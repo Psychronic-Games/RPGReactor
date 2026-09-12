@@ -321,6 +321,11 @@ class EventCommandPicker {
 
         this.renderContent();
         this.modal.style.display = 'flex';
+        const trap = window.RRKeyboardNavigation?.modal(this.modal, {
+            onEscape: () => this.close(),
+            container: () => this.modal.querySelector('.command-picker-container') || this.modal
+        });
+        trap?.enter();
     }
 
     /**
@@ -545,6 +550,7 @@ class EventCommandPicker {
     close() {
         if (this.modal) {
             this.modal.style.display = 'none';
+            this.modal._rrModalKeys?.leave();
         }
     }
 }

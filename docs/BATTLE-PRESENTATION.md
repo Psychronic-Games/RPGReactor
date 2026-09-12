@@ -82,10 +82,48 @@ Runtime **20260906.11** removes the fixed 720×340 preview bottleneck. The stage
 
 - Choose **Preview Formation**, increase **Targets**, then select **Target 1–4** in the preview toolbar or click a battler/foot marker. Drag the model or translation arrows, or enter X/Y/Z and Facing in the inspector. Reset Formation restores the test layout. These temporary placements do not dirty or save the sequence; set actual battle formations in Troops.
 - Choose **Step Transform** to edit a movement key or Battler Motion. The selected movement/motion opens at the end of its duration so the visible pose is the key being edited. Pick **Move** for the shared axis arrows or **Rotate** for the shared pose rings. Dragging changes the saved step, and Undo restores it.
-- Under **Battler Motion → Model Transform**, enable **Override Transform**. Position Offset uses map X/Y and Z height. Rotation uses model X/Y/Z in degrees. Scale multiplies all axes; turn off **Proportional** for separate model-axis X/Y/Z multipliers. Axis-colored sliders and precise numeric fields update the model live. Enabling Override Transform shows both the shared rotation rings and the X/Y/Z offset arrows. Both remain available for motion overrides; Move/Rotate chooses which handle takes priority where they overlap. Dragging either a slider or ring updates the numeric values immediately without rebuilding the inspector, and each slider gesture is one Undo step. Double-click a slider to reset that axis. Scale offers a proportional multiplier plus optional per-axis controls. Numeric entries can exceed the initial slider range within the existing transform limits; the slider expands to match. Editing shows this motion’s final pose before any following instantaneous motion; full playback and scrubbing retain their normal sequence timing. Numeric fields and gizmos edit the same data. Changes interpolate over that motion’s duration and remain until the next motion; a motion without an override restores the model transform layer. Movement/home positions and source model assets are preserved. Battle cleanup restores all proportions even if the action is skipped or cancelled.
+- Under **Battler Motion → Whole Model**, enable **Override Transform**. Position Offset uses map X/Y and Z height. Rotation uses model X/Y/Z in degrees. Scale multiplies all axes; turn off **Proportional** for separate model-axis X/Y/Z multipliers. Axis-colored sliders and precise numeric fields update the model live. Enabling Override Transform shows both the shared rotation rings and the X/Y/Z offset arrows. Both remain available for motion overrides; Move/Rotate chooses which handle takes priority where they overlap. Dragging either a slider or ring updates the numeric values immediately without rebuilding the inspector, and each slider gesture is one Undo step. Double-click a slider to reset that axis. Scale offers a proportional multiplier plus optional per-axis controls. Numeric entries can exceed the initial slider range within the existing transform limits; the slider expands to match. Editing shows this motion’s final pose before any following instantaneous motion; full playback and scrubbing retain their normal sequence timing. Numeric fields and gizmos edit the same data. Changes interpolate over that motion’s duration and remain until the next motion; a motion without an override restores the model transform layer. Movement/home positions and source model assets are preserved. Battle cleanup restores all proportions even if the action is skipped or cancelled.
 - **Current Target** addresses the first target, **All Targets** affects the distinct targets together, and **Target 1–4** selects an individual target for movement/motion/effect presentation. Runtime numbering follows the action’s distinct selected targets, not repeated hit occurrences. A slot that does not exist is skipped. The impact cue still resolves all original targets and skill repeats through the battle system.
 
 Existing sequences without the optional motion `transform` and `targetIndex` properties keep their prior behavior. 2D sprites support position, screen rotation and X/Y scale; 3D models also support pitch, yaw and depth scale.
+
+### Weapons in hand
+
+A weapon step shows, moves or hides the equipped weapon (or the skill's item) in the hand for the sequence. Selecting a step in the editor previews the sequence as of that step, so a weapon shown by the next step is not yet in the hand.
+
+### The preview camera
+
+Right-drag orbits the preview, middle-drag or Shift + right-drag pans it, and the wheel zooms; **Reset View** brings it home and **Frame Battler** keeps the selected battler centred. The view is remembered with the other preview choices and never touches the battle's own camera, which stays as the troop's room sets it.
+
+### Phases inside the sequence (2026-09-12)
+
+An action sequence's step list is divided into phase sections: Prepare, Movement, Execute, Effect, Return and Finish, each with a numbered head where it begins. A step belongs to the section it sits in: drag it into another, choose its Phase in the inspector, or press the + on a head to add a step there. A section with no steps can be let go with Inherit; **Phases…** adds one back, or sorts the steps into phases automatically from what they do. The sequence provides exactly the phases it marks. Sequences kept for battler motions or routines say so under Used As at the foot of the editor.
+
+A record (skill or item, weapon, class, actor or enemy) picks one Action Sequence, or **None**, which is read level by level: on an actor or enemy it means the built-in action plays unless a skill, item or weapon brings a sequence; on a class it means the battler's own sequence; on a weapon, the class's or battler's; on a skill or item, the weapon's, class's or battler's. Each phase of the action comes from the first record down the priority chain whose sequence provides it, and the built-in default fills any phase nobody provides. So a sword that only marks Execute and Effect keeps the actor's run-up and return; a gun that marks Movement too replaces the run-up with its own step forward; a starter provides every phase and owns the whole action until you let a phase inherit. Older per-phase assignments still work and show as such.
+
+### Whole Action versus phases (older records)
+
+Resolution is one decision per action, made along the priority chain (skill or item, then weapon, then class, then actor or enemy): the first record with a setting other than Inherit wins. If that setting is a **Whole Action** (a sequence with the Complete Action purpose, such as Railgun Shot on the pistol), the whole sequence plays and the phase settings further down the chain are not consulted at all. If it is **Phases**, each of the six phases is resolved on its own among the records set to Phases, with the built-in default for any phase nobody set. So a pistol that should never charge the target is right to own a Whole Action; a weapon that only changes how the blow lands can set just its Execute phase and let the class or actor keep supplying the run-up and the return.
+
+### One transform card (2026-09-12)
+
+Wherever a step places something, the inspector shows the same card: **Offset**, **Rotate** and **Scale** tabs over axis-coloured sliders with a number beside each, **Reset** for the open tab, one Undo step per drag. Opening a tab picks the matching viewport tool, so the arrows or rings are already on the thing being edited. The card serves a move step's end pose (its offset, turn and scale over the step's frames), a Battler Motion's model transform, and a weapon step's held item.
+
+Held items are edited in the viewport too. Select a Show or Move weapon step and the arrows stand on the held thing: drag them to move it in the hand (X is forward of the hand), drag the rings to **Tilt**, **Turn** and **Roll** it, and the card follows. Turn and Roll only turn a 3D model; an icon has Tilt alone.
+
+A bound 3D model is held at its grip: **Held By** chooses the middle (a pistol), the base (a sword's handle) or the top. The model's size comes from its binding under Database › Weapons or Items; the step's Scale multiplies it. A model with an authored front face points where its holder faces; one without keeps the long-axis assumption. In Advanced, **Bone Name** names a specific bone to attach to (blank finds the hand), and the icon grip fields place a 2D icon.
+
+The **User** and **Target** above the preview are a preview cast only. Nothing about them is stored in the sequence: in battle, whichever battler uses the sequence plays it, with its own equipment and model. ### Pose Parts (2026-09-12)
+
+A Motion step can pose the model's own parts instead of playing a named motion. Every rigged model shows a **Pose Parts** fold on its Motion steps, beside **Whole Model**: click a part on the model in the preview, or choose one in the fold, and the step becomes a pose of that part (its Motion reads Pose Parts; choosing a clip again drops the pose). The chosen part gets rings and arrows at its joint: drag them to bend or slide it, or use the card's Rotate, Offset and Scale tabs. Card sliders and preview gizmos share one colour per axis: X red (forward), Y green (depth), Z blue (up). Elbows and knees show **Bend** first. The pose is reached over the step's frames and kept until a later step moves that part, so a kick is one step raising the thigh and shin and a later step bringing them home; **Start from rest** on a step sends every posed part home first. A plain motion after a pose (Walk, Idle, a clip) brings the posed parts home over its own frames while it plays, and a 0-frame motion snaps them, the same way a Move step travels from the pose before it. Parts are addressed by the rig's names (the humanoid rig's Hips, Spine, Chest, Neck, Head, upper and lower arms, hands, thighs, shins and feet), so the same sequence plays on any model rigged with those names; a model without a part simply skips it. Sprite-sheet battlers wait through a pose step. Authored poses and clips from Database › 3D Models remain in the Motion list and play on command as before.
+
+A model that ships its own skeleton and clips (a Mixamo or VRM character such as the Demo's Carol) keeps that skeleton: its rig names the file's bones instead of binding a second one, so a pose bends the real arm, and it bends it from wherever the playing clip holds it. Posed parts hold the pose over the clip; the other parts keep playing it, and a release eases the part back onto the clip.
+
+### Projectiles (2026-09-12)
+
+A Projectile step's panel names what flies under **Projectile**: a colored dot, the skill or item's icon or 3D model, the equipped weapon's icon or 3D model, a chosen icon, a picture, any **3D Model** in the project, or an **Animation** from the database that rides the flight (played on an invisible carrier, so it follows the arc). **Thrown To** picks the landing battler, **Flight** one way or return, **Starts From** the hand, the body or a position offset. The card's **Start** tab is the launch point: drag the arrows in the preview or slide X (forward of the thrower), Y and Z (height from the hand, or from the feet for a position offset). **Arrive** sets the landing height and the arc, previewed halfway through the flight. **Look** turns, spins and scales it. Graphic Owner, bone name and grip stay under Advanced. In a flat (non-room) battle a 3D model projectile flies as the colored dot.
+
+**Frame Battler** in the preview toolbar keeps the selected battler in the middle of the view while zoomed in. Preview choices (cast, target count, swap sides, preview weapon, skill/item) are remembered per sequence, and projection, scene, zoom and Frame Battler per project, across restarts.
 
 ## First unarmed attack
 
@@ -97,21 +135,21 @@ Runtime **20260906.10** adds **Unarmed Punch**: run toward the target for 30 fra
 
 Demo now contains sequence **#1 Unarmed Punch**, assigned under **Actors → Fleagus / Carol → Unarmed Attack Sequence**. Their normal default follows lower-priority defaults (the former **Inherit** option). For Battle Test, choose a configured actor, remove their weapon in the test equipment, then use **Attack**. Starting equipment, the saved test party, map formations and plugin choices were preserved. Explicit skill assignments retain priority.
 
-## Assign equipment and unarmed defaults
+## Assign action sequences
 
 Action Sequences has its own database list. Troops contains room and battle-event configuration, with no sequence assignment.
 
-| Assignment | When it applies |
+Every skill, item, weapon, class, actor and enemy shows the same card: a priority line, a **Whole Action** control, and the six phases (Prepare, Movement, Execute, Effect, Return, Finish). Priority follows Victor's Battle Motions: **Skill / Item › Weapon › Class › Actor / Enemy**. A phase assigned on a record overrides that phase on every level after it; a phase left on **Inherit** keeps looking down the chain and ends at the built-in behavior. Weapon assignments apply to normal attacks. An actor's or enemy's own Execute is its default action, an unarmed attack unless something higher assigns one, so there is no separate unarmed override (a saved one from 0.98.5 becomes the actor's Whole Action when the actor had nothing else assigned).
+
+| Whole Action | Effect |
 | --- | --- |
-| Skill or item: **Action Sequence** | Highest priority for that action |
-| Weapon: **Weapon Attack Sequence** | Normal attacks using that weapon, unless the skill overrides it; dual wield checks equipped order |
-| Actor: **Unarmed Attack Sequence** | Normal attacks with no equipped weapon, unless the attack skill overrides it |
-| Class: default action | After skill/item/weapon and applicable unarmed overrides, before the actor default |
-| Actor: **Default Action Sequence** | Actions without a higher-priority override |
-| Enemy: **Default Action Sequence** | Actions without a skill/item override |
-| **Follow Lower-Priority Defaults** (formerly Inherit) | Continue looking through these defaults |
-| **Use Engine / Plugin Action** (formerly Use Existing Behavior) | Stop lookup and use the project's existing action presentation |
-| **Assign Each Action Phase** | Assign Prepare, Movement, Execute/Attack, Effect/Impact, Return and Finish/Cleanup separately |
+| **Use the Phases Below** (default) | Resolve each phase through the priority chain |
+| A complete action sequence | That sequence controls the entire action; the phases are not used |
+| **Use Engine / Plugin Action** | Stop the lookup here and use the project's existing action presentation |
+
+Weapon steps are **Show**, **Move** or **Hide**: show the equipped weapon (its icon, or its bound 3D model in a battle room) once at a hand offset and rotation, then add Move steps that tween offset, rotation and scale over their frames with easing; Hide puts it away. The sequence editor's Options offer a Preview Weapon so a swing can be authored with any weapon.
+
+States carry a **Reaction Sequence** (a motion-purpose sequence played instead of idle while the state is on the battler; the highest-priority afflicting state with one wins), so poison, sleep and custom states each animate from the State record rather than from every battler. Character-set battlers pick their sheet row from their facing (Facing: Face the Target, or a fixed direction), which is what a vertical formation needs. Weapons and thrown items bound to 3D models are held and thrown as those models in battle rooms.
 
 Each phase can inherit, use its built-in behavior, or reference a sequence with the matching purpose. Execute invokes Effect at its Play Effect Phase cue. Battler state/reaction controls separately cover idle, movement, guard, damage and other states; they yield to active actions. Actors/enemies also have an explicit SV/character/static/model graphic selector. See the [assignment and graphics guide](ACTION-SEQUENCE-EXPANSION-2026-09-11.md).
 

@@ -1733,6 +1733,8 @@ class ProjectController {
                 const menuItem = document.createElement('div');
                 menuItem.textContent = item.label;
                 const isEnabled = item.enabled !== false;
+                menuItem.dataset.disabled = String(!isEnabled);
+                menuItem.setAttribute('role', 'menuitem');
                 menuItem.style.cssText = `
                     padding: 6px 16px;
                     cursor: ${isEnabled ? 'pointer' : 'default'};
@@ -1785,6 +1787,12 @@ class ProjectController {
         contextMenu.style.left = `${finalX}px`;
         contextMenu.style.top = `${finalY}px`;
         contextMenu.style.visibility = 'visible';
+        contextMenu.setAttribute('role', 'menu');
+        window.RRKeyboardNavigation?.menu(contextMenu, {
+            items: () => contextMenu.children,
+            isDisabled: row => row.dataset.disabled === 'true',
+            close: () => this.hideMapContextMenu()
+        });
 
         // Close menu when clicking outside
         const closeMenu = (e) => {
@@ -1801,6 +1809,7 @@ class ProjectController {
     hideMapContextMenu() {
         const existingMenu = document.getElementById('map-context-menu');
         if (existingMenu) {
+            existingMenu._rrMenuKeys?.dispose();
             existingMenu.remove();
         }
     }

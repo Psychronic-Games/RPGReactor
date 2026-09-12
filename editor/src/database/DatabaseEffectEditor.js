@@ -185,17 +185,25 @@ class DatabaseEffectEditor {
         modal.appendChild(footer);
         overlay.appendChild(modal);
 
-        header.querySelector('.close-btn').addEventListener('click', () => overlay.remove());
-        footer.querySelector('.cancel-btn').addEventListener('click', () => overlay.remove());
+        const closeModal = () => { overlay.remove(); overlay._rrModalKeys?.leave(); };
+        header.querySelector('.close-btn').addEventListener('click', closeModal);
+        footer.querySelector('.cancel-btn').addEventListener('click', closeModal);
+        window.RRKeyboardNavigation?.modal(overlay, { onEscape: closeModal, container: () => modal });
+        window.RRKeyboardNavigation?.roving(tabBar, {
+            items: () => tabBar.querySelectorAll('.effect-tab'),
+            isSelected: btn => btn.style.background !== 'transparent' && btn.style.background !== '',
+            select: btn => btn.click()
+        });
         footer.querySelector('.ok-btn').addEventListener('click', () => {
             if (!isCurrent() || modalGeneration !== this._modalGeneration || !overlay.isConnected) return;
-            if (this.saveEffect(effect)) overlay.remove();
+            if (this.saveEffect(effect)) closeModal();
         });
         // A click on the backdrop no longer closes the dialog: close deliberately.
 
         this.loadEffectTabContent(activeTab, tabContent, effect);
         document.body.appendChild(overlay);
         this.commonUI?.databaseEditor?.registerDetailModal(overlay);
+        overlay._rrModalKeys?.enter();
     }
 
     loadEffectTabContent(tabId, container, effect) {

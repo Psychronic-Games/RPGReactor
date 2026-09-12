@@ -4,6 +4,7 @@
 - [Equipped items and throws](HELD-ITEMS-AND-THROWS-2026-09-11.md) — hand attachments, ally throws and 16 editable starters.
 - [Expanded action sequences and battler graphics](ACTION-SEQUENCE-EXPANSION-2026-09-11.md) — phases, states, commands and visual graphic selection.
 - [Tiles and small pixel art](TILE-SIZES-AND-SMALL-PIXEL-ART-2026-09-11.md) — sheet dimensions, zoom and rendering/window settings.
+- [September 12 keyboard menus and dialogs](KEYBOARD-MENUS-AND-DIALOGS-2026-09-12.md) — menubar, context menus, database categories and modal focus now answer to the keyboard; what is still uncertified.
 - [September 11 keyboard audit](KEYBOARD-SUPPORT-AUDIT-2026-09-11.md) — verified support and remaining gaps, including Tab traversal.
 - [Menu/shop touch repair](TOUCH-BUTTON-FIX-2026-09-11.md) and [PR #56 integration](PR-INTEGRATION-2026-09-11.md).
 

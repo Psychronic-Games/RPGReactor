@@ -24,56 +24,98 @@ class BattlePresentationEditor {
         const states=new Map(keys().map(([key,details])=>[key,details.open]));
         return ()=>{for(const [key,details] of keys())if(states.has(key))details.open=states.get(key);};
     }
+    /**
+     * Action sequence assignments. Every record shows the same six phases, as
+     * in Victor's Battle Motions: an assignment on a skill or item overrides
+     * the weapon's, which overrides the class's, which overrides the actor's
+     * or enemy's; a phase left inheriting keeps looking down that chain and
+     * ends at the built-in behavior. An actor's own Execute is its unarmed
+     * attack by default, so the old separate unarmed override folds into it.
+     */
     assignment(container,kind,record) {
         if(!['skills','items','weapons','actors','enemies','classes'].includes(kind))return;
         const B=ReactorBattleData,settings=this.settings();
-        const {panel,body}=this.section('Action Sequences');panel.dataset.sequenceAssignment=kind;
+        const panel=this.element('details','database-section rr-battle-assignment-card');panel.dataset.sequenceAssignment=kind;
+        const summary=this.element('summary','database-section-header');const title=this.element('span','','Action Sequences');const status=this.element('span','rr-battle-assignment-status');status.setAttribute('data-rr-i18n-skip','1');summary.append(title,status);panel.append(summary);
+        const body=this.element('div','database-section-content');panel.append(body);
         const value=()=>settings[kind]?.[record.id]||{mode:'inherit'};
+        const assignedCount=()=>{const v=value();if(v.mode==='sequence'||v.mode==='existing')return 1;return Object.values(v.phases||{}).filter(p=>p?.mode&&p.mode!=='inherit').length+Object.values(v.states||{}).filter(p=>p?.mode&&p.mode!=='inherit').length;};
+        const describe=()=>{const v=value(),count=assignedCount();status.textContent=v.mode==='sequence'?this.text(this.message('Sequence: {name}',{name:this.db.data.actionSequences?.[v.sequenceId]?.name||'#'+v.sequenceId})):v.mode==='existing'?this.text('Engine / plugin action'):count?this.text(this.message('{n} assigned',{n:count})):this.text('Using defaults');};
+        panel.open=assignedCount()>0;panel.ontoggle=()=>{this.assignmentOpen=panel.open;};if(this.assignmentOpen!==undefined)panel.open=this.assignmentOpen;
         const set=binding=>{settings[kind]||={};settings[kind][record.id]=binding;this.changed();};
-        const renderBinding=(host,get,put,unarmed=false)=>{
-            const selected=get(),options=[['inherit','Follow Lower-Priority Defaults'],['existing','Use Engine / Plugin Action'],['phases','Assign Each Action Phase'],
-                ...(this.db.data.actionSequences||[]).filter(s=>s&&B.purpose(s)==='action').map(s=>['sequence:'+s.id,s.name||'#'+s.id,true])];
-            if(selected.mode==='sequence'&&!this.db.data.actionSequences?.[selected.sequenceId])options.push(['sequence:'+selected.sequenceId,this.message('Missing Sequence #{id}',{id:selected.sequenceId})]);
-            const row=this.element('div','rr-battle-assignment-controls');host.append(row);
-            let open;const pick=this.select(options,selected.mode==='sequence'?'sequence:'+selected.sequenceId:selected.mode||'inherit',id=>{
-                put({...get(),mode:id.startsWith('sequence:')?'sequence':id,...(id.startsWith('sequence:')?{sequenceId:Number(id.slice(9))}:{})});draw();
-            });pick.setAttribute('aria-label',this.text('Action Sequences'));row.append(pick);
-            const openSequence=id=>{const sequence=this.db.data.actionSequences?.[id];if(sequence){this.parent.openDatabase('actionSequences');this.parent.showDatabaseDetail(sequence,'actionSequences');}};
-            if(selected.mode==='sequence')row.append(this.button('Open Sequence',()=>openSequence(selected.sequenceId)));
-            const hint=selected.mode==='sequence'?'This complete sequence controls the entire action, including movement, impact and return.':selected.mode==='existing'?'Stops inheritance here and uses the engine or enabled battle plugin for the whole action.':selected.mode==='phases'?'Runs Prepare → Movement → Execute → Return → Finish. Execute calls Effect at the impact cue. Each phase can inherit independently.':
-                ['actors','enemies'].includes(kind)?(unarmed?'Falls back to the actor’s normal action assignment.':'Uses the engine or enabled battle plugin when no higher-priority assignment applies.'):
-                kind==='classes'?'Falls back to the actor’s assignment.':kind==='weapons'?'Falls back to the class and actor assignments.':'Uses the weapon (normal attacks), then class, then actor or enemy assignment.';
-            const explanation=this.element('details','rr-battle-assignment-help');explanation.append(this.element('summary','','Help'),this.element('p','rr-battle-help',hint));host.append(explanation);
-            if(selected.mode==='phases')for(const [phase,label,help] of B.actionPhases){const p=this.element('p','rr-battle-help');p.append(this.element('strong','',label),document.createTextNode(' — '+this.text(help)));explanation.append(p);}
-            if(selected.mode!=='phases')return;
-            const list=this.element('div','rr-battle-phase-list');host.append(list);
+        const openSequence=id=>{const sequence=this.db.data.actionSequences?.[id];if(sequence){this.parent.openDatabase('actionSequences');this.parent.showDatabaseDetail(sequence,'actionSequences');}};
+        const level=kind==='items'?'skills':kind==='enemies'?'actors':kind;
+        const isAttack=['weapons','actors','enemies'].includes(kind);
+        // Fold a legacy unarmed override into the actor's own phases.
+        if(kind==='actors'&&value().unarmed){
+            const {unarmed,...rest}=value();
+            const main=rest.mode&&rest.mode!=='inherit';
+            set(main||!unarmed.mode||unarmed.mode==='inherit'?rest:{...rest,mode:unarmed.mode,sequenceId:unarmed.sequenceId,phases:unarmed.phases});
+        }
+        const draw=()=>{
+            const restore=this.preserveDisclosures(body);body.replaceChildren();describe();
+            const current=value();
+            // Priority line with this record's level highlighted.
+            const chain=this.element('div','rr-battle-priority');
+            B.priorityChain.forEach(([id,label],index)=>{
+                if(index)chain.append(this.element('span','rr-battle-priority-arrow','›',true));
+                const step=this.element('span','rr-battle-priority-step'+(id===level?' is-current':''),label);chain.append(step);
+            });
+            body.append(chain);
+            body.append(this.element('p','rr-battle-help',
+                kind==='skills'||kind==='items'?'The sequence chosen here plays whenever this action is used, ahead of the weapon, class and battler.':
+                kind==='weapons'?'The sequence chosen here plays for normal attacks with this weapon, unless the attack skill has its own.':
+                kind==='classes'?'The sequence chosen here is the default for the class’s actors when the action and weapon have none.':
+                'The sequence chosen here is this battler’s default; a weapon, skill or item with its own takes over the phases it provides.'));
+            // One choice: a sequence provides the phases it marks; the rest inherit down the chain.
+            const row=this.element('div','rr-battle-phase-row rr-battle-whole-row');body.append(row);
+            const caption=this.element('div','rr-battle-phase-caption');caption.append(this.element('strong','','Action Sequence'));row.append(caption);
+            const sequences=(this.db.data.actionSequences||[]).filter(s=>s&&B.purpose(s)==='action');
+            // "None" says where the action comes from instead, level by level down the chain.
+            const noneLabel=kind==='skills'||kind==='items'?'None (the weapon, class or battler’s)':kind==='weapons'?'None (the class or battler’s)':kind==='classes'?'None (the battler’s own)':'None (the built-in action)';
+            const options=[['inherit',noneLabel],['existing','Use Engine / Plugin Action'],...(current.mode==='phases'?[['phases','Per-phase assignments (older)']]:[]),...sequences.map(s=>['sequence:'+s.id,s.name||'#'+s.id,true])];
+            if(current.mode==='sequence'&&!this.db.data.actionSequences?.[current.sequenceId])options.push(['sequence:'+current.sequenceId,this.message('Missing Sequence #{id}',{id:current.sequenceId})]);
+            const controls=this.element('div','rr-battle-assignment-controls');row.append(controls);
+            const pick=this.select(options,current.mode==='sequence'?'sequence:'+current.sequenceId:current.mode==='existing'?'existing':current.mode==='phases'?'phases':'inherit',id=>{
+                const {sequenceId,...rest}=current;
+                if(id.startsWith('sequence:'))set({...rest,mode:'sequence',sequenceId:Number(id.slice(9))});
+                else if(id==='existing')set({...rest,mode:'existing'});
+                else if(id==='phases')set(normalize({...rest,mode:'phases'}));
+                else set({...rest,mode:'inherit'});
+                draw();
+            });pick.setAttribute('aria-label',this.text('Action Sequence'));controls.append(pick);
+            if(current.mode==='sequence')controls.append(this.button('Open Sequence',()=>openSequence(current.sequenceId)));
+            else controls.append(this.button('New Sequence',()=>{
+                const records=this.db.data.actionSequences||=[null],id=records.length,steps=B.phaseIds().flatMap(phase=>B.defaultPhase(phase,{isAttack}).steps.map(step=>({...step,phase})));
+                records.push({id,version:1,name:(record.name||'#'+record.id)+' — '+this.text('Action'),phases:B.phaseIds(),steps});
+                set({...value(),mode:'sequence',sequenceId:id});openSequence(id);
+            }));
+            if(current.mode==='sequence'){
+                const sequence=this.db.data.actionSequences?.[current.sequenceId],provided=sequence?B.sequencePhases(sequence):[],inherited=B.phaseIds().filter(p=>!provided.includes(p)),name=p=>this.text(B.actionPhases.find(([id])=>id===p)[1]);
+                body.append(this.element('p','rr-battle-help',sequence?(inherited.length?this.message('Provides {provided}. {inherited} come from the next level down.',{provided:provided.map(name).join(', '),inherited:inherited.map(name).join(', ')}):'Provides every phase: this sequence is the whole action.'):'This sequence is missing.'));
+            }else body.append(this.element('p','rr-battle-help',current.mode==='existing'?'Stops the lookup here and uses the engine or enabled battle plugin for the whole action.':current.mode==='phases'?'Each phase below is picked on its own from sequences made for that phase alone. Newer sequences mark their own phases; choose one above to switch.':
+                kind==='actors'||kind==='enemies'?'No sequence of its own: the built-in action plays, unless a skill, item or weapon brings one.':kind==='classes'?'No sequence of its own: the battler’s own plays, else the built-in action.':'No sequence of its own: the next level down decides (class, then battler), else the built-in action.'));
+            if(current.mode==='phases'){
+            const list=this.element('div','rr-battle-phase-list');body.append(list);
             for(const [phase,label,help] of B.actionPhases){
-                const binding=get().phases?.[phase]||{mode:'inherit'},line=this.element('div','rr-battle-phase-row');list.append(line);
-                const caption=this.element('div','rr-battle-phase-caption');caption.title=this.text(help);caption.append(this.element('span','rr-battle-phase-number',String(B.actionPhases.findIndex(p=>p[0]===phase)+1),true),this.element('strong','',label));line.append(caption);
-                const choices=[['inherit','Follow Lower-Priority Phase'],['existing','Use Built-in Phase'],...(this.db.data.actionSequences||[]).filter(s=>s&&B.purpose(s)===phase).map(s=>['sequence:'+s.id,s.name||'#'+s.id,true])];
+                const binding=current.phases?.[phase]||{mode:'inherit'},line=this.element('div','rr-battle-phase-row');list.append(line);
+                const cap=this.element('div','rr-battle-phase-caption');cap.append(this.element('span','rr-battle-phase-number',String(B.actionPhases.findIndex(p=>p[0]===phase)+1),true),this.element('strong','',label));line.append(cap);
+                cap.title=this.text(help);line.classList.add('rr-battle-phase-compact');
+                const choices=[['inherit','Inherit'],['existing','Built-in'],...(this.db.data.actionSequences||[]).filter(s=>s&&B.purpose(s)===phase).map(s=>['sequence:'+s.id,s.name||'#'+s.id,true])];
                 if(binding.mode==='sequence'&&!choices.some(o=>o[0]==='sequence:'+binding.sequenceId))choices.push(['sequence:'+binding.sequenceId,this.message('Missing or Incompatible Sequence #{id}',{id:binding.sequenceId})]);
-                const controls=this.element('div','rr-battle-assignment-controls');line.append(controls);
-                controls.append(this.select(choices,binding.mode==='sequence'?'sequence:'+binding.sequenceId:binding.mode,id=>{
-                    const next=id.startsWith('sequence:')?{mode:'sequence',sequenceId:Number(id.slice(9))}:{mode:id};put({...get(),phases:{...get().phases,[phase]:next}});draw();
+                const row=this.element('div','rr-battle-assignment-controls');line.append(row);
+                row.append(this.select(choices,binding.mode==='sequence'?'sequence:'+binding.sequenceId:binding.mode,id=>{
+                    const next=id.startsWith('sequence:')?{mode:'sequence',sequenceId:Number(id.slice(9))}:{mode:id};
+                    set(normalize({...value(),mode:'phases',phases:{...value().phases,[phase]:next}}));draw();
                 }));
-                controls.querySelector('select').setAttribute('aria-label',this.text(label));
-                if(binding.mode==='sequence')controls.append(this.button('Open Sequence',()=>openSequence(binding.sequenceId)));
-                else controls.append(this.button('Create Phase',()=>{
-                    const records=this.db.data.actionSequences||=[null],id=records.length;
-                    records.push({...B.defaultPhase(phase,{isAttack:kind==='weapons'||unarmed}),id,name:(record.name||'#'+record.id)+' — '+this.text(label)});
-                    put({...get(),phases:{...get().phases,[phase]:{mode:'sequence',sequenceId:id}}});openSequence(id);
-                }));
+                row.querySelector('select').setAttribute('aria-label',this.text(label));
+                if(binding.mode==='sequence')row.append(this.button('Open Sequence',()=>openSequence(binding.sequenceId)));
             }
-        };
-        const draw=()=>{const restore=this.preserveDisclosures(body);body.replaceChildren();renderBinding(body,value,set);
-            if(kind==='actors'){
-                const details=this.element('details','rr-battle-motion-details');details.append(this.element('summary','','Unarmed Attack Override'));const inner=this.element('div');details.append(inner);body.append(details);
-                renderBinding(inner,()=>value().unarmed||{mode:'inherit'},binding=>set({...value(),unarmed:binding}),true);
             }
             if(['actors','enemies','classes','skills','items'].includes(kind)){
-                const details=this.element('details','rr-battle-motion-details');details.append(this.element('summary','','Battler States and Reactions'));body.append(details);
-                details.append(this.element('p','rr-battle-help','These sequences animate the battler’s state or reaction. They do not apply action damage. Idle and moving sequences repeat while that state remains active.'));
-                for(const [state,label] of B.battlerStates.filter(([state])=>!['skills','items'].includes(kind)||['damage','evade','magicEvade','collapse'].includes(state))){
+                const details=this.element('details','rr-battle-motion-details');details.append(this.element('summary','','Reactions and Idle Motions'));body.append(details);
+                details.append(this.element('p','rr-battle-help','Separate from the action phases above: how the battler stands, gets hit, evades, or falls. These never apply damage.'));
+                for(const [state,label] of B.battlerStates.filter(([state])=>!['abnormal','sleep'].includes(state)&&(!['skills','items'].includes(kind)||['damage','evade','magicEvade','collapse'].includes(state)))){
                     const binding=value().states?.[state]||{mode:'inherit'},options=[['inherit','Follow Battler Defaults'],['existing','Use Built-in Motion'],...(this.db.data.actionSequences||[]).filter(s=>s&&B.purpose(s)==='motion').map(s=>['sequence:'+s.id,s.name||'#'+s.id,true])];
                     const row=this.element('div','rr-battle-phase-row');details.append(row);row.append(this.element('strong','',label));const controls=this.element('div','rr-battle-assignment-controls');row.append(controls);controls.append(this.select(options,binding.mode==='sequence'?'sequence:'+binding.sequenceId:binding.mode,id=>{
                         set({...value(),states:{...value().states,[state]:id.startsWith('sequence:')?{mode:'sequence',sequenceId:Number(id.slice(9))}:{mode:id}}});draw();
@@ -87,83 +129,217 @@ class BattlePresentationEditor {
                 }
             }
             restore();
-        };draw();
+        };
+        // A phases binding with nothing assigned is the same as inheriting;
+        // store it that way so a complete sequence lower in the chain still wins.
+        const normalize=binding=>{
+            const assigned=Object.values(binding.phases||{}).some(p=>p?.mode&&p.mode!=='inherit');
+            const {sequenceId,...rest}=binding;
+            return assigned?{...rest,mode:'phases'}:{...rest,mode:'inherit'};
+        };
+        draw();
         const layout=container.firstElementChild||container;
         if(layout!==container){layout.style.height='auto';layout.style.minHeight='100%';}
         panel.style.flexShrink='0';layout.append(panel);
     }
+    /**
+     * One battler control per record. The graphic type lives in the same box
+     * (actors: the Images card's battler slot; enemies: the General card's
+     * battler rows) as the file, preview and change button, and the sprite
+     * options fold out beneath it. The default 2D type and the 3D type write
+     * the record's own battler name and 3D binding; the other types are
+     * stored in the battle presentation settings.
+     */
     battlerGraphic(container,kind,record) {
         if(!['actors','enemies'].includes(kind))return;
-        const B=ReactorBattleData,settings=this.settings(),{panel,body}=this.section('Battler Graphic');panel.classList.add('rr-battler-graphic-card');
+        const B=ReactorBattleData,settings=this.settings(),project=this.parent.currentProject;
+        if(!project?.path||typeof RRDatabase3DBindings==='undefined')return;
         const get=()=>settings[kind]?.[record.id]?.graphic||{mode:'auto'};
         const set=value=>{settings[kind]||={};settings[kind][record.id]={...settings[kind][record.id],graphic:value};this.changed();};
-        const model=()=>RRDatabase3DBindings.get(this.parent.currentProject.path,kind,record.id,kind==='actors'?'battler':undefined);
+        const slot=kind==='actors'?'battler':undefined;
+        const binding=()=>{try{return RRDatabase3DBindings.get(project.path,kind,record.id,slot);}catch(error){return null;}};
+        const defaultMode=kind==='actors'?'sv':'static';
+        const modes=[...B.graphicModes.filter(([m])=>m===defaultMode),...B.graphicModes.filter(([m])=>m!=='auto'&&m!==defaultMode)];
+
+        // Hosts: the existing box or rows, plus where the options fold lives.
+        let api,host,optionsHost,explicitPane,previewCanvas,nameTag,button,legacyButtonClick,restoreLegacy;
+        if(kind==='actors'){
+            const box=container.querySelectorAll('.database-actor-images .graphic-preview-box')[2];
+            api=box?._rr3dSlot;if(!box||!api)return;
+            host=box;optionsHost=box.closest('.database-section-content')||box.parentElement;
+            button=api.button;legacyButtonClick=button.onclick;
+            api.corner.style.display='none';
+            explicitPane=this.element('div','rr-battler-explicit-pane');explicitPane.style.cssText='display:none;flex-direction:column;align-items:center;justify-content:center;height:176px;box-sizing:border-box;';
+            previewCanvas=this.element('canvas','rr-battler-graphic-preview');previewCanvas.width=144;previewCanvas.height=144;previewCanvas.style.cssText='width:144px;height:144px;';
+            nameTag=api.nameTag2d||this.element('div','rr-battler-graphic-name');
+            explicitPane.append(previewCanvas);api.pane.parentNode.insertBefore(explicitPane,api.pane.nextSibling);
+            restoreLegacy=()=>{box.dataset.rrExplicit='false';button.onclick=legacyButtonClick;explicitPane.style.display='none';api.sync();};
+        }else{
+            const preview=container.querySelector('#enemy-battler-preview-'+record.id);
+            const general=preview?.closest('.database-section-content');
+            const row=general?.querySelector('.rr-3d-binding-row');
+            api=row?._rr3d;if(!preview||!api)return;
+            host=general;optionsHost=general;
+            api.checkLabel.style.display='none';
+            button=general.querySelector('#enemy-change-battler-'+record.id);
+            explicitPane=preview;
+            restoreLegacy=()=>{
+                host.dataset.rrExplicit='false';
+                const value=general.querySelector('.enemy-image-controls .database-field-value');if(value)value.textContent=record.battlerName||this.text('(None)');
+                if(button)this.setText(button,'Change...');
+                api.sync();this.parent.enemyEditor?.loadBattlerPreview?.(record);
+            };
+        }
+
         let generation=0;
-        const draw=()=>{
-            const restore=this.preserveDisclosures(body),token=++generation,g=get(),resolved=B.graphic(settings,kind,record.id,record,model());body.replaceChildren();
-            const explicit=g.mode&&g.mode!=='auto',legacy=kind==='actors'?[container.querySelectorAll('.database-actor-images .graphic-preview-box')[2]]:[container.querySelector('#enemy-battler-preview-'+record.id),container.querySelector('.enemy-image-controls'),container.querySelector('.rr-3d-binding-row')];
-            for(const node of legacy.filter(Boolean)){if(node.dataset.rrLegacyDisplay===undefined)node.dataset.rrLegacyDisplay=node.style.display;node.style.display=explicit?'none':node.dataset.rrLegacyDisplay;}
-            this.field(body,'Graphic Type',this.select(B.graphicModes,g.mode||'auto',mode=>{set({...g,mode});draw();}));
-            const controls=this.element('div','rr-battle-assignment-controls');body.append(controls);
-            controls.append(this.element('span','rr-battle-graphic-name',resolved.type==='model'?resolved.model?.name||this.text('No Model Selected'):resolved.name||this.text('No Image Selected'),true));
-            if(g.mode&&g.mode!=='auto')controls.append(this.button(resolved.type==='model'?'Choose Model…':'Choose Image…',()=>{
-                const commit=change=>{if(!panel.isConnected||token!==generation)return;set({...get(),...change});draw();};
-                if(resolved.type==='model'){
-                    new ModelGraphicPicker({getCurrentProject:()=>this.parent.currentProject,mapEditor3D:window.reactor?.mapEditor3D}).show(resolved.model,result=>commit({model:result}));
-                }else{
-                    const path=require('path'),folder=path.join(this.parent.currentProject.path,'img',resolved.folder),files=RRAssetFiles.listNames(folder,['.png']);
-                    this.parent.showImagePicker(this.text('Choose Battler Graphic'),files,(name,index)=>commit({name,index:index||0}),file=>RRAssetFiles.urlFor(folder,file,['.png']),resolved.name,
-                        {allowNone:true,...(resolved.type==='character'?{sheetType:'character',currentIndex:g.index||0}:{})});
+        const enemyRows=()=>kind==='enemies'?[...host.querySelectorAll('.enemy-image-controls')]:[];
+        const optionsCard=this.element('details','rr-battle-motion-details rr-battler-graphic-card');optionsCard.append(this.element('summary','','Battler Options'));
+        const optionsBody=this.element('div','rr-battler-graphic-options-body');optionsCard.append(optionsBody);optionsCard.style.display='none';
+        if(kind==='actors')optionsHost.append(optionsCard);else host.insertBefore(optionsCard,(enemyRows()[1]||explicitPane).nextSibling);
+
+        const typeSelect=this.select(modes,defaultMode,mode=>choose(mode));
+        typeSelect.setAttribute('aria-label',this.text('Graphic Type'));typeSelect.classList.add('rr-battler-type');
+        if(kind==='actors'){typeSelect.style.cssText='width:100%;margin:4px 0 0;';const bottomRow=button.parentNode;bottomRow.parentNode.insertBefore(typeSelect,bottomRow.nextSibling);}
+        else{const line=this.element('label','rr-battle-field rr-battler-type-row');line.append(this.element('span','','Graphic Type'),typeSelect);const row=api.checkLabel.closest('.rr-3d-binding-row');row.parentNode.insertBefore(line,row);}
+
+        const choose=mode=>{
+            const g=get();
+            if(mode==='model'){
+                set({...g,mode:'auto'});
+                if(binding()){draw();return;}
+                api.openPicker();return;
+            }
+            if(mode===defaultMode){
+                if(binding()&&!api.clear())return;
+                set({...g,mode:'auto'});draw();return;
+            }
+            set({...g,mode});draw();
+        };
+        const pickImage=(resolved,commit)=>{
+            const path=require('path'),folder=path.join(project.path,'img',resolved.folder),files=RRAssetFiles.listNames(folder,['.png']);
+            this.parent.showImagePicker(this.text('Choose Battler Graphic'),files,(name,index)=>commit({name,index:index||0}),file=>RRAssetFiles.urlFor(folder,file,['.png']),resolved.name,
+                {allowNone:true,...(resolved.type==='character'?{sheetType:'character',currentIndex:get().index||0}:{})});
+        };
+        const explicitChange=()=>{
+            const token=generation,g=get(),resolved=B.graphic(settings,kind,record.id,record,binding());
+            const commit=change=>{if(!host.isConnected||token!==generation)return;set({...get(),...change});draw();};
+            if(resolved.type==='model')new ModelGraphicPicker({getCurrentProject:()=>project,mapEditor3D:window.reactor?.mapEditor3D}).show(resolved.model,result=>commit({model:result}));
+            else pickImage(resolved,commit);
+        };
+        if(kind==='enemies'&&button)button.addEventListener('click',event=>{if(host.dataset.rrExplicit!=='true')return;event.stopImmediatePropagation();event.preventDefault();explicitChange();},true);
+
+        const drawPreview=(resolved,token)=>{
+            if(kind==='enemies'){
+                explicitPane._battlerPreviewRequest={};explicitPane.dataset.model='';explicitPane.style.filter='';
+                previewCanvas=this.element('canvas','rr-battler-graphic-preview');previewCanvas.width=240;previewCanvas.height=180;explicitPane.replaceChildren(previewCanvas);
+            }else{
+                previewCanvas.getContext('2d').clearRect(0,0,previewCanvas.width,previewCanvas.height);
+                nameTag.textContent=resolved.type==='model'?resolved.model?.name||this.text('No Model Selected'):resolved.name||this.text('No Image Selected');nameTag.title=nameTag.textContent;
+            }
+            const W=previewCanvas.width,H=previewCanvas.height;
+            if(resolved.type==='model'&&resolved.model){
+                Promise.resolve(RRDatabase3DBindings.modelThumbnail(this.parent.reactor3dEditor,resolved.model)).then(url=>{if(token!==generation||!previewCanvas.isConnected||!url)return;const image=new Image();image.onload=()=>{if(token!==generation)return;const scale=Math.min(W/image.width,H/image.height);previewCanvas.getContext('2d').drawImage(image,(W-image.width*scale)/2,(H-image.height*scale)/2,image.width*scale,image.height*scale);};image.src=url;}).catch(console.warn);
+            }else if(resolved.name){
+                const image=new Image();image.onload=()=>{if(token!==generation||!previewCanvas.isConnected)return;const f=B.graphicFrame(resolved,image.width,image.height,'idle',0,kind==='actors'?-90:90),c=previewCanvas.getContext('2d'),scale=Math.min((W-20)/f.width,(H-20)/f.height);c.imageSmoothingEnabled=false;c.save();c.translate(W/2,H/2-(resolved.offsetY||0));c.scale(resolved.mirror?-1:1,1);c.drawImage(image,f.x,f.y,f.width,f.height,-f.width*scale/2,-f.height*scale/2,f.width*scale,f.height*scale);c.restore();};
+                image.src=RRAssetFiles.urlFor(require('path').join(project.path,'img',resolved.folder),resolved.name,['.png']);
+            }
+        };
+
+        const drawOptions=(g,resolved)=>{
+            const restore=this.preserveDisclosures(optionsCard);optionsBody.replaceChildren();
+            const basic=this.element('div','rr-battle-graphic-options');optionsBody.append(basic);
+            const options=this.element('details','rr-battle-motion-details');options.append(this.element('summary','','Advanced'));optionsBody.append(options);
+            const dimensions=this.element('div','rr-battle-graphic-options');options.append(dimensions);
+            this.number(basic,'Scale',g.scale||1,value=>{set({...get(),scale:Math.max(.1,Math.min(10,value))});draw();},.1);
+            this.number(dimensions,'Vertical Offset (pixels)',g.offsetY||0,value=>{set({...get(),offsetY:value});draw();},1);
+            const mirror=this.element('input');mirror.type='checkbox';mirror.checked=!!g.mirror;mirror.onchange=()=>{set({...get(),mirror:mirror.checked});draw();};this.field(basic,'Mirror',mirror);
+            // Sheet battlers only: whether the stock weapon swing draws with attack motions. Weapons in hand are the sequences' business.
+            for(const [key,label,def] of [['showWeapon','Show Weapon Motion',true]]){const box=this.element('input');box.type='checkbox';box.checked=g[key]??def;box.onchange=()=>set({...get(),[key]:box.checked});this.field(dimensions,label,box);}
+            if(kind==='enemies'){
+                this.field(dimensions,'Attack Animation',this.select([[0,'Use Weapon Animation'],...(this.db.data.animations||[]).filter(Boolean).map(a=>[a.id,a.name,true])],g.attackAnimationId||0,v=>set({...get(),attackAnimationId:Number(v)})));
+                for(let slot=0;slot<2;slot++)this.field(dimensions,this.message('Weapon {n}',{n:slot+1}),this.select([[0,'None'],...(this.db.data.weapons||[]).filter(Boolean).map(w=>[w.id,w.name,true])],g.weaponIds?.[slot]||0,v=>{const ids=[...(get().weaponIds||[0,0])];ids[slot]=Number(v);set({...get(),weaponIds:ids});}));
+            }
+            if(resolved.type==='character'){
+                this.field(basic,'Facing',this.select([['auto','Face the Target'],[2,'Down'],[4,'Left'],[6,'Right'],[8,'Up']],g.direction||'auto',v=>{set({...get(),direction:v==='auto'?undefined:Number(v)});draw();}));
+                const name=this.element('input','database-field-value');name.value=g.damagedName||'';name.onchange=()=>set({...get(),damagedName:name.value});this.field(options,'Defeated Character File',name);
+                this.number(dimensions,'Defeated Character Index (1–8)',(g.damagedIndex||0)+1,v=>set({...get(),damagedIndex:Math.max(0,Math.min(7,Math.round(v)-1))}),1);
+                this.field(dimensions,'Defeated Direction',this.select([[2,'Down'],[4,'Left'],[6,'Right'],[8,'Up']],g.damagedDirection||2,v=>set({...get(),damagedDirection:Number(v)})));
+            }
+            if(['sv','character'].includes(resolved.type)){
+                this.number(dimensions,'Frames per Motion',g.frames||3,value=>{set({...get(),frames:Math.max(1,Math.min(60,Math.round(value)))});draw();},1);
+                this.number(dimensions,'Frames per Step',g.speed||12,value=>set({...get(),speed:Math.max(1,Math.round(value))}),1);
+                if(resolved.type==='sv'){
+                    this.number(dimensions,'Motion Columns',g.motionColumns||3,value=>{set({...get(),motionColumns:Math.max(1,Math.min(32,Math.round(value)))});draw();},1);
+                    this.number(dimensions,'Motion Rows',g.motionRows||6,value=>{set({...get(),motionRows:Math.max(1,Math.min(32,Math.round(value)))});draw();},1);
                 }
-            }));
-            if(g.mode==='auto')body.append(this.element('p','rr-battle-help','Uses the existing battler image, 3D binding or enabled battle plugin. Choose an explicit type to override it without changing the map character or face.'));
-            else if(resolved.type!=='model'){
-                const basic=this.element('div','rr-battle-graphic-options');body.append(basic);
-                const options=this.element('details','rr-battle-motion-details');options.append(this.element('summary','','Advanced'));body.append(options);
-                const dimensions=this.element('div','rr-battle-graphic-options');options.append(dimensions);
-                this.number(basic,'Scale',g.scale||1,value=>{set({...get(),scale:Math.max(.1,Math.min(10,value))});draw();},.1);
-                this.number(dimensions,'Vertical Offset (pixels)',g.offsetY||0,value=>{set({...get(),offsetY:value});draw();},1);
-                const mirror=this.element('input');mirror.type='checkbox';mirror.checked=!!g.mirror;mirror.onchange=()=>{set({...get(),mirror:mirror.checked});draw();};this.field(basic,'Mirror',mirror);
-                for(const [key,label,def] of [['hideShadow','Hide Shadow',false],['showWeapon','Show Weapon Motion',true]]){const box=this.element('input');box.type='checkbox';box.checked=g[key]??def;box.onchange=()=>set({...get(),[key]:box.checked});this.field(dimensions,label,box);}
-                if(kind==='enemies'){
-                    this.field(dimensions,'Attack Animation',this.select([[0,'Use Weapon Animation'],...(this.db.data.animations||[]).filter(Boolean).map(a=>[a.id,a.name,true])],g.attackAnimationId||0,v=>set({...get(),attackAnimationId:Number(v)})));
-                    for(let slot=0;slot<2;slot++)this.field(dimensions,this.message('Weapon {n}',{n:slot+1}),this.select([[0,'None'],...(this.db.data.weapons||[]).filter(Boolean).map(w=>[w.id,w.name,true])],g.weaponIds?.[slot]||0,v=>{const ids=[...(get().weaponIds||[0,0])];ids[slot]=Number(v);set({...get(),weaponIds:ids});}));
-                }
-                if(resolved.type==='character'){
-                    const name=this.element('input','database-field-value');name.value=g.damagedName||'';name.onchange=()=>set({...get(),damagedName:name.value});this.field(options,'Defeated Character File',name);
-                    this.number(dimensions,'Defeated Character Index (1–8)',(g.damagedIndex||0)+1,v=>set({...get(),damagedIndex:Math.max(0,Math.min(7,Math.round(v)-1))}),1);
-                    this.field(dimensions,'Defeated Direction',this.select([[2,'Down'],[4,'Left'],[6,'Right'],[8,'Up']],g.damagedDirection||2,v=>set({...get(),damagedDirection:Number(v)})));
-                }
-                if(['sv','character'].includes(resolved.type)){
-                    this.number(dimensions,'Frames per Motion',g.frames||3,value=>{set({...get(),frames:Math.max(1,Math.min(60,Math.round(value)))});draw();},1);
-                    this.number(dimensions,'Frames per Step',g.speed||12,value=>set({...get(),speed:Math.max(1,Math.round(value))}),1);
-                    if(resolved.type==='sv'){
-                        this.number(dimensions,'Motion Columns',g.motionColumns||3,value=>{set({...get(),motionColumns:Math.max(1,Math.min(32,Math.round(value)))});draw();},1);
-                        this.number(dimensions,'Motion Rows',g.motionRows||6,value=>{set({...get(),motionRows:Math.max(1,Math.min(32,Math.round(value)))});draw();},1);
-                    }
-                    const details=this.element('details','rr-battle-motion-details');details.append(this.element('summary','','Sprite Motion Mapping'));body.append(details);
-                    for(const [motion,label] of [...B.battlerStates,['walk','Walk'],['run','Run'],['punch','Punch'],['cast','Cast'],['return','Return'],['attack','Attack'],['thrust','Thrust'],['swing','Swing'],['missile','Missile'],['skill','Skill'],['item','Item']]){
-                        const m=g.motions?.[motion]||{},row=this.element('div','rr-battle-sprite-motion');details.append(row);row.append(this.element('strong','',label));
-                        const update=patch=>set({...get(),motions:{...get().motions,[motion]:{...get().motions?.[motion],...patch}}});
-                        if(resolved.type==='sv')this.number(row,'Motion Index',(m.index??B.spriteMotions[motion]??1)+1,v=>update({index:Math.max(0,Math.round(v)-1)}),1);
-                        else this.field(row,'Direction',this.select([[2,'Down'],[4,'Left'],[6,'Right'],[8,'Up']],m.direction||4,v=>update({direction:Number(v)})));
-                        this.number(row,'Frames',m.frames||g.frames||3,v=>update({frames:Math.max(1,Math.min(g.frames||3,Math.round(v)))}),1);
-                        this.number(row,'Speed',m.speed||g.speed||12,v=>update({speed:Math.max(1,Math.round(v))}),1);
-                        this.field(row,'Playback',this.select([['default','Default'],['loop','Loop'],['once','Hold Last Frame'],['play','Play Once']],m.loop===undefined?'default':m.loop===true?'loop':m.loop==='once'?'once':'play',v=>update({loop:v==='default'?undefined:v==='loop'?true:v==='once'?'once':false})));
-                    }
+                const details=this.element('details','rr-battle-motion-details');details.append(this.element('summary','','Sprite Motion Mapping'));optionsBody.append(details);
+                for(const [motion,label] of [...B.battlerStates,['walk','Walk'],['run','Run'],['punch','Punch'],['cast','Cast'],['return','Return'],['attack','Attack'],['thrust','Thrust'],['swing','Swing'],['missile','Missile'],['skill','Skill'],['item','Item']]){
+                    const m=g.motions?.[motion]||{},row=this.element('div','rr-battle-sprite-motion');details.append(row);row.append(this.element('strong','',label));
+                    const update=patch=>set({...get(),motions:{...get().motions,[motion]:{...get().motions?.[motion],...patch}}});
+                    if(resolved.type==='sv')this.number(row,'Motion Index',(m.index??B.spriteMotions[motion]??1)+1,v=>update({index:Math.max(0,Math.round(v)-1)}),1);
+                    else this.field(row,'Direction',this.select([[0,'Auto'],[2,'Down'],[4,'Left'],[6,'Right'],[8,'Up']],m.direction||0,v=>update({direction:Number(v)||undefined})));
+                    this.number(row,'Frames',m.frames||g.frames||3,v=>update({frames:Math.max(1,Math.min(g.frames||3,Math.round(v)))}),1);
+                    this.number(row,'Speed',m.speed||g.speed||12,v=>update({speed:Math.max(1,Math.round(v))}),1);
+                    this.field(row,'Playback',this.select([['default','Default'],['loop','Loop'],['once','Hold Last Frame'],['play','Play Once']],m.loop===undefined?'default':m.loop===true?'loop':m.loop==='once'?'once':'play',v=>update({loop:v==='default'?undefined:v==='loop'?true:v==='once'?'once':false})));
                 }
             }
             restore();
-            const preview=this.element('canvas','rr-battler-graphic-preview');preview.width=240;preview.height=180;body.insertBefore(preview,body.children[2]||null);
-            if(resolved.type==='model'&&resolved.model){Promise.resolve(RRDatabase3DBindings.modelThumbnail(this.parent.reactor3dEditor,resolved.model)).then(url=>{if(token!==generation||!preview.isConnected||!url)return;const image=new Image();image.onload=()=>{if(token===generation){const scale=Math.min(240/image.width,180/image.height);preview.getContext('2d').drawImage(image,(240-image.width*scale)/2,(180-image.height*scale)/2,image.width*scale,image.height*scale);}};image.src=url;}).catch(console.warn);}
-            else if(resolved.name){const image=new Image();image.onload=()=>{if(token!==generation||!preview.isConnected)return;const f=B.graphicFrame(resolved,image.width,image.height),c=preview.getContext('2d'),scale=Math.min(220/f.width,160/f.height);c.imageSmoothingEnabled=false;c.save();c.translate(120,90-(resolved.offsetY||0));c.scale(resolved.mirror?-1:1,1);c.drawImage(image,f.x,f.y,f.width,f.height,-f.width*scale/2,-f.height*scale/2,f.width*scale,f.height*scale);c.restore();};image.src=RRAssetFiles.urlFor(require('path').join(this.parent.currentProject.path,'img',resolved.folder),resolved.name,['.png']);}
-        };draw();
-        const layout=container.firstElementChild||container;layout.append(panel);panel.style.marginTop='16px';panel.style.flexShrink='0';
+        };
+
+        const draw=()=>{
+            if(!host.isConnected)return;
+            const token=++generation,g=get(),spec=binding(),explicit=!!g.mode&&g.mode!=='auto';
+            const resolved=B.graphic(settings,kind,record.id,record,spec);
+            typeSelect.value=explicit?g.mode:spec?'model':defaultMode;
+            const wasExplicit=host.dataset.rrExplicit==='true';
+            if(!explicit){
+                optionsCard.style.display='none';
+                if(wasExplicit)restoreLegacy();
+                if(kind==='enemies'){for(const controls of enemyRows())controls.style.display=spec?'none':'';}
+                return;
+            }
+            host.dataset.rrExplicit='true';
+            if(kind==='actors'){
+                api.canvasBox.style.display='none';api.pane.style.display='none';explicitPane.style.display='flex';
+                if(api.nameTag2d)api.nameTag2d.style.display='';
+                this.setText(api.label,(B.graphicModes.find(([m])=>m===g.mode)||[])[1]||g.mode);
+                this.setText(button,resolved.type==='model'?'Change Model':'Change Image');
+                button.onclick=explicitChange;
+            }else{
+                api.name.style.display='none';api.change.style.display='none';
+                const [imageRow,hueRow]=enemyRows();
+                if(imageRow){imageRow.style.display='';for(const input of imageRow.querySelectorAll('input,button'))input.disabled=false;const value=imageRow.querySelector('.database-field-value');if(value)value.textContent=resolved.type==='model'?resolved.model?.name||this.text('(None)'):resolved.name||this.text('(None)');}
+                if(hueRow)hueRow.style.display='none';
+                if(button)this.setText(button,resolved.type==='model'?'Change Model':'Change...');
+            }
+            drawPreview(resolved,token);
+            optionsCard.style.display=resolved.type==='model'?'none':'';
+            if(resolved.type!=='model')drawOptions(g,resolved);
+        };
+        api.afterSync=()=>draw();
+        draw();
     }
     stateGraphic(container,record){
         const settings=this.settings(),{panel,body}=this.section('Battler Motion Override');
         const get=()=>settings.states?.[record.id]?.graphicMotion||{};
         const set=patch=>{settings.states||={};settings.states[record.id]={...settings.states[record.id],graphicMotion:{...get(),...patch}};this.changed();};
+        // A state's own reaction sequence: what the battler does while afflicted (poison, sleep, a custom state).
+        const B=ReactorBattleData,reaction=()=>settings.states?.[record.id]?.reaction||{mode:'inherit'};
+        const setReaction=binding=>{settings.states||={};settings.states[record.id]={...settings.states[record.id],reaction:binding};this.changed();};
+        const drawReaction=()=>{
+            reactionRow.replaceChildren();const binding=reaction();
+            const options=[['inherit','Use the Battler’s Motion'],...(this.db.data.actionSequences||[]).filter(s=>s&&B.purpose(s)==='motion').map(s=>['sequence:'+s.id,s.name||'#'+s.id,true])];
+            if(binding.mode==='sequence'&&!this.db.data.actionSequences?.[binding.sequenceId])options.push(['sequence:'+binding.sequenceId,this.message('Missing Sequence #{id}',{id:binding.sequenceId})]);
+            reactionRow.append(this.select(options,binding.mode==='sequence'?'sequence:'+binding.sequenceId:'inherit',id=>{setReaction(id.startsWith('sequence:')?{mode:'sequence',sequenceId:Number(id.slice(9))}:{mode:'inherit'});drawReaction();}));
+            reactionRow.append(this.button(binding.mode==='sequence'?'Open Sequence':'Create Motion',()=>{
+                let id=binding.sequenceId;
+                if(binding.mode!=='sequence'){const records=this.db.data.actionSequences||=[null];id=records.length;records.push({id,version:1,purpose:'motion',name:(record.name||'#'+record.id)+' — '+this.text('Reaction'),steps:[B.step('motion',{motion:record.motion===2?'sleep':'abnormal',duration:60})]});setReaction({mode:'sequence',sequenceId:id});}
+                const sequence=this.db.data.actionSequences[id];if(sequence){this.parent.openDatabase('actionSequences');this.parent.showDatabaseDetail(sequence,'actionSequences');}
+            }));
+        };
+        const reactionRow=this.element('div','rr-battle-assignment-controls');
+        this.field(body,'Reaction Sequence',reactionRow);drawReaction();
+        body.append(this.element('p','rr-battle-help','Plays instead of the idle motion while this state is on the battler; the highest-priority state with a sequence wins. Poison, sleep and custom states each set their own here.'));
         this.field(body,'Motion',this.select([['','Use Normal State Motion'],...Object.keys(ReactorBattleData.spriteMotions).map(v=>[v,v])],get().motion||'',v=>set({motion:v})));
         this.number(body,'Idle Speed Multiplier',get().speedMultiplier||1,v=>set({speedMultiplier:Math.max(.1,v)}),.1);
         const details=this.element('details','rr-battle-motion-details');details.append(this.element('summary','','Advanced'));const advanced=this.element('div','rr-battle-graphic-options');details.append(advanced);body.append(details);
@@ -233,7 +409,7 @@ class BattlePresentationEditor {
             const item=side==='actors'?this.db.getActor(id):this.db.getEnemy(id);if(!item)continue;
             const graphic=ReactorBattleData.graphic(this.settings(),side,id,item,RRDatabase3DBindings.get(project.path,side,id,side==='actors'?'battler':undefined)),spec=graphic.type==='model'?graphic.model:null,key='cast:'+side+':'+i;
             if(spec){await view.addModel(key,spec,ReactorBattleData.position(draft,side,i));cast.push({key,side,index:i});}
-            else if(graphic.name){try{const bitmap=await assets.image(graphic.folder,graphic.name),frame=ReactorBattleData.graphicFrame(graphic,bitmap.width,bitmap.height);cast.push({key,side,index:i,bitmap,frame,graphic});}catch(error){console.warn(error);}}
+            else if(graphic.name){try{const bitmap=await assets.image(graphic.folder,graphic.name),frame=ReactorBattleData.graphicFrame(graphic,bitmap.width,bitmap.height,'idle',0,side==='actors'?-90:90);cast.push({key,side,index:i,bitmap,frame,graphic});}catch(error){console.warn(error);}}
         }
         return cast;
     }

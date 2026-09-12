@@ -12,7 +12,7 @@
     "screenScale": 1,
     "windowOpacity": 192,
     "picturesUpperLimit": 100,
-    "pixelatedRendering": true
+    "pixelatedRendering": false
   },
   "airship": {
     "bgm": {
@@ -621,7 +621,7 @@
     "",
     ""
   ],
-  "versionId": 81037683,
+  "versionId": 13754739,
   "victoryMe": {
     "name": "Victory1",
     "pan": 0,

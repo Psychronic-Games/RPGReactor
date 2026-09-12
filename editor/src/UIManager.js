@@ -43,35 +43,94 @@ class UIManager {
         // Map trees own their selection. ProjectController highlights only
         // after a successful load; dialog trees must not change the sidebar.
 
-        // HTML Menu Bar - Setup dropdown behavior
-        const menuItems = document.querySelectorAll('.html-menu-item');
+        // HTML Menu Bar. A heading opens on click, or on Enter/Space/Down once
+        // it has keyboard focus; Left/Right walk the headings (carrying an open
+        // menu along), Escape closes, and F10 puts focus on the first heading.
+        const menuItems = Array.from(document.querySelectorAll('.html-menu-item'));
+        const keys = window.RRKeyboardNavigation;
+        const submenuOf = item => document.getElementById(`submenu-${item.getAttribute('data-menu')}`);
+        const isOpen = item => { const sub = submenuOf(item); return !!sub && sub.style.display !== 'none'; };
+        const closeAllMenus = () => {
+            document.querySelectorAll('.html-submenu').forEach(sub => {
+                sub._rrMenuKeys?.dispose();
+                sub.style.display = 'none';
+            });
+            menuItems.forEach(item => item.classList.remove('is-open'));
+        };
+        this.closeHtmlMenus = closeAllMenus;
+        const stepHeading = (item, direction, reopen) => {
+            const index = menuItems.indexOf(item);
+            const next = menuItems[(index + direction + menuItems.length) % menuItems.length];
+            if (!next) return;
+            closeAllMenus();
+            next.focus({ preventScroll: true });
+            if (reopen) openMenu(next, { viaKeyboard: true });
+        };
+        const openMenu = (item, { viaKeyboard = false, fromEnd = false } = {}) => {
+            const submenu = submenuOf(item);
+            if (!submenu) return;
+            closeAllMenus();
+            submenu.style.display = 'block';
+            item.classList.add('is-open');
+            const controller = keys?.menu(submenu, {
+                items: () => submenu.querySelectorAll('.html-menu-option'),
+                isDisabled: row => row.classList.contains('disabled') || row.getAttribute('aria-disabled') === 'true',
+                close: () => { submenu.style.display = 'none'; item.classList.remove('is-open'); },
+                opener: item,
+                focus: false,
+                onLeft: () => stepHeading(item, -1, true),
+                onRight: () => stepHeading(item, 1, true)
+            });
+            if (controller && viaKeyboard) controller.move(fromEnd ? Infinity : 1);
+        };
         menuItems.forEach(item => {
+            item.tabIndex = 0;
+            item.setAttribute('role', 'menuitem');
+            item.setAttribute('aria-haspopup', 'true');
             item.addEventListener('click', (e) => {
-                const menuName = item.getAttribute('data-menu');
-                const submenu = document.getElementById(`submenu-${menuName}`);
-
-                // Close all other submenus
-                document.querySelectorAll('.html-submenu').forEach(sub => {
-                    if (sub !== submenu) {
-                        sub.style.display = 'none';
-                    }
-                });
-
-                // Toggle this submenu
-                if (submenu) {
-                    submenu.style.display = submenu.style.display === 'none' ? 'block' : 'none';
+                if (e.target.closest('.html-submenu')) return;
+                if (isOpen(item)) closeAllMenus();
+                else openMenu(item);
+            });
+            item.addEventListener('keydown', (e) => {
+                if (e.target !== item) return;
+                switch (e.key) {
+                    case 'Enter':
+                    case ' ':
+                    case 'ArrowDown':
+                        e.preventDefault();
+                        openMenu(item, { viaKeyboard: true });
+                        break;
+                    case 'ArrowUp':
+                        e.preventDefault();
+                        openMenu(item, { viaKeyboard: true, fromEnd: true });
+                        break;
+                    case 'ArrowLeft':
+                        e.preventDefault();
+                        stepHeading(item, -1, isOpen(item));
+                        break;
+                    case 'ArrowRight':
+                        e.preventDefault();
+                        stepHeading(item, 1, isOpen(item));
+                        break;
+                    case 'Escape':
+                        if (isOpen(item)) { e.preventDefault(); closeAllMenus(); }
+                        break;
+                    default:
                 }
             });
+        });
+        document.addEventListener('keydown', (e) => {
+            if (e.key !== 'F10' || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+            if (!menuItems.length || !menuItems[0].getClientRects().length) return;
+            e.preventDefault();
+            menuItems[0].focus({ preventScroll: true });
         });
 
         // Close submenus when clicking outside the menu bar
         // Uses pointerdown + capture to fire before anything can swallow the event
         document.addEventListener('pointerdown', (e) => {
-            if (!e.target.closest('#html-menu-bar')) {
-                document.querySelectorAll('.html-submenu').forEach(sub => {
-                    sub.style.display = 'none';
-                });
-            }
+            if (!e.target.closest('#html-menu-bar')) closeAllMenus();
         }, true);
 
         // HTML Menu Bar - Handle menu option clicks
@@ -81,10 +140,7 @@ class UIManager {
                 const action = option.getAttribute('data-action');
                 const db = option.getAttribute('data-db');
 
-                // Close all submenus
-                document.querySelectorAll('.html-submenu').forEach(sub => {
-                    sub.style.display = 'none';
-                });
+                closeAllMenus();
 
                 if (action) {
                     this.handleHtmlMenuAction(action);
@@ -1126,6 +1182,7 @@ class UIManager {
             });
             document.addEventListener('keydown', handleKeyDown, true);
             document.body.appendChild(overlay);
+            window.RRKeyboardNavigation?.modal(overlay, { container: () => modal });
             nameInput.focus();
             if (typeof nameInput.select === 'function') nameInput.select();
         });
@@ -1269,6 +1326,7 @@ class UIManager {
             });
             document.addEventListener('keydown', handleKeyDown, true);
             document.body.appendChild(overlay);
+            window.RRKeyboardNavigation?.modal(overlay, { container: () => modal });
             okButton.focus();
         });
     }
@@ -1357,6 +1415,7 @@ class UIManager {
             });
             document.addEventListener('keydown', handleKeyDown, true);
             document.body.appendChild(overlay);
+            window.RRKeyboardNavigation?.modal(overlay, { container: () => modal });
             (cancelButton || okButton).focus();
         });
     }

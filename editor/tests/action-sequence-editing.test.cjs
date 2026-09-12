@@ -25,3 +25,33 @@ test('editing a motion transform previews its final pose before any following in
  e.playing=true;assert.equal(B.evaluate(e.previewSequence(),10,context).user.transform.x,0,'Full playback still advances to the next motion');
  e.playing=false;e.controls.transformPose=null;assert.equal(e.previewSequence(),e.sequence,'Ordinary scrubbing retains the full sequence');
 });
+
+test('a Move: Weapon step anchors its gizmo on the Show step it moves and previews at its end',()=>{
+ const e=editor({});const show=B.step('weapon',{mode:'show',attachment:'rightHand',x:.5,rotation:-30}),move=B.step('weapon',{mode:'move',duration:6,x:.1});
+ e.sequence={id:1,name:'Draw',steps:[B.step('motion',{duration:0}),show,move,B.step('wait',{duration:4})]};
+ assert.equal(e.heldBase(show),show);assert.equal(e.heldBase(move),show,'A move keeps the hand and grip of the weapon it moves');
+ assert.equal(e.heldBase(B.step('weapon',{visible:false})),null);
+ e.clearPreviewMedia=()=>{};e.updateStepSelection=()=>{};e.drawInspector=()=>{};e.validate=()=>{};e.controls={modeSelect:{},setTool(){}};
+ const cues=B.timeline(e.sequence);e.selectStep(2);assert.equal(e.frame,cues[2].end,'Selecting a weapon move shows where the move ends, under the gizmo');assert.equal(cues[2].end-cues[2].start,6);
+ e.selectStep(1);assert.equal(e.frame,cues[1].start,'Showing a weapon previews at its own frame');
+});
+
+test('picking a rigged part on a Motion step that plays a clip turns the step into a pose of that part',()=>{
+ const e=editor({});const step=B.step('motion',{motion:'missile',duration:8});e.sequence={id:1,name:'Aim',steps:[step]};e.selected=0;
+ e.drawInspector=()=>{};e.paint=()=>{};e.showPoseFrame=()=>{};e.edit=fn=>fn();
+ e.pickPosePart('RightUpperArm');
+ assert.equal(step.motion,B.POSE_MOTION);assert.equal(step.parts.map(p=>p.part).join(),'RightUpperArm');assert.equal(e.posePartName,'RightUpperArm');
+ e.pickPosePart('RightForeArm');assert.equal(step.parts.map(p=>p.part).join(),'RightUpperArm,RightForeArm','A second pick adds a part, the first stays');
+ e.pickPosePart('RightUpperArm');assert.equal(step.parts.length,2,'Picking a posed part again only selects it');assert.equal(e.posePartName,'RightUpperArm');
+ const wait=B.step('wait');e.sequence.steps.push(wait);e.selected=1;e.pickPosePart('Head');assert.equal(wait.parts,undefined,'Only Motion steps pose parts');
+});
+
+test('a projectile can be a 3D model or an animation, and validation asks for the missing pick',()=>{
+ assert.ok(B.extraFields.projectile.find(f=>f.key==='iconSource').options.includes('model'));
+ assert.ok(B.extraFields.projectile.find(f=>f.key==='iconSource').options.includes('animation'));
+ const seq=id=>({...B.template('Projectile Shot'),steps:[B.step('projectile',{iconSource:id,duration:8})]});
+ assert.ok(B.validateSequence(seq('model')).some(e=>/3D model/.test(e)),'a model projectile needs a model');
+ assert.ok(B.validateSequence(seq('animation')).some(e=>/animation/.test(e)),'an animation projectile needs an animation');
+ const good=seq('model');good.steps[0].model={name:'Weapons/Graviton Pistol',file:'Graviton_Pistol',ext:'.glb'};assert.ok(!B.validateSequence(good).some(e=>/3D model/.test(e)));
+ const anim=seq('animation');anim.steps[0].animationId=1;assert.ok(!B.validateSequence(anim).some(e=>/animation/.test(e)));
+});

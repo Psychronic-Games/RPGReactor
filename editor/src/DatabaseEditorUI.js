@@ -83,6 +83,10 @@ class DatabaseEditorUI {
         return typeof window !== 'undefined' && window.I18n ? window.I18n.t(key, params) : key;
     }
 
+    _tt(text) {
+        return window.I18n ? window.I18n.tText(text) : text;
+    }
+
     _dbTitle(type, fallback = type) {
         return typeof window !== 'undefined' && window.I18n?.tDbType ? window.I18n.tDbType(type, fallback) : fallback;
     }
@@ -235,6 +239,7 @@ class DatabaseEditorUI {
         document.querySelectorAll('.database-nav-item').forEach(item => {
             item.classList.toggle('active', item.dataset.type === type);
         });
+        document.getElementById('database-navigation')?._rrRoving?.sync();
     }
 
     captureDetailContext() {
@@ -312,6 +317,7 @@ class DatabaseEditorUI {
 
         this.takeDatabaseSnapshot();
         this.setupDatabaseControls();
+        viewer?._rrModalKeys?.enter();
 
         return { viewer, titleEl, listEl, listPanelEl, detailEl };
     }
@@ -328,6 +334,7 @@ class DatabaseEditorUI {
         this._activeDatabaseList = null;
         this.closeDatabaseActionMenu();
         const viewer = document.getElementById('database-viewer');
+        viewer?._rrModalKeys?.leave();
 
         if (this.animationEditor && this.animationEditor._currentEffekseerStop) {
             this.animationEditor._currentEffekseerStop();
@@ -372,6 +379,32 @@ class DatabaseEditorUI {
         this._dataSnapshot = JSON.stringify(this.databaseManager.data);
     }
 
+    /** Close through Cancel; confirm first when the data differs from the snapshot. */
+    async requestCloseDatabase(cancelAndClose) {
+        if (this._databaseSaveInFlight) return;
+        if (this._databaseCloseDialog) return;
+        let dirty = false;
+        try {
+            dirty = !!this._dataSnapshot && JSON.stringify(this.databaseManager.data) !== this._dataSnapshot;
+        } catch (error) {
+            dirty = true;
+        }
+        if (!dirty) { cancelAndClose(); return; }
+        const session = this._databaseSession;
+        const ask = this.callbacks?.showConfirm || (window.reactor?.uiManager?.showConfirm
+            ? (...args) => window.reactor.uiManager.showConfirm(...args) : null);
+        let discard;
+        this._databaseCloseDialog = true;
+        try {
+            discard = ask
+                ? await ask(this._tt('Discard Changes'), this._tt('Close the database and discard the unsaved changes?'), this._tt('Discard'), this._tt('Cancel'))
+                : confirm(this._tt('Close the database and discard the unsaved changes?'));
+        } finally {
+            this._databaseCloseDialog = false;
+        }
+        if (discard && this._databaseSession === session) cancelAndClose();
+    }
+
     setupDatabaseControls() {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const closeBtn = document.getElementById('database-close-btn');
@@ -387,6 +420,16 @@ class DatabaseEditorUI {
 
         if (closeBtn) closeBtn.onclick = cancelAndClose;
         if (cancelBtn) cancelBtn.onclick = cancelAndClose;
+
+        // Escape is Cancel, as in the dialog it mirrors, but edits are never
+        // dropped silently: a changed database asks first.
+        const viewer = document.getElementById('database-viewer');
+        if (viewer && window.RRKeyboardNavigation) {
+            window.RRKeyboardNavigation.modal(viewer, {
+                onEscape: () => this.requestCloseDatabase(cancelAndClose),
+                initialFocus: () => viewer.querySelector('.database-nav-item.active')
+            });
+        }
 
         if (okBtn) {
             okBtn.onclick = async () => {
@@ -655,6 +698,7 @@ class DatabaseEditorUI {
         navEl?.querySelectorAll('.database-nav-item').forEach(item => {
             item.classList.toggle('active', item.dataset.type === type);
         });
+        navEl?._rrRoving?.sync();
 
         titleEl.textContent = title;
         listEl.innerHTML = '';
@@ -1066,6 +1110,7 @@ class DatabaseEditorUI {
         viewer.classList.add('active');
         this.takeDatabaseSnapshot();
         this.setupDatabaseControls();
+        viewer?._rrModalKeys?.enter();
     }
 
     /**
@@ -1344,6 +1389,12 @@ class DatabaseEditorUI {
         const rect = menu.getBoundingClientRect();
         if (rect.right > window.innerWidth) menu.style.left = `${Math.max(4, window.innerWidth - rect.width - 4)}px`;
         if (rect.bottom > window.innerHeight) menu.style.top = `${Math.max(4, window.innerHeight - rect.height - 4)}px`;
+        menu.setAttribute('role', 'menu');
+        window.RRKeyboardNavigation?.menu(menu, {
+            items: () => menu.children,
+            isDisabled: row => row.disabled === true,
+            close: () => this.closeDatabaseActionMenu()
+        });
 
         const close = event => {
             if (!menu.contains(event.target)) {
@@ -1361,6 +1412,7 @@ class DatabaseEditorUI {
     }
 
     closeDatabaseActionMenu() {
+        this._databaseActionMenu?._rrMenuKeys?.dispose();
         this._databaseActionMenu?.remove();
         if (this._databaseActionMenuClose) document.removeEventListener('pointerdown', this._databaseActionMenuClose, true);
         if (this._databaseActionMenuEscape) document.removeEventListener('keydown', this._databaseActionMenuEscape, true);
@@ -1693,6 +1745,17 @@ class DatabaseEditorUI {
             });
 
             navEl.appendChild(item);
+        });
+
+        navEl.setAttribute('role', 'tablist');
+        navEl.setAttribute('aria-orientation', 'vertical');
+        window.RRKeyboardNavigation?.roving(navEl, {
+            orientation: 'vertical',
+            items: () => navEl.querySelectorAll('.database-nav-item'),
+            isSelected: item => item.classList.contains('active'),
+            select: item => {
+                if (!item.classList.contains('active')) this.openDatabase(item.dataset.type);
+            }
         });
     }
 
@@ -2112,6 +2175,17 @@ class DatabaseEditorUI {
             };
 
 
+            // The file each 2D preview comes from, under the preview; the
+            // 3D slot decoration shows the model name in the same place.
+            const sourceTag = (name, index) => {
+                const tag = document.createElement('div');
+                tag.className = 'graphic-preview-name';
+                tag.setAttribute('data-rr-i18n-skip', '1');
+                tag.textContent = name ? (index === undefined ? name : `${name} (${index + 1})`) : '';
+                tag.title = tag.textContent;
+                return tag;
+            };
+
             // Character sprite section
             const characterBox = document.createElement('div');
             characterBox.className = 'graphic-preview-box';
@@ -2123,7 +2197,8 @@ class DatabaseEditorUI {
 
             const charCanvasContainer = document.createElement('div');
             charCanvasContainer.className = 'graphic-canvas-container';
-            charCanvasContainer.style.minHeight = '160px';
+            charCanvasContainer.style.height = '176px';
+            charCanvasContainer.style.boxSizing = 'border-box';
 
             if (entry.characterName) {
                 // Show animated character sprite (same size as face for consistency)
@@ -2244,6 +2319,7 @@ class DatabaseEditorUI {
             }
 
             characterBox.appendChild(charCanvasContainer);
+            characterBox.appendChild(sourceTag(entry.characterName, entry.characterIndex || 0));
 
             // Add change character button
             const charButton = document.createElement('button');
@@ -2265,7 +2341,8 @@ class DatabaseEditorUI {
 
             const faceCanvasContainer = document.createElement('div');
             faceCanvasContainer.className = 'graphic-canvas-container';
-            faceCanvasContainer.style.minHeight = '160px';
+            faceCanvasContainer.style.height = '176px';
+            faceCanvasContainer.style.boxSizing = 'border-box';
 
             if (entry.faceName) {
                 const faceCanvas = document.createElement('canvas');
@@ -2313,6 +2390,7 @@ class DatabaseEditorUI {
             }
 
             faceBox.appendChild(faceCanvasContainer);
+            faceBox.appendChild(sourceTag(entry.faceName, entry.faceIndex || 0));
 
             // Add change face button
             const faceButton = document.createElement('button');
@@ -2334,7 +2412,8 @@ class DatabaseEditorUI {
 
             const svCanvasContainer = document.createElement('div');
             svCanvasContainer.className = 'graphic-canvas-container';
-            svCanvasContainer.style.minHeight = '160px';
+            svCanvasContainer.style.height = '176px';
+            svCanvasContainer.style.boxSizing = 'border-box';
 
             if (entry.battlerName) {
                 // Show SV battler sprite (same size as face for consistency)
@@ -2385,6 +2464,7 @@ class DatabaseEditorUI {
             }
 
             svBox.appendChild(svCanvasContainer);
+            svBox.appendChild(sourceTag(entry.battlerName));
 
             // Add change SV battler button
             const svButton = document.createElement('button');

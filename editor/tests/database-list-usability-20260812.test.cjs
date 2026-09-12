@@ -15,7 +15,7 @@ test('class learnable skills expose complete selectable CRUD controls', () => {
     assert.match(classEditor, /class="learning-btn-add rr-btn-chip">\$\{tt\('Add'\)\}/);
     assert.match(classEditor, /class="learning-btn-edit rr-btn-chip" disabled>\$\{tt\('Edit'\)\}/);
     assert.match(classEditor, /class="learning-btn-delete rr-btn-chip" disabled>\$\{tt\('Delete'\)\}/);
-    assert.match(classEditor, /class="learning-row" data-learning-index=/);
+    assert.match(classEditor, /class="learning-row trait-row" data-learning-index=/);
     assert.match(classEditor, /row\.addEventListener\('dblclick',[\s\S]*?this\.editLearning/);
     assert.match(classEditor, /event\.key !== 'Enter' && event\.key !== 'Delete'/);
     assert.match(classEditor, /learning-edit-level/);

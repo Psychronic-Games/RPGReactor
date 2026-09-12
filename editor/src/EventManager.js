@@ -905,16 +905,25 @@ class EventManager {
                 });
 
                 menuItem.appendChild(submenu);
+                menuItem.dataset.disabled = String(item.enabled === false);
+                menuItem.setAttribute('role', 'menuitem');
+                menuItem.setAttribute('aria-haspopup', 'true');
 
-                menuItem.addEventListener('mouseenter', () => {
-                    if (item.enabled === false) return;
+                const openSubmenu = () => {
+                    if (item.enabled === false) return null;
                     menuItem.style.backgroundColor = 'var(--color-accent-tint-25)';
                     submenu.style.display = 'block';
                     // A submenu opened near the bottom or right edge would run
                     // off the window and be clipped to its first entry.
                     EventManager.keepSubmenuOnScreen(submenu, menuItem.getBoundingClientRect(),
                         { width: window.innerWidth, height: window.innerHeight });
-                });
+                    return submenu;
+                };
+                menuItem._rrOpenSubmenu = () => {
+                    const opened = openSubmenu();
+                    return opened ? { element: opened, items: () => opened.children, close: () => { opened.style.display = 'none'; } } : null;
+                };
+                menuItem.addEventListener('mouseenter', openSubmenu);
 
                 menuItem.addEventListener('mouseleave', () => {
                     menuItem.style.backgroundColor = 'transparent';
@@ -925,6 +934,8 @@ class EventManager {
             } else {
                 const menuItem = document.createElement('div');
                 menuItem.className = 'context-menu-item';
+                menuItem.dataset.disabled = String(!item.enabled);
+                menuItem.setAttribute('role', 'menuitem');
                 menuItem.style.cssText = `
                     padding: 8px 16px;
                     cursor: ${item.enabled ? 'pointer' : 'not-allowed'};
@@ -977,6 +988,14 @@ class EventManager {
             this.contextMenu.style.left = Math.max(0, viewportWidth - menuRect.width) + 'px';
         }
 
+        this.contextMenu.setAttribute('role', 'menu');
+        window.RRKeyboardNavigation?.menu(this.contextMenu, {
+            items: () => this.contextMenu?.children || [],
+            isDisabled: row => row.dataset.disabled === 'true',
+            submenu: row => row._rrOpenSubmenu?.() || null,
+            close: () => this.hideContextMenu()
+        });
+
         // Close context menu when clicking elsewhere
         const closeHandler = (e) => {
             if (this.contextMenu && !this.contextMenu.contains(e.target)) {
@@ -996,6 +1015,7 @@ class EventManager {
     // Hide context menu
     hideContextMenu() {
         if (this.contextMenu) {
+            this.contextMenu._rrMenuKeys?.dispose();
             this.contextMenu.remove();
             this.contextMenu = null;
         }

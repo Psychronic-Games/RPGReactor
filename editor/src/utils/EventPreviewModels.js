@@ -56,6 +56,8 @@
                         const sidecar = JSON.parse(fs.readFileSync(path.join(project.path, '3d', ...spec.name.split('/'), 'model.json'), 'utf8'));
                         loaded.userData.reactorTransform = Reactor3D.readModelTransform(sidecar);
                         loaded.userData.reactorSidecar = sidecar;
+                        // Feet on the ground in the pose that plays, not the rest pose.
+                        if (Reactor3D.groundAnimatedTemplate) Reactor3D.groundAnimatedTemplate(loaded, sidecar);
                         // Distance levels the import wrote beside the source.
                         if (Array.isArray(sidecar.lods) && Reactor3D.attachLodLevels && !loaded.userData.animated) {
                             const buffers = [];

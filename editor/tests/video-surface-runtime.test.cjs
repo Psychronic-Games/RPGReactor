@@ -464,6 +464,21 @@ test('the image owner path skips playback machinery and gates on decode', () => 
     assert.match(source, /if \(this\.isImage \|\| !video\) return;/, 'updateAudio skips stills');
 });
 
+test('a still asks the picture loader for its own extension, so a JPG is not looked up as a PNG', () => {
+    const asked = [];
+    global.ImageManager = { loadPicture: name => { asked.push(name); return { isReady: () => false }; } };
+    try {
+        const manager = { failed() {}, ready() {} };
+        for (const file of ['SS-Origins-Poster.jpg', 'posters/launch.webp', 'wall.PNG', 'crate.jpeg']) {
+            new runtime.VideoSurfaceOwner(manager, { id: 1, generation: 1, file, target: 'map' }, null);
+        }
+        assert.deepEqual(asked, ['SS-Origins-Poster.jpg', 'posters/launch.webp', 'wall', 'crate.jpeg'],
+            'only the implied .png is dropped; every other format keeps its extension');
+    } finally {
+        delete global.ImageManager;
+    }
+});
+
 test('map decorations seed a map once and remain addressable by normal transform and stop commands', () => {
     const previous=global.$gameMap;global.$gameMap={mapId:()=>7};
     try {

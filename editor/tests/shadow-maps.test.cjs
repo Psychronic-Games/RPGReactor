@@ -206,10 +206,12 @@ test('slots go to the nearest casters and stay put while their light stays chose
     const away = { x: 25, y: 10, lightY: 10, z: 60, radius: 50, gap: -40, spot: true, ax: 0, ay: 0, az: 1, cosHalf: Math.cos(Math.PI / 8), strength: 1.25 };
     const far = { x: 5, y: 1, lightY: 1, z: 5, radius: 3, gap: 40, spot: false, strength: 1 };
     assert.ok(shadows._incident(screen, focus) > shadows._incident(hand, focus), 'the screen lands more light on the body than the torch aimed at the floor');
-    assert.ok(shadows._incident(away, focus) < shadows._incident(screen, focus) / 5, 'a screen aimed away barely counts');
+    // Where a light stands decides; where it points only tips the balance (SHADOW_AIM_FLOOR).
+    assert.ok(shadows._incident(away, focus) < shadows._incident(screen, focus), 'a screen aimed away counts for less');
+    assert.ok(shadows._incident(away, focus) > shadows._incident(screen, focus) * 0.4, 'but not so little that a sweep of its arm trades rows');
     assert.equal(shadows._incident(far, focus), 0, 'out of reach lands nothing');
     assert.ok(shadows._rankFor(screen, focus) < shadows._rankFor(hand, focus));
-    assert.ok(shadows._rankFor(hand, focus) < shadows._rankFor(away, focus));
+    assert.ok(shadows._rankFor(screen, focus) < shadows._rankFor(away, focus));
     assert.ok(shadows._rankFor(far, focus) > 2e4);
     assert.equal(shadows._incident(screen, null), 0, 'no focus, no ranking');
     assert.deepEqual(shadows.assign([a], 3, null).map(s => s && s.id), ['a', null, null]);
@@ -500,9 +502,12 @@ test('both viewports render the maps once a frame before the first pass, and the
     const editor = read('editor/src/MapEditor3D.js');
     assert.match(editor, /lightingManager\?\.feed3D\?\.\(\);\n[\s\S]{0,400}?this\.mapScene\.renderShadows\?\.\(this\.renderer, this\.currentMap\(\)\);\n\s*const scene = this\.mapScene\.scene\(\);/);
     assert.match(editor, /if \(sprite && Reactor3D\.Shadows\) Reactor3D\.Shadows\.markCaster\(mesh, false\);/);
-    assert.equal((editor.match(/Reactor3D\.Shadows\.markCaster\(object, !!template\.userData\.animated\);/g) || []).length, 2, 'event models and props');
+    // Marked once the animation is prepared (a rig can replace the meshes),
+    // and a model that moves by its rules alone is a moving caster too.
+    const marks = editor.match(/const driver = this\.animateModel\([^\n]*\);\n[\s\S]{0,400}?Reactor3D\.Shadows\.markCaster\(object, this\.movesOnItsOwn\(template, driver\)\);/g) || [];
+    assert.equal(marks.length, 2, 'event models and props');
 
-    assert.match(read('runtime/reactor_main.js'), /runtime revision: 20260911\.6/);
+    assert.match(read('runtime/reactor_main.js'), /runtime revision: 20260912\.2/);
 });
 
 test("a casting light's maps hold their origin until the light has drifted a quarter tile", () => {
@@ -519,3 +524,90 @@ test("a casting light's maps hold their origin until the light has drifted a qua
     // The tier, slots and budget are said once, so a shadow report carries them.
     assert.match(three, /console\.info\("RPG Reactor shadows: " \+ Reactor3D\.tier\(\) \+ " tier, " \+ tiles\.length \+ " casting light row\(s\), "/);
 });
+
+test('moving-caster rows are spent around the eye: the owner focus, then the drawing camera, then a light', () => {
+    const shadows = Reactor3D.Shadows;
+    const saved = { focus: shadows.focus, cull: Reactor3D.cullCamera, candidates: shadows._candidates, dynamic: shadows._dynamic };
+    try {
+        shadows._dynamic = new Set();
+        shadows._candidates = [{ x: 24.5, y: 2.5, z: 44.5, radius: 7 }];
+        shadows.focus = null;
+        Reactor3D.cullCamera = null;
+        assert.deepEqual(shadows._focusPoint(null), { x: 24.5, y: 2.5, z: 44.5 }, 'nothing better known: the first light');
+        // The editor draws with its own camera and hangs it above the map;
+        // with a viewport that never answers, the rows used to go to that
+        // first light, wherever it stood.
+        Reactor3D.cullCamera = { position: { x: 30, y: 13, z: 20 } };
+        assert.deepEqual(shadows._focusPoint(null), { x: 30, y: 13, z: 20 }, 'the camera actually drawing');
+        shadows.focus = () => ({ x: 37.5, y: 1, z: 7.5 });
+        assert.deepEqual(shadows._focusPoint(null), { x: 37.5, y: 1, z: 7.5 }, 'an owner\'s point of interest wins');
+        shadows.focus = () => { throw new Error('no view'); };
+        assert.deepEqual(shadows._focusPoint(null), { x: 30, y: 13, z: 20 }, 'a failing focus falls through');
+    } finally {
+        shadows.focus = saved.focus;
+        Reactor3D.cullCamera = saved.cull;
+        shadows._candidates = saved.candidates;
+        shadows._dynamic = saved.dynamic;
+    }
+});
+
+test('a held row is only traded away after the challenger has outranked it for the dwell', () => {
+    const shadows = Reactor3D.Shadows;
+    const saved = { frame: shadows._frame, losing: shadows._losing };
+    try {
+        shadows._frame = 1000;
+        shadows._losing = {};
+        const a = { id: 'a', rank: -0.5 };
+        const b = { id: 'b', rank: -0.4 };
+        const swing = { id: 'swing', rank: -0.7 };
+        const held = [{ id: 'a' }, { id: 'b' }];
+        assert.deepEqual(shadows.assign([a, b, swing], 2, held, 't').map(s => s.id), ['a', 'b'], 'a fresh challenge changes nothing yet');
+        shadows._frame += Reactor3D.SHADOW_ROW_DWELL - 1;
+        assert.deepEqual(shadows.assign([a, b, swing], 2, held, 't').map(s => s.id), ['a', 'b'], 'still held just short of the dwell');
+        shadows._frame += 1;
+        assert.deepEqual(shadows.assign([a, b, swing], 2, held, 't').map(s => s.id), ['a', 'swing'], 'the weaker incumbent yields once the challenge has lasted');
+        // A sweep that stops before the dwell is forgotten: the count starts over.
+        shadows._frame += 10;
+        assert.deepEqual(shadows.assign([a, b], 2, held, 't').map(s => s.id), ['a', 'b']);
+        shadows._frame += Reactor3D.SHADOW_ROW_DWELL - 5;
+        assert.deepEqual(shadows.assign([a, b, swing], 2, held, 't').map(s => s.id), ['a', 'b'], 'a new challenge counts from its own start');
+        // A light with nothing in reach leaves at once, dwell or not.
+        assert.deepEqual(shadows.assign([a, swing], 2, held, 't').map(s => s.id), ['a', 'swing']);
+        // Scopes keep their own counts.
+        assert.deepEqual(shadows.assign([a, b, swing], 2, held, 'other').map(s => s.id), ['a', 'b']);
+        // A challenger twice as strong as the incumbent is no sweep: it takes the row at once.
+        const beam = { id: 'beam', rank: -0.85 };
+        assert.deepEqual(shadows.assign([a, b, beam], 2, held, 'fresh').map(s => s.id), ['a', 'beam']);
+    } finally {
+        shadows._frame = saved.frame;
+        shadows._losing = saved.losing;
+    }
+});
+
+test('rows are ranked on smoothed incident light, so a sweeping cone does not carry them off', () => {
+    const shadows = Reactor3D.Shadows;
+    const saved = { smooth: shadows._smooth, frame: shadows._frame, candidates: shadows._candidates };
+    try {
+        shadows._smooth = null;
+        shadows._frame = 1;
+        shadows._candidates = [];
+        const focus = { x: 0, y: 0, z: 0 };
+        // A screen five tiles up, reach 50, either aimed at the focus or swung away.
+        const at = aim => ({ id: 'screen', x: 0, y: 5, z: 0, lightY: 5, radius: 50, priorityRadius: 50, strength: 1,
+            spot: true, ax: 0, ay: -aim, az: Math.sqrt(Math.max(0, 1 - aim * aim)), cosHalf: 0.9 });
+        const facing = shadows._incident(at(1), focus);
+        const away = shadows._incident(at(0), focus);
+        assert.ok(facing > away * 1.1 && facing <= away * (1 + Reactor3D.SHADOW_PRIORITY_HYSTERESIS) + 1e-9, 'aim tips the instantaneous value by no more than a held row\'s margin');
+        let smoothed = shadows._smoothedIncident(at(0), focus);
+        assert.equal(smoothed, away, 'the first look is taken as it is');
+        for (let frame = 0; frame < 30; frame++) { shadows._frame++; smoothed = shadows._smoothedIncident(at(1), focus); }
+        assert.ok(smoothed < away + (facing - away) * 0.3, 'half a second of facing moves the ranked value only part of the way: ' + smoothed.toFixed(3));
+        for (let frame = 0; frame < 600; frame++) { shadows._frame++; smoothed = shadows._smoothedIncident(at(1), focus); }
+        assert.ok(smoothed > facing * 0.95, 'ten seconds of facing and the ranked value has arrived');
+    } finally {
+        shadows._smooth = saved.smooth;
+        shadows._frame = saved.frame;
+        shadows._candidates = saved.candidates;
+    }
+});
+

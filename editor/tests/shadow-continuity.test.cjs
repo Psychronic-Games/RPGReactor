@@ -29,7 +29,8 @@ test('crossing a spotlight priority edge does not abruptly drop its score tenfol
         { x: Math.sqrt(1 - cosine * cosine), y: -0.7, z: cosine });
     assert.ok(Math.abs(score(0.720001) - score(0.719999)) < 0.0001,
         'tiny movement across the old hard boundary makes only a tiny priority change');
-    assert.ok(score(0.95) > score(0.72) * 5, 'a light aimed directly at the focus still ranks higher');
+    assert.ok(score(0.95) > score(0.72) * 1.1, 'a light aimed directly at the focus still ranks higher');
+    assert.ok(score(0.95) < score(0.72) * 2, 'but never so much that a sweep alone can take a row (SHADOW_ROW_TAKEOVER)');
 });
 
 test('authored flicker changes illumination while keeping shadow priority steady', () => {

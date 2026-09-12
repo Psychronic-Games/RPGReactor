@@ -14,11 +14,11 @@ Native checks cover quick-step insertion, all command options, disclosure persis
 
 ## Assignment and playback
 
-Skills/items take priority, followed by weapons for normal attacks, the actor's class, then the actor or enemy. An unequipped actor can also have an unarmed override. Existing complete-action assignments remain supported.
+Skills/items take priority, followed by weapons for normal attacks, the actor's class, then the actor or enemy. Revised 2026-09-12: the six phases are always visible on every record with the priority chain shown above them, and the separate unarmed override is folded into the actor's own Execute. Existing complete-action assignments remain supported as the Whole Action control.
 
 - **Follow Lower-Priority Defaults** continues through that chain.
 - **Use Engine / Plugin Action** stops inheritance and retains the existing engine/plugin action.
-- **Assign Each Action Phase** exposes Prepare, Movement, Execute/Attack, Effect/Impact, Return, and Finish/Cleanup. Each phase can inherit, use its built-in behavior, or reference a sequence of the corresponding purpose.
+- The phases Prepare, Movement, Execute, Effect, Return and Finish are always listed. Each phase can inherit, use its built-in behavior, or reference a sequence of the corresponding purpose.
 - **A named complete sequence** owns the whole action.
 
 Execute calls Effect at its Play Effect Phase cue. Phase selectors filter out sequences with incompatible purposes and provide Create Phase/Open Sequence buttons. Missing references are visible and fall back to existing action behavior at runtime instead of partially executing an invalid sequence.
@@ -59,7 +59,7 @@ Routine calls detect cycles and missing records, cap nesting at 16, and cap expa
 
 ## Battler graphics
 
-Actors and enemies can use the existing graphic, an SV sheet, a character set, a static image, or a 3D model. The selection is stored in the Database working copy, separately from map-character and face bindings. When an explicit type is active, the obsolete legacy battler preview is hidden rather than displaying a conflicting model/image.
+Actors and enemies choose one battler graphic type in the same box that shows the file and preview: the Images card's battler slot for actors, the General card's battler rows for enemies (revised 2026-09-12; the separate bottom card is gone). The default 2D type and the 3D type write the record's own battler name and 3D binding, so RPG Maker data stays canonical; SV, character-set and static overrides are stored in the Database working copy. Sprite options fold out beneath the box as Battler Options.
 
 SV/character controls include frame count, frame interval, SV motion rows/columns, scale, mirror, vertical offset, shadow and weapon visibility, per-motion index/direction/frame count/speed, and loop/play-once/hold-last behavior. Character battlers support a separate defeated image/index/direction. Enemy controls include up to two weapons and an attack animation. States can override an idle motion with priority, frame settings and speed multiplier.
 

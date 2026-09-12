@@ -76,6 +76,12 @@ jobs:
       - name: Verify list and dropdown keyboard navigation
         working-directory: editor
         run: xvfb-run --auto-servernum npm run smoke:nw-keyboard -- --nw-root="$NWJS_SDK_ROOT" --size=1280x720
+      - name: Verify menu, context-menu and dialog keyboard navigation
+        working-directory: editor
+        run: xvfb-run --auto-servernum npm run smoke:nw-menus -- --nw-root="$NWJS_SDK_ROOT" --size=1280x720
+      - name: Verify event double-click opens the editor in 2D and 3D
+        working-directory: editor
+        run: xvfb-run --auto-servernum npm run smoke:nw-event-double-click -- --nw-root="$NWJS_SDK_ROOT"
       - name: Upload interaction audit evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -87,6 +93,8 @@ jobs:
             /tmp/rr-interaction-after.png
             /tmp/rr-issue54-result.json
             /tmp/rr-issue54-after.png
+            /tmp/rr-keyboard-menus-result.json
+            /tmp/rr-keyboard-menus-after.png
       - name: Clean up NW.js SDK
         if: always()
         shell: bash

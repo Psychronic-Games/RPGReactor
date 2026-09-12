@@ -111,6 +111,7 @@ class ModelGraphicPicker {
         this.selectedPitch = Number(current && current.pitch) || 0;
         this.selectedRoll = Number(current && current.roll) || 0;
         this.selectedSize = Number(current && current.size) > 0 ? Number(current.size) : 2;
+        this.selectedOffset = (Array.isArray(current && current.offset) ? current.offset : [0, 0, 0]).map(v => Number(v) || 0);
         this.selectedFaces = Object.assign({}, (current && current.faces) || {});
         this._placingFace = '';
 
@@ -265,6 +266,8 @@ class ModelGraphicPicker {
                         roll: this.selectedRoll,
                         faces: Object.assign({}, this.selectedFaces),
                         texture: this.selectedTexture || '',
+                        // The model card over the 3D view owns the offset; a re-pick keeps it.
+                        ...(this.selectedOffset.some(v => v) ? { offset: this.selectedOffset.slice() } : {}),
                         ...(this._framing
                             ? { view: { zoom: this.selectedView.zoom, y: this.selectedView.y } }
                             : {})

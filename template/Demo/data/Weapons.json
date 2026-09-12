@@ -1636,7 +1636,7 @@
   },
   {
     "id": 49,
-    "animationId": 0,
+    "animationId": 123,
     "description": "",
     "etypeId": 1,
     "traits": [
@@ -1651,13 +1651,13 @@
         "value": 0
       }
     ],
-    "iconIndex": 0,
-    "name": "",
+    "iconIndex": 100,
+    "name": "Graviton Pistol",
     "note": "",
     "params": [
       0,
       0,
-      0,
+      50,
       0,
       0,
       0,
@@ -1665,7 +1665,7 @@
       0
     ],
     "price": 0,
-    "wtypeId": 0
+    "wtypeId": 9
   },
   {
     "id": 50,

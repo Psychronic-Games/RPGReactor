@@ -478,8 +478,8 @@ class DatabaseClassEditor {
                 const skill = skills.find(s => s && s.id === learning.skillId);
                 const skillName = skill ? skill.name : `${tt('Skill')} #${learning.skillId}`;
                 return `
-                    <tr class="learning-row" data-learning-index="${index}" style="cursor: pointer;">
-                        <td class="learning-indicator" style="width: 3px; padding: 0; border: none; background: transparent;"></td>
+                    <tr class="learning-row trait-row" data-learning-index="${index}" style="cursor: pointer;">
+                        <td class="learning-indicator"></td>
                         <td style="width: 60px; text-align: center;">${learning.level}</td>
                         <td>${rrEscapeHtml(skillName)}</td>
                         <td style="color: var(--color-text-muted); font-size: 11px;">${rrEscapeHtml(learning.note || '')}</td>
@@ -494,7 +494,7 @@ class DatabaseClassEditor {
                 <table class="traits-table learnings-table">
                     <thead>
                         <tr>
-                            <th style="width: 3px; padding: 0; border: none; background: transparent;"></th>
+                            <th class="trait-indicator-heading"></th>
                             <th>${tt('Level')}</th>
                             <th>${tt('Skill')}</th>
                             <th>${tt('Note')}</th>
@@ -528,16 +528,8 @@ class DatabaseClassEditor {
         const rows = table.querySelectorAll('.learning-row');
         rows.forEach(row => {
             row.addEventListener('click', () => {
-                rows.forEach(other => {
-                    other.classList.remove('selected');
-                    const indicator = other.querySelector('.learning-indicator');
-                    if (indicator) indicator.style.backgroundColor = 'transparent';
-                    Array.from(other.querySelectorAll('td')).slice(1).forEach(cell => { cell.style.backgroundColor = ''; });
-                });
+                rows.forEach(other => other.classList.remove('selected'));
                 row.classList.add('selected');
-                const indicator = row.querySelector('.learning-indicator');
-                if (indicator) indicator.style.backgroundColor = 'var(--color-accent-bright)';
-                Array.from(row.querySelectorAll('td')).slice(1).forEach(cell => { cell.style.backgroundColor = 'var(--color-bg-selected)'; });
                 section.focus();
                 this.updateLearningButtonStates(section, table);
             });

@@ -1,5 +1,7 @@
 # Editor keyboard support audit — 2026-09-11
 
+> Superseded for menus, categories and dialog containment by the [September 12 follow-up](KEYBOARD-MENUS-AND-DIALOGS-2026-09-12.md). The tables below describe the state before that change.
+
 Keyboard support is partial. The earlier work substantially improved lists and shared selectors, but it did not provide a consistent keyboard contract for menus, category navigation, or modal dialogs. Tab works on native fields/buttons, yet many dialogs let it reach the editor underneath. This pass records current behavior; it does not change production behavior.
 
 ## Evidence and scope

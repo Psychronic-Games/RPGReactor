@@ -20,7 +20,8 @@ const done = arguments[arguments.length - 1];
         const list = document.getElementById('maps-list'); list.focus();
         check('map tree consumes ArrowDown', key(list, 'ArrowDown'));
         for (let i = 0; i < 100 && pc.tilemapManager.currentMap.id !== 2; i++) await wait();
-        check('map tree arrows load and highlight the next map', pc.tilemapManager.currentMap.id === 2 && !!list.querySelector('[data-map-id="2"].selected'));
+        check('map tree arrows load and highlight the next map', pc.tilemapManager.currentMap.id === 2 && !!list.querySelector('[data-map-id="2"].selected'),
+            { currentMap: pc.tilemapManager.currentMap?.id, selected: list.querySelector('.selected')?.dataset.mapId ?? null, focused: document.activeElement?.id || document.activeElement?.className });
         check('map loading retains list focus', document.activeElement === list);
         key(list, 'Home');
         for (let i = 0; i < 100 && pc.tilemapManager.currentMap.id !== 1; i++) await wait();

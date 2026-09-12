@@ -64,6 +64,8 @@ class SwitchVariablePicker {
         this.modal.addEventListener('keydown', event => {
             if (event.key === 'Escape') this.close();
         });
+        // Tab stays inside the picker; the owner already handles Escape and focus return.
+        window.RRKeyboardNavigation?.modal(this.modal, { container: () => container });
 
         document.body.appendChild(this.modal);
     }
@@ -170,6 +172,17 @@ class SwitchVariablePicker {
         // Scroll event to update active tab
         listContainer.addEventListener('scroll', () => {
             this.updateActiveTabFromScroll(listContainer);
+        });
+        // Arrows walk the rows; Enter on the focused row picks it (the row's own click).
+        window.RRKeyboardNavigation?.roving(listContainer, {
+            orientation: 'vertical',
+            items: () => listContainer.querySelectorAll('.rr-picker-item'),
+            isSelected: item => item.classList.contains('is-selected'),
+            select: item => {
+                listContainer.querySelectorAll('.rr-picker-item.is-selected').forEach(row => row.classList.remove('is-selected'));
+                item.classList.add('is-selected');
+                item.scrollIntoView({ block: 'nearest' });
+            }
         });
 
         mainContent.appendChild(listContainer);

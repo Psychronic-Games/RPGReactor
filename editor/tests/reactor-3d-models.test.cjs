@@ -217,6 +217,14 @@ test('sidecar event models win over notes', () => {
     assert.deepEqual(withFaces.faces.left, [-0.5, 0.2, 0]);
     assert.equal(withFaces.faces.back, undefined);
 
+    // A model nudged off its tile keeps the nudge through the sidecar; one
+    // standing on the tile writes no offset at all.
+    Reactor3D.setEventModelSpec(map, 22, 0, { name: 'Hero', size: 20, offset: [0, '-0.32', 0] });
+    assert.deepEqual(Array.from(Reactor3D.eventModelSpec(map, 22, 0).offset), [0, -0.32, 0]);
+    assert.deepEqual(map.reactor3d.events['22']['0'].offset, [0, -0.32, 0]);
+    Reactor3D.setEventModelSpec(map, 22, 0, { name: 'Hero', size: 20, offset: [0, 0, 0] });
+    assert.equal('offset' in map.reactor3d.events['22']['0'], false);
+
     Reactor3D.setEventModelSpec(map, 22, 0, null);
     assert.equal(Reactor3D.hasEventModels(map), false);
 
@@ -929,6 +937,65 @@ test('the event editor round-trip keeps the model texture', () => {
         path.join(repoRoot, 'editor', 'src', 'event', 'EventEditor.js'), 'utf8');
     const carried = source.match(/texture: spec\.texture \|\| ''/g) || [];
     assert.equal(carried.length, 2, 'both stored-spec branches carry texture');
+});
+
+test('an animated template stands on the pose its resting clip shows, not the rest pose', () => {
+    global.self = global;
+    global.window = global;
+    require(path.join(repoRoot, 'runtime', 'libs', 'three.js'));
+    // One triangle on a node; "hover" lifts the node half a unit for its
+    // whole length, "sink" drops it a quarter. The rest pose is on the ground.
+    const positions = new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]);
+    const times = new Float32Array([0, 1]);
+    const lift = new Float32Array([0, 0.5, 0, 0, 0.5, 0]);
+    const drop = new Float32Array([0, -0.25, 0, 0, -0.25, 0]);
+    const bin = new Uint8Array(positions.byteLength + times.byteLength + lift.byteLength + drop.byteLength);
+    let at = 0;
+    for (const part of [positions, times, lift, drop]) { bin.set(new Uint8Array(part.buffer), at); at += part.byteLength; }
+    const json = {
+        asset: { version: '2.0' },
+        buffers: [{ byteLength: bin.byteLength }],
+        bufferViews: [
+            { buffer: 0, byteOffset: 0, byteLength: positions.byteLength },
+            { buffer: 0, byteOffset: positions.byteLength, byteLength: times.byteLength },
+            { buffer: 0, byteOffset: positions.byteLength + times.byteLength, byteLength: lift.byteLength },
+            { buffer: 0, byteOffset: positions.byteLength + times.byteLength + lift.byteLength, byteLength: drop.byteLength }
+        ],
+        accessors: [
+            { bufferView: 0, componentType: 5126, count: 3, type: 'VEC3', min: [0, 0, 0], max: [1, 1, 0] },
+            { bufferView: 1, componentType: 5126, count: 2, type: 'SCALAR', min: [0], max: [1] },
+            { bufferView: 2, componentType: 5126, count: 2, type: 'VEC3' },
+            { bufferView: 3, componentType: 5126, count: 2, type: 'VEC3' }
+        ],
+        meshes: [{ primitives: [{ attributes: { POSITION: 0 } }] }],
+        nodes: [{ name: 'body', mesh: 0 }],
+        scenes: [{ nodes: [0] }],
+        scene: 0,
+        animations: [
+            { name: 'hover', channels: [{ sampler: 0, target: { node: 0, path: 'translation' } }], samplers: [{ input: 1, output: 2 }] },
+            { name: 'sink', channels: [{ sampler: 0, target: { node: 0, path: 'translation' } }], samplers: [{ input: 1, output: 3 }] }
+        ]
+    };
+    const build = () => Reactor3D.buildGlbTemplate(json, bin, '');
+    const content = template => template.children.find(child => child.name === 'content');
+    const body = template => { let found = null; template.traverse(node => { if (!found && node.name === 'body') found = node; }); return found; };
+
+    const idle = build();
+    const before = body(idle).position.y;
+    Reactor3D.groundAnimatedTemplate(idle, { animations: [{ type: 'clip', trigger: 'idle', name: 'Idle', clip: 'hover' }] });
+    assert.ok(Math.abs(content(idle).position.y - (-0.5)) < 1e-6, 'the idle clip hovers half a unit, so the content drops by that: ' + content(idle).position.y);
+    assert.equal(body(idle).position.y, before, 'the template is handed back in its rest pose');
+    assert.equal(idle.userData.reactorClipGround, 0.5);
+    Reactor3D.groundAnimatedTemplate(idle, { animations: [{ type: 'clip', trigger: 'idle', name: 'Idle', clip: 'sink' }] });
+    assert.ok(Math.abs(content(idle).position.y - (-0.5)) < 1e-6, 'grounded once per template');
+
+    const first = build();
+    Reactor3D.groundAnimatedTemplate(first, null);
+    assert.ok(Math.abs(content(first).position.y - (-0.5)) < 1e-6, 'without rules the first clip is the one that plays');
+
+    const sinking = build();
+    Reactor3D.groundAnimatedTemplate(sinking, { animations: [{ type: 'clip', trigger: 'idle', name: 'Idle', clip: 'sink' }] });
+    assert.ok(Math.abs(content(sinking).position.y - 0.25) < 1e-6, 'a clip below the rest pose lifts the content');
 });
 
 test('embedded clips build, clone, and play motion through clip rules', () => {

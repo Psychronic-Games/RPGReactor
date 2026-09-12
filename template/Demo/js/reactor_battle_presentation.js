@@ -42,7 +42,7 @@
             isAttack:action.isAttack(),weaponIds:subject.weapons?.().map(w=>w.id)||[],
             classId:subject.isActor()?subject.currentClass?.()?.id:0,magical:action.isMagical?.(),animationId:action.item().animationId>0?action.item().animationId:subject.attackAnimationId1?.()||0,
             battlerKind:subject.isActor()?'actors':'enemies',battlerId:subject.isActor()?subject.actorId():subject.enemyId()});
-        if(sequence?.steps.some(s=>s.type==='animation'&&s.animationId>0&&!$dataAnimations[s.animationId])){P.warn('A sequence animation is missing; existing action behavior is retained.');return null;}try{return sequence?B.expandCalls(sequence,P.sequences):null;}catch(error){P.warn(error);return null;}
+        if(sequence?.steps.some(s=>(s.type==='animation'||s.type==='projectile'&&s.iconSource==='animation')&&s.animationId>0&&!$dataAnimations[s.animationId])){P.warn('A sequence animation is missing; existing action behavior is retained.');return null;}try{return sequence?B.expandCalls(sequence,P.sequences):null;}catch(error){P.warn(error);return null;}
     };
     P.compatibility=function(){
         const names=(PluginManager._scripts||[]).join(' ');
@@ -61,7 +61,9 @@
         }
         const camera=room?{...room.settings.camera}:null,cameraSource=room?.settings.cameraSource;
         homes.camera=room?{x:camera.x,y:camera.y,z:camera.z}: {x:0,y:0,z:0};
-        const media=[];
+        // Where each battler's posed parts stand, so a pose step starts from
+        // the last one and the motion after a pose brings the parts home.
+        const media=[],poseState=new Map();
         const adapter={context:{homes,target:homes.target,direction:homes.target&&homes.user&&homes.target.x<homes.user.x?-1:1},
             cue(step,start){
                 const chosen=step._chosen|| (step.role==='allTargets'?visibleTargets:step.role==='target'?[visibleTargets[step.targetIndex??0]]:[subject]);
@@ -90,9 +92,17 @@
                     const ticket={isPlaying:()=>tickets.some(t=>t.isPlaying()),cancel:()=>tickets.forEach(t=>t.cancel?.())};media.push(ticket);return ticket;
                 }
                 else if(step.type==='motion')for(const battler of chosen.filter(Boolean)){
-                    const sprite=ss.findTargetSprite(battler);sprite?.startMotion?.(step.motion==='idle'?'wait':['attack','punch'].includes(step.motion)?'thrust':step.motion==='run'?'walk':step.motion==='cast'?'spell':step.motion);if(sprite&&P.graphicFor(battler)){P.requestGraphicMotion(sprite,step.motion);if(step.motion==='attack'&&P.graphicFor(battler).showWeapon!==false)battler.performAttack?.();}
-                    const state=sprite?._reactorBattler;if(state){root.ReactorBattleRoomView.prepareMotions(state);const rule=state.rules?.find(r=>r.trigger==='action'&&r.name.toLowerCase()===step.motion?.toLowerCase());state.action=step.motion==='idle'?null:{name:rule?.name||step.motion,frame:state.frame};if(step.motion==='idle'&&state.binding)state.binding.movingAt=undefined;}
-                    const model=room?.models.get(sprite?._reactorRoomKey);if(model){model.action=step.motion==='idle'?null:{name:step.motion,start:room.frame};if(step.motion==='idle'&&model.binding)model.binding.movingAt=undefined;}
+                    // A part pose is played by rules made for this step from
+                    // where the battler's parts stand now; sheet battlers wait.
+                    const sheetMotion=B.spriteMotionName(step),releasing=!B.hasPose(step)&&Object.keys(poseState.get(battler)||{}).length>0,actionName=releasing?'pose:'+step.id:B.motionActionName(step);
+                    const sprite=ss.findTargetSprite(battler);sprite?.startMotion?.(sheetMotion==='idle'?'wait':['attack','punch'].includes(sheetMotion)?'thrust':sheetMotion==='run'?'walk':sheetMotion==='cast'?'spell':sheetMotion);if(sprite&&P.graphicFor(battler)){P.requestGraphicMotion(sprite,sheetMotion);if(step.motion==='attack'&&P.graphicFor(battler).showWeapon!==false)battler.performAttack?.();}
+                    const posed=B.hasPose(step)?B.partPoseRules(step,poseState.get(battler)||{}):releasing?B.releasePoseRules(step,poseState.get(battler)||{}):null;if(posed)poseState.set(battler,posed.next);
+                    const join=rules=>{if(!posed||!Array.isArray(rules))return;const kept=rules.filter(r=>r.name!==actionName);kept.push(...posed.rules);
+                        // A release still plays the motion it names, under the release's own action.
+                        if(releasing)kept.push(...B.releaseMotionRules({releases:{[step.id]:step.motion||'idle'},actions:{[step.id]:actionName}},step.id,rules));
+                        rules.length=0;rules.push(...kept);};
+                    const state=sprite?._reactorBattler;if(state){root.ReactorBattleRoomView.prepareMotions(state);join(state.rules);const rule=state.rules?.find(r=>r.trigger==='action'&&r.name.toLowerCase()===actionName?.toLowerCase());state.action=actionName==='idle'?null:{name:rule?.name||actionName,frame:state.frame};if(actionName==='idle'&&state.binding)state.binding.movingAt=undefined;}
+                    const model=room?.models.get(sprite?._reactorRoomKey);if(model){join(model.rules);model.action=actionName==='idle'?null:{name:actionName,start:room.frame};if(actionName==='idle'&&model.binding)model.binding.movingAt=undefined;}
                 }else if(step.type==='weapon'){
                     adapter.clearWeapon();if(step.visible===false)return;
                     const item=step.iconSource==='action'?manager._action.item():subject.weapons?.()[0];const icon=step.iconSource==='icon'?step.iconIndex||0:item?.iconIndex||0;
@@ -150,19 +160,46 @@
             if(main!==sprite){p.x+=(main.x||0)*(sprite.scale?.x||1)/48;p.y+=(main.y||0)*(sprite.scale?.y||1)/48;}
             return B.attachmentPoint(p,{...step,z:step.attachment&&step.attachment!=='offset'?(step.z||0):height??step.z},width,heightPx);
         };
-        const destroy=entry=>{room?.remove(entry.key);entry.graphic.removeFromParent();entry.graphic.destroy();if(entry.owned)entry.graphic.bitmap.destroy();};
+        const destroy=entry=>{entry.animation?.cancel?.();room?.remove(entry.key);if(!entry.graphic)return;entry.graphic.removeFromParent();entry.graphic.destroy();if(entry.owned)entry.graphic.bitmap.destroy();};
+        // An animation projectile plays its animation on the carrier: in a room, anchored to the flying billboard; flat, as an animation sprite whose target is the carrier sprite.
+        const flightAnimation=entry=>{
+            const id=entry.step.animationId,data=root.$dataAnimations?.[id];if(!(id>0)||!data)return null;
+            if(room)return room.playAnimation(entry.key,id,{})||null;
+            const Kind=data.frames?root.Sprite_AnimationMV:root.Sprite_Animation;if(!Kind||!entry.graphic||!ss._effectsContainer)return null;
+            const sprite=new Kind();sprite.targetObjects=[];sprite.setup([entry.graphic],data,false,0,null);ss._effectsContainer.addChild(sprite);ss._animationSprites.push(sprite);
+            return {cancel(){if(ss._animationSprites?.includes(sprite))ss.removeAnimation(sprite);}};
+        };
         const make=(step,battler)=>{
             let bitmap,owned=false,rect;
+            if(room&&['weapon','projectile'].includes(step.type)&&step.weaponGraphic!=='sheet'&&root.Reactor3D?.databaseModelSpec){
+                // A held or thrown thing bound to a 3D model is shown as that model.
+                const source=step.iconSource||(step.type==='projectile'?'color':'weapon');let spec=null;
+                if(source==='weapon'){const weapon=(battler?.weapons?.()||[])[Math.max(0,(step.equipIndex||1)-1)];spec=weapon&&root.Reactor3D.databaseModelSpec('weapons',weapon.id);}
+                else if(source==='action'){const item=manager._action?.item?.();spec=item&&root.Reactor3D.databaseModelSpec(DataManager.isSkill(item)?'skills':'items',item.id);}
+                else if(source==='model'&&step.model?.name)spec=root.Reactor3D.normalizeModelSpec(step.model);
+                if(spec){const key=prefix+(serial++);room.addModel(key,spec,{x:0,y:0,z:0});return {key,model:true,step};}
+            }
             if(step.weaponGraphic==='sheet'){
                 const id=Math.max(1,step.weaponImageId||1),index=(id-1)%12;bitmap=ImageManager.loadSystem('Weapons'+Math.ceil(id/12));rect={x:(Math.floor(index/6)*3+Math.max(0,Math.min(2,(step.weaponFrame||1)-1)))*96,y:index%6*64,width:96,height:64};
             }else if(step.iconSource==='picture')bitmap=ImageManager.loadPicture(step.name);
-            else if(step.type==='projectile'&&(!step.iconSource||step.iconSource==='color')){const size=step.size||8;bitmap=new Bitmap(size,size);bitmap.fillAll(step.color||'#ffcc55');owned=true;}
+            // A model with no room to stand in, and an animation's carrier, fly as a dot (the carrier's is clear).
+            else if(step.type==='projectile'&&(!step.iconSource||['color','model','animation'].includes(step.iconSource))){const size=step.iconSource==='animation'?2:step.size||8;bitmap=new Bitmap(size,size);if(step.iconSource!=='animation')bitmap.fillAll(step.color||'#ffcc55');owned=true;}
             else{bitmap=ImageManager.loadSystem('IconSet');const size=ImageManager.iconWidth||32,index=B.visualIcon(step,step.sourceRole==='user'?subject:battler,manager._action?.item?.());rect={x:index%16*size,y:Math.floor(index/16)*size,width:size,height:size};}
             const graphic=new Sprite(bitmap);if(rect)graphic.setFrame(rect.x,rect.y,rect.width,rect.height);graphic.anchor.set(step.gripX??.5,step.gripY??.5);ss._battleField.addChild(graphic);
             return {key:prefix+(serial++),graphic,rect,owned,step};
         };
         const draw=(entry,p,rotation,visible=true)=>{
-            const {graphic,step}=entry;if(!p||graphic.bitmap.isReady?.()===false){graphic.visible=false;return;}
+            const {graphic}=entry,step=entry.now||entry.step;
+            if(entry.model){
+                // The thing points where its holder faces: an authored front
+                // face turns to the facing itself, a model without one keeps
+                // the long-axis assumption of +90. Tilt tips it, Turn and Roll
+                // finish the pose, all about its grip.
+                const owner=entry.owner?._reactorRoomPosition,record=room?.models.get(entry.key);if(!p||!record)return;
+                room.place(entry.key,B.heldPlacement(p,owner?.facing||0,{...step,rotation},record.spec));
+                if(record.object)record.object.visible=visible;entry.point={...p};return;
+            }
+            if(!p||graphic.bitmap.isReady?.()===false){graphic.visible=false;return;}
             const rect=entry.rect||{x:0,y:0,width:graphic.bitmap.width,height:graphic.bitmap.height};if(!rect.width||!rect.height)return;
             if(room){room.sequenceBillboard(entry.key,graphic.bitmap.canvas,rect,p,{...step,rotation,visible});graphic.visible=false;}
             else{graphic.x=p.x*48;graphic.y=(p.y-(p.z||0))*48;graphic.rotation=rotation*Math.PI/180;graphic.scale.set(step.scale??1);graphic.visible=visible;}
@@ -170,18 +207,24 @@
         };
         const update=()=>{
             if(closed)return;
-            for(const entry of held.values())draw(entry,point(entry.owner,entry.step),(entry.step.rotation||0));
+            for(const entry of held.values()){
+                const tw=entry.tween;if(tw){const t=Math.min(1,(time-tw.start)/Math.max(1,tw.duration));entry.now={...entry.step,...B.heldPose(tw.from,tw.to,B.ease(t,tw.easing))};if(t>=1){entry.step=entry.now;delete entry.tween;}}
+                const now=entry.now||entry.step;draw(entry,point(entry.owner,now),(now.rotation||0));
+            }
             for(const entry of flights){
                 entry.from||=point(entry.owner,entry.step,entry.step.startHeight??1);
                 const to=point(entry.target,{attachment:'offset',x:0,y:0,z:entry.step.endHeight??1},entry.step.endHeight??1),t=Math.min(1,Math.max(0,(time-entry.start)/Math.max(1,entry.step.duration)));
                 if(entry.from&&to)draw(entry,B.flightPoint(entry.from,to,t,entry.step.arc||0,entry.step.flight==='return'),(entry.step.rotation||0)+(time-entry.start)*(entry.step.spin||0),t<1);
+                if(entry.from&&to&&entry.step.iconSource==='animation'&&entry.animation===undefined&&t<1)entry.animation=flightAnimation(entry);
             }
         };
         (ss._rrSequenceVisualUpdates||=new Set()).add(update);if(room)(room.sequenceVisualUpdates||=new Set()).add(update);
         return {held,flights,point,
             cue(step,start,chosen,destinations){
                 if(!['weapon','projectile'].includes(step.type))return false;time=start;
-                if(step.type==='weapon')for(const battler of chosen){const owner=ss.findTargetSprite(battler);if(!owner)continue;const old=held.get(owner);if(old){destroy(old);held.delete(owner);}if(step.visible!==false)held.set(owner,{...make(step,battler),owner});}
+                if(step.type==='weapon')for(const battler of chosen){const owner=ss.findTargetSprite(battler);if(!owner)continue;const old=held.get(owner),mode=B.weaponMode(step);
+                    if(mode==='move'){if(old)old.tween={from:B.heldPose(old.now||old.step,old.now||old.step,1),to:B.heldPose(step,step,1),start,duration:step.duration,easing:step.easing};continue;}
+                    if(old){destroy(old);held.delete(owner);}if(mode!=='hide')held.set(owner,{...make(step,battler),owner});}
                 else{
                     const dest=step.destination||'target',recipients=destinations||(dest==='user'?[subject]:dest==='allTargets'?[...new Set(targets)]:dest==='subject'?[subject]:[targets[step.targetIndex||0]]);
                     for(const battler of chosen)for(const target of recipients){const owner=ss.findTargetSprite(battler),targetSprite=ss.findTargetSprite(target);if(owner&&targetSprite)flights.push({...make(step,battler),owner,target:targetSprite,start});}
@@ -542,7 +585,8 @@
         if(motion){const mapping=graphic.motions?.[motion.name]||{},length=(mapping.frames||graphic.frames||3)*(mapping.speed||graphic.speed||12);
             if(mapping.loop!==true&&mapping.loop!=='once'&&time-motion.start>=length&&!['idle','moving','walk','run','guard','chant','victory','dead'].includes(motion.name))sprite._rrGraphicMotion=motion=null;}
         const override=sprite._rrMotionOverride;if(override&&motion?.name===override.name)graphic={...graphic,motions:{...graphic.motions,[override.name]:{...graphic.motions?.[override.name],...override}}};
-        const held=sprite._rrHeldPose;const frame=B.graphicFrame(graphic,bitmap.width,bitmap.height,held?.motion||motion?.name||P.battlerState(battler,sprite),held?held.frame*(graphic.speed||12):motion?time-motion.start:time);
+        const held=sprite._rrHeldPose,facingYaw=sprite._reactorRoomPosition?.facing??sprite._rrSequenceFacing??(sprite._rrFacing?sprite._rrFacing*90:(battler?.isActor?.()?-90:90));
+        const frame=B.graphicFrame(graphic,bitmap.width,bitmap.height,held?.motion||motion?.name||P.battlerState(battler,sprite),held?held.frame*(graphic.speed||12):motion?time-motion.start:time,facingYaw);
         if(main!==sprite)main.y=-(graphic.offsetY||0);
         main.setFrame(frame.x,frame.y,frame.width,frame.height);
         if(main!==sprite)sprite.setFrame(0,0,frame.width,frame.height);
@@ -579,7 +623,7 @@
             if(battler._rrReaction)delete battler._rrReaction;
             if(state!==sprite._rrStateName||reaction){sprite._rrStatePlayer?.cancel();sprite._rrStatePlayer=null;sprite._rrStateName=state;sprite._rrStateFinished=false;}
             if(!sprite._rrStatePlayer&&!sprite._rrStateFinished){
-                const action=BattleManager._action,item=action?.item?.(),binding=item?P.settings[DataManager.isSkill(item)?'skills':'items']?.[item.id]:null;const sequence=B.resolveState(P.settings,P.sequences,identity.kind,identity.id,state,identity.classId,binding);
+                const action=BattleManager._action,item=action?.item?.(),binding=item?P.settings[DataManager.isSkill(item)?'skills':'items']?.[item.id]:null;const sequence=B.resolveState(P.settings,P.sequences,identity.kind,identity.id,state,identity.classId,binding,(battler.states?.()||[]).map(s=>s.id));
                 if(sequence){const manager={_spriteset:ss,_targets:[],_logWindow:BattleManager._logWindow};sprite._rrStatePlayer=new B.Player(sequence,P.adapter(manager,battler,[],true));}
                 else sprite._rrStateFinished=true;
             }

@@ -477,6 +477,9 @@ class TilemapManager {
             this.destroyAllVirtualChunkLayers();
             this.app.stage.removeChild(this.container);
             this.container.destroy({ children: true });
+            // The underlay went down with the container; a destroyed Graphics
+            // throws on its next clear(), which blocked every later map load.
+            this._previewBackground = null;
         }
 
         // Create new container for tilemap
@@ -2324,7 +2327,7 @@ class TilemapManager {
     renderPreviewBackground(mapWidth, mapHeight) {
         const color = typeof ThemeColors !== 'undefined'
             ? ThemeColors.resolve('--color-asset-preview-bg', '#24272d') : '#24272d';
-        this._previewBackground ||= new PIXI.Graphics();
+        if (!this._previewBackground || this._previewBackground.destroyed) this._previewBackground = new PIXI.Graphics();
         this._previewBackground.clear().rect(0, 0, mapWidth * this.TILE_WIDTH, mapHeight * this.TILE_HEIGHT).fill(color);
         if (this._previewBackground.parent !== this.layers.checkerboard) {
             this.layers.checkerboard.addChild(this._previewBackground);

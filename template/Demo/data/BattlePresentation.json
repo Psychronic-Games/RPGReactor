@@ -78,22 +78,64 @@
     }
   },
   "skills": {},
-  "items": {},
-  "weapons": {},
+  "items": {
+    "7": {
+      "mode": "sequence",
+      "sequenceId": 17
+    },
+    "8": {
+      "mode": "sequence",
+      "sequenceId": 17
+    },
+    "9": {
+      "mode": "sequence",
+      "sequenceId": 17
+    },
+    "10": {
+      "mode": "sequence",
+      "sequenceId": 17
+    },
+    "11": {
+      "mode": "sequence",
+      "sequenceId": 17
+    },
+    "12": {
+      "mode": "sequence",
+      "sequenceId": 17
+    },
+    "13": {
+      "mode": "sequence",
+      "sequenceId": 17
+    },
+    "14": {
+      "mode": "sequence",
+      "sequenceId": 17
+    },
+    "15": {
+      "mode": "sequence",
+      "sequenceId": 17
+    },
+    "19": {
+      "mode": "sequence",
+      "sequenceId": 17
+    }
+  },
+  "weapons": {
+    "1": {
+      "mode": "sequence",
+      "sequenceId": 18
+    },
+    "49": {
+      "mode": "sequence",
+      "sequenceId": 19
+    }
+  },
   "actors": {
     "1": {
-      "mode": "inherit",
-      "unarmed": {
-        "mode": "sequence",
-        "sequenceId": 1
-      }
+      "mode": "inherit"
     },
     "2": {
-      "mode": "inherit",
-      "unarmed": {
-        "mode": "sequence",
-        "sequenceId": 1
-      }
+      "mode": "inherit"
     }
   },
   "enemies": {}

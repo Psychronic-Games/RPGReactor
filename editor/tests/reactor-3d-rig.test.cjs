@@ -380,3 +380,95 @@ test('rig weights round-trip through the binary sidecar, matching base64 exactly
     }
     assert.equal(binaryRead.bones.length, legacy.bones.length);
 });
+
+test('a rig on a model with its own skinned skeleton names the file bones, and poses bend them from the clip pose', () => {
+    require(path.join(repoRoot, 'runtime', 'libs', 'three.js'));
+    const THREE = global.THREE;
+    // A Mixamo-shaped export: an upper arm bone at y=1 with a forearm child
+    // half a unit up, one skinned triangle per bone, bound at rest.
+    const upper = new THREE.Bone(); upper.name = 'mixamorigRightArm'; upper.position.set(0, 1, 0);
+    const fore = new THREE.Bone(); fore.name = 'mixamorigRightForeArm'; fore.position.set(0, 0.5, 0);
+    upper.add(fore);
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array([0, 1, 0, 0.1, 1.2, 0, 0, 1.4, 0, 0, 1.5, 0, 0.1, 1.7, 0, 0, 2, 0]), 3));
+    geometry.setAttribute('skinIndex', new THREE.BufferAttribute(new Uint16Array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0]), 4));
+    geometry.setAttribute('skinWeight', new THREE.BufferAttribute(new Float32Array([1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0]), 4));
+    geometry.setIndex([0, 1, 2, 3, 4, 5]);
+    const root = new THREE.Group();
+    const skinned = new THREE.SkinnedMesh(geometry, new THREE.MeshBasicMaterial());
+    root.add(upper, skinned);
+    root.updateMatrixWorld(true);
+    skinned.bind(new THREE.Skeleton([upper, fore]), new THREE.Matrix4());
+
+    const rig = Reactor3D.readModelRig({ rig: { bones: [
+        { name: 'RightUpperArm', parent: -1, head: [0, 1, 0], tail: [0, 1.5, 0] },
+        { name: 'RightLowerArm', parent: 0, head: [0, 1.5, 0], tail: [0, 2, 0] },
+        { name: 'Head', parent: -1, head: [0, 9, 0], tail: [0, 9.5, 0] }
+    ] } });
+    Reactor3D.applyModelRig(root, rig);
+    const bones = [];
+    root.traverse(node => { if (node.isBone) bones.push(node); });
+    assert.equal(bones.length, 2, 'no second skeleton grows beside the file skeleton');
+    assert.equal(upper.userData.parts[0].name, 'RightUpperArm');
+    assert.equal(fore.userData.parts[0].name, 'RightLowerArm');
+    assert.equal(root.userData.rigMapped, 2, 'a rig bone standing nowhere near a file bone stays unmapped');
+
+    // The file's clip turns the upper arm; a pose bends the forearm.
+    const q0 = new THREE.Quaternion(), q1 = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI / 2);
+    const clip = new THREE.AnimationClip('raise', 1, [new THREE.QuaternionKeyframeTrack('mixamorigRightArm.quaternion', [0, 1], [q0.x, q0.y, q0.z, q0.w, q1.x, q1.y, q1.z, q1.w])]);
+    const binding = Reactor3D.prepareModelInstance(root, [clip]);
+    assert.ok(binding.mixer);
+    const rules = Reactor3D.readModelAnimationRules({ animations: [
+        { name: 'raise', type: 'clip', clip: 'raise', trigger: 'always' },
+        { name: 'bend', part: 'RightLowerArm', type: 'pose', rotate: [0, 0, 90], period: 1, trigger: 'always' }
+    ] });
+    const run = (list, frames) => { for (let frame = 0; frame < frames; frame++) Reactor3D.applyModelAnimation(binding, list, { frame, moving: false, scale: 1 }); };
+    run(rules, 31);
+    const upperAngle = upper.quaternion.angleTo(q0) * 180 / Math.PI;
+    assert.ok(upperAngle > 20 && upperAngle < 70, 'the clip still drives the named upper arm: ' + upperAngle.toFixed(1));
+    const foreAngle = fore.quaternion.angleTo(q0) * 180 / Math.PI;
+    assert.ok(Math.abs(foreAngle - 90) < 1, 'the forearm holds the pose without compounding across frames: ' + foreAngle.toFixed(1));
+    run(rules.slice(0, 1), 10);
+    assert.ok(fore.quaternion.angleTo(q0) < 1e-6, 'releasing the pose hands the forearm back to the clip');
+    const laterUpper = upper.quaternion.angleTo(q0) * 180 / Math.PI;
+    assert.ok(laterUpper > upperAngle, 'the clip kept playing meanwhile');
+});
+
+test('a pose on a mapped joint is read in the model frame however the file skeleton is turned and scaled', () => {
+    require(path.join(repoRoot, 'runtime', 'libs', 'three.js'));
+    const THREE = global.THREE;
+    // A Blender-style export: the armature lies on its back at 100× the scene's units.
+    const armature = new THREE.Group(); armature.name = 'Armature'; armature.rotation.x = -Math.PI / 2; armature.scale.setScalar(0.01);
+    const upper = new THREE.Bone(); upper.name = 'RightArm'; upper.position.set(0, 0, 100); upper.rotation.y = 0.7;
+    const fore = new THREE.Bone(); fore.name = 'RightForeArm'; fore.position.set(0, 0, 50);
+    upper.add(fore); armature.add(upper);
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array([0, 0, 100, 10, 0, 120, 0, 0, 140]), 3));
+    geometry.setAttribute('skinIndex', new THREE.BufferAttribute(new Uint16Array([0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0]), 4));
+    geometry.setAttribute('skinWeight', new THREE.BufferAttribute(new Float32Array([1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0]), 4));
+    const skinned = new THREE.SkinnedMesh(geometry, new THREE.MeshBasicMaterial());
+    armature.add(skinned);
+    const root = new THREE.Group(); root.add(armature); root.updateMatrixWorld(true);
+    skinned.bind(new THREE.Skeleton([upper, fore]), new THREE.Matrix4());
+    // Rig heads sit where the joints stand in the model's own frame (y up, metres).
+    const at = node => root.worldToLocal(node.getWorldPosition(new THREE.Vector3())).toArray();
+    const rig = Reactor3D.readModelRig({ rig: { bones: [
+        { name: 'RightUpperArm', parent: -1, head: at(upper), tail: at(fore) },
+        { name: 'RightLowerArm', parent: 0, head: at(fore), tail: [at(fore)[0], at(fore)[1] + 0.5, at(fore)[2]] }
+    ] } });
+    Reactor3D.applyModelRig(root, rig);
+    assert.equal(root.userData.rigMapped, 2);
+    const idle = new THREE.AnimationClip('idle', 1, [new THREE.VectorKeyframeTrack('RightArm.position', [0, 1], [0, 0, 100, 0, 0, 100])]);
+    const binding = Reactor3D.prepareModelInstance(root, [idle]);
+    const rules = Reactor3D.readModelAnimationRules({ animations: [
+        { name: 'idle', type: 'clip', clip: 'idle', trigger: 'always' },
+        { name: 'lift', part: 'RightLowerArm', type: 'pose', move: [0, 1, 0], period: 1, trigger: 'always' }
+    ] });
+    const before = fore.getWorldPosition(new THREE.Vector3());
+    for (let frame = 0; frame < 3; frame++) Reactor3D.applyModelAnimation(binding, rules, { frame, moving: false, scale: 1 });
+    root.updateMatrixWorld(true);
+    const after = fore.getWorldPosition(new THREE.Vector3());
+    const lift = after.sub(before);
+    assert.ok(Math.abs(lift.x) < 0.02 && Math.abs(lift.z) < 0.02, 'the joint moved straight up in the model frame: ' + lift.toArray().map(n => n.toFixed(2)));
+    assert.ok(lift.y > 0.5, 'and by the authored distance in scene units, not the armature\'s centimetres: ' + lift.y.toFixed(2));
+});

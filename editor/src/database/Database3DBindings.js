@@ -190,6 +190,7 @@
             name.textContent = spec ? spec.name : tt('(None)');
             name.style.display = spec ? '' : 'none';
             change.style.display = spec ? '' : 'none';
+            if (row._rr3d && row._rr3d.afterSync) row._rr3d.afterSync(spec);
             if (pane) {
                 pane.style.display = spec ? 'flex' : 'none';
                 if (spec) {
@@ -247,6 +248,23 @@
         });
         change.addEventListener('click', openPicker);
 
+        // The graphic-type selector in the enemy editor drives this row; it
+        // hides the checkbox and calls these instead.
+        row._rr3d = {
+            sync,
+            openPicker,
+            clear: () => {
+                if (!trySet(project.path, section, id, null)) { sync(); return false; }
+                if (options.onChange) options.onChange(null);
+                sync();
+                return true;
+            },
+            checkLabel: check.parentElement,
+            name,
+            change,
+            bound: () => get(project.path, section, id),
+            afterSync: null
+        };
         sync();
         host.appendChild(row);
         return row;
@@ -333,10 +351,12 @@
         const slot = options.slot;
         const label = box.querySelector('.graphic-preview-label');
         const canvasBox = box.querySelector('.graphic-canvas-container');
+        const nameTag2d = box.querySelector('.graphic-preview-name');
+        if (nameTag2d && nameTag2d.dataset.source2d === undefined) nameTag2d.dataset.source2d = nameTag2d.textContent;
         const button = box.querySelector('.graphic-selector-button');
         if (!label || !canvasBox || !button) return null;
-        const label2d = label.textContent;
-        const button2d = button.textContent;
+        const label2d = label.getAttribute('data-i18n-text-source') || label.textContent;
+        const button2d = button.getAttribute('data-i18n-text-source') || button.textContent;
 
         // The 3D toggle sits beside the change button it re-aims — picking
         // a sprite or a model is one decision, made in one place — and the
@@ -362,7 +382,7 @@
 
         const pane = document.createElement('div');
         pane.style.cssText = 'display:none;flex-direction:column;align-items:center;justify-content:center;'
-            + 'gap:6px;min-height:160px;';
+            + 'gap:6px;height:176px;box-sizing:border-box;';
         const thumb = document.createElement('img');
         thumb.style.cssText = 'width:140px;height:140px;object-fit:contain;image-rendering:auto;'
             + 'background:var(--color-bg-deep);border:1px solid var(--color-border);border-radius:4px;';
@@ -375,7 +395,10 @@
         canvasBox.parentNode.insertBefore(pane, canvasBox.nextSibling);
 
         const bound = () => get(project.path, 'actors', id, slot);
+        const api = { afterSync: null };
+        box._rr3dSlot = api;
         const sync = () => {
+            if (box.dataset.rrExplicit === 'true') { if (api.afterSync) api.afterSync(); return; }
             let spec;
             try { spec = bound(); }
             catch (error) {
@@ -392,13 +415,20 @@
             nameTag.title = '';
             nameTag.style.color = '';
             check.checked = !!spec;
-            label.textContent = spec ? tt(options.label) : label2d;
+            // The i18n pass re-applies a button's remembered source text, so
+            // the source must move with the text or it snaps back.
+            label.setAttribute('data-i18n-text-source', spec ? options.label : label2d);
+            label.textContent = spec ? tt(options.label) : tt(label2d);
             canvasBox.style.display = spec ? 'none' : '';
+            if (nameTag2d && !spec) { nameTag2d.style.display = ''; nameTag2d.textContent = nameTag2d.dataset.source2d || ''; nameTag2d.title = nameTag2d.textContent; }
             if (!spec) canvasBox._load2d?.();
             pane.style.display = spec ? 'flex' : 'none';
-            button.textContent = spec ? tt('Change Model') : button2d;
+            button.setAttribute('data-i18n-text-source', spec ? 'Change Model' : button2d);
+            button.textContent = spec ? tt('Change Model') : tt(button2d);
             if (spec) {
                 nameTag.textContent = spec.name;
+                nameTag.style.display = nameTag2d ? 'none' : '';
+                if (nameTag2d) { nameTag2d.style.display = ''; nameTag2d.textContent = spec.name; nameTag2d.title = spec.name; }
                 thumb.style.opacity = '0.35';
                 if (options.thumbnail) {
                     const render = () => Promise.resolve().then(() => options.thumbnail(spec)).then(url => {
@@ -410,6 +440,7 @@
                     render();
                 }
             }
+            if (api.afterSync) api.afterSync(spec);
         };
 
         const resyncWhenClosed = () => {
@@ -442,14 +473,32 @@
         // When the slot is 3D, the box's button belongs to the model
         // picker; capture beats the 2D handler already attached.
         button.addEventListener('click', event => {
-            if (!bound()) return;
+            if (box.dataset.rrExplicit === 'true' || !bound()) return;
             event.stopImmediatePropagation();
             event.preventDefault();
             openPicker();
         }, true);
 
+        Object.assign(api, {
+            sync,
+            openPicker,
+            clear: () => {
+                if (!trySet(project.path, 'actors', id, null, slot)) { sync(); return false; }
+                sync();
+                return true;
+            },
+            bound,
+            corner,
+            label,
+            label2d,
+            button,
+            button2d,
+            canvasBox,
+            nameTag2d,
+            pane
+        });
         sync();
-        return { sync };
+        return api;
     }
 
     const api = { filePath, read, get, set, attachRow, decorateSlot, modelThumbnail };

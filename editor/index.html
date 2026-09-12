@@ -704,7 +704,7 @@
         <div class="modal-content" style="max-width: 500px; text-align: center;">
             <div class="modal-header">
                 <h2 data-i18n="about.title">About RPG Reactor</h2>
-                <span class="modal-close" onclick="document.getElementById('about-modal').style.display='none'">&times;</span>
+                <button type="button" class="modal-close" id="about-modal-close" aria-label="Close">&times;</button>
             </div>
             <div class="modal-body">
                 <img src="images/logo.png" alt="RPG Reactor" style="max-width: 300px; width: 100%; height: auto; margin-bottom: 24px;" onerror="this.style.display='none'">
@@ -883,6 +883,7 @@
     <script src="src/database/DatabaseTextCodes.js"></script>
     <script src="src/utils/AudioCoverArt.js"></script>
     <script src="src/utils/AudioLoopTags.js"></script>
+    <script src="src/utils/KeyboardNavigation.js"></script>
     <script src="src/utils/PickerIndex.js"></script>
     <script src="src/utils/EnemyActionForecast.js"></script>
     <script src="src/utils/AudioPickerModal.js"></script>
@@ -1078,6 +1079,7 @@
     <script src="src/utils/ModelPropShadows2D.js"></script>
     <script src="src/utils/ModelPropsPreview2D.js"></script>
     <script src="src/ModelPropsManager.js"></script>
+    <script src="src/EventModelPanel.js"></script>
     <script src="src/utils/ColourPopover.js"></script>
     <script src="src/utils/MapLights.js"></script>
     <script src="src/utils/FlatShadowLight2D.js"></script>

@@ -156,7 +156,16 @@ class PluginManager {
 
         modal.style.display = 'block';
         this.fitWindowToViewport();
-        this.pluginListContainer?.focus({ preventScroll: true });
+        const trap = window.RRKeyboardNavigation?.modal(modal, {
+            onEscape: () => {
+                if (document.querySelector('.plugin-manager-child-modal')) return;
+                this.hide();
+            },
+            container: () => this._windowContainer || modal,
+            initialFocus: () => this.pluginListContainer
+        });
+        if (trap) trap.enter();
+        else this.pluginListContainer?.focus({ preventScroll: true });
     }
 
     fitWindowToViewport() {
@@ -177,7 +186,9 @@ class PluginManager {
     hide() {
         const modal = document.getElementById('plugin-manager-modal');
         if (modal) {
+            this._hidePluginContextMenu();
             modal.style.display = 'none';
+            modal._rrModalKeys?.leave();
         }
     }
 
@@ -2008,6 +2019,9 @@ class PluginManager {
 
         this.pluginListContainer = document.createElement('div');
         this.pluginListContainer.className = 'rr-accent-scrollbar';
+        // Focusable from the first open; the list binding that arrives with
+        // the scanned plugins only re-applies this.
+        this.pluginListContainer.tabIndex = 0;
         this.pluginListContainer.style.cssText = `
             flex: 1;
             overflow-y: auto;
@@ -2711,6 +2725,8 @@ class PluginManager {
                 continue;
             }
             const row = document.createElement('div');
+            row.dataset.disabled = String(!!entry.disabled);
+            row.setAttribute('role', 'menuitem');
             row.style.cssText = `
                 padding: 5px 12px;
                 color: ${entry.disabled ? 'var(--color-border-input)' : 'var(--color-text)'};
@@ -2741,22 +2757,24 @@ class PluginManager {
         }
 
         document.body.appendChild(menu);
+        menu.setAttribute('role', 'menu');
+        window.RRKeyboardNavigation?.menu(menu, {
+            items: () => menu.children,
+            isDisabled: row => row.dataset.disabled === 'true',
+            close: () => this._hidePluginContextMenu()
+        });
 
         // Close on click outside or escape
         const closeHandler = (e) => {
-            if (!menu.contains(e.target)) {
-                this._hidePluginContextMenu();
-                document.removeEventListener('mousedown', closeHandler);
-            }
+            if (!menu.contains(e.target)) this._hidePluginContextMenu();
         };
         const escHandler = (e) => {
-            if (e.key === 'Escape') {
-                this._hidePluginContextMenu();
-                document.removeEventListener('keydown', escHandler);
-            }
+            if (e.key === 'Escape') this._hidePluginContextMenu();
         };
+        this._pluginContextMenuHandlers = { closeHandler, escHandler };
         // Delay so the current click doesn't immediately close
         setTimeout(() => {
+            if (this._pluginContextMenuHandlers?.closeHandler !== closeHandler) return;
             document.addEventListener('mousedown', closeHandler);
             document.addEventListener('keydown', escHandler);
         }, 0);
@@ -2764,7 +2782,16 @@ class PluginManager {
 
     _hidePluginContextMenu() {
         const existing = document.getElementById('plugin-context-menu');
-        if (existing) existing.remove();
+        if (existing) {
+            existing._rrMenuKeys?.dispose();
+            existing.remove();
+        }
+        const handlers = this._pluginContextMenuHandlers;
+        if (handlers) {
+            this._pluginContextMenuHandlers = null;
+            document.removeEventListener('mousedown', handlers.closeHandler);
+            document.removeEventListener('keydown', handlers.escHandler);
+        }
     }
 
     /**

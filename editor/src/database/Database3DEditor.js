@@ -6648,13 +6648,15 @@ class Database3DEditor {
             if (weight > bestWeight) { bestWeight = weight; best = bone; }
         }
         const boneObject = best >= 0 ? mesh.skeleton.bones[best] : null;
-        return boneObject ? boneObject.name : null;
+        // A file bone the rig names is picked by the rig's name for it.
+        const part = boneObject && boneObject.userData && boneObject.userData.parts && boneObject.userData.parts[0];
+        return part ? part.name : (boneObject ? boneObject.name : null);
     }
 
     /** Bounds of a binding entry: geometry for meshes, the segment for bones. */
     _expandEntry(box, entry) {
         const mesh = entry.mesh;
-        if (!mesh.isBone) {
+        if (!(mesh.isBone || (mesh.userData && mesh.userData.__reactorClipBone))) {
             box.expandByObject(mesh);
             return;
         }
@@ -6663,7 +6665,7 @@ class Database3DEditor {
         box.expandByPoint(head);
         let leaf = true;
         for (const child of mesh.children) {
-            if (!child.isBone) continue;
+            if (!(child.isBone || (child.userData && child.userData.__reactorClipBone))) continue;
             leaf = false;
             child.updateWorldMatrix(true, false);
             box.expandByPoint(new THREE.Vector3().setFromMatrixPosition(child.matrixWorld));

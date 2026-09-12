@@ -172,7 +172,8 @@ class EventEditor {
                 pitch: Math.round((spec.pitch || 0) * 180 / Math.PI),
                 roll: Math.round((spec.roll || 0) * 180 / Math.PI),
                 faces: spec.faces ? JSON.parse(JSON.stringify(spec.faces)) : {},
-                texture: spec.texture || ''
+                texture: spec.texture || '',
+                ...(spec.offset && spec.offset.some(v => v) ? { offset: Array.from(spec.offset) } : {})
             };
         }
         const raw = map && map.reactor3d && map.reactor3d.events
@@ -189,7 +190,8 @@ class EventEditor {
             pitch: Number(spec.pitch) || 0,
             roll: Number(spec.roll) || 0,
             faces: spec.faces ? JSON.parse(JSON.stringify(spec.faces)) : {},
-            texture: spec.texture || ''
+            texture: spec.texture || '',
+            ...(Array.isArray(spec.offset) && spec.offset.some(v => Number(v)) ? { offset: spec.offset.slice(0, 3).map(v => Number(v) || 0) } : {})
         };
     }
 
@@ -261,6 +263,9 @@ class EventEditor {
             };
             if (spec.faces && typeof spec.faces === 'object' && Object.keys(spec.faces).length) {
                 written.faces = spec.faces;
+            }
+            if (Array.isArray(spec.offset) && spec.offset.some(v => Number(v))) {
+                written.offset = spec.offset.slice(0, 3).map(v => Number(v) || 0);
             }
             pages[String(index)] = written;
         });

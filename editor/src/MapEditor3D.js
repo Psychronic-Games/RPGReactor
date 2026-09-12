@@ -443,6 +443,8 @@ class MapEditor3D {
     teardown() {
         this.enabled = false;
         this._rebuildGeneration++;
+        this.projectController?.eventModelPanel?.hide?.();
+        if (typeof Reactor3D !== 'undefined' && Reactor3D.Shadows && Reactor3D.Shadows.focus) Reactor3D.Shadows.focus = null;
         this.stopLoop();
         this.stopListeningForEdits();
         this.detachInput();
@@ -1585,17 +1587,23 @@ class MapEditor3D {
             const object = RREventPreviewModels.instance(template, spec, page?.image?.direction || 2);
             const elevation = Reactor3D.elevationAt(mapData, event.x, event.y)
                 + (Reactor3D.eventZAt ? Reactor3D.eventZAt(mapData, event.id) : 0);
-            object.position.set(event.x + 0.5, elevation, event.y + 0.5);
+            const offset = spec.offset || [0, 0, 0];
+            object.position.set(event.x + 0.5 + offset[0], elevation + offset[2], event.y + 0.5 + offset[1]);
             object.userData.event = event;
             object.userData.modelPreview = true;
             group.add(object);
-            // An animated preview changes shape each frame; a still one is cached.
-            if (Reactor3D.Shadows) Reactor3D.Shadows.markCaster(object, !!template.userData.animated);
             // Clickable by its box, like a prop: a raycast through a heavy
             // mesh on every hover is what jitters.
             object.userData.pickBox = new THREE.Box3().setFromObject(object);
-            this.animateModel(object, template, null);
+            const driver = this.animateModel(object, template, null);
+            // An animated preview changes shape each frame; a still one is
+            // cached. Marked after the animation is prepared: a rig can
+            // replace the meshes, and meshes marked before that never cast.
+            if (Reactor3D.Shadows) Reactor3D.Shadows.markCaster(object, this.movesOnItsOwn(template, driver));
             this.playModelEffects(object, template, '');
+            // The model card waits for the model: a selection made before the
+            // load finished has nothing to show until now.
+            if (this.selected?.userData?.event?.id === event.id) this.projectController?.eventModelPanel?.sync?.(event);
         });
     }
 
@@ -1640,12 +1648,15 @@ class MapEditor3D {
                 object.traverse(node => { node.userData.propId = prop.id; });
                 this.placeProp(object, prop, mapData);
                 group.add(object);
-                if (Reactor3D.Shadows) Reactor3D.Shadows.markCaster(object, !!template.userData.animated);
                 // Picking tests the box, not the mesh: a raycast through a
                 // million triangles on every mouse move is what jitters.
                 object.userData.pickBox = new THREE.Box3().setFromObject(object);
                 const names = Reactor3D.propAnimationList ? Reactor3D.propAnimationList(prop) : (prop.animation ? [prop.animation] : []);
-                this.animateModel(object, template, names.length ? { names, repeat: !!prop.repeat, speed: prop.animationSpeed ?? 100 } : { speed: prop.animationSpeed ?? 100 });
+                const driver = this.animateModel(object, template, names.length ? { names, repeat: !!prop.repeat, speed: prop.animationSpeed ?? 100 } : { speed: prop.animationSpeed ?? 100 });
+                // A prop that moves by its own rules is a moving caster too,
+                // whether or not its file carries clips; marked once the
+                // animation is prepared, since a rig can replace the meshes.
+                if (Reactor3D.Shadows) Reactor3D.Shadows.markCaster(object, this.movesOnItsOwn(template, driver));
                 this.playModelEffects(object, template, Reactor3D.propEffectList ? Reactor3D.propEffectList(prop) : prop.effect);
                 if (this.selectedPropId === prop.id) this.selectProp(prop.id);
             });
@@ -1663,10 +1674,24 @@ class MapEditor3D {
      * game runs them: continuous rules on their own, and a starting action
      * (a prop's chosen animation) on demand, repeating when asked.
      */
+    /**
+     * Whether a placed model is a moving shadow caster: one with clips of
+     * its own, or rules that run on their own here (always, or at rest).
+     * A model whose rules only answer an action stands still in this view,
+     * and a still model is a cached caster — making the Tank a moving one
+     * put it in the three rows that trade between lights, and its shadow
+     * blinked with them.
+     */
+    movesOnItsOwn(template, driver) {
+        if (template && template.userData && template.userData.animated) return true;
+        const rules = driver && Array.isArray(driver.rules) ? driver.rules : [];
+        return rules.some(rule => rule.trigger === 'always' || rule.trigger === 'idle');
+    }
+
     animateModel(object, template, action) {
-        if (typeof RREventPreviewModels === 'undefined' || !RREventPreviewModels.animate) return;
+        if (typeof RREventPreviewModels === 'undefined' || !RREventPreviewModels.animate) return null;
         const driver = RREventPreviewModels.animate(object, template);
-        if (!driver) return;
+        if (!driver) return null;
         driver.object = object;
         driver.start = this._modelFrame || 0;
         driver.speed = Math.max(1, Math.min(1000, Number(action?.speed) || 100)) / 100;
@@ -1683,6 +1708,7 @@ class MapEditor3D {
         }
         if (!this.animatedModels) this.animatedModels = [];
         this.animatedModels.push(driver);
+        return driver;
     }
 
     /**
@@ -2118,7 +2144,11 @@ class MapEditor3D {
                 if (this._eventSnapshot.get(id) !== identity) added.push(id);
             }
             if (!affected.size && !added.length) { this.refreshPassage(); return; }
-            if (this.selected && this.selected.userData.event && affected.has(this.selected.userData.event.id)) this.select(null);
+            // A rebuilt selection is picked up again below, so an undo of a
+            // model nudge keeps the event, and its card, in hand.
+            const reselect = this.selected?.userData?.event && affected.has(this.selected.userData.event.id)
+                ? this.selected.userData.event.id : null;
+            if (reselect !== null) this.select(null);
             this.disposeEffectPlays(play => play.object.userData.event && affected.has(play.object.userData.event.id));
             if (this.animatedModels) this.animatedModels = this.animatedModels.filter(driver => !(driver.object.userData.event && affected.has(driver.object.userData.event.id)));
             this.animatedEvents = (this.animatedEvents || []).filter(entry => !affected.has(entry.eventId));
@@ -2148,6 +2178,7 @@ class MapEditor3D {
                 }
             }
             this._eventSnapshot = fresh;
+            if (reselect !== null && fresh.has(reselect)) this.selectEventById(reselect);
             this.syncEventArrows();
             this.refreshPassage();
         });
@@ -2640,7 +2671,22 @@ class MapEditor3D {
         this.selected = mesh || null;
         if (this.selected) this.highlight(this.selected, true);
         this.syncEventArrows();
-        return this.selected ? this.selected.userData.event : null;
+        const event = this.selected ? this.selected.userData.event : null;
+        // The docked model card follows the selection: shown for an event
+        // standing as a model here, hidden for everything else.
+        this.projectController?.eventModelPanel?.sync?.(event);
+        return event;
+    }
+
+    /**
+     * The model card moved, turned or resized an event's model in place.
+     * The event diff keys on the sidecar entry, so without this the next
+     * refresh would tear the model down and load it again for nothing.
+     */
+    noteEventModelEdited(event) {
+        const mapData = this.currentMap();
+        if (!event || !mapData || !this._eventSnapshot) return;
+        this._eventSnapshot.set(event.id, this._eventIdentity(event, mapData));
     }
 
     /**
@@ -3656,7 +3702,12 @@ class MapEditor3D {
         // which finds the game's viewport — and this view has none. Told
         // once per frame, before the lights are fed or any pass renders, so
         // a light off the side of *this* viewport is skipped here too.
-        if (typeof Reactor3D !== 'undefined') Reactor3D.cullCamera = this.camera;
+        if (typeof Reactor3D !== 'undefined') {
+            Reactor3D.cullCamera = this.camera;
+            // Shadows spend their moving-caster rows around the eye: here
+            // that is the orbit target, not a camera hung above the map.
+            if (Reactor3D.Shadows) Reactor3D.Shadows.focus = () => this.view && this.view.target;
+        }
         this.animateAutotiles(now);
         this.animateEventPreviews(now);
         this.pickPropLods();

@@ -520,7 +520,9 @@
             // In the game, pictures load through ImageManager so encrypted
             // deployments (.png_) decrypt exactly as Show Picture does. The
             // editor previews and tests have no ImageManager and read raw.
-            const name = this.descriptor.file.replace(/\.[^.]+$/, "");
+            // Only .png is implied by the picture loader; a JPG or WebP keeps
+            // its extension so the loader does not look for a PNG twin.
+            const file = this.descriptor.file, name = /\.png$/i.test(file) ? file.replace(/\.[^.]+$/, "") : file;
             if (typeof ImageManager !== "undefined"
                 && (ImageManager.loadPicture || ImageManager.loadBitmap)) {
                 this.bitmap = ImageManager.loadPicture

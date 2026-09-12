@@ -7999,6 +7999,31 @@ Reactor3D.SHADOW_STATIC_INTERVAL = 10;
 /** A challenger must beat a held row's priority by this fraction to replace it. */
 Reactor3D.SHADOW_PRIORITY_HYSTERESIS = 0.25;
 /**
+ * And must keep beating it for this many frames. A screen swinging on an
+ * arm sweeps its cone over the focus and back in under a second; rows
+ * that chased every sweep traded shadows constantly between lights of
+ * near-equal claim, and every model under them blinked. A light that has
+ * left reach altogether still loses its row at once.
+ */
+Reactor3D.SHADOW_ROW_DWELL = 90;
+/**
+ * How much of each frame's incident light moves a candidate's ranked
+ * value: an exponential average about two seconds long. The cone of a
+ * screen on a swinging arm lands on the focus tenfold brighter for a
+ * moment and then not at all; ranked on the moment, rows chased it.
+ */
+Reactor3D.SHADOW_RANK_SMOOTHING = 0.01;
+/** A challenger this many times stronger than a held row takes it without waiting out the dwell. */
+Reactor3D.SHADOW_ROW_TAKEOVER = 2;
+/**
+ * A spot aimed away from the focus keeps this much of its claim on a row,
+ * so where a light stands decides the row and where it points only tips
+ * the balance. At 0.8 the aim is worth a quarter at most — exactly the
+ * hysteresis a held row enjoys — so a sweep alone can never trade a row
+ * between two lights of equal standing.
+ */
+Reactor3D.SHADOW_AIM_FLOOR = 0.8;
+/**
  * How far a casting character, or one of its bones, must move before the
  * rows it stands in are drawn again, in tiles. An idle animation breathes
  * a hand's width and back; redrawing every frame for that was the whole
@@ -8059,6 +8084,8 @@ Reactor3D.Shadows = {
     _camera: null,
     _static: new Set(),
     _dynamic: new Set(),
+    /** Optional: where the eye rests, for an owner whose camera is not the point of interest. */
+    focus: null,
     _candidates: [],
     _generation: 0,
     _seenGeneration: NaN,
@@ -8167,7 +8194,7 @@ Reactor3D.Shadows = {
      * it already had so its rendering survives. An incumbent gets a small
      * priority margin: flicker and near ties must not trade shadows each frame.
      */
-    assign(candidates, count, previous) {
+    assign(candidates, count, previous, scope) {
         const held = new Set((previous || []).slice(0, count).filter(Boolean).map(p => p.id));
         const rankOf = c => {
             const rank = c.rank !== undefined ? c.rank : c.gap;
@@ -8175,6 +8202,39 @@ Reactor3D.Shadows = {
         };
         const chosen = (candidates || []).slice().sort((a, b) => rankOf(a) - rankOf(b)
             || String(a.id).localeCompare(String(b.id))).slice(0, count);
+        // Dwell: an incumbent outranked but still wanting a row keeps it
+        // until the challenge has lasted SHADOW_ROW_DWELL frames, taking
+        // back the seat of the newest arrival. One that no longer wants a
+        // row (nothing in reach) goes at once.
+        const dwell = Reactor3D.SHADOW_ROW_DWELL;
+        if (held.size && dwell > 0) {
+            const losing = (this._losing || (this._losing = {}))[scope || "rows"] || (this._losing[scope || "rows"] = {});
+            const wants = new Map((candidates || []).map(c => [c.id, c]));
+            const seated = new Set(chosen.map(c => c.id));
+            const plain = c => (c.rank !== undefined ? c.rank : c.gap);
+            const takeover = Reactor3D.SHADOW_ROW_TAKEOVER;
+            // A challenger materially stronger than the incumbent — landing
+            // that many times more light on the focus — is not a sweep.
+            const outclasses = (challenger, incumbent) => {
+                const a = plain(challenger), b = plain(incumbent);
+                if (a >= 0) return false;
+                return b >= 0 || a <= b * takeover;
+            };
+            for (const id of held) {
+                if (seated.has(id) || !wants.has(id)) { delete losing[id]; continue; }
+                if (losing[id] === undefined) losing[id] = this._frame;
+                if (this._frame - losing[id] >= dwell) { delete losing[id]; continue; }
+                for (let k = chosen.length - 1; k >= 0; k--) {
+                    if (held.has(chosen[k].id) || outclasses(chosen[k], wants.get(id))) continue;
+                    seated.delete(chosen[k].id);
+                    chosen[k] = wants.get(id);
+                    seated.add(id);
+                    break;
+                }
+                if (!seated.has(id)) delete losing[id];
+            }
+            for (const id of Object.keys(losing)) if (!held.has(id)) delete losing[id];
+        }
         const result = [];
         for (let k = 0; k < count; k++) result.push(null);
         const pending = [];
@@ -8475,10 +8535,15 @@ Reactor3D.Shadows = {
             } else {
                 // Match the cone's soft edge in the priority too. The old
                 // inside/outside test jumped tenfold at a single angle.
+                // The aim counts for less than the distance: a screen on
+                // a swinging arm sweeps its cone over the focus and away
+                // every few seconds, and rows that followed the aim
+                // traded between near-equal screens on every sweep, each
+                // trade blinking every shadow under them.
                 const edge = candidate.cosHalf === undefined ? -1 : candidate.cosHalf;
                 const inner = edge + (1 - edge) * 0.35;
                 const t = Math.max(0, Math.min(1, (along / dist - (edge - 0.08)) / (inner - edge + 0.08)));
-                fall *= 0.1 + 0.9 * t * t * (3 - 2 * t);
+                fall *= Reactor3D.SHADOW_AIM_FLOOR + (1 - Reactor3D.SHADOW_AIM_FLOOR) * t * t * (3 - 2 * t);
             }
         }
         return fall * (candidate.strength === undefined ? 1 : candidate.strength);
@@ -8491,10 +8556,29 @@ Reactor3D.Shadows = {
      * without landing, nearest first, then the rest by how far they stop
      * short.
      */
-    _rankFor(candidate, focus) {
-        const incident = this._incident(candidate, focus);
+    _rankFor(candidate, focus, incident) {
+        if (incident === undefined) incident = this._incident(candidate, focus);
         if (incident > 0) return -incident;
         return candidate.gap <= 0 ? 1e4 + candidate.gap + candidate.radius : 2e4 + candidate.gap;
+    },
+
+    /**
+     * The incident light a candidate is ranked on: this frame's, eased
+     * towards over SHADOW_RANK_SMOOTHING, kept per light id and dropped
+     * for a light that stops being offered.
+     */
+    _smoothedIncident(candidate, focus) {
+        const now = this._incident(candidate, focus);
+        const rate = Reactor3D.SHADOW_RANK_SMOOTHING;
+        if (!(rate > 0) || rate >= 1) return now;
+        const store = this._smooth || (this._smooth = new Map());
+        const entry = store.get(candidate.id);
+        const value = entry === undefined ? now : entry.value + (now - entry.value) * rate;
+        store.set(candidate.id, { value, frame: this._frame });
+        if (store.size > this._candidates.length * 2 + 8) {
+            for (const [id, kept] of store) if (kept.frame !== this._frame) store.delete(id);
+        }
+        return value;
     },
 
     /** Whether any of the reported places lies within a row's reach. */
@@ -8536,9 +8620,23 @@ Reactor3D.Shadows = {
             const e = root.matrixWorld.elements;
             return { x: e[12], y: e[13], z: e[14] };
         }
+        // An owner with a better idea of where the eye rests — the editor's
+        // orbit target — says so here; its camera itself hangs well above
+        // and behind that point.
+        if (typeof this.focus === "function") {
+            try {
+                const point = this.focus();
+                if (point && Number.isFinite(point.x)) return point;
+            } catch (e) {
+                // The candidates below still stand.
+            }
+        }
         try {
-            const viewport = Reactor3D.viewport ? Reactor3D.viewport() : null;
-            const camera = viewport && viewport._camera;
+            // The camera actually drawing this frame: the editor registers
+            // its own (`cullCamera`), and the game's viewport answers.
+            // Asking the viewport alone found nothing in the editor, so the
+            // rows went to the first light in the list, wherever it stood.
+            const camera = Reactor3D.activeCamera ? Reactor3D.activeCamera() : null;
             if (camera && camera.position) return camera.position;
         } catch (e) {
             // Fall through to the light below.
@@ -8777,10 +8875,10 @@ Reactor3D.Shadows = {
         const wanted = [];
         for (const candidate of this._candidates) {
             candidate.far = this.farFor(candidate.radius, farById.get(candidate.id) || 0);
-            candidate.rank = this._rankFor(candidate, focus);
+            candidate.rank = this._rankFor(candidate, focus, this._smoothedIncident(candidate, focus));
             if (this._castersWithin(candidate, candidate.far)) wanted.push(candidate);
         }
-        const assigned = this.assign(wanted, tiles.length, tiles.map(t => (t.id === null ? null : { id: t.id })));
+        const assigned = this.assign(wanted, tiles.length, tiles.map(t => (t.id === null ? null : { id: t.id })), "static");
         const dynWanted = [];
         for (let k = 0; k < tiles.length; k++) {
             const tile = tiles[k];
@@ -8830,7 +8928,7 @@ Reactor3D.Shadows = {
         }
         // The dynamic rows go to the best-ranked of those lights with a
         // character in reach, and follow their light's static row.
-        const dynAssigned = this.assign(dynWanted, dynTiles.length, dynTiles.map(d => (d.id === null ? null : { id: d.id })));
+        const dynAssigned = this.assign(dynWanted, dynTiles.length, dynTiles.map(d => (d.id === null ? null : { id: d.id })), "dynamic");
         for (let j = 0; j < dynTiles.length; j++) {
             const row = dynTiles[j];
             const chosen = dynAssigned[j] || null;
@@ -10478,6 +10576,11 @@ Reactor3D._normalizeModelSpecNow = function(spec) {
         scale: Number.isFinite(scale) && scale > 0 ? scale : 1,
         // Per-axis stretch on top of the uniform size and scale.
         stretch: this.scaleAxes(spec.stretch).map(v => (Number(v) > 0 ? Number(v) : 1)),
+        // Where the model stands relative to its event or character, in
+        // tiles: x east, y south, z up. The event keeps its own tile; only
+        // the model moves, so a door can sit flush against a wall.
+        offset: (Array.isArray(spec.offset) ? spec.offset : [0, 0, 0]).slice(0, 3)
+            .concat([0, 0, 0]).slice(0, 3).map(v => (Number.isFinite(Number(v)) ? Number(v) : 0)),
         yaw: Number.isFinite(yaw) ? yaw * Math.PI / 180 : 0,
         pitch: Number.isFinite(pitch) ? pitch * Math.PI / 180 : 0,
         roll: Number.isFinite(roll) ? roll * Math.PI / 180 : 0,
@@ -10544,6 +10647,9 @@ Reactor3D.setEventModelSpec = function(mapData, eventId, pageIndex, spec) {
     const faces = this.readModelFaces(spec.faces);
     if (faces) written.faces = faces;
     if (spec.texture) written.texture = String(spec.texture);
+    // A model nudged off its tile keeps the nudge; one standing on it writes nothing.
+    const offset = this._normalizeModelSpecNow(Object.assign({ name: ref.name }, spec)).offset;
+    if (offset.some(v => v)) written.offset = offset;
     store.events[key][page] = written;
     return store.events[key][page];
 };
@@ -12869,8 +12975,28 @@ Reactor3D.buildAnimatedGlbTemplate = function(json, bin, root, nodes, textures) 
     // armature scale hides inside the inverse binds (the model normalised
     // down to a speck), and raw geometry boxes miss the rest pose's
     // Z-up-to-Y-up turn.
+    const box = this.measureSkinnedBox(root);
+    if (box.isEmpty()) box.setFromObject(root);
+    const size = box.getSize(new THREE.Vector3());
+    const center = box.getCenter(new THREE.Vector3());
+    content.position.set(-center.x, -box.min.y, -center.z);
+    root.updateMatrixWorld(true);
+    root.userData.glbSize = { x: size.x, y: size.y, z: size.z };
+    root.userData.glbTextures = textures;
+    root.userData.animated = true;
+    root.__reactorClips = this.readGlbClips(json, bin, nodes);
+    return root;
+};
+
+/**
+ * The box a rig's meshes occupy right now, in the root's frame: skinned
+ * vertices are actually skinned on the CPU (a sample of them), since a
+ * skinned geometry's own box is the unposed mesh, wherever the bones are.
+ */
+Reactor3D.measureSkinnedBox = function(root) {
     const box = new THREE.Box3();
     const temp = new THREE.Vector3();
+    root.updateMatrixWorld(true);
     root.traverse(child => {
         if (!child.isMesh) return;
         if (!child.isSkinnedMesh) {
@@ -12886,16 +13012,68 @@ Reactor3D.buildAnimatedGlbTemplate = function(json, bin, root, nodes, textures) 
             box.expandByPoint(temp.applyMatrix4(child.matrixWorld));
         }
     });
-    if (box.isEmpty()) box.setFromObject(root);
-    const size = box.getSize(new THREE.Vector3());
-    const center = box.getCenter(new THREE.Vector3());
-    content.position.set(-center.x, -box.min.y, -center.z);
-    root.updateMatrixWorld(true);
-    root.userData.glbSize = { x: size.x, y: size.y, z: size.z };
-    root.userData.glbTextures = textures;
-    root.userData.animated = true;
-    root.__reactorClips = this.readGlbClips(json, bin, nodes);
-    return root;
+    return box;
+};
+
+/**
+ * Stand an animated template on the pose it actually shows.
+ *
+ * The loader grounds a rig on its rest pose, but what plays is a clip, and
+ * a clip can hold the whole body above (or below) where the rest pose put
+ * the feet — the Demo's mascot idled a sixth of a tile in the air. The
+ * clip the rules play at rest (the idle rule's, else an always rule's,
+ * else the first) is sampled across its length and the lowest point it
+ * reaches becomes the ground. Once per template; instances inherit it.
+ */
+Reactor3D.groundAnimatedTemplate = function(template, sidecar) {
+    if (!template || !template.userData || !template.userData.animated || typeof THREE === "undefined") return template;
+    if (template.userData.reactorClipGrounded) return template;
+    template.userData.reactorClipGrounded = true;
+    const clips = template.__reactorClips || [];
+    if (!clips.length || !THREE.AnimationMixer) return template;
+    const content = template.children.find(child => child.name === "content");
+    if (!content) return template;
+    const rules = sidecar ? this.readModelAnimationRules(sidecar) : [];
+    const byTrigger = trigger => rules.find(rule => rule.type === "clip" && rule.trigger === trigger && rule.clip);
+    const named = (byTrigger("idle") || byTrigger("always") || {}).clip;
+    const clip = clips.find(entry => entry.name === named) || clips[0];
+    if (!clip || !(clip.duration > 0)) return template;
+    // Remember every node's rest transform: the mixer writes straight into
+    // the bones, and the template must be handed back exactly as it was.
+    const rest = [];
+    template.traverse(node => {
+        rest.push({ node, position: node.position.clone(), quaternion: node.quaternion.clone(), scale: node.scale.clone(),
+            morphs: node.morphTargetInfluences ? node.morphTargetInfluences.slice() : null });
+    });
+    let lowest = Infinity;
+    try {
+        const mixer = new THREE.AnimationMixer(template);
+        const action = mixer.clipAction(clip);
+        action.play();
+        const samples = 12;
+        for (let i = 0; i < samples; i++) {
+            mixer.setTime(clip.duration * i / samples);
+            const box = this.measureSkinnedBox(template);
+            if (!box.isEmpty() && box.min.y < lowest) lowest = box.min.y;
+        }
+        action.stop();
+        mixer.uncacheRoot(template);
+    } catch (error) {
+        lowest = Infinity;
+    }
+    for (const entry of rest) {
+        entry.node.position.copy(entry.position);
+        entry.node.quaternion.copy(entry.quaternion);
+        entry.node.scale.copy(entry.scale);
+        if (entry.morphs) for (let i = 0; i < entry.morphs.length; i++) entry.node.morphTargetInfluences[i] = entry.morphs[i];
+    }
+    template.updateMatrixWorld(true);
+    if (Number.isFinite(lowest) && Math.abs(lowest) > 1e-4) {
+        content.position.y -= lowest;
+        template.updateMatrixWorld(true);
+        template.userData.reactorClipGround = lowest;
+    }
+    return template;
 };
 
 /** Parse glTF animation channels into THREE.AnimationClips. */
@@ -13242,6 +13420,10 @@ Reactor3D.readModelAnimationRules = function(json) {
             // A keyed timeline owns its whole shape; hold belongs to the
             // scalar blend and would desync the action duration.
             hold: keys.length ? false : !!raw.hold,
+            // A keyed pose that stays at its last key once played, for as
+            // long as its action is the current one: a stance taken and
+            // kept, rather than a movement that returns to rest.
+            stay: !!(keys.length && raw.stay),
             // An on-demand animation that starts over when it ends, until
             // another is played or an empty name stops it.
             repeat: !!raw.repeat,
@@ -13561,8 +13743,100 @@ Reactor3D.readModelRig = function(json) {
  * forward kinematics, and the scene graph carries parent motion to the
  * children, so the whole pose card drives bones with no new rule types.
  */
+/**
+ * How a rig template's bones are named in exported skeletons (Mixamo,
+ * VRM, Blender's Rigify), as `normalizeBoneName` reads them.
+ */
+Reactor3D.RIG_BONE_ALIASES = {
+    Hips: ["hips", "pelvis"],
+    Spine: ["spine", "spine1", "spine01", "lowerspine"],
+    Chest: ["chest", "spine2", "spine02", "spine3", "spine03", "upperchest", "upperspine"],
+    Neck: ["neck", "neck1"],
+    Head: ["head"],
+    LeftUpperArm: ["leftarm", "leftupperarm", "upperarml", "lupperarm", "larm", "armupperl", "upperarmleft"],
+    LeftLowerArm: ["leftforearm", "leftlowerarm", "forearml", "lowerarml", "lforearm", "llowerarm", "armlowerl", "lowerarmleft"],
+    LeftHand: ["lefthand", "handl", "lhand", "handleft"],
+    LeftUpperLeg: ["leftupleg", "leftupperleg", "leftthigh", "thighl", "upperlegl", "lthigh", "lupperleg", "upperlegleft"],
+    LeftLowerLeg: ["leftleg", "leftlowerleg", "leftshin", "leftcalf", "calfl", "shinl", "lowerlegl", "llowerleg", "lowerlegleft"],
+    LeftFoot: ["leftfoot", "footl", "lfoot", "footleft"],
+    RightUpperArm: ["rightarm", "rightupperarm", "upperarmr", "rupperarm", "rarm", "armupperr", "upperarmright"],
+    RightLowerArm: ["rightforearm", "rightlowerarm", "forearmr", "lowerarmr", "rforearm", "rlowerarm", "armlowerr", "lowerarmright"],
+    RightHand: ["righthand", "handr", "rhand", "handright"],
+    RightUpperLeg: ["rightupleg", "rightupperleg", "rightthigh", "thighr", "upperlegr", "rthigh", "rupperleg", "upperlegright"],
+    RightLowerLeg: ["rightleg", "rightlowerleg", "rightshin", "rightcalf", "calfr", "shinr", "lowerlegr", "rlowerleg", "lowerlegright"],
+    RightFoot: ["rightfoot", "footr", "rfoot", "footright"]
+};
+
+/** A bone name with its namespace, case and punctuation stripped: "mixamorig:RightArm" reads "rightarm". */
+Reactor3D.normalizeBoneName = function(name) {
+    return String(name || "").toLowerCase().replace(/^.*[:|]/, "").replace(/^mixamorig/, "").replace(/[^a-z0-9]/g, "");
+};
+
+/**
+ * A model that already skins its meshes over the file's own skeleton
+ * keeps that skeleton: each rig bone names the file's bone that stands
+ * where its head was fitted (a matching name counts for half the
+ * distance, so Mixamo's inverted Spine/Spine02 still lands by place), and
+ * that bone registers as the part. The clips keep driving those bones;
+ * a pose bends them from wherever the clip holds them. Returns false when
+ * nothing under `root` is skinned, so the rig binds its own skeleton.
+ */
+Reactor3D.mapRigToSkeleton = function(root, rig) {
+    const bones = [];
+    const seen = new Set();
+    root.traverse(child => {
+        if (!child.isSkinnedMesh || !child.skeleton) return;
+        for (const bone of child.skeleton.bones) {
+            if (bone && !seen.has(bone)) { seen.add(bone); bones.push(bone); }
+        }
+    });
+    if (!bones.length) return false;
+    root.updateMatrixWorld(true);
+    const places = bones.map(bone => root.worldToLocal(bone.getWorldPosition(new THREE.Vector3())));
+    const names = bones.map(bone => this.normalizeBoneName(bone.name));
+    const heads = rig.bones.map(def => new THREE.Vector3().fromArray(def.head));
+    const reach = new THREE.Box3().setFromPoints(heads).getSize(new THREE.Vector3());
+    const span = Math.max(reach.x, reach.y, reach.z, 0.001);
+    const picks = rig.bones.map((def, index) => {
+        const aliases = this.RIG_BONE_ALIASES[def.name] || [this.normalizeBoneName(def.name)];
+        let bone = -1;
+        let score = Infinity;
+        bones.forEach((candidate, j) => {
+            const distance = places[j].distanceTo(heads[index]) / span;
+            const value = aliases.indexOf(names[j]) >= 0 ? distance * 0.5 : distance;
+            if (value < score) { score = value; bone = j; }
+        });
+        return { index, bone, score };
+    });
+    // The surest matches claim their bones first; a rig bone whose bone is
+    // already taken, or that stands nowhere near one, stays unmapped.
+    picks.sort((a, b) => a.score - b.score);
+    const taken = new Set();
+    let mapped = 0;
+    for (const pick of picks) {
+        if (pick.bone < 0 || taken.has(pick.bone) || pick.score > 0.35) continue;
+        taken.add(pick.bone);
+        const bone = bones[pick.bone];
+        const def = rig.bones[pick.index];
+        bone.userData.parts = [{ name: def.name, pivot: [0, 0, 0] }];
+        bone.userData.__reactorRigBone = true;
+        bone.userData.__reactorClipBone = true;
+        bone.userData.__reactorBoneTail = def.tail.slice();
+        mapped++;
+    }
+    root.userData.rigged = true;
+    root.userData.rigMapped = mapped;
+    return true;
+};
+
+/** A node that hinges like a bone: a THREE.Bone, or a file joint (often a plain Group) the rig names. */
+Reactor3D.isRigJoint = function(node) {
+    return !!node && (node.isBone || !!(node.userData && node.userData.__reactorClipBone));
+};
+
 Reactor3D.applyModelRig = function(root, rig) {
     if (typeof THREE === "undefined" || !root || !rig || !rig.bones.length) return;
+    if (this.mapRigToSkeleton(root, rig)) return;
     const meshes = this.carveTargetMeshes(root);
     const bones = rig.bones.map(def => {
         const bone = new THREE.Bone();
@@ -13781,7 +14055,7 @@ Reactor3D.prepareModelInstance = function(object, clips) {
         // Rig bones register as parts too: rotating a bone's local
         // transform about its own origin is bone FK, and the bone
         // hierarchy carries parent motion to children on its own.
-        if (!(child.isMesh || child.isBone) || !child.userData.parts
+        if (!(child.isMesh || Reactor3D.isRigJoint(child)) || !child.userData.parts
             || !child.userData.parts.length) return;
         // The rest turn stays on the node itself so anything holding only
         // the node — a video surface anchored to this part — can ask how
@@ -13793,6 +14067,11 @@ Reactor3D.prepareModelInstance = function(object, clips) {
             basePosition: child.position.clone(),
             baseQuaternion: child.quaternion.clone(),
             baseScale: child.scale.clone(),
+            // A bone the file's clips drive rests wherever the clip holds
+            // it this frame; the animator refreshes this after the mixer.
+            clipBase: child.userData.__reactorClipBone && clips && clips.length
+                ? { position: child.position.clone(), quaternion: child.quaternion.clone(), scale: child.scale.clone() }
+                : null,
             acc: null
         });
     });
@@ -13849,7 +14128,8 @@ Reactor3D.modelRuleDuration = function(rule, clips) {
     // A pose goes there and back: in over one period, out over another —
     // unless it holds, in which case the action only needs the way in and
     // the latch keeps it there.
-    if (rule.type === "pose") return rule.hold ? rule.period : rule.period * 2 * rule.cycles;
+    // A staying pose is never over while its action stands.
+    if (rule.type === "pose") return rule.stay ? Infinity : rule.hold ? rule.period : rule.period * 2 * rule.cycles;
     return rule.period * rule.cycles;
 };
 
@@ -13949,7 +14229,10 @@ Reactor3D.applyModelAnimation = function(binding, rules, state) {
             if (rule.trigger === "action") {
                 if (state.action && state.action.name === rule.name) {
                     const t = state.frame - state.action.frame;
-                    if (t < duration) progress = t / duration;
+                    // A zero-frame pose is there the frame its action starts.
+                    if (rule.instant) progress = 1;
+                    else if (t < duration) progress = t / duration;
+                    else if (rule.stay) progress = 1;
                 }
             } else {
                 const active = rule.trigger === "always"
@@ -14119,15 +14402,26 @@ Reactor3D.applyModelAnimation = function(binding, rules, state) {
         for (let m = 0; m < matched.length; m++) {
             const action = matched[m].action;
             const pivot = matched[m].pivot;
-            if (action.quat) entry.acc.multiply(pivotTurn(pivot, action.quat));
-            if (action.slide) {
-                entry.acc.multiply(nextMat().makeTranslation(
-                    action.slide.x, action.slide.y, action.slide.z));
+            const turn = action.quat;
+            const slide = action.slide;
+            // The slide comes first: an offset is in the model's frame, not
+            // in the frame the same pose's turn leaves behind.
+            if (slide) {
+                entry.acc.multiply(nextMat().makeTranslation(slide.x, slide.y, slide.z));
             }
+            if (turn) entry.acc.multiply(pivotTurn(pivot, turn));
             if (action.grow) entry.acc.multiply(pivotGrow(pivot, action.grow));
         }
     }
     if (binding.mixer) {
+        // Clip-driven bones go back to the clip's last pose before the mixer
+        // runs, so a pose composed onto them last frame never compounds.
+        for (const entry of binding.meshes) {
+            if (!entry.clipBase) continue;
+            entry.mesh.position.copy(entry.clipBase.position);
+            entry.mesh.quaternion.copy(entry.clipBase.quaternion);
+            entry.mesh.scale.copy(entry.clipBase.scale);
+        }
         // The same rules array asks every frame; filter it once per array.
         if (binding._clipRulesFor !== rules) {
             binding._clipRules = rules.filter(rule => rule.type === "clip");
@@ -14225,19 +14519,48 @@ Reactor3D.applyModelAnimation = function(binding, rules, state) {
             }
             binding.mixer.update(0);
         } else binding.mixer.update(step / 60);
+        for (const entry of binding.meshes) {
+            if (!entry.clipBase) continue;
+            entry.clipBase.position.copy(entry.mesh.position);
+            entry.clipBase.quaternion.copy(entry.mesh.quaternion);
+            entry.clipBase.scale.copy(entry.mesh.scale);
+        }
     }
     const scratch = pool.scratch;
     const outPos = pool.outPos;
     const outQuat = pool.outQuat;
     const outScale = pool.outScale;
     for (const entry of binding.meshes) {
+        // A pose bends a clip-driven bone from the clip's pose, not from rest.
+        const basePosition = entry.clipBase ? entry.clipBase.position : entry.basePosition;
+        const baseQuaternion = entry.clipBase ? entry.clipBase.quaternion : entry.baseQuaternion;
+        const baseScale = entry.clipBase ? entry.clipBase.scale : entry.baseScale;
         if (!entry.acc) {
-            entry.mesh.position.copy(entry.basePosition);
-            entry.mesh.quaternion.copy(entry.baseQuaternion);
-            if (entry.baseScale) entry.mesh.scale.copy(entry.baseScale);
+            entry.mesh.position.copy(basePosition);
+            entry.mesh.quaternion.copy(baseQuaternion);
+            if (baseScale) entry.mesh.scale.copy(baseScale);
             continue;
         }
-        scratch.compose(entry.basePosition, entry.baseQuaternion, entry.baseScale || entry.mesh.scale);
+        if (entry.clipBase) {
+            // A pose is authored in the model's frame — the rings and arrows
+            // the author dragged. A file joint's own frame is turned and
+            // scaled by its skeleton (and by whatever its parents' poses did
+            // this frame, settled above), so the pose is carried into that
+            // frame here: acc ← frame⁻¹ · acc · frame.
+            const chain = pool.chain || (pool.chain = new THREE.Quaternion());
+            chain.identity();
+            let units = 1;
+            for (let node = entry.mesh; node && node !== binding.root; node = node.parent) {
+                chain.premultiply(node === entry.mesh ? baseQuaternion : node.quaternion);
+                units *= node.scale.x || 1;
+            }
+            const frame = pool.frame || (pool.frame = new THREE.Matrix4());
+            const unframe = pool.unframe || (pool.unframe = new THREE.Matrix4());
+            frame.makeRotationFromQuaternion(chain).scale(outScale.set(units, units, units));
+            unframe.copy(frame).invert();
+            entry.acc.premultiply(unframe).multiply(frame);
+        }
+        scratch.compose(basePosition, baseQuaternion, baseScale || entry.mesh.scale);
         scratch.multiply(entry.acc);
         scratch.decompose(outPos, outQuat, outScale);
         entry.mesh.position.copy(outPos);
@@ -14383,6 +14706,7 @@ Reactor3D.updateEnemyModelSprite = function(sprite) {
             this.loadModelSidecar(spec.name)
         ]).then(([template, sidecar]) => {
             if (sprite._reactorBattler !== state || !template) return;
+            this.groundAnimatedTemplate(template, sidecar);
             const object = this.cloneModelTemplate(template);
             this.applyModelTransform(object, this.readModelTransform(sidecar));
             const rig = this.readModelRig(sidecar);
@@ -14478,6 +14802,7 @@ Reactor3D.actorFaceState = function(actorId) {
         this.loadModelSidecar(spec.name)
     ]).then(([template, sidecar]) => {
         if (!template || !this.isLoaded()) return;
+        this.groundAnimatedTemplate(template, sidecar);
         const object = this.cloneModelTemplate(template);
         this.applyModelTransform(object, this.readModelTransform(sidecar));
         const rig = this.readModelRig(sidecar);
@@ -14574,6 +14899,7 @@ Reactor3D.updateActorModelSprite = function(sprite) {
             this.loadModelSidecar(spec.name)
         ]).then(([template, sidecar]) => {
             if (sprite._reactorBattler !== state || !template) return;
+            this.groundAnimatedTemplate(template, sidecar);
             const object = this.cloneModelTemplate(template);
             this.applyModelTransform(object, this.readModelTransform(sidecar));
             const rig = this.readModelRig(sidecar);
@@ -14828,6 +15154,7 @@ Reactor3D.updateMapModelSprite = function(sprite) {
             this.loadModelSidecar(spec.name)
         ]).then(([template, sidecar]) => {
             if (sprite._reactorMapModel !== state || !template) return;
+            this.groundAnimatedTemplate(template, sidecar);
             const object = this.cloneModelTemplate(template);
             this.applyModelTransform(object, this.readModelTransform(sidecar));
             const rig = this.readModelRig(sidecar);
@@ -17541,6 +17868,7 @@ Reactor3D.MapScene.prototype.syncCharacterModels = function(characters) {
                 if (!template || !this._modelsGroup) return;
                 const current = this._modelInstances.get(key);
                 if (current !== holder || current.spec !== Reactor3D.modelCacheKey(spec.name, spec.ext, spec.file)) return;
+                Reactor3D.groundAnimatedTemplate(template, sidecar);
                 const object = Reactor3D.cloneModelTemplate(template);
                 Reactor3D.applyModelTransform(object, Reactor3D.readModelTransform(sidecar));
                 object.userData.glbSize = template.userData.glbSize;
@@ -17624,7 +17952,8 @@ Reactor3D.MapScene.prototype.syncCharacterModels = function(characters) {
         // authored facing the wrong way, not part of where the character
         // looks, so it comes back off.
         Reactor3D.noteModelFacing(character, holder.smoothYaw - (spec.yaw || 0));
-        object.position.set(character._realX + 0.5, ground + (character._reactorLift || 0), character._realY + 0.5);
+        const offset = spec.offset || [0, 0, 0];
+        object.position.set(character._realX + 0.5 + offset[0], ground + (character._reactorLift || 0) + offset[2], character._realY + 0.5 + offset[1]);
         holder.cameraBaseX = character._realX;
         holder.cameraBaseY = ground + (character._reactorLift || 0);
         holder.cameraBaseZ = character._realY;

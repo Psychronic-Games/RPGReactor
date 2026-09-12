@@ -56,10 +56,10 @@ class DatabaseEnemyEditor {
                     </div>
                 </div>
                 <div class="form-row enemy-image-controls">
-                    <div class="form-group-fixed">
+                    <div class="form-group-fixed enemy-battler-file-row">
                         <label class="database-field-label">${tt('Battler Image:')}</label>
-                        <span class="database-field-value" style="display: inline-block; width: 150px; padding: 4px 6px; background: var(--color-bg-menubar); border: 1px solid var(--color-border-input); border-radius: 3px; color: var(--color-text); font-size: 12px; vertical-align: middle; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${enemy.battlerName ? this.escapeHTML(enemy.battlerName) : tt('(None)')}</span>
-                        <button id="enemy-change-battler-${enemy.id}" class="rr-btn-chip" style="vertical-align: middle;">${tt('Change...')}</button>
+                        <span class="database-field-value" style="display: inline-block; flex: 1 1 90px; min-width: 0; padding: 4px 6px; background: var(--color-bg-menubar); border: 1px solid var(--color-border-input); border-radius: 3px; color: var(--color-text); font-size: 12px; vertical-align: middle; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${enemy.battlerName ? this.escapeHTML(enemy.battlerName) : tt('(None)')}</span>
+                        <button id="enemy-change-battler-${enemy.id}" class="rr-btn-chip" style="vertical-align: middle; flex: 0 0 auto;">${tt('Change...')}</button>
                     </div>
                 </div>
                 <div id="enemy-battler-preview-${enemy.id}" style="min-height: 100px; background: var(--color-bg-base); border: 1px solid var(--color-border); border-radius: 4px; display: flex; align-items: center; justify-content: center; margin: 4px 0 8px 0; overflow: hidden; padding: 8px;">
@@ -1676,6 +1676,8 @@ class DatabaseEnemyEditor {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const container = document.getElementById(`enemy-battler-preview-${enemy.id}`);
         if (!container) return;
+        // An explicit graphic type draws its own preview into this box.
+        if (container.closest('[data-rr-explicit="true"]')) return;
 
         const project = this.projectManager.getCurrentProject();
         if (!project) return;

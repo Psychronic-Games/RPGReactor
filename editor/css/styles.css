@@ -128,6 +128,37 @@
             color: var(--color-text-strong);
         }
 
+        /* Keyboard focus in the menubar and every popup menu. The active row
+           shares the pointer hover look; rows take focus so no ring is drawn
+           on top of the tint. Headings show a ring only for keyboard focus. */
+        .rr-menu-key-active,
+        .html-menu-option.rr-menu-key-active,
+        .rr-database-action-item.rr-menu-key-active:not(:disabled) {
+            background-color: var(--color-accent-tint-25) !important;
+            color: var(--color-text-strong) !important;
+            outline: none;
+        }
+        .html-menu-item:focus-visible {
+            outline: 2px solid var(--color-accent);
+            outline-offset: -2px;
+        }
+        .html-menu-item.is-open {
+            background-color: var(--color-accent-tint-25);
+            color: var(--color-text-strong);
+        }
+        .html-menu-option:focus,
+        #map-context-menu :focus,
+        #event-context-menu :focus,
+        #plugin-context-menu :focus,
+        .rr-text-code-menu :focus,
+        .rr-database-action-menu:focus,
+        #map-context-menu:focus,
+        #event-context-menu:focus,
+        #plugin-context-menu:focus,
+        .rr-text-code-menu:focus {
+            outline: none;
+        }
+
         /* A global control rather than another menu: keep it at the far edge
            and show the active locale even when the menu labels are unfamiliar. */
         #language-button {
@@ -970,6 +1001,11 @@
             background-color: var(--color-accent-tint-15);
             border-left: 3px solid var(--color-accent-border-strong);
             padding-left: 7px;
+        }
+
+        .database-nav-item:focus-visible {
+            outline: 2px solid var(--color-accent);
+            outline-offset: -2px;
         }
 
         .database-main-content {
@@ -2061,6 +2097,14 @@
             gap: 8px;
         }
 
+        /* The file name gives way before the Change button leaves the card. */
+        .enemy-battler-file-row {
+            flex: 1 1 auto;
+            min-width: 0;
+            flex-wrap: wrap;
+        }
+        .enemy-battler-file-row > label { flex: 0 0 auto; margin: 0; }
+
         .sprite-preview {
             image-rendering: pixelated;
             image-rendering: -moz-crisp-edges;
@@ -2445,12 +2489,17 @@
             margin-top: 8px;
         }
 
+        /* Column titles read as headings, not as another row: the panel
+           surface and type treatment shared with section titles elsewhere. */
         .traits-table th {
-            background-color: var(--color-border);
-            padding: 4px 8px;
-            font-size: 12px;
+            background-color: var(--color-bg-panel);
+            color: var(--color-text-strong);
+            padding: 5px 8px;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
             text-align: left;
-            font-weight: 600;
             border: 1px solid var(--color-border-input);
         }
 
@@ -2569,6 +2618,24 @@
 
         .graphic-preview-box:hover {
             border-color: var(--color-accent-border-strong);
+        }
+
+        .graphic-preview-name {
+            font-size: 11px;
+            color: var(--color-text);
+            max-width: 100%;
+            min-height: 1.2em;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            text-align: center;
+        }
+
+        .graphic-preview-box select.rr-battler-type {
+            background: var(--color-bg-input);
+            border: 1px solid var(--color-border-input);
+            color: var(--color-text);
+            box-sizing: border-box;
         }
 
         .graphic-preview-label {
@@ -2984,6 +3051,15 @@
             cursor: pointer;
             line-height: 1;
             transition: color 0.15s;
+            background: transparent;
+            border: 0;
+            padding: 0 4px;
+            font-family: inherit;
+        }
+
+        .modal-close:focus-visible {
+            outline: 2px solid var(--color-accent);
+            outline-offset: 2px;
         }
 
         .modal-close:hover {
@@ -4750,6 +4826,21 @@
 #model-props-card-tabs { display:flex; gap:4px; padding:3px; margin-bottom:5px; border:1px solid var(--color-border); border-radius:5px; background:var(--color-bg-deep); }
 #model-props-card-tabs button { flex:1; min-width:0; border-color:transparent; background:transparent; }
 #model-props-card-tabs button.primary { background:var(--color-accent-tint-15); border-color:var(--color-accent-border-strong); color:var(--color-accent-bright); }
+/* Event model card: docked over the 3D view for the selected event's model. */
+.event-model-panel { display:flex; flex-direction:column; gap:6px; padding:8px 10px 10px; background:var(--color-bg-panel); border:1px solid var(--color-border); border-radius:6px; box-shadow:0 6px 24px rgba(0,0,0,0.45); font-size:12px; color:var(--color-text); }
+.event-model-panel .emp-header { display:flex; align-items:flex-start; gap:8px; }
+.event-model-panel .emp-titles { flex:1; min-width:0; }
+.event-model-panel .emp-title { font-weight:700; font-size:13px; }
+.event-model-panel .emp-subtitle { color:var(--color-text-muted); font-size:11px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.event-model-panel .emp-close { width:24px; height:24px; padding:0; line-height:1; flex:0 0 auto; }
+.event-model-panel .emp-tabs { display:flex; gap:4px; padding:3px; border:1px solid var(--color-border); border-radius:5px; background:var(--color-bg-deep); }
+.event-model-panel .emp-tabs .map-props-btn { flex:1; min-width:0; min-height:24px; padding:3px 7px; font-size:11px; border-color:transparent; background:transparent; }
+.event-model-panel .emp-tabs .map-props-btn.primary { background:var(--color-accent-tint-15); border-color:var(--color-accent-border-strong); color:var(--color-accent-bright); }
+.event-model-panel .emp-num { width:100%; min-width:0; min-height:25px; box-sizing:border-box; padding:3px 6px; border:1px solid var(--color-border-input); border-radius:4px; background:var(--color-bg-input); color:var(--color-text); font:inherit; text-align:right; appearance:textfield; }
+.event-model-panel .emp-num::-webkit-inner-spin-button, .event-model-panel .emp-num::-webkit-outer-spin-button { -webkit-appearance:none; margin:0; }
+.event-model-panel .emp-footer { display:flex; align-items:center; gap:8px; margin-top:2px; }
+.event-model-panel .emp-hint { flex:1; color:var(--color-text-muted); font-size:11px; line-height:1.3; }
+.event-model-panel .emp-footer .map-props-btn { min-height:24px; padding:3px 9px; font-size:11px; }
 .mp-transform-row { display:grid; grid-template-columns:minmax(30px,auto) minmax(36px,1fr) 70px; align-items:center; gap:5px; margin:4px 0; }
 .mp-transform-row input[type=range] { accent-color:var(--color-accent-bright); }
 .mp-panel .mp-card-num { text-align:right; appearance:textfield; }
@@ -4848,14 +4939,13 @@ details.mp-section:not([open]) > .mp-section-body { display:none; }
 .rr-sequence-center { min-width:0; }
 .rr-sequence-preview { width:100%;aspect-ratio:720/340;border:1px solid var(--color-border);border-radius:4px;touch-action:none; }
 .rr-sequence-scrub { width:100%; }
-.rr-sequence-steps { display:flex;flex-direction:column;gap:5px;max-height:300px;overflow:auto; }
+/* The step list scrolls behind the shared accent scrollbar, with a gutter so the rows never touch it. */
+.rr-sequence-steps { display:flex;flex-direction:column;gap:5px;max-height:300px;overflow:auto;padding-inline-end:8px;scrollbar-gutter:stable; }
 .rr-sequence-steps button { text-align:start; }
 .rr-sequence-steps button.selected { border-color:var(--color-accent);background:var(--color-accent-tint-25); }
 .rr-sequence-step-title { display:block;font-size:11px;line-height:1.35; }
 .rr-sequence-step-detail { display:block;margin-top:3px;font-size:10px;font-weight:normal;line-height:1.3;color:var(--color-text-muted); }
 .rr-sequence-steps button.selected .rr-sequence-step-detail { color:var(--color-text); }
-.rr-sequence-timeline { flex-direction:row;overflow-x:auto;min-height:80px;align-items:stretch; }
-.rr-sequence-timeline button { min-width:80px;white-space:normal; }
 @container database-detail (max-width:650px) { .rr-battle-workspace { grid-template-columns:1fr; } }
 
 /* Assignment cards share spacing at every database record, including narrow columns. */
@@ -4876,8 +4966,19 @@ details.mp-section:not([open]) > .mp-section-body { display:none; }
 .rr-sequence-center { display:flex;flex-direction:column;gap:8px;min-height:0; }
 .rr-sequence-center > * { flex-shrink:0; }
 .rr-sequence-cast { align-items:flex-end; }
-.rr-sequence-cast > .rr-battle-field:nth-child(-n+2) { flex:1;min-width:130px; }
-.rr-sequence-cast > .rr-battle-field { max-width:100%; }
+.rr-sequence-backdrop { display:flex;gap:8px;flex-wrap:wrap;flex-basis:100%; }
+.rr-sequence-backdrop > .rr-battle-field { flex:1;min-width:120px; }
+/* Preview cast and stand-ins: two aligned rows of four (User, Target, Skill / Item, Weapon in Hand; Targets, Swap Sides, Scene, Projection). */
+.rr-sequence-preview-grid { display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px 10px;align-items:end;min-width:0; }
+.rr-sequence-preview-grid > .rr-battle-field { display:flex;flex-direction:column;gap:2px;min-width:0;margin:0; }
+.rr-sequence-preview-grid > .rr-battle-field > span { font-size:11px;color:var(--color-text-muted); }
+.rr-sequence-preview-grid > .rr-battle-field > select { width:100%;min-width:0; }
+.rr-sequence-preview-grid > .rr-sequence-preview-check { flex-direction:row;align-items:center;gap:6px;min-height:25px;align-self:end; }
+.rr-sequence-preview-grid > .rr-sequence-preview-check > span { order:2; }
+.rr-sequence-preview-grid > .rr-sequence-backdrop { grid-column:1 / -1;display:flex;gap:10px; }
+.rr-sequence-preview-grid > .rr-sequence-backdrop > .rr-battle-field { flex:1;min-width:0; }
+.rr-sequence-preview-grid > .rr-sequence-cast-help { grid-column:1 / -1; }
+@container database-detail (max-width:1100px) { .rr-sequence-preview-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 .rr-sequence-tools { display:flex;gap:6px;flex-wrap:wrap; }
 .rr-sequence-tools select { min-width:0;max-width:160px; }
 .rr-sequence-tools button { padding:4px 8px;font-size:11px; }
@@ -4890,9 +4991,29 @@ details.mp-section:not([open]) > .mp-section-body { display:none; }
 .rr-sequence-editor .rr-battle-help { margin:0;font-size:11px; }
 .rr-sequence-numbers { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px; }
 .rr-sequence-numbers .rr-number-stepper,.rr-sequence-numbers input { width:100%!important;min-width:0;max-width:100%;box-sizing:border-box; }
+.rr-sequence-edit-poses { width:100%;min-width:0; }
 .rr-sequence-transform-tools { display:flex;gap:6px; }
 .rr-sequence-transform-tools button { flex:1;min-width:0; }
 .rr-sequence-transform-tools button[aria-pressed=true] { border-color:var(--color-accent);color:var(--color-accent); }
+/* Transform card: Offset / Rotate / Scale tabs over slider rows, the one control for placing anything in the sequence preview. */
+.rr-transform-card { display:flex;flex-direction:column;gap:6px;min-width:0;padding:6px;border:1px solid var(--color-border);border-radius:5px;background:var(--color-bg-deep); }
+.rr-transform-card-tabs { display:flex;gap:4px;padding:3px;border:1px solid var(--color-border);border-radius:5px;background:var(--color-bg-panel); }
+.rr-transform-card-tabs button { flex:1;min-width:0;padding:3px 6px;font-size:11px;border-color:transparent;background:transparent; }
+.rr-transform-card-tabs button.primary { background:var(--color-accent-tint-15);border-color:var(--color-accent-border-strong);color:var(--color-accent-bright); }
+.rr-transform-card-body { display:flex;flex-direction:column;gap:6px;min-width:0; }
+.rr-transform-card-foot { display:flex;align-items:center;gap:8px;min-width:0; }
+.rr-transform-card-foot .rr-battle-help { flex:1;min-width:0; }
+.rr-transform-card-reset { flex:0 0 auto;padding:3px 9px;font-size:11px; }
+.rr-transform-card .rr-battle-field { margin:0; }
+.rr-sequence-cast-help { margin:0;font-size:11px; }
+.rr-pose-parts { display:flex;flex-direction:column;gap:6px;min-width:0; }
+.rr-pose-part-picker { display:flex;gap:6px;min-width:0; }
+.rr-pose-part-picker select { flex:1;min-width:0; }
+.rr-pose-part-list { display:flex;flex-direction:column;gap:4px; }
+.rr-pose-part-row { display:flex;gap:4px;min-width:0; }
+.rr-pose-part-row .rr-pose-part-name { flex:1;min-width:0;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+.rr-pose-part-row.selected .rr-pose-part-name { border-color:var(--color-accent-border-strong);background:var(--color-accent-tint-15);color:var(--color-accent-bright); }
+.rr-pose-part-row .rr-pose-part-remove { flex:0 0 auto;width:28px;padding:0; }
 .rr-sequence-transform-fields { display:flex;flex-direction:column;gap:6px;min-width:0; }
 .rr-sequence-transform-label { font-size:11px;color:var(--color-text-muted); }
 .rr-sequence-transform-row { display:grid;grid-template-columns:14px minmax(0,1fr) 76px;align-items:center;gap:6px;min-width:0; }
@@ -4922,8 +5043,6 @@ details.mp-section:not([open]) > .mp-section-body { display:none; }
 .rr-sequence-steps button[draggable=true]:active { cursor:grabbing; }
 .rr-sequence-steps .drop-before { box-shadow:inset 0 3px var(--color-accent); }
 .rr-sequence-steps .drop-after { box-shadow:inset 0 -3px var(--color-accent); }
-.rr-sequence-timeline .drop-before { box-shadow:inset 3px 0 var(--color-accent); }
-.rr-sequence-timeline .drop-after { box-shadow:inset -3px 0 var(--color-accent); }
 .rr-sequence-steps.drop-empty { outline:2px solid var(--color-accent);outline-offset:-2px; }
 
 .rr-sequence-sound-field { display:flex;flex-wrap:wrap;gap:8px;min-width:0; }
@@ -5062,6 +5181,15 @@ details.mp-section:not([open]) > .mp-section-body { display:none; }
     background-color: var(--color-bg-toolbar);
     color: var(--color-text-strong);
 }
+:root[data-theme="light"] .traits-table th.trait-indicator-heading,
+:root[data-theme="bubblegum-light"] .traits-table th.trait-indicator-heading,
+:root[data-theme="ocean-light"] .traits-table th.trait-indicator-heading,
+:root[data-theme="cascadia-light"] .traits-table th.trait-indicator-heading,
+:root[data-theme="underworld-light"] .traits-table th.trait-indicator-heading,
+:root[data-theme="creamsicle-light"] .traits-table th.trait-indicator-heading,
+:root[data-theme="royalty-light"] .traits-table th.trait-indicator-heading {
+    background: transparent;
+}
 :root[data-theme="light"] :is(.tree-item.selected, .database-nav-item.active),
 :root[data-theme="bubblegum-light"] :is(.tree-item.selected, .database-nav-item.active),
 :root[data-theme="ocean-light"] :is(.tree-item.selected, .database-nav-item.active),
@@ -5138,8 +5266,24 @@ details.mp-section:not([open]) > .mp-section-body { display:none; }
 .rr-battle-motion-details > summary { padding:8px; background:var(--color-bg-panel); border-left:3px solid var(--color-accent); cursor:pointer; font-weight:600; }
 @container database-detail (max-width:560px) { .rr-battle-phase-row { grid-template-columns:minmax(0,1fr); } }
 
-.rr-battler-graphic-card { grid-column:1 / -1; }
-.rr-battler-graphic-card .database-section-content { display:flex;flex-direction:column;gap:8px; }
+.rr-battler-graphic-card { width:100%;margin-top:10px;box-sizing:border-box; }
+.rr-battle-assignment-card > summary { display:flex;align-items:center;gap:10px;cursor:pointer;list-style:none; }
+.rr-battle-assignment-card > summary::-webkit-details-marker { display:none; }
+.rr-battle-assignment-card > summary::before { content:'▶';font-size:10px;color:var(--color-text-muted);transition:transform .15s; }
+.rr-battle-assignment-card[open] > summary::before { transform:rotate(90deg); }
+.rr-battle-assignment-status { margin-left:auto;font-size:11px;font-weight:400;color:var(--color-text-muted);padding:2px 8px;border:1px solid var(--color-border);border-radius:10px; }
+.rr-battle-phase-compact { padding:5px 0; }
+.rr-battle-phase-compact .rr-battle-assignment-controls > select { min-height:28px; }
+.rr-battle-phase-compact .rr-battle-assignment-controls > button { min-height:28px;padding:4px 10px; }
+.rr-battle-priority { display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:6px;font-size:12px;color:var(--color-text-muted); }
+.rr-battle-priority-step { padding:2px 8px;border:1px solid var(--color-border);border-radius:10px; }
+.rr-battle-priority-step.is-current { color:var(--color-text-strong);border-color:var(--color-accent);background:var(--color-accent-tint-15);font-weight:600; }
+.rr-battle-priority-arrow { color:var(--color-text-dim); }
+.rr-battle-whole-row { border-bottom:0;padding-bottom:0; }
+.rr-battle-phase-caption > .rr-battle-help { flex-basis:100%;font-size:11px; }
+.rr-battler-graphic-options-body { display:flex;flex-direction:column;gap:8px;padding:8px 0 0; }
+.rr-battler-type-row { flex-direction:column;align-items:stretch;gap:4px;margin:0 0 8px; }
+.rr-battler-type-row > select { width:100%;min-width:0;margin:0; }
 .rr-battle-graphic-options { display:flex;gap:12px;flex-wrap:wrap; }
 .rr-battle-graphic-options .rr-battle-field { flex:1 1 140px; }
 .rr-battle-graphic-name { flex:1;overflow-wrap:anywhere; }
@@ -5153,23 +5297,34 @@ details.mp-section:not([open]) > .mp-section-body { display:none; }
 .rr-battle-sprite-motion { grid-template-columns:minmax(100px,1fr) repeat(4,minmax(75px,1fr)); }
 
 /* Action authoring: common controls first, optional settings on demand. */
-.rr-sequence-disclosure { width:100%;border:1px solid var(--color-border);border-radius:4px; }
-.rr-sequence-disclosure > summary,
-.rr-sequence-settings > summary { cursor:pointer;padding:6px 8px;font-weight:600;background:var(--color-bg-menubar);color:var(--color-text);border-radius:3px; }
-.rr-sequence-disclosure > summary:hover,
-.rr-sequence-settings > summary:hover { background:var(--color-bg-selected); }
+/* Folds in the step inspector (Advanced, Model Transform): a marked summary on a deeper surface than the card around them. */
+.rr-sequence-disclosure { width:100%;border:1px solid var(--color-border);border-radius:5px;background:var(--color-bg-deep);overflow:hidden; }
+.rr-sequence-disclosure > summary { display:flex;align-items:center;gap:6px;padding:6px 8px;cursor:pointer;list-style:none;font-size:12px;font-weight:600;color:var(--color-text);background:var(--color-bg-panel);border-inline-start:3px solid var(--color-accent-muted); }
+.rr-sequence-disclosure > summary::-webkit-details-marker { display:none; }
+.rr-sequence-disclosure > summary::before { content:'▸';display:inline-block;width:12px;font-size:11px;color:var(--color-text-muted);transition:transform .12s ease; }
+.rr-sequence-disclosure[open] > summary::before { transform:rotate(90deg); }
+.rr-sequence-disclosure[open] > summary { border-inline-start-color:var(--color-accent); }
+.rr-sequence-disclosure > summary:hover { background:var(--color-bg-toolbar); }
 .rr-sequence-disclosure-body { display:flex;flex-direction:column;gap:8px;padding:8px; }
 .rr-sequence-disclosure-body .rr-battle-field { margin:0; }
-.rr-sequence-settings { position:relative; }
-.rr-sequence-settings-content { position:absolute;right:0;top:100%;z-index:20;width:300px;max-width:60vw;padding:10px;border:1px solid var(--color-border);border-radius:4px;background:var(--color-bg-panel);box-shadow:0 4px 16px #0005; }
+/* Phase sections in the step list: where Prepare, Movement, Execute, Effect, Return and Finish begin. */
+.rr-sequence-phase-head { display:flex;align-items:center;gap:6px;margin-top:6px;padding:4px 6px 4px 8px;border-inline-start:3px solid var(--color-accent);border-radius:4px;background:var(--color-bg-panel);font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--color-text);cursor:default; }
+.rr-sequence-phase-head:first-child { margin-top:0; }
+.rr-sequence-phase-number { display:inline-flex;flex:0 0 16px;align-items:center;justify-content:center;width:16px;height:16px;box-sizing:border-box;border-radius:50%;background:var(--color-accent-tint-25);color:var(--color-accent-bright);font-size:10px;font-weight:700; }
+.rr-sequence-phase-label { font-weight:700;flex:0 0 auto; }
+.rr-sequence-phase-count { flex:1;min-width:0;color:var(--color-text-muted);text-transform:none;letter-spacing:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+.rr-sequence-phase-head .rr-btn-secondary { flex:0 0 auto;min-height:20px;padding:0 6px !important;font-size:11px;text-transform:none;letter-spacing:0;white-space:nowrap; }
+.rr-sequence-phase-add { display:inline-flex;align-items:center;justify-content:center;width:22px;padding:0 !important;font-weight:700;text-align:center !important;margin-inline-start:auto; }
+.rr-sequence-phase-head.drop-into { outline:2px solid var(--color-accent);outline-offset:-2px; }
+.rr-sequence-footer { align-items:center;flex-wrap:wrap;gap:8px 14px; }
+.rr-sequence-footer > .rr-battle-field { flex:0 0 auto;flex-direction:row;align-items:center;gap:6px; }
+.rr-sequence-footer > .rr-battle-help { flex:1;min-width:200px;margin:0; }
 .rr-sequence-header > .rr-battle-field > span { display:none; }
 .rr-sequence-header > select { max-width:150px; }
-.rr-sequence-quick-steps { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;margin-bottom:6px; }
-.rr-sequence-quick-steps button { padding:5px 3px;border-color:var(--color-accent);font-size:11px; }
 .rr-battle-assignment-help { color:var(--color-text-muted);font-size:12px; }
 .rr-battle-assignment-help summary { cursor:pointer;width:fit-content; }
 .rr-battle-assignment-help p { margin:6px 0; }
-.rr-battle-phase-caption { flex-direction:row;align-items:center;gap:8px; }
+.rr-battle-phase-caption { flex-direction:row;flex-wrap:wrap;align-items:center;gap:8px; }
 .rr-battle-phase-number { display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;flex-shrink:0;border-radius:50%;border:1px solid var(--color-accent);font-size:11px;color:var(--color-text); }
 .rr-battle-phase-row { padding:5px 0;grid-template-columns:minmax(120px,.8fr) minmax(180px,1.5fr); }
 .rr-battler-graphic-card .rr-battle-motion-details > .rr-battle-graphic-options { padding:8px 0; }

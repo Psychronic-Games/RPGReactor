@@ -26,11 +26,13 @@
     B.actionPhases = [
         ['prepare', 'Prepare', 'Before moving: ready the battler or begin casting.'],
         ['movement', 'Movement', 'Approach the target or step forward.'],
-        ['execute', 'Execute / Attack', 'Perform the attack and call the Effect phase at contact.'],
-        ['effect', 'Effect / Impact', 'Show the target effect and apply the action exactly once.'],
+        ['execute', 'Execute', 'Perform the action itself and call Effect at the moment of contact. A normal attack by default.'],
+        ['effect', 'Effect', 'Show the animation on the targets and apply damage, states and buffs exactly once.'],
         ['return', 'Return', 'Move the battler back home.'],
-        ['finish', 'Finish / Cleanup', 'Finish the action before automatic pose and camera cleanup.']
+        ['finish', 'Finish', 'Clean up after the return, before automatic pose and camera reset.']
     ];
+    // Highest priority first: an assignment on a record overrides every level after it.
+    B.priorityChain = [['skills', 'Skill / Item'], ['weapons', 'Weapon'], ['classes', 'Class'], ['actors', 'Actor / Enemy']];
     B.battlerStates = [
         ['idle','Idle'], ['moving','Moving'], ['input','Choosing Command'], ['ready','Ready'],
         ['chant','Chant / Cast'], ['guard','Guard'], ['damage','Damage'], ['evade','Evade'],
@@ -39,6 +41,64 @@
     ];
     B.purposes = [['action','Complete Action'], ...B.actionPhases.map(([id,label])=>[id,label]), ['motion','Battler State / Reaction'], ['routine','Reusable Routine']];
     B.purpose = sequence => sequence?.purpose || 'action';
+    // The kinds a sequence is used as. Phases are no longer separate
+    // sequences: an action sequence marks each step with the phase it
+    // belongs to, and the phases it provides are exactly the ones a record
+    // assigning it takes over; the rest inherit down the priority chain.
+    B.kinds = [['action','Action (attacks, skills, items)'],['motion','Battler Motion (idle, states, reactions)'],['routine','Routine (called by other sequences)']];
+    B.phaseIds = () => B.actionPhases.map(([id]) => id);
+    B.isPhase = value => B.actionPhases.some(([id]) => id === value);
+    B.stepPhase = step => (step && B.isPhase(step.phase)) ? step.phase : 'execute';
+    // Marked steps, or an explicit list, say which phases a sequence provides.
+    // An action sequence with neither is the older whole action: every phase,
+    // all of its steps in Execute.
+    B.isPhased = sequence => B.purpose(sequence) === 'action' && ((Array.isArray(sequence.phases) && sequence.phases.some(B.isPhase)) || (sequence.steps || []).some(step => step && B.isPhase(step.phase)));
+    B.sequencePhases = sequence => {
+        if (!sequence) return [];
+        const purpose = B.purpose(sequence);
+        if (B.isPhase(purpose)) return [purpose];
+        if (purpose !== 'action') return [];
+        if (!B.isPhased(sequence)) return B.phaseIds();
+        const set = new Set((Array.isArray(sequence.phases) ? sequence.phases : []).filter(B.isPhase));
+        for (const step of sequence.steps || []) if (step) set.add(B.stepPhase(step));
+        return B.phaseIds().filter(id => set.has(id));
+    };
+    B.phaseSteps = (sequence, phase) => {
+        const purpose = B.purpose(sequence);
+        if (purpose === phase) return sequence.steps || [];
+        if (purpose !== 'action') return [];
+        if (!B.isPhased(sequence)) return phase === 'execute' ? (sequence.steps || []) : [];
+        return (sequence.steps || []).filter(step => step && B.stepPhase(step) === phase);
+    };
+    // An older whole-action sequence becomes an explicit one: every step in
+    // Execute, every phase provided (empty ones too), so it still owns the
+    // whole action until its author moves steps into other phases.
+    B.migratePhases = sequence => {
+        if (!sequence || B.purpose(sequence) !== 'action' || B.isPhased(sequence)) return false;
+        for (const step of sequence.steps || []) if (step) step.phase = 'execute';
+        sequence.phases = B.phaseIds();
+        return true;
+    };
+    // Where each step of a plain action belongs, read from what it does: the
+    // approach is Movement, the animation and impact are Effect, the walk
+    // home is Return, the idle after it is Finish, everything else Execute.
+    B.autoPhases = steps => {
+        const list = (steps || []).filter(Boolean), zero = step => ['x','y','z'].every(k => !Number(step[k]));
+        const nextMove = i => list.slice(i + 1).find(step => step.type !== 'motion' && step.type !== 'direction');
+        let impact = false, returned = false;
+        return list.map((step, i) => {
+            let phase = 'execute';
+            const next = nextMove(i);
+            if (step.type === 'impact') { impact = true; phase = 'effect'; }
+            else if (step.type === 'animation' && !impact && list.slice(i + 1).some(s => s.type === 'impact') && !list.slice(i + 1, list.indexOf(list.slice(i + 1).find(s => s.type === 'impact'))).some(s => ['weapon','move','motion','wait'].includes(s.type))) phase = 'effect';
+            else if (!impact && step.type === 'move' && (['target','approach'].includes(step.anchor) || !zero(step))) phase = 'movement';
+            else if (!impact && step.type === 'motion' && ['walk','run'].includes(step.motion) && next?.type === 'move' && (['target','approach'].includes(next.anchor) || !zero(next))) phase = 'movement';
+            else if (impact && step.type === 'move' && step.anchor === 'home' && zero(step) && !returned && step.duration > 0) { returned = true; phase = 'return'; }
+            else if (impact && !returned && step.type === 'motion' && ['walk','run'].includes(step.motion) && next?.type === 'move' && next.anchor === 'home' && zero(next)) phase = 'return';
+            else if (returned) phase = 'finish';
+            return { ...step, phase };
+        });
+    };
     B.graphicModes = [['auto','Use Existing Graphic'],['sv','SV Battler Sheet'],['character','Character Set'],['static','Static Battler Image'],['model','3D Model']];
     B.spriteMotions = {idle:1,walk:0,moving:0,run:0,wait:1,ready:1,input:0,chant:2,guard:3,damage:4,evade:5,
         attack:6,punch:6,thrust:6,swing:7,missile:8,cast:9,spell:9,skill:10,item:11,escape:12,victory:16,abnormal:14,sleep:15,dying:13,dead:17,entry:0,return:12,magicEvade:5,collapse:17,escapeFail:12};
@@ -48,7 +108,11 @@
         if(!config.mode||config.mode==='auto')return legacyModel?{type:'model',model:legacyModel}:{type:kind==='actors'?'sv':'static',name:record?.battlerName||'',folder:kind==='actors'?'sv_actors':'enemies',scale:1};
         return {...config,type:config.mode,name:config.name||'',folder:config.mode==='sv'?'sv_actors':config.mode==='character'?'characters':config.folder||'enemies'};
     };
-    B.graphicFrame = (graphic,width,height,motion='idle',frame=0) => {
+    // Facing is a yaw in degrees: 0 faces +y (down the screen), 90 faces +x
+    // (right), 180 faces -y (up), -90 faces -x (left). Character sheets pick
+    // the matching row unless the graphic or motion names a direction.
+    B.directionFromYaw = yaw => { const a=((Number(yaw)||0)%360+360)%360; return a<45||a>=315?2:a<135?6:a<225?8:4; };
+    B.graphicFrame = (graphic,width,height,motion='idle',frame=0,facingYaw=-90) => {
         if(graphic.type==='static')return {x:0,y:0,width,height};
         const setup=graphic.motions?.[motion]||{},speed=Math.max(1,setup.speed||graphic.speed||12);
         const frames=Math.min(graphic.frames||3,Math.max(1,setup.frames||graphic.frames||3)),tick=Math.floor(Math.max(0,frame)/speed);
@@ -56,7 +120,8 @@
         const pattern=loop==='once'?Math.min(frames-1,tick):loop===false?Math.min(frames-1,tick):tick%frames;
         if(graphic.type==='character'){
             const big=/^[!]*\$/.test(graphic.name||''),columns=big?1:4,rows=big?1:2,index=big?0:Math.max(0,Math.min(7,graphic.index||0));
-            const w=width/(columns*(graphic.frames||3)),h=height/(rows*4),direction=setup.direction||graphic.direction||4;
+            const chosen=setup.direction||graphic.direction,w=width/(columns*(graphic.frames||3)),h=height/(rows*4);
+            const direction=chosen&&chosen!=='auto'?Number(chosen):B.directionFromYaw(facingYaw);
             return {x:((index%4)*(graphic.frames||3)+pattern)*w,y:(Math.floor(index/4)*4+(direction/2-1))*h,width:w,height:h};
         }
         const columns=graphic.motionColumns||3,rows=graphic.motionRows||6,total=columns*rows;
@@ -64,7 +129,13 @@
         const w=width/(columns*(graphic.frames||3)),h=height/rows;
         return {x:(Math.floor(index/rows)*(graphic.frames||3)+pattern)*w,y:(index%rows)*h,width:w,height:h};
     };
-    B.resolveState = (settings,sequences,kind,id,state,classId=0,actionBinding=null) => {
+    // States afflicting the battler (highest priority first) may carry their
+    // own reaction sequence, which replaces the idle-type motions while present.
+    B.resolveState = (settings,sequences,kind,id,state,classId=0,actionBinding=null,stateIds=[]) => {
+        if(['idle','abnormal','sleep','dying','wait','ready'].includes(state))for(const stateId of stateIds){
+            const binding=settings?.states?.[stateId]?.reaction;if(binding?.mode!=='sequence')continue;
+            const sequence=sequences?.[binding.sequenceId];if(sequence&&B.purpose(sequence)==='motion'&&!B.validateSequence(sequence).length)return sequence;
+        }
         for(const entry of [actionBinding,kind==='actors'?settings?.classes?.[classId]:null,settings?.[kind]?.[id]]){
             const binding=entry?.states?.[state];if(!binding||binding.mode==='inherit')continue;
             if(binding.mode==='existing')return null;
@@ -127,21 +198,89 @@
     };
     B.extraFields={
         motion:[n('motionIndex','Custom Motion Index (0 = named motion)'),n('motionFrames','Motion Frames (0 = graphic default)'),n('motionSpeed','Motion Speed (0 = graphic default)'),pick('motionLoop','Motion Playback',['default','loop','once','hold'])],
-        weapon:[pick('weaponGraphic','Graphic',['icon','sheet']),n('weaponImageId','Weapon Sheet Image ID',1),n('weaponFrame','Weapon Frame (1–3)',1)],
+        weapon:[pick('weaponGraphic','Drawn As',['icon','sheet']),n('weaponImageId','Weapon Sheet Image ID',1),n('weaponFrame','Weapon Frame (1–3)',1)],
         move:[pick('moveMode','Movement',['anchor','forward','backward','position'])]
     };
     B.types.push(...Object.keys(B.commands));
     B.commandDefaults = type => Object.fromEntries([...(B.commands[type]?.fields||[]),...(B.extraFields[type]||[])].map(f=>[f.key,f.value]));
-    const attachments=[pick('attachment','Attach To',['offset','rightHand','leftHand','center']),text('bone','Model Bone (optional)'),n('gripX','Grip X (0–1)',.5),n('gripY','Grip Y (0–1)',.5)];
+    const attachments=[pick('attachment','Attach To',['offset','rightHand','leftHand','center']),text('bone','Bone Name (blank = the hand)'),n('gripX','Grip X (0 left – 1 right)',.5),n('gripY','Grip Y (0 base – 1 top)',.5)];
+    B.extraFields.weapon.unshift(pick('mode','Weapon',['show','move','hide']));
     B.extraFields.weapon.push(...attachments,n('equipIndex','Equipment Slot (1 based)',1));
-    B.extraFields.projectile=[pick('iconSource','Projectile Graphic',['color','action','weapon','icon','picture']),n('iconIndex','Icon Index'),text('name','Picture File'),
+    // A weapon step shows the held thing, moves it (offset, rotation and
+    // scale tween over the step's frames from where it was), or hides it.
+    B.weaponMode=step=>step.visible===false?'hide':(step.mode||'show');
+    B.ease=(t,easing)=>{t=Math.max(0,Math.min(1,t));return easing==='linear'?t:t*t*(3-2*t);};
+    // Custom part poses on a Motion step: `parts` lists the rig parts the
+    // step moves (by the model's part names, so the same pose plays on any
+    // model rigged with those names) and where each ends up; the step's
+    // duration is the time taken to get there, and the pose is kept until
+    // a later step moves that part again. `resetPose` first sends every
+    // part posed so far back to rest. The plan below turns the steps of a
+    // sequence into the keyed pose rules the model animator already plays.
+    B.POSE_MOTION='__pose';
+    B.poseRest=()=>({rotate:[0,0,0],move:[0,0,0],resize:[1,1,1]});
+    B.hasPose=step=>!!step&&step.type==='motion'&&(step.motion===B.POSE_MOTION||Array.isArray(step.parts)&&step.parts.length>0||!!step.resetPose);
+    // The action a motion step plays: a pose step's own, a step that releases
+    // a pose (the plan says which) its own too, else the named motion.
+    B.motionActionName=(step,plan)=>plan?.actions?.[step.id]||(B.hasPose(step)?'pose:'+step.id:step.motion);
+    // What a sprite-sheet battler plays for a step: a part pose has no sheet row, so it waits.
+    B.spriteMotionName=step=>B.hasPose(step)?'idle':step.motion;
+    B.partPose=value=>{const v3=(list,fill)=>[0,1,2].map(i=>Number.isFinite(Number(list?.[i]))?Number(list[i]):fill);return {rotate:v3(value?.rotate,0),move:v3(value?.move,0),resize:v3(value?.resize,1)};};
+    B.partPoseRules=(step,previous)=>{
+        const next={};if(!step.resetPose)Object.assign(next,previous);
+        for(const entry of step.parts||[])if(entry&&entry.part)next[String(entry.part)]=B.partPose(entry);
+        const rest=B.poseRest(),same=(a,b)=>['rotate','move','resize'].every(k=>a[k].every((v,i)=>v===b[k][i]));
+        const rules=[];
+        for(const part of new Set([...Object.keys(previous||{}),...Object.keys(next)])){
+            const from=previous?.[part]||rest,to=next[part]||rest;if(same(from,rest)&&same(to,rest))continue;
+            rules.push({name:'pose:'+step.id,part,clip:'',rate:1,type:'pose',axis:'y',trigger:'action',speed:90,perTile:0,degrees:15,amount:.1,period:Math.max(1,Math.ceil((step.duration||0)/2)),cycles:1,phase:0,rotate:[0,0,0],move:[0,0,0],resize:[1,1,1],hold:false,stay:true,instant:!(step.duration>0),repeat:false,keys:[{at:0,...from},{at:1,...to}],effects:[]});
+        }
+        for(const part of Object.keys(next))if(same(next[part],rest))delete next[part];
+        return {rules,next};
+    };
+    // A motion after a pose brings the posed parts home over its own frames
+    // (0 frames snaps), the way a Move step travels from the pose before it.
+    B.releasePoseRules=(step,previous)=>B.partPoseRules({id:step.id,duration:step.duration,resetPose:true,parts:[]},previous);
+    // The plan of a sequence's poses: `rules` per step id, `actions` naming
+    // the action a step plays when it is not the plain motion name, and
+    // `releases` naming the motion a release step still plays alongside.
+    B.posePlan=sequence=>{const state={},plan={rules:{},actions:{},releases:{}};
+        for(const {step} of (sequence._timeline||B.timeline(sequence))){if(step.type!=='motion')continue;const key=B.roleKey(step),previous=state[key]||{};
+            if(B.hasPose(step)){const {rules,next}=B.partPoseRules(step,previous);plan.rules[step.id]=rules;plan.actions[step.id]='pose:'+step.id;state[key]=next;}
+            else if(Object.keys(previous).length){const {rules}=B.releasePoseRules(step,previous);plan.rules[step.id]=rules;plan.actions[step.id]='pose:'+step.id;plan.releases[step.id]=step.motion||'idle';state[key]={};}}
+        return plan;};
+    // The rules one model plays for a release step: the parts going home, and its own rules for the named motion under the same action name.
+    B.releaseMotionRules=(plan,stepId,modelRules)=>{const motion=plan?.releases?.[stepId];if(!motion)return [];const wanted=String(motion).toLowerCase();return (modelRules||[]).filter(r=>r&&r.trigger==='action'&&!String(r.name).startsWith('pose:')&&String(r.name).toLowerCase()===wanted).map(r=>({...r,name:plan.actions[stepId]}));};
+    // The humanoid rig's parts, as a person names them, and how each joint
+    // moves: a hinge (elbow, knee) bends about one axis, a ball joint
+    // (shoulder, hip, neck) turns freely.
+    B.humanoidJoints={
+        Hips:{label:'Hips',kind:'ball'},Spine:{label:'Spine',kind:'ball'},Chest:{label:'Chest',kind:'ball'},Neck:{label:'Neck',kind:'ball'},Head:{label:'Head',kind:'ball'},
+        LeftUpperArm:{label:'Left Upper Arm',kind:'ball'},LeftLowerArm:{label:'Left Forearm (elbow)',kind:'hinge'},LeftHand:{label:'Left Hand',kind:'ball'},
+        RightUpperArm:{label:'Right Upper Arm',kind:'ball'},RightLowerArm:{label:'Right Forearm (elbow)',kind:'hinge'},RightHand:{label:'Right Hand',kind:'ball'},
+        LeftUpperLeg:{label:'Left Thigh',kind:'ball'},LeftLowerLeg:{label:'Left Shin (knee)',kind:'hinge'},LeftFoot:{label:'Left Foot',kind:'ball'},
+        RightUpperLeg:{label:'Right Thigh',kind:'ball'},RightLowerLeg:{label:'Right Shin (knee)',kind:'hinge'},RightFoot:{label:'Right Foot',kind:'ball'}
+    };
+    B.partLabel=part=>B.humanoidJoints[part]?.label||String(part).replace(/[_.-]+/g,' ').replace(/([a-z])([A-Z])/g,'$1 $2');
+    // Which axis a hinge bends about: the limb's own direction rules it out,
+    // and the model's side axis (X) is the pin unless the limb lies along it.
+    B.hingeAxis=direction=>{const d=direction||[0,-1,0];return Math.abs(d[0])<.7?0:1;};
+    B.heldKeys=['x','y','z','rotation','rotateY','rotateZ','scale'];
+    B.heldPose=(from,to,e)=>Object.fromEntries(B.heldKeys.map(k=>{const a=from?.[k]??(k==='scale'?1:0),b=to?.[k]??(k==='scale'?1:0);return [k,a+(b-a)*e];}));
+    // Where a held 3D model stands: at the attachment point, facing where its
+    // holder faces (an authored front face turns to it; a model without one
+    // keeps the +90 long-axis assumption), tipped by the step's Tilt, turned
+    // and rolled by Turn and Roll, held at the grip fraction of its height.
+    B.heldPlacement=(point,facing,step,spec)=>({x:point.x,y:point.y,z:point.z,facing:(facing||0)+(spec?.faces?.front?0:90),rotateX:-(step.rotation||0),rotateY:step.rotateY||0,rotateZ:step.rotateZ||0,scale:step.scale??1,pivotY:step.gripY??.5});
+    B.extraFields.projectile=[pick('iconSource','Projectile Graphic',['color','action','weapon','icon','picture','model','animation']),n('iconIndex','Icon Index'),text('name','Picture File'),
         pick('destination','Destination',['target','allTargets','user','subject']),pick('sourceRole','Graphic Owner',['battler','user']),...attachments,n('equipIndex','Equipment Slot (1 based)',1),
         n('startHeight','Launch Height (tiles)',1),n('endHeight','Arrival Height (tiles)',1),n('arc','Arc Height (tiles)'),n('spin','Spin (degrees/frame)'),n('rotation','Rotation (degrees)'),n('scale','Scale',1),pick('flight','Flight',['oneWay','return'])];
     // Positions are in logical tiles in both flat battles and battle rooms.
     B.attachmentPoint=(pose,step,width=1,height=2)=>{
         const facing=Math.sign(pose.facing)||1,hand=step.attachment==='leftHand'?-1:1;
         if(!step.attachment||step.attachment==='offset')return {x:pose.x+(step.x||0),y:pose.y+(step.y||0),z:(pose.z||0)+(step.z??1)};
-        return {x:pose.x+(step.attachment==='center'?0:width*.22*facing*hand)+(step.x||0)*facing,y:pose.y+(step.y||0),z:(pose.z||0)+height*(step.attachment==='center'?.5:.6)+(step.z||0)};
+        // No bone to hold it: the hand is beside the body, a little forward, at wrist height.
+        return {x:pose.x+(step.attachment==='center'?0:(width*.22*hand+width*.3)*facing)+(step.x||0)*facing,y:pose.y+(step.y||0),z:(pose.z||0)+height*(step.attachment==='center'?.5:.55)+(step.z||0)};
     };
     B.flightPoint=(from,to,progress,arc=0,returning=false)=>{
         const t=Math.max(0,Math.min(1,progress)),u=returning?(t<=.5?t*2:(1-t)*2):t;
@@ -183,7 +322,7 @@
         return {...sequence,expanded:true,steps:steps.map((s,i)=>({...s,id:'expanded-'+i}))};
     };
     B.roles = B.targetGroups;
-    B.templates = ['Unarmed Punch', 'Melee Strike', 'Projectile Shot', 'Cast on Target', 'Heal', 'Self Buff', 'Use Item', 'Throw Item', 'Throw Weapon', 'Boomerang'];
+    B.templates = ['Unarmed Punch', 'Melee Strike', 'Projectile Shot', 'Cast on Target', 'Heal', 'Self Buff', 'Use Item', 'Throw Item', 'Throw Weapon', 'Boomerang', 'Item Toss', 'Sword Slash', 'Railgun Shot'];
     B.step = (type, extra = {}) => Object.assign({ id: 'step-' + Math.random().toString(36).slice(2), type,
         duration: ['impact','sound','animation','effect'].includes(type)||B.commands[type]&&!['jump','leap','float','fall','opacity','flash','tint','shake','whiten','picture','plane'].includes(type) ? 0 : 20, role: 'user', anchor: 'home', x: 0, y: 0, z: 0, easing: 'smooth' }, B.commandDefaults(type), extra);
     B.basicSteps = ['Run to Target', 'Punch', 'Return Home'];
@@ -198,6 +337,15 @@
     ] : [B.step('motion', {motion:'punch',duration:16}),
         B.step('impact', {role:'allTargets'}), B.step('wait', {duration:20})];
     B.template = (name = 'Melee Strike', id = 1) => {
+        // A starter is a whole action: it provides every phase, empty ones
+        // included, so nothing below it in the chain leaks in until its
+        // author lets a phase inherit.
+        const built = B.templateSteps(name, id);
+        built.steps = B.autoPhases(built.steps);
+        built.phases = B.phaseIds();
+        return built;
+    };
+    B.templateSteps = (name = 'Melee Strike', id = 1) => {
         if (name === 'Unarmed Punch') return {id,version:1,name,note:'Run into range, punch on frame 46, then return home.',steps:[...B.basic('Run to Target'),...B.basic('Punch'),...B.basic('Return Home')]};
         if(['Use Item','Throw Item','Throw Weapon','Boomerang'].includes(name)){
             const source=['Throw Weapon','Boomerang'].includes(name)?'weapon':'action',held={attachment:'rightHand',iconSource:source,x:0,y:0,z:0,duration:0};
@@ -207,6 +355,59 @@
             if(name==='Boomerang')steps.push(B.step('projectile',{role:'allTargets',destination:'user',iconSource:'weapon',attachment:'center',arc:.6,spin:15,duration:30,sourceRole:'user'}),B.step('weapon',held));
             steps.push(B.step('wait',{duration:12}),B.step('weapon',{visible:false,duration:0}),B.step('motion',{motion:'idle',duration:0}));
             return {id,version:1,name,note:'',steps};
+        }
+        // Ports of Star Shift Rebellion's Victor Battle Motions notetags, in
+        // native steps: pixel offsets become tiles (48px), waits become step
+        // durations, and the equipped icon keys stay in the hand.
+        if (name === 'Item Toss') return {id,version:1,name,note:'Face the recipient, lob the item (its icon or 3D model) in a high arc, then apply it on arrival. Works for a med kit on an ally or a grenade at an enemy.',steps:[
+            B.step('direction',{direction:'targets',duration:0}),
+            B.step('weapon',{iconSource:'action',attachment:'rightHand',x:0,y:0,z:0,duration:0}),
+            B.step('motion',{motion:'item',duration:12}),
+            B.step('weapon',{visible:false,duration:0}),
+            B.step('projectile',{iconSource:'action',destination:'allTargets',attachment:'rightHand',arc:1.4,spin:0,duration:50}),
+            B.step('animation',{animationSource:'action',role:'allTargets',animationId:0,duration:0}),
+            B.step('impact',{role:'allTargets'}),
+            B.step('wait',{duration:12}),
+            B.step('motion',{motion:'idle',duration:0})]};
+        if (name === 'Sword Slash') {
+            const swing=(x,z,rotation,duration,easing='linear')=>B.step('weapon',{mode:'move',x,y:0,z,rotation,duration,easing});
+            return {id,version:1,name,note:'Walk to the target, raise the blade over the shoulder, sweep it down through the target, then walk home.',steps:[
+                B.step('motion',{motion:'walk',duration:0}),
+                B.step('move',{anchor:'approach',x:-.3,duration:12,easing:'linear',face:'movement'}),
+                B.step('motion',{motion:'idle',duration:0}),
+                B.step('weapon',{mode:'show',iconSource:'weapon',attachment:'rightHand',x:.7,y:0,z:.35,rotation:160,gripY:0,duration:0}),
+                B.step('wait',{duration:30}),
+                swing(.2,1.65,70,3),swing(-.2,.7,-30,3),
+                B.step('animation',{animationSource:'action',role:'allTargets',animationId:0,duration:0}),
+                B.step('impact',{role:'allTargets'}),
+                B.step('wait',{duration:4}),
+                B.step('weapon',{visible:false,duration:0}),
+                B.step('motion',{motion:'walk',duration:0}),
+                B.step('move',{duration:24,easing:'linear',face:'movement'}),
+                B.step('motion',{motion:'idle',duration:0}),
+                B.step('move',{duration:0,face:'home'})]};
+        }
+        if (name === 'Railgun Shot') {
+            // A gun does not charge the target: one step forward, draw low,
+            // raise to aim, fire, lower, holster, step back.
+            const aim=(rotation,duration)=>B.step('weapon',{mode:'move',x:0,y:0,z:0,rotation,duration,easing:'smooth'});
+            return {id,version:1,name,note:'Step forward, draw the gun low, raise it to aim over six frames, fire at the target, lower and holster it, then step back.',steps:[
+                B.step('motion',{motion:'walk',duration:0}),
+                B.step('move',{anchor:'home',x:1,duration:8,easing:'smooth',face:'target'}),
+                B.step('motion',{motion:'missile',duration:0}),
+                B.step('weapon',{mode:'show',iconSource:'weapon',attachment:'rightHand',x:0,y:0,z:0,rotation:-30,duration:0}),
+                aim(0,6),
+                B.step('wait',{duration:4}),
+                B.step('projectile',{iconSource:'color',color:'#9fe0ff',size:6,destination:'allTargets',attachment:'rightHand',arc:0,spin:0,duration:8}),
+                B.step('animation',{animationSource:'action',role:'allTargets',animationId:0,duration:0}),
+                B.step('impact',{role:'allTargets'}),
+                B.step('wait',{duration:16}),
+                aim(-30,6),
+                B.step('weapon',{visible:false,duration:0}),
+                B.step('motion',{motion:'walk',duration:0}),
+                B.step('move',{duration:8,easing:'smooth',face:'movement'}),
+                B.step('motion',{motion:'idle',duration:0}),
+                B.step('move',{duration:0,face:'home'})]};
         }
         const steps = [];
         if (name === 'Melee Strike') steps.push(B.step('move', { anchor: 'target', x: -1.5, duration: 24 }));
@@ -254,8 +455,11 @@
             if(step.type==='sound'&&step.audio){const a=step.audio;if(typeof a.name!=='string'||[['volume',0,100],['pitch',50,150],['pan',-100,100]].some(([k,min,max])=>!Number.isFinite(a[k])||a[k]<min||a[k]>max))errors.push('Sound requires volume 0–100, pitch 50–150 and pan −100–100.');}
             if(['weapon','projectile'].includes(step.type)&&['gripX','gripY'].some(k=>step[k]!==undefined&&(step[k]<0||step[k]>1)))errors.push('Grip coordinates must be between 0 and 1.');
             if(step.type==='projectile'&&step.iconSource==='picture'&&!step.name)errors.push('No file selected');
+            if(step.type==='projectile'&&step.iconSource==='model'&&!step.model?.name)errors.push('Choose a 3D model for the projectile.');
+            if(step.type==='projectile'&&step.iconSource==='animation'&&!(step.animationId>0))errors.push('Choose an animation for the projectile.');
             if(step.type==='projectile'&&(!/^#[0-9a-f]{6}$/i.test(step.color||'#ffcc55')||!Number.isFinite(step.size??8)||(step.size??8)<1||(step.size??8)>512))errors.push('Choose a projectile color and size between 1 and 512.');
             if (!B.roles.includes(step.role)) errors.push('Unknown battler role.');
+            if (step.type === 'motion' && step.parts !== undefined && (!Array.isArray(step.parts) || step.parts.some(entry => !entry || typeof entry.part !== 'string' || !entry.part))) errors.push('Pose parts must name a model part.');
             if(step.targetIndex!==undefined&&(!Number.isInteger(step.targetIndex)||step.targetIndex<0||step.targetIndex>98))errors.push('Choose a valid target number.');
             if(step.transform!==undefined){
                 const t=step.transform;
@@ -269,10 +473,19 @@
                 if (['x','y','z'].some(key => !Number.isFinite(step[key]) || Math.abs(step[key]) > 1000)) errors.push('Positions must be finite and within 1000 units.');
             }
         }
-        if (['action','effect'].includes(purpose) && sequence.hitPolicy !== 'authored' && impacts !== 1 && !sequence.steps.some(s=>s.type==='action')) errors.push('Include exactly one Apply Action Effect step; skill repeats determine the number of hits.');
-        if (!['action','effect','routine'].includes(purpose) && impacts) errors.push('Apply Action Effect belongs in a Complete Action or Effect phase.');
-        if (purpose === 'execute' && (sequence.hitPolicy==='authored'?effectCalls<1:effectCalls!==1)) errors.push('Include exactly one Play Effect Phase step in Execute.');
-        if (purpose !== 'execute' && effectCalls) errors.push('Play Effect Phase belongs in Execute.');
+        const phased = purpose === 'action' && B.isPhased(sequence), provides = phased ? B.sequencePhases(sequence) : [];
+        if (phased) {
+            // A partial action (say, only Movement) needs no impact; one that
+            // provides Effect with steps lands exactly one, unless authored hits.
+            if (sequence.hitPolicy !== 'authored' && impacts > 1) errors.push('Include exactly one Apply Action Effect step; skill repeats determine the number of hits.');
+            if (sequence.hitPolicy !== 'authored' && impacts === 0 && B.phaseSteps(sequence,'effect').length && !sequence.steps.some(s=>s.type==='action')) errors.push('Include exactly one Apply Action Effect step; skill repeats determine the number of hits.');
+            if (sequence.steps.some(s => s.type === 'effect' && B.stepPhase(s) !== 'execute') || effectCalls > 1) errors.push('Play Effect Phase belongs in Execute.');
+        } else {
+            if (['action','effect'].includes(purpose) && sequence.hitPolicy !== 'authored' && impacts !== 1 && !sequence.steps.some(s=>s.type==='action')) errors.push('Include exactly one Apply Action Effect step; skill repeats determine the number of hits.');
+            if (!['action','effect','routine'].includes(purpose) && impacts) errors.push('Apply Action Effect belongs in a Complete Action or Effect phase.');
+            if (purpose === 'execute' && (sequence.hitPolicy==='authored'?effectCalls<1:effectCalls!==1)) errors.push('Include exactly one Play Effect Phase step in Execute.');
+            if (purpose !== 'execute' && effectCalls) errors.push('Play Effect Phase belongs in Execute.');
+        }
         if (duration > 18000) errors.push('A sequence can last at most five minutes.');
         const branches=[];
         for(const step of sequence.steps){
@@ -328,35 +541,60 @@
         const first=choices.find(c=>c.binding.mode&&c.binding.mode!=='inherit');
         if(!first||first.binding.mode==='existing')return {mode:'existing',source:first||null,sequence:null};
         if(first.binding.mode==='sequence'){
+            // A whole sequence at the top of the chain must be a usable action;
+            // one that is not stops the lookup, as it always has.
             const sequence=sequences?.[first.binding.sequenceId];
-            const valid=sequence&&B.purpose(sequence)==='action'&&!B.validateSequence(sequence).length;
-            return {mode:'sequence',source:first,sequence:valid?sequence:null,missing:!valid};
+            if(!sequence||B.purpose(sequence)!=='action'||B.validateSequence(sequence).length)return {mode:'sequence',source:first,sequence:null,missing:true};
         }
-        if(first.binding.mode!=='phases')return {mode:'existing',sequence:null};
+        // Each phase comes from the first record down the chain whose
+        // sequence provides it: a whole sequence for the phases it marks, an
+        // older per-phase assignment for the phase it names, else the built-in
+        // default. A record that stops at the engine ends the search there.
         const phases=B.actionPhases.map(([phase])=>{
-            const choice=choices.find(c=>c.binding.mode==='phases'&&c.binding.phases?.[phase]?.mode&&c.binding.phases[phase].mode!=='inherit');
-            const binding=choice?.binding.phases[phase];
-            const explicit=binding?.mode==='sequence';
-            const sequence=explicit?sequences?.[binding.sequenceId]:B.defaultPhase(phase,context);
-            const valid=sequence&&B.purpose(sequence)===phase&&!B.validateSequence(sequence).length;
-            return {phase,source:choice||null,sequence:valid?sequence:null,missing:!valid};
-        });
-        if(phases.some(p=>p.missing))return {mode:'phases',source:first,phases,sequence:null,missing:true};
-        const steps=[],effect=phases.find(p=>p.phase==='effect').sequence;
-        for(const entry of phases){
-            if(entry.phase==='effect')continue;
-            for(const step of entry.sequence.steps){
-                const source=step.type==='effect'?effect.steps:[step];
-                for(const s of source)steps.push({...copy(s),id:'phase-'+steps.length,phase:step.type==='effect'?'effect':entry.phase});
-                if(step.type==='effect'&&step.duration)steps.push(B.step('wait',{id:'phase-'+steps.length,duration:step.duration,phase:'execute'}));
+            for(const choice of choices){
+                const b=choice.binding;if(!b.mode||b.mode==='inherit')continue;
+                if(b.mode==='existing')break;
+                if(b.mode==='sequence'){
+                    const sequence=sequences?.[b.sequenceId];
+                    if(sequence&&B.purpose(sequence)==='action'&&B.sequencePhases(sequence).includes(phase))return {phase,source:choice,sequence,steps:B.phaseSteps(sequence,phase),missing:!!B.validateSequence(sequence).length};
+                }else if(b.mode==='phases'){
+                    const pb=b.phases?.[phase];if(!pb?.mode||pb.mode==='inherit')continue;
+                    if(pb.mode==='sequence'){const sequence=sequences?.[pb.sequenceId];const valid=sequence&&B.purpose(sequence)===phase&&!B.validateSequence(sequence).length;return {phase,source:choice,sequence:valid?sequence:null,steps:valid?sequence.steps:[],missing:!valid};}
+                    const fallback=B.defaultPhase(phase,context);return {phase,source:choice,sequence:fallback,steps:fallback.steps,missing:false};
+                }
             }
+            const fallback=B.defaultPhase(phase,context);return {phase,source:null,sequence:fallback,steps:fallback.steps,missing:false};
+        });
+        const mode=first.binding.mode==='sequence'?'sequence':'phases';
+        if(phases.some(p=>p.missing))return {mode,source:first,phases,sequence:null,missing:true};
+        // A sequence that lands the blow itself, with nothing but built-in
+        // fillers around it, is the whole action as authored: hand it back.
+        if(mode==='sequence'){const whole=sequences?.[first.binding.sequenceId],own=B.sequencePhases(whole);if(own.includes('execute')&&own.includes('effect')&&phases.every(p=>p.sequence===whole||!p.source))return {mode,source:first,phases,sequence:whole};}
+        // Phases from the same sequence play in that sequence's own order, so
+        // an impact authored mid-swing still lands mid-swing; an Effect
+        // placeholder in Execute takes the Effect steps at that moment.
+        const steps=[],effect=phases.find(p=>p.phase==='effect'),push=(step,phase)=>steps.push({...copy(step),id:'phase-'+steps.length,phase});
+        let placed=false;
+        const expand=(step,phase)=>{
+            if(step.type==='effect'){if(!placed){placed=true;for(const s of effect.steps)push(s,'effect');}if(step.duration)push(B.step('wait',{duration:step.duration}),'execute');return;}
+            if(step.type==='impact')placed=true;push(step,phase);
+        };
+        for(let i=0;i<phases.length;i++){
+            const entry=phases[i];if(entry.phase==='effect'){if(!placed){placed=true;for(const s of entry.steps)push(s,'effect');}continue;}
+            // Coalesce the run of following phases this same sequence provides.
+            const run=[entry];while(i+1<phases.length&&phases[i+1].sequence===entry.sequence&&entry.sequence?.id!==0)run.push(phases[++i]);
+            const wanted=new Set(run.map(r=>r.phase));
+            if(run.length>1)for(const step of entry.sequence.steps){const phase=B.stepPhase(step);if(wanted.has(phase))expand(step,phase);}
+            else for(const step of entry.steps)expand(step,entry.phase);
         }
-        const sequence={id:0,version:1,name:'Resolved Action Phases',hitPolicy:effect.hitPolicy||'once',steps};
-        return {mode:'phases',source:first,phases,sequence:B.validateSequence(sequence).length?null:sequence};
+        const hitSource=effect.sequence?.id?effect.sequence:phases.find(p=>p.phase==='execute').sequence;
+        const sequence={id:0,version:1,name:'Resolved Action Phases',hitPolicy:hitSource?.hitPolicy||'once',steps};
+        return {mode,source:first,phases,sequence:B.validateSequence(sequence).length?null:sequence};
     };
     B.resolve = (settings,sequences,context) => B.resolvePresentation(settings,sequences,context).sequence;
     B.references = (settings, id, sequences=[]) => {
         const result = [];
+        for(const [stateId,value] of Object.entries(settings?.states||{}))if(value?.reaction?.mode==='sequence'&&value.reaction.sequenceId===id)result.push({kind:'states',id:Number(stateId),slot:'reaction'});
         for(const kind of ['skills','items','weapons','actors','enemies','classes'])for(const [recordId,value] of Object.entries(settings?.[kind]||{})){
             const add=(binding,slot)=>{if(binding?.mode==='sequence'&&binding.sequenceId===id)result.push({kind,id:Number(recordId),...(slot?{slot}: {})});};
             add(value);add(value.unarmed,'unarmed');

@@ -236,6 +236,15 @@ class RPGReactor {
                 this.lightingManager._startTicking();
             }
 
+            // The card that edits a selected event's 3D model in place.
+            if (!this.eventModelPanel && typeof EventModelPanel !== 'undefined') {
+                this.eventModelPanel = new EventModelPanel(this.projectController);
+            }
+            if (this.eventModelPanel) {
+                this.projectController.eventModelPanel = this.eventModelPanel;
+                this.eventModelPanel.hide();
+            }
+
             // Set current map for event manager
             if (this.eventManager) {
                 const currentMap = this.projectController.getTilemapManager().currentMap;
@@ -653,9 +662,20 @@ class RPGReactor {
     // Show about dialog
     showAbout() {
         const modal = document.getElementById('about-modal');
-        if (modal) {
-            modal.style.display = 'flex';
+        if (!modal) return;
+        const keys = window.RRKeyboardNavigation;
+        const close = () => {
+            modal.style.display = 'none';
+            modal._rrModalKeys?.leave();
+        };
+        const trap = keys?.modal(modal, { onEscape: close, container: () => modal.querySelector('.modal-content') || modal });
+        const closeButton = modal.querySelector('.modal-close');
+        if (closeButton && !closeButton._rrAboutClose) {
+            closeButton._rrAboutClose = true;
+            closeButton.addEventListener('click', close);
         }
+        modal.style.display = 'flex';
+        trap?.enter();
     }
 
     // Show plugin manager

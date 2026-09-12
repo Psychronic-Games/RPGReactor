@@ -106,6 +106,12 @@ test('normalizeModelSpec fills defaults and rejects nameless entries', () => {
     assert.equal(spec.scale, 1);
     assert.equal(spec.yaw, 0);
     assert.equal(spec.faces, null);
+    assert.deepEqual(Array.from(spec.offset), [0, 0, 0], 'a model stands on its tile until offset');
+    // The offset moves only the model: tiles east, south, and up, kept as
+    // numbers, padded to three, and never taken from junk.
+    assert.deepEqual(Array.from(Reactor3D.normalizeModelSpec({ name: 'Door', offset: ['0.5', -0.25] }).offset), [0.5, -0.25, 0]);
+    assert.deepEqual(Array.from(Reactor3D.normalizeModelSpec({ name: 'Door', offset: 'north' }).offset), [0, 0, 0]);
+    assert.deepEqual(Array.from(Reactor3D.normalizeModelSpec({ name: 'Door', offset: [1, 2, 3, 4] }).offset), [1, 2, 3]);
 });
 
 test('actor bindings split into character, face, and battler slots', () => {

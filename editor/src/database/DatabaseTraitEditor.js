@@ -177,13 +177,20 @@ class DatabaseTraitEditor {
         overlay.appendChild(modal);
 
         // Event listeners
-        header.querySelector('.close-btn').addEventListener('click', () => overlay.remove());
-        footer.querySelector('.cancel-btn').addEventListener('click', () => overlay.remove());
+        const closeModal = () => { overlay.remove(); overlay._rrModalKeys?.leave(); };
+        header.querySelector('.close-btn').addEventListener('click', closeModal);
+        footer.querySelector('.cancel-btn').addEventListener('click', closeModal);
+        window.RRKeyboardNavigation?.modal(overlay, { onEscape: closeModal, container: () => modal });
+        window.RRKeyboardNavigation?.roving(tabBar, {
+            items: () => tabBar.querySelectorAll('.trait-tab'),
+            isSelected: btn => btn.style.background !== 'transparent' && btn.style.background !== '',
+            select: btn => btn.click()
+        });
         footer.querySelector('.ok-btn').addEventListener('click', () => {
             if (!isCurrent() || modalGeneration !== this._modalGeneration || !overlay.isConnected) return;
             const saved = this.saveTrait(trait);
             if (saved) {
-                overlay.remove();
+                closeModal();
             }
         });
         overlay.addEventListener('click', (e) => {
@@ -197,6 +204,7 @@ class DatabaseTraitEditor {
         document.body.appendChild(overlay);
         this.commonUI?.databaseEditor?.registerDetailModal(overlay);
         if (window.I18n) window.I18n.applyText(overlay);
+        overlay._rrModalKeys?.enter();
     }
 
     switchTab(clickedBtn, tabContent, trait) {

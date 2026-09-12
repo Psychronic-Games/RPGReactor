@@ -108,6 +108,7 @@
                 if (rig) R.applyModelRig(object, rig);
                 else { R.carveModelParts(object, R.readModelParts(sidecar)); R.applyPivotOverrides(object, R.readModelPivots(sidecar)); }
                 const e = template.userData.glbSize || {x:1,y:1,z:1};
+                record.extent = e;
                 record.scale = (spec.size || 2) * (spec.scale || 1) / Math.max(e.x,e.y,e.z,.001);
                 object.scale.setScalar(record.scale);
                 record.object = object; record.binding = R.prepareModelInstance(object, object.__reactorClips);
@@ -137,6 +138,14 @@
                     root.Reactor3D.applyEventModelPose(record.object,
                     {...record.spec,pitch:(record.spec.pitch||0)+(p.rotateX||0)*Math.PI/180,roll:(record.spec.roll||0)+(p.rotateZ||0)*Math.PI/180,yaw:(record.spec.yaw||0)+((p.facing||0)+(p.rotateY||0))*Math.PI/180},2,{preview:true,faceYaw:((p.facing||0)+(p.rotateY||0))*Math.PI/180});
                     record.object.scale.set(...['scaleX','scaleY','scaleZ'].map((axis,i)=>record.scale*(p.scale??1)*(p[axis]??1)*(record.spec.stretch?.[i]??1)));
+                    // A held thing turns about its grip, not its feet: a
+                    // model stands on its origin, so the point `pivotY` of
+                    // the way up it (0 the base, .5 the middle) is brought
+                    // to the placed position after the turn.
+                    if (p.pivotY !== undefined && record.extent) {
+                        const T = root.THREE, lift = (record.extent.y || 0) * Math.max(0, Math.min(1, p.pivotY)) * record.object.scale.y;
+                        record.object.position.sub(new T.Vector3(0, lift, 0).applyQuaternion(record.object.quaternion));
+                    }
                 }
             }
         }
@@ -170,8 +179,10 @@
             const name=boneName||attachment,cache=record.attachmentBones||=(new Map());
             if(!cache.has(name)){
                 const normalize=value=>String(value).toLowerCase().replace(/^.*[:|]/,'').replace(/[^a-z0-9]/g,'');
-                const wanted=boneName?[normalize(boneName)]:attachment==='leftHand'?['lefthand','handl','lhand']:['righthand','handr','rhand'];let found=null;
-                record.object.traverse(node=>{if(!found&&wanted.includes(normalize(node.name)))found=node;});cache.set(name,found);
+                const wanted=boneName?[normalize(boneName)]:attachment==='leftHand'?['lefthand','handl','lhand']:['righthand','handr','rhand'];let found=null,any=null;
+                // A rigged model keeps the file's own skeleton beside the rig
+                // that actually moves it; the rig's bone is the hand that moves.
+                record.object.traverse(node=>{if(!wanted.includes(normalize(node.name)))return;if(!any)any=node;if(!found&&(node.userData?.__reactorRigBone||node.userData?.parts?.length))found=node;});cache.set(name,found||any);
             }
             const bone=cache.get(name);if(!bone)return null;
             record.object.updateMatrixWorld(true);return bone.getWorldPosition(new root.THREE.Vector3());

@@ -220,10 +220,17 @@ class OptionsManager {
         if (!this.modal) this._createModal();
         this._renderContent();
         this.modal.style.display = 'flex';
+        const trap = window.RRKeyboardNavigation?.modal(this.modal, {
+            onEscape: () => this.close(),
+            container: () => this.modal.querySelector('.rr-modal') || this.modal
+        });
+        trap?.enter();
     }
 
     close() {
-        if (this.modal) this.modal.style.display = 'none';
+        if (!this.modal) return;
+        this.modal.style.display = 'none';
+        this.modal._rrModalKeys?.leave();
     }
 
     _createModal() {
@@ -371,10 +378,37 @@ class OptionsManager {
             if (btn.dataset.mode === currentMode) btn.dataset.active = 'true';
         });
 
-        languageTrigger.addEventListener('click', () => {
-            languageMenu.style.display = languageMenu.dataset.open === 'true' ? 'none' : 'block';
-            languageMenu.dataset.open = languageMenu.style.display === 'block' ? 'true' : 'false';
-        });
+        // The two dropdowns are plain popups; keys.menu() gives them arrows,
+        // Enter, Escape and focus return. Closing always retires that controller
+        // so a hidden popup cannot keep answering to the dialog's arrow keys.
+        const keys = window.RRKeyboardNavigation;
+        const popup = (menu, trigger, itemSelector, isOpen, setOpen) => {
+            const close = () => { menu._rrMenuKeys?.dispose(); setOpen(false); };
+            const open = ({ viaKeyboard = false } = {}) => {
+                setOpen(true);
+                const controller = keys?.menu(menu, {
+                    items: () => menu.querySelectorAll(itemSelector),
+                    close: () => setOpen(false),
+                    opener: trigger,
+                    focus: false
+                });
+                if (controller && viaKeyboard) controller.move(1);
+            };
+            trigger.addEventListener('click', () => (isOpen() ? close() : open()));
+            trigger.addEventListener('keydown', event => {
+                if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+                event.preventDefault();
+                if (!isOpen()) open({ viaKeyboard: true });
+                else menu._rrMenuKeys?.move(event.key === 'ArrowDown' ? 1 : -1);
+            });
+            return { open, close };
+        };
+        const languagePopup = popup(languageMenu, languageTrigger, '.rr-opt-language-item',
+            () => languageMenu.dataset.open === 'true',
+            open => { languageMenu.style.display = open ? 'block' : 'none'; languageMenu.dataset.open = open ? 'true' : 'false'; });
+        const palettePopup = popup(paletteMenu, paletteTrigger, '.rr-opt-palette-item',
+            () => paletteMenu.style.display === 'block',
+            open => { paletteMenu.style.display = open ? 'block' : 'none'; });
 
         this.modal.querySelectorAll('.rr-opt-language-item').forEach(item => {
             item.addEventListener('click', () => {
@@ -384,14 +418,9 @@ class OptionsManager {
                 this.modal.querySelectorAll('.rr-opt-language-item').forEach(btn => {
                     btn.classList.toggle('is-selected', btn === item);
                 });
-                languageMenu.style.display = 'none';
-                languageMenu.dataset.open = 'false';
+                languagePopup.close();
                 this.applyLanguage(meta.id);
             });
-        });
-
-        paletteTrigger.addEventListener('click', () => {
-            paletteMenu.style.display = paletteMenu.style.display === 'block' ? 'none' : 'block';
         });
 
         this.modal.querySelectorAll('.rr-opt-palette-item').forEach(item => {
@@ -404,17 +433,14 @@ class OptionsManager {
                     btn.classList.toggle('is-selected', btn === item);
                 });
                 if (paletteDesc) paletteDesc.textContent = t(meta.descriptionKey);
-                paletteMenu.style.display = 'none';
+                palettePopup.close();
                 applyCurrentSelection();
             });
         });
 
         this.modal.querySelector('.rr-modal').addEventListener('click', (e) => {
-            if (!e.target.closest('.rr-opt-language-wrap')) {
-                languageMenu.style.display = 'none';
-                languageMenu.dataset.open = 'false';
-            }
-            if (!e.target.closest('.rr-opt-palette-wrap')) paletteMenu.style.display = 'none';
+            if (!e.target.closest('.rr-opt-language-wrap')) languagePopup.close();
+            if (!e.target.closest('.rr-opt-palette-wrap')) palettePopup.close();
         });
 
         modeButtons.forEach(btn => {

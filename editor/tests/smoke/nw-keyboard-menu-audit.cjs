@@ -98,9 +98,9 @@ const driver = new WebDriverClient(path.join(sdkRoot, 'chromedriver'));
             ['Confirmation','#rr-themed-dialog',`reactor.uiManager.openThemedDialog({title:'Audit',message:'No project changes',okLabel:'OK',cancelLabel:'Cancel'});`,`document.querySelector('#rr-themed-dialog-cancel')?.click();`],
             ['Audio picker','.rr-audio-picker-modal',`RRAudioPickerModal.open({title:'Audit',files:[],onConfirm:()=>{}});`,`document.querySelector('.rr-audio-picker-modal button')?.click();`],
             ['System sound','.rr-system-sound-modal',`RRSystemSoundSlotModal.open({slot:{name:'',volume:90,pitch:100,pan:0},files:[],onOk:()=>{}});`,`document.querySelector('.rr-system-sound-modal .rr-modal-close')?.click();`],
-            ['Database','#database-viewer',`reactor.databaseEditorUI.openDatabase('actors');`,`document.querySelector('#database-cancel-btn').click();`],
-            ['Trait','.trait-editor-modal',`reactor.databaseEditorUI.openDatabase('actors');reactor.databaseEditorUI.actorEditor.traitEditor.showTraitEditorModal(structuredClone(reactor.databaseManager.data.actors[1]));`,`document.querySelector('.trait-editor-modal .close-btn').click();document.querySelector('#database-cancel-btn').click();`],
-            ['Effect','.effect-editor-modal',`reactor.databaseEditorUI.openDatabase('items');reactor.databaseEditorUI.itemEditor.effectEditor.showEffectEditorModal(structuredClone(reactor.databaseManager.data.items[1]));`,`document.querySelector('.effect-editor-modal .close-btn').click();document.querySelector('#database-cancel-btn').click();`]
+            ['Database','#database-viewer',`reactor.databaseEditorUI.openDatabase('actors');`,`document.querySelector('#database-cancel-btn')?.click();`],
+            ['Trait','.trait-editor-modal',`reactor.databaseEditorUI.openDatabase('actors');reactor.databaseEditorUI.actorEditor.traitEditor.showTraitEditorModal(structuredClone(reactor.databaseManager.data.actors[1]));`,`document.querySelector('.trait-editor-modal .close-btn')?.click();document.querySelector('#database-cancel-btn')?.click();`],
+            ['Effect','.effect-editor-modal',`reactor.databaseEditorUI.openDatabase('items');reactor.databaseEditorUI.itemEditor.effectEditor.showEffectEditorModal(structuredClone(reactor.databaseManager.data.items[1]));`,`document.querySelector('.effect-editor-modal .close-btn')?.click();document.querySelector('#database-cancel-btn')?.click();`]
         ];
         for (const [name,selector,open,close] of dialogs) {
             await driver.execute(`document.getElementById('audit-opener').focus();${open}`);await pause();
@@ -148,12 +148,12 @@ const driver = new WebDriverClient(path.join(sdkRoot, 'chromedriver'));
         await driver.execute(`document.querySelector('#database-cancel-btn').click();window.__auditSelected=null;window.__auditSwitch=new SwitchVariablePicker(reactor.databaseManager,reactor.projectController);__auditSwitch.show('switch',1,id=>window.__auditSelected=id);`);await pause();
         await key('\uE015');
         result.switchArrow=await driver.execute('return __auditDescribe(document.activeElement);');
-        await key('\uE004');
-        result.switchTab=await driver.execute('return __auditDescribe(document.activeElement);');
+        await key('\uE015');
+        result.switchSecondArrow=await driver.execute('return __auditDescribe(document.activeElement);');
         await key('\uE007');
         result.switchEnterSelected=await driver.execute('return __auditSelected;');
         await driver.execute(`__auditSwitch.close();window.__auditActivated=false;reactor.databaseEditorUI.showDatabaseActionMenu(50,50,[{label:'First',action:()=>{}},{label:'Disabled',enabled:false},{label:'Last',action:()=>{window.__auditActivated=true;}}]);document.querySelector('.rr-database-action-item').focus();`);
-        await key('\uE004');
+        await key('\uE015');
         result.disabledSkipped=await driver.execute('return document.activeElement.textContent;');
         await key('\uE007');
         result.contextEnterActivates=await driver.execute('return __auditActivated;');

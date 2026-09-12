@@ -16,7 +16,8 @@
         "y": 0,
         "z": 0,
         "easing": "smooth",
-        "motion": "run"
+        "motion": "run",
+        "phase": "execute"
       },
       {
         "id": "step-of2zfuo3d9a",
@@ -28,7 +29,8 @@
         "y": 0,
         "z": 0,
         "easing": "linear",
-        "face": "movement"
+        "face": "movement",
+        "phase": "execute"
       },
       {
         "id": "step-vco2qy44o2",
@@ -52,7 +54,8 @@
           "scaleX": 1,
           "scaleY": 1,
           "scaleZ": 1
-        }
+        },
+        "phase": "execute"
       },
       {
         "id": "step-t8cahbu5a0d",
@@ -69,7 +72,8 @@
           "volume": 90,
           "pitch": 100,
           "pan": 0
-        }
+        },
+        "phase": "execute"
       },
       {
         "id": "step-n7sopb609vd",
@@ -81,7 +85,8 @@
         "y": 0,
         "z": 0,
         "easing": "smooth",
-        "animationId": 1
+        "animationId": 1,
+        "phase": "execute"
       },
       {
         "id": "step-ue1fcwlk29f",
@@ -92,7 +97,8 @@
         "x": 0,
         "y": 0,
         "z": 0,
-        "easing": "smooth"
+        "easing": "smooth",
+        "phase": "execute"
       },
       {
         "id": "step-3eegr1wf8xm",
@@ -104,7 +110,8 @@
         "y": 0,
         "z": 0,
         "easing": "smooth",
-        "motion": "run"
+        "motion": "run",
+        "phase": "execute"
       },
       {
         "id": "step-w2zc3323j6r",
@@ -115,7 +122,8 @@
         "x": 0,
         "y": 0,
         "z": 0,
-        "easing": "smooth"
+        "easing": "smooth",
+        "phase": "execute"
       },
       {
         "id": "step-28f6k34req0j",
@@ -127,7 +135,8 @@
         "y": 0,
         "z": 0,
         "easing": "smooth",
-        "motion": "run"
+        "motion": "run",
+        "phase": "execute"
       },
       {
         "id": "step-6fltcd54hj",
@@ -139,7 +148,8 @@
         "y": 0,
         "z": 0,
         "easing": "linear",
-        "face": "movement"
+        "face": "movement",
+        "phase": "execute"
       },
       {
         "id": "step-n6n2jt5b87f",
@@ -151,7 +161,8 @@
         "y": 0,
         "z": 0,
         "easing": "smooth",
-        "motion": "idle"
+        "motion": "idle",
+        "phase": "execute"
       },
       {
         "id": "step-qn4o1hqx86",
@@ -163,7 +174,8 @@
         "y": 0,
         "z": 0,
         "easing": "smooth",
-        "face": "home"
+        "face": "home",
+        "phase": "execute"
       },
       {
         "id": "step-g1aw8tne07m",
@@ -175,8 +187,17 @@
         "y": 0,
         "z": 0,
         "easing": "smooth",
-        "motion": "run"
+        "motion": "run",
+        "phase": "execute"
       }
+    ],
+    "phases": [
+      "prepare",
+      "movement",
+      "execute",
+      "effect",
+      "return",
+      "finish"
     ]
   },
   {
@@ -186,7 +207,7 @@
     "note": "",
     "steps": [
       {
-        "id": "step-oihftc5glrh",
+        "id": "step-9irtm6f69on",
         "type": "move",
         "duration": 24,
         "role": "user",
@@ -195,10 +216,11 @@
         "y": 0,
         "z": 0,
         "easing": "smooth",
-        "moveMode": "anchor"
+        "moveMode": "anchor",
+        "phase": "movement"
       },
       {
-        "id": "step-5c7j3okjf6h",
+        "id": "step-r6gjabvqd49",
         "type": "weapon",
         "duration": 0,
         "role": "user",
@@ -207,6 +229,7 @@
         "y": 0,
         "z": 0,
         "easing": "smooth",
+        "mode": "show",
         "weaponGraphic": "icon",
         "weaponImageId": 1,
         "weaponFrame": 1,
@@ -215,10 +238,11 @@
         "gripX": 0.5,
         "gripY": 0.5,
         "equipIndex": 1,
-        "iconSource": "weapon"
+        "iconSource": "weapon",
+        "phase": "execute"
       },
       {
-        "id": "step-2be90q7tw2j",
+        "id": "step-mxjg6yn33de",
         "type": "motion",
         "duration": 18,
         "role": "user",
@@ -231,10 +255,11 @@
         "motionFrames": 0,
         "motionSpeed": 0,
         "motionLoop": "default",
-        "motion": "attack"
+        "motion": "attack",
+        "phase": "execute"
       },
       {
-        "id": "step-zmiaaf0rpn8",
+        "id": "step-73tsl6sardg",
         "type": "animation",
         "duration": 12,
         "role": "allTargets",
@@ -243,11 +268,12 @@
         "y": 0,
         "z": 0,
         "easing": "smooth",
+        "animationSource": "action",
         "animationId": 0,
-        "animationSource": "action"
+        "phase": "effect"
       },
       {
-        "id": "step-tablczpyd6",
+        "id": "step-j2ugse89q6",
         "type": "impact",
         "duration": 0,
         "role": "allTargets",
@@ -255,10 +281,11 @@
         "x": 0,
         "y": 0,
         "z": 0,
-        "easing": "smooth"
+        "easing": "smooth",
+        "phase": "effect"
       },
       {
-        "id": "step-jwon5hdbu2b",
+        "id": "step-ch3kuzfkavn",
         "type": "wait",
         "duration": 18,
         "role": "user",
@@ -266,10 +293,11 @@
         "x": 0,
         "y": 0,
         "z": 0,
-        "easing": "smooth"
+        "easing": "smooth",
+        "phase": "execute"
       },
       {
-        "id": "step-s1ib1pg1ew",
+        "id": "step-igqdyxgy73s",
         "type": "move",
         "duration": 24,
         "role": "user",
@@ -278,10 +306,11 @@
         "y": 0,
         "z": 0,
         "easing": "smooth",
-        "moveMode": "anchor"
+        "moveMode": "anchor",
+        "phase": "return"
       },
       {
-        "id": "step-plfplceors",
+        "id": "step-4uyzkfoci9h",
         "type": "weapon",
         "duration": 0,
         "role": "user",
@@ -290,6 +319,7 @@
         "y": 0,
         "z": 0,
         "easing": "smooth",
+        "mode": "show",
         "weaponGraphic": "icon",
         "weaponImageId": 1,
         "weaponFrame": 1,
@@ -298,10 +328,11 @@
         "gripX": 0.5,
         "gripY": 0.5,
         "equipIndex": 1,
-        "visible": false
+        "visible": false,
+        "phase": "finish"
       },
       {
-        "id": "step-3793f9qzvk9",
+        "id": "step-rkw35zhbbxd",
         "type": "motion",
         "duration": 8,
         "role": "user",
@@ -314,10 +345,19 @@
         "motionFrames": 0,
         "motionSpeed": 0,
         "motionLoop": "default",
-        "motion": "idle"
+        "motion": "idle",
+        "phase": "finish"
       }
     ],
-    "starterKey": "action:Melee Strike"
+    "starterKey": "action:Melee Strike",
+    "phases": [
+      "prepare",
+      "movement",
+      "execute",
+      "effect",
+      "return",
+      "finish"
+    ]
   },
   {
     "id": 3,
@@ -326,7 +366,7 @@
     "note": "",
     "steps": [
       {
-        "id": "step-po422h4ql5r",
+        "id": "step-szlyjol9yw",
         "type": "weapon",
         "duration": 0,
         "role": "user",
@@ -335,6 +375,7 @@
         "y": 0,
         "z": 0,
         "easing": "smooth",
+        "mode": "show",
         "weaponGraphic": "icon",
         "weaponImageId": 1,
         "weaponFrame": 1,
@@ -343,10 +384,11 @@
         "gripX": 0.5,
         "gripY": 0.5,
         "equipIndex": 1,
-        "iconSource": "weapon"
+        "iconSource": "weapon",
+        "phase": "execute"
       },
       {
-        "id": "step-jpzftb4am6",
+        "id": "step-70g9vepr37q",
         "type": "motion",
         "duration": 18,
         "role": "user",
@@ -359,10 +401,11 @@
         "motionFrames": 0,
         "motionSpeed": 0,
         "motionLoop": "default",
-        "motion": "attack"
+        "motion": "attack",
+        "phase": "execute"
       },
       {
-        "id": "step-5vq2czxxw9v",
+        "id": "step-xr83ti19zk",
         "type": "projectile",
         "duration": 24,
         "role": "user",
@@ -389,10 +432,11 @@
         "scale": 1,
         "flight": "oneWay",
         "color": "#ffcc55",
-        "size": 8
+        "size": 8,
+        "phase": "execute"
       },
       {
-        "id": "step-x007903s41i",
+        "id": "step-etrwi0i5z2n",
         "type": "animation",
         "duration": 12,
         "role": "allTargets",
@@ -401,11 +445,12 @@
         "y": 0,
         "z": 0,
         "easing": "smooth",
+        "animationSource": "action",
         "animationId": 0,
-        "animationSource": "action"
+        "phase": "effect"
       },
       {
-        "id": "step-hk6rqfj1sl",
+        "id": "step-52motb6b3u5",
         "type": "impact",
         "duration": 0,
         "role": "allTargets",
@@ -413,10 +458,11 @@
         "x": 0,
         "y": 0,
         "z": 0,
-        "easing": "smooth"
+        "easing": "smooth",
+        "phase": "effect"
       },
       {
-        "id": "step-u7nje8qfvv",
+        "id": "step-yrk5hzd2mo",
         "type": "wait",
         "duration": 18,
         "role": "user",
@@ -424,10 +470,11 @@
         "x": 0,
         "y": 0,
         "z": 0,
-        "easing": "smooth"
+        "easing": "smooth",
+        "phase": "execute"
       },
       {
-        "id": "step-niv2khlh2a",
+        "id": "step-ossp1ser3zk",
         "type": "weapon",
         "duration": 0,
         "role": "user",
@@ -436,6 +483,7 @@
         "y": 0,
         "z": 0,
         "easing": "smooth",
+        "mode": "show",
         "weaponGraphic": "icon",
         "weaponImageId": 1,
         "weaponFrame": 1,
@@ -444,10 +492,11 @@
         "gripX": 0.5,
         "gripY": 0.5,
         "equipIndex": 1,
-        "visible": false
+        "visible": false,
+        "phase": "execute"
       },
       {
-        "id": "step-4gn5vmwrdog",
+        "id": "step-bcoo564jso",
         "type": "motion",
         "duration": 8,
         "role": "user",
@@ -460,10 +509,19 @@
         "motionFrames": 0,
         "motionSpeed": 0,
         "motionLoop": "default",
-        "motion": "idle"
+        "motion": "idle",
+        "phase": "execute"
       }
     ],
-    "starterKey": "action:Projectile Shot"
+    "starterKey": "action:Projectile Shot",
+    "phases": [
+      "prepare",
+      "movement",
+      "execute",
+      "effect",
+      "return",
+      "finish"
+    ]
   },
   {
     "id": 4,
@@ -472,7 +530,7 @@
     "note": "",
     "steps": [
       {
-        "id": "step-izyde4dw7r",
+        "id": "step-s2yys941h5f",
         "type": "motion",
         "duration": 18,
         "role": "user",
@@ -485,10 +543,11 @@
         "motionFrames": 0,
         "motionSpeed": 0,
         "motionLoop": "default",
-        "motion": "cast"
+        "motion": "cast",
+        "phase": "execute"
       },
       {
-        "id": "step-8zfizjalvv9",
+        "id": "step-lp7is2tio0q",
         "type": "animation",
         "duration": 12,
         "role": "allTargets",
@@ -497,11 +556,12 @@
         "y": 0,
         "z": 0,
         "easing": "smooth",
+        "animationSource": "action",
         "animationId": 0,
-        "animationSource": "action"
+        "phase": "effect"
       },
       {
-        "id": "step-e5w4hmsrnb",
+        "id": "step-sxzr4p26sop",
         "type": "impact",
         "duration": 0,
         "role": "allTargets",
@@ -509,10 +569,11 @@
         "x": 0,
         "y": 0,
         "z": 0,
-        "easing": "smooth"
+        "easing": "smooth",
+        "phase": "effect"
       },
       {
-        "id": "step-p7lssh0oars",
+        "id": "step-esxsnh7fjbn",
         "type": "wait",
         "duration": 18,
         "role": "user",
@@ -520,10 +581,11 @@
         "x": 0,
         "y": 0,
         "z": 0,
-        "easing": "smooth"
+        "easing": "smooth",
+        "phase": "execute"
       },
       {
-        "id": "step-a7scsy10nld",
+        "id": "step-mioathvtw8",
         "type": "motion",
         "duration": 8,
         "role": "user",
@@ -536,10 +598,19 @@
         "motionFrames": 0,
         "motionSpeed": 0,
         "motionLoop": "default",
-        "motion": "idle"
+        "motion": "idle",
+        "phase": "execute"
       }
     ],
-    "starterKey": "action:Cast on Target"
+    "starterKey": "action:Cast on Target",
+    "phases": [
+      "prepare",
+      "movement",
+      "execute",
+      "effect",
+      "return",
+      "finish"
+    ]
   },
   {
     "id": 5,
@@ -548,7 +619,7 @@
     "note": "",
     "steps": [
       {
-        "id": "step-u79urc2956d",
+        "id": "step-tlypofp5x8",
         "type": "motion",
         "duration": 18,
         "role": "user",
@@ -561,10 +632,11 @@
         "motionFrames": 0,
         "motionSpeed": 0,
         "motionLoop": "default",
-        "motion": "cast"
+        "motion": "cast",
+        "phase": "execute"
       },
       {
-        "id": "step-8m5rxrwwrej",
+        "id": "step-jlsr4p7qbdc",
         "type": "animation",
         "duration": 12,
         "role": "allTargets",
@@ -573,11 +645,12 @@
         "y": 0,
         "z": 0,
         "easing": "smooth",
+        "animationSource": "action",
         "animationId": 0,
-        "animationSource": "action"
+        "phase": "effect"
       },
       {
-        "id": "step-yylk0s4eom",
+        "id": "step-7dplw7567ro",
         "type": "impact",
         "duration": 0,
         "role": "allTargets",
@@ -585,10 +658,11 @@
         "x": 0,
         "y": 0,
         "z": 0,
-        "easing": "smooth"
+        "easing": "smooth",
+        "phase": "effect"
       },
       {
-        "id": "step-0qyrs7wkisnb",
+        "id": "step-r1z63w90o0d",
         "type": "wait",
         "duration": 18,
         "role": "user",
@@ -596,10 +670,11 @@
         "x": 0,
         "y": 0,
         "z": 0,
-        "easing": "smooth"
+        "easing": "smooth",
+        "phase": "execute"
       },
       {
-        "id": "step-wr00t1va6",
+        "id": "step-ap0fqe7gcd",
         "type": "motion",
         "duration": 8,
         "role": "user",
@@ -612,10 +687,19 @@
         "motionFrames": 0,
         "motionSpeed": 0,
         "motionLoop": "default",
-        "motion": "idle"
+        "motion": "idle",
+        "phase": "execute"
       }
     ],
-    "starterKey": "action:Heal"
+    "starterKey": "action:Heal",
+    "phases": [
+      "prepare",
+      "movement",
+      "execute",
+      "effect",
+      "return",
+      "finish"
+    ]
   },
   {
     "id": 6,
@@ -624,7 +708,7 @@
     "note": "",
     "steps": [
       {
-        "id": "step-qbia95qffr9",
+        "id": "step-jpt9ybvn4r",
         "type": "motion",
         "duration": 18,
         "role": "user",
@@ -637,10 +721,11 @@
         "motionFrames": 0,
         "motionSpeed": 0,
         "motionLoop": "default",
-        "motion": "cast"
+        "motion": "cast",
+        "phase": "execute"
       },
       {
-        "id": "step-j7c2wh3zzeb",
+        "id": "step-7u24vz54tsn",
         "type": "animation",
         "duration": 12,
         "role": "user",
@@ -649,11 +734,12 @@
         "y": 0,
         "z": 0,
         "easing": "smooth",
+        "animationSource": "action",
         "animationId": 0,
-        "animationSource": "action"
+        "phase": "effect"
       },
       {
-        "id": "step-4iooxaf4ze7",
+        "id": "step-oj0i4im35z",
         "type": "impact",
         "duration": 0,
         "role": "allTargets",
@@ -661,10 +747,11 @@
         "x": 0,
         "y": 0,
         "z": 0,
-        "easing": "smooth"
+        "easing": "smooth",
+        "phase": "effect"
       },
       {
-        "id": "step-dzlhig8chyr",
+        "id": "step-bvbmerl7qb7",
         "type": "wait",
         "duration": 18,
         "role": "user",
@@ -672,10 +759,11 @@
         "x": 0,
         "y": 0,
         "z": 0,
-        "easing": "smooth"
+        "easing": "smooth",
+        "phase": "execute"
       },
       {
-        "id": "step-56rhtlw4pvm",
+        "id": "step-p35ark6rjas",
         "type": "motion",
         "duration": 8,
         "role": "user",
@@ -688,10 +776,19 @@
         "motionFrames": 0,
         "motionSpeed": 0,
         "motionLoop": "default",
-        "motion": "idle"
+        "motion": "idle",
+        "phase": "execute"
       }
     ],
-    "starterKey": "action:Self Buff"
+    "starterKey": "action:Self Buff",
+    "phases": [
+      "prepare",
+      "movement",
+      "execute",
+      "effect",
+      "return",
+      "finish"
+    ]
   },
   {
     "id": 7,
@@ -700,7 +797,7 @@
     "note": "",
     "steps": [
       {
-        "id": "step-dvp7srab52w",
+        "id": "step-gtkoe1zscll",
         "type": "weapon",
         "duration": 0,
         "role": "user",
@@ -709,6 +806,7 @@
         "y": 0,
         "z": 0,
         "easing": "smooth",
+        "mode": "show",
         "weaponGraphic": "icon",
         "weaponImageId": 1,
         "weaponFrame": 1,
@@ -717,10 +815,11 @@
         "gripX": 0.5,
         "gripY": 0.5,
         "equipIndex": 1,
-        "iconSource": "action"
+        "iconSource": "action",
+        "phase": "execute"
       },
       {
-        "id": "step-vbagcoajnc",
+        "id": "step-9a0t5asdoba",
         "type": "motion",
         "duration": 12,
         "role": "user",
@@ -733,10 +832,11 @@
         "motionFrames": 0,
         "motionSpeed": 0,
         "motionLoop": "default",
-        "motion": "item"
+        "motion": "item",
+        "phase": "execute"
       },
       {
-        "id": "step-vqiyzd343c",
+        "id": "step-x9y0n9uimpi",
         "type": "animation",
         "duration": 0,
         "role": "allTargets",
@@ -746,10 +846,11 @@
         "z": 0,
         "easing": "smooth",
         "animationSource": "action",
-        "animationId": 0
+        "animationId": 0,
+        "phase": "effect"
       },
       {
-        "id": "step-pluvk11lbh",
+        "id": "step-uum77hkkrxj",
         "type": "impact",
         "duration": 0,
         "role": "allTargets",
@@ -757,10 +858,11 @@
         "x": 0,
         "y": 0,
         "z": 0,
-        "easing": "smooth"
+        "easing": "smooth",
+        "phase": "effect"
       },
       {
-        "id": "step-g24ffki1qt",
+        "id": "step-3s6lislhu5e",
         "type": "wait",
         "duration": 12,
         "role": "user",
@@ -768,10 +870,11 @@
         "x": 0,
         "y": 0,
         "z": 0,
-        "easing": "smooth"
+        "easing": "smooth",
+        "phase": "execute"
       },
       {
-        "id": "step-a81r8yzbd47",
+        "id": "step-y0au26kip5a",
         "type": "weapon",
         "duration": 0,
         "role": "user",
@@ -780,6 +883,7 @@
         "y": 0,
         "z": 0,
         "easing": "smooth",
+        "mode": "show",
         "weaponGraphic": "icon",
         "weaponImageId": 1,
         "weaponFrame": 1,
@@ -788,10 +892,11 @@
         "gripX": 0.5,
         "gripY": 0.5,
         "equipIndex": 1,
-        "visible": false
+        "visible": false,
+        "phase": "execute"
       },
       {
-        "id": "step-77j0xkox7fg",
+        "id": "step-73wut4tqkuv",
         "type": "motion",
         "duration": 0,
         "role": "user",
@@ -804,10 +909,19 @@
         "motionFrames": 0,
         "motionSpeed": 0,
         "motionLoop": "default",
-        "motion": "idle"
+        "motion": "idle",
+        "phase": "execute"
       }
     ],
-    "starterKey": "action:Use Item"
+    "starterKey": "action:Use Item",
+    "phases": [
+      "prepare",
+      "movement",
+      "execute",
+      "effect",
+      "return",
+      "finish"
+    ]
   },
   {
     "id": 8,
@@ -816,7 +930,7 @@
     "note": "",
     "steps": [
       {
-        "id": "step-7lxxd2zny1f",
+        "id": "step-8y11pyu9js",
         "type": "weapon",
         "duration": 0,
         "role": "user",
@@ -825,6 +939,7 @@
         "y": 0,
         "z": 0,
         "easing": "smooth",
+        "mode": "show",
         "weaponGraphic": "icon",
         "weaponImageId": 1,
         "weaponFrame": 1,
@@ -833,10 +948,11 @@
         "gripX": 0.5,
         "gripY": 0.5,
         "equipIndex": 1,
-        "iconSource": "action"
+        "iconSource": "action",
+        "phase": "execute"
       },
       {
-        "id": "step-3dyaq7ylm19",
+        "id": "step-3bpf62zjbpn",
         "type": "motion",
         "duration": 12,
         "role": "user",
@@ -849,10 +965,11 @@
         "motionFrames": 0,
         "motionSpeed": 0,
         "motionLoop": "default",
-        "motion": "item"
+        "motion": "item",
+        "phase": "execute"
       },
       {
-        "id": "step-0au4gqurz3ge",
+        "id": "step-cpl6rnk4xmo",
         "type": "weapon",
         "duration": 0,
         "role": "user",
@@ -861,6 +978,7 @@
         "y": 0,
         "z": 0,
         "easing": "smooth",
+        "mode": "show",
         "weaponGraphic": "icon",
         "weaponImageId": 1,
         "weaponFrame": 1,
@@ -869,10 +987,11 @@
         "gripX": 0.5,
         "gripY": 0.5,
         "equipIndex": 1,
-        "visible": false
+        "visible": false,
+        "phase": "execute"
       },
       {
-        "id": "step-w3zzyrcfin",
+        "id": "step-oaf0p6mjfzn",
         "type": "projectile",
         "duration": 30,
         "role": "user",
@@ -897,10 +1016,11 @@
         "spin": 0,
         "rotation": 0,
         "scale": 1,
-        "flight": "oneWay"
+        "flight": "oneWay",
+        "phase": "execute"
       },
       {
-        "id": "step-bzlfxutdgxe",
+        "id": "step-c47o87m7o2c",
         "type": "animation",
         "duration": 0,
         "role": "allTargets",
@@ -910,10 +1030,11 @@
         "z": 0,
         "easing": "smooth",
         "animationSource": "action",
-        "animationId": 0
+        "animationId": 0,
+        "phase": "effect"
       },
       {
-        "id": "step-umnb6sqy05l",
+        "id": "step-rqi1bxb1fk",
         "type": "impact",
         "duration": 0,
         "role": "allTargets",
@@ -921,10 +1042,11 @@
         "x": 0,
         "y": 0,
         "z": 0,
-        "easing": "smooth"
+        "easing": "smooth",
+        "phase": "effect"
       },
       {
-        "id": "step-x2k6wdv03g",
+        "id": "step-w25cr5zztch",
         "type": "wait",
         "duration": 12,
         "role": "user",
@@ -932,10 +1054,11 @@
         "x": 0,
         "y": 0,
         "z": 0,
-        "easing": "smooth"
+        "easing": "smooth",
+        "phase": "execute"
       },
       {
-        "id": "step-bc0l2585ip",
+        "id": "step-uk26qpokc5r",
         "type": "weapon",
         "duration": 0,
         "role": "user",
@@ -944,6 +1067,7 @@
         "y": 0,
         "z": 0,
         "easing": "smooth",
+        "mode": "show",
         "weaponGraphic": "icon",
         "weaponImageId": 1,
         "weaponFrame": 1,
@@ -952,10 +1076,11 @@
         "gripX": 0.5,
         "gripY": 0.5,
         "equipIndex": 1,
-        "visible": false
+        "visible": false,
+        "phase": "execute"
       },
       {
-        "id": "step-zcdxzqpf05",
+        "id": "step-bhz0k0wzwr",
         "type": "motion",
         "duration": 0,
         "role": "user",
@@ -968,10 +1093,19 @@
         "motionFrames": 0,
         "motionSpeed": 0,
         "motionLoop": "default",
-        "motion": "idle"
+        "motion": "idle",
+        "phase": "execute"
       }
     ],
-    "starterKey": "action:Throw Item"
+    "starterKey": "action:Throw Item",
+    "phases": [
+      "prepare",
+      "movement",
+      "execute",
+      "effect",
+      "return",
+      "finish"
+    ]
   },
   {
     "id": 9,
@@ -980,7 +1114,7 @@
     "note": "",
     "steps": [
       {
-        "id": "step-ft6d8edsq3m",
+        "id": "step-ptp07i9lg0c",
         "type": "weapon",
         "duration": 0,
         "role": "user",
@@ -989,6 +1123,7 @@
         "y": 0,
         "z": 0,
         "easing": "smooth",
+        "mode": "show",
         "weaponGraphic": "icon",
         "weaponImageId": 1,
         "weaponFrame": 1,
@@ -997,10 +1132,11 @@
         "gripX": 0.5,
         "gripY": 0.5,
         "equipIndex": 1,
-        "iconSource": "weapon"
+        "iconSource": "weapon",
+        "phase": "execute"
       },
       {
-        "id": "step-p2p3uh6wbh",
+        "id": "step-wc342t4ebth",
         "type": "motion",
         "duration": 12,
         "role": "user",
@@ -1013,10 +1149,11 @@
         "motionFrames": 0,
         "motionSpeed": 0,
         "motionLoop": "default",
-        "motion": "item"
+        "motion": "item",
+        "phase": "execute"
       },
       {
-        "id": "step-tfrx7s54tn",
+        "id": "step-l9b8d14oslb",
         "type": "weapon",
         "duration": 0,
         "role": "user",
@@ -1025,6 +1162,7 @@
         "y": 0,
         "z": 0,
         "easing": "smooth",
+        "mode": "show",
         "weaponGraphic": "icon",
         "weaponImageId": 1,
         "weaponFrame": 1,
@@ -1033,10 +1171,11 @@
         "gripX": 0.5,
         "gripY": 0.5,
         "equipIndex": 1,
-        "visible": false
+        "visible": false,
+        "phase": "execute"
       },
       {
-        "id": "step-9pxhdr7dca",
+        "id": "step-20hhu0a4s",
         "type": "projectile",
         "duration": 30,
         "role": "user",
@@ -1061,10 +1200,11 @@
         "spin": 15,
         "rotation": 0,
         "scale": 1,
-        "flight": "oneWay"
+        "flight": "oneWay",
+        "phase": "execute"
       },
       {
-        "id": "step-y8quft8uwa",
+        "id": "step-dieskky79so",
         "type": "animation",
         "duration": 0,
         "role": "allTargets",
@@ -1074,10 +1214,11 @@
         "z": 0,
         "easing": "smooth",
         "animationSource": "action",
-        "animationId": 0
+        "animationId": 0,
+        "phase": "effect"
       },
       {
-        "id": "step-l5d6r5v45wo",
+        "id": "step-erbwzrhjijq",
         "type": "impact",
         "duration": 0,
         "role": "allTargets",
@@ -1085,10 +1226,11 @@
         "x": 0,
         "y": 0,
         "z": 0,
-        "easing": "smooth"
+        "easing": "smooth",
+        "phase": "effect"
       },
       {
-        "id": "step-3b6fito7ptq",
+        "id": "step-n6juwz1zev",
         "type": "wait",
         "duration": 12,
         "role": "user",
@@ -1096,10 +1238,11 @@
         "x": 0,
         "y": 0,
         "z": 0,
-        "easing": "smooth"
+        "easing": "smooth",
+        "phase": "execute"
       },
       {
-        "id": "step-xtb9p2f6z0l",
+        "id": "step-t4pcm10bvx8",
         "type": "weapon",
         "duration": 0,
         "role": "user",
@@ -1108,6 +1251,7 @@
         "y": 0,
         "z": 0,
         "easing": "smooth",
+        "mode": "show",
         "weaponGraphic": "icon",
         "weaponImageId": 1,
         "weaponFrame": 1,
@@ -1116,10 +1260,11 @@
         "gripX": 0.5,
         "gripY": 0.5,
         "equipIndex": 1,
-        "visible": false
+        "visible": false,
+        "phase": "execute"
       },
       {
-        "id": "step-igr7zhefd1j",
+        "id": "step-58y1zp5w2iv",
         "type": "motion",
         "duration": 0,
         "role": "user",
@@ -1132,10 +1277,19 @@
         "motionFrames": 0,
         "motionSpeed": 0,
         "motionLoop": "default",
-        "motion": "idle"
+        "motion": "idle",
+        "phase": "execute"
       }
     ],
-    "starterKey": "action:Throw Weapon"
+    "starterKey": "action:Throw Weapon",
+    "phases": [
+      "prepare",
+      "movement",
+      "execute",
+      "effect",
+      "return",
+      "finish"
+    ]
   },
   {
     "id": 10,
@@ -1144,7 +1298,7 @@
     "note": "",
     "steps": [
       {
-        "id": "step-hjf3z7n7x48",
+        "id": "step-1llu1wn9eyd",
         "type": "weapon",
         "duration": 0,
         "role": "user",
@@ -1153,6 +1307,7 @@
         "y": 0,
         "z": 0,
         "easing": "smooth",
+        "mode": "show",
         "weaponGraphic": "icon",
         "weaponImageId": 1,
         "weaponFrame": 1,
@@ -1161,10 +1316,11 @@
         "gripX": 0.5,
         "gripY": 0.5,
         "equipIndex": 1,
-        "iconSource": "weapon"
+        "iconSource": "weapon",
+        "phase": "execute"
       },
       {
-        "id": "step-y0gbmx3jys",
+        "id": "step-5aylol91s2r",
         "type": "motion",
         "duration": 12,
         "role": "user",
@@ -1177,10 +1333,11 @@
         "motionFrames": 0,
         "motionSpeed": 0,
         "motionLoop": "default",
-        "motion": "item"
+        "motion": "item",
+        "phase": "execute"
       },
       {
-        "id": "step-vlenxaggzrj",
+        "id": "step-wnelnqnm3qe",
         "type": "weapon",
         "duration": 0,
         "role": "user",
@@ -1189,6 +1346,7 @@
         "y": 0,
         "z": 0,
         "easing": "smooth",
+        "mode": "show",
         "weaponGraphic": "icon",
         "weaponImageId": 1,
         "weaponFrame": 1,
@@ -1197,10 +1355,11 @@
         "gripX": 0.5,
         "gripY": 0.5,
         "equipIndex": 1,
-        "visible": false
+        "visible": false,
+        "phase": "execute"
       },
       {
-        "id": "step-jrqrwhj3c1",
+        "id": "step-zkp0qsozwsn",
         "type": "projectile",
         "duration": 30,
         "role": "user",
@@ -1225,10 +1384,11 @@
         "spin": 15,
         "rotation": 0,
         "scale": 1,
-        "flight": "oneWay"
+        "flight": "oneWay",
+        "phase": "execute"
       },
       {
-        "id": "step-gahujhpyhle",
+        "id": "step-pdu87kyhk3",
         "type": "animation",
         "duration": 0,
         "role": "allTargets",
@@ -1238,10 +1398,11 @@
         "z": 0,
         "easing": "smooth",
         "animationSource": "action",
-        "animationId": 0
+        "animationId": 0,
+        "phase": "effect"
       },
       {
-        "id": "step-7wr8ljr28p8",
+        "id": "step-82npyvtmqh8",
         "type": "impact",
         "duration": 0,
         "role": "allTargets",
@@ -1249,10 +1410,11 @@
         "x": 0,
         "y": 0,
         "z": 0,
-        "easing": "smooth"
+        "easing": "smooth",
+        "phase": "effect"
       },
       {
-        "id": "step-mwmjctpzfg",
+        "id": "step-gqig4g2brj5",
         "type": "projectile",
         "duration": 30,
         "role": "allTargets",
@@ -1277,10 +1439,11 @@
         "spin": 15,
         "rotation": 0,
         "scale": 1,
-        "flight": "oneWay"
+        "flight": "oneWay",
+        "phase": "execute"
       },
       {
-        "id": "step-2bhhy928i3p",
+        "id": "step-45tnpgw4va7",
         "type": "weapon",
         "duration": 0,
         "role": "user",
@@ -1289,6 +1452,7 @@
         "y": 0,
         "z": 0,
         "easing": "smooth",
+        "mode": "show",
         "weaponGraphic": "icon",
         "weaponImageId": 1,
         "weaponFrame": 1,
@@ -1297,10 +1461,11 @@
         "gripX": 0.5,
         "gripY": 0.5,
         "equipIndex": 1,
-        "iconSource": "weapon"
+        "iconSource": "weapon",
+        "phase": "execute"
       },
       {
-        "id": "step-2scn06zi2uw",
+        "id": "step-vgf620kr4qa",
         "type": "wait",
         "duration": 12,
         "role": "user",
@@ -1308,10 +1473,11 @@
         "x": 0,
         "y": 0,
         "z": 0,
-        "easing": "smooth"
+        "easing": "smooth",
+        "phase": "execute"
       },
       {
-        "id": "step-untg1vlw9bg",
+        "id": "step-x0sily5yr68",
         "type": "weapon",
         "duration": 0,
         "role": "user",
@@ -1320,6 +1486,7 @@
         "y": 0,
         "z": 0,
         "easing": "smooth",
+        "mode": "show",
         "weaponGraphic": "icon",
         "weaponImageId": 1,
         "weaponFrame": 1,
@@ -1328,10 +1495,11 @@
         "gripX": 0.5,
         "gripY": 0.5,
         "equipIndex": 1,
-        "visible": false
+        "visible": false,
+        "phase": "execute"
       },
       {
-        "id": "step-cb8rjhi6lbm",
+        "id": "step-di4knhhi0cs",
         "type": "motion",
         "duration": 0,
         "role": "user",
@@ -1344,10 +1512,19 @@
         "motionFrames": 0,
         "motionSpeed": 0,
         "motionLoop": "default",
-        "motion": "idle"
+        "motion": "idle",
+        "phase": "execute"
       }
     ],
-    "starterKey": "action:Boomerang"
+    "starterKey": "action:Boomerang",
+    "phases": [
+      "prepare",
+      "movement",
+      "execute",
+      "effect",
+      "return",
+      "finish"
+    ]
   },
   {
     "version": 1,
@@ -1561,7 +1738,8 @@
         "motionFrames": 0,
         "motionSpeed": 0,
         "motionLoop": "default",
-        "motion": "punch"
+        "motion": "punch",
+        "phase": "execute"
       },
       {
         "id": "step-cqo83sodui5",
@@ -1572,7 +1750,8 @@
         "x": 0,
         "y": 0,
         "z": 0,
-        "easing": "smooth"
+        "easing": "smooth",
+        "phase": "execute"
       },
       {
         "id": "step-28xi69ixk7",
@@ -1583,9 +1762,767 @@
         "x": 0,
         "y": 0,
         "z": 0,
-        "easing": "smooth"
+        "easing": "smooth",
+        "phase": "execute"
       }
     ],
-    "id": 16
+    "id": 16,
+    "phases": [
+      "prepare",
+      "movement",
+      "execute",
+      "effect",
+      "return",
+      "finish"
+    ]
+  },
+  {
+    "id": 17,
+    "version": 1,
+    "name": "Item Toss",
+    "note": "Face the recipient, lob the item (its icon or 3D model) in a high arc, then apply it on arrival. Works for a med kit on an ally or a grenade at an enemy.",
+    "steps": [
+      {
+        "id": "step-aqdrd8olmmb",
+        "type": "direction",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "direction": "targets",
+        "position": 0,
+        "phase": "execute"
+      },
+      {
+        "id": "step-7i7jx1wujz3",
+        "type": "weapon",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "mode": "show",
+        "weaponGraphic": "icon",
+        "weaponImageId": 1,
+        "weaponFrame": 1,
+        "attachment": "rightHand",
+        "bone": "",
+        "gripX": 0.5,
+        "gripY": 0.5,
+        "equipIndex": 1,
+        "iconSource": "action",
+        "phase": "execute"
+      },
+      {
+        "id": "step-uzv0odm2ro",
+        "type": "motion",
+        "duration": 12,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "item",
+        "phase": "execute"
+      },
+      {
+        "id": "step-35ryf7sosuo",
+        "type": "weapon",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "mode": "show",
+        "weaponGraphic": "icon",
+        "weaponImageId": 1,
+        "weaponFrame": 1,
+        "attachment": "offset",
+        "bone": "",
+        "gripX": 0.5,
+        "gripY": 0.5,
+        "equipIndex": 1,
+        "visible": false,
+        "phase": "execute"
+      },
+      {
+        "id": "step-osqmgsusebd",
+        "type": "projectile",
+        "duration": 50,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "iconSource": "action",
+        "iconIndex": 0,
+        "name": "",
+        "destination": "allTargets",
+        "sourceRole": "battler",
+        "attachment": "rightHand",
+        "bone": "",
+        "gripX": 0.5,
+        "gripY": 0.5,
+        "equipIndex": 1,
+        "startHeight": 1,
+        "endHeight": 1,
+        "arc": 1.4,
+        "spin": 0,
+        "rotation": 0,
+        "scale": 1,
+        "flight": "oneWay",
+        "phase": "execute"
+      },
+      {
+        "id": "step-zxbfq2jbnar",
+        "type": "animation",
+        "duration": 0,
+        "role": "allTargets",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "animationSource": "action",
+        "animationId": 0,
+        "phase": "effect"
+      },
+      {
+        "id": "step-ds5h83kmm8u",
+        "type": "impact",
+        "duration": 0,
+        "role": "allTargets",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "effect"
+      },
+      {
+        "id": "step-ehylcsga37k",
+        "type": "wait",
+        "duration": 12,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-zeg6w44shz",
+        "type": "motion",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "idle",
+        "phase": "execute"
+      }
+    ],
+    "starterKey": "action:Item Toss",
+    "phases": [
+      "prepare",
+      "movement",
+      "execute",
+      "effect",
+      "return",
+      "finish"
+    ]
+  },
+  {
+    "id": 18,
+    "version": 1,
+    "name": "Sword Slash",
+    "note": "Walk to the target, raise the blade over the shoulder, sweep it down through the target, then walk home.",
+    "steps": [
+      {
+        "id": "step-eh0b0iub1rm",
+        "type": "motion",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "walk",
+        "phase": "movement"
+      },
+      {
+        "id": "step-4004zcxfm6f",
+        "type": "move",
+        "duration": 12,
+        "role": "user",
+        "anchor": "approach",
+        "x": -0.3,
+        "y": 0,
+        "z": 0,
+        "easing": "linear",
+        "moveMode": "anchor",
+        "face": "movement",
+        "phase": "movement"
+      },
+      {
+        "id": "step-94uu4s6uzes",
+        "type": "motion",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "idle",
+        "phase": "execute"
+      },
+      {
+        "id": "step-o27huthsncn",
+        "type": "weapon",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0.7,
+        "y": 0,
+        "z": 0.35,
+        "easing": "smooth",
+        "mode": "show",
+        "weaponGraphic": "icon",
+        "weaponImageId": 1,
+        "weaponFrame": 1,
+        "attachment": "rightHand",
+        "bone": "",
+        "gripX": 0.5,
+        "gripY": 0,
+        "equipIndex": 1,
+        "iconSource": "weapon",
+        "rotation": 160,
+        "phase": "execute"
+      },
+      {
+        "id": "step-n6juqti61bl",
+        "type": "wait",
+        "duration": 30,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-6m58cjozliw",
+        "type": "weapon",
+        "duration": 3,
+        "role": "user",
+        "anchor": "home",
+        "x": 0.2,
+        "y": 0,
+        "z": 1.65,
+        "easing": "linear",
+        "mode": "move",
+        "weaponGraphic": "icon",
+        "weaponImageId": 1,
+        "weaponFrame": 1,
+        "attachment": "offset",
+        "bone": "",
+        "gripX": 0.5,
+        "gripY": 0.5,
+        "equipIndex": 1,
+        "rotation": 70,
+        "phase": "execute"
+      },
+      {
+        "id": "step-a6amz4xfdmb",
+        "type": "weapon",
+        "duration": 3,
+        "role": "user",
+        "anchor": "home",
+        "x": -0.2,
+        "y": 0,
+        "z": 0.7,
+        "easing": "linear",
+        "mode": "move",
+        "weaponGraphic": "icon",
+        "weaponImageId": 1,
+        "weaponFrame": 1,
+        "attachment": "offset",
+        "bone": "",
+        "gripX": 0.5,
+        "gripY": 0.5,
+        "equipIndex": 1,
+        "rotation": -30,
+        "phase": "execute"
+      },
+      {
+        "id": "step-jpn1ey5nji",
+        "type": "animation",
+        "duration": 0,
+        "role": "allTargets",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "animationSource": "action",
+        "animationId": 0,
+        "phase": "effect"
+      },
+      {
+        "id": "step-eulfm673yre",
+        "type": "impact",
+        "duration": 0,
+        "role": "allTargets",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "effect"
+      },
+      {
+        "id": "step-7utunpxoc5d",
+        "type": "wait",
+        "duration": 4,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-107q2u1oei6",
+        "type": "weapon",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "mode": "show",
+        "weaponGraphic": "icon",
+        "weaponImageId": 1,
+        "weaponFrame": 1,
+        "attachment": "offset",
+        "bone": "",
+        "gripX": 0.5,
+        "gripY": 0.5,
+        "equipIndex": 1,
+        "visible": false,
+        "phase": "execute"
+      },
+      {
+        "id": "step-9zic83n5bpt",
+        "type": "motion",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "walk",
+        "phase": "return"
+      },
+      {
+        "id": "step-nrzvo1rxj9",
+        "type": "move",
+        "duration": 24,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "linear",
+        "moveMode": "anchor",
+        "face": "movement",
+        "phase": "return"
+      },
+      {
+        "id": "step-hcnxmc3xts6",
+        "type": "motion",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "idle",
+        "phase": "finish"
+      },
+      {
+        "id": "step-0m8nvkhx187j",
+        "type": "move",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "moveMode": "anchor",
+        "face": "home",
+        "phase": "finish"
+      }
+    ],
+    "starterKey": "action:Sword Slash",
+    "phases": [
+      "prepare",
+      "movement",
+      "execute",
+      "effect",
+      "return",
+      "finish"
+    ]
+  },
+  {
+    "id": 19,
+    "version": 1,
+    "name": "Graviton Shot",
+    "note": "Step forward, draw the gun low, raise it to aim over six frames, fire at the target, lower and holster it, then step back.",
+    "steps": [
+      {
+        "id": "step-00dhg2wqq3d1o",
+        "type": "motion",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "walk",
+        "phase": "movement"
+      },
+      {
+        "id": "step-amp9xzk7x39",
+        "type": "move",
+        "duration": 8,
+        "role": "user",
+        "anchor": "home",
+        "x": 1,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "moveMode": "anchor",
+        "face": "target",
+        "phase": "movement"
+      },
+      {
+        "id": "step-osz1hl2wcwo",
+        "type": "motion",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "__pose",
+        "phase": "execute",
+        "transform": {
+          "x": 0,
+          "y": 0,
+          "z": 0,
+          "rotateX": 0,
+          "rotateY": 0,
+          "rotateZ": 0,
+          "scale": 1,
+          "scaleX": 1,
+          "scaleY": 1,
+          "scaleZ": 1
+        },
+        "parts": [
+          {
+            "part": "RightLowerArm",
+            "rotate": [
+              -93,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          }
+        ]
+      },
+      {
+        "id": "step-k5asb38x5po",
+        "type": "weapon",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0.29,
+        "y": 0.02,
+        "z": 0.04,
+        "easing": "smooth",
+        "mode": "show",
+        "weaponGraphic": "icon",
+        "weaponImageId": 1,
+        "weaponFrame": 1,
+        "attachment": "rightHand",
+        "bone": "",
+        "gripX": 0.5,
+        "gripY": 0.5,
+        "equipIndex": 1,
+        "iconSource": "weapon",
+        "rotation": -30,
+        "phase": "execute"
+      },
+      {
+        "id": "step-spaafxozw2a",
+        "type": "wait",
+        "duration": 4,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-8clidxj6t9h",
+        "type": "projectile",
+        "duration": 8,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "iconSource": "color",
+        "iconIndex": 0,
+        "name": "",
+        "destination": "allTargets",
+        "sourceRole": "battler",
+        "attachment": "rightHand",
+        "bone": "",
+        "gripX": 0.5,
+        "gripY": 0.5,
+        "equipIndex": 1,
+        "startHeight": 1,
+        "endHeight": 1,
+        "arc": 0,
+        "spin": 0,
+        "rotation": 0,
+        "scale": 1,
+        "flight": "oneWay",
+        "color": "#9fe0ff",
+        "size": 6,
+        "phase": "execute"
+      },
+      {
+        "id": "step-dwuk7jh6sn5",
+        "type": "animation",
+        "duration": 0,
+        "role": "allTargets",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "animationSource": "action",
+        "animationId": 0,
+        "phase": "effect"
+      },
+      {
+        "id": "step-7mkqxth1p0o",
+        "type": "impact",
+        "duration": 0,
+        "role": "allTargets",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "effect"
+      },
+      {
+        "id": "step-01pi17vkxdje",
+        "type": "wait",
+        "duration": 16,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-cc3e8hcchda",
+        "type": "weapon",
+        "duration": 6,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "mode": "move",
+        "weaponGraphic": "icon",
+        "weaponImageId": 1,
+        "weaponFrame": 1,
+        "attachment": "offset",
+        "bone": "",
+        "gripX": 0.5,
+        "gripY": 0.5,
+        "equipIndex": 1,
+        "rotation": -30,
+        "phase": "execute"
+      },
+      {
+        "id": "step-m0grxhub00o",
+        "type": "weapon",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "mode": "show",
+        "weaponGraphic": "icon",
+        "weaponImageId": 1,
+        "weaponFrame": 1,
+        "attachment": "offset",
+        "bone": "",
+        "gripX": 0.5,
+        "gripY": 0.5,
+        "equipIndex": 1,
+        "visible": false,
+        "phase": "execute"
+      },
+      {
+        "id": "step-4jks39z1pmx",
+        "type": "motion",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "walk",
+        "phase": "return"
+      },
+      {
+        "id": "step-r9f47yhue3p",
+        "type": "move",
+        "duration": 8,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "moveMode": "anchor",
+        "face": "movement",
+        "phase": "return"
+      },
+      {
+        "id": "step-t9w9kjp7e2",
+        "type": "motion",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "idle",
+        "phase": "finish"
+      },
+      {
+        "id": "step-ywusdfj8g8n",
+        "type": "move",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "moveMode": "anchor",
+        "face": "home",
+        "phase": "finish"
+      }
+    ],
+    "starterKey": "action:Railgun Shot",
+    "phases": [
+      "prepare",
+      "movement",
+      "execute",
+      "effect",
+      "return",
+      "finish"
+    ]
   }
 ]

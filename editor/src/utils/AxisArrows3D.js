@@ -12,13 +12,15 @@
     const DIRS = { x: [1, 0, 0], y: [0, 1, 0], z: [0, 0, 1] };
     const COLORS = { x: 0xff5c5c, y: 0x3ddc84, z: 0x5ca8ff };
 
-    function create(THREE, length, name) {
+    /** `colors` overrides the arrow colours per axis, for a view whose sliders name the axes differently. */
+    function create(THREE, length, name, colors) {
         const rootGroup = new THREE.Group();
         rootGroup.name = name || 'axis-arrows';
         const arrows = { root: rootGroup, length };
+        const palette = Object.assign({}, COLORS, colors || {});
         for (const axis of AXES) {
             const group = new THREE.Group();
-            const material = new THREE.MeshBasicMaterial({ color: COLORS[axis], transparent: true, opacity: 0.75, depthTest: false, fog: false });
+            const material = new THREE.MeshBasicMaterial({ color: palette[axis], transparent: true, opacity: 0.75, depthTest: false, fog: false });
             const shaft = new THREE.Mesh(new THREE.CylinderGeometry(length * 0.03, length * 0.03, length, 6), material);
             shaft.position.y = length / 2;
             const head = new THREE.Mesh(new THREE.ConeGeometry(length * 0.09, length * 0.22, 10), material.clone());

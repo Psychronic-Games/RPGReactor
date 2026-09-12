@@ -142,20 +142,27 @@ class ScriptEditor {
             this.scriptText = e.target.value;
         });
 
-        // Tab key support
+        // Tab indents, as the field holds code; Shift+Tab removes one level
+        // instead of inserting one, and leaves the field when there is none.
         textarea.addEventListener('keydown', (e) => {
-            if (e.key === 'Tab') {
+            if (e.key !== 'Tab') return;
+            if (e.shiftKey) {
+                const outdented = window.RRKeyboardNavigation?.outdentLine(textarea, 4);
+                if (!outdented) return;
                 e.preventDefault();
-                const start = textarea.selectionStart;
-                const end = textarea.selectionEnd;
-                const value = textarea.value;
-
-                // Insert tab character
-                textarea.value = value.substring(0, start) + '    ' + value.substring(end);
-                textarea.selectionStart = textarea.selectionEnd = start + 4;
-
                 this.scriptText = textarea.value;
+                return;
             }
+            e.preventDefault();
+            const start = textarea.selectionStart;
+            const end = textarea.selectionEnd;
+            const value = textarea.value;
+
+            // Insert tab character
+            textarea.value = value.substring(0, start) + '    ' + value.substring(end);
+            textarea.selectionStart = textarea.selectionEnd = start + 4;
+
+            this.scriptText = textarea.value;
         });
 
         textareaContainer.appendChild(textarea);

@@ -211,8 +211,9 @@
         const { element, onDocument, onKey } = openMenu;
         document.removeEventListener('mousedown', onDocument, true);
         document.removeEventListener('keydown', onKey, true);
-        if (element.parentNode) element.parentNode.removeChild(element);
         openMenu = null;
+        element._rrMenuKeys?.dispose();
+        if (element.parentNode) element.parentNode.removeChild(element);
     }
 
     function menuItem(entry) {
@@ -224,6 +225,8 @@
 
         const item = document.createElement('div');
         item.textContent = entry.label + (entry.submenu ? '  ▸' : '');
+        item.dataset.disabled = String(!!entry.disabled);
+        item.setAttribute('role', 'menuitem');
         item.style.cssText = `
             padding: 5px 14px; font-size: 12px; white-space: nowrap; cursor: ${entry.disabled ? 'default' : 'pointer'};
             color: var(--color-text${entry.disabled ? '-muted' : ''});
@@ -284,6 +287,12 @@
         document.addEventListener('keydown', onKey, true);
 
         openMenu = { element, onDocument, onKey };
+        element.setAttribute('role', 'menu');
+        root.RRKeyboardNavigation?.menu(element, {
+            items: () => element.children,
+            isDisabled: row => row.dataset.disabled === 'true',
+            close: closeMenu
+        });
         return element;
     }
 

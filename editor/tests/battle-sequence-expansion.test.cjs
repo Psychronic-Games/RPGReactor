@@ -87,7 +87,7 @@ test('hand attachment resolves actual animated 3D bones and keeps offsets in log
  const THREE=await import('three'),scope={THREE,ReactorBattleData:B};vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../../runtime/reactor_battle_room.js'),'utf8'),scope);const Room=scope.ReactorBattleRoomView,object=new THREE.Group(),bone=new THREE.Bone();bone.name='mixamorig:RightHand';bone.position.set(.3,1.2,0);object.add(bone);object.position.set(5.5,0,3.5);const record={object,spec:{size:2},position:{x:5,y:3,z:0,facing:90}},view=Object.create(Room.prototype);view.models=new Map([['user',record]]);view.billboards=new Map();const step={attachment:'rightHand',x:.1,z:.2};let p=view.attachmentPoint('user',step);assert.ok(Math.abs(p.x-5.4)<1e-8);assert.equal(p.y,3);assert.equal(p.z,1.4);bone.position.y=1.8;p=view.attachmentPoint('user',step);assert.equal(p.z,2);assert.equal(Room.attachmentWorld(record,'rightHand','missing'),null);const fallback=view.attachmentPoint('missing',step,{x:0,y:0,z:0,facing:-90});assert.ok(fallback.x<0);assert.ok(fallback.z>0);
 });
 test('fresh project data includes real editable starter records',()=>{
- const ProjectManager=vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../src/ProjectManager.js'),'utf8')+';ProjectManager',{ReactorBattleData:B,RRJson:{parse:JSON.parse}});const pm=Object.create(ProjectManager.prototype),data=pm.getStarterData('Starter test');assert.equal(data['ActionSequences.json'].filter(Boolean).length,16);assert.ok(data['ActionSequences.json'].some(s=>s?.name==='Throw Item'));B.validateStore(data['ActionSequences.json'],B.empty());const original=[null,{...B.template('Unarmed Punch'),note:'Authored template'}];let saved;Object.assign(pm,{path,fs:{existsSync:file=>file.endsWith('ActionSequences.json'),readFileSync:()=>JSON.stringify(original)},writeProjectMetadata(){},writeJson(file,value){saved=value;}});pm.updateCopiedTemplateProject('/fixture','Copy','0.98.6');assert.equal(saved[1].note,'Authored template');assert.equal(saved.filter(Boolean).length,16);
+ const ProjectManager=vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../src/ProjectManager.js'),'utf8')+';ProjectManager',{ReactorBattleData:B,RRJson:{parse:JSON.parse}});const pm=Object.create(ProjectManager.prototype),data=pm.getStarterData('Starter test');assert.equal(data['ActionSequences.json'].filter(Boolean).length,19);assert.ok(data['ActionSequences.json'].some(s=>s?.name==='Throw Item'));B.validateStore(data['ActionSequences.json'],B.empty());const original=[null,{...B.template('Unarmed Punch'),note:'Authored template'}];let saved;Object.assign(pm,{path,fs:{existsSync:file=>file.endsWith('ActionSequences.json'),readFileSync:()=>JSON.stringify(original)},writeProjectMetadata(){},writeJson(file,value){saved=value;}});pm.updateCopiedTemplateProject('/fixture','Copy','0.98.6');assert.equal(saved[1].note,'Authored template');assert.equal(saved.filter(Boolean).length,19);
 });
 test('humanoid item fallback animates a release while preserving authored motions',async()=>{
  const THREE=await import('three'),scope={THREE,Reactor3D:{readModelAnimationRules:s=>s.animations}};vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../../runtime/reactor_battle_room.js'),'utf8'),scope);
@@ -95,4 +95,68 @@ test('humanoid item fallback animates a release while preserving authored motion
 });
 test('preview equipment slots distinguish shields from dual-wielded weapons with matching IDs',()=>{
  const Editor=vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../src/database/DatabaseActionSequenceEditor.js'),'utf8')+';DatabaseActionSequenceEditor',{ReactorBattleData:B});const record={id:1,classId:1,equips:[2,2],traits:[]},klass={traits:[]},weapon={id:2,iconIndex:19},shield={id:2,iconIndex:87},ed=Object.create(Editor.prototype);Object.assign(ed,{castKinds:{user:'actors'},cast:{user:1},ui:{settings:()=>B.empty()},db:{getActor:()=>record,getClass:()=>klass,getWeapon:()=>weapon,getArmor:()=>shield}});assert.equal(B.visualIcon({iconSource:'weapon',equipIndex:2},ed.previewBattler('user')),87);klass.traits.push({code:55,dataId:1});assert.equal(B.visualIcon({iconSource:'weapon',equipIndex:2},ed.previewBattler('user')),19);
+});
+test('a held model turns about its grip, faces where its holder faces, and tweens every turn',async()=>{
+ // Placement: an authored front face takes the holder's facing itself; a model without one keeps the long-axis +90.
+ const at={x:5,y:3,z:1.5};
+ assert.deepEqual(B.heldPlacement(at,90,{rotation:20,rotateY:10,rotateZ:5,scale:2,gripY:0},{faces:{front:[1,0,0]}}),{x:5,y:3,z:1.5,facing:90,rotateX:-20,rotateY:10,rotateZ:5,scale:2,pivotY:0});
+ const plain=B.heldPlacement(at,90,{},{});assert.equal(plain.facing,180);assert.equal(plain.pivotY,.5);assert.equal(plain.scale,1);
+ // The tween carries Turn and Roll along with the rest.
+ assert.deepEqual(B.heldPose({x:0,rotation:0,rotateY:0,rotateZ:0,scale:1},{x:1,rotation:90,rotateY:40,rotateZ:-20,scale:3},.5),{x:.5,y:0,z:0,rotation:45,rotateY:20,rotateZ:-10,scale:2});
+ // The room view brings the grip point, not the feet, to the placed position, after the turn.
+ const THREE=await import('three'),scope={THREE,ReactorBattleData:B,Reactor3D:{applyEventModelPose:(o,spec)=>{o.rotation.order='YXZ';o.rotation.set(spec.pitch||0,spec.yaw||0,spec.roll||0);}}};
+ vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../../runtime/reactor_battle_room.js'),'utf8'),scope);
+ const Room=scope.ReactorBattleRoomView,object=new THREE.Group(),record={object,spec:{size:1},position:{},extent:{x:.5,y:2,z:.5},scale:1},view=Object.create(Room.prototype);view.models=new Map([['held',record]]);view.billboards=new Map();
+ view.place('held',{x:4,y:6,z:1.5,facing:0,pivotY:.5});
+ assert.ok(Math.abs(object.position.y-.5)<1e-9,'the middle of a two-tile model sits at the hand: '+object.position.y);
+ view.place('held',{x:4,y:6,z:1.5,facing:0,pivotY:0});assert.ok(Math.abs(object.position.y-1.5)<1e-9,'held by the base, the feet sit at the hand');
+ view.place('held',{x:4,y:6,z:1.5,facing:0,rotateX:90,pivotY:.5});
+ assert.ok(Math.abs(object.position.y-1.5)<1e-6&&Math.abs(object.position.z-(6.5-1))<1e-6,'tipped flat, the grip offset lies along the ground: '+object.position.toArray());
+});
+test('preview choices are remembered per sequence and dropped when their records are gone',()=>{
+ const store=new Map(),localStorage={getItem:k=>store.has(k)?store.get(k):null,setItem:(k,v)=>store.set(k,String(v))};
+ const Editor=vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../src/database/DatabaseActionSequenceEditor.js'),'utf8')+';DatabaseActionSequenceEditor',{ReactorBattleData:B,localStorage,JSON});
+ const make=weapons=>{const ed=Object.create(Editor.prototype);Object.assign(ed,{parent:{currentProject:{path:'/p'}},db:{getWeapon:id=>weapons.includes(id)?{id}:null},sequence:{id:7},cast:{user:1,target:1},castKinds:{user:'actors',target:'enemies'},targetCount:1,mirrored:false,sampleWeapon:0,previewProjection:'3d',scene:{kind:'grid'},controls:{distance:14}});return ed;};
+ const first=make([49]);Object.assign(first,{cast:{user:3,target:2},castKinds:{user:'enemies',target:'enemies'},targetCount:3,mirrored:true,sampleWeapon:49,sampleAction:'items:5',previewProjection:'2d',scene:{kind:'troop',id:4}});first.controls.distance=9;first.savePrefs();
+ const second=make([49]),extra=second.loadPrefs();
+ assert.deepEqual([second.cast,second.castKinds,second.targetCount,second.mirrored,second.sampleWeapon,second.previewProjection,second.scene],[{user:3,target:2},{user:'enemies',target:'enemies'},3,true,49,'2d',{kind:'troop',id:4}]);
+ assert.deepEqual({...extra},{sampleAction:'items:5',distance:9,follow:false,orbit:null,pan:null});
+ const other=make([49]);other.sequence={id:8};other.loadPrefs();assert.equal(other.targetCount,1,'another sequence keeps its own cast');assert.equal(other.previewProjection,'2d','projection and scene are shared across sequences');
+ const gone=make([]);gone.loadPrefs();assert.equal(gone.sampleWeapon,0,'a deleted preview weapon is forgotten');
+ store.set('rrSequencePreview:/p','not json');assert.doesNotThrow(()=>make([]).loadPrefs());
+});
+test('pose steps become keyed rules that start where the part stood and stay put, carried by part name',()=>{
+ const seq={version:1,steps:[B.step('motion',{motion:B.POSE_MOTION,duration:20,parts:[{part:'RightLowerArm',rotate:[90,0,0]}]}),B.step('wait',{duration:10}),B.step('motion',{motion:B.POSE_MOTION,duration:10,parts:[{part:'RightUpperArm',rotate:[0,0,-40]}]}),B.step('motion',{motion:B.POSE_MOTION,duration:6,resetPose:true})]};
+ const [first,wait,second,reset]=seq.steps,plan=B.posePlan(seq);
+ assert.equal(B.motionActionName(first),'pose:'+first.id);assert.equal(B.spriteMotionName(first),'idle');assert.equal(B.hasPose(wait),false);
+ assert.deepEqual(plan.rules[first.id].map(r=>[r.part,r.keys[0].rotate,r.keys[1].rotate,r.period,r.stay,r.trigger]),[['RightLowerArm',[0,0,0],[90,0,0],10,true,'action']]);
+ // The second pose keeps the elbow where the first left it while it raises the upper arm.
+ assert.deepEqual(plan.rules[second.id].map(r=>r.part+':'+r.keys[0].rotate+'>'+r.keys[1].rotate).sort(),['RightLowerArm:90,0,0>90,0,0','RightUpperArm:0,0,0>0,0,-40']);
+ // Starting from rest sends every posed part home over the step.
+ assert.deepEqual(plan.rules[reset.id].map(r=>r.part+':'+r.keys[0].rotate+'>'+r.keys[1].rotate).sort(),['RightLowerArm:90,0,0>0,0,0','RightUpperArm:0,0,-40>0,0,0']);
+ assert.deepEqual(plan.releases,{},'no plain motion followed a pose here');
+ // A plain motion after a pose releases the posed parts over its own frames and still plays its motion under the release's action.
+ const walkSeq={version:1,steps:[B.step('motion',{motion:B.POSE_MOTION,duration:20,parts:[{part:'RightLowerArm',rotate:[90,0,0]}]}),B.step('motion',{motion:'walk',duration:12}),B.step('motion',{motion:'idle',duration:0})]};
+ const [pose,walk,idle]=walkSeq.steps,walkPlan=B.posePlan(walkSeq);
+ assert.equal(walkPlan.actions[walk.id],'pose:'+walk.id);assert.equal(walkPlan.releases[walk.id],'walk');assert.equal(B.motionActionName(walk,walkPlan),'pose:'+walk.id);
+ assert.deepEqual(walkPlan.rules[walk.id].map(r=>r.part+':'+r.keys[0].rotate+'>'+r.keys[1].rotate+':p'+r.period),['RightLowerArm:90,0,0>0,0,0:p6']);
+ assert.equal(walkPlan.rules[idle.id],undefined,'once released, the next motion is plain again');assert.equal(B.motionActionName(idle,walkPlan),'idle');
+ const modelRules=[{name:'walk',trigger:'action',type:'clip',clip:'Walking'},{name:'Walk',trigger:'walking',type:'clip',clip:'Walking'},{name:'punch',trigger:'action',type:'clip',clip:'P'}];
+ assert.deepEqual(B.releaseMotionRules(walkPlan,walk.id,modelRules).map(r=>r.name+'/'+r.clip),['pose:'+walk.id+'/Walking']);
+ const snap=B.posePlan({version:1,steps:[pose,B.step('motion',{motion:'idle',duration:0})]});assert.equal(Object.values(snap.rules)[1][0].period,1,'no frames: a snap');
+ assert.equal(B.partLabel('RightLowerArm'),'Right Forearm (elbow)');assert.equal(B.partLabel('Full-Turret'),'Full Turret');assert.equal(B.hingeAxis([0,-1,0]),0);assert.equal(B.hingeAxis([1,0,0]),1);
+ assert.deepEqual(B.validateSequence({version:1,steps:[B.step('motion',{motion:B.POSE_MOTION,parts:[{}]})]}).filter(m=>m.includes('Pose')),['Pose parts must name a model part.']);
+});
+test('a staying keyed pose holds its last key while its action stands, and the animator plays the plan',async()=>{
+ const R=require('../../runtime/reactor_3d.js');global.self=global;global.window=global;require(path.join(__dirname,'../../runtime/libs/three.js'));const THREE=global.THREE;
+ const read=R.readModelAnimationRules({animations:[{type:'pose',trigger:'action',name:'lift',part:'Arm',keys:[{at:1,rotate:[0,0,45]}],stay:true,period:10}]})[0];
+ assert.equal(read.stay,true);assert.equal(R.modelRuleDuration(read),Infinity);
+ assert.equal(R.readModelAnimationRules({animations:[{type:'pose',trigger:'action',name:'x',part:'Arm',stay:true}]})[0].stay,false,'stay needs keys');
+ // A carved part turned by a pose step's rules: halfway there mid-step, all the way after, still there long after.
+ const root=new THREE.Group(),arm=new THREE.Mesh(new THREE.BoxGeometry(1,1,1),new THREE.MeshBasicMaterial());arm.userData.parts=[{name:'Arm',pivot:[0,0,0]}];root.add(arm);
+ const binding=R.prepareModelInstance(root,[]),step=B.step('motion',{motion:B.POSE_MOTION,duration:20,parts:[{part:'Arm',rotate:[0,0,90]}]}),rules=B.partPoseRules(step,{}).rules;
+ const angle=()=>{root.updateMatrixWorld(true);return Math.round(new THREE.Euler().setFromQuaternion(arm.quaternion,'XYZ').z*180/Math.PI)+0;};
+ const at=frame=>{R.applyModelAnimation(binding,rules,{frame,moving:false,distance:0,scale:1,action:{name:rules[0].name,frame:0},seek:true});return angle();};
+ assert.equal(at(0),0);const mid=at(10);assert.ok(mid>20&&mid<70,'part way there: '+mid);assert.equal(at(20),90);assert.equal(at(500),90,'kept while the action stands');
+ R.applyModelAnimation(binding,rules,{frame:600,moving:false,distance:0,scale:1,action:{name:'other',frame:590}});assert.equal(angle(),0,'another action drops it');
 });
