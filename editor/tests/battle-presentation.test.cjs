@@ -257,3 +257,18 @@ test('animation transform and completion fields validate without changing old se
  const s=B.template();s.steps.push(B.step('animation',{animationTransform:{x:1,y:-2,z:.5,scale:2},waitForCompletion:true}));assert.deepEqual(B.validateSequence(s),[]);
  s.steps.at(-1).animationTransform.scale=0;assert.ok(B.validateSequence(s).length);s.steps.at(-1).animationTransform={x:Infinity};assert.ok(B.validateSequence(s).length);
 });
+
+test('the stock input side-step is left to sprite-sheet actors with no authored states',()=>{
+ const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
+ let stepped=0;function Actor(){}Actor.prototype.updateTargetPosition=function(){stepped++;};Actor.prototype.setupWeaponAnimation=function(){};
+ const context={ReactorBattleData:B,DataManager:{isDatabaseLoaded:()=>true},BattleManager:{},Window_BattleLog:function(){},Scene_Battle:function(){},Spriteset_Battle:function(){},PluginManager:{_scripts:[],registerCommand(){}},Sprite_Actor:Actor,$dataAnimations:[null],console:{warn(){}},SceneManager:{}};
+ for(const k of ['Window_BattleLog','Scene_Battle','Spriteset_Battle'])context[k].prototype={};
+ vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../../runtime/reactor_battle_presentation.js'),'utf8'),context);const P=context.ReactorBattlePresentation;P.install();
+ P.settings=B.empty();P.sequences=[null,{id:1,version:1,purpose:'motion',name:'input',steps:[B.step('motion',{motion:'walk',duration:0})]}];
+ const actor=id=>({isActor:()=>true,actorId:()=>id,currentClass:()=>({id:1}),states:()=>[],battlerName:'Actor1'});
+ const sprite=id=>Object.assign(new Actor(),{_actor:actor(id)});
+ sprite(1).updateTargetPosition();assert.equal(stepped,1,'a plain sprite-sheet actor still steps');
+ P.settings.actors[2]={graphic:{mode:'character',name:'$Hero',index:0}};sprite(2).updateTargetPosition();assert.equal(stepped,1,'a character-sheet actor is placed by its sequences');
+ P.settings.actors[3]={states:{input:{mode:'sequence',sequenceId:1}}};sprite(3).updateTargetPosition();assert.equal(stepped,1,'an authored input state owns the input pose');
+ P.settings.classes[1]={states:{input:{mode:'sequence',sequenceId:1}}};sprite(4).updateTargetPosition();assert.equal(stepped,1,'through the class as well');
+});

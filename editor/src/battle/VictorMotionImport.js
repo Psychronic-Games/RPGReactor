@@ -208,6 +208,7 @@
                         const kind = (rest[0] || '').toLowerCase().match(/^(icon|equip|shield|action)\s*(\d+)?$/);
                         if (!kind) { notes.push('icon type "' + rest[0] + '" is not supported'); break; }
                         step.source = kind[1]; if (kind[1] === 'icon') step.iconIndex = number(kind[2]); if (kind[1] === 'equip') step.equipIndex = Math.max(1, number(kind[2], 1));
+                        if (step.source === 'icon' && options.record && options.record.iconIndex > 0 && step.iconIndex === options.record.iconIndex) { step.source = 'action'; delete step.iconIndex; }
                         rest = rest.slice(1);
                     } else {
                         if ((rest[0] || '').toLowerCase() === 'move') { push('picture', { ...step, operation: 'move', index: number(rest[1], 1), x: number(rest[2]), y: number(rest[3]), opacity: number(rest[4], 255), duration: Math.max(0, number(rest[5])) }); break; }
@@ -344,10 +345,12 @@
     V.animationLength = (animations, id) => { const a = animations?.[id]; if (!a) return 0; if (Array.isArray(a.frames)) return a.frames.length * 4; return 0; };
 
     // A throw object as a projectile step: what flies, how long, how high.
-    V.throwStep = (spec, options = {}) => {
+    // A throw that shows the record's own icon is the action's icon: read that way, every item or skill thrown the same way shares one sequence.
+    V.throwStep = (spec, options = {}, record = null) => {
         const step = { role: 'user', destination: 'allTargets', attachment: 'offset', duration: Math.max(1, Math.round(spec.duration || (options.distance ?? 7) * TILE * 5 / (spec.speed || 100))), arc: spec.arc !== undefined ? tiles(spec.arc) : 0, spin: number(spec.spin), flight: spec.return ? 'return' : 'oneWay', iconSource: 'icon', iconIndex: 0, easing: 'linear' };
         const image = spec.image || { kind: 'weapon' };
-        if (image.kind === 'icon') { step.iconSource = 'icon'; step.iconIndex = number(image.value); }
+        if (image.kind === 'icon' && record && number(image.value) === record.iconIndex && record.iconIndex > 0) step.iconSource = 'action';
+        else if (image.kind === 'icon') { step.iconSource = 'icon'; step.iconIndex = number(image.value); }
         else if (image.kind === 'picture') { step.iconSource = 'picture'; step.name = image.value; }
         else if (image.kind === 'animation') { step.iconSource = 'animation'; step.animationId = number(image.value); }
         else step.iconSource = 'weapon';
@@ -362,14 +365,14 @@
     V.convertRecord = (record, options = {}) => {
         const blocks = V.parseBlocks(record.note), throws = V.parseThrows(record.note), phases = {}, states = {}, notes = [];
         for (const block of blocks) {
-            if (V.PHASES.includes(block.kind)) { const out = V.convertBlock(block.motions, options); phases[block.kind] = out.steps; notes.push(...out.notes.map(n => block.kind + ': ' + n)); }
+            if (V.PHASES.includes(block.kind)) { const out = V.convertBlock(block.motions, { ...options, record }); phases[block.kind] = out.steps; notes.push(...out.notes.map(n => block.kind + ': ' + n)); }
             else if (V.STATES[block.kind]) { const out = V.convertBlock(block.motions, { ...options, reaction: true }); states[V.STATES[block.kind]] = out.steps; notes.push(...out.notes.map(n => block.kind + ': ' + n)); }
             else notes.push('sequence "' + block.kind + '" is not a phase or state');
         }
         // A throw needs an Execute to fly in: the record's own, else Victor's default (the action motion, then the effect).
         if (throws.length && !phases.execute && (options.throwsNeedExecute ?? true)) phases.execute = [B.step('motion', { motion: 'attack', duration: 1 }), B.step('wait', { duration: 8 }), B.step('effect', { role: 'allTargets', duration: 0 })];
         for (const spec of throws) {
-            const step = V.throwStep(spec, options), list = phases.execute, at = list.findIndex(s => s.type === 'effect');
+            const step = V.throwStep(spec, options, record), list = phases.execute, at = list.findIndex(s => s.type === 'effect');
             if (spec.timing === 'after') list.splice(at >= 0 ? at + 1 : list.length, 0, B.step('projectile', step));
             else list.splice(at >= 0 ? at : list.length, 0, B.step('projectile', { ...step, ...(spec.timing === 'during' ? { concurrent: true } : {}) }));
         }
@@ -415,24 +418,69 @@
      * Identical results share one sequence, named after the first record that
      * produced it. `existing` sequences are kept in place and extended.
      */
+    // Two sequences are near enough to be one when every step matches in
+    // kind and only hand-tuned numbers differ a little: an offset by a few
+    // pixels, a swing angle by a few degrees, a wait by a few frames. Records
+    // of one kind (and, for weapons, one weapon type) that convert to such
+    // near-twins share the first one, the way Victor's author meant one
+    // choreography per kind of weapon and tuned it per icon.
+    V.NEAR = { tiles: 1, pixels: 24, degrees: 45, frames: 30, speed: 6, rate: 0 };
+    V.similar = (a, b) => {
+        if (!a || !b || (a.purpose || 'action') !== (b.purpose || 'action') || (a.hitPolicy || 'once') !== (b.hitPolicy || 'once') || a.steps.length !== b.steps.length) return false;
+        if (JSON.stringify(a.phases || null) !== JSON.stringify(b.phases || null)) return false;
+        const tile = ['x', 'y', 'z', 'arc', 'height', 'startHeight', 'endHeight'], pixels = ['position'], degrees = ['rotation', 'rotateX', 'rotateY', 'rotateZ', 'angle', 'spin'], frames = ['duration', 'fade', 'turns', 'frame', 'motionFrames', 'motionSpeed'], speed = ['speed'];
+        for (let i = 0; i < a.steps.length; i++) {
+            const x = a.steps[i], y = b.steps[i];
+            const keys = new Set([...Object.keys(x), ...Object.keys(y)].filter(k => k !== 'id'));
+            for (const k of keys) {
+                const u = x[k], v = y[k];
+                if (u === v || (u == null && v == null)) continue;
+                if (typeof u !== 'number' || typeof v !== 'number') return false;
+                const pixel = (x.type === 'icon' || x.type === 'picture' || x.type === 'plane') && (k === 'x' || k === 'y');
+                const limit = pixel || pixels.includes(k) ? V.NEAR.pixels : tile.includes(k) ? V.NEAR.tiles : degrees.includes(k) ? V.NEAR.degrees : frames.includes(k) ? V.NEAR.frames : speed.includes(k) ? V.NEAR.speed : k === 'opacity' ? 32 : V.NEAR.rate;
+                if (Math.abs(u - v) > limit) return false;
+            }
+        }
+        return true;
+    };
     V.importDatabase = (data, options = {}) => {
         // An earlier import is replaced, not stacked: its sequences go, hand-made ones keep their ids.
         const sequences = Array.isArray(options.existing) && options.existing.length ? options.existing.map(s => s && !V.isImported(s) ? JSON.parse(JSON.stringify(s)) : null) : [null];
         while (sequences.length > 1 && sequences.at(-1) === null) sequences.pop();
         const settings = { version: 1, troops: options.troops || {}, skills: {}, items: {}, weapons: {}, actors: {}, enemies: {}, classes: {}, states: {} };
-        const shared = new Map(), report = { records: 0, sequences: 0, states: 0, graphics: 0, notes: [] };
+        const shared = new Map(), groups = new Map(), report = { records: 0, sequences: 0, states: 0, graphics: 0, notes: [] };
+        const clean = name => String(name || '').replace(/\\i\[\d+\]/g, '').trim();
         const key = s => JSON.stringify({ purpose: s.purpose || 'action', phases: s.phases, hitPolicy: s.hitPolicy, steps: s.steps.map(({ id, ...rest }) => rest) });
+        let kindLabel = 'records', groupKey = '', groupLabel = '';
         const intern = (sequence, label) => {
             const k = key(sequence);
-            if (shared.has(k)) { const found = sequences[shared.get(k)]; found.sharedBy = (found.sharedBy || 1) + 1; return shared.get(k); }
-            const id = sequences.length; sequence.id = id; sequence.name = label; sequence.steps = sequence.steps.map((s, i) => ({ ...s, id: 'v-' + id + '-' + i })); sequences.push(sequence); shared.set(k, id); report.sequences++; return id;
+            const join = id => { const found = sequences[id]; found.sharedBy = (found.sharedBy || 1) + 1; if (found.sharedKind !== kindLabel) found.sharedKind = found.sharedKind ? 'records' : kindLabel; (found.sharedGroups ||= new Set()).add(groupLabel); return id; };
+            if (shared.has(k)) return join(shared.get(k));
+            for (const id of groups.get(groupKey) || []) if (V.similar(sequences[id], sequence)) { shared.set(k, id); return join(id); }
+            const id = sequences.length; sequence.id = id; sequence.name = label; sequence.steps = sequence.steps.map((s, i) => ({ ...s, id: 'v-' + id + '-' + i })); sequences.push(sequence); shared.set(k, id); (groups.get(groupKey) || groups.set(groupKey, []).get(groupKey)).push(id); sequence.sharedGroups = new Set([groupLabel]); report.sequences++; return id;
         };
         const tables = [['actors', data.actors], ['classes', data.classes], ['enemies', data.enemies], ['weapons', data.weapons], ['armors', data.armors], ['skills', data.skills], ['items', data.items]];
-        const clean = name => String(name || '').replace(/\\i\[\d+\]/g, '').trim();
+        // One choreography per weapon type: weapons of a type were tuned one by
+        // one from the same idea, so with byType every weapon of the type takes
+        // the sequence most of them share, and the odd ones out are not kept.
+        const canonical = new Map();
+        if (options.byType !== false && Array.isArray(data.weapons)) {
+            const groups = new Map();
+            for (const record of data.weapons) { if (!record) continue; const out = V.convertRecord(record, { ...options, facing: options.facing || (options.vertical ? 'up' : 'left') }); if (!Object.keys(out.phases).length) continue; const sequence = V.sequenceFromPhases(out.phases, ''); (groups.get(record.wtypeId) || groups.set(record.wtypeId, []).get(record.wtypeId)).push({ record, sequence }); }
+            for (const [type, entries] of groups) {
+                const clusters = [];
+                for (const entry of entries) { const cluster = clusters.find(c => V.similar(c[0].sequence, entry.sequence)); if (cluster) cluster.push(entry); else clusters.push([entry]); }
+                clusters.sort((a, b) => b.length - a.length);
+                if (clusters.length > 1) { canonical.set(type, clusters[0][0].record.id); for (const cluster of clusters.slice(1)) for (const entry of cluster) report.notes.push('weapons ' + entry.record.id + ' ' + clean(entry.record.name) + ': uses the ' + (data.system?.weaponTypes?.[type] || 'type ' + type) + ' choreography of ' + clean(clusters[0][0].record.name)); }
+            }
+        }
         for (const [kind, list] of tables) {
             if (!Array.isArray(list)) continue;
             for (const record of list) {
                 if (!record) continue;
+                kindLabel = kind;
+                const typeName = kind === 'weapons' ? (data.system?.weaponTypes?.[record.wtypeId] || '') : kind === 'items' ? 'Item' : '';
+                groupKey = kind + (kind === 'weapons' ? ':' + record.wtypeId : ''); groupLabel = typeName ? typeName + (kind === 'weapons' ? ' attack' : '') : '';
                 const out = V.convertRecord(record, { ...options, facing: options.facing || (options.vertical ? (kind === 'enemies' ? 'down' : 'up') : (kind === 'enemies' ? 'right' : 'left')) });
                 for (const note of out.notes) report.notes.push(kind + ' ' + record.id + ' ' + clean(record.name) + ': ' + note);
                 const provided = Object.keys(out.phases), stateNames = Object.keys(out.states);
@@ -440,7 +488,11 @@
                 if (kind === 'armors') { report.notes.push('armors ' + record.id + ': action sequences on armor are not assignable'); continue; }
                 report.records++;
                 const binding = {};
-                if (provided.length) binding.mode = 'sequence', binding.sequenceId = intern(V.sequenceFromPhases(out.phases, clean(record.name)), clean(record.name));
+                if (provided.length) {
+                    const standIn = kind === 'weapons' && canonical.has(record.wtypeId) && canonical.get(record.wtypeId) !== record.id ? data.weapons[canonical.get(record.wtypeId)] : null;
+                    const source = standIn ? V.convertRecord(standIn, { ...options, facing: options.facing || (options.vertical ? 'up' : 'left') }).phases : out.phases, sourceName = clean((standIn || record).name);
+                    binding.mode = 'sequence'; binding.sequenceId = intern(V.sequenceFromPhases(source, sourceName), sourceName);
+                }
                 if (stateNames.length) { binding.states = {}; for (const state of stateNames) { binding.states[state] = { mode: 'sequence', sequenceId: intern(V.stateSequence(out.states[state], clean(record.name) + ' · ' + state), clean(record.name) + ' · ' + state) }; report.states++; } }
                 if (kind === 'actors') { const graphic = V.actorGraphic(record, options.actorMode ?? 'charset'); if (graphic) { binding.graphic = graphic; report.graphics++; } }
                 if (kind === 'enemies') { const graphic = V.enemyGraphic(record, options.enemyMode ?? 'charset'); if (graphic) { binding.graphic = graphic; report.graphics++; } }
@@ -449,7 +501,8 @@
                 settings[kind][record.id] = binding;
             }
         }
-        for (const sequence of sequences) if (sequence?.sharedBy) { sequence.name = sequence.name + ' (' + sequence.sharedBy + ' records)'; delete sequence.sharedBy; }
+        // A sequence shared by a whole weapon type is named for the type; otherwise after its first record and how many more share it.
+        for (const sequence of sequences) if (sequence) { const groupsOf = sequence.sharedGroups ? [...sequence.sharedGroups].filter(Boolean) : []; if (sequence.sharedBy && groupsOf.length === 1 && groupsOf[0].endsWith(' attack')) sequence.name = groupsOf[0] + ' (' + sequence.sharedBy + ' weapons)'; else if (sequence.sharedBy) sequence.name = sequence.name + ' (+' + (sequence.sharedBy - 1) + ' more ' + (sequence.sharedKind || 'records') + ')'; delete sequence.sharedBy; delete sequence.sharedKind; delete sequence.sharedGroups; }
         return { sequences, settings, report };
     };
 

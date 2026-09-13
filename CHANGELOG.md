@@ -26,6 +26,16 @@ Development cycle in progress. Session detail lives in the [handoff](docs/HANDOF
 - **A plugin can waive an item's stock check alone:** `Game_BattlerBase.hasItemStock` is the "is there any left" half of `meetsItemConditions`, so a prepaid or replayed item skips only that while every other aliased condition still runs (PR #59).
 - **Random startup splash** from numbered PNG files, with the original and a second artwork bundled.
 
+**Victor Engine import and the timing it needed**
+
+- **Import Victor Notetags** (Database › Action Sequences, or `import-victor-motions.cjs`) reads Victor Engine Battle Motions and Battler Graphic Setup notetags on skills, items, weapons, actors, enemies and classes into native sequences: the six phases, entry / input / damage / collapse / victory reactions as battler states, throw objects as projectiles, charset battlers with their sprite-motion setups, and per-frame icon swings folded into one weapon Show plus tweened Move steps. Like records share one sequence: a throw or icon that shows the record's own icon is read as the action's icon, sequences that differ only by hand-tuned numbers are one, and every weapon of a weapon type takes the type's most common choreography; running the import again replaces the earlier one. Star Shift Rebellion ships imported, with Victor's two plugins off.
+- **Concurrent steps.** A step can let the next one start on the same frame (Advanced › Concurrent), so a jump can ride a move and two battlers can act at once.
+- **Moves by speed.** A move can carry a speed in frames per tile instead of a duration; the battle resolves how long it takes from the real distance. A move can also carry an arc, a jump along its travel. A later move for the same battler takes over from wherever the earlier one had got to.
+- **Waits that follow the battle.** A wait can last until the battler's move or jump ends, and a wait for an animation or a popup no longer freezes moves already under way: the steps behind it slide back by the frames it held.
+- **Up and down.** Face Direction gains Up and Down; a character-sheet battler turns by row, faces its opponents when idle, and is never mirrored. Character sheets stand on their middle column and walk 0, 1, 2, 1.
+- An actor drawn from a character sheet, or with an authored input state, no longer takes the engine's 48 px side-step on its turn; its sequences place it.
+- Reactions and battler states may use any decoration step on their own battler. Hits and effect calls are counted along one branch, so an If with a hit in each branch lands once. LeTBS only stands in the way of native sequences while it is actually running the battle.
+
 **Keyboard**
 
 - Every menu and dialog answers to the keyboard: menubar headings are Tab stops (F10), every context-menu family walks with arrows and closes on Escape, database categories walk with arrows, and Options, About, the pickers, Plugin Manager, the Database viewer, Trait/Effect editors and the themed dialogs take focus on open, keep Tab inside and restore their opener. Database Escape asks before discarding edits. See the [keyboard notes](docs/KEYBOARD-MENUS-AND-DIALOGS-2026-09-12.md) for what is not certified.

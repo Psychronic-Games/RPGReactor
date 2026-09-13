@@ -759,7 +759,7 @@ class DatabaseEditorUI {
                 if(ask){const ok=await ask(question,{title:tt('Import Victor Notetags'),okText:tt('Import'),cancelText:tt('Cancel')});if(!ok)return;}else if(!window.confirm(question))return;
                 snapshotForUndo();
                 const data=this.databaseManager.data,settings=data.battlePresentation||ReactorBattleData.empty();
-                const result=V.importDatabase({actors:data.actors,classes:data.classes,enemies:data.enemies,weapons:data.weapons,armors:data.armors,skills:data.skills,items:data.items,animations:data.animations},{existing:data.actionSequences||[null],troops:settings.troops||{},animations:data.animations});
+                const result=V.importDatabase({actors:data.actors,classes:data.classes,enemies:data.enemies,weapons:data.weapons,armors:data.armors,skills:data.skills,items:data.items,animations:data.animations,system:data.system},{existing:data.actionSequences||[null],troops:settings.troops||{},animations:data.animations});
                 if(!result.report.records){window.reactor?.uiManager?.showToast?.(tt('No Victor Engine notetags were found.'));return;}
                 for(const kind of ['skills','items','weapons','actors','enemies','classes','states'])for(const [id,binding] of Object.entries(settings[kind]||{}))if(!result.settings[kind][id])result.settings[kind][id]=binding;
                 data.actionSequences=result.sequences;data.battlePresentation=result.settings;

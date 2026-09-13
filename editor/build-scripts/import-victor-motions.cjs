@@ -23,7 +23,7 @@ const option = (name, fallback) => { const hit = args.find(a => a.startsWith('--
 const dataDir = path.join(project, 'data');
 const read = name => { const file = path.join(dataDir, name + '.json'); return fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : null; };
 
-const data = { actors: read('Actors'), classes: read('Classes'), enemies: read('Enemies'), weapons: read('Weapons'), armors: read('Armors'), skills: read('Skills'), items: read('Items'), states: read('States'), animations: read('Animations') };
+const data = { actors: read('Actors'), classes: read('Classes'), enemies: read('Enemies'), weapons: read('Weapons'), armors: read('Armors'), skills: read('Skills'), items: read('Items'), states: read('States'), animations: read('Animations'), system: read('System') };
 const existingSequences = read('ActionSequences') || [null];
 const existingSettings = read('BattlePresentation') || B.empty();
 const { sequences, settings, report } = V.importDatabase(data, {

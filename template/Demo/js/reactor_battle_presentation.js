@@ -583,6 +583,8 @@
         return graphic;
     };
     P.requestGraphicMotion = (sprite,name) => {sprite._rrGraphicMotion={name,start:sprite._rrGraphicFrame||0};};
+    // Whether the project wrote a sequence for this battler's state (through its own binding, its class, or a state it is under).
+    P.authoredState=(battler,state)=>{const identity=P.battlerIdentity?.(battler);if(!identity||!P.settings)return false;return !!B.resolveState(P.settings,P.sequences,identity.kind,identity.id,state,identity.classId,null,(battler.states?.()||[]).map(s=>s.id));};
     P.battlerState = (battler,sprite) => {
         if(battler.isDead?.())return 'dead';
         const index=battler.stateMotionIndex?.();if(index===2)return 'sleep';if(index===1)return 'abnormal';
@@ -635,6 +637,8 @@
             proto.attackAnimationId1=function(){return P.settings.enemies?.[this.enemyId()]?.graphic?.attackAnimationId||this.weapons()[0]?.animationId||animation?.call(this)||0;};
             proto.performAttack=function(){const g=P.settings.enemies?.[this.enemyId()]?.graphic;if(g?.mode&&g.mode!=='auto'){this.requestMotion?.('thrust');if(g.showWeapon!==false){const type=this.weapons()[0]?.wtypeId,motion=$dataSystem.attackMotions?.[type];if(motion)this.startWeaponAnimation?.(motion.weaponImageId);}return;}return perform?.call(this);};
         }
+        // The stock side-view step (48 px forward while inputting or acting, back home after, the retreat on escape) belongs to sprite-sheet actors with no authored states. A battler drawn from a native graphic, or one whose input state is authored, is placed by its sequences alone.
+        if(root.Sprite_Actor){const target=Sprite_Actor.prototype.updateTargetPosition;Sprite_Actor.prototype.updateTargetPosition=function(...args){const actor=this._actor;if(actor&&(P.graphicFor(actor)||P.authoredState(actor,'input')))return;return target?.apply(this,args);};}
         if(root.Sprite_Actor){const setup=Sprite_Actor.prototype.setupWeaponAnimation;Sprite_Actor.prototype.setupWeaponAnimation=function(){if(P.graphicFor(this._actor)?.showWeapon===false){this._actor.clearWeaponAnimation?.();return;}return setup?.call(this);};}
         if(root.Game_Actor){const visible=Game_Actor.prototype.isSpriteVisible;Game_Actor.prototype.isSpriteVisible=function(){const g=P.settings.actors?.[this.actorId()]?.graphic;return g?.mode&&g.mode!=='auto'?true:visible.call(this);};}
         for(const Class of [root.Game_Actor,root.Game_Enemy])if(Class){
