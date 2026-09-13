@@ -3553,7 +3553,26 @@ Game_BattlerBase.prototype.meetsSkillConditions = function(skill) {
 };
 
 Game_BattlerBase.prototype.meetsItemConditions = function(item) {
-    return this.meetsUsableItemConditions(item) && $gameParty.hasItem(item);
+    return this.meetsUsableItemConditions(item) && this.hasItemStock(item);
+};
+
+/**
+ * Whether the party currently holds `item` for this battler to use.
+ *
+ * Split out of `meetsItemConditions` so that "can this battler act with this
+ * item" and "is there any left" are separately overridable. A plugin that
+ * prepays or waives an item's cost — a replayed action, a pair consumed up
+ * front — can override this one method and leave every other usability
+ * condition intact, including conditions added by plugins that alias
+ * `meetsItemConditions`. Overriding `meetsItemConditions` or `Game_Action`'s
+ * validity check instead means reimplementing that chain, which silently drops
+ * any condition added to it later.
+ *
+ * @param {object} item
+ * @returns {boolean}
+ */
+Game_BattlerBase.prototype.hasItemStock = function(item) {
+    return $gameParty.hasItem(item);
 };
 
 Game_BattlerBase.prototype.canUse = function(item) {
