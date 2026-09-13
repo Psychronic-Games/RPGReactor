@@ -130,8 +130,9 @@ class DatabaseSkillEditor {
                         <label>${tt('Success %')}</label>
                         <input type="number" class="database-field-value" value="${rrEscapeHtml(skill.successRate != null ? skill.successRate : 100)}" data-field="successRate" data-skill-id="${skill.id}">
                         <label>${tt('Repeats')}</label>
-                        <input type="number" class="database-field-value" value="${rrEscapeHtml(skill.repeats != null ? skill.repeats : 1)}" data-field="repeats" data-skill-id="${skill.id}" min="1" max="${globalThis.RR_LIMITS?.ACTION_REPEATS || 100}">
+                        ${ActionRepeats.minFieldHTML(skill, 'data-skill-id')}
                     </div>
+                    ${ActionRepeats.maxRowHTML(skill, 'data-skill-id', true)}
                     <div class="db-row-pair">
                         <label>${tt('Hit Type')}</label>
                         <select class="database-field-value" data-field="hitType" data-skill-id="${skill.id}">
@@ -314,6 +315,7 @@ class DatabaseSkillEditor {
                     }
                     const normalized = this.updateSkillField(skillId, fieldName, value);
                     if (normalized !== undefined && e.target.type === 'number') e.target.value = String(normalized);
+                    if (fieldName === 'repeats' || fieldName === 'repeatsMax') ActionRepeats.syncFields(container, this.databaseManager.getSkill(skillId), 'data-skill-id');
                 });
             });
         }, 0);
@@ -350,14 +352,19 @@ class DatabaseSkillEditor {
             }
             console.log(`Updated skill ${skillId} damage.${subField} to:`, skill.damage[subField]);
         }
+        // Either end of the hit-count range. A range that stops being one
+        // deletes repeatsMax, so the field to show is not skill[fieldName].
+        else if (fieldName === 'repeats' || fieldName === 'repeatsMax') {
+            const shown = ActionRepeats.write(skill, fieldName, value);
+            console.log(`Updated skill ${skillId} field ${fieldName} to:`, shown);
+            this.databaseManager.updateSkill(skillId, skill);
+            return shown;
+        }
         // Handle numeric fields
         else if (['stypeId', 'scope', 'occasion', 'mpCost', 'tpCost', 'tpGain',
-                   'speed', 'successRate', 'repeats', 'hitType', 'animationId',
+                   'speed', 'successRate', 'hitType', 'animationId',
                    'requiredWtypeId1', 'requiredWtypeId2'].includes(fieldName)) {
             skill[fieldName] = parseInt(value) || 0;
-            if (fieldName === 'repeats') {
-                skill[fieldName] = Math.max(1, Math.min(globalThis.RR_LIMITS?.ACTION_REPEATS || 100, skill[fieldName]));
-            }
             console.log(`Updated skill ${skillId} field ${fieldName} to:`, skill[fieldName]);
         }
         // Handle string fields (name, description, note, message1-4)

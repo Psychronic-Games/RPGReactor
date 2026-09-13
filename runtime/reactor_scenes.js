@@ -1607,8 +1607,9 @@ Scene_ItemBase.prototype.isItemEffectsValid = function() {
 Scene_ItemBase.prototype.applyItem = function() {
     const action = new Game_Action(this.user());
     action.setItemObject(this.item());
+    const repeats = action.numRepeats();
     for (const target of this.itemTargetActors()) {
-        for (let i = 0; i < action.numRepeats(); i++) {
+        for (let i = 0; i < repeats; i++) {
             action.apply(target);
         }
     }

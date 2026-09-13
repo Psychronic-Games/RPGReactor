@@ -1776,6 +1776,11 @@
             gap: 10px 12px;
             align-items: center;
         }
+        /* A row with only a right-hand pair, lined up under the field above
+         * it (Skills: Max Repeats under Repeats). */
+        .db-form > .db-row-pair > .db-pair-right {
+            grid-column: 3;
+        }
         .db-form > .db-full {
             grid-column: 1 / -1;
         }
@@ -2033,6 +2038,10 @@
             .db-form > .db-row-cols {
                 grid-auto-flow: row;
                 grid-template-columns: minmax(0, 1fr);
+            }
+
+            .db-form > .db-row-pair > .db-pair-right {
+                grid-column: auto;
             }
 
             .db-form > .db-row-inline,

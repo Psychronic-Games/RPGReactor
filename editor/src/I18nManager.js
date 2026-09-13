@@ -18377,6 +18377,42 @@ Object.assign(RR_TEXT_TRANSLATIONS["vi"], {"Uses the media's original proportion
 Object.assign(RR_TEXT_TRANSLATIONS["th"], {"Uses the media's original proportions and links size and scale controls. Hold Shift while dragging a corner to keep proportions.": "ใช้สัดส่วนเดิมของสื่อและเชื่อมโยงตัวควบคุมขนาดและมาตราส่วน กด Shift ค้างไว้ขณะลากมุมเพื่อรักษาสัดส่วน"});
 Object.assign(RR_TEXT_TRANSLATIONS["tr"], {"Uses the media's original proportions and links size and scale controls. Hold Shift while dragging a corner to keep proportions.": "Medyanın özgün oranlarını kullanır ve boyut ile ölçek denetimlerini birbirine bağlar. Oranları korumak için köşeyi sürüklerken Shift tuşunu basılı tutun."});
 
+// Skills and Items: the upper end of a Repeats range (machine-assisted first pass).
+Object.assign(RR_TEXT_TRANSLATIONS['ja'], { 'Max Repeats': '最大連続回数' });
+Object.assign(RR_TEXT_TRANSLATIONS['zh-Hant'], { 'Max Repeats': '最大重複次數' });
+Object.assign(RR_TEXT_TRANSLATIONS['zh-Hans'], { 'Max Repeats': '最大重复次数' });
+Object.assign(RR_TEXT_TRANSLATIONS['ko'], { 'Max Repeats': '최대 연속 횟수' });
+Object.assign(RR_TEXT_TRANSLATIONS['es'], { 'Max Repeats': 'Repeticiones máx.' });
+Object.assign(RR_TEXT_TRANSLATIONS['pt'], { 'Max Repeats': 'Repetições máx.' });
+Object.assign(RR_TEXT_TRANSLATIONS['fr'], { 'Max Repeats': 'Répétitions max.' });
+Object.assign(RR_TEXT_TRANSLATIONS['de'], { 'Max Repeats': 'Max. Wiederholungen' });
+Object.assign(RR_TEXT_TRANSLATIONS['it'], { 'Max Repeats': 'Ripetizioni max' });
+Object.assign(RR_TEXT_TRANSLATIONS['ru'], { 'Max Repeats': 'Макс. повторов' });
+Object.assign(RR_TEXT_TRANSLATIONS['pl'], { 'Max Repeats': 'Maks. powtórzeń' });
+Object.assign(RR_TEXT_TRANSLATIONS['el'], { 'Max Repeats': 'Μέγ. επαναλήψεις' });
+Object.assign(RR_TEXT_TRANSLATIONS['tr'], { 'Max Repeats': 'En fazla tekrar' });
+Object.assign(RR_TEXT_TRANSLATIONS['ar'], { 'Max Repeats': 'الحد الأقصى للتكرارات' });
+Object.assign(RR_TEXT_TRANSLATIONS['id'], { 'Max Repeats': 'Pengulangan maks.' });
+Object.assign(RR_TEXT_TRANSLATIONS['vi'], { 'Max Repeats': 'Số lần lặp tối đa' });
+Object.assign(RR_TEXT_TRANSLATIONS['th'], { 'Max Repeats': 'จำนวนซ้ำสูงสุด' });
+Object.assign(RR_TEXT_TRANSLATIONS['ja'], { 'Most repeats. Each use rolls a count from Repeats up to this; the same number keeps it fixed.': '最大連続回数。使用するたびに、連続回数からこの値までの回数がランダムに決まります。同じ値なら固定です。' });
+Object.assign(RR_TEXT_TRANSLATIONS['zh-Hant'], { 'Most repeats. Each use rolls a count from Repeats up to this; the same number keeps it fixed.': '最大重複次數。每次使用時，會在重複次數到此值之間隨機決定次數；數值相同則固定。' });
+Object.assign(RR_TEXT_TRANSLATIONS['zh-Hans'], { 'Most repeats. Each use rolls a count from Repeats up to this; the same number keeps it fixed.': '最大重复次数。每次使用时，会在重复次数到此值之间随机决定次数；数值相同则固定。' });
+Object.assign(RR_TEXT_TRANSLATIONS['ko'], { 'Most repeats. Each use rolls a count from Repeats up to this; the same number keeps it fixed.': '최대 연속 횟수. 사용할 때마다 연속 횟수부터 이 값 사이에서 무작위로 정해집니다. 같은 값이면 고정됩니다.' });
+Object.assign(RR_TEXT_TRANSLATIONS['es'], { 'Most repeats. Each use rolls a count from Repeats up to this; the same number keeps it fixed.': 'Repeticiones máximas. Cada uso elige al azar un número entre Repeticiones y este valor; el mismo número lo deja fijo.' });
+Object.assign(RR_TEXT_TRANSLATIONS['pt'], { 'Most repeats. Each use rolls a count from Repeats up to this; the same number keeps it fixed.': 'Repetições máximas. Cada uso sorteia um número entre Repetições e este valor; o mesmo número o mantém fixo.' });
+Object.assign(RR_TEXT_TRANSLATIONS['fr'], { 'Most repeats. Each use rolls a count from Repeats up to this; the same number keeps it fixed.': 'Répétitions maximales. Chaque utilisation tire un nombre entre Répétitions et cette valeur ; la même valeur le rend fixe.' });
+Object.assign(RR_TEXT_TRANSLATIONS['de'], { 'Most repeats. Each use rolls a count from Repeats up to this; the same number keeps it fixed.': 'Maximale Wiederholungen. Jede Verwendung würfelt eine Anzahl zwischen Wiederholungen und diesem Wert; derselbe Wert hält sie fest.' });
+Object.assign(RR_TEXT_TRANSLATIONS['it'], { 'Most repeats. Each use rolls a count from Repeats up to this; the same number keeps it fixed.': 'Ripetizioni massime. Ogni uso estrae un numero tra Ripetizioni e questo valore; lo stesso numero lo rende fisso.' });
+Object.assign(RR_TEXT_TRANSLATIONS['ru'], { 'Most repeats. Each use rolls a count from Repeats up to this; the same number keeps it fixed.': 'Максимум повторов. При каждом использовании число выбирается случайно от «Повторов» до этого значения; одинаковые значения дают фиксированное число.' });
+Object.assign(RR_TEXT_TRANSLATIONS['pl'], { 'Most repeats. Each use rolls a count from Repeats up to this; the same number keeps it fixed.': 'Maksymalna liczba powtórzeń. Każde użycie losuje liczbę od Powtórzeń do tej wartości; ta sama liczba ją ustala.' });
+Object.assign(RR_TEXT_TRANSLATIONS['el'], { 'Most repeats. Each use rolls a count from Repeats up to this; the same number keeps it fixed.': 'Μέγιστες επαναλήψεις. Κάθε χρήση επιλέγει τυχαία πλήθος από τις Επαναλήψεις έως αυτή την τιμή· ο ίδιος αριθμός το κρατά σταθερό.' });
+Object.assign(RR_TEXT_TRANSLATIONS['tr'], { 'Most repeats. Each use rolls a count from Repeats up to this; the same number keeps it fixed.': 'En fazla tekrar. Her kullanımda Tekrar değerinden bu değere kadar rastgele bir sayı seçilir; aynı sayı onu sabit tutar.' });
+Object.assign(RR_TEXT_TRANSLATIONS['ar'], { 'Most repeats. Each use rolls a count from Repeats up to this; the same number keeps it fixed.': 'الحد الأقصى للتكرار. يختار كل استخدام عددًا عشوائيًا من التكرارات حتى هذه القيمة؛ القيمة نفسها تجعله ثابتًا.' });
+Object.assign(RR_TEXT_TRANSLATIONS['id'], { 'Most repeats. Each use rolls a count from Repeats up to this; the same number keeps it fixed.': 'Pengulangan maksimum. Setiap penggunaan mengacak jumlah dari Pengulangan hingga nilai ini; angka yang sama membuatnya tetap.' });
+Object.assign(RR_TEXT_TRANSLATIONS['vi'], { 'Most repeats. Each use rolls a count from Repeats up to this; the same number keeps it fixed.': 'Số lần lặp tối đa. Mỗi lần dùng sẽ chọn ngẫu nhiên số lần từ Số lần lặp đến giá trị này; cùng một số thì cố định.' });
+Object.assign(RR_TEXT_TRANSLATIONS['th'], { 'Most repeats. Each use rolls a count from Repeats up to this; the same number keeps it fixed.': 'จำนวนซ้ำสูงสุด ทุกครั้งที่ใช้จะสุ่มจำนวนตั้งแต่ค่าจำนวนซ้ำจนถึงค่านี้ ถ้าใส่ค่าเท่ากันจะคงที่' });
+
 class I18nManager {
     constructor() {
         for (const table of Object.values(RR_I18N_STRINGS)) {

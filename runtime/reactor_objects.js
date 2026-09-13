@@ -1458,6 +1458,7 @@ Game_Action.prototype.clear = function() {
     this._item = new Game_Item();
     this._targetIndex = -1;
     this._targetSideIsFriend = null;
+    this._repeatsRoll = null;
 };
 
 Game_Action.prototype.setSubject = function(subject) {
@@ -1559,11 +1560,30 @@ Game_Action.prototype.isItem = function() {
 };
 
 Game_Action.prototype.numRepeats = function() {
-    let repeats = this.item().repeats;
+    let repeats = this.itemRepeats();
     if (this.isAttack()) {
         repeats += this.subject().attackTimesAdd();
     }
     return Math.max(1, Math.min(100, Math.floor(Number(repeats) || 1)));
+};
+
+// Repeats is the fewest hits; a repeatsMax above it makes the count a range.
+// The roll is made once and kept on the action, because numRepeats is read
+// many times for one action - to lay out its targets, in AI scoring, and by
+// plugins mid-action - and every read has to agree. It is keyed by the item,
+// so giving the same action a different skill or item rolls again.
+Game_Action.prototype.itemRepeats = function() {
+    const item = this.item();
+    const min = Math.floor(Number(item.repeats) || 1);
+    const max = Math.min(100, Math.floor(Number(item.repeatsMax) || 0));
+    if (max <= min) {
+        return item.repeats;
+    }
+    const key = this._item._dataClass + ":" + this._item._itemId;
+    if (!this._repeatsRoll || this._repeatsRoll.key !== key) {
+        this._repeatsRoll = { key: key, value: min + Math.randomInt(max - min + 1) };
+    }
+    return this._repeatsRoll.value;
 };
 
 Game_Action.prototype.checkItemScope = function(list) {

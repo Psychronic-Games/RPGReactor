@@ -141,10 +141,11 @@ class DatabaseItemEditor {
                     </div>
                     <div class="db-row-pair">
                         <label>${tt('Repeats')}</label>
-                        <input type="number" class="database-field-value" value="${rrEscapeHtml(item.repeats || 1)}" min="1" max="${globalThis.RR_LIMITS?.ACTION_REPEATS || 100}" data-field="repeats" data-item-id="${item.id}">
+                        ${ActionRepeats.minFieldHTML(item, 'data-item-id')}
                         <label>${tt('TP Gain')}</label>
                         <input type="number" class="database-field-value" value="${rrEscapeHtml(item.tpGain || 0)}" data-field="tpGain" data-item-id="${item.id}">
                     </div>
+                    ${ActionRepeats.maxRowHTML(item, 'data-item-id')}
                     <div class="db-row-pair">
                         <label>${tt('Hit Type')}</label>
                         <select class="database-field-value" data-field="hitType" data-item-id="${item.id}">
@@ -287,6 +288,7 @@ class DatabaseItemEditor {
                     const value = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
                     const normalized = this.updateItemField(itemId, fieldName, value);
                     if (normalized !== undefined && e.target.type === 'number') e.target.value = String(normalized);
+                    if (fieldName === 'repeats' || fieldName === 'repeatsMax') ActionRepeats.syncFields(container, this.databaseManager.getItem(itemId), 'data-item-id');
                 });
             });
         }, 0);
@@ -330,12 +332,17 @@ class DatabaseItemEditor {
             item[fieldName] = !!value;
             console.log(`Updated item ${itemId} field ${fieldName} to:`, item[fieldName]);
         }
+        // Either end of the hit-count range. A range that stops being one
+        // deletes repeatsMax, so the field to show is not item[fieldName].
+        else if (fieldName === 'repeats' || fieldName === 'repeatsMax') {
+            const shown = ActionRepeats.write(item, fieldName, value);
+            console.log(`Updated item ${itemId} field ${fieldName} to:`, shown);
+            this.databaseManager.updateItem(itemId, item);
+            return shown;
+        }
         // Handle numeric fields
-        else if (['itypeId', 'price', 'scope', 'occasion', 'speed', 'successRate', 'repeats', 'hitType', 'animationId', 'tpGain'].includes(fieldName)) {
+        else if (['itypeId', 'price', 'scope', 'occasion', 'speed', 'successRate', 'hitType', 'animationId', 'tpGain'].includes(fieldName)) {
             item[fieldName] = parseInt(value) || 0;
-            if (fieldName === 'repeats') {
-                item[fieldName] = Math.max(1, Math.min(globalThis.RR_LIMITS?.ACTION_REPEATS || 100, item[fieldName]));
-            }
             console.log(`Updated item ${itemId} field ${fieldName} to:`, item[fieldName]);
         }
         // Handle string fields (name, description, note)
