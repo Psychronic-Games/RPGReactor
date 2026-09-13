@@ -2342,14 +2342,14 @@
       {
         "id": "step-8clidxj6t9h",
         "type": "projectile",
-        "duration": 8,
+        "duration": 20,
         "role": "user",
         "anchor": "home",
-        "x": 0,
+        "x": 0.5,
         "y": 0,
-        "z": 0,
+        "z": 0.06,
         "easing": "smooth",
-        "iconSource": "animation",
+        "iconSource": "model",
         "iconIndex": 0,
         "name": "",
         "destination": "allTargets",
@@ -2362,14 +2362,20 @@
         "startHeight": 1,
         "endHeight": 1,
         "arc": 0,
-        "spin": 0,
-        "rotation": 0,
-        "scale": 1,
+        "spin": 33,
+        "rotation": 97,
+        "scale": 0.2,
         "flight": "oneWay",
         "color": "#9fe0ff",
         "size": 6,
         "phase": "execute",
-        "animationId": 124
+        "animationId": 124,
+        "model": {
+          "name": "Animations/Black Hole",
+          "file": "black hole",
+          "ext": ".glb",
+          "texture": ""
+        }
       },
       {
         "id": "step-dwuk7jh6sn5",

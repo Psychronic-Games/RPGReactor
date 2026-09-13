@@ -305,9 +305,10 @@ class DatabaseActionSequenceEditor {
         }
     }
     /** A phase section head: which phase the steps below it belong to, with a way to add a step there or let an empty phase inherit again. */
-    phaseHead(phase,count){const U=this.ui,B=ReactorBattleData,[,label,help]=B.actionPhases.find(([id])=>id===phase),head=U.element('div','rr-sequence-phase-head');head.dataset.phaseHead=phase;head.title=U.text(help);
-        head.append(U.element('span','rr-sequence-phase-number',String(B.phaseIds().indexOf(phase)+1),true),U.element('span','rr-sequence-phase-label',label));
-        const tag=U.element('span','rr-sequence-phase-count',count?U.message('{n} steps',{n:count}):'No steps');head.append(tag);
+    // A phase that resumes after another has run (Execute carrying on after the Effect it called at the moment of contact) heads its later run as a continuation, not as a second phase.
+    phaseHead(phase,count,continued=false){const U=this.ui,B=ReactorBattleData,[,label,help]=B.actionPhases.find(([id])=>id===phase),head=U.element('div','rr-sequence-phase-head'+(continued?' rr-sequence-phase-continued':''));head.dataset.phaseHead=phase;head.title=continued?U.text(U.message('{phase} carries on here after the phase it called; these steps are still part of it.',{phase:U.text(label)})):U.text(help);
+        head.append(U.element('span','rr-sequence-phase-number',String(B.phaseIds().indexOf(phase)+1),true),U.element('span','rr-sequence-phase-label',continued?U.message('{phase} (continued)',{phase:U.text(label)}):label));
+        const tag=U.element('span','rr-sequence-phase-count',continued?'':count?U.message('{n} steps',{n:count}):'No steps');if(!continued)head.append(tag);
         const add=U.button('+',()=>{this.insertSteps(this.newSteps(this.stepType.value,phase),this.phaseInsertIndex(phase));},true);add.classList.add('rr-sequence-phase-add');add.title=U.text('Add a step to this phase');add.setAttribute('aria-label',U.text('Add a step to this phase'));head.append(add);
         if(!count){const inherit=U.button('Remove',()=>this.inheritPhase(phase));inherit.classList.add('rr-sequence-phase-inherit');inherit.title=U.text('Remove this empty phase; it then comes from the next level down, or the built-in action');head.append(inherit);}
         return head;}
@@ -316,9 +317,9 @@ class DatabaseActionSequenceEditor {
         // Empty provided phases keep their place in the order: Prepare above the first step, Finish after the last.
         const provided=phased?B.sequencePhases(this.sequence):[],order=B.phaseIds(),placed=new Set();
         const emptyBefore=phase=>{for(const p of provided){if(order.indexOf(p)>=order.indexOf(phase))break;if(!counts[p]&&!placed.has(p)){placed.add(p);this.steps.append(this.phaseHead(p,0));}}};
-        let current=null;
+        let current=null;const headed=new Set();
         B.timeline(this.sequence).forEach(({step},i)=>{
-            if(phased){const phase=B.stepPhase(step);if(phase!==current){emptyBefore(phase);current=phase;this.steps.append(this.phaseHead(phase,counts[phase]));}}
+            if(phased){const phase=B.stepPhase(step);if(phase!==current){emptyBefore(phase);current=phase;this.steps.append(this.phaseHead(phase,counts[phase],headed.has(phase)));headed.add(phase);}}
             const button=U.button('',()=>this.selectStep(i));button.dataset.rrI18nSkip='';button.append(U.element('span','rr-sequence-step-title'),U.element('span','rr-sequence-step-detail'));button.dataset.stepId=step.id;
             button.draggable=true;button.ondragstart=e=>this.startStepDrag(e,{kind:'move',id:step.id});button.ondragend=()=>this.endStepDrag();this.steps.append(button);});
         // Provided phases with no steps yet still show, so a step can be dropped into them or they can be let go.

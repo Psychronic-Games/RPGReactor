@@ -10019,29 +10019,8 @@
   },
   {
     "name": "Graviton Shot",
-    "flashTimings": [
-      {
-        "frame": 0,
-        "duration": 8,
-        "color": [
-          255,
-          0,
-          0,
-          61
-        ]
-      }
-    ],
-    "soundTimings": [
-      {
-        "frame": 0,
-        "se": {
-          "name": "blaster-01",
-          "pan": 0,
-          "pitch": 100,
-          "volume": 100
-        }
-      }
-    ],
+    "flashTimings": [],
+    "soundTimings": [],
     "effectName": "BlackHole-01",
     "displayType": 0,
     "offsetX": 0,
@@ -10051,8 +10030,8 @@
       "y": 0,
       "z": 0
     },
-    "scale": 100,
-    "speed": 100,
+    "scale": 200,
+    "speed": 200,
     "id": 124
   },
   {
