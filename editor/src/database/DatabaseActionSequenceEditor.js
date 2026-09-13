@@ -404,7 +404,7 @@ class DatabaseActionSequenceEditor {
         const close=document.createElement('button');close.className='rr-modal-close';close.type='button';close.textContent='\u00d7';close.setAttribute('aria-label',tt('Close'));
         header.append(title,close);
         const body=document.createElement('div');body.className='rr-modal-body rr-step-picker-body';
-        const search=document.createElement('input');search.type='search';search.className='rr-input rr-step-picker-search';search.placeholder=tt('Search steps…');search.setAttribute('aria-label',tt('Search steps…'));
+        const search=document.createElement('input');search.type='search';search.className='database-field-value rr-step-picker-search';search.placeholder=tt('Search steps…');search.setAttribute('aria-label',tt('Search steps…'));
         const groupsHost=document.createElement('div');groupsHost.className='rr-step-picker-groups';
         const empty=document.createElement('p');empty.className='rr-battle-help rr-step-picker-empty';empty.textContent=tt('No steps match.');empty.hidden=true;
         body.append(search,groupsHost,empty);modal.append(header,body);overlay.append(modal);

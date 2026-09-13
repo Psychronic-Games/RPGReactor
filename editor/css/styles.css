@@ -5349,8 +5349,10 @@ details.mp-section:not([open]) > .mp-section-body { display:none; }
    Lighting, UI property sections), and dense chips a step lighter than the
    bar, so the whole catalogue fits one screen. */
 .rr-step-picker { width:min(880px,94vw);max-height:88vh;display:flex;flex-direction:column; }
-.rr-step-picker-body { display:flex;flex-direction:column;gap:6px;overflow-y:auto;min-height:0;padding:8px 10px 10px; }
-.rr-step-picker-search { width:100%;box-sizing:border-box;padding:5px 8px;font-size:12px;margin-bottom:2px; }
+.rr-step-picker-body { display:flex;flex-direction:column;gap:8px;overflow-y:auto;min-height:0;padding:10px 12px 12px; }
+.rr-step-picker-search { width:100%;box-sizing:border-box;padding:6px 10px;font-size:12px;font-weight:500; }
+.rr-step-picker-search::placeholder { color:var(--color-text-muted);font-weight:normal; }
+.rr-step-picker-groups { display:flex;flex-direction:column;gap:8px; }
 .rr-step-picker-group { border:1px solid var(--color-border);border-radius:5px;background:color-mix(in srgb,var(--color-bg-surface) 80%,var(--color-bg-panel));overflow:hidden; }
 .rr-step-picker-head { margin:0;padding:4px 8px 4px 7px;border-left:3px solid var(--color-accent);border-bottom:1px solid var(--color-border);background:var(--color-bg-toolbar);color:var(--color-text);font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;user-select:none; }
 .rr-step-picker-grid { display:flex;flex-wrap:wrap;gap:3px;padding:4px; }
