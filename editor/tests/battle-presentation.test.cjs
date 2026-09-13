@@ -308,3 +308,16 @@ test('a boss collapse on a room battler lasts the model\'s screen height in fram
  const room=new Enemy();room._reactorRoomKey='enemy:0';room._reactorRoomBounds={x:0,y:0,width:120,height:310};room.startBossCollapse();assert.equal(room._effectDuration,310);
  const small=new Enemy();small._reactorRoomKey='enemy:1';small._reactorRoomBounds={x:0,y:0,width:10,height:12};small.startBossCollapse();assert.equal(small._effectDuration,48,'never shorter than the normal collapse and a half');
 });
+
+
+test('the battle room asks for every model a sequence may throw or a party member holds before the fight',()=>{
+ const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
+ const asked=[];
+ const context={ReactorBattleData:B,DataManager:{isDatabaseLoaded(){return true;}},Reactor3D:{loadModel:(name,ext,file)=>{asked.push(name+ext);return Promise.resolve(null);},normalizeModelSpec:s=>({...s}),databaseModelSpec:(kind,id)=>kind==='weapons'&&id===49?{name:'Weapons/Pistol',ext:'.glb',file:'pistol'}:kind==='skills'&&id===7?{name:'Skills/Orb',ext:'.glb',file:'orb'}:null},
+  $gameParty:{battleMembers:()=>[{weapons:()=>[{id:49},{id:1}],skills:()=>[{id:7},{id:8}]}],items:()=>[]}};
+ vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../../runtime/reactor_battle_presentation.js'),'utf8'),context);
+ const P=context.ReactorBattlePresentation;
+ P.sequences=[null,{id:1,version:1,name:'Shot',steps:[B.step('projectile',{iconSource:'model',model:{name:'Animations/Black Hole',ext:'.glb',file:'black hole'}}),B.step('projectile',{iconSource:'model',model:{name:'Animations/Black Hole',ext:'.glb',file:'black hole'}}),B.step('weapon',{iconSource:'icon'})]}];
+ P.preloadBattleModels();
+ assert.deepEqual(asked.sort(),['Animations/Black Hole.glb','Skills/Orb.glb','Weapons/Pistol.glb'],'each model once: the thrown one, the party weapon, the known skill');
+});

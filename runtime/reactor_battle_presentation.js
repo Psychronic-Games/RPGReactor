@@ -847,12 +847,35 @@
         PluginManager.registerCommand('RPGReactor','BattleSequenceSkip',()=>{const player=BattleManager._reactorSequence;if(player){player.skip();while(player.adapter.pendingImpact)player.adapter.resolveNext();}});
         PluginManager.registerCommand('RPGReactor','BattleRoomCamera',function(args){const room=SceneManager._scene?._spriteset?._reactorRoom;if(room){Object.assign(room.settings.camera,room.cameraState());room.settings.cameraSource='custom';for(const key of ['x','y','z','yaw','pitch','distance'])if(args[key]!==undefined&&Number.isFinite(Number(args[key])))room.settings.camera[key]=Number(args[key]);}});
     };
+    /**
+     * The models a battle may throw or hold, asked for before the fight so
+     * the first throw does not fly for its twenty frames while a 10 MB model
+     * is still loading and never appears. Every model a sequence names
+     * outright, every party weapon's bound model, and the bound model of
+     * every skill and item the party can use; the loader caches templates,
+     * so a model is read once for the whole game.
+     */
+    P.preloadBattleModels=function(){
+        const R=root.Reactor3D;if(!R?.loadModel)return;
+        const specs=[],seen=new Set();
+        const add=spec=>{if(!spec?.name)return;const key=[spec.name,spec.ext,spec.file].join('|');if(seen.has(key))return;seen.add(key);specs.push(spec);};
+        for(const sequence of P.sequences||[])for(const step of sequence?.steps||[])if(step&&['weapon','projectile'].includes(step.type)&&step.model?.name)add(R.normalizeModelSpec?R.normalizeModelSpec(step.model):step.model);
+        if(R.databaseModelSpec){
+            for(const actor of $gameParty?.battleMembers?.()||[]){
+                for(const weapon of actor.weapons?.()||[])add(R.databaseModelSpec('weapons',weapon.id));
+                for(const skill of actor.skills?.()||[])add(R.databaseModelSpec('skills',skill.id));
+            }
+            for(const item of $gameParty?.items?.()||[])add(R.databaseModelSpec('items',item.id));
+        }
+        for(const spec of specs)Promise.resolve(R.loadModel(spec.name,spec.ext,spec.file,spec.texture)).catch(P.warn);
+    };
     P.createRoom=async function(scene,config,token){
         const map=await P.json('data/Map'+String(config.mapId).padStart(3,'0')+'.json');
         map.reactor3d=await P.json('data/Map'+String(config.mapId).padStart(3,'0')+'.r3d.json',true)||{};
         Reactor3D.ensureLoaded();const until=Date.now()+20000;while(!Reactor3D.isLoaded()){if(Date.now()>until)throw Error('3D libraries did not load');await new Promise(r=>setTimeout(r,30));}
         if(scene._reactorRoomToken!==token)return;
         const room=new ReactorBattleRoomView(map,$dataTilesets[map.tilesetId],JSON.parse(JSON.stringify(config)),P.assets);
+        P.preloadBattleModels();
         try{await room.build();if(scene._reactorRoomToken!==token){room.dispose();return;}
             const ss=scene._spriteset;room.resize(Graphics.width,Graphics.height);
             const sprite=new Sprite(new Bitmap(Graphics.width,Graphics.height));ss._baseSprite.addChildAt(sprite,Math.max(0,ss._baseSprite.children.indexOf(ss._battleField)));
