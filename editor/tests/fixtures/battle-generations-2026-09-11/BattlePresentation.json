@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "troops": {},
+  "skills": {},
+  "items": {},
+  "weapons": {},
+  "actors": {
+    "1": {
+      "graphic": {
+        "mode": "character",
+        "name": "$RebellionCharacter-03",
+        "index": 0
+      }
+    }
+  },
+  "enemies": {},
+  "classes": {
+    "1": {
+      "mode": "phases",
+      "phases": {
+        "prepare": {
+          "mode": "sequence",
+          "sequenceId": 17
+        }
+      }
+    }
+  }
+}

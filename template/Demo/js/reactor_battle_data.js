@@ -117,7 +117,9 @@
         const setup=graphic.motions?.[motion]||{},speed=Math.max(1,setup.speed||graphic.speed||12);
         const frames=Math.min(graphic.frames||3,Math.max(1,setup.frames||graphic.frames||3)),tick=Math.floor(Math.max(0,frame)/speed);
         const loop=setup.loop??(!['damage','attack','punch','thrust','swing','missile','cast','spell','skill','item','entry'].includes(motion));
-        const pattern=loop==='once'?Math.min(frames-1,tick):loop===false?Math.min(frames-1,tick):tick%frames;
+        // A character sheet stands on its middle column and walks 0,1,2,1 like it does on the map.
+        const sheet=graphic.type==='character'&&frames===3;
+        const pattern=loop==='once'?Math.min(frames-1,tick):loop===false?(sheet?1:Math.min(frames-1,tick)):sheet?[0,1,2,1][tick%4]:tick%frames;
         if(graphic.type==='character'){
             const big=/^[!]*\$/.test(graphic.name||''),columns=big?1:4,rows=big?1:2,index=big?0:Math.max(0,Math.min(7,graphic.index||0));
             const chosen=setup.direction||graphic.direction,w=width/(columns*(graphic.frames||3)),h=height/(rows*4);
@@ -173,7 +175,7 @@
         item:{label:'Change Inventory',fields:[pick('kind','Inventory',['items','weapons','armors','gold']),n('itemId','Database ID',1),script('amount','Amount','1')]},
         switch:{label:'Control Switch',fields:[n('switchId','Switch ID',1),op(['on','off','toggle'])]},
         variable:{label:'Control Variable',fields:[n('variableId','Variable ID',1),op(['set','add','subtract','multiply','divide','modulo']),script('amount','Value','0')]},
-        direction:{label:'Face Direction',fields:[pick('direction','Facing',['left','right','behind','targets','opponents','home','position']),n('position','X (pixels)')]},
+        direction:{label:'Face Direction',fields:[pick('direction','Facing',['left','right','up','down','behind','targets','opponents','home','position']),n('position','X (pixels)')]},
         home:{label:'Set Home Position',fields:[op(['here','position','restore']),n('x','X (tiles)'),n('y','Y (tiles)')]},
         jump:{label:'Jump',fields:[n('height','Height (tiles)',2)]},
         leap:{label:'Leap',fields:[n('height','Height (tiles)',2)]},
@@ -199,7 +201,7 @@
     B.extraFields={
         motion:[n('motionIndex','Custom Motion Index (0 = named motion)'),n('motionFrames','Motion Frames (0 = graphic default)'),n('motionSpeed','Motion Speed (0 = graphic default)'),pick('motionLoop','Motion Playback',['default','loop','once','hold'])],
         weapon:[pick('weaponGraphic','Drawn As',['icon','sheet']),n('weaponImageId','Weapon Sheet Image ID',1),n('weaponFrame','Weapon Frame (1–3)',1)],
-        move:[pick('moveMode','Movement',['anchor','forward','backward','position'])]
+        move:[pick('moveMode','Movement',['anchor','forward','backward','position']),n('speed','Speed (frames per tile, 0 = use Duration)'),n('arc','Arc (jump height in tiles along the move)')]
     };
     B.types.push(...Object.keys(B.commands));
     B.commandDefaults = type => Object.fromEntries([...(B.commands[type]?.fields||[]),...(B.extraFields[type]||[])].map(f=>[f.key,f.value]));
@@ -432,6 +434,19 @@
             const record={...starter,id:Math.max(1,records.length)};records[record.id]=record;added.push(record);
         }return added;
     };
+    // The most steps of a kind that can run together: alternatives of an If count once, by their fullest branch.
+    B.mostAlong = (steps, match) => {
+        const stack=[];let current=0;
+        for(const step of steps||[]){
+            if(!step)continue;
+            if(step.type==='branch'){stack.push({base:current,best:current});continue;}
+            if((step.type==='elseIf'||step.type==='else')&&stack.length){const f=stack.at(-1);f.best=Math.max(f.best,current);current=f.base;continue;}
+            if(step.type==='end'&&stack.length){const f=stack.pop();current=Math.max(f.best,current);continue;}
+            if(match(step))current++;
+        }
+        while(stack.length){const f=stack.pop();current=Math.max(f.best,current);}
+        return current;
+    };
     B.validateSequence = sequence => {
         const errors = [];
         if (!sequence || sequence.version !== 1 || !Array.isArray(sequence.steps)) return ['Unsupported action sequence format.'];
@@ -448,9 +463,11 @@
             duration += step.duration || 0;
             if (step.type === 'impact') impacts++;
             if (step.type === 'effect') effectCalls++;
-            if (purpose === 'motion' && (!['motion','move','sound','animation','wait'].includes(step.type) || step.role !== 'user' || step.type === 'move' && step.anchor !== 'home')) errors.push('Battler state sequences may affect only the user and cannot apply damage or move the camera.');
+            // A battler state or reaction moves, poses and decorates the battler it plays on, and nothing else: no damage, no other battlers, no camera.
+            if (purpose === 'motion' && (['impact','effect','action','target','clearTargets','formula','element','kill','camera','projectile','weapon'].includes(step.type) || !['user','subject'].includes(step.role) || step.type === 'move' && step.anchor !== 'home')) errors.push('Battler state sequences may affect only the user and cannot apply damage or move the camera.');
             if(step.type==='animation'&&(!Number.isInteger(step.animationId??0)||(step.animationId??0)<0))errors.push('Choose a valid animation.');
             if(step.waitForCompletion!==undefined&&typeof step.waitForCompletion!=='boolean')errors.push('Wait for completion must be enabled or disabled.');
+            if(step.concurrent!==undefined&&typeof step.concurrent!=='boolean')errors.push('Concurrent must be enabled or disabled.');
             if(step.animationTransform!==undefined){const t=step.animationTransform;if(!t||typeof t!=='object'||Array.isArray(t)||Object.entries(t).some(([k,v])=>!['x','y','z','scale'].includes(k)||!Number.isFinite(v)||(k==='scale'?(v<.01||v>100):Math.abs(v)>1000)))errors.push('Choose finite animation offsets and a scale between 0.01 and 100.');}
             if(step.type==='sound'&&step.audio){const a=step.audio;if(typeof a.name!=='string'||[['volume',0,100],['pitch',50,150],['pan',-100,100]].some(([k,min,max])=>!Number.isFinite(a[k])||a[k]<min||a[k]>max))errors.push('Sound requires volume 0–100, pitch 50–150 and pan −100–100.');}
             if(['weapon','projectile'].includes(step.type)&&['gripX','gripY'].some(k=>step[k]!==undefined&&(step[k]<0||step[k]>1)))errors.push('Grip coordinates must be between 0 and 1.');
@@ -473,6 +490,8 @@
                 if (['x','y','z'].some(key => !Number.isFinite(step[key]) || Math.abs(step[key]) > 1000)) errors.push('Positions must be finite and within 1000 units.');
             }
         }
+        // Hits and effect calls are counted along one path: an If with a hit in each branch lands once.
+        impacts = B.mostAlong(sequence.steps, s => s.type === 'impact'); effectCalls = B.mostAlong(sequence.steps, s => s.type === 'effect');
         const phased = purpose === 'action' && B.isPhased(sequence), provides = phased ? B.sequencePhases(sequence) : [];
         if (phased) {
             // A partial action (say, only Movement) needs no impact; one that
@@ -511,11 +530,44 @@
         }
         return true;
     };
-    B.timeline = sequence => {
-        let frame = 0;
-        return (sequence.steps || []).map(step => { const start = frame; frame += Math.max(0, number(step.duration)); return { step, start, end: frame }; });
+    // Each cue runs from its start for its duration. A blocking step (the
+    // default) holds the next step until it ends; a concurrent step lets the
+    // next one begin on the same frame, so a jump can ride a move and a
+    // second battler can act at once. A move with a speed takes as long as
+    // its distance needs, which the context (home and target positions)
+    // decides; without a context its duration stands in.
+    B.stepAdvance = (step, duration = number(step.duration)) => step.concurrent ? 0 : Math.max(0, duration);
+    B.timeline = (sequence, context) => {
+        let frame = 0, max = 0;
+        const poses = context?.homes ? copy(context.homes) : null, target = context?.target || poses?.target || { x: 0, y: 0, z: 0 }, busy = {};
+        const travelling = ['move'], lifting = ['jump','leap','float','fall'];
+        return (sequence.steps || []).map(step => {
+            let duration = Math.max(0, number(step.duration));
+            const key = B.roleKey(step);
+            if (step.type === 'move' && number(step.speed) > 0 && poses) {
+                const from = poses[key] || poses.user, home = context.homes[key] || context.homes.user;
+                if (from && home) {
+                    const goal = B.moveGoal(step, from, home, target, context.homes, context.direction || 1);
+                    duration = Math.max(1, Math.round(number(step.speed) * Math.hypot(goal.x - from.x, goal.y - from.y)));
+                    poses[key] = { ...from, ...goal };
+                }
+            }
+            // A wait for a move or a jump lasts until the battler's travel or lift already under way has ended.
+            if (step.type === 'wait' && (step.waitFor === 'move' || step.waitFor === 'jump')) {
+                const keys = key === 'allTargets' ? Object.keys(busy).filter(k => k.startsWith('target')) : [key];
+                const until = Math.max(0, ...keys.map(k => busy[k]?.[step.waitFor] || 0));
+                duration = Math.max(duration, until - frame);
+            }
+            const start = frame, end = start + duration, advance = B.stepAdvance(step, duration);
+            if (travelling.includes(step.type) || lifting.includes(step.type)) {
+                const kind = travelling.includes(step.type) ? 'move' : 'jump';
+                for (const k of key === 'allTargets' ? Object.keys(context?.homes || { target: 1 }).filter(k => k.startsWith('target')) : [key]) (busy[k] ||= {})[kind] = Math.max(busy[k]?.[kind] || 0, end);
+            }
+            frame += advance; max = Math.max(max, end);
+            return { step, start, end, advance };
+        }).map(cue => Object.assign(cue, { total: Math.max(frame, max) }));
     };
-    B.duration = sequence => B.timeline(sequence).at(-1)?.end || 0;
+    B.duration = (sequence, context) => { const cues = B.timeline(sequence, context); return cues.length ? cues[0].total : 0; };
     B.choices = (settings, {kind,itemId,isAttack,weaponIds=[],battlerKind,battlerId,classId}) => {
         const result=[{kind,id:itemId,binding:settings?.[kind]?.[itemId]}];
         if(isAttack)for(const id of weaponIds)result.push({kind:'weapons',id,binding:settings?.weapons?.[id]});
@@ -530,7 +582,7 @@
             prepare:[B.step('wait',{duration:0})],
             movement:context.isAttack?B.basic('Run to Target'):[B.step('move',{x:.3,duration:12})],
             execute:[B.step('motion',{motion,duration:18}),B.step('effect',{duration:0,role:'allTargets'})],
-            effect:[B.step('animation',{animationId:Math.max(0,context.animationId||0),role:'allTargets',duration:0}),B.step('impact',{role:'allTargets',duration:0})],
+            effect:[B.step('animation',{animationId:Math.max(0,context.animationId||0),role:'allTargets',duration:0,waitForCompletion:true}),B.step('impact',{role:'allTargets',duration:0})],
             return:B.basic('Return Home'),
             finish:[B.step('motion',{motion:'idle',duration:0})]
         };
@@ -576,7 +628,7 @@
         const steps=[],effect=phases.find(p=>p.phase==='effect'),push=(step,phase)=>steps.push({...copy(step),id:'phase-'+steps.length,phase});
         let placed=false;
         const expand=(step,phase)=>{
-            if(step.type==='effect'){if(!placed){placed=true;for(const s of effect.steps)push(s,'effect');}if(step.duration)push(B.step('wait',{duration:step.duration}),'execute');return;}
+            if(step.type==='effect'){placed=true;for(const s of effect.steps)push(s,'effect');if(step.duration)push(B.step('wait',{duration:step.duration}),'execute');return;}
             if(step.type==='impact')placed=true;push(step,phase);
         };
         for(let i=0;i<phases.length;i++){
@@ -584,7 +636,9 @@
             // Coalesce the run of following phases this same sequence provides.
             const run=[entry];while(i+1<phases.length&&phases[i+1].sequence===entry.sequence&&entry.sequence?.id!==0)run.push(phases[++i]);
             const wanted=new Set(run.map(r=>r.phase));
-            if(run.length>1)for(const step of entry.sequence.steps){const phase=B.stepPhase(step);if(wanted.has(phase))expand(step,phase);}
+            // A sequence that calls its Effect from a placeholder in Execute lands it there; its Effect steps are not laid down a second time in their own place.
+            const called=wanted.has('effect')&&entry.sequence.steps.some(s=>s.type==='effect'&&B.stepPhase(s)==='execute');
+            if(run.length>1)for(const step of entry.sequence.steps){const phase=B.stepPhase(step);if(!wanted.has(phase)||(called&&phase==='effect'))continue;expand(step,phase);}
             else for(const step of entry.steps)expand(step,entry.phase);
         }
         const hitSource=effect.sequence?.id?effect.sequence:phases.find(p=>p.phase==='execute').sequence;
@@ -610,6 +664,18 @@
         camera: { x: map.width / 2 - .5, y: map.height / 2 - .5, z: 0, yaw: 0, pitch: 45, distance: 24 },
         actors: [], enemies: [], eventModes: {} }, copy(previous), { type: 'room', mapId: map.id });
     B.facingToward = (from,to) => Math.atan2(to.x-from.x,to.y-from.y)*180/Math.PI;
+    // The yaw a Face Direction step turns its battler to: a fixed way, about
+    // face, or toward the targets, the home spot or a screen position.
+    B.directionYaw = (step,pose,target,home) => {
+        const current=pose.facing??-90;
+        switch(step.direction){
+            case 'right':return 90;case 'left':return -90;case 'up':return 180;case 'down':return 0;
+            case 'behind':return ((current+180+180)%360+360)%360-180;
+            case 'home':return home&&(home.x!==pose.x||home.y!==pose.y)?B.facingToward(pose,home):current;
+            case 'position':return Math.sign(number(step.position)-pose.x*48)>=0?90:-90;
+            default:return target&&(target.x!==pose.x||target.y!==pose.y)?B.facingToward(pose,target):current;
+        }
+    };
     B.position = (room, side, index) => {
         const saved = room[side]?.[index];
         const c = room.camera;
@@ -628,18 +694,47 @@
         for(const k of ['scale','scaleX','scaleY','scaleZ'])p[k]=(pose[k]??1)*t[k];
         return p;
     };
+    // Where a move ends: an anchor (home, the target, or short of the target
+    // along the approach), a screen position, or a step forward or backward
+    // along the battler's facing. Facing is a yaw: a battler facing up or
+    // down steps along y, one facing left or right along x, and the step's
+    // second value is the sideways offset either way.
+    B.moveGoal = (step, from, home, target, homes, direction = 1) => {
+        const anchor = ['target','approach'].includes(step.anchor) ? target : home;
+        let dx=number(step.x)*direction,dy=number(step.y);
+        if(step.anchor==='approach') {
+            const start=homes.user||home,vx=target.x-start.x,vy=target.y-start.y,length=Math.hypot(vx,vy);
+            const ux=length>1e-6?vx/length:direction,uy=length>1e-6?vy/length:0;
+            dx=number(step.x)*ux-number(step.y)*uy;dy=number(step.x)*uy+number(step.y)*ux;
+        }
+        let goal={x:anchor.x+dx,y:anchor.y+dy,z:(anchor.z||0)+number(step.z)};
+        if(step.moveMode==='position')goal={x:number(step.x),y:number(step.y),z:number(step.z)};
+        if(['forward','backward'].includes(step.moveMode)){
+            const sign=step.moveMode==='backward'?-1:1,yaw=from.facing??(direction>0?90:-90),rad=yaw*Math.PI/180,sx=Math.sin(rad),sy=Math.cos(rad);
+            goal=Math.abs(sx)>=Math.abs(sy)?{x:from.x+number(step.x)*sign*Math.sign(sx||direction),y:from.y+number(step.y),z:(from.z||0)+number(step.z)}
+                :{x:from.x+number(step.y),y:from.y+number(step.x)*sign*Math.sign(sy),z:(from.z||0)+number(step.z)};
+        }
+        return goal;
+    };
     B.evaluate = (sequence, frame, context) => {
         const homes = context.homes, defaultTarget = context.target || homes.target || { x: 0, y: 0, z: 0 };
         const result = copy(homes);
-        for (const { step, start, end } of (sequence._timeline||B.timeline(sequence))) {
+        for (const { step, start, end } of (sequence._timeline||B.timeline(sequence, context))) {
             if (start > frame) break;
             const target=step._target||defaultTarget;
-            if (!['move','camera','motion'].includes(step.type)) continue;
+            if (!['move','camera','motion','direction'].includes(step.type)) continue;
             const role = step.type === 'camera' ? 'camera' : B.roleKey(step);
             const roles = step._roles || (role === 'allTargets' ? Object.keys(homes).filter(k => k.startsWith('target') && (k!=='target'||!homes.target0)) : [role]);
             for (const key of roles) {
                 const home = homes[key]; if (!home) continue;
                 const from = result[key];
+                if(step.type==='direction'){
+                    // A turn is part of the pose, so the row a character sheet shows and the way a later step forward goes both follow it.
+                    result[key].facing=B.directionYaw(step,from,key==='user'?target:(homes.user||target),home);
+                    if(key==='target'&&result.target0)result.target0=copy(result.target);
+                    if(key==='target0'&&result.target)result.target=copy(result.target0);
+                    continue;
+                }
                 if(step.type==='motion') {
                     if(step.transform||from.transform){
                         const a=B.transform(from.transform),b=B.transform(step.transform),t=end===start?1:Math.max(0,Math.min(1,(frame-start)/(end-start)));
@@ -649,21 +744,13 @@
                     if(key==='target0'&&result.target)result.target=copy(result.target0);
                     continue;
                 }
-                const anchor = ['target','approach'].includes(step.anchor) ? target : home;
                 let t = end === start ? 1 : Math.max(0, Math.min(1, (frame - start) / (end - start)));
                 if (step.easing === 'smooth') t = t * t * (3 - 2 * t);
-                const direction = context.direction || 1;
-                let dx=step.x*direction,dy=step.y;
-                if(step.anchor==='approach') {
-                    const start=homes.user||home,vx=target.x-start.x,vy=target.y-start.y,length=Math.hypot(vx,vy);
-                    const ux=length>1e-6?vx/length:direction,uy=length>1e-6?vy/length:0;
-                    dx=step.x*ux-step.y*uy;dy=step.x*uy+step.y*ux;
-                }
-                let goal={x:anchor.x+dx,y:anchor.y+dy,z:anchor.z+step.z};
-                if(step.moveMode==='position')goal={x:step.x,y:step.y,z:step.z};
-                if(['forward','backward'].includes(step.moveMode)){const sign=(step.moveMode==='backward'?-1:1)*Math.sign(from.facing||context.direction||1);goal={x:from.x+step.x*sign,y:from.y+step.y,z:from.z+step.z};}
+                const goal = B.moveGoal(step, from, home, target, homes, context.direction || 1);
+                // An arc lifts the battler along the move and sets it down at the end, a jump that rides the travel.
+                const lift = step.type === 'move' && number(step.arc) && frame < end ? 4 * number(step.arc) * t * (1 - t) : 0;
                 result[key] = { ...from, x: from.x + (goal.x - from.x) * t,
-                    y: from.y + (goal.y - from.y) * t, z: from.z + (goal.z - from.z) * t };
+                    y: from.y + (goal.y - from.y) * t, z: from.z + (goal.z - from.z) * t + lift };
                 for(const property of ['rotateX','rotateY','rotateZ','scale']){const baseline=home[property]??(property==='scale'?1:0),previous=from[property]??baseline,goal=step[property]??baseline;result[key][property]=previous+(goal-previous)*t;}
                 if(from.facing!==undefined||home.facing!==undefined)result[key].facing=from.facing??home.facing;
                 if(step.face==='home')result[key].facing=home.facing??B.facingToward(home,target);
@@ -687,7 +774,7 @@
     B.previewVisuals=(sequence,frame,context)=>{
         const poses=B.evaluate(sequence,frame,context),layers=new Map(),opacity={},tones={},held={},trace=[];let flash=null,screenTone=null,shake=null;
         const keys=step=>step.role==='user'||step.role==='subject'?['user']:step.role==='target'?['target'+(step.targetIndex||0)]:step.role==='friends'||step.role==='actors'?['user']:step.role==='battlers'?Object.keys(poses).filter(k=>k==='user'||/^target[0-9]+$/.test(k)):Object.keys(poses).filter(k=>/^target[0-9]+$/.test(k));
-        for(const cue of B.timeline(sequence)){if(cue.start>frame)break;const step={...B.commandDefaults(cue.step.type),...cue.step},t=cue.end===cue.start?1:Math.min(1,(frame-cue.start)/(cue.end-cue.start));
+        for(const cue of B.timeline(sequence,context)){if(cue.start>frame)break;const step={...B.commandDefaults(cue.step.type),...cue.step},t=cue.end===cue.start?1:Math.min(1,(frame-cue.start)/(cue.end-cue.start));
             if(B.commands[step.type])trace.push({label:B.commands[step.type].label,step,start:cue.start});
             if(step.type==='flash'&&frame<=cue.end)flash=[step.red,step.green,step.blue,step.alpha*(1-t)];
             if(step.type==='shake'&&frame<=cue.end)shake=Math.sin((frame-cue.start)*step.speed*.1)*step.power;
@@ -700,7 +787,7 @@
                 if(step.type==='opacity')opacity[key]=(255+(step.opacity-255)*t)/255;
                 if(step.type==='tint'&&step.space==='battler')tones[key]=[step.red,step.green,step.blue,step.gray];
                 if(step.type==='pose')held[key]=step.operation==='clear'?null:{name:step.motion,frame:step.frame-1};
-                if(step.type==='direction')p.facing=step.direction==='right'?90:step.direction==='left'?-90:step.direction==='behind'?-(p.facing||-90):B.facingToward(p,poses.target||poses.user);
+                if(step.type==='direction')p.facing=B.directionYaw(step,p,poses.target||poses.user,poses.user);
             }
             if(['picture','plane','icon','balloon'].includes(step.type)){
                 const owners=step.space==='screen'||step.type==='plane'?['screen']:keys(step);
@@ -715,12 +802,19 @@
         constructor(sequence, adapter) {
             const errors = B.validateSequence(sequence); if (errors.length) throw Error(errors.join(' '));
             this.sequence = copy(sequence); this.adapter = adapter; this.frame = -1; this.done = false;
-            this.timeline = B.timeline(this.sequence); this.duration = B.duration(sequence); this.cursor = 0; this.waiting = null; this.executed=[]; this.branches=[];
+            this.timeline = B.timeline(this.sequence, adapter?.context); this.duration = this.timeline.length ? this.timeline[0].total : 0; this.cursor = 0; this.waiting = null; this.executed=[]; this.branches=[];
         }
         update(delta = 1) {
             if (this.done) return;
-            if (this.waiting?.isPlaying()) return;
-            this.waiting = null;
+            if (this.waiting) {
+                // A blocking cue holds the steps after it, not the ones already
+                // under way: the frames it holds for stretch the timeline behind
+                // it, so a concurrent move keeps travelling through the wait
+                // instead of freezing and snapping when the wait ends.
+                if (this.waiting.isPlaying()) { this.held = (this.held || 0) + Math.max(0, delta); this.pose(this.frame + this.held); return; }
+                const held = this.held || 0; this.held = 0; this.waiting = null;
+                if (held) { for (let i = this.cursor; i < this.timeline.length; i++) { this.timeline[i].start += held; this.timeline[i].end += held; } this.duration += held; this.frame += held; }
+            }
             let frame = Math.min(this.duration, Math.max(0, this.frame) + Math.max(0, delta));
             while (this.cursor < this.timeline.length && this.timeline[this.cursor].start <= frame) {
                 const cue = this.timeline[this.cursor++];
@@ -728,9 +822,16 @@
                 if(step.type==='branch'){const matched=active&&!!this.adapter.condition?.(step.condition);this.branches.push({parent:active,active:matched,matched});}
                 else if(step.type==='elseIf'||step.type==='else'){const b=this.branches.at(-1);b.active=b.parent&&!b.matched&&(step.type==='else'||!!this.adapter.condition?.(step.condition));b.matched||=b.active;}
                 else if(step.type==='end')this.branches.pop();
-                else if(active){this.executed.push(cue);}
+                else if(active){this.executed.push(cue);
+                    if(step.type==='wait'&&(step.waitFor==='move'||step.waitFor==='jump')){
+                        // The wait lasts until the travel or lift already under way for that battler ends; only cues that actually ran count, so a skipped branch cannot stretch it.
+                        const kinds=step.waitFor==='move'?['move']:['jump','leap','float','fall'],key=B.roleKey(step);
+                        const until=Math.max(cue.start,...this.executed.filter(c=>c!==cue&&kinds.includes(c.step.type)&&(key==='allTargets'?B.roleKey(c.step).startsWith('target')||B.roleKey(c.step)==='allTargets':B.roleKey(c.step)===key)).map(c=>c.end));
+                        const delta=until-cue.end;if(delta){cue.end=until;for(let i=this.cursor;i<this.timeline.length;i++){this.timeline[i].start+=delta;this.timeline[i].end+=delta;}this.duration+=delta;}
+                    }
+                }
                 if(!active||['branch','elseIf','else','end'].includes(step.type)){
-                    const removed=cue.end-cue.start;for(let i=this.cursor;i<this.timeline.length;i++){this.timeline[i].start-=removed;this.timeline[i].end-=removed;}this.duration-=removed;frame=Math.min(frame,this.duration);continue;
+                    const removed=cue.advance??(cue.end-cue.start);for(let i=this.cursor;i<this.timeline.length;i++){this.timeline[i].start-=removed;this.timeline[i].end-=removed;}this.duration-=removed;frame=Math.min(frame,this.duration);continue;
                 }
                 const media = this.adapter.cue?.(cue.step, cue.start);
                 if ((!this.skipping && cue.step.waitForCompletion || media?.blocking) && media?.isPlaying()) {

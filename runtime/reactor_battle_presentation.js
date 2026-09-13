@@ -44,9 +44,38 @@
             battlerKind:subject.isActor()?'actors':'enemies',battlerId:subject.isActor()?subject.actorId():subject.enemyId()});
         if(sequence?.steps.some(s=>(s.type==='animation'||s.type==='projectile'&&s.iconSource==='animation')&&s.animationId>0&&!$dataAnimations[s.animationId])){P.warn('A sequence animation is missing; existing action behavior is retained.');return null;}try{return sequence?B.expandCalls(sequence,P.sequences):null;}catch(error){P.warn(error);return null;}
     };
+    // Whether a battler is drawn from a character sheet (rows per facing) rather than a side-view sheet (mirrored to turn).
+    P.usesSheet=sprite=>P.graphicFor?.(sprite?._battler||sprite?._actor||sprite?._enemy)?.type==='character';
+    // The way a battler faces, as a yaw: the pose of a running sequence, the
+    // last Face Direction it was given, else toward its opponents in flat
+    // battles (a party along the bottom looks up) or its side for sprite sheets.
+    P.spriteYaw=(sprite,target)=>{
+        if(sprite._reactorRoomPosition?.facing!==undefined)return sprite._reactorRoomPosition.facing;
+        if(sprite._rrSequenceFacing!==undefined)return sprite._rrSequenceFacing;
+        if(sprite._rrFacingYaw!==undefined)return sprite._rrFacingYaw;
+        const battler=sprite._battler||sprite._actor||sprite._enemy;
+        if(P.usesSheet(sprite)){
+            const ss=SceneManager._scene?._spriteset,others=(target?[target]:battler?.opponentsUnit?.().aliveMembers?.()||[]).map(b=>ss?.findTargetSprite?.(b)).filter(Boolean);
+            if(others.length){const cx=others.reduce((a,s)=>a+s.x,0)/others.length,cy=others.reduce((a,s)=>a+s.y,0)/others.length;if(Math.abs(cx-sprite.x)>1e-3||Math.abs(cy-sprite.y)>1e-3)return B.facingToward({x:sprite.x,y:sprite.y},{x:cx,y:cy});}
+        }
+        if(sprite._rrFacing)return sprite._rrFacing*90;
+        const ss=SceneManager._scene?._spriteset,dest=target&&ss?.findTargetSprite?.(target);
+        return (dest?Math.sign(dest.x-sprite.x)||-1:(battler?.isActor?.()?-1:1))*90;
+    };
+    // Victor Battle Motions vocabulary that imported sequences lean on: an
+    // action steps forward instead of walking up when it is friendly, self,
+    // magical, or a ranged weapon attack (attack motion type missile).
+    P.installActionRules=function(){
+        if(!root.Game_Action||!root.Game_Battler)return;
+        if(!Game_Battler.prototype.isRangedWeapon)Game_Battler.prototype.isRangedWeapon=function(){const weapon=this.weapons?.()?.[0],motion=weapon&&$dataSystem.attackMotions?.[weapon.wtypeId];return !!motion&&motion.type===2;};
+        if(!Game_Action.prototype.isRanged)Game_Action.prototype.isRanged=function(){return (this.isPhysical()||this.isAttack())&&!!this.subject()?.isRangedWeapon?.();};
+        if(!Game_Action.prototype.isStepForward)Game_Action.prototype.isStepForward=function(){return this.isForFriend()||this.isForUser()||this.isMagical()||this.isRanged();};
+        // Victor Dual Wield asked this before a second swing; without that plugin there is never one.
+        if(root.BattleManager&&!BattleManager.isSecondAttack)BattleManager.isSecondAttack=function(){return false;};
+    };
     P.compatibility=function(){
         const names=(PluginManager._scripts||[]).join(' ');
-        const unsupported=names.match(/VE_BattleMotions|YEP_BattleEngineCore|VisuMZ_1_BattleCore|LeTBS/i);
+        const unsupported=names.match(/VE_BattleMotions|YEP_BattleEngineCore|VisuMZ_1_BattleCore/i)||(root.Lecode?.S_TBS?.commandOn?['LeTBS']:null);
         return unsupported ? 'The active '+unsupported[0]+' battle engine needs a presentation adapter. Existing behavior is retained.' : '';
     };
     P.adapter=function(manager,subject,targets,stateOnly=false){
@@ -57,7 +86,7 @@
         const homes={},saved=new Map();
         for(const [key,sprite] of Object.entries(roles))if(sprite){
             if(!saved.has(sprite))saved.set(sprite,{x:sprite.x,y:sprite.y,offsetX:sprite._offsetX,offsetY:sprite._offsetY,rotation:sprite.rotation,scaleX:sprite.scale?.x??1,scaleY:sprite.scale?.y??1,model:sprite._reactorBattler?.object,modelRotation:sprite._reactorBattler?.object?.rotation.clone(),modelScale:sprite._reactorBattler?.object?.scale.clone()});
-            homes[key]=Object.assign({rotateX:0,rotateY:0,rotateZ:0,scale:1},room?{...sprite._reactorRoomPosition}:{x:sprite.x/48,y:sprite.y/48,z:0});
+            homes[key]=Object.assign({rotateX:0,rotateY:0,rotateZ:0,scale:1},room?{...sprite._reactorRoomPosition}:{x:sprite.x/48,y:sprite.y/48,z:0,facing:P.spriteYaw(sprite,targets[0]===sprite._battler?subject:targets[0])});
         }
         const camera=room?{...room.settings.camera}:null,cameraSource=room?.settings.cameraSource;
         homes.camera=room?{x:camera.x,y:camera.y,z:camera.z}: {x:0,y:0,z:0};
@@ -120,7 +149,7 @@
                     if(key==='camera'){if(!stateOnly&&room)Object.assign(room.settings.camera,p);continue;}
                     const sprite=roles[key];if(!sprite||posed.has(sprite))continue;posed.add(sprite);sprite._rrSequenceFacing=p.facing;
                     if(room)sprite._reactorRoomPosition={...sprite._reactorRoomPosition,...p};
-                    else{sprite._offsetX=p.x*48-sprite._homeX;sprite._offsetY=(p.y-p.z)*48-sprite._homeY;sprite.x=p.x*48;sprite.y=(p.y-p.z)*48;const old=saved.get(sprite);sprite.rotation=(old.rotation||0)+(old.model?0:(p.rotateZ||0)*Math.PI/180);if(old.model){old.model.rotation.set(old.modelRotation.x+(p.rotateX||0)*Math.PI/180,old.modelRotation.y+(p.rotateY||0)*Math.PI/180,old.modelRotation.z+(p.rotateZ||0)*Math.PI/180);old.model.scale.set(old.modelScale.x*(p.scaleX??1),old.modelScale.y*(p.scaleY??1),old.modelScale.z*(p.scaleZ??1));}const initialFacing=B.facingToward(homes[key],(key==='user'?homes.target:homes.user)||homes[key]),turn=p.facing!==undefined&&Math.sign(p.facing)!==Math.sign(initialFacing)?-1:1;sprite.scale?.set(old.scaleX*turn*(p.scale??1)*(old.model?1:(p.scaleX??1)),old.scaleY*(p.scale??1)*(old.model?1:(p.scaleY??1)));}
+                    else{sprite._offsetX=p.x*48-sprite._homeX;sprite._offsetY=(p.y-p.z)*48-sprite._homeY;sprite.x=p.x*48;sprite.y=(p.y-p.z)*48;const old=saved.get(sprite);sprite.rotation=(old.rotation||0)+(old.model?0:(p.rotateZ||0)*Math.PI/180);if(old.model){old.model.rotation.set(old.modelRotation.x+(p.rotateX||0)*Math.PI/180,old.modelRotation.y+(p.rotateY||0)*Math.PI/180,old.modelRotation.z+(p.rotateZ||0)*Math.PI/180);old.model.scale.set(old.modelScale.x*(p.scaleX??1),old.modelScale.y*(p.scaleY??1),old.modelScale.z*(p.scaleZ??1));}const initialFacing=B.facingToward(homes[key],(key==='user'?homes.target:homes.user)||homes[key]),turn=!P.usesSheet(sprite)&&p.facing!==undefined&&Math.sign(p.facing)!==Math.sign(initialFacing)?-1:1;sprite.scale?.set(old.scaleX*turn*(p.scale??1)*(old.model?1:(p.scaleX??1)),old.scaleY*(p.scale??1)*(old.model?1:(p.scaleY??1)));}
                 }
                 const projectile=adapter.projectile;
                 if(projectile){const a=roles.user,b=roles.target;if(a&&b){const t=Math.min(1,Math.max(0,(frame-projectile.start)/Math.max(1,projectile.duration)));projectile.graphic.x=a.x+(b.x-a.x)*t;projectile.graphic.y=a.y+(b.y-a.y)*t-48;projectile.graphic.visible=t<1;
@@ -147,7 +176,7 @@
         const prefix='extra:sequence:'+(P._visualSerial=(P._visualSerial||0)+1)+':',held=new Map(),flights=[];let serial=0,time=0,closed=false;
         const point=(sprite,step,height)=>{
             if(!sprite)return null;
-            const p=room?{...sprite._reactorRoomPosition}:{x:sprite.x/48,y:sprite.y/48,z:0,facing:(Math.sign(sprite._rrSequenceFacing)||sprite._rrFacing||Math.sign((ss.findTargetSprite(targets[0])?.x??sprite.x-1)-sprite.x)||-1)*90};
+            const p=room?{...sprite._reactorRoomPosition}:{x:sprite.x/48,y:sprite.y/48,z:0,facing:P.spriteYaw(sprite,targets[0])};
             if(room)return room.attachmentPoint(sprite._reactorRoomKey,{...step,z:step.attachment&&step.attachment!=='offset'?(step.z||0):height??step.z},p);
             const main=sprite._mainSprite||sprite,model=sprite._reactorBattler,world=root.ReactorBattleRoomView?.attachmentWorld(model,step.attachment,step.bone);
             if(world&&model.camera){
@@ -277,7 +306,7 @@
             for(const sprite of sprites)capture(sprite);
             raw._roles=sprites.map(s=>spriteKeys.get(s));raw._chosen=chosen;
             if(visuals.cue(step,start,chosen,step.type==='projectile'?choose({role:step.destination||'target',targetIndex:step.targetIndex,callRole:step.callRole,callFilter:step.callFilter}):null))return;
-            if(['move','camera'].includes(step.type)){const target=ss?.findTargetSprite(selected[0]||targets[0]);if(target)raw._target=room?{...target._reactorRoomPosition}:{x:target.x/48,y:target.y/48,z:0};}
+            if(['move','camera','direction'].includes(step.type)){const target=ss?.findTargetSprite(step.direction==='opponents'?subject.opponentsUnit?.().members()?.[0]:selected[0]||targets[0]);if(target)raw._target=room?{...target._reactorRoomPosition}:{x:target.x/48,y:target.y/48,z:0};}
             if(step.type==='impact'){
                 rate=number(step.rate??100);
                 if(adapter.hitPolicy==='authored'){impactQueue=chosen.slice();manager._targets=[];}
@@ -354,7 +383,7 @@
             if(['direction','home','jump','leap','float','fall','opacity','pose','tint','whiten'].includes(step.type)){
                 for(const sprite of sprites){const main=sprite._mainSprite||sprite,key=capture(sprite),home=homes[key];
                     if(step.type==='home'){if(step.operation==='here'){home.x=sprite.x/48;home.y=sprite.y/48;}else if(step.operation==='position'){home.x=step.x;home.y=step.y;}else{const old=saved.get(sprite);home.x=old.x/48;home.y=old.y/48;}continue;}
-                    if(step.type==='direction'){const target=step.direction==='opponents'?subject.opponentsUnit?.().members()?.[0]:selected[0]||targets[0],dest=ss.findTargetSprite(target),facing=step.direction==='left'?-1:step.direction==='right'?1:step.direction==='behind'?-(sprite._rrFacing||-1):Math.sign((step.direction==='home'?home.x*48:step.direction==='position'?step.position:dest?.x??sprite.x)-sprite.x)||-1;sprite._rrFacing=facing;effects.push({direction:sprite,facing});continue;}
+                    if(step.type==='direction'){const target=step.direction==='opponents'?subject.opponentsUnit?.().members()?.[0]:selected[0]||targets[0],dest=ss.findTargetSprite(target),pose={x:sprite.x/48,y:sprite.y/48,facing:sprite._rrSequenceFacing??sprite._rrFacingYaw??P.spriteYaw(sprite,target)},yaw=B.directionYaw(step,pose,dest?{x:dest.x/48,y:dest.y/48}:null,{x:home.x,y:home.y}),rad=yaw*Math.PI/180,facing=Math.abs(Math.sin(rad))>=Math.abs(Math.cos(rad))?Math.sign(Math.sin(rad)):(sprite._rrFacing||-1);sprite._rrFacing=facing;sprite._rrFacingYaw=yaw;if(!P.usesSheet(sprite))effects.push({direction:sprite,facing});continue;}
                     if(step.type==='pose'){sprite._rrHeldPose=step.operation==='clear'?null:{motion:step.motion,frame:Math.max(0,step.frame-1)};continue;}
                     if(step.type==='opacity')tween(sprite,'opacity',Math.max(0,Math.min(255,step.opacity)),step.duration,start,v=>sprite.opacity=v,sprite.opacity);
                     else if(step.type==='tint')tween(sprite,'tone',[step.red,step.green,step.blue,step.gray],step.duration,start,v=>main.setColorTone?.(v),main.getColorTone?.()||[0,0,0,0]);
@@ -574,7 +603,8 @@
             if(sprite._shadowSprite)sprite._shadowSprite.visible=!graphic.hideShadow;
             main.bitmap=graphic.name?ImageManager.loadBitmap('img/'+graphic.folder+'/',graphic.name):new Bitmap(1,1);
             const scale=Math.max(.1,Math.min(10,graphic.scale||1));
-            main.scale?.set(scale*(graphic.mirror?-1:1)*(kind==='enemies'&&graphic.type!=='static'?-1:1),scale);
+            // A side-view sheet drawn for an enemy is mirrored to face the party; a character sheet turns by row and is never mirrored.
+            main.scale?.set(scale*(graphic.mirror?-1:1)*(kind==='enemies'&&graphic.type!=='static'&&graphic.type!=='character'?-1:1),scale);
             if(kind==='enemies'){sprite.initVisibility?.();sprite.setHue?.(sprite._enemy.battlerHue?.()||0);}
         }
     };
@@ -585,7 +615,7 @@
         if(motion){const mapping=graphic.motions?.[motion.name]||{},length=(mapping.frames||graphic.frames||3)*(mapping.speed||graphic.speed||12);
             if(mapping.loop!==true&&mapping.loop!=='once'&&time-motion.start>=length&&!['idle','moving','walk','run','guard','chant','victory','dead'].includes(motion.name))sprite._rrGraphicMotion=motion=null;}
         const override=sprite._rrMotionOverride;if(override&&motion?.name===override.name)graphic={...graphic,motions:{...graphic.motions,[override.name]:{...graphic.motions?.[override.name],...override}}};
-        const held=sprite._rrHeldPose,facingYaw=sprite._reactorRoomPosition?.facing??sprite._rrSequenceFacing??(sprite._rrFacing?sprite._rrFacing*90:(battler?.isActor?.()?-90:90));
+        const held=sprite._rrHeldPose,facingYaw=sprite._reactorRoomPosition?.facing??P.spriteYaw(sprite);
         const frame=B.graphicFrame(graphic,bitmap.width,bitmap.height,held?.motion||motion?.name||P.battlerState(battler,sprite),held?held.frame*(graphic.speed||12):motion?time-motion.start:time,facingYaw);
         if(main!==sprite)main.y=-(graphic.offsetY||0);
         main.setFrame(frame.x,frame.y,frame.width,frame.height);
@@ -631,7 +661,7 @@
         }
     };
     P.install=function(){
-        if(P.installed)return;P.installed=true;P.installRoomAnchors();P.installSequenceAnimations();P.installBattlebackLoading();P.installPartyLimit();P.installRoomEvents?.();P.installPsychronicHud();
+        if(P.installed)return;P.installed=true;P.installActionRules();P.installRoomAnchors();P.installSequenceAnimations();P.installBattlebackLoading();P.installPartyLimit();P.installRoomEvents?.();P.installPsychronicHud();
         for(const [Class,kind] of [[root.Sprite_Actor,'actors'],[root.Sprite_Enemy,'enemies']])if(Class){
             const updateBitmap=Class.prototype.updateBitmap;
             Class.prototype.updateBitmap=function(...args){

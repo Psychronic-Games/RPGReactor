@@ -243,8 +243,9 @@ test('media cues default to concurrent playback while saved frame waits remain i
 test('completion waits hold later same-frame cues and pose until the owned media finishes',()=>{
  let active=true,hits=0;const sequence={version:1,steps:[B.step('sound',{waitForCompletion:true,duration:3}),B.step('motion',{duration:0,transform:{x:2}}),B.step('impact')]};
  let pose;const p=new B.Player(sequence,{context:{homes:{user:{x:0,y:0,z:0}}},cue:s=>s.type==='sound'?{isPlaying:()=>active}:s.type==='impact'?hits++:null,pose:v=>pose=v});
- p.update(10);assert.equal(p.frame,0);assert.equal(hits,0);assert.equal(pose.user.transform,undefined);p.update(10);assert.equal(p.frame,0);
- active=false;p.update(1);assert.equal(p.frame,1);assert.equal(hits,0);p.update(2);assert.equal(hits,1);assert.equal(pose.user.transform.x,2);p.update(10);assert.equal(hits,1);
+ // The clock keeps counting while the sound plays (a concurrent move would keep travelling), but the cues behind the sound wait for it: they shift by the frames it held.
+ p.update(10);assert.equal(p.frame,0);assert.equal(hits,0);assert.equal(pose.user.transform,undefined);p.update(10);assert.equal(p.frame,0);assert.equal(p.held,10,'the update that starts the wait counts nothing; the next holds ten frames');
+ active=false;p.update(1);assert.equal(p.frame,11);assert.equal(hits,0);assert.equal(p.duration,13);p.update(2);assert.equal(hits,1);assert.equal(pose.user.transform.x,2);p.update(10);assert.equal(hits,1);
 });
 test('skip crosses blocking zero-duration media once; cancellation never emits its pending impact',()=>{
  const sequence={version:1,steps:[B.step('animation',{waitForCompletion:true}),B.step('sound',{waitForCompletion:true}),B.step('impact')]};

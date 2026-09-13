@@ -14,11 +14,12 @@ const impacts=sequence=>sequence.steps.filter(s=>s.type==='impact').length;
 const attack=extra=>({kind:'skills',itemId:1,isAttack:true,weaponIds:[],classId:0,battlerKind:'actors',battlerId:1,...extra});
 
 test('every bundled project\'s sequences and assignments load, validate and resolve without a missing phase',()=>{
- const projects=fs.readdirSync(templates).filter(name=>fs.existsSync(path.join(templates,name,'data/ActionSequences.json')));
- assert.ok(projects.length>=2,'expected the bundled projects to carry ActionSequences.json');
+ // The bundled projects plus a snapshot of Star Shift Rebellion's battle files from before the Victor import (2026-09-13): the older generations must keep loading whatever the live projects move on to.
+ const fixtures=path.join(__dirname,'fixtures'),corpus=[...fs.readdirSync(templates).filter(name=>fs.existsSync(path.join(templates,name,'data/ActionSequences.json'))).map(name=>[name,path.join(templates,name,'data')]),...fs.readdirSync(fixtures).filter(name=>fs.existsSync(path.join(fixtures,name,'ActionSequences.json'))).map(name=>['fixture '+name,path.join(fixtures,name)])];
+ assert.ok(corpus.length>=3,'expected the bundled projects and the fixture to carry ActionSequences.json');
  const seen={unphased:0,phased:0,phasePurpose:0,phasesBinding:0,sequenceBinding:0,resolved:0};
- for(const name of projects){
-  const data=path.join(templates,name,'data'),sequences=read(path.join(data,'ActionSequences.json'));
+ for(const [name,data] of corpus){
+  const sequences=read(path.join(data,'ActionSequences.json'));
   const settings=fs.existsSync(path.join(data,'BattlePresentation.json'))?read(path.join(data,'BattlePresentation.json')):B.empty();
   assert.equal(B.validateStore(sequences,settings),true,name);
   for(const sequence of sequences.slice(1)){if(!sequence)continue;assert.deepEqual(B.validateSequence(sequence),[],name+' #'+sequence.id+' '+sequence.name);
@@ -38,7 +39,7 @@ test('every bundled project\'s sequences and assignments load, validate and reso
    assert.equal(!!resolved.missing,false,name+': '+label+' resolves to a missing sequence');
    if(resolved.mode==='existing')continue;
    assert.ok(resolved.sequence,name+': '+label+' resolved to nothing');assert.deepEqual(B.validateSequence(resolved.sequence),[],name+': '+label);
-   assert.equal(resolved.sequence.hitPolicy==='authored'||impacts(resolved.sequence)===1||resolved.sequence.steps.some(s=>s.type==='action'),true,name+': '+label+' must land exactly once');
+   assert.equal(resolved.sequence.hitPolicy==='authored'||B.mostAlong(resolved.sequence.steps,s=>s.type==='impact')===1||resolved.sequence.steps.some(s=>s.type==='action'),true,name+': '+label+' must land exactly once along any branch');
    seen.resolved++;
   }
   for(const [stateId,entry] of Object.entries(settings.states||{}))if(entry?.reaction?.mode==='sequence')assert.ok(B.resolveState(settings,sequences,'actors',1,'idle',0,null,[Number(stateId)]),name+': state '+stateId+' reaction');
