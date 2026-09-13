@@ -1,8 +1,11 @@
 # Current project status
 
-## 2026-09-13 — PRs #57 and #58 merged
+## 2026-09-13 — PRs merged, sequence generations pinned
 
-Upstream PRs #57 (Max Repeats range) and #58 (refused states not reported; planned targets for `startAction`) are merged over the local September 11–12 commits with one translation-block conflict kept both ways. Runtime **20260913.1**, synced to all 13 projects. **3,130 Node tests pass.** [Integration notes](PR-INTEGRATION-2026-09-13.md). Not pushed.
+- Upstream PRs #57 (Max Repeats range) and #58 (refused states not reported; planned targets for `startAction`) are merged over the local September 11–12 commits with one translation-block conflict kept both ways. Runtime **20260913.1**, synced to all 13 projects. [Integration notes](PR-INTEGRATION-2026-09-13.md).
+- `action-sequence-generations.test.cjs` loads every bundled project's sequences and assignments (Star Shift Rebellion's unphased whole actions and per-phase class pick, Demo's phased starters) and pins the resolver for whole, per-phase and partial phased sequences, including Effect placement after Execute and the resolved action driven through the battle manager override. The editor's legacy unarmed fold no longer writes an undefined `phases` key; the unarmed punch smoke asserts the folded card.
+- Root `CHANGELOG.md` unreleased notes trimmed to release shape; `editor/CHANGELOG.md` keeps the detail.
+- Verification: **3,136 Node tests pass**; `nw-unarmed-punch`, `nw-battle-presentation` and `nw-battle-regressions` pass. Not pushed.
 
 ## 2026-09-12 — 3D sequences: rigged parts, projectiles, shadows, event models
 

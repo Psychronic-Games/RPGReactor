@@ -50,7 +50,7 @@ class BattlePresentationEditor {
         if(kind==='actors'&&value().unarmed){
             const {unarmed,...rest}=value();
             const main=rest.mode&&rest.mode!=='inherit';
-            set(main||!unarmed.mode||unarmed.mode==='inherit'?rest:{...rest,mode:unarmed.mode,sequenceId:unarmed.sequenceId,phases:unarmed.phases});
+            set(main||!unarmed.mode||unarmed.mode==='inherit'?rest:{...rest,mode:unarmed.mode,...(unarmed.sequenceId!==undefined?{sequenceId:unarmed.sequenceId}:{}),...(unarmed.phases?{phases:unarmed.phases}:{})});
         }
         const draw=()=>{
             const restore=this.preserveDisclosures(body);body.replaceChildren();describe();
