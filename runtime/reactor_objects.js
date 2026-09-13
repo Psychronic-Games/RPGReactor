@@ -3890,7 +3890,16 @@ Game_Battler.prototype.addState = function(stateId) {
         const renewed = this.isStateAffected(stateId);
         if (!renewed) {
             this.addNewState(stateId);
+            // addNewState is where a plugin turns a state away after it was found
+            // addable -- an auto-life or a last-gasp skill refusing death. Nothing
+            // was added then, so nothing is recorded or reported: a result that
+            // lists the death state makes the battle log collapse a battler who is
+            // still standing.
+            const landed = this.isStateAffected(stateId);
             this.refresh();
+            if (!landed) {
+                return;
+            }
         }
         this.resetStateCounts(stateId);
         this._result.pushAddedState(stateId);
