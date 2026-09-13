@@ -116,7 +116,8 @@
                 record.chosenEffects=new Set(R.propEffectList(spec));record.media=new Map();
                 if(key.startsWith('prop:')){record.sequence=R.propAnimationList(spec);record.sequenceIndex=0;record.animationStart=this.frame;record.animationFrame=this.frame;}
                 if (!key.startsWith('prop:') && !key.startsWith('event:')) BattleRoomView.prepareMotions(record);
-                this.light(object); this.scene.add(object); this.place(key, position);
+                record.shadowSize = Math.max(e.x, e.z, .001) * record.scale * .85;
+                this.light(object); this.scene.add(object); this.ensureShadow(key, record); this.place(key, position);
             } catch (error) { record.error = String(error); this.assets.warn?.(error); }
         }
         place(key, position) {
@@ -124,6 +125,12 @@
             if (!record) return;
             record.moving=Math.hypot((record.position?.x||0)-position.x,(record.position?.y||0)-position.y)>.001;
             record.position = {...record.position, ...position};
+            if (record.shadow) {
+                const p = record.position, lift = Math.max(0, p.z || 0), size = (record.shadowSize || 1) * (p.scale || 1) / (1 + lift * .35);
+                record.shadow.position.set(p.x + .5, .02, p.y + .5);
+                record.shadow.scale.set(size, size, 1);
+                record.shadowLift = lift;
+            }
             if (record.object) {
                 const p = record.position;
                 record.object.position.set(p.x + .5, (p.z || 0) + (record.billboard ? record.height/2 : 0), p.y + .5);
@@ -166,6 +173,7 @@
                 const material = new T.MeshBasicMaterial({map:texture,transparent:true,alphaTest:.1,side:T.DoubleSide});
                 const object = new T.Mesh(new T.PlaneGeometry(1,1),material);
                 r = {object,texture,canvas,billboard:true,height}; this.billboards.set(key,r); this.scene.add(object);
+                r.shadowSize = height * (width / Math.max(1, heightPx)) * .7; this.ensureShadow(key, r);
             }
             r.object.visible = true;
             if (r.canvas.width !== width || r.canvas.height !== heightPx) { r.canvas.width=width;r.canvas.height=heightPx; }
@@ -201,11 +209,50 @@
             const offset=new root.THREE.Vector3((.5-(step.gripX??.5))*width,((step.gripY??.5)-.5)*height,0).applyQuaternion(q);record.object.position.add(offset);
             record.object.material.opacity=step.opacity??1;record.object.visible=step.visible!==false;
         }
+        /**
+         * A soft disc of shade under a battler, the way the engine draws one
+         * under a side-view actor. The room draws with its own renderer, which
+         * the map's shadow atlas does not serve, so this is the shadow a
+         * battler gets: on the floor beneath its feet, smaller and fainter the
+         * higher it jumps, gone when the battler is. Props and thrown things
+         * cast none; the flat 2D layout draws none.
+         */
+        static shadowTexture() {
+            if (BattleRoomView._shadowTexture) return BattleRoomView._shadowTexture;
+            const T = root.THREE, size = 64, data = new Uint8Array(size * size * 4);
+            for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+                const dx = (x + .5) / size * 2 - 1, dy = (y + .5) / size * 2 - 1, d = Math.sqrt(dx * dx + dy * dy);
+                const a = d >= 1 ? 0 : Math.pow(1 - d, 1.6) * 255;
+                const i = (y * size + x) * 4; data[i] = 0; data[i + 1] = 0; data[i + 2] = 0; data[i + 3] = Math.round(a);
+            }
+            const texture = new T.DataTexture(data, size, size); texture.needsUpdate = true;
+            BattleRoomView._shadowTexture = texture;
+            return texture;
+        }
+        static wantsShadow(key, settings) {
+            return !/^(prop|event|extra):/.test(String(key)) && settings?.projection !== '2d';
+        }
+        ensureShadow(key, record) {
+            const T = root.THREE;
+            if (!T || !this.scene || record.shadow || !BattleRoomView.wantsShadow(key, this.settings)) return;
+            const material = new T.MeshBasicMaterial({ map: BattleRoomView.shadowTexture(), transparent: true, depthWrite: false, opacity: .55, fog: false });
+            const mesh = new T.Mesh(new T.PlaneGeometry(1, 1), material);
+            mesh.rotation.x = -Math.PI / 2; mesh.renderOrder = 1; mesh.userData.__reactorOverlay = true; mesh.name = 'shadow:' + key;
+            record.shadow = mesh; this.scene.add(mesh);
+        }
+        updateShadow(record) {
+            const shadow = record.shadow, object = record.object; if (!shadow) return;
+            let opacity = 1;
+            if (object) object.traverse(node => { const m = node.material; if (opacity === 1 && m && !Array.isArray(m) && m.transparent) opacity = m.opacity; });
+            shadow.visible = !!object && object.visible !== false && opacity > .02;
+            shadow.material.opacity = .55 * Math.min(1, opacity) / (1 + (record.shadowLift || 0) * .6);
+        }
         remove(key) {
             const r = this.models.get(key) || this.billboards.get(key); if (!r) return;
             for (const [id, play] of this.effectPlays) if (play.owner === r) { this.stopEffect(play); this.effectPlays.delete(id); }
             for(const media of r.media?.values()||[])this.stopMedia(media);
             this.models.delete(key);this.billboards.delete(key);
+            if(r.shadow){r.shadow.removeFromParent();r.shadow.geometry.dispose();r.shadow.material.dispose();r.shadow=null;}
             r.object?.removeFromParent();r.binding?.mixer?.stopAllAction?.();
             r.object?.traverse(node => {for(const m of [node.material].flat().filter(Boolean))m.dispose();});
             if(r.billboard){r.object.geometry.dispose();r.texture.dispose();}
@@ -323,6 +370,7 @@
         render() {
             if(this.disposed||!this.renderer)return;
             const R=root.Reactor3D;this.frame++;this.aim();for(const r of this.billboards.values()){r.object.quaternion.copy(this.camera.quaternion);r.object.rotateZ((r.position?.rotateZ||0)*Math.PI/180);}this.world.setAnimationFrame(Math.floor(this.frame/30));
+            for(const r of [...this.models.values(),...this.billboards.values()])if(r.shadow)this.updateShadow(r);
             const lights=this.roomLights();let lightSeed=1000;
             for(const r of this.models.values())if(r.object){
                 const motion=r.action?.name,rule=r.rules.find(rule=>rule.trigger==='action'&&rule.name.toLowerCase()===motion?.toLowerCase());

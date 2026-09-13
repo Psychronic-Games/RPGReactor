@@ -160,3 +160,17 @@ test('a staying keyed pose holds its last key while its action stands, and the a
  assert.equal(at(0),0);const mid=at(10);assert.ok(mid>20&&mid<70,'part way there: '+mid);assert.equal(at(20),90);assert.equal(at(500),90,'kept while the action stands');
  R.applyModelAnimation(binding,rules,{frame:600,moving:false,distance:0,scale:1,action:{name:'other',frame:590}});assert.equal(angle(),0,'another action drops it');
 });
+
+test('a room battler stands on a soft shadow that follows it, shrinks and fades as it rises, and goes with it',async()=>{
+ const THREE=await import('three'),scope={THREE,ReactorBattleData:B,Reactor3D:{applyEventModelPose:(o,spec)=>{o.rotation.order='YXZ';o.rotation.set(spec.pitch||0,spec.yaw||0,spec.roll||0);}}};vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../../runtime/reactor_battle_room.js'),'utf8'),scope);
+ const Room=scope.ReactorBattleRoomView,view=Object.create(Room.prototype);view.models=new Map();view.billboards=new Map();view.scene=new THREE.Scene();view.settings={projection:'3d'};view.effectPlays=new Map();
+ const record={object:new THREE.Group(),spec:{size:2},position:{},extent:{x:1,y:2,z:.6},scale:1,shadowSize:.85};view.models.set('enemy:0',record);view.scene.add(record.object);
+ view.ensureShadow('enemy:0',record);assert.ok(record.shadow,'a battler gets a shadow');assert.ok(view.scene.children.includes(record.shadow));
+ view.place('enemy:0',{x:4,y:6,z:0});assert.deepEqual(record.shadow.position.toArray().map(n=>+n.toFixed(2)),[4.5,.02,6.5]);assert.ok(Math.abs(record.shadow.scale.x-.85)<1e-9);
+ view.updateShadow(record);assert.equal(record.shadow.visible,true);assert.ok(Math.abs(record.shadow.material.opacity-.55)<1e-9);
+ view.place('enemy:0',{x:4,y:6,z:2});assert.ok(record.shadow.scale.x<.85*.6,'smaller two tiles up');view.updateShadow(record);assert.ok(record.shadow.material.opacity<.55*.5,'fainter two tiles up');
+ record.object.visible=false;view.updateShadow(record);assert.equal(record.shadow.visible,false,'no shadow for a hidden battler');
+ const prop={object:new THREE.Group(),spec:{},position:{}};view.models.set('prop:1',prop);view.ensureShadow('prop:1',prop);assert.equal(prop.shadow,undefined,'props cast none here');
+ view.settings={projection:'2d'};const flat={object:new THREE.Group(),spec:{},position:{}};view.models.set('actor:0',flat);view.ensureShadow('actor:0',flat);assert.equal(flat.shadow,undefined,'the flat layout draws none');
+ view.settings={projection:'3d'};view.remove('enemy:0');assert.equal(record.shadow,null);assert.ok(!view.scene.children.some(c=>c.name==='shadow:enemy:0'),'removed with its battler');
+});
