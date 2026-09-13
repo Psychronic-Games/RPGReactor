@@ -16,7 +16,10 @@
     };
     P.load=function(){
         if(P.state!=='idle')return;P.state='loading';
-        Promise.all([P.json('data/ActionSequences.json',true),P.json('data/BattlePresentation.json',true),P.json('data/.BattlePresentation.pending.json',true)]).then(([sequences,settings,journal])=>{
+        // A battle test reads the Test_ copies the editor wrote from its unsaved database, when it wrote them.
+        const testing=typeof DataManager.isBattleTest==='function'&&DataManager.isBattleTest();
+        const battleFile=async name=>testing?(await P.json('data/Test_'+name,true))??P.json('data/'+name,true):P.json('data/'+name,true);
+        Promise.all([battleFile('ActionSequences.json'),battleFile('BattlePresentation.json'),P.json('data/.BattlePresentation.pending.json',true)]).then(([sequences,settings,journal])=>{
             if(journal){if(journal.version!==1||!Array.isArray(journal.files))throw Error('Battle data recovery is required.');for(const entry of journal.files){if(entry.file==='ActionSequences.json')sequences=entry.previous?JSON.parse(entry.previous):null;if(entry.file==='BattlePresentation.json')settings=entry.previous?JSON.parse(entry.previous):null;}}
             for(const sequence of sequences||[])if(sequence)B.migrateSequence(sequence);if(settings)B.migrateSettings(settings);
             B.validateStore(sequences||[null],settings||B.empty());P.sequences=sequences||[null];P.settings=settings||B.empty();
@@ -580,17 +583,47 @@
             const original=Game_Enemy.prototype[method];if(!original)continue;
             Game_Enemy.prototype[method]=function(){const sprite=BattleManager._spriteset?.findTargetSprite?.(this),p=sprite&&P.roomScreenPosition(sprite);return p?p[axis]:original.call(this);};
         }
-        if(root.BattleCursorSprite){
-            const proto=BattleCursorSprite.prototype,x=proto.posX,y=proto.posY;
+        // MOG_BattleCursor keeps its sprite class inside a closure, so it is patched through the instances the spriteset creates: once, on their prototype.
+        const patchCursor=proto=>{
+            if(!proto||proto._reactorRoomAnchored||typeof proto.posX!=='function'||typeof proto.posY!=='function')return;proto._reactorRoomAnchored=true;
+            const x=proto.posX,y=proto.posY;
             const anchor=cursor=>{
                 const sprite=cursor._battlerSprite,bounds=sprite?._reactorRoomBounds,ss=BattleManager._spriteset;if(!bounds||!ss?._reactorRoom||!cursor.parent)return null;
                 const px=cursor._align===3?bounds.x:cursor._align===4?bounds.x+bounds.width:bounds.x+bounds.width/2;
+                // Above sits on the top of the head (the cursor picture hangs from that point), Center mid-body, Below at the feet.
                 const py=cursor._align===0?bounds.y+bounds.height:cursor._align===2?bounds.y:bounds.y+bounds.height/2;
                 return cursor.parent.toLocal(ss._reactorRoomSprite.toGlobal(new PIXI.Point(px,py)));
             };
             proto.posX=function(){const p=anchor(this);return p?p.x+this._position.xOffset+this._effect.waveX+this._battler._battleCursor.X_Offset:x.call(this);};
             proto.posY=function(){const p=anchor(this);return p?p.y+this._position.yOffset+this._effect.waveY+this._battler._battleCursor.Y_Offset:y.call(this);};
-        }
+        };
+        P.patchBattleCursors=spriteset=>{for(const child of spriteset?._sprtField2?.children||[])if(child&&child._battlerSprite&&typeof child.posX==='function')patchCursor(Object.getPrototypeOf(child));};
+        if(root.BattleCursorSprite)patchCursor(BattleCursorSprite.prototype);
+        const createCursor=root.Spriteset_Battle?.prototype.createBattleCursor;
+        if(createCursor)Spriteset_Battle.prototype.createBattleCursor=function(){createCursor.call(this);P.patchBattleCursors(this);};
+    };
+    /**
+     * What the engine does to a battler's sprite, done to its model: the
+     * sprite's opacity, the blend colour a damage flash, an animation flash
+     * or a collapse puts on it, the additive blend of a collapse, and gone
+     * for good once a dead enemy has finished collapsing (the engine leaves
+     * the sprite at a few points of opacity; a model that faint still reads
+     * as standing there).
+     */
+    P.mirrorSpriteLook=function(sprite,battler,record){
+        const object=record?.object;if(!object)return;
+        const main=sprite._mainSprite||sprite,blend=main.getBlendColor?.()||[0,0,0,0],strength=Math.max(0,Math.min(1,(blend[3]||0)/255)),additive=sprite.blendMode===1||main.blendMode===1;
+        const dead=typeof battler.isDead==='function'&&battler.isDead(),collapsed=dead&&!sprite._effectType&&sprite.opacity<32;
+        object.visible=battler.isAppeared()&&sprite.visible!==false&&sprite.opacity>0&&!collapsed;
+        const T=root.THREE,wanted=T?(additive?T.AdditiveBlending:T.NormalBlending):null;
+        object.traverse(node=>{for(const material of Array.isArray(node.material)?node.material:[node.material]){if(!material)continue;
+            material.userData||={};material.userData.rrOriginalOpacity??=material.opacity;
+            material.opacity=material.userData.rrOriginalOpacity*sprite.opacity/255;
+            if(sprite.opacity<255||additive)material.transparent=true;
+            const tint=material.userData.rrBlend||(material.userData.rrBlend={value:{x:0,y:0,z:0,w:0}});
+            tint.value.x=(blend[0]||0)/255;tint.value.y=(blend[1]||0)/255;tint.value.z=(blend[2]||0)/255;tint.value.w=strength;
+            if(wanted!==null&&material.blending!==wanted)material.blending=wanted;
+        }});
     };
     P.publishRoomBounds=function(sprite,room,key){
         const bounds=room.bounds(key);if(!bounds)return;sprite._reactorRoomBounds=bounds;
@@ -830,7 +863,7 @@
             else {if(room.models.has(key))room.remove(key);}
             if(!spec&&main.bitmap?.isReady())room.billboard(key,main.bitmap.canvas,main._frame,{...p,flipX:actor?p.facing>0:p.facing<0},Math.max(.5,main._frame.height/48));
             const record=room.models.get(key)||room.billboards.get(key);
-            if(record?.object){record.object.visible=battler.isAppeared()&&sprite.opacity>0;record.object.traverse(object=>{for(const material of Array.isArray(object.material)?object.material:[object.material])if(material){material.userData||={};material.userData.rrOriginalOpacity??=material.opacity;material.opacity=material.userData.rrOriginalOpacity*sprite.opacity/255;if(sprite.opacity<255)material.transparent=true;}});}
+            if(record?.object)P.mirrorSpriteLook(sprite,battler,record);
             const projected=P.roomScreenPosition(sprite);if(projected){sprite.x=projected.x;sprite.y=projected.y;}
             if(main.texture)main.texture=PIXI.Texture.EMPTY;
         }

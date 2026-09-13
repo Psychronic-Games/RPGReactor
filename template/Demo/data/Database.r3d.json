@@ -17,7 +17,7 @@
         "name": "Actors/Fleagus",
         "file": "Fleagus",
         "ext": ".glb",
-        "size": 2,
+        "size": 3,
         "scale": 1,
         "yaw": 0,
         "pitch": 0,
@@ -43,7 +43,85 @@
         "name": "Actors/Captain_Carol_Everson_Reduced",
         "file": "Captain_Carol_Everson_Reduced",
         "ext": ".glb",
-        "size": 2,
+        "size": 3,
+        "scale": 1,
+        "yaw": 0,
+        "pitch": 0,
+        "roll": 0,
+        "faces": {},
+        "texture": ""
+      }
+    },
+    "3": {
+      "character": {
+        "name": "Actors/Jolt Eagle",
+        "file": "Jolt Eagle",
+        "ext": ".glb",
+        "size": 3,
+        "scale": 1,
+        "yaw": 0,
+        "pitch": 0,
+        "roll": 0,
+        "faces": {},
+        "texture": ""
+      },
+      "battler": {
+        "name": "Actors/Jolt Eagle",
+        "file": "Jolt Eagle",
+        "ext": ".glb",
+        "size": 3,
+        "scale": 1,
+        "yaw": 0,
+        "pitch": 0,
+        "roll": 0,
+        "faces": {},
+        "texture": ""
+      }
+    },
+    "4": {
+      "character": {
+        "name": "Actors/Captain_Carol_Everson_Reduced",
+        "file": "Captain_Carol_Everson_Reduced",
+        "ext": ".glb",
+        "size": 3,
+        "scale": 1,
+        "yaw": 0,
+        "pitch": 0,
+        "roll": 0,
+        "faces": {},
+        "texture": ""
+      },
+      "battler": {
+        "name": "Actors/Captain_Carol_Everson_Reduced",
+        "file": "Captain_Carol_Everson_Reduced",
+        "ext": ".glb",
+        "size": 3,
+        "scale": 1,
+        "yaw": 0,
+        "pitch": 0,
+        "roll": 0,
+        "faces": {},
+        "texture": ""
+      }
+    },
+    "5": {
+      "character": {
+        "name": "Actors/Captain_Carol_Everson_Reduced",
+        "file": "Captain_Carol_Everson_Reduced",
+        "ext": ".glb",
+        "size": 3,
+        "scale": 1,
+        "yaw": 0,
+        "pitch": 0,
+        "roll": 0,
+        "faces": {},
+        "texture": ""
+      },
+      "battler": {
+        "name": "Actors/Captain_Carol_Everson_Reduced",
+        "file": "Captain_Carol_Everson_Reduced",
+        "ext": ".glb",
+        "size": 3,
         "scale": 1,
         "yaw": 0,
         "pitch": 0,
@@ -106,7 +184,7 @@
       "name": "Actors/Psychronic-Mascot",
       "file": "Psychronic-Mascot",
       "ext": ".glb",
-      "size": 2,
+      "size": 4,
       "scale": 1,
       "yaw": 0,
       "pitch": 0,

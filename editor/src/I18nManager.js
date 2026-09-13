@@ -18530,6 +18530,24 @@ Object.assign(RR_TEXT_TRANSLATIONS["ar"], {"Apply Action Effect belongs in a Com
 Object.assign(RR_TEXT_TRANSLATIONS["id"], {"Apply Action Effect belongs in a Complete Action or Execute phase.":"Terapkan Efek Tindakan termasuk dalam Aksi Lengkap atau fase Eksekusi."});
 Object.assign(RR_TEXT_TRANSLATIONS["vi"], {"Apply Action Effect belongs in a Complete Action or Execute phase.":"Áp dụng Hiệu ứng hành động thuộc về Hành động hoàn chỉnh hoặc giai đoạn Thực hiện."});
 Object.assign(RR_TEXT_TRANSLATIONS["th"], {"Apply Action Effect belongs in a Complete Action or Execute phase.":"Apply Action Effect อยู่ในการกระทำที่สมบูรณ์หรือเฟส Execute"});
+// Traits list: the Collapse Effect summary.
+Object.assign(RR_TEXT_TRANSLATIONS["ja"], {"Normal Collapse":"通常の消滅"});
+Object.assign(RR_TEXT_TRANSLATIONS["zh-Hant"], {"Normal Collapse":"一般消散"});
+Object.assign(RR_TEXT_TRANSLATIONS["zh-Hans"], {"Normal Collapse":"普通消散"});
+Object.assign(RR_TEXT_TRANSLATIONS["ko"], {"Normal Collapse":"일반 소멸"});
+Object.assign(RR_TEXT_TRANSLATIONS["es"], {"Normal Collapse":"Colapso normal"});
+Object.assign(RR_TEXT_TRANSLATIONS["pt"], {"Normal Collapse":"Colapso normal"});
+Object.assign(RR_TEXT_TRANSLATIONS["fr"], {"Normal Collapse":"Effondrement normal"});
+Object.assign(RR_TEXT_TRANSLATIONS["de"], {"Normal Collapse":"Normaler Zusammenbruch"});
+Object.assign(RR_TEXT_TRANSLATIONS["it"], {"Normal Collapse":"Collasso normale"});
+Object.assign(RR_TEXT_TRANSLATIONS["ru"], {"Normal Collapse":"Обычное исчезновение"});
+Object.assign(RR_TEXT_TRANSLATIONS["pl"], {"Normal Collapse":"Zwykłe zniknięcie"});
+Object.assign(RR_TEXT_TRANSLATIONS["el"], {"Normal Collapse":"Κανονική κατάρρευση"});
+Object.assign(RR_TEXT_TRANSLATIONS["tr"], {"Normal Collapse":"Normal çöküş"});
+Object.assign(RR_TEXT_TRANSLATIONS["ar"], {"Normal Collapse":"انهيار عادي"});
+Object.assign(RR_TEXT_TRANSLATIONS["id"], {"Normal Collapse":"Runtuh normal"});
+Object.assign(RR_TEXT_TRANSLATIONS["vi"], {"Normal Collapse":"Sụp đổ thường"});
+Object.assign(RR_TEXT_TRANSLATIONS["th"], {"Normal Collapse":"ล้มลงแบบปกติ"});
 // Sequence editor: a phase that resumes after the one it called.
 Object.assign(RR_TEXT_TRANSLATIONS["ja"], {"{phase} (continued)":"{phase}（続き）","{phase} carries on here after the phase it called; these steps are still part of it.":"{phase} は呼び出した段階の後にここで続きます。これらのステップもその一部です。"});
 Object.assign(RR_TEXT_TRANSLATIONS["zh-Hant"], {"{phase} (continued)":"{phase}（續）","{phase} carries on here after the phase it called; these steps are still part of it.":"{phase} 在它所呼叫的階段之後於此繼續；這些步驟仍屬於它。"});

@@ -405,7 +405,8 @@ class BattlePresentationEditor {
         const cast=[];
         for(const side of ['actors','enemies'])for(let i=0;i<(side==='actors'?this.db.getMaxBattleMembers():troopEditor.currentTroop.members.length);i++){
             if(view.disposed||this.parent.currentProject!==project)return cast;
-            const id=side==='actors'?this.db.getSystem()?.partyMembers?.[i]:troopEditor.currentTroop.members[i]?.enemyId;
+            // Actors come from the battle test party (the System's testBattlers), as a battle test would field them, not the starting party.
+            const id=side==='actors'?(troopEditor.battleTestParty?troopEditor.battleTestParty(this.db.getSystem(),this.db.getMaxBattleMembers())[i]?.actor?.id:this.db.getSystem()?.partyMembers?.[i]):troopEditor.currentTroop.members[i]?.enemyId;
             const item=side==='actors'?this.db.getActor(id):this.db.getEnemy(id);if(!item)continue;
             const graphic=ReactorBattleData.graphic(this.settings(),side,id,item,RRDatabase3DBindings.get(project.path,side,id,side==='actors'?'battler':undefined)),spec=graphic.type==='model'?graphic.model:null,key='cast:'+side+':'+i;
             if(spec){await view.addModel(key,spec,ReactorBattleData.position(draft,side,i));cast.push({key,side,index:i});}
@@ -424,7 +425,7 @@ class BattlePresentationEditor {
         troopEditor._roomPreviewCleanup?.();
         const canvas=troopEditor.canvas,ctx=troopEditor.ctx,project=this.parent.currentProject;
         const config=this.settings().troops[troopEditor.currentTroopId];
-        let signature=JSON.stringify([config,troopEditor.currentTroop.members]);
+        const party=()=>[this.db.getSystem()?.testBattlers,this.db.getSystem()?.partyMembers];let signature=JSON.stringify([config,troopEditor.currentTroop.members,party()]);
         let view,raf=0,disposed=false,stopPlacement=()=>{};
         const cleanup=()=>{disposed=true;stopPlacement();cancelAnimationFrame(raf);view?.dispose();this.views.delete(cleanup);
             if(troopEditor._roomPreviewCleanup===cleanup){troopEditor._roomPreviewCleanup=null;troopEditor._roomPreviewActive=false;troopEditor._renderRoomPreview=null;troopEditor._roomPreviewView=null;}};
@@ -434,7 +435,7 @@ class BattlePresentationEditor {
         const message=text=>{ctx.fillStyle='#171a21';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.fillStyle='#ddd';ctx.font='18px sans-serif';ctx.fillText(this.text(text),20,32);};
         message('Loading…');
         troopEditor._renderRoomPreview=()=>{
-            if(current()&&signature!==JSON.stringify([this.settings().troops[troopEditor.currentTroopId],troopEditor.currentTroop.members]))troopEditor.loadAndRenderCanvas();
+            if(current()&&signature!==JSON.stringify([this.settings().troops[troopEditor.currentTroopId],troopEditor.currentTroop.members,party()]))troopEditor.loadAndRenderCanvas();
         };
         try{
             if(!config?.mapId){message('Choose a Battle Room map.');return;}

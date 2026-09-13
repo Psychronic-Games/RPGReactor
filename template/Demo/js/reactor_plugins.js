@@ -243,7 +243,7 @@ var $plugins =
             "Move Speed": "100",
             "Float Effect": "true",
             "Align for Actor": "Above",
-            "Align for Enemy": "Center",
+            "Align for Enemy": "Above",
             "X-Axis Offset Actor": "0",
             "Y-Axis Offset Actor": "0",
             "X-Axis Offset Enemy": "0",

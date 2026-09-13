@@ -2511,7 +2511,10 @@ class DatabaseTroopEditor {
         // Test_Troops.json is written from the database manager's copy, so the
         // placement on screen must be in it before the dialog reads it.
         this.persistTroop();
-        new BattleTestConfigModal(this.databaseManager, project, this.currentTroopId, this.battleback1Name, this.battleback2Name, playtestManager).show();
+        const modal = new BattleTestConfigModal(this.databaseManager, project, this.currentTroopId, this.battleback1Name, this.battleback2Name, playtestManager);
+        // The preview fields the battle test party: redraw it with whatever the dialog assembled.
+        modal.onClose = () => { if (this.currentTroop) this.loadAndRenderCanvas(); };
+        modal.show();
     }
 
     // ==========================================

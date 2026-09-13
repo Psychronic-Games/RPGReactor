@@ -141,6 +141,13 @@ class BattleTestConfigModal {
         if (this.modal && this.modal.parentNode) {
             document.body.removeChild(this.modal);
         }
+        // The party assembled here is the battle test party whether or not a test was started, so the troop preview can field it.
+        const system = this.databaseManager?.getSystem?.();
+        if (system && JSON.stringify(system.testBattlers || null) !== JSON.stringify(this.battlers)) {
+            system.testBattlers = JSON.parse(JSON.stringify(this.battlers));
+            this.databaseManager.markDirty?.('system');
+        }
+        if (typeof this.onClose === 'function') this.onClose();
     }
 
     createButton(label, onclick) {
@@ -642,6 +649,9 @@ class BattleTestConfigModal {
             ['CommonEvents.json', dm.data.commonEvents],
             ['System.json', testSystem],
             ['MapInfos.json', dm.data.mapInfos],
+            // The battle data too, so a sequence assigned a moment ago plays in the test before the database is saved.
+            ['ActionSequences.json', dm.data.actionSequences],
+            ['BattlePresentation.json', dm.data.battlePresentation],
         ];
 
         try {

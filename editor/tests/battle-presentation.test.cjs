@@ -272,3 +272,27 @@ test('the stock input side-step is left to sprite-sheet actors with no authored 
  P.settings.actors[3]={states:{input:{mode:'sequence',sequenceId:1}}};sprite(3).updateTargetPosition();assert.equal(stepped,1,'an authored input state owns the input pose');
  P.settings.classes[1]={states:{input:{mode:'sequence',sequenceId:1}}};sprite(4).updateTargetPosition();assert.equal(stepped,1,'through the class as well');
 });
+
+
+test('a room model wears its sprite\'s opacity, blend colour and collapse, and goes once a dead enemy has collapsed',()=>{
+ const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
+ const context={ReactorBattleData:B,DataManager:{isDatabaseLoaded(){return true;}},THREE:{AdditiveBlending:2,NormalBlending:1}};vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../../runtime/reactor_battle_presentation.js'),'utf8'),context);
+ const P=context.ReactorBattlePresentation;
+ const material={opacity:.8,transparent:false,blending:1,userData:{}},mesh={material,children:[]},object={visible:true,children:[mesh],traverse(fn){fn(this);fn(mesh);}};
+ const battler={isAppeared:()=>true,isDead:()=>false},sprite={opacity:255,visible:true,blendMode:0,getBlendColor:()=>[255,255,255,128]};
+ P.mirrorSpriteLook(sprite,battler,{object});
+ assert.equal(object.visible,true);assert.equal(material.opacity,.8,'full sprite opacity keeps the material\'s own');
+ assert.deepEqual({...material.userData.rrBlend.value},{x:1,y:1,z:1,w:128/255},'a white half flash reaches the shader');
+ // Collapse: red additive, fading.
+ sprite.blendMode=1;sprite.opacity=64;sprite._effectType='collapse';sprite.getBlendColor=()=>[255,128,128,128];battler.isDead=()=>true;
+ P.mirrorSpriteLook(sprite,battler,{object});
+ assert.equal(object.visible,true,'still there while collapsing');assert.equal(material.blending,2,'additive while collapsing');assert.ok(Math.abs(material.opacity-.8*64/255)<1e-9);assert.equal(material.transparent,true);
+ // Collapsed: the engine leaves a few points of opacity; the model is gone.
+ sprite._effectType=null;sprite.opacity=7;
+ P.mirrorSpriteLook(sprite,battler,{object});
+ assert.equal(object.visible,false,'a collapsed enemy\'s model is hidden');
+ // Alive again at full opacity: back to normal.
+ battler.isDead=()=>false;sprite.opacity=255;sprite.blendMode=0;sprite.getBlendColor=()=>[0,0,0,0];
+ P.mirrorSpriteLook(sprite,battler,{object});
+ assert.equal(object.visible,true);assert.equal(material.blending,1);assert.equal(material.userData.rrBlend.value.w,0);
+});

@@ -7746,6 +7746,25 @@ Reactor3D.injectLightShader = function(shader, renderer) {
 };
 
 /**
+ * A blend colour on a lit material, the way a sprite's colour filter blends
+ * one over its pixels: a damage flash, an animation's flash on its targets,
+ * the red of a collapse. `material.userData.rrBlend.value` is {x,y,z,w} in
+ * 0..1 (w the strength), created here or by whoever sets it first; a plain
+ * object so a material cloned through JSON still owns one the shader reads.
+ */
+Reactor3D.injectBlendColor = function(material, shader) {
+    if (!material || !shader) return;
+    material.userData = material.userData || {};
+    const blend = material.userData.rrBlend || (material.userData.rrBlend = { value: { x: 0, y: 0, z: 0, w: 0 } });
+    shader.uniforms.rrBlend = blend;
+    if (shader.fragmentShader.indexOf("uniform vec4 rrBlend;") >= 0) return;
+    shader.fragmentShader = "uniform vec4 rrBlend;\n" + shader.fragmentShader.replace(
+        "#include <map_fragment>",
+        "#include <map_fragment>\n\tdiffuseColor.rgb = mix(diffuseColor.rgb, rrBlend.rgb, rrBlend.a);"
+    );
+};
+
+/**
  * Make a map material take the lights. Composes with whatever the material
  * already injects (UV clamps, billboard quads, straightened depth), and
  * extends its program cache key so a lit program is never shared with an
@@ -7786,6 +7805,7 @@ Reactor3D.litMaterial = function(material) {
     material.onBeforeCompile = function(shader, renderer) {
         if (typeof earlier === "function") earlier.call(this, shader, renderer);
         Reactor3D.injectLightShader(shader, renderer);
+        Reactor3D.injectBlendColor(this, shader);
     };
     const earlierKey = material.customProgramCacheKey;
     material.customProgramCacheKey = function() {

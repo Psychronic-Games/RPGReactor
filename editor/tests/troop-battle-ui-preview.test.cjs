@@ -259,7 +259,7 @@ test('battle test writes every Test_ file even when MapInfos was never handed to
         assert.deepEqual(alerts, []);
         assert.deepEqual(launched, [root]);
         const written = fs.readdirSync(path.join(root, 'data')).filter(f => f.startsWith('Test_')).sort();
-        assert.equal(written.length, 14, `all fourteen Test_ files: ${written.join(', ')}`);
+        assert.equal(written.length, 16, `all sixteen Test_ files, the battle data included: ${written.join(', ')}`);
         assert.deepEqual(JSON.parse(fs.readFileSync(path.join(root, 'data', 'Test_MapInfos.json'), 'utf8')),
             [null, { id: 1, name: 'Start' }], 'MapInfos falls back to the project file on disk');
         const testSystem = JSON.parse(fs.readFileSync(path.join(root, 'data', 'Test_System.json'), 'utf8'));
