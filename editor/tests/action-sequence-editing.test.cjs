@@ -71,8 +71,8 @@ test('the step picker asks which step to add and inserts the choice where it was
  assert.ok(!items.some(item=>item.dataset.stepValue==='effect'),'the retired effect step is not offered');
  const values=items.map(item=>item.dataset.stepValue);assert.equal(new Set(values).size,values.length,'each capability is offered once');
  assert.ok(!values.includes('se')&&values.includes('se:system')&&values.includes('se:stop'),'the sound effect command appears only for what Play Sound cannot do');
- assert.ok(groups.every(group=>group.querySelector('.database-section-header')),'group headers use the accent-strip section header');
- assert.ok(items.find(item=>item.dataset.stepValue==='leap').querySelector('.rr-step-picker-hint'),'look-alike steps carry a hint');
+ assert.ok(groups.every(group=>group.querySelector('.rr-step-picker-head')),'every group has a header bar');
+ assert.ok(items.find(item=>item.dataset.stepValue==='leap').title,'look-alike steps carry a hint as a tooltip');
  const search=overlay.querySelector('.rr-step-picker-search');assert.equal(context.document.activeElement===search,true,'typing filters at once');
  search.value='proj';search.fire('input');
  const shown=items.filter(item=>!item.hidden);assert.deepEqual(shown.map(item=>item.dataset.stepValue),['projectile']);

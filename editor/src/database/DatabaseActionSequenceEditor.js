@@ -415,11 +415,11 @@ class DatabaseActionSequenceEditor {
         for(const [label,items] of this.stepGroups()){
             const known=items.filter(e=>e.value.startsWith('basic:')?B.basicSteps.includes(e.value.slice(6)):B.types.includes(e.value)||B.commands[e.value]);if(!known.length)continue;
             const section=document.createElement('section');section.className='rr-step-picker-group';
-            const heading=U.element('h3','database-section-header',label);section.append(heading);
+            const heading=U.element('div','rr-step-picker-head',label);section.append(heading);
             const grid=document.createElement('div');grid.className='rr-step-picker-grid';section.append(grid);
             for(const entry of known){
-                const button=U.element('button','rr-btn-secondary rr-step-picker-item');button.type='button';button.onclick=()=>choose(entry);button.dataset.stepValue=entry.key;
-                button.append(U.element('span','rr-step-picker-name',entry.label,entry.raw));if(entry.hint)button.append(U.element('span','rr-step-picker-hint',entry.hint));
+                const button=U.element('button','rr-step-picker-item',entry.label,entry.raw);button.type='button';button.onclick=()=>choose(entry);button.dataset.stepValue=entry.key;
+                if(entry.hint)button.title=U.text(entry.hint);
                 grid.append(button);entries.push({entry,button,section,text:(U.text(entry.label)+' '+(entry.hint?U.text(entry.hint):'')+' '+entry.key).toLowerCase()});
             }
             groupsHost.append(section);

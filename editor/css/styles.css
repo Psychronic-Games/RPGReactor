@@ -5344,15 +5344,17 @@ details.mp-section:not([open]) > .mp-section-body { display:none; }
 .rr-sequence-step-modes { display:flex;flex-wrap:nowrap;gap:4px; }
 .rr-sequence-step-modes button { flex:1;min-width:0;padding:5px 3px; }
 
-/* Action Sequences: the step picker dialog. */
-.rr-step-picker { width:min(820px,92vw);max-height:84vh;display:flex;flex-direction:column; }
-.rr-step-picker-body { display:flex;flex-direction:column;gap:14px;overflow-y:auto;min-height:0;padding:14px 18px 18px; }
-.rr-step-picker-search { width:100%;box-sizing:border-box;padding:7px 10px;font-size:13px; }
-.rr-step-picker-group .database-section-header { margin:0 0 8px; }
-.rr-step-picker-grid { display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px; }
-.rr-step-picker-item { display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;padding:7px 10px;min-height:38px;white-space:normal;line-height:1.3;border-left:3px solid transparent; }
-.rr-step-picker-item:hover,.rr-step-picker-item:focus-visible { border-left-color:var(--color-accent); }
-.rr-step-picker-item:focus-visible { outline:2px solid var(--color-accent);outline-offset:1px; }
-.rr-step-picker-name { font-size:12px;font-weight:600;color:var(--color-text-strong); }
-.rr-step-picker-hint { font-size:11px;color:var(--color-text-muted);font-weight:normal; }
-.rr-step-picker-empty { margin:0; }
+/* Action Sequences: the step picker dialog. Each group is a section in the
+   editor's family: a dark header bar with the accent strip (Map Properties,
+   Lighting, UI property sections), and dense chips a step lighter than the
+   bar, so the whole catalogue fits one screen. */
+.rr-step-picker { width:min(880px,94vw);max-height:88vh;display:flex;flex-direction:column; }
+.rr-step-picker-body { display:flex;flex-direction:column;gap:6px;overflow-y:auto;min-height:0;padding:8px 10px 10px; }
+.rr-step-picker-search { width:100%;box-sizing:border-box;padding:5px 8px;font-size:12px;margin-bottom:2px; }
+.rr-step-picker-group { border:1px solid var(--color-border);border-radius:5px;background:color-mix(in srgb,var(--color-bg-surface) 80%,var(--color-bg-panel));overflow:hidden; }
+.rr-step-picker-head { margin:0;padding:4px 8px 4px 7px;border-left:3px solid var(--color-accent);border-bottom:1px solid var(--color-border);background:var(--color-bg-toolbar);color:var(--color-text);font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;user-select:none; }
+.rr-step-picker-grid { display:flex;flex-wrap:wrap;gap:3px;padding:4px; }
+.rr-step-picker-item { margin:0;padding:3px 10px;min-height:0;height:auto;text-align:left;white-space:nowrap;font-size:12px;line-height:1.4;color:var(--color-text);background:var(--color-bg-list-item);border:1px solid var(--color-border);border-radius:3px;cursor:pointer; }
+.rr-step-picker-item:hover { background:var(--color-bg-hover);border-color:var(--color-accent); }
+.rr-step-picker-item:focus-visible { outline:2px solid var(--color-accent);outline-offset:-1px; }
+.rr-step-picker-empty { margin:0;padding:4px 2px; }
