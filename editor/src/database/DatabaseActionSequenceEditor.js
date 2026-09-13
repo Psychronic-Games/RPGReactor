@@ -32,21 +32,26 @@ class DatabaseActionSequenceEditor {
         U.field(cast,'Weapon in Hand',U.select(weaponChoices,this.sampleWeapon||'',value=>{this.sampleWeapon=Number(value)||0;this.weaponModels={};this.savePrefs();this.drawInspector();this.paint();}));
         U.field(cast,'Targets',U.select([[1,'1'],[2,'2'],[3,'3'],[4,'4']],this.targetCount,value=>{this.targetCount=Number(value);this.savePrefs();this.controls.targetsChanged();this.drawInspector();}));
         const mirror=U.element('input');mirror.type='checkbox';mirror.checked=!!this.mirrored;mirror.onchange=()=>{this.mirrored=mirror.checked;this.savePrefs();};U.field(cast,'Swap Sides',mirror).parentElement.classList.add('rr-sequence-preview-check');
-        // Scenery: the plain grid, a battleback pair, or a troop's battle room.
+        // Scene is the backdrop: an empty grid, the project's battleback pair, or a Battle Room from Troops. Every choice is listed; one the project cannot offer is greyed and says why.
         this.scene||={kind:'grid'};const path=require('path'),projectPath=this.parent.currentProject.path;
         const floors=RRAssetFiles.listNames(path.join(projectPath,'img/battlebacks1'),['.png']),walls=RRAssetFiles.listNames(path.join(projectPath,'img/battlebacks2'),['.png']);
         const rooms=Object.entries(U.settings().troops||{}).filter(([,t])=>t?.type==='room'&&t.mapId).map(([id])=>[ 'troop:'+id,U.message('Room: {name}',{name:this.db.data.troops?.[id]?.name||'#'+id})]);
-        // Battle layout: the flat battle as the game lays it out, actors at their home positions, enemies where the chosen troop puts them, seen from above like the screen.
-        const sceneChoices=[['grid','Grid'],['battle','Battle layout'],...(floors.length||walls.length?[['battleback','Battleback']]:[]),...rooms];
-        const sceneValue=this.scene.kind==='troop'?'troop:'+this.scene.id:this.scene.kind;
-        U.field(cast,'Scene',U.select(sceneChoices,sceneChoices.some(c=>c[0]===sceneValue)?sceneValue:'grid',value=>{this.scene=value.startsWith('troop:')?{kind:'troop',id:Number(value.slice(6))}:{kind:value,floor:this.scene.floor,wall:this.scene.wall,troop:this.scene.troop};backdrop.style.display=value==='battleback'||value==='battle'?'':'none';troopRow.style.display=value==='battle'?'':'none';this.savePrefs();this.loadCast();}));
-        U.field(cast,'Projection',U.select([['3d','3D',true],['2d','2D',true]],this.previewProjection,value=>{this.previewProjection=value;this.savePrefs();this.loadCast();}));
-        const backdrop=U.element('div','rr-sequence-backdrop');cast.append(backdrop);backdrop.style.display=this.scene.kind==='battleback'||this.scene.kind==='battle'?'':'none';
-        const troopRow=U.element('div','rr-sequence-backdrop');cast.append(troopRow);troopRow.style.display=this.scene.kind==='battle'?'':'none';
+        const sceneChoices=[['grid','Grid'],['battleback','Battleback'],...(rooms.length?rooms:[['troop:none','Battle Room (none set up under Troops)']])];
+        const sceneValue=this.scene.kind==='troop'?'troop:'+this.scene.id:this.scene.kind,keep=()=>({floor:this.scene.floor,wall:this.scene.wall,troop:this.scene.troop});
+        const sceneSelect=U.field(cast,'Scene',U.select(sceneChoices,sceneChoices.some(c=>c[0]===sceneValue)?sceneValue:'grid',value=>{this.scene=value.startsWith('troop:')?{kind:'troop',id:Number(value.slice(6)),...keep()}:{kind:value,...keep()};showRows();this.savePrefs();this.loadCast();}));
+        if(!rooms.length){const none=sceneSelect.querySelector('option[value="troop:none"]');if(none)none.disabled=true;}
+        sceneSelect.title=U.text('Grid: an empty stage. Battleback: the floor and wall pair from img/battlebacks. Battle Room: a troop set up as a room under Troops.');
+        // Projection is how the battle is seen: in perspective, or flat as the game draws it, the two sides across the screen or up and down it. The flat views stand the cast where the game does.
+        const projectionSelect=U.field(cast,'Projection',U.select([['3d','3D',true],['2d','2D (Horizontal)'],['2d-vertical','2D (Vertical)']],this.previewProjection,value=>{this.previewProjection=value;showRows();this.savePrefs();this.loadCast();}));
+        projectionSelect.title=U.text('3D: the stage in perspective. 2D: the flat battle as the game draws it, actors and enemies facing across the screen (Horizontal) or up and down it (Vertical), at the positions the game and the chosen troop give them.');
+        const backdrop=U.element('div','rr-sequence-backdrop');cast.append(backdrop);
+        const troopRow=U.element('div','rr-sequence-backdrop');cast.append(troopRow);
+        const showRows=()=>{backdrop.style.display=this.scene.kind==='battleback'?'':'none';troopRow.style.display=this.previewProjection!=='3d'&&this.scene.kind!=='troop'?'':'none';};
         const troops=(this.db.data.troops||[]).filter(Boolean).map(t=>[String(t.id),t.name||'#'+t.id,true]);
         U.field(troopRow,'Troop',U.select(troops,String(this.scene.troop||troops[0]?.[0]||1),value=>{this.scene.troop=Number(value);this.savePrefs();this.loadCast();}));
         U.field(backdrop,'Floor',U.select([['','None'],...floors.map(f=>[f,f,true])],this.scene.floor||'',value=>{this.scene.floor=value;this.savePrefs();this.loadCast();}));
         U.field(backdrop,'Wall',U.select([['','None'],...walls.map(f=>[f,f,true])],this.scene.wall||'',value=>{this.scene.wall=value;this.savePrefs();this.loadCast();}));
+        if(!floors.length&&!walls.length)backdrop.append(U.element('span','rr-battle-help','No battlebacks in this project.'));showRows();
         const castHelp=U.element('p','rr-battle-help rr-sequence-cast-help','Preview only, remembered per sequence. In battle, whichever battler uses this sequence plays it.');cast.append(castHelp);
         this.stage=U.element('div','rr-sequence-stage');
         this.canvas=U.element('canvas','rr-sequence-preview');this.canvas.width=720;this.canvas.height=340;this.stage.append(this.canvas);
@@ -85,8 +90,9 @@ class DatabaseActionSequenceEditor {
     readPrefs(){const key=this.prefsKey();if(!key)return {};try{const all=JSON.parse(localStorage.getItem(key)||'{}');return all&&typeof all==='object'?all:{};}catch(error){return {};}}
     loadPrefs(){
         const all=this.readPrefs(),shared=all.shared||{},mine=all.sequences?.[this.sequence.id]||{};
-        if(['3d','2d'].includes(shared.projection))this.previewProjection=shared.projection;
+        if(['3d','2d','2d-vertical'].includes(shared.projection))this.previewProjection=shared.projection;
         if(shared.scene&&typeof shared.scene==='object'&&shared.scene.kind)this.scene=JSON.parse(JSON.stringify(shared.scene));
+        if(this.scene?.kind==='battle'){this.previewProjection='2d-vertical';this.scene={...this.scene,kind:this.scene.floor||this.scene.wall?'battleback':'grid'};}
         for(const role of ['user','target']){const kind=mine.castKinds?.[role],id=Number(mine.cast?.[role]);if(['actors','enemies'].includes(kind)&&id>0){this.castKinds[role]=kind;this.cast[role]=id;}}
         if([1,2,3,4].includes(mine.targetCount))this.targetCount=mine.targetCount;
         this.mirrored=!!mine.mirrored;if(Number(mine.sampleWeapon)>0&&this.db.getWeapon(Number(mine.sampleWeapon)))this.sampleWeapon=Number(mine.sampleWeapon);
@@ -521,27 +527,29 @@ class DatabaseActionSequenceEditor {
         try {
             const assets={...await this.ui.assets(),playSe:se=>this.playPreviewSound(se)};if(this.generation!==generation)return;
             let map={id:0,width:18,height:12,tilesetId:1,data:Array(18*12*6).fill(0),events:[],reactor3d:{}},tileset={id:1,tilesetNames:[],flags:[]},settings=ReactorBattleData.room(map);
-            settings.projection=this.previewProjection||'3d';settings.cameraSource='custom';settings.camera={x:7.5,y:5,z:1,yaw:0,pitch:25,distance:19};this.baseCamera={yaw:0,pitch:25};
+            const projection=this.previewProjection==='3d'?'3d':'2d',vertical=this.previewProjection==='2d-vertical';
+            settings.projection=projection;settings.cameraSource='custom';settings.camera={x:7.5,y:5,z:1,yaw:0,pitch:25,distance:19};this.baseCamera={yaw:0,pitch:25};
             this.sceneHomes=null;const scene=this.scene||{kind:'grid'};
             if(scene.kind==='troop'){
                 const troop=this.ui.settings().troops?.[scene.id];
                 if(troop?.type==='room'&&troop.mapId){
                     map=await this.ui.readMap(troop.mapId);tileset=this.db.getTileset(map.tilesetId)||tileset;
-                    settings=JSON.parse(JSON.stringify(troop));settings.projection=this.previewProjection||'3d';
+                    settings=JSON.parse(JSON.stringify(troop));settings.projection=projection;
                     const homes={user:ReactorBattleData.position(troop,'actors',0)};for(let i=0;i<4;i++)homes['target'+i]=ReactorBattleData.position(troop,'enemies',i);
                     homes.camera={...troop.camera};this.sceneHomes=homes;this.controls.distance=troop.camera?.distance||this.controls.distance;this.baseCamera={yaw:Number(settings.camera?.yaw)||0,pitch:Number(settings.camera?.pitch)||25};
                 }
             }
-            if(scene.kind==='battle'){
+            // A flat projection without a room: the cast stands where the flat battle puts it. Horizontal: the side-view column of actors on the right (600+32i, 280+48i), enemies where the troop puts them. Vertical: actors along the bottom (SVActorPosition when that plugin is on), enemies at the top from the troop. Each side faces the other's centre; the camera frames the game screen from above.
+            if(projection==='2d'&&!this.sceneHomes){
                 const B=ReactorBattleData,system=this.db.getSystem(),W=system?.advanced?.screenWidth||816,H=system?.advanced?.screenHeight||624;
                 // The project's plugin list, from the file itself when the Plugin Manager has not loaded it yet.
                 const readPlugins=()=>{try{const fs=require('fs'),path=require('path'),dir=path.join(project.path,'js'),file=fs.existsSync(path.join(dir,'reactor_plugins.js'))?path.join(dir,'reactor_plugins.js'):path.join(dir,'plugins.js');return new Function('var $plugins=[];'+fs.readFileSync(file,'utf8')+';return $plugins;')()||[];}catch(error){return [];}};
-                const plugins=window.reactor?.pluginManager?.plugins?.length?window.reactor.pluginManager.plugins:readPlugins(),positions=plugins.find(pl=>pl.name==='SVActorPosition'&&pl.status);
-                const actorHome=i=>positions?{x:Number(positions.parameters['actor'+(i+1)+' Xpos'])||600+i*32,y:Number(positions.parameters['actor'+(i+1)+' Ypos'])||280+i*48}:{x:600+i*32,y:280+i*48};
+                const plugins=window.reactor?.pluginManager?.plugins?.length?window.reactor.pluginManager.plugins:readPlugins(),positions=vertical?plugins.find(pl=>pl.name==='SVActorPosition'&&pl.status):null,count=Math.max(1,B.maxBattleMembers(system,plugins));
+                const actorHome=i=>positions?{x:Number(positions.parameters['actor'+(i+1)+' Xpos'])||W/2,y:Number(positions.parameters['actor'+(i+1)+' Ypos'])||H-140}:vertical?{x:W/2+(i-(count-1)/2)*96,y:H-140}:{x:600+i*32,y:280+i*48};
                 const troop=this.db.getTroop(scene.troop||1)||this.db.getTroops()[0],enemies=(troop?.members||[]).filter(m=>!m.hidden).map(m=>({x:m.x,y:m.y}));
-                const actors=Array.from({length:Math.max(1,B.maxBattleMembers(system,plugins))},(_,i)=>actorHome(i)),tiles=pt=>({x:pt.x/48,y:pt.y/48,z:0});
+                const actors=Array.from({length:count},(_,i)=>actorHome(i)),tiles=pt=>({x:pt.x/48,y:pt.y/48,z:0});
                 const centroid=list=>list.length?{x:list.reduce((a,pt)=>a+pt.x,0)/list.length,y:list.reduce((a,pt)=>a+pt.y,0)/list.length}:null;
-                const ec=centroid(enemies)||{x:W/2,y:H/4},ac=centroid(actors)||{x:W/2,y:H*.75},userIsActor=this.castKinds.user==='actors';
+                const ec=centroid(enemies)||(vertical?{x:W/2,y:H/4}:{x:W/4,y:H/2}),ac=centroid(actors)||{x:W/2,y:H*.75},userIsActor=this.castKinds.user==='actors';
                 const userSide=userIsActor?actors:enemies.length?enemies:[ec],targetSide=userIsActor?(enemies.length?enemies:[ec]):actors,userLook=userIsActor?ec:ac,targetLook=userIsActor?ac:ec;
                 const homes={user:{...tiles(userSide[0]),facing:B.facingToward(tiles(userSide[0]),tiles(userLook))}};
                 for(let i=0;i<4;i++){const spot=targetSide[i]||targetSide[targetSide.length-1];homes['target'+i]={...tiles(spot),facing:B.facingToward(tiles(spot),tiles(targetLook))};}
@@ -555,7 +563,7 @@ class DatabaseActionSequenceEditor {
             if(this.battleLayout&&view.camera.isOrthographicCamera){const {W,H}=this.battleLayout,aspect=Math.max(.1,(view.width||960)/(view.height||540));this.controls.distance=Math.max(H/48,(W/48)/aspect);}
             this.iconSet=await assets.image('system','IconSet');if(this.generation!==generation){view.dispose();return;}
             for(const step of this.sequence.steps)if(['picture','plane'].includes(step.type)&&step.name)try{this.sequencePictures[step.name]=await assets.image('pictures',step.name);}catch(error){console.warn(error);}
-            if((scene.kind==='battleback'||scene.kind==='battle')&&(scene.floor||scene.wall)){
+            if(scene.kind==='battleback'&&(scene.floor||scene.wall)){
                 // Composited like the engine's battleback pair: floor first, wall over it.
                 const canvas=document.createElement('canvas');canvas.width=1000;canvas.height=740;const ctx=canvas.getContext('2d');
                 for(const [folder,name] of [['battlebacks1',scene.floor],['battlebacks2',scene.wall]])if(name)try{const bitmap=await assets.image(folder,name);ctx.drawImage(bitmap.image||bitmap.canvas,0,0,canvas.width,canvas.height);}catch(error){console.warn(error);}
