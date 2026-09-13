@@ -174,3 +174,27 @@ test('a room battler stands on a soft shadow that follows it, shrinks and fades 
  view.settings={projection:'2d'};const flat={object:new THREE.Group(),spec:{},position:{}};view.models.set('actor:0',flat);view.ensureShadow('actor:0',flat);assert.equal(flat.shadow,undefined,'the flat layout draws none');
  view.settings={projection:'3d'};view.remove('enemy:0');assert.equal(record.shadow,null);assert.ok(!view.scene.children.some(c=>c.name==='shadow:enemy:0'),'removed with its battler');
 });
+
+test('a sequence pose composes its listed parts from rest under a running clip, and a part listed at zero pins to rest',async()=>{
+ const R=require('../../runtime/reactor_3d.js');global.self=global;global.window=global;require(path.join(__dirname,'../../runtime/libs/three.js'));const THREE=global.THREE;
+ const make=()=>{const root=new THREE.Group(),arm=new THREE.Mesh(new THREE.BoxGeometry(1,1,1),new THREE.MeshBasicMaterial());arm.userData.parts=[{name:'Arm',pivot:[0,0,0]}];arm.userData.__reactorClipBone=true;root.add(arm);
+  const binding=R.prepareModelInstance(root,[new THREE.AnimationClip('idle',1,[])]);const entry=binding.meshes.find(e=>e.mesh===arm);
+  // The clip holds the arm bent 45° about z this frame.
+  entry.clipBase.quaternion.setFromEuler(new THREE.Euler(0,0,Math.PI/4));arm.quaternion.copy(entry.clipBase.quaternion);return {root,arm,binding};};
+ const angle=arm=>Math.round(new THREE.Euler().setFromQuaternion(arm.quaternion,'XYZ').z*180/Math.PI)+0;
+ // A sidecar pose bends from the clip's pose: 45 + 90.
+ { const {arm,binding}=make();const rules=R.readModelAnimationRules({animations:[{type:'pose',trigger:'action',name:'bend',part:'Arm',keys:[{at:1,rotate:[0,0,90]}],stay:true,period:1}]});
+   R.applyModelAnimation(binding,rules,{frame:5,moving:false,distance:0,scale:1,action:{name:'bend',frame:0},seek:true});assert.equal(angle(arm),135,'sidecar poses still bend from the clip'); }
+ // A sequence pose bends from rest: 0 + 90, whatever the clip holds.
+ { const {arm,binding}=make();const rules=B.partPoseRules(B.step('motion',{motion:B.POSE_MOTION,duration:0,parts:[{part:'Arm',rotate:[0,0,90]}]}),{}).rules;
+   assert.equal(rules[0].fromRest,true);R.applyModelAnimation(binding,rules,{frame:5,moving:false,distance:0,scale:1,action:{name:rules[0].name,frame:0},seek:true});assert.equal(angle(arm),90,'a sequence pose ignores the clip on the part it lists'); }
+ // A listed part at zero is still a rule, and pins the part to rest.
+ { const {arm,binding}=make();const rules=B.partPoseRules(B.step('motion',{motion:B.POSE_MOTION,duration:0,parts:[{part:'Arm',rotate:[0,0,0]}]}),{}).rules;
+   assert.equal(rules.length,1,'a part listed at rest is a pin');R.applyModelAnimation(binding,rules,{frame:5,moving:false,distance:0,scale:1,action:{name:rules[0].name,frame:0},seek:true});assert.equal(angle(arm),0,'pinned to rest under the clip');
+   R.applyModelAnimation(binding,rules,{frame:50,moving:false,distance:0,scale:1,action:{name:'other',frame:40},seek:true});assert.equal(angle(arm),45,'the clip has the part back once the pose is gone'); }
+ // A timed pose eases from the clip's pose to rest as it arrives, so nothing snaps.
+ { const {arm,binding}=make();const rules=B.partPoseRules(B.step('motion',{motion:B.POSE_MOTION,duration:20,parts:[{part:'Arm',rotate:[0,0,90]}]}),{}).rules;
+   const at=f=>{R.applyModelAnimation(binding,rules,{frame:f,moving:false,distance:0,scale:1,action:{name:rules[0].name,frame:0},seek:true});return angle(arm);};
+   assert.equal(at(0),45,'starts where the clip holds it');const mid=at(10);assert.ok(mid>45&&mid<90,'on its way: '+mid);assert.equal(at(20),90); }
+ assert.equal(B.partPoseRules(B.step('motion',{motion:B.POSE_MOTION,duration:0,parts:[]}),{}).rules.length,0,'no parts, no rules');
+});

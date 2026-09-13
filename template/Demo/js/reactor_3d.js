@@ -14477,6 +14477,7 @@ Reactor3D.applyModelAnimation = function(binding, rules, state) {
         const rule = rules[i];
         if (rule.type === "clip") continue;
         let quat = null;
+        let restWeight = 0;
         let slide = null;
         let grow = null;
         if (rule.type === "pose" && rule.keys.length) {
@@ -14503,6 +14504,7 @@ Reactor3D.applyModelAnimation = function(binding, rules, state) {
             binding.angles[i] = 0;
             if (progress === null) continue;
             const sampled = this.sampleModelKeys(rule, progress);
+            if (rule.fromRest) restWeight = rule.instant ? 1 : Math.max(0, Math.min(1, progress));
             const toRad = Math.PI / 180;
             quat = nextQuat().setFromEuler(euler.set(
                 sampled.rotate[0] * toRad, sampled.rotate[1] * toRad, sampled.rotate[2] * toRad, "XYZ"));
@@ -14607,7 +14609,8 @@ Reactor3D.applyModelAnimation = function(binding, rules, state) {
             if (grow) binding.root.scale.multiply(grow);
             continue;
         }
-        if (quat || slide || grow) {
+        // A pin (a sequence pose listing a part at rest) turns nothing, but still claims the part.
+        if (quat || slide || grow || restWeight > 0) {
             if (rule._partLowerOf !== rule.part) {
                 rule._partLower = String(rule.part).toLowerCase();
                 rule._partLowerOf = rule.part;
@@ -14619,6 +14622,7 @@ Reactor3D.applyModelAnimation = function(binding, rules, state) {
             action.quat = quat;
             action.slide = slide;
             action.grow = grow;
+            action.rest = restWeight;
             partActions.push(action);
         }
     }
@@ -14791,10 +14795,26 @@ Reactor3D.applyModelAnimation = function(binding, rules, state) {
     const outQuat = pool.outQuat;
     const outScale = pool.outScale;
     for (const entry of binding.meshes) {
-        // A pose bends a clip-driven bone from the clip's pose, not from rest.
-        const basePosition = entry.clipBase ? entry.clipBase.position : entry.basePosition;
-        const baseQuaternion = entry.clipBase ? entry.clipBase.quaternion : entry.baseQuaternion;
-        const baseScale = entry.clipBase ? entry.clipBase.scale : entry.baseScale;
+        // A sidecar pose bends a clip-driven bone from the clip's pose. A
+        // sequence pose (fromRest) starts the parts it lists from the model's
+        // rest pose instead, so an authored aim reads the same whatever clip
+        // is playing — a boxing-guard idle no longer lifts the pistol to the
+        // head — and a listed part at zero pins to rest while the pose stands.
+        let basePosition = entry.clipBase ? entry.clipBase.position : entry.basePosition;
+        let baseQuaternion = entry.clipBase ? entry.clipBase.quaternion : entry.baseQuaternion;
+        let baseScale = entry.clipBase ? entry.clipBase.scale : entry.baseScale;
+        if (entry.acc && entry.clipBase && entry.matched) {
+            let rest = 0;
+            for (const hit of entry.matched) if (hit.action.rest > rest) rest = hit.action.rest;
+            if (rest > 0) {
+                const restPos = pool.restPos || (pool.restPos = new THREE.Vector3());
+                const restQuat = pool.restQuat || (pool.restQuat = new THREE.Quaternion());
+                const restScale = pool.restScale || (pool.restScale = new THREE.Vector3());
+                basePosition = restPos.copy(entry.clipBase.position).lerp(entry.basePosition, rest);
+                baseQuaternion = restQuat.copy(entry.clipBase.quaternion).slerp(entry.baseQuaternion, rest);
+                baseScale = restScale.copy(entry.clipBase.scale).lerp(entry.baseScale, rest);
+            }
+        }
         if (!entry.acc) {
             entry.mesh.position.copy(basePosition);
             entry.mesh.quaternion.copy(baseQuaternion);

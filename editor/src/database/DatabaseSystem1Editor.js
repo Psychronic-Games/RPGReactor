@@ -138,6 +138,12 @@ class DatabaseSystem1Editor {
                     if (field) {
                         system[field] = value;
                         console.debug(`Updated ${field} to:`, value);
+                    } else if (e.target.dataset.presentation) {
+                        // Battle presentation switches live beside the database, not in System.json; on is the absence of the key.
+                        const key = e.target.dataset.presentation, data = this.databaseManager.data;
+                        const presentation = data.battlePresentation ||= (typeof ReactorBattleData !== 'undefined' ? ReactorBattleData.empty() : { version: 1 });
+                        if (value) delete presentation[key]; else presentation[key] = false;
+                        this.databaseManager.mutationGeneration = (this.databaseManager.mutationGeneration || 0) + 1;
                     }
                 });
             });
@@ -592,6 +598,10 @@ class DatabaseSystem1Editor {
         // Row 4: Options
         const options = `
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                <label style="display: flex; align-items: center; gap: 8px; color: var(--color-text); font-size: 12px; cursor: pointer;">
+                    <input type="checkbox" class="system-checkbox" ${this.databaseManager.data.battlePresentation?.startMessages !== false ? 'checked' : ''} data-presentation="startMessages">
+                    ${tt('Announce enemies at battle start')}
+                </label>
                 <label style="display: flex; align-items: center; gap: 8px; color: var(--color-text); font-size: 12px; cursor: pointer;">
                     <input type="checkbox" class="system-checkbox" ${system.optTransparent ? 'checked' : ''} data-field="optTransparent">
                     ${tt('Start Transparent')}

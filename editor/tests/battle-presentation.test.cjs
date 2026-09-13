@@ -321,3 +321,13 @@ test('the battle room asks for every model a sequence may throw or a party membe
  P.preloadBattleModels();
  assert.deepEqual(asked.sort(),['Animations/Black Hole.glb','Skills/Orb.glb','Weapons/Pistol.glb'],'each model once: the thrown one, the party weapon, the known skill');
 });
+
+test('BattlePresentation.json "startMessages": false skips the emerge and preemptive lines',()=>{
+ const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');let shown=0;
+ const context={ReactorBattleData:B,DataManager:{isDatabaseLoaded:()=>true},BattleManager:{displayStartMessages(){shown++;}},Window_BattleLog:function(){},Scene_Battle:function(){},Spriteset_Battle:function(){},PluginManager:{_scripts:[],registerCommand(){}},$dataAnimations:[null],console:{warn(){}},SceneManager:{}};
+ for(const k of ['Window_BattleLog','Scene_Battle','Spriteset_Battle'])context[k].prototype={};
+ vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../../runtime/reactor_battle_presentation.js'),'utf8'),context);const P=context.ReactorBattlePresentation;P.install();
+ P.settings=B.empty();context.BattleManager.displayStartMessages();assert.equal(shown,1,'on by default');
+ P.settings.startMessages=false;context.BattleManager.displayStartMessages();assert.equal(shown,1,'off when the project says so');
+ delete P.settings.startMessages;context.BattleManager.displayStartMessages();assert.equal(shown,2);
+});

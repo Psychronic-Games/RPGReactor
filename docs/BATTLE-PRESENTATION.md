@@ -2,6 +2,8 @@
 
 Current implementation: runtime **20260911.6**, editor **0.98.6**. See the [phase/graphics guide](ACTION-SEQUENCE-EXPANSION-2026-09-11.md) and [held-item/throw guide](HELD-ITEMS-AND-THROWS-2026-09-11.md) for the September 11 expansion. Existing projects continue to use their battlebacks and existing action behavior until a creator assigns the new presentation. Battle rules, damage formulas, skill costs, targeting and repeats remain in the normal battle system.
 
+`BattlePresentation.json` top-level switches: `"commandWindow": "battler"` parks the actor command window above the acting battler; `"startMessages": false` skips the "emerged" and preemptive/surprise lines (System › Options › Announce enemies at battle start).
+
 ## Battle party size
 
 Open **Database → System 1 → Starting Party → Max Battle Members** to set the battle-party capacity (1–99). Battle Room Setup uses that many party slots, including slots not occupied by the starting party; additional party members remain reserves. Editing the value stores `System.json.maxBattleMembers`. The runtime uses this explicit limit even when a party-size plugin is installed. Scripted `setMaxBattleMembers` changes remain supported and persist with the game party.

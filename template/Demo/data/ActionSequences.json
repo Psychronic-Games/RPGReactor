@@ -2272,6 +2272,24 @@
         },
         "parts": [
           {
+            "part": "RightUpperArm",
+            "rotate": [
+              0,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
             "part": "RightLowerArm",
             "rotate": [
               -93,
@@ -2327,9 +2345,27 @@
         "phase": "execute"
       },
       {
+        "id": "step-hj5i2fa4fjj",
+        "type": "sound",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute",
+        "audio": {
+          "name": "blaster-04",
+          "volume": 100,
+          "pitch": 100,
+          "pan": 0
+        }
+      },
+      {
         "id": "step-8clidxj6t9h",
         "type": "projectile",
-        "duration": 20,
+        "duration": 40,
         "role": "user",
         "anchor": "home",
         "x": 0.5,

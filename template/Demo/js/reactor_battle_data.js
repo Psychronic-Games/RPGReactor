@@ -280,10 +280,12 @@
         const next={};if(!step.resetPose)Object.assign(next,previous);
         for(const entry of step.parts||[])if(entry&&entry.part)next[String(entry.part)]=B.partPose(entry);
         const rest=B.poseRest(),same=(a,b)=>['rotate','move','resize'].every(k=>a[k].every((v,i)=>v===b[k][i]));
+        // A part the step lists at rest is still posed: it pins to rest while the pose stands, out from under a clip that would move it.
+        const listed=new Set((step.parts||[]).filter(entry=>entry&&entry.part).map(entry=>String(entry.part)));
         const rules=[];
         for(const part of new Set([...Object.keys(previous||{}),...Object.keys(next)])){
-            const from=previous?.[part]||rest,to=next[part]||rest;if(same(from,rest)&&same(to,rest))continue;
-            rules.push({name:'pose:'+step.id,part,clip:'',rate:1,type:'pose',axis:'y',trigger:'action',speed:90,perTile:0,degrees:15,amount:.1,period:Math.max(1,Math.ceil((step.duration||0)/2)),cycles:1,phase:0,rotate:[0,0,0],move:[0,0,0],resize:[1,1,1],hold:false,stay:true,instant:!(step.duration>0),repeat:false,keys:[{at:0,...from},{at:1,...to}],effects:[]});
+            const from=previous?.[part]||rest,to=next[part]||rest;if(same(from,rest)&&same(to,rest)&&!listed.has(part))continue;
+            rules.push({name:'pose:'+step.id,part,clip:'',rate:1,type:'pose',axis:'y',trigger:'action',speed:90,perTile:0,degrees:15,amount:.1,period:Math.max(1,Math.ceil((step.duration||0)/2)),cycles:1,phase:0,rotate:[0,0,0],move:[0,0,0],resize:[1,1,1],hold:false,stay:true,fromRest:true,instant:!(step.duration>0),repeat:false,keys:[{at:0,...from},{at:1,...to}],effects:[]});
         }
         for(const part of Object.keys(next))if(same(next[part],rest))delete next[part];
         return {rules,next};

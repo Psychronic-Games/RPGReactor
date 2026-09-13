@@ -800,6 +800,9 @@
         const escapeFail=BattleManager.onEscapeFailure;if(escapeFail)BattleManager.onEscapeFailure=function(...args){const result=escapeFail.apply(this,args);for(const actor of $gameParty.battleMembers())actor._rrReaction='escapeFail';return result;};
         const start=BattleManager.startAction,update=BattleManager.updateAction,end=BattleManager.endBattle;
         const beginCamera=manager=>{const ss=manager._spriteset;ss?._reactorRoom?.beginCinematicAction?.(ss.findTargetSprite(manager._subject)?._reactorRoomKey,(manager._targets||[]).map(b=>ss.findTargetSprite(b)?._reactorRoomKey).filter(Boolean));};
+        // "%1 emerged!" and the preemptive/surprise lines are optional: BattlePresentation.json "startMessages": false skips them.
+        const startMessages=BattleManager.displayStartMessages;
+        if(startMessages)BattleManager.displayStartMessages=function(...args){if(P.settings?.startMessages===false)return;return startMessages.apply(this,args);};
         const invoke=BattleManager.invokeAction,endAction=BattleManager.endAction;
         BattleManager.invokeAction=function(...args){this._spriteset?._reactorRoom?.cinematicImpact?.();return invoke.apply(this,args);};
         BattleManager.endAction=function(...args){try{return endAction.apply(this,args);}finally{this._spriteset?._reactorRoom?.endCinematicAction?.();}};
