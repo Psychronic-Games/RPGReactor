@@ -331,3 +331,26 @@ test('BattlePresentation.json "startMessages": false skips the emerge and preemp
  P.settings.startMessages=false;context.BattleManager.displayStartMessages();assert.equal(shown,1,'off when the project says so');
  delete P.settings.startMessages;context.BattleManager.displayStartMessages();assert.equal(shown,2);
 });
+
+test('a told cinematic focus frames the weighted centre of the action and glides after it, then lapses',()=>{
+ const R=require('../../runtime/reactor_3d.js'),View=require('../../runtime/reactor_battle_room.js'),previousR=global.Reactor3D,previousB=global.ReactorBattleData;global.Reactor3D=R;global.ReactorBattleData=B;
+ try{
+  const settings=B.room({id:1,width:50,height:50});settings.cameraSource='custom';settings.camera.mode='cinematic';settings.camera.fov=40;
+  const view=new View({reactor3d:{camera:{mode:'isometric'}}},{},settings,{});view.camera={isOrthographicCamera:false};view.width=960;view.height=540;
+  view.models.set('user',{position:{x:30,y:20,z:0},spec:{size:2}});view.models.set('target0',{position:{x:10,y:20,z:0},spec:{size:2}});
+  view.beginCinematicAction('user',['target0']);view.frame=40;const actor=view.cameraState();assert.equal(actor.x,30,'without a report the actor shot frames the user');
+  view.setCinematicFocus([{x:24,y:20,z:1,weight:2,height:1},{x:10,y:20,key:'target0',weight:1}],{yawOffset:35});view.frame=41;
+  const first=view.cameraState();assert.ok(Math.abs(first.x-(24*2+10)/3)<1e-9,'the first report is framed at once: '+first.x);assert.ok(Math.abs(first.yaw-(actor.yaw-45+35))<.2,'the told yaw offset replaces the actor shot offset: '+first.yaw+' vs '+actor.yaw);
+  assert.ok(first.distance>actor.distance,'the shot widens to keep the target in frame');
+  view.setCinematicFocus([{x:14,y:20,z:1,weight:2,height:1},{x:10,y:20,key:'target0',weight:1}],{yawOffset:35});view.frame=42;
+  const second=view.cameraState();assert.ok(second.x<first.x&&second.x>(14*2+10)/3,'the camera glides toward the moved focus rather than jumping: '+second.x);assert.deepEqual(view.cameraState(),second,'one step per frame');
+  view.frame=46;const lapsed=view.cameraState();assert.equal(lapsed.x,30,'a report older than its hold lapses back to the actor shot');
+  view.setCinematicFocus([],{});assert.equal(view.cinematicShot.focus,null);
+  // The eye stays inside the room: clamped near a wall, free in the middle, and under the ceiling when it looks down.
+  view.map.width=50;view.map.height=50;view.map.reactor3d.room={height:25};
+  assert.equal(view.distanceInsideRoom({x:47,y:47,z:1,yaw:-45,pitch:20,distance:30}),3,'a shot in a corner cannot stand back through the wall');
+  assert.equal(view.distanceInsideRoom({x:25,y:25,z:1,yaw:-45,pitch:20,distance:30}),30,'room to stand back in the middle');
+  assert.ok(Math.abs(view.distanceInsideRoom({x:25,y:25,z:1,yaw:0,pitch:89,distance:60})-23.5)<.1,'a near-vertical shot stops under the ceiling');
+  view.endCinematicAction();assert.equal(view.cinematicTrack,null);
+ }finally{global.Reactor3D=previousR;global.ReactorBattleData=previousB;}
+});

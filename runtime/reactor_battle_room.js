@@ -263,9 +263,48 @@
             if(!this.cinematicEnabled()||!user){this.cinematicShot=null;this.cinematicTransition=null;return;}
             const position=key=>(this.models.get(key)||this.billboards.get(key))?.position;
             const a=position(user),b=position(targets[0]);if(!a)return;
-            this.cinematicTransition={from:this.cameraState(),start:this.frame,duration:30};
+            this.cinematicTransition={from:this.cameraState(),start:this.frame,duration:30};this.cinematicTrack=null;
             this.cinematicShot={phase:'actor',start:this.frame,user,targets:[...new Set(targets)],yaw:b?root.ReactorBattleData.facingToward(a,b):a.facing||0};
         }
+        /**
+         * Where the action is this frame, told by the running sequence: points
+         * in room tiles with a weight (a projectile in flight counts double, so
+         * the camera rides with it while its target stays in frame) and, for a
+         * battler, its room key so its height sizes the shot. The report holds
+         * for a few frames; without one the shot falls back to user/targets.
+         */
+        setCinematicFocus(points,{yawOffset,hold=3}={}){
+            const shot=this.cinematicShot;if(!shot)return;
+            const clean=(points||[]).filter(p=>p&&Number.isFinite(p.x)&&Number.isFinite(p.y)).map(p=>({x:p.x,y:p.y,z:p.z||0,weight:p.weight>0?p.weight:1,key:p.key,height:p.height}));
+            shot.focus=clean.length?{points:clean,yawOffset,expires:this.frame+hold}:null;
+        }
+        /** The farthest the eye can stand back along a shot's yaw and pitch before it leaves the room, so a cut never looks in from behind a wall. */
+        distanceInsideRoom(c){
+            const width=this.settings?.width||this.map?.width||0,height=this.settings?.height||this.map?.height||0;if(!(width>2&&height>2))return c.distance;
+            const yaw=c.yaw*Math.PI/180,pitch=(c.pitch||0)*Math.PI/180,dx=-Math.sin(yaw)*Math.cos(pitch),dy=Math.cos(yaw)*Math.cos(pitch),dz=Math.sin(pitch);
+            let limit=c.distance;
+            // And under the ceiling: a cut that climbs above it looks down through the fixtures.
+            const ceiling=this.map?.reactor3d?.room?.height||BattleRoomView.EYE_CEILING;if(dz>0)limit=Math.min(limit,Math.max(0,ceiling-.5-(c.z||0))/dz);
+            if(dx<0)limit=Math.min(limit,(c.x-1)/-dx);else if(dx>0)limit=Math.min(limit,(width-2-c.x)/dx);
+            if(dy<0)limit=Math.min(limit,(c.y-1)/-dy);else if(dy>0)limit=Math.min(limit,(height-2-c.y)/dy);
+            // And in front of the furniture: a ray from what the shot looks at
+            // out to where the eye would stand stops at the first prop it meets.
+            // The ray is cast every third frame and its answer kept between: the eye moves a fraction of a tile per frame.
+            const cache=this._eyeRayCache;if(cache&&this.frame-cache.frame<3&&Math.abs(cache.x-c.x)<.5&&Math.abs(cache.y-c.y)<.5&&Math.abs(cache.yaw-c.yaw)<3)return Math.max(3,Math.min(c.distance,limit,cache.limit));
+            const T=root.THREE;if(T&&limit>3&&this.scene){
+                // Everything in the room but the cast and what it holds or throws: the map's own objects, props, events, walls.
+                const skip=new Set();for(const [key,r] of [...this.models,...this.billboards])if(!(key.startsWith('prop:')||key.startsWith('event:'))){if(r.object)skip.add(r.object);if(r.shadow)skip.add(r.shadow);}
+                const blockers=this.scene.children.filter(o=>!skip.has(o)&&o.visible!==false&&!o.isLight&&!o.isCamera);
+                if(blockers.length){
+                    const ray=this._eyeRay||(this._eyeRay=new T.Raycaster());ray.set(new T.Vector3(c.x+.5,c.z||0,c.y+.5),new T.Vector3(dx,dz,dy).normalize());ray.near=0;ray.far=limit;
+                    const hit=ray.intersectObjects(blockers,true)[0];if(hit)limit=Math.min(limit,hit.distance-.6);
+                }
+            }
+            this._eyeRayCache={frame:this.frame,x:c.x,y:c.y,yaw:c.yaw,limit};
+            return Math.max(3,Math.min(c.distance,limit));
+        }
+        static get EYE_CEILING(){return 6;}
+        focusHeight(record){return record?.spec?(record.spec.size||2)*(record.spec.scale||1)*(record.position?.scale||1)*(record.position?.scaleY||1):record?.height||2;}
         cinematicImpact(){
             if(!this.cinematicShot||this.cinematicShot.phase==='impact')return;
             this.cinematicTransition={from:this.cameraState(),start:this.frame,duration:24};
@@ -274,7 +313,7 @@
         endCinematicAction(){
             if(!this.cinematicShot)return;
             this.cinematicTransition=this.cinematicEnabled()?{from:this.cameraState(),start:this.frame,duration:42}:null;
-            this.cinematicShot=null;
+            this.cinematicShot=null;this.cinematicTrack=null;
         }
         cinematicBlend(target){
             const transition=this.cinematicTransition;if(!transition)return target;
@@ -291,18 +330,47 @@
             if(!this.cinematicEnabled()){this.cinematicTransition=null;return base;}
             const shot=this.cinematicShot;if(!shot)return this.cinematicBlend(base);
             const record=key=>this.models.get(key)||this.billboards.get(key),user=record(shot.user);
-            const targets=shot.targets.map(record).filter(r=>r?.position),focus=shot.phase==='impact'&&targets.length?targets:[user];
-            if(!focus[0]?.position)return this.cinematicBlend(base);
-            // Frame the whole affected group for area attacks; repeated hits
-            // don't flick through a different camera once per resolver call.
-            const points=focus.map(r=>r.position),x=points.reduce((n,p)=>n+p.x,0)/points.length,y=points.reduce((n,p)=>n+p.y,0)/points.length;
-            const span=Math.max(0,...points.map(p=>Math.hypot(p.x-x,p.y-y)*2));
-            const height=Math.max(2,...focus.map(r=>r.spec?(r.spec.size||2)*(r.spec.scale||1)*(r.position.scale||1)*(r.position.scaleY||1):r.height||2));
-            const aspect=Math.max(.4,this.width/this.height),distance=Math.max(5,(height+span/Math.min(1,aspect))/(2*Math.tan(base.fov*Math.PI/360))*1.3);
+            const told=shot.focus&&shot.focus.expires>=this.frame?shot.focus:null;
+            // Yaw is where the eye sits: 180-yaw(user→target) is straight behind
+            // the user looking at the target, and an offset swings the eye round
+            // from there, so every shot sits on the user's side whatever way the
+            // room faces. Camera.place puts the eye at (-sin yaw, cos yaw)·d.
+            let points,heights,yawOffset=shot.phase==='impact'?70:45;
+            if(told){
+                // The sequence said where the action is: a flying projectile
+                // and its target, the runner and who it runs at, the hit.
+                points=told.points;heights=told.points.map(p=>p.key?this.focusHeight(record(p.key)):(p.height||1));if(told.yawOffset!==undefined)yawOffset=told.yawOffset;
+            }else{
+                const targets=shot.targets.map(record).filter(r=>r?.position&&r.object?.visible!==false),focus=shot.phase==='impact'&&targets.length?targets:[user];
+                if(!focus[0]?.position)return this.cinematicBlend(base);
+                // Frame the whole affected group for area attacks; repeated hits
+                // don't flick through a different camera once per resolver call.
+                points=focus.map(r=>r.position);heights=focus.map(r=>this.focusHeight(r));
+            }
+            const weight=points.reduce((n,p)=>n+(p.weight||1),0),x=points.reduce((n,p)=>n+p.x*(p.weight||1),0)/weight,y=points.reduce((n,p)=>n+p.y*(p.weight||1),0)/weight;
+            // A told shot rides with the action: it widens only so far for a far
+            // target, which enters the frame as the shot nears it.
+            const span=Math.min(told?told.spanCap??4:Infinity,Math.max(0,...points.map(p=>Math.hypot(p.x-x,p.y-y)*2)));
+            const height=Math.max(2,...heights);
+            const aspect=Math.max(.4,this.width/this.height),distance=Math.max(told?6:5,(height+span/Math.min(1,aspect))/(2*Math.tan(base.fov*Math.PI/360))*1.3);
             // A restrained orbit keeps both shots on the same side of the action.
             // Bound the sweep so a long-running action cannot circle the room.
             const age=Math.max(0,this.frame-shot.start),sweep=18*(1-Math.exp(-age/120));
-            return this.cinematicBlend({...base,mode:'fixed',x,y,z:points.reduce((n,p)=>n+(p.z||0),0)/points.length+height*.5,yaw:shot.yaw+(shot.phase==='impact'?100:60)+sweep,pitch:20,distance});
+            let target={...base,mode:'fixed',x,y,z:points.reduce((n,p)=>n+(p.z||0)*(p.weight||1),0)/weight+height*.5,yaw:180-shot.yaw+yawOffset+sweep,pitch:20,distance};
+            target.distance=this.distanceInsideRoom(target);
+            if(told){
+                // A told focus moves every frame (a projectile crossing the
+                // room), so the shot glides after it instead of pinning to it;
+                // one step per frame however often the camera is read.
+                const track=this.cinematicTrack;
+                if(track&&track.frame===this.frame)target=track.target;
+                else{
+                    if(track){const eased={...target};for(const key of ['x','y','z','distance'])eased[key]=track.target[key]+(target[key]-track.target[key])*.2;const arc=((target.yaw-track.target.yaw)%360+540)%360-180;eased.yaw=track.target.yaw+arc*.2;target=eased;}
+                    this.cinematicTrack={frame:this.frame,target};
+                }
+            }else this.cinematicTrack=null;
+            // The ease in from the saved overview passes through the blend too, so it cannot carry the eye through the ceiling on its way down.
+            const blended=this.cinematicBlend(target);blended.distance=this.distanceInsideRoom(blended);return blended;
         }
         cameraState() {
             const Camera=root.Reactor3D.Camera,stored=this.settings.camera;

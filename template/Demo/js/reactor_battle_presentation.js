@@ -177,7 +177,7 @@
         };adapter.owns=sprite=>saved.has(sprite);return P.extendAdapter(adapter,{manager,subject,targets,ss,room,roles,homes,saved,stateOnly});
     };
     P.sequenceVisuals=function({ss,room,subject,manager,targets}){
-        const prefix='extra:sequence:'+(P._visualSerial=(P._visualSerial||0)+1)+':',held=new Map(),flights=[];let serial=0,time=0,closed=false;
+        const prefix='extra:sequence:'+(P._visualSerial=(P._visualSerial||0)+1)+':',held=new Map(),flights=[];let serial=0,time=0,closed=false,approachUntil=-1;
         const point=(sprite,step,height)=>{
             if(!sprite)return null;
             const p=room?{...sprite._reactorRoomPosition}:{x:sprite.x/48,y:sprite.y/48,z:0,facing:P.spriteYaw(sprite,targets[0])};
@@ -247,13 +247,35 @@
             for(const entry of flights){
                 entry.from||=point(entry.owner,entry.step,entry.step.startHeight??1);
                 const to=point(entry.target,{attachment:'offset',x:0,y:0,z:entry.step.endHeight??1},entry.step.endHeight??1),t=Math.min(1,Math.max(0,(time-entry.start)/Math.max(1,entry.step.duration)));
-                if(entry.from&&to)draw(entry,B.flightPoint(entry.from,to,t,entry.step.arc||0,entry.step.flight==='return'),(entry.step.rotation||0)+(time-entry.start)*(entry.step.spin||0),t<1);
+                if(entry.from&&to)draw(entry,B.flightPoint(entry.from,to,t,entry.step.arc||0,entry.step.flight==='return'),(entry.step.rotation||0)+(time-entry.start)*(entry.step.spin||0),t<1);entry.live=!!(entry.from&&to&&t<1);
                 if(entry.from&&to&&entry.step.iconSource==='animation'&&entry.animation===undefined&&t<1)entry.animation=flightAnimation(entry);
             }
+            reportFocus();
+        };
+        // Where the action is this frame, for the cinematic camera: a projectile
+        // in flight with its target, the user and the target it runs at (or
+        // stands beside), the targets at the hit with the user when adjacent,
+        // else the user. The room glides its shot after these points.
+        const reportFocus=()=>{
+            if(!room?.cinematicShot||closed)return;
+            const at=(sprite,weight)=>{const p=sprite?._reactorRoomPosition;return p?{x:p.x,y:p.y,z:p.z||0,weight,key:sprite._reactorRoomKey}:null;};
+            const user=ss.findTargetSprite(subject),near=(a,b)=>a&&b&&Math.hypot(a.x-b.x,a.y-b.y)<=4;
+            // Offsets swing the eye round from straight behind the user: 35 rides a shot, 90 is side-on for a run, 70 sees the hit land.
+            const live=flights.filter(f=>f.live&&f.point);let points=[],yawOffset;
+            if(live.length){for(const f of live){points.push({...f.point,weight:3,height:1});const t=at(f.target,1);if(t)points.push(t);}yawOffset=35;}
+            else{
+                // A fallen enemy is gone from the room; the shot stays with whoever is left.
+                const u=at(user,1),ts=[...new Set(targets)].filter(b=>!(b.isDead?.()&&b.isEnemy?.())).map(b=>at(ss.findTargetSprite(b),1)).filter(Boolean);
+                if(room.cinematicShot.phase==='impact'){points=ts.length?ts:u?[u]:[];if(u&&ts.some(t=>near(t,u)))points.push(u);yawOffset=70;}
+                else if(time<approachUntil&&u&&ts[0]){points=[u,ts[0]];yawOffset=90;}
+                else{points=u?[u]:[];if(u&&ts[0]&&near(ts[0],u))points.push(ts[0]);yawOffset=45;}
+            }
+            room.setCinematicFocus(points,{yawOffset});
         };
         (ss._rrSequenceVisualUpdates||=new Set()).add(update);if(room)(room.sequenceVisualUpdates||=new Set()).add(update);
         return {held,flights,point,
             cue(step,start,chosen,destinations){
+                if(step.type==='move'&&room&&(step.role||'user')==='user'&&['target','approach'].includes(step.anchor))approachUntil=start+(step.duration||0);
                 if(!['weapon','projectile'].includes(step.type))return false;time=start;
                 if(step.type==='weapon')for(const battler of chosen){const owner=ss.findTargetSprite(battler);if(!owner)continue;const old=held.get(owner),mode=B.weaponMode(step);
                     if(mode==='move'){if(old)old.tween={from:B.heldPose(old.now||old.step,old.now||old.step,1),to:B.heldPose(step,step,1),start,duration:step.duration,easing:step.easing};continue;}
