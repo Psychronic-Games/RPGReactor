@@ -5343,3 +5343,12 @@ details.mp-section:not([open]) > .mp-section-body { display:none; }
 
 .rr-sequence-step-modes { display:flex;flex-wrap:nowrap;gap:4px; }
 .rr-sequence-step-modes button { flex:1;min-width:0;padding:5px 3px; }
+
+/* Action Sequences: the step picker dialog. */
+.rr-step-picker { width:min(760px,92vw);max-height:84vh;display:flex;flex-direction:column; }
+.rr-step-picker-body { display:flex;flex-direction:column;gap:12px;overflow-y:auto;min-height:0;padding:14px 18px 18px; }
+.rr-step-picker-search { width:100%;box-sizing:border-box;padding:6px 10px;font-size:13px; }
+.rr-step-picker-group h3 { margin:0 0 6px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--color-text-muted); }
+.rr-step-picker-grid { display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:6px; }
+.rr-step-picker-item { text-align:left;justify-content:flex-start;padding:7px 10px;font-size:12px;white-space:normal;line-height:1.3; }
+.rr-step-picker-item:focus-visible { outline:2px solid var(--color-accent);outline-offset:1px; }

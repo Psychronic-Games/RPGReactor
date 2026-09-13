@@ -68,7 +68,8 @@ class DatabaseActionSequenceEditor {
         const starters=U.button('Starters…',event=>this.showStarterMenu(event.currentTarget));starters.title=U.text('Replace all steps with a starter sequence');modes.append(starters);
         const phasesButton=U.button('Phases…',event=>this.showPhaseMenu(event.currentTarget));phasesButton.title=U.text('Add a phase section, or sort the steps into phases automatically');phasesButton.dataset.sequencePhases='';modes.append(phasesButton);this.phasesButton=phasesButton;timeline.body.append(modes);
         this.steps=U.element('div','rr-sequence-steps rr-accent-scrollbar');timeline.body.append(this.steps);this.stepLanguageChanged=()=>{this.groupStepChoices();this.drawSteps();this.drawInspector();this.validate();this.updateReferences();};window.addEventListener('rr-language-changed',this.stepLanguageChanged);
-        const add=U.element('div','rr-battle-toolbar');this.stepType=U.select([...B.basicSteps.map(t=>['basic:'+t,t]),...B.types.map(t=>[t,this.label(t)])],'basic:Run to Target',()=>{});const addButton=U.button('Add Step',()=>this.insertSteps(this.newSteps()));add.append(this.stepType,addButton);timeline.body.append(add);this.groupStepChoices();
+        // One button: it opens the step picker, which asks what to add. The picker also answers the step list's context menu and each phase head's +.
+        const add=U.element('div','rr-battle-toolbar');const addButton=U.button('Add Step…',()=>this.showStepPicker());add.append(addButton);timeline.body.append(add);
         this.bindStepEditing(timeline.panel,addButton);
         this.validation=U.element('p','rr-battle-help');this.host.append(this.validation);
         const footer=U.element('div','rr-battle-toolbar rr-sequence-footer');this.host.append(footer);
@@ -158,7 +159,7 @@ class DatabaseActionSequenceEditor {
         this.clearPreviewMedia();this.stepPlayback=null;if(this.selected!==index)this.posePartName=null;this.selected=index;this.frame=['move','motion'].includes(cue.step.type)||cue.step.type==='weapon'&&ReactorBattleData.weaponMode(cue.step)==='move'?cue.end:cue.start;this.asOfStep=true;this.controls.mode='step';this.controls.modeSelect.value='step';this.controls.freeScale=false;this.controls.transformPose=cue.step.type==='motion'&&cue.step.transform?cue.step:null;if(this.controls.transformPose)this.controls.setTool('rotate');this.playing=false;this.updateStepSelection();this.drawInspector();this.validate();
     }
     revealStep(){const row=this.stepRows()[this.selected];(row||this.steps).focus({preventScroll:true});row?.scrollIntoView({block:'nearest',inline:'nearest'});}
-    newSteps(value=this.stepType.value,phase){const B=ReactorBattleData;const made=value.startsWith('basic:')?B.basic(value.slice(6)):[B.step(value,value==='weapon'?{duration:0,x:0,z:0,attachment:'rightHand'}:{})];
+    newSteps(value='basic:Run to Target',phase){const B=ReactorBattleData;const made=value.startsWith('basic:')?B.basic(value.slice(6)):[B.step(value,value==='weapon'?{duration:0,x:0,z:0,attachment:'rightHand'}:{})];
         if(B.purpose(this.sequence)!=='action')return made;const at=phase||B.stepPhase(this.sequence.steps[this.selected]||{phase:B.sequencePhases(this.sequence)[0]});return made.map(step=>({...step,phase:at}));}
     /** Where a new step goes to join a phase section: after that phase's last step, or at the end. */
     phaseInsertIndex(phase){const B=ReactorBattleData,steps=this.sequence.steps;let index=-1;steps.forEach((step,i)=>{if(B.stepPhase(step)===phase)index=i;});return index>=0?index+1:steps.length;}
@@ -206,7 +207,7 @@ class DatabaseActionSequenceEditor {
             {label:this.ui.text('Copy'),shortcut:copyKey,enabled:exists,action:run(()=>this.copyStep())},
             {label:this.ui.text('Paste'),shortcut:pasteKey,action:run(()=>this.pasteStep())},
             {separator:true},
-            {label:this.ui.text('Add Step'),action:run(()=>this.insertSteps(this.newSteps()))},
+            {label:this.ui.text('Add Step…'),action:run(()=>this.showStepPicker())},
             {label:this.ui.text('Duplicate'),enabled:exists,action:run(()=>this.insertSteps([this.sequence.steps[this.selected]]))},
             {label:this.ui.text('Delete'),shortcut:'Delete',enabled:exists,action:run(()=>this.deleteStep())}
         ]);this.stepMenu=this.parent._databaseActionMenu;(row||this.steps).focus({preventScroll:true});
@@ -223,8 +224,7 @@ class DatabaseActionSequenceEditor {
             else if((key==='arrowdown'||key==='arrowup')&&this.steps.contains(event.target))action=()=>{this.selectStep(Math.max(0,Math.min(this.sequence.steps.length-1,this.selected+(key==='arrowdown'?1:-1))));this.revealStep();};
             if(action){event.preventDefault();event.stopPropagation();action();}
         });
-        addButton.draggable=true;addButton.title=this.ui.text('Drag into the step list, or click to add below the selected step.');
-        addButton.ondragstart=event=>this.startStepDrag(event,{kind:'add',value:this.stepType.value});addButton.ondragend=()=>this.endStepDrag();
+        addButton.title=this.ui.text('Choose a step to add below the selected one.');
         this.steps.ondragover=event=>{if(!this.stepDrag)return;event.preventDefault();event.dataTransfer.dropEffect=this.stepDrag.kind==='add'?'copy':'move';this.stepDragPoint={clientX:event.clientX,clientY:event.clientY};this.updateStepDrop();};
         this.steps.ondragleave=event=>{if(!this.steps.contains(event.relatedTarget)){this.stepDragPoint=null;this.clearStepDrop();}};
         this.steps.ondrop=event=>{
@@ -309,7 +309,7 @@ class DatabaseActionSequenceEditor {
     phaseHead(phase,count,continued=false){const U=this.ui,B=ReactorBattleData,[,label,help]=B.actionPhases.find(([id])=>id===phase),head=U.element('div','rr-sequence-phase-head'+(continued?' rr-sequence-phase-continued':''));head.dataset.phaseHead=phase;head.title=continued?U.text(U.message('{phase} carries on here after the phase it called; these steps are still part of it.',{phase:U.text(label)})):U.text(help);
         head.append(U.element('span','rr-sequence-phase-number',String(B.phaseIds().indexOf(phase)+1),true),U.element('span','rr-sequence-phase-label',continued?U.message('{phase} (continued)',{phase:U.text(label)}):label));
         const tag=U.element('span','rr-sequence-phase-count',continued?'':count?U.message('{n} steps',{n:count}):'No steps');if(!continued)head.append(tag);
-        const add=U.button('+',()=>{this.insertSteps(this.newSteps(this.stepType.value,phase),this.phaseInsertIndex(phase));},true);add.classList.add('rr-sequence-phase-add');add.title=U.text('Add a step to this phase');add.setAttribute('aria-label',U.text('Add a step to this phase'));head.append(add);
+        const add=U.button('+',()=>this.showStepPicker({phase,index:this.phaseInsertIndex(phase)}),true);add.classList.add('rr-sequence-phase-add');add.title=U.text('Add a step to this phase');add.setAttribute('aria-label',U.text('Add a step to this phase'));head.append(add);
         if(!count){const inherit=U.button('Remove',()=>this.inheritPhase(phase));inherit.classList.add('rr-sequence-phase-inherit');inherit.title=U.text('Remove this empty phase; it then comes from the next level down, or the built-in action');head.append(inherit);}
         return head;}
     drawSteps(){const U=this.ui,B=ReactorBattleData,top=this.steps.scrollTop,focused=this.steps.contains(document.activeElement)?document.activeElement.dataset.stepId:null;this.steps.replaceChildren();
@@ -355,8 +355,9 @@ class DatabaseActionSequenceEditor {
             }
         });
     }
-    groupStepChoices(){
-        const U=this.ui,select=this.stepType,chosen=select.value,groups=[
+    /** Every step a sequence can hold, in the groups the picker shows. */
+    stepGroups(){
+        return [
             ['Templates',ReactorBattleData.basicSteps.map(name=>'basic:'+name)],
             ['Movement',['move','motion','jump','leap','float','fall','home','direction','pose']],
             ['Action',['impact','animation','weapon','projectile','wait','action']],
@@ -366,8 +367,52 @@ class DatabaseActionSequenceEditor {
             ['Game Data',['hp','mp','tp','buff','state','kill','item','switch','variable','formula','element']],
             ['Logic',['branch','elseIf','else','end','event','eval']]
         ];
-        const options=new Map([...select.options].map(option=>[option.value,option]));select.replaceChildren();
-        for(const [label,values] of groups){const group=U.element('optgroup');group.label=U.text(label);for(const value of values)if(options.has(value))group.append(options.get(value));select.append(group);}select.value=chosen;
+    }
+    /**
+     * The step picker: a dialog that asks what to add, grouped as the steps
+     * are used (templates, movement, action…), with a search box. Choosing a
+     * step inserts it at `index` (below the selected step by default) in
+     * `phase` (the selected step's phase by default) and selects it.
+     */
+    showStepPicker({phase,index}={}){
+        const U=this.ui,B=ReactorBattleData,tt=text=>U.text(text);
+        const selected=this.sequence.steps[this.selected];
+        const targetPhase=phase??(selected&&B.purpose(this.sequence)==='action'?B.stepPhase(selected):undefined),targetIndex=index??this.selected+1;
+        const opener=document.activeElement;
+        const overlay=document.createElement('div');overlay.className='rr-modal-overlay';overlay.style.zIndex='10500';
+        const modal=document.createElement('div');modal.className='rr-modal rr-step-picker';modal.setAttribute('role','dialog');modal.setAttribute('aria-modal','true');
+        const header=document.createElement('div');header.className='rr-modal-header';
+        const title=document.createElement('h2');title.className='rr-modal-title';title.id='rr-step-picker-title';title.textContent=tt('Add Step');modal.setAttribute('aria-labelledby',title.id);
+        const close=document.createElement('button');close.className='rr-modal-close';close.type='button';close.textContent='\u00d7';close.setAttribute('aria-label',tt('Close'));
+        header.append(title,close);
+        const body=document.createElement('div');body.className='rr-modal-body rr-step-picker-body';
+        const search=document.createElement('input');search.type='search';search.className='rr-input rr-step-picker-search';search.placeholder=tt('Search steps…');search.setAttribute('aria-label',tt('Search steps…'));
+        const groupsHost=document.createElement('div');groupsHost.className='rr-step-picker-groups';
+        const empty=document.createElement('p');empty.className='rr-battle-help rr-step-picker-empty';empty.textContent=tt('No steps match.');empty.hidden=true;
+        body.append(search,groupsHost,empty);modal.append(header,body);overlay.append(modal);
+        let keys=null;
+        const finish=()=>{keys?.dispose?.();overlay.remove();if(opener?.isConnected&&typeof opener.focus==='function')opener.focus({preventScroll:true});};
+        const choose=value=>{finish();this.insertSteps(this.newSteps(value,targetPhase),targetIndex);};
+        const entries=[];
+        for(const [label,values] of this.stepGroups()){
+            const known=values.filter(v=>v.startsWith('basic:')?B.basicSteps.includes(v.slice(6)):B.types.includes(v));if(!known.length)continue;
+            const section=document.createElement('section');section.className='rr-step-picker-group';
+            const heading=document.createElement('h3');heading.textContent=tt(label);section.append(heading);
+            const grid=document.createElement('div');grid.className='rr-step-picker-grid';section.append(grid);
+            for(const value of known){const name=value.startsWith('basic:')?value.slice(6):this.label(value);const button=U.button(name,()=>choose(value),value.startsWith('basic:'));button.classList.add('rr-step-picker-item');button.dataset.stepValue=value;grid.append(button);entries.push({value,button,section,text:(U.text(name)+' '+value).toLowerCase()});}
+            groupsHost.append(section);
+        }
+        const filter=()=>{const q=search.value.trim().toLowerCase();let shown=0;for(const e of entries){const hit=!q||e.text.includes(q);e.button.hidden=!hit;if(hit)shown++;}for(const section of groupsHost.children)section.hidden=![...section.querySelectorAll('.rr-step-picker-item')].some(b=>!b.hidden);empty.hidden=shown>0;};
+        search.addEventListener('input',filter);
+        search.addEventListener('keydown',event=>{if(event.key==='Enter'){const first=entries.find(e=>!e.button.hidden);if(first){event.preventDefault();choose(first.value);}}});
+        close.addEventListener('click',finish);
+        overlay.addEventListener('mousedown',event=>{if(event.target===overlay)finish();});
+        document.body.append(overlay);
+        keys=typeof RRKeyboardNavigation!=='undefined'&&RRKeyboardNavigation.modal?RRKeyboardNavigation.modal(overlay,{onEscape:finish}):null;
+        if(!keys)overlay.addEventListener('keydown',event=>{if(event.key==='Escape'){event.preventDefault();finish();}});
+        if(keys?.enter)keys.enter(search);else search.focus();
+        this.stepPicker=overlay;
+        return overlay;
     }
     /** Names of the action poses and clips the previewed model of `role` can play. */
     modelActionRules(role){

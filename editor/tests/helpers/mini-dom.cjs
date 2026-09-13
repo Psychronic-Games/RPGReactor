@@ -94,6 +94,23 @@ function createElement(tagName) {
             this.childNodes.push(child);
             return child;
         },
+        /** Nodes or strings, the way the editor's widget helpers build rows. */
+        append(...nodes) {
+            for (const node of nodes) this.appendChild(typeof node === 'object' ? node : createTextNode(node));
+        },
+        replaceChildren(...nodes) {
+            for (const child of this.childNodes.slice()) this.removeChild(child);
+            this.append(...nodes);
+        },
+        get classList() {
+            const self = this, list = () => self.className.split(/\s+/).filter(Boolean), write = names => { self.className = names.join(' '); };
+            return {
+                add(...names) { const names0 = list(); for (const name of names) if (!names0.includes(name)) names0.push(name); write(names0); },
+                remove(...names) { write(list().filter(name => !names.includes(name))); },
+                contains(name) { return list().includes(name); },
+                toggle(name, force) { const on = force ?? !list().includes(name); if (on) this.add(name); else this.remove(name); return on; }
+            };
+        },
         insertBefore(child, reference) {
             const at = this.childNodes.indexOf(reference);
             if (child.parentNode) child.parentNode.removeChild(child);

@@ -55,3 +55,33 @@ test('a projectile can be a 3D model or an animation, and validation asks for th
  const good=seq('model');good.steps[0].model={name:'Weapons/Graviton Pistol',file:'Graviton_Pistol',ext:'.glb'};assert.ok(!B.validateSequence(good).some(e=>/3D model/.test(e)));
  const anim=seq('animation');anim.steps[0].animationId=1;assert.ok(!B.validateSequence(anim).some(e=>/animation/.test(e)));
 });
+
+test('the step picker asks which step to add and inserts the choice where it was opened',()=>{
+ const dom=require('./helpers/mini-dom.cjs');
+ const context=dom.createContext({ReactorBattleData:B,ReactorClipboard:{},RRKeyboardNavigation:{modal:(overlay,{onEscape})=>({entered:null,enter(el){el.focus();},leave(){},dispose(){this.disposed=true;},escape:onEscape})}});
+ vm.createContext(context);const C=vm.runInContext(fs.readFileSync(path.join(__dirname,'../src/database/DatabaseActionSequenceEditor.js'),'utf8')+'\nDatabaseActionSequenceEditor',context);
+ const e=Object.create(C.prototype);e.sequence=B.template();e.selected=1;e.host={isConnected:true};e.parent={updateStatus(){}};
+ const U={text:s=>s,element(tag,classes,text){const el=context.document.createElement(tag);el.className=classes||'';if(text!==undefined)el.textContent=text;return el;},button(label,fn){const b=U.element('button','rr-btn-secondary',label);b.type='button';b.onclick=fn;return b;}};e.ui=U;
+ const inserted=[];e.insertSteps=(records,index)=>{inserted.push({records,index});return true;};
+ const overlay=e.showStepPicker();
+ assert.equal(overlay.parentNode===context.document.body,true,'the picker is a modal over the page');
+ const items=overlay.querySelectorAll('.rr-step-picker-item');
+ assert.ok(items.length>=B.types.length+B.basicSteps.length-1,'every step type and template is offered');
+ const groups=overlay.querySelectorAll('.rr-step-picker-group');assert.ok(groups.length>=6,'steps are grouped');
+ assert.ok(!items.some(item=>item.dataset.stepValue==='effect'),'the retired effect step is not offered');
+ const search=overlay.querySelector('.rr-step-picker-search');assert.equal(context.document.activeElement===search,true,'typing filters at once');
+ search.value='proj';search.fire('input');
+ const shown=items.filter(item=>!item.hidden);assert.deepEqual(shown.map(item=>item.dataset.stepValue),['projectile']);
+ assert.ok(groups.filter(group=>!group.hidden).length===1,'groups with no matching step fold away');
+ search.value='zzz';search.fire('input');assert.equal(overlay.querySelector('.rr-step-picker-empty').hidden,false);
+ search.value='';search.fire('input');assert.equal(overlay.querySelector('.rr-step-picker-empty').hidden,true);
+ items.find(item=>item.dataset.stepValue==='wait').onclick();
+ assert.equal(overlay.parentNode===null,true,'choosing closes the picker');
+ assert.equal(inserted.length,1);assert.equal(inserted[0].index,2,'the step lands below the selected one');assert.equal(inserted[0].records[0].type,'wait');
+ // A phase head opens the picker for its own phase and slot; a template expands into its steps.
+ const second=e.showStepPicker({phase:'finish',index:0});
+ second.querySelectorAll('.rr-step-picker-item').find(item=>item.dataset.stepValue==='basic:Run to Target').onclick();
+ assert.equal(inserted[1].index,0);assert.ok(inserted[1].records.length>1,'a template adds all of its steps');assert.ok(inserted[1].records.every(step=>step.phase==='finish'),'the steps belong to the phase whose + was clicked');
+ // Escape closes without adding anything.
+ const third=e.showStepPicker();third.querySelector('.rr-modal-close').fire('click');assert.equal(third.parentNode===null,true);assert.equal(inserted.length,2);
+});
