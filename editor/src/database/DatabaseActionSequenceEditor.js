@@ -6,7 +6,8 @@ class DatabaseActionSequenceEditor {
         this.dispose();this.stepPlayback=null;this.sequence=sequence;this.selected=0;this.frame=0;this.undo=[];this.redo=[];this.disclosures=new Map();this.cast={user:1,target:1};this.castKinds={user:'actors',target:'enemies'};this.mirrored=false;this.images={};this.targetCount=1;this.sampleWeapon=0;
         const prefs=this.loadPrefs();
         const U=this.ui,B=ReactorBattleData;this.host=U.element('div','rr-sequence-editor');container.append(this.host);
-        const toolbar=U.element('div','rr-battle-toolbar rr-sequence-header');this.host.append(toolbar);
+        // The name, hits and undo live at the top of the middle column, so the step list and the inspector start at the top of the workspace.
+        const toolbar=U.element('div','rr-battle-toolbar rr-sequence-header');
         const name=U.element('input','database-field-value');name.value=sequence.name;name.setAttribute('aria-label','Name');name.onchange=()=>{this.edit(()=>sequence.name=name.value);this.parent._activeDatabaseList?.refresh();};toolbar.append(name);
         // An older whole action shows its steps under Execute with every phase provided; saved with the next edit.
         B.migratePhases(sequence);
@@ -17,7 +18,7 @@ class DatabaseActionSequenceEditor {
         this.previewProjection||='3d';
         const sampleActions=[...(this.db.data.items||[]).filter(Boolean).map(r=>['items:'+r.id,U.message('Item: {name}',{name:r.name})]),...(this.db.data.skills||[]).filter(Boolean).map(r=>['skills:'+r.id,U.message('Skill: {name}',{name:r.name})])];const assigned=B.references(this.ui.settings(),sequence.id,this.db.data.actionSequences).find(r=>['skills','items'].includes(r.kind)),itemAction=sequence.steps.some(s=>s.iconSource==='action');this.sampleAction=sampleActions.some(([id])=>id===prefs.sampleAction)?prefs.sampleAction:assigned?assigned.kind+':'+assigned.id:sampleActions.find(([id])=>id.startsWith(itemAction?'items:':'skills:'))?.[0]||sampleActions[0]?.[0]||'skills:1';
         const weaponChoices=[['','Equipped'],...(this.db.data.weapons||[]).filter(w=>w&&w.name).map(w=>[w.id,w.name,true])];
-        const workspace=U.element('div','rr-battle-workspace');this.host.append(workspace);const center=U.element('div','rr-sequence-center');workspace.append(center);const inspectorCard=U.section('Battler Motion');inspectorCard.panel.classList.add('rr-sequence-inspector-card');this.inspectorHeader=inspectorCard.panel.querySelector('.database-section-header');this.inspector=inspectorCard.body;this.inspector.classList.add('rr-battle-inspector');workspace.append(inspectorCard.panel);
+        const workspace=U.element('div','rr-battle-workspace');this.host.append(workspace);const center=U.element('div','rr-sequence-center');workspace.append(center);center.append(toolbar);const inspectorCard=U.section('Battler Motion');inspectorCard.panel.classList.add('rr-sequence-inspector-card');this.inspectorHeader=inspectorCard.panel.querySelector('.database-section-header');this.inspector=inspectorCard.body;this.inspector.classList.add('rr-battle-inspector');workspace.append(inspectorCard.panel);
         // One grid for the preview's cast and stand-ins: two aligned rows of four, not three toolbars.
         const cast=U.element('div','rr-sequence-preview-grid rr-sequence-cast');cast.dataset.sequenceCast='';center.append(cast);
         const actors=this.db.getActors(),enemies=this.db.getEnemies();
@@ -655,6 +656,8 @@ class DatabaseActionSequenceEditor {
             try{if(picture&&!this.sequencePictures[picture]){const image=await view.assets.image('pictures',picture);if(generation!==this.generation)return;this.sequencePictures[picture]=image;}if(sheet&&!this.weaponSheets[sheet]){const image=await view.assets.image('system',sheet);if(generation!==this.generation)return;this.weaponSheets[sheet]=image;}}catch(error){console.warn(error);}
         }
     }
+    /** Show a flight step where its card looks at it: the launch on the Start and Look tabs, halfway through the flight on Arrive. */
+    showFlightFrame(step){const B=ReactorBattleData;(()=>{const cue=B.timeline(this.sequence)[this.selected];if(!cue)return;this.stepPlayback=null;this.playing=false;this.asOfStep=false;this.frame=(this.controls.cardTabs?.flight||'start')==='arrive'?cue.start+Math.round((step.duration||0)/2):cue.start;})();}
     /** The Projectile step: what flies, where it is thrown, and a Start / Arrive / Look card whose Start arrows sit on the launch point in the preview. */
     drawProjectile(step,change){const U=this.ui,B=ReactorBattleData,host=this.inspector,source=step.iconSource||'color',project=this.parent.currentProject;
         U.field(host,'Projectile',U.select([['color','Colored Dot'],['action','Skill / Item (icon or 3D model)'],['weapon','Equipped Weapon (icon or 3D model)'],['icon','Choose Icon'],['picture','Picture'],['model','3D Model'],['animation','Animation']],source,v=>{change('iconSource',v);this.weaponModels={};this.drawInspector();this.loadSequenceImages();this.paint();}));
@@ -673,7 +676,7 @@ class DatabaseActionSequenceEditor {
             tabs:[{id:'start',label:'Start'},{id:'arrive',label:'Arrive'},{id:'look',label:'Look'}],
             tool:tab=>tab==='look'?'rotate':'move',
             // Start and Look show the launch; Arrive shows the flight halfway, where the arc and landing height read.
-            shown:()=>{const cue=B.timeline(this.sequence)[this.selected];if(!cue)return;this.stepPlayback=null;this.playing=false;this.asOfStep=false;this.frame=(this.controls.cardTabs?.flight||'start')==='arrive'?cue.start+Math.round((step.duration||0)/2):cue.start;},
+            shown:()=>this.showFlightFrame(step),
             rows:tab=>tab==='start'?[row('x','X','X (tiles)',-2,2,.01,0),row('y','Y','Y (tiles)',-2,2,.01,0),row(heightKey(),'Z','Height (tiles)',-1,3,.01,unit(heightKey()))]
                 :tab==='arrive'?[row('endHeight','Z','Arrival Height (tiles)',-1,3,.01,1),row('arc','·','Arc Height (tiles)',-2,4,.01,0)]
                 :[row('rotation','·','Rotation (degrees)',-180,180,1,0),row('spin','·','Spin (degrees/frame)',-45,45,.5,0),row('scale','S','Scale',.1,4,.01,1)],
@@ -815,7 +818,7 @@ class DatabaseActionSequenceEditor {
             for(const key of ['user','target0','target1','target2','target3']){
                 const role=key==='user'?'user':'target',p=poses[key],image=this.images[role],motion=this.controls.mode==='formation'?{name:'idle',start:0}:this.motionFor(key);
                 if(image&&p){const {bitmap,actor,graphic}=image,held=visuals.held[key],facingYaw=p.facing??B.facingToward(p,role==='user'?poses.target:poses.user),frame=B.graphicFrame(graphic,bitmap.width,bitmap.height,held?.name||motion.name,held?held.frame*(graphic.speed||12):Math.max(0,this.frame-motion.start),facingYaw);
-                    view.billboard(key,bitmap.image,frame,{...lift(p),flipX:graphic.type==='character'?!!graphic.mirror:(actor?p.facing>0:p.facing<0)!==!!graphic.mirror},Math.max(.2,frame.height/48)*(graphic.scale||1));
+                    view.billboard(key,bitmap.image,frame,{...lift(p),rotateZ:-(p.rotateZ||0),flipX:graphic.type==='character'?!!graphic.mirror:(actor?p.facing>0:p.facing<0)!==!!graphic.mirror},Math.max(.2,frame.height/48)*(graphic.scale||1));
                 }
                 const record=view.models.get(key)||view.billboards.get(key);if(record?.object){record.object.visible=!!p;record.object.traverse?.(object=>{for(const material of Array.isArray(object.material)?object.material:[object.material])if(material){material.transparent=true;material.opacity=visuals.opacity[key]??1;}});if(p){view.place(key,{...(view.billboards.has(key)?lift(p):p),facing:p.facing??B.facingToward(p,role==='user'?poses.target:poses.user)});record.action=motion.name==='idle'?null:{name:motion.name,start:motion.start};if(motion.name==='idle'&&record.binding)record.binding.movingAt=undefined;}}
             }

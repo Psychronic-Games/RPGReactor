@@ -83,9 +83,11 @@
     function pick(THREE, arrows, camera, rect, clientX, clientY) {
         if (!arrows || !arrows.root.visible || !camera || !rect || !rect.width) return null;
         const origin = arrows.root.getWorldPosition(new THREE.Vector3());
+        // Each arrow's shaft runs along its group's local Y; an owner may turn a group (a flat preview points the height arrow up the screen).
+        const direction = axis => arrows[axis]?.group ? new THREE.Vector3(0, 1, 0).applyQuaternion(arrows[axis].group.getWorldQuaternion(new THREE.Quaternion())).normalize() : new THREE.Vector3(...DIRS[axis]);
         let best = null;
         for (const axis of AXES) {
-            const dir = new THREE.Vector3(...DIRS[axis]);
+            const dir = direction(axis);
             for (let i = 1; i <= 10; i++) {
                 const world = origin.clone().add(dir.clone().multiplyScalar(arrows.length * 1.2 * i / 10));
                 const v = world.clone().project(camera);
@@ -97,14 +99,14 @@
             }
         }
         if (!best) return null;
-        const direction = new THREE.Vector3(...DIRS[best.axis]);
-        const start = axisTravel(THREE, camera, rect, clientX, clientY, origin, direction);
+        const along = direction(best.axis);
+        const start = axisTravel(THREE, camera, rect, clientX, clientY, origin, along);
         if (start === null) return null;
         return {
             axis: best.axis,
             /** Travel along the axis since the grab, in world units, for the current pointer place. */
             travel: (cx, cy) => {
-                const now = axisTravel(THREE, camera, rect, cx, cy, origin, direction);
+                const now = axisTravel(THREE, camera, rect, cx, cy, origin, along);
                 return now === null ? 0 : now - start;
             }
         };

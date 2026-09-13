@@ -2,7 +2,7 @@
 
 ## 2026-09-13 — Victor Battle Motions import; Star Shift Rebellion on native sequences
 
-- A converter reads Victor Engine Battle Motions and Battler Graphic Setup notetags into native action sequences, battler states and charset battlers (`VictorMotionImport.js`, CLI `import-victor-motions.cjs`, editor button Import Victor Notetags). Star Shift Rebellion is imported: 269 shared sequences (92 items share 17, the 81 weapons one per weapon type), 1,086 reactions, 315 charset graphics, with VE_BattleMotions and VE_BattlerGraphicSetup off.
+- A converter reads Victor Engine Battle Motions and Battler Graphic Setup notetags into native action sequences, battler states and charset battlers (`VictorMotionImport.js`, CLI `import-victor-motions.cjs`; the editor button was removed on 2026-09-13, the converter having served to seed the native system). Star Shift Rebellion is imported: 269 shared sequences (92 items share 17, the 81 weapons one per weapon type), 1,086 reactions, 315 charset graphics, with VE_BattleMotions and VE_BattlerGraphicSetup off.
 - Parity forced engine additions: concurrent steps, speed-based moves, jump arcs on moves, up/down facings for character sheets, wait-for-move, blocking waits that stretch the timeline instead of freezing moves, a later move cutting the earlier one, hits counted per branch, LeTBS blocking only while it runs a battle.
 - A seven-member battle harness from the latest save drives sixteen real actions frame by frame (`scratchpad/ssr-battle-harness.cjs`). PR #59 merged. Suite **3,150 Node tests pass**.
 

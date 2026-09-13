@@ -750,23 +750,6 @@ class DatabaseEditorUI {
         if(type==='actionSequences'){
             const starters=document.createElement('button');starters.type='button';starters.className='rr-btn-secondary';starters.style.cssText='width:100%;margin-top:6px';starters.textContent=tt('Add Starter Sequences');
             starters.onclick=()=>{snapshotForUndo();const added=ReactorBattleData.addStarters(this.databaseManager.data.actionSequences);if(!added.length)return;this.databaseManager.mutationGeneration++;listSession.mutationGeneration++;refreshData();refreshList();selectIds([added[0].id]);};searchContainer.append(starters);
-            // Victor Engine Battle Motions notetags, read into native sequences, states and battler graphics.
-            const victor=document.createElement('button');victor.type='button';victor.className='rr-btn-secondary';victor.style.cssText='width:100%;margin-top:6px';victor.textContent=tt('Import Victor Notetags');
-            victor.onclick=async()=>{
-                const V=window.ReactorVictorImport;if(!V)return;
-                const ask=this.callbacks?.showConfirm||(window.reactor?.uiManager?.showConfirm?(...args)=>window.reactor.uiManager.showConfirm(...args):null);
-                const question=tt('Read the Victor Engine Battle Motions and Battler Graphic Setup notetags of every record into action sequences, battler states and battler graphics? Existing sequences are kept; imported ones are added after them, and each record\'s assignment is rewritten from its notes.');
-                if(ask){const ok=await ask(question,{title:tt('Import Victor Notetags'),okText:tt('Import'),cancelText:tt('Cancel')});if(!ok)return;}else if(!window.confirm(question))return;
-                snapshotForUndo();
-                const data=this.databaseManager.data,settings=data.battlePresentation||ReactorBattleData.empty();
-                const result=V.importDatabase({actors:data.actors,classes:data.classes,enemies:data.enemies,weapons:data.weapons,armors:data.armors,skills:data.skills,items:data.items,animations:data.animations,system:data.system},{existing:data.actionSequences||[null],troops:settings.troops||{},animations:data.animations});
-                if(!result.report.records){window.reactor?.uiManager?.showToast?.(tt('No Victor Engine notetags were found.'));return;}
-                for(const kind of ['skills','items','weapons','actors','enemies','classes','states'])for(const [id,binding] of Object.entries(settings[kind]||{}))if(!result.settings[kind][id])result.settings[kind][id]=binding;
-                data.actionSequences=result.sequences;data.battlePresentation=result.settings;
-                this.databaseManager.mutationGeneration++;listSession.mutationGeneration++;refreshData();refreshList();
-                const first=result.sequences.find(s=>s&&/Imported from Victor/.test(s.note||''));if(first)selectIds([first.id]);
-                window.reactor?.uiManager?.showToast?.(tt('Imported {sequences} sequences for {records} records.').replace('{sequences}',String(result.report.sequences)).replace('{records}',String(result.report.records)));
-            };searchContainer.append(victor);
         }
 
         listEl.parentNode.insertBefore(searchContainer, listEl);

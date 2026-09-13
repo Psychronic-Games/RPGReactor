@@ -127,6 +127,8 @@ class ActionSequencePreview {
         });
     }
     activeKey(){const s=this.editor.sequence.steps[this.editor.selected];return this.mode==='formation'?this.selection:s?.role==='user'?'user':s?.role==='allTargets'?this.selection==='user'?'target0':this.selection:'target'+(s?.targetIndex??0);}
+    /** The flat 2D layout: height is drawn as a shift up the screen, and one ring turns things in the screen plane. */
+    flat(){return this.editor.preview?.settings?.projection==='2d';}
     editable(){const s=this.editor.sequence.steps[this.editor.selected];return this.mode==='formation'||s?.type==='move'||(s?.type==='motion'&&!!s.transform)||this.heldStep(s)||this.poseStep(s)||this.flightStep(s);}
     /** A projectile step: its arrows sit where the thing launches from. */
     flightStep(s){return !!s&&s.type==='projectile';}
@@ -165,31 +167,40 @@ class ActionSequencePreview {
         if(!this.rings){this.rings=RRPoseRings3D.create(THREE,.8,'sequence-rings');this.arrows=RRAxisArrows3D.create(THREE,1.3,'sequence-arrows',{x:0xe5484d,y:0x3e63dd,z:0x46a758});view.scene.add(this.rings.root,this.arrows.root);}
         const s=e.sequence.steps[e.selected],posing=this.mode==='step'&&this.poseStep(s),combined=this.mode==='step'&&s?.type==='motion'&&!posing,held=this.mode==='step'&&this.heldStep(s)?this.heldPoint(key,s,p):null,flight=this.mode==='step'&&this.flightStep(s)?this.flightPoint(key,s,p):null;
         const pivot=posing&&e.posePartName?this.partPivot(key,e.posePartName):null;
-        const visible=!!p&&this.editable()&&!e.playing&&(!posing||!!pivot),at=pivot?{x:pivot.point.x,y:pivot.point.y,z:pivot.point.z}:held?{x:held.x+.5,y:held.z,z:held.y+.5}:flight?{x:flight.x+.5,y:flight.z,z:flight.y+.5}:{x:(p?.x||0)+.5,y:(p?.z||0)+.8,z:(p?.y||0)+.5};
+        // The gizmos sit where the thing is drawn: in the flat layout height lifts a sprite up the screen, so the anchor is lifted the same way.
+        const flat=this.flat(),lift=e.liftPose(view),lifted=lift(held||flight||(p?{x:p.x,y:p.y,z:(p.z||0)+.8}:null));
+        const visible=!!p&&this.editable()&&!e.playing&&(!posing||!!pivot),at=pivot?{x:pivot.point.x,y:pivot.point.y,z:pivot.point.z}:lifted?{x:lifted.x+.5,y:lifted.z,z:lifted.y+.5}:{x:.5,y:0,z:.5};
         const yaw=held?(p?.facing||0)+(s.rotateY||0):flight?(p?.facing||0):(p?.facing||0)+(p?.rotateY||0),pitch=held||posing||flight?(held?-(s.rotation||0):0):(p?.rotateX||0);
+        // Flat: the height arrow points up the screen, the depth arrow down it.
+        this.arrows.y.group.rotation.x=flat?-Math.PI/2:0;
         // Part rings are smaller than a battler's; picking reads the radius, so it scales with them.
         if(this.rings){this.rings.baseRadius||=this.rings.radius;const scale=posing?.55:1;this.rings.root.scale.setScalar(scale);this.rings.radius=this.rings.baseRadius*scale;}
         RRPoseRings3D.sync(this.rings,at,yaw,pitch,visible&&(combined||this.tool==='rotate'));
-        this.rings.pitch.group.visible=this.rings.roll.group.visible=this.mode!=='formation';
-        // A projectile only turns about its own axis: one ring.
-        this.rings.yaw.group.visible=!flight;if(flight)this.rings.pitch.group.visible=false;
+        this.rings.pitch.group.visible=this.rings.roll.group.visible=this.mode!=='formation'&&!flat;
+        // A projectile only turns about its own axis: one ring. Flat: the one ring facing the viewer turns things in the screen plane.
+        this.rings.yaw.group.visible=flat||!flight;if(flight&&!flat)this.rings.pitch.group.visible=false;
         RRAxisArrows3D.sync(this.arrows,at,visible&&(combined||this.tool==='move'));view.scene.updateMatrixWorld(true);
     }
-    point(event,height=0){const e=this.editor,view=e.preview;if(!view)return null;const rect=e.canvas.getBoundingClientRect(),ray=new THREE.Raycaster();ray.setFromCamera(new THREE.Vector2((event.clientX-rect.left)/rect.width*2-1,1-(event.clientY-rect.top)/rect.height*2),view.camera);const p=ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0,1,0),-height),new THREE.Vector3());return p?{x:p.x-.5,y:p.z-.5,z:height}:null;}
+    point(event,height=0){const e=this.editor,view=e.preview;if(!view)return null;const rect=e.canvas.getBoundingClientRect(),ray=new THREE.Raycaster();ray.setFromCamera(new THREE.Vector2((event.clientX-rect.left)/rect.width*2-1,1-(event.clientY-rect.top)/rect.height*2),view.camera);const p=ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0,1,0),-height),new THREE.Vector3());return p?{x:p.x-.5,y:p.z-.5+(this.flat()?height:0),z:height}:null;}
     poses(){const e=this.editor;return Object.fromEntries(Object.entries((this.mode==='formation'?e.previewContext().homes:ReactorBattleData.evaluate(e.previewSequence(),e.frame,e.previewContext()))).map(([k,p])=>[k,ReactorBattleData.visualPose(p)]));}
     pickBattler(event){const e=this.editor,rect=e.canvas.getBoundingClientRect(),poses=this.poses(),keys=['user',...Array.from({length:e.targetCount},(_,i)=>'target'+i)];
-        const markers=keys.map(key=>{const p=e.preview.project(poses[key]);return {key,distance:Math.hypot(event.clientX-rect.left-p.x/e.canvas.width*rect.width,event.clientY-rect.top-p.y/e.canvas.height*rect.height)};}).sort((a,b)=>a.distance-b.distance);
+        const lift=e.liftPose(e.preview),markers=keys.filter(key=>poses[key]).map(key=>{const p=e.preview.project(lift(poses[key]));return {key,distance:Math.hypot(event.clientX-rect.left-p.x/e.canvas.width*rect.width,event.clientY-rect.top-p.y/e.canvas.height*rect.height)};}).sort((a,b)=>a.distance-b.distance);
         if(markers[0]?.distance<14)return markers[0].key;
         const ray=new THREE.Raycaster();ray.setFromCamera(new THREE.Vector2((event.clientX-rect.left)/rect.width*2-1,1-(event.clientY-rect.top)/rect.height*2),e.preview.camera);
-        const hits=[];for(const key of keys){const object=(e.preview.models.get(key)||e.preview.billboards.get(key))?.object;if(object?.visible){const hit=ray.intersectObject(object,true)[0];if(hit)hits.push({key,distance:hit.distance});}}return hits.sort((a,b)=>a.distance-b.distance)[0]?.key;
+        // The battler the step already belongs to wins where sprites overlap, and its drawn weapon or projectile is a handle for it too.
+        const active=this.activeKey(),step=e.sequence.steps[e.selected],extra=this.mode==='step'&&step?['extra:held:'+active,'extra:flight:'+step.id]:[];
+        const hits=[];for(const key of [...keys,...extra]){const object=(e.preview.models.get(key)||e.preview.billboards.get(key))?.object;if(object?.visible){const hit=ray.intersectObject(object,true)[0];if(hit)hits.push({key:key.startsWith('extra:')?active:key,distance:hit.distance});}}
+        return hits.sort((a,b)=>(a.key===active?-1:b.key===active?1:0)||a.distance-b.distance)[0]?.key;
     }
     writePosition(point,hold){const e=this.editor,step=e.sequence.steps[e.selected],round=v=>Math.round(v*100)/100;
+        // A field the drag did not move keeps its exact value; only moved fields are rounded to the hundredth.
+        const shift=(base,delta,fallback=0)=>Math.abs(delta)<1e-6?(base??fallback):round((base??fallback)+delta);
         if(this.mode==='formation'){this.placements[hold.key]={...hold.home,x:round(point.x),y:round(point.y),z:round(point.z)};return;}
-        if(this.heldStep(step)){const sign=Math.sign(hold.pose?.facing||1)||1;step.x=round((hold.step.x||0)+(point.x-hold.position.x)*sign);step.y=round((hold.step.y||0)+point.y-hold.position.y);step.z=round((hold.step.z||0)+point.z-hold.position.z);}
-        else if(this.flightStep(step)){const sign=Math.sign(hold.pose?.facing||1)||1,heightKey=(step.attachment||'offset')==='offset'?'startHeight':'z';step.x=round((hold.step.x||0)+(point.x-hold.position.x)*sign);step.y=round((hold.step.y||0)+point.y-hold.position.y);step[heightKey]=round((hold.step[heightKey]??(heightKey==='startHeight'?1:0))+point.z-hold.position.z);}
-        else if(step.type==='motion'){step.transform={...ReactorBattleData.transform(step.transform),x:round(hold.transform.x+point.x-hold.position.x),y:round(hold.transform.y+point.y-hold.position.y),z:round(hold.transform.z+point.z-hold.position.z)};}
+        if(this.heldStep(step)){const sign=Math.sign(hold.pose?.facing||1)||1;step.x=shift(hold.step.x,(point.x-hold.position.x)*sign);step.y=shift(hold.step.y,point.y-hold.position.y);step.z=shift(hold.step.z,point.z-hold.position.z);}
+        else if(this.flightStep(step)){const sign=Math.sign(hold.pose?.facing||1)||1,heightKey=(step.attachment||'offset')==='offset'?'startHeight':'z';step.x=shift(hold.step.x,(point.x-hold.position.x)*sign);step.y=shift(hold.step.y,point.y-hold.position.y);step[heightKey]=shift(hold.step[heightKey],point.z-hold.position.z,heightKey==='startHeight'?1:0);}
+        else if(step.type==='motion'){step.transform={...ReactorBattleData.transform(step.transform),x:shift(hold.transform.x,point.x-hold.position.x),y:shift(hold.transform.y,point.y-hold.position.y),z:shift(hold.transform.z,point.z-hold.position.z)};}
         else {const context=e.previewContext(),home=context.homes[hold.key],anchor=['target','approach'].includes(step.anchor)?context.target:home;
-            const visual=ReactorBattleData.transform(ReactorBattleData.evaluate(e.sequence,e.frame,context)[hold.key]?.transform),dx=point.x-visual.x-anchor.x,dy=point.y-visual.y-anchor.y;
+            const visual=ReactorBattleData.transform(ReactorBattleData.evaluate(e.previewSequence(),e.frame,context)[hold.key]?.transform),dx=point.x-visual.x-anchor.x,dy=point.y-visual.y-anchor.y;
             if(step.anchor==='approach'){const vx=context.target.x-context.homes.user.x,vy=context.target.y-context.homes.user.y,len=Math.hypot(vx,vy),ux=len>1e-6?vx/len:context.direction,uy=len>1e-6?vy/len:0;step.x=round(dx*ux+dy*uy);step.y=round(-dx*uy+dy*ux);}else{step.x=round(dx/context.direction);step.y=round(dy);}step.z=round(point.z-visual.z-anchor.z);
         }
         e.ui.changed();e.validate();
@@ -204,7 +215,7 @@ class ActionSequencePreview {
             const arrowHit=RRAxisArrows3D.pick(THREE,this.arrows,e.preview.camera,rect,event.clientX,event.clientY);
             const heldNow=this.mode==='step'&&this.heldStep(s),posing=this.mode==='step'&&this.poseStep(s),flying=this.mode==='step'&&this.flightStep(s);
             const partEntry=posing?(s.parts||[]).find(x=>x.part===e.posePartName):null,partPose=ReactorBattleData.partPose(partEntry);
-            const ringHit=RRPoseRings3D.pick(THREE,this.rings,e.preview.camera,rect,event.clientX,event.clientY,posing?{yaw:partPose.rotate[1],pitch:partPose.rotate[0],roll:partPose.rotate[2]}:heldNow?{yaw:(p?.facing||0)+(s.rotateY||0),pitch:-(s.rotation||0),roll:s.rotateZ||0}:flying?{yaw:p?.facing||0,pitch:0,roll:s.rotation||0}:{yaw:(p?.facing||0)+(p?.rotateY||0),pitch:p?.rotateX||0,roll:p?.rotateZ||0});
+            const ringHit=RRPoseRings3D.pick(THREE,this.rings,e.preview.camera,rect,event.clientX,event.clientY,this.flat()&&!posing?{yaw:heldNow||flying?-(s.rotation||0):this.mode==='formation'?(p?.facing||0):-(ReactorBattleData.transform(s?.transform).rotateZ||0)}:posing?{yaw:partPose.rotate[1],pitch:partPose.rotate[0],roll:partPose.rotate[2]}:heldNow?{yaw:(p?.facing||0)+(s.rotateY||0),pitch:-(s.rotation||0),roll:s.rotateZ||0}:flying?{yaw:p?.facing||0,pitch:0,roll:s.rotation||0}:{yaw:(p?.facing||0)+(p?.rotateY||0),pitch:p?.rotateX||0,roll:p?.rotateZ||0});
             // Both gizmos stay available for motion overrides. The selected
             // tool decides which handle wins where their screen targets overlap.
             const ring=this.tool==='move'&&arrowHit?null:ringHit,arrow=ring?null:arrowHit;
@@ -214,15 +225,19 @@ class ActionSequencePreview {
             const hit=ring||arrow?key:this.pickBattler(event);if(!hit)return;
             if(hit!==key){this.selection=hit;if(this.mode==='step'&&s&&(s.role!=='allTargets'||hit==='user')){e.edit(()=>{s.role=hit==='user'?'user':'target';s.targetIndex=hit==='user'?undefined:Number(hit.slice(6));});}e.drawInspector();}
             if(!this.editable())return;
-            if(this.mode==='step'){e.pushUndo();if(s.type==='motion')this.showTransformPose(s);else {e.stepPlayback=null;e.frame=ReactorBattleData.timeline(e.sequence)[e.selected].end;}e.paint();}
+            if(this.mode==='step'){if(s.type==='motion')this.showTransformPose(s);else if(flying)e.showFlightFrame(s);else {e.stepPlayback=null;e.playing=false;e.asOfStep=true;e.frame=ReactorBattleData.timeline(e.sequence)[e.selected].end;}e.paint();}
             p=this.poses()[hit];const pivot=posing?this.partPivot(hit,e.posePartName):null,anchor=heldNow?(this.heldPoint(hit,s,p)||p):flying?(this.flightPoint(hit,s,p)||p):pivot?{x:pivot.point.x-.5,y:pivot.point.z-.5,z:pivot.point.y}:p,point=this.point(event,anchor.z);if(!point&&!ring&&!arrow)return;
-            this.hold={key:hit,ring,arrow,position:posing&&pivot?{x:pivot.point.x-.5,y:pivot.point.z-.5,z:pivot.point.y}:{...anchor},pose:{...p},point,home:{...e.previewContext().homes[hit]},transform:ReactorBattleData.transform(s?.transform),step:{...s},part:posing?{name:e.posePartName,from:partPose,object:e.preview.models.get(hit)?.object}:null};
+            this.hold={downX:event.clientX,downY:event.clientY,key:hit,ring,arrow,position:posing&&pivot?{x:pivot.point.x-.5,y:pivot.point.z-.5,z:pivot.point.y}:{...anchor},pose:{...p},point,home:{...e.previewContext().homes[hit]},transform:ReactorBattleData.transform(s?.transform),step:{...s},part:posing?{name:e.posePartName,from:partPose,object:e.preview.models.get(hit)?.object}:null};
             if(ring)RRPoseRings3D.emphasize(this.rings,ring.axis,true);if(arrow)RRAxisArrows3D.emphasize(this.arrows,arrow.axis,true);c.setPointerCapture(event.pointerId);event.preventDefault();
         };
         c.onpointermove=event=>{if(this.cameraDrag){this.moveCameraDrag(event);e.paint();return;}const h=this.hold;if(!h)return;const s=e.sequence.steps[e.selected];
+            // The first movement of a drag is the edit; a click that never moves changes nothing and leaves no undo entry.
+            if(!h.pushed){if(Math.hypot(event.clientX-h.downX,event.clientY-h.downY)<2)return;h.pushed=true;if(this.mode==='step')e.pushUndo();}
             if(h.ring){const value=RRPoseRings3D.drag(THREE,h.ring,e.preview.camera,c.getBoundingClientRect(),event.clientX,event.clientY);if(value===null)return;
                 const delta=value-h.ring.startValue,key={yaw:'rotateY',pitch:'rotateX',roll:'rotateZ'}[h.ring.axis];
                 if(this.mode==='formation')this.placements[h.key]={...h.home,facing:h.home.facing+delta};
+                // Flat: the ring seen face-on turns the thing in the screen plane, clockwise for a positive value as the game draws it.
+                else if(this.flat()&&!h.part){const turn=Math.round(-delta*10)/10;if(this.heldStep(s)||this.flightStep(s))s.rotation=Math.round(((h.step.rotation||0)+turn)*10)/10;else if(s.type==='motion')s.transform={...ReactorBattleData.transform(s.transform),rotateZ:h.transform.rotateZ+turn};else s.rotateZ=(h.step.rotateZ||0)+turn;}
                 else if(h.part){const entry=e.posePartEntry(h.part.name);if(!entry)return;const rotate=h.part.from.rotate.slice();rotate[{pitch:0,yaw:1,roll:2}[h.ring.axis]]+=delta;entry.rotate=rotate.map(v=>Math.round(v*10)/10);}
                 else if(this.heldStep(s)){const heldKey={yaw:'rotateY',pitch:'rotation',roll:'rotateZ'}[h.ring.axis];s[heldKey]=Math.round(((h.step[heldKey]||0)+(heldKey==='rotation'?-delta:delta))*10)/10;}
                 else if(this.flightStep(s)){if(h.ring.axis==='roll')s.rotation=Math.round(((h.step.rotation||0)+delta)*10)/10;}
