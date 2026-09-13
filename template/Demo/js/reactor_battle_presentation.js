@@ -432,6 +432,63 @@
         }};
         return adapter;
     };
+    /**
+     * Where a battler stands on the screen: its foot point and the top of
+     * its picture, in canvas pixels. A model in a room is projected through
+     * the room's camera; a flat sprite is measured from its frame.
+     */
+    P.battlerScreenBox=function(battler){
+        const ss=BattleManager._spriteset,sprite=ss?.findTargetSprite?.(battler);if(!sprite)return null;
+        const room=ss._reactorRoom;
+        if(room&&sprite._reactorRoomPosition){
+            const foot=room.project(sprite._reactorRoomPosition),bounds=sprite._reactorRoomKey?room.bounds(sprite._reactorRoomKey):null;
+            const toGlobal=p=>ss._reactorRoomSprite?.toGlobal?ss._reactorRoomSprite.toGlobal(new PIXI.Point(p.x,p.y)):{x:p.x,y:p.y};
+            const f=toGlobal(foot),t=toGlobal({x:foot.x,y:bounds?bounds.y:foot.y-96});
+            return {x:f.x,top:t.y,bottom:f.y};
+        }
+        const main=sprite._mainSprite||sprite,g=sprite.getGlobalPosition?sprite.getGlobalPosition(new PIXI.Point()):{x:sprite.x,y:sprite.y};
+        const height=(main._frame?.height||main.height||96)*Math.abs(sprite.scale?.y||1)*(main!==sprite?Math.abs(main.scale?.y||1):1);
+        return {x:g.x,top:g.y-height,bottom:g.y};
+    };
+    /**
+     * With BattlePresentation.json's "commandWindow": "battler", the actor
+     * command window stands above the actor whose turn it is, in a flat
+     * battle or a 3D room, wherever a HUD plugin would have parked it. Set
+     * after the window's own update, so a HUD that moves it every frame
+     * (MOG_BattleHud slides it to the actor's box) is overruled every frame.
+     */
+    P.anchorCommandWindow=function(window){
+        const actor=BattleManager.actor?.();if(!actor||!(window.visible||window.active))return;
+        const box=P.battlerScreenBox(actor);if(!box||!Number.isFinite(box.x)||!Number.isFinite(box.top))return;
+        const layerX=(Graphics.width-Graphics.boxWidth)/2,layerY=(Graphics.height-Graphics.boxHeight)/2;
+        const x=Math.round(box.x-layerX-window.width/2),y=Math.round(box.top-layerY-window.height-8);
+        window.x=Math.max(0,Math.min(Graphics.boxWidth-window.width,x));window.y=Math.max(0,Math.min(Graphics.boxHeight-window.height,y));
+    };
+    P.installCommandWindowAnchor=function(){
+        if(typeof Window_ActorCommand==='undefined')return;
+        const update=Window_ActorCommand.prototype.update;
+        Window_ActorCommand.prototype.update=function(){update.call(this);if(P.settings?.commandWindow==='battler')P.anchorCommandWindow(this);};
+    };
+    /**
+     * MOG_BattleHud's MZ port draws each actor's name on a bare Bitmap, which
+     * MZ starts in sans-serif (MV started it in the game font), so the name
+     * is the one label on the HUD in the wrong face. It also draws at one
+     * size, so a long name runs past its box. The name takes the game font
+     * and shrinks until it fits the layout box.
+     */
+    P.installMogHudNames=function(){
+        const Hud=root.Battle_Hud;if(!Hud?.prototype?.refresh_name)return;
+        const refresh=Hud.prototype.refresh_name;
+        Hud.prototype.refresh_name=function(){
+            const bitmap=this._name?.bitmap,name=this._battler?._name;
+            if(bitmap&&name){
+                if($gameSystem?.mainFontFace)bitmap.fontFace=$gameSystem.mainFontFace();
+                const base=Number(root.Moghunter?.bhud_name_font_size)||bitmap.fontSize||20,limit=Math.max(40,Math.min(bitmap.width,(this._layout?.bitmap?.width||this._hud_size?.[0]||bitmap.width)-12)-2*(bitmap.outlineWidth||0));
+                bitmap.fontSize=base;while(bitmap.fontSize>10&&bitmap.measureTextWidth(name)>limit)bitmap.fontSize--;
+            }
+            refresh.call(this);
+        };
+    };
     P.installPsychronicHud=function(){
         if(!(PluginManager._scripts||[]).some(name=>/PSYCHRONIC_ATB-MZ/i.test(name))||typeof Window_Base==='undefined')return;
         const initialize=Window_Base.prototype.initialize;
@@ -677,7 +734,7 @@
         }
     };
     P.install=function(){
-        if(P.installed)return;P.installed=true;P.installActionRules();P.installRoomAnchors();P.installSequenceAnimations();P.installBattlebackLoading();P.installPartyLimit();P.installRoomEvents?.();P.installPsychronicHud();
+        if(P.installed)return;P.installed=true;P.installActionRules();P.installRoomAnchors();P.installSequenceAnimations();P.installBattlebackLoading();P.installPartyLimit();P.installRoomEvents?.();P.installPsychronicHud();P.installCommandWindowAnchor();P.installMogHudNames();
         for(const [Class,kind] of [[root.Sprite_Actor,'actors'],[root.Sprite_Enemy,'enemies']])if(Class){
             const updateBitmap=Class.prototype.updateBitmap;
             Class.prototype.updateBitmap=function(...args){

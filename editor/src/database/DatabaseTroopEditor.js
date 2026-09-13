@@ -434,7 +434,18 @@ class DatabaseTroopEditor {
             imgContainer.style.cssText = 'flex: 1; display: flex; align-items: center; justify-content: center; min-height: 80px;';
 
             const battlerPath = this.getEnemyBattlerUrl(enemy);
-            if (battlerPath) {
+            // An enemy bound to a 3D model has no battler picture: its preview is the model's thumbnail.
+            const modelSpec = this.enemyModelSpec(enemy);
+            if (modelSpec) {
+                const img = document.createElement('img');
+                img.style.cssText = 'max-width:min(360px,100%);max-height:300px;object-fit:contain;';
+                img.alt = modelSpec.name || '';
+                imgContainer.appendChild(img);
+                Promise.resolve().then(() => RRDatabase3DBindings.modelThumbnail(this.parentEditor?.reactor3dEditor, modelSpec)).then(url => {
+                    if (!img.isConnected) return;
+                    if (url) img.src = url; else img.replaceWith(Object.assign(document.createElement('span'), { textContent: tt('No preview'), style: 'color: var(--color-text-dim); font-size: 11px;' }));
+                }).catch(() => { if (img.isConnected) img.replaceWith(Object.assign(document.createElement('span'), { textContent: tt('No preview'), style: 'color: var(--color-text-dim); font-size: 11px;' })); });
+            } else if (battlerPath) {
                 const img = document.createElement('img');
                 img.src = battlerPath;
                 img.style.cssText = 'max-width:min(360px,100%);max-height:300px;image-rendering:pixelated;object-fit:contain;';
@@ -522,6 +533,21 @@ class DatabaseTroopEditor {
             if (selectedLabel) browser.scrollTo(selectedLabel);
             browser.searchInput.focus();
         });
+    }
+
+    /** The 3D model an enemy is drawn as, from its graphic setting or its binding, or null. */
+    enemyModelSpec(enemy) {
+        const project = this.projectManager.getCurrentProject();
+        if (!enemy || !project || typeof RRDatabase3DBindings === 'undefined') return null;
+        try {
+            const bound = RRDatabase3DBindings.get(project.path, 'enemies', enemy.id);
+            const settings = this.databaseManager.data?.battlePresentation;
+            if (settings && typeof ReactorBattleData !== 'undefined') {
+                const graphic = ReactorBattleData.graphic(settings, 'enemies', enemy.id, enemy, bound);
+                return graphic.type === 'model' ? graphic.model : null;
+            }
+            return bound;
+        } catch (error) { return null; }
     }
 
     getEnemyBattlerUrl(enemy) {

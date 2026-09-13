@@ -68,8 +68,8 @@
           "facing": 90
         },
         {
-          "x": 21.3,
-          "y": 31.5,
+          "x": 17.16,
+          "y": 34.51,
           "z": 0,
           "facing": 90
         }
@@ -138,5 +138,6 @@
       "mode": "inherit"
     }
   },
-  "enemies": {}
+  "enemies": {},
+  "commandWindow": "battler"
 }
