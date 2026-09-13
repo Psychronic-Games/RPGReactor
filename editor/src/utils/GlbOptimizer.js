@@ -1113,7 +1113,7 @@
             .catch(() => lods(bytes, options));
     }
 
-    const api = { PRESETS, LOD_LEVELS, LOD_MIN_TRIANGLES, analyze, optimize, lods, lodsAsync, canvasEncoder, parseGlb, remapParts };
+    const api = { PRESETS, LOD_LEVELS, LOD_MIN_TRIANGLES, analyze, optimize, lods, lodsAsync, canvasEncoder, parseGlb, remapParts, imageDimensions };
 
     root.RRGlbOptimizer = api;
 

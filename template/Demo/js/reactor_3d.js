@@ -12102,6 +12102,16 @@ Reactor3D.readFbxAscii = function(text) {
 };
 
 Reactor3D.readFbxBinary = function(buffer) {
+    return this._fbxScene(this._fbxTree(buffer));
+};
+
+/**
+ * The whole node tree of a binary FBX: every node as {name, props, children},
+ * numbers as numbers, 64-bit ids as decimal strings, strings decoded (the
+ * "\0" of a typed name reads as "::"), raw data as bytes, and arrays as
+ * typed arrays, inflated through pako when the file compressed them.
+ */
+Reactor3D._fbxTree = function(buffer) {
     const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
     const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
     const version = view.getUint32(23, true);
@@ -12119,16 +12129,16 @@ Reactor3D.readFbxBinary = function(buffer) {
         cursor += 12;
         let data = bytes.subarray(cursor, cursor + length);
         cursor += length;
-        if (encoding === 1 && typeof pako !== "undefined") data = pako.inflate(data);
-        const src = new DataView(data.buffer, data.byteOffset, data.byteLength);
-        const out = [];
-        const size = type === "d" ? 8 : 4;
-        for (let i = 0; i < count; i++) {
-            out.push(type === "d" ? src.getFloat64(i * size, true)
-                : type === "i" ? src.getInt32(i * size, true)
-                : src.getFloat32(i * size, true));
+        if (encoding === 1) {
+            if (typeof pako === "undefined") throw new Error("FBX arrays are compressed and pako is not loaded");
+            data = pako.inflate(data);
         }
-        return out;
+        const Kind = { d: Float64Array, f: Float32Array, i: Int32Array, l: BigInt64Array, b: Uint8Array, c: Uint8Array }[type];
+        const size = Kind.BYTES_PER_ELEMENT;
+        const copy = new Uint8Array(count * size);
+        copy.set(data.subarray(0, count * size));
+        const out = new Kind(copy.buffer);
+        return type === "l" ? Array.from(out, v => String(v)) : out;
     };
     const readProperty = () => {
         const type = String.fromCharCode(bytes[cursor++]);
@@ -12137,42 +12147,245 @@ Reactor3D.readFbxBinary = function(buffer) {
         if (type === "I") { const v = view.getInt32(cursor, true); cursor += 4; return v; }
         if (type === "F") { const v = view.getFloat32(cursor, true); cursor += 4; return v; }
         if (type === "D") { const v = view.getFloat64(cursor, true); cursor += 8; return v; }
-        if (type === "L") { cursor += 8; return 0; }
+        if (type === "L") { const v = view.getBigInt64(cursor, true); cursor += 8; return String(v); }
         if (type === "S" || type === "R") {
             const length = view.getUint32(cursor, true);
-            cursor += 4 + length;
-            return "";
+            cursor += 4;
+            const data = bytes.subarray(cursor, cursor + length);
+            cursor += length;
+            return type === "S" ? this._modelText(data).replace(/\u0000\u0001/g, "::") : data;
         }
-        if (type === "d" || type === "f" || type === "i") return readArray(type);
+        if ("fdilbc".indexOf(type) >= 0) return readArray(type);
         throw new Error("FBX property " + type);
     };
-    let vertices = null;
-    let indices = null;
     const readNode = () => {
-        const start = cursor;
         const end = u32();
         const count = u32();
         u32();
         const nameLen = bytes[cursor++];
+        if (!end) return null;
         const name = this._modelText(bytes.subarray(cursor, cursor + nameLen));
         cursor += nameLen;
-        if (!end) return;
         const props = [];
         for (let i = 0; i < count; i++) props.push(readProperty());
-        if (name === "Vertices" && Array.isArray(props[0])) vertices = props[0];
-        if (name === "PolygonVertexIndex" && Array.isArray(props[0])) indices = props[0];
-        while (cursor + (wide ? 25 : 13) < end) readNode();
-        cursor = Math.max(cursor, end);
-        if (cursor < start) throw new Error("FBX walk");
+        const children = [];
+        while (cursor < end) {
+            const child = readNode();
+            if (!child) break;
+            children.push(child);
+        }
+        cursor = end;
+        return { name, props, children };
     };
-    while (cursor + (wide ? 25 : 13) < bytes.length) {
-        const mark = cursor;
-        readNode();
-        if (cursor === mark) break;
-        if (vertices && indices) break;
+    const roots = [];
+    while (cursor + (wide ? 25 : 13) <= bytes.length) {
+        const node = readNode();
+        if (!node) break;
+        roots.push(node);
     }
-    if (!vertices || !indices) throw new Error("FBX has no mesh");
-    return this._fbxPolygons(vertices, indices);
+    return roots;
+};
+
+/**
+ * The meshes of an FBX scene as one unwelded triangle list: positions and UVs
+ * per corner, a group per model part and material, and the materials with
+ * their colour, opacity and colour map (a file name beside the model, or
+ * bytes embedded in the file). Each part is placed by its model transforms.
+ */
+Reactor3D._fbxScene = function(roots) {
+    const find = (list, name) => list.find(node => node.name === name);
+    const objects = find(roots, "Objects");
+    const connections = find(roots, "Connections");
+    if (!objects) throw new Error("FBX has no objects");
+    const properties = node => {
+        const out = {};
+        const block = find(node.children, "Properties70");
+        for (const p of block ? block.children : []) if (p.name === "P") out[p.props[0]] = p.props.slice(4);
+        return out;
+    };
+    const geometries = new Map(), models = new Map(), materials = new Map(), textures = new Map(), videos = new Map();
+    for (const node of objects.children) {
+        const id = String(node.props[0]), name = String(node.props[1] || "").replace(/::.*$/, "");
+        if (node.name === "Geometry") {
+            const vertices = find(node.children, "Vertices"), indices = find(node.children, "PolygonVertexIndex");
+            if (!vertices || !indices) continue;
+            const uvLayer = find(node.children, "LayerElementUV"), materialLayer = find(node.children, "LayerElementMaterial");
+            const value = (layer, key) => { const child = layer && find(layer.children, key); return child ? child.props[0] : null; };
+            geometries.set(id, {
+                vertices: vertices.props[0], indices: indices.props[0],
+                uv: uvLayer ? { values: value(uvLayer, "UV"), index: value(uvLayer, "UVIndex"), mapping: value(uvLayer, "MappingInformationType"), reference: value(uvLayer, "ReferenceInformationType") } : null,
+                material: materialLayer ? { values: value(materialLayer, "Materials"), mapping: value(materialLayer, "MappingInformationType") } : null
+            });
+        } else if (node.name === "Model") models.set(id, { id, name, props: properties(node), parent: null, geometry: null, materials: [] });
+        else if (node.name === "Material") {
+            const props = properties(node);
+            const color = props.DiffuseColor || props.Diffuse || [0.8, 0.8, 0.8];
+            const opacity = props.Opacity ? Number(props.Opacity[0]) : props.TransparencyFactor ? 1 - Number(props.TransparencyFactor[0]) : 1;
+            materials.set(id, { id, name, color: [Number(color[0]), Number(color[1]), Number(color[2])], opacity: Number.isFinite(opacity) ? Math.max(0, Math.min(1, opacity)) : 1, texture: "", alpha: "", embedded: null });
+        } else if (node.name === "Texture") {
+            const file = value => value ? String(value).replace(/\\/g, "/").replace(/^.*\//, "") : "";
+            const relative = find(node.children, "RelativeFilename"), absolute = find(node.children, "FileName");
+            textures.set(id, { id, file: file(relative && relative.props[0]) || file(absolute && absolute.props[0]), video: null });
+        } else if (node.name === "Video") {
+            const content = find(node.children, "Content");
+            videos.set(id, { id, content: content && content.props[0] instanceof Uint8Array && content.props[0].length ? content.props[0] : null });
+        }
+    }
+    for (const c of connections ? connections.children : []) {
+        if (c.name !== "C") continue;
+        const kind = c.props[0], child = String(c.props[1]), parent = String(c.props[2]);
+        if (kind === "OO") {
+            if (models.has(child) && models.has(parent)) models.get(child).parent = parent;
+            else if (geometries.has(child) && models.has(parent)) models.get(parent).geometry = child;
+            else if (materials.has(child) && models.has(parent)) models.get(parent).materials.push(child);
+            else if (videos.has(child) && textures.has(parent)) textures.get(parent).video = child;
+        } else if (kind === "OP" && textures.has(child) && materials.has(parent)) {
+            const property = String(c.props[3] || ""), material = materials.get(parent), texture = textures.get(child);
+            if (/^(DiffuseColor|Diffuse|BaseColor|Maya\|baseColor|3dsMax\|base_color_map)$/i.test(property) || !material.texture && /Color/i.test(property)) material.texture = texture.file;
+            if (/Transparen|Opacity|alpha/i.test(property)) material.alpha = texture.file;
+            const video = texture.video && videos.get(texture.video);
+            if (video && video.content && !material.embedded && material.texture === texture.file) material.embedded = video.content;
+        }
+    }
+    // A model's place in the world: its parents' transforms, then translation, pre-rotation, rotation and scaling; geometric transforms move only its own mesh.
+    const hasThree = typeof THREE !== "undefined";
+    const numbers = (list, fallback) => list && list.length >= 3 ? [Number(list[0]) || 0, Number(list[1]) || 0, Number(list[2]) || 0] : fallback;
+    const rotation = (degrees, order) => {
+        const e = new THREE.Euler(degrees[0] * Math.PI / 180, degrees[1] * Math.PI / 180, degrees[2] * Math.PI / 180, ["XYZ", "XZY", "YZX", "YXZ", "ZXY", "ZYX"][order] || "XYZ");
+        return new THREE.Matrix4().makeRotationFromEuler(e);
+    };
+    const local = model => {
+        const p = model.props, order = Number((p.RotationOrder || [0])[0]) || 0;
+        const m = new THREE.Matrix4().makeTranslation(...numbers(p["Lcl Translation"], [0, 0, 0]));
+        if (p.PreRotation) m.multiply(rotation(numbers(p.PreRotation, [0, 0, 0]), 0));
+        m.multiply(rotation(numbers(p["Lcl Rotation"], [0, 0, 0]), order));
+        m.multiply(new THREE.Matrix4().makeScale(...numbers(p["Lcl Scaling"], [1, 1, 1])));
+        return m;
+    };
+    const worlds = new Map();
+    const world = model => {
+        if (worlds.has(model.id)) return worlds.get(model.id);
+        const own = local(model), parent = model.parent && models.get(model.parent);
+        const m = parent ? world(parent).clone().multiply(own) : own;
+        worlds.set(model.id, m);
+        return m;
+    };
+    const geometric = model => {
+        const p = model.props;
+        const m = new THREE.Matrix4().makeTranslation(...numbers(p.GeometricTranslation, [0, 0, 0]));
+        m.multiply(rotation(numbers(p.GeometricRotation, [0, 0, 0]), 0));
+        m.multiply(new THREE.Matrix4().makeScale(...numbers(p.GeometricScaling, [1, 1, 1])));
+        return m;
+    };
+    const settings = find(roots, "GlobalSettings");
+    const upAxis = settings ? Number((properties(settings).UpAxis || [1])[0]) : 1;
+    const up = hasThree && upAxis === 2 ? new THREE.Matrix4().makeRotationX(-Math.PI / 2) : null;
+    const groups = [], materialList = [], materialIndex = new Map();
+    const materialFor = id => {
+        const material = id && materials.get(id);
+        const key = material ? material.id : "";
+        if (!materialIndex.has(key)) {
+            materialIndex.set(key, materialList.length);
+            materialList.push(material ? { name: material.name, color: material.color, opacity: material.opacity, texture: material.texture, alpha: material.alpha, embedded: material.embedded } : { name: "", color: [0.53, 0.53, 0.53], opacity: 1, texture: "", alpha: "", embedded: null });
+        }
+        return materialIndex.get(key);
+    };
+    let anyUv = false;
+    const point = hasThree ? new THREE.Vector3() : null;
+    for (const model of models.values()) {
+        const g = model.geometry && geometries.get(model.geometry);
+        if (!g) continue;
+        const transform = hasThree ? (up ? up.clone().multiply(world(model)) : world(model)).multiply(geometric(model)) : null;
+        const uv = g.uv && g.uv.values && g.uv.values.length ? g.uv : null;
+        if (uv) anyUv = true;
+        const uvAt = (corner, vertex) => {
+            if (!uv) return [0, 0];
+            const mapping = uv.mapping || "ByPolygonVertex", byIndex = uv.reference === "IndexToDirect" && uv.index && uv.index.length;
+            let i = mapping === "ByPolygonVertex" ? corner : mapping === "AllSame" ? 0 : vertex;
+            if (byIndex) i = uv.index[i];
+            return [uv.values[i * 2] || 0, uv.values[i * 2 + 1] || 0];
+        };
+        const materialAt = polygon => {
+            const layer = g.material, list = layer && layer.values;
+            if (!list || !list.length) return model.materials[0] || null;
+            const slot = layer.mapping === "ByPolygon" ? list[polygon] : list[0];
+            return model.materials[slot] || model.materials[0] || null;
+        };
+        // One run per material of this model, each collecting its own corners; runs are laid out one after another below.
+        const runs = new Map();
+        let poly = [], polygon = 0;
+        for (let corner = 0; corner < g.indices.length; corner++) {
+            const raw = g.indices[corner], end = raw < 0, vertex = end ? ~raw : raw;
+            poly.push({ vertex, corner });
+            if (!end) continue;
+            const index = materialFor(materialAt(polygon));
+            let run = runs.get(index);
+            if (!run) { run = { name: model.name, material: index, positions: [], uvs: [] }; runs.set(index, run); groups.push(run); }
+            for (let t = 1; t + 1 < poly.length; t++) {
+                for (const c of [poly[0], poly[t], poly[t + 1]]) {
+                    let x = g.vertices[c.vertex * 3] || 0, y = g.vertices[c.vertex * 3 + 1] || 0, z = g.vertices[c.vertex * 3 + 2] || 0;
+                    if (transform) { point.set(x, y, z).applyMatrix4(transform); x = point.x; y = point.y; z = point.z; }
+                    run.positions.push(x, y, z);
+                    const st = uvAt(c.corner, c.vertex);
+                    run.uvs.push(st[0], st[1]);
+                }
+            }
+            poly = [];
+            polygon++;
+        }
+    }
+    const total = groups.reduce((sum, run) => sum + run.positions.length, 0);
+    if (total < 9) throw new Error("FBX has no polygons");
+    const positions = new Float32Array(total), uvs = new Float32Array(total / 3 * 2);
+    let cursor = 0;
+    for (const run of groups) {
+        positions.set(run.positions, cursor);
+        uvs.set(run.uvs, cursor / 3 * 2);
+        run.start = cursor / 3;
+        run.count = run.positions.length / 3;
+        cursor += run.positions.length;
+        delete run.positions;
+        delete run.uvs;
+    }
+    const indices = new Uint32Array(total / 3);
+    for (let i = 0; i < indices.length; i++) indices[i] = i;
+    return { positions, uvs: anyUv ? uvs : null, indices, groups, materials: materialList };
+};
+
+/**
+ * What a model file costs, in the shape RRGlbOptimizer.analyze gives for a
+ * GLB: triangles, vertices, draw calls, materials, the pictures it names (by
+ * file, sized by the caller from disk), rig and animation counts. An FBX is
+ * read in full; the other formats give one mesh and the sidecar's texture.
+ */
+Reactor3D.modelCost = function(buffer, ext, textureFile) {
+    const kind = String(ext || ".glb").toLowerCase();
+    const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+    const cost = { bytes: bytes.length, images: [], tangentBytes: 0, floatWeightBytes: 0, triangles: 0, vertices: 0, animated: false, primitives: 0, materials: 0, animations: 0, skinned: false, bones: 0 };
+    if (kind === ".fbx" && this._modelText(bytes.subarray(0, 20)).indexOf("Kaydara FBX Binary") === 0) {
+        const tree = this._fbxTree(bytes), mesh = this._fbxScene(tree);
+        const objects = tree.find(node => node.name === "Objects"), children = objects ? objects.children : [];
+        cost.triangles = mesh.positions.length / 9;
+        cost.primitives = mesh.groups.length;
+        cost.materials = mesh.materials.length;
+        for (const node of children) {
+            if (node.name === "Geometry") { const v = node.children.find(c => c.name === "Vertices"); if (v && v.props[0]) cost.vertices += v.props[0].length / 3; }
+            if (node.name === "AnimationStack") cost.animations++;
+            if (node.name === "Deformer" && /Skin/i.test(String(node.props[2] || ""))) cost.skinned = true;
+            if (node.name === "Deformer" && /Cluster/i.test(String(node.props[2] || ""))) cost.bones++;
+        }
+        cost.animated = cost.animations > 0;
+        const named = new Set();
+        for (const material of mesh.materials) for (const name of [material.texture, material.alpha]) if (name && !named.has(name)) { named.add(name); cost.images.push({ name, bytes: 0, width: 0, height: 0, embedded: !!material.embedded && name === material.texture }); }
+        return cost;
+    }
+    const mesh = this.readModel(bytes, kind, "", "");
+    cost.triangles = mesh.indices && mesh.indices.length ? mesh.indices.length / 3 : mesh.positions.length / 9;
+    cost.vertices = mesh.positions.length / 3;
+    cost.primitives = mesh.groups ? new Set(mesh.groups.map(run => run.name)).size || 1 : 1;
+    cost.materials = 1;
+    if (textureFile && mesh.uvs) cost.images.push({ name: textureFile, bytes: 0, width: 0, height: 0, embedded: false });
+    return cost;
 };
 
 Reactor3D.readFbx = function(buffer) {
@@ -12269,16 +12482,17 @@ Reactor3D.buildMeshTemplate = function(mesh, baseUrl, textureFile) {
     // these formats do not embed their images the way GLB does. Image-based
     // loading works from both the editor's file:// base and the game's
     // relative one, where fetch would not.
-    let map = null;
     const textures = [];
-    const directTexture = /^(?:blob:|data:)/i.test(textureFile || "");
-    if (mesh.uvs && textureFile && (baseUrl || directTexture)) {
-        map = new THREE.Texture();
+    const loadMap = (file, embedded) => {
+        const direct = /^(?:blob:|data:)/i.test(file || "");
+        if (!mesh.uvs || !(file || embedded) || !(baseUrl || direct || embedded)) return null;
+        const map = new THREE.Texture();
         if (THREE.SRGBColorSpace) map.colorSpace = THREE.SRGBColorSpace;
-        const candidates = directTexture ? [textureFile] : [
-            baseUrl.replace(/\/source\/$/, "/textures/") + textureFile,
-            baseUrl + textureFile
-        ];
+        const candidates = embedded && typeof URL !== "undefined" && typeof Blob !== "undefined" ? [URL.createObjectURL(new Blob([embedded]))]
+            : direct ? [file] : [
+                baseUrl.replace(/\/source\/$/, "/textures/") + file,
+                baseUrl + file
+            ];
         const tryAt = index => {
             if (index >= candidates.length) return;
             const img = new Image();
@@ -12291,12 +12505,35 @@ Reactor3D.buildMeshTemplate = function(mesh, baseUrl, textureFile) {
         };
         tryAt(0);
         textures.push(map);
-    }
-    const material = new THREE.MeshBasicMaterial(map
-        ? { color: 0xffffff, map, side: THREE.FrontSide, fog: false }
-        : { color: 0x888888, side: THREE.FrontSide, fog: false });
-    Reactor3D.litMaterial(material);
-    material.__reactorModel = true;
+        return map;
+    };
+    // The format's own materials when it carries them (FBX): each with its
+    // colour, opacity and colour map from the model's textures/ folder or the
+    // bytes embedded in the file; the sidecar's texture covers any material
+    // without one. Other formats get the one material the sidecar names.
+    // The sidecar's texture stands in only when the file names none of its own; a file that maps some of its materials means the bare ones to be plain colour.
+    const anyOwnTexture = !!(mesh.materials || []).some(def => def.texture || def.embedded);
+    const makeMaterial = def => {
+        const map = loadMap(def && (def.texture || def.embedded) ? def.texture : anyOwnTexture ? "" : textureFile, def && def.embedded);
+        const color = def && !map && def.color ? new THREE.Color(def.color[0], def.color[1], def.color[2]) : null;
+        const material = new THREE.MeshBasicMaterial(map
+            ? { color: 0xffffff, map, side: THREE.FrontSide, fog: false }
+            : { color: color || 0x888888, side: THREE.FrontSide, fog: false });
+        Reactor3D.litMaterial(material);
+        material.__reactorModel = true;
+        if (def && (def.alpha || def.opacity < 1)) {
+            // Its own colour map's alpha cuts it out; a separate alpha picture is read as an alpha map.
+            if (def.alpha && def.alpha !== def.texture) material.alphaMap = loadMap(def.alpha, null);
+            material.transparent = true;
+            material.opacity = def.opacity < 1 ? def.opacity : 1;
+            material.alphaTest = def.alpha ? 0.02 : 0;
+            material.depthWrite = false;
+        }
+        return material;
+    };
+    const materials = mesh.materials && mesh.materials.length ? mesh.materials.map(makeMaterial) : null;
+    const material = materials ? materials[0] : makeMaterial(null);
+    const materialAt = run => materials && run && run.material !== undefined && materials[run.material] ? materials[run.material] : material;
     const root = new THREE.Group();
     root.name = "model";
     if (mesh.groups) {
@@ -12306,11 +12543,13 @@ Reactor3D.buildMeshTemplate = function(mesh, baseUrl, textureFile) {
         // for files without groups.
         const byName = new Map();
         for (const run of mesh.groups) {
-            const list = byName.get(run.name) || [];
+            const key = run.name + (run.material !== undefined ? "\u0000" + run.material : "");
+            const list = byName.get(key) || [];
             list.push(run);
-            byName.set(run.name, list);
+            byName.set(key, list);
         }
-        for (const [name, runs] of byName) {
+        for (const [key, runs] of byName) {
+            const name = key.split("\u0000")[0];
             const ids = [];
             for (const run of runs) {
                 for (let i = 0; i < run.count; i++) ids.push(mesh.indices[run.start + i]);
@@ -12329,7 +12568,7 @@ Reactor3D.buildMeshTemplate = function(mesh, baseUrl, textureFile) {
                 bounds.expandByPoint(point);
             }
             const pivot = bounds.getCenter(new THREE.Vector3());
-            const piece = new THREE.Mesh(part, material);
+            const piece = new THREE.Mesh(part, materialAt(runs[0]));
             piece.name = name || "model";
             piece.userData.parts = name
                 ? [{ name, pivot: [pivot.x, pivot.y, pivot.z] }]

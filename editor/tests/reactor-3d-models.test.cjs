@@ -1141,3 +1141,40 @@ test('a skinned clip under a centimetre-scaled armature moves sanely', () => {
         'a 10cm bone lift, sampled mid-clip, moves the vertex ~0.05 world units, not 100× that: ' + rise.toFixed(4));
     assert.ok(Math.abs(lifted.x - rest.x) < 0.01, 'the lift stays vertical');
 });
+
+test('a binary FBX scene keeps each part, its UVs and its material with the texture linked to it', () => {
+    // A hand-built node tree in the shape _fbxTree produces: one quad whose
+    // polygon uses the model's second material, which a texture feeds.
+    const P = (name, value) => ({ name: 'P', props: [name, '', '', '', ...value], children: [] });
+    const node = (name, props, children = []) => ({ name, props, children });
+    const tree = [
+        node('GlobalSettings', [], [node('Properties70', [], [P('UpAxis', [1])])]),
+        node('Objects', [], [
+            node('Geometry', ['11', 'Quad::Geometry', 'Mesh'], [
+                node('Vertices', [new Float64Array([0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0])]),
+                node('PolygonVertexIndex', [new Int32Array([0, 1, 2, -4])]),
+                node('LayerElementUV', [0], [
+                    node('MappingInformationType', ['ByPolygonVertex']), node('ReferenceInformationType', ['IndexToDirect']),
+                    node('UV', [new Float64Array([0, 0, 1, 0, 1, 1, 0, 1])]), node('UVIndex', [new Int32Array([0, 1, 2, 3])])
+                ]),
+                node('LayerElementMaterial', [0], [node('MappingInformationType', ['ByPolygon']), node('ReferenceInformationType', ['IndexToDirect']), node('Materials', [new Int32Array([1])])])
+            ]),
+            node('Model', ['21', 'Part::Model', 'Mesh'], [node('Properties70', [], [P('Lcl Translation', [5, 0, 0])])]),
+            node('Material', ['31', 'Plain::Material', ''], [node('Properties70', [], [P('DiffuseColor', [1, 0, 0])])]),
+            node('Material', ['32', 'Wood::Material', ''], [node('Properties70', [], [P('DiffuseColor', [0.8, 0.8, 0.8]), P('TransparencyFactor', [0.25])])]),
+            node('Texture', ['41', 'wood::Texture', ''], [node('RelativeFilename', ['C:\\art\\wood.png'])])
+        ]),
+        node('Connections', [], [
+            node('C', ['OO', '11', '21']), node('C', ['OO', '31', '21']), node('C', ['OO', '32', '21']), node('C', ['OP', '41', '32', 'DiffuseColor'])
+        ])
+    ];
+    const mesh = Reactor3D._fbxScene(tree);
+    assert.equal(mesh.positions.length, 18, 'a quad is two triangles');
+    assert.deepEqual(Array.from(mesh.uvs.slice(0, 6)), [0, 0, 1, 0, 1, 1], 'corner UVs follow the UV index');
+    assert.deepEqual(mesh.groups.map(g => [g.name, g.material, g.start, g.count]), [['Part', 0, 0, 6]]);
+    assert.equal(mesh.materials.length, 1, 'only the material a polygon uses is kept');
+    assert.equal(mesh.materials[0].name, 'Wood');
+    assert.equal(mesh.materials[0].texture, 'wood.png', 'the texture is named by its file, not the exporter\'s path');
+    assert.equal(mesh.materials[0].opacity, 0.75);
+    assert.deepEqual(Array.from(mesh.indices), [0, 1, 2, 3, 4, 5]);
+});

@@ -887,8 +887,9 @@ class Database3DEditor {
         if (this._statsCache.has(key)) return this._statsCache.get(key);
 
         let stats = null;
+        this._statsPending = false;
         try {
-            const analysis = window.RRGlbOptimizer.analyze(new Uint8Array(fs.readFileSync(filePath)));
+            const analysis = this.analyzeModelFile(filePath, entry);
             if (analysis) {
                 const largest = (analysis.images || []).reduce((best, image) =>
                     (!best || image.bytes > best.bytes) ? image : best, null);
@@ -919,9 +920,11 @@ class Database3DEditor {
                 }
             }
         } catch (error) {
+            // Kept for the console: the panel says only that the cost could not be read.
+            this._statsError = error;
             stats = null;
         }
-        this._statsCache.set(key, stats);
+        if (!this._statsPending) this._statsCache.set(key, stats);
         return stats;
     }
 
@@ -1000,6 +1003,8 @@ class Database3DEditor {
         const notes = [];
         if (a.skinned) {
             notes.push(this._t('Characters are posed every frame and are drawn at full detail at every distance — distance levels are not built for them. Their triangle count is paid in full, always.'));
+        } else if (triangles >= 150000 && String(entry.ext || '.glb').toLowerCase() !== '.glb') {
+            notes.push(this._t('This model costs every one of its triangles at every distance. Only a .glb can be optimized here: export it as GLB to cut them.'));
         } else if (triangles >= 150000) {
             notes.push(this._t('This model costs every one of its triangles at every distance. Optimize cuts them — a background prop rarely needs more than a fraction of what a generator gives it.'));
         }
@@ -1037,6 +1042,35 @@ class Database3DEditor {
             line.textContent = note;
             host.appendChild(line);
         }
+    }
+
+    /**
+     * The cost of any model file: a GLB through the optimizer's analysis, the
+     * other formats through the runtime's readers, with each named picture
+     * measured from the textures folder beside the source.
+     */
+    analyzeModelFile(filePath, entry) {
+        const fs = require('fs');
+        const path = require('path');
+        const bytes = new Uint8Array(fs.readFileSync(filePath));
+        const ext = String(entry.ext || path.extname(filePath) || '.glb').toLowerCase();
+        if (ext === '.glb') return window.RRGlbOptimizer.analyze(bytes);
+        // The 3D runtime loads with the first preview; until then a non-GLB has no reader, and the answer is 'not yet' rather than 'cannot'.
+        if (typeof Reactor3D === 'undefined' || !Reactor3D.modelCost) { this._statsPending = true; return null; }
+        const cost = Reactor3D.modelCost(bytes, ext, entry.texture || '');
+        const texturesDir = path.join(path.dirname(path.dirname(filePath)), 'textures');
+        for (const image of cost.images) {
+            const candidates = [path.join(texturesDir, image.name), path.join(path.dirname(filePath), image.name)];
+            const found = candidates.find(candidate => fs.existsSync(candidate));
+            if (!found) continue;
+            try {
+                const data = new Uint8Array(fs.readFileSync(found));
+                const type = /\.png$/i.test(found) ? 'image/png' : /\.jpe?g$/i.test(found) ? 'image/jpeg' : /\.webp$/i.test(found) ? 'image/webp' : '';
+                const dims = window.RRGlbOptimizer.imageDimensions ? window.RRGlbOptimizer.imageDimensions(data, type) : { width: 0, height: 0 };
+                Object.assign(image, { bytes: data.length, width: dims.width || 0, height: dims.height || 0, mimeType: type });
+            } catch (error) { /* a picture that will not read is listed unsized */ }
+        }
+        return cost;
     }
 
     /** Where a model's own GLB lives, or null if it cannot be found. */
@@ -1459,6 +1493,8 @@ class Database3DEditor {
         this.renderEditCard();
         await this._drawPreview(entry);
         if (selection !== this._modelSelection) return;
+        // A non-GLB's cost needs the 3D runtime the preview just loaded.
+        if (this._statsPending) this.renderModelStats();
         // After the preview: _readEmbeddedClips needs Reactor3D, which on a
         // fresh editor only loads inside _drawPreview's ensureLibraries —
         // reading before it left every clip rule marked unresolved until the
