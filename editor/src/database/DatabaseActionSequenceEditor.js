@@ -35,11 +35,15 @@ class DatabaseActionSequenceEditor {
         this.scene||={kind:'grid'};const path=require('path'),projectPath=this.parent.currentProject.path;
         const floors=RRAssetFiles.listNames(path.join(projectPath,'img/battlebacks1'),['.png']),walls=RRAssetFiles.listNames(path.join(projectPath,'img/battlebacks2'),['.png']);
         const rooms=Object.entries(U.settings().troops||{}).filter(([,t])=>t?.type==='room'&&t.mapId).map(([id])=>[ 'troop:'+id,U.message('Room: {name}',{name:this.db.data.troops?.[id]?.name||'#'+id})]);
-        const sceneChoices=[['grid','Grid'],...(floors.length||walls.length?[['battleback','Battleback']]:[]),...rooms];
+        // Battle layout: the flat battle as the game lays it out, actors at their home positions, enemies where the chosen troop puts them, seen from above like the screen.
+        const sceneChoices=[['grid','Grid'],['battle','Battle layout'],...(floors.length||walls.length?[['battleback','Battleback']]:[]),...rooms];
         const sceneValue=this.scene.kind==='troop'?'troop:'+this.scene.id:this.scene.kind;
-        U.field(cast,'Scene',U.select(sceneChoices,sceneChoices.some(c=>c[0]===sceneValue)?sceneValue:'grid',value=>{this.scene=value.startsWith('troop:')?{kind:'troop',id:Number(value.slice(6))}:{kind:value,floor:this.scene.floor,wall:this.scene.wall};backdrop.style.display=value==='battleback'?'':'none';this.savePrefs();this.loadCast();}));
+        U.field(cast,'Scene',U.select(sceneChoices,sceneChoices.some(c=>c[0]===sceneValue)?sceneValue:'grid',value=>{this.scene=value.startsWith('troop:')?{kind:'troop',id:Number(value.slice(6))}:{kind:value,floor:this.scene.floor,wall:this.scene.wall,troop:this.scene.troop};backdrop.style.display=value==='battleback'||value==='battle'?'':'none';troopRow.style.display=value==='battle'?'':'none';this.savePrefs();this.loadCast();}));
         U.field(cast,'Projection',U.select([['3d','3D',true],['2d','2D',true]],this.previewProjection,value=>{this.previewProjection=value;this.savePrefs();this.loadCast();}));
-        const backdrop=U.element('div','rr-sequence-backdrop');cast.append(backdrop);backdrop.style.display=this.scene.kind==='battleback'?'':'none';
+        const backdrop=U.element('div','rr-sequence-backdrop');cast.append(backdrop);backdrop.style.display=this.scene.kind==='battleback'||this.scene.kind==='battle'?'':'none';
+        const troopRow=U.element('div','rr-sequence-backdrop');cast.append(troopRow);troopRow.style.display=this.scene.kind==='battle'?'':'none';
+        const troops=(this.db.data.troops||[]).filter(Boolean).map(t=>[String(t.id),t.name||'#'+t.id,true]);
+        U.field(troopRow,'Troop',U.select(troops,String(this.scene.troop||troops[0]?.[0]||1),value=>{this.scene.troop=Number(value);this.savePrefs();this.loadCast();}));
         U.field(backdrop,'Floor',U.select([['','None'],...floors.map(f=>[f,f,true])],this.scene.floor||'',value=>{this.scene.floor=value;this.savePrefs();this.loadCast();}));
         U.field(backdrop,'Wall',U.select([['','None'],...walls.map(f=>[f,f,true])],this.scene.wall||'',value=>{this.scene.wall=value;this.savePrefs();this.loadCast();}));
         const castHelp=U.element('p','rr-battle-help rr-sequence-cast-help','Preview only, remembered per sequence. In battle, whichever battler uses this sequence plays it.');cast.append(castHelp);
@@ -527,12 +531,30 @@ class DatabaseActionSequenceEditor {
                     homes.camera={...troop.camera};this.sceneHomes=homes;this.controls.distance=troop.camera?.distance||this.controls.distance;this.baseCamera={yaw:Number(settings.camera?.yaw)||0,pitch:Number(settings.camera?.pitch)||25};
                 }
             }
+            if(scene.kind==='battle'){
+                const B=ReactorBattleData,system=this.db.getSystem(),W=system?.advanced?.screenWidth||816,H=system?.advanced?.screenHeight||624;
+                // The project's plugin list, from the file itself when the Plugin Manager has not loaded it yet.
+                const readPlugins=()=>{try{const fs=require('fs'),path=require('path'),dir=path.join(project.path,'js'),file=fs.existsSync(path.join(dir,'reactor_plugins.js'))?path.join(dir,'reactor_plugins.js'):path.join(dir,'plugins.js');return new Function('var $plugins=[];'+fs.readFileSync(file,'utf8')+';return $plugins;')()||[];}catch(error){return [];}};
+                const plugins=window.reactor?.pluginManager?.plugins?.length?window.reactor.pluginManager.plugins:readPlugins(),positions=plugins.find(pl=>pl.name==='SVActorPosition'&&pl.status);
+                const actorHome=i=>positions?{x:Number(positions.parameters['actor'+(i+1)+' Xpos'])||600+i*32,y:Number(positions.parameters['actor'+(i+1)+' Ypos'])||280+i*48}:{x:600+i*32,y:280+i*48};
+                const troop=this.db.getTroop(scene.troop||1)||this.db.getTroops()[0],enemies=(troop?.members||[]).filter(m=>!m.hidden).map(m=>({x:m.x,y:m.y}));
+                const actors=Array.from({length:Math.max(1,B.maxBattleMembers(system,plugins))},(_,i)=>actorHome(i)),tiles=pt=>({x:pt.x/48,y:pt.y/48,z:0});
+                const centroid=list=>list.length?{x:list.reduce((a,pt)=>a+pt.x,0)/list.length,y:list.reduce((a,pt)=>a+pt.y,0)/list.length}:null;
+                const ec=centroid(enemies)||{x:W/2,y:H/4},ac=centroid(actors)||{x:W/2,y:H*.75},userIsActor=this.castKinds.user==='actors';
+                const userSide=userIsActor?actors:enemies.length?enemies:[ec],targetSide=userIsActor?(enemies.length?enemies:[ec]):actors,userLook=userIsActor?ec:ac,targetLook=userIsActor?ac:ec;
+                const homes={user:{...tiles(userSide[0]),facing:B.facingToward(tiles(userSide[0]),tiles(userLook))}};
+                for(let i=0;i<4;i++){const spot=targetSide[i]||targetSide[targetSide.length-1];homes['target'+i]={...tiles(spot),facing:B.facingToward(tiles(spot),tiles(targetLook))};}
+                homes.camera={x:W/96,y:H/96,z:0};this.sceneHomes=homes;this.battleLayout={W,H};
+                settings.projection='2d';settings.camera={x:W/96,y:H/96,z:1,yaw:0,pitch:89.99,distance:H/48};this.baseCamera={yaw:0,pitch:89.99};
+            }else this.battleLayout=null;
             if(this.generation!==generation)return;
             const view=new ReactorBattleRoomView(map,tileset,settings,assets);await view.build();
             if(this.generation!==generation){view.dispose();return;}this.preview=view;this.controls.resize();
+            // The layout view frames the whole game screen: the orthographic span is the taller of the screen height and the height that fits its width in this canvas.
+            if(this.battleLayout&&view.camera.isOrthographicCamera){const {W,H}=this.battleLayout,aspect=Math.max(.1,(view.width||960)/(view.height||540));this.controls.distance=Math.max(H/48,(W/48)/aspect);}
             this.iconSet=await assets.image('system','IconSet');if(this.generation!==generation){view.dispose();return;}
             for(const step of this.sequence.steps)if(['picture','plane'].includes(step.type)&&step.name)try{this.sequencePictures[step.name]=await assets.image('pictures',step.name);}catch(error){console.warn(error);}
-            if(scene.kind==='battleback'&&(scene.floor||scene.wall)){
+            if((scene.kind==='battleback'||scene.kind==='battle')&&(scene.floor||scene.wall)){
                 // Composited like the engine's battleback pair: floor first, wall over it.
                 const canvas=document.createElement('canvas');canvas.width=1000;canvas.height=740;const ctx=canvas.getContext('2d');
                 for(const [folder,name] of [['battlebacks1',scene.floor],['battlebacks2',scene.wall]])if(name)try{const bitmap=await assets.image(folder,name);ctx.drawImage(bitmap.image||bitmap.canvas,0,0,canvas.width,canvas.height);}catch(error){console.warn(error);}
@@ -609,8 +631,11 @@ class DatabaseActionSequenceEditor {
     motionFor(role,frame=this.frame){
         let result={name:'idle',start:0};for(const cue of ReactorBattleData.timeline(this.previewSequence())){if(cue.start>frame)break;if(cue.step.type==='motion'&&(ReactorBattleData.roleKey(cue.step)===role||role==='target0'&&ReactorBattleData.roleKey(cue.step)==='target'||role.startsWith('target')&&cue.step.role==='allTargets'))result={name:ReactorBattleData.motionActionName(cue.step,this._posePlan)||'idle',start:cue.start};}return result;
     }
+    /** Seen from above in the 2D projection, a battler's height reads as a step up the screen, the way the flat battle draws a jump. */
+    liftPose(view){const flat=view?.settings?.projection==='2d';return p=>flat&&p&&p.z?{...p,y:p.y-p.z,z:0}:p;}
     paintSequenceLayers(ctx,visuals,poses,view,width,height){
-        for(const layer of visuals.layers){const {step,owner,start}=layer,p=owner==='screen'?{x:0,y:0}:poses[owner]?view.project(poses[owner]):null;if(!p)continue;
+        const lift=this.liftPose(view);
+        for(const layer of visuals.layers){const {step,owner,start}=layer,p=owner==='screen'?{x:0,y:0}:poses[owner]?view.project(lift(poses[owner])):null;if(!p)continue;
             const bitmap=step.type==='icon'?this.iconSet:this.sequencePictures?.[step.name];
             if(!bitmap){if(step.type==='balloon'&&this.frame-start<76){ctx.save();ctx.font='24px sans-serif';ctx.fillStyle='#fff';ctx.fillText(['','!','?','♪','♥','⚡','…'][step.balloonId]||'!',p.x,p.y-80);ctx.restore();}continue;}
             const image=bitmap.image||bitmap.canvas;ctx.save();ctx.globalAlpha=(step.opacity??255)/255;ctx.translate(p.x+(step.x||0),p.y+(step.y||0));ctx.rotate(((step.angle||0)+(this.frame-start)*(step.spin||0))*Math.PI/180);ctx.scale(step.scale||1,step.scale||1);
@@ -760,7 +785,7 @@ class DatabaseActionSequenceEditor {
             const spec=['weapon','projectile'].includes(step.type)?this.weaponModelSpec(step,key):null;
             if(spec&&p){live.add(id);const record=view.models.get(id);if(!record)view.addModel(id,Reactor3D.normalizeModelSpec(spec),{x:p.x,y:p.y,z:p.z});
                 view.place(id,B.heldPlacement(p,poses[key]?.facing||0,step,spec));if(record?.object)record.object.visible=step.visible!==false;return;}
-            const img=this.previewPropImage(step,key);if(!img||!p)return;live.add(id);view.sequenceBillboard(id,img.source,img.frame,p,step);
+            const img=this.previewPropImage(step,key);if(!img||!p)return;live.add(id);view.sequenceBillboard(id,img.source,img.frame,this.liftPose(view)(p),step);
             // An animation projectile plays its animation on the carrier once per flight; the carrier moving moves the animation.
             if(step.type==='projectile'&&step.iconSource==='animation'&&step.animationId>0){this.flightAnimations||=new Map();if(!this.flightAnimations.has(id))this.flightAnimations.set(id,view.playAnimation(id,step.animationId,{})||null);}};
         for(const [key,step] of held)if(step&&poses[key])draw('extra:held:'+key,step,key,view.attachmentPoint(key,step,poses[key]));
@@ -784,14 +809,15 @@ class DatabaseActionSequenceEditor {
         ctx.fillStyle='#15171c';ctx.fillRect(0,0,width,height);
         const view=this.preview;
         if(view){
+            const lift=this.liftPose(view);
             const camera=this.controls.cameraPose(poses);Object.assign(view.settings.camera,camera,{z:(camera.z||0)+1,distance:this.controls.distance});
             this.ensurePoseRules(view);
             for(const key of ['user','target0','target1','target2','target3']){
                 const role=key==='user'?'user':'target',p=poses[key],image=this.images[role],motion=this.controls.mode==='formation'?{name:'idle',start:0}:this.motionFor(key);
                 if(image&&p){const {bitmap,actor,graphic}=image,held=visuals.held[key],facingYaw=p.facing??B.facingToward(p,role==='user'?poses.target:poses.user),frame=B.graphicFrame(graphic,bitmap.width,bitmap.height,held?.name||motion.name,held?held.frame*(graphic.speed||12):Math.max(0,this.frame-motion.start),facingYaw);
-                    view.billboard(key,bitmap.image,frame,{...p,flipX:(actor?p.facing>0:p.facing<0)!==!!graphic.mirror},Math.max(.2,frame.height/48)*(graphic.scale||1));
+                    view.billboard(key,bitmap.image,frame,{...lift(p),flipX:graphic.type==='character'?!!graphic.mirror:(actor?p.facing>0:p.facing<0)!==!!graphic.mirror},Math.max(.2,frame.height/48)*(graphic.scale||1));
                 }
-                const record=view.models.get(key)||view.billboards.get(key);if(record?.object){record.object.visible=!!p;record.object.traverse?.(object=>{for(const material of Array.isArray(object.material)?object.material:[object.material])if(material){material.transparent=true;material.opacity=visuals.opacity[key]??1;}});if(p){view.place(key,{...p,facing:p.facing??B.facingToward(p,role==='user'?poses.target:poses.user)});record.action=motion.name==='idle'?null:{name:motion.name,start:motion.start};if(motion.name==='idle'&&record.binding)record.binding.movingAt=undefined;}}
+                const record=view.models.get(key)||view.billboards.get(key);if(record?.object){record.object.visible=!!p;record.object.traverse?.(object=>{for(const material of Array.isArray(object.material)?object.material:[object.material])if(material){material.transparent=true;material.opacity=visuals.opacity[key]??1;}});if(p){view.place(key,{...(view.billboards.has(key)?lift(p):p),facing:p.facing??B.facingToward(p,role==='user'?poses.target:poses.user)});record.action=motion.name==='idle'?null:{name:motion.name,start:motion.start};if(motion.name==='idle'&&record.binding)record.binding.movingAt=undefined;}}
             }
             view.sequenceVisualUpdates=new Set([()=>this.paintProps(poses,view,context)]);
             this.controls.sync(poses);view.seekAnimations=true;view.effectsPaused=!this.playing;view.frame=this.frame-1;view.render();ctx.drawImage(view.renderer.domElement,visuals.shake||0,0,width,height);this.paintSequenceLayers(ctx,visuals,poses,view,width,height);

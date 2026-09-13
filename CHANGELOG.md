@@ -34,6 +34,9 @@ Development cycle in progress. Session detail lives in the [handoff](docs/HANDOF
 - **Waits that follow the battle.** A wait can last until the battler's move or jump ends, and a wait for an animation or a popup no longer freezes moves already under way: the steps behind it slide back by the frames it held.
 - **Up and down.** Face Direction gains Up and Down; a character-sheet battler turns by row, faces its opponents when idle, and is never mirrored. Character sheets stand on their middle column and walk 0, 1, 2, 1.
 - An actor drawn from a character sheet, or with an authored input state, no longer takes the engine's 48 px side-step on its turn; its sequences place it.
+- Pictures and icons placed on a battler ride its sprite; one left by a battler state or reaction (a blood splatter on a fallen character) stays until a later clear or the end of the battle. A character-sheet battler stands still on the engine's idle requests instead of jogging in place; the imported input state still walks while a command is chosen.
+- The sequence preview gains a **Battle layout** scene: the cast stands where the flat battle puts it, facing the other side, framed like the game screen; in the 2D projection height reads as a step up the screen and character sheets turn by row.
+- Enemy character sheets that Victor read from sv_enemies, or wrote with a ! in front of a $ name, are found under either spelling and folder.
 - Reactions and battler states may use any decoration step on their own battler. Hits and effect calls are counted along one branch, so an If with a hit in each branch lands once. LeTBS only stands in the way of native sequences while it is actually running the battle.
 
 **Keyboard**

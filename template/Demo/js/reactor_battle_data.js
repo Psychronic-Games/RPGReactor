@@ -106,7 +106,7 @@
         const config=settings?.[kind]?.[id]?.graphic||{mode:'auto'};
         if(config.mode==='model')return {...config,type:'model',model:config.model||legacyModel};
         if(!config.mode||config.mode==='auto')return legacyModel?{type:'model',model:legacyModel}:{type:kind==='actors'?'sv':'static',name:record?.battlerName||'',folder:kind==='actors'?'sv_actors':'enemies',scale:1};
-        return {...config,type:config.mode,name:config.name||'',folder:config.mode==='sv'?'sv_actors':config.mode==='character'?'characters':config.folder||'enemies'};
+        return {...config,type:config.mode,name:config.name||'',folder:config.mode==='sv'?'sv_actors':config.mode==='character'?(config.folder||'characters'):config.folder||'enemies'};
     };
     // Facing is a yaw in degrees: 0 faces +y (down the screen), 90 faces +x
     // (right), 180 faces -y (up), -90 faces -x (left). Character sheets pick
@@ -678,7 +678,7 @@
         const current=pose.facing??-90;
         switch(step.direction){
             case 'right':return 90;case 'left':return -90;case 'up':return 180;case 'down':return 0;
-            case 'behind':return ((current+180+180)%360+360)%360-180;
+            case 'behind':return ((current+180)%360+360)%360-180;
             case 'home':return home&&(home.x!==pose.x||home.y!==pose.y)?B.facingToward(pose,home):current;
             case 'position':return Math.sign(number(step.position)-pose.x*48)>=0?90:-90;
             default:return target&&(target.x!==pose.x||target.y!==pose.y)?B.facingToward(pose,target):current;

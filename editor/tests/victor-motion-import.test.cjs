@@ -86,7 +86,7 @@ test('the whole Star Shift Rebellion database imports into valid, resolvable seq
  const {sequences,settings,report}=V.importDatabase(data,{vertical:true,animations:data.animations});
  assert.ok(report.records>900,'records '+report.records);assert.ok(report.sequences>200&&report.sequences<400,'shared sequences '+report.sequences);
  // Like records share: every pistol takes the one Pistol choreography, and the sixty-odd throwable items whose throw shows their own icon share one sequence.
- const pistols=data.weapons.filter(w=>w&&w.wtypeId===10&&settings.weapons[w.id]?.mode==='sequence'),pistolSeq=new Set(pistols.map(w=>settings.weapons[w.id].sequenceId));assert.ok(pistols.length>10);assert.equal(pistolSeq.size,1,'one sequence for the pistol type');assert.match(sequences[[...pistolSeq][0]].name,/^Pistol attack \(\d+ weapons\)$/);
+ const pistols=data.weapons.filter(w=>w&&w.wtypeId===10&&settings.weapons[w.id]?.mode==='sequence'),pistolSeq=new Set(pistols.map(w=>settings.weapons[w.id].sequenceId));assert.ok(pistols.length>10);assert.equal(pistolSeq.size,1,'one sequence for the pistol type');assert.match(sequences[[...pistolSeq][0]].name,/^Pistol attack \u00b7 \d+ weapons$/);
  const itemSeqs=Object.values(settings.items).filter(b=>b.mode==='sequence').map(b=>b.sequenceId),medkit=itemSeqs.filter(id=>id===settings.items[2].sequenceId).length;assert.ok(medkit>50,'Med Kit-style items share: '+medkit);assert.equal(sequences[settings.items[2].sequenceId].steps.find(st=>st.type==='projectile').iconSource,'action');
  assert.equal(new Set(itemSeqs).size<25,true,'items collapse to a few choreographies: '+new Set(itemSeqs).size);
  for(const s of sequences.slice(1))assert.deepEqual(B.validateSequence(s),[],s.id+' '+s.name);

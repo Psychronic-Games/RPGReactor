@@ -18494,6 +18494,25 @@ Object.assign(RR_TEXT_TRANSLATIONS["tr"], {"Equipped Weapon (icon or 3D model)":
 Object.assign(RR_TEXT_TRANSLATIONS["zh-Hant"], {"Equipped Weapon (icon or 3D model)": "裝備中的武器（圖示或 3D 模型）", "Preview Weapon": "預覽武器", "Moves the shown weapon from where it is to this offset, rotation and scale over the step’s frames.": "在本步驟的影格內，將顯示中的武器從目前位置移到此偏移、旋轉與縮放。", "Show once, then add Move steps to swing or raise it; a bound 3D model is held in place of the icon.": "先顯示一次，再加入移動步驟來揮動或舉起；已綁定的 3D 模型會取代圖示被握住。"});
 Object.assign(RR_TEXT_TRANSLATIONS["zh-Hans"], {"Equipped Weapon (icon or 3D model)": "装备中的武器（图标或 3D 模型）", "Preview Weapon": "预览武器", "Moves the shown weapon from where it is to this offset, rotation and scale over the step’s frames.": "在本步骤的帧内，将显示中的武器从当前位置移到此偏移、旋转与缩放。", "Show once, then add Move steps to swing or raise it; a bound 3D model is held in place of the icon.": "先显示一次，再添加移动步骤来挥动或举起；已绑定的 3D 模型会取代图标被握住。"});
 
+// Sequence preview: the flat battle as the game lays it out.
+Object.assign(RR_TEXT_TRANSLATIONS["ja"], {"Battle layout":"バトル配置"});
+Object.assign(RR_TEXT_TRANSLATIONS["zh-Hant"], {"Battle layout":"戰鬥版面"});
+Object.assign(RR_TEXT_TRANSLATIONS["zh-Hans"], {"Battle layout":"战斗布局"});
+Object.assign(RR_TEXT_TRANSLATIONS["ko"], {"Battle layout":"전투 배치"});
+Object.assign(RR_TEXT_TRANSLATIONS["es"], {"Battle layout":"Disposición de batalla"});
+Object.assign(RR_TEXT_TRANSLATIONS["pt"], {"Battle layout":"Disposição de batalha"});
+Object.assign(RR_TEXT_TRANSLATIONS["fr"], {"Battle layout":"Disposition de combat"});
+Object.assign(RR_TEXT_TRANSLATIONS["de"], {"Battle layout":"Kampfaufstellung"});
+Object.assign(RR_TEXT_TRANSLATIONS["it"], {"Battle layout":"Disposizione di battaglia"});
+Object.assign(RR_TEXT_TRANSLATIONS["ru"], {"Battle layout":"Боевая расстановка"});
+Object.assign(RR_TEXT_TRANSLATIONS["pl"], {"Battle layout":"Układ bitwy"});
+Object.assign(RR_TEXT_TRANSLATIONS["el"], {"Battle layout":"Διάταξη μάχης"});
+Object.assign(RR_TEXT_TRANSLATIONS["tr"], {"Battle layout":"Savaş düzeni"});
+Object.assign(RR_TEXT_TRANSLATIONS["ar"], {"Battle layout":"تخطيط المعركة"});
+Object.assign(RR_TEXT_TRANSLATIONS["id"], {"Battle layout":"Tata letak pertempuran"});
+Object.assign(RR_TEXT_TRANSLATIONS["vi"], {"Battle layout":"Bố trí trận đấu"});
+Object.assign(RR_TEXT_TRANSLATIONS["th"], {"Battle layout":"ผังการต่อสู้"});
+
 // Action sequence steps: concurrent steps, move speed and arc, up and down facings.
 Object.assign(RR_TEXT_TRANSLATIONS["ja"], {"Concurrent":"同時実行","The next step starts on the same frame instead of after this one.":"このステップの終了を待たず、次のステップを同じフレームで開始します。","Concurrent must be enabled or disabled.":"同時実行は有効か無効のどちらかにしてください。","Speed (frames per tile, 0 = use Duration)":"速度（1タイルあたりのフレーム数、0 = 継続時間を使用）","Arc (jump height in tiles along the move)":"弧（移動中のジャンプの高さ、タイル単位）","Up":"上","Down":"下"});
 Object.assign(RR_TEXT_TRANSLATIONS["zh-Hant"], {"Concurrent":"同時進行","The next step starts on the same frame instead of after this one.":"下一步在同一影格開始，而不是等這一步結束。","Concurrent must be enabled or disabled.":"「同時進行」必須為開啟或關閉。","Speed (frames per tile, 0 = use Duration)":"速度（每格影格數，0 = 使用持續時間）","Arc (jump height in tiles along the move)":"弧線（移動時的跳躍高度，以格為單位）","Up":"上","Down":"下"});

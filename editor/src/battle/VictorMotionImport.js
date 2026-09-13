@@ -391,6 +391,9 @@
         return sequence;
     };
     V.stateSequence = (steps, name) => ({ id: 0, version: 1, name, purpose: 'motion', note: V.IMPORT_NOTE, steps: steps.map(s => ({ ...s, role: 'user' })) });
+    // What a shared battler state is called: what happens, to whom, in plain words.
+    V.STATE_LABELS = { entry: 'enters battle', input: 'chooses a command', ready: 'has chosen', damage: 'is hit', collapse: 'falls', victory: 'celebrates', evade: 'evades', magicEvade: 'evades magic', escape: 'escapes', escapeFail: 'fails to escape' };
+    V.stateLabel = (kind, state) => (kind === 'enemies' ? 'Enemy ' : kind === 'classes' ? 'Class ' : 'Character ') + (V.STATE_LABELS[state] || state);
 
     // ----- Graphics ----------------------------------------------------------
     // Victor's default charset motions: still on the standing column, walking
@@ -402,14 +405,21 @@
         if (sheet) for (const [k, v] of Object.entries(sheet)) motions[k] = { ...motions[k], ...v };
         return { mode: 'character', name: actor.characterName, index: actor.characterIndex || 0, motions, ...(/<hide shadows?>/i.test(actor.note) ? { hideShadow: true } : {}) };
     };
-    V.enemyGraphic = (enemy, mode = 'charset') => {
+    // Victor read charset enemies from img/sv_enemies and often wrote the sheet's $ name with a ! in front; the file may sit in img/characters under either spelling, or in sv_enemies. `exists(folder, name)` says which.
+    V.locateSheet = (name, exists) => {
+        if (!exists) return { name, folder: 'characters' };
+        const bare = name.replace(/^!+/, '');
+        for (const [folder, file] of [['characters', name], ['characters', bare], ['sv_enemies', name], ['sv_enemies', bare], ['enemies', name], ['enemies', bare]]) if (exists(folder, file)) return { name: file, folder };
+        return { name, folder: 'characters', missing: true };
+    };
+    V.enemyGraphic = (enemy, mode = 'charset', exists = null) => {
         const name = enemy.battlerName || '';
         if (!(name.startsWith('!') || (mode === 'charset' && name && !name.startsWith('$') && !name.startsWith('%')))) return null;
         if (!name.startsWith('!')) return null;
         const motions = V.defaultSheetMotions(), sheet = V.parseSpriteMotion(enemy.note)[name];
         if (sheet) for (const [k, v] of Object.entries(sheet)) motions[k] = { ...motions[k], ...v };
-        const index = enemy.note.match(/<charset index:\s*(\d+)>/i);
-        return { mode: 'character', name, index: index ? Number(index[1]) : 0, motions, ...(/<hide shadows?>/i.test(enemy.note) ? { hideShadow: true } : {}) };
+        const index = enemy.note.match(/<charset index:\s*(\d+)>/i), where = V.locateSheet(name, exists);
+        return { mode: 'character', name: where.name, ...(where.folder !== 'characters' ? { folder: where.folder } : {}), index: index ? Number(index[1]) : 0, motions, ...(/<hide shadows?>/i.test(enemy.note) ? { hideShadow: true } : {}), ...(where.missing ? { missing: true } : {}) };
     };
 
     // ----- Whole project -----------------------------------------------------
@@ -493,16 +503,25 @@
                     const source = standIn ? V.convertRecord(standIn, { ...options, facing: options.facing || (options.vertical ? 'up' : 'left') }).phases : out.phases, sourceName = clean((standIn || record).name);
                     binding.mode = 'sequence'; binding.sequenceId = intern(V.sequenceFromPhases(source, sourceName), sourceName);
                 }
-                if (stateNames.length) { binding.states = {}; for (const state of stateNames) { binding.states[state] = { mode: 'sequence', sequenceId: intern(V.stateSequence(out.states[state], clean(record.name) + ' · ' + state), clean(record.name) + ' · ' + state) }; report.states++; } }
+                if (stateNames.length) { binding.states = {}; for (const state of stateNames) { const label = V.stateLabel(kind, state); binding.states[state] = { mode: 'sequence', sequenceId: intern(V.stateSequence(out.states[state], label), label) }; report.states++; } }
                 if (kind === 'actors') { const graphic = V.actorGraphic(record, options.actorMode ?? 'charset'); if (graphic) { binding.graphic = graphic; report.graphics++; } }
-                if (kind === 'enemies') { const graphic = V.enemyGraphic(record, options.enemyMode ?? 'charset'); if (graphic) { binding.graphic = graphic; report.graphics++; } }
+                if (kind === 'enemies') { const graphic = V.enemyGraphic(record, options.enemyMode ?? 'charset', options.exists); if (graphic) { if (graphic.missing) { delete graphic.missing; report.notes.push('enemies ' + record.id + ' ' + clean(record.name) + ': sheet ' + graphic.name + ' not found in img/characters, img/sv_enemies or img/enemies'); } binding.graphic = graphic; report.graphics++; } }
                 if (!binding.mode && !binding.states && !binding.graphic) continue;
                 if (!binding.mode) binding.mode = 'inherit';
                 settings[kind][record.id] = binding;
             }
         }
         // A sequence shared by a whole weapon type is named for the type; otherwise after its first record and how many more share it.
-        for (const sequence of sequences) if (sequence) { const groupsOf = sequence.sharedGroups ? [...sequence.sharedGroups].filter(Boolean) : []; if (sequence.sharedBy && groupsOf.length === 1 && groupsOf[0].endsWith(' attack')) sequence.name = groupsOf[0] + ' (' + sequence.sharedBy + ' weapons)'; else if (sequence.sharedBy) sequence.name = sequence.name + ' (+' + (sequence.sharedBy - 1) + ' more ' + (sequence.sharedKind || 'records') + ')'; delete sequence.sharedBy; delete sequence.sharedKind; delete sequence.sharedGroups; }
+        const seenLabels = new Map();
+        for (const sequence of sequences) if (sequence && V.isImported(sequence)) {
+            const groupsOf = sequence.sharedGroups ? [...sequence.sharedGroups].filter(Boolean) : [];
+            const base = sequence.purpose === 'motion' ? sequence.name : sequence.sharedBy && groupsOf.length === 1 && groupsOf[0].endsWith(' attack') ? groupsOf[0] : sequence.name;
+            const nth = (seenLabels.get(base) || 0) + 1; seenLabels.set(base, nth);
+            const variant = nth > 1 ? ' (variant ' + nth + ')' : '';
+            const count = sequence.sharedBy ? ' · ' + sequence.sharedBy + ' ' + (sequence.sharedKind === 'records' || !sequence.sharedKind ? 'records' : sequence.sharedKind) : '';
+            sequence.name = base + variant + count;
+            delete sequence.sharedBy; delete sequence.sharedKind; delete sequence.sharedGroups;
+        }
         return { sequences, settings, report };
     };
 

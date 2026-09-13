@@ -170,7 +170,7 @@
                 adapter.clearProjectile();adapter.clearWeapon();
                 for(const sprite of saved.keys()){sprite.refreshMotion?.();if(sprite._reactorBattler){sprite._reactorBattler.action=null;const binding=sprite._reactorBattler.binding;if(binding){binding.latch={};binding.angles={};}}const model=room?.models.get(sprite._reactorRoomKey);if(model){model.action=null;if(model.binding){model.binding.latch={};model.binding.angles={};}}}
             }
-        };adapter.owns=sprite=>saved.has(sprite);return P.extendAdapter(adapter,{manager,subject,targets,ss,room,roles,homes,saved});
+        };adapter.owns=sprite=>saved.has(sprite);return P.extendAdapter(adapter,{manager,subject,targets,ss,room,roles,homes,saved,stateOnly});
     };
     P.sequenceVisuals=function({ss,room,subject,manager,targets}){
         const prefix='extra:sequence:'+(P._visualSerial=(P._visualSerial||0)+1)+':',held=new Map(),flights=[];let serial=0,time=0,closed=false;
@@ -264,7 +264,7 @@
         };
     };
     P.extendAdapter=function(adapter,env){
-        const {manager,subject,targets,ss,room,roles,homes,saved}=env;
+        const {manager,subject,targets,ss,room,roles,homes,saved,stateOnly=false}=env;
         const visuals=P.sequenceVisuals(env);adapter.visuals=visuals;
         const original={cue:adapter.cue,pose:adapter.pose,cleanup:adapter.cleanup},effects=[],layers=new Map(),restore=[],audioSaved={};
         let selected=[],impactQueue=[],frame=0,formula=null,elements=null,rate=100;
@@ -285,7 +285,7 @@
         const appearance=new Map(),spriteKeys=new Map();for(const [key,sprite] of Object.entries(roles))if(sprite&&!spriteKeys.has(sprite))spriteKeys.set(sprite,key);
         const tween=(sprite,key,to,duration,start,apply,from)=>{effects.push({sprite,key,from,to,start,end:start+duration,apply});};
         const layerPrefix='extra:sequence-layer:'+(P._layerSerial=(P._layerSerial||0)+1)+':';
-        const destroyLayer=key=>{const entry=layers.get(key);if(entry){if(entry.roomKey)room?.remove(entry.roomKey);entry.graphic.removeFromParent();entry.graphic.destroy();layers.delete(key);}};
+        const destroyLayer=(key,owners=[])=>{const entry=layers.get(key)||owners.map(o=>o?._rrLayers?.get(key)).find(Boolean);if(entry){if(entry.roomKey)room?.remove(entry.roomKey);entry.graphic.removeFromParent();entry.graphic.destroy();layers.delete(key);entry.owner?._rrLayers?.delete(key);}};
         const pending=()=>({blocking:true,isPlaying:()=>adapter.pendingImpact});
         const damageCall=target=>{
             const methods={};
@@ -366,15 +366,17 @@
             if(['picture','icon','plane'].includes(step.type)){
                 const owners=step.type==='plane'||step.space==='screen'?[null]:sprites;
                 for(const owner of owners){const key=step.type+':'+step.index+':'+(owner?spriteKeys.get(owner):'screen');
-                    if(step.operation==='clear'){destroyLayer(key);continue;}
+                    if(step.operation==='clear'){destroyLayer(key,[owner]);continue;}
                     if(step.operation==='move'){const entry=layers.get(key);if(entry){for(const k of ['x','y','opacity'])tween(entry,k,step[k],step.duration,start,v=>entry[k]=v,entry[k]);}continue;}
-                    destroyLayer(key);let bitmap;
+                    destroyLayer(key,[owner]);let bitmap;
                     if(step.type==='icon')bitmap=ImageManager.loadSystem('IconSet');else bitmap=ImageManager.loadPicture(step.name);
                     const graphic=step.type==='plane'?new TilingSprite(bitmap):new Sprite(bitmap);graphic.anchor?.set(.5,.5);
                     if(step.type==='icon'){const battler=chosen[sprites.indexOf(owner)]||subject,item=step.source==='action'?action?.item():step.source==='equip'?battler.equips?.()[step.equipIndex-1]:step.source==='shield'?battler.armors?.()[0]:null,index=step.source==='icon'?step.iconIndex:item?.iconIndex||0,size=ImageManager.iconWidth||32;graphic.setFrame(index%16*size,Math.floor(index/16)*size,size,size);}
                     if(step.type==='plane')graphic.move(step.x,step.y,step.width,step.height);
-                    const host=ss._battleField||ss;if(step.layer==='below')host.addChildAt(graphic,0);else host.addChild(graphic);
-                    layers.set(key,{graphic,owner,type:step.type,x:step.x,y:step.y,opacity:step.opacity,step,start,roomKey:layerPrefix+key});
+                    // A picture or icon on a battler is a child of its sprite: it follows every move and fades with a collapse; one from a battler state or reaction stays put after the state ends (Victor's blood splatter on a fallen battler) until a clear or the end of the battle.
+                    const host=owner&&!room&&typeof owner.addChild==='function'?owner:(ss._battleField||ss);if(step.layer==='below')host.addChildAt(graphic,0);else host.addChild(graphic);
+                    const entry={graphic,owner,type:step.type,x:step.x,y:step.y,opacity:step.opacity,step,start,roomKey:layerPrefix+key,hosted:host===owner};
+                    layers.set(key,entry);if(stateOnly&&owner)(owner._rrLayers||=new Map()).set(key,entry);
                 }return;
             }
             if(step.type==='balloon'){
@@ -420,11 +422,11 @@
             }
             for(const sprite of appearance.keys())if(sprite._rrLift){if(room)sprite._reactorRoomPosition.z=(positions[spriteKeys.get(sprite)]?.z||0)+sprite._rrLift;else sprite.y-=sprite._rrLift*48;}
             visuals.pose(time);
-            for(const entry of layers.values()){const {graphic,owner,step}=entry;graphic.opacity=entry.opacity;graphic.rotation=(step.angle+(time-entry.start)*step.spin)*Math.PI/180;graphic.scale?.set(step.scale);if(entry.type==='plane'){graphic.origin.x=(time-entry.start)*step.scrollX;graphic.origin.y=(time-entry.start)*step.scrollY;}else{graphic.x=(owner?.x||0)+entry.x;graphic.y=(owner?.y||0)+entry.y;}}
+            for(const entry of layers.values()){const {graphic,owner,step}=entry;graphic.opacity=entry.opacity;graphic.rotation=(step.angle+(time-entry.start)*step.spin)*Math.PI/180;graphic.scale?.set(step.scale);if(entry.type==='plane'){graphic.origin.x=(time-entry.start)*step.scrollX;graphic.origin.y=(time-entry.start)*step.scrollY;}else if(entry.hosted){graphic.x=entry.x;graphic.y=entry.y;}else{graphic.x=(owner?.x||0)+entry.x;graphic.y=(owner?.y||0)+entry.y;}}
         };
         adapter.cleanup=cancelled=>{try{original.cleanup(cancelled);}finally{
             visuals.cleanup();room?.sequenceVisualUpdates?.delete(updateRoomLayers);
-            for(const fn of restore.reverse())fn();for(const key of [...layers.keys()])destroyLayer(key);
+            for(const fn of restore.reverse())fn();for(const key of [...layers.keys()])if(!(stateOnly&&layers.get(key).hosted))destroyLayer(key);
             for(const [sprite,old] of appearance){sprite.opacity=old.opacity;const main=sprite._mainSprite||sprite;if(old.tone)main.setColorTone?.(old.tone);if(old.blend)main.setBlendColor?.(old.blend);sprite._rrHeldPose=old.pose;sprite._rrGraphicMotion=old.motion;sprite._rrLift=0;delete sprite._rrFacing;delete sprite._rrMotionOverride;sprite._homeX=old.homeX;sprite._homeY=old.homeY;}
         }};
         return adapter;
@@ -583,6 +585,13 @@
         return graphic;
     };
     P.requestGraphicMotion = (sprite,name) => {sprite._rrGraphicMotion={name,start:sprite._rrGraphicFrame||0};};
+    // The engine asks an undecided side-view actor for 'walk' and a decided one for 'wait': the idle bob of a side-view sheet. On a character sheet those are the walk cycle, so a battler drawn from one stands still on them unless a sequence or battler state is the one asking.
+    P.engineMotion = (sprite,name) => {
+        if(name!=='walk'&&name!=='wait')return name;
+        const battler=sprite._battler||sprite._actor||sprite._enemy;if(P.graphicFor(battler)?.type!=='character')return name;
+        if(sprite._rrStatePlayer||root.BattleManager?._reactorSequence?.adapter?.owns?.(sprite))return name;
+        return 'idle';
+    };
     // Whether the project wrote a sequence for this battler's state (through its own binding, its class, or a state it is under).
     P.authoredState=(battler,state)=>{const identity=P.battlerIdentity?.(battler);if(!identity||!P.settings)return false;return !!B.resolveState(P.settings,P.sequences,identity.kind,identity.id,state,identity.classId,null,(battler.states?.()||[]).map(s=>s.id));};
     P.battlerState = (battler,sprite) => {
@@ -628,7 +637,7 @@
             const bitmap=Class.prototype.updateBitmap,frame=Class.prototype.updateFrame,update=Class.prototype.update,motion=Class.prototype.startMotion;
             Class.prototype.updateBitmap=function(...args){const g=P.graphicFor(this._actor||this._enemy);if(g){P.updateGraphicBitmap(this,g,kind);return;}if(this._rrGraphicKey){const main=this._mainSprite||this,old=this._rrGraphicBaseScale;if(old){main.scale.set(old.x,old.y);main.y=old.offsetY;}this._rrGraphicKey=null;this._rrGraphicBaseScale=null;this._battlerName='';}return bitmap?.apply(this,args);};
             Class.prototype.updateFrame=function(...args){const g=P.graphicFor(this._actor||this._enemy);if(g){P.updateGraphicFrame(this,g);return;}return frame?.apply(this,args);};
-            Class.prototype.startMotion=function(name){P.requestGraphicMotion(this,name);return motion?.call(this,name);};
+            Class.prototype.startMotion=function(name){P.requestGraphicMotion(this,P.engineMotion(this,name));return motion?.call(this,name);};
             Class.prototype.update=function(...args){this._rrGraphicFrame=(this._rrGraphicFrame||0)+1;const result=update?.apply(this,args);if(kind==='enemies'&&P.graphicFor(this._enemy)&&this._enemy?.isWeaponAnimationRequested?.()){if(P.graphicFor(this._enemy).showWeapon!==false){if(!this._rrWeaponSprite){this._rrWeaponSprite=new Sprite_Weapon();this.addChild(this._rrWeaponSprite);}this._rrWeaponSprite.setup(this._enemy.weaponImageId());}this._enemy.clearWeaponAnimation();}return result;};
         }
         if(root.Game_Enemy){
@@ -648,6 +657,8 @@
         }
     };
     P.cancelStates=ss=>{for(const sprite of ss?.battlerSprites?.()||[]){sprite._rrStatePlayer?.cancel();sprite._rrStatePlayer=null;}};
+    // Pictures a battler state left on its sprite go at the end of the battle.
+    P.clearBattlerLayers=ss=>{for(const sprite of ss?.battlerSprites?.()||[]){for(const entry of sprite._rrLayers?.values()||[]){entry.graphic.removeFromParent();entry.graphic.destroy();}sprite._rrLayers=null;}};
     P.updateStates=ss=>{
         for(const sprite of ss.battlerSprites?.()||[]){
             const battler=sprite._battler||sprite._actor||sprite._enemy;if(!battler)continue;
@@ -722,7 +733,7 @@
                 P.createRoom(this,config,token).catch(P.warn).finally(()=>{if(this._reactorRoomToken===token)this._reactorRoomLoading=false;});}
         };
         Scene_Battle.prototype.isReady=function(){return !this._reactorRoomLoading&&ready.call(this);};
-        Scene_Battle.prototype.terminate=function(){P.cancelStates(this._spriteset);this._reactorRoomToken=null;this._spriteset?._reactorRoom?.dispose();BattleManager._reactorSequence?.cancel();BattleManager._reactorSequence=null;return terminate.call(this);};
+        Scene_Battle.prototype.terminate=function(){P.cancelStates(this._spriteset);P.clearBattlerLayers(this._spriteset);this._reactorRoomToken=null;this._spriteset?._reactorRoom?.dispose();BattleManager._reactorSequence?.cancel();BattleManager._reactorSequence=null;return terminate.call(this);};
         const updateSprites=Spriteset_Battle.prototype.update;
         Spriteset_Battle.prototype.update=function(){updateSprites.call(this);P.updateStates(this);if(this._reactorRoom)P.updateRoom(this);else for(const update of this._rrSequenceVisualUpdates||[])update();};
         PluginManager.registerCommand('RPGReactor','BattleSequenceSkip',()=>{const player=BattleManager._reactorSequence;if(player){player.skip();while(player.adapter.pendingImpact)player.adapter.resolveNext();}});

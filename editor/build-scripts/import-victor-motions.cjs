@@ -26,8 +26,10 @@ const read = name => { const file = path.join(dataDir, name + '.json'); return f
 const data = { actors: read('Actors'), classes: read('Classes'), enemies: read('Enemies'), weapons: read('Weapons'), armors: read('Armors'), skills: read('Skills'), items: read('Items'), states: read('States'), animations: read('Animations'), system: read('System') };
 const existingSequences = read('ActionSequences') || [null];
 const existingSettings = read('BattlePresentation') || B.empty();
+const imgDir = path.join(project, 'img'), listed = new Map();
+const exists = (folder, name) => { if (!listed.has(folder)) { const dir = path.join(imgDir, folder); listed.set(folder, new Set(fs.existsSync(dir) ? fs.readdirSync(dir).map(f => f.replace(/\.[a-z0-9_]+$/i, '')) : [])); } return listed.get(folder).has(name); };
 const { sequences, settings, report } = V.importDatabase(data, {
-    existing: existingSequences, troops: existingSettings.troops || {}, vertical: flag('vertical'), distance: Number(option('distance', 7)), animations: data.animations
+    existing: existingSequences, troops: existingSettings.troops || {}, vertical: flag('vertical'), distance: Number(option('distance', 7)), animations: data.animations, exists
 });
 // Records the notes said nothing about keep whatever the project already assigned (a room, a model graphic).
 for (const kind of ['skills', 'items', 'weapons', 'actors', 'enemies', 'classes', 'states']) for (const [id, binding] of Object.entries(existingSettings[kind] || {})) if (!settings[kind][id]) settings[kind][id] = binding;
