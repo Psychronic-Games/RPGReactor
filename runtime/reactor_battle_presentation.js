@@ -578,6 +578,11 @@
         return {x:p.x-(ss._battleField?.x||0),y:p.y-(ss._battleField?.y||0)};
     };
     P.installRoomAnchors=function(){
+        // A boss collapse lasts as many frames as the sprite's bitmap is tall; a room battler's sprite is a one-pixel stand-in, so it would end in one frame with the model left half-faded. The model's height on screen stands in for the picture's.
+        if(root.Sprite_Enemy?.prototype.startBossCollapse){
+            const boss=Sprite_Enemy.prototype.startBossCollapse;
+            Sprite_Enemy.prototype.startBossCollapse=function(){boss.call(this);const bounds=this._reactorRoomKey&&this._reactorRoomBounds;if(bounds)this._effectDuration=Math.max(48,Math.round(bounds.height||0));};
+        }
         for(const Class of [root.Sprite_Actor,root.Sprite_Enemy])if(Class){
             const position=Class.prototype.updatePosition;
             Class.prototype.updatePosition=function(...args){position?.apply(this,args);const p=P.roomScreenPosition(this);if(p){this.x=p.x;this.y=p.y;}};

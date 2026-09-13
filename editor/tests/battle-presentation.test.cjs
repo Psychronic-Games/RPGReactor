@@ -296,3 +296,15 @@ test('a room model wears its sprite\'s opacity, blend colour and collapse, and g
  P.mirrorSpriteLook(sprite,battler,{object});
  assert.equal(object.visible,true);assert.equal(material.blending,1);assert.equal(material.userData.rrBlend.value.w,0);
 });
+
+
+test('a boss collapse on a room battler lasts the model\'s screen height in frames, not the placeholder bitmap\'s one pixel',()=>{
+ const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
+ function Enemy(){this.bitmap={height:1};}Enemy.prototype.startBossCollapse=function(){this._effectDuration=this.bitmap.height;this._appeared=false;};Enemy.prototype.updatePosition=function(){};
+ const context={ReactorBattleData:B,DataManager:{isDatabaseLoaded(){return true;}},Sprite_Enemy:Enemy,Scene_Battle:{prototype:{}},Spriteset_Battle:{prototype:{}}};
+ vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../../runtime/reactor_battle_presentation.js'),'utf8'),context);
+ try{context.ReactorBattlePresentation.installRoomAnchors();}catch(error){/* the rest of the installer wants a fuller scene; the collapse wrap is first */}
+ const flat=new Enemy();flat.startBossCollapse();assert.equal(flat._effectDuration,1,'a flat battle keeps the engine\'s rule');
+ const room=new Enemy();room._reactorRoomKey='enemy:0';room._reactorRoomBounds={x:0,y:0,width:120,height:310};room.startBossCollapse();assert.equal(room._effectDuration,310);
+ const small=new Enemy();small._reactorRoomKey='enemy:1';small._reactorRoomBounds={x:0,y:0,width:10,height:12};small.startBossCollapse();assert.equal(small._effectDuration,48,'never shorter than the normal collapse and a half');
+});
