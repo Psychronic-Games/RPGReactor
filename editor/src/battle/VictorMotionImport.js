@@ -20,7 +20,7 @@
     const tiles = px => Math.round(number(px) / TILE * 1000) / 1000;
 
     // ----- Notes -----------------------------------------------------------
-    V.PHASES = ['prepare', 'movement', 'execute', 'effect', 'return', 'finish'];
+    V.PHASES = ['prepare', 'movement', 'execute', 'return', 'finish'];
     // Victor's non-active sequences and the battler state each one plays as.
     V.STATES = { entry: 'entry', inputing: 'input', inputed: 'ready', damage: 'damage', collapse: 'collapse', victory: 'victory', evasion: 'evade', 'magic evasion': 'magicEvade', 'escape sucess': 'escape', 'escape success': 'escape', escape: 'escape', 'escape fail': 'escapeFail' };
     V.SYSTEM_SOUNDS = ['cursor', 'ok', 'cancel', 'buzzer', 'equip', 'save', 'load', 'battle start', 'escape', 'enemy attack', 'enemy damage', 'enemy collapse', 'boss collapse 1', 'boss collapse 2', 'actor damage', 'actor collapse', 'recovery', 'miss', 'evasion', 'magic evasion', 'reflection', 'shop', 'use item', 'use skill'];
@@ -261,7 +261,8 @@
                     break;
                 }
                 case 'action': {
-                    if ((args[1] || '').toLowerCase() === 'effect') push('effect', { role: subject.role === 'user' ? 'allTargets' : subject.role, targetIndex: subject.targetIndex, duration: 0 });
+                    // Victor's effect call: the action's animation on the targets, the hit once it has played, the popups.
+                    if ((args[1] || '').toLowerCase() === 'effect') { const role = subject.role === 'user' ? 'allTargets' : subject.role; push('animation', { animationSource: 'action', animationId: 0, role, targetIndex: subject.targetIndex, duration: 0, waitForCompletion: true }); push('impact', { role, targetIndex: subject.targetIndex, duration: 0 }); push('wait', { waitFor: 'popup', duration: 0 }); }
                     else notes.push('action "' + raw + '" calls a sequence that is not imported');
                     break;
                 }
@@ -370,19 +371,21 @@
             else notes.push('sequence "' + block.kind + '" is not a phase or state');
         }
         // A throw needs an Execute to fly in: the record's own, else Victor's default (the action motion, then the effect).
-        if (throws.length && !phases.execute && (options.throwsNeedExecute ?? true)) phases.execute = [B.step('motion', { motion: 'attack', duration: 1 }), B.step('wait', { duration: 8 }), B.step('effect', { role: 'allTargets', duration: 0 })];
+        if (throws.length && !phases.execute && (options.throwsNeedExecute ?? true)) phases.execute = [B.step('motion', { motion: 'attack', duration: 1 }), B.step('wait', { duration: 8 }), ...V.effectSteps()];
         for (const spec of throws) {
-            const step = V.throwStep(spec, options, record), list = phases.execute, at = list.findIndex(s => s.type === 'effect');
-            if (spec.timing === 'after') list.splice(at >= 0 ? at + 1 : list.length, 0, B.step('projectile', step));
+            const step = V.throwStep(spec, options, record), list = phases.execute, at = list.findIndex(s => s.type === 'animation' && s.animationSource === 'action' || s.type === 'impact');
+            const groupEnd = at >= 0 ? (list.slice(at).findIndex(s => s.type === 'wait' && s.waitFor === 'popup') >= 0 ? at + list.slice(at).findIndex(s => s.type === 'wait' && s.waitFor === 'popup') + 1 : at + 2) : list.length;
+            if (spec.timing === 'after') list.splice(groupEnd, 0, B.step('projectile', step));
             else list.splice(at >= 0 ? at : list.length, 0, B.step('projectile', { ...step, ...(spec.timing === 'during' ? { concurrent: true } : {}) }));
         }
-        // Victor's Effect, when the record drives Execute: the action animation, the hit once it has played, the popups.
-        if (phases.execute && !phases.effect && (options.defaultEffect ?? true)) phases.effect = [B.step('animation', { animationSource: 'action', animationId: 0, role: 'allTargets', duration: 0, waitForCompletion: true }), B.step('impact', { role: 'allTargets', duration: 0 }), B.step('wait', { waitFor: 'popup', duration: 0 })];
+        // Victor's Effect, when the record drives Execute without calling it: the action animation, the hit once it has played, the popups, after the record's own steps.
+        if (phases.execute && !phases.execute.some(s => s.type === 'impact') && (options.defaultEffect ?? true)) phases.execute.push(...V.effectSteps());
         return { phases, states, notes };
     };
 
     V.IMPORT_NOTE = 'Imported from Victor Engine Battle Motions notetags.';
     V.isImported = sequence => !!sequence && typeof sequence.note === 'string' && sequence.note.startsWith('Imported from Victor Engine');
+    V.effectSteps = (role = 'allTargets') => [B.step('animation', { animationSource: 'action', animationId: 0, role, duration: 0, waitForCompletion: true }), B.step('impact', { role, duration: 0 }), B.step('wait', { waitFor: 'popup', duration: 0 })];
     V.sequenceFromPhases = (phases, name) => {
         const provided = V.PHASES.filter(p => phases[p]), steps = [];
         for (const phase of provided) for (const step of phases[phase]) steps.push({ ...step, phase });

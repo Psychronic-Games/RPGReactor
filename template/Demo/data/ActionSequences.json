@@ -195,7 +195,6 @@
       "prepare",
       "movement",
       "execute",
-      "effect",
       "return",
       "finish"
     ]
@@ -270,7 +269,7 @@
         "easing": "smooth",
         "animationSource": "action",
         "animationId": 0,
-        "phase": "effect"
+        "phase": "execute"
       },
       {
         "id": "step-j2ugse89q6",
@@ -282,7 +281,7 @@
         "y": 0,
         "z": 0,
         "easing": "smooth",
-        "phase": "effect"
+        "phase": "execute"
       },
       {
         "id": "step-ch3kuzfkavn",
@@ -354,7 +353,6 @@
       "prepare",
       "movement",
       "execute",
-      "effect",
       "return",
       "finish"
     ]
@@ -447,7 +445,7 @@
         "easing": "smooth",
         "animationSource": "action",
         "animationId": 0,
-        "phase": "effect"
+        "phase": "execute"
       },
       {
         "id": "step-52motb6b3u5",
@@ -459,7 +457,7 @@
         "y": 0,
         "z": 0,
         "easing": "smooth",
-        "phase": "effect"
+        "phase": "execute"
       },
       {
         "id": "step-yrk5hzd2mo",
@@ -518,7 +516,6 @@
       "prepare",
       "movement",
       "execute",
-      "effect",
       "return",
       "finish"
     ]
@@ -558,7 +555,7 @@
         "easing": "smooth",
         "animationSource": "action",
         "animationId": 0,
-        "phase": "effect"
+        "phase": "execute"
       },
       {
         "id": "step-sxzr4p26sop",
@@ -570,7 +567,7 @@
         "y": 0,
         "z": 0,
         "easing": "smooth",
-        "phase": "effect"
+        "phase": "execute"
       },
       {
         "id": "step-esxsnh7fjbn",
@@ -607,7 +604,6 @@
       "prepare",
       "movement",
       "execute",
-      "effect",
       "return",
       "finish"
     ]
@@ -647,7 +643,7 @@
         "easing": "smooth",
         "animationSource": "action",
         "animationId": 0,
-        "phase": "effect"
+        "phase": "execute"
       },
       {
         "id": "step-7dplw7567ro",
@@ -659,7 +655,7 @@
         "y": 0,
         "z": 0,
         "easing": "smooth",
-        "phase": "effect"
+        "phase": "execute"
       },
       {
         "id": "step-r1z63w90o0d",
@@ -696,7 +692,6 @@
       "prepare",
       "movement",
       "execute",
-      "effect",
       "return",
       "finish"
     ]
@@ -736,7 +731,7 @@
         "easing": "smooth",
         "animationSource": "action",
         "animationId": 0,
-        "phase": "effect"
+        "phase": "execute"
       },
       {
         "id": "step-oj0i4im35z",
@@ -748,7 +743,7 @@
         "y": 0,
         "z": 0,
         "easing": "smooth",
-        "phase": "effect"
+        "phase": "execute"
       },
       {
         "id": "step-bvbmerl7qb7",
@@ -785,7 +780,6 @@
       "prepare",
       "movement",
       "execute",
-      "effect",
       "return",
       "finish"
     ]
@@ -847,7 +841,7 @@
         "easing": "smooth",
         "animationSource": "action",
         "animationId": 0,
-        "phase": "effect"
+        "phase": "execute"
       },
       {
         "id": "step-uum77hkkrxj",
@@ -859,7 +853,7 @@
         "y": 0,
         "z": 0,
         "easing": "smooth",
-        "phase": "effect"
+        "phase": "execute"
       },
       {
         "id": "step-3s6lislhu5e",
@@ -918,7 +912,6 @@
       "prepare",
       "movement",
       "execute",
-      "effect",
       "return",
       "finish"
     ]
@@ -1031,7 +1024,7 @@
         "easing": "smooth",
         "animationSource": "action",
         "animationId": 0,
-        "phase": "effect"
+        "phase": "execute"
       },
       {
         "id": "step-rqi1bxb1fk",
@@ -1043,7 +1036,7 @@
         "y": 0,
         "z": 0,
         "easing": "smooth",
-        "phase": "effect"
+        "phase": "execute"
       },
       {
         "id": "step-w25cr5zztch",
@@ -1102,7 +1095,6 @@
       "prepare",
       "movement",
       "execute",
-      "effect",
       "return",
       "finish"
     ]
@@ -1215,7 +1207,7 @@
         "easing": "smooth",
         "animationSource": "action",
         "animationId": 0,
-        "phase": "effect"
+        "phase": "execute"
       },
       {
         "id": "step-erbwzrhjijq",
@@ -1227,7 +1219,7 @@
         "y": 0,
         "z": 0,
         "easing": "smooth",
-        "phase": "effect"
+        "phase": "execute"
       },
       {
         "id": "step-n6juwz1zev",
@@ -1286,7 +1278,6 @@
       "prepare",
       "movement",
       "execute",
-      "effect",
       "return",
       "finish"
     ]
@@ -1399,7 +1390,7 @@
         "easing": "smooth",
         "animationSource": "action",
         "animationId": 0,
-        "phase": "effect"
+        "phase": "execute"
       },
       {
         "id": "step-82npyvtmqh8",
@@ -1411,7 +1402,7 @@
         "y": 0,
         "z": 0,
         "easing": "smooth",
-        "phase": "effect"
+        "phase": "execute"
       },
       {
         "id": "step-gqig4g2brj5",
@@ -1521,7 +1512,6 @@
       "prepare",
       "movement",
       "execute",
-      "effect",
       "return",
       "finish"
     ]
@@ -1771,7 +1761,6 @@
       "prepare",
       "movement",
       "execute",
-      "effect",
       "return",
       "finish"
     ]
@@ -1898,7 +1887,7 @@
         "easing": "smooth",
         "animationSource": "action",
         "animationId": 0,
-        "phase": "effect"
+        "phase": "execute"
       },
       {
         "id": "step-ds5h83kmm8u",
@@ -1910,7 +1899,7 @@
         "y": 0,
         "z": 0,
         "easing": "smooth",
-        "phase": "effect"
+        "phase": "execute"
       },
       {
         "id": "step-ehylcsga37k",
@@ -1947,7 +1936,6 @@
       "prepare",
       "movement",
       "execute",
-      "effect",
       "return",
       "finish"
     ]
@@ -2097,7 +2085,7 @@
         "easing": "smooth",
         "animationSource": "action",
         "animationId": 0,
-        "phase": "effect"
+        "phase": "execute"
       },
       {
         "id": "step-eulfm673yre",
@@ -2109,7 +2097,7 @@
         "y": 0,
         "z": 0,
         "easing": "smooth",
-        "phase": "effect"
+        "phase": "execute"
       },
       {
         "id": "step-7utunpxoc5d",
@@ -2213,7 +2201,6 @@
       "prepare",
       "movement",
       "execute",
-      "effect",
       "return",
       "finish"
     ]
@@ -2389,7 +2376,7 @@
         "easing": "smooth",
         "animationSource": "action",
         "animationId": 0,
-        "phase": "effect"
+        "phase": "execute"
       },
       {
         "id": "step-7mkqxth1p0o",
@@ -2401,7 +2388,7 @@
         "y": 0,
         "z": 0,
         "easing": "smooth",
-        "phase": "effect"
+        "phase": "execute"
       },
       {
         "id": "step-01pi17vkxdje",
@@ -2527,7 +2514,6 @@
       "prepare",
       "movement",
       "execute",
-      "effect",
       "return",
       "finish"
     ]

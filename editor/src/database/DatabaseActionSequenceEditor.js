@@ -10,7 +10,7 @@ class DatabaseActionSequenceEditor {
         const toolbar=U.element('div','rr-battle-toolbar rr-sequence-header');
         const name=U.element('input','database-field-value');name.value=sequence.name;name.setAttribute('aria-label','Name');name.onchange=()=>{this.edit(()=>sequence.name=name.value);this.parent._activeDatabaseList?.refresh();};toolbar.append(name);
         // An older whole action shows its steps under Execute with every phase provided; saved with the next edit.
-        B.migratePhases(sequence);
+        B.migrateSequence(sequence);
         const impact=U.field(toolbar,'Hits',U.select([['once','Hits: the skill decides (one Apply Action Effect)'],['authored','Hits: each Apply Action Effect lands once']],sequence.hitPolicy||'once',value=>this.edit(()=>sequence.hitPolicy=value)));impact.setAttribute('aria-label',U.text('Hits'));impact.title=U.text('How many times the action hits: the skill’s own repeat count through one Apply Action Effect, or exactly one hit per Apply Action Effect step you place.');
         toolbar.append(U.button('Undo',()=>this.history(this.undo,this.redo)),U.button('Redo',()=>this.history(this.redo,this.undo)));
         // What the preview stands in for: the skill or item being used, the
@@ -124,7 +124,7 @@ class DatabaseActionSequenceEditor {
     inheritPhase(phase){const B=ReactorBattleData,sequence=this.sequence;if(B.phaseSteps(sequence,phase).length)return;this.edit(()=>{sequence.phases=B.sequencePhases(sequence).filter(p=>p!==phase);});this.drawSteps();}
     updateReferences(){const refs=ReactorBattleData.references(this.ui.settings(),this.sequence.id,this.db.data.actionSequences);this.ui.setText(this.references,refs.length?this.ui.message('Used by: {records}',{records:refs.map(r=>(window.I18n?.tDbType(r.kind)||r.kind)+' #'+r.id+(r.slot?' · '+r.slot:'')).join(', ')}):'Assign this sequence from a skill, item, weapon, actor or enemy. Previewing never applies damage or changes game state.');}
     motionLabels(){return {...Object.fromEntries(ReactorBattleData.battlerStates),return:'Return',thrust:'Thrust',swing:'Swing',missile:'Missile',skill:'Skill',item:'Item',idle:'Idle',run:'Run',walk:'Walk',punch:'Punch',attack:'Attack',cast:'Cast',guard:'Guard',damage:'Damage',evade:'Evade',victory:'Victory',escape:'Escape'};}
-    label(type){return {move:'Move / Position Key',motion:'Battler Motion',sound:'Play Sound',animation:'Show Animation',projectile:'Projectile',weapon:'Weapon',impact:'Apply Action Effect',effect:'Play Effect Phase',wait:'Wait',camera:'Camera Key'}[type]||ReactorBattleData.commands[type]?.label||type;}
+    label(type){return {move:'Move / Position Key',motion:'Battler Motion',sound:'Play Sound',animation:'Show Animation',projectile:'Projectile',weapon:'Weapon',impact:'Apply Action Effect',wait:'Wait',camera:'Camera Key'}[type]||ReactorBattleData.commands[type]?.label||type;}
     pushUndo(){this.undo.push(JSON.stringify(this.sequence));if(this.undo.length>100)this.undo.shift();this.redo=[];}
     edit(fn){this.clearPreviewMedia();this.stepPlayback=null;this.playing=false;this.pushUndo();fn();this.ui.changed();this.validate();}
     history(from,to){if(!from.length)return;this.clearPreviewMedia();this.stepPlayback=null;this.playing=false;to.push(JSON.stringify(this.sequence));const next=JSON.parse(from.pop());for(const key of Object.keys(this.sequence))delete this.sequence[key];Object.assign(this.sequence,next);this.selected=Math.min(this.selected,this.sequence.steps.length-1);if(this.controls?.transformPose){const step=this.sequence.steps[this.selected];this.controls.transformPose=step?.type==='motion'&&step.transform?step:null;if(this.controls.transformPose)this.controls.showTransformPose(step);}this.ui.changed();this.refresh();}
@@ -359,7 +359,7 @@ class DatabaseActionSequenceEditor {
         const U=this.ui,select=this.stepType,chosen=select.value,groups=[
             ['Templates',ReactorBattleData.basicSteps.map(name=>'basic:'+name)],
             ['Movement',['move','motion','jump','leap','float','fall','home','direction','pose']],
-            ['Action',['impact','effect','animation','weapon','projectile','wait','action']],
+            ['Action',['impact','animation','weapon','projectile','wait','action']],
             ['Targets',['target','clearTargets']],
             ['Audio',['sound','bgm','bgs','se','movie']],
             ['Visual Effects',['camera','balloon','opacity','whiten','flash','tint','shake','picture','icon','plane','battleback','battlestatus','battlelog']],

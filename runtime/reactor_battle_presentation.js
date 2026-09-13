@@ -18,6 +18,7 @@
         if(P.state!=='idle')return;P.state='loading';
         Promise.all([P.json('data/ActionSequences.json',true),P.json('data/BattlePresentation.json',true),P.json('data/.BattlePresentation.pending.json',true)]).then(([sequences,settings,journal])=>{
             if(journal){if(journal.version!==1||!Array.isArray(journal.files))throw Error('Battle data recovery is required.');for(const entry of journal.files){if(entry.file==='ActionSequences.json')sequences=entry.previous?JSON.parse(entry.previous):null;if(entry.file==='BattlePresentation.json')settings=entry.previous?JSON.parse(entry.previous):null;}}
+            for(const sequence of sequences||[])if(sequence)B.migrateSequence(sequence);if(settings)B.migrateSettings(settings);
             B.validateStore(sequences||[null],settings||B.empty());P.sequences=sequences||[null];P.settings=settings||B.empty();
         }).catch(P.warn).finally(()=>P.state='ready');
     };

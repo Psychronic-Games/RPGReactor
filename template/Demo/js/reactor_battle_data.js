@@ -22,12 +22,11 @@
         return limit;
     };
     B.empty = () => ({ version: 1, troops: {}, skills: {}, items: {}, weapons: {}, actors: {}, enemies: {}, classes: {} });
-    B.types = ['move', 'motion', 'sound', 'animation', 'projectile', 'weapon', 'impact', 'wait', 'camera', 'effect'];
+    B.types = ['move', 'motion', 'sound', 'animation', 'projectile', 'weapon', 'impact', 'wait', 'camera'];
     B.actionPhases = [
         ['prepare', 'Prepare', 'Before moving: ready the battler or begin casting.'],
         ['movement', 'Movement', 'Approach the target or step forward.'],
-        ['execute', 'Execute', 'Perform the action itself and call Effect at the moment of contact. A normal attack by default.'],
-        ['effect', 'Effect', 'Show the animation on the targets and apply damage, states and buffs exactly once.'],
+        ['execute', 'Execute', 'Perform the action itself: its animation on the targets and one Apply Action Effect land the hit. A normal attack by default.'],
         ['return', 'Return', 'Move the battler back home.'],
         ['finish', 'Finish', 'Clean up after the return, before automatic pose and camera reset.']
     ];
@@ -79,9 +78,59 @@
         sequence.phases = B.phaseIds();
         return true;
     };
+    // The built-in hit: the action's animation on the targets, then Apply Action Effect.
+    B.builtinHit = (context = {}, role = 'allTargets', targetIndex) => [
+        B.step('animation', { animationSource: 'action', animationId: Math.max(0, context.animationId || 0), role, targetIndex, duration: 0, waitForCompletion: true }),
+        B.step('impact', { role, targetIndex, duration: 0 })
+    ];
+    // Effect used to be a phase of its own, called from Execute by a "Play
+    // Effect Phase" step. It is part of Execute now: steps marked effect keep
+    // their place as Execute steps, a placeholder takes the sequence's effect
+    // steps at that moment (or the built-in hit when it had none), and its
+    // own frames become a wait after them.
+    B.foldEffectPhase = sequence => {
+        if (!sequence || !Array.isArray(sequence.steps)) return false;
+        let changed = false;
+        if (sequence.purpose === 'effect') { sequence.purpose = 'execute'; changed = true; }
+        const steps = sequence.steps.filter(Boolean), effectSteps = steps.filter(step => step.phase === 'effect');
+        const placeholders = steps.filter(step => step.type === 'effect');
+        if (placeholders.length) {
+            const out = [];
+            let first = true;
+            for (const step of steps) {
+                if (step.phase === 'effect' && effectSteps.length) continue;
+                if (step.type !== 'effect') { out.push(step); continue; }
+                const body = first ? (effectSteps.length ? effectSteps.map(s => ({ ...s, phase: 'execute' })) : B.builtinHit({}, step.role || 'allTargets', step.targetIndex)) : [];
+                first = false;
+                for (const s of body) out.push({ ...s, phase: 'execute' });
+                if (step.duration > 0) out.push({ ...B.step('wait', { duration: step.duration }), phase: 'execute' });
+            }
+            sequence.steps = out;
+            changed = true;
+        } else if (effectSteps.length) {
+            for (const step of effectSteps) step.phase = 'execute';
+            changed = true;
+        }
+        if (Array.isArray(sequence.phases) && sequence.phases.includes('effect')) {
+            const set = new Set(sequence.phases.filter(p => p !== 'effect'));
+            if (sequence.steps.some(step => step && B.stepPhase(step) === 'execute')) set.add('execute');
+            sequence.phases = B.phaseIds().filter(p => set.has(p));
+            changed = true;
+        }
+        return changed;
+    };
+    B.migrateSequence = sequence => { const folded = B.foldEffectPhase(sequence), phased = B.migratePhases(sequence); return folded || phased; };
+    // A per-phase pick of the old Effect phase has nothing to bind to.
+    B.migrateSettings = settings => {
+        let changed = false;
+        for (const kind of ['skills','items','weapons','actors','enemies','classes']) for (const value of Object.values(settings?.[kind] || {})) {
+            for (const holder of [value, value?.unarmed]) if (holder?.phases && Object.prototype.hasOwnProperty.call(holder.phases, 'effect')) { delete holder.phases.effect; changed = true; }
+        }
+        return changed;
+    };
     // Where each step of a plain action belongs, read from what it does: the
-    // approach is Movement, the animation and impact are Effect, the walk
-    // home is Return, the idle after it is Finish, everything else Execute.
+    // approach is Movement, the walk home is Return, the idle after it is
+    // Finish, everything else (the swing, the animation, the hit) Execute.
     B.autoPhases = steps => {
         const list = (steps || []).filter(Boolean), zero = step => ['x','y','z'].every(k => !Number(step[k]));
         const nextMove = i => list.slice(i + 1).find(step => step.type !== 'motion' && step.type !== 'direction');
@@ -89,8 +138,7 @@
         return list.map((step, i) => {
             let phase = 'execute';
             const next = nextMove(i);
-            if (step.type === 'impact') { impact = true; phase = 'effect'; }
-            else if (step.type === 'animation' && !impact && list.slice(i + 1).some(s => s.type === 'impact') && !list.slice(i + 1, list.indexOf(list.slice(i + 1).find(s => s.type === 'impact'))).some(s => ['weapon','move','motion','wait'].includes(s.type))) phase = 'effect';
+            if (step.type === 'impact') impact = true;
             else if (!impact && step.type === 'move' && (['target','approach'].includes(step.anchor) || !zero(step))) phase = 'movement';
             else if (!impact && step.type === 'motion' && ['walk','run'].includes(step.motion) && next?.type === 'move' && (['target','approach'].includes(next.anchor) || !zero(next))) phase = 'movement';
             else if (impact && step.type === 'move' && step.anchor === 'home' && zero(step) && !returned && step.duration > 0) { returned = true; phase = 'return'; }
@@ -326,7 +374,7 @@
     B.roles = B.targetGroups;
     B.templates = ['Unarmed Punch', 'Melee Strike', 'Projectile Shot', 'Cast on Target', 'Heal', 'Self Buff', 'Use Item', 'Throw Item', 'Throw Weapon', 'Boomerang', 'Item Toss', 'Sword Slash', 'Railgun Shot'];
     B.step = (type, extra = {}) => Object.assign({ id: 'step-' + Math.random().toString(36).slice(2), type,
-        duration: ['impact','sound','animation','effect'].includes(type)||B.commands[type]&&!['jump','leap','float','fall','opacity','flash','tint','shake','whiten','picture','plane'].includes(type) ? 0 : 20, role: 'user', anchor: 'home', x: 0, y: 0, z: 0, easing: 'smooth' }, B.commandDefaults(type), extra);
+        duration: ['impact','sound','animation'].includes(type)||B.commands[type]&&!['jump','leap','float','fall','opacity','flash','tint','shake','whiten','picture','plane'].includes(type) ? 0 : 20, role: 'user', anchor: 'home', x: 0, y: 0, z: 0, easing: 'smooth' }, B.commandDefaults(type), extra);
     B.basicSteps = ['Run to Target', 'Punch', 'Return Home'];
     B.basic = name => name === 'Run to Target' ? [
         B.step('motion', {motion:'run',duration:0}),
@@ -453,7 +501,7 @@
         if (sequence.steps.length > (sequence.expanded?4096:256)) errors.push('A sequence can contain at most 256 steps.');
         const purpose = B.purpose(sequence);
         if (!B.purposes.some(([id])=>id===purpose)) errors.push('Choose a valid sequence purpose.');
-        let impacts = 0, effectCalls = 0, duration = 0;
+        let impacts = 0, duration = 0;
         const ids = new Set();
         for (const step of sequence.steps) {
             if (!step || !B.types.includes(step.type)) { errors.push('Unknown step type.'); continue; }
@@ -462,9 +510,8 @@
             if (!Number.isInteger(step.duration) || step.duration < 0 || step.duration > 3600) errors.push('Step duration must be 0–3600 frames.');
             duration += step.duration || 0;
             if (step.type === 'impact') impacts++;
-            if (step.type === 'effect') effectCalls++;
             // A battler state or reaction moves, poses and decorates the battler it plays on, and nothing else: no damage, no other battlers, no camera.
-            if (purpose === 'motion' && (['impact','effect','action','target','clearTargets','formula','element','kill','camera','projectile','weapon'].includes(step.type) || !['user','subject'].includes(step.role) || step.type === 'move' && step.anchor !== 'home')) errors.push('Battler state sequences may affect only the user and cannot apply damage or move the camera.');
+            if (purpose === 'motion' && (['impact','action','target','clearTargets','formula','element','kill','camera','projectile','weapon'].includes(step.type) || !['user','subject'].includes(step.role) || step.type === 'move' && step.anchor !== 'home')) errors.push('Battler state sequences may affect only the user and cannot apply damage or move the camera.');
             if(step.type==='animation'&&(!Number.isInteger(step.animationId??0)||(step.animationId??0)<0))errors.push('Choose a valid animation.');
             if(step.waitForCompletion!==undefined&&typeof step.waitForCompletion!=='boolean')errors.push('Wait for completion must be enabled or disabled.');
             if(step.concurrent!==undefined&&typeof step.concurrent!=='boolean')errors.push('Concurrent must be enabled or disabled.');
@@ -490,20 +537,18 @@
                 if (['x','y','z'].some(key => !Number.isFinite(step[key]) || Math.abs(step[key]) > 1000)) errors.push('Positions must be finite and within 1000 units.');
             }
         }
-        // Hits and effect calls are counted along one path: an If with a hit in each branch lands once.
-        impacts = B.mostAlong(sequence.steps, s => s.type === 'impact'); effectCalls = B.mostAlong(sequence.steps, s => s.type === 'effect');
+        // Hits are counted along one path: an If with a hit in each branch lands once.
+        impacts = B.mostAlong(sequence.steps, s => s.type === 'impact');
         const phased = purpose === 'action' && B.isPhased(sequence), provides = phased ? B.sequencePhases(sequence) : [];
         if (phased) {
-            // A partial action (say, only Movement) needs no impact; one that
-            // provides Effect with steps lands exactly one, unless authored hits.
+            // A partial action needs no impact of its own (an Execute without
+            // one gets the built-in hit after its last step); with one, it
+            // lands exactly once unless the hits are authored.
             if (sequence.hitPolicy !== 'authored' && impacts > 1) errors.push('Include exactly one Apply Action Effect step; skill repeats determine the number of hits.');
-            if (sequence.hitPolicy !== 'authored' && impacts === 0 && B.phaseSteps(sequence,'effect').length && !sequence.steps.some(s=>s.type==='action')) errors.push('Include exactly one Apply Action Effect step; skill repeats determine the number of hits.');
-            if (sequence.steps.some(s => s.type === 'effect' && B.stepPhase(s) !== 'execute') || effectCalls > 1) errors.push('Play Effect Phase belongs in Execute.');
         } else {
-            if (['action','effect'].includes(purpose) && sequence.hitPolicy !== 'authored' && impacts !== 1 && !sequence.steps.some(s=>s.type==='action')) errors.push('Include exactly one Apply Action Effect step; skill repeats determine the number of hits.');
-            if (!['action','effect','routine'].includes(purpose) && impacts) errors.push('Apply Action Effect belongs in a Complete Action or Effect phase.');
-            if (purpose === 'execute' && (sequence.hitPolicy==='authored'?effectCalls<1:effectCalls!==1)) errors.push('Include exactly one Play Effect Phase step in Execute.');
-            if (purpose !== 'execute' && effectCalls) errors.push('Play Effect Phase belongs in Execute.');
+            if (purpose === 'action' && sequence.hitPolicy !== 'authored' && impacts !== 1 && !sequence.steps.some(s=>s.type==='action')) errors.push('Include exactly one Apply Action Effect step; skill repeats determine the number of hits.');
+            if (purpose === 'execute' && sequence.hitPolicy !== 'authored' && impacts > 1) errors.push('Include exactly one Apply Action Effect step; skill repeats determine the number of hits.');
+            if (!['action','execute','routine'].includes(purpose) && impacts) errors.push('Apply Action Effect belongs in a Complete Action or Execute phase.');
         }
         if (duration > 18000) errors.push('A sequence can last at most five minutes.');
         const branches=[];
@@ -589,8 +634,7 @@
         const steps={
             prepare:[B.step('wait',{duration:0})],
             movement:context.isAttack?B.basic('Run to Target'):[B.step('move',{x:.3,duration:12})],
-            execute:[B.step('motion',{motion,duration:18}),B.step('effect',{duration:0,role:'allTargets'})],
-            effect:[B.step('animation',{animationId:Math.max(0,context.animationId||0),role:'allTargets',duration:0,waitForCompletion:true}),B.step('impact',{role:'allTargets',duration:0})],
+            execute:[B.step('motion',{motion,duration:18}),...B.builtinHit(context)],
             return:B.basic('Return Home'),
             finish:[B.step('motion',{motion:'idle',duration:0})]
         };
@@ -629,27 +673,25 @@
         if(phases.some(p=>p.missing))return {mode,source:first,phases,sequence:null,missing:true};
         // A sequence that lands the blow itself, with nothing but built-in
         // fillers around it, is the whole action as authored: hand it back.
-        if(mode==='sequence'){const whole=sequences?.[first.binding.sequenceId],own=B.sequencePhases(whole);if(own.includes('execute')&&own.includes('effect')&&phases.every(p=>p.sequence===whole||!p.source))return {mode,source:first,phases,sequence:whole};}
+        if(mode==='sequence'){const whole=sequences?.[first.binding.sequenceId],own=B.sequencePhases(whole);if(own.includes('execute')&&whole.steps.some(s=>s.type==='impact'||s.type==='action')&&phases.every(p=>p.sequence===whole||!p.source))return {mode,source:first,phases,sequence:whole};}
         // Phases from the same sequence play in that sequence's own order, so
-        // an impact authored mid-swing still lands mid-swing; an Effect
-        // placeholder in Execute takes the Effect steps at that moment.
-        const steps=[],effect=phases.find(p=>p.phase==='effect'),push=(step,phase)=>steps.push({...copy(step),id:'phase-'+steps.length,phase});
-        let placed=false;
-        const expand=(step,phase)=>{
-            if(step.type==='effect'){placed=true;for(const s of effect.steps)push(s,'effect');if(step.duration)push(B.step('wait',{duration:step.duration}),'execute');return;}
-            if(step.type==='impact')placed=true;push(step,phase);
-        };
+        // an impact authored mid-swing still lands mid-swing.
+        const steps=[],push=(step,phase)=>steps.push({...copy(step),id:'phase-'+steps.length,phase});
         for(let i=0;i<phases.length;i++){
-            const entry=phases[i];if(entry.phase==='effect'){if(!placed){placed=true;for(const s of entry.steps)push(s,'effect');}continue;}
+            const entry=phases[i];
             // Coalesce the run of following phases this same sequence provides.
             const run=[entry];while(i+1<phases.length&&phases[i+1].sequence===entry.sequence&&entry.sequence?.id!==0)run.push(phases[++i]);
             const wanted=new Set(run.map(r=>r.phase));
-            // A sequence that calls its Effect from a placeholder in Execute lands it there; its Effect steps are not laid down a second time in their own place.
-            const called=wanted.has('effect')&&entry.sequence.steps.some(s=>s.type==='effect'&&B.stepPhase(s)==='execute');
-            if(run.length>1)for(const step of entry.sequence.steps){const phase=B.stepPhase(step);if(!wanted.has(phase)||(called&&phase==='effect'))continue;expand(step,phase);}
-            else for(const step of entry.steps)expand(step,entry.phase);
+            if(run.length>1)for(const step of entry.sequence.steps){const phase=B.stepPhase(step);if(wanted.has(phase))push(step,phase);}
+            else for(const step of entry.steps)push(step,entry.phase);
         }
-        const hitSource=effect.sequence?.id?effect.sequence:phases.find(p=>p.phase==='execute').sequence;
+        // An Execute that lands no hit of its own gets the built-in one after its last step, before the return.
+        if(!steps.some(s=>s.type==='impact'||s.type==='action')){
+            let at=steps.map(s=>s.phase).lastIndexOf('execute');
+            if(at>=0)at+=1;else{at=steps.findIndex(s=>['return','finish'].includes(s.phase));if(at<0)at=steps.length;}
+            steps.splice(at,0,...B.builtinHit(context).map((step,k)=>({...step,id:'phase-hit-'+k,phase:'execute'})));
+        }
+        const hitSource=phases.find(p=>p.phase==='execute').sequence;
         const sequence={id:0,version:1,name:'Resolved Action Phases',hitPolicy:hitSource?.hitPolicy||'once',steps};
         return {mode,source:first,phases,sequence:B.validateSequence(sequence).length?null:sequence};
     };

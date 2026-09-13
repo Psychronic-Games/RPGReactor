@@ -74,7 +74,7 @@ test('unarmed actors use their default, weapon attacks override it, and skill ov
  const action={kind:'skills',itemId:1,isAttack:true,weaponIds:[],battlerKind:'actors',battlerId:1};assert.equal(B.resolve(data,sequences,action),sequences[1]);
  action.weaponIds=[2];assert.equal(B.resolve(data,sequences,action),sequences[2],'a starter provides every phase, so the weapon owns the whole action');
  // A weapon sequence that marks only some phases takes those over; the actor's sequence still supplies the rest (here the run-up).
- const partial={...sequences[2],id:4,phases:['execute','effect'],steps:sequences[2].steps.filter(s=>['execute','effect'].includes(s.phase))};sequences[4]=partial;data.weapons[2]={mode:'sequence',sequenceId:4};
+ const partial={...sequences[2],id:4,phases:['execute'],steps:sequences[2].steps.filter(s=>s.phase==='execute')};sequences[4]=partial;data.weapons[2]={mode:'sequence',sequenceId:4};
  const armed=B.resolvePresentation(data,sequences,action);assert.equal(armed.phases.find(p=>p.phase==='execute').source.kind,'weapons');assert.equal(armed.phases.find(p=>p.phase==='movement').source.kind,'actors');assert.equal(armed.sequence.steps.filter(s=>s.type==='projectile').length,1);assert.equal(armed.sequence.steps.filter(s=>s.type==='impact').length,1);assert.ok(armed.sequence.steps.some(s=>s.phase==='movement'&&s.type==='move'),'the actor\'s run-up leads in');
  data.weapons[2]={mode:'sequence',sequenceId:2};
  data.skills[1]={mode:'sequence',sequenceId:3};assert.equal(B.resolve(data,sequences,action),sequences[3]);data.skills[1]={mode:'existing'};assert.equal(B.resolve(data,sequences,action),null);

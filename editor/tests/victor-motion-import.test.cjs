@@ -46,8 +46,8 @@ test('waits for a number, an animation and popups map onto blocking steps and co
 test('a run of icon lines at changing offsets and angles becomes a weapon Show and tweened Moves, and its clear hides it',()=>{
  const note='motion: user, 1, 1, 120\nicon: user, equip 1, 2, 23, -23, 255, 120\nwait: user, 1\nicon: user, equip 1, 2, 23, -25, 255, 100\nwait: user, 1\nicon: user, equip 1, 2, 23, -28, 255, 80\nwait: user, 1\nicon: user, equip 1, 2, 21, -30, 255, 60\nwait: user, 1\nicon: user, equip 1, 2, 20, -32, 255, 40\nwait: user, 5\nse: play, blaster_05, 100, 150, 0\naction: all targets, effect\nwait: user, 40\nicon: user, clear, 2';
  const out=V.convertBlock(V.parseMotions(note));
- assert.deepEqual(types(out.steps),['motion(1)','weapon','weapon(4)','wait(5)','se','effect','wait(40)','weapon']);
- const [,show,move,,,,,hide]=out.steps;
+ assert.deepEqual(types(out.steps),['motion(1)','weapon','weapon(4)','wait(5)','se','animation','impact','wait[popup]','wait(40)','weapon']);
+ const [,show,move,,,,,,,hide]=out.steps;
  assert.equal(show.mode,'show');assert.equal(show.iconSource,'weapon');assert.equal(show.attachment,'offset');assert.equal(show.x,0.479);assert.equal(show.z,0.479);assert.equal(show.rotation,120);
  assert.equal(move.mode,'move');assert.equal(move.rotation,40);assert.equal(move.easing,'linear');assert.equal(move.x,0.417);assert.equal(move.z,0.667);
  assert.equal(hide.mode,'hide');assert.equal(hide.visible,false);
@@ -57,17 +57,17 @@ test('a run of icon lines at changing offsets and angles becomes a weapon Show a
  assert.deepEqual(types(book.steps),['icon','wait(2)','icon','wait(2)','icon']);assert.equal(book.steps[0].iconIndex,347);assert.equal(book.steps[0].layer,'below');
 });
 
-test('a record becomes one phased sequence with Victor\'s effect, throws fly before the effect, and states become reactions',()=>{
+test('a record becomes one phased sequence with Victor\'s effect inside Execute, throws fly before the effect, and states become reactions',()=>{
  const record={id:1,name:'G1 — Railgun \\i[315]',note:'<throw object: before>\n image: icon 404\n duration: 15\n arc: 0\n start: 22, -10\n</throw object>\n<action sequence: movement>\ndirection: user, up\nmove: user, to target, 6, 100 front\nwait: user, move\n</action sequence>\n<action sequence: execute>\nse: play, blaster_05\naction: all targets, effect\nwait: user, 10\n</action sequence>\n<action sequence: damage>\nmotion: subject, damage\nanimation: subject, 138\nmove: subject, backward, 15, 24\nwait: subject, move\n</action sequence>'};
  const out=V.convertRecord(record,{vertical:true});
- assert.deepEqual(Object.keys(out.phases).sort(),['effect','execute','movement']);
- assert.deepEqual(types(out.phases.execute),['se','projectile(15)','effect','wait(10)']);assert.equal(out.phases.execute[1].iconIndex,404);assert.equal(out.phases.execute[1].x,0.458);
- assert.deepEqual(types(out.phases.effect),['animation','impact','wait[popup]']);assert.equal(out.phases.effect[0].waitForCompletion,true);
+ assert.deepEqual(Object.keys(out.phases).sort(),['execute','movement']);
+ assert.deepEqual(types(out.phases.execute),['se','projectile(15)','animation','impact','wait[popup]','wait(10)']);assert.equal(out.phases.execute[1].iconIndex,404);assert.equal(out.phases.execute[1].x,0.458);
+ assert.equal(out.phases.execute[2].waitForCompletion,true);assert.equal(out.phases.execute[2].animationSource,'action');
  assert.ok(out.states.damage.every(s=>s.role==='user'));assert.equal(out.states.damage[1].animationId,138);
- const sequence=V.sequenceFromPhases(out.phases,'G1');assert.deepEqual(B.validateSequence(sequence),[]);assert.deepEqual(B.sequencePhases(sequence),['movement','execute','effect']);
+ const sequence=V.sequenceFromPhases(out.phases,'G1');assert.deepEqual(B.validateSequence(sequence),[]);assert.deepEqual(B.sequencePhases(sequence),['movement','execute']);
  assert.deepEqual(B.validateSequence(V.stateSequence(out.states.damage,'G1 · damage')),[]);
  // Stray ends and a missing end are forgiven the way Victor forgave them.
- const stray=V.convertBlock(V.parseMotions('wait: user, 5\naction: all targets, effect\nend'));assert.deepEqual(types(stray.steps),['wait(5)','effect']);
+ const stray=V.convertBlock(V.parseMotions('wait: user, 5\naction: all targets, effect\nend'));assert.deepEqual(types(stray.steps),['wait(5)','animation','impact','wait[popup]']);
  const open=V.convertBlock(V.parseMotions('if: action.isStepForward()\nmove: user, forward, 15, 48\nwait: user, move'));assert.equal(open.steps.at(-1).type,'end');
 });
 

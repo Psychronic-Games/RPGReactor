@@ -18,7 +18,7 @@ Skills/items take priority, followed by weapons for normal attacks, the actor's 
 
 - **Follow Lower-Priority Defaults** continues through that chain.
 - **Use Engine / Plugin Action** stops inheritance and retains the existing engine/plugin action.
-- The phases Prepare, Movement, Execute, Effect, Return and Finish are always listed. Each phase can inherit, use its built-in behavior, or reference a sequence of the corresponding purpose.
+- (Effect was folded into Execute on 2026-09-13; the hit is an Apply Action Effect step inside Execute.) The phases Prepare, Movement, Execute, Effect, Return and Finish are always listed. Each phase can inherit, use its built-in behavior, or reference a sequence of the corresponding purpose.
 - **A named complete sequence** owns the whole action.
 
 Execute calls Effect at its Play Effect Phase cue. Phase selectors filter out sequences with incompatible purposes and provide Create Phase/Open Sequence buttons. Missing references are visible and fall back to existing action behavior at runtime instead of partially executing an invalid sequence.

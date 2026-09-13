@@ -74,7 +74,7 @@ test('per-phase assignments in the older shape still pick their phases, and the 
  const resolved=B.resolvePresentation(settings,sequences,attack({classId:1}));
  assert.equal(resolved.mode,'phases');assert.equal(resolved.missing,undefined);assert.equal(resolved.phases[0].sequence,prepare);
  assert.equal(resolved.sequence.steps[0].motion,'chant');assert.deepEqual(phases(resolved.sequence.steps).slice(0,1),['prepare']);
- assert.deepEqual([...new Set(phases(resolved.sequence.steps))],['prepare','movement','execute','effect','return','finish']);
+ assert.deepEqual([...new Set(phases(resolved.sequence.steps))],['prepare','movement','execute','return','finish']);
  assert.equal(impacts(resolved.sequence),1);assert.equal(resolved.sequence.hitPolicy,'once');
  // A per-phase pick of the wrong purpose is a missing phase, not a silent default.
  settings.classes[1].phases.prepare.sequenceId=3;assert.equal(B.resolvePresentation(settings,sequences,attack({classId:1})).missing,true);
@@ -86,41 +86,44 @@ test('per-phase assignments in the older shape still pick their phases, and the 
  assert.equal(B.resolve(settings,sequences,attack({isAttack:false})),null,'a skill is not an unarmed attack');
 });
 
-test('a partial sequence without Effect lands the built-in effect after its Execute steps and before Return',()=>{
+test('a partial sequence without a hit lands the built-in one after its Execute steps and before Return',()=>{
  const partial={id:1,version:1,name:'Swing and walk home',phases:['execute','return'],steps:[
   ...tagged([B.step('motion',{motion:'swing',duration:18}),B.step('wait',{duration:6})],'execute'),
   ...tagged(B.basic('Return Home'),'return')]};
- assert.deepEqual(B.validateSequence(partial),[],'Execute without an impact is valid while Effect is inherited');
+ assert.deepEqual(B.validateSequence(partial),[],'Execute without an impact is valid; the built-in hit follows it');
  const settings=B.empty(),sequences=[null,partial];settings.skills[1]={mode:'sequence',sequenceId:1};
  const resolved=B.resolvePresentation(settings,sequences,attack());
  assert.equal(resolved.missing,undefined);assert.ok(resolved.sequence);
  const order=phases(resolved.sequence.steps),first=phase=>order.indexOf(phase),last=phase=>order.lastIndexOf(phase);
- assert.ok(last('execute')<first('effect'),'effect comes after every Execute step');
- assert.ok(last('effect')<first('return'),'effect comes before Return');
+ const steps=resolved.sequence.steps,hit=steps.findIndex(s=>s.type==='impact'),swing=steps.findIndex(s=>s.motion==='swing');
+ assert.ok(swing<hit&&steps[hit-1].type==='animation'&&steps[hit].phase==='execute','the built-in animation and hit follow the authored Execute steps, as Execute steps');
+ assert.ok(hit<first('return'),'the hit lands before Return');
  assert.ok(last('movement')<first('execute')&&last('return')<first('finish'));
- assert.equal(impacts(resolved.sequence),1);assert.equal(resolved.sequence.steps.filter(s=>s.type==='animation').length,1,'the built-in Effect brings the skill animation');
+ assert.equal(impacts(resolved.sequence),1);assert.equal(steps.filter(s=>s.type==='animation').length,1,'the built-in hit brings the skill animation');
  assert.equal(resolved.sequence.hitPolicy,'once');assert.deepEqual(B.validateSequence(resolved.sequence),[]);
  assert.equal(resolved.phases.find(p=>p.phase==='return').sequence,partial);assert.equal(resolved.phases.find(p=>p.phase==='movement').source,null);
 });
 
-test('an Execute that lands its own impact skips the built-in Effect, and an Effect placeholder takes the effect mid-swing',()=>{
+test('an Execute that lands its own impact gets no built-in hit, and the old Effect phase folds into Execute at its placeholder',()=>{
  const own={id:1,version:1,name:'Self-contained execute',phases:['execute'],steps:tagged([B.step('motion',{motion:'swing',duration:10}),B.step('impact',{role:'allTargets'}),B.step('wait',{duration:4})],'execute')};
  const settings=B.empty(),sequences=[null,own];settings.skills[1]={mode:'sequence',sequenceId:1};
  let resolved=B.resolvePresentation(settings,sequences,attack());
- assert.equal(impacts(resolved.sequence),1,'the authored impact is the only hit');assert.equal(resolved.sequence.steps.filter(s=>s.type==='animation').length,0,'the built-in Effect is not added on top');
+ assert.equal(impacts(resolved.sequence),1,'the authored impact is the only hit');assert.equal(resolved.sequence.steps.filter(s=>s.type==='animation').length,0,'the built-in hit is not added on top');
  assert.deepEqual(B.validateSequence(resolved.sequence),[]);
- // A placeholder in Execute takes the Effect steps at that moment, and its own duration becomes a wait after them.
- const swing={id:2,version:1,name:'Placeholder execute',phases:['execute'],steps:tagged([B.step('motion',{motion:'swing',duration:10}),B.step('effect',{duration:5,role:'allTargets'}),B.step('wait',{duration:7})],'execute')};
- const effect={id:3,version:1,name:'Flashy effect',phases:['effect'],hitPolicy:'authored',steps:tagged([B.step('flash',{duration:2}),B.step('impact',{role:'allTargets'}),B.step('impact',{role:'allTargets',rate:50})],'effect')};
- sequences[2]=swing;sequences[3]=effect;settings.skills[1]={mode:'sequence',sequenceId:3};settings.weapons[4]={mode:'sequence',sequenceId:2};
+ // Older data: a Play Effect Phase placeholder in Execute and an Effect phase of its own. The fold puts the effect steps at the placeholder, as Execute steps, and the placeholder's own frames become a wait after them.
+ const old={id:2,version:1,name:'Placeholder execute',phases:['execute','effect'],hitPolicy:'authored',steps:[...tagged([B.step('motion',{motion:'swing',duration:10}),{...B.step('wait',{duration:5,role:'allTargets'}),type:'effect'},B.step('wait',{duration:7})],'execute'),...tagged([B.step('flash',{duration:2}),B.step('impact',{role:'allTargets'}),B.step('impact',{role:'allTargets',rate:50})],'effect')]};
+ assert.equal(B.migrateSequence(old),true);
+ const types=old.steps.map(s=>s.type+':'+s.phase+(s.duration?'('+s.duration+')':''));
+ assert.deepEqual(types,['motion:execute(10)','flash:execute(2)','impact:execute','impact:execute','wait:execute(5)','wait:execute(7)']);
+ assert.deepEqual(old.phases,['execute']);assert.deepEqual(B.validateSequence(old),[]);
+ sequences[2]=old;settings.skills[1]={mode:'inherit'};settings.weapons[4]={mode:'sequence',sequenceId:2};
  resolved=B.resolvePresentation(settings,sequences,attack({weaponIds:[4]}));
- const types=resolved.sequence.steps.map(s=>s.type+':'+s.phase);
- const at=needle=>types.findIndex(t=>t.startsWith(needle));
- assert.ok(at('motion:execute')<at('flash:effect')&&at('flash:effect')<at('impact:effect')&&at('impact:effect')<at('wait:execute'),types.join(' '));
- assert.equal(types.filter(t=>t==='wait:execute').length,2,'the placeholder\'s five frames become a wait after the effect');
- assert.equal(resolved.sequence.steps.find(s=>s.type==='wait'&&s.duration===5)?.phase,'execute');
- assert.equal(resolved.sequence.hitPolicy,'authored','the Effect provider decides the hit policy');assert.equal(impacts(resolved.sequence),2);
- assert.deepEqual(B.validateSequence(resolved.sequence),[]);assert.equal(resolved.sequence.steps.filter(s=>s.type==='effect').length,0,'the placeholder itself is consumed');
+ assert.equal(resolved.sequence.hitPolicy,'authored');assert.equal(impacts(resolved.sequence),2);assert.deepEqual(B.validateSequence(resolved.sequence),[]);
+ // A placeholder with no Effect steps of its own takes the built-in hit.
+ const lone={id:3,version:1,name:'Lone placeholder',phases:['execute'],steps:tagged([B.step('motion',{motion:'swing',duration:10}),{...B.step('wait',{duration:0,role:'allTargets'}),type:'effect'}],'execute')};
+ B.migrateSequence(lone);assert.deepEqual(lone.steps.map(s=>s.type),['motion','animation','impact']);assert.equal(lone.steps[1].animationSource,'action');
+ // A per-phase pick of the old Effect phase is dropped.
+ const legacy=B.empty();legacy.skills[1]={mode:'phases',phases:{effect:{mode:'sequence',sequenceId:3},execute:{mode:'inherit'}}};assert.equal(B.migrateSettings(legacy),true);assert.deepEqual(Object.keys(legacy.skills[1].phases),['execute']);
 });
 
 test('a resolved partial action plays through the battle manager: movement first, one hit per repeat, then home',()=>{
@@ -140,7 +143,7 @@ test('a resolved partial action plays through the battle manager: movement first
  P.sequences=[null,partial];P.settings=B.empty();P.settings.skills[1]={mode:'sequence',sequenceId:1};
  manager.startAction();assert.ok(manager._reactorSequence,'the partial sequence resolves into a playable action');
  let guard=2000;while(manager._reactorSequence&&guard--)manager.updateAction();assert.ok(guard>0,'the action ends');
- assert.equal(hits.length,3,'one hit per repeat occurrence, from the inherited Effect');
+ assert.equal(hits.length,3,'one hit per repeat occurrence, from the built-in hit');
  assert.ok(hits.every(h=>h.x!==100),'the inherited Movement ran the user to the target before the hits');
  assert.equal(hits[0].motion,'swing','the authored Execute motion is on the battler at impact');
  assert.equal(userSprite.x,100,'Return brought the user home');assert.equal(manager.ended,1);
