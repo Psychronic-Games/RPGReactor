@@ -483,8 +483,12 @@
             const bitmap=this._name?.bitmap,name=this._battler?._name;
             if(bitmap&&name){
                 if($gameSystem?.mainFontFace)bitmap.fontFace=$gameSystem.mainFontFace();
-                const base=Number(root.Moghunter?.bhud_name_font_size)||bitmap.fontSize||20,limit=Math.max(40,Math.min(bitmap.width,(this._layout?.bitmap?.width||this._hud_size?.[0]||bitmap.width)-12)-2*(bitmap.outlineWidth||0));
+                // The box art frames its inside by about 14 px a side; the name, outline included, stays within that.
+                const box=this._layout?.bitmap?.width||this._hud_size?.[0]||bitmap.width,outline=bitmap.outlineWidth||0;
+                const base=Number(root.Moghunter?.bhud_name_font_size)||bitmap.fontSize||20,limit=Math.max(40,Math.min(bitmap.width,box-28)-2*outline);
                 bitmap.fontSize=base;while(bitmap.fontSize>10&&bitmap.measureTextWidth(name)>limit)bitmap.fontSize--;
+                // A centred name is centred on the box itself, not on a bitmap parked off its left edge.
+                if(Number(root.Moghunter?.bhud_name_align)===1&&Number.isFinite(this._pos_x))this._name.x=this._pos_x+Math.round((box-bitmap.width)/2);
             }
             refresh.call(this);
         };
