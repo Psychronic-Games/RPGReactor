@@ -5,6 +5,10 @@
 - `origin/main` (PRs #57, #58, three commits) merged into the local `main` that was two commits ahead; merge commit, not a rebase. One conflict in `I18nManager.js` (both sides appended translation blocks; both kept). Runtime **20260913.1**, `sync-runtime.cjs` refreshed 49 files across the 13 projects. Suite **3,130 passed**. [Details](PR-INTEGRATION-2026-09-13.md).
 - New runtime surface: `Game_Action.itemRepeats` (rolled once per action, keyed by item; `repeatsMax` optional on skills/items), `Game_Action.setPlannedTargets/hasPlannedTargets/clearPlannedTargets/takePlannedTargets` (WeakMap, never serialized), and `addState` returning early when `addNewState` did not land the state. `Scene_ItemBase.applyItem` reads `numRepeats` once.
 
+## 2026-09-13 — Rig preview draws the marker chain
+
+- Owner: "the bones extend past the nodes and aren't connected" in Database › 3D Models rig mode. A/B over today's, yesterday's and the September 11 builds (`scratchpad/demo-rig-lines-check.cjs <editorRoot> <png> [model]`) showed identical lines since the rigger was written on 2026-08-23: `_refreshRigBones` drew `bonesFromMarkers`, i.e. the skinning bones (Hand = elbow→wrist × 1.35, Foot = ankle→floor, UpperLeg from hip height beside the hips, no clavicle). Now `ModelRigger.previewLinks(markers, template)` gives the joint chain (humanoid 13 links through the shoulder midpoint, quadruped 15, other templates fall back to their bones) and the preview draws that; the bones the skin weights use are unchanged. Test in `reactor-3d-rig.test.cjs`. Worktrees `/tmp/claude-1000/rr-yesterday` (1d53e8c) and `/tmp/claude-1000/rr-sept11` (f0f659a) were used for the comparison and removed.
+
 ## 2026-09-13 — Demo battle HUD layout, command window on the actor, 3D enemies in the troop picker
 
 - **Troop picker.** `showEnemyPicker`'s preview used `getEnemyBattlerUrl` only; `enemyModelSpec(enemy)` (graphic setting through `B.graphic`, else the binding) now feeds `RRDatabase3DBindings.modelThumbnail` for a model enemy.

@@ -236,6 +236,45 @@
         return (TEMPLATES[template] || TEMPLATES.humanoid).bones(markers);
     }
 
+    /**
+     * The joint chain to draw while placing markers: every segment runs from
+     * one marker to the next, so the skeleton reads as connected and ends at
+     * the joints. The skinning bones differ on purpose (a hand bone reaches
+     * past the wrist for the fingers, a foot bone to the floor, a thigh
+     * starts at hip height beside the hips) and stay as they are; this is
+     * only what the preview shows. Templates without a chain fall back to
+     * their bones.
+     */
+    const PREVIEW_LINKS = {
+        humanoid(m) {
+            const neckBase = lerp3(m.shoulderL, m.shoulderR, 0.5);
+            const links = [[m.hips, neckBase], [neckBase, m.chin], [m.chin, m.headTop]];
+            for (const side of ['L', 'R']) {
+                links.push([neckBase, m['shoulder' + side]], [m['shoulder' + side], m['elbow' + side]], [m['elbow' + side], m['wrist' + side]]);
+                links.push([m.hips, m['knee' + side]], [m['knee' + side], m['ankle' + side]]);
+            }
+            return links;
+        },
+        quadruped(m) {
+            const links = [[m.hips, m.neck], [m.neck, m.head], [m.hips, m.tailTip]];
+            for (const side of ['L', 'R']) {
+                links.push([m.neck, m['frontLeg' + side]], [m['frontLeg' + side], m['frontKnee' + side]], [m['frontKnee' + side], m['frontAnkle' + side]]);
+                links.push([m.hips, m['rearLeg' + side]], [m['rearLeg' + side], m['rearKnee' + side]], [m['rearKnee' + side], m['rearAnkle' + side]]);
+            }
+            return links;
+        }
+    };
+    function previewLinks(markers, template) {
+        const build = PREVIEW_LINKS[template in TEMPLATES ? template : 'humanoid'];
+        if (build && Object.keys(markers || {}).length) {
+            try {
+                const links = build(markers).filter(([a, b]) => Array.isArray(a) && Array.isArray(b));
+                if (links.length) return links.map(([a, b]) => ({ head: a.slice(), tail: b.slice() }));
+            } catch (error) { /* a marker set this template does not know: draw its bones */ }
+        }
+        return bonesFromMarkers(markers, template);
+    }
+
     const MARKERS = TEMPLATES.humanoid.markers;
 
     // Semantic points can be fitted to imported rigs without rebinding skin.
@@ -567,6 +606,7 @@
         markersFor,
         defaultMarkers,
         bonesFromMarkers,
+        previewLinks,
         computeWeights,
         distanceSqToSegment,
         encodeBytes,

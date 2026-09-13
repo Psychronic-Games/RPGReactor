@@ -6164,7 +6164,8 @@ class Database3DEditor {
     _refreshRigBones() {
         if (!this._rigBoneLines || typeof ModelRigger === 'undefined') return;
         if (this._rigFaceMode) return;
-        const bones = ModelRigger.bonesFromMarkers(this._rigMarkers, this._rigTemplate);
+        // The chain through the markers, not the skinning bones: those run past the wrists and ankles by design.
+        const bones = (ModelRigger.previewLinks || ModelRigger.bonesFromMarkers)(this._rigMarkers, this._rigTemplate);
         const positions = new Float32Array(bones.length * 6);
         bones.forEach((bone, i) => {
             positions.set(bone.head, i * 6);

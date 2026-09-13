@@ -472,3 +472,27 @@ test('a pose on a mapped joint is read in the model frame however the file skele
     assert.ok(Math.abs(lift.x) < 0.02 && Math.abs(lift.z) < 0.02, 'the joint moved straight up in the model frame: ' + lift.toArray().map(n => n.toFixed(2)));
     assert.ok(lift.y > 0.5, 'and by the authored distance in scene units, not the armature\'s centimetres: ' + lift.y.toFixed(2));
 });
+
+
+test('the rig preview draws a chain through the markers, ending at the joints', () => {
+    const size = { x: 1, y: 1.8, z: 0.5 };
+    for (const [template, expected] of [['humanoid', 13], ['quadruped', 15]]) {
+        const markers = ModelRigger.defaultMarkers(size, template);
+        const links = ModelRigger.previewLinks(markers, template);
+        assert.equal(links.length, expected, template + ' link count');
+        const points = Object.values(markers);
+        const onMarker = p => points.some(m => Math.hypot(m[0] - p[0], m[1] - p[1], m[2] - p[2]) < 1e-9);
+        const shoulders = template === 'humanoid' ? [(markers.shoulderL[0] + markers.shoulderR[0]) / 2, (markers.shoulderL[1] + markers.shoulderR[1]) / 2, (markers.shoulderL[2] + markers.shoulderR[2]) / 2] : null;
+        const onChain = p => onMarker(p) || (shoulders && Math.hypot(shoulders[0] - p[0], shoulders[1] - p[1], shoulders[2] - p[2]) < 1e-9);
+        for (const link of links) assert.ok(onChain(link.head) && onChain(link.tail), template + ': every segment ends on a joint');
+        // Every marker is reached by some segment, so nothing floats free.
+        for (const [key, m] of Object.entries(markers)) assert.ok(links.some(l => [l.head, l.tail].some(p => Math.hypot(m[0] - p[0], m[1] - p[1], m[2] - p[2]) < 1e-9)), template + ': ' + key + ' is linked');
+    }
+    // The skinning bones keep their reach: the hand still runs past the wrist.
+    const bones = ModelRigger.bonesFromMarkers(ModelRigger.defaultMarkers(size, 'humanoid'), 'humanoid');
+    const hand = bones.find(b => b.name === 'LeftHand');
+    assert.ok(hand.tail[1] < ModelRigger.defaultMarkers(size, 'humanoid').wristL[1], 'the hand bone reaches beyond the wrist');
+    // A template with no chain of its own draws its bones.
+    const plant = ModelRigger.previewLinks(ModelRigger.defaultMarkers(size, 'plant'), 'plant');
+    assert.deepEqual(plant.map(b => b.head), ModelRigger.bonesFromMarkers(ModelRigger.defaultMarkers(size, 'plant'), 'plant').map(b => b.head));
+});
