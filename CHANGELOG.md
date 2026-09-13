@@ -23,6 +23,7 @@ Development cycle in progress. Session detail lives in the [handoff](docs/HANDOF
 - **Enemy Action Patterns** gain a Behaviour forecast: adjustable battle conditions, eligible actions with their selection shares, and reasons for unreachable actions. Known VisuStella Battle AI rules are read from the plugin manifest; plugin-defined conditions stay outside the forecast.
 - **Skills and items can hit a random number of times** through a Max Repeats box, rolled once per action so every read of `numRepeats` agrees; fixed counts save as before (PR #57).
 - **A plugin can hand an action its targets** before it starts with `Game_Action.setPlannedTargets`; `startAction` takes them once instead of rolling (PR #58).
+- **A plugin can waive an item's stock check alone:** `Game_BattlerBase.hasItemStock` is the "is there any left" half of `meetsItemConditions`, so a prepaid or replayed item skips only that while every other aliased condition still runs (PR #59).
 - **Random startup splash** from numbered PNG files, with the original and a second artwork bundled.
 
 **Keyboard**

@@ -538,18 +538,23 @@
     // decides; without a context its duration stands in.
     B.stepAdvance = (step, duration = number(step.duration)) => step.concurrent ? 0 : Math.max(0, duration);
     B.timeline = (sequence, context) => {
-        let frame = 0, max = 0;
-        const poses = context?.homes ? copy(context.homes) : null, target = context?.target || poses?.target || { x: 0, y: 0, z: 0 }, busy = {};
+        let frame = 0;
+        const poses = context?.homes ? copy(context.homes) : null, target = context?.target || poses?.target || { x: 0, y: 0, z: 0 }, busy = {}, active = {};
         const travelling = ['move'], lifting = ['jump','leap','float','fall'];
-        return (sequence.steps || []).map(step => {
+        const cues = (sequence.steps || []).map(step => {
             let duration = Math.max(0, number(step.duration));
             const key = B.roleKey(step);
-            if (step.type === 'move' && number(step.speed) > 0 && poses) {
-                const from = poses[key] || poses.user, home = context.homes[key] || context.homes.user;
+            const cue = { step };
+            if (step.type === 'move' && poses) {
+                // A move that starts while an earlier move of the same battler is still travelling cuts it there and sets off from that spot.
+                const earlier = active[key], home = context.homes[key] || context.homes.user;
+                let from = poses[key] || poses.user;
+                if (earlier && frame < earlier.end) { const t = earlier.end > earlier.start ? (frame - earlier.start) / (earlier.end - earlier.start) : 1; from = { ...from, x: earlier.from.x + (earlier.goal.x - earlier.from.x) * t, y: earlier.from.y + (earlier.goal.y - earlier.from.y) * t, z: (earlier.from.z || 0) + ((earlier.goal.z || 0) - (earlier.from.z || 0)) * t }; earlier.cue.cut = frame; }
                 if (from && home) {
                     const goal = B.moveGoal(step, from, home, target, context.homes, context.direction || 1);
-                    duration = Math.max(1, Math.round(number(step.speed) * Math.hypot(goal.x - from.x, goal.y - from.y)));
+                    if (number(step.speed) > 0) duration = Math.max(1, Math.round(number(step.speed) * Math.hypot(goal.x - from.x, goal.y - from.y)));
                     poses[key] = { ...from, ...goal };
+                    active[key] = { start: frame, end: frame + duration, from, goal, cue };
                 }
             }
             // A wait for a move or a jump lasts until the battler's travel or lift already under way has ended.
@@ -559,13 +564,16 @@
                 duration = Math.max(duration, until - frame);
             }
             const start = frame, end = start + duration, advance = B.stepAdvance(step, duration);
+            Object.assign(cue, { start, end, advance });
             if (travelling.includes(step.type) || lifting.includes(step.type)) {
                 const kind = travelling.includes(step.type) ? 'move' : 'jump';
                 for (const k of key === 'allTargets' ? Object.keys(context?.homes || { target: 1 }).filter(k => k.startsWith('target')) : [key]) (busy[k] ||= {})[kind] = Math.max(busy[k]?.[kind] || 0, end);
             }
-            frame += advance; max = Math.max(max, end);
-            return { step, start, end, advance };
-        }).map(cue => Object.assign(cue, { total: Math.max(frame, max) }));
+            frame += advance;
+            return cue;
+        });
+        const total = Math.max(frame, ...cues.map(cue => cue.cut ?? cue.end));
+        return cues.map(cue => Object.assign(cue, { total }));
     };
     B.duration = (sequence, context) => { const cues = B.timeline(sequence, context); return cues.length ? cues[0].total : 0; };
     B.choices = (settings, {kind,itemId,isAttack,weaponIds=[],battlerKind,battlerId,classId}) => {
@@ -719,8 +727,10 @@
     B.evaluate = (sequence, frame, context) => {
         const homes = context.homes, defaultTarget = context.target || homes.target || { x: 0, y: 0, z: 0 };
         const result = copy(homes);
-        for (const { step, start, end } of (sequence._timeline||B.timeline(sequence, context))) {
+        for (const { step, start, end: fullEnd, cut } of (sequence._timeline||B.timeline(sequence, context))) {
             if (start > frame) break;
+            // A move cut short by a later move of the same battler holds where that move took over.
+            const end = fullEnd, clock = cut !== undefined ? Math.min(frame, cut) : frame;
             const target=step._target||defaultTarget;
             if (!['move','camera','motion','direction'].includes(step.type)) continue;
             const role = step.type === 'camera' ? 'camera' : B.roleKey(step);
@@ -744,11 +754,11 @@
                     if(key==='target0'&&result.target)result.target=copy(result.target0);
                     continue;
                 }
-                let t = end === start ? 1 : Math.max(0, Math.min(1, (frame - start) / (end - start)));
+                let t = end === start ? 1 : Math.max(0, Math.min(1, (clock - start) / (end - start)));
                 if (step.easing === 'smooth') t = t * t * (3 - 2 * t);
                 const goal = B.moveGoal(step, from, home, target, homes, context.direction || 1);
                 // An arc lifts the battler along the move and sets it down at the end, a jump that rides the travel.
-                const lift = step.type === 'move' && number(step.arc) && frame < end ? 4 * number(step.arc) * t * (1 - t) : 0;
+                const lift = step.type === 'move' && number(step.arc) && clock < end ? 4 * number(step.arc) * t * (1 - t) : 0;
                 result[key] = { ...from, x: from.x + (goal.x - from.x) * t,
                     y: from.y + (goal.y - from.y) * t, z: from.z + (goal.z - from.z) * t + lift };
                 for(const property of ['rotateX','rotateY','rotateZ','scale']){const baseline=home[property]??(property==='scale'?1:0),previous=from[property]??baseline,goal=step[property]??baseline;result[key][property]=previous+(goal-previous)*t;}
@@ -813,7 +823,7 @@
                 // instead of freezing and snapping when the wait ends.
                 if (this.waiting.isPlaying()) { this.held = (this.held || 0) + Math.max(0, delta); this.pose(this.frame + this.held); return; }
                 const held = this.held || 0; this.held = 0; this.waiting = null;
-                if (held) { for (let i = this.cursor; i < this.timeline.length; i++) { this.timeline[i].start += held; this.timeline[i].end += held; } this.duration += held; this.frame += held; }
+                if (held) { for (let i = this.cursor; i < this.timeline.length; i++) { const c = this.timeline[i]; c.start += held; c.end += held; if (c.cut !== undefined) c.cut += held; } this.duration += held; this.frame += held; }
             }
             let frame = Math.min(this.duration, Math.max(0, this.frame) + Math.max(0, delta));
             while (this.cursor < this.timeline.length && this.timeline[this.cursor].start <= frame) {
@@ -827,11 +837,11 @@
                         // The wait lasts until the travel or lift already under way for that battler ends; only cues that actually ran count, so a skipped branch cannot stretch it.
                         const kinds=step.waitFor==='move'?['move']:['jump','leap','float','fall'],key=B.roleKey(step);
                         const until=Math.max(cue.start,...this.executed.filter(c=>c!==cue&&kinds.includes(c.step.type)&&(key==='allTargets'?B.roleKey(c.step).startsWith('target')||B.roleKey(c.step)==='allTargets':B.roleKey(c.step)===key)).map(c=>c.end));
-                        const delta=until-cue.end;if(delta){cue.end=until;for(let i=this.cursor;i<this.timeline.length;i++){this.timeline[i].start+=delta;this.timeline[i].end+=delta;}this.duration+=delta;}
+                        const delta=until-cue.end;if(delta){cue.end=until;for(let i=this.cursor;i<this.timeline.length;i++){const c=this.timeline[i];c.start+=delta;c.end+=delta;if(c.cut!==undefined)c.cut+=delta;}this.duration+=delta;}
                     }
                 }
                 if(!active||['branch','elseIf','else','end'].includes(step.type)){
-                    const removed=cue.advance??(cue.end-cue.start);for(let i=this.cursor;i<this.timeline.length;i++){this.timeline[i].start-=removed;this.timeline[i].end-=removed;}this.duration-=removed;frame=Math.min(frame,this.duration);continue;
+                    const removed=cue.advance??(cue.end-cue.start);for(let i=this.cursor;i<this.timeline.length;i++){const c=this.timeline[i];c.start-=removed;c.end-=removed;if(c.cut!==undefined)c.cut-=removed;}this.duration-=removed;frame=Math.min(frame,this.duration);continue;
                 }
                 const media = this.adapter.cue?.(cue.step, cue.start);
                 if ((!this.skipping && cue.step.waitForCompletion || media?.blocking) && media?.isPlaying()) {

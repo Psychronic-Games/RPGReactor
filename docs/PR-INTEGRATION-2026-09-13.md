@@ -15,4 +15,8 @@
 - Complete Node suite after the merge: **3,130 passed**, zero failures, skips or cancellations (3,107 before, plus the PRs' 23 tests in `action-repeats`, `refused-state` and `planned-targets`).
 - `node --check` on every merged runtime and editor file.
 
+## PR #59, later the same day
+
+[PR #59](https://github.com/Psychronic-Games/RPGReactor/pull/59) "Separate 'can this battler use the item' from 'is there any left'" was approved but not yet on `origin/main`, so its pull ref (`refs/pull/59/head`, `3fabc13`) was merged directly with a merge commit. It touches `runtime/reactor_objects.js` (new `Game_BattlerBase.hasItemStock`, called from `meetsItemConditions`), the Demo copy, `editor/CHANGELOG.md` and a new `item-stock-seam.test.cjs`. No conflicts. Runtime revision **20260913.3**, synced to all 13 projects.
+
 Not pushed. No release, deployment or GitHub message was performed.
