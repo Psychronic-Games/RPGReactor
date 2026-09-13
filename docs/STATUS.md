@@ -1,5 +1,9 @@
 # Current project status
 
+## 2026-09-13 — PRs #57 and #58 merged
+
+Upstream PRs #57 (Max Repeats range) and #58 (refused states not reported; planned targets for `startAction`) are merged over the local September 11–12 commits with one translation-block conflict kept both ways. Runtime **20260913.1**, synced to all 13 projects. **3,130 Node tests pass.** [Integration notes](PR-INTEGRATION-2026-09-13.md). Not pushed.
+
 ## 2026-09-12 — 3D sequences: rigged parts, projectiles, shadows, event models
 
 - **Part posing on rigged models.** Every rigged model's Motion steps show a Pose Parts fold beside Whole Model; clicking a rigged part on the model in the preview (or choosing one in the fold) turns the step into a pose of that part with the gizmos at its joint. Models that ship their own skeleton and clips (Demo Carol) now pose their real bones: `Reactor3D.mapRigToSkeleton` names the file's joints instead of binding a second, motionless skeleton, `Reactor3D.isRigJoint` covers file joints that are plain Groups, and the animator composes poses onto the clip pose in the joint's own frame (`clipBase`, conjugated at compose time). Zero-frame poses snap; a pose's offset applies in the model frame before its turn. See [Battle Rooms and Action Sequences](BATTLE-PRESENTATION.md#pose-parts-2026-09-12).

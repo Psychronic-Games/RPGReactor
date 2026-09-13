@@ -44,6 +44,9 @@ See the [September 11 closeout](docs/SESSION-2026-09-11.md) for the complete sco
 
 - Enemy Action Patterns gain a Behaviour forecast with adjustable battle conditions, eligible actions and their selection shares, and reasons for unreachable actions. Read known VisuStella Battle AI rules from the project plugin manifest; plugin-defined conditions remain outside the forecast.
 
+- Skills and items can hit a random number of times: a Max Repeats box under Repeats turns the count into a range, rolled once per action so every read of `numRepeats` agrees. A fixed count saves exactly as before; the label is a first-pass translation in all 17 locales (PR #57).
+- A plugin can hand an action its targets before it starts (`Game_Action.setPlannedTargets`); `BattleManager.startAction` takes them once instead of rolling, and nothing else can use them up (PR #58).
+
 ### Fixed
 
 - Projectile steps get their own panel instead of a dump of fields under Advanced: what flies (a colored dot, the skill or item, the equipped weapon, an icon, a picture, and now any 3D model from the project or a database animation that rides the flight), Thrown To, Flight, Starts From, and a Start / Arrive / Look card of sliders. The Start arrows sit on the launch point in the preview, so where a shot leaves the hand is dragged, not typed; Arrive previews the flight halfway so the arc and landing height read. Graphic Owner, bone and grip stay under Advanced.
@@ -108,6 +111,7 @@ See the [September 11 closeout](docs/SESSION-2026-09-11.md) for the complete sco
 - Trait and Effect dialogs keep a fixed frame across tabs, with a scrollable body for smaller windows. Assigned tileset filenames use clearer 13px text and full-name tooltips.
 - Unchecked Switch 1, Switch 2, Variable and Self Switch event conditions display blank, matching Item and Actor. Re-enabling restores stored IDs, the variable threshold and the self-switch letter.
 - Enemy forecasts honor random/casual/gambit selection, preserve an authored zero Max TP, and check repeating-turn intersections and narrow resource ranges. Oversized turn cycles report uncertainty instead of incorrectly declaring an action unreachable.
+- A state that a plugin turns away inside `addNewState` (auto-life, a last-gasp skill refusing death) is no longer recorded on the action result or reported as added, so the battle log no longer collapses a battler who is still standing (PR #58).
 
 - Rapid Actor/Class navigation cannot attach retired field handlers to a new record or open duplicate parameter dialogs. Detail refreshes retire their previews and callbacks before rebuilding.
 - Event-command shortcuts follow focus in the command list. Delete/cut/paste in page settings or another dialog cannot change the selected commands; Select All visibly updates the list.

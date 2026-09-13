@@ -63,7 +63,7 @@ const SCOPE_METHODS = [
     'isForAliveFriend', 'isForDeadFriend', 'isForUser', 'isForOne', 'isForRandom',
     'isForAll', 'needsSelection', 'isForAnyone', 'isForAnyoneFocusFriends',
     'isForAnyoneFocusOpponents', 'isForOneSide', 'isForRandomAny',
-    'isForAllAlliesButUser', 'numTargets', 'numRepeats', 'setTargetBattler',
+    'isForAllAlliesButUser', 'numTargets', 'numRepeats', 'itemRepeats', 'setTargetBattler',
     'targetSideUnit', 'makeTargets', 'repeatTargets', 'targetsForAnyone',
     'targetsForRandomAny', 'targetsForAlliesButUser', 'targetsForEveryone',
     'targetsForOpponents', 'targetsForFriends', 'randomTargets', 'targetsForDead',

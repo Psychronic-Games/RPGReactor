@@ -245,6 +245,7 @@ test('loop-driving database values clamp to their documented ranges', () => {
     const skillPath = path.join(repoRoot, 'src', 'database', 'DatabaseSkillEditor.js');
     const itemPath = path.join(repoRoot, 'src', 'database', 'DatabaseItemEditor.js');
     const window = { I18n: null };
+    const ActionRepeats = loadBrowserClass(path.join(repoRoot, 'src', 'database', 'ActionRepeats.js'), 'ActionRepeats', { window });
 
     const actor = { id: 1, initialLevel: 1, maxLevel: 99 };
     const ActorEditor = loadBrowserClass(actorPath, 'DatabaseActorEditor', { window });
@@ -261,7 +262,7 @@ test('loop-driving database values clamp to their documented ranges', () => {
     assert.equal(actor.initialLevel, 50);
 
     const skill = { id: 1, repeats: 1, speed: 0, damage: { variance: 20 } };
-    const SkillEditor = loadBrowserClass(skillPath, 'DatabaseSkillEditor', { window });
+    const SkillEditor = loadBrowserClass(skillPath, 'DatabaseSkillEditor', { window, ActionRepeats });
     const skillEditor = Object.create(SkillEditor.prototype);
     skillEditor.databaseManager = {
         getSkill: () => skill,
@@ -272,7 +273,7 @@ test('loop-driving database values clamp to their documented ranges', () => {
     assert.equal(skillEditor.updateSkillField(1, 'damage.variance', '9999'), 9999);
 
     const item = { id: 1, repeats: 1, price: 0, damage: { variance: 20 } };
-    const ItemEditor = loadBrowserClass(itemPath, 'DatabaseItemEditor', { window });
+    const ItemEditor = loadBrowserClass(itemPath, 'DatabaseItemEditor', { window, ActionRepeats });
     const itemEditor = Object.create(ItemEditor.prototype);
     itemEditor.databaseManager = {
         getItem: () => item,
