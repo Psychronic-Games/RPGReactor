@@ -644,9 +644,14 @@
             white-space: nowrap;
         }
 
+        /* The five view toggles (A1, Grid, Passage, 3D, Video) share one
+           layout, and their boxes are the app's default checkbox size so
+           they match each other and every other checkbox. */
         .map-autotile-animation,
         .map-grid,
-        .map-3d-view {
+        .map-passage,
+        .map-3d-view,
+        .map-video-previews {
             display: inline-flex;
             align-items: center;
             gap: 4px;
@@ -657,9 +662,9 @@
 
         .map-autotile-animation input,
         .map-grid input,
-        .map-3d-view input {
-            width: 12px;
-            height: 12px;
+        .map-passage input,
+        .map-3d-view input,
+        .map-video-previews input {
             margin: 0;
             accent-color: var(--color-accent-bright);
             cursor: pointer;
