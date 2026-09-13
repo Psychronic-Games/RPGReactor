@@ -267,7 +267,10 @@ battler already has.
 | `renewed` | `boolean` — `true` when the battler already had the state and only its turn count was reset; `false` when it was newly added |
 
 Does **not** fire when `isStateAddable` refuses (dead battler, resisted,
-restricted, unknown id).
+restricted, unknown id), nor when `addNewState` does not add the state after
+all. That is where plugins turn a state away once it has been found addable --
+an auto-life or a last-gasp skill refusing death -- and the state is then not
+on the battler, so nothing was added.
 
 ### `stateRemoved`
 

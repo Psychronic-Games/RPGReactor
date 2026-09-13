@@ -1809,6 +1809,52 @@ Game_Action.prototype.repeatTargets = function(targets) {
     return repeatedTargets;
 };
 
+// Targets decided for an action before BattleManager.startAction rolls them.
+//
+// startAction asks makeTargets() for targets at the moment the action begins.
+// A plugin that has to decide them earlier -- testing a reaction against the
+// exact battlers a random scope picked, or replaying a copied action onto the
+// targets of the one it copies -- hands them over here, and startAction uses
+// them instead of rolling again. They are taken once, and only by startAction,
+// so anything else that calls makeTargets() before then (a target preview, a
+// viability check) still gets a fresh answer and cannot use them up.
+//
+// `targets` is an array of battlers, or a function returning one that is
+// called with the action as `this` when the action starts -- for targets that
+// must be checked again at that moment, since a battler may have fallen in
+// between. An empty result falls back to makeTargets(). The plan is kept off
+// the action object, so a JsonEx copy of the action or a save file never
+// carries battler references.
+Game_Action._plannedTargets = new WeakMap();
+
+Game_Action.prototype.setPlannedTargets = function(targets) {
+    if (Array.isArray(targets)) {
+        Game_Action._plannedTargets.set(this, targets.slice());
+    } else if (typeof targets === "function") {
+        Game_Action._plannedTargets.set(this, targets);
+    } else {
+        Game_Action._plannedTargets.delete(this);
+    }
+};
+
+Game_Action.prototype.hasPlannedTargets = function() {
+    return Game_Action._plannedTargets.has(this);
+};
+
+Game_Action.prototype.clearPlannedTargets = function() {
+    Game_Action._plannedTargets.delete(this);
+};
+
+Game_Action.prototype.takePlannedTargets = function() {
+    const planned = Game_Action._plannedTargets.get(this);
+    if (planned === undefined) {
+        return null;
+    }
+    Game_Action._plannedTargets.delete(this);
+    const targets = typeof planned === "function" ? planned.call(this) : planned;
+    return Array.isArray(targets) && targets.length > 0 ? targets : null;
+};
+
 Game_Action.prototype.confusionTarget = function() {
     switch (this.subject().confusionLevel()) {
         case 1:
@@ -3910,7 +3956,16 @@ Game_Battler.prototype.addState = function(stateId) {
         const renewed = this.isStateAffected(stateId);
         if (!renewed) {
             this.addNewState(stateId);
+            // addNewState is where a plugin turns a state away after it was found
+            // addable -- an auto-life or a last-gasp skill refusing death. Nothing
+            // was added then, so nothing is recorded or reported: a result that
+            // lists the death state makes the battle log collapse a battler who is
+            // still standing.
+            const landed = this.isStateAffected(stateId);
             this.refresh();
+            if (!landed) {
+                return;
+            }
         }
         this.resetStateCounts(stateId);
         this._result.pushAddedState(stateId);
