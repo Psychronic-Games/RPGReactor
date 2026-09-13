@@ -44,6 +44,7 @@
     "@jsquash/oxipng": "2.3.0",
     "gif.js": "^0.2.0",
     "gifuct-js": "^2.1.2",
+    "lamejs": "^1.2.1",
     "pixi.js": "^8.20.0",
     "three": "^0.185.1"
   },

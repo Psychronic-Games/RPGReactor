@@ -117,9 +117,9 @@
   },
   {
     "id": 6,
-    "battlerName": "Actor1_6",
-    "characterIndex": 5,
-    "characterName": "Actor1",
+    "battlerName": "",
+    "characterIndex": 0,
+    "characterName": "",
     "classId": 2,
     "equips": [
       7,
@@ -140,9 +140,9 @@
   },
   {
     "id": 7,
-    "battlerName": "Actor1_7",
-    "characterIndex": 6,
-    "characterName": "Actor1",
+    "battlerName": "",
+    "characterIndex": 0,
+    "characterName": "",
     "classId": 3,
     "equips": [
       7,
@@ -163,7 +163,7 @@
   },
   {
     "id": 8,
-    "battlerName": "Actor1_8",
+    "battlerName": "",
     "characterIndex": 7,
     "characterName": "Actor1",
     "classId": 3,

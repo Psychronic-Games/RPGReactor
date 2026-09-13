@@ -431,7 +431,10 @@
         adapter.cleanup=cancelled=>{try{original.cleanup(cancelled);}finally{
             visuals.cleanup();room?.sequenceVisualUpdates?.delete(updateRoomLayers);
             for(const fn of restore.reverse())fn();for(const key of [...layers.keys()])if(!(stateOnly&&layers.get(key).hosted))destroyLayer(key);
-            for(const [sprite,old] of appearance){sprite.opacity=old.opacity;const main=sprite._mainSprite||sprite;if(old.tone)main.setColorTone?.(old.tone);if(old.blend)main.setBlendColor?.(old.blend);sprite._rrHeldPose=old.pose;sprite._rrGraphicMotion=old.motion;sprite._rrLift=0;delete sprite._rrFacing;delete sprite._rrMotionOverride;sprite._homeX=old.homeX;sprite._homeY=old.homeY;}
+            for(const [sprite,old] of appearance){const main=sprite._mainSprite||sprite;
+                // A dead enemy keeps what its collapse left (a few points of opacity, a blend colour): a reaction played over the collapse must not stand it back up.
+                const gone=sprite._battler&&typeof sprite._battler.isDead==='function'&&sprite._battler.isDead()&&typeof sprite._battler.isEnemy==='function'&&sprite._battler.isEnemy();
+                if(!gone){sprite.opacity=old.opacity;if(old.tone)main.setColorTone?.(old.tone);if(old.blend)main.setBlendColor?.(old.blend);}sprite._rrHeldPose=old.pose;sprite._rrGraphicMotion=old.motion;sprite._rrLift=0;delete sprite._rrFacing;delete sprite._rrMotionOverride;sprite._homeX=old.homeX;sprite._homeY=old.homeY;}
         }};
         return adapter;
     };
@@ -624,6 +627,11 @@
             tint.value.x=(blend[0]||0)/255;tint.value.y=(blend[1]||0)/255;tint.value.z=(blend[2]||0)/255;tint.value.w=strength;
             if(wanted!==null&&material.blending!==wanted)material.blending=wanted;
         }});
+        // The engine shakes a boss as it collapses: the model shakes the same few pixels, across the screen.
+        const shake=Number(sprite._shake)||0,room=root.BattleManager?._spriteset?._reactorRoom;
+        if(T&&room?.camera&&object.position){const right=new T.Vector3().setFromMatrixColumn(room.camera.matrixWorld,0).normalize();
+            const previous=object.userData.rrShake||0;if(previous)object.position.addScaledVector(object.userData.rrShakeAxis||right,-previous);
+            if(shake){object.position.addScaledVector(right,shake/48);object.userData.rrShakeAxis=right;}object.userData.rrShake=shake?shake/48:0;}
     };
     P.publishRoomBounds=function(sprite,room,key){
         const bounds=room.bounds(key);if(!bounds)return;sprite._reactorRoomBounds=bounds;

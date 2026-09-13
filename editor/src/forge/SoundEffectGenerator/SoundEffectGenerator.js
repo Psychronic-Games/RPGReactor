@@ -994,6 +994,9 @@ class SoundEffectGenerator {
         this.pattern = new Set();
         this.bpm = 120;
         this.jitterStrength = 'medium';
+        // How a baked sound is written: the game plays WAV, OGG and MP3; the quality step sets the lossy bitrate.
+        this.saveFormat = 'wav';
+        this.saveQuality = 7;
         this._docMouseUpHandler = null;
     }
 
@@ -1079,6 +1082,8 @@ class SoundEffectGenerator {
             if (Array.isArray(cfg.pattern)) this.pattern = new Set(cfg.pattern);
             if (typeof cfg.bpm === 'number') this.bpm = cfg.bpm;
             if (cfg.jitterStrength && JITTER_STRENGTHS[cfg.jitterStrength]) this.jitterStrength = cfg.jitterStrength;
+            if (['wav', 'ogg', 'mp3'].includes(cfg.saveFormat)) this.saveFormat = cfg.saveFormat;
+            if (Number.isInteger(cfg.saveQuality) && cfg.saveQuality >= 1 && cfg.saveQuality <= 10) this.saveQuality = cfg.saveQuality;
         } catch (e) { /* first run */ }
         // Backfill any params missing from older saves or archetype seeds.
         for (const p of PARAM_SCHEMA) {
@@ -1101,6 +1106,13 @@ class SoundEffectGenerator {
         if (this.params.ksDampening === undefined) this.params.ksDampening = 0.995;
     }
 
+    /** What the quality step means for the chosen format, for the label beside the slider. */
+    _qualityLabel() {
+        const exporter = window.RRAudioExport;
+        if (!exporter || this.saveFormat === 'wav') return this._t('lossless');
+        return `${this.saveQuality}/10 · ${exporter.bitrateFor(this.saveFormat, this.saveQuality)} kbps`;
+    }
+
     _saveConfig() {
         const fs = require('fs');
         try {
@@ -1110,7 +1122,9 @@ class SoundEffectGenerator {
                 mode: this.mode,
                 pattern: Array.from(this.pattern),
                 bpm: this.bpm,
-                jitterStrength: this.jitterStrength
+                jitterStrength: this.jitterStrength,
+                saveFormat: this.saveFormat,
+                saveQuality: this.saveQuality
             }, null, 2));
         } catch (e) { console.error('SoundEffectGenerator: save config:', e); }
     }
@@ -1272,6 +1286,9 @@ class SoundEffectGenerator {
                 <div style="padding: 12px 18px; border-top: 1px solid var(--color-border-subtle); background: var(--color-bg-panel); display: flex; align-items: center; gap: 10px; flex-shrink: 0;">
                     <label style="font-size: 12px; color: var(--color-text-muted);">${this._t('Default name:')}</label>
                     <input type="text" class="rr-sfx-name rr-input" placeholder="${this._t('MySFX')}" style="width: 200px; padding: 4px 8px; font-size: 12px;">
+                    <label style="font-size: 12px; color: var(--color-text-muted);">${this._t('Format:')}</label>
+                    <select class="rr-sfx-format rr-input" style="padding: 4px 6px; font-size: 12px;">${(window.RRAudioExport ? window.RRAudioExport.FORMATS : [{ id: 'wav', label: 'WAV (lossless)' }]).map(f => `<option value="${f.id}"${f.id === this.saveFormat ? ' selected' : ''}>${this._t(f.label)}</option>`).join('')}</select>
+                    <label class="rr-sfx-quality-row" style="display: ${this.saveFormat === 'wav' ? 'none' : 'inline-flex'}; align-items: center; gap: 6px; font-size: 12px; color: var(--color-text-muted);">${this._t('Quality:')}<input type="range" class="rr-sfx-quality" min="1" max="10" step="1" value="${this.saveQuality}" style="width: 90px;"><span class="rr-sfx-quality-label" style="font-variant-numeric: tabular-nums; min-width: 60px;">${this._qualityLabel()}</span></label>
                     <div style="font-size: 10px; color: var(--color-text-dim);">${this._t('defaults to {path} - pick any location in the dialog').replace('{path}', 'audio/se/')}</div>
                     <div class="rr-sfx-save-status" style="font-size: 10px; color: var(--color-accent-bright); opacity: 0; transition: opacity 0.3s; margin-left: 8px; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"></div>
                     <button class="rr-sfx-save rr-btn-chip" style="margin-left: auto; padding: 6px 18px; color: var(--color-accent-bright);">${this._t('Bake & Save...')}</button>
@@ -1551,6 +1568,25 @@ class SoundEffectGenerator {
         root.querySelector('.rr-sfx-rand').addEventListener('click', () => this._randomizeFromArchetype());
         root.querySelector('.rr-sfx-reset').addEventListener('click', () => this._seedFromArchetype(this.activeArchetypeId));
         root.querySelector('.rr-sfx-save').addEventListener('click', () => this._saveSfx());
+        const formatSelect = root.querySelector('.rr-sfx-format'), qualityInput = root.querySelector('.rr-sfx-quality');
+        if (formatSelect) formatSelect.addEventListener('change', () => {
+            this.saveFormat = formatSelect.value;
+            const row = root.querySelector('.rr-sfx-quality-row');
+            if (row) row.style.display = this.saveFormat === 'wav' ? 'none' : 'inline-flex';
+            const label = root.querySelector('.rr-sfx-quality-label');
+            if (label) label.textContent = this._qualityLabel();
+            this._saveConfig();
+        });
+        if (qualityInput) qualityInput.addEventListener('input', () => {
+            this.saveQuality = Math.max(1, Math.min(10, parseInt(qualityInput.value, 10) || 7));
+            const label = root.querySelector('.rr-sfx-quality-label');
+            if (label) label.textContent = this._qualityLabel();
+            this._saveConfig();
+        });
+        // Every render wires the grid onto the same root element: the previous render's listeners must go with it, or one click toggles a note once per render so far.
+        if (this._gridWiring) this._gridWiring.abort();
+        this._gridWiring = typeof AbortController !== 'undefined' ? new AbortController() : null;
+        const gridOptions = this._gridWiring ? { signal: this._gridWiring.signal } : undefined;
 
         root.querySelectorAll('.rr-sfx-jitter-btn').forEach(btn => {
             btn.addEventListener('click', () => {
@@ -1585,7 +1621,7 @@ class SoundEffectGenerator {
                 const key = cell.dataset.key;
                 paintValue = !this.pattern.has(key);
                 this._paintCell(cell, key, paintValue);
-            });
+            }, gridOptions);
 
             root.addEventListener('mousemove', (e) => {
                 if (!painting) return;
@@ -1595,12 +1631,12 @@ class SoundEffectGenerator {
                 const isFilled = this.pattern.has(key);
                 if (paintValue && !isFilled) this._paintCell(cell, key, true);
                 else if (!paintValue && isFilled) this._paintCell(cell, key, false);
-            });
+            }, gridOptions);
 
             const stopPaint = () => {
                 if (painting) { painting = false; this._saveConfig(); }
             };
-            root.addEventListener('mouseup', stopPaint);
+            root.addEventListener('mouseup', stopPaint, gridOptions);
             // Also catch mouseup outside the component (e.g. released over sidebar).
             this._docMouseUpHandler = stopPaint;
             document.addEventListener('mouseup', stopPaint);
@@ -1651,7 +1687,7 @@ class SoundEffectGenerator {
         const projectPath = this._syncProjectPath();
         if (!projectPath && !webHost && !this._requireProjectPath()) return;
         const nameInput = this.root.querySelector('.rr-sfx-name');
-        const rawName = (nameInput.value || '').trim().replace(/\.(wav|ogg)$/i, '');
+        const rawName = (nameInput.value || '').trim().replace(/\.(wav|ogg|mp3)$/i, '');
         if (!rawName) { alert(this._t('Enter a name for the sound effect.')); return; }
 
         let buffer;
@@ -1664,7 +1700,19 @@ class SoundEffectGenerator {
             alert(`${this._t('Failed to render:')} ${e.message}`);
             return;
         }
-        const wav = audioBufferToWav(buffer);
+        // The chosen format: WAV as is, MP3 through lamejs, OGG through the browser's Opus encoder.
+        const exporter = window.RRAudioExport, format = exporter && exporter.FORMATS.find(f => f.id === this.saveFormat) || { id: 'wav', extension: '.wav', mimeType: 'audio/wav' };
+        let wav;
+        try {
+            let lame = null;
+            if (format.id === 'mp3') { try { lame = exporter.loadLame(require); } catch (e) { throw new Error(this._t('The MP3 encoder is not installed in this build.')); } }
+            wav = exporter ? await exporter.encode(buffer, format.id, this.saveQuality, lame) : audioBufferToWav(buffer);
+        } catch (e) {
+            console.error('SoundEffectGenerator encode:', e);
+            alert(`${this._t('Failed to encode:')} ${e.message}`);
+            return;
+        }
+        const extension = format.extension;
 
         const path = require('path');
         const defaultDir = projectPath ? path.join(projectPath, 'audio', 'se') : null;
@@ -1672,12 +1720,12 @@ class SoundEffectGenerator {
             try {
                 const result = await webHost.saveFile({
                     data: wav,
-                    projectPath: projectPath ? path.join(defaultDir, `${rawName}.wav`) : null,
-                    suggestedName: `${rawName}.wav`,
-                    mimeType: 'audio/wav',
+                    projectPath: projectPath ? path.join(defaultDir, `${rawName}${extension}`) : null,
+                    suggestedName: `${rawName}${extension}`,
+                    mimeType: format.mimeType,
                 });
                 if (result) this._showSaveStatus(result.project
-                    ? `${this._t('Saved:')} audio/se/${rawName}.wav`
+                    ? `${this._t('Saved:')} audio/se/${rawName}${extension}`
                     : `${this._t('Saved:')} ${result.path}`);
             } catch (err) {
                 console.error('SoundEffectGenerator save:', err);
@@ -1692,9 +1740,9 @@ class SoundEffectGenerator {
         const picker = document.createElement('input');
         picker.type = 'file';
         picker.style.display = 'none';
-        picker.setAttribute('nwsaveas', `${rawName}.wav`);
+        picker.setAttribute('nwsaveas', `${rawName}${extension}`);
         picker.setAttribute('nwworkingdir', defaultDir);
-        picker.accept = '.wav';
+        picker.accept = extension;
         picker.addEventListener('change', (e) => {
             const file = e.target.files && e.target.files[0];
             if (!file || !file.path) return;
