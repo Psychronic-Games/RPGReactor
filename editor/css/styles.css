@@ -5025,8 +5025,9 @@ details.mp-section:not([open]) > .mp-section-body { display:none; }
 .rr-pose-part-row .rr-pose-part-remove { flex:0 0 auto;width:28px;padding:0; }
 .rr-sequence-transform-fields { display:flex;flex-direction:column;gap:6px;min-width:0; }
 .rr-sequence-transform-label { font-size:11px;color:var(--color-text-muted); }
-.rr-sequence-transform-row { display:grid;grid-template-columns:14px minmax(0,1fr) 76px;align-items:center;gap:6px;min-width:0; }
+.rr-sequence-transform-row { display:grid;grid-template-columns:minmax(14px,max-content) minmax(0,1fr) 76px;align-items:center;gap:6px;min-width:0; }
 .rr-sequence-transform-axis { color:var(--transform-axis-color);font-weight:bold;font-size:12px; }
+.rr-sequence-transform-word { font-weight:normal;font-size:11px;color:var(--color-text-muted); }
 .rr-sequence-transform-row input[type=range] { width:100%;min-width:0;margin:0;accent-color:var(--transform-axis-color); }
 .rr-sequence-transform-row input[type=number] { font-size:11px;font-variant-numeric:tabular-nums; }
 .rr-sequence-editor input[type=number] { width:100%;min-width:0; }

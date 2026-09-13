@@ -512,7 +512,8 @@
                     const e=play.effect,a=play.animation,o=play.owner.object;
                     if(!R.effectAnchorWorld(o,e,play.world))continue;
                     if(play.offset){play.world.x+=play.offset.x||0;play.world.y+=play.offset.z||0;play.world.z+=play.offset.y||0;}
-                    const axes=R.scaleAxes(e.scale),unit=R.modelSpanTiles(o)/26*((a.scale||100)/100),rotate=e.rotate||[0,0,0],rotation=a.rotation||{};
+                    // The effect is sized to what it rides: a model's span, or two tiles (a battler's height) for a billboard such as a sprite or a projectile's carrier, which has no model size at all.
+                    const axes=R.scaleAxes(e.scale),unit=(play.span||R.modelSpanTiles(o)||2)/26*((a.scale||100)/100),rotate=e.rotate||[0,0,0],rotation=a.rotation||{};
                     h.setSpeed?.((a.speed??100)/100);h.setLocation(play.world.x,play.world.y,play.world.z);h.setScale(...axes.map(v=>v*unit));
                     h.setRotation((rotate[0]+(rotation.x||0))*Math.PI/180,(rotate[1]+(rotation.y||0))*Math.PI/180+o.rotation.y,(rotate[2]+(rotation.z||0))*Math.PI/180);
                     if(!play.quad){const canvas=document.createElement('canvas');canvas.width=canvas.height=4;play.quad=R.EffekseerScene.quadFor(canvas);this.scene.add(play.quad.mesh);}
@@ -538,7 +539,7 @@
             const owner=this.models.get(key)||this.billboards.get(key);if(!owner?.object)return false;
             const id='cue:'+(this.cueId=(this.cueId||0)+1);
             if(!this.queueEffect(id,owner,{animation:animationId,anchor:{part:'',offset:[0,.5,0]},scale:transform.scale??1,rotate:[0,0,0],loop:false},true))return false;
-            const play=this.effectPlays.get(id);play.offset={...transform};
+            const play=this.effectPlays.get(id);play.offset={...transform};if(transform.span>0)play.span=transform.span;
             return {isPlaying:()=>!this.disposed&&this.effectPlays.has(id)&&!play.failed&&(!play.pending||Date.now()-play.createdAt<15000),
                 cancel:()=>{if(this.effectPlays.has(id)){this.stopEffect(play);this.effectPlays.delete(id);}}};
         }

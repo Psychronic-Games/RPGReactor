@@ -90,9 +90,10 @@ class ActionSequencePreview {
         const sync=()=>{if(!card.isConnected)return false;for(const input of card.querySelectorAll('[data-card-key]')){const value=spec.get(input.dataset.cardKey);if(!Number.isFinite(value)||document.activeElement===input)continue;const text=String(Math.round(value*1000)/1000);if(input.type==='range'){input.min=Math.min(Number(input.min),value);input.max=Math.max(Number(input.max),value);}if(String(input.value)!==text)input.value=text;}return true;};
         (this.cardSyncs||=[]).push(sync);return card;
     }
-    cardRow(host,row,spec){const e=this.editor,U=e.ui,axis=row.axis||'';
+    cardRow(host,row,spec){const e=this.editor,U=e.ui,axis=['X','Y','Z'].includes(row.axis)?row.axis:'';
         const line=U.element('div','rr-sequence-transform-row');line.style.setProperty('--transform-axis-color',({X:'#e5484d',Y:'#46a758',Z:'#3e63dd'})[axis]||'var(--color-accent)');host.append(line);
-        const tag=U.element('span','rr-sequence-transform-axis',axis||'·',true);tag.title=U.text(row.label);line.append(tag);
+        // An axis row is tagged with its letter; any other row with a short word for what it sets.
+        const tag=axis?U.element('span','rr-sequence-transform-axis',axis,true):U.element('span','rr-sequence-transform-axis rr-sequence-transform-word',row.short||(row.axis&&row.axis!=='·'?row.axis:row.label.replace(/\s*\(.*$/,'')));tag.title=U.text(row.label);line.append(tag);
         const value=Number(spec.get(row.key))||0,slider=U.element('input');slider.type='range';slider.min=Math.min(row.min,value);slider.max=Math.max(row.max,value);slider.step=row.step;slider.value=value;slider.dataset.cardKey=row.key;slider.title=U.text(row.label)+' · '+U.text('Double-click to reset');
         const input=U.element('input','database-field-value');input.type='number';input.step=row.step;input.value=Math.round(value*1000)/1000;input.dataset.cardKey=row.key;input.dataset.noStepper='';
         const label=U.text(row.label);slider.setAttribute('aria-label',label);input.setAttribute('aria-label',label);input.title=label;line.append(slider,input);

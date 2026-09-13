@@ -443,7 +443,7 @@ class DatabaseActionSequenceEditor {
                 tool:tab=>tab==='rotate'?'rotate':'move',shown:atEnd,
                 rows:tab=>tab==='offset'?[row('x','X',approach()?'Stop Short (tiles)':U.message('{axis} (tiles)',{axis:'X'}),-6,6,.05,0),row('y','Y',U.message('{axis} (tiles)',{axis:'Y'}),-6,6,.05,0),row('z','Z',U.message('{axis} (tiles)',{axis:'Z'}),-3,6,.05,0)]
                     :tab==='rotate'?['rotateX','rotateY','rotateZ'].map(k=>row(k,k.slice(-1),U.message('Turn {axis} (degrees)',{axis:k.slice(-1)}),-360,360,5,0))
-                    :[row('scale','S','Scale',.1,4,.01,1)],
+                    :[row('scale','Scale','Scale',.1,4,.01,1)],
                 get:key=>key==='x'&&approach()?-(step.x||0):key==='scale'?step.scale??1:step[key]||0,
                 set:(key,value)=>{if(this.sequence.steps[this.selected]!==step)return;step[key]=key==='x'&&approach()?-value:key==='scale'?Math.max(.01,Math.min(100,value)):value;U.changed();this.validate();},
                 reset:tab=>{for(const key of tab==='offset'?['x','y','z']:tab==='rotate'?['rotateX','rotateY','rotateZ']:['scale'])step[key]=key==='scale'?1:0;U.changed();this.validate();},
@@ -501,7 +501,7 @@ class DatabaseActionSequenceEditor {
                     tool:tab=>tab==='rotate'?'rotate':'move',shown:showPose,
                     rows:tab=>tab==='offset'?['x','y','z'].map(k=>row(k,k.toUpperCase(),U.message('{axis} (tiles)',{axis:k.toUpperCase()}),-2,2,.01,0))
                         :tab==='rotate'?[row('rotation','X','Tilt (degrees)',-180,180,1,0),row('rotateY','Y','Turn (degrees)',-180,180,1,0),row('rotateZ','Z','Roll (degrees)',-180,180,1,0)]
-                        :[row('scale','S','Scale',.1,4,.01,1)],
+                        :[row('scale','Scale','Scale',.1,4,.01,1)],
                     get:key=>step[key]??(key==='scale'?1:0),
                     set:(key,value)=>{if(this.sequence.steps[this.selected]!==step)return;step[key]=key==='scale'?Math.max(.01,value):Math.round(value*100)/100;U.changed();this.validate();},
                     reset:tab=>{for(const key of tab==='offset'?['x','y','z']:tab==='rotate'?['rotation','rotateY','rotateZ']:['scale'])step[key]=key==='scale'?1:0;U.changed();this.validate();},
@@ -686,8 +686,8 @@ class DatabaseActionSequenceEditor {
             // Start and Look show the launch; Arrive shows the flight halfway, where the arc and landing height read.
             shown:()=>this.showFlightFrame(step),
             rows:tab=>tab==='start'?[row('x','X','X (tiles)',-2,2,.01,0),row('y','Y','Y (tiles)',-2,2,.01,0),row(heightKey(),'Z','Height (tiles)',-1,3,.01,unit(heightKey()))]
-                :tab==='arrive'?[row('endHeight','Z','Arrival Height (tiles)',-1,3,.01,1),row('arc','·','Arc Height (tiles)',-2,4,.01,0)]
-                :[row('rotation','·','Rotation (degrees)',-180,180,1,0),row('spin','·','Spin (degrees/frame)',-45,45,.5,0),row('scale','S','Scale',.1,4,.01,1)],
+                :tab==='arrive'?[row('endHeight','Z','Arrival Height (tiles)',-1,3,.01,1),row('arc','Arc','Arc Height (tiles)',-2,4,.01,0)]
+                :[row('rotation','Turn','Rotation (degrees)',-180,180,1,0),row('spin','Spin','Spin (degrees/frame)',-45,45,.5,0),row('scale','Scale','Scale',.1,4,.01,1)],
             get:key=>step[key]??unit(key),
             set:(key,value)=>{if(this.sequence.steps[this.selected]!==step)return;step[key]=key==='scale'?Math.max(.01,value):Math.round(value*100)/100;U.changed();this.validate();},
             reset:tab=>{for(const key of tab==='start'?['x','y',heightKey()]:tab==='arrive'?['endHeight','arc']:['rotation','spin','scale'])step[key]=unit(key);U.changed();this.validate();},
@@ -790,7 +790,8 @@ class DatabaseActionSequenceEditor {
                 if(mode==='hide')held.set(key,null);
                 else if(mode==='move'){if(prev){const t=cue.end===cue.start?1:Math.min(1,(this.frame-cue.start)/(cue.end-cue.start));held.set(key,{...prev,...B.heldPose(prev,step,B.ease(t,step.easing))});}}
                 else held.set(key,step);}
-            if(step.type==='projectile'&&this.frame<cue.end)active.push({...cue,step});
+            // A landed animation projectile stays, unseen, while its animation finishes at the landing point, as the game keeps it.
+            if(step.type==='projectile'&&(this.frame<cue.end||step.iconSource==='animation'&&[...(this.flightAnimations||[])].some(([id,ticket])=>id.startsWith('extra:flight:'+cue.step.id+':')&&ticket?.isPlaying?.())))active.push({...cue,step});
         }
         const draw=(id,step,key,p)=>{
             const spec=['weapon','projectile'].includes(step.type)?this.weaponModelSpec(step,key):null;
@@ -808,7 +809,7 @@ class DatabaseActionSequenceEditor {
                 const from=view.attachmentPoint(key,{...step,z:step.attachment&&step.attachment!=='offset'?(step.z||0):step.startHeight??1},start);
                 if(previous){view.place(key,previous);const motion=this.motionFor(key),rule=record.rules.find(r=>r.trigger==='action'&&r.name.toLowerCase()===motion.name.toLowerCase());Reactor3D.applyModelAnimation(record.binding,record.rules,{frame:this.frame,moving:false,scale:record.scale,action:{name:rule?.name||motion.name,frame:motion.start},seek:true});}
                 const to={...poses[target],z:(poses[target].z||0)+(step.endHeight??1)},p=B.flightPoint(from,to,t,step.arc||0,step.flight==='return');
-                draw('extra:flight:'+cue.step.id+':'+key+':'+target,{...step,rotation:(step.rotation||0)+(this.frame-cue.start)*(step.spin||0)},key,p);
+                draw('extra:flight:'+cue.step.id+':'+key+':'+target,{...step,rotation:(step.rotation||0)+(this.frame-cue.start)*(step.spin||0),visible:this.frame<cue.end},key,p);
             }
         }
         for(const key of [...view.billboards.keys()])if((key.startsWith('extra:held:')||key.startsWith('extra:flight:'))&&!live.has(key))view.remove(key);

@@ -2349,7 +2349,7 @@
         "y": 0,
         "z": 0,
         "easing": "smooth",
-        "iconSource": "color",
+        "iconSource": "animation",
         "iconIndex": 0,
         "name": "",
         "destination": "allTargets",
@@ -2368,7 +2368,8 @@
         "flight": "oneWay",
         "color": "#9fe0ff",
         "size": 6,
-        "phase": "execute"
+        "phase": "execute",
+        "animationId": 124
       },
       {
         "id": "step-dwuk7jh6sn5",
