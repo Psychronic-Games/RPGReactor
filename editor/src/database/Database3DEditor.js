@@ -898,7 +898,7 @@ class Database3DEditor {
                     largestTexture: largest,
                     textureBytes: (analysis.images || []).reduce((sum, image) => sum + image.bytes, 0),
                     fileBytes: stat.size,
-                    optimized: fs.existsSync(filePath + '.orig'),
+                    optimized: this._hasOriginalBeside(fs, path, filePath),
                     levels: []
                 };
                 // Distance levels are what stops a heavy prop costing its full
@@ -1004,7 +1004,7 @@ class Database3DEditor {
         if (a.skinned) {
             notes.push(this._t('Characters are posed every frame and are drawn at full detail at every distance — distance levels are not built for them. Their triangle count is paid in full, always.'));
         } else if (triangles >= 150000 && String(entry.ext || '.glb').toLowerCase() !== '.glb') {
-            notes.push(this._t('This model costs every one of its triangles at every distance. Only a .glb can be optimized here: export it as GLB to cut them.'));
+            notes.push(this._t('This model costs every one of its triangles at every distance. Optimize converts it to GLB, bundles its textures inside and cuts them.'));
         } else if (triangles >= 150000) {
             notes.push(this._t('This model costs every one of its triangles at every distance. Optimize cuts them — a background prop rarely needs more than a fraction of what a generator gives it.'));
         }
@@ -1041,6 +1041,64 @@ class Database3DEditor {
             line.style.cssText = `${muted}margin-top:6px;line-height:1.35;`;
             line.textContent = note;
             host.appendChild(line);
+        }
+    }
+
+    /** Whether an original of this model is kept beside it, whatever its format was (`name.glb.orig`, `name.fbx.orig`…). */
+    _hasOriginalBeside(fs, path, filePath) {
+        try {
+            const base = path.basename(filePath, path.extname(filePath)) + '.';
+            return fs.readdirSync(path.dirname(filePath)).some(name => name.startsWith(base) && name.endsWith('.orig'));
+        } catch (error) { return false; }
+    }
+
+    /**
+     * A non-GLB model as GLB bytes: read by the runtime's reader for its
+     * format, its pictures gathered from the textures folder beside the source
+     * (or the bytes the file carried) and embedded, so the GLB stands alone.
+     */
+    _convertModelToGlb(fs, path, filePath, ext, entry) {
+        if (typeof Reactor3D === 'undefined' || !Reactor3D.readModel) throw new Error('The 3D runtime is not loaded.');
+        const readers = { '.obj': 'readObj', '.stl': 'readStl', '.dxf': 'readDxf', '.fbx': 'readFbx', '.3mf': 'read3mf', '.usdz': 'readUsdz' };
+        const reader = readers[ext];
+        if (!reader || typeof Reactor3D[reader] !== 'function') throw new Error('Files of type ' + ext + ' cannot be converted.');
+        const bytes = new Uint8Array(fs.readFileSync(filePath));
+        const mesh = Reactor3D[reader](bytes);
+        const texturesDir = path.join(path.dirname(path.dirname(filePath)), 'textures');
+        const images = {};
+        const wanted = new Set();
+        for (const material of mesh.materials || []) for (const name of [material.texture, material.alpha]) if (name) wanted.add(name);
+        if (!(mesh.materials || []).length && entry.texture) wanted.add(entry.texture);
+        for (const name of wanted) {
+            const found = [path.join(texturesDir, name), path.join(path.dirname(filePath), name)].find(candidate => fs.existsSync(candidate));
+            if (!found) continue;
+            images[name] = { bytes: new Uint8Array(fs.readFileSync(found)), mimeType: /\.jpe?g$/i.test(found) ? 'image/jpeg' : /\.webp$/i.test(found) ? 'image/webp' : 'image/png' };
+        }
+        const glb = window.RRGlbOptimizer.fromMesh(mesh, images, { name: entry.name.split('/').pop(), texture: entry.texture || '' });
+        return { bytes: glb, images: Object.keys(images).length + (mesh.materials || []).filter(m => m.embedded).length, sourceBytes: bytes.length };
+    }
+
+    /** Every model reference in the project's 3D sidecars that named the old extension now names the new one. */
+    _retargetModelExtension(fs, path, name, from, to) {
+        const project = this._project();
+        if (!project || !project.path) return;
+        const dataDir = path.join(project.path, 'data');
+        let files = [];
+        try { files = fs.readdirSync(dataDir).filter(file => /\.r3d\.json$/i.test(file)); } catch (error) { return; }
+        const walk = node => {
+            let changed = false;
+            if (Array.isArray(node)) { for (const item of node) changed = walk(item) || changed; return changed; }
+            if (!node || typeof node !== 'object') return false;
+            if (node.name === name && String(node.ext || '').toLowerCase() === from) { node.ext = to; changed = true; }
+            for (const key of Object.keys(node)) changed = walk(node[key]) || changed;
+            return changed;
+        };
+        for (const file of files) {
+            const full = path.join(dataDir, file);
+            try {
+                const data = JSON.parse(fs.readFileSync(full, 'utf8'));
+                if (walk(data)) this._writeFileAtomic(fs, full, JSON.stringify(data, null, 2) + '\n');
+            } catch (error) { /* a sidecar that will not parse is left as it is */ }
         }
     }
 
@@ -1100,16 +1158,21 @@ class Database3DEditor {
         const entry = this.listModels().find(m => m.name === this.selectedName);
         if (!entry) return say(this._t('Select a model first.'));
         if (!window.RRGlbOptimizer) return say(this._t('The model optimizer is unavailable.'));
-        if ((entry.ext || '.glb').toLowerCase() !== '.glb') {
-            return say(this._t('Only .glb models can be optimized.'));
-        }
         const fs = require('fs');
         const path = require('path');
         const filePath = this.sourcePath(entry);
         if (!filePath) return say(this._t('This model’s source file could not be found.'));
+        const sourceExt = (entry.ext || path.extname(filePath) || '.glb').toLowerCase();
 
         try {
-            const original = new Uint8Array(fs.readFileSync(filePath));
+            // Any other format is first made into a GLB with its pictures inside; the reduction then runs on that, and the GLB is what stays.
+            let original = new Uint8Array(fs.readFileSync(filePath));
+            let conversion = null;
+            if (sourceExt !== '.glb') {
+                say(this._t('Converting {name} to GLB…', { name: entry.name }));
+                conversion = this._convertModelToGlb(fs, path, filePath, sourceExt, entry);
+                original = conversion.bytes;
+            }
             const analysis = window.RRGlbOptimizer.analyze(original);
             if (!analysis) return say(this._t('This file could not be read as a GLB.'));
             const ui = (this.projectController && this.projectController.uiManager)
@@ -1172,7 +1235,7 @@ class Database3DEditor {
                 }
             }
             const bytes = optimized && optimized.bytes ? optimized.bytes : null;
-            if (!bytes || bytes === original) return say(this._t('Nothing left to reduce in this model.'));
+            if (!bytes || (bytes === original && !conversion)) return say(this._t('Nothing left to reduce in this model.'));
 
             // Prove the result loads before it replaces anything. Importing
             // puts every model through this gate; writing in place has to use
@@ -1190,8 +1253,14 @@ class Database3DEditor {
             // The backup is written once and never overwritten, so optimizing
             // twice still leaves the file the user actually started with.
             const backup = filePath + '.orig';
+            const targetPath = conversion ? filePath.slice(0, -sourceExt.length) + '.glb' : filePath;
             if (!fs.existsSync(backup)) fs.copyFileSync(filePath, backup);
-            this._writeFileAtomic(fs, filePath, Buffer.from(bytes));
+            this._writeFileAtomic(fs, targetPath, Buffer.from(bytes));
+            // The converted GLB replaces the source: the old file goes (its backup stands beside it) and every record that named the old extension now names .glb.
+            if (conversion) {
+                fs.rmSync(filePath, { force: true });
+                this._retargetModelExtension(fs, path, entry.name, sourceExt, '.glb');
+            }
 
             // No distance-level files are written here. A level is a second
             // (and third) copy of the geometry on disk, which grows a project
@@ -1227,17 +1296,19 @@ class Database3DEditor {
             // Every cache that holds the old geometry has to let go, or the
             // editor keeps drawing the model it loaded at startup.
             delete this._templates[entry.name];
+            this._statsCache = null;
             if (typeof RREventPreviewModels !== 'undefined' && RREventPreviewModels.clear) RREventPreviewModels.clear();
             // Through whichever controller can reach the map: the database's
         // stand-in forwards, and the real one is the fallback.
         const controller = this.projectController && typeof this.projectController.refreshMap3DView === 'function'
             ? this.projectController : (window.reactor && window.reactor.projectController);
         if (controller && typeof controller.refreshMap3DView === 'function') controller.refreshMap3DView();
-            await this.selectModel(entry);
+            await this.selectModel(conversion ? (this.listModels().find(m => m.name === entry.name) || entry) : entry);
 
-            const before = (original.length / 1048576).toFixed(1);
+            const before = ((conversion ? conversion.sourceBytes : original.length) / 1048576).toFixed(1);
             const after = (bytes.length / 1048576).toFixed(1);
-            const summary = `${this._t('Optimized')} ${entry.name}: ${before}MB → ${after}MB${levelNote}.${partsNote} ` +
+            const converted = conversion ? this._t('Converted from {ext} with {count} texture(s) embedded.', { ext: sourceExt.slice(1).toUpperCase(), count: conversion.images }) + ' ' : '';
+            const summary = converted + `${this._t('Optimized')} ${entry.name}: ${before}MB → ${after}MB${levelNote}.${partsNote} ` +
                 this._t('Original kept as {file}', { file: path.basename(backup) });
             say(summary);
             const stats = this._detail && this._detail.querySelector('.r3d-stats');

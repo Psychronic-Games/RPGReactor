@@ -959,6 +959,100 @@
     }
 
     /**
+     * A GLB built from a mesh in the shape the runtime's readers give (FBX,
+     * OBJ, STL…): {positions, uvs, indices, groups:[{name, material, start,
+     * count}], materials:[{name, color, opacity, texture, alpha, embedded}]}.
+     * Each named part becomes a node and mesh, each material run a primitive
+     * with its own welded vertices, and every picture a material names is
+     * embedded from `images` ({fileName: {bytes, mimeType}}) or the bytes the
+     * file carried, so the result stands alone. A mesh without materials gets
+     * one, wearing `options.texture` when that picture is given.
+     */
+    function fromMesh(mesh, images, options) {
+        const settings = options || {};
+        const pictures = images || {};
+        const positions = mesh.positions, uvs = mesh.uvs;
+        const json = { asset: { version: '2.0', generator: 'RPG Reactor' }, scene: 0, scenes: [{ nodes: [] }], nodes: [], meshes: [], materials: [], accessors: [], bufferViews: [], buffers: [] };
+        const replacements = new Map();
+        const view = (data, target) => {
+            const index = json.bufferViews.length;
+            json.bufferViews.push(Object.assign({ buffer: 0, byteOffset: 0, byteLength: data.byteLength }, target ? { target } : {}));
+            replacements.set(index, new Uint8Array(data.buffer, data.byteOffset, data.byteLength));
+            return index;
+        };
+        // Pictures once each, by file name.
+        const imageIndex = new Map();
+        const textureFor = (name, embedded) => {
+            if (!name && !embedded) return null;
+            const key = name || ('embedded:' + imageIndex.size);
+            if (imageIndex.has(key)) return imageIndex.get(key);
+            const picture = embedded ? { bytes: embedded, mimeType: name && /\.jpe?g$/i.test(name) ? 'image/jpeg' : name && /\.webp$/i.test(name) ? 'image/webp' : 'image/png' } : pictures[name];
+            if (!picture || !picture.bytes || !picture.bytes.length) return null;
+            json.images = json.images || [];
+            json.textures = json.textures || [];
+            json.images.push({ name, mimeType: picture.mimeType || 'image/png', bufferView: view(picture.bytes) });
+            json.textures.push({ source: json.images.length - 1 });
+            imageIndex.set(key, json.textures.length - 1);
+            return json.textures.length - 1;
+        };
+        const defs = mesh.materials && mesh.materials.length ? mesh.materials : [{ name: '', color: [0.53, 0.53, 0.53], opacity: 1, texture: settings.texture || '', alpha: '', embedded: null }];
+        for (const def of defs) {
+            const material = { name: def.name || '', pbrMetallicRoughness: { metallicFactor: 0, roughnessFactor: 1 } };
+            const texture = textureFor(def.texture, def.embedded);
+            // Its own colour picture cuts it out by its alpha; a separate alpha picture stands in as the colour picture, tinted by the material's colour.
+            const alpha = texture == null && def.alpha ? textureFor(def.alpha, null) : null;
+            const opacity = Number.isFinite(def.opacity) ? Math.max(0, Math.min(1, def.opacity)) : 1;
+            const color = def.color || [1, 1, 1];
+            material.pbrMetallicRoughness.baseColorFactor = texture != null ? [1, 1, 1, opacity] : [color[0], color[1], color[2], opacity];
+            if (texture != null) material.pbrMetallicRoughness.baseColorTexture = { index: texture };
+            else if (alpha != null) material.pbrMetallicRoughness.baseColorTexture = { index: alpha };
+            if (def.alpha || opacity < 1) material.alphaMode = 'BLEND';
+            json.materials.push(material);
+        }
+        // One node and mesh per part, one primitive per material run, each with its own welded vertices.
+        const runs = mesh.groups && mesh.groups.length ? mesh.groups : [{ name: '', material: 0, start: 0, count: mesh.indices ? mesh.indices.length : positions.length / 3 }];
+        const byName = new Map();
+        for (const run of runs) { const list = byName.get(run.name || '') || []; list.push(run); byName.set(run.name || '', list); }
+        for (const [name, list] of byName) {
+            const primitives = [];
+            for (const run of list) {
+                const welded = new Map(), outPos = [], outUv = [], outIdx = [];
+                for (let i = 0; i < run.count; i++) {
+                    const source = mesh.indices ? mesh.indices[run.start + i] : run.start + i;
+                    const x = positions[source * 3], y = positions[source * 3 + 1], z = positions[source * 3 + 2];
+                    const u = uvs ? uvs[source * 2] : 0, v = uvs ? uvs[source * 2 + 1] : 0;
+                    const key = x + ',' + y + ',' + z + ',' + u + ',' + v;
+                    let index = welded.get(key);
+                    if (index === undefined) { index = outPos.length / 3; welded.set(key, index); outPos.push(x, y, z); if (uvs) outUv.push(u, 1 - v); }
+                    outIdx.push(index);
+                }
+                if (outIdx.length < 3) continue;
+                const pos = new Float32Array(outPos);
+                const min = [Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity];
+                for (let i = 0; i < pos.length; i += 3) for (let k = 0; k < 3; k++) { if (pos[i + k] < min[k]) min[k] = pos[i + k]; if (pos[i + k] > max[k]) max[k] = pos[i + k]; }
+                const attributes = {};
+                json.accessors.push({ bufferView: view(pos, 34962), componentType: 5126, count: pos.length / 3, type: 'VEC3', min, max });
+                attributes.POSITION = json.accessors.length - 1;
+                if (uvs) {
+                    const uv = new Float32Array(outUv);
+                    json.accessors.push({ bufferView: view(uv, 34962), componentType: 5126, count: uv.length / 2, type: 'VEC2' });
+                    attributes.TEXCOORD_0 = json.accessors.length - 1;
+                }
+                const wide = outPos.length / 3 > 65535;
+                const idx = wide ? new Uint32Array(outIdx) : new Uint16Array(outIdx);
+                json.accessors.push({ bufferView: view(idx, 34963), componentType: wide ? 5125 : 5123, count: idx.length, type: 'SCALAR' });
+                primitives.push({ attributes, indices: json.accessors.length - 1, material: Math.min(json.materials.length - 1, Math.max(0, run.material || 0)), mode: 4 });
+            }
+            if (!primitives.length) continue;
+            json.meshes.push({ name: name || settings.name || 'model', primitives });
+            json.nodes.push({ name: name || settings.name || 'model', mesh: json.meshes.length - 1 });
+            json.scenes[0].nodes.push(json.nodes.length - 1);
+        }
+        if (!json.meshes.length) throw new Error('the model has no triangles');
+        return rebuildGlb(json, new Uint8Array(0), replacements);
+    }
+
+    /**
      * Apply the requested reductions and return new GLB bytes. Options match a
      * PRESETS entry plus an optional async `encodeImage(data, mimeType, maxSize,
      * quality, hasAlpha) -> {data, mimeType} | null` hook (null keeps the
@@ -1113,7 +1207,7 @@
             .catch(() => lods(bytes, options));
     }
 
-    const api = { PRESETS, LOD_LEVELS, LOD_MIN_TRIANGLES, analyze, optimize, lods, lodsAsync, canvasEncoder, parseGlb, remapParts, imageDimensions };
+    const api = { PRESETS, LOD_LEVELS, LOD_MIN_TRIANGLES, analyze, optimize, lods, lodsAsync, canvasEncoder, parseGlb, remapParts, imageDimensions, fromMesh };
 
     root.RRGlbOptimizer = api;
 

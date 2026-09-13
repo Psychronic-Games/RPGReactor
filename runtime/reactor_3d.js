@@ -11601,7 +11601,8 @@ Reactor3D.loadModel = function(name, ext, file, texture) {
     const entry = { promise: null, template: null, failed: false };
     this._glbCache[key] = entry;
     const jobs = [];
-    const kinds = ext ? [ext] : this.MODEL_EXTS;
+    // The named extension first; a model converted to GLB since it was picked is still found under the others.
+    const kinds = ext ? [ext].concat(this.MODEL_EXTS.filter(kind => kind !== ext)) : this.MODEL_EXTS;
     for (let i = 0; i < kinds.length; i++) {
         const next = kinds[i];
         const urls = this.modelUrls(name, next, file);

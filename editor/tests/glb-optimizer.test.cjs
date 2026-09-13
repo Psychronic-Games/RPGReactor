@@ -616,3 +616,34 @@ test('analyze reports what makes a model expensive, not just its triangles', () 
     assert.match(editor, /\$\{filePath\}\|\$\{stat\.size\}\|\$\{stat\.mtimeMs\}/);
     assert.match(editor, /stats: \['\.r3d-stats'\]/, 'the section folds like the others');
 });
+
+test('fromMesh builds a self-contained GLB: welded parts per material, pictures embedded, UVs flipped for glTF', () => {
+    // Two triangles sharing an edge, one per material; the second material names a picture.
+    const mesh = {
+        positions: new Float32Array([0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 0, 1, 0]),
+        uvs: new Float32Array([0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1]),
+        indices: new Uint32Array([0, 1, 2, 3, 4, 5]),
+        groups: [{ name: 'Wing', material: 0, start: 0, count: 3 }, { name: 'Wing', material: 1, start: 3, count: 3 }],
+        materials: [{ name: 'Plain', color: [1, 0, 0], opacity: 0.5, texture: '', alpha: '', embedded: null }, { name: 'Wood', color: [1, 1, 1], opacity: 1, texture: 'wood.png', alpha: '', embedded: null }]
+    };
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52, 0, 0, 0, 2, 0, 0, 0, 3, 8, 6, 0, 0, 0]);
+    const bytes = Optimizer.fromMesh(mesh, { 'wood.png': { bytes: png, mimeType: 'image/png' } }, { name: 'bird' });
+    const parsed = Optimizer.parseGlb(bytes);
+    assert.ok(parsed, 'the result parses as a GLB');
+    const { json } = parsed;
+    assert.deepEqual(json.nodes.map(n => n.name), ['Wing'], 'one node per part');
+    assert.equal(json.meshes[0].primitives.length, 2, 'one primitive per material run');
+    assert.deepEqual(json.meshes[0].primitives.map(p => p.material), [0, 1]);
+    assert.equal(json.materials[0].alphaMode, 'BLEND');
+    assert.deepEqual(json.materials[0].pbrMetallicRoughness.baseColorFactor, [1, 0, 0, 0.5]);
+    assert.equal(json.materials[1].pbrMetallicRoughness.baseColorTexture.index, 0);
+    assert.equal(json.images.length, 1, 'the picture is embedded once');
+    const analysis = Optimizer.analyze(bytes);
+    assert.equal(analysis.triangles, 2);
+    assert.equal(analysis.images[0].width, 2);
+    assert.equal(analysis.images[0].height, 3);
+    const uv = json.accessors[json.meshes[0].primitives[0].attributes.TEXCOORD_0];
+    const view = json.bufferViews[uv.bufferView];
+    const values = new Float32Array(parsed.bin.buffer, parsed.bin.byteOffset + (view.byteOffset || 0), uv.count * 2);
+    assert.deepEqual(Array.from(values), [0, 1, 1, 1, 1, 0], 'V runs top-down in glTF');
+});
