@@ -244,7 +244,7 @@
         battlestatus:{label:'Battle Status Window',fields:[op(['show','hide'])]},
         battlelog:{label:'Battle Log',fields:[op(['text','show','hide','clear']),text('text','Message')]},
         bgm:{label:'Background Music',fields:audio},bgs:{label:'Background Sound',fields:audio},
-        se:{label:'Sound Effect / System Sound',fields:[op(['play','system','stop']),text('name','Audio File'),n('volume','Volume',90),n('pitch','Pitch',100),n('pan','Pan'),n('soundId','System Sound Index',0)]}
+        se:{label:'Sound Effect',fields:[op(['play','system','stop']),text('name','Audio File'),n('volume','Volume',90),n('pitch','Pitch',100),n('pan','Pan'),n('soundId','System Sound Index',0)]}
     };
     B.extraFields={
         motion:[n('motionIndex','Custom Motion Index (0 = named motion)'),n('motionFrames','Motion Frames (0 = graphic default)'),n('motionSpeed','Motion Speed (0 = graphic default)'),pick('motionLoop','Motion Playback',['default','loop','once','hold'])],

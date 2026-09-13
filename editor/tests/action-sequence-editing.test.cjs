@@ -69,6 +69,10 @@ test('the step picker asks which step to add and inserts the choice where it was
  assert.ok(items.length>=B.types.length+B.basicSteps.length-1,'every step type and template is offered');
  const groups=overlay.querySelectorAll('.rr-step-picker-group');assert.ok(groups.length>=6,'steps are grouped');
  assert.ok(!items.some(item=>item.dataset.stepValue==='effect'),'the retired effect step is not offered');
+ const values=items.map(item=>item.dataset.stepValue);assert.equal(new Set(values).size,values.length,'each capability is offered once');
+ assert.ok(!values.includes('se')&&values.includes('se:system')&&values.includes('se:stop'),'the sound effect command appears only for what Play Sound cannot do');
+ assert.ok(groups.every(group=>group.querySelector('.database-section-header')),'group headers use the accent-strip section header');
+ assert.ok(items.find(item=>item.dataset.stepValue==='leap').querySelector('.rr-step-picker-hint'),'look-alike steps carry a hint');
  const search=overlay.querySelector('.rr-step-picker-search');assert.equal(context.document.activeElement===search,true,'typing filters at once');
  search.value='proj';search.fire('input');
  const shown=items.filter(item=>!item.hidden);assert.deepEqual(shown.map(item=>item.dataset.stepValue),['projectile']);
@@ -82,6 +86,8 @@ test('the step picker asks which step to add and inserts the choice where it was
  const second=e.showStepPicker({phase:'finish',index:0});
  second.querySelectorAll('.rr-step-picker-item').find(item=>item.dataset.stepValue==='basic:Run to Target').onclick();
  assert.equal(inserted[1].index,0);assert.ok(inserted[1].records.length>1,'a template adds all of its steps');assert.ok(inserted[1].records.every(step=>step.phase==='finish'),'the steps belong to the phase whose + was clicked');
+ // A folded entry starts the step on the operation it names.
+ const sounds=e.showStepPicker();sounds.querySelectorAll('.rr-step-picker-item').find(item=>item.dataset.stepValue==='se:system').onclick();assert.equal(inserted[2].records[0].type,'se');assert.equal(inserted[2].records[0].operation,'system');
  // Escape closes without adding anything.
- const third=e.showStepPicker();third.querySelector('.rr-modal-close').fire('click');assert.equal(third.parentNode===null,true);assert.equal(inserted.length,2);
+ const third=e.showStepPicker();third.querySelector('.rr-modal-close').fire('click');assert.equal(third.parentNode===null,true);assert.equal(inserted.length,3);
 });

@@ -159,7 +159,7 @@ class DatabaseActionSequenceEditor {
         this.clearPreviewMedia();this.stepPlayback=null;if(this.selected!==index)this.posePartName=null;this.selected=index;this.frame=['move','motion'].includes(cue.step.type)||cue.step.type==='weapon'&&ReactorBattleData.weaponMode(cue.step)==='move'?cue.end:cue.start;this.asOfStep=true;this.controls.mode='step';this.controls.modeSelect.value='step';this.controls.freeScale=false;this.controls.transformPose=cue.step.type==='motion'&&cue.step.transform?cue.step:null;if(this.controls.transformPose)this.controls.setTool('rotate');this.playing=false;this.updateStepSelection();this.drawInspector();this.validate();
     }
     revealStep(){const row=this.stepRows()[this.selected];(row||this.steps).focus({preventScroll:true});row?.scrollIntoView({block:'nearest',inline:'nearest'});}
-    newSteps(value='basic:Run to Target',phase){const B=ReactorBattleData;const made=value.startsWith('basic:')?B.basic(value.slice(6)):[B.step(value,value==='weapon'?{duration:0,x:0,z:0,attachment:'rightHand'}:{})];
+    newSteps(value='basic:Run to Target',phase,extra={}){const B=ReactorBattleData;const made=value.startsWith('basic:')?B.basic(value.slice(6)):[B.step(value,{...(value==='weapon'?{duration:0,x:0,z:0,attachment:'rightHand'}:{}),...extra})];
         if(B.purpose(this.sequence)!=='action')return made;const at=phase||B.stepPhase(this.sequence.steps[this.selected]||{phase:B.sequencePhases(this.sequence)[0]});return made.map(step=>({...step,phase:at}));}
     /** Where a new step goes to join a phase section: after that phase's last step, or at the end. */
     phaseInsertIndex(phase){const B=ReactorBattleData,steps=this.sequence.steps;let index=-1;steps.forEach((step,i)=>{if(B.stepPhase(step)===phase)index=i;});return index>=0?index+1:steps.length;}
@@ -289,6 +289,7 @@ class DatabaseActionSequenceEditor {
         }else if(step.type==='projectile'){
             const dest={allTargets:'All Targets',user:'User',subject:'Subject'}[step.destination]||'Current Target',source=step.iconSource||'color';title=t('Projectile')+': '+role+' → '+t(dest);
             details.push(source==='color'?(step.color||'#ffcc55'):source==='model'?(step.model?.name||t('3D Model')):source==='animation'?(this.db?.getAnimation?.(step.animationId)?.name||t('Animation')):source==='picture'?(step.name||t('Picture')):source==='icon'?t('Icon'):source==='action'?t('Skill / Item'):t('Weapon'));
+        }else if(step.type==='se'){const op=step.operation||'play';title=op==='system'?t('System Sound')+' #'+(step.soundId||0):op==='stop'?t('Stop Sound Effects'):t('Sound Effect')+': '+(step.name||t('None'));
         }else if(step.type==='impact')details.push(t('All Targets'));
         else if(step.type==='wait')details.push(number(step.duration)+'f');
         if(['sound','animation'].includes(step.type)){if(step.waitForCompletion)details.push(t(step.type==='sound'?'Wait for Sound':'Wait for Animation'));if(step.duration)details.push(t('Wait')+': '+step.duration+'f');if(step.animationTransform){details.push(t('Position Offset')+': '+coords(step.animationTransform),t('Scale')+': '+number(step.animationTransform.scale??1)+'×');}}
@@ -355,18 +356,35 @@ class DatabaseActionSequenceEditor {
             }
         });
     }
-    /** Every step a sequence can hold, in the groups the picker shows. */
+    /**
+     * Every step a sequence can hold, once each, in the groups the picker
+     * shows. An entry is a type, a 'basic:' template, or an object naming the
+     * type, the label, the fields the new step starts with and a hint for the
+     * ones whose names alone do not tell them apart (Jump, Leap, Float, Fall).
+     */
     stepGroups(){
+        const H={
+            'basic:Run to Target':'Run up to the target and stop short.','basic:Punch':'A close-range hit: approach, swing, return.','basic:Return Home':'Walk back to the home position.',
+            move:'Move a battler to the target, home or an offset.',home:'Change where Return Home goes.',direction:'Turn a battler to face a direction or a battler.',
+            jump:'Arc up and land back in place.',leap:'Rise and stay aloft until a Fall.',float:'Drift up by a height and stay there.',fall:'Drop to a landing height.',
+            motion:'Play a motion or a model clip.',pose:'Freeze one frame of a sprite motion.',opacity:'Fade a battler in or out.',whiten:'Flash the battler white.',
+            impact:'Deal the skill or item\'s damage and effects.',animation:'Show a database animation on a battler.',weapon:'Show, move or hide the held weapon.',projectile:'Throw something at the target.',wait:'Pause the sequence for a number of frames.',action:'Play another sequence here.',
+            sound:'Play a sound effect file.','se:system':'Play one of the System sounds, such as Cursor or OK.','se:stop':'Stop every sound effect that is playing.',
+            camera:'Move, zoom or turn the battle camera.',flash:'Flash the whole screen.',tint:'Tint the screen.',shake:'Shake the screen.'
+        };
+        const item=(type,label,extra)=>({value:type,key:type+':'+extra.operation,label,extra,hint:H[type+':'+extra.operation]});
         return [
-            ['Templates',ReactorBattleData.basicSteps.map(name=>'basic:'+name)],
-            ['Movement',['move','motion','jump','leap','float','fall','home','direction','pose']],
+            ['Templates',['basic:Run to Target','basic:Punch','basic:Return Home']],
+            ['Movement',['move','jump','leap','float','fall','home','direction']],
+            ['Battler',['motion','pose','opacity','whiten','balloon','icon']],
             ['Action',['impact','animation','weapon','projectile','wait','action']],
             ['Targets',['target','clearTargets']],
-            ['Audio',['sound','bgm','bgs','se','movie']],
-            ['Visual Effects',['camera','balloon','opacity','whiten','flash','tint','shake','picture','icon','plane','battleback','battlestatus','battlelog']],
+            ['Audio',['sound',item('se','System Sound',{operation:'system'}),item('se','Stop Sound Effects',{operation:'stop'}),'bgm','bgs']],
+            ['Camera & Screen',['camera','flash','tint','shake','picture','plane','movie','battleback']],
+            ['Battle UI',['battlestatus','battlelog']],
             ['Game Data',['hp','mp','tp','buff','state','kill','item','switch','variable','formula','element']],
             ['Logic',['branch','elseIf','else','end','event','eval']]
-        ];
+        ].map(([label,values])=>[label,values.map(v=>typeof v==='string'?{value:v,key:v,label:v.startsWith('basic:')?v.slice(6):this.label(v),extra:{},hint:H[v],raw:v.startsWith('basic:')}:v)]);
     }
     /**
      * The step picker: a dialog that asks what to add, grouped as the steps
@@ -392,19 +410,23 @@ class DatabaseActionSequenceEditor {
         body.append(search,groupsHost,empty);modal.append(header,body);overlay.append(modal);
         let keys=null;
         const finish=()=>{keys?.dispose?.();overlay.remove();if(opener?.isConnected&&typeof opener.focus==='function')opener.focus({preventScroll:true});};
-        const choose=value=>{finish();this.insertSteps(this.newSteps(value,targetPhase),targetIndex);};
+        const choose=entry=>{finish();this.insertSteps(this.newSteps(entry.value,targetPhase,entry.extra),targetIndex);};
         const entries=[];
-        for(const [label,values] of this.stepGroups()){
-            const known=values.filter(v=>v.startsWith('basic:')?B.basicSteps.includes(v.slice(6)):B.types.includes(v));if(!known.length)continue;
+        for(const [label,items] of this.stepGroups()){
+            const known=items.filter(e=>e.value.startsWith('basic:')?B.basicSteps.includes(e.value.slice(6)):B.types.includes(e.value)||B.commands[e.value]);if(!known.length)continue;
             const section=document.createElement('section');section.className='rr-step-picker-group';
-            const heading=document.createElement('h3');heading.textContent=tt(label);section.append(heading);
+            const heading=U.element('h3','database-section-header',label);section.append(heading);
             const grid=document.createElement('div');grid.className='rr-step-picker-grid';section.append(grid);
-            for(const value of known){const name=value.startsWith('basic:')?value.slice(6):this.label(value);const button=U.button(name,()=>choose(value),value.startsWith('basic:'));button.classList.add('rr-step-picker-item');button.dataset.stepValue=value;grid.append(button);entries.push({value,button,section,text:(U.text(name)+' '+value).toLowerCase()});}
+            for(const entry of known){
+                const button=U.element('button','rr-btn-secondary rr-step-picker-item');button.type='button';button.onclick=()=>choose(entry);button.dataset.stepValue=entry.key;
+                button.append(U.element('span','rr-step-picker-name',entry.label,entry.raw));if(entry.hint)button.append(U.element('span','rr-step-picker-hint',entry.hint));
+                grid.append(button);entries.push({entry,button,section,text:(U.text(entry.label)+' '+(entry.hint?U.text(entry.hint):'')+' '+entry.key).toLowerCase()});
+            }
             groupsHost.append(section);
         }
         const filter=()=>{const q=search.value.trim().toLowerCase();let shown=0;for(const e of entries){const hit=!q||e.text.includes(q);e.button.hidden=!hit;if(hit)shown++;}for(const section of groupsHost.children)section.hidden=![...section.querySelectorAll('.rr-step-picker-item')].some(b=>!b.hidden);empty.hidden=shown>0;};
         search.addEventListener('input',filter);
-        search.addEventListener('keydown',event=>{if(event.key==='Enter'){const first=entries.find(e=>!e.button.hidden);if(first){event.preventDefault();choose(first.value);}}});
+        search.addEventListener('keydown',event=>{if(event.key==='Enter'){const first=entries.find(e=>!e.button.hidden);if(first){event.preventDefault();choose(first.entry);}}});
         close.addEventListener('click',finish);
         overlay.addEventListener('mousedown',event=>{if(event.target===overlay)finish();});
         document.body.append(overlay);
