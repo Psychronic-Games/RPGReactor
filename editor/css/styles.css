@@ -5360,3 +5360,14 @@ details.mp-section:not([open]) > .mp-section-body { display:none; }
 .rr-step-picker-item:hover { background:var(--color-bg-hover);border-color:var(--color-accent); }
 .rr-step-picker-item:focus-visible { outline:2px solid var(--color-accent);outline-offset:-1px; }
 .rr-step-picker-empty { margin:0;padding:4px 2px; }
+
+/* Database › 3D Models: a folder in the model list is a section header in
+   the editor's family (dark bar, accent strip, uppercase), with its chevron
+   and model count at the ends. Rows beneath keep their own indent. */
+.r3d-model-list > .r3d-folder-head { display:flex;align-items:center;gap:6px;justify-content:flex-start;margin:4px 0 2px;padding:5px 8px 5px 7px;border-left:3px solid var(--color-accent);border-bottom:1px solid var(--color-border);border-radius:3px;background:var(--color-bg-toolbar);color:var(--color-text);font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;user-select:none; }
+.r3d-model-list > .r3d-folder-head:first-child { margin-top:0; }
+.r3d-model-list > .r3d-folder-head:hover { background:var(--color-bg-hover); }
+.r3d-model-list > .r3d-folder-head .r3d-folder-chevron { flex:0 0 auto;width:12px;text-align:center;color:var(--color-accent-bright);transition:transform .15s; }
+.r3d-model-list > .r3d-folder-head:not(.open) .r3d-folder-chevron { transform:rotate(-90deg); }
+.r3d-model-list > .r3d-folder-head .r3d-folder-name { flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+.r3d-model-list > .r3d-folder-head .r3d-folder-count { flex:0 0 auto;font-weight:500;letter-spacing:0;color:var(--color-text-muted); }

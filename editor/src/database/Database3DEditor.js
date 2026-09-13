@@ -585,11 +585,24 @@ class Database3DEditor {
         for (const [folder, entries] of [...folders.entries()]
             .sort((a, b) => a[0].localeCompare(b[0], undefined, { sensitivity: 'base' }))) {
             const open = !!needle || this._openFolders.has(folder);
+            // A folder is a section header in the editor's family: the dark
+            // bar with the accent strip, its chevron and count at the ends.
             const head = document.createElement('div');
-            head.className = 'database-list-item';
+            head.className = 'database-list-item r3d-folder-head';
+            head.classList.toggle('open', open);
             head.setAttribute('data-rr-i18n-skip', '1');
-            head.textContent = `${open ? '▾' : '▸'} ${folder} (${entries.length})`;
-            head.style.fontWeight = 'bold';
+            head.setAttribute('role', 'button');
+            head.setAttribute('aria-expanded', String(open));
+            const chevron = document.createElement('span');
+            chevron.className = 'r3d-folder-chevron';
+            chevron.textContent = '▾';
+            const label = document.createElement('span');
+            label.className = 'r3d-folder-name';
+            label.textContent = folder;
+            const count = document.createElement('span');
+            count.className = 'r3d-folder-count';
+            count.textContent = String(entries.length);
+            head.append(chevron, label, count);
             head.addEventListener('click', () => {
                 if (this._openFolders.has(folder)) this._openFolders.delete(folder);
                 else this._openFolders.add(folder);
