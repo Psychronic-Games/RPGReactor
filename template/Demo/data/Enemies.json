@@ -70,7 +70,6 @@
     ]
   },
   {
-    "id": 2,
     "actions": [
       {
         "conditionParam1": 0,
@@ -80,15 +79,15 @@
         "skillId": 1
       },
       {
-        "skillId": 23,
-        "rating": 3,
-        "conditionType": 1,
+        "skillId": 20,
+        "rating": 5,
+        "conditionType": 0,
         "conditionParam1": 0,
-        "conditionParam2": 2
+        "conditionParam2": 0
       }
     ],
     "battlerHue": 0,
-    "battlerName": "Gnome",
+    "battlerName": "Goblin",
     "dropItems": [
       {
         "dataId": 1,
@@ -124,19 +123,20 @@
         "value": 0
       }
     ],
-    "gold": 8,
-    "name": "Gnome",
+    "gold": 5,
+    "name": "Psychronic",
     "note": "",
     "params": [
-      250,
+      200,
       0,
-      20,
       25,
       20,
       20,
       20,
+      20,
       20
-    ]
+    ],
+    "id": 2
   },
   {
     "id": 3,

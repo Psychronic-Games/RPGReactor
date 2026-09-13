@@ -153,7 +153,7 @@ States carry a **Reaction Sequence** (a motion-purpose sequence played instead o
 
 Each phase can inherit, use its built-in behavior, or reference a sequence with the matching purpose. Battler state/reaction controls separately cover idle, movement, guard, damage and other states; they yield to active actions. Actors/enemies also have an explicit SV/character/static/model graphic selector. See the [assignment and graphics guide](ACTION-SEQUENCE-EXPANSION-2026-09-11.md).
 
-The builder lists **Where Used** references. Referenced sequences cannot be deleted or truncated by Change Maximum until their assignments are removed. Assignments travel with copied records inside the same project; copying into another project does not carry unrelated sequence IDs.
+The builder lists **Where Used** references. Referenced sequences cannot be deleted or truncated by Change Maximum until their assignments are removed. Assignments, graphic settings and 3D model bindings travel with copied and duplicated records inside the same project; copying into another project does not carry unrelated sequence IDs.
 
 ## Compatibility and storage
 

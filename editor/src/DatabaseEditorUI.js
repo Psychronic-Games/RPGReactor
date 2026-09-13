@@ -1513,7 +1513,9 @@ class DatabaseEditorUI {
             return copied;
         });
         const presentation=sourceEntries.map(entry=>this.databaseManager?.data?.battlePresentation?.[type]?.[entry.id]||null);
-        this.listClipboard = { type, entries: copiedEntries, entry: copiedEntries[0] || null, editorNames, presentation:JSON.parse(JSON.stringify(presentation)) };
+        // The 3D model binding lives in the sidecar beside the database, not in the record: it copies with the record or the paste shows a plain battler image.
+        const bindings=sourceEntries.map(entry=>this.readModelBinding(type,entry.id));
+        this.listClipboard = { type, entries: copiedEntries, entry: copiedEntries[0] || null, editorNames, presentation:JSON.parse(JSON.stringify(presentation)), bindings };
         let writePromise = Promise.resolve(true);
         if (typeof ReactorClipboard !== 'undefined') {
             writePromise = Promise.resolve(ReactorClipboard.write('databaseEntry', {
@@ -1523,6 +1525,7 @@ class DatabaseEditorUI {
                 entry: copiedEntries[0] || null,
                 editorNames,
                 presentation,
+                bindings,
                 sourceProjectName: this.currentProject?.name || null,
                 sourceProjectPath: this.currentProject?.path || null
             }));
@@ -1545,7 +1548,8 @@ class DatabaseEditorUI {
             const editorNames = entries.map((_, index) =>
                 typeof payload.editorNames?.[index] === 'string' ? payload.editorNames[index].trim() : '');
             const presentation=payload.sourceProjectPath===this.currentProject?.path?payload.presentation:undefined;
-            this.listClipboard = { type, entries, entry: entries[0], editorNames, presentation };
+            const bindings=payload.sourceProjectPath===this.currentProject?.path?payload.bindings:undefined;
+            this.listClipboard = { type, entries, entry: entries[0], editorNames, presentation, bindings };
             return this.listClipboard;
         }
 
@@ -1664,6 +1668,7 @@ class DatabaseEditorUI {
             pasted.id = targetId + index;
             targetArray[pasted.id] = pasted;
             const section=this.databaseManager.data.battlePresentation?.[type];if(section){const binding=clipboard.presentation?.[index];if(binding)section[pasted.id]=JSON.parse(JSON.stringify(binding));else delete section[pasted.id];}
+            if(Array.isArray(clipboard.bindings))this.writeModelBinding(type,pasted.id,clipboard.bindings[index]||null);
             this.setEditorName(type, pasted.id, clipboard.editorNames?.[index] || '');
             return pasted;
         });
@@ -1675,6 +1680,29 @@ class DatabaseEditorUI {
         this.showDatabaseDetail(pastedEntries[0], type);
         this.updateStatus(this._t('db.entryPasted'));
         return pastedEntries;
+    }
+
+    /** A record's 3D model binding as the sidecar stores it (every slot of an actor), copied, or null. */
+    readModelBinding(type, id) {
+        const api = this.modelBindings || globalThis.RRDatabase3DBindings, project = this.currentProject;
+        if (!api?.read || !project?.path) return null;
+        try {
+            const entry = api.read(project.path)?.[type]?.[String(id)];
+            return entry && typeof entry === 'object' ? JSON.parse(JSON.stringify(entry)) : null;
+        } catch (error) { return null; }
+    }
+
+    /** Bind a record to what a copied entry held: every slot of a slotted entry, one spec of a flat one; null clears whatever the record had. */
+    writeModelBinding(type, id, entry) {
+        const api = this.modelBindings || globalThis.RRDatabase3DBindings, project = this.currentProject;
+        if (!api?.set || !project?.path) return;
+        try {
+            const current = this.readModelBinding(type, id);
+            const slotted = value => value && typeof value === 'object' && !value.name ? value : null;
+            const slots = new Set([...Object.keys(slotted(entry) || {}), ...Object.keys(slotted(current) || {})]);
+            if (slots.size) { for (const slot of slots) api.set(project.path, type, id, slotted(entry)?.[slot] || null, slot); }
+            else api.set(project.path, type, id, entry && entry.name ? entry : null);
+        } catch (error) { console.warn(error); }
     }
 
     duplicateListEntry(entry, data, type, populateList, searchInput) {
@@ -1690,6 +1718,9 @@ class DatabaseEditorUI {
                 this.setEditorName(type, newEntry.id,
                     editorName + ` (${this._t('common.copy')})`);
             }
+            const section = this.databaseManager.data?.battlePresentation?.[type];
+            if (section && section[entry.id]) section[newEntry.id] = JSON.parse(JSON.stringify(section[entry.id]));
+            this.writeModelBinding(type, newEntry.id, this.readModelBinding(type, entry.id));
             data.push(newEntry);
             if (this._activeDatabaseList?.type === type) {
                 this._activeDatabaseList.selectIds([newEntry.id], newEntry.id, false);

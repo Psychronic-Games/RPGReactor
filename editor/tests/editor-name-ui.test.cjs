@@ -69,6 +69,41 @@ test('database list label modes keep editor names outside RPG Maker records', ()
     });
 });
 
+test('database copy, paste and duplicate carry the 3D model binding and presentation settings', async () => {
+    const ui = createUI();
+    const actors = ui.databaseManager.data.actors;
+    ui.databaseManager.data.battlePresentation = { actors: { 1: { graphic: { mode: 'auto' }, mode: 'inherit' } } };
+    // An in-memory stand-in for the Database.r3d.json sidecar with the real slot rules.
+    const store = { actors: { 1: { battler: { name: 'Actors/Fleagus', file: 'Fleagus', ext: '.glb', size: 2 }, face: { name: 'Actors/Fleagus', file: 'Fleagus', ext: '.glb', size: 1 } } } };
+    ui.modelBindings = {
+        read: () => JSON.parse(JSON.stringify(store)),
+        set(projectPath, section, id, spec, slot) {
+            const entry = store[section]?.[id] || {};
+            if (slot) { if (spec) entry[slot] = spec; else delete entry[slot]; if (Object.keys(entry).length) (store[section] ||= {})[id] = entry; else delete store[section][id]; }
+            else if (spec) (store[section] ||= {})[id] = spec; else delete store[section]?.[id];
+        }
+    };
+    const plain = value => JSON.parse(JSON.stringify(value ?? null));
+    try {
+        ui.copyListEntries([actors[1]], 'actors');
+        assert.deepEqual(plain(ui.listClipboard.bindings), plain([store.actors[1]]), 'the copy holds every slot of the binding');
+        ui._snapshotForUndo = () => {};
+        store.actors[2] = { character: { name: 'Actors/Old', file: 'Old', ext: '.glb', size: 1 } };
+        await ui.pasteListEntries(actors[2], actors.filter(Boolean), 'actors', () => {}, { value: '' }, {});
+        assert.deepEqual(plain(store.actors[2]), plain(store.actors[1]), 'the pasted record binds to the same model in every slot, and its stale slot is cleared');
+        assert.deepEqual(plain(ui.databaseManager.data.battlePresentation.actors[2]), plain({ graphic: { mode: 'auto' }, mode: 'inherit' }));
+        ui.duplicateListEntry(actors[1], actors.filter(Boolean), 'actors', () => {}, { value: '' });
+        assert.deepEqual(plain(store.actors[3]), plain(store.actors[1]), 'a duplicate binds like its source');
+        assert.deepEqual(plain(ui.databaseManager.data.battlePresentation.actors[3]), plain({ graphic: { mode: 'auto' }, mode: 'inherit' }));
+        // A record with no binding pastes clean over one that had.
+        ui.copyListEntries([actors[3]], 'actors');
+        delete store.actors[3];
+        ui.copyListEntries([actors[3]], 'actors');
+        await ui.pasteListEntries(actors[2], actors.filter(Boolean), 'actors', () => {}, { value: '' }, {});
+        assert.equal(store.actors[2], undefined, 'pasting an unbound record clears the target binding');
+    } finally { ui.modelBindings = null; }
+});
+
 test('database Cancel snapshots include editor names', () => {
     const ui = createUI();
     ui.setEditorName('actors', 1, 'Original Label');

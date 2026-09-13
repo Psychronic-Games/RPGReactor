@@ -5,6 +5,10 @@
 - `origin/main` (PRs #57, #58, three commits) merged into the local `main` that was two commits ahead; merge commit, not a rebase. One conflict in `I18nManager.js` (both sides appended translation blocks; both kept). Runtime **20260913.1**, `sync-runtime.cjs` refreshed 49 files across the 13 projects. Suite **3,130 passed**. [Details](PR-INTEGRATION-2026-09-13.md).
 - New runtime surface: `Game_Action.itemRepeats` (rolled once per action, keyed by item; `repeatsMax` optional on skills/items), `Game_Action.setPlannedTargets/hasPlannedTargets/clearPlannedTargets/takePlannedTargets` (WeakMap, never serialized), and `addState` returning early when `addNewState` did not land the state. `Scene_ItemBase.applyItem` reads `numRepeats` once.
 
+## 2026-09-13 — Record copy carries the 3D binding
+
+- Owner copied the Psychronic enemy to another line and got "Static Battler Image": `writeDatabaseEntryClipboard` carried the record and `battlePresentation` settings but not the `Database.r3d.json` binding. Now `readModelBinding(type,id)` (raw sidecar entry, every slot) rides in `listClipboard.bindings` and the cross-instance payload (kept only within the same project, like presentation), `pasteListEntries` writes it for the new id through `writeModelBinding` (slot by slot, clearing stale slots of the target), and `duplicateListEntry` copies both the binding and the presentation settings. `this.modelBindings` is an injectable seam for tests (the UI is vm-loaded). Test in `editor-name-ui.test.cjs`.
+
 ## 2026-09-13 — Effect folded into Execute
 
 - **Why.** The owner saw two Execute sections in every Demo sequence and diagnosed it: the hit was a phase (Effect) rather than a step, so Execute was split around it. Effect is gone: five phases (`B.actionPhases`), the `effect` step type ("Play Effect Phase") is gone, and the hit is a Show Animation (animationSource action) + Apply Action Effect pair inside Execute (`B.builtinHit(context, role, targetIndex)`).
