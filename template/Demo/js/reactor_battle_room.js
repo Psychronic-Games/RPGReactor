@@ -337,7 +337,11 @@
         }
         attachmentPoint(key, step, pose) {
             const record=this.models.get(key)||this.billboards.get(key),p=pose||record?.position||{x:0,y:0,z:0},world=BattleRoomView.attachmentWorld(record,step.attachment,step.bone,step.type==='projectile'?'end':undefined);
-            if(world)return {x:world.x-.5+(step.x||0)*Math.sign(p.facing||1),y:world.z-.5+(step.y||0),z:world.y+(step.z||0)};
+            if(world){
+                // A hand bone sits at the wrist; the fist is a little way on along the forearm, and that is where a handle goes.
+                if(!step.bone&&['rightHand','leftHand'].includes(step.attachment)){const frame=BattleRoomView.attachmentQuaternion(record,step.attachment,'');if(frame?.forearm)world.add(frame.forearm.clone().multiplyScalar(.045*this.modelHeight(key)));}
+                return {x:world.x-.5+(step.x||0)*Math.sign(p.facing||1),y:world.z-.5+(step.y||0),z:world.y+(step.z||0)};
+            }
             const height=record?.billboard?record.height*(p.scale||1):(record?.spec?.size||2)*(p.scale||1),width=record?.billboard?height*record.canvas.width/record.canvas.height:height*.5;
             return root.ReactorBattleData.attachmentPoint(p,step,width,height);
         }
