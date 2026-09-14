@@ -14030,6 +14030,8 @@ Reactor3D.readModelRig = function(json) {
             tail: vec3(entry.tail)
         });
     }
+    const markers = {};
+    if (raw.markers && typeof raw.markers === "object") for (const key of Object.keys(raw.markers)) if (Array.isArray(raw.markers[key])) markers[key] = vec3(raw.markers[key]);
     const weights = {};
     // Weights arrive either decoded from the binary sidecar (weightsBin,
     // attached by loadModelSidecar or the editor) or as the legacy base64
@@ -14051,6 +14053,7 @@ Reactor3D.readModelRig = function(json) {
     }
     return {
         template: typeof raw.template === "string" ? raw.template : "humanoid",
+        markers,
         bones,
         weights
     };
@@ -14147,7 +14150,44 @@ Reactor3D.mapRigToSkeleton = function(root, rig) {
     }
     root.userData.rigged = true;
     root.userData.rigMapped = mapped;
+    this.attachRigHands(root, rig, bones.filter(b => b.userData && b.userData.__reactorRigBone));
     return true;
+};
+
+/**
+ * Where a hand's palm and fingertips are, as points in the hand joint's own
+ * frame: from the rig's palm and fingertip markers when it has them, else a
+ * third and two thirds of a forearm past the wrist. Held things sit at the
+ * palm.
+ */
+Reactor3D.attachRigHands = function(root, rig, bones) {
+    if (typeof THREE === "undefined" || !rig || !bones) return;
+    root.updateMatrixWorld(true);
+    const markers = rig.markers || {}, defs = rig.bones || [];
+    for (const side of ["Left", "Right"]) {
+        const hand = bones.find(b => b.userData?.parts?.[0]?.name === side + "Hand");
+        if (!hand) continue;
+        const short = side === "Left" ? "L" : "R";
+        hand.updateMatrixWorld(true);
+        const local = point => point ? hand.worldToLocal(root.localToWorld(new THREE.Vector3().fromArray(point))).toArray() : null;
+        // Placed markers are points in the model's frame. Without them the
+        // palm and fingertips come from the joints themselves, in the room
+        // (a mapped file skeleton need not sit where the template's bones do).
+        let palm = markers["palm" + short] ? local(markers["palm" + short]) : null, knuckles = markers["knuckles" + short] ? local(markers["knuckles" + short]) : null, fingers = markers["fingers" + short] ? local(markers["fingers" + short]) : null;
+        if (!palm || !fingers || !knuckles) {
+            const elbowNode = hand.parent && hand.parent.getWorldPosition ? hand.parent : null;
+            if (elbowNode) {
+                const wristWorld = hand.getWorldPosition(new THREE.Vector3()), elbowWorld = elbowNode.getWorldPosition(new THREE.Vector3());
+                const along = t => hand.worldToLocal(elbowWorld.clone().lerp(wristWorld, t)).toArray();
+                if (!palm) palm = along(1.33);
+                if (!knuckles) knuckles = along(1.5);
+                if (!fingers) fingers = along(1.66);
+            }
+        }
+        if (palm) hand.userData.__reactorPalm = palm;
+        if (knuckles) hand.userData.__reactorKnuckles = knuckles;
+        if (fingers) hand.userData.__reactorFingers = fingers;
+    }
 };
 
 /** A node that hinges like a bone: a THREE.Bone, or a file joint (often a plain Group) the rig names. */
@@ -14182,6 +14222,7 @@ Reactor3D.applyModelRig = function(root, rig) {
     // agree on world space no matter how either is parented.
     for (const bone of rootBones) root.add(bone);
     root.updateMatrixWorld(true);
+    this.attachRigHands(root, rig, bones);
     const skeleton = new THREE.Skeleton(bones);
     for (const key of Object.keys(rig.weights)) {
         const mesh = meshes[Number(key)];

@@ -219,6 +219,7 @@
             if(joint(parent)){elbow=parent.getWorldPosition(new T.Vector3());forearm=at.clone().sub(elbow);if(forearm.lengthSq()<1e-8)forearm=null;else forearm.normalize();if(joint(parent.parent))shoulder=parent.parent.getWorldPosition(new T.Vector3());}
             // The fist: where the fingers root when the file has them, else a little way on from the wrist; and toward the inside of the elbow, where a fist curls, when the arm bends.
             let fist=at.clone();const fingers=(node.children||[]).filter(c=>joint(c)&&c.getWorldPosition);
+            if(node.userData?.__reactorPalm){fist=node.localToWorld(new T.Vector3().fromArray(node.userData.__reactorPalm));return {quaternion,forearm,fist};}
             if(fingers.length){const sum=new T.Vector3();for(const f of fingers)sum.add(f.getWorldPosition(new T.Vector3()));fist.lerp(sum.multiplyScalar(1/fingers.length),.7);}
             else if(forearm)fist.add(forearm.clone().multiplyScalar(.045*(record.extent&&record.scale?record.extent.y*record.scale:3)));
             if(forearm&&shoulder){const toShoulder=shoulder.clone().sub(elbow);const side=toShoulder.sub(forearm.clone().multiplyScalar(toShoulder.dot(forearm)));if(side.lengthSq()>1e-6)fist.add(side.normalize().multiplyScalar(.02*(record.extent&&record.scale?record.extent.y*record.scale:3)));}

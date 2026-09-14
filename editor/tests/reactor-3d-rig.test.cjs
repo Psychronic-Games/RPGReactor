@@ -476,7 +476,7 @@ test('a pose on a mapped joint is read in the model frame however the file skele
 
 test('the rig preview draws a chain through the markers, ending at the joints', () => {
     const size = { x: 1, y: 1.8, z: 0.5 };
-    for (const [template, expected] of [['humanoid', 13], ['quadruped', 15]]) {
+    for (const [template, expected] of [['humanoid', 19], ['quadruped', 15]]) {
         const markers = ModelRigger.defaultMarkers(size, template);
         const links = ModelRigger.previewLinks(markers, template);
         assert.equal(links.length, expected, template + ' link count');
@@ -495,4 +495,38 @@ test('the rig preview draws a chain through the markers, ending at the joints', 
     // A template with no chain of its own draws its bones.
     const plant = ModelRigger.previewLinks(ModelRigger.defaultMarkers(size, 'plant'), 'plant');
     assert.deepEqual(plant.map(b => b.head), ModelRigger.bonesFromMarkers(ModelRigger.defaultMarkers(size, 'plant'), 'plant').map(b => b.head));
+});
+
+test('the humanoid template carries palm and fingertip markers, the hand bone reaches the fingertips, and a saved rig is completed, not replaced', () => {
+    const size = { x: 0.6, y: 1.8, z: 0.3 }, markers = ModelRigger.defaultMarkers(size);
+    for (const key of ['palmL', 'palmR', 'knucklesL', 'knucklesR', 'fingersL', 'fingersR']) assert.ok(Array.isArray(markers[key]), key);
+    const bones = ModelRigger.bonesFromMarkers(markers), hand = bones.find(b => b.name === 'RightHand');
+    assert.deepEqual(hand.tail, markers.fingersR, 'the hand bone ends at the fingertips');
+    assert.equal(bones.length, 17, 'no new bones');
+    // A rig saved before the markers existed keeps every placed marker; the new ones come from its own wrist and elbow.
+    const saved = ModelRigger.defaultMarkers(size); delete saved.palmL; delete saved.palmR; delete saved.knucklesL; delete saved.knucklesR; delete saved.fingersL; delete saved.fingersR; saved.wristR = [-0.5, 0.9, 0.1]; saved.elbowR = [-0.4, 1.1, 0.1];
+    const done = ModelRigger.completeMarkers(saved, 'humanoid', size);
+    assert.deepEqual(done.wristR, [-0.5, 0.9, 0.1], 'placed markers survive');
+    assert.ok(Math.abs(done.palmR[0] - (-0.4 + (-0.5 + 0.4) * 1.33)) < 1e-9 && Math.abs(done.palmR[1] - (1.1 + (0.9 - 1.1) * 1.33)) < 1e-9, 'the palm is a third of a forearm past the wrist');
+    assert.ok(Math.abs(done.fingersR[1] - (1.1 + (0.9 - 1.1) * 1.66)) < 1e-9, 'the fingertips two thirds');
+    assert.ok(Math.abs(done.knucklesR[1] - (1.1 + (0.9 - 1.1) * 1.5)) < 1e-9, 'the knuckles half way');
+    const links = ModelRigger.previewLinks(markers, 'humanoid');
+    assert.ok(links.some(l => l.head[0] === markers.wristL[0] && l.tail[0] === markers.palmL[0]), 'the preview chain runs on to the palm');
+});
+
+test('the runtime gives each rig hand its palm point, from markers or derived, and a held thing sits there', () => {
+    global.self = global; global.window = global; require(path.join(repoRoot, 'runtime', 'libs', 'three.js')); const THREE = global.THREE;
+    const size = { x: 0.6, y: 1.8, z: 0.3 }, markers = ModelRigger.defaultMarkers(size), bones = ModelRigger.bonesFromMarkers(markers);
+    const rig = Reactor3D.readModelRig({ rig: { markers, bones, weights: {} } });
+    assert.deepEqual(rig.markers.palmR, markers.palmR, 'the reader keeps markers');
+    const root = new THREE.Group(); Reactor3D.applyModelRig(root, rig);
+    let hand = null; root.traverse(n => { if (n.userData?.parts?.[0]?.name === 'RightHand') hand = n; });
+    assert.ok(hand && hand.userData.__reactorPalm && hand.userData.__reactorKnuckles && hand.userData.__reactorFingers, 'the hand knows its palm, knuckles and fingertips');
+    const palmWorld = hand.localToWorld(new THREE.Vector3().fromArray(hand.userData.__reactorPalm));
+    assert.ok(palmWorld.distanceTo(new THREE.Vector3().fromArray(markers.palmR)) < 1e-6, 'and it is the marker');
+    // Without markers the palm is derived from the bones.
+    const bare = Reactor3D.readModelRig({ rig: { bones, weights: {} } }), root2 = new THREE.Group(); Reactor3D.applyModelRig(root2, bare);
+    let hand2 = null; root2.traverse(n => { if (n.userData?.parts?.[0]?.name === 'RightHand') hand2 = n; });
+    const derived = hand2.localToWorld(new THREE.Vector3().fromArray(hand2.userData.__reactorPalm)), wrist = new THREE.Vector3().fromArray(markers.wristR), elbow = new THREE.Vector3().fromArray(markers.elbowR);
+    assert.ok(derived.distanceTo(elbow.clone().lerp(wrist, 1.33)) < 1e-6, 'a third of a forearm past the wrist');
 });

@@ -6063,13 +6063,9 @@ class Database3DEditor {
         this._rigMode = true;
         this._rigTemplate = (this.customRig && ModelRigger.TEMPLATES[this.customRig.template])
             ? this.customRig.template : (this._rigTemplate || 'humanoid');
-        const saved = this.customRig && this.customRig.markers;
-        const complete = saved && ModelRigger.markersFor(this._rigTemplate).every(marker =>
-            Array.isArray(saved[marker.key]) && saved[marker.key].length === 3);
-        this._rigMarkers = complete
-            ? JSON.parse(JSON.stringify(saved))
-            : ModelRigger.defaultMarkers(
-                this._template.userData.glbSize || { x: 1, y: 1.8, z: 1 }, this._rigTemplate);
+        const saved = this.customRig && this.customRig.markers, size = this._template.userData.glbSize || { x: 1, y: 1.8, z: 1 };
+        const placed = saved && ModelRigger.markersFor(this._rigTemplate).some(marker => Array.isArray(saved[marker.key]) && saved[marker.key].length === 3);
+        this._rigMarkers = placed ? ModelRigger.completeMarkers(saved, this._rigTemplate, size) : ModelRigger.defaultMarkers(size, this._rigTemplate);
         this._buildRigVisuals();
         this.renderRigBar();
         return true;

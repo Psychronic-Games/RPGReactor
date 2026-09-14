@@ -50,6 +50,12 @@
                 { key: 'elbowR', label: 'Right elbow', mirror: 'elbowL' },
                 { key: 'wristL', label: 'Left wrist', mirror: 'wristR' },
                 { key: 'wristR', label: 'Right wrist', mirror: 'wristL' },
+                { key: 'palmL', label: 'Left palm', mirror: 'palmR' },
+                { key: 'palmR', label: 'Right palm', mirror: 'palmL' },
+                { key: 'knucklesL', label: 'Left knuckles', mirror: 'knucklesR' },
+                { key: 'knucklesR', label: 'Right knuckles', mirror: 'knucklesL' },
+                { key: 'fingersL', label: 'Left fingertips', mirror: 'fingersR' },
+                { key: 'fingersR', label: 'Right fingertips', mirror: 'fingersL' },
                 { key: 'kneeL', label: 'Left knee', mirror: 'kneeR' },
                 { key: 'kneeR', label: 'Right knee', mirror: 'kneeL' },
                 { key: 'ankleL', label: 'Left ankle', mirror: 'ankleR' },
@@ -62,6 +68,9 @@
                     shoulderL: at(0.42, 0.8), shoulderR: at(-0.42, 0.8),
                     elbowL: at(0.62, 0.62), elbowR: at(-0.62, 0.62),
                     wristL: at(0.68, 0.45), wristR: at(-0.68, 0.45),
+                    palmL: at(0.71, 0.41), palmR: at(-0.71, 0.41),
+                    knucklesL: at(0.73, 0.385), knucklesR: at(-0.73, 0.385),
+                    fingersL: at(0.75, 0.36), fingersR: at(-0.75, 0.36),
                     kneeL: at(0.2, 0.27), kneeR: at(-0.2, 0.27),
                     ankleL: at(0.22, 0.05), ankleR: at(-0.22, 0.05)
                 };
@@ -79,8 +88,9 @@
                     const name = part => (side === 'L' ? 'Left' : 'Right') + part;
                     add(name('UpperArm'), 'Chest', m['shoulder' + side], m['elbow' + side]);
                     add(name('LowerArm'), name('UpperArm'), m['elbow' + side], m['wrist' + side]);
+                    // The hand bone runs from the wrist to the fingertips; a rig without that marker reaches past the wrist as before.
                     add(name('Hand'), name('LowerArm'), m['wrist' + side],
-                        lerp3(m['elbow' + side], m['wrist' + side], 1.35));
+                        m['fingers' + side] || lerp3(m['elbow' + side], m['wrist' + side], 1.35));
                     const knee = m['knee' + side];
                     const ankle = m['ankle' + side];
                     add(name('UpperLeg'), 'Hips', [knee[0], m.hips[1], knee[2]], knee);
@@ -231,6 +241,27 @@
         return (TEMPLATES[template] || TEMPLATES.humanoid).defaults(h, halfW, halfD);
     }
 
+    /**
+     * A saved marker set brought up to the template: what was placed is kept,
+     * anything the template gained since is derived from the joints around
+     * it (a palm a third of a forearm past the wrist, fingertips two thirds),
+     * else taken from the defaults for the model's size.
+     */
+    function completeMarkers(saved, template, size) {
+        const out = defaultMarkers(size, template);
+        for (const key of Object.keys(saved || {})) if (Array.isArray(saved[key]) && saved[key].length === 3) out[key] = saved[key].slice();
+        if ((template || 'humanoid') === 'humanoid') {
+            for (const side of ['L', 'R']) {
+                const wrist = saved && saved['wrist' + side], elbow = saved && saved['elbow' + side];
+                if (!Array.isArray(wrist) || !Array.isArray(elbow)) continue;
+                if (!(saved && Array.isArray(saved['palm' + side]))) out['palm' + side] = lerp3(elbow, wrist, 1.33);
+                if (!(saved && Array.isArray(saved['knuckles' + side]))) out['knuckles' + side] = lerp3(elbow, wrist, 1.5);
+                if (!(saved && Array.isArray(saved['fingers' + side]))) out['fingers' + side] = lerp3(elbow, wrist, 1.66);
+            }
+        }
+        return out;
+    }
+
     /** Derive the template's skeleton from its fitted markers. */
     function bonesFromMarkers(markers, template) {
         return (TEMPLATES[template] || TEMPLATES.humanoid).bones(markers);
@@ -251,6 +282,9 @@
             const links = [[m.hips, neckBase], [neckBase, m.chin], [m.chin, m.headTop]];
             for (const side of ['L', 'R']) {
                 links.push([neckBase, m['shoulder' + side]], [m['shoulder' + side], m['elbow' + side]], [m['elbow' + side], m['wrist' + side]]);
+                // The hand: wrist, palm centre, base of the fingers, fingertips.
+                const chain = [m['wrist' + side], m['palm' + side], m['knuckles' + side], m['fingers' + side]].filter(Boolean);
+                for (let i = 1; i < chain.length; i++) links.push([chain[i - 1], chain[i]]);
                 links.push([m.hips, m['knee' + side]], [m['knee' + side], m['ankle' + side]]);
             }
             return links;
@@ -605,6 +639,7 @@
         templates,
         markersFor,
         defaultMarkers,
+        completeMarkers,
         bonesFromMarkers,
         previewLinks,
         computeWeights,

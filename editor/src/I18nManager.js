@@ -18584,6 +18584,42 @@ Object.assign(RR_TEXT_TRANSLATIONS["ar"], {"Add Step…":"إضافة خطوة…
 Object.assign(RR_TEXT_TRANSLATIONS["id"], {"Add Step…":"Tambah langkah…","Search steps…":"Cari langkah…","No steps match.":"Tidak ada langkah yang cocok.","Choose a step to add below the selected one.":"Pilih langkah untuk ditambahkan di bawah yang dipilih."});
 Object.assign(RR_TEXT_TRANSLATIONS["vi"], {"Add Step…":"Thêm bước…","Search steps…":"Tìm bước…","No steps match.":"Không có bước nào khớp.","Choose a step to add below the selected one.":"Chọn một bước để thêm bên dưới bước đang chọn."});
 Object.assign(RR_TEXT_TRANSLATIONS["th"], {"Add Step…":"เพิ่มขั้นตอน…","Search steps…":"ค้นหาขั้นตอน…","No steps match.":"ไม่มีขั้นตอนที่ตรงกัน","Choose a step to add below the selected one.":"เลือกขั้นตอนที่จะเพิ่มใต้ขั้นตอนที่เลือก"});
+// Rig: knuckle markers.
+Object.assign(RR_TEXT_TRANSLATIONS["ja"], {"Left knuckles":"左指の付け根","Right knuckles":"右指の付け根"});
+Object.assign(RR_TEXT_TRANSLATIONS["zh-Hant"], {"Left knuckles":"左指根","Right knuckles":"右指根"});
+Object.assign(RR_TEXT_TRANSLATIONS["zh-Hans"], {"Left knuckles":"左指根","Right knuckles":"右指根"});
+Object.assign(RR_TEXT_TRANSLATIONS["ko"], {"Left knuckles":"왼손 손가락 밑","Right knuckles":"오른손 손가락 밑"});
+Object.assign(RR_TEXT_TRANSLATIONS["es"], {"Left knuckles":"Nudillos izquierdos","Right knuckles":"Nudillos derechos"});
+Object.assign(RR_TEXT_TRANSLATIONS["pt"], {"Left knuckles":"Nós dos dedos esquerdos","Right knuckles":"Nós dos dedos direitos"});
+Object.assign(RR_TEXT_TRANSLATIONS["fr"], {"Left knuckles":"Base des doigts gauche","Right knuckles":"Base des doigts droite"});
+Object.assign(RR_TEXT_TRANSLATIONS["de"], {"Left knuckles":"Linke Fingerknöchel","Right knuckles":"Rechte Fingerknöchel"});
+Object.assign(RR_TEXT_TRANSLATIONS["it"], {"Left knuckles":"Nocche sinistre","Right knuckles":"Nocche destre"});
+Object.assign(RR_TEXT_TRANSLATIONS["ru"], {"Left knuckles":"Костяшки левой","Right knuckles":"Костяшки правой"});
+Object.assign(RR_TEXT_TRANSLATIONS["pl"], {"Left knuckles":"Lewe kostki palców","Right knuckles":"Prawe kostki palców"});
+Object.assign(RR_TEXT_TRANSLATIONS["el"], {"Left knuckles":"Αριστερές αρθρώσεις","Right knuckles":"Δεξιές αρθρώσεις"});
+Object.assign(RR_TEXT_TRANSLATIONS["tr"], {"Left knuckles":"Sol parmak boğumları","Right knuckles":"Sağ parmak boğumları"});
+Object.assign(RR_TEXT_TRANSLATIONS["ar"], {"Left knuckles":"مفاصل الأصابع اليسرى","Right knuckles":"مفاصل الأصابع اليمنى"});
+Object.assign(RR_TEXT_TRANSLATIONS["id"], {"Left knuckles":"Buku jari kiri","Right knuckles":"Buku jari kanan"});
+Object.assign(RR_TEXT_TRANSLATIONS["vi"], {"Left knuckles":"Khớp ngón tay trái","Right knuckles":"Khớp ngón tay phải"});
+Object.assign(RR_TEXT_TRANSLATIONS["th"], {"Left knuckles":"โคนนิ้วซ้าย","Right knuckles":"โคนนิ้วขวา"});
+// Rig: palm and fingertip markers.
+Object.assign(RR_TEXT_TRANSLATIONS["ja"], {"Left palm":"左手のひら","Right palm":"右手のひら","Left fingertips":"左指先","Right fingertips":"右指先"});
+Object.assign(RR_TEXT_TRANSLATIONS["zh-Hant"], {"Left palm":"左手掌","Right palm":"右手掌","Left fingertips":"左指尖","Right fingertips":"右指尖"});
+Object.assign(RR_TEXT_TRANSLATIONS["zh-Hans"], {"Left palm":"左手掌","Right palm":"右手掌","Left fingertips":"左指尖","Right fingertips":"右指尖"});
+Object.assign(RR_TEXT_TRANSLATIONS["ko"], {"Left palm":"왼손바닥","Right palm":"오른손바닥","Left fingertips":"왼손 손끝","Right fingertips":"오른손 손끝"});
+Object.assign(RR_TEXT_TRANSLATIONS["es"], {"Left palm":"Palma izquierda","Right palm":"Palma derecha","Left fingertips":"Dedos izquierdos","Right fingertips":"Dedos derechos"});
+Object.assign(RR_TEXT_TRANSLATIONS["pt"], {"Left palm":"Palma esquerda","Right palm":"Palma direita","Left fingertips":"Dedos esquerdos","Right fingertips":"Dedos direitos"});
+Object.assign(RR_TEXT_TRANSLATIONS["fr"], {"Left palm":"Paume gauche","Right palm":"Paume droite","Left fingertips":"Doigts gauches","Right fingertips":"Doigts droits"});
+Object.assign(RR_TEXT_TRANSLATIONS["de"], {"Left palm":"Linke Handfläche","Right palm":"Rechte Handfläche","Left fingertips":"Linke Fingerspitzen","Right fingertips":"Rechte Fingerspitzen"});
+Object.assign(RR_TEXT_TRANSLATIONS["it"], {"Left palm":"Palmo sinistro","Right palm":"Palmo destro","Left fingertips":"Dita sinistre","Right fingertips":"Dita destre"});
+Object.assign(RR_TEXT_TRANSLATIONS["ru"], {"Left palm":"Левая ладонь","Right palm":"Правая ладонь","Left fingertips":"Кончики пальцев левой","Right fingertips":"Кончики пальцев правой"});
+Object.assign(RR_TEXT_TRANSLATIONS["pl"], {"Left palm":"Lewa dłoń","Right palm":"Prawa dłoń","Left fingertips":"Lewe opuszki","Right fingertips":"Prawe opuszki"});
+Object.assign(RR_TEXT_TRANSLATIONS["el"], {"Left palm":"Αριστερή παλάμη","Right palm":"Δεξιά παλάμη","Left fingertips":"Αριστερά ακροδάχτυλα","Right fingertips":"Δεξιά ακροδάχτυλα"});
+Object.assign(RR_TEXT_TRANSLATIONS["tr"], {"Left palm":"Sol avuç","Right palm":"Sağ avuç","Left fingertips":"Sol parmak uçları","Right fingertips":"Sağ parmak uçları"});
+Object.assign(RR_TEXT_TRANSLATIONS["ar"], {"Left palm":"راحة اليد اليسرى","Right palm":"راحة اليد اليمنى","Left fingertips":"أطراف الأصابع اليسرى","Right fingertips":"أطراف الأصابع اليمنى"});
+Object.assign(RR_TEXT_TRANSLATIONS["id"], {"Left palm":"Telapak kiri","Right palm":"Telapak kanan","Left fingertips":"Ujung jari kiri","Right fingertips":"Ujung jari kanan"});
+Object.assign(RR_TEXT_TRANSLATIONS["vi"], {"Left palm":"Lòng bàn tay trái","Right palm":"Lòng bàn tay phải","Left fingertips":"Đầu ngón tay trái","Right fingertips":"Đầu ngón tay phải"});
+Object.assign(RR_TEXT_TRANSLATIONS["th"], {"Left palm":"ฝ่ามือซ้าย","Right palm":"ฝ่ามือขวา","Left fingertips":"ปลายนิ้วซ้าย","Right fingertips":"ปลายนิ้วขวา"});
 // Sequence editor: how a weapon is held.
 Object.assign(RR_TEXT_TRANSLATIONS["ja"], {"Its grip":"グリップ","Held With":"持ち方","One hand":"片手","Both hands":"両手","Aim":"狙い","No aim":"狙わない","At the target":"ターゲットへ"});
 Object.assign(RR_TEXT_TRANSLATIONS["zh-Hant"], {"Its grip":"握把","Held With":"持握方式","One hand":"單手","Both hands":"雙手","Aim":"瞄準","No aim":"不瞄準","At the target":"朝向目標"});
