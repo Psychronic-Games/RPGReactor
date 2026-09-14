@@ -875,7 +875,7 @@ class DatabaseActionSequenceEditor {
             const spec=['weapon','projectile'].includes(step.type)?this.weaponModelSpec(step,key):null;
             if(spec&&p){live.add(id);const record=view.models.get(id);if(!record)view.addModel(id,Reactor3D.normalizeModelSpec(spec),{x:p.x,y:p.y,z:p.z});
                 const otherKey=key==='user'?'target0':'user',other=view.models.get(otherKey),at=poses[otherKey]?{...poses[otherKey],height:.6*(view.modelHeight?view.modelHeight(otherKey):2)}:null;
-                const hold=()=>{if(!view.models.get(id))return;const placement={...B.heldPlacement(p,poses[key]?.facing||0,step,spec),visible:step.visible!==false};if(view.holdHeld&&poses[key])view.holdHeld(key,id,step,poses[key],at,placement);else view.place(id,placement);const rec=view.models.get(id);if(rec?.object)rec.object.visible=step.visible!==false;};
+                const hold=()=>{if(!view.models.get(id))return;const placement={...B.heldPlacement(p,poses[key]?.facing||0,step,spec),visible:step.visible!==false};if(step.type==='weapon'&&view.holdHeld&&poses[key])view.holdHeld(key,id,step,poses[key],at,placement);else view.place(id,placement);const rec=view.models.get(id);if(rec?.object)rec.object.visible=step.visible!==false;};
                 hold();(this._holds||=new Map()).set(id,hold);return;}
             const img=this.previewPropImage(step,key);if(!img||!p)return;live.add(id);view.sequenceBillboard(id,img.source,img.frame,this.liftPose(view)(p),step);
             // An animation projectile plays its animation on the carrier once per flight; the carrier moving moves the animation.

@@ -232,7 +232,8 @@
                 const owner=entry.owner?._reactorRoomPosition,record=room?.models.get(entry.key);if(!p||!record)return;
                 const ownerKey=entry.owner?._reactorRoomKey,targetSprite=ss.findTargetSprite(targets[0]),targetRecord=room.models.get(targetSprite?._reactorRoomKey),at=targetSprite?._reactorRoomPosition?{...targetSprite._reactorRoomPosition,height:.6*room.modelHeight(targetSprite._reactorRoomKey)}:null;
                 const placement={...B.heldPlacement(p,owner?.facing||0,{...step,rotation},record.spec),visible};
-                if(ownerKey&&entry.owner._reactorRoomPosition){const held=room.holdHeld(ownerKey,entry.key,step,entry.owner._reactorRoomPosition,at,placement);if(held)p=held;}
+                // Only a thing held in a hand rides the hand; a model in flight goes where the flight says.
+                if(step.type==='weapon'&&ownerKey&&entry.owner._reactorRoomPosition){const held=room.holdHeld(ownerKey,entry.key,step,entry.owner._reactorRoomPosition,at,placement);if(held)p=held;}
                 else room.place(entry.key,placement);
                 if(record.object)record.object.visible=visible;entry.point={...p};return;
             }
