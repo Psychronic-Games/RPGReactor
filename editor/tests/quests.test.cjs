@@ -220,7 +220,8 @@ test('VisuStella quests come out layer by layer: keys, categories, hidden object
     assert.equal(quests.length, 2);
     const [welcome, errand] = quests;
     assert.equal(welcome.key, 'Welcome');
-    assert.equal(welcome.name, '\\i[87]Welcome Quest', 'one backslash, as the game reads it');
+    assert.equal(welcome.name, 'Welcome Quest', 'the title\'s leading icon code is lifted out of the name...');
+    assert.equal(welcome.iconIndex, 87, '...into the icon Reactor draws in front of it');
     assert.equal(welcome.category, '\\C[5]Main Quests');
     assert.equal(welcome.difficulty, 'Easy');
     assert.equal(welcome.description, 'Thank you for using the \\c[4]Quest System\\c[0].');
@@ -273,7 +274,8 @@ test('Yanfly quests come out of their numbered slots: category from Type, hidden
     const quests = QuestImporter.fromYanflyParameters(params);
     assert.deepEqual([...quests.map(q => q.key)], ['yep1', 'yep3', 'yep10'], 'slot order, empty slot 2 skipped, 10 sorts after 3');
     const [first, third, tenth] = quests;
-    assert.equal(first.name, '\\i[677]Serious Questions');
+    assert.equal(first.name, 'Serious Questions');
+    assert.equal(first.iconIndex, 677, 'the leading icon code becomes the quest icon');
     assert.equal(first.category, 'Primary Missions');
     assert.equal(first.difficulty, '\\c[6]Easy\\c[0]');
     assert.equal(first.from, 'Central Command');
@@ -343,6 +345,105 @@ test('the dialog learns every source, present or not, from one project folder', 
     } finally {
         fs.rmSync(dir, { recursive: true, force: true });
     }
+});
+
+test('a title\'s leading icon becomes the quest icon, and the enabled quest systems are read from the manifest alone', () => {
+    const QuestImporter = loadImporter();
+    assert.deepEqual({ ...QuestImporter.leadingIcon('\\I[87]Welcome') }, { iconIndex: 87, text: 'Welcome' });
+    assert.deepEqual({ ...QuestImporter.leadingIcon('\\i[5] Spaced') }, { iconIndex: 5, text: ' Spaced' }, 'what follows the code is kept as written');
+    assert.deepEqual({ ...QuestImporter.leadingIcon('Find the \\I[3]gem') }, { iconIndex: 0, text: 'Find the \\I[3]gem' }, 'an icon inside the title stays put');
+    const yanfly = QuestImporter.fromYanflyQuest({ 'Title': '\\i[12]Slot quest', 'Objectives List': '["\\"Go\\""]' }, 4);
+    assert.equal(yanfly.name, 'Slot quest');
+    assert.equal(yanfly.iconIndex, 12);
+    const iconOnly = QuestImporter.fromVisustellaQuest({ 'Key:str': 'bare', 'Title:str': '\\i[9]' }, 'Main');
+    assert.equal(iconOnly.name, 'bare', 'a title that was only an icon falls back to the key');
+    assert.equal(iconOnly.iconIndex, 9);
+
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rr-quest-systems-'));
+    try {
+        fs.mkdirSync(path.join(dir, 'js'));
+        fs.writeFileSync(path.join(dir, 'js', 'reactor_main.js'), '');
+        const manifest = list => `var $plugins =\n${JSON.stringify(list)};\n`;
+        const file = path.join(dir, 'js', 'reactor_plugins.js');
+        fs.writeFileSync(file, manifest([{ name: 'VisuMZ_2_QuestSystem', status: true, parameters: {} }, { name: 'GS_QuestSystem', status: false, parameters: {} }]));
+        assert.deepEqual(JSON.parse(JSON.stringify(QuestImporter.enabledSystems(dir))), [{ source: 'visustella', label: 'VisuStella Quest System' }]);
+        fs.writeFileSync(file, manifest([{ name: 'VisuMZ_2_QuestSystem', status: false, parameters: {} }]));
+        const later = Date.now() / 1000 + 5;
+        fs.utimesSync(file, later, later);
+        assert.deepEqual(JSON.parse(JSON.stringify(QuestImporter.enabledSystems(dir))), [], 'turning it off in the Plugin Manager is seen');
+        assert.deepEqual(JSON.parse(JSON.stringify(QuestImporter.enabledSystems(path.join(dir, 'nope')))), []);
+    } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+    }
+});
+
+test('the quest icon opens the picker on the project\'s own IconSet, and a re-render wires the text codes again', () => {
+    const calls = { picker: [], decorate: [], detached: 0 };
+    const window = {
+        RRIconPicker: { iconSetPathFor: projectPath => `${projectPath}/img/system/IconSet.png` },
+        RRDatabaseTextCodes: { decorate: (container, options) => { calls.decorate.push([container, options.projectPath()]); return () => { calls.detached++; }; } }
+    };
+    const context = { console, module: undefined, globalThis: undefined, window, rrEscapeHtml: v => String(v) };
+    context.globalThis = context;
+    vm.runInNewContext(read('editor/src/database/DatabaseQuestEditor.js') + '\n;globalThis.__D = DatabaseQuestEditor;', context);
+    const Editor = context.__D;
+    const quest = Editor.normalize({ id: 1, name: 'Q', iconIndex: 3 });
+    const parent = { currentProject: { path: 'D:/Game' }, showIconPicker: (...args) => calls.picker.push(args), refreshDatabaseListEntry: () => {}, _textCodeDetach: () => { calls.detached++; } };
+    const editor = new Editor({ updateQuest: () => {}, getQuest: () => quest }, {}, null, parent);
+    const handlers = {};
+    const icon = { innerHTML: '', addEventListener: (type, fn) => { handlers[type] = fn; } };
+    const container = { querySelectorAll: () => [], querySelector: selector => (selector === '.quest-icon' ? icon : null) };
+    editor.attachListeners(container, quest);
+    handlers.click();
+    assert.equal(calls.picker.length, 1);
+    assert.equal(calls.picker[0][0], 3);
+    assert.equal(calls.picker[0][2], 'D:/Game/img/system/IconSet.png', 'the sheet the picker loads is the project\'s');
+    calls.picker[0][1](42);
+    assert.equal(quest.iconIndex, 42);
+    editor.decorateTextCodes(container);
+    assert.equal(calls.detached, 1, 'the previous wiring is released first');
+    assert.deepEqual(calls.decorate.map(([node, projectPath]) => [node === container, projectPath]), [[true, 'D:/Game']]);
+    parent._textCodeDetach();
+    assert.equal(calls.detached, 2, 'and the new handle is the parent\'s to release');
+    assert.match(read('editor/src/database/DatabaseQuestEditor.js'), /const rerender = \(\) => \{\n\s*this\.showQuestDetail\([^\n]*\n\s*this\.decorateTextCodes\(container\);/);
+});
+
+test('objectives and rewards are boxes that keep their line breaks, and every text the log draws previews its codes', () => {
+    const context = { console, module: undefined, globalThis: undefined, window: {}, rrEscapeHtml: v => String(v), document: { createElement: () => ({ dataset: {}, innerHTML: '' }) } };
+    context.globalThis = context;
+    vm.runInNewContext(read('editor/src/database/DatabaseQuestEditor.js') + '\n;globalThis.__D = DatabaseQuestEditor;', context);
+    const Editor = context.__D;
+    const editor = new Editor({ getSystem: () => ({ switches: [], variables: [] }) }, {}, null, null);
+    const quest = Editor.normalize({ id: 2, objectives: [{ text: 'Describe each objective\nhere.', hidden: false, switchId: 0 }] });
+    const html = editor.listSection(quest, 'objectives', 'Objectives', 'Add').innerHTML;
+    assert.match(html, /<textarea class="database-field-value quest-row-text" rows="2"[^>]*data-rr-textcodes="help" data-rr-textcodes-preview>Describe each objective\nhere\.<\/textarea>/);
+    assert.doesNotMatch(html, /<input type="text"[^>]*data-prop="text"/, 'a text input would strip the break');
+    assert.equal(editor.rowsFor(''), 1);
+    assert.equal(editor.rowsFor('a\nb\nc\nd\ne\nf\ng\nh\ni\nj'), 8, 'past eight lines the box scrolls');
+    const source = read('editor/src/database/DatabaseQuestEditor.js');
+    for (const field of ['name', 'category', 'difficulty', 'from', 'location', 'description', 'subtext', 'quotes']) {
+        assert.match(source, new RegExp(`data-field="${field}" data-quest-id="\\$\\{quest\\.id\\}" data-rr-textcodes="help" data-rr-textcodes-preview`), field);
+    }
+    assert.doesNotMatch(source, /data-field="(key|note)"[^>]*data-rr-textcodes/, 'the key and the note are never drawn in game');
+    assert.match(source, /QuestImporter\.enabledSystems\(project\.path\)/);
+    assert.match(source, /class="quest-other-system" style="grid-column:1 \/ -1;/, 'the notice spans the form rather than squeezing into its first column');
+});
+
+test('the Quests list draws a name\'s codes the way the log does; every other tab keeps the name as typed', () => {
+    const ui = read('editor/src/DatabaseEditorUI.js');
+    const at = ui.indexOf('    paintDatabaseListName(span, text, type) {');
+    assert.ok(at > 0, 'one helper writes list names');
+    const body = ui.slice(at, ui.indexOf('\n    }\n', at));
+    const painted = [];
+    const helper = new Function('window', `return function${body.slice(body.indexOf('('))}\n}`)({ RRIconCodes: { paint: (span, text) => painted.push(text) } });
+    const quest = {};
+    helper.call(null, quest, '\\i[87]Welcome Quest', 'quests');
+    assert.deepEqual(painted, ['\\i[87]Welcome Quest']);
+    const skill = {};
+    helper.call(null, skill, '\\I[64]Fire', 'skills');
+    assert.equal(skill.textContent, '\\I[64]Fire', 'a skill name is left as typed');
+    assert.equal(painted.length, 1);
+    assert.equal((ui.match(/this\.paintDatabaseListName\(nameSpan, labels\.primary, (type|reference\.type)\)/g) || []).length, 3, 'the list, a refreshed row and a Referenced by row');
 });
 
 test('the Quests tab imports through one button and a source picker, not a plugin-named button', () => {

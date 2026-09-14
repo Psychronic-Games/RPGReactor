@@ -91,6 +91,46 @@ class QuestImporter {
     }
 
     /**
+     * A title's leading `\I[n]` as the quest's icon, and the title after it.
+     * These plugins have no icon field, so the convention is to write the
+     * icon into the title; Reactor draws `iconIndex` directly in front of the
+     * name, so lifting it out reads the same in game and gives the Quests
+     * tab's icon box and list something to show. Anything after the code,
+     * spaces included, stays as written, and an icon later in a title stays put.
+     */
+    static leadingIcon(title) {
+        const text = String(title == null ? '' : title);
+        const match = /^\\I\[(\d+)\]/i.exec(text);
+        return match ? { iconIndex: Number(match[1]), text: text.slice(match[0].length) } : { iconIndex: 0, text };
+    }
+
+    /**
+     * The quest-system plugins a project has enabled, in dialog order, as
+     * `{ source, label }`. Only the manifest's names and switches are read,
+     * never the quests, and the answer is cached on the manifest's mtime, so
+     * the Quests tab can ask on every render.
+     */
+    static enabledSystems(projectPath) {
+        const fs = require('fs');
+        const file = QuestImporter.manifestPath(projectPath);
+        let stamp;
+        try {
+            stamp = fs.statSync(file).mtimeMs;
+        } catch (error) {
+            return [];
+        }
+        const cacheKey = `${file}|${stamp}`;
+        if (QuestImporter._enabledKey !== cacheKey) {
+            const plugins = QuestImporter.readManifest(projectPath);
+            QuestImporter._enabled = Object.keys(QuestImporter.SOURCES)
+                .filter(source => plugins.some(plugin => plugin && plugin.name === QuestImporter.SOURCES[source].plugin && plugin.status !== false))
+                .map(source => ({ source, label: QuestImporter.SOURCES[source].label }));
+            QuestImporter._enabledKey = cacheKey;
+        }
+        return QuestImporter._enabled.map(entry => Object.assign({}, entry));
+    }
+
+    /**
      * The quests of a VisuStella `Categories` parameter value (the raw
      * string from the manifest, or an already-parsed array), as Reactor
      * records without ids. Order is the plugin's: category by category.
@@ -135,10 +175,10 @@ class QuestImporter {
             noteLines.push('<Import: on-load script>', onLoad, '</Import>');
         }
         return {
-            name: title || key || 'Quest',
+            name: QuestImporter.leadingIcon(title).text || key || 'Quest',
             key: key || '',
             category: categoryName,
-            iconIndex: 0,
+            iconIndex: QuestImporter.leadingIcon(title).iconIndex,
             difficulty: QuestImporter.clean(QuestImporter.field(struct, 'Difficulty')),
             from: QuestImporter.clean(QuestImporter.field(struct, 'From')),
             location: QuestImporter.clean(QuestImporter.field(struct, 'Location')),
@@ -217,10 +257,10 @@ class QuestImporter {
         if (descriptions.length > 1) noteLines.push('<Import: other descriptions>', ...descriptions.slice(1), '</Import>');
         if (subtexts.filter(Boolean).length > 1) noteLines.push('<Import: other subtexts>', ...subtexts.slice(1), '</Import>');
         return {
-            name: title || `Quest ${number}`,
+            name: QuestImporter.leadingIcon(title).text || `Quest ${number}`,
             key: `yep${number}`,
             category: QuestImporter.clean(QuestImporter.field(struct, 'Type')),
-            iconIndex: 0,
+            iconIndex: QuestImporter.leadingIcon(title).iconIndex,
             difficulty: QuestImporter.clean(QuestImporter.field(struct, 'Difficulty')),
             from: QuestImporter.clean(QuestImporter.field(struct, 'From')),
             location: QuestImporter.clean(QuestImporter.field(struct, 'Location')),

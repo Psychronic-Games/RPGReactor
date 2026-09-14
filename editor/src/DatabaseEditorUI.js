@@ -135,6 +135,18 @@ class DatabaseEditorUI {
         return { primary: editorName, secondary: gameName, editorName };
     }
 
+    /**
+     * Write a list row's name. A quest's name is drawn by the quest log with
+     * drawTextEx and commonly carries `\I[n]` (an imported one nearly always
+     * does), so the Quests list shows it the way the player reads it - icon
+     * and words, other codes dropped - rather than as markup. Every other
+     * tab keeps the name as typed.
+     */
+    paintDatabaseListName(span, text, type) {
+        if (type === 'quests' && window.RRIconCodes) window.RRIconCodes.paint(span, text);
+        else span.textContent = text;
+    }
+
     refreshDatabaseListLabel(entry, type) {
         const listEl = document.getElementById('database-list');
         const item = Array.from(listEl?.querySelectorAll('.database-list-item') || [])
@@ -143,7 +155,7 @@ class DatabaseEditorUI {
         const labels = this.databaseEntryLabels(entry, type);
         item.dataset.entryName = labels.primary;
         const nameSpan = item.querySelector('.database-list-name');
-        if (nameSpan) nameSpan.textContent = labels.primary;
+        if (nameSpan) this.paintDatabaseListName(nameSpan, labels.primary, type);
         let altSpan = item.querySelector('.database-list-alt');
         if (labels.secondary) {
             if (!altSpan) {
@@ -832,7 +844,7 @@ class DatabaseEditorUI {
 
                 const nameSpan = document.createElement('span');
                 nameSpan.className = 'database-list-name';
-                nameSpan.textContent = labels.primary;
+                this.paintDatabaseListName(nameSpan, labels.primary, type);
                 const idSpan = document.createElement('span');
                 idSpan.className = 'database-list-id';
                 idSpan.textContent = `#${entry.id}`;
@@ -1304,7 +1316,7 @@ class DatabaseEditorUI {
             const labels = source
                 ? this.databaseEntryLabels(source, reference.type)
                 : { primary: this._t('common.unnamed'), secondary: '' };
-            nameSpan.textContent = labels.primary;
+            this.paintDatabaseListName(nameSpan, labels.primary, reference.type);
             if (labels.secondary) {
                 const altSpan = document.createElement('span');
                 altSpan.className = 'database-list-alt';
