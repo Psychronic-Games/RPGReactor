@@ -482,7 +482,7 @@ Utils.hasEncryptedAudio = function() {
  * @returns {?string} The corrected URL, or null if no distinct match exists.
  */
 Utils.correctFileCase = function(url) {
-    if (!this.isNwjs()) return null;
+    if (!this.isNwjs()) return this.correctFileCaseFromIndex(url);
     try {
         const fs = require("fs");
         const path = require("path");
@@ -515,6 +515,55 @@ Utils.correctFileCase = function(url) {
     } catch (e) {
         return null;
     }
+};
+
+/**
+ * A browser cannot read the directory it was served from, so a web build
+ * writes every file path into js/reactor_files.json and the runtime corrects
+ * casing from that list instead. The index is fetched once, on the first
+ * request that could need it; until it arrives the load-error retry finds it.
+ */
+Utils._webFileIndex = null;
+
+/**
+ * @param {string[]} files - Relative, forward-slashed paths of every file in the build.
+ */
+Utils.setWebFileIndex = function(files) {
+    const index = new Map();
+    for (const file of files || []) {
+        if (typeof file === "string") index.set(file.toLowerCase(), file);
+    }
+    this._webFileIndex = index;
+};
+
+Utils.loadWebFileIndex = function() {
+    if (this._webFileIndexRequested || this.isNwjs() || typeof fetch !== "function") return;
+    // The web editor serves its project through its own host, not this index.
+    if (typeof window !== "undefined" && window.RPGReactorHost) return;
+    this._webFileIndexRequested = true;
+    fetch("js/reactor_files.json")
+        .then(response => (response.ok ? response.json() : null))
+        .then(data => {
+            if (data && Array.isArray(data.files)) this.setWebFileIndex(data.files);
+        })
+        .catch(() => {});
+};
+
+/**
+ * @param {string} url - The relative URL that failed to load.
+ * @returns {?string} The URL as the build's file index spells it, or null.
+ */
+Utils.correctFileCaseFromIndex = function(url) {
+    this.loadWebFileIndex();
+    const index = this._webFileIndex;
+    if (!index) return null;
+    const clean = decodeURIComponent(String(url).split("?")[0]);
+    if (/^([a-z][a-z0-9+.-]*:|\/)/i.test(clean)) return null;
+    const segments = clean.split("/").filter(s => s && s !== ".");
+    if (segments.some(s => s === "..")) return null;
+    const normalized = segments.join("/");
+    const match = index.get(normalized.toLowerCase());
+    return match && match !== normalized ? match : null;
 };
 
 /**

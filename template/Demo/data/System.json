@@ -304,7 +304,7 @@
       "volume": 90
     },
     {
-      "name": "Miss",
+      "name": "Miss1",
       "pan": 0,
       "pitch": 100,
       "volume": 90
@@ -322,25 +322,25 @@
       "volume": 90
     },
     {
-      "name": "Reflection",
+      "name": "powerup-01",
       "pan": 0,
       "pitch": 100,
       "volume": 90
     },
     {
-      "name": "Shop1",
+      "name": "select-03",
       "pan": 0,
       "pitch": 100,
       "volume": 90
     },
     {
-      "name": "Item3",
+      "name": "powerup-03",
       "pan": 0,
       "pitch": 100,
       "volume": 90
     },
     {
-      "name": "Item3",
+      "name": "powerup-03",
       "pan": 0,
       "pitch": 100,
       "volume": 90

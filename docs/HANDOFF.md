@@ -1,5 +1,10 @@
 # Handoff - 0.98.6 In Progress
 
+## 2026-09-13 — Web filename casing, Demo sounds
+
+- `Utils.correctFileCase` on the web reads `js/reactor_files.json` (`Utils.loadWebFileIndex`, fetched once on first need, skipped under `window.RPGReactorHost`; `setWebFileIndex` builds a lowercase → real map; `correctFileCaseFromIndex`). `editor/build-scripts/web-file-index.cjs` writes the index; `build-worker.js` (web platform, after the copy) and `dist-editor-worker.js` (into `pkg-web/project`) call it. Tests: `web-file-index.test.cjs`.
+- Demo `Animations.json` (421 timings, 112 names) and `System.json` sounds now name Demo files by family (mapping in `docs/demo-missing-se.md`); `demo-template-completeness.test.cjs` fails on any sound the Demo names but does not ship. Runtime revision 20260913.21.
+
 ## 2026-09-13 — PRs #57 and #58 merged
 
 - `origin/main` (PRs #57, #58, three commits) merged into the local `main` that was two commits ahead; merge commit, not a rebase. One conflict in `I18nManager.js` (both sides appended translation blocks; both kept). Runtime **20260913.1**, `sync-runtime.cjs` refreshed 49 files across the 13 projects. Suite **3,130 passed**. [Details](PR-INTEGRATION-2026-09-13.md).

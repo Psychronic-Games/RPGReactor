@@ -104,3 +104,28 @@ test('every tracked Demo asset is present on disk', () => {
     }
     assert.deepEqual(missing, [], `tracked Demo files missing on disk: ${missing.slice(0, 5).join(', ')}`);
 });
+
+test('every sound the Demo names exists on disk with that exact spelling', () => {
+    // A browser build cannot repair a name, and a missing sound stops a battle with a load error.
+    const onDisk = new Set(fs.readdirSync(path.join(demoRoot, 'audio', 'se')).map(file => file.replace(/\.[^.]+$/, '')));
+    const named = new Map();
+    const note = (name, where) => { if (name) named.set(name, (named.get(name) || []).concat(where)); };
+    const animations = JSON.parse(fs.readFileSync(path.join(demoRoot, 'data', 'Animations.json'), 'utf8'));
+    for (const animation of animations) {
+        if (!animation) continue;
+        for (const timing of animation.soundTimings || []) note(timing.se && timing.se.name, `animation ${animation.id} ${animation.name}`);
+    }
+    const system = JSON.parse(fs.readFileSync(path.join(demoRoot, 'data', 'System.json'), 'utf8'));
+    (system.sounds || []).forEach((sound, index) => note(sound && sound.name, `system sound ${index}`));
+    const sequences = JSON.parse(fs.readFileSync(path.join(demoRoot, 'data', 'ActionSequences.json'), 'utf8'));
+    const walk = (node, where) => {
+        if (!node || typeof node !== 'object') return;
+        if (Array.isArray(node)) return node.forEach(item => walk(item, where));
+        if (typeof node.se === 'string') note(node.se, where);
+        if (node.se && typeof node.se === 'object' && typeof node.se.name === 'string') note(node.se.name, where);
+        for (const key of Object.keys(node)) if (key !== 'se') walk(node[key], where);
+    };
+    for (const sequence of sequences) if (sequence) walk(sequence.steps || sequence, `sequence ${sequence.id} ${sequence.name}`);
+    const missing = [...named].filter(([name]) => !onDisk.has(name)).map(([name, where]) => `${name} (${where.slice(0, 3).join('; ')})`);
+    assert.deepEqual(missing, [], 'sounds the Demo names but does not ship');
+});

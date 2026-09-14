@@ -11,6 +11,7 @@ const https = require('https');
 const iconHelpers = require('./icon-helpers');
 const nwRuntime = require('./nw-runtime-utils');
 const nwCodec = require('./nw-codec-utils');
+const webFileIndex = require('./web-file-index.cjs');
 const assetOptimizer = require('./asset-optimizer');
 const appImage = require('./appimage-utils');
 const nativeDownload = require('./native-download');
@@ -543,6 +544,9 @@ async function installProprietaryCodec(platform, runtimeRoot, runtimeVersion, pr
                 progress(Math.round(pCopy), 'Copying game files...');
                 copyDirRecursive(stagingDir, platformOutDir);
                 logGood('Game files copied.');
+                // A browser cannot list its files; the runtime corrects filename casing from this index.
+                const indexed = webFileIndex.writeWebFileIndex(platformOutDir);
+                logInfo(`File index written: ${indexed} files (filename casing is corrected from it in the browser).`);
                 progress(Math.round(pRename), 'Finalizing...');
             } else {
                 // ── Get NW.js runtime ───────────────────────────────

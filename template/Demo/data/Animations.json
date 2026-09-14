@@ -68,7 +68,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Evasion2",
+          "name": "whoosh-02",
           "pan": 0,
           "pitch": 150,
           "volume": 80
@@ -77,7 +77,7 @@
       {
         "frame": 1,
         "se": {
-          "name": "Damage4",
+          "name": "hit-01",
           "pan": 0,
           "pitch": 120,
           "volume": 90
@@ -134,7 +134,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Blow1",
+          "name": "hit-01",
           "pan": 0,
           "pitch": 100,
           "volume": 90
@@ -143,7 +143,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Fire1",
+          "name": "blaster-03",
           "pan": 0,
           "pitch": 100,
           "volume": 100
@@ -191,7 +191,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Blow1",
+          "name": "hit-01",
           "pan": 0,
           "pitch": 100,
           "volume": 100
@@ -200,7 +200,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Ice3",
+          "name": "whoosh-03",
           "pan": 0,
           "pitch": 75,
           "volume": 90
@@ -248,7 +248,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Thunder8",
+          "name": "blaster-05",
           "pan": 0,
           "pitch": 80,
           "volume": 100
@@ -257,7 +257,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Blow3",
+          "name": "hit-03",
           "pan": 0,
           "pitch": 100,
           "volume": 100
@@ -295,7 +295,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Slash1",
+          "name": "slash-01",
           "pan": 0,
           "pitch": 140,
           "volume": 80
@@ -333,7 +333,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Evasion2",
+          "name": "whoosh-02",
           "pan": 0,
           "pitch": 150,
           "volume": 80
@@ -342,7 +342,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Slash1",
+          "name": "slash-01",
           "pan": 0,
           "pitch": 140,
           "volume": 80
@@ -399,7 +399,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Thunder1",
+          "name": "blaster-02",
           "pan": 0,
           "pitch": 120,
           "volume": 90
@@ -408,7 +408,7 @@
       {
         "frame": 2,
         "se": {
-          "name": "Sword5",
+          "name": "slash-01",
           "pan": 0,
           "pitch": 100,
           "volume": 100
@@ -417,7 +417,7 @@
       {
         "frame": 4,
         "se": {
-          "name": "Fire1",
+          "name": "blaster-03",
           "pan": 0,
           "pitch": 100,
           "volume": 100
@@ -465,7 +465,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Slash1",
+          "name": "slash-01",
           "pan": 0,
           "pitch": 140,
           "volume": 80
@@ -474,7 +474,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Ice3",
+          "name": "whoosh-03",
           "pan": 0,
           "pitch": 100,
           "volume": 100
@@ -522,7 +522,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Slash1",
+          "name": "slash-01",
           "pan": 0,
           "pitch": 140,
           "volume": 80
@@ -531,7 +531,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Thunder8",
+          "name": "blaster-05",
           "pan": 0,
           "pitch": 100,
           "volume": 100
@@ -569,7 +569,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Thunder1",
+          "name": "blaster-02",
           "pan": 0,
           "pitch": 120,
           "volume": 90
@@ -578,7 +578,7 @@
       {
         "frame": 4,
         "se": {
-          "name": "Sword5",
+          "name": "slash-01",
           "pan": 0,
           "pitch": 120,
           "volume": 90
@@ -616,7 +616,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Evasion2",
+          "name": "whoosh-02",
           "pan": 0,
           "pitch": 150,
           "volume": 80
@@ -625,7 +625,7 @@
       {
         "frame": 1,
         "se": {
-          "name": "Thunder4",
+          "name": "blaster-05",
           "pan": 0,
           "pitch": 120,
           "volume": 90
@@ -683,7 +683,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Thunder1",
+          "name": "blaster-02",
           "pan": 0,
           "pitch": 120,
           "volume": 90
@@ -692,7 +692,7 @@
       {
         "frame": 2,
         "se": {
-          "name": "Sword5",
+          "name": "slash-01",
           "pan": 0,
           "pitch": 100,
           "volume": 100
@@ -701,7 +701,7 @@
       {
         "frame": 3,
         "se": {
-          "name": "Fire1",
+          "name": "blaster-03",
           "pan": 0,
           "pitch": 100,
           "volume": 100
@@ -749,7 +749,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Thunder1",
+          "name": "blaster-02",
           "pan": 0,
           "pitch": 120,
           "volume": 90
@@ -758,7 +758,7 @@
       {
         "frame": 2,
         "se": {
-          "name": "Sword5",
+          "name": "slash-01",
           "pan": 0,
           "pitch": 100,
           "volume": 100
@@ -767,7 +767,7 @@
       {
         "frame": 3,
         "se": {
-          "name": "Ice3",
+          "name": "whoosh-03",
           "pan": 0,
           "pitch": 75,
           "volume": 100
@@ -815,7 +815,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Thunder1",
+          "name": "blaster-02",
           "pan": 0,
           "pitch": 120,
           "volume": 90
@@ -824,7 +824,7 @@
       {
         "frame": 2,
         "se": {
-          "name": "Sword5",
+          "name": "slash-01",
           "pan": 0,
           "pitch": 100,
           "volume": 100
@@ -833,7 +833,7 @@
       {
         "frame": 3,
         "se": {
-          "name": "Thunder8",
+          "name": "blaster-05",
           "pan": 0,
           "pitch": 80,
           "volume": 100
@@ -905,7 +905,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Attack2",
+          "name": "hit-02",
           "pan": 0,
           "pitch": 100,
           "volume": 90
@@ -914,7 +914,7 @@
       {
         "frame": 1,
         "se": {
-          "name": "Slash2",
+          "name": "slash-02",
           "pan": 0,
           "pitch": 100,
           "volume": 90
@@ -923,7 +923,7 @@
       {
         "frame": 3,
         "se": {
-          "name": "Fire1",
+          "name": "blaster-03",
           "pan": 0,
           "pitch": 100,
           "volume": 100
@@ -961,7 +961,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Attack2",
+          "name": "hit-02",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -970,7 +970,7 @@
       {
         "frame": 1,
         "se": {
-          "name": "Slash2",
+          "name": "slash-02",
           "pan": 0,
           "pitch": 100,
           "volume": 90
@@ -979,7 +979,7 @@
       {
         "frame": 3,
         "se": {
-          "name": "Ice3",
+          "name": "whoosh-03",
           "pan": 0,
           "pitch": 75,
           "volume": 100
@@ -1017,7 +1017,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Attack2",
+          "name": "hit-02",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -1026,7 +1026,7 @@
       {
         "frame": 1,
         "se": {
-          "name": "Slash2",
+          "name": "slash-02",
           "pan": 0,
           "pitch": 100,
           "volume": 90
@@ -1035,7 +1035,7 @@
       {
         "frame": 3,
         "se": {
-          "name": "Thunder8",
+          "name": "blaster-05",
           "pan": 0,
           "pitch": 80,
           "volume": 100
@@ -1103,7 +1103,7 @@
       {
         "frame": 2,
         "se": {
-          "name": "Blow1",
+          "name": "hit-01",
           "pan": 0,
           "pitch": 120,
           "volume": 90
@@ -1112,7 +1112,7 @@
       {
         "frame": 5,
         "se": {
-          "name": "Blow3",
+          "name": "hit-03",
           "pan": 0,
           "pitch": 100,
           "volume": 90
@@ -1121,7 +1121,7 @@
       {
         "frame": 9,
         "se": {
-          "name": "Blow1",
+          "name": "hit-01",
           "pan": 0,
           "pitch": 120,
           "volume": 90
@@ -1130,7 +1130,7 @@
       {
         "frame": 27,
         "se": {
-          "name": "Thunder5",
+          "name": "blaster-02",
           "pan": 0,
           "pitch": 120,
           "volume": 90
@@ -1139,7 +1139,7 @@
       {
         "frame": 34,
         "se": {
-          "name": "Blow3",
+          "name": "hit-03",
           "pan": 0,
           "pitch": 100,
           "volume": 90
@@ -1148,7 +1148,7 @@
       {
         "frame": 44,
         "se": {
-          "name": "Thunder5",
+          "name": "blaster-02",
           "pan": 0,
           "pitch": 120,
           "volume": 90
@@ -1157,7 +1157,7 @@
       {
         "frame": 44,
         "se": {
-          "name": "Blow3",
+          "name": "hit-03",
           "pan": 0,
           "pitch": 100,
           "volume": 90
@@ -1166,7 +1166,7 @@
       {
         "frame": 51,
         "se": {
-          "name": "Blow3",
+          "name": "hit-03",
           "pan": 0,
           "pitch": 100,
           "volume": 90
@@ -1175,7 +1175,7 @@
       {
         "frame": 69,
         "se": {
-          "name": "Thunder5",
+          "name": "blaster-02",
           "pan": 0,
           "pitch": 120,
           "volume": 90
@@ -1184,7 +1184,7 @@
       {
         "frame": 84,
         "se": {
-          "name": "Blow3",
+          "name": "hit-03",
           "pan": 0,
           "pitch": 100,
           "volume": 90
@@ -1193,7 +1193,7 @@
       {
         "frame": 91,
         "se": {
-          "name": "Blow3",
+          "name": "hit-03",
           "pan": 0,
           "pitch": 100,
           "volume": 90
@@ -1202,7 +1202,7 @@
       {
         "frame": 99,
         "se": {
-          "name": "Thunder5",
+          "name": "blaster-02",
           "pan": 0,
           "pitch": 120,
           "volume": 90
@@ -1270,7 +1270,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Blow1",
+          "name": "hit-01",
           "pan": 0,
           "pitch": 100,
           "volume": 90
@@ -1279,7 +1279,7 @@
       {
         "frame": 2,
         "se": {
-          "name": "Blow1",
+          "name": "hit-01",
           "pan": 0,
           "pitch": 100,
           "volume": 90
@@ -1288,7 +1288,7 @@
       {
         "frame": 3,
         "se": {
-          "name": "Blow3",
+          "name": "hit-03",
           "pan": 0,
           "pitch": 100,
           "volume": 90
@@ -1297,7 +1297,7 @@
       {
         "frame": 5,
         "se": {
-          "name": "Blow1",
+          "name": "hit-01",
           "pan": 0,
           "pitch": 100,
           "volume": 100
@@ -1306,7 +1306,7 @@
       {
         "frame": 7,
         "se": {
-          "name": "Blow2",
+          "name": "hit-02",
           "pan": 0,
           "pitch": 100,
           "volume": 100
@@ -1315,7 +1315,7 @@
       {
         "frame": 9,
         "se": {
-          "name": "Blow1",
+          "name": "hit-01",
           "pan": 0,
           "pitch": 100,
           "volume": 100
@@ -1324,7 +1324,7 @@
       {
         "frame": 12,
         "se": {
-          "name": "Blow3",
+          "name": "hit-03",
           "pan": 0,
           "pitch": 100,
           "volume": 90
@@ -1333,7 +1333,7 @@
       {
         "frame": 14,
         "se": {
-          "name": "Blow3",
+          "name": "hit-03",
           "pan": 0,
           "pitch": 100,
           "volume": 100
@@ -1342,7 +1342,7 @@
       {
         "frame": 17,
         "se": {
-          "name": "Blow2",
+          "name": "hit-02",
           "pan": 0,
           "pitch": 100,
           "volume": 100
@@ -1351,7 +1351,7 @@
       {
         "frame": 18,
         "se": {
-          "name": "Blow3",
+          "name": "hit-03",
           "pan": 0,
           "pitch": 70,
           "volume": 90
@@ -1360,7 +1360,7 @@
       {
         "frame": 22,
         "se": {
-          "name": "Blow3",
+          "name": "hit-03",
           "pan": 0,
           "pitch": 100,
           "volume": 100
@@ -1369,7 +1369,7 @@
       {
         "frame": 24,
         "se": {
-          "name": "Blow2",
+          "name": "hit-02",
           "pan": 0,
           "pitch": 100,
           "volume": 100
@@ -1378,7 +1378,7 @@
       {
         "frame": 27,
         "se": {
-          "name": "Blow3",
+          "name": "hit-03",
           "pan": 0,
           "pitch": 70,
           "volume": 90
@@ -1387,7 +1387,7 @@
       {
         "frame": 34,
         "se": {
-          "name": "Blow3",
+          "name": "hit-03",
           "pan": 0,
           "pitch": 100,
           "volume": 100
@@ -1396,7 +1396,7 @@
       {
         "frame": 44,
         "se": {
-          "name": "Blow2",
+          "name": "hit-02",
           "pan": 0,
           "pitch": 100,
           "volume": 100
@@ -1405,7 +1405,7 @@
       {
         "frame": 54,
         "se": {
-          "name": "Blow3",
+          "name": "hit-03",
           "pan": 0,
           "pitch": 70,
           "volume": 90
@@ -1414,7 +1414,7 @@
       {
         "frame": 59,
         "se": {
-          "name": "Damage2",
+          "name": "hit-02",
           "pan": 0,
           "pitch": 120,
           "volume": 100
@@ -1423,7 +1423,7 @@
       {
         "frame": 79,
         "se": {
-          "name": "Damage2",
+          "name": "hit-02",
           "pan": 0,
           "pitch": 120,
           "volume": 100
@@ -1481,7 +1481,7 @@
       {
         "frame": 1,
         "se": {
-          "name": "Slash1",
+          "name": "slash-01",
           "pan": 0,
           "pitch": 100,
           "volume": 90
@@ -1490,7 +1490,7 @@
       {
         "frame": 3,
         "se": {
-          "name": "Slash3",
+          "name": "slash-01",
           "pan": 0,
           "pitch": 120,
           "volume": 90
@@ -1499,7 +1499,7 @@
       {
         "frame": 5,
         "se": {
-          "name": "Slash3",
+          "name": "slash-01",
           "pan": 0,
           "pitch": 120,
           "volume": 90
@@ -1508,7 +1508,7 @@
       {
         "frame": 7,
         "se": {
-          "name": "Slash1",
+          "name": "slash-01",
           "pan": 0,
           "pitch": 120,
           "volume": 90
@@ -1517,7 +1517,7 @@
       {
         "frame": 9,
         "se": {
-          "name": "Slash3",
+          "name": "slash-01",
           "pan": 0,
           "pitch": 120,
           "volume": 90
@@ -1526,7 +1526,7 @@
       {
         "frame": 11,
         "se": {
-          "name": "Slash4",
+          "name": "slash-02",
           "pan": 0,
           "pitch": 120,
           "volume": 90
@@ -1535,7 +1535,7 @@
       {
         "frame": 15,
         "se": {
-          "name": "Slash1",
+          "name": "slash-01",
           "pan": 0,
           "pitch": 100,
           "volume": 90
@@ -1544,7 +1544,7 @@
       {
         "frame": 17,
         "se": {
-          "name": "Slash3",
+          "name": "slash-01",
           "pan": 0,
           "pitch": 120,
           "volume": 90
@@ -1553,7 +1553,7 @@
       {
         "frame": 19,
         "se": {
-          "name": "Slash3",
+          "name": "slash-01",
           "pan": 0,
           "pitch": 120,
           "volume": 90
@@ -1562,7 +1562,7 @@
       {
         "frame": 23,
         "se": {
-          "name": "Slash1",
+          "name": "slash-01",
           "pan": 0,
           "pitch": 120,
           "volume": 90
@@ -1571,7 +1571,7 @@
       {
         "frame": 27,
         "se": {
-          "name": "Slash3",
+          "name": "slash-01",
           "pan": 0,
           "pitch": 120,
           "volume": 90
@@ -1580,7 +1580,7 @@
       {
         "frame": 47,
         "se": {
-          "name": "Evasion2",
+          "name": "whoosh-02",
           "pan": 0,
           "pitch": 120,
           "volume": 90
@@ -1628,7 +1628,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Sword4",
+          "name": "slash-02",
           "pan": 0,
           "pitch": 100,
           "volume": 90
@@ -1637,7 +1637,7 @@
       {
         "frame": 1,
         "se": {
-          "name": "Slash2",
+          "name": "slash-02",
           "pan": 0,
           "pitch": 110,
           "volume": 90
@@ -1646,7 +1646,7 @@
       {
         "frame": 3,
         "se": {
-          "name": "Wind4",
+          "name": "whoosh-04",
           "pan": 0,
           "pitch": 100,
           "volume": 80
@@ -1655,7 +1655,7 @@
       {
         "frame": 7,
         "se": {
-          "name": "Slash8",
+          "name": "slash-02",
           "pan": 0,
           "pitch": 100,
           "volume": 90
@@ -1664,7 +1664,7 @@
       {
         "frame": 7,
         "se": {
-          "name": "Wind4",
+          "name": "whoosh-04",
           "pan": 0,
           "pitch": 100,
           "volume": 100
@@ -1673,7 +1673,7 @@
       {
         "frame": 9,
         "se": {
-          "name": "Slash1",
+          "name": "slash-01",
           "pan": 0,
           "pitch": 90,
           "volume": 90
@@ -1682,7 +1682,7 @@
       {
         "frame": 16,
         "se": {
-          "name": "Ice3",
+          "name": "whoosh-03",
           "pan": 0,
           "pitch": 90,
           "volume": 90
@@ -1750,7 +1750,7 @@
       {
         "frame": 1,
         "se": {
-          "name": "Slash2",
+          "name": "slash-02",
           "pan": 0,
           "pitch": 100,
           "volume": 100
@@ -1759,7 +1759,7 @@
       {
         "frame": 8,
         "se": {
-          "name": "Slash3",
+          "name": "slash-01",
           "pan": 0,
           "pitch": 120,
           "volume": 100
@@ -1768,7 +1768,7 @@
       {
         "frame": 11,
         "se": {
-          "name": "Slash2",
+          "name": "slash-02",
           "pan": 0,
           "pitch": 100,
           "volume": 100
@@ -1777,7 +1777,7 @@
       {
         "frame": 22,
         "se": {
-          "name": "Slash3",
+          "name": "slash-01",
           "pan": 0,
           "pitch": 100,
           "volume": 100
@@ -1786,7 +1786,7 @@
       {
         "frame": 28,
         "se": {
-          "name": "Slash2",
+          "name": "slash-02",
           "pan": 0,
           "pitch": 100,
           "volume": 100
@@ -1795,7 +1795,7 @@
       {
         "frame": 33,
         "se": {
-          "name": "Slash3",
+          "name": "slash-01",
           "pan": 0,
           "pitch": 120,
           "volume": 100
@@ -1804,7 +1804,7 @@
       {
         "frame": 37,
         "se": {
-          "name": "Slash2",
+          "name": "slash-02",
           "pan": 0,
           "pitch": 100,
           "volume": 100
@@ -1813,7 +1813,7 @@
       {
         "frame": 43,
         "se": {
-          "name": "Slash3",
+          "name": "slash-01",
           "pan": 0,
           "pitch": 100,
           "volume": 100
@@ -1822,7 +1822,7 @@
       {
         "frame": 59,
         "se": {
-          "name": "Slash1",
+          "name": "slash-01",
           "pan": 0,
           "pitch": 100,
           "volume": 100
@@ -1831,7 +1831,7 @@
       {
         "frame": 59,
         "se": {
-          "name": "Evasion1",
+          "name": "whoosh-01",
           "pan": 0,
           "pitch": 150,
           "volume": 70
@@ -1840,7 +1840,7 @@
       {
         "frame": 79,
         "se": {
-          "name": "Slash2",
+          "name": "slash-02",
           "pan": 0,
           "pitch": 100,
           "volume": 100
@@ -1849,7 +1849,7 @@
       {
         "frame": 79,
         "se": {
-          "name": "Evasion1",
+          "name": "whoosh-01",
           "pan": 0,
           "pitch": 150,
           "volume": 70
@@ -1858,7 +1858,7 @@
       {
         "frame": 95,
         "se": {
-          "name": "Slash1",
+          "name": "slash-01",
           "pan": 0,
           "pitch": 100,
           "volume": 100
@@ -1867,7 +1867,7 @@
       {
         "frame": 99,
         "se": {
-          "name": "Slash3",
+          "name": "slash-01",
           "pan": 0,
           "pitch": 120,
           "volume": 90
@@ -1935,7 +1935,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Wind6",
+          "name": "whoosh-01",
           "pan": 0,
           "pitch": 130,
           "volume": 90
@@ -1944,7 +1944,7 @@
       {
         "frame": 2,
         "se": {
-          "name": "Sword5",
+          "name": "slash-01",
           "pan": 0,
           "pitch": 130,
           "volume": 90
@@ -1953,7 +1953,7 @@
       {
         "frame": 3,
         "se": {
-          "name": "Slash1",
+          "name": "slash-01",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -1962,7 +1962,7 @@
       {
         "frame": 4,
         "se": {
-          "name": "Sword5",
+          "name": "slash-01",
           "pan": 0,
           "pitch": 130,
           "volume": 90
@@ -1971,7 +1971,7 @@
       {
         "frame": 5,
         "se": {
-          "name": "Slash1",
+          "name": "slash-01",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -1980,7 +1980,7 @@
       {
         "frame": 6,
         "se": {
-          "name": "Sword5",
+          "name": "slash-01",
           "pan": 0,
           "pitch": 130,
           "volume": 90
@@ -1989,7 +1989,7 @@
       {
         "frame": 11,
         "se": {
-          "name": "Wind6",
+          "name": "whoosh-01",
           "pan": 0,
           "pitch": 130,
           "volume": 90
@@ -1998,7 +1998,7 @@
       {
         "frame": 15,
         "se": {
-          "name": "Sword5",
+          "name": "slash-01",
           "pan": 0,
           "pitch": 130,
           "volume": 90
@@ -2007,7 +2007,7 @@
       {
         "frame": 19,
         "se": {
-          "name": "Slash1",
+          "name": "slash-01",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -2016,7 +2016,7 @@
       {
         "frame": 21,
         "se": {
-          "name": "Sword5",
+          "name": "slash-01",
           "pan": 0,
           "pitch": 130,
           "volume": 90
@@ -2025,7 +2025,7 @@
       {
         "frame": 26,
         "se": {
-          "name": "Slash1",
+          "name": "slash-01",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -2034,7 +2034,7 @@
       {
         "frame": 31,
         "se": {
-          "name": "Sword5",
+          "name": "slash-01",
           "pan": 0,
           "pitch": 130,
           "volume": 90
@@ -2043,7 +2043,7 @@
       {
         "frame": 35,
         "se": {
-          "name": "Sword5",
+          "name": "slash-01",
           "pan": 0,
           "pitch": 130,
           "volume": 90
@@ -2052,7 +2052,7 @@
       {
         "frame": 38,
         "se": {
-          "name": "Slash1",
+          "name": "slash-01",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -2061,7 +2061,7 @@
       {
         "frame": 41,
         "se": {
-          "name": "Sword5",
+          "name": "slash-01",
           "pan": 0,
           "pitch": 130,
           "volume": 90
@@ -2070,7 +2070,7 @@
       {
         "frame": 46,
         "se": {
-          "name": "Slash1",
+          "name": "slash-01",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -2079,7 +2079,7 @@
       {
         "frame": 52,
         "se": {
-          "name": "Slash1",
+          "name": "slash-01",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -2088,7 +2088,7 @@
       {
         "frame": 56,
         "se": {
-          "name": "Sword5",
+          "name": "slash-01",
           "pan": 0,
           "pitch": 130,
           "volume": 90
@@ -2097,7 +2097,7 @@
       {
         "frame": 62,
         "se": {
-          "name": "Slash1",
+          "name": "slash-01",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -2106,7 +2106,7 @@
       {
         "frame": 66,
         "se": {
-          "name": "Slash1",
+          "name": "slash-01",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -2115,7 +2115,7 @@
       {
         "frame": 69,
         "se": {
-          "name": "Sword5",
+          "name": "slash-01",
           "pan": 0,
           "pitch": 130,
           "volume": 90
@@ -2124,7 +2124,7 @@
       {
         "frame": 74,
         "se": {
-          "name": "Slash1",
+          "name": "slash-01",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -2133,7 +2133,7 @@
       {
         "frame": 89,
         "se": {
-          "name": "Sword4",
+          "name": "slash-02",
           "pan": 0,
           "pitch": 130,
           "volume": 90
@@ -2142,7 +2142,7 @@
       {
         "frame": 89,
         "se": {
-          "name": "Slash2",
+          "name": "slash-02",
           "pan": 0,
           "pitch": 130,
           "volume": 90
@@ -2220,7 +2220,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Wind5",
+          "name": "whoosh-05",
           "pan": 0,
           "pitch": 80,
           "volume": 80
@@ -2229,7 +2229,7 @@
       {
         "frame": 2,
         "se": {
-          "name": "Sword4",
+          "name": "slash-02",
           "pan": 0,
           "pitch": 150,
           "volume": 100
@@ -2238,7 +2238,7 @@
       {
         "frame": 4,
         "se": {
-          "name": "Sword5",
+          "name": "slash-01",
           "pan": 0,
           "pitch": 150,
           "volume": 100
@@ -2247,7 +2247,7 @@
       {
         "frame": 6,
         "se": {
-          "name": "Slash2",
+          "name": "slash-02",
           "pan": 0,
           "pitch": 150,
           "volume": 100
@@ -2256,7 +2256,7 @@
       {
         "frame": 7,
         "se": {
-          "name": "Sword4",
+          "name": "slash-02",
           "pan": 0,
           "pitch": 150,
           "volume": 100
@@ -2265,7 +2265,7 @@
       {
         "frame": 9,
         "se": {
-          "name": "Sword5",
+          "name": "slash-01",
           "pan": 0,
           "pitch": 150,
           "volume": 80
@@ -2274,7 +2274,7 @@
       {
         "frame": 10,
         "se": {
-          "name": "Slash2",
+          "name": "slash-02",
           "pan": 0,
           "pitch": 150,
           "volume": 100
@@ -2283,7 +2283,7 @@
       {
         "frame": 13,
         "se": {
-          "name": "Sword4",
+          "name": "slash-02",
           "pan": 0,
           "pitch": 150,
           "volume": 100
@@ -2292,7 +2292,7 @@
       {
         "frame": 16,
         "se": {
-          "name": "Sword5",
+          "name": "slash-01",
           "pan": 0,
           "pitch": 150,
           "volume": 100
@@ -2301,7 +2301,7 @@
       {
         "frame": 17,
         "se": {
-          "name": "Slash2",
+          "name": "slash-02",
           "pan": 0,
           "pitch": 150,
           "volume": 100
@@ -2310,7 +2310,7 @@
       {
         "frame": 19,
         "se": {
-          "name": "Sword4",
+          "name": "slash-02",
           "pan": 0,
           "pitch": 150,
           "volume": 80
@@ -2319,7 +2319,7 @@
       {
         "frame": 23,
         "se": {
-          "name": "Sword4",
+          "name": "slash-02",
           "pan": 0,
           "pitch": 150,
           "volume": 100
@@ -2328,7 +2328,7 @@
       {
         "frame": 27,
         "se": {
-          "name": "Sword5",
+          "name": "slash-01",
           "pan": 0,
           "pitch": 150,
           "volume": 100
@@ -2337,7 +2337,7 @@
       {
         "frame": 31,
         "se": {
-          "name": "Slash2",
+          "name": "slash-02",
           "pan": 0,
           "pitch": 150,
           "volume": 100
@@ -2346,7 +2346,7 @@
       {
         "frame": 39,
         "se": {
-          "name": "Sword5",
+          "name": "slash-01",
           "pan": 0,
           "pitch": 150,
           "volume": 100
@@ -2355,7 +2355,7 @@
       {
         "frame": 43,
         "se": {
-          "name": "Sword4",
+          "name": "slash-02",
           "pan": 0,
           "pitch": 150,
           "volume": 100
@@ -2413,7 +2413,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Attack3",
+          "name": "hit-03",
           "pan": 0,
           "pitch": 100,
           "volume": 80
@@ -2422,7 +2422,7 @@
       {
         "frame": 1,
         "se": {
-          "name": "Slash2",
+          "name": "slash-02",
           "pan": 0,
           "pitch": 100,
           "volume": 80
@@ -2431,7 +2431,7 @@
       {
         "frame": 3,
         "se": {
-          "name": "Attack2",
+          "name": "hit-02",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -2440,7 +2440,7 @@
       {
         "frame": 4,
         "se": {
-          "name": "Slash3",
+          "name": "slash-01",
           "pan": 0,
           "pitch": 100,
           "volume": 80
@@ -2449,7 +2449,7 @@
       {
         "frame": 6,
         "se": {
-          "name": "Attack2",
+          "name": "hit-02",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -2458,7 +2458,7 @@
       {
         "frame": 7,
         "se": {
-          "name": "Slash2",
+          "name": "slash-02",
           "pan": 0,
           "pitch": 100,
           "volume": 80
@@ -2467,7 +2467,7 @@
       {
         "frame": 9,
         "se": {
-          "name": "Attack2",
+          "name": "hit-02",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -2476,7 +2476,7 @@
       {
         "frame": 10,
         "se": {
-          "name": "Slash3",
+          "name": "slash-01",
           "pan": 0,
           "pitch": 100,
           "volume": 80
@@ -2485,7 +2485,7 @@
       {
         "frame": 16,
         "se": {
-          "name": "Attack2",
+          "name": "hit-02",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -2494,7 +2494,7 @@
       {
         "frame": 17,
         "se": {
-          "name": "Slash1",
+          "name": "slash-01",
           "pan": 0,
           "pitch": 80,
           "volume": 90
@@ -2503,7 +2503,7 @@
       {
         "frame": 21,
         "se": {
-          "name": "Attack2",
+          "name": "hit-02",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -2512,7 +2512,7 @@
       {
         "frame": 25,
         "se": {
-          "name": "Slash3",
+          "name": "slash-01",
           "pan": 0,
           "pitch": 100,
           "volume": 80
@@ -2521,7 +2521,7 @@
       {
         "frame": 29,
         "se": {
-          "name": "Attack2",
+          "name": "hit-02",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -2530,7 +2530,7 @@
       {
         "frame": 30,
         "se": {
-          "name": "Slash1",
+          "name": "slash-01",
           "pan": 0,
           "pitch": 80,
           "volume": 90
@@ -2539,7 +2539,7 @@
       {
         "frame": 41,
         "se": {
-          "name": "Attack2",
+          "name": "hit-02",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -2548,7 +2548,7 @@
       {
         "frame": 41,
         "se": {
-          "name": "Slash1",
+          "name": "slash-01",
           "pan": 0,
           "pitch": 80,
           "volume": 90
@@ -2557,7 +2557,7 @@
       {
         "frame": 74,
         "se": {
-          "name": "Attack2",
+          "name": "hit-02",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -2566,7 +2566,7 @@
       {
         "frame": 74,
         "se": {
-          "name": "Slash1",
+          "name": "slash-01",
           "pan": 0,
           "pitch": 80,
           "volume": 90
@@ -2654,7 +2654,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Crossbow",
+          "name": "gun-shot-01",
           "pan": 0,
           "pitch": 100,
           "volume": 100
@@ -2663,7 +2663,7 @@
       {
         "frame": 2,
         "se": {
-          "name": "Attack3",
+          "name": "hit-03",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -2672,7 +2672,7 @@
       {
         "frame": 5,
         "se": {
-          "name": "Attack3",
+          "name": "hit-03",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -2681,7 +2681,7 @@
       {
         "frame": 8,
         "se": {
-          "name": "Battle3",
+          "name": "applause-01",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -2690,7 +2690,7 @@
       {
         "frame": 13,
         "se": {
-          "name": "Battle3",
+          "name": "applause-01",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -2699,7 +2699,7 @@
       {
         "frame": 13,
         "se": {
-          "name": "Wind6",
+          "name": "whoosh-01",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -2877,7 +2877,7 @@
       {
         "frame": 1,
         "se": {
-          "name": "Slash1",
+          "name": "slash-01",
           "pan": 0,
           "pitch": 110,
           "volume": 100
@@ -2886,7 +2886,7 @@
       {
         "frame": 5,
         "se": {
-          "name": "Slash4",
+          "name": "slash-02",
           "pan": 0,
           "pitch": 90,
           "volume": 100
@@ -2895,7 +2895,7 @@
       {
         "frame": 8,
         "se": {
-          "name": "Slash5",
+          "name": "slash-01",
           "pan": 0,
           "pitch": 90,
           "volume": 100
@@ -2904,7 +2904,7 @@
       {
         "frame": 12,
         "se": {
-          "name": "Slash2",
+          "name": "slash-02",
           "pan": 0,
           "pitch": 110,
           "volume": 100
@@ -2913,7 +2913,7 @@
       {
         "frame": 15,
         "se": {
-          "name": "Slash1",
+          "name": "slash-01",
           "pan": 0,
           "pitch": 120,
           "volume": 100
@@ -2922,7 +2922,7 @@
       {
         "frame": 17,
         "se": {
-          "name": "Damage2",
+          "name": "hit-02",
           "pan": 0,
           "pitch": 110,
           "volume": 100
@@ -2931,7 +2931,7 @@
       {
         "frame": 22,
         "se": {
-          "name": "Slash2",
+          "name": "slash-02",
           "pan": 0,
           "pitch": 110,
           "volume": 100
@@ -2940,7 +2940,7 @@
       {
         "frame": 25,
         "se": {
-          "name": "Slash1",
+          "name": "slash-01",
           "pan": 0,
           "pitch": 120,
           "volume": 100
@@ -2949,7 +2949,7 @@
       {
         "frame": 35,
         "se": {
-          "name": "Damage2",
+          "name": "hit-02",
           "pan": 0,
           "pitch": 110,
           "volume": 100
@@ -2958,7 +2958,7 @@
       {
         "frame": 41,
         "se": {
-          "name": "Slash2",
+          "name": "slash-02",
           "pan": 0,
           "pitch": 110,
           "volume": 100
@@ -2967,7 +2967,7 @@
       {
         "frame": 49,
         "se": {
-          "name": "Slash1",
+          "name": "slash-01",
           "pan": 0,
           "pitch": 120,
           "volume": 100
@@ -2976,7 +2976,7 @@
       {
         "frame": 89,
         "se": {
-          "name": "Damage2",
+          "name": "hit-02",
           "pan": 0,
           "pitch": 110,
           "volume": 100
@@ -2985,7 +2985,7 @@
       {
         "frame": 95,
         "se": {
-          "name": "Slash2",
+          "name": "slash-02",
           "pan": 0,
           "pitch": 110,
           "volume": 100
@@ -2994,7 +2994,7 @@
       {
         "frame": 104,
         "se": {
-          "name": "Slash1",
+          "name": "slash-01",
           "pan": 0,
           "pitch": 120,
           "volume": 100
@@ -3132,7 +3132,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Thunder3",
+          "name": "blaster-02",
           "pan": 0,
           "pitch": 90,
           "volume": 90
@@ -3141,7 +3141,7 @@
       {
         "frame": 1,
         "se": {
-          "name": "Slash1",
+          "name": "slash-01",
           "pan": 0,
           "pitch": 110,
           "volume": 100
@@ -3150,7 +3150,7 @@
       {
         "frame": 5,
         "se": {
-          "name": "Slash1",
+          "name": "slash-01",
           "pan": 0,
           "pitch": 110,
           "volume": 100
@@ -3159,7 +3159,7 @@
       {
         "frame": 8,
         "se": {
-          "name": "Thunder3",
+          "name": "blaster-02",
           "pan": 0,
           "pitch": 90,
           "volume": 90
@@ -3168,7 +3168,7 @@
       {
         "frame": 11,
         "se": {
-          "name": "Slash1",
+          "name": "slash-01",
           "pan": 0,
           "pitch": 110,
           "volume": 100
@@ -3177,7 +3177,7 @@
       {
         "frame": 15,
         "se": {
-          "name": "Slash1",
+          "name": "slash-01",
           "pan": 0,
           "pitch": 110,
           "volume": 100
@@ -3186,7 +3186,7 @@
       {
         "frame": 19,
         "se": {
-          "name": "Thunder3",
+          "name": "blaster-02",
           "pan": 0,
           "pitch": 90,
           "volume": 90
@@ -3195,7 +3195,7 @@
       {
         "frame": 25,
         "se": {
-          "name": "Slash3",
+          "name": "slash-01",
           "pan": 0,
           "pitch": 100,
           "volume": 100
@@ -3303,7 +3303,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Fire3",
+          "name": "blaster-03",
           "pan": 0,
           "pitch": 70,
           "volume": 90
@@ -3312,7 +3312,7 @@
       {
         "frame": 1,
         "se": {
-          "name": "Thunder1",
+          "name": "blaster-02",
           "pan": 0,
           "pitch": 50,
           "volume": 90
@@ -3400,7 +3400,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Darkness4",
+          "name": "drone-01",
           "pan": 0,
           "pitch": 60,
           "volume": 90
@@ -3409,7 +3409,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Darkness3",
+          "name": "drone-01",
           "pan": 0,
           "pitch": 50,
           "volume": 90
@@ -3477,7 +3477,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Sound3",
+          "name": "bell-01",
           "pan": 0,
           "pitch": 100,
           "volume": 90
@@ -3515,7 +3515,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Blind",
+          "name": "drone-01",
           "pan": 0,
           "pitch": 70,
           "volume": 90
@@ -3524,7 +3524,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Sand",
+          "name": "whoosh-01",
           "pan": 0,
           "pitch": 110,
           "volume": 90
@@ -3670,7 +3670,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Monster1",
+          "name": "bell-01",
           "pan": 0,
           "pitch": 100,
           "volume": 100
@@ -3708,7 +3708,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Wind7",
+          "name": "whoosh-02",
           "pan": 0,
           "pitch": 50,
           "volume": 90
@@ -3717,7 +3717,7 @@
       {
         "frame": 2,
         "se": {
-          "name": "Blow2",
+          "name": "hit-02",
           "pan": 0,
           "pitch": 70,
           "volume": 100
@@ -3755,7 +3755,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Thunder2",
+          "name": "blaster-05",
           "pan": 0,
           "pitch": 80,
           "volume": 90
@@ -3764,7 +3764,7 @@
       {
         "frame": 2,
         "se": {
-          "name": "Thunder8",
+          "name": "blaster-05",
           "pan": 0,
           "pitch": 100,
           "volume": 90
@@ -3773,7 +3773,7 @@
       {
         "frame": 2,
         "se": {
-          "name": "Blow3",
+          "name": "hit-03",
           "pan": 0,
           "pitch": 50,
           "volume": 100
@@ -3831,7 +3831,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Flash2",
+          "name": "powerup-02",
           "pan": 0,
           "pitch": 130,
           "volume": 90
@@ -3840,7 +3840,7 @@
       {
         "frame": 1,
         "se": {
-          "name": "Sword1",
+          "name": "slash-01",
           "pan": 0,
           "pitch": 50,
           "volume": 90
@@ -4005,7 +4005,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Starlight",
+          "name": "powerup-01",
           "pan": 0,
           "pitch": 150,
           "volume": 80
@@ -4072,7 +4072,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Saint4",
+          "name": "powerup-01",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -4099,7 +4099,7 @@
       {
         "frame": 4,
         "se": {
-          "name": "Ice5",
+          "name": "whoosh-05",
           "pan": 0,
           "pitch": 100,
           "volume": 90
@@ -4157,7 +4157,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Ice1",
+          "name": "whoosh-01",
           "pan": 0,
           "pitch": 100,
           "volume": 90
@@ -4166,7 +4166,7 @@
       {
         "frame": 8,
         "se": {
-          "name": "Evasion2",
+          "name": "whoosh-02",
           "pan": 0,
           "pitch": 50,
           "volume": 90
@@ -4175,7 +4175,7 @@
       {
         "frame": 9,
         "se": {
-          "name": "Flash2",
+          "name": "powerup-02",
           "pan": 0,
           "pitch": 50,
           "volume": 50
@@ -4252,7 +4252,7 @@
       {
         "frame": 1,
         "se": {
-          "name": "Ice1",
+          "name": "whoosh-01",
           "pan": 0,
           "pitch": 100,
           "volume": 90
@@ -4338,7 +4338,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Ice1",
+          "name": "whoosh-01",
           "pan": 0,
           "pitch": 90,
           "volume": 90
@@ -4405,7 +4405,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Starlight",
+          "name": "powerup-01",
           "pan": 0,
           "pitch": 150,
           "volume": 80
@@ -4423,7 +4423,7 @@
       {
         "frame": 6,
         "se": {
-          "name": "Ice1",
+          "name": "whoosh-01",
           "pan": 0,
           "pitch": 100,
           "volume": 90
@@ -4509,7 +4509,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Saint4",
+          "name": "powerup-01",
           "pan": 0,
           "pitch": 150,
           "volume": 80
@@ -4577,7 +4577,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Magic1",
+          "name": "powerup-01",
           "pan": 0,
           "pitch": 100,
           "volume": 90
@@ -4586,7 +4586,7 @@
       {
         "frame": 3,
         "se": {
-          "name": "Starlight",
+          "name": "powerup-01",
           "pan": 0,
           "pitch": 130,
           "volume": 90
@@ -4595,7 +4595,7 @@
       {
         "frame": 4,
         "se": {
-          "name": "Skill1",
+          "name": "powerup-01",
           "pan": 0,
           "pitch": 70,
           "volume": 90
@@ -4663,7 +4663,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Magic2",
+          "name": "powerup-02",
           "pan": 0,
           "pitch": 100,
           "volume": 90
@@ -4681,7 +4681,7 @@
       {
         "frame": 13,
         "se": {
-          "name": "Up3",
+          "name": "powerup-03",
           "pan": 0,
           "pitch": 130,
           "volume": 80
@@ -4729,7 +4729,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Up4",
+          "name": "powerup-01",
           "pan": 0,
           "pitch": 100,
           "volume": 90
@@ -4738,7 +4738,7 @@
       {
         "frame": 2,
         "se": {
-          "name": "Magic1",
+          "name": "powerup-01",
           "pan": 0,
           "pitch": 100,
           "volume": 90
@@ -4910,7 +4910,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Down2",
+          "name": "drone-01",
           "pan": 0,
           "pitch": 100,
           "volume": 90
@@ -4919,7 +4919,7 @@
       {
         "frame": 2,
         "se": {
-          "name": "Magic2",
+          "name": "powerup-02",
           "pan": 0,
           "pitch": 100,
           "volume": 90
@@ -4967,7 +4967,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Stare",
+          "name": "whoosh-01",
           "pan": 0,
           "pitch": 110,
           "volume": 70
@@ -4976,7 +4976,7 @@
       {
         "frame": 6,
         "se": {
-          "name": "Earth2",
+          "name": "hit-02",
           "pan": 0,
           "pitch": 70,
           "volume": 80
@@ -5034,7 +5034,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Blind",
+          "name": "drone-01",
           "pan": 0,
           "pitch": 120,
           "volume": 80
@@ -5043,7 +5043,7 @@
       {
         "frame": 59,
         "se": {
-          "name": "Darkness7",
+          "name": "drone-01",
           "pan": 0,
           "pitch": 100,
           "volume": 80
@@ -5052,7 +5052,7 @@
       {
         "frame": 69,
         "se": {
-          "name": "Darkness8",
+          "name": "drone-01",
           "pan": 0,
           "pitch": 100,
           "volume": 80
@@ -5110,7 +5110,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Wind5",
+          "name": "whoosh-05",
           "pan": 0,
           "pitch": 80,
           "volume": 90
@@ -5119,7 +5119,7 @@
       {
         "frame": 2,
         "se": {
-          "name": "Darkness4",
+          "name": "drone-01",
           "pan": 0,
           "pitch": 60,
           "volume": 100
@@ -5128,7 +5128,7 @@
       {
         "frame": 5,
         "se": {
-          "name": "Darkness1",
+          "name": "drone-01",
           "pan": 0,
           "pitch": 100,
           "volume": 100
@@ -5166,7 +5166,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Darkness1",
+          "name": "drone-01",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -5175,7 +5175,7 @@
       {
         "frame": 1,
         "se": {
-          "name": "Twine",
+          "name": "drone-01",
           "pan": 0,
           "pitch": 150,
           "volume": 70
@@ -5184,7 +5184,7 @@
       {
         "frame": 1,
         "se": {
-          "name": "Particles1",
+          "name": "blaster-01",
           "pan": 0,
           "pitch": 150,
           "volume": 70
@@ -5222,7 +5222,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Poison",
+          "name": "drone-01",
           "pan": 0,
           "pitch": 100,
           "volume": 90
@@ -5280,7 +5280,7 @@
       {
         "frame": 2,
         "se": {
-          "name": "Blind",
+          "name": "drone-01",
           "pan": 0,
           "pitch": 100,
           "volume": 90
@@ -5289,7 +5289,7 @@
       {
         "frame": 3,
         "se": {
-          "name": "Darkness2",
+          "name": "drone-01",
           "pan": 0,
           "pitch": 80,
           "volume": 50
@@ -5327,7 +5327,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Silence",
+          "name": "drone-01",
           "pan": 0,
           "pitch": 100,
           "volume": 90
@@ -5336,7 +5336,7 @@
       {
         "frame": 5,
         "se": {
-          "name": "Sound2",
+          "name": "select-05",
           "pan": 0,
           "pitch": 80,
           "volume": 70
@@ -5345,7 +5345,7 @@
       {
         "frame": 59,
         "se": {
-          "name": "Flash1",
+          "name": "powerup-01",
           "pan": 0,
           "pitch": 70,
           "volume": 70
@@ -5402,7 +5402,7 @@
       {
         "frame": 5,
         "se": {
-          "name": "Sleep",
+          "name": "drone-01",
           "pan": 0,
           "pitch": 100,
           "volume": 90
@@ -5450,7 +5450,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Absorb2",
+          "name": "drone-01",
           "pan": 0,
           "pitch": 50,
           "volume": 80
@@ -5459,7 +5459,7 @@
       {
         "frame": 4,
         "se": {
-          "name": "Raise2",
+          "name": "powerup-02",
           "pan": 0,
           "pitch": 70,
           "volume": 80
@@ -5517,7 +5517,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Darkness1",
+          "name": "drone-01",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -5526,7 +5526,7 @@
       {
         "frame": 3,
         "se": {
-          "name": "Paralyze3",
+          "name": "blaster-02",
           "pan": 0,
           "pitch": 100,
           "volume": 90
@@ -5574,7 +5574,7 @@
       {
         "frame": 1,
         "se": {
-          "name": "Stare",
+          "name": "whoosh-01",
           "pan": 0,
           "pitch": 120,
           "volume": 90
@@ -5583,7 +5583,7 @@
       {
         "frame": 44,
         "se": {
-          "name": "Darkness5",
+          "name": "drone-01",
           "pan": 0,
           "pitch": 90,
           "volume": 80
@@ -5631,7 +5631,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Fire8",
+          "name": "EVFX06_01_SingleBlast",
           "pan": 0,
           "pitch": 90,
           "volume": 80
@@ -5669,7 +5669,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Fire9",
+          "name": "blaster-03",
           "pan": 0,
           "pitch": 150,
           "volume": 80
@@ -5737,7 +5737,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Fire8",
+          "name": "EVFX06_01_SingleBlast",
           "pan": 0,
           "pitch": 70,
           "volume": 80
@@ -5785,7 +5785,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Fire8",
+          "name": "EVFX06_01_SingleBlast",
           "pan": 0,
           "pitch": 70,
           "volume": 80
@@ -5833,7 +5833,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Fire8",
+          "name": "EVFX06_01_SingleBlast",
           "pan": 0,
           "pitch": 70,
           "volume": 80
@@ -5871,7 +5871,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Starlight",
+          "name": "powerup-01",
           "pan": 0,
           "pitch": 150,
           "volume": 80
@@ -5880,7 +5880,7 @@
       {
         "frame": 1,
         "se": {
-          "name": "Wind1",
+          "name": "whoosh-01",
           "pan": 0,
           "pitch": 80,
           "volume": 70
@@ -5889,7 +5889,7 @@
       {
         "frame": 3,
         "se": {
-          "name": "Crash",
+          "name": "hit-01",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -5898,7 +5898,7 @@
       {
         "frame": 9,
         "se": {
-          "name": "Ice11",
+          "name": "whoosh-01",
           "pan": 0,
           "pitch": 100,
           "volume": 90
@@ -5907,7 +5907,7 @@
       {
         "frame": 13,
         "se": {
-          "name": "Sword2",
+          "name": "slash-02",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -5954,7 +5954,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Thunder1",
+          "name": "blaster-02",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -6002,7 +6002,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Thunder4",
+          "name": "blaster-05",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -6011,7 +6011,7 @@
       {
         "frame": 5,
         "se": {
-          "name": "Flash2",
+          "name": "powerup-02",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -6020,7 +6020,7 @@
       {
         "frame": 16,
         "se": {
-          "name": "Earth1",
+          "name": "hit-01",
           "pan": 0,
           "pitch": 130,
           "volume": 70
@@ -6029,7 +6029,7 @@
       {
         "frame": 17,
         "se": {
-          "name": "Ice5",
+          "name": "whoosh-05",
           "pan": 0,
           "pitch": 100,
           "volume": 90
@@ -6038,7 +6038,7 @@
       {
         "frame": 89,
         "se": {
-          "name": "Ice11",
+          "name": "whoosh-01",
           "pan": 0,
           "pitch": 100,
           "volume": 90
@@ -6076,7 +6076,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Wind6",
+          "name": "whoosh-01",
           "pan": 0,
           "pitch": 80,
           "volume": 90
@@ -6085,7 +6085,7 @@
       {
         "frame": 2,
         "se": {
-          "name": "Thunder6",
+          "name": "blaster-05",
           "pan": 0,
           "pitch": 90,
           "volume": 80
@@ -6094,7 +6094,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Ice10",
+          "name": "whoosh-05",
           "pan": 0,
           "pitch": 90,
           "volume": 80
@@ -6142,7 +6142,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Wind2",
+          "name": "whoosh-02",
           "pan": 0,
           "pitch": 70,
           "volume": 65
@@ -6151,7 +6151,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Magic1",
+          "name": "powerup-01",
           "pan": 0,
           "pitch": 100,
           "volume": 80
@@ -6160,7 +6160,7 @@
       {
         "frame": 9,
         "se": {
-          "name": "Ice10",
+          "name": "whoosh-05",
           "pan": 0,
           "pitch": 100,
           "volume": 80
@@ -6169,7 +6169,7 @@
       {
         "frame": 19,
         "se": {
-          "name": "Crash",
+          "name": "hit-01",
           "pan": 0,
           "pitch": 150,
           "volume": 70
@@ -6178,7 +6178,7 @@
       {
         "frame": 23,
         "se": {
-          "name": "Ice5",
+          "name": "whoosh-05",
           "pan": 0,
           "pitch": 100,
           "volume": 90
@@ -6216,7 +6216,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Thunder6",
+          "name": "blaster-05",
           "pan": 0,
           "pitch": 100,
           "volume": 90
@@ -6264,7 +6264,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Thunder3",
+          "name": "blaster-02",
           "pan": 0,
           "pitch": 100,
           "volume": 90
@@ -6273,7 +6273,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Thunder8",
+          "name": "blaster-05",
           "pan": 0,
           "pitch": 100,
           "volume": 90
@@ -6331,7 +6331,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Thunder1",
+          "name": "blaster-02",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -6340,7 +6340,7 @@
       {
         "frame": 1,
         "se": {
-          "name": "Paralyze1",
+          "name": "blaster-02",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -6349,7 +6349,7 @@
       {
         "frame": 49,
         "se": {
-          "name": "Thunder1",
+          "name": "blaster-02",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -6358,7 +6358,7 @@
       {
         "frame": 50,
         "se": {
-          "name": "Paralyze1",
+          "name": "blaster-02",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -6406,7 +6406,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Thunder10",
+          "name": "blaster-05",
           "pan": 0,
           "pitch": 120,
           "volume": 100
@@ -6415,7 +6415,7 @@
       {
         "frame": 1,
         "se": {
-          "name": "Thunder9",
+          "name": "blaster-02",
           "pan": 0,
           "pitch": 100,
           "volume": 100
@@ -6473,7 +6473,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Wind2",
+          "name": "whoosh-02",
           "pan": 0,
           "pitch": 75,
           "volume": 65
@@ -6482,7 +6482,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Magic1",
+          "name": "powerup-01",
           "pan": 0,
           "pitch": 100,
           "volume": 80
@@ -6491,7 +6491,7 @@
       {
         "frame": 59,
         "se": {
-          "name": "Thunder9",
+          "name": "blaster-02",
           "pan": 0,
           "pitch": 100,
           "volume": 90
@@ -6500,7 +6500,7 @@
       {
         "frame": 59,
         "se": {
-          "name": "Paralyze1",
+          "name": "blaster-02",
           "pan": 0,
           "pitch": 100,
           "volume": 75
@@ -6509,7 +6509,7 @@
       {
         "frame": 79,
         "se": {
-          "name": "Paralyze1",
+          "name": "blaster-02",
           "pan": 0,
           "pitch": 100,
           "volume": 75
@@ -6547,7 +6547,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Water5",
+          "name": "whoosh-05",
           "pan": 0,
           "pitch": 100,
           "volume": 90
@@ -6556,7 +6556,7 @@
       {
         "frame": 19,
         "se": {
-          "name": "Water2",
+          "name": "whoosh-02",
           "pan": 0,
           "pitch": 130,
           "volume": 90
@@ -6595,7 +6595,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Dive",
+          "name": "whoosh-01",
           "pan": 0,
           "pitch": 135,
           "volume": 90
@@ -6604,7 +6604,7 @@
       {
         "frame": 6,
         "se": {
-          "name": "Water1",
+          "name": "whoosh-01",
           "pan": 0,
           "pitch": 100,
           "volume": 100
@@ -6652,7 +6652,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Water5",
+          "name": "whoosh-05",
           "pan": 0,
           "pitch": 100,
           "volume": 90
@@ -6661,7 +6661,7 @@
       {
         "frame": 11,
         "se": {
-          "name": "Water4",
+          "name": "whoosh-04",
           "pan": 0,
           "pitch": 90,
           "volume": 90
@@ -6670,7 +6670,7 @@
       {
         "frame": 13,
         "se": {
-          "name": "Water1",
+          "name": "whoosh-01",
           "pan": 0,
           "pitch": 90,
           "volume": 90
@@ -6679,7 +6679,7 @@
       {
         "frame": 59,
         "se": {
-          "name": "Water1",
+          "name": "whoosh-01",
           "pan": 0,
           "pitch": 90,
           "volume": 90
@@ -6688,7 +6688,7 @@
       {
         "frame": 59,
         "se": {
-          "name": "Water4",
+          "name": "whoosh-04",
           "pan": 0,
           "pitch": 90,
           "volume": 90
@@ -6746,7 +6746,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Water1",
+          "name": "whoosh-01",
           "pan": 0,
           "pitch": 50,
           "volume": 90
@@ -6815,7 +6815,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Wind2",
+          "name": "whoosh-02",
           "pan": 0,
           "pitch": 70,
           "volume": 65
@@ -6824,7 +6824,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Magic1",
+          "name": "powerup-01",
           "pan": 0,
           "pitch": 100,
           "volume": 80
@@ -6833,7 +6833,7 @@
       {
         "frame": 9,
         "se": {
-          "name": "Wind1",
+          "name": "whoosh-01",
           "pan": 0,
           "pitch": 120,
           "volume": 75
@@ -6842,7 +6842,7 @@
       {
         "frame": 23,
         "se": {
-          "name": "Water1",
+          "name": "whoosh-01",
           "pan": 0,
           "pitch": 50,
           "volume": 90
@@ -6851,7 +6851,7 @@
       {
         "frame": 59,
         "se": {
-          "name": "Water2",
+          "name": "whoosh-02",
           "pan": 0,
           "pitch": 50,
           "volume": 90
@@ -6860,7 +6860,7 @@
       {
         "frame": 59,
         "se": {
-          "name": "Water1",
+          "name": "whoosh-01",
           "pan": 0,
           "pitch": 50,
           "volume": 90
@@ -6908,7 +6908,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Earth1",
+          "name": "hit-01",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -6917,7 +6917,7 @@
       {
         "frame": 5,
         "se": {
-          "name": "Break",
+          "name": "hit-01",
           "pan": 0,
           "pitch": 100,
           "volume": 90
@@ -6955,7 +6955,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Thunder2",
+          "name": "blaster-05",
           "pan": 0,
           "pitch": 50,
           "volume": 90
@@ -6964,7 +6964,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Earth5",
+          "name": "hit-02",
           "pan": 0,
           "pitch": 100,
           "volume": 100
@@ -6973,7 +6973,7 @@
       {
         "frame": 29,
         "se": {
-          "name": "Fire3",
+          "name": "blaster-03",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -7021,7 +7021,7 @@
       {
         "frame": 5,
         "se": {
-          "name": "Earth1",
+          "name": "hit-01",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -7030,7 +7030,7 @@
       {
         "frame": 5,
         "se": {
-          "name": "Fire3",
+          "name": "blaster-03",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -7039,7 +7039,7 @@
       {
         "frame": 79,
         "se": {
-          "name": "Earth3",
+          "name": "hit-03",
           "pan": 0,
           "pitch": 140,
           "volume": 90
@@ -7048,7 +7048,7 @@
       {
         "frame": 79,
         "se": {
-          "name": "Fire1",
+          "name": "blaster-03",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -7057,7 +7057,7 @@
       {
         "frame": 79,
         "se": {
-          "name": "Sand",
+          "name": "whoosh-01",
           "pan": 0,
           "pitch": 100,
           "volume": 100
@@ -7105,7 +7105,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Earth4",
+          "name": "hit-01",
           "pan": 0,
           "pitch": 100,
           "volume": 100
@@ -7114,7 +7114,7 @@
       {
         "frame": 1,
         "se": {
-          "name": "Earth1",
+          "name": "hit-01",
           "pan": 0,
           "pitch": 100,
           "volume": 100
@@ -7123,7 +7123,7 @@
       {
         "frame": 3,
         "se": {
-          "name": "Earth5",
+          "name": "hit-02",
           "pan": 0,
           "pitch": 100,
           "volume": 100
@@ -7132,7 +7132,7 @@
       {
         "frame": 89,
         "se": {
-          "name": "Sand",
+          "name": "whoosh-01",
           "pan": 0,
           "pitch": 100,
           "volume": 100
@@ -7200,7 +7200,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Wind2",
+          "name": "whoosh-02",
           "pan": 0,
           "pitch": 70,
           "volume": 65
@@ -7209,7 +7209,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Magic1",
+          "name": "powerup-01",
           "pan": 0,
           "pitch": 100,
           "volume": 80
@@ -7218,7 +7218,7 @@
       {
         "frame": 44,
         "se": {
-          "name": "Earth2",
+          "name": "hit-02",
           "pan": 0,
           "pitch": 125,
           "volume": 75
@@ -7227,7 +7227,7 @@
       {
         "frame": 69,
         "se": {
-          "name": "Earth4",
+          "name": "hit-01",
           "pan": 0,
           "pitch": 125,
           "volume": 75
@@ -7236,7 +7236,7 @@
       {
         "frame": 69,
         "se": {
-          "name": "Earth1",
+          "name": "hit-01",
           "pan": 0,
           "pitch": 125,
           "volume": 75
@@ -7311,7 +7311,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Wind3",
+          "name": "whoosh-03",
           "pan": 0,
           "pitch": 140,
           "volume": 90
@@ -7320,7 +7320,7 @@
       {
         "frame": 4,
         "se": {
-          "name": "Wind5",
+          "name": "whoosh-05",
           "pan": 0,
           "pitch": 140,
           "volume": 90
@@ -7329,7 +7329,7 @@
       {
         "frame": 14,
         "se": {
-          "name": "Wind3",
+          "name": "whoosh-03",
           "pan": 0,
           "pitch": 140,
           "volume": 90
@@ -7338,7 +7338,7 @@
       {
         "frame": 19,
         "se": {
-          "name": "Wind5",
+          "name": "whoosh-05",
           "pan": 0,
           "pitch": 140,
           "volume": 90
@@ -7386,7 +7386,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Wind5",
+          "name": "whoosh-05",
           "pan": 0,
           "pitch": 120,
           "volume": 90
@@ -7395,7 +7395,7 @@
       {
         "frame": 2,
         "se": {
-          "name": "Wind2",
+          "name": "whoosh-02",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -7404,7 +7404,7 @@
       {
         "frame": 5,
         "se": {
-          "name": "Wind2",
+          "name": "whoosh-02",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -7413,7 +7413,7 @@
       {
         "frame": 8,
         "se": {
-          "name": "Wind2",
+          "name": "whoosh-02",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -7422,7 +7422,7 @@
       {
         "frame": 29,
         "se": {
-          "name": "Sand",
+          "name": "whoosh-01",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -7480,7 +7480,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Wind5",
+          "name": "whoosh-05",
           "pan": 0,
           "pitch": 80,
           "volume": 100
@@ -7489,7 +7489,7 @@
       {
         "frame": 1,
         "se": {
-          "name": "Sand",
+          "name": "whoosh-01",
           "pan": 0,
           "pitch": 70,
           "volume": 100
@@ -7557,7 +7557,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Wind2",
+          "name": "whoosh-02",
           "pan": 0,
           "pitch": 75,
           "volume": 65
@@ -7566,7 +7566,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Magic1",
+          "name": "powerup-01",
           "pan": 0,
           "pitch": 100,
           "volume": 80
@@ -7575,7 +7575,7 @@
       {
         "frame": 29,
         "se": {
-          "name": "Wind2",
+          "name": "whoosh-02",
           "pan": 0,
           "pitch": 125,
           "volume": 75
@@ -7584,7 +7584,7 @@
       {
         "frame": 49,
         "se": {
-          "name": "Skill2",
+          "name": "powerup-02",
           "pan": 0,
           "pitch": 100,
           "volume": 90
@@ -7593,7 +7593,7 @@
       {
         "frame": 79,
         "se": {
-          "name": "Wind3",
+          "name": "whoosh-03",
           "pan": 0,
           "pitch": 140,
           "volume": 65
@@ -7602,7 +7602,7 @@
       {
         "frame": 79,
         "se": {
-          "name": "Skill1",
+          "name": "powerup-01",
           "pan": 0,
           "pitch": 100,
           "volume": 90
@@ -7611,7 +7611,7 @@
       {
         "frame": 109,
         "se": {
-          "name": "Wind3",
+          "name": "whoosh-03",
           "pan": 0,
           "pitch": 140,
           "volume": 65
@@ -7620,7 +7620,7 @@
       {
         "frame": 129,
         "se": {
-          "name": "Wind3",
+          "name": "whoosh-03",
           "pan": 0,
           "pitch": 140,
           "volume": 65
@@ -7668,7 +7668,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Up3",
+          "name": "powerup-03",
           "pan": 0,
           "pitch": 100,
           "volume": 90
@@ -7677,7 +7677,7 @@
       {
         "frame": 14,
         "se": {
-          "name": "Reflection",
+          "name": "powerup-01",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -7686,7 +7686,7 @@
       {
         "frame": 14,
         "se": {
-          "name": "Sword4",
+          "name": "slash-02",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -7695,7 +7695,7 @@
       {
         "frame": 19,
         "se": {
-          "name": "Reflection",
+          "name": "powerup-01",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -7753,7 +7753,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Ice3",
+          "name": "whoosh-03",
           "pan": 0,
           "pitch": 70,
           "volume": 90
@@ -7762,7 +7762,7 @@
       {
         "frame": 3,
         "se": {
-          "name": "Saint4",
+          "name": "powerup-01",
           "pan": 0,
           "pitch": 115,
           "volume": 90
@@ -7820,7 +7820,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Starlight",
+          "name": "powerup-01",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -7829,7 +7829,7 @@
       {
         "frame": 1,
         "se": {
-          "name": "Ice5",
+          "name": "whoosh-05",
           "pan": 0,
           "pitch": 100,
           "volume": 90
@@ -7847,7 +7847,7 @@
       {
         "frame": 64,
         "se": {
-          "name": "Sword2",
+          "name": "slash-02",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -7856,7 +7856,7 @@
       {
         "frame": 74,
         "se": {
-          "name": "Sword2",
+          "name": "slash-02",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -7865,7 +7865,7 @@
       {
         "frame": 84,
         "se": {
-          "name": "Sword2",
+          "name": "slash-02",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -7923,7 +7923,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Skill1",
+          "name": "powerup-01",
           "pan": 0,
           "pitch": 100,
           "volume": 100
@@ -7932,7 +7932,7 @@
       {
         "frame": 8,
         "se": {
-          "name": "Explosion1",
+          "name": "blaster-03",
           "pan": 0,
           "pitch": 150,
           "volume": 100
@@ -7941,7 +7941,7 @@
       {
         "frame": 8,
         "se": {
-          "name": "Saint4",
+          "name": "powerup-01",
           "pan": 0,
           "pitch": 120,
           "volume": 100
@@ -7950,7 +7950,7 @@
       {
         "frame": 59,
         "se": {
-          "name": "Explosion4",
+          "name": "EVFX06_01_SingleBlast",
           "pan": 0,
           "pitch": 150,
           "volume": 100
@@ -8008,7 +8008,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Wind2",
+          "name": "whoosh-02",
           "pan": 0,
           "pitch": 70,
           "volume": 65
@@ -8017,7 +8017,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Magic1",
+          "name": "powerup-01",
           "pan": 0,
           "pitch": 100,
           "volume": 80
@@ -8026,7 +8026,7 @@
       {
         "frame": 9,
         "se": {
-          "name": "Skill3",
+          "name": "powerup-03",
           "pan": 0,
           "pitch": 110,
           "volume": 75
@@ -8044,7 +8044,7 @@
       {
         "frame": 27,
         "se": {
-          "name": "Ice3",
+          "name": "whoosh-03",
           "pan": 0,
           "pitch": 100,
           "volume": 90
@@ -8053,7 +8053,7 @@
       {
         "frame": 59,
         "se": {
-          "name": "Wind2",
+          "name": "whoosh-02",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -8062,7 +8062,7 @@
       {
         "frame": 79,
         "se": {
-          "name": "Wind2",
+          "name": "whoosh-02",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -8071,7 +8071,7 @@
       {
         "frame": 89,
         "se": {
-          "name": "Wind2",
+          "name": "whoosh-02",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -8080,7 +8080,7 @@
       {
         "frame": 119,
         "se": {
-          "name": "Magic12",
+          "name": "powerup-03",
           "pan": 0,
           "pitch": 100,
           "volume": 90
@@ -8138,7 +8138,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Darkness1",
+          "name": "drone-01",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -8206,7 +8206,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Darkness3",
+          "name": "drone-01",
           "pan": 0,
           "pitch": 100,
           "volume": 90
@@ -8215,7 +8215,7 @@
       {
         "frame": 59,
         "se": {
-          "name": "Darkness1",
+          "name": "drone-01",
           "pan": 0,
           "pitch": 130,
           "volume": 90
@@ -8273,7 +8273,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Darkness4",
+          "name": "drone-01",
           "pan": 0,
           "pitch": 100,
           "volume": 90
@@ -8282,7 +8282,7 @@
       {
         "frame": 9,
         "se": {
-          "name": "Thunder3",
+          "name": "blaster-02",
           "pan": 0,
           "pitch": 50,
           "volume": 90
@@ -8291,7 +8291,7 @@
       {
         "frame": 69,
         "se": {
-          "name": "Fire9",
+          "name": "blaster-03",
           "pan": 0,
           "pitch": 50,
           "volume": 90
@@ -8300,7 +8300,7 @@
       {
         "frame": 79,
         "se": {
-          "name": "Fire9",
+          "name": "blaster-03",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -8309,7 +8309,7 @@
       {
         "frame": 89,
         "se": {
-          "name": "Fire9",
+          "name": "blaster-03",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -8318,7 +8318,7 @@
       {
         "frame": 99,
         "se": {
-          "name": "Fire9",
+          "name": "blaster-03",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -8386,7 +8386,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Teleport",
+          "name": "whoosh-01",
           "pan": 0,
           "pitch": 100,
           "volume": 90
@@ -8395,7 +8395,7 @@
       {
         "frame": 29,
         "se": {
-          "name": "Blind",
+          "name": "drone-01",
           "pan": 0,
           "pitch": 100,
           "volume": 80
@@ -8404,7 +8404,7 @@
       {
         "frame": 29,
         "se": {
-          "name": "Float2",
+          "name": "whoosh-02",
           "pan": 0,
           "pitch": 140,
           "volume": 80
@@ -8462,7 +8462,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Wind2",
+          "name": "whoosh-02",
           "pan": 0,
           "pitch": 70,
           "volume": 65
@@ -8471,7 +8471,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Magic1",
+          "name": "powerup-01",
           "pan": 0,
           "pitch": 100,
           "volume": 80
@@ -8480,7 +8480,7 @@
       {
         "frame": 9,
         "se": {
-          "name": "Darkness4",
+          "name": "drone-01",
           "pan": 0,
           "pitch": 90,
           "volume": 75
@@ -8489,7 +8489,7 @@
       {
         "frame": 64,
         "se": {
-          "name": "Magic10",
+          "name": "powerup-01",
           "pan": 0,
           "pitch": 120,
           "volume": 75
@@ -8498,7 +8498,7 @@
       {
         "frame": 64,
         "se": {
-          "name": "Blind",
+          "name": "drone-01",
           "pan": 0,
           "pitch": 120,
           "volume": 75
@@ -8546,7 +8546,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Darkness1",
+          "name": "drone-01",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -8555,7 +8555,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Magic5",
+          "name": "powerup-02",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -8564,7 +8564,7 @@
       {
         "frame": 44,
         "se": {
-          "name": "Particles1",
+          "name": "blaster-01",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -8612,7 +8612,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Explosion2",
+          "name": "EVFX06_01_SingleBlast",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -8621,7 +8621,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Particles1",
+          "name": "blaster-01",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -8679,7 +8679,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Particles4",
+          "name": "blaster-04",
           "pan": 0,
           "pitch": 100,
           "volume": 90
@@ -8727,7 +8727,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Fire9",
+          "name": "blaster-03",
           "pan": 0,
           "pitch": 140,
           "volume": 90
@@ -8785,7 +8785,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Particles4",
+          "name": "blaster-04",
           "pan": 0,
           "pitch": 140,
           "volume": 90
@@ -8794,7 +8794,7 @@
       {
         "frame": 59,
         "se": {
-          "name": "Fire8",
+          "name": "EVFX06_01_SingleBlast",
           "pan": 0,
           "pitch": 140,
           "volume": 90
@@ -8803,7 +8803,7 @@
       {
         "frame": 69,
         "se": {
-          "name": "Fire7",
+          "name": "blaster-03",
           "pan": 0,
           "pitch": 140,
           "volume": 90
@@ -8812,7 +8812,7 @@
       {
         "frame": 79,
         "se": {
-          "name": "Fire8",
+          "name": "EVFX06_01_SingleBlast",
           "pan": 0,
           "pitch": 140,
           "volume": 90
@@ -8821,7 +8821,7 @@
       {
         "frame": 89,
         "se": {
-          "name": "Fire7",
+          "name": "blaster-03",
           "pan": 0,
           "pitch": 140,
           "volume": 50
@@ -8830,7 +8830,7 @@
       {
         "frame": 99,
         "se": {
-          "name": "Fire8",
+          "name": "EVFX06_01_SingleBlast",
           "pan": 0,
           "pitch": 140,
           "volume": 90
@@ -8888,7 +8888,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Gun1",
+          "name": "gun-shot-01",
           "pan": 0,
           "pitch": 100,
           "volume": 90
@@ -8946,7 +8946,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Gun2",
+          "name": "gun-shot-01",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -9004,7 +9004,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Gun1",
+          "name": "gun-shot-01",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -9013,7 +9013,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Crash",
+          "name": "hit-01",
           "pan": 0,
           "pitch": 150,
           "volume": 40
@@ -9022,7 +9022,7 @@
       {
         "frame": 9,
         "se": {
-          "name": "Gun1",
+          "name": "gun-shot-01",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -9031,7 +9031,7 @@
       {
         "frame": 19,
         "se": {
-          "name": "Gun3",
+          "name": "gun-shot-01",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -9109,7 +9109,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Phone",
+          "name": "whoosh-01",
           "pan": 0,
           "pitch": 150,
           "volume": 40
@@ -9118,7 +9118,7 @@
       {
         "frame": 24,
         "se": {
-          "name": "Skill1",
+          "name": "powerup-01",
           "pan": 0,
           "pitch": 150,
           "volume": 70
@@ -9127,7 +9127,7 @@
       {
         "frame": 69,
         "se": {
-          "name": "Skill2",
+          "name": "powerup-02",
           "pan": 0,
           "pitch": 150,
           "volume": 70
@@ -9136,7 +9136,7 @@
       {
         "frame": 109,
         "se": {
-          "name": "Wind6",
+          "name": "whoosh-01",
           "pan": 0,
           "pitch": 150,
           "volume": 70
@@ -9145,7 +9145,7 @@
       {
         "frame": 124,
         "se": {
-          "name": "Wind6",
+          "name": "whoosh-01",
           "pan": 0,
           "pitch": 150,
           "volume": 70
@@ -9154,7 +9154,7 @@
       {
         "frame": 149,
         "se": {
-          "name": "Explosion2",
+          "name": "EVFX06_01_SingleBlast",
           "pan": 0,
           "pitch": 100,
           "volume": 70
@@ -9163,7 +9163,7 @@
       {
         "frame": 169,
         "se": {
-          "name": "Fire2",
+          "name": "EVFX06_01_SingleBlast",
           "pan": 0,
           "pitch": 150,
           "volume": 70
@@ -9221,7 +9221,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Laser1",
+          "name": "blaster-01",
           "pan": 0,
           "pitch": 50,
           "volume": 90
@@ -9230,7 +9230,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Paralyze2",
+          "name": "blaster-05",
           "pan": 0,
           "pitch": 50,
           "volume": 90
@@ -9239,7 +9239,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Evasion2",
+          "name": "whoosh-02",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -9296,7 +9296,7 @@
       {
         "frame": 29,
         "se": {
-          "name": "Fire6",
+          "name": "EVFX06_01_SingleBlast",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -9305,7 +9305,7 @@
       {
         "frame": 64,
         "se": {
-          "name": "Fire3",
+          "name": "blaster-03",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -9353,7 +9353,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Magic2",
+          "name": "powerup-02",
           "pan": 0,
           "pitch": 150,
           "volume": 75
@@ -9362,7 +9362,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Up3",
+          "name": "powerup-03",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -9380,7 +9380,7 @@
       {
         "frame": 39,
         "se": {
-          "name": "Darkness4",
+          "name": "drone-01",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -9428,7 +9428,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Magic2",
+          "name": "powerup-02",
           "pan": 0,
           "pitch": 150,
           "volume": 75
@@ -9437,7 +9437,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Up3",
+          "name": "powerup-03",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -9446,7 +9446,7 @@
       {
         "frame": 39,
         "se": {
-          "name": "Float1",
+          "name": "whoosh-01",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -9455,7 +9455,7 @@
       {
         "frame": 39,
         "se": {
-          "name": "Darkness4",
+          "name": "drone-01",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -9503,7 +9503,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Particles1",
+          "name": "blaster-01",
           "pan": 0,
           "pitch": 110,
           "volume": 60
@@ -9512,7 +9512,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Teleport",
+          "name": "whoosh-01",
           "pan": 0,
           "pitch": 110,
           "volume": 90
@@ -9560,7 +9560,7 @@
       {
         "frame": 5,
         "se": {
-          "name": "Flash2",
+          "name": "powerup-02",
           "pan": 0,
           "pitch": 100,
           "volume": 90

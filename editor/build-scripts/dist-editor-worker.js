@@ -16,6 +16,7 @@ const nwCodec = require('./nw-codec-utils');
 const appImage = require('./appimage-utils');
 const nativeDownload = require('./native-download');
 const nativeRelease = require('./native-release.cjs');
+const webFileIndex = require('./web-file-index.cjs');
 
 // ── Logging ──────────────────────────────────────────────────────────
 function log(msg, color)  { parentPort.postMessage({ type: 'log', message: msg, color: color || '#cccccc' }); }
@@ -1041,6 +1042,8 @@ function buildWeb(stageRoot, stagingDir) {
     trimWebProject(path.join(webRoot, 'project'), log);
     refreshStarterRuntime(path.join(stageRoot, 'runtime'), path.join(webRoot, 'project'));
     patchWebProject(path.join(webRoot, 'project'));
+    // The playtest runs the project in a browser, which corrects filename casing from this index.
+    webFileIndex.writeWebFileIndex(path.join(webRoot, 'project'));
 
     const sourceHtml = fs.readFileSync(path.join(stageRoot, 'index.html'), 'utf8');
     const scriptPattern = /<script\s+src="(src\/[^"]+)"\s*><\/script>/g;

@@ -45,6 +45,8 @@ Development cycle in progress. Session detail lives in the [handoff](docs/HANDOF
 
 ### Fixed
 
+- **Web builds correct filename casing.** A browser cannot read the folder it was served from, so a project made on Windows that asks for "Slash1.ogg" and ships "slash1.ogg" failed to load on the web where the desktop build quietly found the file. Every web build (a game built for the browser, and the web editor's playtest) now carries an index of its files, and the runtime spells a request the way the build does before asking again.
+- **Every Demo sound exists.** The stock animations and four system sounds named files the Demo does not ship, and the Short Sword's attack animation was one of them, so a slash in the browser stopped with a missing file. Each now names a Demo sound of its family; a test keeps every sound the Demo names on disk.
 - **Loading a second map** no longer fails: the preview underlay was destroyed with the previous map but reused (regression from September 11).
 - **Shadows hold still.** Rows are ranked on where a light stands with smoothing and dwell, so a still model keeps its shadow and the Demo Tank stops blinking; moving models cast shadows in the editor's 3D view; animated models are grounded on their resting clip, so the Demo mascot no longer floats.
 - **A state a plugin refuses** inside `addNewState` (auto-life, a last-gasp skill) is no longer recorded or reported as added, so the battle log no longer collapses a standing battler (PR #58).
