@@ -16,7 +16,7 @@
   },
   "airship": {
     "bgm": {
-      "name": "Ship3",
+      "name": "Psychronic - Harmonic Nebula",
       "pan": 0,
       "pitch": 100,
       "volume": 90
@@ -103,7 +103,7 @@
   "battleSystem": 2,
   "boat": {
     "bgm": {
-      "name": "Ship1",
+      "name": "Psychronic - Call Of The Horizon",
       "pan": 0,
       "pitch": 100,
       "volume": 90
@@ -116,7 +116,7 @@
   },
   "currencyUnit": "G",
   "defeatMe": {
-    "name": "Defeat1",
+    "name": "",
     "pan": 0,
     "pitch": 100,
     "volume": 90
@@ -144,7 +144,7 @@
   ],
   "gameTitle": "Reactor One",
   "gameoverMe": {
-    "name": "Gameover1",
+    "name": "",
     "pan": 0,
     "pitch": 100,
     "volume": 90
@@ -184,7 +184,7 @@
   ],
   "ship": {
     "bgm": {
-      "name": "Ship2",
+      "name": "Psychronic - Cybertech Flight",
       "pan": 0,
       "pitch": 100,
       "volume": 90

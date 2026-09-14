@@ -143,7 +143,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "blaster-03",
+          "name": "EVFX06_01_SingleBlast",
           "pan": 0,
           "pitch": 100,
           "volume": 100
@@ -248,7 +248,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "blaster-05",
+          "name": "blaster-02",
           "pan": 0,
           "pitch": 80,
           "volume": 100
@@ -399,7 +399,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "blaster-02",
+          "name": "blaster-05",
           "pan": 0,
           "pitch": 120,
           "volume": 90
@@ -417,7 +417,7 @@
       {
         "frame": 4,
         "se": {
-          "name": "blaster-03",
+          "name": "EVFX06_01_SingleBlast",
           "pan": 0,
           "pitch": 100,
           "volume": 100
@@ -531,7 +531,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "blaster-05",
+          "name": "blaster-02",
           "pan": 0,
           "pitch": 100,
           "volume": 100
@@ -569,7 +569,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "blaster-02",
+          "name": "blaster-05",
           "pan": 0,
           "pitch": 120,
           "volume": 90
@@ -625,7 +625,7 @@
       {
         "frame": 1,
         "se": {
-          "name": "blaster-05",
+          "name": "blaster-02",
           "pan": 0,
           "pitch": 120,
           "volume": 90
@@ -683,7 +683,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "blaster-02",
+          "name": "blaster-05",
           "pan": 0,
           "pitch": 120,
           "volume": 90
@@ -701,7 +701,7 @@
       {
         "frame": 3,
         "se": {
-          "name": "blaster-03",
+          "name": "EVFX06_01_SingleBlast",
           "pan": 0,
           "pitch": 100,
           "volume": 100
@@ -749,7 +749,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "blaster-02",
+          "name": "blaster-05",
           "pan": 0,
           "pitch": 120,
           "volume": 90
@@ -815,7 +815,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "blaster-02",
+          "name": "blaster-05",
           "pan": 0,
           "pitch": 120,
           "volume": 90
@@ -833,7 +833,7 @@
       {
         "frame": 3,
         "se": {
-          "name": "blaster-05",
+          "name": "blaster-02",
           "pan": 0,
           "pitch": 80,
           "volume": 100
@@ -923,7 +923,7 @@
       {
         "frame": 3,
         "se": {
-          "name": "blaster-03",
+          "name": "EVFX06_01_SingleBlast",
           "pan": 0,
           "pitch": 100,
           "volume": 100
@@ -1035,7 +1035,7 @@
       {
         "frame": 3,
         "se": {
-          "name": "blaster-05",
+          "name": "blaster-02",
           "pan": 0,
           "pitch": 80,
           "volume": 100
@@ -1130,7 +1130,7 @@
       {
         "frame": 27,
         "se": {
-          "name": "blaster-02",
+          "name": "blaster-05",
           "pan": 0,
           "pitch": 120,
           "volume": 90
@@ -1148,7 +1148,7 @@
       {
         "frame": 44,
         "se": {
-          "name": "blaster-02",
+          "name": "blaster-05",
           "pan": 0,
           "pitch": 120,
           "volume": 90
@@ -1175,7 +1175,7 @@
       {
         "frame": 69,
         "se": {
-          "name": "blaster-02",
+          "name": "blaster-05",
           "pan": 0,
           "pitch": 120,
           "volume": 90
@@ -1202,7 +1202,7 @@
       {
         "frame": 99,
         "se": {
-          "name": "blaster-02",
+          "name": "blaster-05",
           "pan": 0,
           "pitch": 120,
           "volume": 90
@@ -2681,7 +2681,7 @@
       {
         "frame": 8,
         "se": {
-          "name": "applause-01",
+          "name": "drone-01",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -2690,7 +2690,7 @@
       {
         "frame": 13,
         "se": {
-          "name": "applause-01",
+          "name": "drone-01",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -3132,7 +3132,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "blaster-02",
+          "name": "blaster-05",
           "pan": 0,
           "pitch": 90,
           "volume": 90
@@ -3159,7 +3159,7 @@
       {
         "frame": 8,
         "se": {
-          "name": "blaster-02",
+          "name": "blaster-05",
           "pan": 0,
           "pitch": 90,
           "volume": 90
@@ -3186,7 +3186,7 @@
       {
         "frame": 19,
         "se": {
-          "name": "blaster-02",
+          "name": "blaster-05",
           "pan": 0,
           "pitch": 90,
           "volume": 90
@@ -3303,7 +3303,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "blaster-03",
+          "name": "EVFX06_01_SingleBlast",
           "pan": 0,
           "pitch": 70,
           "volume": 90
@@ -3312,7 +3312,7 @@
       {
         "frame": 1,
         "se": {
-          "name": "blaster-02",
+          "name": "blaster-05",
           "pan": 0,
           "pitch": 50,
           "volume": 90
@@ -3670,7 +3670,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "bell-01",
+          "name": "drone-01",
           "pan": 0,
           "pitch": 100,
           "volume": 100
@@ -3755,7 +3755,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "blaster-05",
+          "name": "blaster-02",
           "pan": 0,
           "pitch": 80,
           "volume": 90
@@ -3764,7 +3764,7 @@
       {
         "frame": 2,
         "se": {
-          "name": "blaster-05",
+          "name": "blaster-02",
           "pan": 0,
           "pitch": 100,
           "volume": 90
@@ -5336,7 +5336,7 @@
       {
         "frame": 5,
         "se": {
-          "name": "select-05",
+          "name": "bell-01",
           "pan": 0,
           "pitch": 80,
           "volume": 70
@@ -5517,7 +5517,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "drone-01",
+          "name": "Push",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -5526,7 +5526,7 @@
       {
         "frame": 3,
         "se": {
-          "name": "blaster-02",
+          "name": "blaster-05",
           "pan": 0,
           "pitch": 100,
           "volume": 90
@@ -5669,7 +5669,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "blaster-03",
+          "name": "EVFX06_01_SingleBlast",
           "pan": 0,
           "pitch": 150,
           "volume": 80
@@ -5954,7 +5954,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "blaster-02",
+          "name": "blaster-05",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -6002,7 +6002,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "blaster-05",
+          "name": "blaster-02",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -6085,7 +6085,7 @@
       {
         "frame": 2,
         "se": {
-          "name": "blaster-05",
+          "name": "blaster-02",
           "pan": 0,
           "pitch": 90,
           "volume": 80
@@ -6216,7 +6216,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "blaster-05",
+          "name": "blaster-02",
           "pan": 0,
           "pitch": 100,
           "volume": 90
@@ -6264,7 +6264,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "blaster-02",
+          "name": "blaster-05",
           "pan": 0,
           "pitch": 100,
           "volume": 90
@@ -6273,7 +6273,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "blaster-05",
+          "name": "blaster-02",
           "pan": 0,
           "pitch": 100,
           "volume": 90
@@ -6331,7 +6331,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "blaster-02",
+          "name": "Thunder11-long",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -6340,7 +6340,7 @@
       {
         "frame": 1,
         "se": {
-          "name": "blaster-02",
+          "name": "Thunder11-long",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -6349,7 +6349,7 @@
       {
         "frame": 49,
         "se": {
-          "name": "blaster-02",
+          "name": "blaster-05",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -6358,7 +6358,7 @@
       {
         "frame": 50,
         "se": {
-          "name": "blaster-02",
+          "name": "blaster-05",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -6406,7 +6406,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "blaster-05",
+          "name": "blaster-02",
           "pan": 0,
           "pitch": 120,
           "volume": 100
@@ -6415,7 +6415,7 @@
       {
         "frame": 1,
         "se": {
-          "name": "blaster-02",
+          "name": "blaster-05",
           "pan": 0,
           "pitch": 100,
           "volume": 100
@@ -6491,7 +6491,7 @@
       {
         "frame": 59,
         "se": {
-          "name": "blaster-02",
+          "name": "blaster-05",
           "pan": 0,
           "pitch": 100,
           "volume": 90
@@ -6500,7 +6500,7 @@
       {
         "frame": 59,
         "se": {
-          "name": "blaster-02",
+          "name": "blaster-05",
           "pan": 0,
           "pitch": 100,
           "volume": 75
@@ -6509,7 +6509,7 @@
       {
         "frame": 79,
         "se": {
-          "name": "blaster-02",
+          "name": "blaster-05",
           "pan": 0,
           "pitch": 100,
           "volume": 75
@@ -6955,7 +6955,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "blaster-05",
+          "name": "blaster-02",
           "pan": 0,
           "pitch": 50,
           "volume": 90
@@ -6973,7 +6973,7 @@
       {
         "frame": 29,
         "se": {
-          "name": "blaster-03",
+          "name": "EVFX06_01_SingleBlast",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -7030,7 +7030,7 @@
       {
         "frame": 5,
         "se": {
-          "name": "blaster-03",
+          "name": "EVFX06_01_SingleBlast",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -7048,7 +7048,7 @@
       {
         "frame": 79,
         "se": {
-          "name": "blaster-03",
+          "name": "EVFX06_01_SingleBlast",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -7932,7 +7932,7 @@
       {
         "frame": 8,
         "se": {
-          "name": "blaster-03",
+          "name": "EVFX06_01_SingleBlast",
           "pan": 0,
           "pitch": 150,
           "volume": 100
@@ -8282,7 +8282,7 @@
       {
         "frame": 9,
         "se": {
-          "name": "blaster-02",
+          "name": "blaster-05",
           "pan": 0,
           "pitch": 50,
           "volume": 90
@@ -8291,7 +8291,7 @@
       {
         "frame": 69,
         "se": {
-          "name": "blaster-03",
+          "name": "EVFX06_01_SingleBlast",
           "pan": 0,
           "pitch": 50,
           "volume": 90
@@ -8300,7 +8300,7 @@
       {
         "frame": 79,
         "se": {
-          "name": "blaster-03",
+          "name": "EVFX06_01_SingleBlast",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -8309,7 +8309,7 @@
       {
         "frame": 89,
         "se": {
-          "name": "blaster-03",
+          "name": "EVFX06_01_SingleBlast",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -8318,7 +8318,7 @@
       {
         "frame": 99,
         "se": {
-          "name": "blaster-03",
+          "name": "EVFX06_01_SingleBlast",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -8727,7 +8727,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "blaster-03",
+          "name": "EVFX06_01_SingleBlast",
           "pan": 0,
           "pitch": 140,
           "volume": 90
@@ -8803,7 +8803,7 @@
       {
         "frame": 69,
         "se": {
-          "name": "blaster-03",
+          "name": "EVFX06_01_SingleBlast",
           "pan": 0,
           "pitch": 140,
           "volume": 90
@@ -8821,7 +8821,7 @@
       {
         "frame": 89,
         "se": {
-          "name": "blaster-03",
+          "name": "EVFX06_01_SingleBlast",
           "pan": 0,
           "pitch": 140,
           "volume": 50
@@ -8888,7 +8888,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "gun-shot-01",
+          "name": "Railgun-01",
           "pan": 0,
           "pitch": 100,
           "volume": 90
@@ -9109,7 +9109,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "whoosh-01",
+          "name": "select-03",
           "pan": 0,
           "pitch": 150,
           "volume": 40
@@ -9118,7 +9118,7 @@
       {
         "frame": 24,
         "se": {
-          "name": "powerup-01",
+          "name": "swipe",
           "pan": 0,
           "pitch": 150,
           "volume": 70
@@ -9230,7 +9230,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "blaster-05",
+          "name": "blaster-02",
           "pan": 0,
           "pitch": 50,
           "volume": 90
@@ -9305,7 +9305,7 @@
       {
         "frame": 64,
         "se": {
-          "name": "blaster-03",
+          "name": "EVFX06_01_SingleBlast",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -9944,7 +9944,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Attack1",
+          "name": "blaster_16",
           "pan": 0,
           "pitch": 100,
           "volume": 90
@@ -10020,7 +10020,17 @@
   {
     "name": "Graviton Shot",
     "flashTimings": [],
-    "soundTimings": [],
+    "soundTimings": [
+      {
+        "frame": 0,
+        "se": {
+          "name": "blaster_14",
+          "pan": 0,
+          "pitch": 50,
+          "volume": 70
+        }
+      }
+    ],
     "effectName": "BlackHole-01",
     "displayType": 0,
     "offsetX": 0,

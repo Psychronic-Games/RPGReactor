@@ -105,27 +105,81 @@ test('every tracked Demo asset is present on disk', () => {
     assert.deepEqual(missing, [], `tracked Demo files missing on disk: ${missing.slice(0, 5).join(', ')}`);
 });
 
-test('every sound the Demo names exists on disk with that exact spelling', () => {
-    // A browser build cannot repair a name, and a missing sound stops a battle with a load error.
-    const onDisk = new Set(fs.readdirSync(path.join(demoRoot, 'audio', 'se')).map(file => file.replace(/\.[^.]+$/, '')));
-    const named = new Map();
-    const note = (name, where) => { if (name) named.set(name, (named.get(name) || []).concat(where)); };
-    const animations = JSON.parse(fs.readFileSync(path.join(demoRoot, 'data', 'Animations.json'), 'utf8'));
-    for (const animation of animations) {
+/**
+ * Every audio name the Demo can play, with where it is named: animation sound
+ * timings (MZ soundTimings and MV timings), System sounds, music and jingles,
+ * event commands and move routes on maps, common events and troop pages,
+ * sequence sound steps, and plugin parameters named like a sound.
+ */
+function demoAudioReferences() {
+    const data = path.join(demoRoot, 'data');
+    const read = name => JSON.parse(fs.readFileSync(path.join(data, name), 'utf8'));
+    const refs = [];
+    const note = (kind, name, where) => { if (typeof name === 'string' && name) refs.push({ kind, name, where }); };
+    for (const animation of read('Animations.json')) {
         if (!animation) continue;
-        for (const timing of animation.soundTimings || []) note(timing.se && timing.se.name, `animation ${animation.id} ${animation.name}`);
+        for (const timing of animation.soundTimings || []) note('se', timing.se && timing.se.name, `animation ${animation.id} ${animation.name}`);
+        for (const timing of animation.timings || []) note('se', timing.se && timing.se.name, `animation ${animation.id} ${animation.name} (MV timings)`);
     }
-    const system = JSON.parse(fs.readFileSync(path.join(demoRoot, 'data', 'System.json'), 'utf8'));
-    (system.sounds || []).forEach((sound, index) => note(sound && sound.name, `system sound ${index}`));
-    const sequences = JSON.parse(fs.readFileSync(path.join(demoRoot, 'data', 'ActionSequences.json'), 'utf8'));
-    const walk = (node, where) => {
-        if (!node || typeof node !== 'object') return;
-        if (Array.isArray(node)) return node.forEach(item => walk(item, where));
-        if (typeof node.se === 'string') note(node.se, where);
-        if (node.se && typeof node.se === 'object' && typeof node.se.name === 'string') note(node.se.name, where);
-        for (const key of Object.keys(node)) if (key !== 'se') walk(node[key], where);
+    const system = read('System.json');
+    (system.sounds || []).forEach((sound, index) => note('se', sound && sound.name, `system sound ${index}`));
+    for (const [key, kind] of [['titleBgm', 'bgm'], ['battleBgm', 'bgm'], ['boat', 'bgm'], ['ship', 'bgm'], ['airship', 'bgm'], ['victoryMe', 'me'], ['defeatMe', 'me'], ['gameoverMe', 'me']]) {
+        const value = system[key];
+        if (value && value.bgm) note('bgm', value.bgm.name, `system ${key}`);
+        else if (value) note(kind, value.name, `system ${key}`);
+    }
+    const commandKinds = { 241: 'bgm', 245: 'bgs', 249: 'me', 250: 'se' };
+    const walkList = (list, where) => {
+        for (const command of list || []) {
+            const p = command.parameters || [];
+            if (commandKinds[command.code]) note(commandKinds[command.code], p[0] && p[0].name, `${where} command ${command.code}`);
+            if (command.code === 205 && p[1] && p[1].list) for (const move of p[1].list) if (move.code === 44 && move.parameters && move.parameters[0]) note('se', move.parameters[0].name, `${where} route`);
+            if (command.code === 132) note('bgm', p[0] && p[0].name, `${where} battle music`);
+            if (command.code === 133) note('me', p[0] && p[0].name, `${where} victory jingle`);
+            if (command.code === 139) note('me', p[0] && p[0].name, `${where} defeat jingle`);
+            if (command.code === 140) note('bgm', p[1] && p[1].name, `${where} vehicle music`);
+        }
     };
-    for (const sequence of sequences) if (sequence) walk(sequence.steps || sequence, `sequence ${sequence.id} ${sequence.name}`);
-    const missing = [...named].filter(([name]) => !onDisk.has(name)).map(([name, where]) => `${name} (${where.slice(0, 3).join('; ')})`);
-    assert.deepEqual(missing, [], 'sounds the Demo names but does not ship');
+    for (const file of fs.readdirSync(data).filter(name => /^Map\d+\.json$/.test(name))) {
+        const map = read(file);
+        if (map.autoplayBgm && map.bgm) note('bgm', map.bgm.name, `${file} autoplay`);
+        if (map.autoplayBgs && map.bgs) note('bgs', map.bgs.name, `${file} autoplay`);
+        for (const event of map.events || []) {
+            if (!event) continue;
+            (event.pages || []).forEach((page, index) => {
+                walkList(page.list, `${file} event ${event.id} page ${index}`);
+                for (const move of (page.moveRoute && page.moveRoute.list) || []) if (move.code === 44 && move.parameters && move.parameters[0]) note('se', move.parameters[0].name, `${file} event ${event.id} autonomous route`);
+            });
+        }
+    }
+    for (const common of read('CommonEvents.json')) if (common) walkList(common.list, `common event ${common.id}`);
+    for (const troop of read('Troops.json')) if (troop) (troop.pages || []).forEach((page, index) => walkList(page.list, `troop ${troop.id} page ${index}`));
+    const sequences = fs.readFileSync(path.join(data, 'ActionSequences.json'), 'utf8');
+    for (const match of sequences.matchAll(/"se":\s*(?:"([^"]+)"|\{[^}]*"name":\s*"([^"]+)")/g)) note('se', match[1] || match[2], 'action sequence');
+    const pluginSource = fs.readFileSync(path.join(demoRoot, 'js', 'reactor_plugins.js'), 'utf8');
+    const plugins = JSON.parse(pluginSource.slice(pluginSource.indexOf('['), pluginSource.lastIndexOf(']') + 1));
+    const walkParams = (value, plugin, key) => {
+        if (typeof value === 'string') {
+            try { const parsed = JSON.parse(value); if (parsed && typeof parsed === 'object') return walkParams(parsed, plugin, key); } catch (error) { /* a plain string */ }
+            if (/(^|[a-z_])(se|sound|sfx)$/i.test(key) && /^[A-Za-z0-9 _.-]{2,40}$/.test(value) && !/^\d+$/.test(value) && !/^(true|false|none|off|on)$/i.test(value)) note('se', value, `plugin ${plugin} ${key}`);
+            return;
+        }
+        if (value && typeof value === 'object') for (const child of Object.keys(value)) walkParams(value[child], plugin, child);
+    };
+    for (const plugin of plugins) if (plugin.status) walkParams(plugin.parameters, plugin.name, '');
+    return refs;
+}
+
+test('every sound, track and jingle the Demo names exists on disk with that exact spelling', () => {
+    // A browser build cannot repair a name, and a missing file stops the game with a load error.
+    const onDisk = {};
+    for (const kind of ['se', 'bgm', 'bgs', 'me']) {
+        const folder = path.join(demoRoot, 'audio', kind);
+        onDisk[kind] = new Set(fs.existsSync(folder) ? fs.readdirSync(folder).map(file => file.replace(/\.[^.]+$/, '')) : []);
+    }
+    const refs = demoAudioReferences();
+    assert.ok(refs.length > 400, `the audit sees the Demo's references (${refs.length})`);
+    const missing = new Map();
+    for (const ref of refs) if (!onDisk[ref.kind].has(ref.name)) missing.set(`${ref.kind}/${ref.name}`, (missing.get(`${ref.kind}/${ref.name}`) || []).concat(ref.where));
+    assert.deepEqual([...missing].map(([name, where]) => `${name} (${[...new Set(where)].slice(0, 3).join('; ')})`), [], 'audio the Demo names but does not ship');
 });

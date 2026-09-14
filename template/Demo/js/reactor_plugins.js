@@ -366,7 +366,7 @@ var $plugins =
             "showLevels": "true",
             "showLevelProgress": "true",
             "playLevelUpSound": "true",
-            "levelUpSE": "Up4",
+            "levelUpSE": "powerup-02",
             "expAnimationSpeed": "30",
             "expBarColor1": "#44ff88",
             "expBarColor2": "#44aaff",
