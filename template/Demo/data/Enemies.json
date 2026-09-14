@@ -4,15 +4,22 @@
     "id": 1,
     "actions": [
       {
-        "conditionParam1": 0,
-        "conditionParam2": 0,
+        "skillId": 1,
+        "rating": 4,
         "conditionType": 0,
-        "rating": 5,
-        "skillId": 1
+        "conditionParam1": 0,
+        "conditionParam2": 0
       },
       {
         "skillId": 20,
-        "rating": 5,
+        "rating": 3,
+        "conditionType": 0,
+        "conditionParam1": 0,
+        "conditionParam2": 0
+      },
+      {
+        "skillId": 7,
+        "rating": 6,
         "conditionType": 0,
         "conditionParam1": 0,
         "conditionParam2": 0
@@ -64,7 +71,7 @@
     "name": "Psychronic",
     "note": "",
     "params": [
-      200,
+      2000,
       0,
       25,
       20,
@@ -77,14 +84,21 @@
   {
     "actions": [
       {
-        "conditionParam1": 0,
-        "conditionParam2": 0,
+        "skillId": 1,
+        "rating": 3,
         "conditionType": 0,
-        "rating": 5,
-        "skillId": 1
+        "conditionParam1": 0,
+        "conditionParam2": 0
       },
       {
-        "skillId": 20,
+        "skillId": 6,
+        "rating": 5,
+        "conditionType": 0,
+        "conditionParam1": 0,
+        "conditionParam2": 0
+      },
+      {
+        "skillId": 8,
         "rating": 5,
         "conditionType": 0,
         "conditionParam1": 0,
@@ -137,7 +151,7 @@
     "name": "Tank",
     "note": "",
     "params": [
-      200,
+      3200,
       0,
       25,
       20,

@@ -198,3 +198,15 @@ test('a sequence pose composes its listed parts from rest under a running clip, 
    assert.equal(at(0),45,'starts where the clip holds it');const mid=at(10);assert.ok(mid>45&&mid<90,'on its way: '+mid);assert.equal(at(20),90); }
  assert.equal(B.partPoseRules(B.step('motion',{motion:B.POSE_MOTION,duration:0,parts:[]}),{}).rules.length,0,'no parts, no rules');
 });
+
+test('an aimed pose part takes its turn from the scene, and a motion can keep posed parts',()=>{
+ const step=B.step('motion',{motion:B.POSE_MOTION,duration:0,parts:[{part:'Full-Turret',aim:'target',rotate:[0,0,0]},{part:'Hatch',rotate:[10,0,0]}]});
+ const {rules}=B.partPoseRules(step,{},(entry)=>entry.part==='Full-Turret'?37:0);
+ assert.deepEqual(rules.find(r=>r.part==='Full-Turret').keys[1].rotate,[0,37,0],'the aim resolver answers the turn about the up axis');
+ assert.deepEqual(rules.find(r=>r.part==='Hatch').keys[1].rotate,[10,0,0],'other parts keep their authored turn');
+ assert.deepEqual(B.partPoseRules(step,{}).rules.find(r=>r.part==='Full-Turret').keys[1].rotate,[0,0,0],'no resolver, no turn');
+ const fire=B.step('motion',{motion:'Fire Canon',duration:0,keepPose:true}),walk=B.step('motion',{motion:'walk',duration:0});
+ const plan=B.posePlan({id:1,version:1,steps:[step,fire,walk]});
+ assert.equal(plan.rules[fire.id],undefined,'a motion that keeps posed parts releases nothing');
+ assert.ok(plan.rules[walk.id]?.length,'the next plain motion still brings the parts home');
+});

@@ -77,7 +77,48 @@
       "eventModes": {}
     }
   },
-  "skills": {},
+  "skills": {
+    "4": {
+      "mode": "sequence",
+      "sequenceId": 25
+    },
+    "5": {
+      "mode": "sequence",
+      "sequenceId": 26
+    },
+    "6": {
+      "mode": "sequence",
+      "sequenceId": 30
+    },
+    "7": {
+      "mode": "sequence",
+      "sequenceId": 32
+    },
+    "8": {
+      "mode": "sequence",
+      "sequenceId": 33
+    },
+    "172": {
+      "mode": "sequence",
+      "sequenceId": 20
+    },
+    "173": {
+      "mode": "sequence",
+      "sequenceId": 22
+    },
+    "174": {
+      "mode": "sequence",
+      "sequenceId": 21
+    },
+    "175": {
+      "mode": "sequence",
+      "sequenceId": 29
+    },
+    "178": {
+      "mode": "sequence",
+      "sequenceId": 23
+    }
+  },
   "items": {
     "7": {
       "mode": "sequence",
@@ -118,6 +159,14 @@
     "19": {
       "mode": "sequence",
       "sequenceId": 17
+    },
+    "20": {
+      "mode": "sequence",
+      "sequenceId": 27
+    },
+    "21": {
+      "mode": "sequence",
+      "sequenceId": 28
     }
   },
   "weapons": {
@@ -128,6 +177,10 @@
     "49": {
       "mode": "sequence",
       "sequenceId": 19
+    },
+    "50": {
+      "mode": "sequence",
+      "sequenceId": 24
     }
   },
   "actors": {
@@ -147,7 +200,12 @@
       "mode": "inherit"
     }
   },
-  "enemies": {},
+  "enemies": {
+    "2": {
+      "mode": "sequence",
+      "sequenceId": 31
+    }
+  },
   "commandWindow": "battler",
   "startMessages": false
 }

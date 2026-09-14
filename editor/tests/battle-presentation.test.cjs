@@ -354,3 +354,40 @@ test('a told cinematic focus frames the weighted centre of the action and glides
   view.endCinematicAction();assert.equal(view.cinematicTrack,null);
  }finally{global.Reactor3D=previousR;global.ReactorBattleData=previousB;}
 });
+
+test('a room tells how far a carved part must turn to face a point, from the part pivots in the model frame',()=>{
+ const path=require('node:path'),R=require('../../runtime/reactor_3d.js'),View=require('../../runtime/reactor_battle_room.js'),previousR=global.Reactor3D,previousB=global.ReactorBattleData;global.Reactor3D=R;global.ReactorBattleData=B;global.self=global;global.window=global;require(path.join(__dirname,'../../runtime/libs/three.js'));const THREE=global.THREE;
+ try{
+  const settings=B.room({id:1,width:50,height:50});const view=new View({reactor3d:{}},{},settings,{});
+  const object=new THREE.Group(),root=new THREE.Group();object.add(root);object.position.set(10.5,0,10.5);object.updateMatrixWorld(true);
+  const mesh=new THREE.Mesh(new THREE.BoxGeometry(1,1,1),new THREE.MeshBasicMaterial());root.add(mesh);
+  // The gun sits +x of the turret pivot: the turret rests pointing east.
+  const binding={root,meshes:[{mesh,parts:[{name:'Gun',pivot:[2,1,0]},{name:'Turret',pivot:[0,1,0]}],baseQuaternion:new THREE.Quaternion()}]};
+  view.models.set('t',{object,binding,position:{x:10,y:10,z:0},rules:[]});
+  assert.ok(Math.abs(view.aimTurn('t','Turret',{x:20,y:10}))<1e-6,'a target due east needs no turn');
+  assert.ok(Math.abs(view.aimTurn('t','Turret',{x:10,y:20})-(-90))<1e-6,'a target due south is a quarter turn one way: '+view.aimTurn('t','Turret',{x:10,y:20}));
+  assert.ok(Math.abs(view.aimTurn('t','Turret',{x:10,y:0})-90)<1e-6,'due north the other');
+  object.rotation.y=Math.PI/2;object.updateMatrixWorld(true);
+  assert.ok(Math.abs(view.aimTurn('t','Turret',{x:20,y:10})-(90))<1e-6||Math.abs(view.aimTurn('t','Turret',{x:20,y:10})-(-90))<1e-6,'the answer follows the model\'s own turn');
+  assert.equal(view.aimTurn('t','Nothing',{x:1,y:1}),0,'an unknown part turns nothing');
+ }finally{global.Reactor3D=previousR;global.ReactorBattleData=previousB;}
+});
+
+test('a held model is read by its shape: long axis, tip, grip and which way its bulk hangs; a reach lands a hand on a point',()=>{
+ const path=require('node:path'),R=require('../../runtime/reactor_3d.js'),View=require('../../runtime/reactor_battle_room.js'),previousR=global.Reactor3D,previousB=global.ReactorBattleData;global.Reactor3D=R;global.ReactorBattleData=B;global.self=global;global.window=global;require(path.join(__dirname,'../../runtime/libs/three.js'));const THREE=global.THREE;
+ try{
+  // A sword along +Y: a thin blade from y 0.3 to 3, a wide guard at y 0.2, a grip below it; the bulk hangs to -Z below the guard.
+  const sword=new THREE.Group();const add=(w,h,d,y,z=0)=>{const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d,2,12,2),new THREE.MeshBasicMaterial());m.position.set(0,y,z);sword.add(m);};
+  add(.16,2.7,.04,1.9);add(.6,.08,.12,.42);add(.1,.7,.1,0);add(.14,.06,.3,.42,-.15);
+  const shape=R.heldShape(sword);
+  assert.deepEqual(shape.axis,[0,1,0],'the blade runs up the long axis toward the tip');assert.ok(shape.base[1]<.5,'the handle end is the bottom: '+shape.base[1]);assert.ok(shape.grip<.25,'the grip is just under the guard: '+shape.grip);assert.ok(shape.up[2]>.9,'the bulk hangs to -Z so up is +Z');
+  // A two-bone arm: shoulder → elbow → hand, straight along +X; the hand reaches a point within its length.
+  const settings=B.room({id:1,width:50,height:50});const view=new View({reactor3d:{}},{},settings,{});
+  const body=new THREE.Group(),upper=new THREE.Group(),fore=new THREE.Group(),hand=new THREE.Group();upper.name='RightArm';fore.name='RightForeArm';hand.name='RightHand';body.add(upper);upper.add(fore);fore.add(hand);upper.position.set(0,1.4,0);fore.position.set(.5,0,0);hand.position.set(.4,0,0);body.updateMatrixWorld(true);
+  view.models.set('a',{object:body,position:{x:0,y:0,z:0},rules:[],binding:{root:body,meshes:[]}});
+  const target=new THREE.Vector3(.3,1.0,.5);assert.equal(view.reachArm('a','right',target),true);
+  const reached=hand.getWorldPosition(new THREE.Vector3());assert.ok(reached.distanceTo(target)<1e-3,'the hand lands on the point: '+reached.toArray().map(n=>n.toFixed(3)));
+  const elbow=fore.getWorldPosition(new THREE.Vector3());assert.ok(Math.abs(elbow.distanceTo(upper.getWorldPosition(new THREE.Vector3()))-.5)<1e-6,'the upper arm keeps its length');
+  const far=new THREE.Vector3(5,1.4,0);view.reachArm('a','right',far);assert.ok(Math.abs(hand.getWorldPosition(new THREE.Vector3()).x-.9)<1e-3,'a point out of reach straightens the arm toward it');
+ }finally{global.Reactor3D=previousR;global.ReactorBattleData=previousB;}
+});

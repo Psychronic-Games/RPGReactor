@@ -13253,6 +13253,64 @@ Reactor3D.buildAnimatedGlbTemplate = function(json, bin, root, nodes, textures) 
  * vertices are actually skinned on the CPU (a sample of them), since a
  * skinned geometry's own box is the unposed mesh, wherever the bones are.
  */
+/**
+ * What a held model is shaped like, in its own frame: the long axis (a
+ * blade, a barrel) signed toward the thin end (the tip, the muzzle), the
+ * side its bulk hangs off that axis (a grip, a magazine: "down"), and the
+ * handle end. A hand lays the long axis along the forearm, tip forward,
+ * bulk down, handle end in the fist, so no per-weapon turns are needed.
+ */
+Reactor3D.heldShape = function(object) {
+    if (!object) return null;
+    if (object.userData.__heldShape) return object.userData.__heldShape;
+    object.updateMatrixWorld(true);
+    const toLocal = new THREE.Matrix4().copy(object.matrixWorld).invert(), points = [];
+    const v = new THREE.Vector3();
+    object.traverse(mesh => {
+        if (!mesh.isMesh || !mesh.geometry?.attributes?.position) return;
+        const position = mesh.geometry.attributes.position, m = new THREE.Matrix4().multiplyMatrices(toLocal, mesh.matrixWorld);
+        const stride = Math.max(1, Math.floor(position.count / 4000));
+        for (let i = 0; i < position.count; i += stride) { v.fromBufferAttribute(position, i).applyMatrix4(m); points.push([v.x, v.y, v.z]); }
+    });
+    if (points.length < 8) return null;
+    const min = [Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity];
+    for (const p of points) for (let a = 0; a < 3; a++) { if (p[a] < min[a]) min[a] = p[a]; if (p[a] > max[a]) max[a] = p[a]; }
+    const size = [0, 1, 2].map(a => max[a] - min[a]), axis = size.indexOf(Math.max(...size)), centre = [0, 1, 2].map(a => (min[a] + max[a]) / 2);
+    const others = [0, 1, 2].filter(a => a !== axis), length = size[axis] || 1;
+    // The handle end is the end nearer the widest cross-section: a sword's
+    // guard, a rifle's receiver and stock, a pistol's grip and slide all sit
+    // toward the hand; a broad blade tip can still be wider than a pommel,
+    // so the thin end alone would be fooled.
+    const N = 20, slices = new Array(N).fill(0), sliceOf = p => Math.min(N - 1, Math.floor((p[axis] - min[axis]) / length * N));
+    for (const p of points) { const t = sliceOf(p); const r = Math.hypot(p[others[0]] - centre[others[0]], p[others[1]] - centre[others[1]]); if (r > slices[t]) slices[t] = r; }
+    let widest = 0; for (let i = 1; i < N; i++) if (slices[i] > slices[widest]) widest = i;
+    const tipAtMax = widest < N / 2, sign = tipAtMax ? 1 : -1;
+    // Where the bulk hangs: the mean offset across the line that runs through
+    // the tip's own cross-section (the muzzle, the blade), not the box centre.
+    const tipSlice = tipAtMax ? N - 1 : 0, line = [0, 0, 0]; let onTip = 0;
+    for (const p of points) { if (sliceOf(p) !== tipSlice) continue; onTip++; for (const a of others) line[a] += p[a]; }
+    for (const a of others) line[a] = onTip ? line[a] / onTip : centre[a];
+    const mean = [0, 0, 0]; for (const p of points) for (const a of others) mean[a] += p[a] - line[a];
+    for (const a of others) mean[a] /= points.length;
+    const hang = Math.hypot(mean[others[0]], mean[others[1]]);
+    const down = [0, 0, 0];
+    if (hang > length * .005) { for (const a of others) down[a] = mean[a] / hang; }
+    else { const second = others[0], third = others[1]; down[size[second] >= size[third] ? second : third] = -1; }
+    const unit = [0, 0, 0]; unit[axis] = sign;
+    const base = centre.slice(); base[axis] = tipAtMax ? min[axis] : max[axis];
+    // The grip: the narrowest slice between the handle end and the widest
+    // one (a sword's grip behind its guard, a rifle's neck behind the
+    // receiver), as a fraction of the length from the handle end; a thing
+    // with nothing narrower there is held a fifth of the way along.
+    const order = []; for (let k = 0; k < N; k++) order.push(tipAtMax ? k : N - 1 - k);
+    // The very end slice is a pommel or a buttplate, not the grip.
+    let grip = .2, best = Infinity;
+    for (let k = 1; k < N; k++) { const i = order[k]; if (i === widest) break; if (slices[i] > 0 && slices[i] < best) { best = slices[i]; grip = (k + .5) / N; } }
+    const shape = { axis: unit, up: down.map(n => -n), down, length, base, centre, grip, slices: slices.map(n => Math.round(n * 1000) / 1000), size, widest };
+    object.userData.__heldShape = shape;
+    return shape;
+};
+
 Reactor3D.measureSkinnedBox = function(root) {
     const box = new THREE.Box3();
     const temp = new THREE.Vector3();
@@ -14705,6 +14763,10 @@ Reactor3D.applyModelAnimation = function(binding, rules, state) {
                 rate = rule.rate || 1;
             }
         }
+        // A pose step holds the whole model at rest while it stands (a clip
+        // would move the spine and shoulders under the posed arm, and the
+        // editor shows the pose on a still model): only travel plays a clip.
+        const posed = !!state.action && String(state.action.name).startsWith("pose:") && !state.moving;
         if (!desired) {
             // Movement is held for a moment after it stops being reported.
             //
@@ -14744,6 +14806,9 @@ Reactor3D.applyModelAnimation = function(binding, rules, state) {
                 rate = rule.rate || 1;
             }
         }
+        // Under a pose the idle plays its first frame and stays there: a
+        // still stance for the posed arm to work from, never the bind T-pose.
+        if (posed && desired && !state.moving) { key = desired + ':posed'; once = false; }
         if (binding.clipKey !== key) {
             binding.clipKey = key;
             const previous = binding.clipAction;
@@ -14762,6 +14827,7 @@ Reactor3D.applyModelAnimation = function(binding, rules, state) {
             }
             if (previous && previous !== next) previous.fadeOut(0.2);
             binding.clipAction = next;
+            if (next && posed) { next.paused = true; next.time = 0; }
         }
         if (binding.clipAction) binding.clipAction.timeScale = rate;
         // The mixer follows the caller's frame clock, not the call rate:

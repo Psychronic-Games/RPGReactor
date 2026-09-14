@@ -142,6 +142,27 @@
                     const stretch = spec.stretch || [1, 1, 1];
                     record.object.scale.set(...stretch.map(axis => axis * record.scale));
                 } else if (!record.billboard) {
+                    if(p.frame){
+                        // In a hand: the model's long axis lies along the forearm with its tip forward and its bulk hanging down, the handle end (pivotY of the way along) in the fist; Tilt, Turn and Roll then adjust that in the hand's frame, and it all rides the hand.
+                        const T=root.THREE,R=root.Reactor3D,shape=R.heldShape(record.object),hand=p.frame.quaternion;
+                        const forward=p.frame.forearm?p.frame.forearm.clone():new T.Vector3(0,0,1).applyQuaternion(hand);
+                        let up=new T.Vector3(0,1,0);up.sub(forward.clone().multiplyScalar(up.dot(forward)));if(up.lengthSq()<1e-6)up.set(0,0,1);up.normalize();
+                        const right=new T.Vector3().crossVectors(forward,up);
+                        const la=new T.Vector3().fromArray(shape?shape.axis:[0,1,0]);let lu=new T.Vector3().fromArray(shape?shape.up:[0,0,1]);lu.sub(la.clone().multiplyScalar(lu.dot(la)));if(lu.lengthSq()<1e-6)lu.set(0,0,1);lu.normalize();const lr=new T.Vector3().crossVectors(la,lu);
+                        const world=new T.Matrix4().makeBasis(forward,up,right),local=new T.Matrix4().makeBasis(la,lu,lr);
+                        const base=new T.Quaternion().setFromRotationMatrix(world.multiply(local.transpose()));
+                        const adjust=new T.Quaternion().setFromEuler(new T.Euler((p.rotateX||0)*Math.PI/180,(p.rotateY||0)*Math.PI/180,(p.rotateZ||0)*Math.PI/180,'XYZ'));
+                        // The adjustment turns about the hand's own axes.
+                        record.object.quaternion.copy(hand).multiply(adjust).multiply(hand.clone().invert()).multiply(base);
+                        record.object.scale.set(...['scaleX','scaleY','scaleZ'].map((axis,i)=>record.scale*(p.scale??1)*(p[axis]??1)*(record.spec.stretch?.[i]??1)));
+                        if(shape){
+                            // The point pivotY of the way from the handle end to the tip sits in the hand.
+                            // Held By 0 (the base) is the model's own grip; any other value is that fraction of the way from the handle end to the tip.
+                            const along=p.pivotY?Math.max(0,Math.min(1,p.pivotY)):shape.grip,gripPoint=new T.Vector3().fromArray(shape.base).add(new T.Vector3().fromArray(shape.axis).multiplyScalar(shape.length*along));
+                            record.object.position.sub(gripPoint.multiplyScalar(record.object.scale.x).applyQuaternion(record.object.quaternion));
+                        }
+                        return;
+                    }
                     root.Reactor3D.applyEventModelPose(record.object,
                     {...record.spec,pitch:(record.spec.pitch||0)+(p.rotateX||0)*Math.PI/180,roll:(record.spec.roll||0)+(p.rotateZ||0)*Math.PI/180,yaw:(record.spec.yaw||0)+((p.facing||0)+(p.rotateY||0))*Math.PI/180},2,{preview:true,faceYaw:((p.facing||0)+(p.rotateY||0))*Math.PI/180});
                     record.object.scale.set(...['scaleX','scaleY','scaleZ'].map((axis,i)=>record.scale*(p.scale??1)*(p[axis]??1)*(record.spec.stretch?.[i]??1)));
@@ -182,6 +203,20 @@
             r.height=height;r.object.scale.set(height*frame.width/frame.height*(position.scale??1)*(position.scaleX??1)*(position.flipX?-1:1),height*(position.scale??1)*(position.scaleY??1),1);
             this.place(key,position);r.object.quaternion.copy(this.camera.quaternion);
         }
+        /**
+         * The hand (or named bone) an attachment names, as a frame: its world
+         * orientation and the forearm's direction (from the joint above it to
+         * it, in the room), or null for an offset or a carved part.
+         */
+        static attachmentQuaternion(record, attachment, boneName) {
+            if(!record?.object||(!boneName&&!['rightHand','leftHand'].includes(attachment)))return null;
+            BattleRoomView.attachmentWorld(record,attachment,boneName);
+            const node=record.attachmentBones?.get(boneName||attachment);if(!node)return null;
+            const T=root.THREE;node.updateMatrixWorld?.(true);
+            const quaternion=node.getWorldQuaternion(new T.Quaternion()),at=node.getWorldPosition(new T.Vector3());
+            let forearm=null;const parent=node.parent;if(parent?.getWorldPosition){const from=parent.getWorldPosition(new T.Vector3());forearm=at.clone().sub(from);if(forearm.lengthSq()<1e-8)forearm=null;else forearm.normalize();}
+            return {quaternion,forearm};
+        }
         static attachmentWorld(record, attachment, boneName) {
             if(!record?.object||(!boneName&&!['rightHand','leftHand'].includes(attachment)))return null;
             const name=boneName||attachment,cache=record.attachmentBones||=(new Map());
@@ -192,8 +227,85 @@
                 // that actually moves it; the rig's bone is the hand that moves.
                 record.object.traverse(node=>{if(!wanted.includes(normalize(node.name)))return;if(!any)any=node;if(!found&&(node.userData?.__reactorRigBone||node.userData?.parts?.length))found=node;});cache.set(name,found||any);
             }
-            const bone=cache.get(name);if(!bone)return null;
+            const bone=cache.get(name);
+            if(!bone&&boneName&&record.binding){
+                // A carved part (a tank's gun) is not a node: its pivot, in the model's frame, is the point.
+                const wanted=String(boneName).toLowerCase();for(const e of record.binding.meshes){const part=e.parts.find(p=>String(p.name).toLowerCase()===wanted&&p.pivot);if(part){const frame=record.binding.root||record.object;frame.updateMatrixWorld(true);return new root.THREE.Vector3().fromArray(part.pivot).applyMatrix4(frame.matrixWorld);}}
+            }
+            if(!bone)return null;
             record.object.updateMatrixWorld(true);return bone.getWorldPosition(new root.THREE.Vector3());
+        }
+        /** The hand's world orientation for a held step on a battler, or null when it is not held in a hand. */
+        attachmentFrame(key, step) {
+            const record=this.models.get(key);if(!record||!step?.attachment||step.attachment==='offset'||step.attachment==='center')return null;
+            return BattleRoomView.attachmentQuaternion(record,step.attachment,step.bone);
+        }
+        /**
+         * Bends an arm so its hand lands on a point (two-bone reach in the
+         * room): the upper arm turns so the elbow sits on the shoulder-to-
+         * point line, off toward where it already bends and downward, then
+         * the forearm turns to the point. Works on the joints the pose rules
+         * already move, after them, for this frame.
+         */
+        reachArm(key, side, target, {down=.5}={}) {
+            const record=this.models.get(key),T=root.THREE;if(!record?.object||!target)return false;
+            BattleRoomView.attachmentWorld(record,side+'Hand','');const hand=record.attachmentBones?.get(side+'Hand'),fore=hand?.parent,upper=fore?.parent;if(!upper?.parent)return false;
+            upper.updateMatrixWorld(true);
+            const S=upper.getWorldPosition(new T.Vector3()),E=fore.getWorldPosition(new T.Vector3()),H=hand.getWorldPosition(new T.Vector3());
+            const a=S.distanceTo(E),b=E.distanceTo(H);if(a<1e-4||b<1e-4)return false;
+            const goal=target.clone();let d=S.distanceTo(goal);if(d<1e-4)return false;d=Math.max(Math.abs(a-b)+1e-3,Math.min(a+b-1e-3,d));
+            const dir=goal.clone().sub(S).normalize();
+            let pole=E.clone().sub(S);pole.sub(dir.clone().multiplyScalar(pole.dot(dir)));if(pole.lengthSq()<1e-6)pole.set(0,-1,0);pole.normalize();
+            pole.lerp(new T.Vector3(0,-1,0),down);pole.sub(dir.clone().multiplyScalar(pole.dot(dir)));if(pole.lengthSq()<1e-6)pole.set(0,-1,0);pole.normalize();
+            const cosA=Math.max(-1,Math.min(1,(a*a+d*d-b*b)/(2*a*d))),angA=Math.acos(cosA);
+            const elbow=S.clone().add(dir.clone().multiplyScalar(Math.cos(angA)*a)).add(pole.clone().multiplyScalar(Math.sin(angA)*a));
+            const turn=(bone,from,to)=>{const q=new T.Quaternion().setFromUnitVectors(from.normalize(),to.normalize()),parentQ=bone.parent.getWorldQuaternion(new T.Quaternion());bone.quaternion.premultiply(parentQ.clone().invert().multiply(q).multiply(parentQ));bone.updateMatrixWorld(true);};
+            turn(upper,E.clone().sub(S),elbow.clone().sub(S));
+            const E2=fore.getWorldPosition(new T.Vector3()),H2=hand.getWorldPosition(new T.Vector3());
+            turn(fore,H2.clone().sub(E2),goal.clone().sub(E2));
+            return true;
+        }
+        /**
+         * Holds a shown weapon the way its step asks: aimed, the shooting arm
+         * reaches down the line to the target so the barrel (laid along that
+         * line) points at it and the stock sits back by the shoulder; the
+         * answer is the hand frame to place the item with.
+         */
+        holdAim(ownerKey, heldKey, step, at) {
+            const T=root.THREE,R=root.Reactor3D,side=step.attachment==='leftHand'?'left':'right';
+            const frame=this.attachmentFrame(ownerKey,step);if(!frame||step.aim!=='target'||!at)return frame;
+            const owner=this.models.get(ownerKey),held=this.models.get(heldKey);
+            BattleRoomView.attachmentWorld(owner,side+'Hand','');const hand=owner.attachmentBones?.get(side+'Hand'),upper=hand?.parent?.parent;if(!upper)return frame;
+            const S=upper.getWorldPosition(new T.Vector3()),goal=new T.Vector3(at.x+.5,(at.z||0)+(at.height??1.2),at.y+.5),dir=goal.clone().sub(S);if(dir.lengthSq()<1e-6)return frame;dir.normalize();
+            const shape=held?.object?R.heldShape(held.object):null,gripLength=shape?shape.grip*shape.length*(held.scale||1):.3,itemLength=shape?shape.length*(held.scale||1):0;
+            // A long gun is shouldered (the stock ends by the shoulder); a short one is held out at arm's length.
+            const fore=hand.parent,E=fore.getWorldPosition(new T.Vector3()),H=hand.getWorldPosition(new T.Vector3()),reach=S.distanceTo(E)+E.distanceTo(H);
+            const distance=itemLength>1.2?Math.max(.35,gripLength+.12):reach*.86;
+            this.reachArm(ownerKey,side,S.clone().add(dir.clone().multiplyScalar(distance)),{down:.65});
+            const after=this.attachmentFrame(ownerKey,step)||frame;after.forearm=dir;return after;
+        }
+        /**
+         * Holds a shown weapon for this frame, in order: the aiming arm reaches
+         * (bending the arm), the hand's point is read from the bent arm, the
+         * item is placed there in the hand's frame, then the other hand takes
+         * it. Returns the hand point in room tiles.
+         */
+        holdHeld(ownerKey, heldKey, step, ownerPose, at, placement) {
+            const frame=this.holdAim(ownerKey,heldKey,step,at);
+            const p=this.attachmentPoint(ownerKey,step,ownerPose);if(!p)return null;
+            this.place(heldKey,{...placement,x:p.x,y:p.y,z:p.z,frame});
+            if(placement.visible!==false)this.holdBoth(ownerKey,heldKey,step);
+            return p;
+        }
+        /** The other hand takes the held thing a little way out along it, as far as an arm reaches. */
+        holdBoth(ownerKey, heldKey, step) {
+            const T=root.THREE,R=root.Reactor3D;if(step.hands!=='both')return;
+            const held=this.models.get(heldKey);if(!held?.object)return;const shape=R.heldShape(held.object);if(!shape)return;
+            const other=step.attachment==='leftHand'?'right':'left';
+            held.object.updateMatrixWorld(true);
+            const grip=new T.Vector3().fromArray(shape.base).add(new T.Vector3().fromArray(shape.axis).multiplyScalar(shape.length*shape.grip)),tip=new T.Vector3().fromArray(shape.base).add(new T.Vector3().fromArray(shape.axis).multiplyScalar(shape.length));
+            const point=grip.lerp(tip,.3).applyMatrix4(held.object.matrixWorld);
+            this.reachArm(ownerKey,other,point,{down:.7});
         }
         attachmentPoint(key, step, pose) {
             const record=this.models.get(key)||this.billboards.get(key),p=pose||record?.position||{x:0,y:0,z:0},world=BattleRoomView.attachmentWorld(record,step.attachment,step.bone);
@@ -292,18 +404,51 @@
             // The ray is cast every third frame and its answer kept between: the eye moves a fraction of a tile per frame.
             const cache=this._eyeRayCache;if(cache&&this.frame-cache.frame<3&&Math.abs(cache.x-c.x)<.5&&Math.abs(cache.y-c.y)<.5&&Math.abs(cache.yaw-c.yaw)<3)return Math.max(3,Math.min(c.distance,limit,cache.limit));
             const T=root.THREE;if(T&&limit>3&&this.scene){
-                // Everything in the room but the cast and what it holds or throws: the map's own objects, props, events, walls.
-                const skip=new Set();for(const [key,r] of [...this.models,...this.billboards])if(!(key.startsWith('prop:')||key.startsWith('event:'))){if(r.object)skip.add(r.object);if(r.shadow)skip.add(r.shadow);}
-                const blockers=this.scene.children.filter(o=>!skip.has(o)&&o.visible!==false&&!o.isLight&&!o.isCamera);
-                if(blockers.length){
-                    const ray=this._eyeRay||(this._eyeRay=new T.Raycaster());ray.set(new T.Vector3(c.x+.5,c.z||0,c.y+.5),new T.Vector3(dx,dz,dy).normalize());ray.near=0;ray.far=limit;
-                    const hit=ray.intersectObjects(blockers,true)[0];if(hit)limit=Math.min(limit,hit.distance-.6);
+                // The furniture as boxes, measured once per shot: the map's own objects, props and events, never the cast or what it holds or throws. A box the look-at point sits inside cannot say where its far side is and is left to the wall clamp.
+                const boxes=this.eyeBlockers();
+                if(boxes.length){
+                    const origin=new T.Vector3(c.x+.5,c.z||0,c.y+.5),ray=this._eyeRay3||(this._eyeRay3=new T.Ray());ray.set(origin,new T.Vector3(dx,dz,dy).normalize());const point=new T.Vector3();
+                    for(const box of boxes){if(box.containsPoint(origin))continue;if(ray.intersectBox(box,point))limit=Math.min(limit,Math.max(0,point.distanceTo(origin)-.6));}
                 }
             }
             this._eyeRayCache={frame:this.frame,x:c.x,y:c.y,yaw:c.yaw,limit};
             return Math.max(3,Math.min(c.distance,limit));
         }
         static get EYE_CEILING(){return 6;}
+        /** World boxes of everything a cut must not look through, cached for the shot. */
+        eyeBlockers(){
+            if(this._eyeBoxes&&this._eyeBoxesShot===this.cinematicShot)return this._eyeBoxes;
+            const T=root.THREE,skip=new Set();for(const [key,r] of [...this.models,...this.billboards])if(!(key.startsWith('prop:')||key.startsWith('event:'))){if(r.object)skip.add(r.object);if(r.shadow)skip.add(r.shadow);}
+            const boxes=[];const add=o=>{if(!o||skip.has(o)||o.visible===false||o.isLight||o.isCamera)return;const box=new T.Box3().setFromObject(o);if(!box.isEmpty())boxes.push(box);};
+            for(const o of this.scene?.children||[]){if(o.isGroup&&o.children.length>4&&!this.models.has(o.name)){for(const child of o.children)add(child);}else add(o);}
+            this._eyeBoxes=boxes;this._eyeBoxesShot=this.cinematicShot;return boxes;
+        }
+        /**
+         * Degrees a carved part must turn about its up axis to point at a
+         * room position. The part's rest forward is the line from its pivot
+         * to the pivot of the part nested inside it (a turret's gun), else
+         * the model's own forward; both are taken from the live object, so
+         * the answer holds whatever way the battler faces or the file leans.
+         */
+        aimTurn(key,partName,at){
+            const record=this.models.get(key),T=root.THREE;if(!record?.object||!record.binding||!at)return 0;
+            const wanted=String(partName).toLowerCase(),entries=record.binding.meshes.filter(e=>e.parts.some(p=>String(p.name).toLowerCase()===wanted));if(!entries.length)return 0;
+            const pivotOf=name=>{for(const e of record.binding.meshes){const i=e.parts.findIndex(p=>String(p.name).toLowerCase()===name);if(i>=0&&e.parts[i].pivot)return {pivot:e.parts[i].pivot,entry:e};}return null;};
+            const own=pivotOf(wanted);if(!own)return 0;
+            // The nested part: listed before this one on a mesh they share.
+            let child=null;for(const e of entries){const i=e.parts.findIndex(p=>String(p.name).toLowerCase()===wanted);if(i>0){child=pivotOf(String(e.parts[i-1].name).toLowerCase());if(child)break;}}
+            // Pivots and the rest forward live in the model's frame (the pose frame the rules turn in), so the model root carries them into the room.
+            const frame=record.binding.root||record.object;frame.updateMatrixWorld(true);
+            const local=child?new T.Vector3().fromArray(child.pivot).sub(new T.Vector3().fromArray(own.pivot)):new T.Vector3(0,0,1);
+            if(local.lengthSq()<1e-8)local.set(0,0,1);
+            const q=frame.getWorldQuaternion(new T.Quaternion());
+            const forward=local.clone().applyQuaternion(q);forward.y=0;
+            const pivotWorld=new T.Vector3().fromArray(own.pivot).applyMatrix4(frame.matrixWorld);
+            const desired=new T.Vector3(at.x+.5-pivotWorld.x,0,at.y+.5-pivotWorld.z);
+            if(forward.lengthSq()<1e-8||desired.lengthSq()<1e-8)return 0;
+            forward.normalize();desired.normalize();
+            return Math.atan2(forward.z*desired.x-forward.x*desired.z,forward.x*desired.x+forward.z*desired.z)*180/Math.PI;
+        }
         focusHeight(record){return record?.spec?(record.spec.size||2)*(record.spec.scale||1)*(record.position?.scale||1)*(record.position?.scaleY||1):record?.height||2;}
         cinematicImpact(){
             if(!this.cinematicShot||this.cinematicShot.phase==='impact')return;
@@ -357,7 +502,10 @@
             // Bound the sweep so a long-running action cannot circle the room.
             const age=Math.max(0,this.frame-shot.start),sweep=18*(1-Math.exp(-age/120));
             let target={...base,mode:'fixed',x,y,z:points.reduce((n,p)=>n+(p.z||0)*(p.weight||1),0)/weight+height*.5,yaw:180-shot.yaw+yawOffset+sweep,pitch:20,distance};
-            target.distance=this.distanceInsideRoom(target);
+            const wanted=target.distance;target.distance=this.distanceInsideRoom(target);
+            // A wall behind a big subject (the tank against the west wall) can leave the eye inside it: try the other side of the line, then the far side.
+            const radius=height*.55;
+            if(target.distance<radius){for(const alt of [-yawOffset,180+yawOffset,180-yawOffset]){const other={...target,yaw:180-shot.yaw+alt+sweep,distance:wanted};other.distance=this.distanceInsideRoom(other);if(other.distance>target.distance)target=other;if(target.distance>=radius)break;}}
             if(told){
                 // A told focus moves every frame (a projectile crossing the
                 // room), so the shot glides after it instead of pinning to it;
@@ -444,6 +592,7 @@
                 const motion=r.action?.name,rule=r.rules.find(rule=>rule.trigger==='action'&&rule.name.toLowerCase()===motion?.toLowerCase());
                 const action=r.sequence?.length?this.propAction(r):r.action?{name:rule?.name||motion,frame:r.action.start}:null;
                 if(r.binding&&r.rules.length)R.applyModelAnimation(r.binding,r.rules,{frame:r.sequence?.length?r.animationFrame:this.frame,moving:!!r.moving,dashing:motion==='run',distance:0,scale:r.scale,action,seek:!!this.seekAnimations});
+                this.fireRuleEffects(r,action);
                 r.object.updateMatrixWorld(true);
                 for(const e of r.effects||[])if(e.type==='light' && this.effectActive(r,e)){
                     const light=R.effectLight(r.object,e);if(light){Object.assign(light,R.animateLight(e.light,this.frame,++lightSeed,light.radius,light.intensity));lights.push(light);}
@@ -456,6 +605,24 @@
             this.updateEffects();
             for(const update of this.sequenceVisualUpdates||[])update();
             this.renderer.render(this.scene,this.camera);
+        }
+        /** A rule's timed effects (a muzzle flash at the cannon, a sound) fire once each as the action clock passes them. */
+        fireRuleEffects(record,action) {
+            const R=root.Reactor3D;
+            if(!action||!record.binding){record.fxAction=null;return;}
+            const stamp=action.name+':'+action.frame;if(record.fxAction!==stamp){record.fxAction=stamp;record.fxT=-1;}
+            const now=this.frame-action.frame;
+            for(const rule of record.rules){
+                if(rule.trigger!=='action'||!rule.effects?.length||String(rule.name).toLowerCase()!==String(action.name).toLowerCase())continue;
+                const duration=R.modelRuleDuration(rule,record.binding.clips);
+                for(const effect of R.modelEffectsToFire(rule,Number.isFinite(duration)?duration:Math.max(1,rule.period||1),record.fxT,now)){
+                    const id='rulefx:'+(this.cueId=(this.cueId||0)+1);
+                    if(effect.effect){const definition=(record.effects||[]).find(e=>e.name===effect.effect);if(definition?.animation)this.queueEffect(id,record,definition,true);}
+                    else if(effect.animation)this.queueEffect(id,record,{animation:effect.animation,anchor:{part:'',offset:[0,.5,0]},scale:1,rotate:[0,0,0],loop:false},true);
+                    if(effect.se&&root.AudioManager?.playSe)root.AudioManager.playSe(effect.se);
+                }
+            }
+            record.fxT=now;
         }
         effectActive(record,effect) {
             if(record.chosenEffects?.has(effect.name))return true;

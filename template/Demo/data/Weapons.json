@@ -1669,8 +1669,8 @@
   },
   {
     "id": 50,
-    "animationId": 0,
-    "description": "",
+    "animationId": 111,
+    "description": "A shoulder-fired railgun.",
     "etypeId": 1,
     "traits": [
       {
@@ -1684,13 +1684,13 @@
         "value": 0
       }
     ],
-    "iconIndex": 0,
-    "name": "",
+    "iconIndex": 101,
+    "name": "Railgun Rifle",
     "note": "",
     "params": [
       0,
       0,
-      0,
+      70,
       0,
       0,
       0,
@@ -1698,6 +1698,6 @@
       0
     ],
     "price": 0,
-    "wtypeId": 0
+    "wtypeId": 9
   }
 ]

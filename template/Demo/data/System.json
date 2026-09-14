@@ -564,7 +564,7 @@
   "testBattlers": [
     {
       "actorId": 1,
-      "level": 1,
+      "level": 20,
       "equips": [
         1,
         1,
@@ -575,9 +575,9 @@
     },
     {
       "actorId": 2,
-      "level": 1,
+      "level": 20,
       "equips": [
-        49,
+        50,
         0,
         0,
         9,
@@ -586,7 +586,7 @@
     },
     {
       "actorId": 3,
-      "level": 1,
+      "level": 20,
       "equips": [
         49,
         0,
@@ -633,7 +633,7 @@
     "",
     ""
   ],
-  "versionId": 71528958,
+  "versionId": 43618664,
   "victoryMe": {
     "name": "Victory1",
     "pan": 0,

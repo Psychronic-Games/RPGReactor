@@ -149,7 +149,7 @@
       "name": "Weapons/Graviton Pistol",
       "file": "Graviton_Pistol",
       "ext": ".glb",
-      "size": 0.5,
+      "size": 0.75,
       "scale": 1,
       "yaw": 0,
       "pitch": 0,
@@ -176,6 +176,18 @@
           -0.10673332334740109
         ]
       },
+      "texture": ""
+    },
+    "50": {
+      "name": "Weapons/Railgun Rifle",
+      "file": "Railgun-Rifle",
+      "ext": ".glb",
+      "size": 1.9,
+      "scale": 1,
+      "yaw": 0,
+      "pitch": 0,
+      "roll": 0,
+      "faces": {},
       "texture": ""
     }
   },

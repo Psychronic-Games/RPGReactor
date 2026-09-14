@@ -255,7 +255,7 @@
     B.commandDefaults = type => Object.fromEntries([...(B.commands[type]?.fields||[]),...(B.extraFields[type]||[])].map(f=>[f.key,f.value]));
     const attachments=[pick('attachment','Attach To',['offset','rightHand','leftHand','center']),text('bone','Bone Name (blank = the hand)'),n('gripX','Grip X (0 left – 1 right)',.5),n('gripY','Grip Y (0 base – 1 top)',.5)];
     B.extraFields.weapon.unshift(pick('mode','Weapon',['show','move','hide']));
-    B.extraFields.weapon.push(...attachments,n('equipIndex','Equipment Slot (1 based)',1));
+    B.extraFields.weapon.push(...attachments,n('equipIndex','Equipment Slot (1 based)',1),pick('hands','Held With',['one','both']),pick('aim','Aim',['none','target']));
     // A weapon step shows the held thing, moves it (offset, rotation and
     // scale tween over the step's frames from where it was), or hides it.
     B.weaponMode=step=>step.visible===false?'hide':(step.mode||'show');
@@ -276,9 +276,13 @@
     // What a sprite-sheet battler plays for a step: a part pose has no sheet row, so it waits.
     B.spriteMotionName=step=>B.hasPose(step)?'idle':step.motion;
     B.partPose=value=>{const v3=(list,fill)=>[0,1,2].map(i=>Number.isFinite(Number(list?.[i]))?Number(list[i]):fill);return {rotate:v3(value?.rotate,0),move:v3(value?.move,0),resize:v3(value?.resize,1)};};
-    B.partPoseRules=(step,previous)=>{
+    // A part entry with `aim` ('target' or 'user') turns to face that battler when the step
+    // plays: `aimOf(entry, step)` answers the turn in degrees about the part's up axis from
+    // the live scene (the room knows where the part points and where the target stands).
+    B.aimedParts=(step,aimOf)=>(step.parts||[]).map(entry=>entry&&entry.part&&entry.aim&&aimOf?{...entry,rotate:[0,Number(aimOf(entry,step))||0,0]}:entry);
+    B.partPoseRules=(step,previous,aimOf)=>{
         const next={};if(!step.resetPose)Object.assign(next,previous);
-        for(const entry of step.parts||[])if(entry&&entry.part)next[String(entry.part)]=B.partPose(entry);
+        for(const entry of B.aimedParts(step,aimOf))if(entry&&entry.part)next[String(entry.part)]=B.partPose(entry);
         const rest=B.poseRest(),same=(a,b)=>['rotate','move','resize'].every(k=>a[k].every((v,i)=>v===b[k][i]));
         // A part the step lists at rest is still posed: it pins to rest while the pose stands, out from under a clip that would move it.
         const listed=new Set((step.parts||[]).filter(entry=>entry&&entry.part).map(entry=>String(entry.part)));
@@ -296,10 +300,10 @@
     // The plan of a sequence's poses: `rules` per step id, `actions` naming
     // the action a step plays when it is not the plain motion name, and
     // `releases` naming the motion a release step still plays alongside.
-    B.posePlan=sequence=>{const state={},plan={rules:{},actions:{},releases:{}};
+    B.posePlan=(sequence,aimOf)=>{const state={},plan={rules:{},actions:{},releases:{}};
         for(const {step} of (sequence._timeline||B.timeline(sequence))){if(step.type!=='motion')continue;const key=B.roleKey(step),previous=state[key]||{};
-            if(B.hasPose(step)){const {rules,next}=B.partPoseRules(step,previous);plan.rules[step.id]=rules;plan.actions[step.id]='pose:'+step.id;state[key]=next;}
-            else if(Object.keys(previous).length){const {rules}=B.releasePoseRules(step,previous);plan.rules[step.id]=rules;plan.actions[step.id]='pose:'+step.id;plan.releases[step.id]=step.motion||'idle';state[key]={};}}
+            if(B.hasPose(step)){const {rules,next}=B.partPoseRules(step,previous,aimOf);plan.rules[step.id]=rules;plan.actions[step.id]='pose:'+step.id;state[key]=next;}
+            else if(Object.keys(previous).length&&!step.keepPose){const {rules}=B.releasePoseRules(step,previous);plan.rules[step.id]=rules;plan.actions[step.id]='pose:'+step.id;plan.releases[step.id]=step.motion||'idle';state[key]={};}}
         return plan;};
     // The rules one model plays for a release step: the parts going home, and its own rules for the named motion under the same action name.
     B.releaseMotionRules=(plan,stepId,modelRules)=>{const motion=plan?.releases?.[stepId];if(!motion)return [];const wanted=String(motion).toLowerCase();return (modelRules||[]).filter(r=>r&&r.trigger==='action'&&!String(r.name).startsWith('pose:')&&String(r.name).toLowerCase()===wanted).map(r=>({...r,name:plan.actions[stepId]}));};

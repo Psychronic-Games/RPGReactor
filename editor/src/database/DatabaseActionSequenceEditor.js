@@ -562,7 +562,9 @@ class DatabaseActionSequenceEditor {
                 const showPose=()=>{this.stepPlayback=null;this.playing=false;this.asOfStep=true;this.frame=ReactorBattleData.timeline(this.sequence)[this.selected].end;};
                 const spec=this.weaponModelSpec(step,B.roleKey(step).startsWith('target')?'target0':'user');
                 // A model is held by its middle, its base (a sword's grip) or its top.
-                if(spec&&mode==='show')U.field(this.inspector,'Held By',U.select([['0.5','Middle'],['0','Base'],['1','Top']],String(step.gripY??.5),v=>{change('gripY',Number(v));showPose();this.paint();}));
+                if(spec&&mode==='show'){U.field(this.inspector,'Held By',U.select([['0','Its grip'],['0.5','Middle'],['1','Top']],String(step.gripY??0),v=>{change('gripY',Number(v));showPose();this.paint();}));
+                    U.field(this.inspector,'Held With',U.select([['one','One hand'],['both','Both hands']],step.hands||'one',v=>{change('hands',v);showPose();this.paint();}));
+                    U.field(this.inspector,'Aim',U.select([['none','No aim'],['target','At the target']],step.aim||'none',v=>{change('aim',v);showPose();this.paint();}));}
                 const row=(key,axis,label,min,max,stepSize,reset)=>({key,axis,label,min,max,step:stepSize,reset});
                 this.controls.transformCard(this.inspector,{id:'held',
                     tabs:[{id:'offset',label:'Offset'},{id:'rotate',label:'Rotate'},{id:'scale',label:'Scale'}],
@@ -711,6 +713,8 @@ class DatabaseActionSequenceEditor {
     /** Seen from above in the 2D projection, a battler's height reads as a step up the screen, the way the flat battle draws a jump. */
     liftPose(view){const flat=view?.settings?.projection==='2d';return p=>flat&&p&&p.z?{...p,y:p.y-p.z,z:0}:p;}
     paintSequenceLayers(ctx,visuals,poses,view,width,height){
+        // Held things are placed again after each frame's animation (a reach bends the arm after the pose rules), as the battle does.
+        this._holds=new Map();if(!this._holdUpdater){this._holdUpdater=()=>{for(const hold of this._holds?.values()||[])hold();};(view.sequenceVisualUpdates||=new Set()).add(this._holdUpdater);}
         const lift=this.liftPose(view);
         for(const layer of visuals.layers){const {step,owner,start}=layer,p=owner==='screen'?{x:0,y:0}:poses[owner]?view.project(lift(poses[owner])):null;if(!p)continue;
             const bitmap=step.type==='icon'?this.iconSet:this.sequencePictures?.[step.name];
@@ -774,16 +778,18 @@ class DatabaseActionSequenceEditor {
         const list=U.element('div','rr-pose-part-list');host.append(list);
         for(const entry of posed){const row=U.element('div','rr-pose-part-row'+(entry.part===this.posePartName?' selected':''));const pick=U.button(B.partLabel(entry.part),()=>{this.posePartName=entry.part;this.controls.setTool('rotate');this.drawInspector();this.showPoseFrame();this.paint();},true);pick.classList.add('rr-pose-part-name');pick.setAttribute('aria-pressed',String(entry.part===this.posePartName));
             const remove=U.button('×',()=>{this.edit(()=>step.parts=step.parts.filter(p=>p!==entry));if(this.posePartName===entry.part)this.posePartName=null;this.drawInspector();this.showPoseFrame();this.paint();},true);remove.classList.add('rr-pose-part-remove');remove.title=U.text('Remove');remove.setAttribute('aria-label',U.text('Remove'));row.append(pick,remove);list.append(row);}
-        if(!posing)return;
+        if(!posing){const keep=U.element('input');keep.type='checkbox';keep.checked=!!step.keepPose;keep.onchange=()=>{this.edit(()=>step.keepPose=keep.checked||undefined);this._poseRulesKey=null;this.paint();};const keepField=U.field(host,'Keep posed parts',keep);keepField.title=U.text('Plays this motion without bringing posed parts home: a turret stays aimed while its gun fires.');return;}
         const reset=U.element('input');reset.type='checkbox';reset.checked=!!step.resetPose;reset.onchange=()=>{this.edit(()=>step.resetPose=reset.checked||undefined);this.showPoseFrame();this.paint();};U.field(host,'Start from rest',reset);
         const entry=posed.find(p=>p.part===this.posePartName);if(!entry)return;
+        const aim=U.element('input');aim.type='checkbox';aim.checked=!!entry.aim;aim.onchange=()=>{this.edit(()=>{const live=this.posePartEntry(entry.part);if(!live)return;if(aim.checked)live.aim='target';else delete live.aim;});this._poseRulesKey=null;this.drawInspector();this.showPoseFrame();this.paint();};const aimField=U.field(host,'Aim at target',aim);aimField.title=U.text('Turns this part to face the target when the step plays, from wherever the model stands. A turret needs no authored turn.');
+        if(entry.aim){host.append(U.element('p','rr-battle-help','This part turns to face the target on its own; Offset and Scale still apply.'));}
         const info=parts.find(p=>p.name===entry.part),hinge=info?.hinge??null,axes=['X','Y','Z'];
         const row=(key,axis,label,min,max,stepSize,reset)=>({key,axis,label,min,max,step:stepSize,reset});
         const get=key=>{const [field,index]=key.split('.');return B.partPose(entry)[field][Number(index)];};
         this.controls.transformCard(host,{id:'part',
             tabs:[{id:'rotate',label:'Rotate'},{id:'offset',label:'Offset'},{id:'scale',label:'Scale'}],
             tool:tab=>tab==='offset'?'move':'rotate',shown:()=>this.showPoseFrame(),
-            rows:tab=>tab==='rotate'?[...(hinge!==null?[row('rotate.'+hinge,axes[hinge],U.message('Bend ({axis})',{axis:axes[hinge]}),-160,160,1,0)]:[]),...[0,1,2].filter(i=>i!==hinge).map(i=>row('rotate.'+i,axes[i],U.message('Turn {axis} (degrees)',{axis:axes[i]}),-180,180,1,0))]
+            rows:tab=>tab==='rotate'?(entry.aim?[]:[...(hinge!==null?[row('rotate.'+hinge,axes[hinge],U.message('Bend ({axis})',{axis:axes[hinge]}),-160,160,1,0)]:[]),...[0,1,2].filter(i=>i!==hinge).map(i=>row('rotate.'+i,axes[i],U.message('Turn {axis} (degrees)',{axis:axes[i]}),-180,180,1,0))])
                 // Offsets are named the way the rest of the editor names them: Z is up, Y is depth. The part's own frame keeps Y up, so the middle value is Z.
                 :tab==='offset'?[[0,'X'],[2,'Y'],[1,'Z']].map(([i,axis])=>row('move.'+i,axis,U.message('{axis} (tiles)',{axis}),-1,1,.01,0))
                 :[0,1,2].map(i=>row('resize.'+i,axes[i],U.message('Scale {axis}',{axis:axes[i]}),.2,3,.01,1)),
@@ -795,8 +801,12 @@ class DatabaseActionSequenceEditor {
     }
     /** The pose steps' rules, rebuilt when they change, joined to each previewed model's own rules. */
     ensurePoseRules(view){
-        const B=ReactorBattleData,sequence=this.previewSequence(),key=JSON.stringify(sequence.steps.filter(s=>s.type==='motion').map(s=>[s.id,s.duration,s.role,s.targetIndex,s.motion,s.resetPose,s.parts]));
-        if(this._poseRulesKey!==key){this._poseRulesKey=key;this._posePlan=B.posePlan(sequence);this._poseRules=Object.values(this._posePlan.rules).flat();}
+        const B=ReactorBattleData,sequence=this.previewSequence(),context=this.previewContext(),aims=sequence.steps.some(s=>s.type==='motion'&&(s.parts||[]).some(p=>p&&p.aim));
+        const key=JSON.stringify([sequence.steps.filter(s=>s.type==='motion').map(s=>[s.id,s.duration,s.role,s.targetIndex,s.motion,s.resetPose,s.parts]),aims?[context.homes,[...view.models.keys()]]:null]);
+        if(this._poseRulesKey!==key){this._poseRulesKey=key;let waiting=false;
+            // An aimed part turns toward where its target stands when the step starts; a model still loading answers next paint.
+            const cues=B.timeline(sequence,context),aimOf=(entry,step)=>{const cue=cues.find(c=>c.step===step||c.step.id===step.id),poses=B.evaluate(sequence,cue?cue.start:0,context),key=B.roleKey(step),me=key==='user'?'user':'target'+(step.targetIndex||0),at=entry.aim==='user'?poses.user:(me==='user'?poses['target'+(step.targetIndex||0)]||poses.target0||poses.target:poses.user);const rec=view.models.get(me);if(!rec?.binding)waiting=true;if(!at||!rec)return 0;const saved=rec.position;if(poses[me])view.place(me,poses[me]);const turn=view.aimTurn(me,entry.part,at);if(saved)view.place(me,saved);return turn;};
+            this._posePlan=B.posePlan(sequence,aimOf);this._poseRules=Object.values(this._posePlan.rules).flat();if(waiting)this._poseRulesKey=null;}
         for(const record of view.models.values()){if(!record.binding||!Array.isArray(record.rules))continue;if(record._poseRulesKey===key)continue;record._baseRules||=record.rules;
             // A release step plays this model's own rules for the motion it names, under the release's action.
             const releases=Object.keys(this._posePlan.releases).flatMap(id=>B.releaseMotionRules(this._posePlan,id,record._baseRules));
@@ -864,7 +874,9 @@ class DatabaseActionSequenceEditor {
         const draw=(id,step,key,p)=>{
             const spec=['weapon','projectile'].includes(step.type)?this.weaponModelSpec(step,key):null;
             if(spec&&p){live.add(id);const record=view.models.get(id);if(!record)view.addModel(id,Reactor3D.normalizeModelSpec(spec),{x:p.x,y:p.y,z:p.z});
-                view.place(id,B.heldPlacement(p,poses[key]?.facing||0,step,spec));if(record?.object)record.object.visible=step.visible!==false;return;}
+                const otherKey=key==='user'?'target0':'user',other=view.models.get(otherKey),at=poses[otherKey]?{...poses[otherKey],height:.55*((other?.spec?.size||2)*(other?.spec?.scale||1))}:null;
+                const hold=()=>{if(!view.models.get(id))return;const placement={...B.heldPlacement(p,poses[key]?.facing||0,step,spec),visible:step.visible!==false};if(view.holdHeld&&poses[key])view.holdHeld(key,id,step,poses[key],at,placement);else view.place(id,placement);const rec=view.models.get(id);if(rec?.object)rec.object.visible=step.visible!==false;};
+                hold();(this._holds||=new Map()).set(id,hold);return;}
             const img=this.previewPropImage(step,key);if(!img||!p)return;live.add(id);view.sequenceBillboard(id,img.source,img.frame,this.liftPose(view)(p),step);
             // An animation projectile plays its animation on the carrier once per flight; the carrier moving moves the animation.
             if(step.type==='projectile'&&step.iconSource==='animation'&&step.animationId>0){this.flightAnimations||=new Map();if(!this.flightAnimations.has(id))this.flightAnimations.set(id,view.playAnimation(id,step.animationId,{})||null);}};

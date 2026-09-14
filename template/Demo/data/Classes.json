@@ -7535,34 +7535,19 @@
     ],
     "learnings": [
       {
-        "level": 2,
+        "level": 1,
         "note": "",
-        "skillId": 172
+        "skillId": 4
       },
       {
-        "level": 5,
+        "level": 1,
         "note": "",
-        "skillId": 173
+        "skillId": 5
       },
       {
-        "level": 8,
-        "note": "",
-        "skillId": 175
-      },
-      {
-        "level": 12,
+        "level": 1,
         "note": "",
         "skillId": 176
-      },
-      {
-        "level": 15,
-        "note": "",
-        "skillId": 174
-      },
-      {
-        "level": 20,
-        "note": "",
-        "skillId": 178
       }
     ],
     "name": "Starship Captain",
@@ -8453,34 +8438,19 @@
     ],
     "learnings": [
       {
-        "level": 2,
+        "level": 1,
         "note": "",
-        "skillId": 172
+        "skillId": 4
       },
       {
-        "level": 5,
+        "level": 1,
         "note": "",
-        "skillId": 173
+        "skillId": 5
       },
       {
-        "level": 8,
-        "note": "",
-        "skillId": 175
-      },
-      {
-        "level": 12,
+        "level": 1,
         "note": "",
         "skillId": 176
-      },
-      {
-        "level": 15,
-        "note": "",
-        "skillId": 174
-      },
-      {
-        "level": 20,
-        "note": "",
-        "skillId": 178
       }
     ],
     "name": "Maverick",

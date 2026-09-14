@@ -1944,10 +1944,10 @@
     "id": 18,
     "version": 1,
     "name": "Sword Slash",
-    "note": "Walk to the target, raise the blade over the shoulder, sweep it down through the target, then walk home.",
+    "note": "",
     "steps": [
       {
-        "id": "step-eh0b0iub1rm",
+        "id": "step-0001mrj0s",
         "type": "motion",
         "duration": 0,
         "role": "user",
@@ -1964,45 +1964,30 @@
         "phase": "movement"
       },
       {
-        "id": "step-4004zcxfm6f",
+        "id": "step-00021wyp0",
         "type": "move",
         "duration": 12,
         "role": "user",
         "anchor": "approach",
-        "x": -0.3,
+        "x": -0.4,
         "y": 0,
         "z": 0,
-        "easing": "linear",
+        "easing": "smooth",
         "moveMode": "anchor",
-        "face": "movement",
+        "speed": 0,
+        "arc": 0,
+        "face": "target",
         "phase": "movement"
       },
       {
-        "id": "step-94uu4s6uzes",
-        "type": "motion",
+        "id": "step-0003etc3y",
+        "type": "weapon",
         "duration": 0,
         "role": "user",
         "anchor": "home",
         "x": 0,
         "y": 0,
         "z": 0,
-        "easing": "smooth",
-        "motionIndex": 0,
-        "motionFrames": 0,
-        "motionSpeed": 0,
-        "motionLoop": "default",
-        "motion": "idle",
-        "phase": "execute"
-      },
-      {
-        "id": "step-o27huthsncn",
-        "type": "weapon",
-        "duration": 0,
-        "role": "user",
-        "anchor": "home",
-        "x": 0.7,
-        "y": 0,
-        "z": 0.35,
         "easing": "smooth",
         "mode": "show",
         "weaponGraphic": "icon",
@@ -2013,14 +1998,107 @@
         "gripX": 0.5,
         "gripY": 0,
         "equipIndex": 1,
+        "hands": "one",
+        "aim": "none",
         "iconSource": "weapon",
-        "rotation": 160,
+        "rotation": 0,
         "phase": "execute"
       },
       {
-        "id": "step-n6juqti61bl",
+        "id": "step-0004i8wpm",
+        "type": "motion",
+        "duration": 8,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "__pose",
+        "parts": [
+          {
+            "part": "RightUpperArm",
+            "rotate": [
+              -150,
+              0,
+              -40
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "RightLowerArm",
+            "rotate": [
+              -80,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "Chest",
+            "rotate": [
+              -12,
+              0,
+              18
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "Hips",
+            "rotate": [
+              -4,
+              0,
+              6
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          }
+        ],
+        "phase": "execute"
+      },
+      {
+        "id": "step-0005ph0mj",
         "type": "wait",
-        "duration": 30,
+        "duration": 5,
         "role": "user",
         "anchor": "home",
         "x": 0,
@@ -2030,51 +2108,134 @@
         "phase": "execute"
       },
       {
-        "id": "step-6m58cjozliw",
-        "type": "weapon",
-        "duration": 3,
+        "id": "step-0006xuko1",
+        "type": "sound",
+        "duration": 0,
         "role": "user",
         "anchor": "home",
-        "x": 0.2,
+        "x": 0,
         "y": 0,
-        "z": 1.65,
-        "easing": "linear",
-        "mode": "move",
-        "weaponGraphic": "icon",
-        "weaponImageId": 1,
-        "weaponFrame": 1,
-        "attachment": "offset",
-        "bone": "",
-        "gripX": 0.5,
-        "gripY": 0.5,
-        "equipIndex": 1,
-        "rotation": 70,
+        "z": 0,
+        "easing": "smooth",
+        "audio": {
+          "name": "whoosh-02",
+          "volume": 80,
+          "pitch": 120,
+          "pan": 0
+        },
         "phase": "execute"
       },
       {
-        "id": "step-a6amz4xfdmb",
-        "type": "weapon",
-        "duration": 3,
+        "id": "step-0007o9rpu",
+        "type": "motion",
+        "duration": 5,
         "role": "user",
         "anchor": "home",
-        "x": -0.2,
+        "x": 0,
         "y": 0,
-        "z": 0.7,
-        "easing": "linear",
-        "mode": "move",
-        "weaponGraphic": "icon",
-        "weaponImageId": 1,
-        "weaponFrame": 1,
-        "attachment": "offset",
-        "bone": "",
-        "gripX": 0.5,
-        "gripY": 0.5,
-        "equipIndex": 1,
-        "rotation": -30,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "__pose",
+        "parts": [
+          {
+            "part": "RightUpperArm",
+            "rotate": [
+              -50,
+              0,
+              55
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "RightLowerArm",
+            "rotate": [
+              -5,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "Chest",
+            "rotate": [
+              24,
+              0,
+              -20
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "Hips",
+            "rotate": [
+              10,
+              0,
+              -10
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          }
+        ],
         "phase": "execute"
       },
       {
-        "id": "step-jpn1ey5nji",
+        "id": "step-0008219c4",
+        "type": "sound",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "audio": {
+          "name": "slash-01",
+          "volume": 90,
+          "pitch": 110,
+          "pan": 0
+        },
+        "phase": "execute"
+      },
+      {
+        "id": "step-00090org8",
         "type": "animation",
         "duration": 0,
         "role": "allTargets",
@@ -2088,7 +2249,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-eulfm673yre",
+        "id": "step-000au4wq3",
         "type": "impact",
         "duration": 0,
         "role": "allTargets",
@@ -2100,9 +2261,23 @@
         "phase": "execute"
       },
       {
-        "id": "step-7utunpxoc5d",
+        "id": "step-000b3exgy",
+        "type": "shake",
+        "duration": 10,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "power": 3,
+        "speed": 8,
+        "phase": "execute"
+      },
+      {
+        "id": "step-000c38nhf",
         "type": "wait",
-        "duration": 4,
+        "duration": 14,
         "role": "user",
         "anchor": "home",
         "x": 0,
@@ -2112,7 +2287,110 @@
         "phase": "execute"
       },
       {
-        "id": "step-107q2u1oei6",
+        "id": "step-000d1rwjc",
+        "type": "motion",
+        "duration": 10,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "__pose",
+        "parts": [
+          {
+            "part": "RightUpperArm",
+            "rotate": [
+              0,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "RightLowerArm",
+            "rotate": [
+              0,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "Chest",
+            "rotate": [
+              0,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "Hips",
+            "rotate": [
+              0,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          }
+        ],
+        "phase": "execute"
+      },
+      {
+        "id": "step-000e7t7zw",
+        "type": "wait",
+        "duration": 2,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-000fg1ip3",
         "type": "weapon",
         "duration": 0,
         "role": "user",
@@ -2130,11 +2408,13 @@
         "gripX": 0.5,
         "gripY": 0.5,
         "equipIndex": 1,
+        "hands": "one",
+        "aim": "none",
         "visible": false,
         "phase": "execute"
       },
       {
-        "id": "step-9zic83n5bpt",
+        "id": "step-000gnmi7j",
         "type": "motion",
         "duration": 0,
         "role": "user",
@@ -2151,21 +2431,23 @@
         "phase": "return"
       },
       {
-        "id": "step-nrzvo1rxj9",
+        "id": "step-000hcb3jv",
         "type": "move",
-        "duration": 24,
+        "duration": 16,
         "role": "user",
         "anchor": "home",
         "x": 0,
         "y": 0,
         "z": 0,
-        "easing": "linear",
+        "easing": "smooth",
         "moveMode": "anchor",
+        "speed": 0,
+        "arc": 0,
         "face": "movement",
         "phase": "return"
       },
       {
-        "id": "step-hcnxmc3xts6",
+        "id": "step-000iedm6c",
         "type": "motion",
         "duration": 0,
         "role": "user",
@@ -2182,7 +2464,7 @@
         "phase": "finish"
       },
       {
-        "id": "step-0m8nvkhx187j",
+        "id": "step-000j4lsvs",
         "type": "move",
         "duration": 0,
         "role": "user",
@@ -2192,18 +2474,20 @@
         "z": 0,
         "easing": "smooth",
         "moveMode": "anchor",
+        "speed": 0,
+        "arc": 0,
         "face": "home",
         "phase": "finish"
       }
     ],
-    "starterKey": "action:Sword Slash",
     "phases": [
       "prepare",
       "movement",
       "execute",
       "return",
       "finish"
-    ]
+    ],
+    "purpose": "action"
   },
   {
     "id": 19,
@@ -2272,29 +2556,11 @@
         },
         "parts": [
           {
-            "part": "RightUpperArm",
+            "part": "Chest",
             "rotate": [
+              -4,
               0,
-              0,
-              0
-            ],
-            "move": [
-              0,
-              0,
-              0
-            ],
-            "resize": [
-              1,
-              1,
-              1
-            ]
-          },
-          {
-            "part": "RightLowerArm",
-            "rotate": [
-              -93,
-              0,
-              0
+              10
             ],
             "move": [
               0,
@@ -2315,9 +2581,9 @@
         "duration": 0,
         "role": "user",
         "anchor": "home",
-        "x": 0.29,
-        "y": 0.02,
-        "z": 0.04,
+        "x": 0,
+        "y": 0,
+        "z": 0,
         "easing": "smooth",
         "mode": "show",
         "weaponGraphic": "icon",
@@ -2326,11 +2592,15 @@
         "attachment": "rightHand",
         "bone": "",
         "gripX": 0.5,
-        "gripY": 0.5,
+        "gripY": 0,
         "equipIndex": 1,
         "iconSource": "weapon",
-        "rotation": -30,
-        "phase": "execute"
+        "rotation": 0,
+        "phase": "execute",
+        "rotateY": 0,
+        "rotateZ": 0,
+        "hands": "one",
+        "aim": "target"
       },
       {
         "id": "step-spaafxozw2a",
@@ -2553,5 +2823,7410 @@
       "return",
       "finish"
     ]
+  },
+  {
+    "id": 20,
+    "version": 1,
+    "name": "Heavy Cleave",
+    "note": "",
+    "steps": [
+      {
+        "id": "step-000kho78e",
+        "type": "motion",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "walk",
+        "phase": "movement"
+      },
+      {
+        "id": "step-000lna882",
+        "type": "move",
+        "duration": 10,
+        "role": "user",
+        "anchor": "approach",
+        "x": -1.8,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "moveMode": "anchor",
+        "speed": 0,
+        "arc": 0,
+        "face": "target",
+        "phase": "movement"
+      },
+      {
+        "id": "step-000mm4edi",
+        "type": "weapon",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "mode": "show",
+        "weaponGraphic": "icon",
+        "weaponImageId": 1,
+        "weaponFrame": 1,
+        "attachment": "rightHand",
+        "bone": "",
+        "gripX": 0.5,
+        "gripY": 0,
+        "equipIndex": 1,
+        "hands": "one",
+        "aim": "none",
+        "iconSource": "weapon",
+        "rotation": 0,
+        "phase": "execute"
+      },
+      {
+        "id": "step-000njnmf6",
+        "type": "motion",
+        "duration": 7,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "__pose",
+        "parts": [
+          {
+            "part": "RightUpperArm",
+            "rotate": [
+              -165,
+              0,
+              -10
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "RightLowerArm",
+            "rotate": [
+              -80,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "LeftUpperArm",
+            "rotate": [
+              -150,
+              0,
+              10
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "LeftLowerArm",
+            "rotate": [
+              -80,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "Chest",
+            "rotate": [
+              -14,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          }
+        ],
+        "phase": "execute"
+      },
+      {
+        "id": "step-000opr0lb",
+        "type": "sound",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "audio": {
+          "name": "whoosh-03",
+          "volume": 90,
+          "pitch": 90,
+          "pan": 0
+        },
+        "phase": "execute"
+      },
+      {
+        "id": "step-000phb4xw",
+        "type": "move",
+        "duration": 14,
+        "role": "user",
+        "anchor": "approach",
+        "x": -0.4,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "moveMode": "anchor",
+        "speed": 0,
+        "arc": 1.6,
+        "face": "target",
+        "phase": "execute"
+      },
+      {
+        "id": "step-000qd4l6q",
+        "type": "sound",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "audio": {
+          "name": "slash-02",
+          "volume": 100,
+          "pitch": 85,
+          "pan": 0
+        },
+        "phase": "execute"
+      },
+      {
+        "id": "step-000rcwqpj",
+        "type": "motion",
+        "duration": 3,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "__pose",
+        "parts": [
+          {
+            "part": "RightUpperArm",
+            "rotate": [
+              -45,
+              0,
+              10
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "RightLowerArm",
+            "rotate": [
+              -10,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "LeftUpperArm",
+            "rotate": [
+              -35,
+              0,
+              -10
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "LeftLowerArm",
+            "rotate": [
+              -10,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "Chest",
+            "rotate": [
+              28,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "Hips",
+            "rotate": [
+              12,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          }
+        ],
+        "phase": "execute"
+      },
+      {
+        "id": "step-000swob3l",
+        "type": "animation",
+        "duration": 0,
+        "role": "allTargets",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "animationSource": "id",
+        "animationId": 23,
+        "phase": "execute"
+      },
+      {
+        "id": "step-000tn268w",
+        "type": "impact",
+        "duration": 0,
+        "role": "allTargets",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-000uz7fpz",
+        "type": "shake",
+        "duration": 18,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "power": 7,
+        "speed": 10,
+        "phase": "execute"
+      },
+      {
+        "id": "step-000veq6cs",
+        "type": "flash",
+        "duration": 8,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "red": 255,
+        "green": 255,
+        "blue": 255,
+        "alpha": 120,
+        "phase": "execute"
+      },
+      {
+        "id": "step-000w67slm",
+        "type": "wait",
+        "duration": 20,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-000xm314q",
+        "type": "motion",
+        "duration": 12,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "__pose",
+        "parts": [
+          {
+            "part": "RightUpperArm",
+            "rotate": [
+              0,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "RightLowerArm",
+            "rotate": [
+              0,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "LeftUpperArm",
+            "rotate": [
+              0,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "LeftLowerArm",
+            "rotate": [
+              0,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "Chest",
+            "rotate": [
+              0,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "Hips",
+            "rotate": [
+              0,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          }
+        ],
+        "phase": "execute"
+      },
+      {
+        "id": "step-000ya93aj",
+        "type": "wait",
+        "duration": 2,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-000zmiaw7",
+        "type": "weapon",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "mode": "show",
+        "weaponGraphic": "icon",
+        "weaponImageId": 1,
+        "weaponFrame": 1,
+        "attachment": "offset",
+        "bone": "",
+        "gripX": 0.5,
+        "gripY": 0.5,
+        "equipIndex": 1,
+        "hands": "one",
+        "aim": "none",
+        "visible": false,
+        "phase": "execute"
+      },
+      {
+        "id": "step-0010tj7nn",
+        "type": "motion",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "walk",
+        "phase": "return"
+      },
+      {
+        "id": "step-00117o34s",
+        "type": "move",
+        "duration": 16,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "moveMode": "anchor",
+        "speed": 0,
+        "arc": 0,
+        "face": "movement",
+        "phase": "return"
+      },
+      {
+        "id": "step-00126d6zw",
+        "type": "motion",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "idle",
+        "phase": "finish"
+      },
+      {
+        "id": "step-00135g167",
+        "type": "move",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "moveMode": "anchor",
+        "speed": 0,
+        "arc": 0,
+        "face": "home",
+        "phase": "finish"
+      }
+    ],
+    "phases": [
+      "prepare",
+      "movement",
+      "execute",
+      "return",
+      "finish"
+    ],
+    "purpose": "action"
+  },
+  {
+    "id": 21,
+    "version": 1,
+    "name": "Double Slash",
+    "note": "",
+    "steps": [
+      {
+        "id": "step-0014zb42y",
+        "type": "motion",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "walk",
+        "phase": "movement"
+      },
+      {
+        "id": "step-0015ku7xw",
+        "type": "move",
+        "duration": 12,
+        "role": "user",
+        "anchor": "approach",
+        "x": -0.4,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "moveMode": "anchor",
+        "speed": 0,
+        "arc": 0,
+        "face": "target",
+        "phase": "movement"
+      },
+      {
+        "id": "step-0016awti5",
+        "type": "weapon",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "mode": "show",
+        "weaponGraphic": "icon",
+        "weaponImageId": 1,
+        "weaponFrame": 1,
+        "attachment": "rightHand",
+        "bone": "",
+        "gripX": 0.5,
+        "gripY": 0,
+        "equipIndex": 1,
+        "hands": "one",
+        "aim": "none",
+        "iconSource": "weapon",
+        "rotation": 0,
+        "phase": "execute"
+      },
+      {
+        "id": "step-0017kmf7r",
+        "type": "motion",
+        "duration": 7,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "__pose",
+        "parts": [
+          {
+            "part": "RightUpperArm",
+            "rotate": [
+              -130,
+              0,
+              -45
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "RightLowerArm",
+            "rotate": [
+              -60,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "Chest",
+            "rotate": [
+              -8,
+              0,
+              18
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          }
+        ],
+        "phase": "execute"
+      },
+      {
+        "id": "step-0018dl4st",
+        "type": "wait",
+        "duration": 3,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-00193q0m2",
+        "type": "sound",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "audio": {
+          "name": "whoosh-01",
+          "volume": 80,
+          "pitch": 125,
+          "pan": 0
+        },
+        "phase": "execute"
+      },
+      {
+        "id": "step-001arapsh",
+        "type": "motion",
+        "duration": 3,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "__pose",
+        "parts": [
+          {
+            "part": "RightUpperArm",
+            "rotate": [
+              -55,
+              0,
+              45
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "RightLowerArm",
+            "rotate": [
+              -10,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "Chest",
+            "rotate": [
+              16,
+              0,
+              -15
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "Hips",
+            "rotate": [
+              6,
+              0,
+              -6
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          }
+        ],
+        "phase": "execute"
+      },
+      {
+        "id": "step-001b1zexb",
+        "type": "sound",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "audio": {
+          "name": "slash-01",
+          "volume": 90,
+          "pitch": 115,
+          "pan": 0
+        },
+        "phase": "execute"
+      },
+      {
+        "id": "step-001cd0l0t",
+        "type": "animation",
+        "duration": 0,
+        "role": "allTargets",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "animationSource": "id",
+        "animationId": 6,
+        "phase": "execute"
+      },
+      {
+        "id": "step-001dxpxt2",
+        "type": "impact",
+        "duration": 0,
+        "role": "allTargets",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-001eu1s82",
+        "type": "shake",
+        "duration": 8,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "power": 3,
+        "speed": 8,
+        "phase": "execute"
+      },
+      {
+        "id": "step-001fvccb3",
+        "type": "wait",
+        "duration": 8,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-001go4grn",
+        "type": "motion",
+        "duration": 7,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "__pose",
+        "parts": [
+          {
+            "part": "RightUpperArm",
+            "rotate": [
+              -115,
+              0,
+              60
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "RightLowerArm",
+            "rotate": [
+              -75,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "Chest",
+            "rotate": [
+              -6,
+              0,
+              -20
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "Hips",
+            "rotate": [
+              0,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          }
+        ],
+        "phase": "execute"
+      },
+      {
+        "id": "step-001hc9rkx",
+        "type": "wait",
+        "duration": 2,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-001idm527",
+        "type": "sound",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "audio": {
+          "name": "whoosh-04",
+          "volume": 80,
+          "pitch": 120,
+          "pan": 0
+        },
+        "phase": "execute"
+      },
+      {
+        "id": "step-001jcvtj9",
+        "type": "motion",
+        "duration": 3,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "__pose",
+        "parts": [
+          {
+            "part": "RightUpperArm",
+            "rotate": [
+              -50,
+              0,
+              -45
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "RightLowerArm",
+            "rotate": [
+              -10,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "Chest",
+            "rotate": [
+              16,
+              0,
+              18
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "Hips",
+            "rotate": [
+              6,
+              0,
+              8
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          }
+        ],
+        "phase": "execute"
+      },
+      {
+        "id": "step-001kmdb6y",
+        "type": "sound",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "audio": {
+          "name": "slash-02",
+          "volume": 95,
+          "pitch": 105,
+          "pan": 0
+        },
+        "phase": "execute"
+      },
+      {
+        "id": "step-001lpr3fq",
+        "type": "animation",
+        "duration": 0,
+        "role": "allTargets",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "animationSource": "id",
+        "animationId": 7,
+        "phase": "execute"
+      },
+      {
+        "id": "step-001mhdebb",
+        "type": "impact",
+        "duration": 0,
+        "role": "allTargets",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-001nfsk0p",
+        "type": "shake",
+        "duration": 10,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "power": 4,
+        "speed": 8,
+        "phase": "execute"
+      },
+      {
+        "id": "step-001o72apq",
+        "type": "wait",
+        "duration": 14,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-001pzx58a",
+        "type": "motion",
+        "duration": 10,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "__pose",
+        "parts": [
+          {
+            "part": "RightUpperArm",
+            "rotate": [
+              0,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "RightLowerArm",
+            "rotate": [
+              0,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "Chest",
+            "rotate": [
+              0,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "Hips",
+            "rotate": [
+              0,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          }
+        ],
+        "phase": "execute"
+      },
+      {
+        "id": "step-001qckzfa",
+        "type": "wait",
+        "duration": 2,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-001rqkjm4",
+        "type": "weapon",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "mode": "show",
+        "weaponGraphic": "icon",
+        "weaponImageId": 1,
+        "weaponFrame": 1,
+        "attachment": "offset",
+        "bone": "",
+        "gripX": 0.5,
+        "gripY": 0.5,
+        "equipIndex": 1,
+        "hands": "one",
+        "aim": "none",
+        "visible": false,
+        "phase": "execute"
+      },
+      {
+        "id": "step-001sq4as4",
+        "type": "motion",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "walk",
+        "phase": "return"
+      },
+      {
+        "id": "step-001txb6xr",
+        "type": "move",
+        "duration": 16,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "moveMode": "anchor",
+        "speed": 0,
+        "arc": 0,
+        "face": "movement",
+        "phase": "return"
+      },
+      {
+        "id": "step-001u7pbsc",
+        "type": "motion",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "idle",
+        "phase": "finish"
+      },
+      {
+        "id": "step-001vljt9t",
+        "type": "move",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "moveMode": "anchor",
+        "speed": 0,
+        "arc": 0,
+        "face": "home",
+        "phase": "finish"
+      }
+    ],
+    "phases": [
+      "prepare",
+      "movement",
+      "execute",
+      "return",
+      "finish"
+    ],
+    "purpose": "action",
+    "hitPolicy": "authored"
+  },
+  {
+    "id": 22,
+    "version": 1,
+    "name": "Cross Slash",
+    "note": "",
+    "steps": [
+      {
+        "id": "step-001w2cj6i",
+        "type": "motion",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "run",
+        "phase": "movement"
+      },
+      {
+        "id": "step-001xhxzdj",
+        "type": "move",
+        "duration": 10,
+        "role": "user",
+        "anchor": "approach",
+        "x": -1.2,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "moveMode": "anchor",
+        "speed": 0,
+        "arc": 0,
+        "face": "target",
+        "phase": "movement"
+      },
+      {
+        "id": "step-001ylpprd",
+        "type": "weapon",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "mode": "show",
+        "weaponGraphic": "icon",
+        "weaponImageId": 1,
+        "weaponFrame": 1,
+        "attachment": "rightHand",
+        "bone": "",
+        "gripX": 0.5,
+        "gripY": 0,
+        "equipIndex": 1,
+        "hands": "one",
+        "aim": "none",
+        "iconSource": "weapon",
+        "rotation": 0,
+        "phase": "execute"
+      },
+      {
+        "id": "step-001z0s5ik",
+        "type": "motion",
+        "duration": 6,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "__pose",
+        "parts": [
+          {
+            "part": "RightUpperArm",
+            "rotate": [
+              -135,
+              0,
+              -50
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "RightLowerArm",
+            "rotate": [
+              -60,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "Chest",
+            "rotate": [
+              -10,
+              0,
+              20
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          }
+        ],
+        "phase": "execute"
+      },
+      {
+        "id": "step-00200cqh5",
+        "type": "wait",
+        "duration": 2,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-0021kzxvv",
+        "type": "sound",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "audio": {
+          "name": "whoosh-02",
+          "volume": 85,
+          "pitch": 110,
+          "pan": 0
+        },
+        "phase": "execute"
+      },
+      {
+        "id": "step-00226htnw",
+        "type": "motion",
+        "duration": 3,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "__pose",
+        "parts": [
+          {
+            "part": "RightUpperArm",
+            "rotate": [
+              -55,
+              0,
+              50
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "RightLowerArm",
+            "rotate": [
+              -10,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "Chest",
+            "rotate": [
+              18,
+              0,
+              -18
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "Hips",
+            "rotate": [
+              6,
+              0,
+              -8
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          }
+        ],
+        "phase": "execute"
+      },
+      {
+        "id": "step-00237wwxa",
+        "type": "sound",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "audio": {
+          "name": "slash-01",
+          "volume": 90,
+          "pitch": 100,
+          "pan": 0
+        },
+        "phase": "execute"
+      },
+      {
+        "id": "step-00248hh9z",
+        "type": "animation",
+        "duration": 0,
+        "role": "allTargets",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "animationSource": "id",
+        "animationId": 23,
+        "phase": "execute"
+      },
+      {
+        "id": "step-002571b79",
+        "type": "wait",
+        "duration": 6,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-0026dgpkd",
+        "type": "motion",
+        "duration": 6,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "__pose",
+        "parts": [
+          {
+            "part": "RightUpperArm",
+            "rotate": [
+              -125,
+              0,
+              65
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "RightLowerArm",
+            "rotate": [
+              -70,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "Chest",
+            "rotate": [
+              -6,
+              0,
+              -22
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          }
+        ],
+        "phase": "execute"
+      },
+      {
+        "id": "step-0027k3wrj",
+        "type": "wait",
+        "duration": 2,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-0028miosk",
+        "type": "sound",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "audio": {
+          "name": "whoosh-05",
+          "volume": 85,
+          "pitch": 110,
+          "pan": 0
+        },
+        "phase": "execute"
+      },
+      {
+        "id": "step-0029l6gnt",
+        "type": "motion",
+        "duration": 3,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "__pose",
+        "parts": [
+          {
+            "part": "RightUpperArm",
+            "rotate": [
+              -55,
+              0,
+              -50
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "RightLowerArm",
+            "rotate": [
+              -10,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "Chest",
+            "rotate": [
+              18,
+              0,
+              20
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "Hips",
+            "rotate": [
+              6,
+              0,
+              8
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          }
+        ],
+        "phase": "execute"
+      },
+      {
+        "id": "step-002asgt90",
+        "type": "sound",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "audio": {
+          "name": "slash-02",
+          "volume": 100,
+          "pitch": 95,
+          "pan": 0
+        },
+        "phase": "execute"
+      },
+      {
+        "id": "step-002bolnnr",
+        "type": "animation",
+        "duration": 0,
+        "role": "allTargets",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "animationSource": "id",
+        "animationId": 24,
+        "phase": "execute"
+      },
+      {
+        "id": "step-002cgbyia",
+        "type": "impact",
+        "duration": 0,
+        "role": "allTargets",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-002d3bf9h",
+        "type": "shake",
+        "duration": 16,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "power": 6,
+        "speed": 10,
+        "phase": "execute"
+      },
+      {
+        "id": "step-002ef4hyp",
+        "type": "flash",
+        "duration": 6,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "red": 255,
+        "green": 255,
+        "blue": 255,
+        "alpha": 90,
+        "phase": "execute"
+      },
+      {
+        "id": "step-002fdqijh",
+        "type": "wait",
+        "duration": 18,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-002gapbi0",
+        "type": "motion",
+        "duration": 10,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "__pose",
+        "parts": [
+          {
+            "part": "RightUpperArm",
+            "rotate": [
+              0,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "RightLowerArm",
+            "rotate": [
+              0,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "Chest",
+            "rotate": [
+              0,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "Hips",
+            "rotate": [
+              0,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          }
+        ],
+        "phase": "execute"
+      },
+      {
+        "id": "step-002hclg91",
+        "type": "wait",
+        "duration": 2,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-002isrxkb",
+        "type": "weapon",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "mode": "show",
+        "weaponGraphic": "icon",
+        "weaponImageId": 1,
+        "weaponFrame": 1,
+        "attachment": "offset",
+        "bone": "",
+        "gripX": 0.5,
+        "gripY": 0.5,
+        "equipIndex": 1,
+        "hands": "one",
+        "aim": "none",
+        "visible": false,
+        "phase": "execute"
+      },
+      {
+        "id": "step-002jd3vji",
+        "type": "motion",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "walk",
+        "phase": "return"
+      },
+      {
+        "id": "step-002k475r0",
+        "type": "move",
+        "duration": 18,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "moveMode": "anchor",
+        "speed": 0,
+        "arc": 0,
+        "face": "movement",
+        "phase": "return"
+      },
+      {
+        "id": "step-002lytxif",
+        "type": "motion",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "idle",
+        "phase": "finish"
+      },
+      {
+        "id": "step-002ma0046",
+        "type": "move",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "moveMode": "anchor",
+        "speed": 0,
+        "arc": 0,
+        "face": "home",
+        "phase": "finish"
+      }
+    ],
+    "phases": [
+      "prepare",
+      "movement",
+      "execute",
+      "return",
+      "finish"
+    ],
+    "purpose": "action"
+  },
+  {
+    "id": 23,
+    "version": 1,
+    "name": "Spin Crash",
+    "note": "",
+    "steps": [
+      {
+        "id": "step-002n1ulq3",
+        "type": "motion",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "run",
+        "phase": "movement"
+      },
+      {
+        "id": "step-002ottevk",
+        "type": "move",
+        "duration": 10,
+        "role": "user",
+        "anchor": "approach",
+        "x": -1.4,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "moveMode": "anchor",
+        "speed": 0,
+        "arc": 0,
+        "face": "target",
+        "phase": "movement"
+      },
+      {
+        "id": "step-002p1bl6d",
+        "type": "weapon",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "mode": "show",
+        "weaponGraphic": "icon",
+        "weaponImageId": 1,
+        "weaponFrame": 1,
+        "attachment": "rightHand",
+        "bone": "",
+        "gripX": 0.5,
+        "gripY": 0,
+        "equipIndex": 1,
+        "hands": "one",
+        "aim": "none",
+        "iconSource": "weapon",
+        "rotation": 0,
+        "phase": "execute"
+      },
+      {
+        "id": "step-002qds095",
+        "type": "motion",
+        "duration": 6,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "__pose",
+        "parts": [
+          {
+            "part": "RightUpperArm",
+            "rotate": [
+              -70,
+              0,
+              -70
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "RightLowerArm",
+            "rotate": [
+              -15,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "LeftUpperArm",
+            "rotate": [
+              -60,
+              0,
+              60
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "LeftLowerArm",
+            "rotate": [
+              -20,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "Chest",
+            "rotate": [
+              18,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "Hips",
+            "rotate": [
+              6,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          }
+        ],
+        "phase": "execute"
+      },
+      {
+        "id": "step-002r75d31",
+        "type": "sound",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "audio": {
+          "name": "whoosh-03",
+          "volume": 90,
+          "pitch": 80,
+          "pan": 0
+        },
+        "phase": "execute"
+      },
+      {
+        "id": "step-002sbj50p",
+        "type": "move",
+        "duration": 26,
+        "role": "user",
+        "anchor": "approach",
+        "x": -1,
+        "y": 0,
+        "z": 0,
+        "easing": "linear",
+        "moveMode": "anchor",
+        "speed": 0,
+        "arc": 0,
+        "rotateY": 720,
+        "face": "target",
+        "phase": "execute"
+      },
+      {
+        "id": "step-002tddadd",
+        "type": "wait",
+        "duration": 9,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-002u789fo",
+        "type": "sound",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "audio": {
+          "name": "whoosh-04",
+          "volume": 90,
+          "pitch": 90,
+          "pan": 0
+        },
+        "phase": "execute"
+      },
+      {
+        "id": "step-002v1zy1l",
+        "type": "wait",
+        "duration": 9,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-002wf8oiz",
+        "type": "sound",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "audio": {
+          "name": "slash-02",
+          "volume": 100,
+          "pitch": 80,
+          "pan": 0
+        },
+        "phase": "execute"
+      },
+      {
+        "id": "step-002xpdz9g",
+        "type": "animation",
+        "duration": 0,
+        "role": "allTargets",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "animationSource": "id",
+        "animationId": 25,
+        "phase": "execute"
+      },
+      {
+        "id": "step-002y7jhx3",
+        "type": "impact",
+        "duration": 0,
+        "role": "allTargets",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-002z6g0he",
+        "type": "shake",
+        "duration": 20,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "power": 8,
+        "speed": 10,
+        "phase": "execute"
+      },
+      {
+        "id": "step-0030c7kpi",
+        "type": "flash",
+        "duration": 8,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "red": 255,
+        "green": 240,
+        "blue": 200,
+        "alpha": 110,
+        "phase": "execute"
+      },
+      {
+        "id": "step-0031t1hux",
+        "type": "wait",
+        "duration": 10,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-00329ux1l",
+        "type": "motion",
+        "duration": 12,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "__pose",
+        "parts": [
+          {
+            "part": "RightUpperArm",
+            "rotate": [
+              0,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "RightLowerArm",
+            "rotate": [
+              0,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "LeftUpperArm",
+            "rotate": [
+              0,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "LeftLowerArm",
+            "rotate": [
+              0,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "Chest",
+            "rotate": [
+              0,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "Hips",
+            "rotate": [
+              0,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          }
+        ],
+        "phase": "execute"
+      },
+      {
+        "id": "step-0033losr9",
+        "type": "wait",
+        "duration": 2,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-0034kg06z",
+        "type": "weapon",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "mode": "show",
+        "weaponGraphic": "icon",
+        "weaponImageId": 1,
+        "weaponFrame": 1,
+        "attachment": "offset",
+        "bone": "",
+        "gripX": 0.5,
+        "gripY": 0.5,
+        "equipIndex": 1,
+        "hands": "one",
+        "aim": "none",
+        "visible": false,
+        "phase": "execute"
+      },
+      {
+        "id": "step-0035l2kbx",
+        "type": "motion",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "walk",
+        "phase": "return"
+      },
+      {
+        "id": "step-0036m0bhj",
+        "type": "move",
+        "duration": 18,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "moveMode": "anchor",
+        "speed": 0,
+        "arc": 0,
+        "face": "movement",
+        "phase": "return"
+      },
+      {
+        "id": "step-00377lmhl",
+        "type": "motion",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "idle",
+        "phase": "finish"
+      },
+      {
+        "id": "step-0038w1n7x",
+        "type": "move",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "moveMode": "anchor",
+        "speed": 0,
+        "arc": 0,
+        "face": "home",
+        "phase": "finish"
+      }
+    ],
+    "phases": [
+      "prepare",
+      "movement",
+      "execute",
+      "return",
+      "finish"
+    ],
+    "purpose": "action"
+  },
+  {
+    "id": 24,
+    "version": 1,
+    "name": "Railgun Shot",
+    "note": "",
+    "steps": [
+      {
+        "id": "step-003m3ivy5",
+        "type": "motion",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "walk",
+        "phase": "movement"
+      },
+      {
+        "id": "step-003npa7ai",
+        "type": "move",
+        "duration": 8,
+        "role": "user",
+        "anchor": "home",
+        "x": 0.8,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "moveMode": "anchor",
+        "speed": 0,
+        "arc": 0,
+        "face": "target",
+        "phase": "movement"
+      },
+      {
+        "id": "step-003omq8q9",
+        "type": "weapon",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "mode": "show",
+        "weaponGraphic": "icon",
+        "weaponImageId": 1,
+        "weaponFrame": 1,
+        "attachment": "rightHand",
+        "bone": "",
+        "gripX": 0.5,
+        "gripY": 0,
+        "equipIndex": 1,
+        "hands": "both",
+        "aim": "target",
+        "iconSource": "weapon",
+        "rotation": 0,
+        "phase": "execute"
+      },
+      {
+        "id": "step-003pgbnqr",
+        "type": "motion",
+        "duration": 8,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "__pose",
+        "parts": [
+          {
+            "part": "Chest",
+            "rotate": [
+              -4,
+              0,
+              10
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "Head",
+            "rotate": [
+              6,
+              0,
+              -8
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          }
+        ],
+        "phase": "execute"
+      },
+      {
+        "id": "step-003q76zdc",
+        "type": "sound",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "audio": {
+          "name": "powerup-02",
+          "volume": 70,
+          "pitch": 140,
+          "pan": 0
+        },
+        "phase": "execute"
+      },
+      {
+        "id": "step-003rzwx8k",
+        "type": "wait",
+        "duration": 18,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-003scq854",
+        "type": "sound",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "audio": {
+          "name": "blaster-05",
+          "volume": 100,
+          "pitch": 80,
+          "pan": 0
+        },
+        "phase": "execute"
+      },
+      {
+        "id": "step-003t6hl73",
+        "type": "flash",
+        "duration": 4,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "red": 180,
+        "green": 230,
+        "blue": 255,
+        "alpha": 80,
+        "phase": "execute"
+      },
+      {
+        "id": "step-003ubgsh9",
+        "type": "projectile",
+        "duration": 9,
+        "role": "user",
+        "anchor": "home",
+        "x": 0.6,
+        "y": 0,
+        "z": 0.05,
+        "easing": "linear",
+        "iconSource": "color",
+        "iconIndex": 0,
+        "name": "",
+        "destination": "target",
+        "sourceRole": "battler",
+        "attachment": "rightHand",
+        "bone": "",
+        "gripX": 0.5,
+        "gripY": 0.5,
+        "equipIndex": 1,
+        "startHeight": 1,
+        "endHeight": 1,
+        "arc": 0,
+        "spin": 0,
+        "rotation": 0,
+        "scale": 1,
+        "flight": "oneWay",
+        "color": "#9fe8ff",
+        "size": 10,
+        "phase": "execute"
+      },
+      {
+        "id": "step-003vvwpgd",
+        "type": "motion",
+        "duration": 2,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "__pose",
+        "parts": [
+          {
+            "part": "Chest",
+            "rotate": [
+              -14,
+              0,
+              10
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "Head",
+            "rotate": [
+              6,
+              0,
+              -8
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          }
+        ],
+        "phase": "execute"
+      },
+      {
+        "id": "step-003wwspxu",
+        "type": "animation",
+        "duration": 0,
+        "role": "allTargets",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "animationSource": "id",
+        "animationId": 77,
+        "phase": "execute"
+      },
+      {
+        "id": "step-003x1bzea",
+        "type": "impact",
+        "duration": 0,
+        "role": "allTargets",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-003y2uv38",
+        "type": "shake",
+        "duration": 12,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "power": 5,
+        "speed": 9,
+        "phase": "execute"
+      },
+      {
+        "id": "step-003zrqy7u",
+        "type": "wait",
+        "duration": 10,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-0040fiitk",
+        "type": "motion",
+        "duration": 10,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "__pose",
+        "parts": [
+          {
+            "part": "Chest",
+            "rotate": [
+              0,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "Head",
+            "rotate": [
+              0,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          }
+        ],
+        "phase": "execute"
+      },
+      {
+        "id": "step-0041pobef",
+        "type": "wait",
+        "duration": 2,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-0042twyys",
+        "type": "weapon",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "mode": "show",
+        "weaponGraphic": "icon",
+        "weaponImageId": 1,
+        "weaponFrame": 1,
+        "attachment": "offset",
+        "bone": "",
+        "gripX": 0.5,
+        "gripY": 0.5,
+        "equipIndex": 1,
+        "hands": "one",
+        "aim": "none",
+        "visible": false,
+        "phase": "execute"
+      },
+      {
+        "id": "step-0043s0b2p",
+        "type": "motion",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "walk",
+        "phase": "return"
+      },
+      {
+        "id": "step-0044qfhb4",
+        "type": "move",
+        "duration": 8,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "moveMode": "anchor",
+        "speed": 0,
+        "arc": 0,
+        "face": "movement",
+        "phase": "return"
+      },
+      {
+        "id": "step-00452k76b",
+        "type": "motion",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "idle",
+        "phase": "finish"
+      },
+      {
+        "id": "step-0046pioqo",
+        "type": "move",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "moveMode": "anchor",
+        "speed": 0,
+        "arc": 0,
+        "face": "home",
+        "phase": "finish"
+      }
+    ],
+    "phases": [
+      "prepare",
+      "movement",
+      "execute",
+      "return",
+      "finish"
+    ],
+    "purpose": "action"
+  },
+  {
+    "id": 25,
+    "version": 1,
+    "name": "Overcharge Shot",
+    "note": "",
+    "steps": [
+      {
+        "id": "step-0047v4gz0",
+        "type": "weapon",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "mode": "show",
+        "weaponGraphic": "icon",
+        "weaponImageId": 1,
+        "weaponFrame": 1,
+        "attachment": "rightHand",
+        "bone": "",
+        "gripX": 0.5,
+        "gripY": 0,
+        "equipIndex": 1,
+        "hands": "both",
+        "aim": "target",
+        "iconSource": "weapon",
+        "rotation": 0,
+        "phase": "execute"
+      },
+      {
+        "id": "step-0048e4oyd",
+        "type": "motion",
+        "duration": 8,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "__pose",
+        "parts": [
+          {
+            "part": "Chest",
+            "rotate": [
+              -4,
+              0,
+              10
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "Head",
+            "rotate": [
+              6,
+              0,
+              -8
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          }
+        ],
+        "phase": "execute"
+      },
+      {
+        "id": "step-00490o62t",
+        "type": "sound",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "audio": {
+          "name": "powerup-03",
+          "volume": 80,
+          "pitch": 90,
+          "pan": 0
+        },
+        "phase": "execute"
+      },
+      {
+        "id": "step-004a6kg6r",
+        "type": "animation",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "animationSource": "id",
+        "animationId": 52,
+        "phase": "execute"
+      },
+      {
+        "id": "step-004bust3x",
+        "type": "wait",
+        "duration": 30,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-004can017",
+        "type": "sound",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "audio": {
+          "name": "blaster-03",
+          "volume": 100,
+          "pitch": 70,
+          "pan": 0
+        },
+        "phase": "execute"
+      },
+      {
+        "id": "step-004dnnkw8",
+        "type": "flash",
+        "duration": 6,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "red": 255,
+        "green": 255,
+        "blue": 255,
+        "alpha": 140,
+        "phase": "execute"
+      },
+      {
+        "id": "step-004e0gmmq",
+        "type": "projectile",
+        "duration": 10,
+        "role": "user",
+        "anchor": "home",
+        "x": 0.6,
+        "y": 0,
+        "z": 0.05,
+        "easing": "linear",
+        "iconSource": "animation",
+        "iconIndex": 0,
+        "name": "",
+        "destination": "target",
+        "sourceRole": "battler",
+        "attachment": "rightHand",
+        "bone": "",
+        "gripX": 0.5,
+        "gripY": 0.5,
+        "equipIndex": 1,
+        "startHeight": 1,
+        "endHeight": 1,
+        "arc": 0,
+        "spin": 0,
+        "rotation": 0,
+        "scale": 1,
+        "flight": "oneWay",
+        "animationId": 121,
+        "phase": "execute"
+      },
+      {
+        "id": "step-004fy22bi",
+        "type": "motion",
+        "duration": 3,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "__pose",
+        "parts": [
+          {
+            "part": "Chest",
+            "rotate": [
+              -16,
+              0,
+              10
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "Head",
+            "rotate": [
+              6,
+              0,
+              -8
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          }
+        ],
+        "phase": "execute"
+      },
+      {
+        "id": "step-004gpc7n4",
+        "type": "animation",
+        "duration": 0,
+        "role": "allTargets",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "animationSource": "id",
+        "animationId": 107,
+        "phase": "execute"
+      },
+      {
+        "id": "step-004hrw3f8",
+        "type": "impact",
+        "duration": 0,
+        "role": "allTargets",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-004is127e",
+        "type": "shake",
+        "duration": 24,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "power": 9,
+        "speed": 10,
+        "phase": "execute"
+      },
+      {
+        "id": "step-004j1kx55",
+        "type": "wait",
+        "duration": 12,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-004k1l92g",
+        "type": "motion",
+        "duration": 10,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "__pose",
+        "parts": [
+          {
+            "part": "Chest",
+            "rotate": [
+              0,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "Head",
+            "rotate": [
+              0,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          }
+        ],
+        "phase": "execute"
+      },
+      {
+        "id": "step-004lvr4b3",
+        "type": "wait",
+        "duration": 2,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-004m2emsz",
+        "type": "weapon",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "mode": "show",
+        "weaponGraphic": "icon",
+        "weaponImageId": 1,
+        "weaponFrame": 1,
+        "attachment": "offset",
+        "bone": "",
+        "gripX": 0.5,
+        "gripY": 0.5,
+        "equipIndex": 1,
+        "hands": "one",
+        "aim": "none",
+        "visible": false,
+        "phase": "execute"
+      },
+      {
+        "id": "step-004nzx6kl",
+        "type": "motion",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "idle",
+        "phase": "finish"
+      },
+      {
+        "id": "step-004o5xhiq",
+        "type": "move",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "moveMode": "anchor",
+        "speed": 0,
+        "arc": 0,
+        "face": "home",
+        "phase": "finish"
+      }
+    ],
+    "phases": [
+      "prepare",
+      "movement",
+      "execute",
+      "return",
+      "finish"
+    ],
+    "purpose": "action"
+  },
+  {
+    "id": 26,
+    "version": 1,
+    "name": "Suppressing Fire",
+    "note": "",
+    "steps": [
+      {
+        "id": "step-004peht96",
+        "type": "weapon",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "mode": "show",
+        "weaponGraphic": "icon",
+        "weaponImageId": 1,
+        "weaponFrame": 1,
+        "attachment": "rightHand",
+        "bone": "",
+        "gripX": 0.5,
+        "gripY": 0,
+        "equipIndex": 1,
+        "hands": "both",
+        "aim": "target",
+        "iconSource": "weapon",
+        "rotation": 0,
+        "phase": "execute"
+      },
+      {
+        "id": "step-004q1c5w9",
+        "type": "motion",
+        "duration": 6,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "__pose",
+        "parts": [
+          {
+            "part": "Chest",
+            "rotate": [
+              -4,
+              0,
+              10
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "Head",
+            "rotate": [
+              6,
+              0,
+              -8
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          }
+        ],
+        "phase": "execute"
+      },
+      {
+        "id": "step-004rydvsk",
+        "type": "sound",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "audio": {
+          "name": "gun-shot-01",
+          "volume": 85,
+          "pitch": 105,
+          "pan": 0
+        },
+        "phase": "execute"
+      },
+      {
+        "id": "step-004s5dcsl",
+        "type": "projectile",
+        "duration": 8,
+        "role": "user",
+        "anchor": "home",
+        "x": 0.6,
+        "y": 0,
+        "z": 0.05,
+        "easing": "linear",
+        "iconSource": "color",
+        "iconIndex": 0,
+        "name": "",
+        "destination": "allTargets",
+        "sourceRole": "battler",
+        "attachment": "rightHand",
+        "bone": "",
+        "gripX": 0.5,
+        "gripY": 0.5,
+        "equipIndex": 1,
+        "startHeight": 1,
+        "endHeight": 1,
+        "arc": 0,
+        "spin": 0,
+        "rotation": 0,
+        "scale": 1,
+        "flight": "oneWay",
+        "color": "#ffd27a",
+        "size": 7,
+        "phase": "execute"
+      },
+      {
+        "id": "step-004t9yjg2",
+        "type": "animation",
+        "duration": 0,
+        "role": "allTargets",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "animationSource": "id",
+        "animationId": 111,
+        "phase": "execute"
+      },
+      {
+        "id": "step-004u1rk1p",
+        "type": "impact",
+        "duration": 0,
+        "role": "allTargets",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-004vxb2fz",
+        "type": "shake",
+        "duration": 6,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "power": 2,
+        "speed": 10,
+        "phase": "execute"
+      },
+      {
+        "id": "step-004w2jqs4",
+        "type": "wait",
+        "duration": 4,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-004x7wrcq",
+        "type": "sound",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "audio": {
+          "name": "gun-shot-01",
+          "volume": 85,
+          "pitch": 110,
+          "pan": 0
+        },
+        "phase": "execute"
+      },
+      {
+        "id": "step-004yi88af",
+        "type": "projectile",
+        "duration": 8,
+        "role": "user",
+        "anchor": "home",
+        "x": 0.6,
+        "y": 0,
+        "z": 0.05,
+        "easing": "linear",
+        "iconSource": "color",
+        "iconIndex": 0,
+        "name": "",
+        "destination": "allTargets",
+        "sourceRole": "battler",
+        "attachment": "rightHand",
+        "bone": "",
+        "gripX": 0.5,
+        "gripY": 0.5,
+        "equipIndex": 1,
+        "startHeight": 1,
+        "endHeight": 1,
+        "arc": 0,
+        "spin": 0,
+        "rotation": 0,
+        "scale": 1,
+        "flight": "oneWay",
+        "color": "#ffd27a",
+        "size": 7,
+        "phase": "execute"
+      },
+      {
+        "id": "step-004z062nq",
+        "type": "animation",
+        "duration": 0,
+        "role": "allTargets",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "animationSource": "id",
+        "animationId": 111,
+        "phase": "execute"
+      },
+      {
+        "id": "step-0050o5ctk",
+        "type": "impact",
+        "duration": 0,
+        "role": "allTargets",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-0051fpjjt",
+        "type": "shake",
+        "duration": 6,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "power": 2,
+        "speed": 10,
+        "phase": "execute"
+      },
+      {
+        "id": "step-0052fsf7u",
+        "type": "wait",
+        "duration": 4,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-0053ejz4c",
+        "type": "sound",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "audio": {
+          "name": "gun-shot-01",
+          "volume": 85,
+          "pitch": 115,
+          "pan": 0
+        },
+        "phase": "execute"
+      },
+      {
+        "id": "step-0054icrz2",
+        "type": "projectile",
+        "duration": 8,
+        "role": "user",
+        "anchor": "home",
+        "x": 0.6,
+        "y": 0,
+        "z": 0.05,
+        "easing": "linear",
+        "iconSource": "color",
+        "iconIndex": 0,
+        "name": "",
+        "destination": "allTargets",
+        "sourceRole": "battler",
+        "attachment": "rightHand",
+        "bone": "",
+        "gripX": 0.5,
+        "gripY": 0.5,
+        "equipIndex": 1,
+        "startHeight": 1,
+        "endHeight": 1,
+        "arc": 0,
+        "spin": 0,
+        "rotation": 0,
+        "scale": 1,
+        "flight": "oneWay",
+        "color": "#ffd27a",
+        "size": 7,
+        "phase": "execute"
+      },
+      {
+        "id": "step-0055n662f",
+        "type": "animation",
+        "duration": 0,
+        "role": "allTargets",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "animationSource": "id",
+        "animationId": 111,
+        "phase": "execute"
+      },
+      {
+        "id": "step-0056fmzhe",
+        "type": "impact",
+        "duration": 0,
+        "role": "allTargets",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-0057ss2rf",
+        "type": "shake",
+        "duration": 6,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "power": 2,
+        "speed": 10,
+        "phase": "execute"
+      },
+      {
+        "id": "step-0058fhahm",
+        "type": "wait",
+        "duration": 4,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-0059kry3i",
+        "type": "wait",
+        "duration": 10,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-005a3e6vy",
+        "type": "motion",
+        "duration": 10,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "__pose",
+        "parts": [
+          {
+            "part": "Chest",
+            "rotate": [
+              0,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "Head",
+            "rotate": [
+              0,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          }
+        ],
+        "phase": "execute"
+      },
+      {
+        "id": "step-005bc3dd3",
+        "type": "wait",
+        "duration": 2,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-005c5yuw3",
+        "type": "weapon",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "mode": "show",
+        "weaponGraphic": "icon",
+        "weaponImageId": 1,
+        "weaponFrame": 1,
+        "attachment": "offset",
+        "bone": "",
+        "gripX": 0.5,
+        "gripY": 0.5,
+        "equipIndex": 1,
+        "hands": "one",
+        "aim": "none",
+        "visible": false,
+        "phase": "execute"
+      },
+      {
+        "id": "step-005d5ok7j",
+        "type": "motion",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "idle",
+        "phase": "finish"
+      },
+      {
+        "id": "step-005eb49ir",
+        "type": "move",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "moveMode": "anchor",
+        "speed": 0,
+        "arc": 0,
+        "face": "home",
+        "phase": "finish"
+      }
+    ],
+    "phases": [
+      "prepare",
+      "movement",
+      "execute",
+      "return",
+      "finish"
+    ],
+    "purpose": "action",
+    "hitPolicy": "authored"
+  },
+  {
+    "id": 27,
+    "version": 1,
+    "name": "Frag Grenade",
+    "note": "",
+    "steps": [
+      {
+        "id": "step-005fehb9t",
+        "type": "weapon",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "mode": "show",
+        "weaponGraphic": "icon",
+        "weaponImageId": 1,
+        "weaponFrame": 1,
+        "attachment": "rightHand",
+        "bone": "",
+        "gripX": 0.5,
+        "gripY": 0.5,
+        "equipIndex": 1,
+        "hands": "one",
+        "aim": "none",
+        "iconSource": "action",
+        "rotation": 0,
+        "phase": "execute"
+      },
+      {
+        "id": "step-005gpr5r0",
+        "type": "motion",
+        "duration": 6,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "__pose",
+        "parts": [
+          {
+            "part": "RightUpperArm",
+            "rotate": [
+              -60,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "RightLowerArm",
+            "rotate": [
+              -110,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "LeftUpperArm",
+            "rotate": [
+              -50,
+              0,
+              -25
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "LeftLowerArm",
+            "rotate": [
+              -100,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          }
+        ],
+        "phase": "execute"
+      },
+      {
+        "id": "step-005hrslc9",
+        "type": "sound",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "audio": {
+          "name": "select-03",
+          "volume": 70,
+          "pitch": 80,
+          "pan": 0
+        },
+        "phase": "execute"
+      },
+      {
+        "id": "step-005iv0jm6",
+        "type": "wait",
+        "duration": 8,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-005j73m4q",
+        "type": "motion",
+        "duration": 6,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "__pose",
+        "parts": [
+          {
+            "part": "RightUpperArm",
+            "rotate": [
+              -160,
+              0,
+              -20
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "RightLowerArm",
+            "rotate": [
+              -40,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "LeftUpperArm",
+            "rotate": [
+              0,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "LeftLowerArm",
+            "rotate": [
+              0,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "Chest",
+            "rotate": [
+              -10,
+              0,
+              10
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          }
+        ],
+        "phase": "execute"
+      },
+      {
+        "id": "step-005ka0xqm",
+        "type": "sound",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "audio": {
+          "name": "whoosh-01",
+          "volume": 80,
+          "pitch": 100,
+          "pan": 0
+        },
+        "phase": "execute"
+      },
+      {
+        "id": "step-005lp14ei",
+        "type": "weapon",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "mode": "show",
+        "weaponGraphic": "icon",
+        "weaponImageId": 1,
+        "weaponFrame": 1,
+        "attachment": "offset",
+        "bone": "",
+        "gripX": 0.5,
+        "gripY": 0.5,
+        "equipIndex": 1,
+        "hands": "one",
+        "aim": "none",
+        "visible": false,
+        "phase": "execute"
+      },
+      {
+        "id": "step-005mqe4cg",
+        "type": "projectile",
+        "duration": 34,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "linear",
+        "iconSource": "action",
+        "iconIndex": 0,
+        "name": "",
+        "destination": "allTargets",
+        "sourceRole": "battler",
+        "attachment": "rightHand",
+        "bone": "",
+        "gripX": 0.5,
+        "gripY": 0.5,
+        "equipIndex": 1,
+        "startHeight": 1.6,
+        "endHeight": 0.4,
+        "arc": 2.4,
+        "spin": 14,
+        "rotation": 0,
+        "scale": 1,
+        "flight": "oneWay",
+        "phase": "execute"
+      },
+      {
+        "id": "step-005naf053",
+        "type": "sound",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "audio": {
+          "name": "hit-03",
+          "volume": 100,
+          "pitch": 60,
+          "pan": 0
+        },
+        "phase": "execute"
+      },
+      {
+        "id": "step-005olh4a6",
+        "type": "animation",
+        "duration": 0,
+        "role": "allTargets",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "animationSource": "id",
+        "animationId": 108,
+        "phase": "execute"
+      },
+      {
+        "id": "step-005p40chs",
+        "type": "impact",
+        "duration": 0,
+        "role": "allTargets",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-005q973kv",
+        "type": "shake",
+        "duration": 22,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "power": 9,
+        "speed": 10,
+        "phase": "execute"
+      },
+      {
+        "id": "step-005ra17oy",
+        "type": "flash",
+        "duration": 10,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "red": 255,
+        "green": 200,
+        "blue": 120,
+        "alpha": 150,
+        "phase": "execute"
+      },
+      {
+        "id": "step-005srxb1f",
+        "type": "motion",
+        "duration": 6,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "__pose",
+        "parts": [
+          {
+            "part": "RightUpperArm",
+            "rotate": [
+              -40,
+              0,
+              20
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "RightLowerArm",
+            "rotate": [
+              -10,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "Chest",
+            "rotate": [
+              12,
+              0,
+              -8
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          }
+        ],
+        "phase": "execute"
+      },
+      {
+        "id": "step-005tpzc9i",
+        "type": "wait",
+        "duration": 14,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-005u08sbl",
+        "type": "motion",
+        "duration": 10,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "__pose",
+        "parts": [
+          {
+            "part": "RightUpperArm",
+            "rotate": [
+              0,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "RightLowerArm",
+            "rotate": [
+              0,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "Chest",
+            "rotate": [
+              0,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          }
+        ],
+        "phase": "execute"
+      },
+      {
+        "id": "step-005voyq58",
+        "type": "motion",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "idle",
+        "phase": "finish"
+      },
+      {
+        "id": "step-005wbmyai",
+        "type": "move",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "moveMode": "anchor",
+        "speed": 0,
+        "arc": 0,
+        "face": "home",
+        "phase": "finish"
+      }
+    ],
+    "phases": [
+      "prepare",
+      "movement",
+      "execute",
+      "return",
+      "finish"
+    ],
+    "purpose": "action"
+  },
+  {
+    "id": 28,
+    "version": 1,
+    "name": "Med-Kit Toss",
+    "note": "",
+    "steps": [
+      {
+        "id": "step-005xnk24m",
+        "type": "weapon",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "mode": "show",
+        "weaponGraphic": "icon",
+        "weaponImageId": 1,
+        "weaponFrame": 1,
+        "attachment": "rightHand",
+        "bone": "",
+        "gripX": 0.5,
+        "gripY": 0.5,
+        "equipIndex": 1,
+        "hands": "one",
+        "aim": "none",
+        "iconSource": "action",
+        "rotation": 0,
+        "phase": "execute"
+      },
+      {
+        "id": "step-005y3zlx9",
+        "type": "motion",
+        "duration": 6,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "__pose",
+        "parts": [
+          {
+            "part": "RightUpperArm",
+            "rotate": [
+              30,
+              0,
+              -10
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "RightLowerArm",
+            "rotate": [
+              -20,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          }
+        ],
+        "phase": "execute"
+      },
+      {
+        "id": "step-005z2gcu9",
+        "type": "sound",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "audio": {
+          "name": "whoosh-02",
+          "volume": 70,
+          "pitch": 120,
+          "pan": 0
+        },
+        "phase": "execute"
+      },
+      {
+        "id": "step-00602vrdd",
+        "type": "weapon",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "mode": "show",
+        "weaponGraphic": "icon",
+        "weaponImageId": 1,
+        "weaponFrame": 1,
+        "attachment": "offset",
+        "bone": "",
+        "gripX": 0.5,
+        "gripY": 0.5,
+        "equipIndex": 1,
+        "hands": "one",
+        "aim": "none",
+        "visible": false,
+        "phase": "execute"
+      },
+      {
+        "id": "step-0061iprng",
+        "type": "motion",
+        "duration": 5,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "__pose",
+        "parts": [
+          {
+            "part": "RightUpperArm",
+            "rotate": [
+              -80,
+              0,
+              -5
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "RightLowerArm",
+            "rotate": [
+              -10,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          }
+        ],
+        "phase": "execute"
+      },
+      {
+        "id": "step-0062ba98p",
+        "type": "projectile",
+        "duration": 24,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "linear",
+        "iconSource": "action",
+        "iconIndex": 0,
+        "name": "",
+        "destination": "target",
+        "sourceRole": "battler",
+        "attachment": "rightHand",
+        "bone": "",
+        "gripX": 0.5,
+        "gripY": 0.5,
+        "equipIndex": 1,
+        "startHeight": 1,
+        "endHeight": 1,
+        "arc": 1.4,
+        "spin": 6,
+        "rotation": 0,
+        "scale": 1,
+        "flight": "oneWay",
+        "phase": "execute"
+      },
+      {
+        "id": "step-0063o26gr",
+        "type": "sound",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "audio": {
+          "name": "powerup-01",
+          "volume": 80,
+          "pitch": 120,
+          "pan": 0
+        },
+        "phase": "execute"
+      },
+      {
+        "id": "step-0064mm5ec",
+        "type": "animation",
+        "duration": 0,
+        "role": "allTargets",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "animationSource": "id",
+        "animationId": 41,
+        "phase": "execute"
+      },
+      {
+        "id": "step-0065ia425",
+        "type": "impact",
+        "duration": 0,
+        "role": "allTargets",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-0066xw5ce",
+        "type": "wait",
+        "duration": 10,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-0067m2bpw",
+        "type": "motion",
+        "duration": 8,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "__pose",
+        "parts": [
+          {
+            "part": "RightUpperArm",
+            "rotate": [
+              0,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "RightLowerArm",
+            "rotate": [
+              0,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          }
+        ],
+        "phase": "execute"
+      },
+      {
+        "id": "step-0068tlbhn",
+        "type": "motion",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "idle",
+        "phase": "finish"
+      },
+      {
+        "id": "step-0069cirre",
+        "type": "move",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "moveMode": "anchor",
+        "speed": 0,
+        "arc": 0,
+        "face": "home",
+        "phase": "finish"
+      }
+    ],
+    "phases": [
+      "prepare",
+      "movement",
+      "execute",
+      "return",
+      "finish"
+    ],
+    "purpose": "action"
+  },
+  {
+    "id": 29,
+    "version": 1,
+    "name": "Willpower",
+    "note": "",
+    "steps": [
+      {
+        "id": "step-0039w071u",
+        "type": "weapon",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "mode": "show",
+        "weaponGraphic": "icon",
+        "weaponImageId": 1,
+        "weaponFrame": 1,
+        "attachment": "rightHand",
+        "bone": "",
+        "gripX": 0.5,
+        "gripY": 0,
+        "equipIndex": 1,
+        "hands": "one",
+        "aim": "none",
+        "iconSource": "weapon",
+        "rotation": 0,
+        "phase": "execute"
+      },
+      {
+        "id": "step-003atzjmo",
+        "type": "motion",
+        "duration": 8,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "__pose",
+        "parts": [
+          {
+            "part": "RightUpperArm",
+            "rotate": [
+              -170,
+              0,
+              -20
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "RightLowerArm",
+            "rotate": [
+              -20,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "LeftUpperArm",
+            "rotate": [
+              -90,
+              0,
+              -25
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "LeftLowerArm",
+            "rotate": [
+              -120,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "Chest",
+            "rotate": [
+              -12,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          }
+        ],
+        "phase": "execute"
+      },
+      {
+        "id": "step-003brjls7",
+        "type": "sound",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "audio": {
+          "name": "powerup-01",
+          "volume": 90,
+          "pitch": 100,
+          "pan": 0
+        },
+        "phase": "execute"
+      },
+      {
+        "id": "step-003c3rycs",
+        "type": "animation",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "animationSource": "id",
+        "animationId": 51,
+        "phase": "execute"
+      },
+      {
+        "id": "step-003dkjzga",
+        "type": "flash",
+        "duration": 10,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "red": 255,
+        "green": 220,
+        "blue": 120,
+        "alpha": 90,
+        "phase": "execute"
+      },
+      {
+        "id": "step-003e8sk7l",
+        "type": "wait",
+        "duration": 24,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-003fipl4n",
+        "type": "impact",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-003gztptw",
+        "type": "wait",
+        "duration": 10,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-003hb7nh2",
+        "type": "motion",
+        "duration": 12,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "__pose",
+        "parts": [
+          {
+            "part": "RightUpperArm",
+            "rotate": [
+              0,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "RightLowerArm",
+            "rotate": [
+              0,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "LeftUpperArm",
+            "rotate": [
+              0,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "LeftLowerArm",
+            "rotate": [
+              0,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "Chest",
+            "rotate": [
+              0,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          }
+        ],
+        "phase": "execute"
+      },
+      {
+        "id": "step-003i6axd6",
+        "type": "wait",
+        "duration": 2,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-003jy2913",
+        "type": "weapon",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "mode": "show",
+        "weaponGraphic": "icon",
+        "weaponImageId": 1,
+        "weaponFrame": 1,
+        "attachment": "offset",
+        "bone": "",
+        "gripX": 0.5,
+        "gripY": 0.5,
+        "equipIndex": 1,
+        "hands": "one",
+        "aim": "none",
+        "visible": false,
+        "phase": "execute"
+      },
+      {
+        "id": "step-003k2mn2d",
+        "type": "motion",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "idle",
+        "phase": "finish"
+      },
+      {
+        "id": "step-003l8g40i",
+        "type": "move",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "moveMode": "anchor",
+        "speed": 0,
+        "arc": 0,
+        "face": "home",
+        "phase": "finish"
+      }
+    ],
+    "phases": [
+      "prepare",
+      "movement",
+      "execute",
+      "return",
+      "finish"
+    ],
+    "purpose": "action"
+  },
+  {
+    "id": 30,
+    "version": 1,
+    "name": "Cannon Fire",
+    "note": "",
+    "steps": [
+      {
+        "id": "step-006ai0uwm",
+        "type": "motion",
+        "duration": 22,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "__pose",
+        "parts": [
+          {
+            "part": "Full-Turret",
+            "aim": "target",
+            "rotate": [
+              0,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          }
+        ],
+        "phase": "execute"
+      },
+      {
+        "id": "step-006bunsa1",
+        "type": "sound",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "audio": {
+          "name": "drone-01",
+          "volume": 60,
+          "pitch": 140,
+          "pan": 0
+        },
+        "phase": "execute"
+      },
+      {
+        "id": "step-006czs9g3",
+        "type": "wait",
+        "duration": 10,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-006djs86w",
+        "type": "motion",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "Fire Canon",
+        "keepPose": true,
+        "phase": "execute"
+      },
+      {
+        "id": "step-006erne3i",
+        "type": "sound",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "audio": {
+          "name": "blaster-01",
+          "volume": 100,
+          "pitch": 55,
+          "pan": 0
+        },
+        "phase": "execute"
+      },
+      {
+        "id": "step-006f1699u",
+        "type": "sound",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "audio": {
+          "name": "hit-03",
+          "volume": 90,
+          "pitch": 50,
+          "pan": 0
+        },
+        "phase": "execute"
+      },
+      {
+        "id": "step-006g1piz7",
+        "type": "flash",
+        "duration": 6,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "red": 255,
+        "green": 220,
+        "blue": 160,
+        "alpha": 120,
+        "phase": "execute"
+      },
+      {
+        "id": "step-006hwi94f",
+        "type": "shake",
+        "duration": 10,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "power": 5,
+        "speed": 10,
+        "phase": "execute"
+      },
+      {
+        "id": "step-006i73ztk",
+        "type": "projectile",
+        "duration": 12,
+        "role": "user",
+        "anchor": "home",
+        "x": 2.2,
+        "y": 0,
+        "z": 0.2,
+        "easing": "linear",
+        "iconSource": "color",
+        "iconIndex": 0,
+        "name": "",
+        "destination": "target",
+        "sourceRole": "battler",
+        "attachment": "rightHand",
+        "bone": "Canon Shaft",
+        "gripX": 0.5,
+        "gripY": 0.5,
+        "equipIndex": 1,
+        "startHeight": 1,
+        "endHeight": 0.8,
+        "arc": 0,
+        "spin": 0,
+        "rotation": 0,
+        "scale": 1,
+        "flight": "oneWay",
+        "color": "#ffb060",
+        "size": 14,
+        "phase": "execute"
+      },
+      {
+        "id": "step-006jbbhql",
+        "type": "animation",
+        "duration": 0,
+        "role": "allTargets",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "animationSource": "id",
+        "animationId": 67,
+        "phase": "execute"
+      },
+      {
+        "id": "step-006kbt8eu",
+        "type": "impact",
+        "duration": 0,
+        "role": "allTargets",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-006lw57dd",
+        "type": "shake",
+        "duration": 24,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "power": 9,
+        "speed": 10,
+        "phase": "execute"
+      },
+      {
+        "id": "step-006mm36tc",
+        "type": "flash",
+        "duration": 10,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "red": 255,
+        "green": 180,
+        "blue": 100,
+        "alpha": 140,
+        "phase": "execute"
+      },
+      {
+        "id": "step-006ngmoxu",
+        "type": "wait",
+        "duration": 12,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-006ow9bzg",
+        "type": "motion",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "idle",
+        "phase": "execute"
+      },
+      {
+        "id": "step-006ppivdj",
+        "type": "wait",
+        "duration": 10,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-006qboogu",
+        "type": "motion",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "idle",
+        "phase": "finish"
+      },
+      {
+        "id": "step-006rudn5p",
+        "type": "move",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "moveMode": "anchor",
+        "speed": 0,
+        "arc": 0,
+        "face": "home",
+        "phase": "finish"
+      }
+    ],
+    "phases": [
+      "prepare",
+      "movement",
+      "execute",
+      "return",
+      "finish"
+    ],
+    "purpose": "action"
+  },
+  {
+    "id": 31,
+    "version": 1,
+    "name": "Tank Ram",
+    "note": "",
+    "steps": [
+      {
+        "id": "step-006sp4su6",
+        "type": "sound",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "audio": {
+          "name": "drone-01",
+          "volume": 80,
+          "pitch": 80,
+          "pan": 0
+        },
+        "phase": "execute"
+      },
+      {
+        "id": "step-006t97om8",
+        "type": "wait",
+        "duration": 10,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-006uwu16p",
+        "type": "move",
+        "duration": 10,
+        "role": "user",
+        "anchor": "approach",
+        "x": -2.2,
+        "y": 0,
+        "z": 0,
+        "easing": "linear",
+        "moveMode": "anchor",
+        "speed": 0,
+        "arc": 0,
+        "face": "target",
+        "phase": "execute"
+      },
+      {
+        "id": "step-006v0urn1",
+        "type": "shake",
+        "duration": 12,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "power": 6,
+        "speed": 10,
+        "phase": "execute"
+      },
+      {
+        "id": "step-006wwcgeo",
+        "type": "sound",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "audio": {
+          "name": "hit-02",
+          "volume": 100,
+          "pitch": 70,
+          "pan": 0
+        },
+        "phase": "execute"
+      },
+      {
+        "id": "step-006xb8cx5",
+        "type": "animation",
+        "duration": 0,
+        "role": "allTargets",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "animationSource": "id",
+        "animationId": 39,
+        "phase": "execute"
+      },
+      {
+        "id": "step-006yr6bm6",
+        "type": "impact",
+        "duration": 0,
+        "role": "allTargets",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-006zpwv5w",
+        "type": "wait",
+        "duration": 16,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-00704313y",
+        "type": "move",
+        "duration": 24,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "moveMode": "anchor",
+        "speed": 0,
+        "arc": 0,
+        "face": "home",
+        "phase": "return"
+      },
+      {
+        "id": "step-0071v2r6c",
+        "type": "motion",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "idle",
+        "phase": "finish"
+      },
+      {
+        "id": "step-0072xz3j5",
+        "type": "move",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "moveMode": "anchor",
+        "speed": 0,
+        "arc": 0,
+        "face": "home",
+        "phase": "finish"
+      }
+    ],
+    "phases": [
+      "prepare",
+      "movement",
+      "execute",
+      "return",
+      "finish"
+    ],
+    "purpose": "action"
+  },
+  {
+    "id": 32,
+    "version": 1,
+    "name": "Reactor Beam",
+    "note": "",
+    "steps": [
+      {
+        "id": "step-0073vh0dp",
+        "type": "motion",
+        "duration": 10,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "__pose",
+        "parts": [
+          {
+            "part": "RightUpperArm",
+            "rotate": [
+              -40,
+              0,
+              -75
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "RightLowerArm",
+            "rotate": [
+              -20,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "LeftUpperArm",
+            "rotate": [
+              -40,
+              0,
+              75
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "LeftLowerArm",
+            "rotate": [
+              -20,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "Chest",
+            "rotate": [
+              -12,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          }
+        ],
+        "phase": "execute"
+      },
+      {
+        "id": "step-0074u0mpv",
+        "type": "sound",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "audio": {
+          "name": "powerup-03",
+          "volume": 80,
+          "pitch": 70,
+          "pan": 0
+        },
+        "phase": "execute"
+      },
+      {
+        "id": "step-0075b8gaq",
+        "type": "animation",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "animationSource": "id",
+        "animationId": 53,
+        "phase": "execute"
+      },
+      {
+        "id": "step-00769jd23",
+        "type": "wait",
+        "duration": 26,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-00773ias2",
+        "type": "sound",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "audio": {
+          "name": "blaster-04",
+          "volume": 100,
+          "pitch": 60,
+          "pan": 0
+        },
+        "phase": "execute"
+      },
+      {
+        "id": "step-0078ez9ww",
+        "type": "flash",
+        "duration": 6,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "red": 255,
+        "green": 60,
+        "blue": 60,
+        "alpha": 110,
+        "phase": "execute"
+      },
+      {
+        "id": "step-0079e5bgp",
+        "type": "projectile",
+        "duration": 6,
+        "role": "user",
+        "anchor": "home",
+        "x": 0.4,
+        "y": 0,
+        "z": 0,
+        "easing": "linear",
+        "iconSource": "color",
+        "iconIndex": 0,
+        "name": "",
+        "destination": "target",
+        "sourceRole": "battler",
+        "attachment": "rightHand",
+        "bone": "Head",
+        "gripX": 0.5,
+        "gripY": 0.5,
+        "equipIndex": 1,
+        "startHeight": 1,
+        "endHeight": 1,
+        "arc": 0,
+        "spin": 0,
+        "rotation": 0,
+        "scale": 1,
+        "flight": "oneWay",
+        "color": "#ff3b3b",
+        "size": 16,
+        "phase": "execute"
+      },
+      {
+        "id": "step-007aimh7b",
+        "type": "animation",
+        "duration": 0,
+        "role": "allTargets",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "animationSource": "id",
+        "animationId": 121,
+        "phase": "execute"
+      },
+      {
+        "id": "step-007buzti1",
+        "type": "impact",
+        "duration": 0,
+        "role": "allTargets",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-007cshmg4",
+        "type": "shake",
+        "duration": 18,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "power": 7,
+        "speed": 10,
+        "phase": "execute"
+      },
+      {
+        "id": "step-007dsdvag",
+        "type": "wait",
+        "duration": 12,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-007elmgkt",
+        "type": "motion",
+        "duration": 12,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "__pose",
+        "parts": [
+          {
+            "part": "RightUpperArm",
+            "rotate": [
+              0,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "RightLowerArm",
+            "rotate": [
+              0,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "LeftUpperArm",
+            "rotate": [
+              0,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "LeftLowerArm",
+            "rotate": [
+              0,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "Chest",
+            "rotate": [
+              0,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          }
+        ],
+        "phase": "execute"
+      },
+      {
+        "id": "step-007fbgn5w",
+        "type": "motion",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "idle",
+        "phase": "finish"
+      },
+      {
+        "id": "step-007gecz3m",
+        "type": "move",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "moveMode": "anchor",
+        "speed": 0,
+        "arc": 0,
+        "face": "home",
+        "phase": "finish"
+      }
+    ],
+    "phases": [
+      "prepare",
+      "movement",
+      "execute",
+      "return",
+      "finish"
+    ],
+    "purpose": "action"
+  },
+  {
+    "id": 33,
+    "version": 1,
+    "name": "Cannon Barrage",
+    "note": "",
+    "steps": [
+      {
+        "id": "step-007hp4nx4",
+        "type": "sound",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "audio": {
+          "name": "drone-01",
+          "volume": 60,
+          "pitch": 140,
+          "pan": 0
+        },
+        "phase": "execute"
+      },
+      {
+        "id": "step-007iz3li4",
+        "type": "motion",
+        "duration": 20,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "__pose",
+        "targetIndex": 0,
+        "parts": [
+          {
+            "part": "Full-Turret",
+            "aim": "target",
+            "rotate": [
+              0,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          }
+        ],
+        "phase": "execute"
+      },
+      {
+        "id": "step-007j424if",
+        "type": "wait",
+        "duration": 4,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-007kbnqbw",
+        "type": "motion",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "Fire Canon",
+        "keepPose": true,
+        "phase": "execute"
+      },
+      {
+        "id": "step-007lupg58",
+        "type": "sound",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "audio": {
+          "name": "blaster-01",
+          "volume": 100,
+          "pitch": 55,
+          "pan": 0
+        },
+        "phase": "execute"
+      },
+      {
+        "id": "step-007mqa1iv",
+        "type": "sound",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "audio": {
+          "name": "hit-03",
+          "volume": 90,
+          "pitch": 50,
+          "pan": 0
+        },
+        "phase": "execute"
+      },
+      {
+        "id": "step-007nx3zpx",
+        "type": "flash",
+        "duration": 5,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "red": 255,
+        "green": 220,
+        "blue": 160,
+        "alpha": 100,
+        "phase": "execute"
+      },
+      {
+        "id": "step-007oeknwj",
+        "type": "shake",
+        "duration": 8,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "power": 4,
+        "speed": 10,
+        "phase": "execute"
+      },
+      {
+        "id": "step-007p947uf",
+        "type": "projectile",
+        "duration": 12,
+        "role": "user",
+        "anchor": "home",
+        "x": 2.2,
+        "y": 0,
+        "z": 0.2,
+        "easing": "linear",
+        "iconSource": "color",
+        "iconIndex": 0,
+        "name": "",
+        "destination": "target",
+        "sourceRole": "battler",
+        "attachment": "rightHand",
+        "bone": "Canon Shaft",
+        "gripX": 0.5,
+        "gripY": 0.5,
+        "equipIndex": 1,
+        "startHeight": 1,
+        "endHeight": 0.8,
+        "arc": 0,
+        "spin": 0,
+        "rotation": 0,
+        "scale": 1,
+        "flight": "oneWay",
+        "color": "#ffb060",
+        "size": 14,
+        "targetIndex": 0,
+        "phase": "execute"
+      },
+      {
+        "id": "step-007qxlczz",
+        "type": "animation",
+        "duration": 0,
+        "role": "target",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "animationSource": "id",
+        "animationId": 67,
+        "targetIndex": 0,
+        "phase": "execute"
+      },
+      {
+        "id": "step-007rx422v",
+        "type": "impact",
+        "duration": 0,
+        "role": "target",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "targetIndex": 0,
+        "phase": "execute"
+      },
+      {
+        "id": "step-007szyheu",
+        "type": "shake",
+        "duration": 14,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "power": 7,
+        "speed": 10,
+        "phase": "execute"
+      },
+      {
+        "id": "step-007t9smx2",
+        "type": "wait",
+        "duration": 8,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-007u50j67",
+        "type": "motion",
+        "duration": 12,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "__pose",
+        "targetIndex": 1,
+        "parts": [
+          {
+            "part": "Full-Turret",
+            "aim": "target",
+            "rotate": [
+              0,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          }
+        ],
+        "phase": "execute"
+      },
+      {
+        "id": "step-007v07st0",
+        "type": "wait",
+        "duration": 4,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-007w3ojz2",
+        "type": "motion",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "Fire Canon",
+        "keepPose": true,
+        "phase": "execute"
+      },
+      {
+        "id": "step-007xlnnx3",
+        "type": "sound",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "audio": {
+          "name": "blaster-01",
+          "volume": 100,
+          "pitch": 55,
+          "pan": 0
+        },
+        "phase": "execute"
+      },
+      {
+        "id": "step-007yr7vbe",
+        "type": "sound",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "audio": {
+          "name": "hit-03",
+          "volume": 90,
+          "pitch": 50,
+          "pan": 0
+        },
+        "phase": "execute"
+      },
+      {
+        "id": "step-007zwtbp5",
+        "type": "flash",
+        "duration": 5,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "red": 255,
+        "green": 220,
+        "blue": 160,
+        "alpha": 100,
+        "phase": "execute"
+      },
+      {
+        "id": "step-0080y3yhq",
+        "type": "shake",
+        "duration": 8,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "power": 4,
+        "speed": 10,
+        "phase": "execute"
+      },
+      {
+        "id": "step-0081cb4ky",
+        "type": "projectile",
+        "duration": 12,
+        "role": "user",
+        "anchor": "home",
+        "x": 2.2,
+        "y": 0,
+        "z": 0.2,
+        "easing": "linear",
+        "iconSource": "color",
+        "iconIndex": 0,
+        "name": "",
+        "destination": "target",
+        "sourceRole": "battler",
+        "attachment": "rightHand",
+        "bone": "Canon Shaft",
+        "gripX": 0.5,
+        "gripY": 0.5,
+        "equipIndex": 1,
+        "startHeight": 1,
+        "endHeight": 0.8,
+        "arc": 0,
+        "spin": 0,
+        "rotation": 0,
+        "scale": 1,
+        "flight": "oneWay",
+        "color": "#ffb060",
+        "size": 14,
+        "targetIndex": 1,
+        "phase": "execute"
+      },
+      {
+        "id": "step-0082fcap9",
+        "type": "animation",
+        "duration": 0,
+        "role": "target",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "animationSource": "id",
+        "animationId": 67,
+        "targetIndex": 1,
+        "phase": "execute"
+      },
+      {
+        "id": "step-0083crhdq",
+        "type": "impact",
+        "duration": 0,
+        "role": "target",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "targetIndex": 1,
+        "phase": "execute"
+      },
+      {
+        "id": "step-00840hef2",
+        "type": "shake",
+        "duration": 14,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "power": 7,
+        "speed": 10,
+        "phase": "execute"
+      },
+      {
+        "id": "step-0085znjwj",
+        "type": "wait",
+        "duration": 8,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-0086mlfww",
+        "type": "motion",
+        "duration": 12,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "__pose",
+        "targetIndex": 2,
+        "parts": [
+          {
+            "part": "Full-Turret",
+            "aim": "target",
+            "rotate": [
+              0,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          }
+        ],
+        "phase": "execute"
+      },
+      {
+        "id": "step-0087kolka",
+        "type": "wait",
+        "duration": 4,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-0088694pa",
+        "type": "motion",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "Fire Canon",
+        "keepPose": true,
+        "phase": "execute"
+      },
+      {
+        "id": "step-0089x7uys",
+        "type": "sound",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "audio": {
+          "name": "blaster-01",
+          "volume": 100,
+          "pitch": 55,
+          "pan": 0
+        },
+        "phase": "execute"
+      },
+      {
+        "id": "step-008a3rtaq",
+        "type": "sound",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "audio": {
+          "name": "hit-03",
+          "volume": 90,
+          "pitch": 50,
+          "pan": 0
+        },
+        "phase": "execute"
+      },
+      {
+        "id": "step-008b6b7pk",
+        "type": "flash",
+        "duration": 5,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "red": 255,
+        "green": 220,
+        "blue": 160,
+        "alpha": 100,
+        "phase": "execute"
+      },
+      {
+        "id": "step-008cuqk7g",
+        "type": "shake",
+        "duration": 8,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "power": 4,
+        "speed": 10,
+        "phase": "execute"
+      },
+      {
+        "id": "step-008dv2fhh",
+        "type": "projectile",
+        "duration": 12,
+        "role": "user",
+        "anchor": "home",
+        "x": 2.2,
+        "y": 0,
+        "z": 0.2,
+        "easing": "linear",
+        "iconSource": "color",
+        "iconIndex": 0,
+        "name": "",
+        "destination": "target",
+        "sourceRole": "battler",
+        "attachment": "rightHand",
+        "bone": "Canon Shaft",
+        "gripX": 0.5,
+        "gripY": 0.5,
+        "equipIndex": 1,
+        "startHeight": 1,
+        "endHeight": 0.8,
+        "arc": 0,
+        "spin": 0,
+        "rotation": 0,
+        "scale": 1,
+        "flight": "oneWay",
+        "color": "#ffb060",
+        "size": 14,
+        "targetIndex": 2,
+        "phase": "execute"
+      },
+      {
+        "id": "step-008et8gzx",
+        "type": "animation",
+        "duration": 0,
+        "role": "target",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "animationSource": "id",
+        "animationId": 67,
+        "targetIndex": 2,
+        "phase": "execute"
+      },
+      {
+        "id": "step-008fp26ej",
+        "type": "impact",
+        "duration": 0,
+        "role": "target",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "targetIndex": 2,
+        "phase": "execute"
+      },
+      {
+        "id": "step-008g9e4vi",
+        "type": "shake",
+        "duration": 14,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "power": 7,
+        "speed": 10,
+        "phase": "execute"
+      },
+      {
+        "id": "step-008hro37g",
+        "type": "wait",
+        "duration": 8,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-008iq4iuj",
+        "type": "wait",
+        "duration": 6,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-008j13ebw",
+        "type": "motion",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "idle",
+        "phase": "execute"
+      },
+      {
+        "id": "step-008kzdii4",
+        "type": "wait",
+        "duration": 8,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-008lcy0zz",
+        "type": "motion",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "idle",
+        "phase": "finish"
+      },
+      {
+        "id": "step-008m4fx00",
+        "type": "move",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "moveMode": "anchor",
+        "speed": 0,
+        "arc": 0,
+        "face": "home",
+        "phase": "finish"
+      }
+    ],
+    "phases": [
+      "prepare",
+      "movement",
+      "execute",
+      "return",
+      "finish"
+    ],
+    "purpose": "action",
+    "hitPolicy": "authored"
   }
 ]

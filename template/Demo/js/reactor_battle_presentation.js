@@ -127,9 +127,10 @@
                 else if(step.type==='motion')for(const battler of chosen.filter(Boolean)){
                     // A part pose is played by rules made for this step from
                     // where the battler's parts stand now; sheet battlers wait.
-                    const sheetMotion=B.spriteMotionName(step),releasing=!B.hasPose(step)&&Object.keys(poseState.get(battler)||{}).length>0,actionName=releasing?'pose:'+step.id:B.motionActionName(step);
+                    const sheetMotion=B.spriteMotionName(step),releasing=!B.hasPose(step)&&!step.keepPose&&Object.keys(poseState.get(battler)||{}).length>0,actionName=releasing?'pose:'+step.id:B.motionActionName(step);
                     const sprite=ss.findTargetSprite(battler);sprite?.startMotion?.(sheetMotion==='idle'?'wait':['attack','punch'].includes(sheetMotion)?'thrust':sheetMotion==='run'?'walk':sheetMotion==='cast'?'spell':sheetMotion);if(sprite&&P.graphicFor(battler)){P.requestGraphicMotion(sprite,sheetMotion);if(step.motion==='attack'&&P.graphicFor(battler).showWeapon!==false)battler.performAttack?.();}
-                    const posed=B.hasPose(step)?B.partPoseRules(step,poseState.get(battler)||{}):releasing?B.releasePoseRules(step,poseState.get(battler)||{}):null;if(posed)poseState.set(battler,posed.next);
+                    const aimOf=room?(entry)=>{const who=entry.aim==='user'?subject:(targets[step.targetIndex||0]||targets[0]);const at=ss.findTargetSprite(who)?._reactorRoomPosition;return sprite?._reactorRoomKey&&at?room.aimTurn(sprite._reactorRoomKey,entry.part,at):0;}:null;
+                    const posed=B.hasPose(step)?B.partPoseRules(step,poseState.get(battler)||{},aimOf):releasing?B.releasePoseRules(step,poseState.get(battler)||{}):null;if(posed)poseState.set(battler,posed.next);
                     const join=rules=>{if(!posed||!Array.isArray(rules))return;const kept=rules.filter(r=>r.name!==actionName);kept.push(...posed.rules);
                         // A release still plays the motion it names, under the release's own action.
                         if(releasing)kept.push(...B.releaseMotionRules({releases:{[step.id]:step.motion||'idle'},actions:{[step.id]:actionName}},step.id,rules));
@@ -177,7 +178,7 @@
         };adapter.owns=sprite=>saved.has(sprite);return P.extendAdapter(adapter,{manager,subject,targets,ss,room,roles,homes,saved,stateOnly});
     };
     P.sequenceVisuals=function({ss,room,subject,manager,targets}){
-        const prefix='extra:sequence:'+(P._visualSerial=(P._visualSerial||0)+1)+':',held=new Map(),flights=[];let serial=0,time=0,closed=false,approachUntil=-1;
+        const prefix='extra:sequence:'+(P._visualSerial=(P._visualSerial||0)+1)+':',held=new Map(),flights=[];let serial=0,time=0,closed=false,approachUntil=-1,barrageUntil=-1;
         const point=(sprite,step,height)=>{
             if(!sprite)return null;
             const p=room?{...sprite._reactorRoomPosition}:{x:sprite.x/48,y:sprite.y/48,z:0,facing:P.spriteYaw(sprite,targets[0])};
@@ -221,7 +222,7 @@
             const graphic=new Sprite(bitmap);if(rect)graphic.setFrame(rect.x,rect.y,rect.width,rect.height);graphic.anchor.set(step.gripX??.5,step.gripY??.5);ss._battleField.addChild(graphic);
             return {key:prefix+(serial++),graphic,rect,owned,step};
         };
-        const draw=(entry,p,rotation,visible=true)=>{
+        const draw=(entry,p0,rotation,visible=true)=>{let p=p0;
             const {graphic}=entry,step=entry.now||entry.step;
             if(entry.model){
                 // The thing points where its holder faces: an authored front
@@ -229,7 +230,10 @@
                 // the long-axis assumption of +90. Tilt tips it, Turn and Roll
                 // finish the pose, all about its grip.
                 const owner=entry.owner?._reactorRoomPosition,record=room?.models.get(entry.key);if(!p||!record)return;
-                room.place(entry.key,B.heldPlacement(p,owner?.facing||0,{...step,rotation},record.spec));
+                const ownerKey=entry.owner?._reactorRoomKey,targetSprite=ss.findTargetSprite(targets[0]),targetRecord=room.models.get(targetSprite?._reactorRoomKey),at=targetSprite?._reactorRoomPosition?{...targetSprite._reactorRoomPosition,height:.55*((targetRecord?.spec?.size||2)*(targetRecord?.spec?.scale||1))}:null;
+                const placement={...B.heldPlacement(p,owner?.facing||0,{...step,rotation},record.spec),visible};
+                if(ownerKey&&entry.owner._reactorRoomPosition){const held=room.holdHeld(ownerKey,entry.key,step,entry.owner._reactorRoomPosition,at,placement);if(held)p=held;}
+                else room.place(entry.key,placement);
                 if(record.object)record.object.visible=visible;entry.point={...p};return;
             }
             if(!p||graphic.bitmap.isReady?.()===false){graphic.visible=false;return;}
@@ -262,7 +266,10 @@
             const user=ss.findTargetSprite(subject),near=(a,b)=>a&&b&&Math.hypot(a.x-b.x,a.y-b.y)<=4;
             // Offsets swing the eye round from straight behind the user: 35 rides a shot, 90 is side-on for a run, 70 sees the hit land.
             const live=flights.filter(f=>f.live&&f.point);let points=[],yawOffset;
-            if(live.length){for(const f of live){points.push({...f.point,weight:3,height:1});const t=at(f.target,1);if(t)points.push(t);}yawOffset=35;}
+            // One shot is followed; a barrage (several in the air) is watched from the shooter, who is the picture, and the hit shot shows where they land.
+            if(live.length>1)barrageUntil=time+24;
+            if(live.length>1||time<barrageUntil){const u=at(user,3);if(u)points.push(u);for(const f of live)points.push({...f.point,weight:1,height:1});yawOffset=35;}
+            else if(live.length){for(const f of live){points.push({...f.point,weight:3,height:1});const t=at(f.target,1);if(t)points.push(t);}yawOffset=35;}
             else{
                 // A fallen enemy is gone from the room; the shot stays with whoever is left.
                 const u=at(user,1),ts=[...new Set(targets)].filter(b=>!(b.isDead?.()&&b.isEnemy?.())).map(b=>at(ss.findTargetSprite(b),1)).filter(Boolean);
