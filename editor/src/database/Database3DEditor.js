@@ -1753,6 +1753,7 @@ class Database3DEditor {
                     for (const axis of ['x', 'y', 'z']) this._view.pan[axis] += (this._viewGoal.pan[axis] - this._view.pan[axis]) * k;
                 }
                 Reactor3D.aimCamera(this._camera, this._orbitCenter(this._view.pan), this._view);
+                this._updateRigHover();
                 this._updateRigOverlay();
                 {
                     const now = performance.now();
@@ -5696,6 +5697,7 @@ class Database3DEditor {
                 }
             } else if (mode === 'rigdrag') {
                 this._rigDragKey = null;
+                this._rigHoverAt = undefined;
             } else if (mode === 'facearrow') {
                 if (this._faceArrows) RRAxisArrows3D.emphasize(this._faceArrows, null, false);
                 this._faceArrowHold = null;
@@ -6061,6 +6063,16 @@ class Database3DEditor {
             const key = this._rigMarkerUnderPointer(clientX, clientY, 36);
             if (key) return this._rigMarkerMeshes[key].getWorldPosition(new THREE.Vector3());
         }
+        if (this._rigSurface) {
+            const canvas = this._detail.querySelector('.r3d-db-canvas');
+            const rect = canvas.getBoundingClientRect();
+            const pointer = new THREE.Vector2(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1);
+            const raycaster = new THREE.Raycaster();
+            raycaster.setFromCamera(pointer, this._camera);
+            const o = raycaster.ray.origin, d = raycaster.ray.direction;
+            const hit = this._rigSurface.raycast(o.x, o.y, o.z, d.x, d.y, d.z)[0];
+            return hit ? new THREE.Vector3(hit.x, hit.y, hit.z) : this._cameraPlanePoint(clientX, clientY, centre);
+        }
         const now = performance.now(), last = this._wheelHit;
         if (last && now - last.at < 300 && Math.hypot(last.x - clientX, last.y - clientY) < 6) return last.point || this._cameraPlanePoint(clientX, clientY, centre);
         const hits = this._raycastPointer(clientX, clientY) || [];
@@ -6101,10 +6113,72 @@ class Database3DEditor {
         this._fineLabelsShown = close;
         for (const marker of this._rigMarkerDefinitions()) {
             const sphere = this._rigMarkerMeshes[marker.key];
-            if (sphere) sphere.scale.setScalar(k);
+            if (sphere) sphere.scale.setScalar(k * (marker.key === this._rigHoverKey ? 1.7 : 1));
             const label = this._rigMarkerLabels && this._rigMarkerLabels[marker.key];
             if (label && marker.fine) label.visible = close;
             this._placeRigLabel(marker.key);
+        }
+    }
+
+    /** The marker under the pointer swells and the cursor offers a grab, so it is plain which one a press will take. */
+    _updateRigHover() {
+        if (!this._rigMode || this._rigFaceMode || !this._rigMarkerMeshes || !this._pointer || this._rigDragKey) return;
+        if (this._pointerMovedAt === this._rigHoverAt) return;
+        this._rigHoverAt = this._pointerMovedAt;
+        const key = this._rigMarkerUnderPointer(this._pointer.x, this._pointer.y, 12);
+        if (key === this._rigHoverKey) return;
+        this._rigHoverKey = key;
+        this._rigOverlayScale = undefined;
+        if (!this._dragging) {
+            const canvas = this._detail.querySelector('.r3d-db-canvas');
+            if (canvas) canvas.style.cursor = key ? 'pointer' : (this._tool === 'orbit' ? 'grab' : 'crosshair');
+        }
+    }
+
+    /**
+     * The model's surface as a tree over its triangles, built once per
+     * instance: what a dragged marker snaps into and what the wheel zooms
+     * toward. Overlay meshes (the markers themselves) are left out.
+     */
+    _buildRigSurface() {
+        this._rigSurface = null;
+        if (this._rigFaceMode || typeof RRMeshSurfacePicker === 'undefined' || !this._object || typeof THREE === 'undefined') return;
+        const started = performance.now();
+        this._rigSurface = RRMeshSurfacePicker.build(this._object, THREE, node => !!(node.userData && node.userData.__reactorOverlay));
+        this._rigSurfaceMs = performance.now() - started;
+        this._refreshRigMarkerFit();
+    }
+
+    /** How deep a limb or torso can be for a snap to land in its middle rather than just under the skin. */
+    _rigThickness() {
+        const size = (this._template && this._template.userData.glbSize) || { x: 1, y: 1.8, z: 1 };
+        return Math.max(size.x, size.y, size.z) * (this._scale || 1) * 0.3;
+    }
+
+    /** Where the pointer's ray enters the model, moved to the middle of the flesh there, in rig-group space; null off the model. */
+    _rigSurfacePoint(clientX, clientY) {
+        if (!this._rigSurface || !this._camera || !this._rigGroup) return null;
+        const canvas = this._detail.querySelector('.r3d-db-canvas');
+        const rect = canvas.getBoundingClientRect();
+        const pointer = new THREE.Vector2(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1);
+        const raycaster = new THREE.Raycaster();
+        raycaster.setFromCamera(pointer, this._camera);
+        const o = raycaster.ray.origin, d = raycaster.ray.direction;
+        const hit = this._rigSurface.pickFlesh(o.x, o.y, o.z, d.x, d.y, d.z, this._rigThickness());
+        if (!hit) return null;
+        return this._rigGroup.worldToLocal(new THREE.Vector3().fromArray(hit.point));
+    }
+
+    /** Markers inside the model draw solid; one floating outside it draws faint, so a miss shows from any angle. */
+    _refreshRigMarkerFit(keys) {
+        if (!this._rigSurface || !this._rigMarkerMeshes) return;
+        for (const key of keys || Object.keys(this._rigMarkerMeshes)) {
+            const sphere = this._rigMarkerMeshes[key];
+            if (!sphere) continue;
+            const world = sphere.getWorldPosition(new THREE.Vector3());
+            const inside = this._rigSurface.inside(world.x, world.y, world.z);
+            sphere.userData.__inside = inside;
+            sphere.material.opacity = inside ? 0.95 : 0.35;
         }
     }
 
@@ -6213,6 +6287,8 @@ class Database3DEditor {
         this._rigGroup = null;
         this._rigMarkerMeshes = null;
         this._rigBoneLines = null;
+        this._rigSurface = null;
+        this._rigHoverKey = null;
     }
 
     /** Marker spheres and the derived bone lines, in model space. */
@@ -6270,6 +6346,7 @@ class Database3DEditor {
         this._rigGroup = group;
         this._refreshRigBones();
         this._syncFacePointVisuals();
+        this._buildRigSurface();
     }
 
     /** A floating text label for one rig marker. */
@@ -6340,9 +6417,13 @@ class Database3DEditor {
         if (!sphere || !this._object) return;
         const anchor = new THREE.Vector3();
         sphere.getWorldPosition(anchor);
-        const point = this._cameraPlanePoint(clientX, clientY, anchor);
-        if (!point) return;
-        const local = this._rigGroup.worldToLocal(point.clone());
+        // Into the model under the pointer, at the middle of the flesh there,
+        // so the depth is right from every angle; off the model, across the
+        // camera plane as before.
+        const snapped = this._rigFaceMode ? null : this._rigSurfacePoint(clientX, clientY);
+        const point = snapped ? null : this._cameraPlanePoint(clientX, clientY, anchor);
+        if (!snapped && !point) return;
+        const local = snapped || this._rigGroup.worldToLocal(point.clone());
         if (this._rigFaceMode) {
             this._rigMarkers[key] = local.toArray();
             this._syncFacePointVisuals();
@@ -6358,6 +6439,7 @@ class Database3DEditor {
             this._rigMarkerMeshes[marker.mirror].position.set(-local.x, local.y, local.z);
             this._placeRigLabel(marker.mirror);
         }
+        this._refreshRigMarkerFit(marker && marker.mirror ? [key, marker.mirror] : [key]);
         this._refreshRigBones();
     }
 
@@ -6433,7 +6515,7 @@ class Database3DEditor {
         }
         const hint = document.createElement('span');
         hint.style.cssText = 'color:var(--color-text-muted);';
-        hint.textContent = this._t('Drag the markers onto the joints; sides mirror.') + ' ' + this._t('Wheel zooms toward the pointer; Shift-drag pans.');
+        hint.textContent = this._t('Drag the markers onto the joints; sides mirror.') + ' ' + this._t('Markers snap into the model; a faint one floats outside it.') + ' ' + this._t('Wheel zooms toward the pointer; Shift-drag pans.');
         bar.appendChild(hint);
     }
 
