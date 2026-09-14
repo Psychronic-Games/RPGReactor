@@ -5717,12 +5717,20 @@ class Database3DEditor {
         canvas.addEventListener('wheel', event => {
             event.preventDefault();
             this._lastInputAt = performance.now();
+            // Zoom toward the pointer: the thing under it (a rig marker, else
+            // the model's surface) stays put and the camera closes on it, so
+            // a few notches land on the fingertip the pointer rests on. The
+            // camera stops a hand's width short of that point rather than
+            // flying through it.
             const before = this._viewGoal.distance;
-            this._viewGoal.distance = Math.min(20, Math.max(0.12, before * (event.deltaY > 0 ? 1.15 : 1 / 1.15)));
-            // Zoom toward the pointer: the point under it stays put, so a
-            // few notches land on the fingertip the pointer rests on.
             const centre = this._orbitCenterWorld(this._viewGoal.pan);
-            const under = centre && this._cameraPlanePoint(event.clientX, event.clientY, centre);
+            const under = centre && this._pointUnderPointer(event.clientX, event.clientY, centre);
+            let ratio = event.deltaY > 0 ? 1.15 : 1 / 1.15;
+            if (under && ratio < 1) {
+                const gap = this._camera.position.distanceTo(under);
+                if (gap * ratio < 0.06) ratio = Math.min(1, 0.06 / Math.max(gap, 1e-6));
+            }
+            this._viewGoal.distance = Math.min(20, Math.max(0.12, before * ratio));
             if (under) {
                 const keep = 1 - this._viewGoal.distance / before;
                 this._viewGoal.pan.x += (under.x - centre.x) * keep;
@@ -6041,6 +6049,26 @@ class Database3DEditor {
         return new THREE.Vector3(centre.x + 0.5, centre.y, centre.z + 0.5);
     }
 
+    /**
+     * The world point under the pointer, for zooming toward it: a rig marker
+     * within reach, else where the ray meets the model (a raycast against a
+     * skinned mesh refreshes its bounds, so one hit serves a burst of wheel
+     * notches), else the orbit centre's own depth.
+     */
+    _pointUnderPointer(clientX, clientY, centre) {
+        if (typeof THREE === 'undefined' || !this._camera) return null;
+        if (this._rigMode && this._rigMarkerMeshes) {
+            const key = this._rigMarkerUnderPointer(clientX, clientY, 36);
+            if (key) return this._rigMarkerMeshes[key].getWorldPosition(new THREE.Vector3());
+        }
+        const now = performance.now(), last = this._wheelHit;
+        if (last && now - last.at < 300 && Math.hypot(last.x - clientX, last.y - clientY) < 6) return last.point || this._cameraPlanePoint(clientX, clientY, centre);
+        const hits = this._raycastPointer(clientX, clientY) || [];
+        const hit = hits.find(entry => !(entry.object.userData && entry.object.userData.__reactorOverlay));
+        this._wheelHit = { at: now, x: clientX, y: clientY, point: hit ? hit.point.clone() : null };
+        return this._wheelHit.point || this._cameraPlanePoint(clientX, clientY, centre);
+    }
+
     /** Slide the orbit centre across the view by a pointer delta, so the picture follows the pointer. */
     _panView(dx, dy) {
         if (!this._camera || typeof THREE === 'undefined') return;
@@ -6056,17 +6084,20 @@ class Database3DEditor {
     }
 
     /**
-     * Rig markers and their labels keep one size on screen: they are scene
-     * objects, and zooming onto a hand used to fill the view with one dot.
-     * Finger labels crowd a whole-body view, so they show once the camera
-     * is close enough to read them.
+     * Rig markers keep one size on screen: they are scene objects, and
+     * zooming onto a hand used to fill the view with one dot. Labels grow
+     * as the camera comes in (with the square root of the zoom), so finger
+     * names read up close and stay small over the whole body. Finger labels
+     * crowd a whole-body view, so they show once the camera is close.
      */
     _updateRigOverlay() {
         if (!this._rigMode || this._rigFaceMode || !this._rigMarkerMeshes) return;
-        const k = Math.min(1, Math.max(0.01, this._view.distance / 4));
+        const zoom = Math.min(1, Math.max(0.01, this._view.distance / 4));
+        const k = zoom, kLabel = Math.sqrt(zoom);
         const close = this._view.distance < 0.9;
         if (Math.abs(k - (this._rigOverlayScale || 0)) < 1e-4 && close === this._fineLabelsShown) return;
         this._rigOverlayScale = k;
+        this._rigLabelScale = kLabel;
         this._fineLabelsShown = close;
         for (const marker of this._rigMarkerDefinitions()) {
             const sphere = this._rigMarkerMeshes[marker.key];
@@ -6081,9 +6112,11 @@ class Database3DEditor {
     _placeRigLabel(key) {
         const sphere = this._rigMarkerMeshes && this._rigMarkerMeshes[key], label = this._rigMarkerLabels && this._rigMarkerLabels[key];
         if (!sphere || !label) return;
-        const k = this._rigOverlayScale || 1;
-        label.scale.set(label.userData.__width * k, label.userData.__height * k, 1);
-        label.position.set(sphere.position.x, sphere.position.y + label.userData.__lift * k, sphere.position.z);
+        const k = this._rigOverlayScale || 1, kLabel = this._rigLabelScale || 1;
+        label.scale.set(label.userData.__width * kLabel, label.userData.__height * kLabel, 1);
+        // Just above the dot: past its radius, then half the label's own height.
+        const lift = label.userData.__lift * k + label.userData.__height * kLabel * 0.55;
+        label.position.set(sphere.position.x, sphere.position.y + lift, sphere.position.z);
     }
 
     _cameraPlanePoint(clientX, clientY, anchorWorld) {
@@ -6222,13 +6255,13 @@ class Database3DEditor {
         this._rigOverlayScale = undefined;
         for (const marker of this._rigMarkerDefinitions()) {
             const sprite = this._makeMarkerLabel(this._t(marker.label));
-            const height = marker.fine ? labelHeight * 0.5 : labelHeight;
+            const height = marker.fine ? labelHeight * 0.7 : labelHeight;
             sprite.userData.__width = height * 5;
             sprite.userData.__height = height;
-            sprite.userData.__lift = radius * (marker.fine ? 1.2 : 2.6);
+            sprite.userData.__lift = radius * (marker.fine ? 0.6 : 1.2);
             sprite.scale.set(height * 5, height, 1);
             sprite.position.fromArray(this._rigMarkers[marker.key]);
-            sprite.position.y += sprite.userData.__lift;
+            sprite.position.y += sprite.userData.__lift + height * 0.55;
             sprite.visible = (!this._rigFaceMode || marker.key === this._facePoint) && !marker.fine;
             group.add(sprite);
             this._rigMarkerLabels[marker.key] = sprite;
@@ -6279,12 +6312,12 @@ class Database3DEditor {
     }
 
     /** The marker under the pointer, by projected screen distance. */
-    _rigMarkerUnderPointer(clientX, clientY) {
+    _rigMarkerUnderPointer(clientX, clientY, reach = 10) {
         if (!this._rigMarkerMeshes || !this._camera) return null;
         const canvas = this._detail.querySelector('.r3d-db-canvas');
         const rect = canvas.getBoundingClientRect();
         let best = null;
-        let bestDistance = 10;
+        let bestDistance = reach;
         for (const key of Object.keys(this._rigMarkerMeshes)) {
             if (!this._rigMarkerMeshes[key].visible) continue;
             const world = new THREE.Vector3();
