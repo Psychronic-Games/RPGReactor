@@ -318,6 +318,13 @@
             if(placement.visible!==false)this.holdBoth(ownerKey,heldKey,step);
             return p;
         }
+        /** Where a held model's tip (a muzzle, a blade point) is, in room tiles, or null. */
+        heldTipPoint(heldKey) {
+            const T=root.THREE,R=root.Reactor3D,held=this.models.get(heldKey);if(!held?.object||held.object.visible===false)return null;
+            const shape=R.heldShape(held.object);if(!shape)return null;held.object.updateMatrixWorld(true);
+            const tip=new T.Vector3().fromArray(shape.base).add(new T.Vector3().fromArray(shape.axis).multiplyScalar(shape.length)).applyMatrix4(held.object.matrixWorld);
+            return {x:tip.x-.5,y:tip.z-.5,z:tip.y};
+        }
         /** The other hand takes the held thing a little way out along it, as far as an arm reaches. */
         holdBoth(ownerKey, heldKey, step) {
             const T=root.THREE,R=root.Reactor3D;if(step.hands!=='both')return;

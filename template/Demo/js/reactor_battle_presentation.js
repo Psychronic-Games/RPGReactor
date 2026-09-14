@@ -182,7 +182,11 @@
         const point=(sprite,step,height)=>{
             if(!sprite)return null;
             const p=room?{...sprite._reactorRoomPosition}:{x:sprite.x/48,y:sprite.y/48,z:0,facing:P.spriteYaw(sprite,targets[0])};
-            if(room)return room.attachmentPoint(sprite._reactorRoomKey,{...step,z:step.attachment&&step.attachment!=='offset'?(step.z||0):height??step.z},p);
+            if(room){
+                // A shot from a hand that holds a weapon model leaves the weapon's tip, the step's offsets on top.
+                if(step.type==='projectile'&&['rightHand','leftHand'].includes(step.attachment)&&!step.bone){const heldEntry=held.get(sprite);const tip=heldEntry?.model&&heldEntry.step?.attachment===step.attachment?room.heldTipPoint(heldEntry.key):null;if(tip){const f=(p.facing||0)*Math.PI/180,dx=Math.sin(f),dy=Math.cos(f);return {x:tip.x+dx*(step.x||0)-dy*(step.y||0),y:tip.y+dy*(step.x||0)+dx*(step.y||0),z:tip.z+(step.z||0)};}}
+                return room.attachmentPoint(sprite._reactorRoomKey,{...step,z:step.attachment&&step.attachment!=='offset'?(step.z||0):height??step.z},p);
+            }
             const main=sprite._mainSprite||sprite,model=sprite._reactorBattler,world=root.ReactorBattleRoomView?.attachmentWorld(model,step.attachment,step.bone);
             if(world&&model.camera){
                 const projected=world.project(model.camera),size=model.size||main._frame?.width||48;

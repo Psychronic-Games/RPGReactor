@@ -1947,7 +1947,7 @@
     "note": "",
     "steps": [
       {
-        "id": "step-000150b45",
+        "id": "step-0001pd9ca",
         "type": "motion",
         "duration": 0,
         "role": "user",
@@ -1964,7 +1964,7 @@
         "phase": "movement"
       },
       {
-        "id": "step-0002tqhyo",
+        "id": "step-00024lg0g",
         "type": "move",
         "duration": 12,
         "role": "user",
@@ -1980,7 +1980,7 @@
         "phase": "movement"
       },
       {
-        "id": "step-0003hk6tm",
+        "id": "step-00032dpp7",
         "type": "weapon",
         "duration": 0,
         "role": "user",
@@ -2005,7 +2005,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-0004mc1jo",
+        "id": "step-0004kjmqc",
         "type": "motion",
         "duration": 8,
         "role": "user",
@@ -2096,7 +2096,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-0005c5u2n",
+        "id": "step-0005d5f79",
         "type": "wait",
         "duration": 5,
         "role": "user",
@@ -2108,7 +2108,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-0006ipkto",
+        "id": "step-0006ac84q",
         "type": "sound",
         "duration": 0,
         "role": "user",
@@ -2126,7 +2126,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-0007kqd08",
+        "id": "step-00079c43g",
         "type": "motion",
         "duration": 5,
         "role": "user",
@@ -2217,7 +2217,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-000864oaw",
+        "id": "step-00080cu88",
         "type": "sound",
         "duration": 0,
         "role": "user",
@@ -2235,7 +2235,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-0009bivem",
+        "id": "step-0009qdzdl",
         "type": "animation",
         "duration": 0,
         "role": "allTargets",
@@ -2249,7 +2249,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-000apnnmm",
+        "id": "step-000agvgyx",
         "type": "impact",
         "duration": 0,
         "role": "allTargets",
@@ -2261,7 +2261,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-000bp3hd2",
+        "id": "step-000b565l8",
         "type": "shake",
         "duration": 10,
         "role": "user",
@@ -2275,7 +2275,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-000cvc6f0",
+        "id": "step-000cfx1dx",
         "type": "wait",
         "duration": 14,
         "role": "user",
@@ -2287,7 +2287,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-000dyzv50",
+        "id": "step-000dq5xbt",
         "type": "motion",
         "duration": 10,
         "role": "user",
@@ -2378,7 +2378,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-000ep0ral",
+        "id": "step-000e4p9t6",
         "type": "wait",
         "duration": 2,
         "role": "user",
@@ -2390,7 +2390,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-000f9nii5",
+        "id": "step-000fljs94",
         "type": "weapon",
         "duration": 0,
         "role": "user",
@@ -2414,7 +2414,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-000gm9sel",
+        "id": "step-000g12c21",
         "type": "motion",
         "duration": 0,
         "role": "user",
@@ -2431,7 +2431,7 @@
         "phase": "return"
       },
       {
-        "id": "step-000he4khe",
+        "id": "step-000hgncpu",
         "type": "move",
         "duration": 16,
         "role": "user",
@@ -2447,7 +2447,7 @@
         "phase": "return"
       },
       {
-        "id": "step-000i9904o",
+        "id": "step-000ipndlu",
         "type": "motion",
         "duration": 0,
         "role": "user",
@@ -2464,7 +2464,7 @@
         "phase": "finish"
       },
       {
-        "id": "step-000jjjtd8",
+        "id": "step-000jfuq5c",
         "type": "move",
         "duration": 0,
         "role": "user",
@@ -2638,9 +2638,9 @@
         "duration": 40,
         "role": "user",
         "anchor": "home",
-        "x": 0.5,
+        "x": 0.05,
         "y": 0,
-        "z": 0.06,
+        "z": 0,
         "easing": "smooth",
         "iconSource": "model",
         "iconIndex": 0,
@@ -2831,7 +2831,7 @@
     "note": "",
     "steps": [
       {
-        "id": "step-000k6n7a7",
+        "id": "step-000kha0tz",
         "type": "motion",
         "duration": 0,
         "role": "user",
@@ -2848,7 +2848,7 @@
         "phase": "movement"
       },
       {
-        "id": "step-000l9gn9c",
+        "id": "step-000lkqxwm",
         "type": "move",
         "duration": 10,
         "role": "user",
@@ -2864,7 +2864,7 @@
         "phase": "movement"
       },
       {
-        "id": "step-000m6idio",
+        "id": "step-000m22nh4",
         "type": "weapon",
         "duration": 0,
         "role": "user",
@@ -2889,7 +2889,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-000nainhr",
+        "id": "step-000nne2qj",
         "type": "motion",
         "duration": 7,
         "role": "user",
@@ -2998,7 +2998,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-000oxlcze",
+        "id": "step-000oijp4z",
         "type": "sound",
         "duration": 0,
         "role": "user",
@@ -3016,7 +3016,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-000pp1jr1",
+        "id": "step-000p3w94m",
         "type": "move",
         "duration": 14,
         "role": "user",
@@ -3032,7 +3032,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-000qgnxyv",
+        "id": "step-000q5yuif",
         "type": "sound",
         "duration": 0,
         "role": "user",
@@ -3050,7 +3050,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-000r7ebn1",
+        "id": "step-000rcg403",
         "type": "motion",
         "duration": 3,
         "role": "user",
@@ -3177,7 +3177,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-000sv4w3y",
+        "id": "step-000sn15dm",
         "type": "animation",
         "duration": 0,
         "role": "allTargets",
@@ -3191,7 +3191,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-000ty77p0",
+        "id": "step-000tdv8ji",
         "type": "impact",
         "duration": 0,
         "role": "allTargets",
@@ -3203,7 +3203,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-000uufi1p",
+        "id": "step-000u9bsy7",
         "type": "shake",
         "duration": 18,
         "role": "user",
@@ -3217,7 +3217,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-000vwkw1i",
+        "id": "step-000vzhqcu",
         "type": "flash",
         "duration": 8,
         "role": "user",
@@ -3233,7 +3233,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-000wt4hwp",
+        "id": "step-000wyjzal",
         "type": "wait",
         "duration": 20,
         "role": "user",
@@ -3245,7 +3245,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-000xgzc4t",
+        "id": "step-000x2cr00",
         "type": "motion",
         "duration": 12,
         "role": "user",
@@ -3372,7 +3372,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-000yyd0dp",
+        "id": "step-000ymrrwu",
         "type": "wait",
         "duration": 2,
         "role": "user",
@@ -3384,7 +3384,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-000zu6jag",
+        "id": "step-000zc1pcg",
         "type": "weapon",
         "duration": 0,
         "role": "user",
@@ -3408,7 +3408,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-0010danaq",
+        "id": "step-0010w9i3q",
         "type": "motion",
         "duration": 0,
         "role": "user",
@@ -3425,7 +3425,7 @@
         "phase": "return"
       },
       {
-        "id": "step-0011kl9wi",
+        "id": "step-00110c50a",
         "type": "move",
         "duration": 16,
         "role": "user",
@@ -3441,7 +3441,7 @@
         "phase": "return"
       },
       {
-        "id": "step-00129dlpl",
+        "id": "step-0012o7edu",
         "type": "motion",
         "duration": 0,
         "role": "user",
@@ -3458,7 +3458,7 @@
         "phase": "finish"
       },
       {
-        "id": "step-0013rncr8",
+        "id": "step-001357yxa",
         "type": "move",
         "duration": 0,
         "role": "user",
@@ -3490,7 +3490,7 @@
     "note": "",
     "steps": [
       {
-        "id": "step-0014buvck",
+        "id": "step-0014jzfwi",
         "type": "motion",
         "duration": 0,
         "role": "user",
@@ -3507,7 +3507,7 @@
         "phase": "movement"
       },
       {
-        "id": "step-0015vdxz8",
+        "id": "step-0015mbs5o",
         "type": "move",
         "duration": 12,
         "role": "user",
@@ -3523,7 +3523,7 @@
         "phase": "movement"
       },
       {
-        "id": "step-00163ue0y",
+        "id": "step-00160ysls",
         "type": "weapon",
         "duration": 0,
         "role": "user",
@@ -3548,7 +3548,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-00171m31l",
+        "id": "step-0017tkvqk",
         "type": "motion",
         "duration": 7,
         "role": "user",
@@ -3621,7 +3621,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-00180iu7y",
+        "id": "step-00185dny5",
         "type": "wait",
         "duration": 3,
         "role": "user",
@@ -3633,7 +3633,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-0019yx4zl",
+        "id": "step-0019d2wm0",
         "type": "sound",
         "duration": 0,
         "role": "user",
@@ -3651,7 +3651,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-001al8km6",
+        "id": "step-001al6pnt",
         "type": "motion",
         "duration": 3,
         "role": "user",
@@ -3742,7 +3742,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-001bxxzx6",
+        "id": "step-001bpei51",
         "type": "sound",
         "duration": 0,
         "role": "user",
@@ -3760,7 +3760,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-001cc29g9",
+        "id": "step-001cljx3e",
         "type": "animation",
         "duration": 0,
         "role": "allTargets",
@@ -3774,7 +3774,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-001diuajt",
+        "id": "step-001dnp6bt",
         "type": "impact",
         "duration": 0,
         "role": "allTargets",
@@ -3786,7 +3786,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-001e6qjhj",
+        "id": "step-001evbqwf",
         "type": "shake",
         "duration": 8,
         "role": "user",
@@ -3800,7 +3800,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-001f88tu4",
+        "id": "step-001file2p",
         "type": "wait",
         "duration": 8,
         "role": "user",
@@ -3812,7 +3812,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-001ggb8m8",
+        "id": "step-001gpnceg",
         "type": "motion",
         "duration": 7,
         "role": "user",
@@ -3903,7 +3903,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-001h3qfws",
+        "id": "step-001hx2l0f",
         "type": "wait",
         "duration": 2,
         "role": "user",
@@ -3915,7 +3915,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-001i2w1n4",
+        "id": "step-001idbivp",
         "type": "sound",
         "duration": 0,
         "role": "user",
@@ -3933,7 +3933,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-001jx3x8h",
+        "id": "step-001jykl2h",
         "type": "motion",
         "duration": 3,
         "role": "user",
@@ -4024,7 +4024,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-001k01c2j",
+        "id": "step-001k1etv8",
         "type": "sound",
         "duration": 0,
         "role": "user",
@@ -4042,7 +4042,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-001lzt8fj",
+        "id": "step-001lp27y0",
         "type": "animation",
         "duration": 0,
         "role": "allTargets",
@@ -4056,7 +4056,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-001mms0fw",
+        "id": "step-001m8ln61",
         "type": "impact",
         "duration": 0,
         "role": "allTargets",
@@ -4068,7 +4068,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-001nzstx8",
+        "id": "step-001n04vzp",
         "type": "shake",
         "duration": 10,
         "role": "user",
@@ -4082,7 +4082,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-001o9389r",
+        "id": "step-001ouryfr",
         "type": "wait",
         "duration": 14,
         "role": "user",
@@ -4094,7 +4094,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-001pvk76n",
+        "id": "step-001p0pdtc",
         "type": "motion",
         "duration": 10,
         "role": "user",
@@ -4185,7 +4185,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-001qiide5",
+        "id": "step-001qi2qsl",
         "type": "wait",
         "duration": 2,
         "role": "user",
@@ -4197,7 +4197,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-001rico4m",
+        "id": "step-001r68c9q",
         "type": "weapon",
         "duration": 0,
         "role": "user",
@@ -4221,7 +4221,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-001s0e07o",
+        "id": "step-001shcw94",
         "type": "motion",
         "duration": 0,
         "role": "user",
@@ -4238,7 +4238,7 @@
         "phase": "return"
       },
       {
-        "id": "step-001tf6w5k",
+        "id": "step-001t4vwt8",
         "type": "move",
         "duration": 16,
         "role": "user",
@@ -4254,7 +4254,7 @@
         "phase": "return"
       },
       {
-        "id": "step-001uyw2fv",
+        "id": "step-001uni243",
         "type": "motion",
         "duration": 0,
         "role": "user",
@@ -4271,7 +4271,7 @@
         "phase": "finish"
       },
       {
-        "id": "step-001vuh3vx",
+        "id": "step-001vf87js",
         "type": "move",
         "duration": 0,
         "role": "user",
@@ -4304,7 +4304,7 @@
     "note": "",
     "steps": [
       {
-        "id": "step-001w12yjx",
+        "id": "step-001wn81lx",
         "type": "motion",
         "duration": 0,
         "role": "user",
@@ -4321,7 +4321,7 @@
         "phase": "movement"
       },
       {
-        "id": "step-001xpu6cy",
+        "id": "step-001xqqy4o",
         "type": "move",
         "duration": 10,
         "role": "user",
@@ -4337,7 +4337,7 @@
         "phase": "movement"
       },
       {
-        "id": "step-001yb69rs",
+        "id": "step-001ye1tyv",
         "type": "weapon",
         "duration": 0,
         "role": "user",
@@ -4362,7 +4362,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-001zkfrw0",
+        "id": "step-001zu7tdn",
         "type": "motion",
         "duration": 6,
         "role": "user",
@@ -4435,7 +4435,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-0020xvygj",
+        "id": "step-00205zizb",
         "type": "wait",
         "duration": 2,
         "role": "user",
@@ -4447,7 +4447,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-00218xptj",
+        "id": "step-00219pfxf",
         "type": "sound",
         "duration": 0,
         "role": "user",
@@ -4465,7 +4465,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-0022ypfq7",
+        "id": "step-0022adz9p",
         "type": "motion",
         "duration": 3,
         "role": "user",
@@ -4556,7 +4556,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-00232ff4j",
+        "id": "step-0023rovz3",
         "type": "sound",
         "duration": 0,
         "role": "user",
@@ -4574,7 +4574,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-00243q9tm",
+        "id": "step-0024dje0m",
         "type": "animation",
         "duration": 0,
         "role": "allTargets",
@@ -4588,7 +4588,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-00251em7n",
+        "id": "step-0025oqx3u",
         "type": "wait",
         "duration": 6,
         "role": "user",
@@ -4600,7 +4600,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-0026jbiqm",
+        "id": "step-00265fqk8",
         "type": "motion",
         "duration": 6,
         "role": "user",
@@ -4673,7 +4673,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-00274jjfl",
+        "id": "step-0027ce70w",
         "type": "wait",
         "duration": 2,
         "role": "user",
@@ -4685,7 +4685,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-0028lejsc",
+        "id": "step-0028p8k3q",
         "type": "sound",
         "duration": 0,
         "role": "user",
@@ -4703,7 +4703,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-0029ym2sy",
+        "id": "step-0029x5h5r",
         "type": "motion",
         "duration": 3,
         "role": "user",
@@ -4794,7 +4794,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-002asdgdk",
+        "id": "step-002aj0akq",
         "type": "sound",
         "duration": 0,
         "role": "user",
@@ -4812,7 +4812,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-002bqy8xq",
+        "id": "step-002bj3dhz",
         "type": "animation",
         "duration": 0,
         "role": "allTargets",
@@ -4826,7 +4826,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-002c7pc7f",
+        "id": "step-002c4rh4s",
         "type": "impact",
         "duration": 0,
         "role": "allTargets",
@@ -4838,7 +4838,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-002d6679g",
+        "id": "step-002dmzgy8",
         "type": "shake",
         "duration": 16,
         "role": "user",
@@ -4852,7 +4852,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-002e9w9a0",
+        "id": "step-002e9jjm3",
         "type": "flash",
         "duration": 6,
         "role": "user",
@@ -4868,7 +4868,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-002feegl9",
+        "id": "step-002fk3xuq",
         "type": "wait",
         "duration": 18,
         "role": "user",
@@ -4880,7 +4880,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-002go55z8",
+        "id": "step-002gtj5e7",
         "type": "motion",
         "duration": 10,
         "role": "user",
@@ -4971,7 +4971,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-002hzcozv",
+        "id": "step-002hxwfug",
         "type": "wait",
         "duration": 2,
         "role": "user",
@@ -4983,7 +4983,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-002i7vlgv",
+        "id": "step-002irpr4d",
         "type": "weapon",
         "duration": 0,
         "role": "user",
@@ -5007,7 +5007,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-002j02u4j",
+        "id": "step-002j6zs9y",
         "type": "motion",
         "duration": 0,
         "role": "user",
@@ -5024,7 +5024,7 @@
         "phase": "return"
       },
       {
-        "id": "step-002k8463i",
+        "id": "step-002knma1h",
         "type": "move",
         "duration": 18,
         "role": "user",
@@ -5040,7 +5040,7 @@
         "phase": "return"
       },
       {
-        "id": "step-002lp7wew",
+        "id": "step-002luobtz",
         "type": "motion",
         "duration": 0,
         "role": "user",
@@ -5057,7 +5057,7 @@
         "phase": "finish"
       },
       {
-        "id": "step-002mc7pjx",
+        "id": "step-002mdsh5g",
         "type": "move",
         "duration": 0,
         "role": "user",
@@ -5089,7 +5089,7 @@
     "note": "",
     "steps": [
       {
-        "id": "step-002n5waif",
+        "id": "step-002na84nn",
         "type": "motion",
         "duration": 0,
         "role": "user",
@@ -5106,7 +5106,7 @@
         "phase": "movement"
       },
       {
-        "id": "step-002otblpe",
+        "id": "step-002o14jb0",
         "type": "move",
         "duration": 10,
         "role": "user",
@@ -5122,7 +5122,7 @@
         "phase": "movement"
       },
       {
-        "id": "step-002p1eqtj",
+        "id": "step-002plc3vd",
         "type": "weapon",
         "duration": 0,
         "role": "user",
@@ -5147,7 +5147,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-002qxlirr",
+        "id": "step-002qidnax",
         "type": "motion",
         "duration": 6,
         "role": "user",
@@ -5274,7 +5274,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-002ronxt8",
+        "id": "step-002r1g12m",
         "type": "sound",
         "duration": 0,
         "role": "user",
@@ -5292,7 +5292,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-002sldxys",
+        "id": "step-002sfrao1",
         "type": "move",
         "duration": 26,
         "role": "user",
@@ -5309,7 +5309,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-002tpjyc1",
+        "id": "step-002towldr",
         "type": "wait",
         "duration": 9,
         "role": "user",
@@ -5321,7 +5321,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-002ulfntt",
+        "id": "step-002uu3whs",
         "type": "sound",
         "duration": 0,
         "role": "user",
@@ -5339,7 +5339,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-002v222ju",
+        "id": "step-002vgcz5m",
         "type": "wait",
         "duration": 9,
         "role": "user",
@@ -5351,7 +5351,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-002wna6oe",
+        "id": "step-002wb3vtb",
         "type": "sound",
         "duration": 0,
         "role": "user",
@@ -5369,7 +5369,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-002xdx4qk",
+        "id": "step-002xzzy51",
         "type": "animation",
         "duration": 0,
         "role": "allTargets",
@@ -5383,7 +5383,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-002ycl98b",
+        "id": "step-002ylrlgq",
         "type": "impact",
         "duration": 0,
         "role": "allTargets",
@@ -5395,7 +5395,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-002znc23s",
+        "id": "step-002zolbww",
         "type": "shake",
         "duration": 20,
         "role": "user",
@@ -5409,7 +5409,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-0030pl0nr",
+        "id": "step-0030p7gwd",
         "type": "flash",
         "duration": 8,
         "role": "user",
@@ -5425,7 +5425,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-00310y2gq",
+        "id": "step-0031lkgjn",
         "type": "wait",
         "duration": 10,
         "role": "user",
@@ -5437,7 +5437,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-0032uypey",
+        "id": "step-0032rv3qu",
         "type": "motion",
         "duration": 12,
         "role": "user",
@@ -5564,7 +5564,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-0033chm38",
+        "id": "step-003328s5d",
         "type": "wait",
         "duration": 2,
         "role": "user",
@@ -5576,7 +5576,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-00348vvmy",
+        "id": "step-0034naqg3",
         "type": "weapon",
         "duration": 0,
         "role": "user",
@@ -5600,7 +5600,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-0035ohpuk",
+        "id": "step-0035ytjwo",
         "type": "motion",
         "duration": 0,
         "role": "user",
@@ -5617,7 +5617,7 @@
         "phase": "return"
       },
       {
-        "id": "step-00368i9e3",
+        "id": "step-0036s1ddq",
         "type": "move",
         "duration": 18,
         "role": "user",
@@ -5633,7 +5633,7 @@
         "phase": "return"
       },
       {
-        "id": "step-0037guazf",
+        "id": "step-0037ytozs",
         "type": "motion",
         "duration": 0,
         "role": "user",
@@ -5650,7 +5650,7 @@
         "phase": "finish"
       },
       {
-        "id": "step-0038y596u",
+        "id": "step-0038s6pmq",
         "type": "move",
         "duration": 0,
         "role": "user",
@@ -5682,7 +5682,7 @@
     "note": "",
     "steps": [
       {
-        "id": "step-003mofeh7",
+        "id": "step-003mjmb2z",
         "type": "motion",
         "duration": 0,
         "role": "user",
@@ -5699,7 +5699,7 @@
         "phase": "movement"
       },
       {
-        "id": "step-003n90kss",
+        "id": "step-003n8jlfg",
         "type": "move",
         "duration": 8,
         "role": "user",
@@ -5715,7 +5715,7 @@
         "phase": "movement"
       },
       {
-        "id": "step-003or0joz",
+        "id": "step-003o3x4ui",
         "type": "weapon",
         "duration": 0,
         "role": "user",
@@ -5740,7 +5740,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-003pqutd0",
+        "id": "step-003p5q7tz",
         "type": "motion",
         "duration": 8,
         "role": "user",
@@ -5795,7 +5795,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-003qs4bdm",
+        "id": "step-003qt1h8o",
         "type": "sound",
         "duration": 0,
         "role": "user",
@@ -5813,7 +5813,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-003rbzfs1",
+        "id": "step-003rwmrbb",
         "type": "wait",
         "duration": 18,
         "role": "user",
@@ -5825,7 +5825,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-003syswx8",
+        "id": "step-003spwyxh",
         "type": "sound",
         "duration": 0,
         "role": "user",
@@ -5843,7 +5843,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-003tfeurv",
+        "id": "step-003tlod5p",
         "type": "flash",
         "duration": 4,
         "role": "user",
@@ -5859,14 +5859,14 @@
         "phase": "execute"
       },
       {
-        "id": "step-003unywo8",
+        "id": "step-003ui1ury",
         "type": "projectile",
         "duration": 9,
         "role": "user",
         "anchor": "home",
-        "x": 0.6,
+        "x": 0.05,
         "y": 0,
-        "z": 0.05,
+        "z": 0,
         "easing": "linear",
         "iconSource": "color",
         "iconIndex": 0,
@@ -5890,7 +5890,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-003v35v85",
+        "id": "step-003voupzl",
         "type": "motion",
         "duration": 2,
         "role": "user",
@@ -5945,7 +5945,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-003wlouwv",
+        "id": "step-003wp214r",
         "type": "animation",
         "duration": 0,
         "role": "allTargets",
@@ -5959,7 +5959,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-003xvjz76",
+        "id": "step-003xmu3qy",
         "type": "impact",
         "duration": 0,
         "role": "allTargets",
@@ -5971,7 +5971,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-003y0kh3t",
+        "id": "step-003y5bkov",
         "type": "shake",
         "duration": 12,
         "role": "user",
@@ -5985,7 +5985,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-003zkpgyi",
+        "id": "step-003zniz7m",
         "type": "wait",
         "duration": 10,
         "role": "user",
@@ -5997,7 +5997,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-0040a8spf",
+        "id": "step-0040h80zt",
         "type": "motion",
         "duration": 10,
         "role": "user",
@@ -6052,7 +6052,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-0041otq4w",
+        "id": "step-004198mo4",
         "type": "wait",
         "duration": 2,
         "role": "user",
@@ -6064,7 +6064,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-0042fvjv9",
+        "id": "step-0042v7zzn",
         "type": "weapon",
         "duration": 0,
         "role": "user",
@@ -6088,7 +6088,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-0043m88i8",
+        "id": "step-0043w97w8",
         "type": "motion",
         "duration": 0,
         "role": "user",
@@ -6105,7 +6105,7 @@
         "phase": "return"
       },
       {
-        "id": "step-0044r9204",
+        "id": "step-0044xxhjc",
         "type": "move",
         "duration": 8,
         "role": "user",
@@ -6121,7 +6121,7 @@
         "phase": "return"
       },
       {
-        "id": "step-0045hwli0",
+        "id": "step-0045dfjsv",
         "type": "motion",
         "duration": 0,
         "role": "user",
@@ -6138,7 +6138,7 @@
         "phase": "finish"
       },
       {
-        "id": "step-0046zdhhl",
+        "id": "step-00464ep50",
         "type": "move",
         "duration": 0,
         "role": "user",
@@ -6170,7 +6170,7 @@
     "note": "",
     "steps": [
       {
-        "id": "step-0047dz8jh",
+        "id": "step-0047pw93j",
         "type": "weapon",
         "duration": 0,
         "role": "user",
@@ -6195,7 +6195,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-0048n9vjj",
+        "id": "step-00485hq3k",
         "type": "motion",
         "duration": 8,
         "role": "user",
@@ -6250,7 +6250,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-0049ocz82",
+        "id": "step-004970y2t",
         "type": "sound",
         "duration": 0,
         "role": "user",
@@ -6268,7 +6268,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-004aafgr3",
+        "id": "step-004aa9u1t",
         "type": "animation",
         "duration": 0,
         "role": "user",
@@ -6282,7 +6282,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-004b3hz9p",
+        "id": "step-004baw3mf",
         "type": "wait",
         "duration": 30,
         "role": "user",
@@ -6294,7 +6294,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-004ct3o0a",
+        "id": "step-004c3y9n6",
         "type": "sound",
         "duration": 0,
         "role": "user",
@@ -6312,7 +6312,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-004d73d1n",
+        "id": "step-004df13ix",
         "type": "flash",
         "duration": 6,
         "role": "user",
@@ -6328,14 +6328,14 @@
         "phase": "execute"
       },
       {
-        "id": "step-004ed48xd",
+        "id": "step-004er589u",
         "type": "projectile",
         "duration": 10,
         "role": "user",
         "anchor": "home",
-        "x": 0.6,
+        "x": 0.05,
         "y": 0,
-        "z": 0.05,
+        "z": 0,
         "easing": "linear",
         "iconSource": "animation",
         "iconIndex": 0,
@@ -6358,7 +6358,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-004f5kr3g",
+        "id": "step-004fquu1t",
         "type": "motion",
         "duration": 3,
         "role": "user",
@@ -6413,7 +6413,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-004gobne4",
+        "id": "step-004ghg1aa",
         "type": "animation",
         "duration": 0,
         "role": "allTargets",
@@ -6427,7 +6427,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-004hphz2x",
+        "id": "step-004h0m77m",
         "type": "impact",
         "duration": 0,
         "role": "allTargets",
@@ -6439,7 +6439,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-004il9z23",
+        "id": "step-004i3hkbg",
         "type": "shake",
         "duration": 24,
         "role": "user",
@@ -6453,7 +6453,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-004jocdnj",
+        "id": "step-004jhhjy9",
         "type": "wait",
         "duration": 12,
         "role": "user",
@@ -6465,7 +6465,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-004kgckyy",
+        "id": "step-004kd4n5m",
         "type": "motion",
         "duration": 10,
         "role": "user",
@@ -6520,7 +6520,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-004l2wfsq",
+        "id": "step-004lxurvd",
         "type": "wait",
         "duration": 2,
         "role": "user",
@@ -6532,7 +6532,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-004mjcdsk",
+        "id": "step-004mm3z8q",
         "type": "weapon",
         "duration": 0,
         "role": "user",
@@ -6556,7 +6556,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-004ndchvf",
+        "id": "step-004nd1rd2",
         "type": "motion",
         "duration": 0,
         "role": "user",
@@ -6573,7 +6573,7 @@
         "phase": "finish"
       },
       {
-        "id": "step-004ouk38l",
+        "id": "step-004ogz478",
         "type": "move",
         "duration": 0,
         "role": "user",
@@ -6605,7 +6605,7 @@
     "note": "",
     "steps": [
       {
-        "id": "step-004p78djk",
+        "id": "step-004pcpdbn",
         "type": "weapon",
         "duration": 0,
         "role": "user",
@@ -6630,7 +6630,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-004qsnvxy",
+        "id": "step-004qcw6g0",
         "type": "motion",
         "duration": 6,
         "role": "user",
@@ -6685,7 +6685,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-004r5r9ke",
+        "id": "step-004rmiagu",
         "type": "sound",
         "duration": 0,
         "role": "user",
@@ -6703,14 +6703,14 @@
         "phase": "execute"
       },
       {
-        "id": "step-004s4hit3",
+        "id": "step-004sr5fgv",
         "type": "projectile",
         "duration": 8,
         "role": "user",
         "anchor": "home",
-        "x": 0.6,
+        "x": 0.05,
         "y": 0,
-        "z": 0.05,
+        "z": 0,
         "easing": "linear",
         "iconSource": "color",
         "iconIndex": 0,
@@ -6734,7 +6734,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-004tjxiq1",
+        "id": "step-004t83nqb",
         "type": "animation",
         "duration": 0,
         "role": "allTargets",
@@ -6748,7 +6748,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-004uuwmps",
+        "id": "step-004uzx8lx",
         "type": "impact",
         "duration": 0,
         "role": "allTargets",
@@ -6760,7 +6760,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-004vqnru6",
+        "id": "step-004vl03jb",
         "type": "shake",
         "duration": 6,
         "role": "user",
@@ -6774,7 +6774,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-004wsmad7",
+        "id": "step-004wdf58x",
         "type": "wait",
         "duration": 4,
         "role": "user",
@@ -6786,7 +6786,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-004x2fo5z",
+        "id": "step-004x322vg",
         "type": "sound",
         "duration": 0,
         "role": "user",
@@ -6804,14 +6804,14 @@
         "phase": "execute"
       },
       {
-        "id": "step-004y4u7yy",
+        "id": "step-004yxbdim",
         "type": "projectile",
         "duration": 8,
         "role": "user",
         "anchor": "home",
-        "x": 0.6,
+        "x": 0.05,
         "y": 0,
-        "z": 0.05,
+        "z": 0,
         "easing": "linear",
         "iconSource": "color",
         "iconIndex": 0,
@@ -6835,7 +6835,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-004ze910o",
+        "id": "step-004zp8rza",
         "type": "animation",
         "duration": 0,
         "role": "allTargets",
@@ -6849,7 +6849,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-0050dtv14",
+        "id": "step-0050g7qq3",
         "type": "impact",
         "duration": 0,
         "role": "allTargets",
@@ -6861,7 +6861,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-0051ri8qb",
+        "id": "step-0051n1hla",
         "type": "shake",
         "duration": 6,
         "role": "user",
@@ -6875,7 +6875,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-0052zjhiw",
+        "id": "step-0052zmvav",
         "type": "wait",
         "duration": 4,
         "role": "user",
@@ -6887,7 +6887,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-00538jd5x",
+        "id": "step-0053gja9l",
         "type": "sound",
         "duration": 0,
         "role": "user",
@@ -6905,14 +6905,14 @@
         "phase": "execute"
       },
       {
-        "id": "step-00542kj09",
+        "id": "step-0054tl39y",
         "type": "projectile",
         "duration": 8,
         "role": "user",
         "anchor": "home",
-        "x": 0.6,
+        "x": 0.05,
         "y": 0,
-        "z": 0.05,
+        "z": 0,
         "easing": "linear",
         "iconSource": "color",
         "iconIndex": 0,
@@ -6936,7 +6936,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-00555pynn",
+        "id": "step-0055wqqif",
         "type": "animation",
         "duration": 0,
         "role": "allTargets",
@@ -6950,7 +6950,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-0056wazki",
+        "id": "step-0056dm5wr",
         "type": "impact",
         "duration": 0,
         "role": "allTargets",
@@ -6962,7 +6962,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-0057sfrbg",
+        "id": "step-0057fg1qq",
         "type": "shake",
         "duration": 6,
         "role": "user",
@@ -6976,7 +6976,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-0058dscov",
+        "id": "step-0058skak9",
         "type": "wait",
         "duration": 4,
         "role": "user",
@@ -6988,7 +6988,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-00592yvzt",
+        "id": "step-00592g9fk",
         "type": "wait",
         "duration": 10,
         "role": "user",
@@ -7000,7 +7000,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-005a0aw2k",
+        "id": "step-005avzu1b",
         "type": "motion",
         "duration": 10,
         "role": "user",
@@ -7055,7 +7055,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-005bio09y",
+        "id": "step-005bug7s7",
         "type": "wait",
         "duration": 2,
         "role": "user",
@@ -7067,7 +7067,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-005cvojyn",
+        "id": "step-005cesunu",
         "type": "weapon",
         "duration": 0,
         "role": "user",
@@ -7091,7 +7091,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-005dz5yk0",
+        "id": "step-005dr10a1",
         "type": "motion",
         "duration": 0,
         "role": "user",
@@ -7108,7 +7108,7 @@
         "phase": "finish"
       },
       {
-        "id": "step-005ez0mnr",
+        "id": "step-005eifpfv",
         "type": "move",
         "duration": 0,
         "role": "user",
@@ -7141,7 +7141,7 @@
     "note": "",
     "steps": [
       {
-        "id": "step-005fau78r",
+        "id": "step-005frlccy",
         "type": "weapon",
         "duration": 0,
         "role": "user",
@@ -7166,7 +7166,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-005ghqwuq",
+        "id": "step-005gn6h49",
         "type": "motion",
         "duration": 6,
         "role": "user",
@@ -7257,7 +7257,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-005hjw4oy",
+        "id": "step-005hben2g",
         "type": "sound",
         "duration": 0,
         "role": "user",
@@ -7275,7 +7275,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-005i29dka",
+        "id": "step-005il01sc",
         "type": "wait",
         "duration": 8,
         "role": "user",
@@ -7287,7 +7287,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-005jv7t5x",
+        "id": "step-005jsm9f4",
         "type": "motion",
         "duration": 6,
         "role": "user",
@@ -7396,7 +7396,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-005kabgar",
+        "id": "step-005ks1itq",
         "type": "sound",
         "duration": 0,
         "role": "user",
@@ -7414,7 +7414,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-005lf7ff1",
+        "id": "step-005lacv5p",
         "type": "weapon",
         "duration": 0,
         "role": "user",
@@ -7438,7 +7438,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-005mpurl4",
+        "id": "step-005melfxn",
         "type": "projectile",
         "duration": 34,
         "role": "user",
@@ -7467,7 +7467,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-005nzlp8a",
+        "id": "step-005n3slvw",
         "type": "sound",
         "duration": 0,
         "role": "user",
@@ -7485,7 +7485,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-005onzxzu",
+        "id": "step-005oiess9",
         "type": "animation",
         "duration": 0,
         "role": "allTargets",
@@ -7499,7 +7499,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-005pj45k8",
+        "id": "step-005pjvtgq",
         "type": "impact",
         "duration": 0,
         "role": "allTargets",
@@ -7511,7 +7511,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-005qbcmrs",
+        "id": "step-005qx6bs2",
         "type": "shake",
         "duration": 22,
         "role": "user",
@@ -7525,7 +7525,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-005rm6h1a",
+        "id": "step-005rzrqpy",
         "type": "flash",
         "duration": 10,
         "role": "user",
@@ -7541,7 +7541,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-005sqwsgy",
+        "id": "step-005s0kati",
         "type": "motion",
         "duration": 6,
         "role": "user",
@@ -7614,7 +7614,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-005t8ry4k",
+        "id": "step-005tkc5sy",
         "type": "wait",
         "duration": 14,
         "role": "user",
@@ -7626,7 +7626,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-005u0sys9",
+        "id": "step-005ui5fed",
         "type": "motion",
         "duration": 10,
         "role": "user",
@@ -7699,7 +7699,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-005vcqc8t",
+        "id": "step-005v6liqx",
         "type": "motion",
         "duration": 0,
         "role": "user",
@@ -7716,7 +7716,7 @@
         "phase": "finish"
       },
       {
-        "id": "step-005wnfdmw",
+        "id": "step-005wd0dao",
         "type": "move",
         "duration": 0,
         "role": "user",
@@ -7748,7 +7748,7 @@
     "note": "",
     "steps": [
       {
-        "id": "step-005xbggsp",
+        "id": "step-005xzb3fs",
         "type": "weapon",
         "duration": 0,
         "role": "user",
@@ -7773,7 +7773,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-005y45g3r",
+        "id": "step-005yxprae",
         "type": "motion",
         "duration": 6,
         "role": "user",
@@ -7828,7 +7828,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-005z5e98e",
+        "id": "step-005z29p72",
         "type": "sound",
         "duration": 0,
         "role": "user",
@@ -7846,7 +7846,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-0060bc4sn",
+        "id": "step-006004ew5",
         "type": "weapon",
         "duration": 0,
         "role": "user",
@@ -7870,7 +7870,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-0061m9x6b",
+        "id": "step-00613eypt",
         "type": "motion",
         "duration": 5,
         "role": "user",
@@ -7925,7 +7925,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-0062k5wd3",
+        "id": "step-0062r0s7t",
         "type": "projectile",
         "duration": 24,
         "role": "user",
@@ -7954,7 +7954,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-00638diis",
+        "id": "step-0063n1jyr",
         "type": "sound",
         "duration": 0,
         "role": "user",
@@ -7972,7 +7972,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-006404cdd",
+        "id": "step-0064bn1b7",
         "type": "animation",
         "duration": 0,
         "role": "allTargets",
@@ -7986,7 +7986,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-0065brimt",
+        "id": "step-00653pkx5",
         "type": "impact",
         "duration": 0,
         "role": "allTargets",
@@ -7998,7 +7998,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-0066h3s0k",
+        "id": "step-00665qxz0",
         "type": "wait",
         "duration": 10,
         "role": "user",
@@ -8010,7 +8010,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-0067uedr7",
+        "id": "step-006765gea",
         "type": "motion",
         "duration": 8,
         "role": "user",
@@ -8065,7 +8065,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-0068j5j6b",
+        "id": "step-0068f36c4",
         "type": "motion",
         "duration": 0,
         "role": "user",
@@ -8082,7 +8082,7 @@
         "phase": "finish"
       },
       {
-        "id": "step-0069mk0ye",
+        "id": "step-0069q3hbv",
         "type": "move",
         "duration": 0,
         "role": "user",
@@ -8114,7 +8114,7 @@
     "note": "",
     "steps": [
       {
-        "id": "step-0039kmpsp",
+        "id": "step-0039sn7wd",
         "type": "weapon",
         "duration": 0,
         "role": "user",
@@ -8139,7 +8139,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-003a85avl",
+        "id": "step-003aol60v",
         "type": "motion",
         "duration": 8,
         "role": "user",
@@ -8248,7 +8248,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-003bnoxbj",
+        "id": "step-003b5bjku",
         "type": "sound",
         "duration": 0,
         "role": "user",
@@ -8266,7 +8266,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-003cgcufu",
+        "id": "step-003ckdsa4",
         "type": "animation",
         "duration": 0,
         "role": "user",
@@ -8280,7 +8280,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-003drr876",
+        "id": "step-003d1ocbl",
         "type": "flash",
         "duration": 10,
         "role": "user",
@@ -8296,7 +8296,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-003e6s0x3",
+        "id": "step-003ek0abi",
         "type": "wait",
         "duration": 24,
         "role": "user",
@@ -8308,7 +8308,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-003f9kfuz",
+        "id": "step-003ffbwdw",
         "type": "impact",
         "duration": 0,
         "role": "user",
@@ -8320,7 +8320,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-003gzivcm",
+        "id": "step-003ghlj80",
         "type": "wait",
         "duration": 10,
         "role": "user",
@@ -8332,7 +8332,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-003hcunrx",
+        "id": "step-003hc060l",
         "type": "motion",
         "duration": 12,
         "role": "user",
@@ -8441,7 +8441,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-003iijc2i",
+        "id": "step-003i2q5ck",
         "type": "wait",
         "duration": 2,
         "role": "user",
@@ -8453,7 +8453,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-003jd8sv9",
+        "id": "step-003jg20zg",
         "type": "weapon",
         "duration": 0,
         "role": "user",
@@ -8477,7 +8477,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-003k8gnlr",
+        "id": "step-003kpe4z8",
         "type": "motion",
         "duration": 0,
         "role": "user",
@@ -8494,7 +8494,7 @@
         "phase": "finish"
       },
       {
-        "id": "step-003lvn3iy",
+        "id": "step-003l0418h",
         "type": "move",
         "duration": 0,
         "role": "user",
@@ -8526,7 +8526,7 @@
     "note": "",
     "steps": [
       {
-        "id": "step-006a57j7e",
+        "id": "step-006a11pzk",
         "type": "motion",
         "duration": 22,
         "role": "user",
@@ -8564,7 +8564,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-006bcc9va",
+        "id": "step-006b7b0o8",
         "type": "sound",
         "duration": 0,
         "role": "user",
@@ -8582,7 +8582,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-006ct0trb",
+        "id": "step-006cfavf7",
         "type": "wait",
         "duration": 10,
         "role": "user",
@@ -8594,7 +8594,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-006dla9vm",
+        "id": "step-006d6vo45",
         "type": "motion",
         "duration": 0,
         "role": "user",
@@ -8612,7 +8612,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-006evc96k",
+        "id": "step-006e9zhvh",
         "type": "sound",
         "duration": 0,
         "role": "user",
@@ -8630,7 +8630,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-006fjmhhm",
+        "id": "step-006fhbdsl",
         "type": "sound",
         "duration": 0,
         "role": "user",
@@ -8648,7 +8648,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-006gsy0xk",
+        "id": "step-006glot0m",
         "type": "flash",
         "duration": 6,
         "role": "user",
@@ -8664,7 +8664,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-006hfvwn7",
+        "id": "step-006hemlma",
         "type": "shake",
         "duration": 10,
         "role": "user",
@@ -8678,7 +8678,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-006ilro32",
+        "id": "step-006iebcss",
         "type": "projectile",
         "duration": 12,
         "role": "user",
@@ -8709,7 +8709,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-006jppqxk",
+        "id": "step-006jfq9vh",
         "type": "animation",
         "duration": 0,
         "role": "allTargets",
@@ -8723,7 +8723,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-006k55rud",
+        "id": "step-006krbbf5",
         "type": "impact",
         "duration": 0,
         "role": "allTargets",
@@ -8735,7 +8735,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-006lg4u2s",
+        "id": "step-006l8hmvp",
         "type": "shake",
         "duration": 24,
         "role": "user",
@@ -8749,7 +8749,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-006mefvsx",
+        "id": "step-006madb2d",
         "type": "flash",
         "duration": 10,
         "role": "user",
@@ -8765,7 +8765,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-006nssua1",
+        "id": "step-006nz8ouu",
         "type": "wait",
         "duration": 12,
         "role": "user",
@@ -8777,7 +8777,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-006ohg266",
+        "id": "step-006o5uu0h",
         "type": "motion",
         "duration": 0,
         "role": "user",
@@ -8794,7 +8794,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-006pub3ac",
+        "id": "step-006pkxenq",
         "type": "wait",
         "duration": 10,
         "role": "user",
@@ -8806,7 +8806,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-006qozvjf",
+        "id": "step-006qpdjat",
         "type": "motion",
         "duration": 0,
         "role": "user",
@@ -8823,7 +8823,7 @@
         "phase": "finish"
       },
       {
-        "id": "step-006rrizpa",
+        "id": "step-006rt2x82",
         "type": "move",
         "duration": 0,
         "role": "user",
@@ -8855,7 +8855,7 @@
     "note": "",
     "steps": [
       {
-        "id": "step-006svt2ma",
+        "id": "step-006snv4yo",
         "type": "sound",
         "duration": 0,
         "role": "user",
@@ -8873,7 +8873,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-006toy695",
+        "id": "step-006t4anmk",
         "type": "wait",
         "duration": 10,
         "role": "user",
@@ -8885,7 +8885,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-006u9un5l",
+        "id": "step-006umxbsl",
         "type": "move",
         "duration": 10,
         "role": "user",
@@ -8901,7 +8901,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-006vozlic",
+        "id": "step-006v5b1as",
         "type": "shake",
         "duration": 12,
         "role": "user",
@@ -8915,7 +8915,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-006w2ht22",
+        "id": "step-006wcvuox",
         "type": "sound",
         "duration": 0,
         "role": "user",
@@ -8933,7 +8933,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-006xiznos",
+        "id": "step-006x5ke8m",
         "type": "animation",
         "duration": 0,
         "role": "allTargets",
@@ -8947,7 +8947,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-006y8sl0f",
+        "id": "step-006yztst5",
         "type": "impact",
         "duration": 0,
         "role": "allTargets",
@@ -8959,7 +8959,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-006zppk4g",
+        "id": "step-006z2817g",
         "type": "wait",
         "duration": 16,
         "role": "user",
@@ -8971,7 +8971,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-00704pnha",
+        "id": "step-0070whuj7",
         "type": "move",
         "duration": 24,
         "role": "user",
@@ -8987,7 +8987,7 @@
         "phase": "return"
       },
       {
-        "id": "step-0071nutpu",
+        "id": "step-007191n6q",
         "type": "motion",
         "duration": 0,
         "role": "user",
@@ -9004,7 +9004,7 @@
         "phase": "finish"
       },
       {
-        "id": "step-00726whl5",
+        "id": "step-0072s8nvu",
         "type": "move",
         "duration": 0,
         "role": "user",
@@ -9036,7 +9036,7 @@
     "note": "",
     "steps": [
       {
-        "id": "step-0073nsjb9",
+        "id": "step-0073fwcld",
         "type": "motion",
         "duration": 10,
         "role": "user",
@@ -9145,7 +9145,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-00747fhby",
+        "id": "step-00742ai9e",
         "type": "sound",
         "duration": 0,
         "role": "user",
@@ -9163,7 +9163,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-0075t21ck",
+        "id": "step-00752rcd7",
         "type": "animation",
         "duration": 0,
         "role": "user",
@@ -9177,7 +9177,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-0076u21ju",
+        "id": "step-0076h1rpp",
         "type": "wait",
         "duration": 26,
         "role": "user",
@@ -9189,7 +9189,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-00773yd30",
+        "id": "step-00772ba0x",
         "type": "sound",
         "duration": 0,
         "role": "user",
@@ -9207,7 +9207,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-0078dpjp4",
+        "id": "step-00780r7h2",
         "type": "flash",
         "duration": 6,
         "role": "user",
@@ -9223,7 +9223,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-0079i1pkh",
+        "id": "step-0079koese",
         "type": "projectile",
         "duration": 6,
         "role": "user",
@@ -9254,7 +9254,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-007a1ou86",
+        "id": "step-007amvlsk",
         "type": "animation",
         "duration": 0,
         "role": "allTargets",
@@ -9268,7 +9268,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-007bnp47m",
+        "id": "step-007b04o3v",
         "type": "impact",
         "duration": 0,
         "role": "allTargets",
@@ -9280,7 +9280,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-007cu6tut",
+        "id": "step-007ceprkp",
         "type": "shake",
         "duration": 18,
         "role": "user",
@@ -9294,7 +9294,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-007di0px5",
+        "id": "step-007dckr5a",
         "type": "wait",
         "duration": 12,
         "role": "user",
@@ -9306,7 +9306,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-007ejywc3",
+        "id": "step-007e189i2",
         "type": "motion",
         "duration": 12,
         "role": "user",
@@ -9415,7 +9415,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-007ff18c7",
+        "id": "step-007fy1pcs",
         "type": "motion",
         "duration": 0,
         "role": "user",
@@ -9432,7 +9432,7 @@
         "phase": "finish"
       },
       {
-        "id": "step-007g2fast",
+        "id": "step-007gs57c2",
         "type": "move",
         "duration": 0,
         "role": "user",
@@ -9464,7 +9464,7 @@
     "note": "",
     "steps": [
       {
-        "id": "step-007h33xyi",
+        "id": "step-007hkfnco",
         "type": "sound",
         "duration": 0,
         "role": "user",
@@ -9482,7 +9482,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-007ildavy",
+        "id": "step-007idwinb",
         "type": "motion",
         "duration": 20,
         "role": "user",
@@ -9521,7 +9521,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-007ja55zh",
+        "id": "step-007jlf224",
         "type": "wait",
         "duration": 4,
         "role": "user",
@@ -9533,7 +9533,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-007kbr1om",
+        "id": "step-007kewogr",
         "type": "motion",
         "duration": 0,
         "role": "user",
@@ -9551,7 +9551,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-007ld5wkq",
+        "id": "step-007lumx28",
         "type": "sound",
         "duration": 0,
         "role": "user",
@@ -9569,7 +9569,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-007mya4f2",
+        "id": "step-007mqdv71",
         "type": "sound",
         "duration": 0,
         "role": "user",
@@ -9587,7 +9587,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-007n00vt9",
+        "id": "step-007nmetrp",
         "type": "flash",
         "duration": 5,
         "role": "user",
@@ -9603,7 +9603,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-007ohjnp3",
+        "id": "step-007o4b724",
         "type": "shake",
         "duration": 8,
         "role": "user",
@@ -9617,7 +9617,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-007pv28m9",
+        "id": "step-007p18mok",
         "type": "projectile",
         "duration": 12,
         "role": "user",
@@ -9649,7 +9649,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-007q2tixu",
+        "id": "step-007q61un5",
         "type": "animation",
         "duration": 0,
         "role": "target",
@@ -9664,7 +9664,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-007rj8v4y",
+        "id": "step-007r2p6oj",
         "type": "impact",
         "duration": 0,
         "role": "target",
@@ -9677,7 +9677,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-007sr4v29",
+        "id": "step-007sesjn0",
         "type": "shake",
         "duration": 14,
         "role": "user",
@@ -9691,7 +9691,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-007tw8rqy",
+        "id": "step-007td5ox4",
         "type": "wait",
         "duration": 8,
         "role": "user",
@@ -9703,7 +9703,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-007uug5wj",
+        "id": "step-007u5ktob",
         "type": "motion",
         "duration": 12,
         "role": "user",
@@ -9742,7 +9742,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-007vdugfi",
+        "id": "step-007v6r9mv",
         "type": "wait",
         "duration": 4,
         "role": "user",
@@ -9754,7 +9754,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-007w9cgp2",
+        "id": "step-007wb6leh",
         "type": "motion",
         "duration": 0,
         "role": "user",
@@ -9772,7 +9772,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-007xxypqs",
+        "id": "step-007x7cnu6",
         "type": "sound",
         "duration": 0,
         "role": "user",
@@ -9790,7 +9790,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-007y5j047",
+        "id": "step-007yz2i1b",
         "type": "sound",
         "duration": 0,
         "role": "user",
@@ -9808,7 +9808,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-007z2ymfw",
+        "id": "step-007zyg8sc",
         "type": "flash",
         "duration": 5,
         "role": "user",
@@ -9824,7 +9824,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-00808ehsh",
+        "id": "step-0080ar73z",
         "type": "shake",
         "duration": 8,
         "role": "user",
@@ -9838,7 +9838,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-00815rxxk",
+        "id": "step-0081c9qdl",
         "type": "projectile",
         "duration": 12,
         "role": "user",
@@ -9870,7 +9870,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-0082ndkb4",
+        "id": "step-0082k47ih",
         "type": "animation",
         "duration": 0,
         "role": "target",
@@ -9885,7 +9885,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-0083xmz0c",
+        "id": "step-00837v0po",
         "type": "impact",
         "duration": 0,
         "role": "target",
@@ -9898,7 +9898,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-0084nfxtv",
+        "id": "step-0084zomqq",
         "type": "shake",
         "duration": 14,
         "role": "user",
@@ -9912,7 +9912,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-0085n7kap",
+        "id": "step-00854zzcy",
         "type": "wait",
         "duration": 8,
         "role": "user",
@@ -9924,7 +9924,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-0086wd6b0",
+        "id": "step-0086r3du0",
         "type": "motion",
         "duration": 12,
         "role": "user",
@@ -9963,7 +9963,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-0087fp4fl",
+        "id": "step-0087utiy2",
         "type": "wait",
         "duration": 4,
         "role": "user",
@@ -9975,7 +9975,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-0088xaelv",
+        "id": "step-0088iyqs8",
         "type": "motion",
         "duration": 0,
         "role": "user",
@@ -9993,7 +9993,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-0089doedd",
+        "id": "step-0089jwfzc",
         "type": "sound",
         "duration": 0,
         "role": "user",
@@ -10011,7 +10011,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-008anyfbq",
+        "id": "step-008azkod5",
         "type": "sound",
         "duration": 0,
         "role": "user",
@@ -10029,7 +10029,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-008bvrlls",
+        "id": "step-008bbsl4x",
         "type": "flash",
         "duration": 5,
         "role": "user",
@@ -10045,7 +10045,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-008czyp3j",
+        "id": "step-008chd3hw",
         "type": "shake",
         "duration": 8,
         "role": "user",
@@ -10059,7 +10059,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-008d4ss2r",
+        "id": "step-008dgn5qg",
         "type": "projectile",
         "duration": 12,
         "role": "user",
@@ -10091,7 +10091,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-008etgu1n",
+        "id": "step-008egxxim",
         "type": "animation",
         "duration": 0,
         "role": "target",
@@ -10106,7 +10106,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-008fzuvhn",
+        "id": "step-008foxhx9",
         "type": "impact",
         "duration": 0,
         "role": "target",
@@ -10119,7 +10119,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-008gnabel",
+        "id": "step-008gji3ra",
         "type": "shake",
         "duration": 14,
         "role": "user",
@@ -10133,7 +10133,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-008hc87qg",
+        "id": "step-008hysx9k",
         "type": "wait",
         "duration": 8,
         "role": "user",
@@ -10145,7 +10145,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-008i78z70",
+        "id": "step-008ikvl4a",
         "type": "wait",
         "duration": 6,
         "role": "user",
@@ -10157,7 +10157,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-008j8fsiq",
+        "id": "step-008j0dx29",
         "type": "motion",
         "duration": 0,
         "role": "user",
@@ -10174,7 +10174,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-008k39iyi",
+        "id": "step-008kdwn6p",
         "type": "wait",
         "duration": 8,
         "role": "user",
@@ -10186,7 +10186,7 @@
         "phase": "execute"
       },
       {
-        "id": "step-008l6crms",
+        "id": "step-008lr6z85",
         "type": "motion",
         "duration": 0,
         "role": "user",
@@ -10203,7 +10203,7 @@
         "phase": "finish"
       },
       {
-        "id": "step-008m3voi5",
+        "id": "step-008mxhnzj",
         "type": "move",
         "duration": 0,
         "role": "user",
