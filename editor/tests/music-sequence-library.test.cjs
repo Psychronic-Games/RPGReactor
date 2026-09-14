@@ -112,6 +112,7 @@ function withAudioCommand(databaseManager, run) {
         }
     };
     require(path.join(editorRoot, 'src', 'utils', 'BgmSequenceEditor.js'));
+    require(path.join(editorRoot, 'src', 'utils', 'BattleMusic.js'));
     const AudioCommandEditor = require(path.join(editorRoot, 'src', 'event', 'commands', 'AudioCommandEditor.js'));
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rr-music-seq-'));
     try {
@@ -152,12 +153,67 @@ test('Change Battle BGM can name a library sequence and keeps its track as the f
     });
 });
 
+test('battle music is one audio object: a track, a sequence, or nothing worth storing', () => {
+    const BattleMusic = require(path.join(editorRoot, 'src', 'utils', 'BattleMusic.js'));
+    assert.equal(BattleMusic.sequenceId({ sequence: 'library:12' }), 12);
+    assert.equal(BattleMusic.sequenceId({ sequence: 3 }), 0, 'a map id is not a library key');
+    assert.equal(BattleMusic.sequenceId(null), 0);
+    assert.deepEqual(BattleMusic.normalize({ name: 'Battle1', volume: '70', pitch: null, pan: 'x', looped: true }),
+        { name: 'Battle1', volume: 70, pitch: 100, pan: 0 });
+    assert.deepEqual(BattleMusic.normalize({ sequence: 'library:2' }), { name: '', volume: 90, pitch: 100, pan: 0, sequence: 'library:2' });
+    assert.equal(BattleMusic.normalize({ name: '', sequence: 'nope' }), null);
+    assert.equal(BattleMusic.normalize(undefined), null);
+
+    const manager = { getMusicSequence: id => (id === 2 ? { id: 2, name: 'Boss' } : null) };
+    assert.equal(BattleMusic.label({ name: 'Battle1', sequence: 'library:2' }, manager), 'Music sequence: Boss', 'a sequence is shown by name, not by its fallback');
+    assert.equal(BattleMusic.label({ sequence: 'library:9' }, manager), 'Music sequence: (missing)');
+    assert.equal(BattleMusic.label({ name: 'Battle1' }, manager), 'Battle1');
+    assert.equal(BattleMusic.label(null, manager), '(None)');
+
+    assert.deepEqual(BattleMusic.fromPicker({ name: 'T', volume: 1, pitch: 2, pan: 3 }, { select: { value: '4' } }),
+        { name: 'T', volume: 1, pitch: 2, pan: 3, sequence: 'library:4' });
+    assert.deepEqual(BattleMusic.fromPicker({ name: 'T', volume: 1, pitch: 2, pan: 3 }, null), { name: 'T', volume: 1, pitch: 2, pan: 3 });
+});
+
+test('the battle music picker opens on the current choice and hands back the audio object', () => {
+    const previous = { window: global.window, document: global.document, RRAssetFiles: global.RRAssetFiles, RRAudioPickerModal: global.RRAudioPickerModal };
+    const opened = [];
+    global.window = { I18n: { tText: text => text } };
+    global.RRAssetFiles = require(path.join(editorRoot, 'src', 'utils', 'AssetFiles.js'));
+    global.RRAudioPickerModal = { open: options => opened.push(options) };
+    global.document = { createElement: () => { const el = { style: {}, innerHTML: '', select: { value: '0' } }; el.querySelector = () => el.select; return el; } };
+    require(path.join(editorRoot, 'src', 'utils', 'BgmSequenceEditor.js'));
+    const BattleMusic = require(path.join(editorRoot, 'src', 'utils', 'BattleMusic.js'));
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rr-battle-music-'));
+    try {
+        fs.mkdirSync(path.join(root, 'audio', 'bgm'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'audio', 'bgm', 'Battle1.ogg'), 'audio');
+        const library = { getMusicSequences: () => [{ id: 1, name: 'Boss' }] };
+        const chosen = [];
+        assert.equal(BattleMusic.open({ databaseManager: library, projectPath: null, onOk: () => {} }), false, 'no project, no picker');
+        assert.equal(BattleMusic.open({ databaseManager: library, projectPath: root, current: { name: 'Battle1', volume: 60, pitch: 100, pan: 0, sequence: 'library:1' }, onOk: audio => chosen.push(audio) }), true);
+        const picker = opened.at(-1);
+        assert.equal(picker.selected, 'Battle1');
+        assert.deepEqual(picker.levels, { volume: 60, pitch: 100, pan: 0 });
+        assert.equal(picker.loopDefault, true);
+        assert.deepEqual(picker.files.map(file => file.name), ['Battle1']);
+        assert.match(picker.extraControls.innerHTML, /<option value="1" selected>0001: Boss<\/option>/);
+        picker.extraControls.select.value = '0';
+        picker.onOk({ name: 'Battle1', volume: 60, pitch: 100, pan: 0 });
+        assert.deepEqual(chosen.at(-1), { name: 'Battle1', volume: 60, pitch: 100, pan: 0 }, 'choosing (None) as the sequence leaves the plain track');
+    } finally {
+        fs.rmSync(root, { recursive: true, force: true });
+        Object.assign(global, previous);
+    }
+});
+
 test('Referenced by lists the troops and Change Battle BGM commands that name a sequence', () => {
     const Finder = require(path.join(editorRoot, 'src', 'database', 'DatabaseReferenceFinder.js'));
     const change = sequence => ({ code: 132, indent: 0, parameters: [Object.assign({ name: 'Battle1', volume: 90, pitch: 100, pan: 0 }, sequence ? { sequence } : {})] });
     const data = {
-        troops: [null, { id: 1, name: 'Bats', members: [], battleBgmSequenceId: 2, pages: [{ conditions: {}, list: [change('library:2')] }] },
-            { id: 2, name: 'Rats', members: [], battleBgmSequenceId: 1, pages: [] }],
+        troops: [null, { id: 1, name: 'Bats', members: [], battleBgm: { name: '', volume: 90, pitch: 100, pan: 0, sequence: 'library:2' }, pages: [{ conditions: {}, list: [change('library:2')] }] },
+            { id: 2, name: 'Rats', members: [], battleBgm: { name: 'Battle1', volume: 90, pitch: 100, pan: 0, sequence: 'library:1' }, pages: [] },
+            { id: 3, name: 'Moles', members: [], battleBgm: { name: 'Battle2', volume: 90, pitch: 100, pan: 0 }, pages: [] }],
         commonEvents: [null, null, null, null, { id: 4, name: 'Boss', list: [change('library:2'), change(null), change('library:1')] }]
     };
     const finder = new Finder({ data, getSystem: () => ({}) });
@@ -175,16 +231,28 @@ test('the tab, the pickers and the strings are wired', () => {
     const html = read('index.html');
     assert.match(html, /<script src="src\/database\/DatabaseMusicSequenceEditor\.js"><\/script>/);
     assert.ok(html.indexOf('src/utils/BgmSequenceEditor.js') < html.indexOf('src/database/DatabaseMusicSequenceEditor.js'));
-    for (const id of ['map-bgm-sequence-source', 'map-bgm-sequence-move-btn', 'map-bgm-sequence-move-hint', 'map-bgm-sequence-library-hint', 'map-battle-bgm-sequence-select']) {
+    for (const id of ['map-bgm-sequence-source', 'map-bgm-sequence-move-btn', 'map-bgm-sequence-move-hint', 'map-bgm-sequence-library-hint',
+        'map-battle-bgm-track', 'map-battle-bgm-choose-btn', 'map-battle-bgm-clear-btn']) {
         assert.match(html, new RegExp(`id="${id}"`), id);
     }
+    assert.doesNotMatch(html, /map-battle-bgm-sequence-select/, 'the sequence-only dropdown is gone');
+    const battleMusic = html.indexOf('src/utils/BattleMusic.js');
+    assert.ok(battleMusic > html.indexOf('src/utils/BgmSequenceEditor.js'), 'loaded after the list it draws options with');
+    for (const user of ['src/event/commands/AudioCommandEditor.js', 'src/database/DatabaseTroopEditor.js', 'src/ProjectController.js']) {
+        const at = html.indexOf(user);
+        assert.ok(at < 0 || battleMusic < at, `loaded before ${user}`);
+    }
+    assert.doesNotMatch(read('src/event/commands/AudioCommandEditor.js'), /createSequencePicker/, 'Change Battle BGM uses the shared row');
     const ui = read('src/DatabaseEditorUI.js');
     assert.match(ui, /\{ name: 'Music Sequences', type: 'musicSequences' \}/);
     assert.match(ui, /type === 'musicSequences' && this\.musicSequenceEditor/);
     assert.match(read('src/UIManager.js'), /openDatabase\('musicSequences'\)/);
     const troop = read('src/database/DatabaseTroopEditor.js');
     assert.match(troop, /bar\.appendChild\(this\.createBattleMusicSection\(\)\);/);
-    assert.match(troop, /troop\.battleBgmSequenceId = id;/);
+    assert.match(troop, /if \(music\) troop\.battleBgm = music;/);
+    assert.match(troop, /RRBattleMusic\.open\(\{/);
+    assert.doesNotMatch(troop + read('src/ProjectController.js') + read('src/database/DatabaseReferenceFinder.js') + fs.readFileSync(path.join(editorRoot, '..', 'runtime', 'reactor_managers.js'), 'utf8'),
+        /battleBgmSequenceId/, 'no reader of the retired field is left');
     const i18n = read('src/I18nManager.js');
     assert.match(i18n, /musicSequences: 'menu\.musicSequences'/);
     assert.equal((i18n.match(/"menu\.musicSequences": /g) || []).length, 18, 'English and the 17 locales');

@@ -534,11 +534,16 @@
                                 </div>
                             </div>
 
-                            <!-- Battle music: an entry of Database > Music Sequences. -->
+                            <!-- Battle music: a track or an entry of Database > Music Sequences,
+                                 chosen in the shared audio picker; this row only shows the choice. -->
                             <div style="margin-bottom: 8px;">
-                                <label class="map-props-label" for="map-battle-bgm-sequence-select" style="display: block; margin-bottom: 2px;" data-i18n="mapProps.battleMusic">Battle music</label>
-                                <select id="map-battle-bgm-sequence-select" style="width: 100%; padding: 4px 6px; background-color: var(--color-bg-input); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; font-size: 12px;"></select>
-                                <div style="font-size: 11px; color: var(--color-text-muted); line-height: 1.5; margin-top: 4px;" data-i18n="mapProps.battleMusicHint">A sequence from Database › Music Sequences for battles on this map. A troop’s own battle music, or one set by Change Battle BGM, plays instead.</div>
+                                <label class="map-props-label" style="display: block; margin-bottom: 2px;" data-i18n="mapProps.battleMusic">Battle music</label>
+                                <div style="display: flex; gap: 6px; align-items: center;">
+                                    <div id="map-battle-bgm-track" title="Choose a track" data-i18n-title="mapProps.trackHint" style="flex: 1; min-width: 0; padding: 5px 6px; background-color: var(--color-bg-input); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer;"></div>
+                                    <button type="button" id="map-battle-bgm-choose-btn" class="map-props-btn primary" style="flex: 0 0 auto; padding: 5px 12px; font-size: 12px;" data-i18n="mapProps.choose">Choose…</button>
+                                    <button type="button" id="map-battle-bgm-clear-btn" class="map-props-btn" style="flex: 0 0 auto; padding: 5px 12px; font-size: 12px;">Clear</button>
+                                </div>
+                                <div style="font-size: 11px; color: var(--color-text-muted); line-height: 1.5; margin-top: 4px;" data-i18n="mapProps.battleMusicHint">A track, or a sequence from Database › Music Sequences, for battles on this map. A troop’s own battle music, or one set by Change Battle BGM, plays instead.</div>
                             </div>
                         </div>
 
@@ -905,6 +910,7 @@
     <script src="src/utils/EnemyActionForecast.js"></script>
     <script src="src/utils/AudioPickerModal.js"></script>
     <script src="src/utils/BgmSequenceEditor.js"></script>
+    <script src="src/utils/BattleMusic.js"></script>
     <script src="src/utils/SystemSoundSlotModal.js"></script>
     <script src="src/utils/PluginAnnotations.js"></script>
     <script src="src/utils/PluginParamCodec.js"></script>

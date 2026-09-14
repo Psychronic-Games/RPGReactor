@@ -167,7 +167,8 @@ class DatabaseReferenceFinder {
         });
 
         this._records('troops').forEach(troop => {
-            emit('troops', troop.id, 'musicSequences', Number(troop.battleBgmSequenceId), 'Battle Music');
+            const battleMusic = /^library:(\d+)$/.exec(String(troop.battleBgm?.sequence || ''));
+            if (battleMusic) emit('troops', troop.id, 'musicSequences', Number(battleMusic[1]), 'Battle Music');
             (troop.members || []).forEach(member => {
                 emit('troops', troop.id, 'enemies', Number(member?.enemyId), 'Members');
             });

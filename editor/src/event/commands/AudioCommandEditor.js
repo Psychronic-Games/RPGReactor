@@ -238,7 +238,8 @@ class AudioCommandEditor {
         const current = this.command.parameters[0] || {};
         // Change Battle BGM can name a music sequence; the track stays on the
         // command as the fallback the runtime plays if that entry is gone.
-        const sequencePicker = this.command.code === 132 ? this.createSequencePicker(current.sequence) : null;
+        const sequencePicker = this.command.code === 132 && typeof RRBattleMusic !== 'undefined'
+            ? RRBattleMusic.sequenceRow(this.databaseManager, RRBattleMusic.sequenceId(current), tt) : null;
 
         RRAudioPickerModal.open({
             title: `${tt('Select')} ${folder.toUpperCase()} ${tt('File')}`,
@@ -268,31 +269,6 @@ class AudioCommandEditor {
                 if (done) done(this.command);
             }
         });
-    }
-
-    /**
-     * The Music sequence row for Change Battle BGM: { row, select }, or null
-     * when the library is empty and the command names no entry.
-     */
-    createSequencePicker(key) {
-        const tt = text => window.I18n ? window.I18n.tText(text) : text;
-        const escape = text => typeof rrEscapeHtml === 'function' ? rrEscapeHtml(text) : String(text);
-        const match = typeof key === 'string' ? /^library:(\d+)$/.exec(key) : null;
-        const selectedId = match ? Number(match[1]) : 0;
-        const entries = this.databaseManager && typeof this.databaseManager.getMusicSequences === 'function'
-            ? this.databaseManager.getMusicSequences() : [];
-        if (!entries.length && !selectedId) return null;
-        if (typeof document === 'undefined' || typeof RRBgmSequenceEditor === 'undefined') return null;
-        const row = document.createElement('div');
-        row.className = 'audio-command-sequence-row';
-        row.style.cssText = 'display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px;';
-        row.innerHTML = `
-            <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--color-text);">
-                <span style="flex: 0 0 auto;">${escape(tt('Music sequence'))}</span>
-                <select class="audio-command-sequence-select" style="flex: 1; min-width: 0; padding: 4px 6px; font-size: 12px; background: var(--color-bg-input); color: var(--color-text); border: 1px solid var(--color-border-input); border-radius: 3px;">${RRBgmSequenceEditor.libraryOptions(entries, selectedId, tt('(None)'), tt('(missing)'))}</select>
-            </label>
-            <div style="font-size: 11px; color: var(--color-text-muted); line-height: 1.5;">${escape(tt('A sequence from Database › Music Sequences plays instead of the track below, which stays as its fallback.'))}</div>`;
-        return { row, select: row.querySelector('select') };
     }
 
     /**

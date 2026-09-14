@@ -2170,7 +2170,8 @@ class ProjectController {
     populateMapMusicLibraryForm(mapData) {
         this._pendingSequenceMove = null;
         this._mapBgmSequenceSource = Number(mapData.bgmSequenceId) || 0;
-        this._mapBattleBgmSequenceId = Number(mapData.battleBgmSequenceId) || 0;
+        this._mapBattleBgm = typeof RRBattleMusic !== 'undefined'
+            ? RRBattleMusic.normalize(mapData.battleBgm) : (mapData.battleBgm || null);
         if (this._mapBgmSequenceSource > 0) {
             // A library sequence is on whether or not the map keeps one of its own.
             const checkbox = document.getElementById('map-bgm-sequence-checkbox');
@@ -2180,11 +2181,32 @@ class ProjectController {
             if (pane) pane.style.display = 'block';
         }
         this.renderMapSequenceSource();
-        const battle = document.getElementById('map-battle-bgm-sequence-select');
-        if (battle && typeof RRBgmSequenceEditor !== 'undefined') {
-            battle.innerHTML = RRBgmSequenceEditor.libraryOptions(this.musicSequenceLibrary(),
-                this._mapBattleBgmSequenceId, this._tt('(None)'), this._tt('(missing)'));
-        }
+        this.renderMapBattleMusic();
+    }
+
+    /** Show the map's battle music: a track, a library sequence by name, or (None). */
+    renderMapBattleMusic() {
+        const label = document.getElementById('map-battle-bgm-track');
+        if (!label || typeof RRBattleMusic === 'undefined') return;
+        label.textContent = RRBattleMusic.label(this._mapBattleBgm, this.databaseManager, text => this._tt(text));
+        label.style.color = this._mapBattleBgm ? 'var(--color-text)' : 'var(--color-text-muted)';
+        const clear = document.getElementById('map-battle-bgm-clear-btn');
+        if (clear) clear.textContent = this._tt('Clear');
+    }
+
+    /** Battle music for this map, a track or a library sequence, through the shared picker. */
+    openMapBattleMusicPicker() {
+        if (typeof RRBattleMusic === 'undefined') return;
+        RRBattleMusic.open({
+            databaseManager: this.databaseManager,
+            projectPath: this.currentProject?.path,
+            current: this._mapBattleBgm,
+            zIndex: 10010,
+            onOk: audio => {
+                this._mapBattleBgm = RRBattleMusic.normalize(audio);
+                this.renderMapBattleMusic();
+            }
+        });
     }
 
     /** Fill the Sequence picker, and show what goes with the current choice. */
@@ -2793,8 +2815,11 @@ class ProjectController {
             this.renderMapSequenceSource();
         });
         this._bindMapPropertiesListener('map-bgm-sequence-move-btn', 'click', () => this.stageSequenceMove());
-        this._bindMapPropertiesListener('map-battle-bgm-sequence-select', 'change', (e) => {
-            this._mapBattleBgmSequenceId = Number(e.target.value) || 0;
+        this._bindMapPropertiesListener('map-battle-bgm-choose-btn', 'click', () => this.openMapBattleMusicPicker());
+        this._bindMapPropertiesListener('map-battle-bgm-track', 'click', () => this.openMapBattleMusicPicker());
+        this._bindMapPropertiesListener('map-battle-bgm-clear-btn', 'click', () => {
+            this._mapBattleBgm = null;
+            this.renderMapBattleMusic();
         });
         this._bindMapPropertiesListener('map-bgm-track', 'click', () => this.openMapAudioPicker('bgm'));
         this._bindMapPropertiesListener('map-bgs-choose-btn', 'click', () => this.openMapAudioPicker('bgs'));
@@ -3108,9 +3133,10 @@ class ProjectController {
         }
         if (libraryId > 0 && sequenceOn) mapData.bgmSequenceId = libraryId;
         else delete mapData.bgmSequenceId;
-        const battleSequenceId = Number(this._mapBattleBgmSequenceId) || 0;
-        if (battleSequenceId > 0) mapData.battleBgmSequenceId = battleSequenceId;
-        else delete mapData.battleBgmSequenceId;
+        const battleMusic = typeof RRBattleMusic !== 'undefined'
+            ? RRBattleMusic.normalize(this._mapBattleBgm) : (this._mapBattleBgm || null);
+        if (battleMusic) mapData.battleBgm = battleMusic;
+        else delete mapData.battleBgm;
 
         if (wants3D) {
             if (elevation) elevation.addNote(mapData);

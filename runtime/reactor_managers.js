@@ -1839,9 +1839,9 @@ AudioManager.throwLoadError = function(webAudio) {
 // A sequence can also live in the project's library,
 // $dataSystem.reactorMusicSequences = [null, { id, name, sequence }], and
 // travel under the key "library:<id>" instead of a map id. A map points at
-// one with `bgmSequenceId` (which wins over a sequence of its own), a troop
-// or a map picks its battle music with `battleBgmSequenceId`, and Change
-// Battle BGM stores the key on its audio object. The library is always
+// one with `bgmSequenceId` (which wins over a sequence of its own), and a
+// troop, a map or Change Battle BGM keep battle music as an audio object whose
+// track plays, or whose `sequence` names an entry. The library is always
 // loaded, so a library key never waits. Two maps naming the same entry share
 // its key, so moving between them leaves the music playing.
 
@@ -1895,30 +1895,41 @@ AudioManager.librarySequenceData = function(id) {
 };
 
 /**
- * Battle music from the library: the System battle track marked with the
- * entry's key, or null when `id` names nothing playable. The track is only
- * heard if the entry is removed while a save still names it.
+ * The battle music a troop or a map keeps in `battleBgm`, the same audio object
+ * Change Battle BGM stores. Its track plays; a `sequence` naming a playable
+ * library entry plays that entry instead, with the track -- or the System
+ * track, when none is set -- as the fallback. Null when it names neither.
  */
-AudioManager.librarySequenceBattleBgm = function(id) {
-    if (!this.librarySequenceData(id)) return null;
-    const bgm = Object.assign({}, $dataSystem.battleBgm || this.makeEmptyAudioObject());
-    delete bgm.looped;
-    bgm.sequence = this.librarySequenceKey(id);
-    return bgm;
+AudioManager.battleMusicBgm = function(audio) {
+    if (!audio || typeof audio !== "object") return null;
+    const bgm = {
+        name: typeof audio.name === "string" ? audio.name : "",
+        volume: Number.isFinite(audio.volume) ? audio.volume : 90,
+        pitch: Number.isFinite(audio.pitch) ? audio.pitch : 100,
+        pan: Number.isFinite(audio.pan) ? audio.pan : 0
+    };
+    const libraryId = this.librarySequenceId(audio.sequence);
+    if (libraryId > 0 && this.librarySequenceData(libraryId)) {
+        if (!bgm.name && $dataSystem.battleBgm) Object.assign(bgm, $dataSystem.battleBgm);
+        delete bgm.looped;
+        bgm.sequence = this.librarySequenceKey(libraryId);
+        return bgm;
+    }
+    return bgm.name ? bgm : null;
 };
 
 /** The battle music the troop about to fight names, or null. */
 AudioManager.troopBattleBgm = function() {
     if (typeof $gameTroop === "undefined" || !$gameTroop || typeof $gameTroop.troop !== "function") return null;
     const troop = $gameTroop.troop();
-    return troop ? this.librarySequenceBattleBgm(troop.battleBgmSequenceId) : null;
+    return troop ? this.battleMusicBgm(troop.battleBgm) : null;
 };
 
 /** The battle music the current map names, or null; a battle test has no map. */
 AudioManager.mapBattleBgm = function() {
     if (typeof $gameMap === "undefined" || !$gameMap || !($gameMap.mapId() > 0)) return null;
     if (typeof $dataMap === "undefined" || !$dataMap) return null;
-    return this.librarySequenceBattleBgm($dataMap.battleBgmSequenceId);
+    return this.battleMusicBgm($dataMap.battleBgm);
 };
 
 /** The sequence a key names: a library entry, or the current map's for its id (null while that map is not loaded). */

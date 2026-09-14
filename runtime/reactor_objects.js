@@ -311,8 +311,8 @@ Game_System.prototype.setWindowTone = function(value) {
 };
 
 Game_System.prototype.battleBgm = function() {
-    // Each source is optional: a troop's music sequence, then Change Battle
-    // BGM, then the map's battle sequence, then the System track.
+    // Each source is optional: a troop's battle music, then Change Battle BGM,
+    // then the map's battle music, then the System track.
     return AudioManager.troopBattleBgm() || this._battleBgm || AudioManager.mapBattleBgm() || $dataSystem.battleBgm;
 };
 

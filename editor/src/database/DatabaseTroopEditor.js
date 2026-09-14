@@ -149,25 +149,41 @@ class DatabaseTroopEditor {
         return bar;
     }
 
-    /** Battle music: an entry of Database > Music Sequences, played instead of any other battle music. */
+    /** Battle music: a track or an entry of Database > Music Sequences, played instead of any other battle music. */
     createBattleMusicSection() {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
-        const entries = typeof this.databaseManager.getMusicSequences === 'function'
-            ? this.databaseManager.getMusicSequences() : [];
-        const options = typeof RRBgmSequenceEditor !== 'undefined'
-            ? RRBgmSequenceEditor.libraryOptions(entries, this.currentTroop.battleBgmSequenceId, tt('(None)'), tt('(missing)'))
-            : '';
+        const choose = window.I18n ? window.I18n.t('mapProps.choose') : 'Choose…';
         const section = document.createElement('div');
         section.className = 'database-section';
         section.style.cssText = 'width:100%;min-width:0;';
         section.innerHTML = `
             <div class="database-section-header">${this.escapeHTML(tt('Battle Music'))}</div>
             <div class="database-section-content">
-                <select class="database-field-value" id="troop-battle-music-select" style="width: 100%; box-sizing: border-box;">${options}</select>
+                <!-- The sidebar is narrow: the choice gets a line of its own, so a
+                     sequence or track name is not cut down to its first word. -->
+                <div class="database-field-value" id="troop-battle-music-track" style="width: 100%; min-width: 0; box-sizing: border-box; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer;"></div>
+                <div style="display: flex; gap: 4px; justify-content: flex-end; margin-top: 4px;">
+                    <button type="button" class="rr-btn-chip" id="troop-battle-music-choose">${this.escapeHTML(choose)}</button>
+                    <button type="button" class="rr-btn-chip" id="troop-battle-music-clear">${this.escapeHTML(tt('Clear'))}</button>
+                </div>
                 <div style="font-size: 11px; color: var(--color-text-muted); line-height: 1.5; margin-top: 4px;">${this.escapeHTML(tt('Plays instead of any other battle music.'))}</div>
             </div>
         `;
+        this.renderBattleMusicLabel(section);
         return section;
+    }
+
+    /** The troop's battle music as the section shows it: a track, a sequence by name, or (None). */
+    renderBattleMusicLabel(root) {
+        const label = root && root.querySelector('#troop-battle-music-track');
+        if (!label) return;
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        const music = this.currentTroop && this.currentTroop.battleBgm;
+        label.textContent = typeof RRBattleMusic !== 'undefined'
+            ? RRBattleMusic.label(music, this.databaseManager, tt)
+            : ((music && music.name) || tt('(None)'));
+        label.title = label.textContent;
+        label.style.color = music ? 'var(--color-text)' : 'var(--color-text-muted)';
     }
 
     // ==========================================
@@ -2569,16 +2585,32 @@ class DatabaseTroopEditor {
                 this.persistTroop();
             });
         }
-        const musicSelect = container.querySelector('#troop-battle-music-select');
-        if (musicSelect) {
-            musicSelect.addEventListener('change', (e) => {
-                if (!isCurrent()) return;
-                const id = Number(e.target.value) || 0;
-                if (id > 0) troop.battleBgmSequenceId = id;
-                else delete troop.battleBgmSequenceId;
-                this.persistTroop();
+        // Battle music is chosen in the shared audio picker, a track or a library sequence.
+        const openMusic = () => {
+            if (!isCurrent() || typeof RRBattleMusic === 'undefined') return;
+            RRBattleMusic.open({
+                databaseManager: this.databaseManager,
+                projectPath: this.projectManager.getCurrentProject()?.path,
+                current: troop.battleBgm,
+                zIndex: 10010,
+                onOk: audio => {
+                    if (!isCurrent()) return;
+                    const music = RRBattleMusic.normalize(audio);
+                    if (music) troop.battleBgm = music;
+                    else delete troop.battleBgm;
+                    this.persistTroop();
+                    this.renderBattleMusicLabel(container);
+                }
             });
-        }
+        };
+        container.querySelector('#troop-battle-music-choose')?.addEventListener('click', openMusic);
+        container.querySelector('#troop-battle-music-track')?.addEventListener('click', openMusic);
+        container.querySelector('#troop-battle-music-clear')?.addEventListener('click', () => {
+            if (!isCurrent()) return;
+            delete troop.battleBgm;
+            this.persistTroop();
+            this.renderBattleMusicLabel(container);
+        });
     }
 
     createSmallButton(label, onclick) {

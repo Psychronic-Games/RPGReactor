@@ -109,7 +109,8 @@ function controllerFor(mapData, sequence) {
         document: { getElementById: id => values[id] || null },
         RR_LIMITS: { MAP_WIDTH: 512, MAP_HEIGHT: 512 },
         rrIsMapSizeSupported: (w, h) => w >= 1 && w <= 512 && h >= 1 && h <= 512,
-        RRBgmSequenceEditor: loadEditorClass()
+        RRBgmSequenceEditor: loadEditorClass(),
+        RRBattleMusic: require(path.join(editorRoot, 'src', 'utils', 'BattleMusic.js'))
     };
     const ProjectController = vm.runInNewContext(read('src/ProjectController.js') + '\nProjectController;', context);
     const controller = Object.create(ProjectController.prototype);
@@ -231,15 +232,21 @@ function libraryFor(saves, { saveResult = true } = {}) {
     };
 }
 
-test('Map Properties names library entries for its music and its battle music, and unticking turns both off', async () => {
-    const map = { id: 3, name: 'Woods', width: 20, height: 15, data: [], events: [], bgmSequenceId: 9, battleBgmSequenceId: 9 };
+test('Map Properties names a library entry for its music, and a track or a sequence for its battle music', async () => {
+    const map = { id: 3, name: 'Woods', width: 20, height: 15, data: [], events: [], bgmSequenceId: 9, battleBgm: { name: 'Old', volume: 90, pitch: 100, pan: 0 } };
     const controller = controllerFor(map, { enabled: true, entries: [] });
     controller._mapBgmSequenceSource = 2;
-    controller._mapBattleBgmSequenceId = 4;
+    controller._mapBattleBgm = { name: 'Battle2', volume: '80', pitch: 100, pan: -10, looped: true };
     assert.equal(await controller.saveMapProperties(), true, 'an empty sequence of its own is not validated while a library entry plays');
     assert.equal(controller.written.bgmSequenceId, 2);
-    assert.equal(controller.written.battleBgmSequenceId, 4);
+    assert.deepEqual(controller.written.battleBgm, { name: 'Battle2', volume: 80, pitch: 100, pan: -10 }, 'a plain track, stored clean');
     assert.equal('bgmSequence' in controller.written, false, 'nor kept beside the library entry');
+
+    const sequence = controllerFor(map, { enabled: false, entries: [] });
+    sequence._mapBattleBgm = { name: '', volume: 90, pitch: 100, pan: 0, sequence: 'library:4' };
+    assert.equal(await sequence.saveMapProperties(), true);
+    assert.deepEqual(sequence.written.battleBgm, { name: '', volume: 90, pitch: 100, pan: 0, sequence: 'library:4' },
+        'a sequence needs no track of its own');
 
     const kept = controllerFor(map, { enabled: true, entries: [{ type: 'track', name: 'A', fadeIn: 0, once: false, volume: 80, pitch: 100, pan: 0 }] });
     kept._mapBgmSequenceSource = 2;
@@ -251,7 +258,12 @@ test('Map Properties names library entries for its music and its battle music, a
     off._mapBgmSequenceSource = 2;
     assert.equal(await off.saveMapProperties(), true);
     assert.equal('bgmSequenceId' in off.written, false, 'the checkbox turns the library entry off too');
-    assert.equal('battleBgmSequenceId' in off.written, false, 'and (None) clears the battle music');
+    assert.equal('battleBgm' in off.written, false, 'and Clear leaves no battle music behind');
+
+    const nothing = controllerFor(map, { enabled: false, entries: [] });
+    nothing._mapBattleBgm = { name: '', volume: 90, pitch: 100, pan: 0 };
+    assert.equal(await nothing.saveMapProperties(), true);
+    assert.equal('battleBgm' in nothing.written, false, 'an object naming neither a track nor a sequence is not stored');
 });
 
 test('Move to library saves System.json before the map, and the map keeps one copy', async () => {

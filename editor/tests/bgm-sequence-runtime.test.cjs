@@ -770,16 +770,26 @@ test('a one-track library entry shared by two maps leaves its track playing acro
     assert.equal(created.length, 1);
 });
 
-test('battle music: a troop or a map names a library entry, each in front of the System track', () => {
+test('battle music: a troop or a map names a track or a library entry, each in front of the System track', () => {
     const system = LIBRARY_SYSTEM();
-    const map = { bgm: { name: 'Field' }, battleBgmSequenceId: 2 };
-    const { AudioManager, context } = loadAudioManager({ map, system, troop: { id: 3, battleBgmSequenceId: 1 } });
-    assert.deepEqual(plain(AudioManager.troopBattleBgm()), { name: 'Battle1', volume: 90, pitch: 100, pan: 0, sequence: 'library:1' });
-    assert.deepEqual(plain(AudioManager.mapBattleBgm()), { name: 'Battle1', volume: 90, pitch: 100, pan: 0, sequence: 'library:2' });
+    const map = { bgm: { name: 'Field' }, battleBgm: { name: 'MapBattle', volume: 70, pitch: 110, pan: 5 } };
+    const troop = { id: 3, battleBgm: { name: '', volume: 90, pitch: 100, pan: 0, sequence: 'library:1' } };
+    const { AudioManager, context } = loadAudioManager({ map, system, troop });
+    assert.deepEqual(plain(AudioManager.troopBattleBgm()), { name: 'Battle1', volume: 90, pitch: 100, pan: 0, sequence: 'library:1' },
+        'a sequence with no track of its own falls back to the System track');
+    assert.deepEqual(plain(AudioManager.mapBattleBgm()), { name: 'MapBattle', volume: 70, pitch: 110, pan: 5 }, 'a plain track plays as it is');
+
+    const track = sequence => ({ id: 3, battleBgm: Object.assign({ name: 'Mine', volume: 80, pitch: 100, pan: 0 }, sequence ? { sequence } : {}) });
+    context.$gameTroop = { troop: () => track('library:2') };
+    assert.deepEqual(plain(AudioManager.troopBattleBgm()), { name: 'Mine', volume: 80, pitch: 100, pan: 0, sequence: 'library:2' },
+        'a sequence keeps the track it was given as its fallback');
+    context.$gameTroop = { troop: () => track('library:7') };
+    assert.deepEqual(plain(AudioManager.troopBattleBgm()), { name: 'Mine', volume: 80, pitch: 100, pan: 0 },
+        'an entry the library lacks leaves the track to play');
+    context.$gameTroop = { troop: () => ({ id: 3, battleBgm: { name: '', sequence: 'library:7' } }) };
+    assert.equal(AudioManager.troopBattleBgm(), null, 'and with no track either, the troop is no answer');
     context.$gameTroop = { troop: () => ({ id: 3 }) };
-    assert.equal(AudioManager.troopBattleBgm(), null, 'a troop naming nothing is no answer');
-    context.$gameTroop = { troop: () => ({ id: 3, battleBgmSequenceId: 7 }) };
-    assert.equal(AudioManager.troopBattleBgm(), null, 'nor is one naming an entry the library lacks');
+    assert.equal(AudioManager.troopBattleBgm(), null, 'nor is a troop naming nothing');
     context.$gameTroop = { troop: () => undefined };
     assert.equal(AudioManager.troopBattleBgm(), null, 'nor is a troop that is not set up');
     context.$gameMap = { mapId: () => 0 };
@@ -819,7 +829,7 @@ test('a battle sequence takes over from the map sequence, survives the second re
     created[0].end();                            // -> Bed
     created[1].end();                            // the map's intro is spent
     const saved = AudioManager.saveBgm();        // BattleManager.saveBgmAndBgs
-    const battle = AudioManager.librarySequenceBattleBgm(1);
+    const battle = AudioManager.battleMusicBgm({ sequence: 'library:1' });
     AudioManager.playBgm(battle);                // Scene_Map's encounter effect
     assert.deepEqual(live(), ['BossIntro']);
     const running = AudioManager._bgmSequence;
