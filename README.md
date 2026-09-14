@@ -4,7 +4,7 @@ RPG Reactor is an open-source, cross-platform RPG game editor and runtime for RP
 
 Use RPG Reactor to create, edit, playtest, and package 2D RPGs with familiar RPG Maker-style maps, events, database records, plugins, and deployment workflows, without depending on the original RPG Maker runtime or editor.
 
-Pre-built download binaries are available at <https://psychronic.itch.io/rpg-reactor>. The latest tagged source release is [0.98.6](https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.98.6).
+Pre-built download binaries are available at <https://psychronic.itch.io/rpg-reactor>. The current development version is 0.98.7 and is not published yet; the latest tagged source release is [0.98.6](https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.98.6).
 
 ## What's new in 0.98.6
 
@@ -163,17 +163,17 @@ for third-party files or user/project content.
 ## Cutting a Source Release
 
 `cut-release.cjs` is the canonical source-release path. Run it from a clean
-`main` worktree after all 0.98.6 changes have been committed:
+`main` worktree after all 0.98.7 changes have been committed:
 
 ```bash
-node editor/build-scripts/cut-release.cjs 0.98.6 --dry-run
-node editor/build-scripts/cut-release.cjs 0.98.6
+node editor/build-scripts/cut-release.cjs 0.98.7 --dry-run
+node editor/build-scripts/cut-release.cjs 0.98.7
 ```
 
 The command runs the complete editor test suite, finalizes both changelog
 headings with the release date, updates `editor/package.json`, the root README
 release link and its recognized validation-count sentence, creates a release
-commit when those surfaces changed, creates an annotated `v0.98.6` tag, and pushes the branch and tag. The tag push starts
+commit when those surfaces changed, creates an annotated `v0.98.7` tag, and pushes the branch and tag. The tag push starts
 `publish-release.yml`, which creates or updates the GitHub source release using
 that version's root changelog section. `--no-push` stops after creating the tag.
 Other version prose, validation dates, the editor README, and the status summary
