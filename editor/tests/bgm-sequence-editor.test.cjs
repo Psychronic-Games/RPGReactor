@@ -210,3 +210,115 @@ test('the form, the script and the strings are wired', () => {
     const i18n = read('src/I18nManager.js');
     assert.equal((i18n.match(/'mapProps\.bgmSequence': /g) || []).length, 18, 'English and the 17 locales');
 });
+
+/** A database manager whose library lives on a System object, recording what it saves. */
+function libraryFor(saves, { saveResult = true } = {}) {
+    const system = { reactorMusicSequences: [null] };
+    return {
+        system,
+        manager: {
+            mutationGeneration: 0,
+            data: { system, get musicSequences() { return system.reactorMusicSequences; } },
+            addEntry(key, record) {
+                const list = this.data[key];
+                record.id = list.length;
+                list.push(record);
+                return record;
+            },
+            async saveJSON(projectPath, filename) { saves.push(filename); return saveResult; },
+            getMusicSequences() { return system.reactorMusicSequences.filter(Boolean); }
+        }
+    };
+}
+
+test('Map Properties names library entries for its music and its battle music, and unticking turns both off', async () => {
+    const map = { id: 3, name: 'Woods', width: 20, height: 15, data: [], events: [], bgmSequenceId: 9, battleBgmSequenceId: 9 };
+    const controller = controllerFor(map, { enabled: true, entries: [] });
+    controller._mapBgmSequenceSource = 2;
+    controller._mapBattleBgmSequenceId = 4;
+    assert.equal(await controller.saveMapProperties(), true, 'an empty sequence of its own is not validated while a library entry plays');
+    assert.equal(controller.written.bgmSequenceId, 2);
+    assert.equal(controller.written.battleBgmSequenceId, 4);
+    assert.equal('bgmSequence' in controller.written, false, 'nor kept beside the library entry');
+
+    const kept = controllerFor(map, { enabled: true, entries: [{ type: 'track', name: 'A', fadeIn: 0, once: false, volume: 80, pitch: 100, pan: 0 }] });
+    kept._mapBgmSequenceSource = 2;
+    assert.equal(await kept.saveMapProperties(), true);
+    assert.equal(kept.written.bgmSequenceId, 2);
+    assert.equal(kept.written.bgmSequence.entries.length, 1, 'a sequence of its own is kept for switching back');
+
+    const off = controllerFor(map, { enabled: false, entries: [] });
+    off._mapBgmSequenceSource = 2;
+    assert.equal(await off.saveMapProperties(), true);
+    assert.equal('bgmSequenceId' in off.written, false, 'the checkbox turns the library entry off too');
+    assert.equal('battleBgmSequenceId' in off.written, false, 'and (None) clears the battle music');
+});
+
+test('Move to library saves System.json before the map, and the map keeps one copy', async () => {
+    const sequence = { enabled: true, entries: [{ type: 'track', name: 'A', fadeIn: 0, once: false, volume: 80, pitch: 100, pan: 0 }] };
+    const map = { id: 3, name: 'Woods', width: 20, height: 15, data: [], events: [], bgmSequence: sequence };
+    const controller = controllerFor(map, sequence);
+    const order = [];
+    const { system, manager } = libraryFor(order);
+    controller.databaseManager = manager;
+    controller.currentProject = { maps: [], path: '/project' };
+    const writeMap = controller.writeMapDataFile;
+    controller.writeMapDataFile = data => { order.push('map'); return writeMap(data); };
+
+    controller.stageSequenceMove();
+    assert.deepEqual(controller._pendingSequenceMove.name, 'Woods', 'named after the map');
+    assert.equal(system.reactorMusicSequences.length, 1, 'staging writes nothing');
+
+    assert.equal(await controller.saveMapProperties(), true);
+    assert.deepEqual(order, ['System.json', 'map']);
+    assert.equal(system.reactorMusicSequences[1].name, 'Woods');
+    assert.deepEqual(plain(system.reactorMusicSequences[1].sequence), sequence);
+    assert.equal(controller.written.bgmSequenceId, 1);
+    assert.equal('bgmSequence' in controller.written, false);
+    assert.equal(controller._pendingSequenceMove, null);
+});
+
+test('a failed library save leaves the map untouched, and Cancel forgets a staged move', async () => {
+    const sequence = { enabled: true, entries: [{ type: 'track', name: 'A', fadeIn: 0, once: false, volume: 80, pitch: 100, pan: 0 }] };
+    const map = { id: 3, name: 'Woods', width: 20, height: 15, data: [], events: [], bgmSequence: sequence };
+    const saves = [];
+    let controller = controllerFor(map, sequence);
+    let library = libraryFor(saves, { saveResult: false });
+    controller.databaseManager = library.manager;
+    controller.currentProject = { maps: [], path: '/project' };
+    controller.stageSequenceMove();
+    assert.equal(await controller.saveMapProperties(), false);
+    assert.equal(controller.written, undefined, 'the map was not written');
+    assert.deepEqual(plain(library.system.reactorMusicSequences), [null], 'the entry was taken back out');
+    assert.deepEqual(controller.alerts, ['The music sequence library could not be saved.']);
+    assert.ok(controller._pendingSequenceMove, 'still staged, so OK can try again');
+
+    controller = controllerFor(map, sequence);
+    library = libraryFor(saves);
+    controller.databaseManager = library.manager;
+    controller.stageSequenceMove();
+    controller.populateMapMusicLibraryForm(map);    // what reopening the dialog does
+    assert.equal(controller._pendingSequenceMove, null);
+    assert.equal(library.system.reactorMusicSequences.length, 1);
+
+    const invalid = controllerFor(map, { enabled: true, entries: [{ type: 'track', name: '' }] });
+    invalid.stageSequenceMove();
+    assert.equal(invalid._pendingSequenceMove, undefined, 'a sequence with a fault is not moved');
+    assert.deepEqual(invalid.alerts, ['Entry 1: choose a track.']);
+});
+
+test('a move staged and then switched off writes nothing to the library', async () => {
+    const entries = [{ type: 'track', name: 'A', fadeIn: 0, once: false, volume: 80, pitch: 100, pan: 0 }];
+    const map = { id: 3, name: 'Woods', width: 20, height: 15, data: [], events: [], bgmSequence: { enabled: true, entries } };
+    const saves = [];
+    const controller = controllerFor(map, { enabled: false, entries });
+    const { system, manager } = libraryFor(saves);
+    controller.databaseManager = manager;
+    controller.currentProject = { maps: [], path: '/project' };
+    controller._pendingSequenceMove = { name: 'Woods', sequence: { enabled: true, entries } };
+    assert.equal(await controller.saveMapProperties(), true);
+    assert.deepEqual(saves, [], 'System.json was not touched');
+    assert.equal(system.reactorMusicSequences.length, 1);
+    assert.deepEqual(plain(controller.written.bgmSequence), { enabled: false, entries }, 'the map keeps its own copy, switched off');
+    assert.equal('bgmSequenceId' in controller.written, false);
+});

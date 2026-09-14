@@ -2191,6 +2191,12 @@ class EventCommandList {
             case 133: {
                 const audio = params[0] || {};
                 description = audio.name || tt('(None)');
+                // Change Battle BGM naming a library sequence reads as that sequence.
+                const sequence = typeof audio.sequence === 'string' ? /^library:(\d+)$/.exec(audio.sequence) : null;
+                if (sequence) {
+                    const entry = this.eventEditor?.databaseManager?.getMusicSequence?.(Number(sequence[1]));
+                    description = `${tt('Music sequence')}: ${entry ? entry.name : tt('(missing)')}`;
+                }
                 break;
             }
             case 134: description = params[0] === 0 ? tt('Disable') : tt('Enable'); break;

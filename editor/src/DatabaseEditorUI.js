@@ -36,6 +36,8 @@ class DatabaseEditorUI {
         this.stateEditor = new DatabaseStateEditor(databaseManager, { getCurrentProject: () => this.currentProject }, this.commonUI, this);
         this.questEditor = typeof DatabaseQuestEditor !== 'undefined'
             ? new DatabaseQuestEditor(databaseManager, { getCurrentProject: () => this.currentProject }, this.commonUI, this) : null;
+        this.musicSequenceEditor = typeof DatabaseMusicSequenceEditor !== 'undefined'
+            ? new DatabaseMusicSequenceEditor(databaseManager, { getCurrentProject: () => this.currentProject }, this) : null;
         this.animationEditor = new DatabaseAnimationEditor(databaseManager, { getCurrentProject: () => this.currentProject }, this.commonUI, this);
         const eventProjectManager = {
             getCurrentProject: () => this.currentProject,
@@ -616,6 +618,10 @@ class DatabaseEditorUI {
             case 'quests':
                 data = this.databaseManager.getQuests();
                 title = this._dbTitle(type, 'Quests');
+                break;
+            case 'musicSequences':
+                data = this.databaseManager.getMusicSequences();
+                title = this._dbTitle(type, 'Music Sequences');
                 break;
             case 'reactor3d': {
                 const { detailEl } = this.prepareDatabaseSection('reactor3d', this._dbTitle('reactor3d', '3D Models'), { showListPanel: false });
@@ -1757,6 +1763,7 @@ class DatabaseEditorUI {
             { name: 'User Interfaces', type: 'userInterfaces' },
             { name: 'Action Sequences', type: 'actionSequences' },
             { name: 'Quests', type: 'quests' },
+            { name: 'Music Sequences', type: 'musicSequences' },
             { name: 'System 1', type: 'system1' },
             { name: 'System 2', type: 'system2' },
             { name: 'Types', type: 'types' },
@@ -1832,6 +1839,8 @@ class DatabaseEditorUI {
             this.actionSequenceEditor.show(detailEl, entry);
         } else if (type === 'quests' && this.questEditor) {
             this.questEditor.showQuestDetail(detailEl, entry);
+        } else if (type === 'musicSequences' && this.musicSequenceEditor) {
+            this.musicSequenceEditor.show(detailEl, entry);
         } else {
             // Generic display for other types
             this.showGenericDetail(detailEl, entry, type);
@@ -2056,6 +2065,8 @@ class DatabaseEditorUI {
             // Reactor quests: reactor_quests.js reads this shape as it is.
             actionSequences: typeof ReactorBattleData !== 'undefined' ? ReactorBattleData.template() : {version:1,name:'New Sequence',steps:[]},
             quests: { name: 'New Quest', key: '', category: '', iconIndex: 0, difficulty: '', from: '', location: '', description: '', objectives: [], rewards: [], subtext: '', quotes: '', activation: { type: 'command', switchId: 0, variableId: 0, operator: '>=', value: 0 }, completion: { type: 'command', switchId: 0 }, note: '' },
+            // Stored on System.json; reactor_managers.js reads this shape as it is.
+            musicSequences: { name: 'New Sequence', sequence: { enabled: true, entries: [] } },
         };
     }
 
@@ -2066,7 +2077,7 @@ class DatabaseEditorUI {
             actors: 9999, classes: 9999, skills: 9999, items: 9999,
             weapons: 9999, armors: 9999, enemies: 9999, troops: 9999,
             states: 9999, animations: 5000, tilesets: 1000, commonEvents: 9999,
-            userInterfaces: 9999, quests: 9999, actionSequences: 9999, elements: 512, skillTypes: 128, weaponTypes: 256,
+            userInterfaces: 9999, quests: 9999, musicSequences: 9999, actionSequences: 9999, elements: 512, skillTypes: 128, weaponTypes: 256,
             armorTypes: 256, equipTypes: 128
         }[type] || 0;
     }

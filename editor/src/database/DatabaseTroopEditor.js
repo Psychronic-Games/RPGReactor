@@ -132,6 +132,7 @@ class DatabaseTroopEditor {
         if (this.parentEditor.battlePresentationEditor) bar.appendChild(this.parentEditor.battlePresentationEditor.roomPanel(this));
         bar.appendChild(this.createMembersSection());
         bar.appendChild(this.createBattlebackSection());
+        bar.appendChild(this.createBattleMusicSection());
 
         // Note
         const noteSection = document.createElement('div');
@@ -146,6 +147,27 @@ class DatabaseTroopEditor {
         `;
         bar.appendChild(noteSection);
         return bar;
+    }
+
+    /** Battle music: an entry of Database > Music Sequences, played instead of any other battle music. */
+    createBattleMusicSection() {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        const entries = typeof this.databaseManager.getMusicSequences === 'function'
+            ? this.databaseManager.getMusicSequences() : [];
+        const options = typeof RRBgmSequenceEditor !== 'undefined'
+            ? RRBgmSequenceEditor.libraryOptions(entries, this.currentTroop.battleBgmSequenceId, tt('(None)'), tt('(missing)'))
+            : '';
+        const section = document.createElement('div');
+        section.className = 'database-section';
+        section.style.cssText = 'width:100%;min-width:0;';
+        section.innerHTML = `
+            <div class="database-section-header">${this.escapeHTML(tt('Battle Music'))}</div>
+            <div class="database-section-content">
+                <select class="database-field-value" id="troop-battle-music-select" style="width: 100%; box-sizing: border-box;">${options}</select>
+                <div style="font-size: 11px; color: var(--color-text-muted); line-height: 1.5; margin-top: 4px;">${this.escapeHTML(tt('Plays instead of any other battle music.'))}</div>
+            </div>
+        `;
+        return section;
     }
 
     // ==========================================
@@ -2544,6 +2566,16 @@ class DatabaseTroopEditor {
             noteInput.addEventListener('input', (e) => {
                 if (!isCurrent()) return;
                 troop.note = e.target.value;
+                this.persistTroop();
+            });
+        }
+        const musicSelect = container.querySelector('#troop-battle-music-select');
+        if (musicSelect) {
+            musicSelect.addEventListener('change', (e) => {
+                if (!isCurrent()) return;
+                const id = Number(e.target.value) || 0;
+                if (id > 0) troop.battleBgmSequenceId = id;
+                else delete troop.battleBgmSequenceId;
                 this.persistTroop();
             });
         }

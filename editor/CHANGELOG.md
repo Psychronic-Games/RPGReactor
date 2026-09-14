@@ -1,5 +1,13 @@
 # Changelog
 
+## [Unreleased]
+
+- **Music sequences have a library, and battles can play one.** A sequence -- intro entries, shuffled palettes, crossfades -- could only be authored on one map, and battle music was always a single looping track. **Database › Music Sequences** now holds named sequences, edited with the same list Map Properties uses, and four places can name one: a map's music, a map's **Battle music**, a troop's **Battle Music**, and **Change Battle BGM**, which gains a *Music sequence* picker above its track. Each is optional, and a battle asks them in this order: the troop, then Change Battle BGM, then the map, then the System track. That order lives in `Game_System.battleBgm`, so everything that reads the battle BGM agrees on it.
+
+  The library is stored on `System.json` as `reactorMusicSequences`, so the runtime and a battle test already have it with `$dataSystem`; a project that never adds an entry saves exactly as before. A BGM object names an entry with `sequence: "library:<id>"` where a map's own sequence uses the map id, so save files, Save/Replay BGM, vehicles and the return from a battle carry it without new plumbing. Two maps naming the same entry share that key, so walking between them leaves the music playing instead of restarting it -- including a sequence that is one plain track, which is now left running the way any current BGM is. A saved key whose entry has since been deleted plays the track it stood in for rather than waiting for a map.
+
+  A sequence already stored on a map keeps working untouched. Map Properties gains a **Sequence** picker (stored on this map, or a library entry) and **Move to library**, which turns a map's own sequence into a library entry: nothing is written until OK, which saves `System.json` first and the map second, so a failed library save leaves the map holding its copy. Referenced by lists the troops and Change Battle BGM commands that name an entry; maps are not scanned, for the same reason map events are not. New strings are translated across all 17 non-English locales -- a machine-assisted first pass, worth a native review.
+
 ## [0.98.6] - 2026-09-14
 
 See the [September 11 closeout](../docs/SESSION-2026-09-11.md) for the complete scope and final 3,082-test verification.

@@ -2002,6 +2002,7 @@ class ProjectController {
             this.renderMapAudioChoice(type);
         }
         this.populateBgmSequenceForm(mapData);
+        this.populateMapMusicLibraryForm(mapData);
 
         // Battleback Settings
         const battlebackCheckbox = document.getElementById('map-specify-battleback-checkbox');
@@ -2138,7 +2139,9 @@ class ProjectController {
                 container,
                 tt: text => this._tt(text),
                 t: (key, params) => this._t(key, params),
-                pickTrack: options => this.pickSequenceTrack(options)
+                pickTrack: options => this.pickSequenceTrack(options),
+                // Move to library is offered only while there is something to move.
+                onEdit: () => this.renderMapSequenceSource()
             });
         }
         this._bgmSequenceEditor.load(mapData.bgmSequence);
@@ -2151,6 +2154,113 @@ class ProjectController {
         if (this._bgmSequenceEditor) return this._bgmSequenceEditor.value();
         if (typeof RRBgmSequenceEditor !== 'undefined') return RRBgmSequenceEditor.normalize(this._mapBgmSequence);
         return this._mapBgmSequence || null;
+    }
+
+    /** Database > Music Sequences entries, for the pickers; empty before a project opens. */
+    musicSequenceLibrary() {
+        const manager = this.databaseManager;
+        return manager && typeof manager.getMusicSequences === 'function' ? manager.getMusicSequences() : [];
+    }
+
+    /**
+     * The map's library choices: which entry plays as its music (0 is the
+     * sequence stored on the map) and which as its battle music. A Move to
+     * library waiting for OK lives only here, so Cancel leaves nothing behind.
+     */
+    populateMapMusicLibraryForm(mapData) {
+        this._pendingSequenceMove = null;
+        this._mapBgmSequenceSource = Number(mapData.bgmSequenceId) || 0;
+        this._mapBattleBgmSequenceId = Number(mapData.battleBgmSequenceId) || 0;
+        if (this._mapBgmSequenceSource > 0) {
+            // A library sequence is on whether or not the map keeps one of its own.
+            const checkbox = document.getElementById('map-bgm-sequence-checkbox');
+            if (checkbox) checkbox.checked = true;
+            if (this._bgmSequenceEditor) this._bgmSequenceEditor.setEnabled(true);
+            const pane = document.getElementById('map-bgm-sequence');
+            if (pane) pane.style.display = 'block';
+        }
+        this.renderMapSequenceSource();
+        const battle = document.getElementById('map-battle-bgm-sequence-select');
+        if (battle && typeof RRBgmSequenceEditor !== 'undefined') {
+            battle.innerHTML = RRBgmSequenceEditor.libraryOptions(this.musicSequenceLibrary(),
+                this._mapBattleBgmSequenceId, this._tt('(None)'), this._tt('(missing)'));
+        }
+    }
+
+    /** Fill the Sequence picker, and show what goes with the current choice. */
+    renderMapSequenceSource() {
+        const select = document.getElementById('map-bgm-sequence-source');
+        if (!select || typeof RRBgmSequenceEditor === 'undefined') return;
+        const escape = text => typeof rrEscapeHtml === 'function' ? rrEscapeHtml(text) : String(text);
+        let html = RRBgmSequenceEditor.libraryOptions(this.musicSequenceLibrary(), this._mapBgmSequenceSource,
+            this._tt('Stored on this map'), this._tt('(missing)'));
+        if (this._pendingSequenceMove) {
+            const label = this._tt('(new) {name}').split('{name}').join(this._pendingSequenceMove.name);
+            html += `<option value="new">${escape(label)}</option>`;
+        }
+        select.innerHTML = html;
+        select.value = this._pendingSequenceMove ? 'new' : String(this._mapBgmSequenceSource || 0);
+        const fromLibrary = select.value !== '0';
+        const show = (id, visible) => {
+            const element = document.getElementById(id);
+            if (element) element.style.display = visible ? '' : 'none';
+        };
+        const staged = select.value === 'new';
+        show('map-bgm-sequence-editor', !fromLibrary);
+        show('map-bgm-sequence-library-hint', fromLibrary && !staged);
+        const inline = this.mapBgmSequenceFromForm();
+        const canMove = !fromLibrary && !!(inline && inline.entries && inline.entries.length);
+        show('map-bgm-sequence-move-btn', canMove);
+        // While a move waits for OK, its hint is the one that says nothing is saved yet.
+        show('map-bgm-sequence-move-hint', canMove || staged);
+    }
+
+    /** Move to library, first half: only the form changes until OK. */
+    stageSequenceMove() {
+        const sequence = this.mapBgmSequenceFromForm();
+        if (!sequence || !sequence.entries || !sequence.entries.length) return;
+        const moved = Object.assign({}, sequence, { enabled: true });
+        const error = RRBgmSequenceEditor.validate(moved, text => this._tt(text));
+        if (error) {
+            alert(error);
+            return;
+        }
+        // Map files carry no name of their own; the map list does.
+        const mapId = this.currentEditingMap?.id;
+        const name = document.getElementById('map-name-input')?.value
+            || this.currentEditingMap?.name
+            || this.currentProject?.maps?.[mapId]?.name
+            || (mapId ? `Map ${String(mapId).padStart(3, '0')}` : '');
+        this._pendingSequenceMove = { name, sequence: moved };
+        this.renderMapSequenceSource();
+    }
+
+    /**
+     * Move to library, the OK half: add the entry and save System.json before
+     * the map is written, so a failure leaves the map with its own copy and
+     * nothing lost. Returns the new id, or 0 when the library was not saved.
+     */
+    async commitSequenceMove() {
+        const pending = this._pendingSequenceMove;
+        const manager = this.databaseManager;
+        const fail = () => {
+            alert(this._tt('The music sequence library could not be saved.'));
+            return 0;
+        };
+        if (!pending || !manager || typeof manager.addEntry !== 'function' || !manager.data?.system) return fail();
+        const entry = manager.addEntry('musicSequences', { name: pending.name, sequence: pending.sequence });
+        if (!entry) return fail();
+        const saved = !!this.currentProject?.path
+            && await manager.saveJSON(this.currentProject.path, 'System.json', manager.data.system);
+        if (!saved) {
+            const list = manager.data.musicSequences;
+            if (Array.isArray(list) && list[list.length - 1] === entry) list.pop();
+            manager.mutationGeneration = (manager.mutationGeneration || 0) + 1;
+            return fail();
+        }
+        this._pendingSequenceMove = null;
+        this._mapBgmSequenceSource = entry.id;
+        return entry.id;
     }
 
     /** A track for a sequence row or a palette pool, through the shared audio picker. */
@@ -2672,6 +2782,19 @@ class ProjectController {
             if (this._bgmSequenceEditor) this._bgmSequenceEditor.setEnabled(e.target.checked);
             const pane = document.getElementById('map-bgm-sequence');
             if (pane) pane.style.display = e.target.checked ? 'block' : 'none';
+            // Switching the sequence off abandons a move waiting for OK.
+            if (!e.target.checked) this._pendingSequenceMove = null;
+            this.renderMapSequenceSource();
+        });
+        this._bindMapPropertiesListener('map-bgm-sequence-source', 'change', (e) => {
+            if (e.target.value === 'new') return;
+            this._pendingSequenceMove = null;
+            this._mapBgmSequenceSource = Number(e.target.value) || 0;
+            this.renderMapSequenceSource();
+        });
+        this._bindMapPropertiesListener('map-bgm-sequence-move-btn', 'click', () => this.stageSequenceMove());
+        this._bindMapPropertiesListener('map-battle-bgm-sequence-select', 'change', (e) => {
+            this._mapBattleBgmSequenceId = Number(e.target.value) || 0;
         });
         this._bindMapPropertiesListener('map-bgm-track', 'click', () => this.openMapAudioPicker('bgm'));
         this._bindMapPropertiesListener('map-bgs-choose-btn', 'click', () => this.openMapAudioPicker('bgs'));
@@ -2908,13 +3031,23 @@ class ProjectController {
         const room = this.readMap3DForm();
         const audio = this._mapAudio || {};
         const bgmSequence = this.mapBgmSequenceFromForm();
-        if (typeof RRBgmSequenceEditor !== 'undefined') {
+        // 0 is the sequence stored on this map, a number a library entry, and
+        // 'new' a Move to library waiting for this OK.
+        // A staged move only counts while the sequence is switched on at all.
+        const moving = !!this._pendingSequenceMove && !!(bgmSequence && bgmSequence.enabled);
+        const sequenceSource = moving ? 'new' : (Number(this._mapBgmSequenceSource) || 0);
+        if (typeof RRBgmSequenceEditor !== 'undefined' && sequenceSource === 0) {
             const sequenceError = RRBgmSequenceEditor.validate(bgmSequence, text => this._tt(text));
             if (sequenceError) {
                 alert(sequenceError);
                 document.getElementById('map-bgm-sequence-checkbox')?.focus();
                 return false;
             }
+        }
+        let movedId = 0;
+        if (sequenceSource === 'new') {
+            movedId = await this.commitSequenceMove();
+            if (!movedId) return false;
         }
 
         // Collect data from form. Every field the map already has is carried
@@ -2962,11 +3095,22 @@ class ProjectController {
             events: this.currentEditingMap.events || []
         };
 
-        if (typeof RRBgmSequenceEditor !== 'undefined' && RRBgmSequenceEditor.isBlank(bgmSequence)) {
+        const libraryId = movedId || (typeof sequenceSource === 'number' ? sequenceSource : 0);
+        const sequenceOn = !!(bgmSequence && bgmSequence.enabled);
+        if (movedId) {
+            // The library holds it now; a second copy is what the move removes.
+            delete mapData.bgmSequence;
+        } else if (typeof RRBgmSequenceEditor !== 'undefined' && (RRBgmSequenceEditor.isBlank(bgmSequence)
+            || (libraryId > 0 && !(bgmSequence && bgmSequence.entries && bgmSequence.entries.length)))) {
             delete mapData.bgmSequence;
         } else if (bgmSequence) {
             mapData.bgmSequence = bgmSequence;
         }
+        if (libraryId > 0 && sequenceOn) mapData.bgmSequenceId = libraryId;
+        else delete mapData.bgmSequenceId;
+        const battleSequenceId = Number(this._mapBattleBgmSequenceId) || 0;
+        if (battleSequenceId > 0) mapData.battleBgmSequenceId = battleSequenceId;
+        else delete mapData.battleBgmSequenceId;
 
         if (wants3D) {
             if (elevation) elevation.addNote(mapData);

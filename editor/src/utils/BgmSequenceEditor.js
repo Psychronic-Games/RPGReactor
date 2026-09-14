@@ -1,8 +1,10 @@
 /**
- * RRBgmSequenceEditor - the Map Properties list for a map's BGM sequence.
+ * RRBgmSequenceEditor - the list that edits one BGM sequence.
  *
- * A sequence is `{ enabled, entries }` and lives in Map###.json as
- * `bgmSequence`. Entries play in order and repeat:
+ * A sequence is `{ enabled, entries }`. It lives in Map###.json as
+ * `bgmSequence` (Map Properties), or in System.json's music sequence library
+ * (Database > Music Sequences); both surfaces render this same list.
+ * Entries play in order and repeat:
  *   { type: 'track', name, volume, pitch, pan, fadeIn }   (any entry may set `once`)
  *   { type: 'silence', duration }
  *   { type: 'palette', duration, fadeIn, fadeOut, single, layers: [{ volume, pitch, pan, order, pool }] }
@@ -131,12 +133,15 @@ class RRBgmSequenceEditor {
      * @param {function} options.t - Keyed translator, for the shared levels line.
      * @param {function} options.pickTrack - ({ selected, levels, previewLevels }) => Promise
      *   resolving to the picker's { name, volume, pitch, pan }, or null on cancel.
+     * @param {function} [options.onEdit] - Receives value() after every edit, for
+     *   a host with no OK button of its own to write the sequence back.
      */
     constructor(options) {
         this.container = options.container;
         this.tt = options.tt || (text => text);
         this.t = options.t || ((key) => key);
         this.pickTrack = options.pickTrack || (() => Promise.resolve(null));
+        this.onEdit = options.onEdit || null;
         this.sequence = RRBgmSequenceEditor.normalize(null);
         this.container.addEventListener('click', event => this.onClick(event));
         this.container.addEventListener('change', event => this.onChange(event));
@@ -154,6 +159,31 @@ class RRBgmSequenceEditor {
 
     setEnabled(enabled) {
         this.sequence.enabled = !!enabled;
+    }
+
+    edited() {
+        if (this.onEdit) this.onEdit(this.value());
+    }
+
+    /**
+     * `<option>` markup for a picker of library entries: `noneLabel` as 0, then
+     * each entry as `0001: Name`. An id the library no longer holds stays listed
+     * as missing, so opening a form never quietly changes what it names.
+     */
+    static libraryOptions(entries, selectedId, noneLabel, missingLabel) {
+        const escape = text => typeof rrEscapeHtml === 'function' ? rrEscapeHtml(text) : String(text == null ? '' : text);
+        const selected = Number(selectedId) || 0;
+        const label = (id, name) => `${String(id).padStart(4, '0')}: ${name}`;
+        const option = (value, text) => `<option value="${value}"${value === selected ? ' selected' : ''}>${escape(text)}</option>`;
+        let html = option(0, noneLabel);
+        let found = selected === 0;
+        for (const entry of entries || []) {
+            if (!entry || !(entry.id > 0)) continue;
+            if (entry.id === selected) found = true;
+            html += option(entry.id, label(entry.id, entry.name || ''));
+        }
+        if (!found) html += option(selected, label(selected, missingLabel));
+        return html;
     }
 
     escape(text) {
@@ -341,6 +371,7 @@ class RRBgmSequenceEditor {
                 return;
         }
         this.render();
+        this.edited();
     }
 
     onChange(event) {
@@ -359,8 +390,9 @@ class RRBgmSequenceEditor {
         else if (key === 'pitch') node[key] = RRBgmSequenceEditor.number(input.value, 100, 50, 150);
         else if (key === 'pan') node[key] = RRBgmSequenceEditor.number(input.value, 0, -100, 100);
         else if (key === 'order') node[key] = input.value === 'sequential' || input.value === 'shuffle' ? input.value : 'random';
-        else if (key === 'once' || key === 'single') { node[key] = !!input.checked; return; }
+        else if (key === 'once' || key === 'single') { node[key] = !!input.checked; this.edited(); return; }
         input.value = node[key];
+        this.edited();
     }
 
     /** A track row carries its own levels; a pool entry previews with its layer's. */
@@ -379,6 +411,7 @@ class RRBgmSequenceEditor {
         node.name = result.name;
         if (!isPoolEntry) Object.assign(node, RRBgmSequenceEditor.levels(result));
         this.render();
+        this.edited();
     }
 }
 

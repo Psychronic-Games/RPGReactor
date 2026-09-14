@@ -92,6 +92,7 @@
                     <div class="html-menu-option" data-db="userInterfaces" data-i18n="menu.userInterfaces" style="padding: 8px 16px; cursor: pointer;">User Interfaces</div>
                     <div class="html-menu-option" data-db="actionSequences" data-i18n="menu.actionSequences" style="padding:8px 16px;cursor:pointer;">Action Sequences</div>
                     <div class="html-menu-option" data-db="quests" data-i18n="menu.quests" style="padding: 8px 16px; cursor: pointer;">Quests</div>
+                    <div class="html-menu-option" data-db="musicSequences" data-i18n="menu.musicSequences" style="padding: 8px 16px; cursor: pointer;">Music Sequences</div>
                     <div style="height: 1px; background: var(--color-border); margin: 4px 0;"></div>
                     <div class="html-menu-option" data-db="system1" data-i18n="db.system1" style="padding: 8px 16px; cursor: pointer;">System 1</div>
                     <div class="html-menu-option" data-db="system2" data-i18n="db.system2" style="padding: 8px 16px; cursor: pointer;">System 2</div>
@@ -448,6 +449,15 @@
                                     </label>
                                     <div id="map-bgm-sequence" style="display: none; margin-top: 4px;">
                                         <div style="font-size: 11px; color: var(--color-text-muted); line-height: 1.5;" data-i18n="mapProps.bgmSequenceHint">The track above is the fallback for vehicles and plugins.</div>
+                                        <!-- Where the sequence lives: on this map, or an entry of the
+                                             Music Sequences library that several maps can share. -->
+                                        <div style="display: flex; gap: 6px; align-items: center; margin-top: 6px;">
+                                            <label for="map-bgm-sequence-source" style="flex: 0 0 auto; font-size: 12px;" data-i18n="mapProps.sequenceSource">Sequence</label>
+                                            <select id="map-bgm-sequence-source" style="flex: 1; min-width: 0; padding: 4px 6px; background-color: var(--color-bg-input); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; font-size: 12px;"></select>
+                                            <button type="button" id="map-bgm-sequence-move-btn" class="map-props-btn" style="flex: 0 0 auto; padding: 4px 10px; font-size: 12px;" data-i18n="mapProps.moveToLibrary">Move to library</button>
+                                        </div>
+                                        <div id="map-bgm-sequence-move-hint" style="font-size: 11px; color: var(--color-text-muted); line-height: 1.5; margin-top: 4px;" data-i18n="mapProps.moveToLibraryHint">Adds this sequence to Database › Music Sequences, so other maps, troops and events can use it. Nothing is saved until you press OK.</div>
+                                        <div id="map-bgm-sequence-library-hint" style="display: none; font-size: 11px; color: var(--color-text-muted); line-height: 1.5; margin-top: 4px;" data-i18n="mapProps.libraryHint">This sequence is edited in Database › Music Sequences.</div>
                                         <div id="map-bgm-sequence-editor"></div>
                                     </div>
                                 </div>
@@ -522,6 +532,13 @@
                                         <button class="map-props-btn primary" style="flex: 0 0 auto; padding: 5px 12px; font-size: 12px;" id="map-battleback2-browse-btn" type="button" data-i18n="mapProps.browse">Browse…</button>
                                     </div>
                                 </div>
+                            </div>
+
+                            <!-- Battle music: an entry of Database > Music Sequences. -->
+                            <div style="margin-bottom: 8px;">
+                                <label class="map-props-label" for="map-battle-bgm-sequence-select" style="display: block; margin-bottom: 2px;" data-i18n="mapProps.battleMusic">Battle music</label>
+                                <select id="map-battle-bgm-sequence-select" style="width: 100%; padding: 4px 6px; background-color: var(--color-bg-input); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; font-size: 12px;"></select>
+                                <div style="font-size: 11px; color: var(--color-text-muted); line-height: 1.5; margin-top: 4px;" data-i18n="mapProps.battleMusicHint">A sequence from Database › Music Sequences for battles on this map. A troop’s own battle music, or one set by Change Battle BGM, plays instead.</div>
                             </div>
                         </div>
 
@@ -1205,6 +1222,7 @@
     <script src="src/database/ActionRepeats.js"></script>
     <script src="src/database/QuestImporter.js"></script>
     <script src="src/database/DatabaseQuestEditor.js"></script>
+    <script src="src/database/DatabaseMusicSequenceEditor.js"></script>
     <script src="src/database/TraitHelp.js"></script>
     <script src="src/database/DatabaseItemBaseEditor.js"></script>
     <script src="src/database/DatabaseRowClipboard.js"></script>
