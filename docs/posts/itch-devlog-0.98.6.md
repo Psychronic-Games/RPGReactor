@@ -44,7 +44,7 @@ Fleagus swings a 3D short sword through six authored attacks. Carol shoulders a 
 - Browser builds now find a file whose name is spelled with different capitals, the way desktop builds already did.
 - Fixes for loading a second map, blinking shadows, mouse and touch in menus under Pixi 8, and many database, theme and event editing details.
 
-The source passes **3,177 automated tests**, with native editor and game checks driven by real pointer input over the sequence editor, the rig editor and the Demo battle. Full-game and plugin-combination testing remains ongoing.
+The source passes **3,181 automated tests**, with native editor and game checks driven by real pointer input over the sequence editor, the rig editor and the Demo battle. Full-game and plugin-combination testing remains ongoing.
 
 Thank you to everyone contributing code and reporting issues with examples and screenshots.
 

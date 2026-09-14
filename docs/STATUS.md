@@ -7,7 +7,7 @@
 - **Demo battle** authored in `scratchpad/demo-seqs.cjs` / `demo-apply.cjs`: sword skills for Fleagus, Railgun Rifle and gun skills for Carol, Graviton Pistol for Jolt, Frag Grenade and Med-Kit, Tank cannon aim/fire and ram, Reactor Beam; eight Star Shift Freelancers effects with sounds; start messages off (`startMessages:false`, System › Options).
 - **Rig hands.** Humanoid template: palm plus base and tip for five fingers per hand; `attachRigHands` gives every hand joint its palm, knuckle and fingertip points. Rig mode holds the rest pose; the DB 3D viewport zooms toward the pointer, pans, snaps dragged markers into the flesh through a triangle BVH (`MeshSurfacePicker`), draws outside markers faint, keeps labels sized and unstacked. Carol's rig has placed hand markers.
 - **Editor.** Add Step picker (grouped, searchable, strip headers); 3D model folders as strip headers; map toolbar toggles one size.
-- Docs: [release notes](posts/release-notes-0.98.6.md), [itch devlog](posts/itch-devlog-0.98.6.md), [rigging guide](RIGGING-MODELS.md). Verification: **3,177 Node tests pass**; live NW.js checks of the Demo battle, held items, rig zoom/snap/labels. Not pushed.
+- Docs: [release notes](posts/release-notes-0.98.6.md), [itch devlog](posts/itch-devlog-0.98.6.md), [rigging guide](RIGGING-MODELS.md). Verification: **3,181 Node tests pass**; live NW.js checks of the Demo battle, held items, rig zoom/snap/labels. Not pushed.
 
 ## 2026-09-13 — Victor Battle Motions import; Star Shift Rebellion on native sequences
 

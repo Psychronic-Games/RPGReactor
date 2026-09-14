@@ -46,6 +46,6 @@
 
 - Fleagus swings the 3D short sword (Sword Slash, Heavy Cleave, Double Slash, Cross Slash, Spin Crash, Willpower). Carol carries the Railgun Rifle with Overcharge Shot and Suppressing Fire. Jolt keeps the Graviton Pistol. Frag Grenade and Med-Kit are thrown. The Tank aims its turret and fires or rams; Psychronic fires a Reactor Beam. Eight Effekseer effects from Star Shift Freelancers with their sounds. HUD along the bottom with a centred timeline.
 
-Validation at release preparation: **3,177 automated tests pass**, plus native NW.js editor and game checks driven by real pointer input over the sequence editor, the rig editor and the Demo battle. See [BATTLE-PRESENTATION.md](https://github.com/Psychronic-Games/RPGReactor/blob/v0.98.6/docs/BATTLE-PRESENTATION.md) and [RIGGING-MODELS.md](https://github.com/Psychronic-Games/RPGReactor/blob/v0.98.6/docs/RIGGING-MODELS.md) for authoring and limits.
+Validation at release preparation: **3,181 automated tests pass**, plus native NW.js editor and game checks driven by real pointer input over the sequence editor, the rig editor and the Demo battle. See [BATTLE-PRESENTATION.md](https://github.com/Psychronic-Games/RPGReactor/blob/v0.98.6/docs/BATTLE-PRESENTATION.md) and [RIGGING-MODELS.md](https://github.com/Psychronic-Games/RPGReactor/blob/v0.98.6/docs/RIGGING-MODELS.md) for authoring and limits.
 
 Thanks to the community contributors for PRs #52, #57, #58 and #59 and to everyone reporting reproducible issues.
