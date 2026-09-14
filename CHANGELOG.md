@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased - 0.98.6]
+## [0.98.6] - 2026-09-14
 
 Development cycle in progress. Session detail lives in the [handoff](docs/HANDOFF.md) and the dated notes under `docs/`.
 

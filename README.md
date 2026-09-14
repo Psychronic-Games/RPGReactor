@@ -4,7 +4,7 @@ RPG Reactor is an open-source, cross-platform RPG game editor and runtime for RP
 
 Use RPG Reactor to create, edit, playtest, and package 2D RPGs with familiar RPG Maker-style maps, events, database records, plugins, and deployment workflows, without depending on the original RPG Maker runtime or editor.
 
-Pre-built download binaries are available at <https://psychronic.itch.io/rpg-reactor>. The current development version is 0.98.6 and is not published yet; the latest tagged source release is [0.98.5](https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.98.5).
+Pre-built download binaries are available at <https://psychronic.itch.io/rpg-reactor>. The latest tagged source release is [0.98.6](https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.98.6).
 
 ## What's new in 0.98.6
 
@@ -139,7 +139,7 @@ cd editor
 npm test
 ```
 
-GitHub Actions runs syntax checks, the full Node suite, dependency audit, patch hygiene, and clean-checkout checks. The suite covers editor data round trips, runtime compatibility, rendering contracts, save safety, localization, generators, deployment, and release infrastructure. On 2026-09-04, local working-tree validation completed with **2932 passing tests**, zero failures or skips. This was not a clean release run. Separate CI GUI smokes cover Web persistence and NW.js saves; the UI-layout smoke is an additional local gate. See [current status](docs/STATUS.md) for verification limits and [the release checklist](docs/RELEASE-CHECKLIST.md) for checks still required on release hardware.
+GitHub Actions runs syntax checks, the full Node suite, dependency audit, patch hygiene, and clean-checkout checks. The suite covers editor data round trips, runtime compatibility, rendering contracts, save safety, localization, generators, deployment, and release infrastructure. On 2026-09-04, local working-tree validation completed with **3181 passing tests**, zero failures or skips. This was not a clean release run. Separate CI GUI smokes cover Web persistence and NW.js saves; the UI-layout smoke is an additional local gate. See [current status](docs/STATUS.md) for verification limits and [the release checklist](docs/RELEASE-CHECKLIST.md) for checks still required on release hardware.
 
 ## Trusted Projects
 

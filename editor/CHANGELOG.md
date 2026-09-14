@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased - 0.98.6]
+## [0.98.6] - 2026-09-14
 
 See the [September 11 closeout](../docs/SESSION-2026-09-11.md) for the complete scope and final 3,082-test verification.
 
