@@ -13,10 +13,60 @@
  * The model functions are static so a save can normalize and validate what
  * the form holds without the DOM; the instance renders one container and
  * edits its copy in place. Tracks are chosen through `pickTrack`, which
- * the caller wires to the shared audio picker.
+ * the caller wires to the shared audio picker. Starters… replaces the list
+ * with a ready shape whose track slots come from `listTracks`, the project's
+ * BGM folder, so a sequence can be heard before it is authored.
  */
 class RRBgmSequenceEditor {
     static TRACK_DEFAULTS = { volume: 100, pitch: 100, pan: 0 };
+
+    /** The ready shapes Starters… offers, in the order it lists them. */
+    static STARTERS = [
+        { id: 'intro-loop', label: 'Intro, then a loop', hint: 'An opening track plays once, then a second track repeats, crossfading in.' },
+        { id: 'playlist', label: 'Shuffled playlist', hint: 'Four tracks in shuffled order, each playing in full and crossfading into the next.' },
+        { id: 'battle', label: 'Battle: opening, then a random bed', hint: 'An opening track plays once, then tracks drawn at random carry the fight.' },
+        { id: 'one-then-pause', label: 'One track, then a pause', hint: 'Each pass plays one track drawn at random, then 15 seconds of quiet.' },
+        { id: 'layered', label: 'Layered ambience', hint: 'Two layers sound together: a bed, and a quieter layer that comes and goes.' }
+    ];
+
+    /**
+     * A starter's entries in the stored shape, its track slots filled from
+     * `tracks` in turn (repeating when there are fewer) or left to be chosen
+     * when there are none. Null for an id that names no starter.
+     */
+    static starter(id, tracks) {
+        const names = (Array.isArray(tracks) ? tracks : []).filter(name => typeof name === 'string' && name);
+        let next = 0;
+        const name = () => (names.length ? names[next++ % names.length] : '');
+        const track = extra => Object.assign({ type: 'track', name: name(), fadeIn: 0, once: false }, extra);
+        const pool = count => Array.from({ length: count }, () => ({ type: 'track', name: name() }));
+        const layer = (extra, items) => Object.assign({ order: 'random' }, extra, { pool: items });
+        let entries;
+        switch (id) {
+            case 'intro-loop':
+                entries = [track({ once: true }), track({ fadeIn: 2 })];
+                break;
+            case 'playlist':
+                entries = [{ type: 'palette', duration: 0, fadeIn: 0, fadeOut: 4, layers: [layer({ order: 'shuffle' }, pool(4))] }];
+                break;
+            case 'battle':
+                entries = [track({ once: true }), { type: 'palette', duration: 0, fadeIn: 1, fadeOut: 3, layers: [layer({}, pool(3))] }];
+                break;
+            case 'one-then-pause':
+                entries = [{ type: 'palette', single: true, duration: 0, fadeIn: 2, fadeOut: 4, layers: [layer({}, pool(3))] },
+                    { type: 'silence', duration: 15 }];
+                break;
+            case 'layered': {
+                const bed = pool(2);
+                const accents = [...pool(1), { type: 'silence', duration: 20 }, ...pool(1)];
+                entries = [{ type: 'palette', duration: 0, fadeIn: 3, fadeOut: 4, layers: [layer({}, bed), layer({ volume: 60 }, accents)] }];
+                break;
+            }
+            default:
+                return null;
+        }
+        return RRBgmSequenceEditor.normalize({ enabled: true, entries }).entries;
+    }
 
     static number(value, fallback, min, max) {
         // Number(null) is 0, so a missing value must be caught before it is
@@ -135,6 +185,10 @@ class RRBgmSequenceEditor {
      *   resolving to the picker's { name, volume, pitch, pan }, or null on cancel.
      * @param {function} [options.onEdit] - Receives value() after every edit, for
      *   a host with no OK button of its own to write the sequence back.
+     * @param {function} [options.listTracks] - () => the project's BGM track
+     *   names, which a starter's track slots are filled from.
+     * @param {function} [options.confirm] - (message) => boolean, asked before a
+     *   starter replaces entries; the browser's confirm by default.
      */
     constructor(options) {
         this.container = options.container;
@@ -142,6 +196,8 @@ class RRBgmSequenceEditor {
         this.t = options.t || ((key) => key);
         this.pickTrack = options.pickTrack || (() => Promise.resolve(null));
         this.onEdit = options.onEdit || null;
+        this.listTracks = options.listTracks || (() => []);
+        this.confirm = options.confirm || (message => (typeof confirm === 'function' ? confirm(message) : true));
         this.sequence = RRBgmSequenceEditor.normalize(null);
         this.container.addEventListener('click', event => this.onClick(event));
         this.container.addEventListener('change', event => this.onChange(event));
@@ -208,6 +264,30 @@ class RRBgmSequenceEditor {
         return `<select data-path="${path}" style="padding: 2px 4px; font-size: 12px; background: var(--color-bg-input); color: var(--color-text); border: 1px solid var(--color-border-input); border-radius: 3px;">`
             + option('random', this.tt('Random')) + option('shuffle', this.tt('Shuffle'))
             + option('sequential', this.tt('In order')) + `</select>`;
+    }
+
+    /** Starters…: a themed dropdown of ready shapes, each option saying what it does. */
+    starterSelect() {
+        const options = RRBgmSequenceEditor.STARTERS.map(starter =>
+            `<option value="${starter.id}" title="${this.escape(this.tt(starter.hint))}">${this.escape(this.tt(starter.label))}</option>`).join('');
+        return `<select class="bgm-seq-starters" style="padding: 2px 4px; font-size: 11px; background: var(--color-bg-input); color: var(--color-text); border: 1px solid var(--color-border-input); border-radius: 3px;">`
+            + `<option value="" selected title="${this.escape(this.tt('Fill the list with a ready-made shape. Its tracks come from this project’s BGM folder, to swap for your own.'))}">${this.escape(this.tt('Starters…'))}</option>`
+            + `${options}</select>`;
+    }
+
+    /** Replace the list with a starter, asking first when there are entries to lose. */
+    applyStarter(id) {
+        const entries = RRBgmSequenceEditor.starter(id, this.listTracks());
+        const replacing = this.sequence.entries.length > 0;
+        if (entries && (!replacing || this.confirm(this.tt('Replace the entries in this list with the starter?')))) {
+            this.sequence.entries = entries;
+            this.render();
+            this.edited();
+            return true;
+        }
+        // Declined: redraw so the dropdown reads Starters… again.
+        this.render();
+        return false;
     }
 
     smallButton(action, path, label, title) {
@@ -307,10 +387,12 @@ class RRBgmSequenceEditor {
         this.container.innerHTML = `
             <div style="font-size: 11px; color: var(--color-text-muted); line-height: 1.5; margin-bottom: 4px;">${this.escape(this.tt('Each layer plays one track at a time from its pool, at random or in order. Loop points are ignored inside a sequence.'))} ${this.escape(this.tt('A fade-in on the next entry crossfades into it.'))} ${this.escape(this.t('mapProps.bgmSequenceDuration'))}</div>
             <div class="bgm-seq-list" style="display: flex; flex-direction: column; gap: 4px;">${rows || `<div style="font-size: 12px; color: var(--color-text-muted); padding: 4px 0;">${this.escape(this.tt('No entries yet.'))}</div>`}</div>
-            <div style="display: flex; gap: 4px; margin-top: 6px;">
+            <div style="display: flex; gap: 4px; margin-top: 6px; align-items: center;">
                 ${this.smallButton('add-track', '', this.tt('+ Track'))}
                 ${this.smallButton('add-silence', '', this.tt('+ Silence'))}
                 ${this.smallButton('add-palette', '', this.tt('+ Palette'))}
+                <span style="flex: 1;"></span>
+                ${this.starterSelect()}
             </div>`;
     }
 
@@ -380,6 +462,10 @@ class RRBgmSequenceEditor {
 
     onChange(event) {
         const input = event.target;
+        if (input && input.classList && input.classList.contains('bgm-seq-starters')) {
+            if (input.value) this.applyStarter(input.value);
+            return;
+        }
         const path = input && input.dataset ? input.dataset.path : null;
         if (!path) return;
         const parts = path.split('.');

@@ -82,6 +82,7 @@ class DatabaseMusicSequenceEditor {
             tt: text => this._tt(text),
             t: (key, params) => this._t(key, params),
             pickTrack: options => this.pickTrack(options),
+            listTracks: () => this.bgmTrackNames(),
             onEdit: sequence => {
                 live.sequence = Object.assign(sequence, { enabled: true });
                 this.markChanged();
@@ -94,6 +95,18 @@ class DatabaseMusicSequenceEditor {
 
     markChanged() {
         this.databaseManager.mutationGeneration = (this.databaseManager.mutationGeneration || 0) + 1;
+    }
+
+    /** The project's BGM track names, which the list's starters are filled from. */
+    bgmTrackNames() {
+        const project = this._project();
+        if (!project?.path || typeof RRAssetFiles === 'undefined') return [];
+        try {
+            const folder = require('path').join(project.path, 'audio', 'bgm');
+            return RRAssetFiles.listUnique(folder, RRAssetFiles.AUDIO_EXTENSIONS).map(file => file.name).filter(Boolean);
+        } catch (error) {
+            return [];
+        }
     }
 
     /** A track for a row or a pool, through the shared audio picker. */

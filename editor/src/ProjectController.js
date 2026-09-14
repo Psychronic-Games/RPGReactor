@@ -2138,6 +2138,7 @@ class ProjectController {
                 tt: text => this._tt(text),
                 t: (key, params) => this._t(key, params),
                 pickTrack: options => this.pickSequenceTrack(options),
+                listTracks: () => this.bgmTrackNames(),
                 // Move to library is offered only while there is something to move.
                 onEdit: () => this.renderMapBgmSequence()
             });
@@ -2338,6 +2339,17 @@ class ProjectController {
         this._pendingSequenceMove = null;
         this._mapBgmSequenceSource = entry.id;
         return entry.id;
+    }
+
+    /** The project's BGM track names, which the sequence list's starters are filled from. */
+    bgmTrackNames() {
+        if (!this.currentProject?.path || typeof RRAssetFiles === 'undefined') return [];
+        try {
+            const folder = require('path').join(this.currentProject.path, 'audio', 'bgm');
+            return RRAssetFiles.listUnique(folder, RRAssetFiles.AUDIO_EXTENSIONS).map(file => file.name).filter(Boolean);
+        } catch (error) {
+            return [];
+        }
     }
 
     /** A track for a sequence row or a palette pool, through the shared audio picker. */

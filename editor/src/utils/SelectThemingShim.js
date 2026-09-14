@@ -283,6 +283,12 @@
 
         popup.appendChild(list);
         document.body.appendChild(popup);
+        // Anchored at the trigger's left, a popup wider than the room to its right
+        // ran off the window -- a dropdown at the right edge of a form, whose
+        // options carry hints. Slide it back in, never past the left margin.
+        const margin = 8;
+        const overflow = popup.getBoundingClientRect().right - (window.innerWidth - margin);
+        if (overflow > 0) popup.style.left = `${Math.max(margin, rect.left - overflow)}px`;
         openPopup = popup;
         popup.focus({ preventScroll: true });
         let keyboardIndex = selectEl.selectedIndex;
