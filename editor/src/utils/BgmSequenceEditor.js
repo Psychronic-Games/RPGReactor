@@ -46,13 +46,14 @@ class RRBgmSequenceEditor {
         let entries;
         switch (id) {
             case 'intro-loop':
-                entries = [track({ once: true }), track({ fadeIn: 2 })];
+                // The intro fades out under the loop as the loop fades in: a crossfade, not a gap.
+                entries = [track({ once: true, fadeOut: 2 }), track({ fadeIn: 2 })];
                 break;
             case 'playlist':
                 entries = [{ type: 'palette', duration: 0, fadeIn: 0, fadeOut: 4, layers: [layer({ order: 'shuffle' }, pool(4))] }];
                 break;
             case 'battle':
-                entries = [track({ once: true }), { type: 'palette', duration: 0, fadeIn: 1, fadeOut: 3, layers: [layer({}, pool(3))] }];
+                entries = [track({ once: true, fadeOut: 2 }), { type: 'palette', duration: 0, fadeIn: 1, fadeOut: 3, layers: [layer({}, pool(3))] }];
                 break;
             case 'one-then-pause':
                 entries = [{ type: 'palette', single: true, duration: 0, fadeIn: 2, fadeOut: 4, layers: [layer({}, pool(3))] },
@@ -125,7 +126,7 @@ class RRBgmSequenceEditor {
                 };
             default:
                 return Object.assign(
-                    { type: 'track', name: typeof raw.name === 'string' ? raw.name : '', fadeIn: RRBgmSequenceEditor.seconds(raw.fadeIn), once: !!raw.once },
+                    { type: 'track', name: typeof raw.name === 'string' ? raw.name : '', fadeIn: RRBgmSequenceEditor.seconds(raw.fadeIn), fadeOut: RRBgmSequenceEditor.seconds(raw.fadeOut), once: !!raw.once },
                     RRBgmSequenceEditor.levels(raw));
         }
     }
@@ -397,11 +398,18 @@ class RRBgmSequenceEditor {
         const head = `<span style="flex: 0 0 auto; min-width: 16px; color: var(--color-text-muted); font-size: 11px;">${index + 1}</span>`;
         const nameBox = (p, name, levels) => `<span data-action="pick" data-path="${p}" title="${this.escape(this.tt('Choose a track'))}" style="flex: 1; min-width: 0; padding: 4px 6px; background: var(--color-bg-input); border: 1px solid var(--color-border-input); border-radius: 3px; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer;">${this.trackName(name)}${levels ? ` <span style="color: var(--color-text-muted); font-size: 11px;">${this.escape(this.levelsText(levels))}</span>` : ''}</span>`;
         if (entry.type === 'track') {
-            return `<div class="bgm-seq-row bgm-seq-depth-1" style="display: flex; gap: 6px; align-items: center;">${head}
-                <span style="flex: 0 0 52px; font-size: 12px;">${this.escape(this.tt('Track'))}</span>
-                ${nameBox(path, entry.name, entry)}
-                <label style="flex: 0 0 auto; display: inline-flex; align-items: center; gap: 4px; font-size: 12px;">${this.escape(this.tt('Fade-in (s)'))} ${this.numberInput(`${path}.fadeIn`, entry.fadeIn, 0, 600, 0.5, 60)}</label>
-                ${this.rowTools(path, entry.once)}
+            // Both fades beside the name would squeeze it to nothing in Map
+            // Properties' column, so they take their own line, as a palette's do.
+            return `<div class="bgm-seq-row bgm-seq-depth-1">
+                <div style="display: flex; gap: 6px; align-items: center;">${head}
+                    <span style="flex: 0 0 52px; font-size: 12px;">${this.escape(this.tt('Track'))}</span>
+                    ${nameBox(path, entry.name, entry)}
+                    ${this.rowTools(path, entry.once)}
+                </div>
+                <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 3px 0 0 22px;">
+                    <label title="${this.escape(this.tt('How long this track rises from silence as it starts.'))}" style="display: inline-flex; align-items: center; gap: 4px; font-size: 12px;">${this.escape(this.tt('Fade-in (s)'))} ${this.numberInput(`${path}.fadeIn`, entry.fadeIn, 0, 600, 0.5, 60)}</label>
+                    <label title="${this.escape(this.tt('How long this track fades away, and how early the next entry starts under it. 0 plays it to its end.'))}" style="display: inline-flex; align-items: center; gap: 4px; font-size: 12px;">${this.escape(this.tt('Fade-out (s)'))} ${this.numberInput(`${path}.fadeOut`, entry.fadeOut, 0, 600, 0.5, 60)}</label>
+                </div>
             </div>`;
         }
         if (entry.type === 'silence') {
@@ -454,8 +462,8 @@ class RRBgmSequenceEditor {
             </div>
             <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 3px 0 0 22px;">
                 <label style="display: inline-flex; align-items: center; gap: 4px; font-size: 12px;">${this.escape(this.tt('Duration (s)'))} ${this.numberInput(`${path}.duration`, entry.duration, 0, 36000, 1, 64)}</label>
-                <label style="display: inline-flex; align-items: center; gap: 4px; font-size: 12px;">${this.escape(this.tt('Fade-in (s)'))} ${this.numberInput(`${path}.fadeIn`, entry.fadeIn, 0, 600, 0.5, 60)}</label>
-                <label style="display: inline-flex; align-items: center; gap: 4px; font-size: 12px;">${this.escape(this.tt('Fade-out (s)'))} ${this.numberInput(`${path}.fadeOut`, entry.fadeOut, 0, 600, 0.5, 60)}</label>
+                <label title="${this.escape(this.tt('How long each track rises from silence as it starts.'))}" style="display: inline-flex; align-items: center; gap: 4px; font-size: 12px;">${this.escape(this.tt('Fade-in (s)'))} ${this.numberInput(`${path}.fadeIn`, entry.fadeIn, 0, 600, 0.5, 60)}</label>
+                <label title="${this.escape(this.tt('How long each track fades away, and how early the next one starts under it. 0 plays every track to its end.'))}" style="display: inline-flex; align-items: center; gap: 4px; font-size: 12px;">${this.escape(this.tt('Fade-out (s)'))} ${this.numberInput(`${path}.fadeOut`, entry.fadeOut, 0, 600, 0.5, 60)}</label>
                 <label title="${this.escape(this.tt('Each layer plays one track, then the sequence moves on.'))}" style="display: inline-flex; align-items: center; gap: 4px; font-size: 12px;"><input type="checkbox" data-path="${path}.single"${entry.single ? ' checked' : ''}> ${this.escape(this.tt('Move on after one track'))}</label>
             </div>
             ${layers}
@@ -467,7 +475,7 @@ class RRBgmSequenceEditor {
         const entries = this.sequence.entries;
         const rows = entries.map((entry, index) => this.renderEntry(entry, index)).join('');
         this.container.innerHTML = `
-            <div style="font-size: 11px; color: var(--color-text-muted); line-height: 1.5; margin-bottom: 4px;">${this.escape(this.tt('Each layer plays one track at a time from its pool, at random or in order. Loop points are ignored inside a sequence.'))} ${this.escape(this.tt('A fade-in on the next entry crossfades into it.'))} ${this.escape(this.t('mapProps.bgmSequenceDuration'))}</div>
+            <div style="font-size: 11px; color: var(--color-text-muted); line-height: 1.5; margin-bottom: 4px;">${this.escape(this.tt('Each layer plays one track at a time from its pool, at random or in order. Loop points are ignored inside a sequence.'))} ${this.escape(this.tt('A fade-out starts what follows early, under the ending track; a fade-in lets the new one rise.'))} ${this.escape(this.t('mapProps.bgmSequenceDuration'))}</div>
             <div class="bgm-seq-list" style="display: flex; flex-direction: column; gap: 4px;">${rows || `<div style="font-size: 12px; color: var(--color-text-muted); padding: 4px 0;">${this.escape(this.tt('No entries yet.'))}</div>`}</div>
             <div style="display: flex; gap: 4px; margin-top: 6px; align-items: center;">
                 ${this.smallButton('add-track', '', this.tt('+ Track'))}
@@ -523,7 +531,7 @@ class RRBgmSequenceEditor {
         const { node, list, index } = this.resolve(path);
         switch (action) {
             case 'add-track':
-                this.sequence.entries.push(Object.assign({ type: 'track', name: '', fadeIn: 0 }, RRBgmSequenceEditor.levels(null)));
+                this.sequence.entries.push(Object.assign({ type: 'track', name: '', fadeIn: 0, fadeOut: 0 }, RRBgmSequenceEditor.levels(null)));
                 break;
             case 'add-silence':
                 this.sequence.entries.push({ type: 'silence', duration: 10 });

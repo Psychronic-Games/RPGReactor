@@ -38,8 +38,9 @@ test('every starter is a valid sequence once its tracks come from the project', 
 test('each starter uses the feature it is named for', () => {
     const E = loadEditorClass();
     const intro = E.starter('intro-loop', TRACKS);
-    assert.deepEqual(plain(intro.map(entry => [entry.type, entry.name, entry.once, entry.fadeIn])),
-        [['track', 'A', true, 0], ['track', 'B', false, 2]], 'an intro once, then a track that repeats and crossfades in');
+    assert.deepEqual(plain(intro.map(entry => [entry.type, entry.name, entry.once, entry.fadeIn, entry.fadeOut])),
+        [['track', 'A', true, 0, 2], ['track', 'B', false, 2, 0]], 'an intro once, fading out under a loop that fades in');
+    assert.equal(E.starter('battle', TRACKS)[0].fadeOut, 2, 'the opening fades out under the bed rather than leaving a gap');
 
     const [playlist] = E.starter('playlist', TRACKS);
     assert.equal(playlist.duration, 0, 'plays through rather than on a clock');

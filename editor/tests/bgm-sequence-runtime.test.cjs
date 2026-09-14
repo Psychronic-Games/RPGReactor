@@ -453,6 +453,43 @@ test('a track shorter than its own crossfade is left alone', () => {
     assert.equal(created.length, 2, 'the ordinary end-of-track draw still happens');
 });
 
+test('a track entry with a fade-out hands over early, fading away under what follows', () => {
+    const map = { bgm: { name: '', volume: 90, pitch: 100, pan: 0 }, bgmSequence: { enabled: true, entries: [
+        { type: 'track', name: 'Intro', volume: 100, pitch: 100, pan: 0, once: true, fadeOut: 4 },
+        { type: 'track', name: 'Loop', volume: 100, pitch: 100, pan: 0, fadeIn: 3 }
+    ] } };
+    const { AudioManager, context, created, live, tick } = loadAudioManager({ map });
+    context.WebAudio.trackSeconds = 60;
+    AudioManager.playBgm(AudioManager.mapBgmObject(map, 1));
+    tick(50);
+    assert.deepEqual(live(), ['Intro'], 'nothing happens while the track has more than its fade left');
+
+    tick(7);   // 57s into a 60s track: inside its 4s fade-out
+    assert.equal(created[0].fadedOut, 4, 'the intro rides its fade down');
+    assert.equal(created[1].name, 'Loop');
+    assert.equal(created[1].fadedIn, 3, 'the loop swells up under it: a crossfade, not a gap');
+    assert.deepEqual(live().sort(), ['Intro', 'Loop'], 'both sound together');
+
+    tick(4);
+    assert.deepEqual(live(), ['Loop'], 'the intro is released when its tail ends');
+    created[0].end();
+    assert.equal(created.length, 2, 'the intro running out after its hand-over starts nothing more');
+});
+
+test('a track entry with no fade-out still plays to its true end before the next begins', () => {
+    const map = { bgm: { name: '', volume: 90, pitch: 100, pan: 0 }, bgmSequence: { enabled: true, entries: [
+        { type: 'track', name: 'A', volume: 100, pitch: 100, pan: 0 },
+        { type: 'track', name: 'B', volume: 100, pitch: 100, pan: 0, fadeIn: 3 }
+    ] } };
+    const { AudioManager, context, created, tick } = loadAudioManager({ map });
+    context.WebAudio.trackSeconds = 60;
+    AudioManager.playBgm(AudioManager.mapBgmObject(map, 1));
+    tick(59.5);
+    assert.equal(created.length, 1, 'no early hand-over');
+    created[0].end();
+    assert.equal(created[1].name, 'B');
+});
+
 test('a layer set to sequential walks its pool in order instead of drawing at random', () => {
     const pool = [{ type: 'track', name: 'One' }, { type: 'track', name: 'Two' }, { type: 'track', name: 'Three' }];
     const map = { bgm: { name: '', volume: 90, pitch: 100, pan: 0 }, bgmSequence: { enabled: true, entries: [

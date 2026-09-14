@@ -1810,7 +1810,9 @@ AudioManager.throwLoadError = function(webAudio) {
 // A map's music can be a sequence instead of one looping track
 // ($dataMap.bgmSequence = { enabled, entries }). Entries play in order and
 // the sequence loops:
-//   { type: "track", name, volume, pitch, pan }   plays once to its true end
+//   { type: "track", name, volume, pitch, pan, fadeIn, fadeOut } plays once to
+//       its end; with `fadeOut` it hands over that many seconds early, fading
+//       away under whatever follows
 //   { type: "silence", duration }                 seconds of quiet
 //   { type: "palette", duration, fadeIn, fadeOut, layers } layers sound
 //       together; each layer draws from its own pool of tracks and silences --
@@ -2348,6 +2350,19 @@ AudioManager.updateBgmSequence = function() {
             if (!palette.layers.length) this._advanceBgmSequence();
         }
         return;
+    }
+    // A track entry naming a fade-out hands over before its end, the way a
+    // palette layer does: what follows starts under its last seconds while it
+    // fades away. Without one it plays out and its stop listener moves on.
+    const entry = state.entries[state.index];
+    const fadeOut = entry && entry.type !== "palette" && entry.type !== "silence" ? Math.max(0, Number(entry.fadeOut) || 0) : 0;
+    if (fadeOut > 0) {
+        const buffer = this._bgmSequenceBuffers()[0];
+        if (buffer && this._bgmSequenceLayerIsEnding({ buffer: buffer }, { fadeOut: fadeOut })) {
+            this._retireBgmSequenceBuffer(state, buffer, fadeOut);
+            this._advanceBgmSequence(fadeOut);
+            return;
+        }
     }
     if (state.due && now >= state.due) {
         state.due = 0;
