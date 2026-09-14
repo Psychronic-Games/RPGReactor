@@ -15,7 +15,9 @@
  * edits its copy in place. Tracks are chosen through `pickTrack`, which
  * the caller wires to the shared audio picker. Starters… replaces the list
  * with a ready shape whose track slots come from `listTracks`, the project's
- * BGM folder, so a sequence can be heard before it is authored.
+ * BGM folder, so a sequence can be heard before it is authored. Preview plays
+ * the list as it stands through RRSequencePreview, which runs the game's own
+ * sequence player, with Stop and Skip beside it while it plays.
  */
 class RRBgmSequenceEditor {
     static TRACK_DEFAULTS = { volume: 100, pitch: 100, pan: 0 };
@@ -189,6 +191,9 @@ class RRBgmSequenceEditor {
      *   names, which a starter's track slots are filled from.
      * @param {function} [options.confirm] - (message) => boolean, asked before a
      *   starter replaces entries; the browser's confirm by default.
+     * @param {function} [options.projectPath] - () => the project folder, whose
+     *   runtime and audio a preview plays.
+     * @param {object} [options.preview] - The preview player; RRSequencePreview by default.
      */
     constructor(options) {
         this.container = options.container;
@@ -198,12 +203,18 @@ class RRBgmSequenceEditor {
         this.onEdit = options.onEdit || null;
         this.listTracks = options.listTracks || (() => []);
         this.confirm = options.confirm || (message => (typeof confirm === 'function' ? confirm(message) : true));
+        this.projectPath = options.projectPath || (() => null);
+        this.preview = options.preview || (typeof RRSequencePreview !== 'undefined' ? RRSequencePreview : null);
+        this.previewMessage = '';
         this.sequence = RRBgmSequenceEditor.normalize(null);
         this.container.addEventListener('click', event => this.onClick(event));
         this.container.addEventListener('change', event => this.onChange(event));
     }
 
     load(raw) {
+        // A preview belongs to the sequence it started from.
+        if (this.preview && this.preview.isPlaying(this)) this.preview.stop(this);
+        this.previewMessage = '';
         this.sequence = RRBgmSequenceEditor.normalize(raw);
         this.render();
     }
@@ -218,7 +229,78 @@ class RRBgmSequenceEditor {
     }
 
     edited() {
+        // Why the preview would not play stops being true once the list changes.
+        if (this.previewMessage) {
+            this.previewMessage = '';
+            const line = typeof this.container.querySelector === 'function' ? this.container.querySelector('.bgm-seq-preview-status') : null;
+            if (line && !(this.preview && this.preview.isPlaying(this))) line.textContent = '';
+        }
         if (this.onEdit) this.onEdit(this.value());
+    }
+
+    /** Whether the list is on screen; a preview stops once its list is not. */
+    isShown() {
+        const container = this.container;
+        if (!container || container.isConnected === false) return false;
+        return typeof container.getClientRects !== 'function' || container.getClientRects().length > 0;
+    }
+
+    /** Preview, or Stop and Skip while this list's preview plays. */
+    previewControls() {
+        if (!this.preview) return '';
+        if (!this.preview.isPlaying(this)) {
+            return this.smallButton('preview', '', `▶ ${this.tt('Preview')}`, this.tt('Hear the sequence as the game plays it, unsaved changes included.'));
+        }
+        return this.smallButton('preview-stop', '', `■ ${this.tt('Stop')}`, this.tt('Stop'))
+            + this.smallButton('preview-skip', '', `${this.tt('Skip')} ▸▸`, this.tt('Skip to the next entry'));
+    }
+
+    /** "Entry 2 of 3 · Palette · Layer 1: Name · Layer 2: Silence", from the preview's status(). */
+    previewText(status) {
+        if (!status || !(status.index >= 0)) return '';
+        const parts = [this.tt('Entry {n} of {total}').replace('{n}', String(status.index + 1)).replace('{total}', String(status.total))];
+        if (status.type === 'palette') {
+            parts.push(this.tt('Palette'));
+            (status.layers || []).forEach((name, index) => {
+                parts.push(`${this.tt('Layer {n}').replace('{n}', String(index + 1))}: ${name || this.tt('Silence')}`);
+            });
+        } else if (status.type === 'silence') {
+            parts.push(this.tt('Silence'));
+        } else {
+            parts.push(`${this.tt('Track')}: ${status.track || ''}`);
+        }
+        return parts.join(' · ');
+    }
+
+    /** Plays the list as it stands, switched on whatever its host says, or says what stops it. */
+    startPreview() {
+        if (!this.preview) return;
+        const sequence = Object.assign(this.value(), { enabled: true });
+        const problem = RRBgmSequenceEditor.validate(sequence, this.tt);
+        if (problem) {
+            this.previewMessage = problem;
+            this.render();
+            return;
+        }
+        const result = this.preview.play({
+            owner: this,
+            projectPath: this.projectPath(),
+            sequence,
+            onChange: status => this.showPreviewStatus(status)
+        });
+        this.previewMessage = result && result.ok ? ''
+            : this.tt(result && result.error ? result.error : 'The Reactor runtime could not be found.').replace('{reason}', (result && result.reason) || '');
+        this.render();
+    }
+
+    /** The now-playing line follows the preview; its end puts Preview back. */
+    showPreviewStatus(status) {
+        if (!status) {
+            this.render();
+            return;
+        }
+        const line = typeof this.container.querySelector === 'function' ? this.container.querySelector('.bgm-seq-preview-status') : null;
+        if (line) line.textContent = this.previewText(status);
     }
 
     /**
@@ -391,9 +473,12 @@ class RRBgmSequenceEditor {
                 ${this.smallButton('add-track', '', this.tt('+ Track'))}
                 ${this.smallButton('add-silence', '', this.tt('+ Silence'))}
                 ${this.smallButton('add-palette', '', this.tt('+ Palette'))}
+                <span style="width: 8px;"></span>
+                ${this.previewControls()}
                 <span style="flex: 1;"></span>
                 ${this.starterSelect()}
-            </div>`;
+            </div>
+            <div class="bgm-seq-preview-status" style="font-size: 11px; color: var(--color-text-muted); line-height: 1.5; margin-top: 4px;">${this.escape(this.preview && this.preview.isPlaying(this) && typeof this.preview.status === 'function' ? this.previewText(this.preview.status()) : this.previewMessage)}</div>`;
     }
 
     /** The object at a dotted path into the sequence, and the list plus index it sits in. */
@@ -420,6 +505,20 @@ class RRBgmSequenceEditor {
         if (!target || !this.container.contains(target)) return;
         event.preventDefault();
         const action = target.dataset.action;
+        // The preview's buttons change what is heard, not the sequence.
+        if (action === 'preview') {
+            this.startPreview();
+            return;
+        }
+        if (action === 'preview-stop') {
+            if (this.preview) this.preview.stop(this);
+            this.render();
+            return;
+        }
+        if (action === 'preview-skip') {
+            if (this.preview) this.preview.skip(this);
+            return;
+        }
         const path = target.dataset.path || '';
         const { node, list, index } = this.resolve(path);
         switch (action) {

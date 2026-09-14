@@ -83,6 +83,7 @@ class DatabaseMusicSequenceEditor {
             t: (key, params) => this._t(key, params),
             pickTrack: options => this.pickTrack(options),
             listTracks: () => this.bgmTrackNames(),
+            projectPath: () => this._project()?.path,
             onEdit: sequence => {
                 live.sequence = Object.assign(sequence, { enabled: true });
                 this.markChanged();

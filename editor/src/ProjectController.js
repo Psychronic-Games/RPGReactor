@@ -2139,6 +2139,7 @@ class ProjectController {
                 t: (key, params) => this._t(key, params),
                 pickTrack: options => this.pickSequenceTrack(options),
                 listTracks: () => this.bgmTrackNames(),
+                projectPath: () => this.currentProject?.path,
                 // Move to library is offered only while there is something to move.
                 onEdit: () => this.renderMapBgmSequence()
             });
