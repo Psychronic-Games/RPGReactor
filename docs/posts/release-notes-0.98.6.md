@@ -39,6 +39,7 @@
 - Every menu and dialog answers to the keyboard. Themes, database tables, event editing, rapid navigation, map wheel zoom and Unicode map names are tightened across the editor.
 - Sound Effect Generator saves WAV, OGG or MP3 with a quality step. Media surfaces load JPG and WebP. Random startup splash. Map toolbar toggles are one size.
 - Music sequences gain fade-in, crossfade, intros, pools and per-track volume (PR #52).
+- Web builds carry a file index so the browser runtime corrects filename casing the way the desktop runtime does from disk. Every sound the Demo names now ships.
 - Fixed: loading a second map, shadows blinking on still models, menus and shops under Pixi 8 mouse and touch, web battle room video after blocked autoplay.
 
 ## Demo
