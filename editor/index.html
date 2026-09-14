@@ -443,21 +443,16 @@
                                         <button type="button" id="map-bgm-choose-btn" class="map-props-btn primary" style="flex: 0 0 auto; padding: 5px 12px; font-size: 12px;" data-i18n="mapProps.choose">Choose…</button>
                                     </div>
                                     <div id="map-bgm-levels" style="font-size: 11px; color: var(--color-text-muted); margin-top: 4px; min-height: 12px;"></div>
-                                    <label class="map-props-label" style="display: flex; align-items: center; cursor: pointer; margin-top: 8px;">
-                                        <input type="checkbox" id="map-bgm-sequence-checkbox" style="margin-right: 6px;">
-                                        <span data-i18n="mapProps.bgmSequence">Play a sequence instead of one track</span>
-                                    </label>
-                                    <div id="map-bgm-sequence" style="display: none; margin-top: 4px;">
-                                        <div style="font-size: 11px; color: var(--color-text-muted); line-height: 1.5;" data-i18n="mapProps.bgmSequenceHint">The track above is the fallback for vehicles and plugins.</div>
-                                        <!-- Where the sequence lives: on this map, or an entry of the
-                                             Music Sequences library that several maps can share. -->
-                                        <div style="display: flex; gap: 6px; align-items: center; margin-top: 6px;">
-                                            <label for="map-bgm-sequence-source" style="flex: 0 0 auto; font-size: 12px;" data-i18n="mapProps.sequenceSource">Sequence</label>
-                                            <select id="map-bgm-sequence-source" style="flex: 1; min-width: 0; padding: 4px 6px; background-color: var(--color-bg-input); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; font-size: 12px;"></select>
-                                            <button type="button" id="map-bgm-sequence-move-btn" class="map-props-btn" style="flex: 0 0 auto; padding: 4px 10px; font-size: 12px;" data-i18n="mapProps.moveToLibrary">Move to library</button>
-                                        </div>
-                                        <div id="map-bgm-sequence-move-hint" style="font-size: 11px; color: var(--color-text-muted); line-height: 1.5; margin-top: 4px;" data-i18n="mapProps.moveToLibraryHint">Adds this sequence to Database › Music Sequences, so other maps, troops and events can use it. Nothing is saved until you press OK.</div>
+                                    <!-- The sequence is chosen in the same picker, in a row above the
+                                         tracks, as battle music is; the track stays its fallback. This
+                                         pane holds what belongs to the chosen sequence. -->
+                                    <div id="map-bgm-sequence" style="display: none; margin-top: 6px;">
+                                        <div style="font-size: 11px; color: var(--color-text-muted); line-height: 1.5;" data-i18n="mapProps.bgmSequenceHint">The fallback track does not play while a sequence does, but save files, battles and vehicles know the music here by it. Choose no music sequence in the picker to play the track instead.</div>
                                         <div id="map-bgm-sequence-library-hint" style="display: none; font-size: 11px; color: var(--color-text-muted); line-height: 1.5; margin-top: 4px;" data-i18n="mapProps.libraryHint">This sequence is edited in Database › Music Sequences.</div>
+                                        <div id="map-bgm-sequence-move-row" style="display: none; gap: 8px; align-items: center; margin-top: 6px;">
+                                            <button type="button" id="map-bgm-sequence-move-btn" class="map-props-btn" style="flex: 0 0 auto; padding: 4px 10px; font-size: 12px;" data-i18n="mapProps.moveToLibrary">Move to library</button>
+                                            <div id="map-bgm-sequence-move-hint" style="flex: 1; min-width: 0; font-size: 11px; color: var(--color-text-muted); line-height: 1.5;" data-i18n="mapProps.moveToLibraryHint">Adds this sequence to Database › Music Sequences, so other maps, troops and events can use it. Nothing is saved until you press OK.</div>
+                                        </div>
                                         <div id="map-bgm-sequence-editor"></div>
                                     </div>
                                 </div>

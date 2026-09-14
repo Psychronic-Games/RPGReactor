@@ -91,7 +91,7 @@ test('the list edits its copy in place: add, move, remove, retype a number, and 
 });
 
 /** Map Properties with every field the save reads, over a map that carries a field the form does not know. */
-function controllerFor(mapData, sequence) {
+function controllerFor(mapData, sequence, extraContext = {}) {
     const values = {
         'map-width-input': { value: String(mapData.width) }, 'map-height-input': { value: String(mapData.height) },
         'map-note-textarea': { value: mapData.note || '' }, 'map-name-input': { value: mapData.name },
@@ -101,7 +101,7 @@ function controllerFor(mapData, sequence) {
         'map-specify-battleback-checkbox': { checked: false }, 'map-battleback1-select': { value: '' }, 'map-battleback2-select': { value: '' },
         'map-parallax-image-select': { value: '' }, 'map-parallax-loop-x-checkbox': { checked: false }, 'map-parallax-loop-y-checkbox': { checked: false },
         'map-parallax-show-checkbox': { checked: false }, 'map-parallax-sx-input': { value: '0' }, 'map-parallax-sy-input': { value: '0' },
-        'map-bgm-sequence-checkbox': { focus() { this.focused = true; } }
+        'map-bgm-choose-btn': { focus() { this.focused = true; } }
     };
     const alerts = [];
     const context = {
@@ -110,7 +110,8 @@ function controllerFor(mapData, sequence) {
         RR_LIMITS: { MAP_WIDTH: 512, MAP_HEIGHT: 512 },
         rrIsMapSizeSupported: (w, h) => w >= 1 && w <= 512 && h >= 1 && h <= 512,
         RRBgmSequenceEditor: loadEditorClass(),
-        RRBattleMusic: require(path.join(editorRoot, 'src', 'utils', 'BattleMusic.js'))
+        RRBattleMusic: require(path.join(editorRoot, 'src', 'utils', 'BattleMusic.js')),
+        ...extraContext
     };
     const ProjectController = vm.runInNewContext(read('src/ProjectController.js') + '\nProjectController;', context);
     const controller = Object.create(ProjectController.prototype);
@@ -196,20 +197,75 @@ test('a blank sequence leaves the key off, a disabled one with entries stays, an
     controller = controllerFor(map, { enabled: true, entries: [{ type: 'silence', duration: 0 }] });
     assert.equal(await controller.saveMapProperties(), false);
     assert.deepEqual(controller.alerts, ['Entry 1: a silence needs a duration above zero.']);
-    assert.equal(controller.values['map-bgm-sequence-checkbox'].focused, true);
+    assert.equal(controller.values['map-bgm-choose-btn'].focused, true, 'the picker is where the sequence is switched off');
     assert.equal(controller.written, undefined, 'nothing was written');
 });
 
 test('the form, the script and the strings are wired', () => {
     const html = read('index.html');
-    assert.match(html, /id="map-bgm-sequence-checkbox"/);
+    assert.doesNotMatch(html, /map-bgm-sequence-checkbox|map-bgm-sequence-source/, 'the sequence is chosen in the picker, as battle music is');
+    assert.match(html, /id="map-bgm-sequence"/);
     assert.match(html, /id="map-bgm-sequence-editor"/);
     assert.match(html, /<script src="src\/utils\/BgmSequenceEditor\.js"><\/script>/);
     const controller = read('src/ProjectController.js');
-    assert.match(controller, /this\._bindMapPropertiesListener\('map-bgm-sequence-checkbox', 'change'/);
     assert.match(controller, /this\.populateBgmSequenceForm\(mapData\);/);
+    assert.match(controller, /extraControls: sequenceRow \? sequenceRow\.row : undefined/);
     const i18n = read('src/I18nManager.js');
-    assert.equal((i18n.match(/'mapProps\.bgmSequence': /g) || []).length, 18, 'English and the 17 locales');
+    assert.equal((i18n.match(/'mapProps\.fallbackTrack': /g) || []).length, 18, 'English and the 17 locales');
+    assert.equal((i18n.match(/'mapProps\.bgmSequenceHint': /g) || []).length, 18);
+    assert.doesNotMatch(i18n, /mapProps\.bgmSequence'|mapProps\.sequenceSource/, 'the checkbox and the Sequence label leave no strings behind');
+});
+
+test('the map music picker offers (None), the map’s own sequence, a staged move and the library, and OK applies the choice', () => {
+    const previous = { document: global.document, RRBgmSequenceEditor: global.RRBgmSequenceEditor };
+    // BattleMusic.js was required into this realm, so the row it builds needs a document here.
+    global.document = { createElement: () => { const el = { style: {}, innerHTML: '', select: { value: '' } }; el.querySelector = () => el.select; return el; } };
+    global.RRBgmSequenceEditor = loadEditorClass();
+    try {
+        const opened = [];
+        const picker = { open: options => opened.push(options) };
+        const entries = [{ type: 'track', name: 'A', fadeIn: 0, once: false, volume: 80, pitch: 100, pan: 0 }];
+        const map = { id: 3, name: 'Woods', width: 20, height: 15, data: [], events: [] };
+        const controller = controllerFor(map, { enabled: true, entries }, {
+            window: { RRAudioPickerModal: picker }, RRAudioPickerModal: picker,
+            RRAssetFiles: { listUnique: () => [], AUDIO_EXTENSIONS: [] }
+        });
+        controller.currentProject = { maps: [], path: '/project' };
+        controller.databaseManager = {
+            getMusicSequences: () => [{ id: 2, name: 'Caves' }],
+            getMusicSequence: id => (id === 2 ? { id: 2, name: 'Caves' } : null)
+        };
+        controller._mapBgmSequenceSource = 0;
+        assert.equal(controller.mapBgmSequenceLabel(), 'Music sequence: Stored on this map');
+
+        controller.openMapAudioPicker('bgm');
+        const row = opened.at(-1).extraControls;
+        assert.match(row.innerHTML, /<option value="0">\(None\)<\/option><option value="map" selected>Stored on this map<\/option><option value="2">0002: Caves<\/option>/);
+        row.select.value = '2';
+        opened.at(-1).onOk({ name: 'Town', volume: 70, pitch: 100, pan: 0 });
+        assert.deepEqual(plain(controller._mapAudio.bgm), { name: 'Town', volume: 70, pitch: 100, pan: 0 }, 'the track is still the fallback');
+        assert.equal(controller.mapBgmSequenceChoice(), '2');
+        assert.equal(controller._mapBgmSequenceSource, 2);
+        assert.equal(controller.mapBgmSequenceLabel(), 'Music sequence: Caves');
+
+        controller.setMapBgmSequenceChoice('map');
+        controller._pendingSequenceMove = { name: 'Woods', sequence: { enabled: true, entries } };
+        controller.openMapAudioPicker('bgm');
+        assert.match(opened.at(-1).extraControls.innerHTML, /<option value="new" selected>\(new\) Woods<\/option>/);
+        assert.equal(controller.mapBgmSequenceLabel(), 'Music sequence: (new) Woods');
+        opened.at(-1).extraControls.select.value = '0';
+        opened.at(-1).onOk({ name: 'Town', volume: 70, pitch: 100, pan: 0 });
+        assert.equal(controller._pendingSequenceMove, null, 'choosing anything else abandons the move');
+        assert.equal(controller.mapBgmSequenceChoice(), '0');
+        assert.equal(controller.mapBgmSequenceLabel(), null);
+        assert.equal(controller.mapBgmSequenceFromForm().enabled, false);
+        assert.deepEqual(plain(controller.mapBgmSequenceFromForm().entries), entries, '(None) keeps the map’s own entries for switching back');
+
+        controller.openMapAudioPicker('bgs');
+        assert.equal(opened.at(-1).extraControls, undefined, 'BGS has no sequence');
+    } finally {
+        Object.assign(global, previous);
+    }
 });
 
 /** A database manager whose library lives on a System object, recording what it saves. */
@@ -257,13 +313,28 @@ test('Map Properties names a library entry for its music, and a track or a seque
     const off = controllerFor(map, { enabled: false, entries: [] });
     off._mapBgmSequenceSource = 2;
     assert.equal(await off.saveMapProperties(), true);
-    assert.equal('bgmSequenceId' in off.written, false, 'the checkbox turns the library entry off too');
+    assert.equal('bgmSequenceId' in off.written, false, '(None) turns the library entry off too');
     assert.equal('battleBgm' in off.written, false, 'and Clear leaves no battle music behind');
 
     const nothing = controllerFor(map, { enabled: false, entries: [] });
     nothing._mapBattleBgm = { name: '', volume: 90, pitch: 100, pan: 0 };
     assert.equal(await nothing.saveMapProperties(), true);
     assert.equal('battleBgm' in nothing.written, false, 'an object naming neither a track nor a sequence is not stored');
+});
+
+test('a field OK removes leaves the open map too, so reopening or saving the map cannot bring it back', async () => {
+    const map = { id: 3, name: 'Woods', width: 20, height: 15, data: [], events: [], _live: true,
+        bgmSequenceId: 2, bgmSequence: { enabled: true, entries: [] }, battleBgm: { name: 'Battle1', volume: 90, pitch: 100, pan: 0 } };
+    const controller = controllerFor(map, { enabled: false, entries: [] });
+    controller._mapBgmSequenceSource = 2;
+    controller._mapBattleBgm = null;
+    assert.equal(await controller.saveMapProperties(), true);
+    for (const key of ['bgmSequenceId', 'bgmSequence', 'battleBgm']) {
+        assert.equal(key in controller.written, false, `${key} left the file`);
+        assert.equal(key in map, false, `${key} left the map in memory`);
+    }
+    assert.equal(map._live, true, 'editor-only fields stay on the live map');
+    assert.deepEqual(plain(map.bgm), { name: 'Fallback', volume: 90, pitch: 100, pan: 0 }, 'and the form’s own fields still land on it');
 });
 
 test('Move to library saves System.json before the map, and the map keeps one copy', async () => {

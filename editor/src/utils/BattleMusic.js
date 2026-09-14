@@ -47,15 +47,18 @@ class RRBattleMusic {
 
     /**
      * The Music sequence row that sits above the audio picker: { row, select },
-     * or null when the library is empty and nothing is named.
+     * or null when there is nothing to choose and nothing is named. A host adds
+     * choices of its own after (None) with `extraOptions` (Map Properties' "Stored
+     * on this map"), and says what they mean with `hint`.
      */
-    static sequenceRow(databaseManager, selectedId, tt) {
+    static sequenceRow(databaseManager, selectedId, tt, { extraOptions = [], hint } = {}) {
         const say = tt || (text => text);
         const escape = text => typeof rrEscapeHtml === 'function' ? rrEscapeHtml(text) : String(text);
         const entries = databaseManager && typeof databaseManager.getMusicSequences === 'function'
             ? databaseManager.getMusicSequences() : [];
-        const selected = Number(selectedId) || 0;
-        if (!entries.length && !selected) return null;
+        const selected = extraOptions.some(option => String(option.value) === String(selectedId))
+            ? String(selectedId) : (Number(selectedId) || 0);
+        if (!entries.length && !selected && !extraOptions.length) return null;
         if (typeof document === 'undefined' || typeof RRBgmSequenceEditor === 'undefined') return null;
         const row = document.createElement('div');
         row.className = 'audio-command-sequence-row';
@@ -63,9 +66,9 @@ class RRBattleMusic {
         row.innerHTML = `
             <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--color-text);">
                 <span style="flex: 0 0 auto;">${escape(say('Music sequence'))}</span>
-                <select class="audio-command-sequence-select" style="flex: 1; min-width: 0; padding: 4px 6px; font-size: 12px; background: var(--color-bg-input); color: var(--color-text); border: 1px solid var(--color-border-input); border-radius: 3px;">${RRBgmSequenceEditor.libraryOptions(entries, selected, say('(None)'), say('(missing)'))}</select>
+                <select class="audio-command-sequence-select" style="flex: 1; min-width: 0; padding: 4px 6px; font-size: 12px; background: var(--color-bg-input); color: var(--color-text); border: 1px solid var(--color-border-input); border-radius: 3px;">${RRBgmSequenceEditor.libraryOptions(entries, selected, say('(None)'), say('(missing)'), extraOptions)}</select>
             </label>
-            <div style="font-size: 11px; color: var(--color-text-muted); line-height: 1.5;">${escape(say('A sequence from Database › Music Sequences plays instead of the track below, which stays as its fallback.'))}</div>`;
+            <div style="font-size: 11px; color: var(--color-text-muted); line-height: 1.5;">${escape(hint || say('A sequence from Database › Music Sequences plays instead of the track below, which stays as its fallback.'))}</div>`;
         return { row, select: row.querySelector('select') };
     }
 

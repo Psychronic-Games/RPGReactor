@@ -167,16 +167,20 @@ class RRBgmSequenceEditor {
 
     /**
      * `<option>` markup for a picker of library entries: `noneLabel` as 0, then
-     * each entry as `0001: Name`. An id the library no longer holds stays listed
-     * as missing, so opening a form never quietly changes what it names.
+     * any `extraOptions` of the host's own ({ value, label }, chosen by value),
+     * then each entry as `0001: Name`. An id the library no longer holds stays
+     * listed as missing, so opening a form never quietly changes what it names.
      */
-    static libraryOptions(entries, selectedId, noneLabel, missingLabel) {
+    static libraryOptions(entries, selectedId, noneLabel, missingLabel, extraOptions) {
         const escape = text => typeof rrEscapeHtml === 'function' ? rrEscapeHtml(text) : String(text == null ? '' : text);
-        const selected = Number(selectedId) || 0;
+        const extras = Array.isArray(extraOptions) ? extraOptions : [];
+        const extra = extras.find(option => String(option.value) === String(selectedId));
+        const selected = extra ? String(extra.value) : (Number(selectedId) || 0);
         const label = (id, name) => `${String(id).padStart(4, '0')}: ${name}`;
-        const option = (value, text) => `<option value="${value}"${value === selected ? ' selected' : ''}>${escape(text)}</option>`;
+        const option = (value, text) => `<option value="${escape(String(value))}"${value === selected ? ' selected' : ''}>${escape(text)}</option>`;
         let html = option(0, noneLabel);
-        let found = selected === 0;
+        for (const choice of extras) html += option(String(choice.value), choice.label);
+        let found = selected === 0 || !!extra;
         for (const entry of entries || []) {
             if (!entry || !(entry.id > 0)) continue;
             if (entry.id === selected) found = true;

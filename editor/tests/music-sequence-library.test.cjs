@@ -76,6 +76,9 @@ test('library pickers list entries by id, keep a vanished choice visible, and es
     const missing = E.libraryOptions([{ id: 1, name: 'Boss' }], 7, '(None)', '(missing)');
     assert.match(missing, /<option value="7" selected>0007: \(missing\)<\/option>$/, 'an id the library lost stays chosen');
     assert.match(E.libraryOptions([], 0, 'Stored on this map', '(missing)'), /^<option value="0" selected>Stored on this map<\/option>$/);
+    assert.equal(E.libraryOptions([{ id: 2, name: 'Caves' }], 'map', '(None)', '(missing)', [{ value: 'map', label: 'Stored on this map' }]),
+        '<option value="0">(None)</option><option value="map" selected>Stored on this map</option><option value="2">0002: Caves</option>',
+        'a choice of the host’s own sits after (None), and can be the one chosen');
 });
 
 test('every edit reaches onEdit, so a host without an OK button can write the sequence back', async () => {
@@ -231,7 +234,7 @@ test('the tab, the pickers and the strings are wired', () => {
     const html = read('index.html');
     assert.match(html, /<script src="src\/database\/DatabaseMusicSequenceEditor\.js"><\/script>/);
     assert.ok(html.indexOf('src/utils/BgmSequenceEditor.js') < html.indexOf('src/database/DatabaseMusicSequenceEditor.js'));
-    for (const id of ['map-bgm-sequence-source', 'map-bgm-sequence-move-btn', 'map-bgm-sequence-move-hint', 'map-bgm-sequence-library-hint',
+    for (const id of ['map-bgm-sequence-move-btn', 'map-bgm-sequence-move-hint', 'map-bgm-sequence-library-hint',
         'map-battle-bgm-track', 'map-battle-bgm-choose-btn', 'map-battle-bgm-clear-btn']) {
         assert.match(html, new RegExp(`id="${id}"`), id);
     }
