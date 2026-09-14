@@ -656,14 +656,17 @@
         const object=record?.object;if(!object)return;
         const main=sprite._mainSprite||sprite,blend=main.getBlendColor?.()||[0,0,0,0],strength=Math.max(0,Math.min(1,(blend[3]||0)/255)),additive=sprite.blendMode===1||main.blendMode===1;
         const dead=typeof battler.isDead==='function'&&battler.isDead(),collapsed=dead&&!sprite._effectType&&sprite.opacity<32;
-        object.visible=battler.isAppeared()&&sprite.visible!==false&&sprite.opacity>0&&!collapsed;
+        // The stock damage blink switches a sprite off and on; a model would vanish, so it flashes white on the off frames instead.
+        const blinking=sprite._effectType==='blink',blinkOff=blinking&&sprite.opacity===0,opacity=blinking?255:sprite.opacity;
+        object.visible=battler.isAppeared()&&sprite.visible!==false&&opacity>0&&!collapsed;
         const T=root.THREE,wanted=T?(additive?T.AdditiveBlending:T.NormalBlending):null;
         object.traverse(node=>{for(const material of Array.isArray(node.material)?node.material:[node.material]){if(!material)continue;
             material.userData||={};material.userData.rrOriginalOpacity??=material.opacity;
-            material.opacity=material.userData.rrOriginalOpacity*sprite.opacity/255;
-            if(sprite.opacity<255||additive)material.transparent=true;
+            material.opacity=material.userData.rrOriginalOpacity*opacity/255;
+            if(opacity<255||additive)material.transparent=true;
             const tint=material.userData.rrBlend||(material.userData.rrBlend={value:{x:0,y:0,z:0,w:0}});
-            tint.value.x=(blend[0]||0)/255;tint.value.y=(blend[1]||0)/255;tint.value.z=(blend[2]||0)/255;tint.value.w=strength;
+            if(blinkOff){tint.value.x=1;tint.value.y=1;tint.value.z=1;tint.value.w=.7;}
+            else{tint.value.x=(blend[0]||0)/255;tint.value.y=(blend[1]||0)/255;tint.value.z=(blend[2]||0)/255;tint.value.w=strength;}
             if(wanted!==null&&material.blending!==wanted)material.blending=wanted;
         }});
         // The engine shakes a boss as it collapses: the model shakes the same few pixels, across the screen.

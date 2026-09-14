@@ -86,7 +86,7 @@
       {
         "frame": 2,
         "se": {
-          "name": "Powerup",
+          "name": "powerup-02",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -351,7 +351,7 @@
       {
         "frame": 2,
         "se": {
-          "name": "Powerup",
+          "name": "powerup-02",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -634,7 +634,7 @@
       {
         "frame": 8,
         "se": {
-          "name": "Powerup",
+          "name": "powerup-02",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -3592,7 +3592,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Ice4",
+          "name": "scan-01",
           "pan": 0,
           "pitch": 110,
           "volume": 90
@@ -3908,7 +3908,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Heal3",
+          "name": "powerup-01",
           "pan": 0,
           "pitch": 100,
           "volume": 90
@@ -3917,7 +3917,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Saint2",
+          "name": "powerup-03",
           "pan": 0,
           "pitch": 100,
           "volume": 90
@@ -4014,7 +4014,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Saint2",
+          "name": "powerup-03",
           "pan": 0,
           "pitch": 100,
           "volume": 100
@@ -4081,7 +4081,7 @@
       {
         "frame": 1,
         "se": {
-          "name": "Ice4",
+          "name": "scan-01",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -4090,7 +4090,7 @@
       {
         "frame": 3,
         "se": {
-          "name": "Heal1",
+          "name": "powerup-01",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -4184,7 +4184,7 @@
       {
         "frame": 9,
         "se": {
-          "name": "Ice4",
+          "name": "scan-01",
           "pan": 0,
           "pitch": 100,
           "volume": 80
@@ -4261,7 +4261,7 @@
       {
         "frame": 2,
         "se": {
-          "name": "Recovery",
+          "name": "powerup-01",
           "pan": 0,
           "pitch": 70,
           "volume": 90
@@ -4270,7 +4270,7 @@
       {
         "frame": 6,
         "se": {
-          "name": "Ice4",
+          "name": "scan-01",
           "pan": 0,
           "pitch": 100,
           "volume": 90
@@ -4347,7 +4347,7 @@
       {
         "frame": 2,
         "se": {
-          "name": "Ice4",
+          "name": "scan-01",
           "pan": 0,
           "pitch": 100,
           "volume": 90
@@ -4414,7 +4414,7 @@
       {
         "frame": 1,
         "se": {
-          "name": "Ice4",
+          "name": "scan-01",
           "pan": 0,
           "pitch": 120,
           "volume": 90
@@ -4432,7 +4432,7 @@
       {
         "frame": 9,
         "se": {
-          "name": "Heal3",
+          "name": "powerup-01",
           "pan": 0,
           "pitch": 120,
           "volume": 90
@@ -4500,7 +4500,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Ice4",
+          "name": "scan-01",
           "pan": 0,
           "pitch": 100,
           "volume": 90
@@ -4672,7 +4672,7 @@
       {
         "frame": 9,
         "se": {
-          "name": "Ice4",
+          "name": "scan-01",
           "pan": 0,
           "pitch": 150,
           "volume": 100
@@ -4796,7 +4796,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Powerup",
+          "name": "powerup-02",
           "pan": 0,
           "pitch": 100,
           "volume": 90
@@ -4805,7 +4805,7 @@
       {
         "frame": 4,
         "se": {
-          "name": "Magic4",
+          "name": "powerup-03",
           "pan": 0,
           "pitch": 120,
           "volume": 80
@@ -4853,7 +4853,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Up1",
+          "name": "powerup-01",
           "pan": 0,
           "pitch": 80,
           "volume": 80
@@ -4862,7 +4862,7 @@
       {
         "frame": 9,
         "se": {
-          "name": "Ice4",
+          "name": "scan-01",
           "pan": 0,
           "pitch": 90,
           "volume": 80
@@ -5393,7 +5393,7 @@
       {
         "frame": 1,
         "se": {
-          "name": "Up1",
+          "name": "powerup-01",
           "pan": 0,
           "pitch": 50,
           "volume": 70
@@ -5945,7 +5945,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Ice4",
+          "name": "scan-01",
           "pan": 0,
           "pitch": 100,
           "volume": 90
@@ -7838,7 +7838,7 @@
       {
         "frame": 2,
         "se": {
-          "name": "Up1",
+          "name": "powerup-01",
           "pan": 0,
           "pitch": 80,
           "volume": 90
@@ -8035,7 +8035,7 @@
       {
         "frame": 19,
         "se": {
-          "name": "Ice4",
+          "name": "scan-01",
           "pan": 0,
           "pitch": 100,
           "volume": 90
@@ -9287,7 +9287,7 @@
       {
         "frame": 0,
         "se": {
-          "name": "Powerup",
+          "name": "powerup-02",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -9371,7 +9371,7 @@
       {
         "frame": 39,
         "se": {
-          "name": "Magic4",
+          "name": "powerup-03",
           "pan": 0,
           "pitch": 150,
           "volume": 90
@@ -10035,11 +10035,32 @@
     "id": 124
   },
   {
-    "name": "",
-    "flashTimings": [],
-    "soundTimings": [],
-    "effectName": "",
-    "displayType": 0,
+    "id": 125,
+    "displayType": 1,
+    "effectName": "EVFX06_01_SingleBlast",
+    "flashTimings": [
+      {
+        "frame": 4,
+        "duration": 30,
+        "color": [
+          255,
+          17,
+          85,
+          255
+        ]
+      },
+      {
+        "frame": 14,
+        "duration": 5,
+        "color": [
+          255,
+          153,
+          85,
+          255
+        ]
+      }
+    ],
+    "name": "Frag Blast",
     "offsetX": 0,
     "offsetY": 0,
     "rotation": {
@@ -10048,32 +10069,108 @@
       "z": 0
     },
     "scale": 100,
+    "soundTimings": [
+      {
+        "frame": 0,
+        "se": {
+          "name": "EVFX06_01_SingleBlast",
+          "pan": 0,
+          "pitch": 100,
+          "volume": 100
+        }
+      }
+    ],
     "speed": 100,
-    "id": 125
+    "timings": [],
+    "alignBottom": false
   },
   {
-    "name": "",
-    "flashTimings": [],
-    "soundTimings": [],
-    "effectName": "",
+    "id": 126,
     "displayType": 0,
+    "effectName": "EVFX06_02_SmokeBlast",
+    "flashTimings": [
+      {
+        "frame": 14,
+        "duration": 20,
+        "color": [
+          255,
+          255,
+          255,
+          255
+        ]
+      },
+      {
+        "frame": 29,
+        "duration": 50,
+        "color": [
+          0,
+          0,
+          0,
+          255
+        ]
+      }
+    ],
+    "name": "Smoke Blast",
     "offsetX": 0,
     "offsetY": 0,
     "rotation": {
       "x": 0,
-      "y": 0,
+      "y": 15,
       "z": 0
     },
     "scale": 100,
+    "soundTimings": [
+      {
+        "frame": 0,
+        "se": {
+          "name": "EVFX06_02_SmokeBlast",
+          "pan": 0,
+          "pitch": 100,
+          "volume": 90
+        }
+      }
+    ],
     "speed": 100,
-    "id": 126
+    "alignBottom": true,
+    "timings": []
   },
   {
-    "name": "",
-    "flashTimings": [],
-    "soundTimings": [],
-    "effectName": "",
+    "id": 127,
     "displayType": 0,
+    "effectName": "EVFXParagon05_09_BlackholeGrenade",
+    "flashTimings": [
+      {
+        "frame": 89,
+        "duration": 10,
+        "color": [
+          0,
+          0,
+          0,
+          255
+        ]
+      },
+      {
+        "frame": 99,
+        "duration": 10,
+        "color": [
+          0,
+          0,
+          0,
+          255
+        ]
+      },
+      {
+        "frame": 109,
+        "duration": 10,
+        "color": [
+          0,
+          0,
+          0,
+          255
+        ]
+      }
+    ],
+    "name": "Blackhole Grenade",
     "offsetX": 0,
     "offsetY": 0,
     "rotation": {
@@ -10082,66 +10179,228 @@
       "z": 0
     },
     "scale": 100,
+    "soundTimings": [
+      {
+        "frame": 0,
+        "se": {
+          "name": "EVFXParagon05_09_BlackholeGrenade",
+          "pan": 0,
+          "pitch": 100,
+          "volume": 90
+        }
+      }
+    ],
     "speed": 100,
-    "id": 127
+    "alignBottom": false,
+    "timings": []
   },
   {
-    "name": "",
-    "flashTimings": [],
-    "soundTimings": [],
-    "effectName": "",
-    "displayType": 0,
+    "id": 128,
+    "displayType": 1,
+    "effectName": "EVFXParagon05_07_CarpetBombing",
+    "flashTimings": [
+      {
+        "frame": 44,
+        "duration": 5,
+        "color": [
+          255,
+          136,
+          51,
+          255
+        ]
+      },
+      {
+        "frame": 49,
+        "duration": 30,
+        "color": [
+          255,
+          255,
+          255,
+          255
+        ]
+      },
+      {
+        "frame": 54,
+        "duration": 5,
+        "color": [
+          0,
+          0,
+          0,
+          255
+        ]
+      },
+      {
+        "frame": 59,
+        "duration": 5,
+        "color": [
+          255,
+          136,
+          51,
+          255
+        ]
+      },
+      {
+        "frame": 64,
+        "duration": 5,
+        "color": [
+          0,
+          0,
+          0,
+          255
+        ]
+      },
+      {
+        "frame": 69,
+        "duration": 5,
+        "color": [
+          255,
+          136,
+          51,
+          255
+        ]
+      },
+      {
+        "frame": 79,
+        "duration": 15,
+        "color": [
+          255,
+          255,
+          255,
+          255
+        ]
+      }
+    ],
+    "name": "Mortar Strike",
     "offsetX": 0,
     "offsetY": 0,
     "rotation": {
-      "x": 0,
+      "x": 20,
       "y": 0,
       "z": 0
     },
     "scale": 100,
+    "soundTimings": [
+      {
+        "frame": 0,
+        "se": {
+          "name": "EVFXParagon05_07_CarpetBombing",
+          "pan": 0,
+          "pitch": 100,
+          "volume": 90
+        }
+      }
+    ],
     "speed": 100,
-    "id": 128
+    "alignBottom": true,
+    "timings": []
   },
   {
-    "name": "",
-    "flashTimings": [],
-    "soundTimings": [],
-    "effectName": "",
+    "id": 129,
     "displayType": 0,
+    "effectName": "EVFX04_14_SnipeShot",
+    "flashTimings": [
+      {
+        "frame": 89,
+        "duration": 30,
+        "color": [
+          255,
+          119,
+          17,
+          187
+        ]
+      }
+    ],
+    "name": "Snipe Shot",
     "offsetX": 0,
     "offsetY": 0,
     "rotation": {
-      "x": 0,
+      "x": 15,
       "y": 0,
       "z": 0
     },
     "scale": 100,
+    "soundTimings": [
+      {
+        "frame": 0,
+        "se": {
+          "name": "EVFX04_14_SnipeShot",
+          "pan": 0,
+          "pitch": 100,
+          "volume": 100
+        }
+      }
+    ],
     "speed": 100,
-    "id": 129
+    "timings": [],
+    "alignBottom": false
   },
   {
-    "name": "",
-    "flashTimings": [],
-    "soundTimings": [],
-    "effectName": "",
+    "id": 130,
     "displayType": 0,
-    "offsetX": 0,
-    "offsetY": 0,
+    "effectName": "EVFX06_05_EnergyBeam",
+    "flashTimings": [
+      {
+        "frame": 4,
+        "duration": 30,
+        "color": [
+          153,
+          119,
+          0,
+          255
+        ]
+      }
+    ],
+    "name": "Energy Beam",
+    "offsetX": 15,
+    "offsetY": -50,
     "rotation": {
       "x": 0,
       "y": 0,
-      "z": 0
+      "z": 270
     },
-    "scale": 100,
+    "scale": 33,
+    "soundTimings": [
+      {
+        "frame": 0,
+        "se": {
+          "name": "EVFX06_05_EnergyBeam",
+          "pan": 0,
+          "pitch": 100,
+          "volume": 100
+        }
+      }
+    ],
     "speed": 100,
-    "id": 130
+    "alignBottom": false,
+    "timings": []
   },
   {
-    "name": "",
-    "flashTimings": [],
-    "soundTimings": [],
-    "effectName": "",
+    "id": 131,
     "displayType": 0,
+    "effectName": "EVFXParagon05_02_BlasterShot",
+    "flashTimings": [
+      {
+        "frame": 19,
+        "duration": 5,
+        "color": [
+          255,
+          255,
+          255,
+          255
+        ]
+      },
+      {
+        "frame": 24,
+        "duration": 5,
+        "color": [
+          255,
+          102,
+          102,
+          255
+        ]
+      }
+    ],
+    "name": "Blaster Shot",
     "offsetX": 0,
     "offsetY": 0,
     "rotation": {
@@ -10150,15 +10409,88 @@
       "z": 0
     },
     "scale": 100,
+    "soundTimings": [
+      {
+        "frame": 0,
+        "se": {
+          "name": "EVFXParagon05_02_BlasterShot",
+          "pan": 0,
+          "pitch": 100,
+          "volume": 90
+        }
+      }
+    ],
     "speed": 100,
-    "id": 131
+    "alignBottom": false,
+    "timings": []
   },
   {
-    "name": "",
-    "flashTimings": [],
-    "soundTimings": [],
-    "effectName": "",
+    "id": 132,
     "displayType": 0,
+    "effectName": "EVFX04_11_NormalShot",
+    "flashTimings": [
+      {
+        "frame": 0,
+        "duration": 8,
+        "color": [
+          170,
+          136,
+          68,
+          153
+        ]
+      },
+      {
+        "frame": 9,
+        "duration": 8,
+        "color": [
+          221,
+          136,
+          68,
+          255
+        ]
+      },
+      {
+        "frame": 19,
+        "duration": 8,
+        "color": [
+          119,
+          68,
+          68,
+          187
+        ]
+      },
+      {
+        "frame": 29,
+        "duration": 8,
+        "color": [
+          255,
+          221,
+          68,
+          221
+        ]
+      },
+      {
+        "frame": 39,
+        "duration": 8,
+        "color": [
+          204,
+          170,
+          170,
+          255
+        ]
+      },
+      {
+        "frame": 49,
+        "duration": 8,
+        "color": [
+          255,
+          255,
+          255,
+          238
+        ]
+      }
+    ],
+    "name": "Normal Shot",
     "offsetX": 0,
     "offsetY": 0,
     "rotation": {
@@ -10167,8 +10499,20 @@
       "z": 0
     },
     "scale": 100,
+    "soundTimings": [
+      {
+        "frame": 0,
+        "se": {
+          "name": "EVFX04_11_NormalShot",
+          "pan": 0,
+          "pitch": 100,
+          "volume": 90
+        }
+      }
+    ],
     "speed": 100,
-    "id": 132
+    "timings": [],
+    "alignBottom": false
   },
   {
     "name": "",

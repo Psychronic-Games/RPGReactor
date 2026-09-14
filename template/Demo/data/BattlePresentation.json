@@ -167,6 +167,10 @@
     "21": {
       "mode": "sequence",
       "sequenceId": 28
+    },
+    "22": {
+      "mode": "sequence",
+      "sequenceId": 34
     }
   },
   "weapons": {

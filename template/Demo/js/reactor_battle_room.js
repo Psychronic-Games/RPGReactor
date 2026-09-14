@@ -403,7 +403,7 @@
             if(!this.cinematicEnabled()||!user){this.cinematicShot=null;this.cinematicTransition=null;return;}
             const position=key=>(this.models.get(key)||this.billboards.get(key))?.position;
             const a=position(user),b=position(targets[0]);if(!a)return;
-            this.cinematicTransition={from:this.cameraState(),start:this.frame,duration:30};this.cinematicTrack=null;
+            this.cinematicTransition={from:this.cameraState(),start:this.frame,duration:36};this.cinematicTrack=null;
             this.cinematicShot={phase:'actor',start:this.frame,user,targets:[...new Set(targets)],yaw:b?root.ReactorBattleData.facingToward(a,b):a.facing||0};
         }
         /**
@@ -443,6 +443,8 @@
             return Math.max(3,Math.min(c.distance,limit));
         }
         static get EYE_CEILING(){return 6;}
+        /** How much of the way to its goal a cinematic shot moves each frame. */
+        static get CAMERA_GLIDE(){return .12;}
         /** World boxes of everything a cut must not look through, cached for the shot. */
         eyeBlockers(){
             if(this._eyeBoxes&&this._eyeBoxesShot===this.cinematicShot)return this._eyeBoxes;
@@ -482,7 +484,7 @@
         focusHeight(record){return record?.spec?(record.spec.size||2)*(record.spec.scale||1)*(record.position?.scale||1)*(record.position?.scaleY||1):record?.height||2;}
         cinematicImpact(){
             if(!this.cinematicShot||this.cinematicShot.phase==='impact')return;
-            this.cinematicTransition={from:this.cameraState(),start:this.frame,duration:24};
+            this.cinematicTransition={from:this.cameraState(),start:this.frame,duration:30};
             this.cinematicShot.phase='impact';this.cinematicShot.start=this.frame;
         }
         endCinematicAction(){
@@ -535,18 +537,20 @@
             const wanted=target.distance;target.distance=this.distanceInsideRoom(target);
             // A wall behind a big subject (the tank against the west wall) can leave the eye inside it: try the other side of the line, then the far side.
             const radius=height*.55;
-            if(target.distance<radius){for(const alt of [-yawOffset,180+yawOffset,180-yawOffset]){const other={...target,yaw:180-shot.yaw+alt+sweep,distance:wanted};other.distance=this.distanceInsideRoom(other);if(other.distance>target.distance)target=other;if(target.distance>=radius)break;}}
-            if(told){
-                // A told focus moves every frame (a projectile crossing the
-                // room), so the shot glides after it instead of pinning to it;
-                // one step per frame however often the camera is read.
-                const track=this.cinematicTrack;
+            if(shot.side!==undefined){const kept={...target,yaw:180-shot.yaw+shot.side+sweep,distance:wanted};kept.distance=this.distanceInsideRoom(kept);target=kept;}
+            else if(target.distance<radius){for(const alt of [-yawOffset,180+yawOffset,180-yawOffset]){const other={...target,yaw:180-shot.yaw+alt+sweep,distance:wanted};other.distance=this.distanceInsideRoom(other);if(other.distance>target.distance){target=other;shot.side=alt;}if(target.distance>=radius)break;}}
+            {
+                // The shot glides toward where it should be, one step per frame
+                // however often the camera is read: a focus that moves (a shot
+                // crossing the room), a clamp that changes as the eye nears a
+                // wall, a swing to the other side, all ease instead of jumping.
+                const track=this.cinematicTrack,rate=BattleRoomView.CAMERA_GLIDE;
                 if(track&&track.frame===this.frame)target=track.target;
                 else{
-                    if(track){const eased={...target};for(const key of ['x','y','z','distance'])eased[key]=track.target[key]+(target[key]-track.target[key])*.2;const arc=((target.yaw-track.target.yaw)%360+540)%360-180;eased.yaw=track.target.yaw+arc*.2;target=eased;}
+                    if(track){const eased={...target};for(const key of ['x','y','z','distance'])eased[key]=track.target[key]+(target[key]-track.target[key])*rate;const arc=((target.yaw-track.target.yaw)%360+540)%360-180;eased.yaw=track.target.yaw+arc*rate;target=eased;}
                     this.cinematicTrack={frame:this.frame,target};
                 }
-            }else this.cinematicTrack=null;
+            }
             // The ease in from the saved overview passes through the blend too, so it cannot carry the eye through the ceiling on its way down.
             const blended=this.cinematicBlend(target);blended.distance=this.distanceInsideRoom(blended);return blended;
         }
