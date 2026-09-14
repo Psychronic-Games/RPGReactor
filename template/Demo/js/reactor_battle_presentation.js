@@ -797,7 +797,10 @@
         if(root.Game_Actor){const visible=Game_Actor.prototype.isSpriteVisible;Game_Actor.prototype.isSpriteVisible=function(){const g=P.settings.actors?.[this.actorId()]?.graphic;return g?.mode&&g.mode!=='auto'?true:visible.call(this);};}
         for(const Class of [root.Game_Actor,root.Game_Enemy])if(Class){
             const methods={performDamage:'damage',performEvasion:'evade',performMagicEvasion:'magicEvade',performCollapse:'collapse',performVictory:'victory',performEscape:'escape'};
-            for(const [method,name] of Object.entries(methods)){const prior=Class.prototype[method];Class.prototype[method]=function(...args){const result=prior?.apply(this,args),sprite=SceneManager._scene?._spriteset?.findTargetSprite(this);if(sprite)P.requestGraphicMotion(sprite,name);this._rrReaction=name;return result;};}
+            for(const [method,name] of Object.entries(methods)){const prior=Class.prototype[method];Class.prototype[method]=function(...args){const result=prior?.apply(this,args),sprite=SceneManager._scene?._spriteset?.findTargetSprite(this);if(sprite)P.requestGraphicMotion(sprite,name);this._rrReaction=name;
+                // A model in a room takes the hit on the body: knocked back from the attacker, then springing forward.
+                if(name==='damage'&&sprite?._reactorRoomKey){const room=SceneManager._scene?._spriteset?._reactorRoom,attacker=SceneManager._scene?._spriteset?.findTargetSprite(BattleManager._subject);room?.startRecoil(sprite._reactorRoomKey,attacker?._reactorRoomPosition||null);}
+                return result;};}
             const perform=Class.prototype.performAction;Class.prototype.performAction=function(action){const result=perform?.call(this,action),sprite=SceneManager._scene?._spriteset?.findTargetSprite(this);if(sprite)P.requestGraphicMotion(sprite,action.isAttack?.()?'attack':action.isGuard?.()?'guard':action.isItem?.()?'item':action.isMagical?.()?'cast':'skill');return result;};
         }
     };

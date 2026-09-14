@@ -13303,9 +13303,12 @@ Reactor3D.heldShape = function(object) {
     // receiver), as a fraction of the length from the handle end; a thing
     // with nothing narrower there is held a fifth of the way along.
     const order = []; for (let k = 0; k < N; k++) order.push(tipAtMax ? k : N - 1 - k);
-    // The very end slice is a pommel or a buttplate, not the grip.
+    // The handle is the narrow run between the end slice (a pommel, a
+    // buttplate) and the widest slice; the fist closes on its middle, so a
+    // long two-hand grip shows as much handle below the hand as above it.
     let grip = .2, best = Infinity;
-    for (let k = 1; k < N; k++) { const i = order[k]; if (i === widest) break; if (slices[i] > 0 && slices[i] < best) { best = slices[i]; grip = (k + .5) / N; } }
+    for (let k = 1; k < N; k++) { const i = order[k]; if (i === widest) break; if (slices[i] > 0 && slices[i] < best) best = slices[i]; }
+    if (best < Infinity) { let sum = 0, count = 0; for (let k = 1; k < N; k++) { const i = order[k]; if (i === widest) break; if (slices[i] > 0 && slices[i] <= best * 1.4) { sum += k; count++; } } if (count) grip = (sum / count + .5) / N; }
     const shape = { axis: unit, up: down.map(n => -n), down, length, base, centre, grip, slices: slices.map(n => Math.round(n * 1000) / 1000), size, widest };
     object.userData.__heldShape = shape;
     return shape;

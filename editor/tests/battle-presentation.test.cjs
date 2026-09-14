@@ -395,3 +395,19 @@ test('a held model is read by its shape: long axis, tip, grip and which way its 
   const far=new THREE.Vector3(5,1.4,0);view.reachArm('a','right',far);assert.ok(Math.abs(hand.getWorldPosition(new THREE.Vector3()).x-.9)<1e-3,'a point out of reach straightens the arm toward it');
  }finally{global.Reactor3D=previousR;global.ReactorBattleData=previousB;}
 });
+
+test('a hit recoil goes back, springs forward past home and settles, smaller on a big model',()=>{
+ const R=require('../../runtime/reactor_3d.js'),View=require('../../runtime/reactor_battle_room.js'),previousR=global.Reactor3D,previousB=global.ReactorBattleData;global.Reactor3D=R;global.ReactorBattleData=B;
+ try{
+  const back=[0,2,4,6].map(t=>View.recoilOffset(t,2));assert.ok(back[0]===0&&back[1]>0&&back[2]>back[1]&&back[3]>back[2],'pushed back over the first frames: '+back);
+  assert.ok(View.recoilOffset(6,2)>.39,'a tile-sized model goes back four tenths');
+  const spring=[10,12,14].map(t=>View.recoilOffset(t,2));assert.ok(spring.some(v=>v<0),'then springs past home: '+spring);
+  assert.ok(Math.abs(View.recoilOffset(17.99,2))<.05&&View.recoilOffset(18,2)===null,'and settles');
+  assert.ok(View.recoilOffset(6,15)<View.recoilOffset(6,2)/3,'a tank barely moves');
+  const settings=B.room({id:1,width:50,height:50});const view=new View({reactor3d:{}},{},settings,{});
+  view.models.set('t',{position:{x:10,y:10,z:0,facing:90},spec:{size:2},object:{position:{x:10.5,y:0,z:10.5},updateMatrixWorld(){}}});
+  view.startRecoil('t',{x:4,y:10});assert.ok(view.models.get('t').recoil.dx>.99,'away from the attacker to the west is east');
+  view.frame=6;view.applyRecoil(view.models.get('t'));assert.ok(view.models.get('t').object.position.x>10.85,'the object is pushed, the record is not: '+view.models.get('t').object.position.x);assert.equal(view.models.get('t').position.x,10);
+  view.startRecoil('t',null);assert.ok(Math.abs(view.models.get('t').recoil.dx+1)<1e-9,'no attacker: straight back from a facing of 90 is west');
+ }finally{global.Reactor3D=previousR;global.ReactorBattleData=previousB;}
+});

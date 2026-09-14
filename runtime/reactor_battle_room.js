@@ -479,6 +479,30 @@
             forward.normalize();desired.normalize();
             return Math.atan2(forward.z*desired.x-forward.x*desired.z,forward.x*desired.x+forward.z*desired.z)*180/Math.PI;
         }
+        /**
+         * A hit knocks a model back along the line from whoever hit it, then
+         * it springs forward past home and settles: the offset in tiles for a
+         * frame of the recoil, or null once it is over. Big models move less.
+         */
+        static recoilOffset(t, size=2) {
+            if(t<0||t>=18)return null;
+            const d=.4*Math.min(1,3/Math.max(1,size));
+            if(t<6)return d*Math.sin(t/6*Math.PI/2);
+            const s=(t-6)/12;return d*(1-s)*Math.cos(s*Math.PI/2)-.12*Math.sin(s*Math.PI)*d/.4;
+        }
+        /** Starts a hit recoil on a battler, away from a point in room tiles (the attacker), else straight back from its facing. */
+        startRecoil(key, from) {
+            const record=this.models.get(key)||this.billboards.get(key);if(!record?.position)return;
+            const p=record.position;let dx=p.x-(from?.x??p.x),dy=p.y-(from?.y??p.y);
+            if(Math.hypot(dx,dy)<1e-3){const f=(p.facing||0)*Math.PI/180;dx=-Math.sin(f);dy=-Math.cos(f);}
+            const n=Math.hypot(dx,dy)||1;record.recoil={start:this.frame,dx:dx/n,dy:dy/n};
+        }
+        applyRecoil(record) {
+            const r=record.recoil;if(!r||!record.object)return;
+            const offset=BattleRoomView.recoilOffset(this.frame-r.start,record.spec?.size||record.height||2);
+            if(offset===null){record.recoil=null;return;}
+            record.object.position.x+=r.dx*offset;record.object.position.z+=r.dy*offset;record.object.updateMatrixWorld(true);
+        }
         /** How tall a battler's model stands in the room, in tiles (a tank's size is its length, not its height). */
         modelHeight(key){const r=this.models.get(key)||this.billboards.get(key);if(!r)return 2;if(r.billboard)return r.height||2;const e=r.extent;return e&&r.scale?Math.max(.5,e.y*r.scale*(r.position?.scale||1)*(r.position?.scaleY||1)):this.focusHeight(r);}
         focusHeight(record){return record?.spec?(record.spec.size||2)*(record.spec.scale||1)*(record.position?.scale||1)*(record.position?.scaleY||1):record?.height||2;}
@@ -620,13 +644,14 @@
         render() {
             if(this.disposed||!this.renderer)return;
             const R=root.Reactor3D;this.frame++;this.aim();for(const r of this.billboards.values()){r.object.quaternion.copy(this.camera.quaternion);r.object.rotateZ((r.position?.rotateZ||0)*Math.PI/180);}this.world.setAnimationFrame(Math.floor(this.frame/30));
+            for(const r of this.billboards.values())this.applyRecoil(r);
             for(const r of [...this.models.values(),...this.billboards.values()])if(r.shadow)this.updateShadow(r);
             const lights=this.roomLights();let lightSeed=1000;
             for(const r of this.models.values())if(r.object){
                 const motion=r.action?.name,rule=r.rules.find(rule=>rule.trigger==='action'&&rule.name.toLowerCase()===motion?.toLowerCase());
                 const action=r.sequence?.length?this.propAction(r):r.action?{name:rule?.name||motion,frame:r.action.start}:null;
                 if(r.binding&&r.rules.length)R.applyModelAnimation(r.binding,r.rules,{frame:r.sequence?.length?r.animationFrame:this.frame,moving:!!r.moving,dashing:motion==='run',distance:0,scale:r.scale,action,seek:!!this.seekAnimations});
-                this.fireRuleEffects(r,action);
+                this.fireRuleEffects(r,action);this.applyRecoil(r);
                 r.object.updateMatrixWorld(true);
                 for(const e of r.effects||[])if(e.type==='light' && this.effectActive(r,e)){
                     const light=R.effectLight(r.object,e);if(light){Object.assign(light,R.animateLight(e.light,this.frame,++lightSeed,light.radius,light.intensity));lights.push(light);}
