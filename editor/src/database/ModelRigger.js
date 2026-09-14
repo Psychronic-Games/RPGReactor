@@ -54,7 +54,9 @@
         const out = [];
         for (const finger of FINGERS) for (const end of ['base', 'tip']) for (const side of ['L', 'R']) {
             const label = (side === 'L' ? 'Left ' : 'Right ') + FINGER_LABELS[finger] + ' ' + end;
-            out.push({ key: fingerKey(finger, end, side), label, mirror: fingerKey(finger, end, side === 'L' ? 'R' : 'L'), fine: true });
+            // The viewport shows the short name: the marker's colour already says which side.
+            const short = capital(finger) + ' ' + end;
+            out.push({ key: fingerKey(finger, end, side), label, short, mirror: fingerKey(finger, end, side === 'L' ? 'R' : 'L'), fine: true });
         }
         return out;
     }

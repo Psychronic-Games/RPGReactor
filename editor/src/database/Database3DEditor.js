@@ -5798,7 +5798,8 @@ class Database3DEditor {
 
     /** Hover highlight: run from the frame loop, throttled by time. */
     _updateHover() {
-        if (this._selectMode || this._tool !== 'orbit' || !this._pointer || !this._object) return;
+        // Placing rig markers hovers markers, not parts: the part raycast is the slow one on a skinned model.
+        if (this._selectMode || (this._rigMode && !this._rigFaceMode) || this._tool !== 'orbit' || !this._pointer || !this._object) return;
         const now = performance.now();
         if (!Database3DEditor.shouldRaycastHover({
             now,
@@ -6098,25 +6099,67 @@ class Database3DEditor {
     /**
      * Rig markers keep one size on screen: they are scene objects, and
      * zooming onto a hand used to fill the view with one dot. Labels grow
-     * as the camera comes in (with the square root of the zoom), so finger
-     * names read up close and stay small over the whole body. Finger labels
-     * crowd a whole-body view, so they show once the camera is close.
+     * as the camera comes in (with the square root of the zoom, up to a
+     * readable cap), so finger names read up close and stay small over the
+     * whole body. Labels that would land on one another are then thinned.
      */
     _updateRigOverlay() {
         if (!this._rigMode || this._rigFaceMode || !this._rigMarkerMeshes) return;
         const zoom = Math.min(1, Math.max(0.01, this._view.distance / 4));
-        const k = zoom, kLabel = Math.sqrt(zoom);
+        const k = zoom;
+        let kLabel = Math.sqrt(zoom);
+        // No taller than about 22px of text: at that size a hand's worth of names still fits.
+        const canvas = this._detail.querySelector('.r3d-db-canvas');
+        const rect = canvas && canvas.getBoundingClientRect();
+        if (rect && rect.height && this._rigLabelBase && this._camera) {
+            const worldPerPixel = (2 * this._view.distance * Math.tan((this._camera.fov * Math.PI) / 360)) / rect.height;
+            const cap = (46 * worldPerPixel) / (this._rigLabelBase * (this._object ? this._object.scale.y : 1));
+            kLabel = Math.min(kLabel, cap);
+        }
+        if (Math.abs(k - (this._rigOverlayScale || 0)) > 1e-4 || Math.abs(kLabel - (this._rigLabelScale || 0)) > 1e-4) {
+            this._rigOverlayScale = k;
+            this._rigLabelScale = kLabel;
+            for (const marker of this._rigMarkerDefinitions()) {
+                const sphere = this._rigMarkerMeshes[marker.key];
+                if (sphere) sphere.scale.setScalar(k * (marker.key === this._rigHoverKey ? 1.7 : 1));
+                this._placeRigLabel(marker.key);
+            }
+        }
+        this._declutterRigLabels(rect);
+    }
+
+    /**
+     * Which labels draw this frame: the hovered or dragged marker's always;
+     * finger names only once the camera is close; and never one on top of
+     * another — the joints' names go first, then the fingers, and a label
+     * whose box would cross one already placed stays hidden until the
+     * markers are moved apart or the camera comes closer.
+     */
+    _declutterRigLabels(rect) {
+        if (!this._rigMarkerLabels || !this._camera || !rect || !rect.height) return;
         const close = this._view.distance < 0.9;
-        if (Math.abs(k - (this._rigOverlayScale || 0)) < 1e-4 && close === this._fineLabelsShown) return;
-        this._rigOverlayScale = k;
-        this._rigLabelScale = kLabel;
-        this._fineLabelsShown = close;
-        for (const marker of this._rigMarkerDefinitions()) {
-            const sphere = this._rigMarkerMeshes[marker.key];
-            if (sphere) sphere.scale.setScalar(k * (marker.key === this._rigHoverKey ? 1.7 : 1));
-            const label = this._rigMarkerLabels && this._rigMarkerLabels[marker.key];
-            if (label && marker.fine) label.visible = close;
-            this._placeRigLabel(marker.key);
+        const keep = key => key && (key === this._rigHoverKey || key === this._rigDragKey);
+        const defs = this._rigMarkerDefinitions().slice().sort((a, b) => (keep(b.key) - keep(a.key)) || ((a.fine ? 1 : 0) - (b.fine ? 1 : 0)));
+        const tanHalf = Math.tan((this._camera.fov * Math.PI) / 360);
+        const world = new THREE.Vector3(), scale = new THREE.Vector3();
+        const placed = [];
+        for (const marker of defs) {
+            const label = this._rigMarkerLabels[marker.key];
+            if (!label) continue;
+            if (marker.fine && !close && !keep(marker.key)) { label.visible = false; continue; }
+            label.getWorldPosition(world);
+            const distance = world.distanceTo(this._camera.position);
+            const ndc = world.clone().project(this._camera);
+            if (ndc.z > 1 || distance <= 0) { label.visible = false; continue; }
+            label.getWorldScale(scale);
+            const pxPerUnit = rect.height / (2 * distance * tanHalf);
+            const w = scale.x * pxPerUnit, h = scale.y * pxPerUnit;
+            const cx = (ndc.x * 0.5 + 0.5) * rect.width, cy = (-ndc.y * 0.5 + 0.5) * rect.height;
+            const box = { l: cx - w / 2, r: cx + w / 2, t: cy - h / 2, b: cy + h / 2 };
+            const crosses = placed.some(p => box.l < p.r && box.r > p.l && box.t < p.b && box.b > p.t);
+            if (crosses && !keep(marker.key)) { label.visible = false; continue; }
+            label.visible = true;
+            placed.push(box);
         }
     }
 
@@ -6327,18 +6370,20 @@ class Database3DEditor {
         // gives no clue whether it wants the elbow or the wrist.
         this._rigMarkerLabels = {};
         const labelHeight = Math.max(size.x, size.y, size.z) * (this._rigFaceMode ? 0.025 : 0.05);
+        this._rigLabelBase = labelHeight;
         this._fineLabelsShown = undefined;
         this._rigOverlayScale = undefined;
         for (const marker of this._rigMarkerDefinitions()) {
-            const sprite = this._makeMarkerLabel(this._t(marker.label));
+            const sprite = this._makeMarkerLabel(this._t(marker.short || marker.label));
             const height = marker.fine ? labelHeight * 0.7 : labelHeight;
-            sprite.userData.__width = height * 5;
+            sprite.userData.__width = height * sprite.userData.__aspect;
             sprite.userData.__height = height;
             sprite.userData.__lift = radius * (marker.fine ? 0.6 : 1.2);
-            sprite.scale.set(height * 5, height, 1);
+            sprite.scale.set(sprite.userData.__width, height, 1);
             sprite.position.fromArray(this._rigMarkers[marker.key]);
             sprite.position.y += sprite.userData.__lift + height * 0.55;
             sprite.visible = (!this._rigFaceMode || marker.key === this._facePoint) && !marker.fine;
+            sprite.userData.__fine = !!marker.fine;
             group.add(sprite);
             this._rigMarkerLabels[marker.key] = sprite;
         }
@@ -6352,23 +6397,28 @@ class Database3DEditor {
     /** A floating text label for one rig marker. */
     _makeMarkerLabel(text) {
         const canvas = document.createElement('canvas');
-        canvas.width = 320;
+        const font = 'bold 30px sans-serif';
+        const measure = canvas.getContext('2d');
+        measure.font = font;
+        // Wide enough for its own words: a fixed width clipped the longer names.
+        canvas.width = Math.max(64, Math.ceil(measure.measureText(text).width) + 24);
         canvas.height = 64;
         const context = canvas.getContext('2d');
-        context.font = 'bold 30px sans-serif';
+        context.font = font;
         context.textAlign = 'center';
         context.textBaseline = 'middle';
         context.lineWidth = 6;
         context.strokeStyle = 'rgba(0,0,0,0.85)';
-        context.strokeText(text, 160, 32);
+        context.strokeText(text, canvas.width / 2, 32);
         context.fillStyle = '#ffffff';
-        context.fillText(text, 160, 32);
+        context.fillText(text, canvas.width / 2, 32);
         const texture = new THREE.CanvasTexture(canvas);
         const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
             map: texture, depthTest: false, transparent: true, opacity: 0.95
         }));
         sprite.renderOrder = 31;
         sprite.userData.__reactorOverlay = true;
+        sprite.userData.__aspect = canvas.width / canvas.height;
         return sprite;
     }
 

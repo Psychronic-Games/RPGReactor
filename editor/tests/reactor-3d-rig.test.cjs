@@ -504,6 +504,7 @@ test('the humanoid template carries a palm and five fingers per hand, the hand b
     for (const key of ['palmL', 'palmR', ...fingerKeys]) assert.ok(Array.isArray(markers[key]), key);
     const defs = ModelRigger.markersFor('humanoid');
     assert.equal(defs.find(d => d.key === 'indexTipL').label, 'Left index finger tip', 'each finger end is named');
+    assert.equal(defs.find(d => d.key === 'indexTipL').short, 'Index tip', 'with a short name for the viewport');
     assert.equal(defs.find(d => d.key === 'pinkyBaseR').mirror, 'pinkyBaseL', 'and mirrors across');
     assert.ok(defs.find(d => d.key === 'thumbTipR').fine && !defs.find(d => d.key === 'wristR').fine, 'finger markers are the fine ones');
     const bones = ModelRigger.bonesFromMarkers(markers), hand = bones.find(b => b.name === 'RightHand');
