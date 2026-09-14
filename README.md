@@ -6,15 +6,15 @@ Use RPG Reactor to create, edit, playtest, and package 2D RPGs with familiar RPG
 
 Pre-built download binaries are available at <https://psychronic.itch.io/rpg-reactor>. The current development version is 0.98.6 and is not published yet; the latest tagged source release is [0.98.5](https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.98.5).
 
-## What's new in 0.98.5
+## What's new in 0.98.6
 
-- **Battle Rooms and visual Action Sequences:** use a map as the battle arena, place 2D/3D battlers, build attacks from editable steps, and stage cinematic cameras. Start with the reusable unarmed punch sequence.
-- **Native lighting and media surfaces:** place animated lights, images, and videos directly on maps or model parts, with visual position, rotation, size, and corner controls.
-- **Expanded 3D authoring:** sharper model previews, model optimization tools, facial markers, and audio-driven lip motion for spoken voices.
-- **Quests, interfaces, and audio:** author quests and custom interface panels, arrange map music sequences, and choose sound variants with shared audio pickers.
-- **Compatibility and reliability:** MV/MZ and 2D regression fixes, safer event/map saving, clearer tool selection, and more consistent themes and translations.
+- **Action sequences that fight for real:** one step list with five phases, poses on a rigged model's own parts, weapons held by their handles and aimed at the target, thrown items, projectiles from the muzzle, and cinematic cuts that follow the action.
+- **Victor Engine import:** Battle Motions and Battler Graphic Setup notetags become native sequences, with the concurrent steps, speed moves, arcs and waits that took.
+- **Hands on the rig:** palm and finger markers, a still model while placing them, zoom to the pointer, markers that snap into the mesh and show when they miss.
+- **Models and editor:** FBX and other formats keep materials and textures and convert to GLB, every menu and dialog answers to the keyboard, System 2 sizes and framing, enemy behaviour forecasts, OGG and MP3 from the Sound Effect Generator.
+- **The Demo fights back:** a 3D sword, railgun, pistol, grenades, med-kits, a tank that aims its cannon, and Star Shift effects with their sounds. Web builds correct filename casing.
 
-Read the [0.98.5 release notes](docs/posts/release-notes-0.98.5.md) for details and current limitations. Battle Rooms and Action Sequences are opt-in; existing battles keep their configured behavior. Earlier updates remain in the [changelog](CHANGELOG.md) and [devlog archive](docs/README.md).
+Read the [0.98.6 release notes](docs/posts/release-notes-0.98.6.md) for details and current limitations. Everything here is opt-in; existing projects keep their battles until they choose the new presentation. Earlier updates remain in the [changelog](CHANGELOG.md) and [devlog archive](docs/README.md).
 
 ## Repository Layout
 
@@ -33,7 +33,7 @@ RPGReactor/
 ## Documentation
 
 - [Editor README](editor/README.md): detailed feature list, source launch steps, project structure, shortcuts, and technical notes.
-- [Latest release notes](docs/posts/release-notes-0.98.5.md): features, fixes, and compatibility limits for 0.98.5.
+- [Latest release notes](docs/posts/release-notes-0.98.6.md): features, fixes, and compatibility limits for 0.98.6.
 - [Changelog](CHANGELOG.md): upcoming development and previous releases.
 - [Battle authoring guide](docs/BATTLE-PRESENTATION.md): Battle Rooms, formations, action steps, and supported plugin behavior.
 - [Media surface guide](docs/MEDIA-SURFACES.md): image/video placement, transforms, proportions, and legacy command support.
