@@ -714,7 +714,8 @@ class DatabaseActionSequenceEditor {
     liftPose(view){const flat=view?.settings?.projection==='2d';return p=>flat&&p&&p.z?{...p,y:p.y-p.z,z:0}:p;}
     paintSequenceLayers(ctx,visuals,poses,view,width,height){
         // Held things are placed again after each frame's animation (a reach bends the arm after the pose rules), as the battle does.
-        this._holds=new Map();if(!this._holdUpdater){this._holdUpdater=()=>{for(const hold of this._holds?.values()||[])hold();};(view.sequenceVisualUpdates||=new Set()).add(this._holdUpdater);}
+        this._holds=new Map();if(!this._holdUpdater)this._holdUpdater=()=>{for(const hold of this._holds?.values()||[])hold();};
+        if(this._holdView!==view){this._holdView=view;(view.sequenceVisualUpdates||=new Set()).add(this._holdUpdater);}
         const lift=this.liftPose(view);
         for(const layer of visuals.layers){const {step,owner,start}=layer,p=owner==='screen'?{x:0,y:0}:poses[owner]?view.project(lift(poses[owner])):null;if(!p)continue;
             const bitmap=step.type==='icon'?this.iconSet:this.sequencePictures?.[step.name];
@@ -897,6 +898,8 @@ class DatabaseActionSequenceEditor {
         for(const [key,ticket] of this.flightAnimations||[])if(!live.has(key)){ticket?.cancel?.();this.flightAnimations.delete(key);}
         // A held or thrown model stays loaded but is only seen while its step is current; scrubbing back before Show hides it.
         for(const [key,record] of view.models)if((key.startsWith('extra:held:')||key.startsWith('extra:flight:'))&&!live.has(key)&&record.object)record.object.visible=false;
+        // The flight maths above re-posed the models; the holds go on again so a reached arm and its weapon agree in this paint.
+        this._holdUpdater?.();
     }
     paint(){this.controls.resize();const B=ReactorBattleData,ctx=this.canvas.getContext('2d'),context=this.previewContext(),width=this.canvas.width,height=this.canvas.height,visuals=B.previewVisuals(this.previewSequence(),this.frame,context),poses=Object.fromEntries(Object.entries((this.controls.mode==='formation'?context.homes:visuals.poses)).map(([k,p])=>[k,B.visualPose(p)]));
         ctx.fillStyle='#15171c';ctx.fillRect(0,0,width,height);

@@ -215,8 +215,14 @@
             const node=record.attachmentBones?.get(boneName||attachment);if(!node)return null;
             const T=root.THREE;node.updateMatrixWorld?.(true);
             const quaternion=node.getWorldQuaternion(new T.Quaternion()),at=node.getWorldPosition(new T.Vector3());
-            let forearm=null;const parent=node.parent;if(parent?.getWorldPosition){const from=parent.getWorldPosition(new T.Vector3());forearm=at.clone().sub(from);if(forearm.lengthSq()<1e-8)forearm=null;else forearm.normalize();}
-            return {quaternion,forearm};
+            let forearm=null,elbow=null,shoulder=null;const parent=node.parent,joint=n=>!!n&&(n.isBone||n.userData?.__reactorRigBone||n.userData?.parts?.length);
+            if(joint(parent)){elbow=parent.getWorldPosition(new T.Vector3());forearm=at.clone().sub(elbow);if(forearm.lengthSq()<1e-8)forearm=null;else forearm.normalize();if(joint(parent.parent))shoulder=parent.parent.getWorldPosition(new T.Vector3());}
+            // The fist: where the fingers root when the file has them, else a little way on from the wrist; and toward the inside of the elbow, where a fist curls, when the arm bends.
+            let fist=at.clone();const fingers=(node.children||[]).filter(c=>joint(c)&&c.getWorldPosition);
+            if(fingers.length){const sum=new T.Vector3();for(const f of fingers)sum.add(f.getWorldPosition(new T.Vector3()));fist.lerp(sum.multiplyScalar(1/fingers.length),.7);}
+            else if(forearm)fist.add(forearm.clone().multiplyScalar(.045*(record.extent&&record.scale?record.extent.y*record.scale:3)));
+            if(forearm&&shoulder){const toShoulder=shoulder.clone().sub(elbow);const side=toShoulder.sub(forearm.clone().multiplyScalar(toShoulder.dot(forearm)));if(side.lengthSq()>1e-6)fist.add(side.normalize().multiplyScalar(.02*(record.extent&&record.scale?record.extent.y*record.scale:3)));}
+            return {quaternion,forearm,fist};
         }
         /**
          * The far end of a carved part along its own length (a gun's muzzle),
@@ -338,8 +344,8 @@
         attachmentPoint(key, step, pose) {
             const record=this.models.get(key)||this.billboards.get(key),p=pose||record?.position||{x:0,y:0,z:0},world=BattleRoomView.attachmentWorld(record,step.attachment,step.bone,step.type==='projectile'?'end':undefined);
             if(world){
-                // A hand bone sits at the wrist; the fist is a little way on along the forearm, and that is where a handle goes.
-                if(!step.bone&&['rightHand','leftHand'].includes(step.attachment)){const frame=BattleRoomView.attachmentQuaternion(record,step.attachment,'');if(frame?.forearm)world.add(frame.forearm.clone().multiplyScalar(.045*this.modelHeight(key)));}
+                // A hand bone sits at the wrist; a handle goes in the fist.
+                if(!step.bone&&['rightHand','leftHand'].includes(step.attachment)){const frame=BattleRoomView.attachmentQuaternion(record,step.attachment,'');if(frame?.fist)world.copy(frame.fist);}
                 return {x:world.x-.5+(step.x||0)*Math.sign(p.facing||1),y:world.z-.5+(step.y||0),z:world.y+(step.z||0)};
             }
             const height=record?.billboard?record.height*(p.scale||1):(record?.spec?.size||2)*(p.scale||1),width=record?.billboard?height*record.canvas.width/record.canvas.height:height*.5;
