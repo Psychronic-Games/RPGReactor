@@ -191,7 +191,8 @@
                 canvas.width = width; canvas.height = heightPx;
                 const texture = new T.CanvasTexture(canvas); texture.colorSpace = T.SRGBColorSpace;
                 texture.generateMipmaps = false; texture.minFilter = T.LinearFilter;
-                const material = new T.MeshBasicMaterial({map:texture,transparent:true,alphaTest:.1,side:T.DoubleSide});
+                // A thrown or held thing drawn as a picture (a tracer, a grenade icon) is not dimmed by the room's fog or tone: it reads as its own colour at any distance.
+                const material = new T.MeshBasicMaterial({map:texture,transparent:true,alphaTest:.1,side:T.DoubleSide,fog:!String(key).startsWith('extra:'),toneMapped:!String(key).startsWith('extra:')});
                 const object = new T.Mesh(new T.PlaneGeometry(1,1),material);
                 r = {object,texture,canvas,billboard:true,height}; this.billboards.set(key,r); this.scene.add(object);
                 r.shadowSize = height * (width / Math.max(1, heightPx)) * .7; this.ensureShadow(key, r);
@@ -217,8 +218,28 @@
             let forearm=null;const parent=node.parent;if(parent?.getWorldPosition){const from=parent.getWorldPosition(new T.Vector3());forearm=at.clone().sub(from);if(forearm.lengthSq()<1e-8)forearm=null;else forearm.normalize();}
             return {quaternion,forearm};
         }
-        static attachmentWorld(record, attachment, boneName) {
+        /**
+         * The far end of a carved part along its own length (a gun's muzzle),
+         * in the room, carrying the part's current pose: the part's forward is
+         * from the pivot of the part around it to its own pivot, and its
+         * geometry's furthest point along that is the end.
+         */
+        static partEndWorld(record, partName) {
+            const T=root.THREE,wanted=String(partName).toLowerCase(),meshes=record.binding?.meshes||[];let own=null,parentPivot=null;
+            for(const e of meshes){const i=e.parts.findIndex(p=>String(p.name).toLowerCase()===wanted);if(i<0)continue;if(!own&&e.parts[i].pivot)own={pivot:e.parts[i].pivot,entry:e};if(!parentPivot&&i+1<e.parts.length&&e.parts[i+1].pivot)parentPivot=e.parts[i+1].pivot;}
+            if(!own)return null;
+            const pivot=new T.Vector3().fromArray(own.pivot),forward=parentPivot?pivot.clone().sub(new T.Vector3().fromArray(parentPivot)):new T.Vector3(1,0,0);if(forward.lengthSq()<1e-8)forward.set(1,0,0);forward.normalize();
+            const frame=record.binding.root||record.object;frame.updateMatrixWorld(true);const toModel=new T.Matrix4().copy(frame.matrixWorld).invert();
+            let far=0;const v=new T.Vector3();
+            for(const e of meshes){if(String(e.parts[0]?.name).toLowerCase()!==wanted||!e.mesh.geometry?.attributes?.position)continue;const m=new T.Matrix4().multiplyMatrices(toModel,e.mesh.matrixWorld),position=e.mesh.geometry.attributes.position,stride=Math.max(1,Math.floor(position.count/2000));
+                for(let i=0;i<position.count;i+=stride){v.fromBufferAttribute(position,i).applyMatrix4(m);far=Math.max(far,v.sub(pivot).dot(forward));}}
+            // The end rides the part's own mesh, so a turned turret's muzzle turns with it.
+            const local=pivot.clone().add(forward.multiplyScalar(far)),acc=own.entry.mesh.matrixWorld.clone().multiply(new T.Matrix4().copy(own.entry.mesh.matrix).invert());
+            return local.applyMatrix4(frame.matrixWorld.clone().invert().multiply(acc).multiply(frame.matrixWorld)).applyMatrix4(frame.matrixWorld);
+        }
+        static attachmentWorld(record, attachment, boneName, mode) {
             if(!record?.object||(!boneName&&!['rightHand','leftHand'].includes(attachment)))return null;
+            if(mode==='end'&&boneName&&record.binding){const end=BattleRoomView.partEndWorld(record,boneName);if(end)return end;}
             const name=boneName||attachment,cache=record.attachmentBones||=(new Map());
             if(!cache.has(name)){
                 const normalize=value=>String(value).toLowerCase().replace(/^.*[:|]/,'').replace(/[^a-z0-9]/g,'');
@@ -308,7 +329,7 @@
             this.reachArm(ownerKey,other,point,{down:.7});
         }
         attachmentPoint(key, step, pose) {
-            const record=this.models.get(key)||this.billboards.get(key),p=pose||record?.position||{x:0,y:0,z:0},world=BattleRoomView.attachmentWorld(record,step.attachment,step.bone);
+            const record=this.models.get(key)||this.billboards.get(key),p=pose||record?.position||{x:0,y:0,z:0},world=BattleRoomView.attachmentWorld(record,step.attachment,step.bone,step.type==='projectile'?'end':undefined);
             if(world)return {x:world.x-.5+(step.x||0)*Math.sign(p.facing||1),y:world.z-.5+(step.y||0),z:world.y+(step.z||0)};
             const height=record?.billboard?record.height*(p.scale||1):(record?.spec?.size||2)*(p.scale||1),width=record?.billboard?height*record.canvas.width/record.canvas.height:height*.5;
             return root.ReactorBattleData.attachmentPoint(p,step,width,height);
@@ -449,6 +470,8 @@
             forward.normalize();desired.normalize();
             return Math.atan2(forward.z*desired.x-forward.x*desired.z,forward.x*desired.x+forward.z*desired.z)*180/Math.PI;
         }
+        /** How tall a battler's model stands in the room, in tiles (a tank's size is its length, not its height). */
+        modelHeight(key){const r=this.models.get(key)||this.billboards.get(key);if(!r)return 2;if(r.billboard)return r.height||2;const e=r.extent;return e&&r.scale?Math.max(.5,e.y*r.scale*(r.position?.scale||1)*(r.position?.scaleY||1)):this.focusHeight(r);}
         focusHeight(record){return record?.spec?(record.spec.size||2)*(record.spec.scale||1)*(record.position?.scale||1)*(record.position?.scaleY||1):record?.height||2;}
         cinematicImpact(){
             if(!this.cinematicShot||this.cinematicShot.phase==='impact')return;

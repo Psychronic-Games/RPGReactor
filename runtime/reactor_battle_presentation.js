@@ -230,7 +230,7 @@
                 // the long-axis assumption of +90. Tilt tips it, Turn and Roll
                 // finish the pose, all about its grip.
                 const owner=entry.owner?._reactorRoomPosition,record=room?.models.get(entry.key);if(!p||!record)return;
-                const ownerKey=entry.owner?._reactorRoomKey,targetSprite=ss.findTargetSprite(targets[0]),targetRecord=room.models.get(targetSprite?._reactorRoomKey),at=targetSprite?._reactorRoomPosition?{...targetSprite._reactorRoomPosition,height:.55*((targetRecord?.spec?.size||2)*(targetRecord?.spec?.scale||1))}:null;
+                const ownerKey=entry.owner?._reactorRoomKey,targetSprite=ss.findTargetSprite(targets[0]),targetRecord=room.models.get(targetSprite?._reactorRoomKey),at=targetSprite?._reactorRoomPosition?{...targetSprite._reactorRoomPosition,height:.6*room.modelHeight(targetSprite._reactorRoomKey)}:null;
                 const placement={...B.heldPlacement(p,owner?.facing||0,{...step,rotation},record.spec),visible};
                 if(ownerKey&&entry.owner._reactorRoomPosition){const held=room.holdHeld(ownerKey,entry.key,step,entry.owner._reactorRoomPosition,at,placement);if(held)p=held;}
                 else room.place(entry.key,placement);
