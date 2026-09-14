@@ -147,10 +147,12 @@ class Database3DEditor {
         this.selectedPart = -1;
         // The card's target: null = nothing chosen, '' = whole model.
         this.selectedPartName = null;
-        this._view = { yaw: 30, pitch: 20, distance: 4 };
+        this._view = { yaw: 30, pitch: 20, distance: 4, pan: { x: 0, y: 0, z: 0 } };
         // Inputs steer the goal; the camera eases toward it every frame,
         // so wheel notches and pointer deltas glide instead of snapping.
-        this._viewGoal = { yaw: 30, pitch: 20, distance: 4 };
+        // The pan slides the orbit centre off the model's middle: a wheel
+        // zooms toward the pointer, Shift-drag or the middle button pans.
+        this._viewGoal = { yaw: 30, pitch: 20, distance: 4, pan: { x: 0, y: 0, z: 0 } };
         this._sim = { walking: false, action: null };
         this._tool = 'orbit';
         this._selectMode = false;
@@ -1648,10 +1650,15 @@ class Database3DEditor {
         const template = await this._loadTemplate(entry);
         if (!template || gen !== this._gen || !canvas.isConnected) return;
         this._template = template;
+        this._viewGoal.pan = { x: 0, y: 0, z: 0 };
+        this._view.pan = { x: 0, y: 0, z: 0 };
         if (!this._renderer) {
             this._scene = new THREE.Scene();
             ModelPreview3D.updateBackground(this._scene);
             this._camera = Reactor3D.createCamera({ fov: 40 });
+            // Close enough to pick one fingertip on a rig without the near plane cutting the hand.
+            this._camera.near = 0.02;
+            this._camera.updateProjectionMatrix();
             this._renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
             this._renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
             if (THREE.SRGBColorSpace) this._renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -1713,7 +1720,7 @@ class Database3DEditor {
                 // rules freeze while a selection is being drawn.
                 // Once per animation frame, not per display refresh: spin
                 // and walk-distance gains accumulate per call.
-                if (this._binding && rules.length && !this._selectMode && !this._rigFaceMode && typeof Reactor3D !== 'undefined'
+                if (this._binding && rules.length && !this._selectMode && !this._rigMode && typeof Reactor3D !== 'undefined'
                     && frame !== this._lastAnimFrame) {
                     this._lastAnimFrame = frame;
                     Reactor3D.applyModelAnimation(this._binding, rules, {
@@ -1743,12 +1750,13 @@ class Database3DEditor {
                     this._view.yaw += (this._viewGoal.yaw - this._view.yaw) * k;
                     this._view.pitch += (this._viewGoal.pitch - this._view.pitch) * k;
                     this._view.distance += (this._viewGoal.distance - this._view.distance) * k;
+                    for (const axis of ['x', 'y', 'z']) this._view.pan[axis] += (this._viewGoal.pan[axis] - this._view.pan[axis]) * k;
                 }
-                Reactor3D.aimCamera(this._camera,
-                    this._viewCenter || { x: -0.5, y: 0, z: -0.5 }, this._view);
+                Reactor3D.aimCamera(this._camera, this._orbitCenter(this._view.pan), this._view);
+                this._updateRigOverlay();
                 {
                     const now = performance.now();
-                    const goalKey = `${this._viewGoal.yaw}|${this._viewGoal.pitch}|${this._viewGoal.distance}`;
+                    const goalKey = `${this._viewGoal.yaw}|${this._viewGoal.pitch}|${this._viewGoal.distance}|${this._viewGoal.pan.x}|${this._viewGoal.pan.y}|${this._viewGoal.pan.z}`;
                     if (goalKey !== this._lastGoalKey) {
                         this._lastGoalKey = goalKey;
                         this._lastInputAt = now;
@@ -5606,7 +5614,10 @@ class Database3DEditor {
             }
             this._dragging = true;
             this._lastInputAt = performance.now();
-            if (orbit) {
+            if (event.button === 1 || (orbit && event.shiftKey)) {
+                mode = 'pan';
+                canvas.style.cursor = 'move';
+            } else if (orbit) {
                 mode = 'orbit';
                 canvas.style.cursor = 'grabbing';
             } else if (this._tool === 'select' && this._selectMode) {
@@ -5637,6 +5648,8 @@ class Database3DEditor {
             if (mode === 'orbit') {
                 this._viewGoal.yaw -= (event.clientX - lastX) * 0.4;
                 this._viewGoal.pitch = Math.min(72, Math.max(5, this._viewGoal.pitch - (event.clientY - lastY) * 0.3));
+            } else if (mode === 'pan') {
+                this._panView(event.clientX - lastX, event.clientY - lastY);
             } else if (mode === 'select') {
                 const rect = canvas.getBoundingClientRect();
                 const x = event.clientX - rect.left;
@@ -5704,7 +5717,18 @@ class Database3DEditor {
         canvas.addEventListener('wheel', event => {
             event.preventDefault();
             this._lastInputAt = performance.now();
-            this._viewGoal.distance = Math.min(20, Math.max(1.2, this._viewGoal.distance * (event.deltaY > 0 ? 1.15 : 1 / 1.15)));
+            const before = this._viewGoal.distance;
+            this._viewGoal.distance = Math.min(20, Math.max(0.12, before * (event.deltaY > 0 ? 1.15 : 1 / 1.15)));
+            // Zoom toward the pointer: the point under it stays put, so a
+            // few notches land on the fingertip the pointer rests on.
+            const centre = this._orbitCenterWorld(this._viewGoal.pan);
+            const under = centre && this._cameraPlanePoint(event.clientX, event.clientY, centre);
+            if (under) {
+                const keep = 1 - this._viewGoal.distance / before;
+                this._viewGoal.pan.x += (under.x - centre.x) * keep;
+                this._viewGoal.pan.y += (under.y - centre.y) * keep;
+                this._viewGoal.pan.z += (under.z - centre.z) * keep;
+            }
         }, { passive: false });
     }
 
@@ -6003,6 +6027,65 @@ class Database3DEditor {
     }
 
     /** Where the pointer ray crosses the camera-parallel plane through a point. */
+    /** The orbit centre in scene units (the model's middle plus the pan), as aimCamera reads it. */
+    _orbitCenter(pan) {
+        const base = this._viewCenter || { x: -0.5, y: 0, z: -0.5 };
+        const offset = pan || { x: 0, y: 0, z: 0 };
+        return { x: base.x + offset.x, y: base.y + offset.y, z: base.z + offset.z };
+    }
+
+    /** The same point as a world vector (aimCamera looks at the cell centre, half a unit in on x and z). */
+    _orbitCenterWorld(pan) {
+        if (typeof THREE === 'undefined') return null;
+        const centre = this._orbitCenter(pan);
+        return new THREE.Vector3(centre.x + 0.5, centre.y, centre.z + 0.5);
+    }
+
+    /** Slide the orbit centre across the view by a pointer delta, so the picture follows the pointer. */
+    _panView(dx, dy) {
+        if (!this._camera || typeof THREE === 'undefined') return;
+        const canvas = this._detail.querySelector('.r3d-db-canvas');
+        const rect = canvas.getBoundingClientRect();
+        const perPixel = 2 * this._view.distance * Math.tan((this._camera.fov * Math.PI) / 360) / Math.max(1, rect.height);
+        const right = new THREE.Vector3().setFromMatrixColumn(this._camera.matrixWorld, 0);
+        const up = new THREE.Vector3().setFromMatrixColumn(this._camera.matrixWorld, 1);
+        const move = right.multiplyScalar(-dx * perPixel).add(up.multiplyScalar(dy * perPixel));
+        this._viewGoal.pan.x += move.x;
+        this._viewGoal.pan.y += move.y;
+        this._viewGoal.pan.z += move.z;
+    }
+
+    /**
+     * Rig markers and their labels keep one size on screen: they are scene
+     * objects, and zooming onto a hand used to fill the view with one dot.
+     * Finger labels crowd a whole-body view, so they show once the camera
+     * is close enough to read them.
+     */
+    _updateRigOverlay() {
+        if (!this._rigMode || this._rigFaceMode || !this._rigMarkerMeshes) return;
+        const k = Math.min(1, Math.max(0.01, this._view.distance / 4));
+        const close = this._view.distance < 0.9;
+        if (Math.abs(k - (this._rigOverlayScale || 0)) < 1e-4 && close === this._fineLabelsShown) return;
+        this._rigOverlayScale = k;
+        this._fineLabelsShown = close;
+        for (const marker of this._rigMarkerDefinitions()) {
+            const sphere = this._rigMarkerMeshes[marker.key];
+            if (sphere) sphere.scale.setScalar(k);
+            const label = this._rigMarkerLabels && this._rigMarkerLabels[marker.key];
+            if (label && marker.fine) label.visible = close;
+            this._placeRigLabel(marker.key);
+        }
+    }
+
+    /** A marker's label floats just above it, at the overlay's current screen scale. */
+    _placeRigLabel(key) {
+        const sphere = this._rigMarkerMeshes && this._rigMarkerMeshes[key], label = this._rigMarkerLabels && this._rigMarkerLabels[key];
+        if (!sphere || !label) return;
+        const k = this._rigOverlayScale || 1;
+        label.scale.set(label.userData.__width * k, label.userData.__height * k, 1);
+        label.position.set(sphere.position.x, sphere.position.y + label.userData.__lift * k, sphere.position.z);
+    }
+
     _cameraPlanePoint(clientX, clientY, anchorWorld) {
         const canvas = this._detail.querySelector('.r3d-db-canvas');
         const rect = canvas.getBoundingClientRect();
@@ -6060,6 +6143,10 @@ class Database3DEditor {
             this.renderEditCard();
             return true;
         }
+        // Markers describe the rest pose, so the model holds it while they
+        // are placed: an idle clip kept walking Carol out from under her rig.
+        this._stopEffectPreview();
+        this._rebuildInstance();
         this._rigMode = true;
         this._rigTemplate = (this.customRig && ModelRigger.TEMPLATES[this.customRig.template])
             ? this.customRig.template : (this._rigTemplate || 'humanoid');
@@ -6109,7 +6196,7 @@ class Database3DEditor {
             const side = /L$/.test(marker.key) ? 'L' : (/R$/.test(marker.key) ? 'R' : '');
             const color = side === 'L' ? 0x5aa9ff : side === 'R' ? 0xff6a6a : 0xffd15c;
             const markerRadius = this._rigFaceMode
-                ? radius * (marker.key === 'upperLip' || marker.key === 'lowerLip' ? 0.2 : 0.4) : radius;
+                ? radius * (marker.key === 'upperLip' || marker.key === 'lowerLip' ? 0.2 : 0.4) : marker.fine ? radius * 0.5 : radius;
             const sphere = new THREE.Mesh(
                 new THREE.SphereGeometry(markerRadius, 12, 10),
                 new THREE.MeshBasicMaterial({ color, depthTest: false, transparent: true, opacity: 0.9 }));
@@ -6131,12 +6218,18 @@ class Database3DEditor {
         // gives no clue whether it wants the elbow or the wrist.
         this._rigMarkerLabels = {};
         const labelHeight = Math.max(size.x, size.y, size.z) * (this._rigFaceMode ? 0.025 : 0.05);
+        this._fineLabelsShown = undefined;
+        this._rigOverlayScale = undefined;
         for (const marker of this._rigMarkerDefinitions()) {
             const sprite = this._makeMarkerLabel(this._t(marker.label));
-            sprite.scale.set(labelHeight * 5, labelHeight, 1);
+            const height = marker.fine ? labelHeight * 0.5 : labelHeight;
+            sprite.userData.__width = height * 5;
+            sprite.userData.__height = height;
+            sprite.userData.__lift = radius * (marker.fine ? 1.2 : 2.6);
+            sprite.scale.set(height * 5, height, 1);
             sprite.position.fromArray(this._rigMarkers[marker.key]);
-            sprite.position.y += radius * 2.6;
-            sprite.visible = !this._rigFaceMode || marker.key === this._facePoint;
+            sprite.position.y += sprite.userData.__lift;
+            sprite.visible = (!this._rigFaceMode || marker.key === this._facePoint) && !marker.fine;
             group.add(sprite);
             this._rigMarkerLabels[marker.key] = sprite;
         }
@@ -6225,15 +6318,12 @@ class Database3DEditor {
         }
         this._rigMarkers[key] = [local.x, local.y, local.z];
         sphere.position.copy(local);
-        const lift = sphere.geometry.parameters.radius * 2.6;
-        const label = this._rigMarkerLabels && this._rigMarkerLabels[key];
-        if (label) label.position.set(local.x, local.y + lift, local.z);
+        this._placeRigLabel(key);
         const marker = this._rigMarkerDefinitions().find(entry => entry.key === key);
         if (marker && marker.mirror) {
             this._rigMarkers[marker.mirror] = [-local.x, local.y, local.z];
             this._rigMarkerMeshes[marker.mirror].position.set(-local.x, local.y, local.z);
-            const twin = this._rigMarkerLabels && this._rigMarkerLabels[marker.mirror];
-            if (twin) twin.position.set(-local.x, local.y + lift, local.z);
+            this._placeRigLabel(marker.mirror);
         }
         this._refreshRigBones();
     }
@@ -6310,7 +6400,7 @@ class Database3DEditor {
         }
         const hint = document.createElement('span');
         hint.style.cssText = 'color:var(--color-text-muted);';
-        hint.textContent = this._t('Drag the markers onto the joints; sides mirror.');
+        hint.textContent = this._t('Drag the markers onto the joints; sides mirror.') + ' ' + this._t('Wheel zooms toward the pointer; Shift-drag pans.');
         bar.appendChild(hint);
     }
 

@@ -476,7 +476,7 @@ test('a pose on a mapped joint is read in the model frame however the file skele
 
 test('the rig preview draws a chain through the markers, ending at the joints', () => {
     const size = { x: 1, y: 1.8, z: 0.5 };
-    for (const [template, expected] of [['humanoid', 19], ['quadruped', 15]]) {
+    for (const [template, expected] of [['humanoid', 35], ['quadruped', 15]]) {
         const markers = ModelRigger.defaultMarkers(size, template);
         const links = ModelRigger.previewLinks(markers, template);
         assert.equal(links.length, expected, template + ' link count');
@@ -497,21 +497,31 @@ test('the rig preview draws a chain through the markers, ending at the joints', 
     assert.deepEqual(plant.map(b => b.head), ModelRigger.bonesFromMarkers(ModelRigger.defaultMarkers(size, 'plant'), 'plant').map(b => b.head));
 });
 
-test('the humanoid template carries palm and fingertip markers, the hand bone reaches the fingertips, and a saved rig is completed, not replaced', () => {
+test('the humanoid template carries a palm and five fingers per hand, the hand bone reaches the middle fingertip, and a saved rig is completed, not replaced', () => {
     const size = { x: 0.6, y: 1.8, z: 0.3 }, markers = ModelRigger.defaultMarkers(size);
-    for (const key of ['palmL', 'palmR', 'knucklesL', 'knucklesR', 'fingersL', 'fingersR']) assert.ok(Array.isArray(markers[key]), key);
+    const fingerKeys = [];
+    for (const finger of ['thumb', 'index', 'middle', 'ring', 'pinky']) for (const end of ['Base', 'Tip']) for (const side of ['L', 'R']) fingerKeys.push(finger + end + side);
+    for (const key of ['palmL', 'palmR', ...fingerKeys]) assert.ok(Array.isArray(markers[key]), key);
+    const defs = ModelRigger.markersFor('humanoid');
+    assert.equal(defs.find(d => d.key === 'indexTipL').label, 'Left index finger tip', 'each finger end is named');
+    assert.equal(defs.find(d => d.key === 'pinkyBaseR').mirror, 'pinkyBaseL', 'and mirrors across');
+    assert.ok(defs.find(d => d.key === 'thumbTipR').fine && !defs.find(d => d.key === 'wristR').fine, 'finger markers are the fine ones');
     const bones = ModelRigger.bonesFromMarkers(markers), hand = bones.find(b => b.name === 'RightHand');
-    assert.deepEqual(hand.tail, markers.fingersR, 'the hand bone ends at the fingertips');
+    assert.deepEqual(hand.tail, markers.middleTipR, 'the hand bone ends at the middle fingertip');
     assert.equal(bones.length, 17, 'no new bones');
     // A rig saved before the markers existed keeps every placed marker; the new ones come from its own wrist and elbow.
-    const saved = ModelRigger.defaultMarkers(size); delete saved.palmL; delete saved.palmR; delete saved.knucklesL; delete saved.knucklesR; delete saved.fingersL; delete saved.fingersR; saved.wristR = [-0.5, 0.9, 0.1]; saved.elbowR = [-0.4, 1.1, 0.1];
+    const saved = ModelRigger.defaultMarkers(size); delete saved.palmL; delete saved.palmR; for (const key of fingerKeys) delete saved[key]; saved.wristR = [-0.5, 0.9, 0.1]; saved.elbowR = [-0.4, 1.1, 0.1];
     const done = ModelRigger.completeMarkers(saved, 'humanoid', size);
     assert.deepEqual(done.wristR, [-0.5, 0.9, 0.1], 'placed markers survive');
     assert.ok(Math.abs(done.palmR[0] - (-0.4 + (-0.5 + 0.4) * 1.33)) < 1e-9 && Math.abs(done.palmR[1] - (1.1 + (0.9 - 1.1) * 1.33)) < 1e-9, 'the palm is a third of a forearm past the wrist');
-    assert.ok(Math.abs(done.fingersR[1] - (1.1 + (0.9 - 1.1) * 1.66)) < 1e-9, 'the fingertips two thirds');
-    assert.ok(Math.abs(done.knucklesR[1] - (1.1 + (0.9 - 1.1) * 1.5)) < 1e-9, 'the knuckles half way');
+    assert.ok(Math.abs(done.middleTipR[1] - (1.1 + (0.9 - 1.1) * 1.66)) < 1e-9, 'a fingertip two thirds');
+    assert.ok(Math.abs(done.middleBaseR[1] - (1.1 + (0.9 - 1.1) * 1.5)) < 1e-9, 'its base half way');
+    assert.ok(done.indexBaseR[2] > done.middleBaseR[2] && done.middleBaseR[2] > done.ringBaseR[2] && done.ringBaseR[2] > done.pinkyBaseR[2], 'the fingers spread sideways in order');
+    assert.ok(done.thumbBaseR[2] > done.indexBaseR[2] && done.thumbBaseR[1] > done.indexBaseR[1], 'the thumb sits outside and nearer the wrist');
     const links = ModelRigger.previewLinks(markers, 'humanoid');
     assert.ok(links.some(l => l.head[0] === markers.wristL[0] && l.tail[0] === markers.palmL[0]), 'the preview chain runs on to the palm');
+    assert.ok(links.some(l => l.head === markers.palmL || (l.head[0] === markers.palmL[0] && l.head[1] === markers.palmL[1] && l.tail[0] === markers.pinkyBaseL[0] && l.tail[2] === markers.pinkyBaseL[2])), 'and from the palm to each finger base');
+    assert.ok(links.some(l => l.head[2] === markers.indexBaseL[2] && l.head[1] === markers.indexBaseL[1] && l.tail[1] === markers.indexTipL[1]), 'and from a base to its tip');
 });
 
 test('the runtime gives each rig hand its palm point, from markers or derived, and a held thing sits there', () => {
@@ -522,6 +532,12 @@ test('the runtime gives each rig hand its palm point, from markers or derived, a
     const root = new THREE.Group(); Reactor3D.applyModelRig(root, rig);
     let hand = null; root.traverse(n => { if (n.userData?.parts?.[0]?.name === 'RightHand') hand = n; });
     assert.ok(hand && hand.userData.__reactorPalm && hand.userData.__reactorKnuckles && hand.userData.__reactorFingers, 'the hand knows its palm, knuckles and fingertips');
+    const fingers = hand.userData.__reactorFingerPoints;
+    assert.deepEqual(Object.keys(fingers), ['thumb', 'index', 'middle', 'ring', 'pinky'], 'and every finger');
+    const tipWorld = hand.localToWorld(new THREE.Vector3().fromArray(fingers.index.tip));
+    assert.ok(tipWorld.distanceTo(new THREE.Vector3().fromArray(markers.indexTipR)) < 1e-6, 'each at its marker');
+    const knuckleWorld = hand.localToWorld(new THREE.Vector3().fromArray(hand.userData.__reactorKnuckles));
+    assert.ok(knuckleWorld.distanceTo(new THREE.Vector3().fromArray(markers.middleBaseR)) < 0.03, 'the knuckle line is the mean of the bases');
     const palmWorld = hand.localToWorld(new THREE.Vector3().fromArray(hand.userData.__reactorPalm));
     assert.ok(palmWorld.distanceTo(new THREE.Vector3().fromArray(markers.palmR)) < 1e-6, 'and it is the marker');
     // Without markers the palm is derived from the bones.

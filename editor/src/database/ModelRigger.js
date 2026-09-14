@@ -37,6 +37,48 @@
      * Preset motions target these standard bone names, so a correctly
      * fitted rig gets the whole motion library plug-and-play.
      */
+    /**
+     * The five fingers of a hand, each with a base (its knuckle) and a tip.
+     * A held handle sits at the palm centre; the bases say which way the
+     * fingers close and the tips where the hand ends.
+     */
+    const FINGERS = ['thumb', 'index', 'middle', 'ring', 'pinky'];
+    const FINGER_LABELS = { thumb: 'thumb', index: 'index finger', middle: 'middle finger', ring: 'ring finger', pinky: 'pinky' };
+    // Sideways spread of each finger as a fraction of the forearm, thumb first; the thumb sits nearer the wrist.
+    const FINGER_SPREAD = { thumb: 0.14, index: 0.07, middle: 0, ring: -0.07, pinky: -0.14 };
+    const FINGER_ALONG = { base: 1.5, tip: 1.66 };
+    const THUMB_ALONG = { base: 1.32, tip: 1.48 };
+    const fingerKey = (finger, end, side) => finger + (end === 'base' ? 'Base' : 'Tip') + side;
+    const capital = word => word.charAt(0).toUpperCase() + word.slice(1);
+    function fingerMarkers() {
+        const out = [];
+        for (const finger of FINGERS) for (const end of ['base', 'tip']) for (const side of ['L', 'R']) {
+            const label = (side === 'L' ? 'Left ' : 'Right ') + FINGER_LABELS[finger] + ' ' + end;
+            out.push({ key: fingerKey(finger, end, side), label, mirror: fingerKey(finger, end, side === 'L' ? 'R' : 'L'), fine: true });
+        }
+        return out;
+    }
+    function fingerDefaults(h, halfW, halfD) {
+        const out = {};
+        for (const finger of FINGERS) {
+            const spread = FINGER_SPREAD[finger] * 2.6, thumb = finger === 'thumb';
+            for (const side of ['L', 'R']) {
+                const sign = side === 'L' ? 1 : -1;
+                out[fingerKey(finger, 'base', side)] = [sign * halfW * (thumb ? 0.70 : 0.73), h * (thumb ? 0.405 : 0.385), halfD * spread];
+                out[fingerKey(finger, 'tip', side)] = [sign * halfW * (thumb ? 0.72 : 0.75), h * (thumb ? 0.38 : 0.355), halfD * (thumb ? spread + 0.2 : spread)];
+            }
+        }
+        return out;
+    }
+    /** A finger point past the wrist along the forearm, spread sideways (model depth) so the fingers do not stack. */
+    function fingerFromForearm(elbow, wrist, finger, end) {
+        const along = (finger === 'thumb' ? THUMB_ALONG : FINGER_ALONG)[end];
+        const point = lerp3(elbow, wrist, along);
+        const forearm = Math.hypot(wrist[0] - elbow[0], wrist[1] - elbow[1], wrist[2] - elbow[2]);
+        point[2] += forearm * FINGER_SPREAD[finger];
+        return point;
+    }
+
     const TEMPLATES = {
         humanoid: {
             label: 'Humanoid',
@@ -52,10 +94,7 @@
                 { key: 'wristR', label: 'Right wrist', mirror: 'wristL' },
                 { key: 'palmL', label: 'Left palm', mirror: 'palmR' },
                 { key: 'palmR', label: 'Right palm', mirror: 'palmL' },
-                { key: 'knucklesL', label: 'Left knuckles', mirror: 'knucklesR' },
-                { key: 'knucklesR', label: 'Right knuckles', mirror: 'knucklesL' },
-                { key: 'fingersL', label: 'Left fingertips', mirror: 'fingersR' },
-                { key: 'fingersR', label: 'Right fingertips', mirror: 'fingersL' },
+                ...fingerMarkers(),
                 { key: 'kneeL', label: 'Left knee', mirror: 'kneeR' },
                 { key: 'kneeR', label: 'Right knee', mirror: 'kneeL' },
                 { key: 'ankleL', label: 'Left ankle', mirror: 'ankleR' },
@@ -69,8 +108,7 @@
                     elbowL: at(0.62, 0.62), elbowR: at(-0.62, 0.62),
                     wristL: at(0.68, 0.45), wristR: at(-0.68, 0.45),
                     palmL: at(0.71, 0.41), palmR: at(-0.71, 0.41),
-                    knucklesL: at(0.73, 0.385), knucklesR: at(-0.73, 0.385),
-                    fingersL: at(0.75, 0.36), fingersR: at(-0.75, 0.36),
+                    ...fingerDefaults(h, halfW, halfD),
                     kneeL: at(0.2, 0.27), kneeR: at(-0.2, 0.27),
                     ankleL: at(0.22, 0.05), ankleR: at(-0.22, 0.05)
                 };
@@ -88,9 +126,9 @@
                     const name = part => (side === 'L' ? 'Left' : 'Right') + part;
                     add(name('UpperArm'), 'Chest', m['shoulder' + side], m['elbow' + side]);
                     add(name('LowerArm'), name('UpperArm'), m['elbow' + side], m['wrist' + side]);
-                    // The hand bone runs from the wrist to the fingertips; a rig without that marker reaches past the wrist as before.
+                    // The hand bone runs from the wrist to the middle fingertip; a rig without that marker reaches past the wrist as before.
                     add(name('Hand'), name('LowerArm'), m['wrist' + side],
-                        m['fingers' + side] || lerp3(m['elbow' + side], m['wrist' + side], 1.35));
+                        m['middleTip' + side] || lerp3(m['elbow' + side], m['wrist' + side], 1.35));
                     const knee = m['knee' + side];
                     const ankle = m['ankle' + side];
                     add(name('UpperLeg'), 'Hips', [knee[0], m.hips[1], knee[2]], knee);
@@ -244,7 +282,7 @@
     /**
      * A saved marker set brought up to the template: what was placed is kept,
      * anything the template gained since is derived from the joints around
-     * it (a palm a third of a forearm past the wrist, fingertips two thirds),
+     * it (a palm a third of a forearm past the wrist, finger bases half, tips two thirds, spread sideways),
      * else taken from the defaults for the model's size.
      */
     function completeMarkers(saved, template, size) {
@@ -255,8 +293,10 @@
                 const wrist = saved && saved['wrist' + side], elbow = saved && saved['elbow' + side];
                 if (!Array.isArray(wrist) || !Array.isArray(elbow)) continue;
                 if (!(saved && Array.isArray(saved['palm' + side]))) out['palm' + side] = lerp3(elbow, wrist, 1.33);
-                if (!(saved && Array.isArray(saved['knuckles' + side]))) out['knuckles' + side] = lerp3(elbow, wrist, 1.5);
-                if (!(saved && Array.isArray(saved['fingers' + side]))) out['fingers' + side] = lerp3(elbow, wrist, 1.66);
+                for (const finger of FINGERS) for (const end of ['base', 'tip']) {
+                    const key = fingerKey(finger, end, side);
+                    if (!(saved && Array.isArray(saved[key]))) out[key] = fingerFromForearm(elbow, wrist, finger, end);
+                }
             }
         }
         return out;
@@ -282,9 +322,15 @@
             const links = [[m.hips, neckBase], [neckBase, m.chin], [m.chin, m.headTop]];
             for (const side of ['L', 'R']) {
                 links.push([neckBase, m['shoulder' + side]], [m['shoulder' + side], m['elbow' + side]], [m['elbow' + side], m['wrist' + side]]);
-                // The hand: wrist, palm centre, base of the fingers, fingertips.
-                const chain = [m['wrist' + side], m['palm' + side], m['knuckles' + side], m['fingers' + side]].filter(Boolean);
-                for (let i = 1; i < chain.length; i++) links.push([chain[i - 1], chain[i]]);
+                // The hand: wrist to palm centre, then each finger from the palm through its base to its tip.
+                if (m['palm' + side]) {
+                    links.push([m['wrist' + side], m['palm' + side]]);
+                    for (const finger of FINGERS) {
+                        const base = m[fingerKey(finger, 'base', side)], tip = m[fingerKey(finger, 'tip', side)];
+                        if (base) links.push([m['palm' + side], base]);
+                        if (base && tip) links.push([base, tip]);
+                    }
+                }
                 links.push([m.hips, m['knee' + side]], [m['knee' + side], m['ankle' + side]]);
             }
             return links;
@@ -640,6 +686,8 @@
         markersFor,
         defaultMarkers,
         completeMarkers,
+        FINGERS,
+        fingerKey,
         bonesFromMarkers,
         previewLinks,
         computeWeights,

@@ -14173,7 +14173,19 @@ Reactor3D.attachRigHands = function(root, rig, bones) {
         // Placed markers are points in the model's frame. Without them the
         // palm and fingertips come from the joints themselves, in the room
         // (a mapped file skeleton need not sit where the template's bones do).
-        let palm = markers["palm" + short] ? local(markers["palm" + short]) : null, knuckles = markers["knuckles" + short] ? local(markers["knuckles" + short]) : null, fingers = markers["fingers" + short] ? local(markers["fingers" + short]) : null;
+        let palm = markers["palm" + short] ? local(markers["palm" + short]) : null, knuckles = null, fingers = null;
+        // Each finger's base and tip, when the rig places them; the knuckle
+        // line and fingertip point are their means.
+        const points = {};
+        const mean = list => list.length ? list.reduce((a, p) => [a[0] + p[0] / list.length, a[1] + p[1] / list.length, a[2] + p[2] / list.length], [0, 0, 0]) : null;
+        for (const finger of ["thumb", "index", "middle", "ring", "pinky"]) {
+            const base = markers[finger + "Base" + short], tip = markers[finger + "Tip" + short];
+            if (base || tip) points[finger] = { base: local(base), tip: local(tip) };
+        }
+        const bases = Object.values(points).map(p => p.base).filter(Boolean), tips = Object.values(points).map(p => p.tip).filter(Boolean);
+        if (bases.length) knuckles = mean(bases);
+        if (tips.length) fingers = mean(tips);
+        if (Object.keys(points).length) hand.userData.__reactorFingerPoints = points;
         if (!palm || !fingers || !knuckles) {
             const elbowNode = hand.parent && hand.parent.getWorldPosition ? hand.parent : null;
             if (elbowNode) {
