@@ -29,10 +29,10 @@ function loadRuntime(dataQuests, world = {}) {
         PluginManager: { registerCommand: (plugin, name, fn) => { registered[name] = fn; } },
         Game_System: { prototype: {} },
         Game_Map: { prototype: { update: stub() } },
-        Window_MenuCommand: { prototype: { addOriginalCommands: stub() } },
+        Window_MenuCommand: { prototype: { makeCommandList: stub() } },
         Scene_Menu: { prototype: { createCommandWindow: stub() } },
         Scene_MenuBase: { prototype: { create: stub(), update: stub() } },
-        Scene_Boot: { prototype: { create: stub(), isReady: () => true } },
+        Scene_Boot: { prototype: { create: stub(), isReady: () => true, start: stub() } },
         Window_HorzCommand: { prototype: { initialize: stub(), update: stub() } },
         Window_Selectable: { prototype: { initialize: stub(), refresh: stub(), select: stub() } },
         Rectangle: stub(),
@@ -425,7 +425,7 @@ test('objectives and rewards are boxes that keep their line breaks, and every te
         assert.match(source, new RegExp(`data-field="${field}" data-quest-id="\\$\\{quest\\.id\\}" data-rr-textcodes="help" data-rr-textcodes-preview`), field);
     }
     assert.doesNotMatch(source, /data-field="(key|note)"[^>]*data-rr-textcodes/, 'the key and the note are never drawn in game');
-    assert.match(source, /QuestImporter\.enabledSystems\(project\.path\)/);
+    assert.match(source, /importer\.installedSystems\(project\.path\)/);
     assert.match(source, /class="quest-other-system" style="grid-column:1 \/ -1;/, 'the notice spans the form rather than squeezing into its first column');
 });
 
@@ -446,6 +446,247 @@ test('the Quests list draws a name\'s codes the way the log does; every other ta
     assert.equal((ui.match(/this\.paintDatabaseListName\(nameSpan, labels\.primary, (type|reference\.type)\)/g) || []).length, 3, 'the list, a refreshed row and a Referenced by row');
 });
 
+// --- which quest log the game uses ----------------------------------------
+
+const plain = value => JSON.parse(JSON.stringify(value));
+
+test('the menu command goes in as the list is built, after Formation, with its own handler; once, not in a submenu, not when VisuStella\'s log is the game\'s', () => {
+    const { context } = loadRuntime(DATA);
+    const base = context.Window_MenuCommand.prototype.makeCommandList;
+    context.Scene_Boot.prototype.start.call({});
+    const wrapped = context.Window_MenuCommand.prototype.makeCommandList;
+    assert.notEqual(wrapped, base, 'wrapped at boot, once every plugin has loaded');
+    context.Scene_Boot.prototype.start.call({});
+    assert.equal(context.Window_MenuCommand.prototype.makeCommandList, wrapped, 'a second boot does not wrap it again');
+    const menu = (subcategory = '') => ({
+        _list: [], handlers: {},
+        addCommand(name, symbol, enabled) { this._list.push({ name, symbol, enabled }); },
+        findSymbol(symbol) { return this._list.findIndex(entry => entry.symbol === symbol); },
+        setHandler(symbol, fn) { this.handlers[symbol] = fn; },
+        currentSubcategory: () => subcategory
+    });
+    const top = menu();
+    for (const symbol of ['item', 'skill', 'formation', 'options', 'save']) top.addCommand(symbol, symbol, true);
+    wrapped.call(top);
+    wrapped.call(top);
+    assert.deepEqual(plain(top._list.map(entry => entry.symbol)), ['item', 'skill', 'formation', 'reactorQuest', 'options', 'save']);
+    top.handlers.reactorQuest();
+    assert.equal(context.__pushed, context.Scene_Quest, 'the handler comes with the command, since MainMenuCore replaces createCommandWindow');
+    const submenu = menu('datalog');
+    wrapped.call(submenu);
+    assert.equal(submenu._list.length, 0, 'a MainMenuCore submenu keeps its own list');
+    context.$dataSystem.reactorQuests.log = 'visustella';
+    context.Imported = { VisuMZ_2_QuestSystem: true };
+    context.Game_System.prototype.setQuestStatus = () => {};
+    const other = menu();
+    other.addCommand('formation', 'formation', true);
+    wrapped.call(other);
+    assert.equal(other.findSymbol('reactorQuest'), -1, 'VisuStella\'s log is on the menu instead');
+});
+
+test('with VisuStella\'s log chosen, progress made here is passed on to it by key; before the plugin runs, nothing is', () => {
+    const world = { system: { reactorQuests: { log: 'visustella' } }, switches: {} };
+    const { context, quests, run } = loadRuntime(DATA, world);
+    const calls = [];
+    const questData = { objectives: { WELCOME: [1] }, objectivesCompleted: {}, objectivesFailed: {}, rewards: { WELCOME: [1] }, rewardsClaimed: {}, rewardsDenied: {} };
+    quests.discover(2);
+    assert.equal(context.ReactorQuests.logMode(), 'reactor', 'chosen, but the plugin is not running');
+    context.Imported = { VisuMZ_2_QuestSystem: true };
+    Object.assign(context.Game_System.prototype, {
+        setQuestStatus: (key, status) => calls.push(['status', key, status]),
+        setQuestObjectives: (key, ids, status) => calls.push(['objectives', key, ids, status]),
+        setQuestRewards: (key, ids, status) => calls.push(['rewards', key, ids, status]),
+        setTrackedQuest: key => calls.push(['tracked', key]),
+        questData: () => questData
+    });
+    assert.equal(context.ReactorQuests.logMode(), 'visustella');
+    run('QuestSet', { questId: 'welcome', action: 'discover' });
+    run('QuestObjective', { questId: '1', objective: '1', state: 'complete' });
+    run('QuestObjective', { questId: '1', objective: 'all', state: 'show' });
+    run('QuestReward', { questId: '1', reward: '2', state: 'show' });
+    run('QuestSet', { questId: '1', action: 'track' });
+    run('QuestSet', { questId: '1', action: 'fail' });
+    run('QuestSet', { questId: '1', action: 'reset' });
+    assert.deepEqual(plain(calls), [
+        ['status', 'welcome', 'known'],
+        ['objectives', 'welcome', [1], 'complete'],
+        ['objectives', 'welcome', [1], 'complete'], ['objectives', 'welcome', [2, 3], 'show'],
+        ['rewards', 'welcome', [2], 'show'],
+        ['tracked', 'welcome'],
+        ['status', 'welcome', 'failed'],
+        ['status', 'welcome', 'remove']
+    ]);
+    assert.equal(questData.objectives.WELCOME, undefined, 'a reset quest\'s objectives start over in the plugin too');
+    calls.length = 0;
+    quests.discover(1);
+    world.switches[7] = true;
+    quests.update();
+    assert.deepEqual(plain(calls), [
+        ['status', 'welcome', 'known'],
+        ['objectives', 'welcome', [1], 'show'], ['objectives', 'welcome', [2], 'remove'], ['objectives', 'welcome', [3], 'complete']
+    ], 'an objective a switch completes is passed on as well');
+    const visuScene = function VisuStellaSceneQuest() {};
+    context.Scene_Quest = visuScene;
+    run('OpenQuestLog', { questId: '1' });
+    assert.equal(context.__pushed, visuScene, 'Open Quest Log opens the plugin\'s log');
+    assert.equal(context.ReactorQuests.keyOf({ id: 5, key: '' }), 'ReactorQuest5');
+});
+
+test('quests written back into VisuStella\'s Quest System come out as they went in, keeping what Reactor has no field for', () => {
+    const QuestImporter = loadImporter();
+    const raw = visustellaParameter([
+        { name: '\\C[5]Main Quests', quests: [
+            { key: 'Welcome', title: '\\i[87]Welcome Quest', difficulty: 'Easy', from: 'NPC', location: 'Town',
+              descriptions: ['First \\c[4]text\\c[0].', 'Second description.'],
+              objectives: ['Talk\nto Reid', 'Hidden one'], visibleObjectives: [1],
+              rewards: ['\\i[176]Potion'], visibleRewards: [1],
+              subtexts: ['', 'Sub'], quotes: [''], onLoad: 'console.log(1);' }
+        ] },
+        { name: 'Side', quests: [{ key: 'Errand', title: 'Errand', objectives: ['Go'], visibleObjectives: [1], subtexts: [], quotes: [] }] }
+    ]);
+    assert.equal(QuestImporter.fromVisustellaCategories(raw, ['WELCOME'])[0].activation.type, 'start', 'known at the start there, appears at the start here');
+    const quests = QuestImporter.fromVisustellaCategories(raw).map((quest, index) => Object.assign(quest, { id: index + 1 }));
+    assert.equal(QuestImporter.toVisustellaCategories(quests, raw), raw, 'untouched quests write back byte for byte');
+
+    quests[0].name = 'Welcome Home';
+    quests[0].iconIndex = 0;
+    quests[0].objectives[1].hidden = false;
+    quests[0].category = 'Side';
+    quests.push({ id: 3, key: '', name: 'Fresh', category: 'New', iconIndex: 5, description: 'D', objectives: [], rewards: [], subtext: '', quotes: '' });
+    const written = JSON.parse(QuestImporter.toVisustellaCategories(quests, raw)).map(category => JSON.parse(category));
+    assert.deepEqual(written.map(category => category['CategoryName:str']), ['Side', 'New'], 'an emptied category is dropped; a new one follows those the plugin had');
+    const side = JSON.parse(written[0]['Quests:arraystruct']).map(struct => JSON.parse(struct));
+    assert.deepEqual(side.map(struct => struct['Key:str']), ['Welcome', 'Errand']);
+    assert.equal(side[0]['Title:str'], 'Welcome Home');
+    assert.equal(side[0]['VisibleObjectives:arraynum'], '["1","2"]');
+    assert.deepEqual(plain(QuestImporter.noteList(side[0]['Description:arrayjson'])), ['First \\c[4]text\\c[0].', 'Second description.'], 'the alternate description is kept');
+    assert.deepEqual(plain(QuestImporter.noteList(side[0]['Subtext:arrayjson'])), ['', 'Sub'], 'the subtext goes back where it came from');
+    assert.equal(side[0]['OnLoadQuestJS:func'], JSON.stringify('console.log(1);'));
+    const fresh = JSON.parse(JSON.parse(written[1]['Quests:arraystruct'])[0]);
+    assert.equal(fresh['Key:str'], 'ReactorQuest3', 'no key: the one the runtime passes on');
+    assert.equal(fresh['Title:str'], '\\i[5]Fresh');
+    assert.equal(fresh['Subtext:arrayjson'], '[]');
+    assert.equal(fresh['OnLoadQuestJS:func'], JSON.stringify('// Insert JavaScript code here.'));
+});
+
+test('saving carries the quest log choice into the manifest, only once one was made and only when something changes', () => {
+    const QuestImporter = loadImporter();
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rr-quest-log-'));
+    try {
+        fs.mkdirSync(path.join(dir, 'js'));
+        fs.writeFileSync(path.join(dir, 'js', 'reactor_main.js'), '');
+        const file = path.join(dir, 'js', 'reactor_plugins.js');
+        const general = JSON.stringify({ 'KnownQuests:arraystr': '["Old"]', 'TrackedQuest:str': 'Old' });
+        const plugins = [
+            { name: 'VisuMZ_0_CoreEngine', status: true, description: '', parameters: {} },
+            { name: 'VisuMZ_2_QuestSystem', status: false, description: 'd', parameters: { 'General:struct': general, 'Categories:arraystruct': visustellaParameter([{ name: 'Main', quests: [{ key: 'Old', title: 'Old', objectives: [] }] }]) } }
+        ];
+        const header = '// Generated by RPG Reactor Plugin Manager\n// Do not edit this file directly - use the Plugin Manager instead\n\n';
+        const original = header + 'var $plugins =\n' + JSON.stringify(plugins, null, 4) + ';\n';
+        fs.writeFileSync(file, original);
+        const quests = [
+            { id: 1, key: 'Hero', name: 'Hero', category: 'Main', objectives: [], rewards: [], activation: { type: 'start' } },
+            { id: 2, key: 'Later', name: 'Later', category: 'Main', objectives: [], rewards: [], activation: { type: 'command' } }
+        ];
+        assert.deepEqual(plain(QuestImporter.syncQuestLog(dir, quests, {})), { ok: true, changed: false }, 'no choice made, nothing written');
+        assert.equal(fs.readFileSync(file, 'utf8'), original);
+        assert.equal(QuestImporter.syncQuestLog(dir, quests, { log: 'visustella' }).changed, true);
+        const text = fs.readFileSync(file, 'utf8');
+        assert.ok(text.startsWith(header + 'var $plugins =\n'), 'written the way the Plugin Manager writes it');
+        const written = QuestImporter.parseManifest(text);
+        assert.equal(written[0].name, 'VisuMZ_0_CoreEngine', 'every other plugin is left as it was');
+        assert.equal(written[1].status, true, 'the plugin is turned on');
+        const back = QuestImporter.fromVisustellaCategories(written[1].parameters['Categories:arraystruct'], QuestImporter.visustellaKnownKeys(written[1].parameters));
+        assert.deepEqual(plain(back.map(quest => [quest.key, quest.activation.type])), [['Hero', 'start'], ['Later', 'command']], 'the quest list is these quests, and a start-of-game quest is known at the start');
+        assert.equal(JSON.parse(written[1].parameters['General:struct'])['TrackedQuest:str'], 'Old', 'the rest of General is left alone');
+        assert.equal(QuestImporter.syncQuestLog(dir, quests, { log: 'visustella' }).changed, false, 'nothing new, no rewrite');
+        assert.equal(QuestImporter.syncQuestLog(dir, quests, { log: 'reactor' }).changed, true);
+        assert.equal(QuestImporter.parseManifest(fs.readFileSync(file, 'utf8'))[1].status, false, 'Reactor\'s log chosen: the plugin is turned off');
+        assert.equal(fs.existsSync(file + '.tmp'), false);
+    } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+    }
+});
+
+test('the database save carries the choice, and a failure there fails the save', () => {
+    const manager = read('editor/src/DatabaseManager.js');
+    assert.match(manager, /if \(failed\.length === 0 && !this\.syncQuestLog\(projectPath\)\) \{\n\s*failed\.push\('js\/reactor_plugins\.js'\);/);
+    const at = manager.indexOf('    syncQuestLog(projectPath) {');
+    assert.ok(at > 0);
+    const body = manager.slice(at, manager.indexOf('\n    }\n', at));
+    const make = importer => new Function('QuestImporter', 'console', `return function${body.slice(body.indexOf('('))}\n}`)(importer, { error: () => {} });
+    const self = setting => ({ getSystem: () => ({ reactorQuests: setting }), getQuests: () => ['q'] });
+    const calls = [];
+    const working = make({ syncQuestLog: (projectPath, quests, setting) => { calls.push([projectPath, quests, setting.log]); return { ok: true }; } });
+    assert.equal(working.call(self({}), 'P'), true);
+    assert.equal(calls.length, 0, 'no choice made, the plugin list is not asked');
+    assert.equal(working.call(self({ log: 'visustella' }), 'P'), true);
+    assert.deepEqual(calls, [['P', ['q'], 'visustella']]);
+    const broken = make({ syncQuestLog: () => { throw new Error('disk full'); } });
+    assert.equal(broken.call(self({ log: 'reactor' }), 'P'), false);
+});
+
+test('choosing VisuStella\'s log in the Quests tab brings in the quests it lacks here and keeps its start-of-game quests starting', () => {
+    const importer = {
+        SOURCES: { visustella: { label: 'VS' } },
+        installedSystems: () => [{ source: 'visustella', label: 'VS', enabled: true }],
+        read: () => ({ quests: [{ key: 'Welcome', name: 'W', activation: { type: 'start' } }, { key: 'ReactorQuest3', name: 'K', activation: { type: 'command' } }, { key: 'Fresh', name: 'F', activation: { type: 'command' } }] }),
+        readManifest: () => [{}],
+        visustellaEntry: () => ({ parameters: {} }),
+        visustellaKnownKeys: () => ['welcome'],
+        visustellaKeyOf: quest => quest.key || 'ReactorQuest' + quest.id,
+        uniqueKey: wanted => wanted
+    };
+    const store = [null, { id: 1, key: 'Welcome', name: 'W', activation: { type: 'command' } }, { id: 2, key: 'Side', name: 'S', activation: { type: 'command' } }, { id: 3, key: '', name: 'K', activation: { type: 'command' } }];
+    const system = {};
+    const questions = [];
+    const opened = [];
+    const window = { confirm: text => { questions.push(text); return true; }, alert: () => {} };
+    const context = { console, module: undefined, globalThis: undefined, window, rrEscapeHtml: v => String(v), QuestImporter: importer };
+    context.globalThis = context;
+    vm.runInNewContext(read('editor/src/database/DatabaseQuestEditor.js') + '\n;globalThis.__D = DatabaseQuestEditor;', context);
+    const manager = {
+        mutationGeneration: 0,
+        getSystem: () => system,
+        getQuests: () => store.filter(Boolean),
+        getQuest: id => store[id],
+        updateQuest: (id, data) => { store[id] = data; },
+        addQuest: record => { const quest = Object.assign({}, record, { id: store.length }); store.push(quest); return quest; }
+    };
+    const parent = { currentProject: { path: 'P' }, openDatabase: type => opened.push(type), showDatabaseDetail: () => {} };
+    const editor = new context.__D(manager, {}, null, parent);
+
+    assert.equal(plain(editor.questLogState(editor.settings())).notes[0].startsWith('VS is also enabled.'), true, 'no choice yet: the two logs are described as separate');
+    assert.equal(editor.chooseQuestLog('visustella'), true, 'an import happened, and it re-rendered');
+    assert.equal(system.reactorQuests.log, 'visustella');
+    assert.equal(store[1].activation.type, 'start', 'known at the start in the plugin');
+    assert.equal(store[2].activation.type, 'command', 'a quest the plugin does not know stays as it was');
+    assert.deepEqual(plain(store.slice(4).map(quest => quest.key)), ['Fresh'], 'only the quest this database lacked: a key-less quest read back under its id-made key is the same quest');
+    assert.doesNotMatch(read('editor/src/database/DatabaseQuestEditor.js'), /\? '' : 'hidden'/, 'a bare hidden attribute loses to .db-col\'s display, so columns hide with DatabaseQuestEditor.HIDDEN');
+    assert.match(questions[0], /^Saving will replace the quests in VS with the ones here\. /);
+    assert.deepEqual(opened, ['quests']);
+    assert.match(plain(editor.questLogState(editor.settings())).notes[0], /^Saving writes these quests into VS and turns it on\./);
+    assert.equal(editor.chooseQuestLog('reactor'), false);
+    assert.equal(system.reactorQuests.log, 'reactor');
+    assert.match(plain(editor.questLogState(editor.settings())).notes[0], /^Saving turns VS off in the Plugin Manager/);
+});
+
+test('the quest log\'s category tabs draw their names through drawTextEx, so a coloured category shows its colour, not its code', () => {
+    const { context } = loadRuntime(DATA);
+    const drawn = [];
+    const tab = {
+        itemLineRect: () => ({ x: 10, y: 4, width: 200, height: 36 }),
+        commandName: () => '\\C[5]Main Quests',
+        textSizeEx: () => ({ width: 100, height: 36 }),
+        resetTextColor: () => {},
+        changePaintOpacity: () => {},
+        isCommandEnabled: () => true,
+        drawTextEx: (text, x, y, width) => drawn.push([text, x, y, width])
+    };
+    context.Window_QuestCategory.prototype.drawItem.call(tab, 1);
+    assert.deepEqual(plain(drawn), [['\\C[5]Main Quests', 60, 4, 200]], 'centred on the width it measures, codes left for drawTextEx');
+});
+
 test('the Quests tab imports through one button and a source picker, not a plugin-named button', () => {
     const editor = read('editor/src/database/DatabaseQuestEditor.js');
     assert.match(editor, /quest-import"[^>]*>\$\{tt\('Import…'\)\}<\/button>/);
@@ -453,7 +694,7 @@ test('the Quests tab imports through one button and a source picker, not a plugi
     assert.match(editor, /QuestImporter\.available\(project\.path\)/);
     assert.match(editor, /showImportDialog\(sources, source => this\.importFrom\(source\)\)/);
     assert.match(editor, /QuestImporter\.read\(project\.path, source\)/);
-    assert.doesNotMatch(editor, /VisuStella/, 'no source is special-cased in the editor');
+    assert.doesNotMatch(editor, /'VisuStella Quest System'|VisuMZ_2_QuestSystem/, 'plugin names and labels come from QuestImporter.SOURCES, never from the editor');
     for (const key of ['Import Quests', 'not in this project', '{count} quest(s) found', 'Import {count} quest(s) from {source}?']) {
         assert.ok(editor.includes(`'${key}'`), key);
     }

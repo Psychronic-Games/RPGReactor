@@ -576,6 +576,23 @@ class DatabaseManager {
         this.mutationGeneration++;
     }
 
+    /**
+     * Carry Database > Quests' choice of in-game quest log into the plugin
+     * list (QuestImporter.syncQuestLog). Nothing is written before a choice is
+     * made, and a failure fails the save instead of passing silently.
+     */
+    syncQuestLog(projectPath) {
+        const importer = typeof QuestImporter !== 'undefined' ? QuestImporter : null;
+        const setting = (this.getSystem() || {}).reactorQuests;
+        if (!importer || typeof importer.syncQuestLog !== 'function' || !setting || !setting.log) return true;
+        try {
+            return importer.syncQuestLog(projectPath, this.getQuests(), setting).ok !== false;
+        } catch (error) {
+            console.error('Could not carry the quest log choice into the plugin list:', error);
+            return false;
+        }
+    }
+
     /** The library array on System.json; null before a project is open. */
     musicSequenceList() {
         const system = this.data.system;
@@ -842,6 +859,9 @@ class DatabaseManager {
         }
         if (failed.length === 0 && !await this.saveEditorNames(projectPath)) {
             failed.push(this.editorNamesModule()?.FILENAME || 'Database.names.json');
+        }
+        if (failed.length === 0 && !this.syncQuestLog(projectPath)) {
+            failed.push('js/reactor_plugins.js');
         }
         if (failed.length) console.error(`Failed to save database files: ${failed.join(', ')}`);
         return failed.length === 0;

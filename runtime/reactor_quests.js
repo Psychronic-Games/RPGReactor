@@ -102,10 +102,51 @@
         };
     };
 
-    /** Whether the main menu offers the quest log: enabled, and there is something to show. */
+    /**
+     * Whether the main menu offers Reactor's quest log: it is the game's log,
+     * the command is on, and there is something to show.
+     */
     ReactorQuests.menuEnabled = function() {
-        return this.settings().menuCommand && this.quests().length > 0;
+        return this.logMode() === "reactor" && this.settings().menuCommand && this.quests().length > 0;
     };
+
+    //-------------------------------------------------------------------------
+    // Which quest log the game uses
+    //
+    // Database > Quests chooses between Reactor's own log and VisuStella's
+    // Quest System (System.json reactorQuests.log). With VisuStella's, the
+    // editor writes these quests into that plugin's parameters, and every
+    // change of progress made here - by event command, by a rule, by script -
+    // is passed on to it by key, so the log the player opens moves with the
+    // events that were authored against Reactor's quests.
+
+    /** The game's log: "visustella" only when it was chosen and the plugin is running. */
+    ReactorQuests.logMode = function() {
+        const stored = (typeof $dataSystem !== "undefined" && $dataSystem && $dataSystem.reactorQuests) || {};
+        return stored.log === "visustella" && this.visustellaRunning() ? "visustella" : "reactor";
+    };
+
+    ReactorQuests.visustellaRunning = function() {
+        return !!(window.Imported && window.Imported.VisuMZ_2_QuestSystem)
+            && typeof Game_System.prototype.setQuestStatus === "function";
+    };
+
+    /** A quest's key in VisuStella's list: its own, or one made from its id (the editor writes the same). */
+    ReactorQuests.keyOf = function(quest) {
+        const key = String((quest && quest.key) || "").trim();
+        return key || "ReactorQuest" + (quest ? quest.id : 0);
+    };
+
+    /** Run apply(key, $gameSystem) against VisuStella's log when it is the game's. */
+    ReactorQuests.mirror = function(quest, apply) {
+        if (!quest || this.logMode() !== "visustella" || typeof $gameSystem === "undefined" || !$gameSystem) return;
+        apply(this.keyOf(quest), $gameSystem);
+        const scene = typeof SceneManager !== "undefined" ? SceneManager._scene : null;
+        if (scene && typeof scene.refreshQuestTrackerWindow === "function") scene.refreshQuestTrackerWindow();
+    };
+
+    /** Reactor's objective states as the ones VisuStella's setQuestObjectives takes. */
+    ReactorQuests.OBJECTIVE_TO_VISUSTELLA = { open: "show", hidden: "remove", done: "complete", failed: "fail" };
 
     /** The category names in the order they first appear among the given quests. */
     ReactorQuests.categoriesOf = function(quests) {
@@ -170,6 +211,7 @@
         if (!this._rewards[id]) {
             this._rewards[id] = (quest.rewards || []).map(reward => !(reward && reward.hidden));
         }
+        ReactorQuests.mirror(quest, (key, system) => system.setQuestStatus(key, "known"));
         return true;
     };
 
@@ -179,6 +221,7 @@
         this.discover(quest.id);
         this._status[quest.id] = ReactorQuests.STATUS.COMPLETED;
         if (this._tracked === quest.id) this._tracked = 0;
+        ReactorQuests.mirror(quest, (key, system) => system.setQuestStatus(key, "completed"));
         return true;
     };
 
@@ -188,6 +231,7 @@
         this.discover(quest.id);
         this._status[quest.id] = ReactorQuests.STATUS.FAILED;
         if (this._tracked === quest.id) this._tracked = 0;
+        ReactorQuests.mirror(quest, (key, system) => system.setQuestStatus(key, "failed"));
         return true;
     };
 
@@ -200,6 +244,15 @@
         delete this._rewards[quest.id];
         this._order = this._order.filter(other => other !== quest.id);
         if (this._tracked === quest.id) this._tracked = 0;
+        ReactorQuests.mirror(quest, (key, system) => {
+            system.setQuestStatus(key, "remove");
+            // Its objectives and rewards start over too: the plugin keeps them by upper-case key.
+            const data = system.questData();
+            const upper = key.toUpperCase();
+            for (const field of ["objectives", "objectivesCompleted", "objectivesFailed", "rewards", "rewardsClaimed", "rewardsDenied"]) {
+                if (data[field]) delete data[field][upper];
+            }
+        });
         return true;
     };
 
@@ -233,16 +286,33 @@
                 default: return value;
             }
         };
+        let changed;
         if (index === "all") {
             this._objectives[quest.id] = states.map(apply);
+            changed = states.map((value, at) => at);
         } else {
             const at = Number(index);
             if (!(at >= 0 && at < states.length)) return false;
             states[at] = apply(states[at], at);
             this._objectives[quest.id] = states;
+            changed = [at];
         }
+        this._mirrorObjectives(quest, changed);
         this._checkCompletion(quest);
         return true;
+    };
+
+    /** Pass some objectives' current states (0-based indices) on to VisuStella's log. */
+    Game_Quests.prototype._mirrorObjectives = function(quest, indices) {
+        const states = this.objectiveStates(quest.id);
+        ReactorQuests.mirror(quest, (key, system) => {
+            const groups = {};
+            for (const at of indices) {
+                const target = ReactorQuests.OBJECTIVE_TO_VISUSTELLA[states[at]];
+                if (target) (groups[target] = groups[target] || []).push(at + 1);
+            }
+            for (const target of Object.keys(groups)) system.setQuestObjectives(key, groups[target], target);
+        });
     };
 
     /** Whether every objective the player can see is complete (and there is at least one). */
@@ -271,20 +341,27 @@
         if (!quest) return false;
         this.discover(quest.id);
         const shown = this.rewardsShown(quest.id);
+        let ids;
         if (index === "all") {
             this._rewards[quest.id] = shown.map(() => !!visible);
+            ids = shown.map((value, at) => at + 1);
         } else {
             const at = Number(index);
             if (!(at >= 0 && at < shown.length)) return false;
             shown[at] = !!visible;
             this._rewards[quest.id] = shown;
+            ids = [at + 1];
         }
+        ReactorQuests.mirror(quest, (key, system) => system.setQuestRewards(key, ids, visible ? "show" : "remove"));
         return true;
     };
 
     Game_Quests.prototype.setTracked = function(id) {
         const quest = id ? ReactorQuests.find(id) : null;
         this._tracked = quest && this.isActive(quest.id) ? quest.id : 0;
+        if (ReactorQuests.logMode() === "visustella" && typeof $gameSystem !== "undefined" && $gameSystem) {
+            $gameSystem.setTrackedQuest(this._tracked ? ReactorQuests.keyOf(quest) : "");
+        }
     };
 
     Game_Quests.prototype.tracked = function() {
@@ -346,7 +423,10 @@
                     changed = true;
                 }
             });
-            if (changed) this._objectives[id] = states;
+            if (changed) {
+                this._objectives[id] = states;
+                this._mirrorObjectives(quest, states.map((value, at) => at));
+            }
             const done = quest.completion || {};
             if (done.type === "switch" && done.switchId > 0 && $gameSwitches.value(done.switchId)) {
                 this.complete(id);
@@ -432,6 +512,11 @@
     });
 
     PluginManager.registerCommand("RPGReactor", "OpenQuestLog", function(args) {
+        // Once VisuStella's Quest System loads, the global Scene_Quest is its own.
+        if (ReactorQuests.logMode() === "visustella") {
+            SceneManager.push(window.Scene_Quest);
+            return;
+        }
         if (args && args.questId) {
             const id = questIdOf(args);
             if (id) Scene_Quest.openOn = id;
@@ -442,18 +527,41 @@
     //-------------------------------------------------------------------------
     // The main menu
 
-    const _Window_MenuCommand_addOriginalCommands = Window_MenuCommand.prototype.addOriginalCommands;
-    Window_MenuCommand.prototype.addOriginalCommands = function() {
-        _Window_MenuCommand_addOriginalCommands.apply(this, arguments);
-        if (ReactorQuests.menuEnabled()) {
-            this.addCommand(ReactorQuests.settings().commandName, "reactorQuest", true);
-        }
+    /**
+     * The command goes in as the menu finishes building its list, where
+     * addOriginalCommands would have put it (after Formation), and brings its
+     * own handler. It used to ride addOriginalCommands and
+     * Scene_Menu.createCommandWindow, but VisuStella's MainMenuCore replaces
+     * both outright, so neither the command nor its handler reached the menu.
+     * A MainMenuCore submenu keeps its own list.
+     */
+    ReactorQuests.addMenuCommand = function(commandWindow) {
+        if (!this.menuEnabled()) return;
+        if (typeof commandWindow.currentSubcategory === "function" && commandWindow.currentSubcategory()) return;
+        if (commandWindow.findSymbol("reactorQuest") >= 0) return;
+        commandWindow.addCommand(this.settings().commandName, "reactorQuest", true);
+        const list = commandWindow._list;
+        const command = list.pop();
+        const formation = list.findIndex(entry => entry.symbol === "formation");
+        const options = list.findIndex(entry => entry.symbol === "options");
+        list.splice(formation >= 0 ? formation + 1 : options >= 0 ? options : list.length, 0, command);
+        commandWindow.setHandler("reactorQuest", () => SceneManager.push(Scene_Quest));
     };
 
-    const _Scene_Menu_createCommandWindow = Scene_Menu.prototype.createCommandWindow;
-    Scene_Menu.prototype.createCommandWindow = function() {
-        _Scene_Menu_createCommandWindow.apply(this, arguments);
-        this._commandWindow.setHandler("reactorQuest", () => SceneManager.push(Scene_Quest));
+    // Wrapped at boot, once every plugin has loaded, so the wrap sits outside
+    // whatever a plugin did to the menu's list.
+    const _Scene_Boot_start = Scene_Boot.prototype.start;
+    Scene_Boot.prototype.start = function() {
+        const proto = Window_MenuCommand.prototype;
+        if (typeof proto.makeCommandList === "function" && !proto.makeCommandList._reactorQuests) {
+            const makeCommandList = proto.makeCommandList;
+            proto.makeCommandList = function() {
+                makeCommandList.apply(this, arguments);
+                ReactorQuests.addMenuCommand(this);
+            };
+            proto.makeCommandList._reactorQuests = true;
+        }
+        _Scene_Boot_start.apply(this, arguments);
     };
 
     //-------------------------------------------------------------------------
@@ -593,6 +701,17 @@
         for (const category of ReactorQuests.categoriesOf(known)) {
             if (category) this.addCommand(category, "category", true, category);
         }
+    };
+
+    // A category name takes text codes - an imported one usually carries a
+    // colour - and Window_Command draws with drawText, which prints them.
+    Window_QuestCategory.prototype.drawItem = function(index) {
+        const rect = this.itemLineRect(index);
+        const name = this.commandName(index);
+        const width = this.textSizeEx(name).width;
+        this.resetTextColor();
+        this.changePaintOpacity(this.isCommandEnabled(index));
+        this.drawTextEx(name, rect.x + Math.max(0, (rect.width - width) / 2), rect.y, rect.width);
     };
 
     Window_QuestCategory.prototype.setListWindow = function(listWindow) {

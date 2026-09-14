@@ -8,8 +8,9 @@
  * "Quest N" parameter; GS_QuestSystem keeps a data/Quests.json of its own.
  * Each comes back as plain Reactor records - keys intact where the source
  * has them, otherwise a key that names the source and its id - so an event
- * that named a quest keeps naming it. Nothing is written here: the Quests
- * tab decides what to keep.
+ * that named a quest keeps naming it. Reading writes nothing: the Quests
+ * tab decides what to keep. When the tab makes VisuStella's Quest System the
+ * game's quest log, syncQuestLog writes the quests back into that plugin.
  */
 class QuestImporter {
     /** The sources an importer knows, by id, in the order the dialog lists them. */
@@ -117,17 +118,26 @@ class QuestImporter {
         try {
             stamp = fs.statSync(file).mtimeMs;
         } catch (error) {
+            QuestImporter._systems = [];
+            QuestImporter._enabledKey = '';
             return [];
         }
         const cacheKey = `${file}|${stamp}`;
         if (QuestImporter._enabledKey !== cacheKey) {
             const plugins = QuestImporter.readManifest(projectPath);
-            QuestImporter._enabled = Object.keys(QuestImporter.SOURCES)
-                .filter(source => plugins.some(plugin => plugin && plugin.name === QuestImporter.SOURCES[source].plugin && plugin.status !== false))
-                .map(source => ({ source, label: QuestImporter.SOURCES[source].label }));
+            QuestImporter._systems = Object.keys(QuestImporter.SOURCES)
+                .map(source => ({ source, entry: plugins.find(plugin => plugin && plugin.name === QuestImporter.SOURCES[source].plugin) }))
+                .filter(found => found.entry)
+                .map(found => ({ source: found.source, label: QuestImporter.SOURCES[found.source].label, enabled: found.entry.status !== false }));
             QuestImporter._enabledKey = cacheKey;
         }
-        return QuestImporter._enabled.map(entry => Object.assign({}, entry));
+        return QuestImporter._systems.filter(entry => entry.enabled).map(entry => ({ source: entry.source, label: entry.label }));
+    }
+
+    /** Every quest-system plugin in the manifest, on or off, as { source, label, enabled }; cached like enabledSystems. */
+    static installedSystems(projectPath) {
+        QuestImporter.enabledSystems(projectPath);
+        return (QuestImporter._systems || []).map(entry => Object.assign({}, entry));
     }
 
     /**
@@ -135,8 +145,9 @@ class QuestImporter {
      * string from the manifest, or an already-parsed array), as Reactor
      * records without ids. Order is the plugin's: category by category.
      */
-    static fromVisustellaCategories(value) {
+    static fromVisustellaCategories(value, knownKeys) {
         const categories = QuestImporter.layer(value);
+        const known = new Set((knownKeys || []).map(key => String(key).toUpperCase().trim()));
         const quests = [];
         if (!Array.isArray(categories)) return quests;
         for (const rawCategory of categories) {
@@ -147,7 +158,10 @@ class QuestImporter {
             for (const rawQuest of list) {
                 const quest = QuestImporter.layer(rawQuest);
                 if (!quest || typeof quest !== 'object') continue;
-                quests.push(QuestImporter.fromVisustellaQuest(quest, categoryName));
+                const record = QuestImporter.fromVisustellaQuest(quest, categoryName);
+                // Known at the start of a game in the plugin: appears at the start here.
+                if (record.key && known.has(record.key.toUpperCase())) record.activation.type = 'start';
+                quests.push(record);
             }
         }
         return quests;
@@ -211,7 +225,7 @@ class QuestImporter {
         return {
             source: 'visustella',
             enabled: entry.status !== false,
-            quests: QuestImporter.fromVisustellaCategories(raw)
+            quests: QuestImporter.fromVisustellaCategories(raw, QuestImporter.visustellaKnownKeys(params))
         };
     }
 
@@ -419,6 +433,165 @@ class QuestImporter {
                 count: found ? found.quests.length : 0
             };
         });
+    }
+
+    // --- writing VisuStella's Quest System ----------------------------------
+
+    /** The quest keys the plugin's General settings make known at the start of a game. */
+    static visustellaKnownKeys(params) {
+        const general = QuestImporter.layer((params || {})['General:struct']);
+        const list = QuestImporter.layer(QuestImporter.field(general, 'KnownQuests'));
+        return Array.isArray(list) ? list.map(key => String(key)) : [];
+    }
+
+    /** A quest's key in the plugin: its own, or one made from its id (reactor_quests.js makes the same). */
+    static visustellaKeyOf(quest) {
+        const key = String((quest && quest.key) || '').trim();
+        return key || 'ReactorQuest' + (quest ? quest.id : 0);
+    }
+
+    /** A note[] parameter value from a list of texts. */
+    static noteParam(texts) {
+        return JSON.stringify(texts.map(text => JSON.stringify(String(text == null ? '' : text))));
+    }
+
+    /**
+     * A plugin text list with Reactor's one text put back where the importer
+     * took it from - the first entry for a description, the first non-empty
+     * one for a subtext or quote - keeping every other entry, which are the
+     * alternates the plugin switches to by command.
+     */
+    static mergeTexts(previous, text, firstNonEmpty) {
+        const list = QuestImporter.noteList(previous);
+        const value = String(text == null ? '' : text);
+        if (!list.length && !value) return '[]';
+        let at = firstNonEmpty ? list.findIndex(Boolean) : 0;
+        if (at < 0) at = 0;
+        list[at] = value;
+        return QuestImporter.noteParam(list);
+    }
+
+    /**
+     * One Reactor quest as the plugin's quest struct. Fields Reactor has no
+     * place for - alternate texts, the on-load script, anything a later
+     * version adds - are kept from the struct the plugin held for this key.
+     */
+    static toVisustellaQuest(quest, previous) {
+        const base = previous && typeof previous === 'object' ? previous : {};
+        const kept = (name, fallback) => (base[name] !== undefined ? base[name] : fallback);
+        const icon = Number(quest.iconIndex) > 0 ? '\\i[' + Number(quest.iconIndex) + ']' : '';
+        const objectives = Array.isArray(quest.objectives) ? quest.objectives : [];
+        const rewards = Array.isArray(quest.rewards) ? quest.rewards : [];
+        const texts = entries => QuestImporter.noteParam(entries.map(entry => (entry && entry.text) || ''));
+        const visible = entries => JSON.stringify(entries
+            .map((entry, index) => (entry && !entry.hidden ? String(index + 1) : null))
+            .filter(Boolean));
+        const struct = {
+            'Key:str': QuestImporter.visustellaKeyOf(quest),
+            'Header': kept('Header', ''),
+            'Title:str': icon + String(quest.name || ''),
+            'Difficulty:str': String(quest.difficulty || ''),
+            'From:str': String(quest.from || ''),
+            'Location:str': String(quest.location || ''),
+            'Description:arrayjson': QuestImporter.mergeTexts(base['Description:arrayjson'], quest.description, false),
+            'Lists': kept('Lists', ''),
+            'Objectives:arrayjson': texts(objectives),
+            'VisibleObjectives:arraynum': visible(objectives),
+            'Rewards:arrayjson': texts(rewards),
+            'VisibleRewards:arraynum': visible(rewards),
+            'Footer': kept('Footer', ''),
+            'Subtext:arrayjson': QuestImporter.mergeTexts(base['Subtext:arrayjson'], quest.subtext, true),
+            'Quotes:arrayjson': QuestImporter.mergeTexts(base['Quotes:arrayjson'], quest.quotes, true),
+            'JavaScript': kept('JavaScript', ''),
+            'OnLoadQuestJS:func': kept('OnLoadQuestJS:func', JSON.stringify('// Insert JavaScript code here.'))
+        };
+        for (const name of Object.keys(base)) if (!(name in struct)) struct[name] = base[name];
+        return struct;
+    }
+
+    /**
+     * The plugin's Categories parameter for a set of Reactor quests: one
+     * category per Reactor category, in the order the plugin already had them
+     * and then in the order new ones first appear, each quest built over what
+     * the plugin held for its key. Quests and categories no longer here are
+     * dropped: with this log chosen, the Quests tab is the source.
+     */
+    static toVisustellaCategories(quests, previousValue) {
+        const previous = QuestImporter.layer(previousValue);
+        const oldCategories = [];
+        const oldQuests = new Map();
+        for (const raw of Array.isArray(previous) ? previous : []) {
+            const category = QuestImporter.layer(raw);
+            if (!category || typeof category !== 'object') continue;
+            oldCategories.push(category);
+            const list = QuestImporter.layer(QuestImporter.field(category, 'Quests'));
+            for (const rawQuest of Array.isArray(list) ? list : []) {
+                const struct = QuestImporter.layer(rawQuest);
+                if (!struct || typeof struct !== 'object') continue;
+                const key = String(QuestImporter.field(struct, 'Key') || '').toUpperCase().trim();
+                if (key && !oldQuests.has(key)) oldQuests.set(key, struct);
+            }
+        }
+        const groups = new Map();
+        for (const quest of quests || []) {
+            if (!quest) continue;
+            const name = String(quest.category || '').trim() || 'Quests';
+            if (!groups.has(name)) groups.set(name, []);
+            groups.get(name).push(QuestImporter.toVisustellaQuest(quest, oldQuests.get(QuestImporter.visustellaKeyOf(quest).toUpperCase())));
+        }
+        const nameOf = category => String(QuestImporter.field(category, 'CategoryName') || '').trim();
+        const order = oldCategories.map(nameOf).filter((name, index, all) => groups.has(name) && all.indexOf(name) === index);
+        for (const name of groups.keys()) if (!order.includes(name)) order.push(name);
+        return JSON.stringify(order.map(name => {
+            const kept = oldCategories.find(category => nameOf(category) === name);
+            const category = kept ? Object.assign({}, kept) : { 'CategoryName:str': name };
+            category['Quests:arraystruct'] = JSON.stringify(groups.get(name).map(struct => JSON.stringify(struct)));
+            return JSON.stringify(category);
+        }));
+    }
+
+    /**
+     * Carry Database > Quests' choice of in-game quest log into the plugin
+     * list. "visustella": the Quest System is turned on, its quest list
+     * becomes these quests, and the ones that appear at the start of the game
+     * become the ones it knows at the start. "reactor": it is turned off, so
+     * the game has one log. No choice yet, no such plugin in the manifest, or
+     * nothing that would change: the file is left alone. The rest of the
+     * manifest is written back as the Plugin Manager writes it.
+     */
+    static syncQuestLog(projectPath, quests, setting) {
+        const mode = setting && setting.log;
+        if (mode !== 'visustella' && mode !== 'reactor') return { ok: true, changed: false };
+        const fs = require('fs');
+        const file = QuestImporter.manifestPath(projectPath);
+        if (!fs.existsSync(file)) return { ok: true, changed: false };
+        const text = fs.readFileSync(file, 'utf8');
+        const plugins = QuestImporter.parseManifest(text);
+        const entry = QuestImporter.visustellaEntry(plugins);
+        if (!entry) return { ok: true, changed: false };
+        const before = JSON.stringify(entry);
+        if (mode === 'reactor') {
+            entry.status = false;
+        } else {
+            entry.status = true;
+            if (!entry.parameters || typeof entry.parameters !== 'object') entry.parameters = {};
+            const params = entry.parameters;
+            params['Categories:arraystruct'] = QuestImporter.toVisustellaCategories(quests, params['Categories:arraystruct']);
+            const general = QuestImporter.layer(params['General:struct']);
+            if (general && typeof general === 'object') {
+                general['KnownQuests:arraystr'] = JSON.stringify((quests || [])
+                    .filter(quest => quest && quest.activation && quest.activation.type === 'start')
+                    .map(quest => QuestImporter.visustellaKeyOf(quest)));
+                params['General:struct'] = JSON.stringify(general);
+            }
+        }
+        if (JSON.stringify(entry) === before) return { ok: true, changed: false };
+        const at = text.search(/var\s+\$plugins\s*=/);
+        const header = at > 0 ? text.slice(0, at) : '';
+        const temp = file + '.tmp';
+        fs.writeFileSync(temp, header + 'var $plugins =\n' + JSON.stringify(plugins, null, 4) + ';\n', 'utf8');
+        fs.renameSync(temp, file);
+        return { ok: true, changed: true };
     }
 
     /** A key nobody else has: the wanted one, or it with a number after it. */
