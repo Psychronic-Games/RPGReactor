@@ -180,6 +180,10 @@ The complete counter/reflection/substitution and victory/defeat/escape/abort/plu
 `editor/tests/smoke/nw-sequence-authoring.cjs` checks actual canvas resolution and bounded layout at three window sizes, independent target dragging, shared ring pointer gestures, per-axis scale, and save/reload. `RR_SEQUENCE_TRANSFORM=1 node editor/tests/smoke/nw-unarmed-punch.cjs` verifies a rendered stretched/offset punch and restoration after the action.
 
 
+### Hits on 3D battlers (2026-09-13)
+
+A battler's model in a room takes a hit on the body: pushed back along the line from the attacker over six frames, springing forward past home and settling, less so for a big model. The stock damage blink flashes the model white instead of hiding it. Models wear the engine's sprite effects (hit and animation flashes, collapse fade, boss shake, gone once a dead enemy has collapsed) and stand on a soft floor shadow. While a pose step stands, the model's idle clip freezes on its first frame so the posed arm is not moved under the pose; battle matches the editor.
+
 ### Media steps and room presentation (2026-09-06)
 
 **Show Animation** opens the shared searchable animation picker with a live preview. X/Y offsets use map tiles; Z is height and Scale multiplies the animation’s own size. These settings affect the sequence preview and battles, including sprite-sheet fallback animations. The source database animation is unchanged. Hit Physical and other animations play their authored sound timings in the preview as well as battle.

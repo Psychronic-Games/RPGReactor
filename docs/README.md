@@ -23,6 +23,8 @@
 - [September 10 PR integration](PR-INTEGRATION-2026-09-10.md): enemy Behaviour forecast, integration corrections, validation and preserved local work.
 - [Keyboard/UI audit — issue #54](UI-KEYBOARD-AUDIT-2026-09-10.md): list focus, popup navigation, stable tabbed dialogs, readable tileset names and blank inactive event conditions.
 
+- [0.98.6 release notes](posts/release-notes-0.98.6.md): phased sequences, held and aimed weapons, cinematic focus, Victor import, hands on the rig, the Demo fight.
+- [0.98.6 itch.io devlog](posts/itch-devlog-0.98.6.md): announcement text, with a [plain-text copy](posts/itch-devlog-0.98.6-plain.txt).
 - [0.98.5 release notes](posts/release-notes-0.98.5.md): consolidated features, fixes, compatibility boundaries and validation.
 - [0.98.5 itch.io devlog](posts/itch-devlog-0.98.5.md): announcement text, with a [plain-text copy](posts/itch-devlog-0.98.5-plain.txt).
 
@@ -32,6 +34,7 @@ This folder contains release notes, audit history, and maintainer workflows that
 - [Battle Rooms and Action Sequences](BATTLE-PRESENTATION.md): authoring rooms, map cameras, visual sequences, equipment/unarmed assignments, compatibility and current limitations. See also the [design and remaining roadmap](DESIGN-BATTLE-ROOMS-AND-ACTION-SEQUENCES.md).
 - [September 5 PR integration](PR-INTEGRATION-2026-09-05.md): PRs #44 and #45, combined-tree validation, and the Project Tools save/containment fixes and regression checks.
 - [September 4 session closeout](SESSION-2026-09-04.md): the day's rendering, speech, database, language/theme, recovery and Demo changes, with validation and remaining work.
+- [Rigging a 3D model](RIGGING-MODELS.md): templates, the hand markers, placing markers precisely (snap, zoom, faint markers) and what the runtime reads.
 - [Model face points and speech](3D-FACE-AND-SPEECH.md): eye placement, mouth/lip authoring, spoken dialogue and per-prop animation speed.
 - [UX and localization audit](UX-LOCALIZATION-AUDIT-2026-09-06.md): theme consistency, new-system translations, live language switching, layout and repeatable checks.
 - [Editor audit](EDITOR_AUDIT.md): command/database authoring, nested dialogs, translation coverage and themes.

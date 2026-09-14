@@ -1,5 +1,14 @@
 # Current project status
 
+## 2026-09-13 — Demo fight, held weapons, cinematic focus, hands on the rig
+
+- **Held and aimed weapons.** A bound model is read by its shape (`Reactor3D.heldShape`: widest slice = handle end, grip = narrow run behind it) and sits at the hand's palm; weapon steps carry **Held With** (both hands) and **Aim** (two-bone reach down the line to the target). Projectiles leave the muzzle or a carved part's end. Pose Parts can **Aim at target**; motions can **Keep posed parts**; sequence poses compose from rest.
+- **Camera and hits.** The running sequence reports its focus every frame and the cinematic camera glides after it (flights, charges, impacts); shots stay inside the room and clear of props. Hits knock a model back with a spring; the damage blink is a white flash. Run-ins move per tile.
+- **Demo battle** authored in `scratchpad/demo-seqs.cjs` / `demo-apply.cjs`: sword skills for Fleagus, Railgun Rifle and gun skills for Carol, Graviton Pistol for Jolt, Frag Grenade and Med-Kit, Tank cannon aim/fire and ram, Reactor Beam; eight Star Shift Freelancers effects with sounds; start messages off (`startMessages:false`, System › Options).
+- **Rig hands.** Humanoid template: palm plus base and tip for five fingers per hand; `attachRigHands` gives every hand joint its palm, knuckle and fingertip points. Rig mode holds the rest pose; the DB 3D viewport zooms toward the pointer, pans, snaps dragged markers into the flesh through a triangle BVH (`MeshSurfacePicker`), draws outside markers faint, keeps labels sized and unstacked. Carol's rig has placed hand markers.
+- **Editor.** Add Step picker (grouped, searchable, strip headers); 3D model folders as strip headers; map toolbar toggles one size.
+- Docs: [release notes](posts/release-notes-0.98.6.md), [itch devlog](posts/itch-devlog-0.98.6.md), [rigging guide](RIGGING-MODELS.md). Verification: **3,177 Node tests pass**; live NW.js checks of the Demo battle, held items, rig zoom/snap/labels. Not pushed.
+
 ## 2026-09-13 — Victor Battle Motions import; Star Shift Rebellion on native sequences
 
 - A converter reads Victor Engine Battle Motions and Battler Graphic Setup notetags into native action sequences, battler states and charset battlers (`VictorMotionImport.js`, CLI `import-victor-motions.cjs`; the editor button was removed on 2026-09-13, the converter having served to seed the native system). Star Shift Rebellion is imported: 269 shared sequences (92 items share 17, the 81 weapons one per weapon type), 1,086 reactions, 315 charset graphics, with VE_BattleMotions and VE_BattlerGraphicSetup off.
