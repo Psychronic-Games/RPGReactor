@@ -36,6 +36,8 @@ class DatabaseEditorUI {
         this.stateEditor = new DatabaseStateEditor(databaseManager, { getCurrentProject: () => this.currentProject }, this.commonUI, this);
         this.questEditor = typeof DatabaseQuestEditor !== 'undefined'
             ? new DatabaseQuestEditor(databaseManager, { getCurrentProject: () => this.currentProject }, this.commonUI, this) : null;
+        this.musicSequenceEditor = typeof DatabaseMusicSequenceEditor !== 'undefined'
+            ? new DatabaseMusicSequenceEditor(databaseManager, { getCurrentProject: () => this.currentProject }, this) : null;
         this.animationEditor = new DatabaseAnimationEditor(databaseManager, { getCurrentProject: () => this.currentProject }, this.commonUI, this);
         const eventProjectManager = {
             getCurrentProject: () => this.currentProject,
@@ -133,6 +135,18 @@ class DatabaseEditorUI {
         return { primary: editorName, secondary: gameName, editorName };
     }
 
+    /**
+     * Write a list row's name. A quest's name is drawn by the quest log with
+     * drawTextEx and commonly carries `\I[n]` (an imported one nearly always
+     * does), so the Quests list shows it the way the player reads it - icon
+     * and words, other codes dropped - rather than as markup. Every other
+     * tab keeps the name as typed.
+     */
+    paintDatabaseListName(span, text, type) {
+        if (type === 'quests' && window.RRIconCodes) window.RRIconCodes.paint(span, text);
+        else span.textContent = text;
+    }
+
     refreshDatabaseListLabel(entry, type) {
         const listEl = document.getElementById('database-list');
         const item = Array.from(listEl?.querySelectorAll('.database-list-item') || [])
@@ -141,7 +155,7 @@ class DatabaseEditorUI {
         const labels = this.databaseEntryLabels(entry, type);
         item.dataset.entryName = labels.primary;
         const nameSpan = item.querySelector('.database-list-name');
-        if (nameSpan) nameSpan.textContent = labels.primary;
+        if (nameSpan) this.paintDatabaseListName(nameSpan, labels.primary, type);
         let altSpan = item.querySelector('.database-list-alt');
         if (labels.secondary) {
             if (!altSpan) {
@@ -617,6 +631,10 @@ class DatabaseEditorUI {
                 data = this.databaseManager.getQuests();
                 title = this._dbTitle(type, 'Quests');
                 break;
+            case 'musicSequences':
+                data = this.databaseManager.getMusicSequences();
+                title = this._dbTitle(type, 'Music Sequences');
+                break;
             case 'reactor3d': {
                 const { detailEl } = this.prepareDatabaseSection('reactor3d', this._dbTitle('reactor3d', '3D Models'), { showListPanel: false });
                 this.reactor3dEditor.projectController = {
@@ -826,7 +844,7 @@ class DatabaseEditorUI {
 
                 const nameSpan = document.createElement('span');
                 nameSpan.className = 'database-list-name';
-                nameSpan.textContent = labels.primary;
+                this.paintDatabaseListName(nameSpan, labels.primary, type);
                 const idSpan = document.createElement('span');
                 idSpan.className = 'database-list-id';
                 idSpan.textContent = `#${entry.id}`;
@@ -1298,7 +1316,7 @@ class DatabaseEditorUI {
             const labels = source
                 ? this.databaseEntryLabels(source, reference.type)
                 : { primary: this._t('common.unnamed'), secondary: '' };
-            nameSpan.textContent = labels.primary;
+            this.paintDatabaseListName(nameSpan, labels.primary, reference.type);
             if (labels.secondary) {
                 const altSpan = document.createElement('span');
                 altSpan.className = 'database-list-alt';
@@ -1757,6 +1775,7 @@ class DatabaseEditorUI {
             { name: 'User Interfaces', type: 'userInterfaces' },
             { name: 'Action Sequences', type: 'actionSequences' },
             { name: 'Quests', type: 'quests' },
+            { name: 'Music Sequences', type: 'musicSequences' },
             { name: 'System 1', type: 'system1' },
             { name: 'System 2', type: 'system2' },
             { name: 'Types', type: 'types' },
@@ -1832,6 +1851,8 @@ class DatabaseEditorUI {
             this.actionSequenceEditor.show(detailEl, entry);
         } else if (type === 'quests' && this.questEditor) {
             this.questEditor.showQuestDetail(detailEl, entry);
+        } else if (type === 'musicSequences' && this.musicSequenceEditor) {
+            this.musicSequenceEditor.show(detailEl, entry);
         } else {
             // Generic display for other types
             this.showGenericDetail(detailEl, entry, type);
@@ -2056,6 +2077,8 @@ class DatabaseEditorUI {
             // Reactor quests: reactor_quests.js reads this shape as it is.
             actionSequences: typeof ReactorBattleData !== 'undefined' ? ReactorBattleData.template() : {version:1,name:'New Sequence',steps:[]},
             quests: { name: 'New Quest', key: '', category: '', iconIndex: 0, difficulty: '', from: '', location: '', description: '', objectives: [], rewards: [], subtext: '', quotes: '', activation: { type: 'command', switchId: 0, variableId: 0, operator: '>=', value: 0 }, completion: { type: 'command', switchId: 0 }, note: '' },
+            // Stored on System.json; reactor_managers.js reads this shape as it is.
+            musicSequences: { name: 'New Sequence', sequence: { enabled: true, entries: [] } },
         };
     }
 
@@ -2066,7 +2089,7 @@ class DatabaseEditorUI {
             actors: 9999, classes: 9999, skills: 9999, items: 9999,
             weapons: 9999, armors: 9999, enemies: 9999, troops: 9999,
             states: 9999, animations: 5000, tilesets: 1000, commonEvents: 9999,
-            userInterfaces: 9999, quests: 9999, actionSequences: 9999, elements: 512, skillTypes: 128, weaponTypes: 256,
+            userInterfaces: 9999, quests: 9999, musicSequences: 9999, actionSequences: 9999, elements: 512, skillTypes: 128, weaponTypes: 256,
             armorTypes: 256, equipTypes: 128
         }[type] || 0;
     }

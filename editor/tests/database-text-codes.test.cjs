@@ -97,6 +97,70 @@ test('a programmatic insert reaches the editor\'s change persistence; typing is 
     delete globalThis.RRTextCodeMenu;
 });
 
+test('a field marked for preview gets a line under it drawing its codes, hidden while it has none', () => {
+    const Decorator = require(src('database/DatabaseTextCodes.js'));
+    const listeners = {};
+    const docListeners = {};
+    const preview = { style: {}, hidden: false, textContent: 'stale', removed: false, remove() { this.removed = true; } };
+    const field = {
+        value: 'Talk to \\C[4]Reid\\C[0]',
+        getAttribute: () => 'help',
+        hasAttribute: name => name === 'data-rr-textcodes-preview',
+        addEventListener: (type, fn) => { (listeners[type] = listeners[type] || []).push(fn); },
+        removeEventListener: (type, fn) => { listeners[type] = (listeners[type] || []).filter(entry => entry !== fn); },
+        dispatchEvent: () => true,
+        insertAdjacentElement: (where, element) => { field.inserted = [where, element]; },
+        ownerDocument: {
+            createElement: () => preview,
+            addEventListener: (type, fn) => { docListeners[type] = fn; },
+            removeEventListener: type => { delete docListeners[type]; }
+        }
+    };
+    const rendered = [];
+    const container = { querySelectorAll: selector => selector === '[data-rr-textcodes]' ? [field] : [] };
+    global.window = global.window || globalThis;
+    globalThis.RRTextCodeMenu = {
+        attach: () => () => {},
+        createReferencePanel: () => ({}),
+        hasPreviewableCode: text => /\\[A-Za-z]+\[/.test(text),
+        renderPreview: (element, text, options) => { rendered.push([element, text, typeof options.iconSetUrl]); element.textContent = 'drawn'; }
+    };
+    try {
+        const detach = Decorator.decorate(container, { projectPath: () => '' });
+        assert.deepEqual(field.inserted, ['afterend', preview], 'the line sits directly under its field');
+        assert.equal(preview.hidden, false);
+        assert.deepEqual(rendered[0], [preview, 'Talk to \\C[4]Reid\\C[0]', 'function'], 'drawn with an icon sheet to draw from');
+        assert.ok(docListeners['rr-windowskin-loaded'], 'repainted once the project palette loads');
+        field.value = 'Plain words';
+        for (const fn of listeners.input) fn(new Event('input'));
+        assert.equal(preview.hidden, true, 'no code, no line');
+        assert.equal(preview.textContent, '');
+        detach();
+        assert.equal(preview.removed, true);
+        assert.equal(docListeners['rr-windowskin-loaded'], undefined);
+    } finally {
+        delete globalThis.RRTextCodeMenu;
+    }
+});
+
+test('an unmarked field gets no preview line', () => {
+    const Decorator = require(src('database/DatabaseTextCodes.js'));
+    let inserted = false;
+    const field = {
+        value: '\\C[4]x', getAttribute: () => 'help', hasAttribute: () => false,
+        addEventListener: () => {}, removeEventListener: () => {}, dispatchEvent: () => true,
+        insertAdjacentElement: () => { inserted = true; }, ownerDocument: { createElement: () => ({ style: {} }) }
+    };
+    global.window = global.window || globalThis;
+    globalThis.RRTextCodeMenu = { attach: () => () => {}, createReferencePanel: () => ({}), hasPreviewableCode: () => true, renderPreview: () => {} };
+    try {
+        Decorator.decorate({ querySelectorAll: selector => selector === '[data-rr-textcodes]' ? [field] : [] }, { projectPath: () => '' })();
+        assert.equal(inserted, false, 'Items, Skills and the rest look as they did');
+    } finally {
+        delete globalThis.RRTextCodeMenu;
+    }
+});
+
 test('OK on an untouched run writes back exactly what was read (review of #29)', () => {
     const list = [
         { code: 101, indent: 0, parameters: ['', 0, 0, 0, ''] },

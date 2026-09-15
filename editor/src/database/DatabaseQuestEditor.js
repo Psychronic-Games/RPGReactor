@@ -7,6 +7,12 @@
  * complete. The runtime (reactor_quests.js) reads this shape as it is.
  */
 class DatabaseQuestEditor {
+    /**
+     * The attribute that hides a form column. .db-col sets its own display, which
+     * outranks the [hidden] attribute, so a bare `hidden` left the column showing.
+     */
+    static HIDDEN = 'hidden style="display:none;"';
+
     constructor(databaseManager, projectManager, commonUI, parentEditor) {
         this.databaseManager = databaseManager;
         this.projectManager = projectManager;
@@ -22,8 +28,9 @@ class DatabaseQuestEditor {
     }
 
     _project() {
-        return this.projectManager && this.projectManager.getCurrentProject
+        const own = this.projectManager && this.projectManager.getCurrentProject
             ? this.projectManager.getCurrentProject() : (this.projectManager && this.projectManager.currentProject);
+        return own || (this.parentEditor && this.parentEditor.currentProject) || null;
     }
 
     /** A record with every field the runtime may read, old or new. */
@@ -73,6 +80,39 @@ class DatabaseQuestEditor {
         return `<span class="rr-icon-code" style="${rrEscapeHtml(codes.cellCss(index, codes.iconSetUrl(), 32))}"></span>`;
     }
 
+    /** Lines an objective or reward box opens at: every line of its text, up to eight. */
+    rowsFor(text) {
+        return Math.max(1, Math.min(8, String(text == null ? '' : text).split('\n').length));
+    }
+
+    /**
+     * The quest log the game uses, as the Quest Log section shows it, and the
+     * lines that say what saving will do about it. "visustella" only when that
+     * plugin is in the project; an unset choice reads as Reactor's own log but
+     * changes nothing in the plugin list until one is made.
+     */
+    questLogState(settings) {
+        const project = this._project();
+        const importer = typeof QuestImporter !== 'undefined' ? QuestImporter : null;
+        const systems = project && project.path && importer && importer.installedSystems ? importer.installedSystems(project.path) : [];
+        const plugin = systems.find(entry => entry.source === 'visustella') || null;
+        const pluginLabel = plugin ? this._t(plugin.label) : '';
+        const log = settings.log === 'visustella' && plugin ? 'visustella' : 'reactor';
+        const notes = [];
+        if (log === 'visustella') {
+            notes.push(this._t('Saving writes these quests into {source} and turns it on. The game opens its quest log, and quest event commands and rules update it.', { source: pluginLabel }));
+        } else if (plugin && plugin.enabled) {
+            notes.push(settings.log === 'reactor'
+                ? this._t('Saving turns {source} off in the Plugin Manager, so the game has one quest log.', { source: pluginLabel })
+                : this._t('{source} is also enabled. It runs its own quest log, with its own quests and progress: these quests do not appear in it, and its plugin commands do not change them.', { source: pluginLabel }));
+        }
+        for (const entry of systems) {
+            if (entry.source === 'visustella' || !entry.enabled) continue;
+            notes.push(this._t('{source} is also enabled. It runs its own quest log, with its own quests and progress: these quests do not appear in it, and its plugin commands do not change them.', { source: this._t(entry.label) }));
+        }
+        return { log, plugin, pluginLabel, notes };
+    }
+
     showQuestDetail(container, quest) {
         const tt = text => this._t(text);
         DatabaseQuestEditor.normalize(quest);
@@ -83,6 +123,8 @@ class DatabaseQuestEditor {
 
         // The quest log's own settings and the importer sit above every quest:
         // they are the project's, not this record's.
+        const state = this.questLogState(settings);
+        const ownMenu = state.log === 'reactor' ? '' : DatabaseQuestEditor.HIDDEN;
         const strip = document.createElement('div');
         strip.className = 'database-section';
         strip.innerHTML = `
@@ -90,10 +132,16 @@ class DatabaseQuestEditor {
             <div class="database-section-content"><div class="db-form">
                 <div class="db-row-cols">
                     <span class="db-col">
+                        <label>${tt('Quest log in game')}</label>
+                        <select class="database-field-value" data-quest-log>
+                            ${this.options([['reactor', tt('Reactor quest log')]].concat(state.plugin ? [['visustella', state.pluginLabel]] : []), state.log)}
+                        </select>
+                    </span>
+                    <span class="db-col" ${ownMenu}>
                         <label>${tt('Show in the main menu')}</label>
                         <input type="checkbox" class="system-checkbox" data-quest-setting="menuCommand" ${settings.menuCommand !== false ? 'checked' : ''}>
                     </span>
-                    <span class="db-col">
+                    <span class="db-col" ${ownMenu}>
                         <label>${tt('Menu command name')}</label>
                         <input type="text" class="database-field-value" data-quest-setting="commandName" value="${rrEscapeHtml(settings.commandName)}">
                     </span>
@@ -101,12 +149,15 @@ class DatabaseQuestEditor {
                         <button type="button" class="rr-btn-secondary quest-import" title="${rrEscapeHtml(tt('Read the quests another plugin stores in this project and add them here.'))}">${tt('Import…')}</button>
                     </span>
                 </div>
+                ${state.notes.map(text => `<div class="quest-other-system" style="grid-column:1 / -1;margin-top:6px;font-size:12px;color:var(--color-text-muted);">${rrEscapeHtml(text)}</div>`).join('')}
             </div></div>`;
         wrapper.appendChild(strip);
 
         const grid = document.createElement('div');
         grid.className = 'db-page-grid';
 
+        // Every text the log draws goes through drawTextEx, so each of these
+        // takes text codes and shows a preview line once it carries one.
         const general = document.createElement('div');
         general.className = 'database-section';
         general.innerHTML = `
@@ -118,16 +169,16 @@ class DatabaseQuestEditor {
                 </div>
                 <div class="db-form db-fill">
                     <div class="db-row-cols">
-                        <span class="db-col"><label>${tt('Name')}</label><input type="text" class="database-field-value" value="${rrEscapeHtml(quest.name)}" data-field="name" data-quest-id="${quest.id}"></span>
-                        <span class="db-col"><label>${tt('Key')}</label><input type="text" class="database-field-value" value="${rrEscapeHtml(quest.key)}" data-field="key" data-quest-id="${quest.id}" placeholder="${rrEscapeHtml(tt('for scripts and imports'))}"></span>
+                        <span class="db-col"><label>${tt('Name')}</label><input type="text" class="database-field-value" value="${rrEscapeHtml(quest.name)}" data-field="name" data-quest-id="${quest.id}" data-rr-textcodes="help" data-rr-textcodes-preview></span>
+                        <span class="db-col"><label>${tt('Key')}</label><input type="text" class="database-field-value" value="${rrEscapeHtml(quest.key)}" data-field="key" data-quest-id="${quest.id}" placeholder="${rrEscapeHtml(state.log === 'visustella' && typeof QuestImporter !== 'undefined' ? QuestImporter.visustellaKeyOf(quest) : tt('for scripts and imports'))}"></span>
                     </div>
                     <div class="db-row-cols">
-                        <span class="db-col"><label>${tt('Category')}</label><input type="text" class="database-field-value" value="${rrEscapeHtml(quest.category)}" data-field="category" data-quest-id="${quest.id}" list="quest-categories-${quest.id}"><datalist id="quest-categories-${quest.id}">${this.categoryOptions()}</datalist></span>
-                        <span class="db-col"><label>${tt('Difficulty')}</label><input type="text" class="database-field-value" value="${rrEscapeHtml(quest.difficulty)}" data-field="difficulty" data-quest-id="${quest.id}"></span>
+                        <span class="db-col"><label>${tt('Category')}</label><input type="text" class="database-field-value" value="${rrEscapeHtml(quest.category)}" data-field="category" data-quest-id="${quest.id}" data-rr-textcodes="help" data-rr-textcodes-preview list="quest-categories-${quest.id}"><datalist id="quest-categories-${quest.id}">${this.categoryOptions()}</datalist></span>
+                        <span class="db-col"><label>${tt('Difficulty')}</label><input type="text" class="database-field-value" value="${rrEscapeHtml(quest.difficulty)}" data-field="difficulty" data-quest-id="${quest.id}" data-rr-textcodes="help" data-rr-textcodes-preview></span>
                     </div>
                     <div class="db-row-cols">
-                        <span class="db-col"><label>${tt('From')}</label><input type="text" class="database-field-value" value="${rrEscapeHtml(quest.from)}" data-field="from" data-quest-id="${quest.id}"></span>
-                        <span class="db-col"><label>${tt('Location')}</label><input type="text" class="database-field-value" value="${rrEscapeHtml(quest.location)}" data-field="location" data-quest-id="${quest.id}"></span>
+                        <span class="db-col"><label>${tt('From')}</label><input type="text" class="database-field-value" value="${rrEscapeHtml(quest.from)}" data-field="from" data-quest-id="${quest.id}" data-rr-textcodes="help" data-rr-textcodes-preview></span>
+                        <span class="db-col"><label>${tt('Location')}</label><input type="text" class="database-field-value" value="${rrEscapeHtml(quest.location)}" data-field="location" data-quest-id="${quest.id}" data-rr-textcodes="help" data-rr-textcodes-preview></span>
                     </div>
                 </div>
             </div></div>`;
@@ -145,21 +196,21 @@ class DatabaseQuestEditor {
                             ${this.options([['command', tt('Only by event command')], ['start', tt('At the start of the game')], ['switch', tt('When a switch is ON')], ['variable', tt('When a variable reaches a value')]], quest.activation.type)}
                         </select>
                     </span>
-                    <span class="db-col quest-when-switch" ${quest.activation.type === 'switch' ? '' : 'hidden'}>
+                    <span class="db-col quest-when-switch" ${quest.activation.type === 'switch' ? '' : DatabaseQuestEditor.HIDDEN}>
                         <label>${tt('Switch')}</label>
                         <button type="button" class="rr-btn-secondary quest-pick" data-pick="switch" data-target="activation.switchId">${rrEscapeHtml(this.switchName(quest.activation.switchId))}</button>
                     </span>
-                    <span class="db-col quest-when-variable" ${quest.activation.type === 'variable' ? '' : 'hidden'}>
+                    <span class="db-col quest-when-variable" ${quest.activation.type === 'variable' ? '' : DatabaseQuestEditor.HIDDEN}>
                         <label>${tt('Variable')}</label>
                         <button type="button" class="rr-btn-secondary quest-pick" data-pick="variable" data-target="activation.variableId">${rrEscapeHtml(this.variableName(quest.activation.variableId))}</button>
                     </span>
-                    <span class="db-col quest-when-variable" ${quest.activation.type === 'variable' ? '' : 'hidden'}>
+                    <span class="db-col quest-when-variable" ${quest.activation.type === 'variable' ? '' : DatabaseQuestEditor.HIDDEN}>
                         <label>${tt('Is')}</label>
                         <select class="database-field-value" data-field="activation.operator" data-quest-id="${quest.id}">
                             ${this.options([['>=', '≥'], ['==', '='], ['<=', '≤'], ['>', '>'], ['<', '<'], ['!=', '≠']], quest.activation.operator)}
                         </select>
                     </span>
-                    <span class="db-col quest-when-variable" ${quest.activation.type === 'variable' ? '' : 'hidden'}>
+                    <span class="db-col quest-when-variable" ${quest.activation.type === 'variable' ? '' : DatabaseQuestEditor.HIDDEN}>
                         <label>${tt('Value')}</label>
                         <input type="number" class="database-field-value" value="${rrEscapeHtml(quest.activation.value)}" data-field="activation.value" data-quest-id="${quest.id}">
                     </span>
@@ -171,7 +222,7 @@ class DatabaseQuestEditor {
                             ${this.options([['command', tt('Only by event command')], ['objectives', tt('When every shown objective is complete')], ['switch', tt('When a switch is ON')]], quest.completion.type)}
                         </select>
                     </span>
-                    <span class="db-col quest-done-switch" ${quest.completion.type === 'switch' ? '' : 'hidden'}>
+                    <span class="db-col quest-done-switch" ${quest.completion.type === 'switch' ? '' : DatabaseQuestEditor.HIDDEN}>
                         <label>${tt('Switch')}</label>
                         <button type="button" class="rr-btn-secondary quest-pick" data-pick="switch" data-target="completion.switchId">${rrEscapeHtml(this.switchName(quest.completion.switchId))}</button>
                     </span>
@@ -187,7 +238,7 @@ class DatabaseQuestEditor {
                 <div class="db-row-cols">
                     <span class="db-col">
                         <label>${tt('Description')}</label>
-                        <textarea class="database-field-value" rows="5" data-field="description" data-quest-id="${quest.id}" data-rr-textcodes="help">${rrEscapeHtml(quest.description)}</textarea>
+                        <textarea class="database-field-value" rows="5" data-field="description" data-quest-id="${quest.id}" data-rr-textcodes="help" data-rr-textcodes-preview>${rrEscapeHtml(quest.description)}</textarea>
                         <div data-rr-textcodes-panel="help" style="margin-top:4px;"></div>
                     </span>
                 </div>
@@ -203,10 +254,10 @@ class DatabaseQuestEditor {
             <div class="database-section-header">${tt('Extra Text')}</div>
             <div class="database-section-content"><div class="db-form">
                 <div class="db-row-cols">
-                    <span class="db-col"><label>${tt('Subtext')}</label><textarea class="database-field-value" rows="3" data-field="subtext" data-quest-id="${quest.id}" data-rr-textcodes="help">${rrEscapeHtml(quest.subtext)}</textarea></span>
+                    <span class="db-col"><label>${tt('Subtext')}</label><textarea class="database-field-value" rows="3" data-field="subtext" data-quest-id="${quest.id}" data-rr-textcodes="help" data-rr-textcodes-preview>${rrEscapeHtml(quest.subtext)}</textarea></span>
                 </div>
                 <div class="db-row-cols">
-                    <span class="db-col"><label>${tt('Quotes')}</label><textarea class="database-field-value" rows="3" data-field="quotes" data-quest-id="${quest.id}" data-rr-textcodes="help">${rrEscapeHtml(quest.quotes)}</textarea></span>
+                    <span class="db-col"><label>${tt('Quotes')}</label><textarea class="database-field-value" rows="3" data-field="quotes" data-quest-id="${quest.id}" data-rr-textcodes="help" data-rr-textcodes-preview>${rrEscapeHtml(quest.quotes)}</textarea></span>
                 </div>
             </div></div>`;
         grid.appendChild(more);
@@ -243,7 +294,12 @@ class DatabaseQuestEditor {
         return Array.from(seen).map(name => `<option value="${rrEscapeHtml(name)}"></option>`).join('');
     }
 
-    /** Objectives and rewards: a row each, in the order the player sees them. */
+    /**
+     * Objectives and rewards: a row each, in the order the player sees them.
+     * The text is a box rather than a one-line input: a text input strips
+     * line breaks from its value, and an imported objective often has them,
+     * so the first edit of such a row used to write the breaks away.
+     */
     listSection(quest, kind, title, addLabel) {
         const tt = text => this._t(text);
         const section = document.createElement('div');
@@ -252,7 +308,9 @@ class DatabaseQuestEditor {
         const rows = (quest[kind] || []).map((entry, index) => `
             <div class="quest-row" data-index="${index}" style="display:grid;grid-template-columns:22px minmax(0,1fr) auto auto auto auto;gap:8px;align-items:center;">
                 <span style="color:var(--color-text-muted);font-size:11px;text-align:right;">${index + 1}.</span>
-                <input type="text" class="database-field-value" style="width:100%;min-width:0;" value="${rrEscapeHtml(entry && entry.text ? entry.text : '')}" data-list="${kind}" data-index="${index}" data-prop="text" data-rr-textcodes="help">
+                <div style="display:flex;flex-direction:column;gap:2px;min-width:0;">
+                    <textarea class="database-field-value quest-row-text" rows="${this.rowsFor(entry && entry.text)}" style="width:100%;min-width:0;resize:vertical;" data-list="${kind}" data-index="${index}" data-prop="text" data-rr-textcodes="help" data-rr-textcodes-preview>${rrEscapeHtml(entry && entry.text ? entry.text : '')}</textarea>
+                </div>
                 <label style="display:flex;align-items:center;gap:4px;font-size:11px;white-space:nowrap;color:var(--color-text-muted);" title="${rrEscapeHtml(tt('Not shown until an event command or a switch reveals it.'))}">
                     <input type="checkbox" class="system-checkbox" ${entry && entry.hidden ? 'checked' : ''} data-list="${kind}" data-index="${index}" data-prop="hidden">${tt('Hidden at first')}
                 </label>
@@ -270,8 +328,28 @@ class DatabaseQuestEditor {
         return section;
     }
 
+    /**
+     * Wire the text-code menus, reference panel and previews again after this
+     * editor re-renders itself. DatabaseEditorUI decorates once per selection,
+     * so a row added, moved or removed here - or a rule changed - came back as
+     * plain fields. The detach handle stays on the parent, which owns it.
+     */
+    decorateTextCodes(container) {
+        const parent = this.parentEditor;
+        if (typeof window === 'undefined' || !window.RRDatabaseTextCodes || !parent) return;
+        if (parent._textCodeDetach) parent._textCodeDetach();
+        parent._textCodeDetach = window.RRDatabaseTextCodes.decorate(container, {
+            projectPath: () => ((this._project() || {}).path) || '',
+            databaseManager: this.databaseManager,
+            projectController: { getCurrentProject: () => this._project() }
+        });
+    }
+
     attachListeners(container, quest) {
-        const rerender = () => this.showQuestDetail(container, this.databaseManager.getQuest(quest.id) || quest);
+        const rerender = () => {
+            this.showQuestDetail(container, this.databaseManager.getQuest(quest.id) || quest);
+            this.decorateTextCodes(container);
+        };
         container.querySelectorAll('[data-field][data-quest-id]').forEach(field => {
             field.addEventListener('change', event => {
                 const value = event.target.type === 'checkbox' ? event.target.checked : event.target.value;
@@ -298,6 +376,10 @@ class DatabaseQuestEditor {
                 entry[prop] = event.target.type === 'checkbox' ? event.target.checked : event.target.value;
                 this.databaseManager.updateQuest(quest.id, quest);
             });
+        });
+        // A row's box grows with its text, so no line hides behind a scrollbar.
+        container.querySelectorAll('.quest-row-text').forEach(field => {
+            field.addEventListener('input', () => { field.rows = this.rowsFor(field.value); });
         });
         container.querySelectorAll('.quest-add').forEach(button => button.addEventListener('click', () => {
             const kind = button.dataset.list;
@@ -338,12 +420,22 @@ class DatabaseQuestEditor {
         const icon = container.querySelector('.quest-icon');
         if (icon) icon.addEventListener('click', () => {
             if (!this.parentEditor || !this.parentEditor.showIconPicker) return;
+            // The picker loads whatever sheet it is handed; without the
+            // project's, it reported IconSet.png missing on every project.
+            const project = this._project();
+            const picker = typeof window !== 'undefined' ? window.RRIconPicker : null;
+            const sheet = project && project.path && picker && picker.iconSetPathFor ? picker.iconSetPathFor(project.path) : null;
             this.parentEditor.showIconPicker(quest.iconIndex || 0, index => {
                 quest.iconIndex = index;
                 this.databaseManager.updateQuest(quest.id, quest);
                 icon.innerHTML = this.iconHtml(index);
                 this.parentEditor.refreshDatabaseListEntry?.(quest, 'quests');
-            });
+            }, sheet);
+        });
+        const logChoice = container.querySelector('[data-quest-log]');
+        if (logChoice) logChoice.addEventListener('change', () => {
+            // An import on the way has already re-rendered, on the quest it added.
+            if (!this.chooseQuestLog(logChoice.value)) rerender();
         });
         const importButton = container.querySelector('.quest-import');
         if (importButton) importButton.addEventListener('click', () => this.importQuests());
@@ -461,23 +553,30 @@ class DatabaseQuestEditor {
         return overlay;
     }
 
-    /** Read one source's quests and add the ones this database lacks, matched by key. */
-    importFrom(source) {
+    /**
+     * Read one source's quests and add the ones this database lacks, matched
+     * by key. `lead` is said before the question. Returns true once quests
+     * were added and the tab re-opened on the last of them.
+     */
+    importFrom(source, lead) {
         const project = this._project();
-        if (!project || !project.path || typeof QuestImporter === 'undefined') return;
+        if (!project || !project.path || typeof QuestImporter === 'undefined') return false;
         const label = this._t((QuestImporter.SOURCES[source] || {}).label || source);
         const found = QuestImporter.read(project.path, source);
-        const say = message => window.alert ? window.alert(message) : console.log(message);
+        const say = message => { if (window.alert) window.alert(message); else console.log(message); return false; };
         if (!found) return say(this._t('{source} is not in this project.', { source: label }));
         if (!found.quests.length) return say(this._t('{source} has no quests to import.', { source: label }));
         const existing = this.databaseManager.getQuests();
-        const taken = new Set(existing.map(quest => quest && quest.key).filter(Boolean));
+        // A quest written to the plugin without a key went under the key made from
+        // its id; reading it back is the same quest, not a new one.
+        const taken = new Set(existing.flatMap(quest => (quest ? [quest.key, QuestImporter.visustellaKeyOf ? QuestImporter.visustellaKeyOf(quest) : ''] : [])).filter(Boolean));
         const fresh = found.quests.filter(quest => !quest.key || !taken.has(quest.key));
         if (!fresh.length) return say(this._t('Every quest from {source} is already here (matched by key).', { source: label }));
         const skipped = found.quests.length - fresh.length;
-        const question = this._t('Import {count} quest(s) from {source}?', { count: fresh.length, source: label })
+        const question = (lead ? lead + ' ' : '')
+            + this._t('Import {count} quest(s) from {source}?', { count: fresh.length, source: label })
             + (skipped ? ' ' + this._t('{count} already here will be left alone.', { count: skipped }) : '');
-        if (!window.confirm(question)) return;
+        if (!window.confirm(question)) return false;
         let last = null;
         for (const record of fresh) {
             record.key = QuestImporter.uniqueKey(record.key || record.name, taken);
@@ -487,7 +586,42 @@ class DatabaseQuestEditor {
         if (this.parentEditor && this.parentEditor.openDatabase) {
             this.parentEditor.openDatabase('quests');
             if (last && this.parentEditor.showDatabaseDetail) this.parentEditor.showDatabaseDetail(last, 'quests');
+            return true;
         }
+        return false;
+    }
+
+    /**
+     * Make VisuStella's Quest System or Reactor's own log the one the game
+     * uses. Nothing reaches the plugin list until the database is saved
+     * (DatabaseManager.syncQuestLog). Choosing the plugin first keeps what it
+     * already does: a quest it knows at the start of a game appears at the
+     * start here, which is how that is written back, and the quests it has
+     * that this database lacks are offered for import, since saving replaces
+     * its list with these. Returns true when an import re-rendered the tab.
+     */
+    chooseQuestLog(mode) {
+        const settings = this.settings();
+        settings.log = mode === 'visustella' ? 'visustella' : 'reactor';
+        this.databaseManager.mutationGeneration++;
+        if (settings.log !== 'visustella') return false;
+        const project = this._project();
+        if (!project || !project.path || typeof QuestImporter === 'undefined') return false;
+        const entry = QuestImporter.visustellaEntry(QuestImporter.readManifest(project.path));
+        const known = new Set(QuestImporter.visustellaKnownKeys(entry && entry.parameters).map(key => String(key).toUpperCase().trim()));
+        for (const quest of this.databaseManager.getQuests()) {
+            DatabaseQuestEditor.normalize(quest);
+            if (quest.activation.type === 'command' && known.has(QuestImporter.visustellaKeyOf(quest).toUpperCase())) {
+                quest.activation.type = 'start';
+                this.databaseManager.updateQuest(quest.id, quest);
+            }
+        }
+        const found = QuestImporter.read(project.path, 'visustella');
+        if (!found || !found.quests.length) return false;
+        const taken = new Set(this.databaseManager.getQuests().flatMap(quest => (quest ? [quest.key, QuestImporter.visustellaKeyOf(quest)] : [])).filter(Boolean));
+        if (!found.quests.some(quest => !quest.key || !taken.has(quest.key))) return false;
+        const label = this._t(QuestImporter.SOURCES.visustella.label);
+        return this.importFrom('visustella', this._t('Saving will replace the quests in {source} with the ones here.', { source: label }));
     }
 }
 

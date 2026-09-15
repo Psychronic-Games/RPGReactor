@@ -11,6 +11,11 @@
  * reference panel. Fields sharing a spec share one panel, which inserts into
  * whichever of them was focused last.
  *
+ * A field that also carries `data-rr-textcodes-preview` gets a line under it
+ * showing what the player reads - icons drawn, `\C[n]` colours applied, other
+ * codes gone - the same preview a plugin parameter's text field has. The line
+ * is hidden while the text carries no code, so a plain field looks as before.
+ *
  * The database editors persist on `change`, and a script write to `.value`
  * fires none - an inserted code would show and then be lost at the next
  * selection. Real typing arrives as an InputEvent and the menu's insert as a
@@ -37,6 +42,9 @@
                 return codes && codes.readManifest ? (codes.readManifest(projectPath()) || []) : [];
             },
             projectPath,
+            // The sheet the database list draws its icons from; '' (no
+            // project) leaves a preview drawing text only.
+            iconSetUrl: () => (root.RRIconCodes ? root.RRIconCodes.iconSetUrl() : ''),
             skin: () => {
                 const skins = root.RRWindowskin;
                 const base = projectPath();
@@ -53,6 +61,41 @@
                 }
                 context._variablePicker.show('variable', 1, id => onPick(id));
             }
+        };
+    }
+
+    /** The preview line under one field. Returns a function that removes it. */
+    function attachPreview(field, options) {
+        const menu = root.RRTextCodeMenu;
+        const doc = field.ownerDocument;
+        if (!menu || !menu.renderPreview || !menu.hasPreviewableCode || !doc) return () => {};
+        const preview = doc.createElement('div');
+        preview.className = 'rr-text-code-preview';
+        preview.style.cssText = 'min-width:0;padding:1px 2px;font-size:12px;'
+            + 'color:var(--color-text);white-space:pre-wrap;overflow-wrap:anywhere;';
+        preview.hidden = true;
+        field.insertAdjacentElement('afterend', preview);
+
+        const refresh = () => {
+            const value = String(field.value == null ? '' : field.value);
+            const show = menu.hasPreviewableCode(value);
+            preview.hidden = !show;
+            if (show) menu.renderPreview(preview, value, options);
+            else preview.textContent = '';
+        };
+        field.addEventListener('input', refresh);
+        field.addEventListener('change', refresh);
+        // The first paint can land before the windowskin has loaded, in the
+        // fallback palette; repaint once the project's own colours arrive.
+        const skinPending = !options.skin();
+        if (skinPending) doc.addEventListener('rr-windowskin-loaded', refresh, { once: true });
+        refresh();
+
+        return () => {
+            field.removeEventListener('input', refresh);
+            field.removeEventListener('change', refresh);
+            if (skinPending) doc.removeEventListener('rr-windowskin-loaded', refresh);
+            preview.remove();
         };
     }
 
@@ -87,6 +130,9 @@
                 field.removeEventListener('focus', onFocus);
                 field.removeEventListener('input', onInput);
             });
+            if (field.hasAttribute && field.hasAttribute('data-rr-textcodes-preview')) {
+                detachers.push(attachPreview(field, menuOptions(spec, settings)));
+            }
         }
 
         for (const anchor of Array.from(container.querySelectorAll('[data-rr-textcodes-panel]'))) {
