@@ -1726,7 +1726,7 @@ AudioManager.saveBgm = function() {
             pitch: fallback.pitch || 0,
             pan: fallback.pan || 0,
             pos: 0,
-            sequence: sequence.mapId
+            sequence: sequence.key
         };
         // Only when it has, so a sequence that never looped saves as it always did.
         if (sequence.looped) saved.looped = true;
@@ -1810,7 +1810,9 @@ AudioManager.throwLoadError = function(webAudio) {
 // A map's music can be a sequence instead of one looping track
 // ($dataMap.bgmSequence = { enabled, entries }). Entries play in order and
 // the sequence loops:
-//   { type: "track", name, volume, pitch, pan }   plays once to its true end
+//   { type: "track", name, volume, pitch, pan, fadeIn, fadeOut } plays once to
+//       its end; with `fadeOut` it hands over that many seconds early, fading
+//       away under whatever follows
 //   { type: "silence", duration }                 seconds of quiet
 //   { type: "palette", duration, fadeIn, fadeOut, layers } layers sound
 //       together; each layer draws from its own pool of tracks and silences --
@@ -1835,6 +1837,15 @@ AudioManager.throwLoadError = function(webAudio) {
 // through playBgm. Restarting needs the map's data: when the map is not
 // the current one yet (a save being loaded), the request waits as
 // _pendingBgmSequence until the map's autoplay repeats it.
+//
+// A sequence can also live in the project's library,
+// $dataSystem.reactorMusicSequences = [null, { id, name, sequence }], and
+// travel under the key "library:<id>" instead of a map id. A map points at
+// one with `bgmSequenceId` (which wins over a sequence of its own), and a
+// troop, a map or Change Battle BGM keep battle music as an audio object whose
+// track plays, or whose `sequence` names an entry. The library is always
+// loaded, so a library key never waits. Two maps naming the same entry share
+// its key, so moving between them leaves the music playing.
 
 AudioManager._bgmSequence = null;
 AudioManager._pendingBgmSequence = null;
@@ -1845,12 +1856,18 @@ AudioManager.mapBgmObject = function(map, mapId) {
     const bgm = Object.assign({}, (map && map.bgm) || this.makeEmptyAudioObject());
     delete bgm.sequence;
     delete bgm.looped;
-    if (this.mapHasBgmSequence(map) && mapId > 0) {
-        bgm.sequence = mapId;
-        // Carry whether this map's sequence has already come round, so boarding
+    let key = null;
+    if (map && this.librarySequenceData(map.bgmSequenceId)) {
+        key = this.librarySequenceKey(map.bgmSequenceId);
+    } else if (this.mapHasBgmSequence(map) && mapId > 0) {
+        key = mapId;
+    }
+    if (key !== null) {
+        bgm.sequence = key;
+        // Carry whether this sequence has already come round, so boarding
         // a vehicle does not hand back an object that replays a heard intro.
         const running = this._bgmSequence || this._pendingBgmSequence;
-        if (running && running.mapId === mapId && running.looped) bgm.looped = true;
+        if (running && running.key === key && running.looped) bgm.looped = true;
     }
     return bgm;
 };
@@ -1860,35 +1877,107 @@ AudioManager.mapHasBgmSequence = function(map) {
     return !!(sequence && sequence.enabled !== false && Array.isArray(sequence.entries) && sequence.entries.length > 0);
 };
 
-/** The current map's sequence data for `mapId`, or null when that map is not loaded. */
-AudioManager._bgmSequenceDataFor = function(mapId) {
-    if (typeof $gameMap === "undefined" || !$gameMap || $gameMap.mapId() !== mapId) return null;
+/** The key a library entry travels under in a BGM object. */
+AudioManager.librarySequenceKey = function(id) {
+    return "library:" + id;
+};
+
+/** The library id a key names, or 0 when the key is a map id. */
+AudioManager.librarySequenceId = function(key) {
+    const match = typeof key === "string" ? /^library:(\d+)$/.exec(key) : null;
+    return match ? Number(match[1]) : 0;
+};
+
+/** A library entry's sequence, or null when `id` names nothing playable. */
+AudioManager.librarySequenceData = function(id) {
+    if (!(id > 0) || typeof $dataSystem === "undefined" || !$dataSystem) return null;
+    const list = $dataSystem.reactorMusicSequences;
+    const record = Array.isArray(list) ? list[id] : null;
+    return record && this.mapHasBgmSequence({ bgmSequence: record.sequence }) ? record.sequence : null;
+};
+
+/**
+ * The battle music a troop or a map keeps in `battleBgm`, the same audio object
+ * Change Battle BGM stores. Its track plays; a `sequence` naming a playable
+ * library entry plays that entry instead, with the track -- or the System
+ * track, when none is set -- as the fallback. Null when it names neither.
+ */
+AudioManager.battleMusicBgm = function(audio) {
+    if (!audio || typeof audio !== "object") return null;
+    const bgm = {
+        name: typeof audio.name === "string" ? audio.name : "",
+        volume: Number.isFinite(audio.volume) ? audio.volume : 90,
+        pitch: Number.isFinite(audio.pitch) ? audio.pitch : 100,
+        pan: Number.isFinite(audio.pan) ? audio.pan : 0
+    };
+    const libraryId = this.librarySequenceId(audio.sequence);
+    if (libraryId > 0 && this.librarySequenceData(libraryId)) {
+        if (!bgm.name && $dataSystem.battleBgm) Object.assign(bgm, $dataSystem.battleBgm);
+        delete bgm.looped;
+        bgm.sequence = this.librarySequenceKey(libraryId);
+        return bgm;
+    }
+    return bgm.name ? bgm : null;
+};
+
+/** The battle music the troop about to fight names, or null. */
+AudioManager.troopBattleBgm = function() {
+    if (typeof $gameTroop === "undefined" || !$gameTroop || typeof $gameTroop.troop !== "function") return null;
+    const troop = $gameTroop.troop();
+    return troop ? this.battleMusicBgm(troop.battleBgm) : null;
+};
+
+/** The battle music the current map names, or null; a battle test has no map. */
+AudioManager.mapBattleBgm = function() {
+    if (typeof $gameMap === "undefined" || !$gameMap || !($gameMap.mapId() > 0)) return null;
+    if (typeof $dataMap === "undefined" || !$dataMap) return null;
+    return this.battleMusicBgm($dataMap.battleBgm);
+};
+
+/** The sequence a key names: a library entry, or the current map's for its id (null while that map is not loaded). */
+AudioManager._bgmSequenceDataFor = function(key) {
+    const libraryId = this.librarySequenceId(key);
+    if (libraryId > 0) return this.librarySequenceData(libraryId);
+    if (typeof $gameMap === "undefined" || !$gameMap || $gameMap.mapId() !== key) return null;
     if (typeof $dataMap === "undefined" || !this.mapHasBgmSequence($dataMap)) return null;
     return $dataMap.bgmSequence;
 };
 
 AudioManager.playBgmSequence = function(bgm) {
-    const mapId = bgm.sequence;
-    if (this._bgmSequence && this._bgmSequence.mapId === mapId && !this._bgmSequence.stopping) return;
+    const key = bgm.sequence;
+    const mapId = this.librarySequenceId(key) > 0 ? 0 : key;
+    if (this._bgmSequence && this._bgmSequence.key === key && !this._bgmSequence.stopping) return;
     const fallback = { name: bgm.name, volume: bgm.volume, pitch: bgm.pitch, pan: bgm.pan };
     // A battle stops the sequence outright and coming back starts a new one, so
     // without this an intro entry would be heard again after every encounter.
     // Arriving on the map afresh carries no flag, which is what keeps an intro
     // an intro on each visit rather than only ever once.
     const looped = bgm.looped === true;
-    const data = this._bgmSequenceDataFor(mapId);
-    this.stopBgm();
+    const data = this._bgmSequenceDataFor(key);
     if (!data) {
-        this._pendingBgmSequence = { mapId: mapId, fallback: fallback, looped: looped };
+        this.stopBgmSequence();
+        if (mapId) {
+            this.stopBgm();
+            this._pendingBgmSequence = { key: key, mapId: mapId, fallback: fallback, looped: looped };
+        } else if (fallback.name) {
+            // A library entry that is gone: play the track it stood in for.
+            this.playBgm(fallback);
+        } else {
+            this.stopBgm();
+        }
         return;
     }
     const entries = data.entries.filter(entry => entry && typeof entry === "object");
     if (entries.length === 1 && entries[0].type === "track") {
-        // One plain track: the ordinary looping BGM, loop tags and all.
+        // One plain track: the ordinary looping BGM, loop tags and all -- and,
+        // like any BGM, left playing when it is already the current track.
+        this.stopBgmSequence();
         this.playBgm(this._bgmSequenceTrackAudio(entries[0]));
         return;
     }
+    this.stopBgm();
     this._bgmSequence = {
+        key: key,
         mapId: mapId,
         fallback: fallback,
         entries: entries,
@@ -2261,6 +2350,19 @@ AudioManager.updateBgmSequence = function() {
             if (!palette.layers.length) this._advanceBgmSequence();
         }
         return;
+    }
+    // A track entry naming a fade-out hands over before its end, the way a
+    // palette layer does: what follows starts under its last seconds while it
+    // fades away. Without one it plays out and its stop listener moves on.
+    const entry = state.entries[state.index];
+    const fadeOut = entry && entry.type !== "palette" && entry.type !== "silence" ? Math.max(0, Number(entry.fadeOut) || 0) : 0;
+    if (fadeOut > 0) {
+        const buffer = this._bgmSequenceBuffers()[0];
+        if (buffer && this._bgmSequenceLayerIsEnding({ buffer: buffer }, { fadeOut: fadeOut })) {
+            this._retireBgmSequenceBuffer(state, buffer, fadeOut);
+            this._advanceBgmSequence(fadeOut);
+            return;
+        }
     }
     if (state.due && now >= state.due) {
         state.due = 0;

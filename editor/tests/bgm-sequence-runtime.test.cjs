@@ -9,7 +9,7 @@ const managers = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_manager
 const plain = value => JSON.parse(JSON.stringify(value));
 
 /** AudioManager alone, over a WebAudio whose clock and endings the test drives. */
-function loadAudioManager({ mapId = 1, map = null } = {}) {
+function loadAudioManager({ mapId = 1, map = null, system = null, troop = null } = {}) {
     const start = managers.indexOf('function AudioManager() {');
     const end = managers.indexOf('function SoundManager() {');
     assert.ok(start >= 0 && end > start);
@@ -56,7 +56,8 @@ function loadAudioManager({ mapId = 1, map = null } = {}) {
     WebAudio._currentTime = () => clock.now;
     const context = {
         WebAudio, Graphics: { frameCount: 0 }, Utils: { encodeURI: s => s }, console, Math, Number, Object, Array,
-        $gameMap: { mapId: () => mapId }, $dataMap: map
+        $gameMap: { mapId: () => mapId }, $dataMap: map,
+        $dataSystem: system, $gameTroop: { troop: () => troop }
     };
     vm.createContext(context);
     vm.runInContext(managers.slice(start, end) + '\n;this.AudioManager = AudioManager;', context);
@@ -452,6 +453,43 @@ test('a track shorter than its own crossfade is left alone', () => {
     assert.equal(created.length, 2, 'the ordinary end-of-track draw still happens');
 });
 
+test('a track entry with a fade-out hands over early, fading away under what follows', () => {
+    const map = { bgm: { name: '', volume: 90, pitch: 100, pan: 0 }, bgmSequence: { enabled: true, entries: [
+        { type: 'track', name: 'Intro', volume: 100, pitch: 100, pan: 0, once: true, fadeOut: 4 },
+        { type: 'track', name: 'Loop', volume: 100, pitch: 100, pan: 0, fadeIn: 3 }
+    ] } };
+    const { AudioManager, context, created, live, tick } = loadAudioManager({ map });
+    context.WebAudio.trackSeconds = 60;
+    AudioManager.playBgm(AudioManager.mapBgmObject(map, 1));
+    tick(50);
+    assert.deepEqual(live(), ['Intro'], 'nothing happens while the track has more than its fade left');
+
+    tick(7);   // 57s into a 60s track: inside its 4s fade-out
+    assert.equal(created[0].fadedOut, 4, 'the intro rides its fade down');
+    assert.equal(created[1].name, 'Loop');
+    assert.equal(created[1].fadedIn, 3, 'the loop swells up under it: a crossfade, not a gap');
+    assert.deepEqual(live().sort(), ['Intro', 'Loop'], 'both sound together');
+
+    tick(4);
+    assert.deepEqual(live(), ['Loop'], 'the intro is released when its tail ends');
+    created[0].end();
+    assert.equal(created.length, 2, 'the intro running out after its hand-over starts nothing more');
+});
+
+test('a track entry with no fade-out still plays to its true end before the next begins', () => {
+    const map = { bgm: { name: '', volume: 90, pitch: 100, pan: 0 }, bgmSequence: { enabled: true, entries: [
+        { type: 'track', name: 'A', volume: 100, pitch: 100, pan: 0 },
+        { type: 'track', name: 'B', volume: 100, pitch: 100, pan: 0, fadeIn: 3 }
+    ] } };
+    const { AudioManager, context, created, tick } = loadAudioManager({ map });
+    context.WebAudio.trackSeconds = 60;
+    AudioManager.playBgm(AudioManager.mapBgmObject(map, 1));
+    tick(59.5);
+    assert.equal(created.length, 1, 'no early hand-over');
+    created[0].end();
+    assert.equal(created[1].name, 'B');
+});
+
 test('a layer set to sequential walks its pool in order instead of drawing at random', () => {
     const pool = [{ type: 'track', name: 'One' }, { type: 'track', name: 'Two' }, { type: 'track', name: 'Three' }];
     const map = { bgm: { name: '', volume: 90, pitch: 100, pan: 0 }, bgmSequence: { enabled: true, entries: [
@@ -708,4 +746,141 @@ test('a pool item can be trimmed against the rest of its pool', () => {
     AudioManager.bgmVolume = 50;
     const after = AudioManager._bgmSequence.palette.layers[0].buffer.volume;
     assert.ok(Math.abs(after - before / 2) < 1e-9, 'halved the slider, got ' + after + ' from ' + before);
+});
+
+/** A System.json carrying a music sequence library. */
+const LIBRARY_SYSTEM = () => ({
+    battleBgm: { name: 'Battle1', volume: 90, pitch: 100, pan: 0 },
+    reactorMusicSequences: [null,
+        { id: 1, name: 'Boss', sequence: { enabled: true, entries: [
+            { type: 'track', name: 'BossIntro', once: true },
+            { type: 'track', name: 'BossLoop' }
+        ] } },
+        { id: 2, name: 'Field', sequence: { enabled: true, entries: [
+            { type: 'track', name: 'FieldA' },
+            { type: 'track', name: 'FieldB' }
+        ] } }
+    ]
+});
+
+test('a map naming a library entry plays it under the library key, ahead of a sequence of its own', () => {
+    const system = LIBRARY_SYSTEM();
+    const map = { bgm: { name: 'Fallback', volume: 90, pitch: 100, pan: 0 }, bgmSequenceId: 2, bgmSequence: SEQUENCE };
+    const { AudioManager, live } = loadAudioManager({ map, system });
+    const bgm = AudioManager.mapBgmObject(map, 1);
+    assert.equal(bgm.sequence, 'library:2');
+    AudioManager.playBgm(bgm);
+    assert.deepEqual(live(), ['FieldA']);
+    assert.deepEqual(plain(AudioManager.saveBgm()), { name: 'Fallback', volume: 90, pitch: 100, pan: 0, pos: 0, sequence: 'library:2' });
+    assert.equal(AudioManager.mapBgmObject(Object.assign({}, map, { bgmSequenceId: 9 }), 1).sequence, 1,
+        'an id the library does not hold falls back to the map\'s own sequence');
+});
+
+test('two maps naming the same entry share it, so a transfer between them does not restart the music', () => {
+    const system = LIBRARY_SYSTEM();
+    const first = { bgm: { name: 'A', volume: 90, pitch: 100, pan: 0 }, bgmSequenceId: 2 };
+    const second = { bgm: { name: 'B', volume: 90, pitch: 100, pan: 0 }, bgmSequenceId: 2 };
+    const { AudioManager, created, live, context } = loadAudioManager({ map: first, system });
+    AudioManager.playBgm(AudioManager.mapBgmObject(first, 1));
+    const running = AudioManager._bgmSequence;
+    context.$gameMap = { mapId: () => 2 };
+    context.$dataMap = second;
+    AudioManager.playBgm(AudioManager.mapBgmObject(second, 2));
+    assert.equal(AudioManager._bgmSequence, running, 'the same sequence keeps playing');
+    assert.equal(created.length, 1);
+    assert.deepEqual(live(), ['FieldA']);
+});
+
+test('a one-track library entry shared by two maps leaves its track playing across the transfer', () => {
+    const system = { reactorMusicSequences: [null, { id: 1, name: 'Town', sequence: { enabled: true, entries: [
+        { type: 'track', name: 'Town', volume: 80, pitch: 100, pan: 0 }
+    ] } }] };
+    const first = { bgm: { name: 'A' }, bgmSequenceId: 1 };
+    const second = { bgm: { name: 'B' }, bgmSequenceId: 1 };
+    const { AudioManager, created } = loadAudioManager({ map: first, system });
+    AudioManager.playBgm(AudioManager.mapBgmObject(first, 1));
+    const buffer = AudioManager._bgmBuffer;
+    assert.equal(buffer.name, 'Town');
+    assert.equal(buffer.loop, true, 'one plain track is still the looping BGM');
+    AudioManager.playBgm(AudioManager.mapBgmObject(second, 2));
+    assert.equal(AudioManager._bgmBuffer, buffer, 'not restarted');
+    assert.equal(created.length, 1);
+});
+
+test('battle music: a troop or a map names a track or a library entry, each in front of the System track', () => {
+    const system = LIBRARY_SYSTEM();
+    const map = { bgm: { name: 'Field' }, battleBgm: { name: 'MapBattle', volume: 70, pitch: 110, pan: 5 } };
+    const troop = { id: 3, battleBgm: { name: '', volume: 90, pitch: 100, pan: 0, sequence: 'library:1' } };
+    const { AudioManager, context } = loadAudioManager({ map, system, troop });
+    assert.deepEqual(plain(AudioManager.troopBattleBgm()), { name: 'Battle1', volume: 90, pitch: 100, pan: 0, sequence: 'library:1' },
+        'a sequence with no track of its own falls back to the System track');
+    assert.deepEqual(plain(AudioManager.mapBattleBgm()), { name: 'MapBattle', volume: 70, pitch: 110, pan: 5 }, 'a plain track plays as it is');
+
+    const track = sequence => ({ id: 3, battleBgm: Object.assign({ name: 'Mine', volume: 80, pitch: 100, pan: 0 }, sequence ? { sequence } : {}) });
+    context.$gameTroop = { troop: () => track('library:2') };
+    assert.deepEqual(plain(AudioManager.troopBattleBgm()), { name: 'Mine', volume: 80, pitch: 100, pan: 0, sequence: 'library:2' },
+        'a sequence keeps the track it was given as its fallback');
+    context.$gameTroop = { troop: () => track('library:7') };
+    assert.deepEqual(plain(AudioManager.troopBattleBgm()), { name: 'Mine', volume: 80, pitch: 100, pan: 0 },
+        'an entry the library lacks leaves the track to play');
+    context.$gameTroop = { troop: () => ({ id: 3, battleBgm: { name: '', sequence: 'library:7' } }) };
+    assert.equal(AudioManager.troopBattleBgm(), null, 'and with no track either, the troop is no answer');
+    context.$gameTroop = { troop: () => ({ id: 3 }) };
+    assert.equal(AudioManager.troopBattleBgm(), null, 'nor is a troop naming nothing');
+    context.$gameTroop = { troop: () => undefined };
+    assert.equal(AudioManager.troopBattleBgm(), null, 'nor is a troop that is not set up');
+    context.$gameMap = { mapId: () => 0 };
+    assert.equal(AudioManager.mapBattleBgm(), null, 'a battle test has no map');
+});
+
+test('Game_System.battleBgm asks the troop, then Change Battle BGM, then the map, then System', () => {
+    const objects = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_objects.js'), 'utf8');
+    const source = /Game_System\.prototype\.battleBgm = function\(\) \{[\s\S]*?\n\};/.exec(objects)[0];
+    const answers = { troop: null, map: null };
+    const context = {
+        Game_System: function() {},
+        AudioManager: { troopBattleBgm: () => answers.troop, mapBattleBgm: () => answers.map },
+        $dataSystem: { battleBgm: { name: 'System' } }
+    };
+    vm.createContext(context);
+    vm.runInContext(source, context);
+    const system = Object.create(context.Game_System.prototype);
+    const name = () => system.battleBgm().name;
+    assert.equal(name(), 'System');
+    answers.map = { name: 'Map' };
+    assert.equal(name(), 'Map');
+    system._battleBgm = { name: 'Event' };
+    assert.equal(name(), 'Event', 'Change Battle BGM outranks the map');
+    answers.troop = { name: 'Troop' };
+    assert.equal(name(), 'Troop', 'and the troop outranks everything');
+});
+
+test('a battle sequence takes over from the map sequence, survives the second request, and hands back with the intro spent', () => {
+    const system = LIBRARY_SYSTEM();
+    const map = { bgm: { name: 'Fallback', volume: 90, pitch: 100, pan: 0 }, bgmSequence: { enabled: true, entries: [
+        { type: 'track', name: 'Opening', once: true },
+        { type: 'track', name: 'Bed' }
+    ] } };
+    const { AudioManager, created, live } = loadAudioManager({ map, system });
+    AudioManager.playBgm(AudioManager.mapBgmObject(map, 1));
+    created[0].end();                            // -> Bed
+    created[1].end();                            // the map's intro is spent
+    const saved = AudioManager.saveBgm();        // BattleManager.saveBgmAndBgs
+    const battle = AudioManager.battleMusicBgm({ sequence: 'library:1' });
+    AudioManager.playBgm(battle);                // Scene_Map's encounter effect
+    assert.deepEqual(live(), ['BossIntro']);
+    const running = AudioManager._bgmSequence;
+    AudioManager.playBgm(battle);                // Scene_Battle.start asks again
+    assert.equal(AudioManager._bgmSequence, running, 'the second request does not restart the intro');
+    AudioManager.replayBgm(saved);               // BattleManager.replayBgmAndBgs
+    assert.deepEqual(live(), ['Bed'], 'back on the map bed, its intro not replayed');
+});
+
+test('a library key whose entry is gone plays the track it stood in for, and never waits', () => {
+    const { AudioManager, created } = loadAudioManager({ system: LIBRARY_SYSTEM() });
+    AudioManager.playBgm({ name: 'Battle1', volume: 90, pitch: 100, pan: 0, sequence: 'library:5' });
+    assert.equal(AudioManager._bgmSequence, null);
+    assert.equal(AudioManager._pendingBgmSequence, null, 'the library is always loaded, so nothing waits');
+    assert.equal(created.length, 1);
+    assert.equal(AudioManager._bgmBuffer.name, 'Battle1');
 });

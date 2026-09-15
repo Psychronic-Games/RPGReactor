@@ -18,6 +18,7 @@ class DatabaseManager {
             commonEvents: 9999,
             userInterfaces: 9999,
             quests: 9999,
+            musicSequences: 9999,
             actionSequences: 9999,
             elements: 512,
             skillTypes: 128,
@@ -104,6 +105,16 @@ class DatabaseManager {
             // Editor-only labels for player-facing database entries.
             editorNames: null
         };
+        // The music sequence library lives on System.json, so the runtime and a
+        // battle test read it with the rest of $dataSystem. The list machinery
+        // addresses every section as data[type]; this names that array. Not
+        // enumerable, so nothing that walks `data` sees the library twice.
+        Object.defineProperty(this.data, 'musicSequences', {
+            configurable: true,
+            enumerable: false,
+            get: () => this.musicSequenceList(),
+            set: value => { if (this.data.system) this.data.system.reactorMusicSequences = value; }
+        });
 
         // Initialize Node.js modules if running in NW.js
         if (!this.fs && typeof nw !== 'undefined') {
@@ -152,6 +163,11 @@ class DatabaseManager {
                 loaded.userInterfaces = [null, ...stock];
             }
             if (!Array.isArray(loaded.quests) || loaded.quests.length === 0) loaded.quests = [null];
+            // Before the saved state is captured, so a project without a library
+            // does not read as changed the moment the list is first touched.
+            if (loaded.system && (!Array.isArray(loaded.system.reactorMusicSequences) || !loaded.system.reactorMusicSequences.length)) {
+                loaded.system.reactorMusicSequences = [null];
+            }
             const battle = typeof ReactorBattleData !== 'undefined' ? ReactorBattleData : require('../../runtime/reactor_battle_data.js');
             if (Array.isArray(loaded.actionSequences) && !loaded.actionSequences.length) loaded.actionSequences = [null];
             if (Array.isArray(loaded.battlePresentation) && !loaded.battlePresentation.length) loaded.battlePresentation = battle.empty();
@@ -422,14 +438,14 @@ class DatabaseManager {
                 data.versionId = DatabaseManager.newVersionId();
             }
 
-            this._writeFileAtomic(this.fs, filePath, JSON.stringify(data, null, 2));
+            this._writeFileAtomic(this.fs, filePath, JSON.stringify(this.fileContent(filename, data), null, 2));
             const entry = this.dataFiles.find(([, file]) => file === filename);
             if (entry) this.captureSavedState(entry[0]);
 
             if (filename !== 'System.json' && !options.skipVersionBump && this.data && this.data.system) {
                 this.data.system.versionId = DatabaseManager.newVersionId();
                 const systemPath = this.path.join(dataPath, 'System.json');
-                this._writeFileAtomic(this.fs, systemPath, JSON.stringify(this.data.system, null, 2));
+                this._writeFileAtomic(this.fs, systemPath, JSON.stringify(this.fileContent('System.json', this.data.system), null, 2));
                 const systemEntry = this.dataFiles.find(([, file]) => file === 'System.json');
                 if (systemEntry) this.captureSavedState(systemEntry[0]);
             }
@@ -558,6 +574,58 @@ class DatabaseManager {
     updateQuest(id, data) {
         this.data.quests[id] = data;
         this.mutationGeneration++;
+    }
+
+    /**
+     * Carry Database > Quests' choice of in-game quest log into the plugin
+     * list (QuestImporter.syncQuestLog). Nothing is written before a choice is
+     * made, and a failure fails the save instead of passing silently.
+     */
+    syncQuestLog(projectPath) {
+        const importer = typeof QuestImporter !== 'undefined' ? QuestImporter : null;
+        const setting = (this.getSystem() || {}).reactorQuests;
+        if (!importer || typeof importer.syncQuestLog !== 'function' || !setting || !setting.log) return true;
+        try {
+            return importer.syncQuestLog(projectPath, this.getQuests(), setting).ok !== false;
+        } catch (error) {
+            console.error('Could not carry the quest log choice into the plugin list:', error);
+            return false;
+        }
+    }
+
+    /** The library array on System.json; null before a project is open. */
+    musicSequenceList() {
+        const system = this.data.system;
+        if (!system) return null;
+        if (!Array.isArray(system.reactorMusicSequences) || !system.reactorMusicSequences.length) {
+            system.reactorMusicSequences = [null];
+        }
+        return system.reactorMusicSequences;
+    }
+
+    getMusicSequences() {
+        return (this.musicSequenceList() || []).filter(entry => entry !== null);
+    }
+
+    getMusicSequence(id) {
+        return (this.musicSequenceList() || [])[id] || null;
+    }
+
+    hasMusicSequences() {
+        return (this.musicSequenceList() || []).some(Boolean);
+    }
+
+    /**
+     * What a database file holds on disk. An empty music library stays off
+     * System.json, so a project that never authored a sequence saves as before.
+     */
+    fileContent(filename, data) {
+        if (filename !== 'System.json' || !data || typeof data !== 'object') return data;
+        const list = data.reactorMusicSequences;
+        if (!Array.isArray(list) || list.some(Boolean)) return data;
+        const copy = { ...data };
+        delete copy.reactorMusicSequences;
+        return copy;
     }
 
     getUserInterfaces() {
@@ -791,6 +859,9 @@ class DatabaseManager {
         }
         if (failed.length === 0 && !await this.saveEditorNames(projectPath)) {
             failed.push(this.editorNamesModule()?.FILENAME || 'Database.names.json');
+        }
+        if (failed.length === 0 && !this.syncQuestLog(projectPath)) {
+            failed.push('js/reactor_plugins.js');
         }
         if (failed.length) console.error(`Failed to save database files: ${failed.join(', ')}`);
         return failed.length === 0;

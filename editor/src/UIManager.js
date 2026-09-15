@@ -380,6 +380,10 @@ class UIManager {
             label: 'Quests',
             click: () => this.callbacks.openDatabase('quests')
         }));
+        databaseMenu.append(new nw.MenuItem({
+            label: 'Music Sequences',
+            click: () => this.callbacks.openDatabase('musicSequences')
+        }));
         databaseMenu.append(new nw.MenuItem({ type: 'separator' }));
         databaseMenu.append(new nw.MenuItem({
             label: 'System 1',

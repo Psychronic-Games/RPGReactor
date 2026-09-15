@@ -236,6 +236,10 @@ class AudioCommandEditor {
             ? RRAssetFiles.listUnique(audioFolder, RRAssetFiles.AUDIO_EXTENSIONS)
             : [];
         const current = this.command.parameters[0] || {};
+        // Change Battle BGM can name a music sequence; the track stays on the
+        // command as the fallback the runtime plays if that entry is gone.
+        const sequencePicker = this.command.code === 132 && typeof RRBattleMusic !== 'undefined'
+            ? RRBattleMusic.sequenceRow(this.databaseManager, RRBattleMusic.sequenceId(current), tt) : null;
 
         RRAudioPickerModal.open({
             title: `${tt('Select')} ${folder.toUpperCase()} ${tt('File')}`,
@@ -249,13 +253,17 @@ class AudioCommandEditor {
             },
             loopDefault: folder !== 'se',
             zIndex: 10006,
+            extraControls: sequencePicker ? sequencePicker.row : undefined,
             onOk: result => {
-                this.command.parameters[0] = {
+                const audio = {
                     name: result.name,
                     volume: result.volume,
                     pitch: result.pitch,
                     pan: result.pan
                 };
+                const sequenceId = sequencePicker ? Number(sequencePicker.select.value) || 0 : 0;
+                if (sequenceId > 0) audio.sequence = `library:${sequenceId}`;
+                this.command.parameters[0] = audio;
                 const done = this.callback;
                 this.callback = null;
                 if (done) done(this.command);

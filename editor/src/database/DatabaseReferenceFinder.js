@@ -9,6 +9,8 @@
  *     state 12 without guessing at a syntax the editor does not own.
  *   - Map events. They live in Map###.json, not in the database, and would
  *     mean reading every map file off disk to answer one context-menu click.
+ *     A map's music and battle music sequences live there too, for the same
+ *     reason unlisted.
  *
  * Command parameter layouts are taken from the Reactor runtime's own
  * Game_Interpreter (runtime/reactor_objects.js), not from memory of MZ.
@@ -18,7 +20,7 @@ class DatabaseReferenceFinder {
     /** Types a lookup can be run on. */
     static get targetTypes() {
         return ['actors', 'classes', 'skills', 'items', 'weapons', 'armors',
-            'enemies', 'troops', 'states', 'animations', 'tilesets', 'commonEvents', 'actionSequences'];
+            'enemies', 'troops', 'states', 'animations', 'tilesets', 'commonEvents', 'actionSequences', 'musicSequences'];
     }
 
     /**
@@ -165,6 +167,8 @@ class DatabaseReferenceFinder {
         });
 
         this._records('troops').forEach(troop => {
+            const battleMusic = /^library:(\d+)$/.exec(String(troop.battleBgm?.sequence || ''));
+            if (battleMusic) emit('troops', troop.id, 'musicSequences', Number(battleMusic[1]), 'Battle Music');
             (troop.members || []).forEach(member => {
                 emit('troops', troop.id, 'enemies', Number(member?.enemyId), 'Members');
             });
@@ -241,7 +245,7 @@ class DatabaseReferenceFinder {
      */
     static get commandNames() {
         return {
-            111: 'Conditional Branch', 117: 'Common Event', 126: 'Change Items',
+            111: 'Conditional Branch', 117: 'Common Event', 132: 'Change Battle BGM', 126: 'Change Items',
             127: 'Change Weapons', 128: 'Change Armors', 129: 'Change Party Member',
             212: 'Show Animation', 282: 'Change Tileset', 301: 'Battle Processing',
             302: 'Shop Processing', 605: 'Shop Processing', 303: 'Name Input Processing',
@@ -286,6 +290,11 @@ class DatabaseReferenceFinder {
                 }
                 break;
             case 117: push('commonEvents', params[0]); break;
+            case 132: {
+                const match = /^library:(\d+)$/.exec(String(params[0]?.sequence || ''));
+                if (match) push('musicSequences', match[1]);
+                break;
+            }
             case 126: push('items', params[0]); break;
             case 127: push('weapons', params[0]); break;
             case 128: push('armors', params[0]); break;

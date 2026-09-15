@@ -24,6 +24,7 @@ globalThis.RR_LIMITS = Object.freeze({
         commonEvents: 9999,
         userInterfaces: 9999,
         quests: 9999,
+        musicSequences: 9999,
         actionSequences: 9999,
         elements: 512,
         skillTypes: 128,

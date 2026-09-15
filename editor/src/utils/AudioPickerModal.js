@@ -26,6 +26,8 @@
      *   when the cards are hidden.
      * @param {boolean} [options.loopDefault] - Loop toggle's initial state.
      * @param {number} [options.zIndex] - Overlay z-index (default 2000).
+     * @param {HTMLElement} [options.extraControls] - A caller's own controls,
+     *   shown above the player; the caller reads them back in onOk.
      * @param {function} options.onOk - Receives {name, volume, pitch, pan}.
      * @param {function} [options.onCancel]
      */
@@ -130,6 +132,7 @@
             min-height: 0;
         `;
         modal.appendChild(body);
+        if (options.extraControls) body.appendChild(options.extraControls);
 
         // ── Player info: cover art + selected track name + time ──────────
         const info = document.createElement('div');
