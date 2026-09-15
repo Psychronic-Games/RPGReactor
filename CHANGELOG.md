@@ -6,7 +6,12 @@ Development cycle in progress. Session detail lives in the [handoff](docs/HANDOF
 
 ### Added
 
+- **Music sequences have a library, and battles can play one.** Database › Music Sequences holds named sequences; a map, a map's battle music, a troop's Battle Music and Change Battle BGM can each name one or a plain track. Battle music resolves troop, then Change Battle BGM, then map, then System. Map Properties picks music with the same picker, **Move to library** promotes a map's own sequence, the list offers **Starters…** and **▶ Preview** through the game's own player, and Track entries can fade out under what follows (PR #60).
+- **Database › Quests chooses the game's quest log:** Reactor's, or VisuStella's Quest System when the project has it; saving the database switches the plugin and feeds it this tab's quests, and Reactor's quest commands update it in game (PR #60).
+
 ### Fixed
+
+- **Database › Quests:** the icon picker no longer reports IconSet.png missing on every project; every quest text field previews its icons and colour codes as the player reads them; objective and reward rows keep their line breaks; imports read a title's leading icon code as the quest icon; Reactor's Quests menu command appears under VisuStella MainMenuCore (PR #60).
 
 ## [0.98.6] - 2026-09-14
 

@@ -1,5 +1,10 @@
 # Handoff - 0.98.6 In Progress
 
+## 2026-09-15 — PR #60 merged (music sequence library, battle music, Quests tab)
+
+- Merged GitHub's `origin/main` (PR #60, Xehanort88) over the 0.98.7 bump; one conflict in `editor/CHANGELOG.md` (heading), see [PR-INTEGRATION-2026-09-15.md](PR-INTEGRATION-2026-09-15.md). Runtime revision 20260915.1, all bundled projects synced.
+- New editor modules: `database/DatabaseMusicSequenceEditor.js`, `utils/BattleMusic.js` (battle music resolution troop → Change Battle BGM → map → System), `utils/SequencePreview.js`, `database/DatabaseTextCodes.js`. Library lives on `System.json` as `reactorMusicSequences`. Quests: `QuestImporter.js` reads leading icon codes; **Quest log in game** switches the VisuStella plugin on save.
+
 ## 2026-09-13 — Web filename casing, Demo sounds
 
 - `Utils.correctFileCase` on the web reads `js/reactor_files.json` (`Utils.loadWebFileIndex`, fetched once on first need, skipped under `window.RPGReactorHost`; `setWebFileIndex` builds a lowercase → real map; `correctFileCaseFromIndex`). `editor/build-scripts/web-file-index.cjs` writes the index; `build-worker.js` (web platform, after the copy) and `dist-editor-worker.js` (into `pkg-web/project`) call it. Tests: `web-file-index.test.cjs`.
