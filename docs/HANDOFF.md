@@ -1,5 +1,10 @@
 # Handoff - 0.98.6 In Progress
 
+## 2026-09-15 — CI red since the 0.98.6 tag: tests read Star Shift Rebellion
+
+- `clean-checkout` failed on every run since `v0.98.6` because `action-sequence-generations.test.cjs` required three corpora (Demo, Star Shift Rebellion, fixture) and `victor-motion-import.test.cjs` read Star Shift Rebellion's data; `template/Star Shift Rebellion` is gitignored, so CI never has it. The first now needs only the Demo and the fixture, the second skips when the project is absent. **Reproduce CI locally** with a fresh clone (`git clone --no-hardlinks file://<repo> /tmp/x`), `npm ci --ignore-scripts`, `npm test`: the clone holds only committed files, which is what catches a test leaning on a gitignored project.
+- `gui-smokes` failed on a different step each run (web persistence on the tag, interaction order on the PR #60 merge); both pass in the clean clone here (`npm run smoke:web`, `npm run smoke:nw-interactions -- --nw-root=nwjs-linux`), so they are runner timing, not code. Read the step log on the Actions run page to see the assertion.
+
 ## 2026-09-15 — PR #60 merged (music sequence library, battle music, Quests tab)
 
 - Merged GitHub's `origin/main` (PR #60, Xehanort88) over the 0.98.7 bump; one conflict in `editor/CHANGELOG.md` (heading), see [PR-INTEGRATION-2026-09-15.md](PR-INTEGRATION-2026-09-15.md). Runtime revision 20260915.1, all bundled projects synced.
