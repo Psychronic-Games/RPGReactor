@@ -1,5 +1,9 @@
 # Handoff - 0.98.6 In Progress
 
+## 2026-09-15 — Spot light guide mirrored in 2D (Discord report)
+
+- `LightingManager._aimPoint`, the cone lines in `_renderMarkers` and the `aim` drag used `+yaw` (aim = (sin yaw, cos yaw)); `FlatLightField2D.aim`, the game's `syncReactorFlatLights` (rotation π − scene yaw, scene yaw = −data yaw) and `Reactor3D` (setLights receives `-light.yaw`) all aim at (sin −yaw, cos −yaw). Guide and drag now negate yaw; the 3D rings already did (`RRPoseRings3D.sync(…, -light.yaw, …)`). Data and runtime untouched. Test at the end of `lighting-tool.test.cjs` pins the four against each other.
+
 ## 2026-09-15 — CI red since the 0.98.6 tag: tests read Star Shift Rebellion
 
 - `clean-checkout` failed on every run since `v0.98.6` because `action-sequence-generations.test.cjs` required three corpora (Demo, Star Shift Rebellion, fixture) and `victor-motion-import.test.cjs` read Star Shift Rebellion's data; `template/Star Shift Rebellion` is gitignored, so CI never has it. The first now needs only the Demo and the fixture, the second skips when the project is absent. **Reproduce CI locally** with a fresh clone (`git clone --no-hardlinks file://<repo> /tmp/x`), `npm ci --ignore-scripts`, `npm test`: the clone holds only committed files, which is what catches a test leaning on a gitignored project.

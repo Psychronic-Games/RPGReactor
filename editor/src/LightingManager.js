@@ -604,7 +604,7 @@ class LightingManager {
             if (light.type === 'spot' || light.type === 'beam') {
                 const aim = this._aimPoint(light, at);
                 const spread = (light.angle * Math.PI) / 360;
-                const yaw = (light.yaw * Math.PI) / 180;
+                const yaw = -(light.yaw * Math.PI) / 180;
                 const dir = side => ({
                     x: x + Math.sin(yaw + side * spread) * light.radius * tw,
                     y: y + Math.cos(yaw + side * spread) * light.radius * tw
@@ -650,8 +650,14 @@ class LightingManager {
         return { x: at.x + light.radius, y: at.y };
     }
 
+    /**
+     * Where the cone points, in map tiles. The glow, the game's flat sprite
+     * and the 3D cone all aim at (sin -yaw, cos -yaw): yaw turns the light
+     * clockwise on screen from south. The handle used to turn the other way,
+     * so a cone drawn to the left lit the right.
+     */
     _aimPoint(light, at) {
-        const yaw = (light.yaw * Math.PI) / 180;
+        const yaw = -(light.yaw * Math.PI) / 180;
         return { x: at.x + Math.sin(yaw) * light.radius, y: at.y + Math.cos(yaw) * light.radius };
     }
 
@@ -1028,8 +1034,9 @@ class LightingManager {
         } else if (drag.mode === 'aim') {
             const dx = at.x - drag.anchor.x;
             const dy = at.y - drag.anchor.y;
+            // The inverse of _aimPoint: the glow lands where the handle is dropped.
             RRMapLights.update(map, drag.id, {
-                yaw: Math.round(Math.atan2(dx, dy) * 180 / Math.PI),
+                yaw: Math.round(-Math.atan2(dx, dy) * 180 / Math.PI),
                 radius: Math.round(Math.hypot(dx, dy) * 100) / 100
             });
         }

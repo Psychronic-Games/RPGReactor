@@ -11,6 +11,7 @@ Development cycle in progress. Session detail lives in the [handoff](docs/HANDOF
 
 ### Fixed
 
+- **A spot light's guideline points where its light goes.** In the 2D map view the aim handle and cone lines of a selected spot or beam light were mirrored across the light: the glow, the game's flat lighting and the 3D cone all turn one way for a given yaw and the guide turned the other, so a cone drawn to the left lit the right (reported on Discord). The handle, the cone lines and the aim drag now follow the renderers; saved lights look the same in game as before.
 - **Database › Quests:** the icon picker no longer reports IconSet.png missing on every project; every quest text field previews its icons and colour codes as the player reads them; objective and reward rows keep their line breaks; imports read a title's leading icon code as the quest icon; Reactor's Quests menu command appears under VisuStella MainMenuCore (PR #60).
 
 ## [0.98.6] - 2026-09-14
