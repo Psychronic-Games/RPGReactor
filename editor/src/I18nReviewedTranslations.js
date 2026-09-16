@@ -5441,6 +5441,31 @@ Object.assign(globalThis.RR_REVIEWED_TRANSLATIONS.text.ja, {Motion:'モーショ
  for(const [locale,row] of Object.entries(rows)){const values=row.split('|');keys.forEach((key,i)=>globalThis.RR_REVIEWED_TRANSLATIONS.text[locale][key]=values[i]);}
 }
 
+// A Target State condition on a skill that targets nobody, on the same panel.
+{
+ const keys=["This skill targets nobody, so a Target State condition can never hold."];
+ const rows={
+  "ja": "このスキルは対象を取らないため、対象のステート条件は成立しません。",
+  "es": "Esta habilidad no tiene objetivo, así que una condición de Estado del objetivo nunca se cumple.",
+  "zh-Hant": "此技能沒有目標，因此「目標狀態」條件永遠無法成立。",
+  "zh-Hans": "此技能没有目标，因此“目标状态”条件永远无法成立。",
+  "ru": "Этот навык не имеет цели, поэтому условие «Состояние цели» никогда не выполняется.",
+  "pt": "Esta habilidade não tem alvo, então uma condição de Estado do alvo nunca vale.",
+  "de": "Diese Fähigkeit hat kein Ziel, daher kann eine Bedingung „Zustand des Ziels“ nie gelten.",
+  "fr": "Cette compétence ne vise personne, donc une condition État de la cible ne peut jamais être vraie.",
+  "el": "Αυτή η ικανότητα δεν έχει στόχο, οπότε μια συνθήκη Κατάσταση στόχου δεν ισχύει ποτέ.",
+  "ko": "이 스킬은 대상이 없으므로 대상 상태 조건은 절대 성립하지 않습니다.",
+  "ar": "هذه المهارة لا تستهدف أحدًا، لذا لا يتحقق شرط حالة الهدف أبدًا.",
+  "it": "Questa abilità non ha bersaglio, quindi una condizione Stato del bersaglio non vale mai.",
+  "pl": "Ta umiejętność nie ma celu, więc warunek „Stan celu” nigdy nie zachodzi.",
+  "id": "Skill ini tidak menargetkan siapa pun, jadi kondisi Status Target tidak pernah terpenuhi.",
+  "vi": "Kỹ năng này không nhắm vào ai, nên điều kiện Trạng thái mục tiêu không bao giờ đúng.",
+  "th": "สกิลนี้ไม่มีเป้าหมาย เงื่อนไขสถานะเป้าหมายจึงไม่มีทางเป็นจริง",
+  "tr": "Bu beceri kimseyi hedeflemez, bu yüzden Hedef durumu koşulu asla sağlanmaz."
+ };
+ for(const [locale,row] of Object.entries(rows)){const values=row.split('|');keys.forEach((key,i)=>globalThis.RR_REVIEWED_TRANSLATIONS.text[locale][key]=values[i]);}
+}
+
 // Battle AI on-the-spot turn counting, noted on the behaviour forecast panel.
 {
  const keys=["Battle AI counts turns on the spot, so a turn condition can sit one turn earlier than it reads."];

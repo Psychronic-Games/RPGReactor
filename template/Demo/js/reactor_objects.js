@@ -5603,13 +5603,24 @@ Game_Battler.prototype.meetsTpCondition = function(param1, param2) {
     return this.tpRate() >= param1 && this.tpRate() <= param2;
 };
 
+// Membership by state object rather than by id. While states() is the engine's
+// own map over _states the two are the same answer, but a plugin that injects
+// passive states into states() (VisuMZ_1_SkillsStatesCore does) then reaches
+// this check too, so a passive answers a state condition the way the player
+// sees it. The lookup is guarded because such a plugin can push an entry for a
+// state id that no longer exists, and includes(undefined) would match.
 Game_Battler.prototype.meetsStateCondition = function(param) {
-    return this.isStateAffected(param);
+    const state = $dataStates[param];
+    return !!state && this.states().includes(state);
 };
 
+// Asked of the candidate rather than read off its _states, so a per-class
+// replacement of meetsStateCondition governs the target check as well:
+// SkillsStatesCore replaces Game_Enemy's, and the two sides of an action
+// condition cannot end up disagreeing about what counts as having a state.
 Game_Battler.prototype.meetsTargetStateCondition = function(param, action) {
     return this.actionTargetCandidates(action).some(battler =>
-        battler.isStateAffected(param)
+        battler.meetsStateCondition(param)
     );
 };
 

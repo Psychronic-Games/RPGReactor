@@ -160,12 +160,42 @@
         return true;
     }
 
+    /**
+     * Whether a skill has anyone to target.
+     *
+     * The runtime reads a Target State condition off the skill's own scope:
+     * `meetsTargetStateCondition` asks `actionTargetCandidates`
+     * (runtime/reactor_objects.js), and a skill whose scope reaches nobody
+     * hands it an empty list. `.some()` over nothing is false, so the
+     * condition can never hold however the battle goes.
+     *
+     * Only an authored scope of 0 counts, and only with no `<Target: ...>`
+     * notetag on the skill: BattleCore rewrites `scope` from that tag at boot
+     * while the authored data still reads 0, and a scope already rewritten to a
+     * string is some plugin's business rather than this module's. Both cases
+     * answer "it has targets", because a wrong yes costs a missing warning and
+     * a wrong no costs a false one.
+     */
+    function skillCanHaveTargets(skill) {
+        if (!skill) return false;
+        if (typeof skill.scope === 'string') return true;
+        if (/<Target\s*:/i.test(String(skill.note || ''))) return true;
+        return Number(skill.scope || 0) !== 0;
+    }
+
+    /** True when a Target State condition on this row is readable at all. */
+    function canReadTargetState(action, skill) {
+        return skillCanHaveTargets(skill)
+            || !conditions(action).some(c => c.type === TARGET_STATE);
+    }
+
     function validActions(enemy, skills, state) {
         const byId = skillIndex(skills);
         return (enemy.actions || [])
             .map((action, index) => ({ action, index }))
             .filter(({ action }) =>
                 conditions(action).every(c => meets(c, state))
+                && canReadTargetState(action, byId.get(action.skillId))
                 && canUse(byId.get(action.skillId), state));
     }
 
@@ -419,6 +449,7 @@
      *   `no-skill`  the skill id points at nothing
      *   `occasion`  the skill is not usable in battle
      *   `cost`      the cost exceeds what this enemy can ever hold
+     *   `no-target` a Target State condition on a skill that targets nobody
      *   `condition` affordable, but the conditions never hold together
      *   `outranked` valid, but the ceiling always sits above its rating
      *
@@ -446,6 +477,7 @@
             if (Number(skill.mpCost || 0) > maxMp(enemy) || Number(skill.tpCost || 0) > maxTp(enemy)) {
                 dead.push({ index, action, reason: 'cost' }); return;
             }
+            if (!canReadTargetState(action, skill)) { dead.push({ index, action, reason: 'no-target' }); return; }
             if (!everValid.has(index)) { dead.push({ index, action, reason: 'condition' }); return; }
             if (rules_.style === 'gambit') { dead.push({ index, action, reason: 'priority' }); return; }
             const ceiling = lowestCeiling.get(index);
@@ -476,6 +508,7 @@
         DEFAULT_MAX_TP,
         alwaysValid,
         audit,
+        canReadTargetState,
         canUse,
         conditions,
         forecast,
@@ -485,6 +518,7 @@
         pool,
         reachable,
         rules,
+        skillCanHaveTargets,
         skillIndex,
         validActions,
         variables

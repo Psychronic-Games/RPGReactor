@@ -793,6 +793,7 @@ class DatabaseEnemyEditor {
             case 'occasion': return tt('This skill cannot be used in battle.');
             case 'cost': return tt('The cost is higher than this enemy can hold.');
             case 'condition': return tt('These conditions can never hold together.');
+            case 'no-target': return tt('This skill targets nobody, so a Target State condition can never hold.');
             default:
                 return tt('Outranked whenever it is usable: the ceiling never drops below {n}.')
                     .replace('{n}', entry.ceiling);
