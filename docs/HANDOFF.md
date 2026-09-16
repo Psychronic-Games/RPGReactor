@@ -1,5 +1,9 @@
 # Handoff - 0.98.6 In Progress
 
+## 2026-09-16 — Reactor event commands translated (user zh-Hans patch)
+
+- A zh-Hans patch (`RPG_Reactor_zh-Hans_patch_v0.98.6.zip`, one appended block) named six quest/media commands and the Reactor tab. The names live in `RR_EVENT_COMMAND_NAMES` (looked up by `tEventCommandName`, falling back to `tText`), which the i18n gate does not audit. **Load order matters:** `I18nReviewedTranslations.js` loads before `I18nManager.js` and the manager merges `RR_REVIEWED_TRANSLATIONS` over the base tables at its end, so the reviewed layer wins; an audit that loads the reviewed file last sees phantom gaps (Switch Light, Lighting, Game Flow are all reviewed-covered). The six names went into the reviewed `commands` tables for all 17 locales, and the tab qualifier into reviewed `sections` and `text` for the eight non-Latin-script locales (the manager's own IIFE forces `'Reactor'` back, but the reviewed merge runs after it). `i18n.test.cjs` requires reviewed Polish to cover the whole command catalog. Guard: `event-command-names-i18n.test.cjs` loads the three files in the app's order and requires every `name:`/`title:` in `EventCommandPicker.js` to resolve per locale.
+
 ## 2026-09-16 — PR #61 merged (enemy state conditions)
 
 - Merged GitHub's `origin/main` (PR #61, Xehanort88) cleanly; see [PR-INTEGRATION-2026-09-16.md](PR-INTEGRATION-2026-09-16.md). Runtime revision 20260916.1, all bundled projects synced. `Game_Battler.actionConditionStateIds` and the `params` list on action conditions are the new data points; the forecast's `no-target` reason is new.
