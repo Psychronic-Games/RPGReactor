@@ -85,7 +85,15 @@
         if (Array.isArray(action.conditions)) {
             return action.conditions
                 .filter(c => c && Number.isInteger(c.type) && c.type > 0)
-                .map(c => ({ type: c.type, param1: Number(c.param1) || 0, param2: Number(c.param2) || 0 }));
+                .map(c => {
+                    const normalized = {
+                        type: c.type,
+                        param1: Number(c.param1) || 0,
+                        param2: Number(c.param2) || 0
+                    };
+                    if (Array.isArray(c.params)) normalized.params = c.params;
+                    return normalized;
+                });
         }
         const type = Number(action.conditionType) || 0;
         if (type <= 0) return [];
@@ -108,6 +116,18 @@
         return Number.isFinite(n) ? Math.max(0, n) : 0;
     }
 
+    /**
+     * The states a state condition names; a list holds when any one is there.
+     * Mirrors Game_Battler.actionConditionStateIds, including its fallback to
+     * param1 when the list is missing or holds nothing usable.
+     */
+    function stateIds(condition) {
+        const authored = Array.isArray(condition.params)
+            ? condition.params.map(Number).filter(id => Number.isInteger(id) && id > 0)
+            : [];
+        return authored.length > 0 ? authored : [condition.param1];
+    }
+
     /** Mirrors Game_Battler.meetsActionCondition. */
     function meets(condition, state) {
         const { type, param1, param2 } = condition;
@@ -119,10 +139,10 @@
             case HP: return state.hpRate >= param1 && state.hpRate <= param2;
             case MP: return state.mpRate >= param1 && state.mpRate <= param2;
             case TP: return state.tpRate >= param1 && state.tpRate <= param2;
-            case USER_STATE: return state.userStates.has(param1);
-            case USER_LACKS_STATE: return !state.userStates.has(param1);
-            case TARGET_STATE: return state.targetStates.has(param1);
-            case TARGET_LACKS_STATE: return !state.targetStates.has(param1);
+            case USER_STATE: return stateIds(condition).some(id => state.userStates.has(id));
+            case USER_LACKS_STATE: return !stateIds(condition).some(id => state.userStates.has(id));
+            case TARGET_STATE: return stateIds(condition).some(id => state.targetStates.has(id));
+            case TARGET_LACKS_STATE: return !stateIds(condition).some(id => state.targetStates.has(id));
             case PARTY_LEVEL: return state.partyLevel >= param1;
             case SWITCH: return state.switches.has(param1);
             default: return false;
@@ -160,12 +180,42 @@
         return true;
     }
 
+    /**
+     * Whether a skill has anyone to target.
+     *
+     * The runtime reads a Target State condition off the skill's own scope:
+     * `meetsTargetStateCondition` asks `actionTargetCandidates`
+     * (runtime/reactor_objects.js), and a skill whose scope reaches nobody
+     * hands it an empty list. `.some()` over nothing is false, so the
+     * condition can never hold however the battle goes.
+     *
+     * Only an authored scope of 0 counts, and only with no `<Target: ...>`
+     * notetag on the skill: BattleCore rewrites `scope` from that tag at boot
+     * while the authored data still reads 0, and a scope already rewritten to a
+     * string is some plugin's business rather than this module's. Both cases
+     * answer "it has targets", because a wrong yes costs a missing warning and
+     * a wrong no costs a false one.
+     */
+    function skillCanHaveTargets(skill) {
+        if (!skill) return false;
+        if (typeof skill.scope === 'string') return true;
+        if (/<Target\s*:/i.test(String(skill.note || ''))) return true;
+        return Number(skill.scope || 0) !== 0;
+    }
+
+    /** True when a Target State condition on this row is readable at all. */
+    function canReadTargetState(action, skill) {
+        return skillCanHaveTargets(skill)
+            || !conditions(action).some(c => c.type === TARGET_STATE);
+    }
+
     function validActions(enemy, skills, state) {
         const byId = skillIndex(skills);
         return (enemy.actions || [])
             .map((action, index) => ({ action, index }))
             .filter(({ action }) =>
                 conditions(action).every(c => meets(c, state))
+                && canReadTargetState(action, byId.get(action.skillId))
                 && canUse(byId.get(action.skillId), state));
     }
 
@@ -242,7 +292,9 @@
         const byId = skillIndex(skills);
         const used = type => all.some(c => c.type === type);
         const costs = key => actions.some(a => Number((byId.get(a.skillId) || {})[key] || 0) > 0);
-        const ids = types => [...new Set(all.filter(c => types.includes(c.type)).map(c => c.param1))].sort((a, b) => a - b);
+        const ids = types => [...new Set(all.filter(c => types.includes(c.type)).flatMap(stateIds))]
+            .filter(id => Number.isInteger(id) && id > 0)
+            .sort((a, b) => a - b);
         return {
             turn: used(TURN),
             hp: used(HP),
@@ -419,6 +471,7 @@
      *   `no-skill`  the skill id points at nothing
      *   `occasion`  the skill is not usable in battle
      *   `cost`      the cost exceeds what this enemy can ever hold
+     *   `no-target` a Target State condition on a skill that targets nobody
      *   `condition` affordable, but the conditions never hold together
      *   `outranked` valid, but the ceiling always sits above its rating
      *
@@ -446,6 +499,7 @@
             if (Number(skill.mpCost || 0) > maxMp(enemy) || Number(skill.tpCost || 0) > maxTp(enemy)) {
                 dead.push({ index, action, reason: 'cost' }); return;
             }
+            if (!canReadTargetState(action, skill)) { dead.push({ index, action, reason: 'no-target' }); return; }
             if (!everValid.has(index)) { dead.push({ index, action, reason: 'condition' }); return; }
             if (rules_.style === 'gambit') { dead.push({ index, action, reason: 'priority' }); return; }
             const ceiling = lowestCeiling.get(index);
@@ -476,6 +530,7 @@
         DEFAULT_MAX_TP,
         alwaysValid,
         audit,
+        canReadTargetState,
         canUse,
         conditions,
         forecast,
@@ -485,7 +540,9 @@
         pool,
         reachable,
         rules,
+        skillCanHaveTargets,
         skillIndex,
+        stateIds,
         validActions,
         variables
     };

@@ -68,6 +68,57 @@ test('reads the rule in force from the plugin manifest', () => {
     assert.equal(disabled.source, 'engine');
 });
 
+test('a state condition naming several states is any of them, and each is a toggle', () => {
+    const skills = skillList([{ id: 1 }, { id: 2, scope: 1 }]);
+    const e = enemy([always(1, 5), { skillId: 2, rating: 9,
+        conditions: [{ type: 4, param1: 7, param2: 0, params: [7, 4] }] }]);
+
+    assert.deepEqual(forecast.variables(e, skills).userStates, [4, 7]);
+    assert.deepEqual(forecast.stateIds({ type: 4, param1: 7, params: [7, 4] }), [7, 4]);
+    assert.deepEqual(forecast.stateIds({ type: 4, param1: 7 }), [7],
+        'no list is the one-state case');
+
+    const valid = state => forecast.forecast(e, skills, ENGINE, state).valid.length;
+    assert.equal(valid({ userStates: [4] }), 2, 'either state is enough');
+    assert.equal(valid({ userStates: [7] }), 2);
+    assert.equal(valid({ userStates: [] }), 1);
+    assert.deepEqual(forecast.audit(e, skills, ENGINE).dead, []);
+});
+
+test('a Target State condition on a skill that targets nobody is named as such', () => {
+    // The runtime reads the condition off the skill's scope, so a scope of 0
+    // leaves it with no candidates and the row can never fire.
+    const skills = skillList([{ id: 1 }, { id: 2, scope: 0 }]);
+    const e = enemy([always(1, 5), when(2, 9, 8, 4)]);
+    const { dead } = forecast.audit(e, skills, ENGINE);
+    assert.deepEqual(dead.map(d => [d.action.skillId, d.reason]), [[2, 'no-target']]);
+});
+
+test('only a Target State row is held against a targetless skill', () => {
+    // Target Lacks State is satisfiable there - vacuously, over no candidates -
+    // and a row with no target condition never reads the scope at all.
+    const skills = skillList([{ id: 1, scope: 0 }, { id: 2, scope: 0 }]);
+    const e = enemy([when(1, 5, 10, 4), always(2, 5)]);
+    const { dead } = forecast.audit(e, skills, ENGINE);
+    assert.deepEqual(dead, []);
+});
+
+test('a scope a plugin owns is left alone rather than warned about', () => {
+    // BattleCore rewrites scope from <Target: ...> at boot while the authored
+    // data still reads 0, and a scope already rewritten is a string. Warning on
+    // either would be a false alarm, which is the one thing this panel must not
+    // produce.
+    const tagged = skillList([{ id: 1 }, { id: 2, scope: 0, note: '<Target: Ally or Enemy>' }]);
+    assert.deepEqual(forecast.audit(enemy([always(1, 5), when(2, 9, 8, 4)]), tagged, ENGINE).dead, []);
+
+    const rewritten = skillList([{ id: 1 }, { id: 2, scope: 'ENEMY OR ALLY' }]);
+    assert.deepEqual(forecast.audit(enemy([always(1, 5), when(2, 9, 8, 4)]), rewritten, ENGINE).dead, []);
+
+    assert.equal(forecast.skillCanHaveTargets({ scope: 0 }), false);
+    assert.equal(forecast.skillCanHaveTargets({ scope: 1 }), true);
+    assert.equal(forecast.skillCanHaveTargets(undefined), false);
+});
+
 test('a cost the enemy can never pay makes an action dead', () => {
     const skills = skillList([{ id: 1 }, { id: 2, mpCost: 500 }]);
     const e = enemy([always(1, 5), always(2, 9)]);

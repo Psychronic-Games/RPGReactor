@@ -5537,7 +5537,8 @@ Game_Enemy.prototype.meetsCondition = function(action) {
                 condition.type,
                 condition.param1,
                 condition.param2,
-                action
+                action,
+                condition
             )
         );
     }
@@ -5549,8 +5550,12 @@ Game_Enemy.prototype.meetsCondition = function(action) {
     );
 };
 
+// `condition` is the whole entry, which a state condition needs for its list of
+// ids; everything else reads the two params. A caller with the older four
+// arguments - a plugin bridging an actor onto this method - still gets the
+// single-state behaviour, because the list falls back to param1.
 Game_Battler.prototype.meetsActionCondition = function(
-    type, param1, param2, action
+    type, param1, param2, action, condition
 ) {
     switch (type) {
         case 1:
@@ -5559,8 +5564,14 @@ Game_Battler.prototype.meetsActionCondition = function(
             return this.meetsHpCondition(param1, param2);
         case 3:
             return this.meetsMpCondition(param1, param2);
+        // A state condition can name several states, and holds when any one of
+        // them is there. Composing per id rather than per candidate keeps
+        // meetsTargetStateCondition a one-state question, so a plugin that
+        // replaces it keeps working: "any of these states on any reachable
+        // target" is the same set either way round.
         case 4:
-            return this.meetsStateCondition(param1);
+            return this.actionConditionStateIds(param1, condition)
+                .some(id => this.meetsStateCondition(id));
         case 5:
             return this.meetsPartyLevelCondition(param1);
         case 6:
@@ -5568,18 +5579,39 @@ Game_Battler.prototype.meetsActionCondition = function(
         case 7:
             return this.meetsTpCondition(param1, param2);
         case 8:
-            return this.meetsTargetStateCondition(param1, action);
+            return this.actionConditionStateIds(param1, condition)
+                .some(id => this.meetsTargetStateCondition(id, action));
         // "Lacks" is the negation of the same check, not of isStateAffected:
         // a plugin that replaces meetsStateCondition with a passive-state-
         // aware version (VisuMZ_1_SkillsStatesCore does) then moves has and
-        // lacks together instead of leaving them disagreeing.
+        // lacks together instead of leaving them disagreeing. Over a list it
+        // reads as "none of these", which is what negating "any of these" is.
         case 9:
-            return !this.meetsStateCondition(param1);
+            return !this.actionConditionStateIds(param1, condition)
+                .some(id => this.meetsStateCondition(id));
         case 10:
-            return !this.meetsTargetStateCondition(param1, action);
+            return !this.actionConditionStateIds(param1, condition)
+                .some(id => this.meetsTargetStateCondition(id, action));
         default:
             return Number(type) === 0;
     }
+};
+
+/**
+ * The states a state condition names.
+ *
+ * `params` is the authored list and param1 is its first entry, kept so the
+ * legacy `conditionParam1` field and anything reading it still name a real
+ * state. An action written before lists existed has no `params` and is the
+ * one-state case. A list that survives editing as nothing usable falls back to
+ * param1 rather than to the empty set, because `some` over nothing is false
+ * and would silently retire the action.
+ */
+Game_Battler.prototype.actionConditionStateIds = function(param1, condition) {
+    const authored = condition && Array.isArray(condition.params)
+        ? condition.params.map(Number).filter(id => Number.isInteger(id) && id > 0)
+        : [];
+    return authored.length > 0 ? authored : [param1];
 };
 
 Game_Battler.prototype.meetsTurnCondition = function(param1, param2) {
@@ -5603,13 +5635,24 @@ Game_Battler.prototype.meetsTpCondition = function(param1, param2) {
     return this.tpRate() >= param1 && this.tpRate() <= param2;
 };
 
+// Membership by state object rather than by id. While states() is the engine's
+// own map over _states the two are the same answer, but a plugin that injects
+// passive states into states() (VisuMZ_1_SkillsStatesCore does) then reaches
+// this check too, so a passive answers a state condition the way the player
+// sees it. The lookup is guarded because such a plugin can push an entry for a
+// state id that no longer exists, and includes(undefined) would match.
 Game_Battler.prototype.meetsStateCondition = function(param) {
-    return this.isStateAffected(param);
+    const state = $dataStates[param];
+    return !!state && this.states().includes(state);
 };
 
+// Asked of the candidate rather than read off its _states, so a per-class
+// replacement of meetsStateCondition governs the target check as well:
+// SkillsStatesCore replaces Game_Enemy's, and the two sides of an action
+// condition cannot end up disagreeing about what counts as having a state.
 Game_Battler.prototype.meetsTargetStateCondition = function(param, action) {
     return this.actionTargetCandidates(action).some(battler =>
-        battler.isStateAffected(param)
+        battler.meetsStateCondition(param)
     );
 };
 
