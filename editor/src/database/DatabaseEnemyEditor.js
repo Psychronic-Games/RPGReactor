@@ -588,11 +588,16 @@ class DatabaseEnemyEditor {
         if (Array.isArray(action?.conditions)) {
             return action.conditions
                 .filter(condition => Number.isInteger(condition?.type) && condition.type > 0)
-                .map(condition => ({
-                    type: condition.type,
-                    param1: Number(condition.param1) || 0,
-                    param2: Number(condition.param2) || 0
-                }));
+                .map(condition => {
+                    const normalized = {
+                        type: condition.type,
+                        param1: Number(condition.param1) || 0,
+                        param2: Number(condition.param2) || 0
+                    };
+                    const ids = this.parseConditionStateIds(condition.params);
+                    if (ids.length > 0) normalized.params = ids;
+                    return normalized;
+                });
         }
         const type = Number(action?.conditionType) || 0;
         if (type <= 0) return [];
@@ -636,7 +641,10 @@ class DatabaseEnemyEditor {
                 if (emitted.has(type)) {
                     merged.push(condition);
                 } else {
-                    merged.push({ ...condition, ...editedByType.get(type) });
+                    const edited = editedByType.get(type);
+                    const next = { ...condition, ...edited };
+                    if (!Array.isArray(edited.params)) delete next.params;
+                    merged.push(next);
                     emitted.add(type);
                 }
             }
@@ -645,6 +653,32 @@ class DatabaseEnemyEditor {
             if (!emitted.has(condition.type)) merged.push(condition);
         }
         return merged;
+    }
+
+    /**
+     * The state ids a condition names, in the shape the runtime reads them.
+     *
+     * `params` is the authored list and param1 is its first entry, kept for
+     * the legacy fields; a condition written before lists existed has only
+     * param1. Accepts the stored array or the comma-separated string the
+     * dialog's hidden field holds, so both sides of an edit parse the same way.
+     */
+    parseConditionStateIds(value) {
+        const parts = Array.isArray(value) ? value : String(value ?? '').split(',');
+        return [...new Set(parts
+            .map(part => Number(typeof part === 'string' ? part.trim() : part))
+            .filter(id => Number.isInteger(id) && id > 0))];
+    }
+
+    conditionStateIds(condition) {
+        const authored = this.parseConditionStateIds(condition?.params);
+        return authored.length > 0 ? authored : [Number(condition?.param1) || 0];
+    }
+
+    conditionStateNames(condition) {
+        return this.conditionStateIds(condition)
+            .map(id => this.conditionStateName(id))
+            .join(' / ');
     }
 
     conditionStateName(stateId) {
@@ -671,13 +705,13 @@ class DatabaseEnemyEditor {
             case 7:
                 return this.describeRateCondition(tt('TP'), condition);
             case 4:
-                return `${tt('User State')}: ${this.conditionStateName(condition.param1)}`;
+                return `${tt('User State')}: ${this.conditionStateNames(condition)}`;
             case 8:
-                return `${tt('Target State')}: ${this.conditionStateName(condition.param1)}`;
+                return `${tt('Target State')}: ${this.conditionStateNames(condition)}`;
             case 9:
-                return `${tt('User Lacks State')}: ${this.conditionStateName(condition.param1)}`;
+                return `${tt('User Lacks State')}: ${this.conditionStateNames(condition)}`;
             case 10:
-                return `${tt('Target Lacks State')}: ${this.conditionStateName(condition.param1)}`;
+                return `${tt('Target Lacks State')}: ${this.conditionStateNames(condition)}`;
             case 5:
                 return `${tt('Party Lv')} >= ${condition.param1}`;
             case 6:
@@ -696,6 +730,7 @@ class DatabaseEnemyEditor {
                     const type = condition?.type;
                     if (!Number.isInteger(type) || type <= 0) return tt('Unknown');
                     return this.describeCondition({
+                        params: condition.params,
                         type,
                         param1: Number(condition.param1) || 0,
                         param2: Number(condition.param2) || 0
@@ -793,6 +828,7 @@ class DatabaseEnemyEditor {
             case 'occasion': return tt('This skill cannot be used in battle.');
             case 'cost': return tt('The cost is higher than this enemy can hold.');
             case 'condition': return tt('These conditions can never hold together.');
+            case 'no-target': return tt('This skill targets nobody, so a Target State condition can never hold.');
             default:
                 return tt('Outranked whenever it is usable: the ceiling never drops below {n}.')
                     .replace('{n}', entry.ceiling);
@@ -1144,17 +1180,6 @@ class DatabaseEnemyEditor {
         this.refreshEnemyDetail(enemy);
     }
 
-    getConditionStateOptions(selectedId) {
-        const states = (this.databaseManager.getStates() || [])
-            .filter(state => state && state.id > 0);
-        const options = states.map(state =>
-            `<option value="${state.id}" ${state.id === selectedId ? 'selected' : ''}>#${state.id} ${this.escapeHTML(state.name || '')}</option>`);
-        if (selectedId > 0 && !states.some(state => state.id === selectedId)) {
-            options.unshift(`<option value="${selectedId}" selected>#${selectedId}</option>`);
-        }
-        return options.join('');
-    }
-
     getConditionSwitchOptions(selectedId) {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const names = this.databaseManager.getSystem()?.switches || [];
@@ -1181,7 +1206,15 @@ class DatabaseEnemyEditor {
             const attrs = `class="action-cond-field" data-cond-type="${type.id}" data-cond-param="${field.param}"`;
 
             if (field.kind === 'state') {
-                return `<select ${attrs} style="${fieldStyle} flex: 1; min-width: 0;">${this.getConditionStateOptions(Number(raw) || 1)}</select>`;
+                // The hidden field is the record: the chips and the select are
+                // controls over it, and readConditionsFromModal reads it alone,
+                // so nothing depends on scraping the rendered chips back.
+                const ids = condition ? this.conditionStateIds(condition).filter(id => id > 0) : [];
+                return `
+                    <div class="action-cond-states" data-cond-type="${type.id}" style="flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px;">
+                        <input type="hidden" class="action-cond-field" data-cond-type="${type.id}" data-cond-param="${field.param}" value="${ids.join(',')}">
+                        ${this.buildConditionStateChoicesHTML(type.id, ids)}
+                    </div>`;
             }
             if (field.kind === 'switch') {
                 return `
@@ -1198,6 +1231,62 @@ class DatabaseEnemyEditor {
                     ${type.percent ? `<span style="${captionStyle}">%</span>` : ''}
                 </span>`;
         }).join('');
+    }
+
+    buildConditionStateChoicesHTML(typeId, ids) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        const fieldStyle = 'padding: 4px 6px; background: var(--color-bg-menubar); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; font-size: 12px; box-sizing: border-box;';
+        const chips = ids.map(id => `
+            <button type="button" class="rr-btn-chip action-cond-state-chip" data-cond-type="${typeId}" data-state-id="${id}"
+                style="font-size: 11px; padding: 2px 6px;">${this.escapeHTML(this.conditionStateName(id))} &times;</button>`).join('');
+        const chosen = new Set(ids);
+        const options = (this.databaseManager.getStates() || [])
+            .filter(state => state && state.id > 0 && !chosen.has(state.id))
+            .map(state => `<option value="${state.id}">#${state.id} ${this.escapeHTML(state.name || '')}</option>`)
+            .join('');
+        const empty = ids.length === 0
+            ? `<span style="font-size: 11px; color: var(--color-text-muted);">${tt('No state chosen')}</span>`
+            : '';
+        return `${chips}${empty}
+            <select class="action-cond-state-add" data-cond-type="${typeId}" style="${fieldStyle} flex: 0 1 auto; min-width: 0;">
+                <option value="">${tt('Add state…')}</option>${options}
+            </select>`;
+    }
+
+    /** Rewrites one state row's hidden field and the controls over it. */
+    updateConditionStates(modal, typeId, change) {
+        const box = modal.querySelector(`.action-cond-states[data-cond-type="${typeId}"]`);
+        const field = box?.querySelector('.action-cond-field');
+        if (!box || !field) return;
+        const ids = change(this.parseConditionStateIds(field.value));
+        field.value = ids.join(',');
+        for (const child of [...box.children]) if (child !== field) child.remove();
+        box.insertAdjacentHTML('beforeend', this.buildConditionStateChoicesHTML(typeId, ids));
+        // Naming a state is asking for the condition, so the row ticks itself
+        // rather than leaving a choice that quietly does nothing.
+        const toggle = modal.querySelector(`.action-cond-toggle[data-cond-type="${typeId}"]`);
+        if (toggle && ids.length > 0) toggle.checked = true;
+        this.syncConditionRowStates(modal);
+    }
+
+    setupConditionStateControls(modal) {
+        const box = modal.querySelector('#action-edit-conditions');
+        if (!box) return;
+        box.addEventListener('click', event => {
+            const chip = event.target.closest?.('.action-cond-state-chip');
+            if (!chip || chip.disabled) return;
+            event.preventDefault();
+            const stateId = Number(chip.dataset.stateId);
+            this.updateConditionStates(modal, Number(chip.dataset.condType),
+                ids => ids.filter(id => id !== stateId));
+        });
+        box.addEventListener('change', event => {
+            const add = event.target.closest?.('.action-cond-state-add');
+            if (!add || !add.value) return;
+            const stateId = Number(add.value);
+            this.updateConditionStates(modal, Number(add.dataset.condType),
+                ids => (ids.includes(stateId) ? ids : [...ids, stateId]));
+        });
     }
 
     buildConditionRowsHTML(conditions) {
@@ -1217,9 +1306,8 @@ class DatabaseEnemyEditor {
         modal.querySelectorAll('.action-cond-row').forEach(row => {
             const checked = row.querySelector('.action-cond-toggle')?.checked;
             row.style.opacity = checked ? '1' : '0.5';
-            row.querySelectorAll('.action-cond-field').forEach(field => {
-                field.disabled = !checked;
-            });
+            row.querySelectorAll('.action-cond-field, .action-cond-state-chip, .action-cond-state-add')
+                .forEach(field => { field.disabled = !checked; });
         });
     }
 
@@ -1228,6 +1316,19 @@ class DatabaseEnemyEditor {
         for (const type of this.conditionTypeCatalog()) {
             const toggle = modal.querySelector(`.action-cond-toggle[data-cond-type="${type.id}"]`);
             if (!toggle?.checked) continue;
+
+            if (type.fields.some(field => field.kind === 'state')) {
+                const field = modal.querySelector(
+                    `.action-cond-field[data-cond-type="${type.id}"][data-cond-param="1"]`);
+                const ids = this.parseConditionStateIds(field?.value);
+                // A ticked row naming nothing is not a condition: stored, it
+                // would read as state 0 and retire the action outright.
+                if (ids.length === 0) continue;
+                const condition = { type: type.id, param1: ids[0], param2: 0 };
+                if (ids.length > 1) condition.params = ids;
+                conditions.push(condition);
+                continue;
+            }
 
             const read = param => {
                 const field = modal.querySelector(`.action-cond-field[data-cond-type="${type.id}"][data-cond-param="${param}"]`);
@@ -1278,6 +1379,7 @@ class DatabaseEnemyEditor {
                     </div>
                     <div style="margin-top: 4px; font-size: 11px; color: var(--color-text-muted);">
                         ${tt('Every checked condition must be met. With none checked the action is always available.')}
+                        ${tt('A condition that names several states holds when any one of them is there.')}
                     </div>
                 </div>
                 <div>
@@ -1290,6 +1392,7 @@ class DatabaseEnemyEditor {
         modal.querySelectorAll('.action-cond-toggle').forEach(toggle => {
             toggle.addEventListener('change', () => this.syncConditionRowStates(modal));
         });
+        this.setupConditionStateControls(modal);
         this.syncConditionRowStates(modal);
 
         const btnRow = document.createElement('div');

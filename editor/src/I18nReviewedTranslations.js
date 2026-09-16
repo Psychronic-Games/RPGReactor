@@ -5441,6 +5441,56 @@ Object.assign(globalThis.RR_REVIEWED_TRANSLATIONS.text.ja, {Motion:'モーショ
  for(const [locale,row] of Object.entries(rows)){const values=row.split('|');keys.forEach((key,i)=>globalThis.RR_REVIEWED_TRANSLATIONS.text[locale][key]=values[i]);}
 }
 
+// Several states in one enemy action condition, on the Action Pattern dialog.
+{
+ const keys=["Add state…","No state chosen","A condition that names several states holds when any one of them is there."];
+ const rows={
+  "ja": "ステートを追加…|ステート未選択|複数のステートを指定した条件は、そのいずれかが付いていれば成立します。",
+  "es": "Añadir estado…|Ningún estado elegido|Una condición que nombra varios estados se cumple si hay alguno de ellos.",
+  "zh-Hant": "新增狀態…|未選擇狀態|指定多個狀態的條件，只要其中任一個存在即成立。",
+  "zh-Hans": "添加状态…|未选择状态|指定多个状态的条件，只要其中任一个存在即成立。",
+  "ru": "Добавить состояние…|Состояние не выбрано|Условие с несколькими состояниями выполняется, если есть любое из них.",
+  "pt": "Adicionar estado…|Nenhum estado escolhido|Uma condição que nomeia vários estados vale se qualquer um deles estiver presente.",
+  "de": "Zustand hinzufügen…|Kein Zustand gewählt|Eine Bedingung mit mehreren Zuständen gilt, sobald einer davon vorliegt.",
+  "fr": "Ajouter un état…|Aucun état choisi|Une condition qui nomme plusieurs états est vraie dès que l’un d’eux est présent.",
+  "el": "Προσθήκη κατάστασης…|Δεν επιλέχθηκε κατάσταση|Μια συνθήκη με πολλές καταστάσεις ισχύει αν υπάρχει οποιαδήποτε από αυτές.",
+  "ko": "상태 추가…|선택된 상태 없음|여러 상태를 지정한 조건은 그중 하나라도 있으면 성립합니다.",
+  "ar": "إضافة حالة…|لم يتم اختيار حالة|الشرط الذي يذكر عدة حالات يتحقق عند وجود أي منها.",
+  "it": "Aggiungi stato…|Nessuno stato scelto|Una condizione che nomina più stati vale se ce n’è almeno uno.",
+  "pl": "Dodaj stan…|Nie wybrano stanu|Warunek wymieniający kilka stanów zachodzi, gdy jest którykolwiek z nich.",
+  "id": "Tambah status…|Belum ada status dipilih|Kondisi yang menyebut beberapa status terpenuhi jika ada salah satunya.",
+  "vi": "Thêm trạng thái…|Chưa chọn trạng thái|Điều kiện nêu nhiều trạng thái đúng khi có bất kỳ trạng thái nào trong số đó.",
+  "th": "เพิ่มสถานะ…|ยังไม่ได้เลือกสถานะ|เงื่อนไขที่ระบุหลายสถานะจะเป็นจริงเมื่อมีสถานะใดสถานะหนึ่ง",
+  "tr": "Durum ekle…|Durum seçilmedi|Birkaç durumu belirten bir koşul, bunlardan herhangi biri varsa sağlanır."
+ };
+ for(const [locale,row] of Object.entries(rows)){const values=row.split('|');keys.forEach((key,i)=>globalThis.RR_REVIEWED_TRANSLATIONS.text[locale][key]=values[i]);}
+}
+
+// A Target State condition on a skill that targets nobody, on the same panel.
+{
+ const keys=["This skill targets nobody, so a Target State condition can never hold."];
+ const rows={
+  "ja": "このスキルは対象を取らないため、対象のステート条件は成立しません。",
+  "es": "Esta habilidad no tiene objetivo, así que una condición de Estado del objetivo nunca se cumple.",
+  "zh-Hant": "此技能沒有目標，因此「目標狀態」條件永遠無法成立。",
+  "zh-Hans": "此技能没有目标，因此“目标状态”条件永远无法成立。",
+  "ru": "Этот навык не имеет цели, поэтому условие «Состояние цели» никогда не выполняется.",
+  "pt": "Esta habilidade não tem alvo, então uma condição de Estado do alvo nunca vale.",
+  "de": "Diese Fähigkeit hat kein Ziel, daher kann eine Bedingung „Zustand des Ziels“ nie gelten.",
+  "fr": "Cette compétence ne vise personne, donc une condition État de la cible ne peut jamais être vraie.",
+  "el": "Αυτή η ικανότητα δεν έχει στόχο, οπότε μια συνθήκη Κατάσταση στόχου δεν ισχύει ποτέ.",
+  "ko": "이 스킬은 대상이 없으므로 대상 상태 조건은 절대 성립하지 않습니다.",
+  "ar": "هذه المهارة لا تستهدف أحدًا، لذا لا يتحقق شرط حالة الهدف أبدًا.",
+  "it": "Questa abilità non ha bersaglio, quindi una condizione Stato del bersaglio non vale mai.",
+  "pl": "Ta umiejętność nie ma celu, więc warunek „Stan celu” nigdy nie zachodzi.",
+  "id": "Skill ini tidak menargetkan siapa pun, jadi kondisi Status Target tidak pernah terpenuhi.",
+  "vi": "Kỹ năng này không nhắm vào ai, nên điều kiện Trạng thái mục tiêu không bao giờ đúng.",
+  "th": "สกิลนี้ไม่มีเป้าหมาย เงื่อนไขสถานะเป้าหมายจึงไม่มีทางเป็นจริง",
+  "tr": "Bu beceri kimseyi hedeflemez, bu yüzden Hedef durumu koşulu asla sağlanmaz."
+ };
+ for(const [locale,row] of Object.entries(rows)){const values=row.split('|');keys.forEach((key,i)=>globalThis.RR_REVIEWED_TRANSLATIONS.text[locale][key]=values[i]);}
+}
+
 // Battle AI on-the-spot turn counting, noted on the behaviour forecast panel.
 {
  const keys=["Battle AI counts turns on the spot, so a turn condition can sit one turn earlier than it reads."];

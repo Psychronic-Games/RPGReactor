@@ -15,12 +15,35 @@ const objectsSource = fs.readFileSync(
 const enemyEditorSource = fs.readFileSync(
     path.join(repoRoot, 'editor', 'src', 'database', 'DatabaseEnemyEditor.js'), 'utf8');
 
-function battler(name, states = [], alive = true) {
+/**
+ * The state records the runtime compares against.
+ *
+ * meetsStateCondition tests membership of states() by object, so every fake
+ * here has to hand back the same record the runtime looks up. Ids are minted
+ * on demand: the tests care which state, never what is in it.
+ */
+const $dataStates = new Proxy([], {
+    get(target, key) {
+        if (typeof key === 'string' && /^\d+$/.test(key)) {
+            if (!target[key]) target[key] = { id: Number(key), name: `State ${key}` };
+            return target[key];
+        }
+        return target[key];
+    }
+});
+
+/**
+ * `passives` are states the battler has without them being in _states, which
+ * is what VisuMZ_1_SkillsStatesCore's passive states are: states() carries
+ * them, isStateAffected does not.
+ */
+function battler(name, states = [], alive = true, passives = []) {
     return {
         name,
         isAlive: () => alive,
         isDead: () => !alive,
-        isStateAffected: id => states.includes(id)
+        isStateAffected: id => states.includes(id),
+        states: () => [...states, ...passives].map(id => $dataStates[id])
     };
 }
 
@@ -40,6 +63,7 @@ function makeWorld(overrides = {}) {
         tp: 0,
         partyLevel: 1,
         states: [],
+        passives: [],
         switches: {},
         opponents: [],
         friends: [],
@@ -75,6 +99,7 @@ function loadRuntimeConditions(overrides = {}) {
         Game_Action,
         BattleManager: { isTpb: () => false },
         $dataSkills: world.skills,
+        $dataStates,
         $gameTroop: { turnCount: () => world.turn - 1 },
         $gameParty: { highestLevel: () => world.partyLevel },
         $gameSwitches: { value: id => !!world.switches[id] }
@@ -85,6 +110,14 @@ function loadRuntimeConditions(overrides = {}) {
     assert.ok(predicateStart >= 0 && predicateEnd > predicateStart, 'the shipped scope predicates can be extracted');
     vm.runInNewContext(objectsSource.slice(predicateStart, predicateEnd), context);
 
+    // Candidates are plain objects, but the runtime asks each one the shipped
+    // Game_Battler methods - meetsTargetStateCondition now calls the
+    // candidate's own meetsStateCondition - so they answer through the real
+    // prototype rather than a stand-in written here.
+    for (const member of [...world.opponents, ...world.friends]) {
+        Object.setPrototypeOf(member, context.Game_Battler.prototype);
+    }
+
     const enemy = new context.Game_Enemy();
     Object.assign(enemy, {
         turnCount: () => world.turn,
@@ -92,6 +125,7 @@ function loadRuntimeConditions(overrides = {}) {
         mpRate: () => world.mp,
         tpRate: () => world.tp,
         isStateAffected: id => world.states.includes(id),
+        states: () => [...world.states, ...world.passives].map(id => $dataStates[id]),
         opponentsUnit: () => unit(world.opponents),
         friendsUnit: () => unit(world.friends)
     });
@@ -244,6 +278,9 @@ test('actor/plugin-style execution reaches every battler condition method', () =
         switches: { 3: true },
         skills: { 12: { scope: 1 } }
     });
+    // This candidate is reached through the actor's own units rather than the
+    // world, so it is linked to the shipped prototype here.
+    Object.setPrototypeOf(poisoned, context.Game_Battler.prototype);
 
     class Game_Actor extends context.Game_Battler {}
     const actor = new Game_Actor();
@@ -253,6 +290,7 @@ test('actor/plugin-style execution reaches every battler condition method', () =
         mpRate: () => 0.6,
         tpRate: () => 0.75,
         isStateAffected: id => id === 7,
+        states: () => [$dataStates[7]],
         opponentsUnit: () => unit([poisoned]),
         friendsUnit: () => unit([])
     });
@@ -646,6 +684,86 @@ test('a no-target or missing skill has no Target State candidates', () => {
     assert.equal(meets(targetPoisoned(999), { skills, opponents: poisoned }), false);
 });
 
+test('a passive state answers a state condition on either side of the action', () => {
+    // Nothing here is in _states: a passive is carried by states() alone, and
+    // both halves of the check have to see it or the two sides disagree about
+    // what "has Poison" means.
+    const passivelyPoisoned = [battler('passively poisoned', [], true, [POISON])];
+    assert.equal(meets(targetPoisoned(101), {
+        skills, opponents: passivelyPoisoned
+    }), true, 'Target State reads a passive on the target');
+    assert.equal(meets({ conditions: [{ type: 10, param1: POISON, param2: 0 }], skillId: 101 }, {
+        skills, opponents: passivelyPoisoned
+    }), false, 'Target Lacks State agrees with it');
+
+    assert.equal(meets({ conditions: [{ type: 4, param1: POISON, param2: 0 }] }, {
+        passives: [POISON]
+    }), true, 'User State reads a passive on the user');
+    assert.equal(meets({ conditions: [{ type: 9, param1: POISON, param2: 0 }] }, {
+        passives: [POISON]
+    }), false, 'User Lacks State agrees with it');
+});
+
+test('a per-class replacement of meetsStateCondition governs the target check too', () => {
+    // SkillsStatesCore replaces Game_Enemy's meetsStateCondition and nothing
+    // else. The target walk has to ask the candidate rather than read its
+    // states directly, or that replacement never reaches an actor target.
+    const { context, enemy, world } = loadRuntimeConditions({
+        skills, opponents: [battler('opponent')]
+    });
+    const target = world.opponents[0];
+    target.meetsStateCondition = () => true;
+    assert.equal(enemy.meetsCondition(targetPoisoned(101)), true,
+        'the candidate answers for itself');
+    target.meetsStateCondition = () => false;
+    assert.equal(enemy.meetsCondition(targetPoisoned(101)), false);
+    assert.ok(context.Game_Battler.prototype.meetsTargetStateCondition,
+        'the shipped target check is the one under test');
+});
+
+test('a state condition can name several states, and holds when any is there', () => {
+    const ENRAGED = 7;
+    const list = type => ({
+        skillId: 101,
+        conditions: [{ type, param1: POISON, param2: 0, params: [POISON, ENRAGED] }]
+    });
+    assert.equal(meets(list(4), { states: [ENRAGED] }), true);
+    assert.equal(meets(list(4), { states: [POISON] }), true);
+    assert.equal(meets(list(4), { states: [POISON, ENRAGED] }), true);
+    assert.equal(meets(list(4), { states: [1] }), false);
+
+    // Negating "any of these" is "none of these", which is what the row says.
+    assert.equal(meets(list(9), { states: [ENRAGED] }), false);
+    assert.equal(meets(list(9), { states: [1] }), true);
+
+    const poisoned = [battler('poisoned', [POISON])];
+    const enraged = [battler('enraged', [ENRAGED])];
+    const clean = [battler('clean')];
+    assert.equal(meets(list(8), { skills, opponents: enraged }), true);
+    assert.equal(meets(list(8), { skills, opponents: poisoned }), true);
+    assert.equal(meets(list(8), { skills, opponents: clean }), false);
+    assert.equal(meets(list(10), { skills, opponents: enraged }), false);
+    assert.equal(meets(list(10), { skills, opponents: clean }), true);
+});
+
+test('a missing or unusable state list falls back to the single state', () => {
+    // some() over an empty list is false, so an empty list must not be taken
+    // at its word: it would retire the action rather than leave it as authored.
+    const ENRAGED = 7;
+    const withParams = params => ({ conditions: [{ type: 4, param1: ENRAGED, param2: 0, params }] });
+    assert.equal(meets(withParams([]), { states: [ENRAGED] }), true);
+    assert.equal(meets(withParams(['x', 0, -3]), { states: [ENRAGED] }), true);
+    assert.equal(meets(withParams(undefined), { states: [ENRAGED] }), true);
+    assert.equal(meets({ conditionType: 4, conditionParam1: ENRAGED, conditionParam2: 0 },
+        { states: [ENRAGED] }), true, 'legacy fields carry no list at all');
+
+    // A plugin bridging an actor onto the shipped method passes four
+    // arguments and no condition, which is the one-state case.
+    const { enemy } = loadRuntimeConditions({ states: [ENRAGED] });
+    assert.equal(enemy.meetsActionCondition(4, ENRAGED, 0, {}), true);
+    assert.equal(enemy.meetsActionCondition(9, ENRAGED, 0, {}), false);
+});
+
 test('User State still inspects the user rather than a reachable target', () => {
     const userEnraged = {
         skillId: 101,
@@ -678,14 +796,67 @@ test('state conditions stay distinct and orphan state/switch IDs remain selectab
         conditions: [{ type: 8, param1: 99, param2: 0 }]
     }), 'Target State: #99');
 
-    assert.match(editor.getConditionStateOptions(99),
-        /^<option value="99" selected>#99<\/option>/);
+    // A state that no longer exists has no name and no row in the picker, but
+    // it is still the condition: it stays a chip, and stays in the field the
+    // dialog reads back, so opening an action cannot quietly rewrite it.
+    const targetState = editor.conditionTypeCatalog().find(type => type.id === 8);
+    const orphan = editor.buildConditionFieldsHTML(targetState, { type: 8, param1: 99, param2: 0 });
+    assert.match(orphan, /data-cond-param="1" value="99"/);
+    assert.match(orphan, /action-cond-state-chip/);
+    assert.match(orphan, /data-state-id="99"/);
+    assert.match(orphan, /#99 &times;/);
+
+    // What is already chosen is not offered again.
+    const chosen = editor.buildConditionStateChoicesHTML(8, [4]);
+    assert.match(chosen, /data-state-id="4"/);
+    assert.doesNotMatch(chosen, /<option value="4"/);
+    assert.match(chosen, /<option value="7">#7 Enraged<\/option>/);
+
     assert.match(editor.getConditionSwitchOptions(42),
         /^<option value="42" selected>#42<\/option>/);
-    assert.match(editor.getConditionStateOptions(4),
-        /<option value="4" selected>#4 Poison<\/option>/);
     assert.match(editor.getConditionSwitchOptions(1),
         /<option value="1" selected>#1 Gate<\/option>/);
+});
+
+test('a state row is read as a list, and one state still stores no list', () => {
+    const editor = loadEnemyEditor(
+        [{ id: 4, name: 'Poison' }, { id: 7, name: 'Enraged' }],
+        [null, 'Gate']
+    );
+    assert.deepEqual(plain(editor.readConditionsFromModal(conditionModal([4], { '4:1': '7,4' }))),
+        [{ type: 4, param1: 7, param2: 0, params: [7, 4] }]);
+
+    // One state is the shape every action already on disk has, so a project
+    // edited under this dialog does not grow a field it never needed.
+    assert.deepEqual(plain(editor.readConditionsFromModal(conditionModal([4], { '4:1': '7' }))),
+        [{ type: 4, param1: 7, param2: 0 }]);
+
+    // Ticked but naming nothing is not a condition: stored, param1 would be 0.
+    assert.deepEqual(plain(editor.readConditionsFromModal(conditionModal([4], { '4:1': '' }))), []);
+
+    const action = {};
+    editor.setActionConditions(action,
+        editor.readConditionsFromModal(conditionModal([4], { '4:1': '7,4' })));
+    assert.equal(action.conditionType, 4);
+    assert.equal(action.conditionParam1, 7, 'the legacy field names a real state');
+});
+
+test('editing a state row back to one state drops the list it had', () => {
+    const editor = loadEnemyEditor([{ id: 4, name: 'Poison' }, { id: 7, name: 'Enraged' }], [null, 'Gate']);
+    const action = { conditions: [{ type: 4, param1: 7, param2: 0, params: [7, 4] }] };
+    const merged = editor.mergeEditedActionConditions(action,
+        editor.readConditionsFromModal(conditionModal([4], { '4:1': '4' })));
+    assert.deepEqual(plain(merged), [{ type: 4, param1: 4, param2: 0 }]);
+});
+
+test('the action list spells out every state a condition names', () => {
+    const editor = loadEnemyEditor([{ id: 4, name: 'Poison' }, { id: 7, name: 'Enraged' }], [null, 'Gate']);
+    assert.equal(editor.describeConditions({
+        conditions: [{ type: 4, param1: 7, param2: 0, params: [7, 4] }]
+    }), 'User State: Enraged / Poison');
+    assert.equal(editor.describeConditions({
+        conditions: [{ type: 10, param1: 4, param2: 0, params: [4, 99] }]
+    }), 'Target Lacks State: Poison / #99');
 });
 
 // ---------------------------------------------------------------------------
