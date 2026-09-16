@@ -85,7 +85,15 @@
         if (Array.isArray(action.conditions)) {
             return action.conditions
                 .filter(c => c && Number.isInteger(c.type) && c.type > 0)
-                .map(c => ({ type: c.type, param1: Number(c.param1) || 0, param2: Number(c.param2) || 0 }));
+                .map(c => {
+                    const normalized = {
+                        type: c.type,
+                        param1: Number(c.param1) || 0,
+                        param2: Number(c.param2) || 0
+                    };
+                    if (Array.isArray(c.params)) normalized.params = c.params;
+                    return normalized;
+                });
         }
         const type = Number(action.conditionType) || 0;
         if (type <= 0) return [];
@@ -108,6 +116,18 @@
         return Number.isFinite(n) ? Math.max(0, n) : 0;
     }
 
+    /**
+     * The states a state condition names; a list holds when any one is there.
+     * Mirrors Game_Battler.actionConditionStateIds, including its fallback to
+     * param1 when the list is missing or holds nothing usable.
+     */
+    function stateIds(condition) {
+        const authored = Array.isArray(condition.params)
+            ? condition.params.map(Number).filter(id => Number.isInteger(id) && id > 0)
+            : [];
+        return authored.length > 0 ? authored : [condition.param1];
+    }
+
     /** Mirrors Game_Battler.meetsActionCondition. */
     function meets(condition, state) {
         const { type, param1, param2 } = condition;
@@ -119,10 +139,10 @@
             case HP: return state.hpRate >= param1 && state.hpRate <= param2;
             case MP: return state.mpRate >= param1 && state.mpRate <= param2;
             case TP: return state.tpRate >= param1 && state.tpRate <= param2;
-            case USER_STATE: return state.userStates.has(param1);
-            case USER_LACKS_STATE: return !state.userStates.has(param1);
-            case TARGET_STATE: return state.targetStates.has(param1);
-            case TARGET_LACKS_STATE: return !state.targetStates.has(param1);
+            case USER_STATE: return stateIds(condition).some(id => state.userStates.has(id));
+            case USER_LACKS_STATE: return !stateIds(condition).some(id => state.userStates.has(id));
+            case TARGET_STATE: return stateIds(condition).some(id => state.targetStates.has(id));
+            case TARGET_LACKS_STATE: return !stateIds(condition).some(id => state.targetStates.has(id));
             case PARTY_LEVEL: return state.partyLevel >= param1;
             case SWITCH: return state.switches.has(param1);
             default: return false;
@@ -272,7 +292,9 @@
         const byId = skillIndex(skills);
         const used = type => all.some(c => c.type === type);
         const costs = key => actions.some(a => Number((byId.get(a.skillId) || {})[key] || 0) > 0);
-        const ids = types => [...new Set(all.filter(c => types.includes(c.type)).map(c => c.param1))].sort((a, b) => a - b);
+        const ids = types => [...new Set(all.filter(c => types.includes(c.type)).flatMap(stateIds))]
+            .filter(id => Number.isInteger(id) && id > 0)
+            .sort((a, b) => a - b);
         return {
             turn: used(TURN),
             hp: used(HP),
@@ -520,6 +542,7 @@
         rules,
         skillCanHaveTargets,
         skillIndex,
+        stateIds,
         validActions,
         variables
     };

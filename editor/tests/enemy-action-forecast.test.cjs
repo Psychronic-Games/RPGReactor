@@ -68,6 +68,23 @@ test('reads the rule in force from the plugin manifest', () => {
     assert.equal(disabled.source, 'engine');
 });
 
+test('a state condition naming several states is any of them, and each is a toggle', () => {
+    const skills = skillList([{ id: 1 }, { id: 2, scope: 1 }]);
+    const e = enemy([always(1, 5), { skillId: 2, rating: 9,
+        conditions: [{ type: 4, param1: 7, param2: 0, params: [7, 4] }] }]);
+
+    assert.deepEqual(forecast.variables(e, skills).userStates, [4, 7]);
+    assert.deepEqual(forecast.stateIds({ type: 4, param1: 7, params: [7, 4] }), [7, 4]);
+    assert.deepEqual(forecast.stateIds({ type: 4, param1: 7 }), [7],
+        'no list is the one-state case');
+
+    const valid = state => forecast.forecast(e, skills, ENGINE, state).valid.length;
+    assert.equal(valid({ userStates: [4] }), 2, 'either state is enough');
+    assert.equal(valid({ userStates: [7] }), 2);
+    assert.equal(valid({ userStates: [] }), 1);
+    assert.deepEqual(forecast.audit(e, skills, ENGINE).dead, []);
+});
+
 test('a Target State condition on a skill that targets nobody is named as such', () => {
     // The runtime reads the condition off the skill's scope, so a scope of 0
     // leaves it with no candidates and the row can never fire.

@@ -5441,6 +5441,31 @@ Object.assign(globalThis.RR_REVIEWED_TRANSLATIONS.text.ja, {Motion:'モーショ
  for(const [locale,row] of Object.entries(rows)){const values=row.split('|');keys.forEach((key,i)=>globalThis.RR_REVIEWED_TRANSLATIONS.text[locale][key]=values[i]);}
 }
 
+// Several states in one enemy action condition, on the Action Pattern dialog.
+{
+ const keys=["Add state…","No state chosen","A condition that names several states holds when any one of them is there."];
+ const rows={
+  "ja": "ステートを追加…|ステート未選択|複数のステートを指定した条件は、そのいずれかが付いていれば成立します。",
+  "es": "Añadir estado…|Ningún estado elegido|Una condición que nombra varios estados se cumple si hay alguno de ellos.",
+  "zh-Hant": "新增狀態…|未選擇狀態|指定多個狀態的條件，只要其中任一個存在即成立。",
+  "zh-Hans": "添加状态…|未选择状态|指定多个状态的条件，只要其中任一个存在即成立。",
+  "ru": "Добавить состояние…|Состояние не выбрано|Условие с несколькими состояниями выполняется, если есть любое из них.",
+  "pt": "Adicionar estado…|Nenhum estado escolhido|Uma condição que nomeia vários estados vale se qualquer um deles estiver presente.",
+  "de": "Zustand hinzufügen…|Kein Zustand gewählt|Eine Bedingung mit mehreren Zuständen gilt, sobald einer davon vorliegt.",
+  "fr": "Ajouter un état…|Aucun état choisi|Une condition qui nomme plusieurs états est vraie dès que l’un d’eux est présent.",
+  "el": "Προσθήκη κατάστασης…|Δεν επιλέχθηκε κατάσταση|Μια συνθήκη με πολλές καταστάσεις ισχύει αν υπάρχει οποιαδήποτε από αυτές.",
+  "ko": "상태 추가…|선택된 상태 없음|여러 상태를 지정한 조건은 그중 하나라도 있으면 성립합니다.",
+  "ar": "إضافة حالة…|لم يتم اختيار حالة|الشرط الذي يذكر عدة حالات يتحقق عند وجود أي منها.",
+  "it": "Aggiungi stato…|Nessuno stato scelto|Una condizione che nomina più stati vale se ce n’è almeno uno.",
+  "pl": "Dodaj stan…|Nie wybrano stanu|Warunek wymieniający kilka stanów zachodzi, gdy jest którykolwiek z nich.",
+  "id": "Tambah status…|Belum ada status dipilih|Kondisi yang menyebut beberapa status terpenuhi jika ada salah satunya.",
+  "vi": "Thêm trạng thái…|Chưa chọn trạng thái|Điều kiện nêu nhiều trạng thái đúng khi có bất kỳ trạng thái nào trong số đó.",
+  "th": "เพิ่มสถานะ…|ยังไม่ได้เลือกสถานะ|เงื่อนไขที่ระบุหลายสถานะจะเป็นจริงเมื่อมีสถานะใดสถานะหนึ่ง",
+  "tr": "Durum ekle…|Durum seçilmedi|Birkaç durumu belirten bir koşul, bunlardan herhangi biri varsa sağlanır."
+ };
+ for(const [locale,row] of Object.entries(rows)){const values=row.split('|');keys.forEach((key,i)=>globalThis.RR_REVIEWED_TRANSLATIONS.text[locale][key]=values[i]);}
+}
+
 // A Target State condition on a skill that targets nobody, on the same panel.
 {
  const keys=["This skill targets nobody, so a Target State condition can never hold."];
