@@ -111,7 +111,9 @@ class TraitHelp {
             'The default fade-out, with the usual collapse sound.',
             'The tinted ribbon-split collapse used for bosses.',
             'The sprite vanishes at once, with no animation.',
-            'The sprite stays on screen after defeat.'
+            'The sprite stays on screen after defeat.',
+            'The sprite breaks into drifting motes and blows away.',
+            'The sprite burns away into rising embers and sparks.'
         ].map(tt);
         return collapseHelp;
     }
