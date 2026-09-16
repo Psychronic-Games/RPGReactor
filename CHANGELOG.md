@@ -7,11 +7,13 @@ Development cycle in progress. Session detail lives in the [handoff](docs/HANDOF
 ### Added
 
 - **Music sequences have a library, and battles can play one.** Database › Music Sequences holds named sequences; a map, a map's battle music, a troop's Battle Music and Change Battle BGM can each name one or a plain track. Battle music resolves troop, then Change Battle BGM, then map, then System. Map Properties picks music with the same picker, **Move to library** promotes a map's own sequence, the list offers **Starters…** and **▶ Preview** through the game's own player, and Track entries can fade out under what follows (PR #60).
+- **Enemy action conditions name several states.** Each state row on an action pattern is a chip list with an Add state picker; a row holds when any listed state is present, a Lacks row when none is. Stored as `params` beside `param1`, so a one-state row keeps its old shape. The behaviour forecast reads the whole list (PR #61).
 - **Database › Quests chooses the game's quest log:** Reactor's, or VisuStella's Quest System when the project has it; saving the database switches the plugin and feeds it this tab's quests, and Reactor's quest commands update it in game (PR #60).
 
 ### Fixed
 
 - **A spot light's guideline points where its light goes.** In the 2D map view the aim handle and cone lines of a selected spot or beam light were mirrored across the light: the glow, the game's flat lighting and the 3D cone all turn one way for a given yaw and the guide turned the other, so a cone drawn to the left lit the right (reported on Discord). The handle, the cone lines and the aim drag now follow the renderers; saved lights look the same in game as before.
+- **A passive state answers both sides of an enemy state condition.** Target State read each candidate's raw state list, so a target whose Poison came from a passive read as clean; the check now asks each candidate its own `meetsStateCondition`, so plugin replacements govern both sides. The forecast also reports a Target State row that can never fire because the skill's scope hands it no candidates (PR #61).
 - **Database › Quests:** the icon picker no longer reports IconSet.png missing on every project; every quest text field previews its icons and colour codes as the player reads them; objective and reward rows keep their line breaks; imports read a title's leading icon code as the quest icon; Reactor's Quests menu command appears under VisuStella MainMenuCore (PR #60).
 
 ## [0.98.6] - 2026-09-14

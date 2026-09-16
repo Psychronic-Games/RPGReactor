@@ -1,5 +1,9 @@
 # Handoff - 0.98.6 In Progress
 
+## 2026-09-16 — PR #61 merged (enemy state conditions)
+
+- Merged GitHub's `origin/main` (PR #61, Xehanort88) cleanly; see [PR-INTEGRATION-2026-09-16.md](PR-INTEGRATION-2026-09-16.md). Runtime revision 20260916.1, all bundled projects synced. `Game_Battler.actionConditionStateIds` and the `params` list on action conditions are the new data points; the forecast's `no-target` reason is new.
+
 ## 2026-09-15 — Spot light guide mirrored in 2D (Discord report)
 
 - `LightingManager._aimPoint`, the cone lines in `_renderMarkers` and the `aim` drag used `+yaw` (aim = (sin yaw, cos yaw)); `FlatLightField2D.aim`, the game's `syncReactorFlatLights` (rotation π − scene yaw, scene yaw = −data yaw) and `Reactor3D` (setLights receives `-light.yaw`) all aim at (sin −yaw, cos −yaw). Guide and drag now negate yaw; the 3D rings already did (`RRPoseRings3D.sync(…, -light.yaw, …)`). Data and runtime untouched. Test at the end of `lighting-tool.test.cjs` pins the four against each other.
