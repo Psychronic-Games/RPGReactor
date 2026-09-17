@@ -118,14 +118,21 @@ class ControlVariablesEditor {
         ];
     }
 
-    static actorGameDataParameters() {
-        return ['Level', 'EXP', 'HP', 'MP', 'Max HP', 'Max MP', 'Attack', 'Defense',
-            'M.Attack', 'M.Defense', 'Agility', 'Luck', 'TP'];
+    // These two return display-ready labels rather than catalog keys: the eight
+    // parameters in the middle are named by the project's Terms page, so they
+    // cannot be routed through the translator a second time by the caller.
+    static actorGameDataParameters(translate) {
+        const t = typeof translate === 'function'
+            ? translate
+            : (text => (globalThis.window?.I18n ? globalThis.window.I18n.tText(text) : text));
+        return [...['Level', 'EXP', 'HP', 'MP'].map(t), ...globalThis.rrParamNames(t), t('TP')];
     }
 
-    static enemyGameDataParameters() {
-        return ['HP', 'MP', 'Max HP', 'Max MP', 'Attack', 'Defense', 'M.Attack',
-            'M.Defense', 'Agility', 'Luck', 'TP'];
+    static enemyGameDataParameters(translate) {
+        const t = typeof translate === 'function'
+            ? translate
+            : (text => (globalThis.window?.I18n ? globalThis.window.I18n.tText(text) : text));
+        return [...['HP', 'MP'].map(t), ...globalThis.rrParamNames(t), t('TP')];
     }
 
     static lastActionGameDataParameters() {
@@ -739,12 +746,12 @@ class ControlVariablesEditor {
             return `${this._databaseGameDataName(getterName, Math.max(1, param1), tt)} · ${tt('Possession')} ${tt('Count')}`;
         }
         if (type === 3) {
-            const property = ControlVariablesEditor.actorGameDataParameters()[param2] || 'Level';
-            return `${tt(property)} · ${this._databaseGameDataName('getActors', Math.max(1, param1), tt)}`;
+            const property = ControlVariablesEditor.actorGameDataParameters(tt)[param2] || tt('Level');
+            return `${property} · ${this._databaseGameDataName('getActors', Math.max(1, param1), tt)}`;
         }
         if (type === 4) {
-            const property = ControlVariablesEditor.enemyGameDataParameters()[param2] || 'HP';
-            return `${tt(property)} · ${tt('Enemy')} ${Math.max(0, param1) + 1}`;
+            const property = ControlVariablesEditor.enemyGameDataParameters(tt)[param2] || tt('HP');
+            return `${property} · ${tt('Enemy')} ${Math.max(0, param1) + 1}`;
         }
         if (type === 5) {
             const property = ControlVariablesEditor.characterGameDataParameters()[param2] || 'Map X';
@@ -825,6 +832,9 @@ class ControlVariablesEditor {
             if (previouslyFocused && previouslyFocused.isConnected) previouslyFocused.focus();
         };
         const selectOptions = labels => labels.map((label, value) => ({ value, label: tt(label) }));
+        // For lists that are already display-ready (they can carry project-authored
+        // parameter names, which must not be run through the translator).
+        const readyOptions = labels => labels.map((label, value) => ({ value, label }));
         const indexedOptions = (label, selectedValue) => {
             const options = Array.from({ length: 8 }, (_unused, index) => ({
                 value: index,
@@ -886,7 +896,7 @@ class ControlVariablesEditor {
                         value => { draft.param1 = value; }
                     ));
                     controls.appendChild(this._gameDataSelect(
-                        selectOptions(ControlVariablesEditor.actorGameDataParameters()),
+                        readyOptions(ControlVariablesEditor.actorGameDataParameters(tt)),
                         active ? draft.param2 : 0,
                         !active,
                         value => { draft.param2 = value; }
@@ -900,7 +910,7 @@ class ControlVariablesEditor {
                         value => { draft.param1 = value; }
                     ));
                     controls.appendChild(this._gameDataSelect(
-                        selectOptions(ControlVariablesEditor.enemyGameDataParameters()),
+                        readyOptions(ControlVariablesEditor.enemyGameDataParameters(tt)),
                         active ? draft.param2 : 0,
                         !active,
                         value => { draft.param2 = value; }

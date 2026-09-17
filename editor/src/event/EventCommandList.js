@@ -2352,8 +2352,8 @@ class EventCommandList {
                 break;
             }
             case 317: {
-                const paramNames = ['Max HP', 'Max MP', 'Attack', 'Defense', 'M.Attack', 'M.Defense', 'Agility', 'Luck', 'Max TP'];
-                const pName = tt(paramNames[params[2]] || 'Unknown');
+                const paramNames = [...globalThis.rrParamNames(tt), tt('Max TP')];
+                const pName = paramNames[params[2]] || tt('Unknown');
                 const op = params[3] === 0 ? '+' : '-';
                 const val = params[4] === 1
                     ? `{${params[5] || 0}}`
@@ -2610,12 +2610,12 @@ class EventCommandList {
             case 3: { // Actor param
                 let name = `${tt('Actor')} ${param1}`;
                 if (data && data.actors && data.actors[param1] && data.actors[param1].name) name = data.actors[param1].name;
-                const paramNames = ['Level', 'EXP', 'HP', 'MP', 'Max HP', 'Max MP', 'Attack', 'Defense', 'M.Attack', 'M.Defense', 'Agility', 'Luck'];
-                return `${name}.${tt(paramNames[param2] || 'param')}`;
+                const paramNames = [...['Level', 'EXP', 'HP', 'MP'].map(tt), ...globalThis.rrParamNames(tt)];
+                return `${name}.${paramNames[param2] || tt('Param')}`;
             }
             case 4: { // Enemy param (param1 = troop member index)
-                const paramNames = ['HP', 'MP', 'Max HP', 'Max MP', 'Attack', 'Defense', 'M.Attack', 'M.Defense', 'Agility', 'Luck'];
-                return `${tt('Troop')} #${param1 + 1}.${tt(paramNames[param2] || 'param')}`;
+                const paramNames = [...['HP', 'MP'].map(tt), ...globalThis.rrParamNames(tt)];
+                return `${tt('Troop')} #${param1 + 1}.${paramNames[param2] || tt('Param')}`;
             }
             case 5: { // Character (param1 = char id, param2 = prop)
                 let charName = '';
