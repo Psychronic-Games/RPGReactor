@@ -26,7 +26,8 @@ class DatabaseEffectEditor {
 
     static getEffectValue(effect, dbManager) {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
-        const p = ['Max HP', 'Max MP', 'Attack', 'Defense', 'M.Attack', 'M.Defense', 'Agility', 'Luck', 'Max TP'].map(tt);
+        // Max TP is paramId 8 for Grow, not a terms.params slot, so it keeps its own label.
+        const p = [...globalThis.rrParamNames(tt), tt('Max TP')];
         switch (effect.code) {
             case 11: case 12: {
                 const pct = Math.round(effect.value1 * 100);
@@ -389,7 +390,7 @@ class DatabaseEffectEditor {
 
     createBuffTab(container, effect) {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
-        const paramNames = ['Max HP', 'Max MP', 'Attack', 'Defense', 'M.Attack', 'M.Defense', 'Agility', 'Luck'].map(tt);
+        const paramNames = globalThis.rrParamNames(tt);
         const paramOpts = paramNames.map((name, idx) =>
             `<option value="${idx}" ${effect.dataId === idx ? 'selected' : ''}>${name}</option>`
         ).join('');
@@ -423,7 +424,7 @@ class DatabaseEffectEditor {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
         // Grow reaches Max TP as paramId 8 (`Game_BattlerBase.PARAM_MAX_TP`),
         // which is its own accumulator in the runtime, never a ninth params entry.
-        const paramNames = ['Max HP', 'Max MP', 'Attack', 'Defense', 'M.Attack', 'M.Defense', 'Agility', 'Luck', 'Max TP'].map(tt);
+        const paramNames = [...globalThis.rrParamNames(tt), tt('Max TP')];
         const paramOpts = paramNames.map((name, idx) =>
             `<option value="${idx}" ${effect.code === 42 && effect.dataId === idx ? 'selected' : ''}>${name}</option>`
         ).join('');

@@ -122,23 +122,16 @@ class ChangeParameterEditor {
         const paramSelect = document.createElement('select');
         paramSelect.style.cssText = 'padding:6px 10px; background-color:var(--color-bg-input); color:var(--color-text); border:1px solid var(--color-border-input); border-radius:3px; font-size:12px; flex:1;';
 
-        const paramTypes = [
-            { value: 0, label: 'Max HP' },
-            { value: 1, label: 'Max MP' },
-            { value: 2, label: 'Attack' },
-            { value: 3, label: 'Defense' },
-            { value: 4, label: 'M.Attack' },
-            { value: 5, label: 'M.Defense' },
-            { value: 6, label: 'Agility' },
-            { value: 7, label: 'Luck' },
-            // Max TP: paramId 8 in the runtime's own accumulator.
-            { value: 8, label: 'Max TP' }
-        ];
+        // Labels come from the project's own terms, so this dialog agrees with
+        // the status screen it changes. Max TP is paramId 8 in the runtime's own
+        // accumulator, not a terms.params slot, so it keeps its own label.
+        const paramTypes = [...globalThis.rrParamNames(tt), tt('Max TP')]
+            .map((label, value) => ({ value, label }));
 
         paramTypes.forEach(pt => {
             const option = document.createElement('option');
             option.value = pt.value;
-            option.textContent = window.I18n ? window.I18n.tText(pt.label) : pt.label;
+            option.textContent = pt.label;
             option.selected = (this.paramType === pt.value);
             paramSelect.appendChild(option);
         });

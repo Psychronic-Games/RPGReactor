@@ -3,6 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
+const { paramNamesSource } = require('./helpers/param-names.cjs');
 
 const repoRoot = path.resolve(__dirname, '..', '..');
 const objects = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_objects.js'), 'utf8');
@@ -64,7 +65,9 @@ test('Change Parameter gets a Random operand rolled once per command', () => {
 
 function loadEditor() {
     const context = { window: {}, rrEscapeHtml: v => String(v) };
-    vm.runInNewContext(`${editorSource}\nglobalThis.DatabaseEffectEditor = DatabaseEffectEditor;`, context);
+    vm.runInNewContext(
+        `${paramNamesSource()}\n${editorSource}\nglobalThis.DatabaseEffectEditor = DatabaseEffectEditor;`,
+        context);
     return new context.DatabaseEffectEditor({ getSkills: () => [], getCommonEvents: () => [], getStates: () => [] }, null);
 }
 
@@ -94,9 +97,13 @@ test('the Grow summary shows the sign and the range', () => {
 
 test('the Change Parameter dialog and command list know Max TP and Random', () => {
     const dialog = fs.readFileSync(path.join(__dirname, '..', 'src', 'event', 'commands', 'ChangeParameterEditor.js'), 'utf8');
-    assert.match(dialog, /\{ value: 8, label: 'Max TP' \}/);
+    // Max TP is the ninth entry, after the eight the project names, so it is
+    // still paramId 8 whatever those eight are called.
+    assert.match(dialog, /\[\.\.\.globalThis\.rrParamNames\(tt\), tt\('Max TP'\)\]\s*\n\s*\.map\(\(label, value\) => \(\{ value, label \}\)\)/);
     assert.match(dialog, /this\.operandType === 2\n\s+\? \[this\.actorSelect, this\.actorId, this\.paramType, this\.operation, this\.operandType, this\.operand, this\.operandMax\]/, 'the seventh slot only for Random');
     const list = fs.readFileSync(path.join(__dirname, '..', 'src', 'event', 'EventCommandList.js'), 'utf8');
-    assert.match(list, /'Agility', 'Luck', 'Max TP'\];\n\s+const pName = tt\(paramNames\[params\[2\]\]/);
+    // Max TP is still the entry after the eight the project names, and still
+    // looked up by params[2].
+    assert.match(list, /rrParamNames\(tt\), tt\('Max TP'\)\];\n\s+const pName = paramNames\[params\[2\]\]/);
     assert.match(list, /params\[4\] === 2/);
 });
