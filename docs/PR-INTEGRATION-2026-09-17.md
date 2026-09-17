@@ -11,7 +11,7 @@
 
 - No conflicts; merge commit `35bfc24`. The PRs' changelog entries landed under the local `[Unreleased - 0.98.7]` heading.
 - Runtime revision **20260917.1**, every bundled project synced, `--check` clean.
-- **Room battlers:** `P.installRoomAnchors` wraps `Sprite_Enemy.prototype.startParticleCollapse` so a sprite with `_reactorRoomKey` takes the standard collapse. Without it, a 3D enemy that also has a battler image would shred that hidden 2D image on screen while `updateParticleCollapse` set the sprite's opacity to 0 and the model, mirroring it, vanished at once; a 3D enemy without an image already fell back (nothing opaque to cut). Test beside the boss-collapse duration test in `battle-presentation.test.cjs`.
+- **Room battlers:** `P.installRoomAnchors` wraps `Sprite_Enemy.prototype.startParticleCollapse` so a sprite with `_reactorRoomKey` dissolves its model through `room.startDissolve` (a 3D counterpart added the same day, see the handoff) and keeps the standard collapse running as long. Without it, a 3D enemy that also has a battler image would shred that hidden 2D image on screen while `updateParticleCollapse` set the sprite's opacity to 0 and the model, mirroring it, vanished at once; a 3D enemy without an image already fell back (nothing opaque to cut). Test beside the boss-collapse duration test in `battle-presentation.test.cjs`.
 
 ## Verification
 

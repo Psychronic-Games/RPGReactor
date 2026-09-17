@@ -395,11 +395,206 @@
             const shadow = record.shadow, object = record.object; if (!shadow) return;
             let opacity = 1;
             if (object) object.traverse(node => { const m = node.material; if (opacity === 1 && m && !Array.isArray(m) && m.transparent) opacity = m.opacity; });
+            if (record.dissolve) opacity = Math.min(opacity, record.dissolveShadow ?? 1);
             shadow.visible = !!object && object.visible !== false && opacity > .02;
             shadow.material.opacity = .55 * Math.min(1, opacity) / (1 + (record.shadowLift || 0) * .6);
         }
+        /**
+         * Ash and Ember for a model: the Collapse Effect trait's dissolves,
+         * which in a flat battle cut the sprite's bitmap into shards. Here
+         * the model's surface is sampled into shards coloured from its own
+         * textures and released on a wave from the feet up, each drifting,
+         * curling, shrinking and fading, while the model itself is eaten
+         * from the feet up behind them. Ember tints the shards towards fire
+         * and adds additive sparks. Returns how many frames it lasts, or 0
+         * when the key has no drawn model; the caller keeps the engine's
+         * collapse running that long so the battle waits for it.
+         */
+        startDissolve(key, presetName) {
+            const T = root.THREE, record = this.models.get(key);
+            if (!T || !record?.object || !this.scene) return 0;
+            if (record.dissolve) return record.dissolve.duration;
+            const preset = BattleRoomView.DISSOLVE[presetName] || BattleRoomView.DISSOLVE.ash;
+            const object = record.object; object.updateMatrixWorld(true);
+            const box = new T.Box3().setFromObject(object);
+            if (!Number.isFinite(box.min.y) || !Number.isFinite(box.max.y)) return 0;
+            const height = Math.max(.05, box.max.y - box.min.y);
+            const shards = BattleRoomView.surfaceShards(object, Math.round(Math.min(6000, Math.max(1200, height * 2500))), T);
+            if (!shards) return 0;
+            const count = shards.count, delay = new Float32Array(count), seed = new Float32Array(count), size = new Float32Array(count);
+            for (let i = 0; i < count; i++) {
+                const y = shards.position[i * 3 + 1];
+                delay[i] = (y - box.min.y) / height * preset.waveSpread + Math.random() * 6;
+                seed[i] = Math.random() * 1000; size[i] = height * preset.shardSize * (.7 + Math.random() * .6);
+            }
+            const geometry = new T.BufferGeometry();
+            geometry.setAttribute('position', new T.BufferAttribute(shards.position, 3));
+            geometry.setAttribute('color', new T.BufferAttribute(shards.color, 3));
+            geometry.setAttribute('aDelay', new T.BufferAttribute(delay, 1));
+            geometry.setAttribute('aSeed', new T.BufferAttribute(seed, 1));
+            geometry.setAttribute('aSize', new T.BufferAttribute(size, 1));
+            const material = BattleRoomView.shardMaterial(T, preset, false);
+            const points = new T.Points(geometry, material); points.frustumCulled = false; points.renderOrder = 5; points.userData.__reactorOverlay = true;
+            this.scene.add(points);
+            let sparks = null;
+            if (preset.sparks > 0) {
+                const n = Math.min(preset.sparks, count), sp = new Float32Array(n * 3), sc = new Float32Array(n * 3), sd = new Float32Array(n), ss = new Float32Array(n), sz = new Float32Array(n);
+                for (let i = 0; i < n; i++) {
+                    const from = Math.floor(Math.random() * count);
+                    sp.set(shards.position.subarray(from * 3, from * 3 + 3), i * 3); sc.set([1, .55, .25], i * 3);
+                    sd[i] = delay[from] + Math.random() * 4; ss[i] = Math.random() * 1000; sz[i] = height * preset.shardSize * .5;
+                }
+                const g = new T.BufferGeometry();
+                g.setAttribute('position', new T.BufferAttribute(sp, 3)); g.setAttribute('color', new T.BufferAttribute(sc, 3));
+                g.setAttribute('aDelay', new T.BufferAttribute(sd, 1)); g.setAttribute('aSeed', new T.BufferAttribute(ss, 1)); g.setAttribute('aSize', new T.BufferAttribute(sz, 1));
+                sparks = new T.Points(g, BattleRoomView.shardMaterial(T, preset, true)); sparks.frustumCulled = false; sparks.renderOrder = 6; sparks.userData.__reactorOverlay = true;
+                this.scene.add(sparks);
+            }
+            record.dissolve = { points, sparks, preset, start: this.frame, duration: Math.round(preset.waveSpread + preset.shardLife + 8), minY: box.min.y, maxY: box.max.y, done: false };
+            this.updateDissolve(record);
+            return record.dissolve.duration;
+        }
+        /** Advance one model's dissolve: the wave front eats the model, the shards' clock runs, and at the end the model is gone and the shards are freed. */
+        updateDissolve(record) {
+            const d = record.dissolve; if (!d) return;
+            const t = this.frame - d.start, preset = d.preset;
+            // The front leads the shards a little so a shard is never seen leaving a surface that still stands.
+            const front = d.minY + (d.maxY - d.minY) * Math.min(1.05, (t + 2) / preset.waveSpread);
+            record.object?.traverse(node => { for (const m of [node.material].flat().filter(Boolean)) { const u = m.userData?.rrDissolve || (m.userData = m.userData || {}, m.userData.rrDissolve = { value: -1e9 }); u.value = front; } });
+            record.dissolveShadow = Math.max(0, 1 - t / preset.waveSpread);
+            const scale = this.camera?.isOrthographicCamera ? (this.height || 624) / Math.max(.001, (this.camera.top - this.camera.bottom)) : (this.height || 624) / (2 * Math.tan(((this.camera?.fov || 40) * Math.PI) / 360));
+            for (const p of [d.points, d.sparks]) if (p) { p.material.uniforms.uTime.value = t; p.material.uniforms.uScale.value = scale; p.material.uniforms.uOrtho.value = this.camera?.isOrthographicCamera ? 1 : 0; }
+            if (t >= d.duration && !d.done) {
+                d.done = true;
+                if (record.object) record.object.visible = false;
+                for (const p of [d.points, d.sparks]) if (p) { p.removeFromParent(); p.geometry.dispose(); p.material.dispose(); }
+                d.points = d.sparks = null;
+            }
+        }
+        static get DISSOLVE() {
+            return BattleRoomView._dissolve || (BattleRoomView._dissolve = {
+                ash:   { waveSpread: 45, shardLife: 70, shardSize: .022, buoyancy: .010, curl: .12, curlFrequency: .11, fadePower: 2,   tint: [0, 0, 0],        tintStrength: 0,   sparks: 0 },
+                ember: { waveSpread: 45, shardLife: 70, shardSize: .022, buoyancy: .022, curl: .25, curlFrequency: .16, fadePower: 1.6, tint: [1, .35, .12],    tintStrength: .85, sparks: 500 }
+            });
+        }
+        /**
+         * Points on the model's surface, area-weighted over its triangles
+         * (skinned meshes read as posed), each coloured from the material's
+         * texture at that spot when its pixels can be read, else from the
+         * material's colour times any vertex colour. World space.
+         */
+        static surfaceShards(object, count, T) {
+            const triangles = [];
+            let total = 0;
+            const v = new T.Vector3(), a = new T.Vector3(), b = new T.Vector3(), c = new T.Vector3();
+            object.traverse(node => {
+                if (!node.isMesh || !node.geometry || node.userData?.__reactorOverlay || node.visible === false) return;
+                const geometry = node.geometry, position = geometry.getAttribute('position'); if (!position) return;
+                const index = geometry.getIndex(), n = index ? index.count : position.count;
+                const read = node.isSkinnedMesh && typeof node.getVertexPosition === 'function' ? i => node.getVertexPosition(i, v) : i => v.fromBufferAttribute(position, i);
+                const uv = geometry.getAttribute('uv'), colors = geometry.getAttribute('color'), groups = geometry.groups?.length ? geometry.groups : [{ start: 0, count: n, materialIndex: 0 }];
+                for (const group of groups) {
+                    const material = Array.isArray(node.material) ? node.material[group.materialIndex] : node.material;
+                    const end = Math.min(n, group.start + group.count);
+                    for (let i = group.start; i + 2 < end; i += 3) {
+                        const ia = index ? index.getX(i) : i, ib = index ? index.getX(i + 1) : i + 1, ic = index ? index.getX(i + 2) : i + 2;
+                        read(ia); a.copy(v).applyMatrix4(node.matrixWorld); read(ib); b.copy(v).applyMatrix4(node.matrixWorld); read(ic); c.copy(v).applyMatrix4(node.matrixWorld);
+                        const area = b.clone().sub(a).cross(c.clone().sub(a)).length() / 2;
+                        if (!(area > 0)) continue;
+                        total += area;
+                        triangles.push({ ax: a.x, ay: a.y, az: a.z, bx: b.x, by: b.y, bz: b.z, cx: c.x, cy: c.y, cz: c.z, cumulative: total, material, uv: uv ? [uv.getX(ia), uv.getY(ia), uv.getX(ib), uv.getY(ib), uv.getX(ic), uv.getY(ic)] : null, colors: colors ? [colors.getX(ia), colors.getY(ia), colors.getZ(ia), colors.getX(ib), colors.getY(ib), colors.getZ(ib), colors.getX(ic), colors.getY(ic), colors.getZ(ic)] : null });
+                    }
+                }
+            });
+            if (!triangles.length || !(total > 0)) return null;
+            const position = new Float32Array(count * 3), color = new Float32Array(count * 3);
+            const pick = value => { let lo = 0, hi = triangles.length - 1; while (lo < hi) { const mid = (lo + hi) >> 1; if (triangles[mid].cumulative < value) lo = mid + 1; else hi = mid; } return triangles[lo]; };
+            for (let k = 0; k < count; k++) {
+                const tri = pick(Math.random() * total);
+                let r1 = Math.random(), r2 = Math.random(); if (r1 + r2 > 1) { r1 = 1 - r1; r2 = 1 - r2; }
+                const r0 = 1 - r1 - r2;
+                position[k * 3] = tri.ax * r0 + tri.bx * r1 + tri.cx * r2; position[k * 3 + 1] = tri.ay * r0 + tri.by * r1 + tri.cy * r2; position[k * 3 + 2] = tri.az * r0 + tri.bz * r1 + tri.cz * r2;
+                const rgb = BattleRoomView.surfaceColour(tri, r0, r1, r2, T);
+                color[k * 3] = rgb[0]; color[k * 3 + 1] = rgb[1]; color[k * 3 + 2] = rgb[2];
+            }
+            return { position, color, count };
+        }
+        /** The colour of a spot on a triangle: texture pixel when readable, times material colour and vertex colour. */
+        static surfaceColour(tri, r0, r1, r2, T) {
+            const material = tri.material, base = material?.color?.isColor ? [material.color.r, material.color.g, material.color.b] : [1, 1, 1];
+            let rgb = base.slice();
+            const pixels = tri.uv && material?.map ? BattleRoomView.texturePixels(material.map) : null;
+            if (pixels) {
+                let u = tri.uv[0] * r0 + tri.uv[2] * r1 + tri.uv[4] * r2, w = tri.uv[1] * r0 + tri.uv[3] * r1 + tri.uv[5] * r2;
+                u -= Math.floor(u); w -= Math.floor(w); if (material.map.flipY !== false) w = 1 - w;
+                const x = Math.min(pixels.width - 1, Math.floor(u * pixels.width)), y = Math.min(pixels.height - 1, Math.floor(w * pixels.height)), at = (y * pixels.width + x) * 4;
+                const srgb = [pixels.data[at] / 255, pixels.data[at + 1] / 255, pixels.data[at + 2] / 255];
+                // Texture pixels are sRGB; the shard colour attribute is linear, like the material's colour.
+                rgb = srgb.map((s, i) => base[i] * (s <= .04045 ? s / 12.92 : Math.pow((s + .055) / 1.055, 2.4)));
+            }
+            if (tri.colors) for (let i = 0; i < 3; i++) rgb[i] *= tri.colors[i] * r0 + tri.colors[3 + i] * r1 + tri.colors[6 + i] * r2;
+            return rgb;
+        }
+        /** A texture's pixels through a canvas, read once per texture; null where there is no document or the image cannot be drawn. */
+        static texturePixels(texture) {
+            const image = texture?.image; if (!image || typeof document === 'undefined') return null;
+            const cache = BattleRoomView._texturePixels || (BattleRoomView._texturePixels = new WeakMap());
+            if (cache.has(texture)) return cache.get(texture);
+            let pixels = null;
+            try {
+                const width = image.naturalWidth || image.videoWidth || image.width, height = image.naturalHeight || image.videoHeight || image.height;
+                if (width > 0 && height > 0) {
+                    const canvas = document.createElement('canvas'); canvas.width = width; canvas.height = height;
+                    const context = canvas.getContext('2d', { willReadFrequently: true }); context.drawImage(image, 0, 0);
+                    pixels = context.getImageData(0, 0, width, height);
+                }
+            } catch (_) { pixels = null; }
+            cache.set(texture, pixels);
+            return pixels;
+        }
+        /** The shard material: each point runs its own clock from its release, drifts up and curls, shrinks and fades; sparks are the additive kind. */
+        static shardMaterial(T, preset, sparks) {
+            return new T.ShaderMaterial({
+                uniforms: { uTime: { value: 0 }, uScale: { value: 300 }, uOrtho: { value: 0 }, uLife: { value: sparks ? Math.round(preset.shardLife * .55) : preset.shardLife }, uBuoyancy: { value: sparks ? preset.buoyancy * 2.4 : preset.buoyancy }, uCurl: { value: sparks ? preset.curl * .6 : preset.curl }, uCurlFrequency: { value: preset.curlFrequency }, uFadePower: { value: sparks ? 1.2 : preset.fadePower }, uTint: { value: new T.Vector3(...preset.tint) }, uTintStrength: { value: sparks ? 1 : preset.tintStrength } },
+                vertexShader: [
+                    'attribute float aDelay; attribute float aSeed; attribute float aSize;',
+                    'uniform float uTime, uScale, uOrtho, uLife, uBuoyancy, uCurl, uCurlFrequency;',
+                    'varying vec3 vColor; varying float vRemaining;',
+                    'void main() {',
+                    '  float age = uTime - aDelay;',
+                    '  float remaining = clamp(1.0 - age / uLife, 0.0, 1.0);',
+                    '  vRemaining = age > 0.0 ? remaining : 0.0; vColor = color;',
+                    '  vec3 p = position;',
+                    '  if (age > 0.0) {',
+                    '    float t = age / uLife;',
+                    '    p.y += uBuoyancy * age * (0.6 + 0.8 * t);',
+                    '    p.x += uCurl * t * sin(aSeed + age * uCurlFrequency);',
+                    '    p.z += uCurl * t * cos(aSeed * 1.7 + age * uCurlFrequency * 0.9);',
+                    '  }',
+                    '  vec4 mv = modelViewMatrix * vec4(p, 1.0);',
+                    '  gl_Position = projectionMatrix * mv;',
+                    '  float size = aSize * (0.35 + 0.65 * remaining) * uScale;',
+                    '  gl_PointSize = vRemaining > 0.0 ? (uOrtho > 0.5 ? size : size / max(0.05, -mv.z)) : 0.0;',
+                    '  if (vRemaining <= 0.0) gl_Position = vec4(2.0, 2.0, 2.0, 1.0);',
+                    '}'].join('\n'),
+                fragmentShader: [
+                    'uniform float uFadePower, uTintStrength; uniform vec3 uTint;',
+                    'varying vec3 vColor; varying float vRemaining;',
+                    'void main() {',
+                    '  vec2 d = gl_PointCoord - 0.5;',
+                    '  float edge = 1.0 - smoothstep(0.30, 0.5, length(d));',
+                    '  float alpha = pow(vRemaining, uFadePower) * edge;',
+                    '  if (alpha <= 0.002) discard;',
+                    '  vec3 colour = mix(vColor, uTint, uTintStrength * (1.0 - vRemaining * 0.6));',
+                    '  gl_FragColor = vec4(colour, alpha);',
+                    '}'].join('\n'),
+                vertexColors: true, transparent: true, depthWrite: false,
+                blending: sparks ? T.AdditiveBlending : T.NormalBlending, toneMapped: !sparks
+            });
+        }
         remove(key) {
             const r = this.models.get(key) || this.billboards.get(key); if (!r) return;
+            if (r.dissolve) { for (const p of [r.dissolve.points, r.dissolve.sparks]) if (p) { p.removeFromParent(); p.geometry.dispose(); p.material.dispose(); } r.dissolve = null; }
             for (const [id, play] of this.effectPlays) if (play.owner === r) { this.stopEffect(play); this.effectPlays.delete(id); }
             for(const media of r.media?.values()||[])this.stopMedia(media);
             this.models.delete(key);this.billboards.delete(key);
@@ -656,6 +851,7 @@
             if(this.disposed||!this.renderer)return;
             const R=root.Reactor3D;this.frame++;this.aim();for(const r of this.billboards.values()){r.object.quaternion.copy(this.camera.quaternion);r.object.rotateZ((r.position?.rotateZ||0)*Math.PI/180);}this.world.setAnimationFrame(Math.floor(this.frame/30));
             for(const r of this.billboards.values())this.applyRecoil(r);
+            for(const r of this.models.values())if(r.dissolve)this.updateDissolve(r);
             for(const r of [...this.models.values(),...this.billboards.values()])if(r.shadow)this.updateShadow(r);
             const lights=this.roomLights();let lightSeed=1000;
             for(const r of this.models.values())if(r.object){

@@ -7765,6 +7765,25 @@ Reactor3D.injectBlendColor = function(material, shader) {
 };
 
 /**
+ * A dissolve threshold on a lit material: pixels whose world height lies
+ * below `material.userData.rrDissolve.value` are discarded, so a model can
+ * be eaten from the feet up while shards stream off it (an Ash or Ember
+ * collapse in a battle room). A plain {value} object in userData, as the
+ * blend colour is, so a cloned material owns one and the shader reads it.
+ */
+Reactor3D.injectDissolve = function(material, shader) {
+    if (!material || !shader || shader.fragmentShader.indexOf("vRRWorldPos") < 0) return;
+    material.userData = material.userData || {};
+    const dissolve = material.userData.rrDissolve || (material.userData.rrDissolve = { value: -1e9 });
+    shader.uniforms.rrDissolve = dissolve;
+    if (shader.fragmentShader.indexOf("uniform float rrDissolve;") >= 0) return;
+    shader.fragmentShader = "uniform float rrDissolve;\n" + shader.fragmentShader.replace(
+        "#include <map_fragment>",
+        "if (vRRWorldPos.y < rrDissolve) discard;\n\t#include <map_fragment>"
+    );
+};
+
+/**
  * Make a map material take the lights. Composes with whatever the material
  * already injects (UV clamps, billboard quads, straightened depth), and
  * extends its program cache key so a lit program is never shared with an
@@ -7806,6 +7825,7 @@ Reactor3D.litMaterial = function(material) {
         if (typeof earlier === "function") earlier.call(this, shader, renderer);
         Reactor3D.injectLightShader(shader, renderer);
         Reactor3D.injectBlendColor(this, shader);
+        Reactor3D.injectDissolve(this, shader);
     };
     const earlierKey = material.customProgramCacheKey;
     material.customProgramCacheKey = function() {

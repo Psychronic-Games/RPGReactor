@@ -415,3 +415,29 @@ test('a hit recoil goes back, springs forward past home and settles, smaller on 
   view.startRecoil('t',null);assert.ok(Math.abs(view.models.get('t').recoil.dx+1)<1e-9,'no attacker: straight back from a facing of 90 is west');
  }finally{global.Reactor3D=previousR;global.ReactorBattleData=previousB;}
 });
+
+test('a room model dissolves for Ash and Ember: shards off its surface in its colours, the model eaten from the feet up, gone at the end', async () => {
+    const vm=require('node:vm'),fs=require('node:fs'),path=require('node:path');const THREE=await import('three'),scope={THREE,ReactorBattleData:B};vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../../runtime/reactor_battle_room.js'),'utf8'),scope);
+    const Room=scope.ReactorBattleRoomView,view=Object.create(Room.prototype);view.models=new Map();view.billboards=new Map();view.scene=new THREE.Scene();view.frame=100;view.height=624;view.camera=new THREE.PerspectiveCamera(40,1,.1,100);
+    const material=new THREE.MeshStandardMaterial({color:0x3060c0});material.userData.rrDissolve={value:-1e9};
+    const mesh=new THREE.Mesh(new THREE.BoxGeometry(1,2,1),material);mesh.position.set(5.5,1,3.5);const object=new THREE.Group();object.add(mesh);view.scene.add(object);
+    const record={object,spec:{size:2},position:{x:5,y:3},shadow:{visible:true,material:{opacity:.55}}};view.models.set('enemy:0',record);
+    assert.equal(view.startDissolve('missing','ash'),0,'no model, no dissolve');
+    const frames=view.startDissolve('enemy:0','ember');
+    assert.ok(frames>100&&frames<140,`lasts about two seconds (${frames})`);
+    const d=record.dissolve;assert.ok(d.points&&d.sparks,'ember has shards and sparks');
+    const pos=d.points.geometry.getAttribute('position'),col=d.points.geometry.getAttribute('color'),delay=d.points.geometry.getAttribute('aDelay');
+    assert.ok(pos.count>=1200,`enough shards (${pos.count})`);
+    let inside=0;for(let i=0;i<pos.count;i++){const x=pos.getX(i),y=pos.getY(i),z=pos.getZ(i);if(x>=4.99&&x<=6.01&&y>=-.01&&y<=2.01&&z>=2.99&&z<=4.01)inside++;}
+    assert.equal(inside,pos.count,'every shard lies on the model');
+    assert.ok(Math.abs(col.getX(0)-material.color.r)<1e-6&&Math.abs(col.getZ(0)-material.color.b)<1e-6,'shards take the material colour when no texture can be read');
+    let low=Infinity,high=-Infinity;for(let i=0;i<delay.count;i++){low=Math.min(low,delay.getX(i));high=Math.max(high,delay.getX(i));}
+    assert.ok(low>=0&&high<=51,'release runs from the feet over the wave');
+    assert.equal(view.startDissolve('enemy:0','ash'),frames,'asked twice, one dissolve');
+    // The front rises with the frames.
+    assert.ok(material.userData.rrDissolve.value<0.2,'the front starts at the feet');
+    view.frame=100+22;view.updateDissolve(record);const half=material.userData.rrDissolve.value;assert.ok(half>.8&&half<1.3,`half way up at half the wave (${half.toFixed(2)})`);
+    assert.equal(d.points.material.uniforms.uTime.value,22);assert.ok(record.dissolveShadow<.6&&record.dissolveShadow>.4,'the floor shadow fades with the wave');
+    view.frame=100+frames;view.updateDissolve(record);
+    assert.equal(d.done,true);assert.equal(object.visible,false,'the model is gone');assert.equal(d.points,null,'the shards are freed');assert.equal(view.scene.children.filter(c=>c.isPoints).length,0);
+});

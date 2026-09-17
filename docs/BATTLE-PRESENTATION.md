@@ -182,7 +182,7 @@ The complete counter/reflection/substitution and victory/defeat/escape/abort/plu
 
 ### Hits on 3D battlers (2026-09-13)
 
-A battler's model in a room takes a hit on the body: pushed back along the line from the attacker over six frames, springing forward past home and settling, less so for a big model. The stock damage blink flashes the model white instead of hiding it. Models wear the engine's sprite effects (hit and animation flashes, collapse fade, boss shake, gone once a dead enemy has collapsed) and stand on a soft floor shadow. While a pose step stands, the model's idle clip freezes on its first frame so the posed arm is not moved under the pose; battle matches the editor.
+A battler's model in a room takes a hit on the body: pushed back along the line from the attacker over six frames, springing forward past home and settling, less so for a big model. The stock damage blink flashes the model white instead of hiding it. Models wear the engine's sprite effects (hit and animation flashes, collapse fade, boss shake, gone once a dead enemy has collapsed) and stand on a soft floor shadow. While a pose step stands, the model's idle clip freezes on its first frame so the posed arm is not moved under the pose; battle matches the editor. An enemy whose Collapse Effect trait is **Ash** or **Ember** dissolves as a model too: shards in its own colours leave its surface on a wave from the feet up while the model is eaten away behind them, Ember with fire-tinted shards and sparks.
 
 ### Media steps and room presentation (2026-09-06)
 
