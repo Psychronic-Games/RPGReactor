@@ -11,6 +11,7 @@ const source = (...parts) => fs.readFileSync(path.join(srcDir, ...parts), 'utf8'
 // they are one object, so the test makes them one here too.
 globalThis.window = globalThis;
 globalThis.rrEscapeHtml = require(path.join(srcDir, 'utils', 'HtmlEscape.js'));
+require(path.join(srcDir, 'utils', 'ParamNames.js'));
 const TraitHelp = require(path.join(srcDir, 'database', 'TraitHelp.js'));
 
 const TraitEditor = new Function(

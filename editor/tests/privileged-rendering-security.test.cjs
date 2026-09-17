@@ -4,6 +4,7 @@ const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
+const { paramNamesSource } = require('./helpers/param-names.cjs');
 
 const editorRoot = path.resolve(__dirname, '..');
 const escapeHtml = require(path.join(editorRoot, 'src', 'utils', 'HtmlEscape.js'));
@@ -28,7 +29,8 @@ test('database trait options escape project-authored names', () => {
         window: { I18n: null },
         console
     };
-    const DatabaseTraitEditor = vm.runInNewContext(`${source}\nDatabaseTraitEditor;`, context);
+    const DatabaseTraitEditor = vm.runInNewContext(
+        `${paramNamesSource()}\n${source}\nDatabaseTraitEditor;`, context);
     const editor = Object.create(DatabaseTraitEditor.prototype);
     editor.databaseManager = {
         getSystem: () => ({ elements: ['', 'Fire'] }),
