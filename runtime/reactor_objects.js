@@ -5511,6 +5511,15 @@ Game_Enemy.prototype.performCollapse = function() {
         case 2:
             this.requestEffect("instantCollapse");
             break;
+        // 3 is "No Disappear": the sprite stays put, so no effect is requested.
+        case 4:
+            this.requestEffect("ashCollapse");
+            SoundManager.playEnemyCollapse();
+            break;
+        case 5:
+            this.requestEffect("emberCollapse");
+            SoundManager.playEnemyCollapse();
+            break;
     }
 };
 

@@ -1271,6 +1271,7 @@ Sprite_Enemy.prototype.setupEffect = function() {
 };
 
 Sprite_Enemy.prototype.startEffect = function(effectType) {
+    this.destroyParticleCollapse();
     this._effectType = effectType;
     switch (this._effectType) {
         case "appear":
@@ -1293,6 +1294,12 @@ Sprite_Enemy.prototype.startEffect = function(effectType) {
             break;
         case "instantCollapse":
             this.startInstantCollapse();
+            break;
+        case "ashCollapse":
+            this.startParticleCollapse("ash");
+            break;
+        case "emberCollapse":
+            this.startParticleCollapse("ember");
             break;
     }
     this.revertToNormal();
@@ -1357,6 +1364,10 @@ Sprite_Enemy.prototype.updateEffect = function() {
             case "instantCollapse":
                 this.updateInstantCollapse();
                 break;
+            case "ashCollapse":
+            case "emberCollapse":
+                this.updateParticleCollapse();
+                break;
         }
         if (this._effectDuration === 0) {
             this._effectType = null;
@@ -1410,6 +1421,464 @@ Sprite_Enemy.prototype.updateBossCollapse = function() {
 
 Sprite_Enemy.prototype.updateInstantCollapse = function() {
     this.opacity = 0;
+};
+
+//-----------------------------------------------------------------------------
+// Particle collapse -- Collapse Effect trait values 4 (Ash) and 5 (Ember).
+//
+// The battler's own bitmap is cut into a grid of cells, each becoming one
+// particle that is released on a bottom-up wave, then drifts upward, spins,
+// shrinks and fades. Ember additionally tints the shards towards fire and
+// spawns an additive spark layer.
+//
+// Three PIXI 8 facts shape the implementation:
+//
+//   * A ParticleContainer draws `particleChildren` -- Particle objects handed
+//     to addParticle() -- and binds ONE texture source for the whole
+//     container. Per-particle UVs come from each Particle's own frame, so the
+//     cells can be sub-frames of the battler texture, but the shards and the
+//     sparks (a different source) need containers of their own.
+//   * Of the per-particle attributes only `position` is dynamic by default.
+//     Scale, rotation and colour must be opted into or they bake at frame one.
+//   * js/libs/pixi_compat.js replaces PIXI.ParticleContainer with a plain
+//     Container so MZ-era plugins that addChild() sprites to it still draw,
+//     and parks the real class on PIXI.__v8ParticleContainer.
+//
+// The layers are siblings of the battler sprite rather than children: the art
+// is hidden by taking the sprite's opacity to 0, and in a stock project
+// mainSprite() *is* the sprite, so a child layer would be hidden along with it.
+//-----------------------------------------------------------------------------
+
+Sprite_Enemy.PARTICLE_COLLAPSE = {
+    ash: {
+        cellSize: 4,
+        waveSpread: 45,
+        shardLife: 70,
+        buoyancy: 0.012,
+        curlAmplitude: 1.8,
+        curlFrequency: 0.11,
+        fadePower: 2,
+        tint: 0,
+        sparks: 0
+    },
+    ember: {
+        cellSize: 4,
+        waveSpread: 45,
+        shardLife: 70,
+        buoyancy: 0.03,
+        curlAmplitude: 4,
+        curlFrequency: 0.16,
+        fadePower: 1.6,
+        tint: 0xff5a1e,
+        sparks: 600
+    }
+};
+
+Sprite_Enemy.prototype.startParticleCollapse = function(presetName) {
+    this._appeared = false;
+    const preset = Sprite_Enemy.PARTICLE_COLLAPSE[presetName];
+    const state = preset ? this.createParticleCollapse(preset) : null;
+    if (!state) {
+        // No bitmap yet, no PIXI 8 particles, or nothing opaque to cut up:
+        // fall back to the standard collapse rather than skipping the death.
+        this._effectType = "collapse";
+        this._effectDuration = 32;
+        return;
+    }
+    this._particleCollapse = state;
+    this._effectDuration = state.duration;
+};
+
+/**
+ * The descendant that actually carries the battler art.
+ *
+ * mainSprite() is not it, whatever its name suggests: VisuStella's Battle Core
+ * parents the art under a distortion sprite and returns THAT, so mainSprite()
+ * itself holds no bitmap and a collapse reading it would fall back for every
+ * enemy in any project running Battle Core. In a stock project mainSprite()
+ * *is* this sprite, and does hold one.
+ *
+ * @returns {Sprite|null} The sprite holding a ready bitmap, or null.
+ */
+Sprite_Enemy.prototype.particleCollapseArtSprite = function() {
+    const holdsArt = function(sprite) {
+        const bitmap = sprite ? sprite.bitmap : null;
+        return !!(bitmap && bitmap.isReady() && bitmap.width > 0 && bitmap.height > 0);
+    };
+    // Where Battle Core has built _mainSprite, that is the only candidate: it
+    // owns the art, and the distortion sprite mainSprite() hands back is a
+    // container whose bitmap -- if some plugin has given it one -- belongs to
+    // that plugin, not to this battler. Falling through to it while the art is
+    // still loading dissolves the wrong image rather than nothing, which is
+    // worse than waiting: measured here as a 370x435 generated surface cut into
+    // 6305 shards in place of a 131x135 battler.
+    if (this._mainSprite) {
+        return holdsArt(this._mainSprite) ? this._mainSprite : null;
+    }
+    const main = this.mainSprite();
+    if (holdsArt(main)) {
+        return main;
+    }
+    return holdsArt(this) ? this : null;
+};
+
+/**
+ * Where the art sprite sits in this sprite's own coordinates, so the particles
+ * can stand in for it exactly however deeply Battle Core has nested it.
+ *
+ * @param {Sprite} art - The sprite returned by particleCollapseArtSprite.
+ * @returns {object} An {x, y} offset.
+ */
+Sprite_Enemy.prototype.particleCollapseArtOffset = function(art) {
+    let x = 0;
+    let y = 0;
+    for (let node = art; node && node !== this; node = node.parent) {
+        x += node.x;
+        y += node.y;
+    }
+    return { x: x, y: y };
+};
+
+Sprite_Enemy.prototype.createParticleCollapse = function(preset) {
+    if (!PIXI.Particle) {
+        return null;
+    }
+    const parent = this.parent;
+    const art = this.particleCollapseArtSprite();
+    if (!parent || !art) {
+        return null;
+    }
+    const bitmap = art.bitmap;
+    // An SV battler draws one pose out of a sheet, so cut the frame on show
+    // rather than the bitmap, which would hand back every pose at once.
+    const frame = art._frame;
+    const useFrame = frame && frame.width > 0 && frame.height > 0;
+    const frameX = useFrame ? Math.floor(frame.x) : 0;
+    const frameY = useFrame ? Math.floor(frame.y) : 0;
+    const width = useFrame ? Math.floor(frame.width) : bitmap.width;
+    const height = useFrame ? Math.floor(frame.height) : bitmap.height;
+    const base = bitmap.baseTexture;
+    const source = base ? base.source || base : null;
+    if (width < 1 || height < 1 || !source) {
+        return null;
+    }
+    const anchorX = art.anchor ? art.anchor.x : 0.5;
+    const anchorY = art.anchor ? art.anchor.y : 1;
+    const offset = this.particleCollapseArtOffset(art);
+
+    const ParticleLayer = PIXI.__v8ParticleContainer || PIXI.ParticleContainer;
+    const cell = preset.cellSize;
+    const columns = Math.ceil(width / cell);
+    const rows = Math.ceil(height / cell);
+    // The alpha map spans the whole bitmap; cells index into it with the
+    // frame's offset added, so a sheet and a lone image read the same way.
+    const alphaMap = this.particleCollapseAlphaMap(source, bitmap.width, bitmap.height);
+    const shardLayer = new ParticleLayer({
+        dynamicProperties: {
+            position: true,
+            vertex: true,
+            rotation: true,
+            color: true
+        }
+    });
+    const shards = [];
+    let longestDelay = 0;
+
+    for (let row = 0; row < rows; row++) {
+        for (let column = 0; column < columns; column++) {
+            const x = column * cell;
+            const y = row * cell;
+            const w = Math.min(cell, width - x);
+            const h = Math.min(cell, height - y);
+            // A fully transparent cell is an invisible quad that still costs a
+            // vertex write every frame, and battler art is mostly margin.
+            if (alphaMap && !this.isParticleCollapseCellVisible(
+                    alphaMap, bitmap.width, frameX + x, frameY + y, w, h)) {
+                continue;
+            }
+            const particle = new PIXI.Particle({
+                texture: new PIXI.Texture({
+                    source: source,
+                    frame: new Rectangle(frameX + x, frameY + y, w, h)
+                }),
+                anchorX: 0.5,
+                anchorY: 0.5
+            });
+            // Measured off the art sprite's own anchor and its offset within
+            // this sprite, so the grid stands exactly where the art stood.
+            const originX = offset.x + x + w / 2 - width * anchorX;
+            const originY = offset.y + y + h / 2 - height * anchorY;
+            particle.x = originX;
+            particle.y = originY;
+            const delay = Math.round(
+                (1 - row / rows + Math.random() * 0.34) * preset.waveSpread
+            );
+            longestDelay = Math.max(longestDelay, delay);
+            shards.push({
+                particle: particle,
+                originX: originX,
+                originY: originY,
+                delay: delay,
+                driftX: (Math.random() - 0.5) * 0.9,
+                driftY: -0.35 - Math.random() * 0.75,
+                spin: (Math.random() - 0.5) * 0.14,
+                phase: Math.random() * Math.PI * 2,
+                released: false
+            });
+            shardLayer.addParticle(particle);
+        }
+    }
+    if (shards.length === 0) {
+        shardLayer.destroy();
+        return null;
+    }
+
+    const layers = [shardLayer];
+    let sparks = null;
+    const sparkTexture = preset.sparks > 0 ? Sprite_Enemy.particleCollapseSparkTexture() : null;
+    if (sparkTexture) {
+        const sparkLayer = new ParticleLayer({
+            dynamicProperties: { position: true, vertex: true, color: true }
+        });
+        sparkLayer.blendMode = "add";
+        sparks = { layer: sparkLayer, pool: [], next: 0 };
+        for (let i = 0; i < preset.sparks; i++) {
+            const particle = new PIXI.Particle({
+                texture: sparkTexture,
+                anchorX: 0.5,
+                anchorY: 0.5
+            });
+            particle.alpha = 0;
+            particle.x = -99999;
+            particle.y = -99999;
+            sparkLayer.addParticle(particle);
+            sparks.pool.push({ particle: particle, age: -1, life: 0, x: 0, y: 0, driftX: 0, driftY: 0, size: 1 });
+        }
+        layers.push(sparkLayer);
+    }
+
+    // BattleCore re-sorts the battler layer every frame by _baseY then
+    // spriteId. Without these keys the comparison reads undefined and the
+    // shards can land behind the backdrop.
+    for (let i = 0; i < layers.length; i++) {
+        const layer = layers[i];
+        layer.x = this.x;
+        layer.y = this.y;
+        layer._baseY = this._baseY === undefined ? this.y : this._baseY;
+        layer.spriteId = this.spriteId + 0.4 + i * 0.1;
+        parent.addChild(layer);
+    }
+
+    return {
+        preset: preset,
+        layers: layers,
+        shards: shards,
+        sparks: sparks,
+        duration: longestDelay + preset.shardLife + 8
+    };
+};
+
+/**
+ * Per-pixel alpha for a texture source, cached on the source itself.
+ *
+ * Read through the source's own resource rather than Bitmap#context: the
+ * context getter calls _ensureCanvas(), which on an image-backed bitmap builds
+ * a canvas AND replaces the bitmap's base texture, re-uploading a cached,
+ * shared battler image as a side effect of somebody dying.
+ *
+ * @param {object} source - The PIXI texture source behind the battler bitmap.
+ * @param {number} width - The bitmap width in pixels.
+ * @param {number} height - The bitmap height in pixels.
+ * @returns {Uint8Array|null} One alpha byte per pixel, or null if unreadable.
+ */
+Sprite_Enemy.prototype.particleCollapseAlphaMap = function(source, width, height) {
+    const cached = source.__rrCollapseAlpha;
+    if (cached && cached.length === width * height) {
+        return cached;
+    }
+    const resource = source.resource;
+    if (!resource) {
+        return null;
+    }
+    try {
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const context = canvas.getContext("2d", { willReadFrequently: true });
+        context.drawImage(resource, 0, 0, width, height);
+        const rgba = context.getImageData(0, 0, width, height).data;
+        const map = new Uint8Array(width * height);
+        for (let i = 0, j = 3; i < map.length; i++, j += 4) {
+            map[i] = rgba[j];
+        }
+        source.__rrCollapseAlpha = map;
+        return map;
+    } catch (e) {
+        // A tainted or non-drawable resource only costs the cull, not the effect.
+        return null;
+    }
+};
+
+Sprite_Enemy.prototype.isParticleCollapseCellVisible = function(map, width, x, y, w, h) {
+    for (let j = y; j < y + h; j++) {
+        let offset = j * width + x;
+        for (let i = 0; i < w; i++, offset++) {
+            if (map[offset] > 8) {
+                return true;
+            }
+        }
+    }
+    return false;
+};
+
+Sprite_Enemy.particleCollapseSparkTexture = function() {
+    if (this._sparkTexture) {
+        return this._sparkTexture;
+    }
+    const size = 32;
+    const half = size / 2;
+    // Held on the class so the bitmap outlives the collapse that built it --
+    // the texture borrows its source.
+    this._sparkBitmap = new Bitmap(size, size);
+    const context = this._sparkBitmap.context;
+    const gradient = context.createRadialGradient(half, half, 0, half, half, half);
+    gradient.addColorStop(0, "rgba(255, 255, 255, 1)");
+    gradient.addColorStop(0.28, "rgba(255, 205, 120, 0.9)");
+    gradient.addColorStop(0.62, "rgba(255, 110, 30, 0.38)");
+    gradient.addColorStop(1, "rgba(255, 70, 10, 0)");
+    context.fillStyle = gradient;
+    context.fillRect(0, 0, size, size);
+    const base = this._sparkBitmap.baseTexture;
+    base.update();
+    this._sparkTexture = new PIXI.Texture({ source: base.source || base });
+    return this._sparkTexture;
+};
+
+Sprite_Enemy.blendParticleCollapseTint = function(from, to, rate) {
+    const r = ((from >> 16) & 255) + ((((to >> 16) & 255) - ((from >> 16) & 255)) * rate);
+    const g = ((from >> 8) & 255) + ((((to >> 8) & 255) - ((from >> 8) & 255)) * rate);
+    const b = (from & 255) + (((to & 255) - (from & 255)) * rate);
+    return ((r | 0) << 16) | ((g | 0) << 8) | (b | 0);
+};
+
+Sprite_Enemy.prototype.updateParticleCollapse = function() {
+    this.opacity = 0;
+    const state = this._particleCollapse;
+    if (!state) {
+        return;
+    }
+    const preset = state.preset;
+    const elapsed = state.duration - this._effectDuration;
+
+    for (let i = 0; i < state.layers.length; i++) {
+        state.layers[i].x = this.x;
+        state.layers[i].y = this.y;
+    }
+
+    for (let i = 0; i < state.shards.length; i++) {
+        const shard = state.shards[i];
+        const age = elapsed - shard.delay;
+        if (age <= 0) {
+            continue;
+        }
+        if (!shard.released) {
+            shard.released = true;
+            if (state.sparks && Math.random() < 0.3) {
+                this.emitParticleCollapseSpark(state, shard.originX, shard.originY);
+            }
+        }
+        const particle = shard.particle;
+        shard.driftY -= preset.buoyancy;
+        particle.x = shard.originX + shard.driftX * age +
+            Math.sin((age + shard.phase * 9) * preset.curlFrequency) * preset.curlAmplitude;
+        particle.y = shard.originY + shard.driftY * age;
+        particle.rotation += shard.spin;
+        const remaining = Math.max(0, 1 - age / preset.shardLife);
+        particle.scaleX = 0.35 + remaining * 0.65;
+        particle.scaleY = particle.scaleX;
+        particle.alpha = Math.pow(remaining, preset.fadePower);
+        if (preset.tint) {
+            particle.tint = Sprite_Enemy.blendParticleCollapseTint(
+                0xffffff, preset.tint, Math.min(1, age / 22)
+            );
+            if (state.sparks && age < 30 && Math.random() < 0.012) {
+                this.emitParticleCollapseSpark(state, particle.x, particle.y);
+            }
+        }
+    }
+
+    if (state.sparks) {
+        this.updateParticleCollapseSparks(state);
+    }
+    if (this._effectDuration <= 0) {
+        this.destroyParticleCollapse();
+    }
+};
+
+Sprite_Enemy.prototype.emitParticleCollapseSpark = function(state, x, y) {
+    const sparks = state.sparks;
+    const spark = sparks.pool[sparks.next];
+    sparks.next = (sparks.next + 1) % sparks.pool.length;
+    spark.age = 0;
+    spark.life = 22 + Math.random() * 20;
+    spark.x = x;
+    spark.y = y;
+    spark.driftX = (Math.random() - 0.5) * 1.5;
+    spark.driftY = -0.7 - Math.random() * 1.4;
+    spark.size = 0.1 + Math.random() * 0.16;
+};
+
+Sprite_Enemy.prototype.updateParticleCollapseSparks = function(state) {
+    const pool = state.sparks.pool;
+    for (let i = 0; i < pool.length; i++) {
+        const spark = pool[i];
+        if (spark.age < 0) {
+            continue;
+        }
+        spark.age++;
+        const particle = spark.particle;
+        if (spark.age >= spark.life) {
+            spark.age = -1;
+            particle.alpha = 0;
+            particle.x = -99999;
+            particle.y = -99999;
+            continue;
+        }
+        spark.driftY -= 0.045;
+        spark.x += spark.driftX;
+        spark.y += spark.driftY;
+        particle.x = spark.x;
+        particle.y = spark.y;
+        const remaining = 1 - spark.age / spark.life;
+        particle.scaleX = spark.size * (0.5 + remaining * 0.5);
+        particle.scaleY = particle.scaleX;
+        particle.alpha = remaining * remaining;
+        particle.tint = Sprite_Enemy.blendParticleCollapseTint(0xff5a10, 0xfff0c0, remaining);
+    }
+};
+
+Sprite_Enemy.prototype.destroyParticleCollapse = function() {
+    const state = this._particleCollapse;
+    if (!state) {
+        return;
+    }
+    this._particleCollapse = null;
+    // Each shard holds a Texture of its own, and a v8 Texture subscribes to its
+    // source's resize event. Left undestroyed, one collapse pins thousands of
+    // listeners to a session-lived, ImageManager-cached battler source.
+    for (let i = 0; i < state.shards.length; i++) {
+        const texture = state.shards[i].particle.texture;
+        if (texture && !texture.destroyed) {
+            texture.destroy();
+        }
+    }
+    for (let i = 0; i < state.layers.length; i++) {
+        const layer = state.layers[i];
+        if (layer.parent) {
+            layer.parent.removeChild(layer);
+        }
+        layer.destroy();
+    }
 };
 
 Sprite_Enemy.prototype.damageOffsetX = function() {
@@ -5465,6 +5934,9 @@ Spriteset_Map.prototype.update = function() {
             Reactor3D.releaseBattlerState(this._reactorBattler);
             if (this._mainSprite) Reactor3D.releaseBattlerState(this._mainSprite._reactorBattler);
         }
+        // A collapse still running when the scene ends owns one Texture per
+        // shard, each subscribed to the battler source's resize event.
+        if (this.destroyParticleCollapse) this.destroyParticleCollapse();
         return _destroy.apply(this, arguments);
     };
 })();
