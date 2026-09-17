@@ -17,6 +17,11 @@ Development cycle in progress. Session detail lives in the [handoff](docs/HANDOF
 - **A passive state answers both sides of an enemy state condition.** Target State read each candidate's raw state list, so a target whose Poison came from a passive read as clean; the check now asks each candidate its own `meetsStateCondition`, so plugin replacements govern both sides. The forecast also reports a Target State row that can never fire because the skill's scope hands it no candidates (PR #61).
 - **Database › Quests:** the icon picker no longer reports IconSet.png missing on every project; every quest text field previews its icons and colour codes as the player reads them; objective and reward rows keep their line breaks; imports read a title's leading icon code as the quest icon; Reactor's Quests menu command appears under VisuStella MainMenuCore (PR #60).
 
+### Development
+
+- CI had been red since the 0.98.6 tag: two suites read Star Shift Rebellion, which is not in the repository. They now skip, or use the tracked fixture, where the project is absent. A fresh clone plus `npm ci --ignore-scripts` and `npm test` reproduces CI locally.
+- `event-command-names-i18n.test.cjs` holds every command and section of the event picker against every locale, loading the translation files in the app's order.
+
 ## [0.98.6] - 2026-09-14
 
 Release notes: [docs/posts/release-notes-0.98.6.md](docs/posts/release-notes-0.98.6.md).

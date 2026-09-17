@@ -1,5 +1,13 @@
 # Current project status
 
+## 2026-09-16 — PRs #60 and #61 in, CI green again, Discord and translation fixes
+
+- **PR #60** (music sequence library, battle music resolution troop → Change Battle BGM → map → System, sequence preview and starters, Quests tab fixes, Reactor or VisuStella quest log) and **PR #61** (passive states on both sides of an enemy state condition, several states per condition row, forecast `no-target`) are merged locally; notes in [PR-INTEGRATION-2026-09-15.md](PR-INTEGRATION-2026-09-15.md) and [PR-INTEGRATION-2026-09-16.md](PR-INTEGRATION-2026-09-16.md). Runtime revision 20260916.1.
+- **CI** had failed every run since `v0.98.6`: two suites read the gitignored Star Shift Rebellion. They skip or use the fixture now; a fresh clone reproduces CI.
+- **Spot light guide** in the 2D map view was mirrored against the glow, the game and the 3D cone (Discord report); the guide, cone lines and aim drag follow the renderers.
+- **Reactor event commands** (six quest and media surface names) are translated in all 17 locales from a user's zh-Hans patch, and the Reactor tab is qualified in non-Latin scripts; a test covers every picker entry per locale.
+- Verification: **3,247 Node tests pass**; clean-clone run passes with one skip; live checks of the 2D lighting guide and the Chinese picker. Not pushed.
+
 ## 2026-09-14 — 0.98.6 released; 0.98.7 open
 
 - `v0.98.6` is tagged and published on GitHub from the changelog section (Publish Release succeeded); signed binaries and the itch channels follow from the Actions tab (Release Candidate → Release). The itch devlog is `docs/posts/itch-devlog-0.98.6-plain.txt`.
