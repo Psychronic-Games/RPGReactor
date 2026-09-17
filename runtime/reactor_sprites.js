@@ -1501,15 +1501,25 @@ Sprite_Enemy.prototype.startParticleCollapse = function(presetName) {
  * @returns {Sprite|null} The sprite holding a ready bitmap, or null.
  */
 Sprite_Enemy.prototype.particleCollapseArtSprite = function() {
-    const candidates = [this._mainSprite, this.mainSprite(), this];
-    for (let i = 0; i < candidates.length; i++) {
-        const sprite = candidates[i];
+    const holdsArt = function(sprite) {
         const bitmap = sprite ? sprite.bitmap : null;
-        if (bitmap && bitmap.isReady() && bitmap.width > 0 && bitmap.height > 0) {
-            return sprite;
-        }
+        return !!(bitmap && bitmap.isReady() && bitmap.width > 0 && bitmap.height > 0);
+    };
+    // Where Battle Core has built _mainSprite, that is the only candidate: it
+    // owns the art, and the distortion sprite mainSprite() hands back is a
+    // container whose bitmap -- if some plugin has given it one -- belongs to
+    // that plugin, not to this battler. Falling through to it while the art is
+    // still loading dissolves the wrong image rather than nothing, which is
+    // worse than waiting: measured here as a 370x435 generated surface cut into
+    // 6305 shards in place of a 131x135 battler.
+    if (this._mainSprite) {
+        return holdsArt(this._mainSprite) ? this._mainSprite : null;
     }
-    return null;
+    const main = this.mainSprite();
+    if (holdsArt(main)) {
+        return main;
+    }
+    return holdsArt(this) ? this : null;
 };
 
 /**
