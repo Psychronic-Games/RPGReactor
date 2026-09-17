@@ -25,6 +25,7 @@ const editorRoot = path.resolve(__dirname, '..');
 const objectsSource = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_objects.js'), 'utf8');
 const enemyEditorSource = fs.readFileSync(
     path.join(editorRoot, 'src', 'database', 'DatabaseEnemyEditor.js'), 'utf8');
+const { paramNamesSource } = require('./helpers/param-names.cjs');
 
 // ---------------------------------------------------------------------------
 // The runtime's own maxTp, lifted out of Game_Enemy
@@ -53,7 +54,7 @@ function loadEnemyEditor() {
     // The constructor builds a trait editor; max TP has nothing to do with
     // traits, so a stub is enough to get an instance.
     const context = { window: {}, console, require, DatabaseTraitEditor: class {} };
-    vm.runInNewContext(`${enemyEditorSource}\n;__Editor = DatabaseEnemyEditor;`, context);
+    vm.runInNewContext(`${paramNamesSource()}\n${enemyEditorSource}\n;__Editor = DatabaseEnemyEditor;`, context);
     return new context.__Editor(
         { getStates: () => [], getSkills: () => [], getSystem: () => ({ switches: [] }) },
         null, null, null

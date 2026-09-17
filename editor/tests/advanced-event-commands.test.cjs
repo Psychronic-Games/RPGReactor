@@ -5,6 +5,7 @@ const test = require('node:test');
 
 const editorRoot = path.resolve(__dirname, '..');
 const Codec = require(path.join(editorRoot, 'src', 'event', 'commands', 'ReactorEventCommandCodec.js'));
+require(path.join(editorRoot, 'src', 'utils', 'ParamNames.js')); // parameter labels come from the project's Terms
 const ControlVariablesEditor = require(path.join(editorRoot, 'src', 'event', 'commands', 'ControlVariablesEditor.js'));
 const LoopEditor = require(path.join(editorRoot, 'src', 'event', 'commands', 'LoopEditor.js'));
 
