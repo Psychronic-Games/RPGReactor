@@ -1,5 +1,9 @@
 # Handoff - 0.98.6 In Progress
 
+## 2026-09-17 — PRs #62 and #63 merged (Ash/Ember collapse, class curve target level)
+
+- Merged cleanly (`35bfc24`); see [PR-INTEGRATION-2026-09-17.md](PR-INTEGRATION-2026-09-17.md). Runtime revision 20260917.1, all bundled projects synced. Collapse Effect trait now has values 4 (Ash) and 5 (Ember) driven by `Sprite_Enemy._particleCollapse`. A room battler (`sprite._reactorRoomKey`) is steered to the standard collapse in `P.installRoomAnchors`, next to the boss-collapse duration patch, so the model fades rather than the hidden stand-in shredding while the model blinks out. Dissolving the model itself would be a 3D feature of its own.
+
 ## 2026-09-16 — Palette sideways scrollbar on the web
 
 - `#tileset-preview-canvas`, `#region-palette-canvas` and `#object3d-palette-canvas` were `min-width: 100%; min-height: 100%` at their natural pixel size (8 × tile size) inside `overflow: auto` containers; `html.rr-web #sidebar` is `clamp(260px, 30vw, 380px)`, so 384px (48px tiles) or 512px (64px) always overflowed sideways. Now `width: 100%; height: auto` with the containers `overflow-x: hidden; overflow-y: auto; scrollbar-gutter: stable`. Click mapping already divides by `rect.width`, so hit-testing is unchanged. `map-objects-3d.test.cjs` pins the three. Live: `scratchpad/palette-fit-check.cjs` under the `rr-web` class reports canvas 369px in a 369px client with no sideways scroll at both 384 and 512 natural widths.

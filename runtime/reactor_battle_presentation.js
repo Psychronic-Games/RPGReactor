@@ -617,6 +617,11 @@
             const boss=Sprite_Enemy.prototype.startBossCollapse;
             Sprite_Enemy.prototype.startBossCollapse=function(){boss.call(this);const bounds=this._reactorRoomKey&&this._reactorRoomBounds;if(bounds)this._effectDuration=Math.max(48,Math.round(bounds.height||0));};
         }
+        // Ash and Ember cut the sprite's own bitmap into shards. A room battler's sprite stands in for a model, so its shards would fly in 2D while the model, mirroring the sprite's opacity, vanished at once; the model takes the standard fade instead.
+        if(root.Sprite_Enemy?.prototype.startParticleCollapse){
+            const particle=Sprite_Enemy.prototype.startParticleCollapse;
+            Sprite_Enemy.prototype.startParticleCollapse=function(preset){if(!this._reactorRoomKey)return particle.call(this,preset);this._effectType='collapse';if(typeof this.startCollapse==='function')this.startCollapse();else{this._effectDuration=32;this._appeared=false;}};
+        }
         for(const Class of [root.Sprite_Actor,root.Sprite_Enemy])if(Class){
             const position=Class.prototype.updatePosition;
             Class.prototype.updatePosition=function(...args){position?.apply(this,args);const p=P.roomScreenPosition(this);if(p){this.x=p.x;this.y=p.y;}};
