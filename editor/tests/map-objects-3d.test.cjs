@@ -503,19 +503,21 @@ test('the pickers are built exactly like the A-G preview', () => {
      * two palettes behaving unlike the tileset tabs in the same slot.
      *
      * There is one right answer and the editor already had it. The tileset
-     * preview gives its canvas a natural size and `min-width: 100%`, and puts
-     * it in a container that scrolls — so the bar sits at the panel's edge and
-     * the canvas fills the panel when there is room for it.
+     * preview gives its canvas a natural size and `width: 100%; height: auto`,
+     * and puts it in a container that scrolls vertically only — so the bar sits
+     * at the panel's edge, the canvas fills the panel when there is room for it
+     * and shrinks to it when there is not (a narrower web sidebar used to grow a
+     * sideways scrollbar for the last few pixels).
      */
     const tileset = readSrc('TilesetPaletteViewer.js');
-    assert.match(tileset, /id="tileset-preview-container"[^>]*overflow: auto[^>]*min-height: 0;/);
-    assert.match(tileset, /id="tileset-preview-canvas"[^>]*min-width: 100%; min-height: 100%;/);
+    assert.match(tileset, /id="tileset-preview-container"[^>]*overflow-x: hidden; overflow-y: auto; scrollbar-gutter: stable[^>]*min-height: 0;/);
+    assert.match(tileset, /id="tileset-preview-canvas"[^>]*width: 100%; height: auto;/);
 
     for (const [file, id] of [['RegionManager.js', 'region'], ['Object3DManager.js', 'object3d']]) {
         const source = readSrc(file);
-        assert.match(source, new RegExp(`id="${id}-palette-scroll"[^>]*overflow: auto[^>]*min-height: 0;`),
+        assert.match(source, new RegExp(`id="${id}-palette-scroll"[^>]*overflow-x: hidden; overflow-y: auto; scrollbar-gutter: stable[^>]*min-height: 0;`),
             `${file} scrolls the way the tileset preview does`);
-        assert.match(source, new RegExp(`id="${id}-palette-canvas"[^>]*min-width: 100%; min-height: 100%;`),
+        assert.match(source, new RegExp(`id="${id}-palette-canvas"[^>]*width: 100%; height: auto;`),
             `${file} fills the panel the way the tileset preview does`);
         // Its natural size only — nothing measured, nothing observed.
         assert.doesNotMatch(source, /getBoundingClientRect\(\)\.width/, `${file} measures nothing`);

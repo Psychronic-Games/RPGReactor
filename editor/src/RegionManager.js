@@ -240,8 +240,8 @@ class RegionManager {
                 </div>
 
                 <!-- Region Palette Canvas (scrollable) -->
-                <div id="region-palette-scroll" style="flex: 1; overflow: auto; position: relative; min-height: 0; background-color: var(--color-bg-menubar);">
-                    <canvas id="region-palette-canvas" style="display: block; cursor: pointer; min-width: 100%; min-height: 100%;"></canvas>
+                <div id="region-palette-scroll" style="flex: 1; overflow-x: hidden; overflow-y: auto; scrollbar-gutter: stable; position: relative; min-height: 0; background-color: var(--color-bg-menubar);">
+                    <canvas id="region-palette-canvas" style="display: block; cursor: pointer; width: 100%; height: auto;"></canvas>
                 </div>
             </div>
         `;

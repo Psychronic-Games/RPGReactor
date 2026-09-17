@@ -257,8 +257,8 @@ class Object3DManager {
                             title="${tt('Start a new object on the lowest number nothing is using yet')}">${tt('New object')}</button>
                     </div>
                 </div>
-                <div id="object3d-palette-scroll" style="flex: 1; overflow: auto; position: relative; min-height: 0; background-color: var(--color-bg-menubar);">
-                    <canvas id="object3d-palette-canvas" style="display: block; cursor: pointer; min-width: 100%; min-height: 100%;"></canvas>
+                <div id="object3d-palette-scroll" style="flex: 1; overflow-x: hidden; overflow-y: auto; scrollbar-gutter: stable; position: relative; min-height: 0; background-color: var(--color-bg-menubar);">
+                    <canvas id="object3d-palette-canvas" style="display: block; cursor: pointer; width: 100%; height: auto;"></canvas>
                 </div>
             </div>
         `;

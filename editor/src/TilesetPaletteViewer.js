@@ -106,8 +106,8 @@ class TilesetPaletteViewer {
                 </div>
 
                 <!-- Tileset Preview Canvas -->
-                <div id="tileset-preview-container" class="rr-accent-scrollbar" style="flex: 1; overflow: auto; background-color: transparent; position: relative; min-height: 0;">
-                    <canvas id="tileset-preview-canvas" style="display: block; image-rendering: pixelated; cursor: crosshair; min-width: 100%; min-height: 100%;"></canvas>
+                <div id="tileset-preview-container" class="rr-accent-scrollbar" style="flex: 1; overflow-x: hidden; overflow-y: auto; scrollbar-gutter: stable; background-color: transparent; position: relative; min-height: 0;">
+                    <canvas id="tileset-preview-canvas" style="display: block; image-rendering: pixelated; cursor: crosshair; width: 100%; height: auto;"></canvas>
                     <div id="tileset-empty-message" style="display: none; padding: 20px; text-align: center; color: var(--color-text-dim); font-size: 11px;">
                         ${tt('No tileset image assigned')}<br/>${tt('for this layer')}
                     </div>
