@@ -1,5 +1,9 @@
 # Handoff - 0.98.6 In Progress
 
+## 2026-09-18 — PR #64 merged (editor reads the project's parameter names)
+
+- Merged cleanly (`a4920cd`); reviewed as a draft, no defects found; see [PR-INTEGRATION-2026-09-18.md](PR-INTEGRATION-2026-09-18.md). **Any editor surface that names a base parameter must call `globalThis.rrParamNames(translate)` from `src/utils/ParamNames.js`, never its own literal list** — the two literal lists left in `DatabaseEditorUI.js` are the Terms page's own field labels and must stay literal. The util falls back to the translated English default for a slot the project has not renamed, so sandboxed tests that assert English labels keep passing; a vm context needs `tests/helpers/param-names.cjs` or it throws `rrParamNames is not a function` on the first row rendered. Editor-only, no runtime revision bump. New guard: `editor-sources-parse.test.cjs` parses every script `index.html` loads.
+
 ## 2026-09-17 — PRs #62 and #63 merged (Ash/Ember collapse, class curve target level)
 
 - Merged cleanly (`35bfc24`); see [PR-INTEGRATION-2026-09-17.md](PR-INTEGRATION-2026-09-17.md). Runtime revision 20260917.1, all bundled projects synced. Collapse Effect trait now has values 4 (Ash) and 5 (Ember) driven by `Sprite_Enemy._particleCollapse`. A room battler (`sprite._reactorRoomKey`) is routed in `P.installRoomAnchors` to `room.startDissolve(key, preset)` and its sprite's collapse runs as many frames (`_effectDuration`), so the battle waits.

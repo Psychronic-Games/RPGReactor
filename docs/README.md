@@ -6,6 +6,7 @@
 - [Tiles and small pixel art](TILE-SIZES-AND-SMALL-PIXEL-ART-2026-09-11.md) — sheet dimensions, zoom and rendering/window settings.
 - [September 12 keyboard menus and dialogs](KEYBOARD-MENUS-AND-DIALOGS-2026-09-12.md) — menubar, context menus, database categories and modal focus now answer to the keyboard; what is still uncertified.
 - [September 11 keyboard audit](KEYBOARD-SUPPORT-AUDIT-2026-09-11.md) — verified support and remaining gaps, including Tab traversal.
+- [PR #64 integration](PR-INTEGRATION-2026-09-18.md) — the editor reads the project's own parameter names; a draft PR reviewed in depth before merging.
 - [PR #62 and #63 integration](PR-INTEGRATION-2026-09-17.md) — Ash and Ember collapse effects, class curves anchored at a target level.
 - [PR #61 integration](PR-INTEGRATION-2026-09-16.md) — passive states on both sides of an enemy state condition, several states per condition row, forecast no-target rows.
 - [PR #60 integration](PR-INTEGRATION-2026-09-15.md) — music sequence library and battle music, Quests tab fixes and the quest-log choice merged over the 0.98.7 cycle bump.
