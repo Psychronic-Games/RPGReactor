@@ -78,6 +78,28 @@ test('the curve dialog anchors on a target level, not the engine cap', () => {
     assert.match(classEditorSource, /class="exp-target-input"/);
 });
 
+test('the EXP graph box fits the dialog instead of asserting a height', () => {
+    // It was a hardcoded 420px inside a flex area that is 194px tall at the
+    // modal's own 88vh cap, so the table ran 226px under the sliders with no
+    // bottom edge and the graph was drawn for twice its visible height.
+    assert.doesNotMatch(classEditorSource, /border-radius: 4px; height: 420px; overflow-y: auto;/);
+    assert.match(classEditorSource, /flex: 1 1 420px;[^"]*min-height: 140px;[^"]*overflow: hidden;/,
+        'the box takes what is left, down to a floor, and clips its own content');
+    // The tab area has to be a column, or flex sizing applies to the wrong axis
+    // and the box collapses to its floor whatever room the dialog has.
+    assert.match(classEditorSource, /flex-direction: column;\s*\n\s*flex: 1 1 auto;\s*\n\s*min-height: 0;/);
+
+    // The canvas is sized when the table is built, so a box that follows the
+    // window needs a redraw on resize — and the listener has to go again.
+    assert.match(classEditorSource, /window\.addEventListener\('resize', onWindowResize\)/);
+    assert.match(classEditorSource, /window\.removeEventListener\('resize', onWindowResize\)/);
+    // Both on the close path and if the dialog is dismissed by its owner.
+    assert.match(classEditorSource, /if \(!overlay\.isConnected\) \{\s*\n\s*window\.removeEventListener\('resize', onWindowResize\);/);
+    assert.match(classEditorSource, /cancelAnimationFrame\(updateFrame\)/, 'a pending frame must not outlive the dialog');
+    assert.doesNotMatch(classEditorSource, /'\.close-btn'\)\.addEventListener\('click', \(\) => overlay\.remove\(\)\)/,
+        'the close buttons go through closeExpModal so the listener is removed');
+});
+
 test('the target level comes from the actors that use the class', () => {
     const actors = [
         null,

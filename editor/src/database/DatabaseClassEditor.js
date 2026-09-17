@@ -1246,12 +1246,18 @@ class DatabaseClassEditor {
         `;
         tabBar.appendChild(targetControl);
 
-        // Tab content container with table and graph
+        // Tab content container with table and graph. This is the part that
+        // takes whatever height is left over, so it must be allowed to shrink:
+        // a flex item defaults to min-height:auto and would otherwise refuse to
+        // go below its content, pushing the dialog past its own 88vh cap.
         const tabContent = document.createElement('div');
         tabContent.style.cssText = `
             padding: 16px;
-            overflow-y: auto;
             position: relative;
+            display: flex;
+            flex-direction: column;
+            flex: 1 1 auto;
+            min-height: 0;
         `;
 
         // Controls section with sliders
@@ -1263,19 +1269,21 @@ class DatabaseClassEditor {
         `;
 
         // Create slider controls with appropriate ranges for each parameter
+        // One line per control rather than a label above its row. The four of
+        // them were 293px of a 634px dialog, which is what left the table with
+        // no room; on a single line they are closer to 190px and the table gets
+        // the difference.
         const createSliderControl = (label, value, index, min, max) => {
             const controlDiv = document.createElement('div');
-            controlDiv.style.cssText = 'margin-bottom: 12px;';
+            controlDiv.style.cssText = 'display: flex; align-items: center; gap: 12px; margin-bottom: 10px;';
             controlDiv.innerHTML = `
-                <label class="database-field-label" style="margin-bottom: 4px; display: block;">${label}</label>
-                <div style="display: flex; align-items: center; gap: 12px;">
-                    <input type="range" class="exp-slider" data-param-index="${index}"
-                           min="${min}" max="${max}" value="${value}"
-                           style="flex: 1; height: 6px; background: var(--color-border-subtle); border-radius: 3px; outline: none; cursor: pointer;">
-                    <input type="number" class="exp-number" data-param-index="${index}"
-                           value="${value}" min="${min}" max="${max}"
-                           style="width: 60px; padding: 6px; background: var(--color-bg-button); border: 1px solid var(--color-bg-button-hover); color: var(--color-text-strong); border-radius: 4px; text-align: center;">
-                </div>
+                <label class="database-field-label" style="margin: 0; flex: 0 0 116px; white-space: nowrap;">${label}</label>
+                <input type="range" class="exp-slider" data-param-index="${index}"
+                       min="${min}" max="${max}" value="${value}"
+                       style="flex: 1; min-width: 0; height: 6px; background: var(--color-border-subtle); border-radius: 3px; outline: none; cursor: pointer;">
+                <input type="number" class="exp-number" data-param-index="${index}"
+                       value="${value}" min="${min}" max="${max}"
+                       style="flex: 0 0 60px; width: 60px; padding: 6px; background: var(--color-bg-button); border: 1px solid var(--color-bg-button-hover); color: var(--color-text-strong); border-radius: 4px; text-align: center;">
             `;
             return controlDiv;
         };
@@ -1328,10 +1336,16 @@ class DatabaseClassEditor {
             console.log('Tab:', activeTab, 'MaxExp:', maxExp, 'L1:', data[0]?.exp, `L${maxLevel}:`, data[maxLevel - 1]?.exp);
 
             // Create table with graph background
+            // The box fills whatever the dialog has left instead of asserting a
+            // fixed 420px: at 88vh that was 226px taller than the space it had,
+            // so the table ran under the sliders with no bottom edge and the
+            // graph was drawn for an area twice its visible height. The graph
+            // sits outside the scroller so it stays put as a backdrop, and the
+            // table scrolls over it.
             tabContent.innerHTML = `
-                <div style="position: relative; background: var(--color-bg-input); border: 1px solid var(--color-border-subtle); border-radius: 4px; height: 420px; overflow-y: auto;">
-                    <canvas id="exp-graph-canvas" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0;"></canvas>
-                    <div style="position: relative; z-index: 1; background: color-mix(in srgb, var(--color-bg-input) 85%, transparent);">
+                <div style="position: relative; flex: 1 1 420px; min-width: 0; min-height: 140px; background: var(--color-bg-input); border: 1px solid var(--color-border-subtle); border-radius: 4px; overflow: hidden;">
+                    <canvas id="exp-graph-canvas" style="position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0;"></canvas>
+                    <div style="position: absolute; inset: 0; overflow-y: auto; z-index: 1; background: color-mix(in srgb, var(--color-bg-input) 85%, transparent);">
                         <table style="width: 100%; border-collapse: collapse; font-family: monospace; font-size: 11px; background: transparent;">
                             <tbody>
                                 ${data.map((d, idx) => {
@@ -1461,6 +1475,29 @@ class DatabaseClassEditor {
             });
         };
 
+        // The graph canvas is sized from the box when the table is built, and
+        // the box now follows the window instead of being a fixed 420px, so a
+        // resize would otherwise leave a graph drawn for the old height. The
+        // box's size comes from flex rather than from its content, so redrawing
+        // cannot resize it back and this cannot feed itself.
+        // Self-healing: the dialog can also be dismissed by whoever holds it
+        // through registerDetailModal, which never runs the close handler below,
+        // so the listener takes its own detachment as the signal to go.
+        const onWindowResize = () => {
+            if (!overlay.isConnected) {
+                window.removeEventListener('resize', onWindowResize);
+                return;
+            }
+            scheduleTabDisplay();
+        };
+        window.addEventListener('resize', onWindowResize);
+        const closeExpModal = () => {
+            window.removeEventListener('resize', onWindowResize);
+            if (updateFrame !== null) cancelAnimationFrame(updateFrame);
+            updateFrame = null;
+            overlay.remove();
+        };
+
         // Sync slider and number input
         const syncInputs = () => {
             const targetInput = modal.querySelector('.exp-target-input');
@@ -1504,13 +1541,13 @@ class DatabaseClassEditor {
         overlay.appendChild(modal);
 
         // Event listeners
-        header.querySelector('.close-btn').addEventListener('click', () => overlay.remove());
-        footer.querySelector('.cancel-btn').addEventListener('click', () => overlay.remove());
+        header.querySelector('.close-btn').addEventListener('click', closeExpModal);
+        footer.querySelector('.cancel-btn').addEventListener('click', closeExpModal);
         footer.querySelector('.ok-btn').addEventListener('click', () => {
             classEntry.expParams = [...params];
             this.databaseManager.updateClass(classEntry.id, classEntry);
             this.refreshClassDetail(classEntry);
-            overlay.remove();
+            closeExpModal();
         });
         overlay.addEventListener('click', (e) => {
             // A click on the backdrop no longer closes the dialog: an accidental
