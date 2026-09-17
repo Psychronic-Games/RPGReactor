@@ -111,6 +111,29 @@ class DatabaseClassEditor {
         return section;
     }
 
+    /**
+     * The level this class is actually being balanced for: the highest maxLevel
+     * among the actors assigned to it. Curves are STORED across the full 1..999
+     * engine domain, but authoring against 999 asks the designer for a number no
+     * player in their game will ever reach — a party capped at 60 got a Lv999
+     * anchor and no readout of the level that mattered. Falls back to the highest
+     * maxLevel anywhere in the database, then to the MZ default of 99.
+     */
+    _targetLevelFor(classEntry) {
+        const capLevel = globalThis.RR_LIMITS?.ACTOR_LEVEL || 999;
+        const clamp = value => Math.max(2, Math.min(capLevel, Math.floor(Number(value))));
+        const actors = this.databaseManager?.getActors?.() || [];
+        const levelsOf = list => list
+            .filter(actor => actor && Number.isFinite(Number(actor.maxLevel)) && Number(actor.maxLevel) >= 2)
+            .map(actor => Number(actor.maxLevel));
+
+        const own = levelsOf(actors.filter(actor => actor && actor.classId === classEntry?.id));
+        if (own.length) return clamp(Math.max(...own));
+        const any = levelsOf(actors);
+        if (any.length) return clamp(Math.max(...any));
+        return 99;
+    }
+
     createParameterCurvesSection(classEntry) {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const section = document.createElement('div');
@@ -119,20 +142,23 @@ class DatabaseClassEditor {
         const paramNames = ['Max HP', 'Max MP', 'Attack', 'Defense', 'M.Attack', 'M.Defense', 'Agility', 'Luck'].map(name => tt(name));
         const paramColors = ['#FF3366', '#33CCFF', '#FF9933', '#FFD700', '#9966FF', '#33FF99', '#FF66CC', '#66FFFF'];
         const params = classEntry.params || [];
+        const targetLevel = this._targetLevelFor(classEntry);
+        const midLevel = Math.max(2, Math.min(targetLevel - 1, Math.round((1 + targetLevel) / 2)));
 
         let paramsHTML = '';
         paramNames.forEach((name, idx) => {
             const values = params[idx] || [];
-            const level1 = globalThis.rrClassParamAtLevel?.(values, 1) ?? 0;
-            const level99 = globalThis.rrClassParamAtLevel?.(values, 99) ?? 0;
-            const level999 = globalThis.rrClassParamAtLevel?.(values, 999) ?? level99;
+            const valueAt = level => globalThis.rrClassParamAtLevel?.(values, level) ?? 0;
+            const level1 = valueAt(1);
+            const levelMid = valueAt(midLevel);
+            const levelTarget = valueAt(targetLevel);
             const canvasId = `param-curve-${classEntry.id}-${idx}`;
             const color = paramColors[idx];
             paramsHTML += `
                 <div class="param-curve-cell" data-param-idx="${idx}" style="display: flex; flex-direction: column; cursor: pointer; padding: 4px; border-radius: 4px; transition: background 0.15s;" title="${tt('Click to edit')} ${name} ${tt('curve')}">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
                         <label class="database-field-label" style="font-size: 10px; color: ${color}; font-weight: bold;">${name}</label>
-                         <span style="font-size: 9px; color: var(--color-text-muted);">${tt('Lv')}1: ${level1} → ${tt('Lv')}99: ${level99} → ${tt('Lv')}999: ${level999}</span>
+                         <span style="font-size: 9px; color: var(--color-text-muted);">${tt('Lv')}1: ${level1} → ${tt('Lv')}${midLevel}: ${levelMid} → ${tt('Lv')}${targetLevel}: ${levelTarget}</span>
                     </div>
                     <canvas id="${canvasId}" width="200" height="50"
                             style="width: 100%; height: 50px; border: 1px solid var(--color-border); background: var(--color-bg-input); border-radius: 4px;"
@@ -154,7 +180,7 @@ class DatabaseClassEditor {
             paramNames.forEach((name, idx) => {
                 const canvas = section.querySelector(`#param-curve-${classEntry.id}-${idx}`);
                 if (canvas) {
-                    this.drawParameterCurve(canvas, params[idx] || [], paramColors[idx]);
+                    this.drawParameterCurve(canvas, params[idx] || [], paramColors[idx], { maxLevel: targetLevel });
                 }
             });
 
@@ -177,13 +203,16 @@ class DatabaseClassEditor {
     }
 
     /**
-     * Generate-Curve modal for a single parameter: user picks the Lv1 value,
-     * the value at the level cap (999), and a curve shape (exponent), and the
-     * editor recomputes every level in the 1..cap domain. Apply writes the
-     * full per-level array back to classEntry.params[paramIdx]. Legacy
-     * 100-entry MZ arrays seed the cap value from the runtime's linear
-     * extrapolation, so opening and applying without touching anything keeps
-     * the curve the game was already playing.
+     * Generate-Curve modal for a single parameter: user picks the Lv1 value, a
+     * target level, the value at that target level, and a curve shape
+     * (exponent). The editor still writes the full 1..999 array the runtime
+     * reads — the target level only decides where the second anchor sits and
+     * how far the preview plots, so the numbers on screen are levels the game
+     * will actually reach. Levels past the target continue the same curve
+     * rather than flat-lining, so raising an actor's maxLevel later still has
+     * sensible values waiting. Legacy 100-entry MZ arrays seed the anchor from
+     * the runtime's linear extrapolation, so opening and applying without
+     * touching anything keeps the curve the game was already playing.
      */
     showParameterCurveModal(classEntry, paramIdx, paramName, color) {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
@@ -198,10 +227,11 @@ class DatabaseClassEditor {
 
         // Param-specific sane bounds. HP/MP go high; other stats stay smaller.
         const maxAllowed = (paramIdx === 0) ? 99999 : (paramIdx === 1) ? 99999 : 9999;
+        let targetLevel = this._targetLevelFor(classEntry);
         const initialLv1 = Number.isFinite(Number(current[1])) ? Number(current[1]) : 1;
-        const initialLvMax = globalThis.rrClassParamAtLevel?.(current, capLevel) ?? initialLv1;
+        const initialLvMax = globalThis.rrClassParamAtLevel?.(current, targetLevel) ?? initialLv1;
         // Best-fit exponent from existing curve so the slider starts where the curve already lives.
-        const initialExponent = this._inferCurveExponent(current);
+        const initialExponent = this._inferCurveExponent(current, targetLevel);
 
         let lv1 = initialLv1;
         let lvMax = Math.max(1, Math.min(maxAllowed, initialLvMax));
@@ -209,7 +239,7 @@ class DatabaseClassEditor {
         let workingValues = current.slice();
 
         const recompute = () => {
-            workingValues = this._generateParamCurve(lv1, lvMax, exponent, capLevel + 1);
+            workingValues = this._generateParamCurve(lv1, lvMax, exponent, capLevel + 1, targetLevel, maxAllowed);
             redraw();
         };
 
@@ -234,7 +264,13 @@ class DatabaseClassEditor {
                 </div>
 
                 <div style="display: grid; grid-template-columns: 110px 1fr 80px; gap: 12px; align-items: center;">
-                    <label style="font-size: 12px; color: var(--color-text-muted);">${tt('Level 999 value')}</label>
+                    <label style="font-size: 12px; color: var(--color-text-muted);">${tt('Target level')}</label>
+                    <span class="rr-pc-target-hint" style="font-size: 11px; color: var(--color-text-muted);"></span>
+                    <input type="number" class="rr-pc-target-input rr-input" min="2" max="${capLevel}" value="${targetLevel}">
+                </div>
+
+                <div style="display: grid; grid-template-columns: 110px 1fr 80px; gap: 12px; align-items: center;">
+                    <label style="font-size: 12px; color: var(--color-text-muted);">${tt('Value at target level')}</label>
                     <input type="range" class="rr-pc-lvmax-slider rr-range" min="1" max="${maxAllowed}" value="${lvMax}">
                     <input type="number" class="rr-pc-lvmax-input rr-input" min="1" max="${maxAllowed}" value="${lvMax}">
                 </div>
@@ -272,15 +308,18 @@ class DatabaseClassEditor {
         const previewCanvas = modal.querySelector('.rr-pc-preview');
         const readout = modal.querySelector('.rr-pc-readout');
         const shapeLabel = modal.querySelector('.rr-pc-shape-label');
+        const targetHint = modal.querySelector('.rr-pc-target-hint');
 
         const redraw = () => {
             // Fixed Y-axis anchored at 0 so the visual scale stays absolute
             // (auto-fit would mirror rising vs falling curves of the same shape).
             const yMax = Math.max(lv1, lvMax, 1);
-            this.drawParameterCurve(previewCanvas, workingValues, color, { min: 0, max: yMax });
+            this.drawParameterCurve(previewCanvas, workingValues, color, { min: 0, max: yMax, maxLevel: targetLevel });
             const level = tt('Lv');
             const at = lvl => globalThis.rrClassParamAtLevel?.(workingValues, lvl) ?? workingValues[Math.min(lvl, workingValues.length - 1)];
-            readout.textContent = `${level}1: ${at(1)}  ${level}99: ${at(99)}  ${level}500: ${at(500)}  ${level}${capLevel}: ${at(capLevel)}`;
+            const midLevel = Math.max(2, Math.min(targetLevel - 1, Math.round((1 + targetLevel) / 2)));
+            readout.textContent = `${level}1: ${at(1)}  ${level}${midLevel}: ${at(midLevel)}  ${level}${targetLevel}: ${at(targetLevel)}`;
+            targetHint.textContent = `${level}1 – ${level}${targetLevel}`;
             shapeLabel.textContent = exponent === 1 ? tt('Linear') : exponent.toFixed(2);
         };
 
@@ -290,16 +329,32 @@ class DatabaseClassEditor {
         const lvMaxSlider = modal.querySelector('.rr-pc-lvmax-slider');
         const lvMaxInput  = modal.querySelector('.rr-pc-lvmax-input');
         const shapeSlider = modal.querySelector('.rr-pc-shape-slider');
+        const targetInput = modal.querySelector('.rr-pc-target-input');
 
         const syncLv1 = (v) => { lv1 = Math.max(1, Math.min(maxAllowed, parseInt(v) || 1)); lv1Slider.value = lv1; lv1Input.value = lv1; recompute(); };
         const syncLvMax = (v) => { lvMax = Math.max(1, Math.min(maxAllowed, parseInt(v) || 1)); lvMaxSlider.value = lvMax; lvMaxInput.value = lvMax; recompute(); };
         const syncShape = (v) => { exponent = (parseInt(v) || 100) / 100; recompute(); };
+        // Moving the target re-anchors the view onto the SAME curve: read what
+        // the working curve already gives at the new target and use that as the
+        // anchor value. Because the generator is a pure power curve, that leaves
+        // every level's value unchanged — only the level you author against moves.
+        const syncTarget = (v) => {
+            const next = Math.max(2, Math.min(capLevel, parseInt(v) || targetLevel));
+            if (next === targetLevel) return;
+            const anchored = globalThis.rrClassParamAtLevel?.(workingValues, next) ?? lvMax;
+            targetLevel = next;
+            lvMax = Math.max(1, Math.min(maxAllowed, Math.round(Number(anchored) || lvMax)));
+            lvMaxSlider.value = lvMax;
+            lvMaxInput.value = lvMax;
+            recompute();
+        };
 
         lv1Slider.addEventListener('input', e => syncLv1(e.target.value));
         lv1Input.addEventListener('input', e => syncLv1(e.target.value));
         lvMaxSlider.addEventListener('input', e => syncLvMax(e.target.value));
         lvMaxInput.addEventListener('input', e => syncLvMax(e.target.value));
         shapeSlider.addEventListener('input', e => syncShape(e.target.value));
+        targetInput.addEventListener('change', e => syncTarget(e.target.value));
 
         const close = () => overlay.remove();
         modal.querySelector('.rr-param-curve-close').addEventListener('click', close);
@@ -310,14 +365,21 @@ class DatabaseClassEditor {
             this.commonUI.updateStatus(`${paramName} ${tt('curve updated')}`);
             close();
             // Redraw the mini curve in the section
+            // The grid summarises all eight params side by side, so it stays on
+            // the class's own derived target even if this dialog was pointed at
+            // a different level — otherwise one cell would report Lv40 while its
+            // seven neighbours reported Lv60. The dialog's target is a view, not
+            // something the curve stores.
+            const cellTarget = this._targetLevelFor(classEntry);
             const mini = document.getElementById(`param-curve-${classEntry.id}-${paramIdx}`);
-            if (mini) this.drawParameterCurve(mini, classEntry.params[paramIdx], color);
-            // Refresh the Lv1/Lv99/Lv999 readout span next to the param name
+            if (mini) this.drawParameterCurve(mini, classEntry.params[paramIdx], color, { maxLevel: cellTarget });
+            // Refresh the Lv1/mid/target readout span next to the param name
             const cell = mini ? mini.closest('.param-curve-cell') : null;
             const readoutSpan = cell ? cell.querySelector('span') : null;
             if (readoutSpan) {
                 const at = lvl => globalThis.rrClassParamAtLevel?.(workingValues, lvl) ?? workingValues[Math.min(lvl, workingValues.length - 1)];
-                readoutSpan.textContent = `${tt('Lv')}1: ${at(1)} → ${tt('Lv')}99: ${at(99)} → ${tt('Lv')}${capLevel}: ${at(capLevel)}`;
+                const midLevel = Math.max(2, Math.min(cellTarget - 1, Math.round((1 + cellTarget) / 2)));
+                readoutSpan.textContent = `${tt('Lv')}1: ${at(1)} → ${tt('Lv')}${midLevel}: ${at(midLevel)} → ${tt('Lv')}${cellTarget}: ${at(cellTarget)}`;
             }
         });
         // A click on the backdrop no longer closes the dialog: close deliberately.
@@ -326,21 +388,33 @@ class DatabaseClassEditor {
     }
 
     /**
-     * Generate a length-`count` parameter curve from the Lv1 value to the
-     * final-level value using value(t) = lv1 + (lvEnd - lv1) * t^exponent,
-     * with t = (level-1)/(lastLevel-1). Exponent < 1 = fast early growth,
+     * Generate a length-`count` parameter curve that passes through lvEnd at
+     * `targetLevel`, using value(t) = lv1 + (lvEnd - lv1) * t^exponent with
+     * t = (level-1)/(targetLevel-1). Exponent < 1 = fast early growth,
      * = 1 linear, > 1 slow early / fast late.
+     *
+     * The array is still filled to `count`, so the stored curve covers the
+     * whole engine domain whatever the target is. Past the target, t exceeds 1
+     * and the same curve simply continues — a designer capping at 60 gets
+     * plausible values at 61+ instead of a flat line, should an actor's
+     * maxLevel ever be raised. `targetLevel` defaults to the last level in the
+     * array, which is the pre-target-level behaviour. `limit` caps that tail at
+     * the same ceiling the dialog allows for the anchor: with a target of 40 and
+     * a steep exponent, t reaches ~25 by Lv999 and an uncapped cubic would write
+     * millions into the array.
      */
-    _generateParamCurve(lv1, lvEnd, exponent, count) {
+    _generateParamCurve(lv1, lvEnd, exponent, count, targetLevel, limit) {
         // Params arrays are indexed BY LEVEL: [level] for level 1..lastLevel,
         // with [0] an unread placeholder. The old 0-based mapping put the
         // Lv1 value in the placeholder and read every level one step low.
         const out = new Array(count);
         const lastLevel = Math.max(2, count - 1);
+        const anchorLevel = Math.max(2, Math.min(lastLevel, Math.floor(Number(targetLevel) || lastLevel)));
+        const ceiling = Number.isFinite(Number(limit)) ? Number(limit) : Infinity;
         for (let level = 1; level < count; level++) {
-            const t = Math.min(1, (level - 1) / (lastLevel - 1));
+            const t = (level - 1) / (anchorLevel - 1);
             const v = lv1 + (lvEnd - lv1) * Math.pow(t, exponent);
-            out[level] = Math.max(1, Math.round(v));
+            out[level] = Math.min(ceiling, Math.max(1, Math.round(v)));
         }
         out[0] = out[1]; // placeholder mirrors Lv1, like MZ writes it
         return out;
@@ -348,39 +422,55 @@ class DatabaseClassEditor {
 
     /**
      * Reverse-fit an exponent from an existing curve so the modal opens with a
-     * slider position that roughly matches the saved shape. Uses the midpoint
-     * of whatever domain the array actually stores (100-entry MZ arrays and
-     * full 1000-entry Reactor arrays alike).
+     * slider position that roughly matches the saved shape. Samples the
+     * midpoint of the authoring domain — the target level when one is given,
+     * otherwise whatever domain the array actually stores (100-entry MZ arrays
+     * and full 1000-entry Reactor arrays alike).
      */
-    _inferCurveExponent(values) {
+    _inferCurveExponent(values, targetLevel) {
         if (!values || values.length < 3) return 1;
         const capLevel = globalThis.RR_LIMITS?.ACTOR_LEVEL || 999;
-        const lastLevel = Math.min(values.length - 1, capLevel);
+        const requested = Math.floor(Number(targetLevel) || capLevel);
+        const lastLevel = Math.max(2, Math.min(values.length - 1, capLevel, requested));
         const lv1 = Number(values[1]);
         const lvEnd = Number(values[lastLevel]);
         if (!Number.isFinite(lv1) || !Number.isFinite(lvEnd) || lvEnd === lv1) return 1;
-        const mid = Number(values[Math.round((1 + lastLevel) / 2)]);
+        // The curve parameter is t = (level-1)/(lastLevel-1), so the level where
+        // t is exactly 0.5 is 1 + (lastLevel-1)/2 — NOT (1+lastLevel)/2. Those
+        // agree whenever lastLevel is odd, which every domain used to be (999,
+        // and 99 for legacy arrays), so the old form was right by luck. At an
+        // even target such as 60 it samples t = 0.508 while solving as if it
+        // were 0.5, and the fit comes back ~3% low: reopening the dialog and
+        // pressing Apply then quietly rebalanced the class. Solve at the t the
+        // sample actually sits on instead.
+        const midLevel = Math.round(1 + (lastLevel - 1) / 2);
+        const mid = Number(values[midLevel]);
         if (!Number.isFinite(mid)) return 1;
-        // mid = lv1 + (lvEnd - lv1) * 0.5^exponent  =>  0.5^exponent = (mid-lv1)/(lvEnd-lv1)
+        const t = (midLevel - 1) / (lastLevel - 1);
+        if (!(t > 0) || t >= 1) return 1;
+        // mid = lv1 + (lvEnd - lv1) * t^exponent  =>  t^exponent = (mid-lv1)/(lvEnd-lv1)
         const ratio = (mid - lv1) / (lvEnd - lv1);
         if (ratio <= 0 || ratio >= 1) return 1;
-        const exp = Math.log(ratio) / Math.log(0.5);
+        const exp = Math.log(ratio) / Math.log(t);
         return Math.max(0.3, Math.min(3.0, exp));
     }
 
     /**
-     * Plot the parameter across the full 1..999 level domain — the same
-     * series the game computes: stored values where the array has them,
-     * linear extrapolation at the final slope beyond. The authored region
-     * draws solid; an extrapolated tail (legacy 100-entry MZ arrays) draws
-     * dashed and dimmer past a faint divider so it reads as "projected".
+     * Plot the parameter across the 1..maxLevel domain — the same series the
+     * game computes: stored values where the array has them, linear
+     * extrapolation at the final slope beyond. The authored region draws solid;
+     * an extrapolated tail (legacy 100-entry MZ arrays) draws dashed and dimmer
+     * past a faint divider so it reads as "projected".
      *
-     * @param {Object} [bounds] - { min, max } to lock the Y-axis (used by the
+     * @param {Object} [options] - { min, max } to lock the Y-axis (used by the
      *   Generate Curve preview so the visual scale stays absolute and curves
      *   don't appear "mirrored" between rising vs falling configs). When omitted,
      *   the canvas auto-fits the values (used by the mini-curve thumbnails).
+     *   { maxLevel } plots only up to that level instead of the engine cap, so
+     *   a class balanced for Lv60 fills the width with the levels that exist
+     *   rather than squeezing them into the first 6% of the canvas.
      */
-    drawParameterCurve(canvas, values, color, bounds) {
+    drawParameterCurve(canvas, values, color, options) {
         const ctx = canvas.getContext('2d');
         const width = canvas.width;
         const height = canvas.height;
@@ -391,12 +481,13 @@ class DatabaseClassEditor {
         if (!values || values.length === 0) return;
 
         const capLevel = globalThis.RR_LIMITS?.ACTOR_LEVEL || 999;
-        let authoredLevel = Math.min(values.length - 1, capLevel);
+        const plotLevel = Math.max(2, Math.min(capLevel, Math.floor(Number(options?.maxLevel) || capLevel)));
+        let authoredLevel = Math.min(values.length - 1, plotLevel);
         while (authoredLevel > 1 && !Number.isFinite(Number(values[authoredLevel]))) authoredLevel--;
         if (!Number.isFinite(Number(values[authoredLevel]))) return;
 
-        const series = new Array(capLevel);
-        for (let level = 1; level <= capLevel; level++) {
+        const series = new Array(plotLevel);
+        for (let level = 1; level <= plotLevel; level++) {
             series[level - 1] = globalThis.rrClassParamAtLevel
                 ? globalThis.rrClassParamAtLevel(values, level)
                 : Number(values[Math.min(level, authoredLevel)]) || 0;
@@ -404,10 +495,11 @@ class DatabaseClassEditor {
         const splitIndex = authoredLevel - 1;
 
         // Find min/max for scaling
-        const min = bounds ? bounds.min : Math.min(...series);
-        const max = bounds ? bounds.max : Math.max(...series);
+        const hasBounds = Number.isFinite(Number(options?.min)) && Number.isFinite(Number(options?.max));
+        const min = hasBounds ? Number(options.min) : Math.min(...series);
+        const max = hasBounds ? Number(options.max) : Math.max(...series);
         const range = max - min || 1;
-        const xAt = index => (index / Math.max(1, capLevel - 1)) * width;
+        const xAt = index => (index / Math.max(1, plotLevel - 1)) * width;
         const yAt = value => height - ((value - min) / range) * (height - 6) - 3;
 
         // Draw gradient fill under curve
@@ -436,7 +528,7 @@ class DatabaseClassEditor {
         ctx.stroke();
 
         // Extrapolated tail: dashed, dimmer, behind a faint divider tick
-        if (splitIndex < capLevel - 1) {
+        if (splitIndex < plotLevel - 1) {
             const splitX = xAt(splitIndex);
             ctx.shadowBlur = 0;
             ctx.save();
@@ -453,7 +545,7 @@ class DatabaseClassEditor {
             ctx.lineWidth = 2;
             ctx.setLineDash([5, 4]);
             ctx.beginPath();
-            for (let index = splitIndex; index < capLevel; index++) {
+            for (let index = splitIndex; index < plotLevel; index++) {
                 if (index === splitIndex) ctx.moveTo(xAt(index), yAt(series[index]));
                 else ctx.lineTo(xAt(index), yAt(series[index]));
             }
@@ -1081,8 +1173,10 @@ class DatabaseClassEditor {
             classEntry.expParams = [30, 20, 30, 30]; // [basis, extra, accelA, accelB]
         }
 
+        const capLevel = globalThis.RR_LIMITS?.ACTOR_LEVEL || 999;
         let params = [...classEntry.expParams];
         let activeTab = 'nextLevel';
+        let targetLevel = this._targetLevelFor(classEntry);
 
         // Create modal overlay
         const overlay = document.createElement('div');
@@ -1136,6 +1230,21 @@ class DatabaseClassEditor {
             });
             tabBar.appendChild(tabBtn);
         });
+
+        // Target level, in the tab bar rather than above the sliders. The table
+        // used to enumerate all 999 levels — roughly 200 rows of EXP figures a
+        // game capped at 60 will never award, rebuilt on every slider tick.
+        // It scopes what the two tabs show, so it belongs beside them; the
+        // control panel below is already 358px of a 634px dialog and a sixth row
+        // there would have taken another third of the table's height.
+        const targetControl = document.createElement('div');
+        targetControl.style.cssText = 'display: flex; align-items: center; gap: 8px; padding: 0 12px; border-left: 1px solid var(--color-border-subtle); flex: 0 0 auto;';
+        targetControl.innerHTML = `
+            <label class="database-field-label" style="margin: 0; white-space: nowrap;">${tt('Target level')}</label>
+            <input type="number" class="exp-target-input" value="${targetLevel}" min="2" max="${capLevel}"
+                   style="width: 62px; padding: 4px 6px; background: var(--color-bg-button); border: 1px solid var(--color-bg-button-hover); color: var(--color-text-strong); border-radius: 4px; text-align: center;">
+        `;
+        tabBar.appendChild(targetControl);
 
         // Tab content container with table and graph
         const tabContent = document.createElement('div');
@@ -1198,8 +1307,8 @@ class DatabaseClassEditor {
                 btn.style.color = isActive ? 'var(--color-accent-bright)' : 'var(--color-text-muted)';
             });
 
-            // Generate data for all levels
-            const maxLevel = globalThis.RR_LIMITS?.ACTOR_LEVEL || 999;
+            // Generate data up to the target level the designer is balancing for
+            const maxLevel = targetLevel;
             const nextLevelData = [];
             const totalData = [];
 
@@ -1216,7 +1325,7 @@ class DatabaseClassEditor {
             const data = activeTab === 'nextLevel' ? nextLevelData : totalData;
             const maxExp = Math.max(...data.map(d => d.exp));
 
-            console.log('Tab:', activeTab, 'MaxExp:', maxExp, 'L1:', data[0]?.exp, 'L99:', data[98]?.exp, 'L999:', data[998]?.exp);
+            console.log('Tab:', activeTab, 'MaxExp:', maxExp, 'L1:', data[0]?.exp, `L${maxLevel}:`, data[maxLevel - 1]?.exp);
 
             // Create table with graph background
             tabContent.innerHTML = `
@@ -1354,6 +1463,14 @@ class DatabaseClassEditor {
 
         // Sync slider and number input
         const syncInputs = () => {
+            const targetInput = modal.querySelector('.exp-target-input');
+            targetInput?.addEventListener('change', (e) => {
+                const next = Math.max(2, Math.min(capLevel, parseInt(e.target.value) || targetLevel));
+                targetLevel = next;
+                e.target.value = next;
+                scheduleTabDisplay();
+            });
+
             modal.querySelectorAll('.exp-slider').forEach(slider => {
                 slider.addEventListener('input', (e) => {
                     const index = parseInt(e.target.dataset.paramIndex);
