@@ -453,7 +453,7 @@ class DatabaseTraitEditor {
             this._rowHTML(trait, {
                 code: 63, label: this._t('Collapse Effect'),
                 control: this._selectHTML('collapse-select', 63, this._hintedOptions(63, trait,
-                    ['Normal', 'Boss', 'Instant', 'No Disappear'].map(label => this._t(label)),
+                    ['Normal', 'Boss', 'Instant', 'No Disappear', 'Ash', 'Ember'].map(label => this._t(label)),
                     help ? help.collapseEffects() : []))
             }),
             this._rowHTML(trait, {
