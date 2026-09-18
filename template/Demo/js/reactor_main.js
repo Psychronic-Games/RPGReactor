@@ -1,5 +1,5 @@
 //=============================================================================
-// reactor_main.js v1.9.0 — RPG Reactor runtime entry point
+// reactor_main.js — RPG Reactor runtime entry point
 // RPG Reactor runtime version: 0.98.7
 // RPG Reactor runtime revision: 20260918.4
 // The same stamp, reachable from the F12 console: which engine is this

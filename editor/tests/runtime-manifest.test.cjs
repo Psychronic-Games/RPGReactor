@@ -145,7 +145,14 @@ test('the revision the updater compares and the revision the game reports are th
     assert.ok(stated, 'reactor_main.js states a runtime revision in its header');
     assert.ok(reported, 'reactor_main.js sets RPG_REACTOR_RUNTIME_REVISION');
     assert.equal(stated, reported,
-        'the header comment decides whether a project refreshes; bump it with the global');
+        'the header comment decides whether a project refreshes; sync-runtime stamps it from the global');
+
+    // The version comment has an executable twin too: the editor compares it
+    // against editor/package.json, so a hand-typed copy that drifts either
+    // refreshes every project on every open or stops refreshing them at all.
+    const statedVersion = main.match(/RPG Reactor runtime version:\s*([\d.]+)/)?.[1];
+    const packaged = JSON.parse(fs.readFileSync(path.join(workspaceRoot, 'editor', 'package.json'), 'utf8')).version;
+    assert.equal(statedVersion, packaged, 'the header version is stamped from editor/package.json');
 
     // And the bundled projects carry that same runtime, or they are running an older engine.
     const templates = path.join(workspaceRoot, 'template');
