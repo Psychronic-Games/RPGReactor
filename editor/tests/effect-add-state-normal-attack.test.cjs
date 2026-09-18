@@ -3,6 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
+const { paramNamesSource } = require('./helpers/param-names.cjs');
 
 const source = fs.readFileSync(
     path.join(__dirname, '..', 'src', 'database', 'DatabaseEffectEditor.js'),
@@ -16,7 +17,9 @@ const context = {
         .replaceAll('>', '&gt;')
         .replaceAll('"', '&quot;')
 };
-vm.runInNewContext(`${source}\nglobalThis.DatabaseEffectEditor = DatabaseEffectEditor;`, context);
+vm.runInNewContext(
+    `${paramNamesSource()}\n${source}\nglobalThis.DatabaseEffectEditor = DatabaseEffectEditor;`,
+    context);
 const DatabaseEffectEditor = context.DatabaseEffectEditor;
 
 function renderStateTab(effect) {

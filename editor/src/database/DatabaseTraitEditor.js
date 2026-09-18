@@ -248,8 +248,7 @@ class DatabaseTraitEditor {
     }
 
     _paramOptions(code, trait) {
-        return ['Max HP', 'Max MP', 'Attack', 'Defense', 'M.Attack', 'M.Defense', 'Agility', 'Luck']
-            .map(param => this._t(param))
+        return globalThis.rrParamNames(param => this._t(param))
             .map((param, idx) => `<option value="${idx}" ${trait.code === code && trait.dataId === idx ? 'selected' : ''}>${param}</option>`)
             .join('');
     }
@@ -304,10 +303,14 @@ class DatabaseTraitEditor {
 
     createParamTab(container, trait) {
         const help = globalThis.TraitHelp;
-        const exParams = this._hintedOptions(22, trait,
-            ['Hit Rate', 'Evasion Rate', 'Critical Rate', 'Critical Evasion', 'Magic Evasion', 'Magic Reflection', 'Counter Attack', 'HP Regeneration', 'MP Regeneration', 'TP Regeneration']
-                .map(param => this._t(param)),
-            help ? help.exParams() : []);
+        // Hit and Evasion are named on the Terms page, in terms.params 8-9; the
+        // eight after them have no term slot and keep the editor's own labels.
+        const exParamNames = ['Hit Rate', 'Evasion Rate', 'Critical Rate', 'Critical Evasion', 'Magic Evasion',
+            'Magic Reflection', 'Counter Attack', 'HP Regeneration', 'MP Regeneration', 'TP Regeneration']
+            .map(param => this._t(param));
+        [exParamNames[0], exParamNames[1]] = globalThis.rrHitEvasionNames(
+            ['Hit Rate', 'Evasion Rate'], param => this._t(param));
+        const exParams = this._hintedOptions(22, trait, exParamNames, help ? help.exParams() : []);
         const spParams = this._hintedOptions(23, trait,
             ['Target Rate', 'Guard Effect', 'Recovery Effect', 'Pharmacology', 'MP Cost Rate', 'TP Charge Rate', 'Physical Damage', 'Magical Damage', 'Floor Damage', 'Experience']
                 .map(param => this._t(param)),

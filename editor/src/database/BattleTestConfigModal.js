@@ -457,7 +457,7 @@ class BattleTestConfigModal {
         container.innerHTML = '';
 
         const stats = this.calculateStats(battler);
-        const paramNames = ['Max HP', 'Max MP', 'Attack', 'Defense', 'M.Attack', 'M.Defense', 'Agility', 'Luck'].map(name => this._t(name));
+        const paramNames = globalThis.rrParamNames(name => this._t(name));
 
         const grid = document.createElement('div');
         grid.style.cssText = 'display: grid; grid-template-columns: 1fr 1fr; gap: 4px 16px;';

@@ -107,7 +107,7 @@ class DatabaseArmorEditor {
 
         // Parameters Section
         const params = armor.params || [0,0,0,0,0,0,0,0];
-        const paramNames = ['Max HP', 'Max MP', 'Attack', 'Defense', 'M.Attack', 'M.Defense', 'Agility', 'Luck'].map(name => window.I18n ? window.I18n.tText(name) : name);
+        const paramNames = globalThis.rrParamNames();
         const paramsSection = document.createElement('div');
         paramsSection.className = 'database-section';
         paramsSection.innerHTML = `

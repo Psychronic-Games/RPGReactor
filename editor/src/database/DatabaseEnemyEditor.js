@@ -384,8 +384,8 @@ class DatabaseEnemyEditor {
     parameterRows(enemy) {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const params = (enemy && enemy.params) || [0, 0, 0, 0, 0, 0, 0, 0];
-        const rows = ['Max HP', 'Max MP', 'Attack', 'Defense', 'M.Attack', 'M.Defense', 'Agility', 'Luck']
-            .map((name, idx) => ({ label: tt(name), value: params[idx] || 0, field: 'params', index: idx }));
+        const rows = globalThis.rrParamNames(tt)
+            .map((name, idx) => ({ label: name, value: params[idx] || 0, field: 'params', index: idx }));
         rows.splice(2, 0, { label: tt('Max TP'), value: this.enemyMaxTp(enemy), field: 'maxTp', index: null });
         return rows;
     }

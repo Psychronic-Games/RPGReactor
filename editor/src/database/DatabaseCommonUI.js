@@ -33,12 +33,14 @@ class DatabaseCommonUI {
     getTraitValue(trait) {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
         if (trait.code === 21) { // Parameter
-            const params = ['Max HP', 'Max MP', 'Attack', 'Defense', 'M.Attack', 'M.Defense', 'Agility', 'Luck'];
+            const params = globalThis.rrParamNames(tt);
             const change = Math.round((trait.value - 1) * 100);
-            return `${tt(params[trait.dataId] || 'Param')} ${change >= 0 ? '+' : ''}${change}%`;
+            return `${params[trait.dataId] || tt('Param')} ${change >= 0 ? '+' : ''}${change}%`;
         } else if (trait.code === 22) { // Ex-Parameter
-            const exParams = ['Hit Rate', 'Evasion', 'Critical Rate', 'Critical Evade', 'Magic Evade', 'Magic Reflect', 'Counter', 'HP Regen', 'MP Regen', 'TP Regen'];
-            return `${tt(exParams[trait.dataId] || 'ExParam')} +${Math.round(trait.value * 100)}%`;
+            const exParams = ['Hit Rate', 'Evasion', 'Critical Rate', 'Critical Evade', 'Magic Evade', 'Magic Reflect', 'Counter', 'HP Regen', 'MP Regen', 'TP Regen'].map(tt);
+            // Hit and Evasion are named on the Terms page, in terms.params 8-9.
+            [exParams[0], exParams[1]] = globalThis.rrHitEvasionNames(['Hit Rate', 'Evasion'], tt);
+            return `${exParams[trait.dataId] || tt('Ex-Parameter')} +${Math.round(trait.value * 100)}%`;
         } else if (trait.code === 23) { // Sp-Parameter
             const spParams = ['Target Rate', 'Guard Rate', 'Recovery Rate', 'Pharmacology', 'MP Cost Rate', 'TP Charge Rate', 'Physical Damage', 'Magical Damage', 'Floor Damage', 'Experience'];
             return `${tt(spParams[trait.dataId] || 'SpParam')} ${Math.round(trait.value * 100)}%`;
@@ -47,8 +49,8 @@ class DatabaseCommonUI {
             const elementName = elements[trait.dataId] || `${tt('Element')} ${trait.dataId}`;
             return `${elementName} ${Math.round(trait.value * 100)}%`;
         } else if (trait.code === 12) { // Debuff Rate
-            const params = ['Max HP', 'Max MP', 'Attack', 'Defense', 'M.Attack', 'M.Defense', 'Agility', 'Luck'];
-            return `${tt(params[trait.dataId] || 'Param')} ${tt('Debuff')} ${Math.round(trait.value * 100)}%`;
+            const params = globalThis.rrParamNames(tt);
+            return `${params[trait.dataId] || tt('Param')} ${tt('Debuff')} ${Math.round(trait.value * 100)}%`;
         } else if (trait.code === 13) { // State Rate
             const state = this.databaseManager.getState(trait.dataId);
             const stateName = state ? state.name : `${tt('State')} ${trait.dataId}`;
