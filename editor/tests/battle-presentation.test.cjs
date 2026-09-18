@@ -568,3 +568,43 @@ test('the collapse sound names itself, looks like a picker and opens above the t
     assert.doesNotMatch(source, /const projectPath = this\.commonUI\?\.currentProject\?\.path;/,
         'never the copy taken before a project was open');
 });
+
+// A battle room advances one frame per view.render(), and in game that call
+// comes from the engine's fixed 60 fps update. Both room previews called it
+// once per requestAnimationFrame, so the room ran at the monitor's rate: 2.4x
+// too fast on a 144 Hz screen, half speed on 30 Hz. Reported from the Troops
+// page: "the speed of the stuff in the map seems tied to monitor Hz".
+test('a room preview advances at 60 frames a second whatever the monitor does', () => {
+    const fs = require('node:fs'), path = require('node:path');
+    const editorRoot = path.resolve(__dirname, '..');
+    const source = fs.readFileSync(path.join(editorRoot, 'src/battle/BattlePresentationEditor.js'), 'utf8');
+
+    // The method alone: the file needs a DOM and three.js to load whole.
+    const body = source.slice(source.indexOf('    roomFrameSteps(clock,now) {'));
+    const roomFrameSteps = new Function(`return function ${body.slice(0, body.indexOf('\n    }') + 6).trim()}`)();
+
+    const run = (hz, seconds) => {
+        const clock = {};
+        let stepped = 0;
+        const frames = Math.round(hz * seconds);
+        for (let i = 0; i <= frames; i++) stepped += roomFrameSteps(clock, (i * 1000) / hz);
+        return stepped;
+    };
+    // One second of wall clock is 60 room frames at any refresh rate. The first
+    // call seeds the clock and spends a frame, so a second is 60 either way.
+    for (const hz of [30, 50, 60, 75, 120, 144, 165, 240]) {
+        const stepped = run(hz, 1);
+        assert.ok(Math.abs(stepped - 61) <= 1, `${hz} Hz advanced ${stepped} frames in a second`);
+    }
+    assert.equal(run(144, 5) > 295 && run(144, 5) < 306, true, 'and stays right over five seconds');
+
+    // A stall is not repaid all at once: four frames is the most any one tick owes.
+    const clock = {};
+    roomFrameSteps(clock, 0);
+    assert.equal(roomFrameSteps(clock, 5000), 4, 'a backgrounded tab does not fast-forward the room');
+
+    // And both loops step the renderer rather than calling it once per frame.
+    assert.equal((source.match(/for\(let step=0;step<steps;step\+\+\)view\.render\(\);/g) || []).length, 2,
+        'the troop preview and the setup dialog both pace the room');
+    assert.doesNotMatch(source, /this\.drawRoomCast\(view,draft,cast\);view\.render\(\);/, 'no unpaced render is left');
+});

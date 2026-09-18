@@ -1,5 +1,11 @@
 # Handoff - 0.98.6 In Progress
 
+## 2026-09-18 — A room preview ran at the monitor's refresh rate
+
+- **`ReactorBattleRoomView.render()` advances the room by one frame** (`this.frame++`) and everything reads that counter: model animation, `setAnimationFrame(frame/30)` for autotiles, effect clocks, dissolves. In game the call comes from the engine's fixed 60 fps update, so **any editor surface that drives the view must supply its own 60 fps cadence** — rendering once per `requestAnimationFrame` runs the room at the display's rate.
+- Both loops in `BattlePresentationEditor` did exactly that. `roomFrameSteps(clock, now)` now turns elapsed wall clock into whole 60ths, capped at four so a stall is not repaid at once, and each loop steps the renderer that many times and draws once. `DatabaseActionSequenceEditor` was already right: it sets `view.frame` from its own clock before rendering.
+- Measured on the harness display (180 Hz) before and after: **180.2 room frames/s → 60.2**. `scratchpad/room-preview-rate-check.cjs [out.png] [seconds] [--old]`; `--old` monkeypatches `roomFrameSteps` to return 1 to reproduce the old behaviour without editing the source.
+
 ## 2026-09-18 — The revision that decides a refresh had stopped moving
 
 - **`reactor_main.js` states its revision twice and they are not interchangeable.** The header comment `// RPG Reactor runtime revision: X` is what `ProjectManager.ensureProjectRuntime` compares between the source and a project's own `js/reactor_main.js`; `globalThis.RPG_REACTOR_RUNTIME_REVISION` is what the running game reports. **Bump both.** The comment sat at 20260912.2 through six days of global bumps, so any project whose `js/` already said 0.98.7 read as current and never refreshed — every runtime fix in that window reached new projects only.
