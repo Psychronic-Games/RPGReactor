@@ -1301,6 +1301,9 @@ Sprite_Enemy.prototype.startEffect = function(effectType) {
         case "emberCollapse":
             this.startParticleCollapse("ember");
             break;
+        case "wispCollapse":
+            this.startParticleCollapse("wisp");
+            break;
     }
     this.revertToNormal();
 };
@@ -1366,6 +1369,7 @@ Sprite_Enemy.prototype.updateEffect = function() {
                 break;
             case "ashCollapse":
             case "emberCollapse":
+            case "wispCollapse":
                 this.updateParticleCollapse();
                 break;
         }
@@ -1461,6 +1465,27 @@ Sprite_Enemy.PARTICLE_COLLAPSE = {
         tint: 0,
         sparks: 0
     },
+    // `tintRamp` is how many frames a shard takes to reach the preset tint.
+    // It defaults to 22, which outlasts a short preset's whole shard life --
+    // a fast preset has to shorten it or its shards die before they colour.
+    //
+    // Spark fields below are read only when `sparks` is above zero. They
+    // describe a soft blob on a ballistic path: how it is coloured, how many
+    // are struck, how long each lives and how quickly it fades. One emitter
+    // serves every look -- the difference between a spark and a wisp is
+    // entirely in these numbers.
+    //
+    //   sparkHot/sparkCool  the tint ramp a spark walks from birth to death
+    //   sparkStops          the blob's own gradient, as [offset, css] pairs
+    //   sparkLife           [min, max] frames
+    //   sparkDrift          lateral spread at birth
+    //   sparkRise           [min, max] vertical speed at birth, negative is up
+    //   sparkGravity        downward acceleration per frame
+    //   sparkSize           [min, max] scale
+    //   sparkFade           fade exponent; 2 is fire's hard fade
+    //   sparkPeak           highest alpha a spark reaches
+    //   emitOnRelease       chance a releasing cell strikes a spark
+    //   emitWhileAging      per-frame chance a young shard strikes another
     ember: {
         cellSize: 4,
         waveSpread: 45,
@@ -1470,7 +1495,58 @@ Sprite_Enemy.PARTICLE_COLLAPSE = {
         curlFrequency: 0.16,
         fadePower: 1.6,
         tint: 0xff5a1e,
-        sparks: 600
+        tintRamp: 22,
+        sparks: 600,
+        sparkHot: 0xff5a10,
+        sparkCool: 0xfff0c0,
+        sparkStops: [
+            [0, "rgba(255, 255, 255, 1)"],
+            [0.28, "rgba(255, 205, 120, 0.9)"],
+            [0.62, "rgba(255, 110, 30, 0.38)"],
+            [1, "rgba(255, 70, 10, 0)"]
+        ],
+        sparkLife: [22, 42],
+        sparkDrift: 1.5,
+        sparkRise: [-0.7, -2.1],
+        sparkGravity: 0.045,
+        sparkSize: [0.1, 0.26],
+        sparkFade: 2,
+        sparkPeak: 1,
+        emitOnRelease: 0.3,
+        emitWhileAging: 0.012
+    },
+    // The same emitter as ember, slowed down and softened: longer-lived,
+    // larger, gentler-fading blobs with no opaque core, so overlapping sparks
+    // accumulate into a glow rather than reading as hot grit. Nothing here is
+    // a new mechanism, only different numbers.
+    wisp: {
+        cellSize: 4,
+        waveSpread: 45,
+        shardLife: 70,
+        buoyancy: 0.014,
+        curlAmplitude: 2.6,
+        curlFrequency: 0.09,
+        fadePower: 1.7,
+        tint: 0x5fe8a8,
+        tintRamp: 22,
+        sparks: 700,
+        sparkHot: 0x3fe0a0,
+        sparkCool: 0xe8fff4,
+        sparkStops: [
+            [0, "rgba(240, 255, 248, 0.92)"],
+            [0.2, "rgba(160, 255, 212, 0.6)"],
+            [0.5, "rgba(62, 226, 152, 0.24)"],
+            [1, "rgba(18, 140, 92, 0)"]
+        ],
+        sparkLife: [55, 100],
+        sparkDrift: 0.5,
+        sparkRise: [-0.22, -0.6],
+        sparkGravity: 0.01,
+        sparkSize: [0.18, 0.4],
+        sparkFade: 1.3,
+        sparkPeak: 0.96,
+        emitOnRelease: 0.2,
+        emitWhileAging: 0.01
     }
 };
 
@@ -1635,7 +1711,9 @@ Sprite_Enemy.prototype.createParticleCollapse = function(preset) {
 
     const layers = [shardLayer];
     let sparks = null;
-    const sparkTexture = preset.sparks > 0 ? Sprite_Enemy.particleCollapseSparkTexture() : null;
+    const sparkTexture = preset.sparks > 0
+        ? Sprite_Enemy.particleCollapseSparkTexture(preset.sparkStops)
+        : null;
     if (sparkTexture) {
         const sparkLayer = new ParticleLayer({
             dynamicProperties: { position: true, vertex: true, color: true }
@@ -1731,27 +1809,46 @@ Sprite_Enemy.prototype.isParticleCollapseCellVisible = function(map, width, x, y
     return false;
 };
 
-Sprite_Enemy.particleCollapseSparkTexture = function() {
-    if (this._sparkTexture) {
-        return this._sparkTexture;
+Sprite_Enemy.PARTICLE_COLLAPSE_DEFAULT_STOPS = [
+    [0, "rgba(255, 255, 255, 1)"],
+    [0.28, "rgba(255, 205, 120, 0.9)"],
+    [0.62, "rgba(255, 110, 30, 0.38)"],
+    [1, "rgba(255, 70, 10, 0)"]
+];
+
+/**
+ * The soft blob a spark is drawn with, built once per distinct gradient.
+ *
+ * Cached by the stops themselves rather than by preset name, so two presets
+ * sharing a gradient share one texture and a tuned preset gets its own. The
+ * bitmaps are held on the class because each texture only borrows its source.
+ *
+ * @param {Array} stops - [offset, css colour] pairs, or null for the default.
+ * @returns {PIXI.Texture} The blob texture.
+ */
+Sprite_Enemy.particleCollapseSparkTexture = function(stops) {
+    const shape = stops || Sprite_Enemy.PARTICLE_COLLAPSE_DEFAULT_STOPS;
+    const key = JSON.stringify(shape);
+    this._sparkTextures = this._sparkTextures || {};
+    this._sparkBitmaps = this._sparkBitmaps || {};
+    if (this._sparkTextures[key]) {
+        return this._sparkTextures[key];
     }
     const size = 32;
     const half = size / 2;
-    // Held on the class so the bitmap outlives the collapse that built it --
-    // the texture borrows its source.
-    this._sparkBitmap = new Bitmap(size, size);
-    const context = this._sparkBitmap.context;
+    const bitmap = new Bitmap(size, size);
+    const context = bitmap.context;
     const gradient = context.createRadialGradient(half, half, 0, half, half, half);
-    gradient.addColorStop(0, "rgba(255, 255, 255, 1)");
-    gradient.addColorStop(0.28, "rgba(255, 205, 120, 0.9)");
-    gradient.addColorStop(0.62, "rgba(255, 110, 30, 0.38)");
-    gradient.addColorStop(1, "rgba(255, 70, 10, 0)");
+    for (const stop of shape) {
+        gradient.addColorStop(stop[0], stop[1]);
+    }
     context.fillStyle = gradient;
     context.fillRect(0, 0, size, size);
-    const base = this._sparkBitmap.baseTexture;
+    const base = bitmap.baseTexture;
     base.update();
-    this._sparkTexture = new PIXI.Texture({ source: base.source || base });
-    return this._sparkTexture;
+    this._sparkBitmaps[key] = bitmap;
+    this._sparkTextures[key] = new PIXI.Texture({ source: base.source || base });
+    return this._sparkTextures[key];
 };
 
 Sprite_Enemy.blendParticleCollapseTint = function(from, to, rate) {
@@ -1783,7 +1880,7 @@ Sprite_Enemy.prototype.updateParticleCollapse = function() {
         }
         if (!shard.released) {
             shard.released = true;
-            if (state.sparks && Math.random() < 0.3) {
+            if (state.sparks && Math.random() < (preset.emitOnRelease ?? 0.3)) {
                 this.emitParticleCollapseSpark(state, shard.originX, shard.originY);
             }
         }
@@ -1799,9 +1896,9 @@ Sprite_Enemy.prototype.updateParticleCollapse = function() {
         particle.alpha = Math.pow(remaining, preset.fadePower);
         if (preset.tint) {
             particle.tint = Sprite_Enemy.blendParticleCollapseTint(
-                0xffffff, preset.tint, Math.min(1, age / 22)
+                0xffffff, preset.tint, Math.min(1, age / (preset.tintRamp ?? 22))
             );
-            if (state.sparks && age < 30 && Math.random() < 0.012) {
+            if (state.sparks && age < 30 && Math.random() < (preset.emitWhileAging ?? 0.012)) {
                 this.emitParticleCollapseSpark(state, particle.x, particle.y);
             }
         }
@@ -1815,20 +1912,37 @@ Sprite_Enemy.prototype.updateParticleCollapse = function() {
     }
 };
 
+/**
+ * Reads a [min, max] preset range, tolerating a missing or malformed one.
+ *
+ * @param {Array} range - The [min, max] pair.
+ * @param {number} min - Fallback minimum.
+ * @param {number} max - Fallback maximum.
+ * @returns {number} A value in the range.
+ */
+Sprite_Enemy.particleCollapseRoll = function(range, min, max) {
+    const low = Array.isArray(range) && isFinite(range[0]) ? range[0] : min;
+    const high = Array.isArray(range) && isFinite(range[1]) ? range[1] : max;
+    return low + Math.random() * (high - low);
+};
+
 Sprite_Enemy.prototype.emitParticleCollapseSpark = function(state, x, y) {
+    const preset = state.preset;
+    const roll = Sprite_Enemy.particleCollapseRoll;
     const sparks = state.sparks;
     const spark = sparks.pool[sparks.next];
     sparks.next = (sparks.next + 1) % sparks.pool.length;
     spark.age = 0;
-    spark.life = 22 + Math.random() * 20;
+    spark.life = roll(preset.sparkLife, 22, 42);
     spark.x = x;
     spark.y = y;
-    spark.driftX = (Math.random() - 0.5) * 1.5;
-    spark.driftY = -0.7 - Math.random() * 1.4;
-    spark.size = 0.1 + Math.random() * 0.16;
+    spark.driftX = (Math.random() - 0.5) * (preset.sparkDrift ?? 1.5);
+    spark.driftY = roll(preset.sparkRise, -0.7, -2.1);
+    spark.size = roll(preset.sparkSize, 0.1, 0.26);
 };
 
 Sprite_Enemy.prototype.updateParticleCollapseSparks = function(state) {
+    const preset = state.preset;
     const pool = state.sparks.pool;
     for (let i = 0; i < pool.length; i++) {
         const spark = pool[i];
@@ -1844,7 +1958,7 @@ Sprite_Enemy.prototype.updateParticleCollapseSparks = function(state) {
             particle.y = -99999;
             continue;
         }
-        spark.driftY -= 0.045;
+        spark.driftY -= preset.sparkGravity ?? 0.045;
         spark.x += spark.driftX;
         spark.y += spark.driftY;
         particle.x = spark.x;
@@ -1852,9 +1966,66 @@ Sprite_Enemy.prototype.updateParticleCollapseSparks = function(state) {
         const remaining = 1 - spark.age / spark.life;
         particle.scaleX = spark.size * (0.5 + remaining * 0.5);
         particle.scaleY = particle.scaleX;
-        particle.alpha = remaining * remaining;
-        particle.tint = Sprite_Enemy.blendParticleCollapseTint(0xff5a10, 0xfff0c0, remaining);
+        // A gentler exponent and a peak below 1 is what turns grit into glow:
+        // the blobs stop saturating individually and accumulate instead.
+        particle.alpha = Math.pow(remaining, preset.sparkFade ?? 2) * (preset.sparkPeak ?? 1);
+        particle.tint = Sprite_Enemy.blendParticleCollapseTint(
+            preset.sparkHot ?? 0xff5a10, preset.sparkCool ?? 0xfff0c0, remaining
+        );
     }
+};
+
+/**
+ * Unhooks a collapse's shard textures from the shared battler source at once.
+ *
+ * Every v8 Texture listens for its source's "resize", and EventEmitter3 removes
+ * a listener by rescanning and rebuilding the whole listener array -- so
+ * dropping the shards one at a time is quadratic in shard count, and it all
+ * lands on the single frame the collapse ends. Measured on this PIXI build with
+ * a 370x435 battler: 6,305 shards cost 51.0 ms that way and 11,049 cost
+ * 146.8 ms. Filtering them out in one pass is linear -- 0.5 ms and 0.6 ms for
+ * the same two grids -- and leaves the source holding exactly the same
+ * listeners afterwards.
+ *
+ * This reaches into EventEmitter3's own storage, so each shape it can hold is
+ * checked and an unfamiliar one just leaves the per-texture path to do its job.
+ *
+ * @param {Array} shards - The collapse's shard records.
+ */
+Sprite_Enemy.prototype.unhookParticleCollapseTextures = function(shards) {
+    const first = shards.length > 1 ? shards[0].particle.texture : null;
+    const source = first ? first.source : null;
+    const events = source ? source._events : null;
+    if (!events) {
+        return;
+    }
+    // EventEmitter3 prefixes its keys only where a bare object has a prototype.
+    const key = events.resize !== undefined ? 'resize'
+        : events['~resize'] !== undefined ? '~resize' : null;
+    const listeners = key ? events[key] : null;
+    // A lone listener is stored bare rather than in an array: nothing to batch.
+    if (!Array.isArray(listeners)) {
+        return;
+    }
+    const mine = new Set();
+    for (let i = 0; i < shards.length; i++) {
+        const texture = shards[i].particle.texture;
+        if (texture && texture.source === source) {
+            mine.add(texture);
+        }
+    }
+    const kept = [];
+    for (let i = 0; i < listeners.length; i++) {
+        // Only this collapse's own subscriptions go. Anything else on the
+        // source -- the battler's own sprite, a second enemy of the same kind
+        // collapsing beside it -- is left exactly where it was.
+        if (!mine.has(listeners[i].context)) {
+            kept.push(listeners[i]);
+        }
+    }
+    // An empty array is a shape EventEmitter3 tolerates, and it clears it away
+    // itself on the first off() below -- which every shard is about to call.
+    events[key] = kept;
 };
 
 Sprite_Enemy.prototype.destroyParticleCollapse = function() {
@@ -1866,6 +2037,7 @@ Sprite_Enemy.prototype.destroyParticleCollapse = function() {
     // Each shard holds a Texture of its own, and a v8 Texture subscribes to its
     // source's resize event. Left undestroyed, one collapse pins thousands of
     // listeners to a session-lived, ImageManager-cached battler source.
+    this.unhookParticleCollapseTextures(state.shards);
     for (let i = 0; i < state.shards.length; i++) {
         const texture = state.shards[i].particle.texture;
         if (texture && !texture.destroyed) {

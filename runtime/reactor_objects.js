@@ -5520,6 +5520,10 @@ Game_Enemy.prototype.performCollapse = function() {
             this.requestEffect("emberCollapse");
             SoundManager.playEnemyCollapse();
             break;
+        case 6:
+            this.requestEffect("wispCollapse");
+            SoundManager.playEnemyCollapse();
+            break;
     }
 };
 
