@@ -576,3 +576,38 @@ test('shared labels retain their original source and parameters through live lan
     assert.equal(label.textContent,'Enemy: Attack $& {name}');
     attrs.set('data-rr-i18n-skip','');label.textContent='Attack';manager.setLanguage('ja',{persist:false});assert.equal(label.textContent,'Attack');
 });
+
+// The Collapse Sound row is drawn directly beneath Collapse Effect, so each
+// locale has to name the same event twice. Translated on its own, the Japanese
+// row said "折れる音" (a snapping sound) under an effect called 消滅エフェクト,
+// and four other locales chose a different word for the same thing.
+test('the collapse sound row names whatever its own Collapse Effect row names', () => {
+    const { catalogs, RR_LANGUAGES } = loadI18nForTest();
+    const text = catalogs.text;
+    // A shared run of characters is all a comparison across scripts can ask for:
+    // two per label where the script writes without spaces, four elsewhere.
+    const shortest = { ja: 2, 'zh-Hans': 2, 'zh-Hant': 2, ko: 2 };
+    const longestCommon = (a, b) => {
+        let best = 0;
+        for (let i = 0; i < a.length; i++) {
+            for (let j = i + best + 1; j <= a.length; j++) {
+                if (b.includes(a.slice(i, j))) best = j - i; else break;
+            }
+        }
+        return best;
+    };
+    for (const locale of Array.from(RR_LANGUAGES, lang => lang.id).filter(id => id !== 'en')) {
+        const table = text[locale] || {};
+        const effect = table['Collapse Effect'];
+        const sound = table['Collapse Sound'];
+        const tip = table['The sound this enemy makes as it collapses.'];
+        assert.ok(effect && effect !== 'Collapse Effect', `${locale} translates the effect row`);
+        assert.ok(sound && sound !== 'Collapse Sound', `${locale} translates the sound row`);
+        assert.ok(tip && tip !== 'The sound this enemy makes as it collapses.', `${locale} translates the hint`);
+        const shared = longestCommon(effect.toLowerCase(), sound.toLowerCase());
+        assert.ok(shared >= (shortest[locale] || 4),
+            `${locale}: "${sound}" shares only ${shared} characters with "${effect}"`);
+    }
+    assert.equal(text.ja['Collapse Sound'], '消滅音', 'and reads as the effect above it, not as breaking glass');
+    assert.equal(text['zh-Hans']['Collapse Sound'], '消失音效');
+});
