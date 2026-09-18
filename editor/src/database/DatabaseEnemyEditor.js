@@ -1659,7 +1659,7 @@ class DatabaseEnemyEditor {
         this.traitEditor.showTraitEditorModal(enemy, -1, (updatedEntry) => {
             this.databaseManager.updateEnemy(updatedEntry.id, updatedEntry);
             this.refreshEnemyDetail(updatedEntry);
-        });
+        }, 'enemies');
     }
 
     editTrait(enemy, traitIndex) {
@@ -1668,7 +1668,7 @@ class DatabaseEnemyEditor {
         this.traitEditor.showTraitEditorModal(enemy, traitIndex, (updatedEntry) => {
             this.databaseManager.updateEnemy(updatedEntry.id, updatedEntry);
             this.refreshEnemyDetail(updatedEntry);
-        });
+        }, 'enemies');
     }
 
     async cutTrait(enemy, traitIndex) {

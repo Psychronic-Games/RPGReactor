@@ -18625,6 +18625,24 @@ Object.assign(RR_TEXT_TRANSLATIONS["id"], {"Ash":"Abu","Ember":"Bara","Ash Colla
 Object.assign(RR_TEXT_TRANSLATIONS["vi"], {"Ash":"Tro","Ember":"Than hồng","Ash Collapse":"Sụp đổ thành tro","Ember Collapse":"Sụp đổ thành than hồng","The sprite breaks into drifting motes and blows away.":"Sprite vỡ thành những hạt bụi trôi nổi rồi tan biến.","The sprite burns away into rising embers and sparks.":"Sprite cháy rụi thành than hồng và tia lửa bay lên."});
 Object.assign(RR_TEXT_TRANSLATIONS["th"], {"Ash":"เถ้า","Ember":"ถ่านไฟ","Ash Collapse":"ล้มลงเป็นเถ้า","Ember Collapse":"ล้มลงเป็นถ่านไฟ","The sprite breaks into drifting motes and blows away.":"สไปรต์แตกเป็นละอองที่ลอยกระจายแล้วเลือนหายไป","The sprite burns away into rising embers and sparks.":"สไปรต์มอดไหม้กลายเป็นถ่านไฟและประกายไฟที่ลอยขึ้น"});
 // Traits list: the Wisp collapse option and its tooltip.
+// Collapse Effect: the sound an enemy makes.
+Object.assign(RR_TEXT_TRANSLATIONS["ja"], {"Collapse Sound": "折れる音", "System default": "システム既定", "The sound this enemy makes as it collapses.": "この敵が崩れるときに鳴る音です。"});
+Object.assign(RR_TEXT_TRANSLATIONS["zh-Hant"], {"Collapse Sound": "消滅音效", "System default": "系統預設", "The sound this enemy makes as it collapses.": "這個敵人消滅時發出的音效。"});
+Object.assign(RR_TEXT_TRANSLATIONS["zh-Hans"], {"Collapse Sound": "消灭音效", "System default": "系统默认", "The sound this enemy makes as it collapses.": "这个敌人消灭时发出的音效。"});
+Object.assign(RR_TEXT_TRANSLATIONS["ko"], {"Collapse Sound": "소멸 효과음", "System default": "시스템 기본값", "The sound this enemy makes as it collapses.": "이 적이 쓰러질 때 나는 소리입니다."});
+Object.assign(RR_TEXT_TRANSLATIONS["es"], {"Collapse Sound": "Sonido de colapso", "System default": "Predeterminado del sistema", "The sound this enemy makes as it collapses.": "El sonido que hace este enemigo al derrumbarse."});
+Object.assign(RR_TEXT_TRANSLATIONS["pt"], {"Collapse Sound": "Som do colapso", "System default": "Padrão do sistema", "The sound this enemy makes as it collapses.": "O som que este inimigo faz ao desmoronar."});
+Object.assign(RR_TEXT_TRANSLATIONS["fr"], {"Collapse Sound": "Son d’effondrement", "System default": "Valeur par défaut du système", "The sound this enemy makes as it collapses.": "Le son que fait cet ennemi en s’effondrant."});
+Object.assign(RR_TEXT_TRANSLATIONS["de"], {"Collapse Sound": "Kollaps-Sound", "System default": "Systemstandard", "The sound this enemy makes as it collapses.": "Der Klang, den dieser Gegner beim Zusammenbrechen macht."});
+Object.assign(RR_TEXT_TRANSLATIONS["it"], {"Collapse Sound": "Suono del collasso", "System default": "Predefinito di sistema", "The sound this enemy makes as it collapses.": "Il suono che fa questo nemico mentre crolla."});
+Object.assign(RR_TEXT_TRANSLATIONS["ru"], {"Collapse Sound": "Звук гибели", "System default": "Системный по умолчанию", "The sound this enemy makes as it collapses.": "Звук, который издаёт этот враг, когда рушится."});
+Object.assign(RR_TEXT_TRANSLATIONS["pl"], {"Collapse Sound": "Dźwięk rozpadu", "System default": "Domyślny systemowy", "The sound this enemy makes as it collapses.": "Dźwięk, jaki wydaje ten wróg, gdy się rozpada."});
+Object.assign(RR_TEXT_TRANSLATIONS["el"], {"Collapse Sound": "Ήχος κατάρρευσης", "System default": "Προεπιλογή συστήματος", "The sound this enemy makes as it collapses.": "Ο ήχος που κάνει αυτός ο εχθρός καθώς καταρρέει."});
+Object.assign(RR_TEXT_TRANSLATIONS["tr"], {"Collapse Sound": "Çöküş sesi", "System default": "Sistem varsayılanı", "The sound this enemy makes as it collapses.": "Bu düşman çökerken çıkan ses."});
+Object.assign(RR_TEXT_TRANSLATIONS["ar"], {"Collapse Sound": "صوت الانهيار", "System default": "الافتراضي للنظام", "The sound this enemy makes as it collapses.": "الصوت الذي يصدره هذا العدو أثناء انهياره."});
+Object.assign(RR_TEXT_TRANSLATIONS["id"], {"Collapse Sound": "Suara keruntuhan", "System default": "Bawaan sistem", "The sound this enemy makes as it collapses.": "Suara yang dikeluarkan musuh ini saat runtuh."});
+Object.assign(RR_TEXT_TRANSLATIONS["vi"], {"Collapse Sound": "Âm thanh gục ngã", "System default": "Mặc định hệ thống", "The sound this enemy makes as it collapses.": "Âm thanh kẻ địch này phát ra khi gục xuống."});
+Object.assign(RR_TEXT_TRANSLATIONS["th"], {"Collapse Sound": "เสียงการล่มสลาย", "System default": "ค่าเริ่มต้นของระบบ", "The sound this enemy makes as it collapses.": "เสียงที่ศัตรูตัวนี้ส่งออกมาขณะล่มสลาย"});
 // Collapse Effect: Shatter.
 Object.assign(RR_TEXT_TRANSLATIONS["ja"], {"Shatter":"粉砕","Shatter Collapse":"粉砕の消滅","The sprite breaks like glass: shards burst outward from the middle and fall.":"スプライトがガラスのように砕け、破片が中心から飛び散って落ちます。"});
 Object.assign(RR_TEXT_TRANSLATIONS["zh-Hant"], {"Shatter":"碎裂","Shatter Collapse":"碎裂消散","The sprite breaks like glass: shards burst outward from the middle and fall.":"圖像如玻璃般碎裂，碎片自中心向外迸散並墜落。"});

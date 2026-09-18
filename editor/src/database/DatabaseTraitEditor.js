@@ -81,7 +81,9 @@ class DatabaseTraitEditor {
      * @param {Number} traitIndex - Index of trait to edit (-1 for new trait)
      * @param {Function} onSave - Callback when trait is saved
      */
-    showTraitEditorModal(entry, traitIndex = -1, onSave = null) {
+    showTraitEditorModal(entry, traitIndex = -1, onSave = null, recordType = null) {
+        this.recordType = recordType;
+        this._collapseSe = this._storedCollapseSe(entry, recordType);
         this._modal?.remove();
         const modalGeneration = this._modalGeneration = (this._modalGeneration || 0) + 1;
         const isCurrent = this.commonUI?.databaseEditor?.captureDetailContext?.() || (() => true);
@@ -458,6 +460,7 @@ class DatabaseTraitEditor {
                 control: this._selectHTML('collapse-select', 63, this._hintedOptions(63, trait,
                     ['Normal', 'Boss', 'Instant', 'No Disappear', 'Ash', 'Ember', 'Wisp', 'Shatter'].map(label => this._t(label)),
                     help ? help.collapseEffects() : []))
+                    + this._collapseSoundHTML()
             }),
             this._rowHTML(trait, {
                 code: 64, label: this._t('Party Ability'),
@@ -468,6 +471,90 @@ class DatabaseTraitEditor {
         ].join('');
 
         this.setupRadioInputs(container, trait);
+        this._setupCollapseSound(container);
+    }
+
+    /**
+     * The sound an enemy's collapse makes, beside the effect that makes it.
+     *
+     * A trait is three numbers, so the choice cannot live in the trait itself:
+     * it is kept with the enemy's other presentation settings and read at the
+     * moment the enemy collapses. Only the Enemies page offers it, because that
+     * is the record the runtime resolves the sound from; the same trait on a
+     * state or a class still collapses with the engine's own sound.
+     */
+    _collapseSoundHTML() {
+        if (this.recordType !== 'enemies') return '';
+        const chosen = this._collapseSe && this._collapseSe.name;
+        const label = chosen ? this._collapseSe.name : this._t('System default');
+        return `<button type="button" class="collapse-se-button database-field-value"`
+            + ` title="${rrEscapeHtml(this._t('The sound this enemy makes as it collapses.'))}"`
+            + `>${rrEscapeHtml(label)}</button>`;
+    }
+
+    _storedCollapseSe(entry, recordType) {
+        if (recordType !== 'enemies' || !entry) return null;
+        const section = this.databaseManager?.data?.battlePresentation?.[recordType];
+        const stored = section && section[entry.id] && section[entry.id].collapseSe;
+        return stored ? { ...stored } : null;
+    }
+
+    _setupCollapseSound(container) {
+        // Rendered into a bare container by the trait-help tests, which have no
+        // query methods and no picker to open.
+        if (!container || typeof container.querySelector !== 'function') return;
+        const button = container.querySelector('.collapse-se-button');
+        if (!button || typeof button.addEventListener !== 'function') return;
+        button.addEventListener('click', event => {
+            event.preventDefault();
+            const projectPath = this.commonUI?.currentProject?.path;
+            if (!projectPath || typeof RRAudioPickerModal === 'undefined' || typeof RRAssetFiles === 'undefined') return;
+            const path = require('path'), fs = require('fs');
+            const folder = path.join(projectPath, 'audio', 'se');
+            const current = this._collapseSe || {};
+            RRAudioPickerModal.open({
+                title: this._t('Collapse Sound'),
+                folderLabel: 'SE',
+                files: fs.existsSync(folder) ? RRAssetFiles.listUnique(folder, RRAssetFiles.AUDIO_EXTENSIONS) : [],
+                selected: current.name || '',
+                levels: {
+                    volume: current.volume === undefined ? 90 : current.volume,
+                    pitch: current.pitch === undefined ? 100 : current.pitch,
+                    pan: current.pan === undefined ? 0 : current.pan
+                },
+                loopDefault: false,
+                zIndex: 10010,
+                // Choosing nothing is how the system default is restored.
+                onOk: result => {
+                    this._collapseSe = result && result.name
+                        ? {
+                            name: result.name,
+                            volume: result.volume === undefined ? 90 : result.volume,
+                            pitch: result.pitch === undefined ? 100 : result.pitch,
+                            pan: result.pan === undefined ? 0 : result.pan
+                        }
+                        : null;
+                    button.textContent = this._collapseSe ? this._collapseSe.name : this._t('System default');
+                }
+            });
+        });
+    }
+
+    /** Keep the chosen sound with the enemy's other presentation settings. */
+    _saveCollapseSe(entry) {
+        if (this.recordType !== 'enemies' || !entry) return;
+        const data = this.databaseManager?.data;
+        if (!data || !data.battlePresentation) return;
+        const presentation = data.battlePresentation;
+        const section = presentation[this.recordType] || (presentation[this.recordType] = {});
+        if (this._collapseSe) {
+            const record = section[entry.id] || (section[entry.id] = {});
+            record.collapseSe = { ...this._collapseSe };
+        } else if (section[entry.id]) {
+            delete section[entry.id].collapseSe;
+            // An entry that held nothing but the sound goes with it.
+            if (!Object.keys(section[entry.id]).length) delete section[entry.id];
+        }
     }
 
     setupRadioInputs(container, trait) {
@@ -581,6 +668,8 @@ class DatabaseTraitEditor {
             }
             this.currentEntry.traits.push(trait);
         }
+
+        this._saveCollapseSe(this.currentEntry);
 
         // Call save callback if provided
         if (this.onSaveCallback) {

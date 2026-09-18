@@ -1,5 +1,11 @@
 # Handoff - 0.98.6 In Progress
 
+## 2026-09-18 — A per-enemy collapse sound
+
+- **A trait is three numbers** (`code`, `dataId`, `value`), so a filename cannot live in it. The chosen sound is kept with the enemy's other presentation settings: `BattlePresentation.json` → `enemies[id].collapseSe` (`{name, volume, pitch, pan}`), beside the existing `mode`/`sequenceId`. `B.validateStore` only checks that each section is an object, so a new per-record field round-trips without a schema change.
+- Editor: `DatabaseTraitEditor.showTraitEditorModal(entry, traitIndex, onSave, recordType)` takes a record type, and **only `'enemies'` renders the control** (`_collapseSoundHTML`), because that is the record the runtime resolves the sound from — the same trait on a state or class still uses the engine's sound. `DatabaseEnemyEditor` passes it from both its trait dialogs. `_setupCollapseSound` opens `RRAudioPickerModal` on `audio/se`; `_saveCollapseSe` writes on OK and deletes the field (and the entry, if it held nothing else) when no sound is chosen. **The trait-help tests render tabs into a bare container with no `querySelector`**, so any new wiring in `createOtherTab` must guard for that or two suites fail.
+- Runtime: `Game_Enemy.prototype.playCollapseSe(fallback)` reads `ReactorBattlePresentation.settings.enemies[id].collapseSe` and plays it, else calls the engine's own; every case of `performCollapse` goes through it, Instant passing `null` so a chosen sound still plays where there was none. Runtime 20260918.3.
+
 ## 2026-09-18 — Shatter, the eighth Collapse Effect (2D and 3D)
 
 - Trait value 7 → `shatterCollapse` → `startParticleCollapse("shatter")`. **A dissolve and a break are different shapes of effect**: the first three presets drift cells off a climbing wave, Shatter throws polygons outward from the middle and drops them.

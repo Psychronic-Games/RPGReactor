@@ -5497,36 +5497,69 @@ Game_Enemy.prototype.performDamage = function() {
     this.requestEffect("blink");
 };
 
+/**
+ * Play this enemy's collapse sound: the one chosen beside its Collapse Effect
+ * in the editor, or the engine's own.
+ *
+ * The choice lives in BattlePresentation.json under `enemies[id].collapseSe`,
+ * beside the other per-enemy presentation settings, because a trait is three
+ * numbers and has nowhere to keep a filename. A chosen sound is played for
+ * every collapse kind, Instant included, which has none of its own.
+ *
+ * @param {?Function} fallback - The engine's sound for this kind, if any.
+ */
+Game_Enemy.prototype.playCollapseSe = function(fallback) {
+    const chosen = globalThis.ReactorBattlePresentation
+        && globalThis.ReactorBattlePresentation.settings
+        && globalThis.ReactorBattlePresentation.settings.enemies
+        && globalThis.ReactorBattlePresentation.settings.enemies[this.enemyId()];
+    const se = chosen && chosen.collapseSe;
+    if (se && se.name) {
+        AudioManager.playSe({
+            name: se.name,
+            volume: se.volume === undefined ? 90 : se.volume,
+            pitch: se.pitch === undefined ? 100 : se.pitch,
+            pan: se.pan === undefined ? 0 : se.pan
+        });
+        return;
+    }
+    if (fallback) {
+        fallback();
+    }
+};
+
 Game_Enemy.prototype.performCollapse = function() {
     Game_Battler.prototype.performCollapse.call(this);
     switch (this.collapseType()) {
         case 0:
             this.requestEffect("collapse");
-            SoundManager.playEnemyCollapse();
+            this.playCollapseSe(() => SoundManager.playEnemyCollapse());
             break;
         case 1:
             this.requestEffect("bossCollapse");
-            SoundManager.playBossCollapse1();
+            this.playCollapseSe(() => SoundManager.playBossCollapse1());
             break;
         case 2:
             this.requestEffect("instantCollapse");
+            // Instant has no sound of its own; a chosen one still plays.
+            this.playCollapseSe(null);
             break;
         // 3 is "No Disappear": the sprite stays put, so no effect is requested.
         case 4:
             this.requestEffect("ashCollapse");
-            SoundManager.playEnemyCollapse();
+            this.playCollapseSe(() => SoundManager.playEnemyCollapse());
             break;
         case 5:
             this.requestEffect("emberCollapse");
-            SoundManager.playEnemyCollapse();
+            this.playCollapseSe(() => SoundManager.playEnemyCollapse());
             break;
         case 6:
             this.requestEffect("wispCollapse");
-            SoundManager.playEnemyCollapse();
+            this.playCollapseSe(() => SoundManager.playEnemyCollapse());
             break;
         case 7:
             this.requestEffect("shatterCollapse");
-            SoundManager.playEnemyCollapse();
+            this.playCollapseSe(() => SoundManager.playEnemyCollapse());
             break;
     }
 };

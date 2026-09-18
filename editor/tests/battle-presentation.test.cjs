@@ -484,3 +484,41 @@ test('Shatter is wired end to end: the trait, both emitters, and a mesh of trian
     assert.match(preset, /buoyancy: -[0-9.]+/, 'a negative buoyancy is gravity');
     assert.ok(/shrink: 0\b/.test(preset), 'its shards keep their size');
 });
+
+test("an enemy can carry its own collapse sound, chosen beside the effect and stored with its presentation settings", () => {
+    const fs = require('node:fs'), path = require('node:path'), vm = require('node:vm');
+    const editorRoot = path.resolve(__dirname, '..');
+    const objects = fs.readFileSync(path.join(editorRoot, '../runtime/reactor_objects.js'), 'utf8');
+    // Every collapse kind asks for the enemy's own sound before the engine's.
+    assert.match(objects, /Game_Enemy\.prototype\.playCollapseSe = function/);
+    for (const kind of ['collapse', 'bossCollapse', 'ashCollapse', 'emberCollapse', 'wispCollapse', 'shatterCollapse']) {
+        const at = objects.indexOf(`this.requestEffect("${kind}")`);
+        assert.ok(at > 0, kind);
+        assert.match(objects.slice(at, at + 200), /this\.playCollapseSe\(/, `${kind} plays the chosen sound`);
+    }
+    assert.doesNotMatch(objects.slice(objects.indexOf('Game_Enemy.prototype.performCollapse')), /SoundManager\.playEnemyCollapse\(\);\n/, 'no kind reaches the engine sound directly');
+    // The resolver itself: the enemy's entry wins, and its levels default.
+    const source = objects.slice(objects.indexOf('Game_Enemy.prototype.playCollapseSe'), objects.indexOf('Game_Enemy.prototype.performCollapse'));
+    const context = { globalThis: {}, AudioManager: { played: null, playSe(se) { this.played = se; } } };
+    context.globalThis = context;
+    vm.runInNewContext(`const Game_Enemy = { prototype: {} };\n${source}\nthis.play = Game_Enemy.prototype.playCollapseSe;`, context);
+    const enemy = { enemyId: () => 3, playCollapseSe: context.play };
+    let fellBack = false;
+    enemy.playCollapseSe(() => { fellBack = true; });
+    assert.equal(fellBack, true, 'no chosen sound falls back to the engine');
+    context.ReactorBattlePresentation = { settings: { enemies: { 3: { collapseSe: { name: 'glass-01' } } } } };
+    fellBack = false;
+    enemy.playCollapseSe(() => { fellBack = true; });
+    assert.equal(fellBack, false, 'a chosen sound replaces it');
+    // Spread it out of the vm realm first: a cross-realm object fails strict deepEqual.
+    assert.deepEqual({ ...context.AudioManager.played }, { name: 'glass-01', volume: 90, pitch: 100, pan: 0 }, 'with the usual levels when none were saved');
+
+    // The editor offers it on the Enemies page only, and clears back to the default.
+    const editor = fs.readFileSync(path.join(editorRoot, 'src/database/DatabaseTraitEditor.js'), 'utf8');
+    assert.match(editor, /_collapseSoundHTML\(\) \{\s*\n\s*if \(this\.recordType !== 'enemies'\) return '';/);
+    assert.match(editor, /RRAudioPickerModal\.open\(/, 'through the shared audio picker');
+    assert.match(editor, /this\._saveCollapseSe\(this\.currentEntry\);/, 'saved with the trait');
+    assert.match(editor, /delete section\[entry\.id\]\.collapseSe;/, 'and cleared when no sound is chosen');
+    const enemies = fs.readFileSync(path.join(editorRoot, 'src/database/DatabaseEnemyEditor.js'), 'utf8');
+    assert.equal((enemies.match(/\}, 'enemies'\);/g) || []).length, 2, 'both trait dialogs say which record they edit');
+});
