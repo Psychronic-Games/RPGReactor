@@ -70,7 +70,7 @@ test('option explanations match the length of the list they annotate', () => {
     assert.equal(TraitHelp.exParams().length, 10);
     assert.equal(TraitHelp.spParams().length, 10);
     assert.equal(TraitHelp.specialFlags().length, 4);
-    assert.equal(TraitHelp.collapseEffects().length, 6);
+    assert.equal(TraitHelp.collapseEffects().length, 7);
     assert.equal(TraitHelp.partyAbilities().length, 6);
     assert.equal(TraitHelp.slotTypes().length, 2);
     for (const list of [TraitHelp.exParams(), TraitHelp.spParams(), TraitHelp.specialFlags(),
@@ -94,7 +94,7 @@ test('the dropdowns that have per-choice help render it as an option title', () 
     const expected = {
         param: [['exparam-select', 10], ['spparam-select', 10]],
         equip: [['slottype-select', 2]],
-        other: [['specialflag-select', 4], ['collapse-select', 6], ['party-select', 6]]
+        other: [['specialflag-select', 4], ['collapse-select', 7], ['party-select', 6]]
     };
     for (const [tab, selects] of Object.entries(expected)) {
         const html = renderTab(tab);

@@ -107,9 +107,9 @@ class DatabaseCommonUI {
             return flags[trait.dataId] ? tt(flags[trait.dataId]) : `${tt('Special Flag')} ${trait.dataId}`;
         } else if (trait.code === 63) { // Collapse Effect
             // Stored as the engine reads it: 0 Normal, 1 Boss, 2 Instant,
-            // 3 No Disappear, 4 Ash, 5 Ember.
+            // 3 No Disappear, 4 Ash, 5 Ember, 6 Wisp.
             const effects = ['Normal Collapse', 'Boss Collapse', 'Instant Collapse', 'No Disappear',
-                'Ash Collapse', 'Ember Collapse'];
+                'Ash Collapse', 'Ember Collapse', 'Wisp Collapse'];
             return effects[trait.dataId] ? tt(effects[trait.dataId]) : `${tt('Collapse')} ${trait.dataId}`;
         } else if (trait.code === 64) { // Party Ability
             const abilities = ['Encounter Half', 'Encounter None', 'Cancel Surprise', 'Raise Preemptive', 'Gold Double', 'Drop Item Double'];
