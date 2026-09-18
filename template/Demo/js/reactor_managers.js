@@ -533,8 +533,17 @@ DataManager.savefileExists = function(savefileId) {
 DataManager.saveGame = function(savefileId) {
     const contents = this.makeSaveContents();
     const saveName = this.makeSavename(savefileId);
+    // The list entry describes the moment being saved, so it is read here
+    // rather than after the write resolves. The write is asynchronous and can
+    // land frames later, by which time the game has moved on: a save taken as
+    // a battle ends resolves while the map that follows is loading, and
+    // `loadDataFile` holds `$dataMap` at null for the length of that request.
+    // A plugin that names the map in its savefile info -- VisuStella SaveCore
+    // reads `$dataMap.displayName` -- then threw inside the promise, which
+    // left the file written but absent from the save list.
+    const info = this.makeSavefileInfo();
     return StorageManager.saveObject(saveName, contents).then(() => {
-        this._globalInfo[savefileId] = this.makeSavefileInfo();
+        this._globalInfo[savefileId] = info;
         // pass the array: MV plugin wrappers of saveGlobalInfo expect it
         this.saveGlobalInfo(this._globalInfo);
         return 0;

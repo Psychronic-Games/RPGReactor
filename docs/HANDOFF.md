@@ -1,5 +1,10 @@
 # Handoff - 0.98.6 In Progress
 
+## 2026-09-18 — A save's list entry was read a few frames too late
+
+- **`DataManager.saveGame` computed `makeSavefileInfo()` inside the write's `.then`.** Between asking for a save and the write landing, the game moves: `Scene_Battle.terminate` fires the autosave and the playtest checkpoint, the scene changes to `Scene_Map`, and a transfer calls `DataManager.loadDataFile`, which parks `$dataMap` at `null` for the whole XHR. Stock `makeSavefileInfo` never touches the map; **VisuStella SaveCore reads `$dataMap.displayName`**, so it threw inside the promise — file written, `saveGlobalInfo` never reached, a save on disk the list cannot show. Reported from Haven as a console warning after every battle. The info is read before the write is awaited now. Runtime 20260918.4, synced.
+- **The rule this is an instance of:** anything a save's metadata reads has to be read at save time, not in the write's continuation. A promise here spans scene changes and data loads. Related: [[feedback-globals-only-in-game]].
+
 ## 2026-09-18 — Options fit, and two labels that nothing was translating
 
 - **`1fr` has `min-width: auto`.** Both Options grids were `120px 1fr`, so the *Database List Labels* control at `width: max-content` widened the track past the 520px modal and `.rr-modal-body` scrolled sideways. Reported in Russian, but the group is longer in vi/el/es/it/fr/id/pt/pl. Tracks are `minmax(0, 1fr)`; both segmented controls carry `max-width: 100%` and segments that shrink and wrap (`flex: 0 1 auto; min-width: 0; white-space: normal`). **Any fixed-width child of a grid track needs `minmax(0, …)` above it**, and this modal is inline-styled, so CSS cannot override it — the fix has to be in `OptionsManager.js`.
