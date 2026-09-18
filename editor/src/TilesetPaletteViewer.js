@@ -54,6 +54,29 @@ class TilesetPaletteViewer {
             this.fs = require('fs');
             this.path = require('path');
         }
+
+        // The status line under the palette is written by hand rather than
+        // carried on a data-i18n attribute, so nothing redraws it when the
+        // language changes: it sat in English under a Russian editor until
+        // the next tileset or map switch happened to rewrite it.
+        if (typeof window !== 'undefined') {
+            window.addEventListener('rr-language-changed', () => this.renderSelectionInfo());
+        }
+    }
+
+    /**
+     * The one writer for the palette's status line. `_selection` is the last
+     * selection's shape, or null when there is none; both wordings are built
+     * here so either can be redrawn in a new language from what is still true.
+     */
+    renderSelectionInfo() {
+        const info = typeof document !== 'undefined' ? document.getElementById('selection-info') : null;
+        if (!info) return;
+        const tt = text => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
+        const chosen = this._selection;
+        info.innerHTML = chosen
+            ? `<div>${tt('Selected:')} ${chosen.width}x${chosen.height} ${tt('tiles')} (${chosen.count} ${tt('tiles')}) ${tt('on layer')} ${chosen.layer}</div>`
+            : `<div>${tt('No tiles selected')}</div>`;
     }
 
     // Set reference to MapEditor
@@ -343,12 +366,8 @@ class TilesetPaletteViewer {
         // selected — while a click still painted the previous sheet's tiles.
         if (layerName !== this.currentLayer) {
             this.selectedTiles = [];
-            const info = document.getElementById('selection-info');
-            if (info) {
-                const tt = text => (typeof window !== 'undefined' && window.I18n)
-                    ? window.I18n.tText(text) : text;
-                info.innerHTML = `<div>${tt('No tiles selected')}</div>`;
-            }
+            this._selection = null;
+            this.renderSelectionInfo();
             // Drop any hover preview built from the old selection; without a
             // selection nothing rebuilds it until the pointer moves again.
             this.mapEditor?.hideTilePreview?.();
@@ -471,12 +490,8 @@ class TilesetPaletteViewer {
                 // unrelated tiles.
                 this.selectedTiles = [];
                 this.mapEditor?.hideTilePreview?.();
-                const info = document.getElementById('selection-info');
-                if (info) {
-                    const tt = text => (typeof window !== 'undefined' && window.I18n)
-                        ? window.I18n.tText(text) : text;
-                    info.innerHTML = `<div>${tt('No tiles selected')}</div>`;
-                }
+                this._selection = null;
+                this.renderSelectionInfo();
             }
 
             // Load all tileset images (wait for them to complete). The token
@@ -889,12 +904,9 @@ class TilesetPaletteViewer {
         this.drawSelectionOverlay(minX, minY, width, height, actualLayer);
 
         // Update selection info
-        const tt = (text) => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
-        const info = document.getElementById('selection-info');
-        if (info) {
-            const displayLayer = this.currentLayer === 'A' ? actualLayer : this.currentLayer;
-            info.innerHTML = `<div>${tt('Selected:')} ${width}x${height} ${tt('tiles')} (${this.selectedTiles.length} ${tt('tiles')}) ${tt('on layer')} ${displayLayer}</div>`;
-        }
+        this._selection = { width, height, count: this.selectedTiles.length,
+            layer: this.currentLayer === 'A' ? actualLayer : this.currentLayer };
+        this.renderSelectionInfo();
 
         // Auto-toggle erase mode based on tile transparency
         this.autoToggleEraseMode();
@@ -1055,13 +1067,10 @@ class TilesetPaletteViewer {
 
     // Clear selection
     clearSelection() {
-        const tt = (text) => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
         this.selectedTiles = [];
         this.renderCurrentLayer();
-        const info = document.getElementById('selection-info');
-        if (info) {
-            info.innerHTML = `<div>${tt('No tiles selected')}</div>`;
-        }
+        this._selection = null;
+        this.renderSelectionInfo();
     }
 
     // Helper to determine which sub-layer of merged 'A' was clicked

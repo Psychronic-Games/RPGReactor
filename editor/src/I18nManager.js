@@ -19359,6 +19359,27 @@ Object.assign(RR_I18N_STRINGS["vi"], {"lit.preset.compound": "Đèn tổ hợp",
 Object.assign(RR_I18N_STRINGS["th"], {"lit.preset.compound": "แสงแบบรวม", "lit.preset.fluorescent": "ฟลูออเรสเซนต์", "lit.components": "องค์ประกอบ", "lit.component": "องค์ประกอบ", "lit.compoundName": "ชื่อ", "lit.componentId": "ID ส่วน", "lit.addComponent": "เพิ่ม", "lit.removeComponent": "ลบองค์ประกอบ", "lit.componentHint": "การตั้งค่าด้านล่างแก้ไของค์ประกอบนี้ ลากบนแผนที่เพื่อย้ายแสงทั้งหมด"});
 Object.assign(RR_I18N_STRINGS["tr"], {"lit.preset.compound": "Bileşik Işık", "lit.preset.fluorescent": "Floresan", "lit.components": "Bileşenler", "lit.component": "Bileşen", "lit.compoundName": "Ad", "lit.componentId": "Parça ID", "lit.addComponent": "Ekle", "lit.removeComponent": "Bileşeni kaldır", "lit.componentHint": "Aşağıdaki ayarlar bu bileşeni düzenler. Işığın tamamını taşımak için haritada sürükleyin."});
 
+// The map toolbar's media-surface toggle. Its tooltip was translated from the
+// start; the word beside the checkbox was not, so it read "Video" in all 18.
+Object.assign(RR_I18N_STRINGS["en"], {"workspace.video": "Video"});
+Object.assign(RR_I18N_STRINGS["ja"], {"workspace.video": "ビデオ"});
+Object.assign(RR_I18N_STRINGS["es"], {"workspace.video": "Vídeo"});
+Object.assign(RR_I18N_STRINGS["zh-Hant"], {"workspace.video": "影片"});
+Object.assign(RR_I18N_STRINGS["zh-Hans"], {"workspace.video": "视频"});
+Object.assign(RR_I18N_STRINGS["ru"], {"workspace.video": "Видео"});
+Object.assign(RR_I18N_STRINGS["pt"], {"workspace.video": "Vídeo"});
+Object.assign(RR_I18N_STRINGS["de"], {"workspace.video": "Video"});
+Object.assign(RR_I18N_STRINGS["fr"], {"workspace.video": "Vidéo"});
+Object.assign(RR_I18N_STRINGS["el"], {"workspace.video": "Βίντεο"});
+Object.assign(RR_I18N_STRINGS["ko"], {"workspace.video": "비디오"});
+Object.assign(RR_I18N_STRINGS["ar"], {"workspace.video": "فيديو"});
+Object.assign(RR_I18N_STRINGS["it"], {"workspace.video": "Video"});
+Object.assign(RR_I18N_STRINGS["pl"], {"workspace.video": "Wideo"});
+Object.assign(RR_I18N_STRINGS["id"], {"workspace.video": "Video"});
+Object.assign(RR_I18N_STRINGS["vi"], {"workspace.video": "Video"});
+Object.assign(RR_I18N_STRINGS["th"], {"workspace.video": "วิดีโอ"});
+Object.assign(RR_I18N_STRINGS["tr"], {"workspace.video": "Video"});
+
 // Reviewed entries are deliberately applied last. They correct legacy wording,
 // replace generated first-pass text, and complete newly routed UI phrases.
 // Phrases added 2026-09-12; reviewed translations below still win over these.
