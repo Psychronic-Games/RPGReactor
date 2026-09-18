@@ -114,7 +114,8 @@ class TraitHelp {
             'The sprite stays on screen after defeat.',
             'The sprite breaks into drifting motes and blows away.',
             'The sprite burns away into rising embers and sparks.',
-            'The sprite unravels into slow green motes that drift upward and glow.'
+            'The sprite unravels into slow green motes that drift upward and glow.',
+            'The sprite breaks like glass: shards burst outward from the middle and fall.'
         ].map(tt);
         return collapseHelp;
     }

@@ -1304,6 +1304,9 @@ Sprite_Enemy.prototype.startEffect = function(effectType) {
         case "wispCollapse":
             this.startParticleCollapse("wisp");
             break;
+        case "shatterCollapse":
+            this.startParticleCollapse("shatter");
+            break;
     }
     this.revertToNormal();
 };
@@ -1369,6 +1372,7 @@ Sprite_Enemy.prototype.updateEffect = function() {
                 break;
             case "ashCollapse":
             case "emberCollapse":
+            case "shatterCollapse":
             case "wispCollapse":
                 this.updateParticleCollapse();
                 break;
@@ -1519,6 +1523,52 @@ Sprite_Enemy.PARTICLE_COLLAPSE = {
     // larger, gentler-fading blobs with no opaque core, so overlapping sparks
     // accumulate into a glow rather than reading as hot grit. Nothing here is
     // a new mechanism, only different numbers.
+    // Glass. The three above are dissolves: a wave climbs the battler and
+    // what it passes drifts off. Shatter is a break -- every cell leaves at
+    // once, thrown outward from the middle and falling, keeping its size and
+    // its colour, so the battler reads as coming apart rather than fading.
+    //
+    //   burst      outward speed from the middle; 0 is the drifting kind
+    //   spin       tumble per frame; the dissolves use a gentle 0.14
+    //   shrink     how much of its size a shard loses; 0 keeps all of it
+    //
+    // `buoyancy` is negative here, which is simply gravity: the update
+    // subtracts it from the fall each frame, so a negative one accelerates
+    // downward instead of lifting.
+    shatter: {
+        fragments: true,
+        hold: 1.5,
+        cellSize: 11,
+        waveSpread: 3,
+        shardLife: 130,
+        lift: 0.22,
+        buoyancy: -0.055,
+        curlAmplitude: 0,
+        curlFrequency: 0,
+        fadePower: 0.45,
+        tint: 0,
+        burst: 0.17,
+        settle: 26,
+        spin: 0.05,
+        shrink: 0,
+        sparks: 260,
+        sparkHot: 0xdff2ff,
+        sparkCool: 0xffffff,
+        sparkStops: [
+            [0, "rgba(255, 255, 255, 1)"],
+            [0.35, "rgba(214, 240, 255, 0.75)"],
+            [1, "rgba(160, 210, 255, 0)"]
+        ],
+        sparkLife: [10, 20],
+        sparkDrift: 2.2,
+        sparkRise: [-0.4, -1.4],
+        sparkGravity: 0.07,
+        sparkSize: [0.07, 0.17],
+        sparkFade: 2.4,
+        sparkPeak: 1,
+        emitOnRelease: 0.16,
+        emitWhileAging: 0
+    },
     wisp: {
         cellSize: 4,
         waveSpread: 45,
@@ -1553,7 +1603,9 @@ Sprite_Enemy.PARTICLE_COLLAPSE = {
 Sprite_Enemy.prototype.startParticleCollapse = function(presetName) {
     this._appeared = false;
     const preset = Sprite_Enemy.PARTICLE_COLLAPSE[presetName];
-    const state = preset ? this.createParticleCollapse(preset) : null;
+    const state = preset
+        ? (preset.fragments ? this.createFragmentCollapse(preset) : this.createParticleCollapse(preset))
+        : null;
     if (!state) {
         // No bitmap yet, no PIXI 8 particles, or nothing opaque to cut up:
         // fall back to the standard collapse rather than skipping the death.
@@ -1615,6 +1667,194 @@ Sprite_Enemy.prototype.particleCollapseArtOffset = function(art) {
     return { x: x, y: y };
 };
 
+/**
+ * The battler cut into triangles that fly apart: glass, not grit.
+ *
+ * A particle is a quad however small it is cut, so a break made of them reads
+ * as chunks. Real shards need real polygons, so this path builds one PIXI.Mesh
+ * whose triangles are cut from the battler's own frame -- a jittered grid, each
+ * cell split on a random diagonal, so no two pieces are the same shape -- and
+ * moves their corners itself each frame. One mesh is one draw call, and a few
+ * hundred triangles cost less arithmetic per frame than the particle path.
+ *
+ * @param {object} preset - A PARTICLE_COLLAPSE entry carrying `fragments`.
+ * @returns {?object} The collapse state, or null if it cannot be built.
+ */
+Sprite_Enemy.prototype.createFragmentCollapse = function(preset) {
+    if (typeof PIXI.Mesh !== "function" || typeof PIXI.MeshGeometry !== "function") {
+        return null;
+    }
+    const parent = this.parent;
+    const art = this.particleCollapseArtSprite();
+    if (!parent || !art) {
+        return null;
+    }
+    const bitmap = art.bitmap;
+    const frame = art._frame;
+    const useFrame = frame && frame.width > 0 && frame.height > 0;
+    const frameX = useFrame ? Math.floor(frame.x) : 0;
+    const frameY = useFrame ? Math.floor(frame.y) : 0;
+    const width = useFrame ? Math.floor(frame.width) : bitmap.width;
+    const height = useFrame ? Math.floor(frame.height) : bitmap.height;
+    const base = bitmap.baseTexture;
+    const source = base ? base.source || base : null;
+    if (width < 1 || height < 1 || !source) {
+        return null;
+    }
+    const anchorX = art.anchor ? art.anchor.x : 0.5;
+    const anchorY = art.anchor ? art.anchor.y : 1;
+    const offset = this.particleCollapseArtOffset(art);
+    const cell = preset.cellSize;
+    const columns = Math.ceil(width / cell);
+    const rows = Math.ceil(height / cell);
+    const alphaMap = this.particleCollapseAlphaMap(source, bitmap.width, bitmap.height);
+    const imageWidth = bitmap.width || 1;
+    const imageHeight = bitmap.height || 1;
+    // The art's own middle, in the coordinates the corners use, so the break
+    // can be aimed and timed outward from it.
+    const centreX = offset.x + width / 2 - width * anchorX;
+    const centreY = offset.y + height / 2 - height * anchorY;
+    const burstSpeed = preset.burst || 0;
+    const burstRadius = Math.max(1, Math.hypot(width, height) / 2);
+    const spinRange = preset.spin ?? 0.14;
+    const jitter = cell * 0.3;
+
+    const triangles = [];
+    const positions = [];
+    const uvs = [];
+    // A grid point, nudged off the lattice so the cut lines are irregular. The
+    // rim keeps its true edge, or the silhouette would fray.
+    const nudge = (value, limit) => (value <= 0 || value >= limit)
+        ? value
+        : Math.max(0, Math.min(limit, value + (Math.random() - 0.5) * jitter));
+    const grid = [];
+    for (let row = 0; row <= rows; row++) {
+        const line = [];
+        for (let column = 0; column <= columns; column++) {
+            line.push({
+                x: nudge(Math.min(width, column * cell), width),
+                y: nudge(Math.min(height, row * cell), height)
+            });
+        }
+        grid.push(line);
+    }
+    const push = (corners) => {
+        let cx = 0, cy = 0;
+        for (const corner of corners) { cx += corner.x / 3; cy += corner.y / 3; }
+        const originX = offset.x + cx - width * anchorX;
+        const originY = offset.y + cy - height * anchorY;
+        const awayX = originX - centreX, awayY = originY - centreY;
+        const reach = Math.hypot(awayX, awayY) || 0.0001;
+        const speed = burstSpeed * (0.45 + Math.random() * 0.8);
+        const local = [];
+        for (const corner of corners) {
+            local.push(corner.x - cx, corner.y - cy);
+            positions.push(0, 0);
+            uvs.push((frameX + corner.x) / imageWidth, (frameY + corner.y) / imageHeight);
+        }
+        triangles.push({
+            originX: originX,
+            originY: originY,
+            local: local,
+            driftX: (awayX / reach) * speed + (Math.random() - 0.5) * 0.4,
+            driftY: (awayY / reach) * speed * 0.7,
+            lift: 0.35 + Math.random() * 0.75,
+            spin: (Math.random() - 0.5) * spinRange,
+            delay: Math.round(
+                (reach / burstRadius) * preset.waveSpread * 0.55 + Math.random() * preset.waveSpread * 0.45
+            )
+        });
+    };
+    for (let row = 0; row < rows; row++) {
+        for (let column = 0; column < columns; column++) {
+            const x = column * cell, y = row * cell;
+            const w = Math.min(cell, width - x), h = Math.min(cell, height - y);
+            if (alphaMap && !this.isParticleCollapseCellVisible(
+                    alphaMap, bitmap.width, frameX + x, frameY + y, w, h)) {
+                continue;
+            }
+            const a = grid[row][column], b = grid[row][column + 1];
+            const c = grid[row + 1][column + 1], d = grid[row + 1][column];
+            // A random diagonal, so the cut lines do not all run one way.
+            if (Math.random() < 0.5) { push([a, b, c]); push([a, c, d]); }
+            else { push([a, b, d]); push([b, c, d]); }
+        }
+    }
+    if (!triangles.length) {
+        return null;
+    }
+    const indices = new Uint32Array(triangles.length * 3);
+    for (let i = 0; i < indices.length; i++) indices[i] = i;
+    const geometry = new PIXI.MeshGeometry({
+        positions: new Float32Array(positions),
+        uvs: new Float32Array(uvs),
+        indices: indices,
+        shrinkBuffersToFit: false
+    });
+    const mesh = new PIXI.Mesh({
+        geometry: geometry,
+        texture: new PIXI.Texture({ source: source })
+    });
+    mesh.eventMode = "none";
+    parent.addChild(mesh);
+    let longestDelay = 0;
+    for (const triangle of triangles) longestDelay = Math.max(longestDelay, triangle.delay);
+    const state = {
+        fragments: true,
+        mesh: mesh,
+        geometry: geometry,
+        triangles: triangles,
+        layers: [mesh],
+        shards: [],
+        sparks: null,
+        // Feet level in the art's own coordinates: where a shard comes to rest.
+        floor: offset.y + height - height * anchorY,
+        duration: Math.round(longestDelay + preset.shardLife + 8),
+        preset: preset
+    };
+    this.updateFragmentCollapse(state, 0);
+    return state;
+};
+
+/**
+ * Move every triangle: thrown out from the middle, turning about its own,
+ * falling, and stopped by the floor the battler stood on.
+ *
+ * @param {object} state - The collapse state from createFragmentCollapse.
+ * @param {number} elapsed - Frames since the collapse began.
+ */
+Sprite_Enemy.prototype.updateFragmentCollapse = function(state, elapsed) {
+    const preset = state.preset;
+    const positions = state.geometry.positions;
+    const hold = preset.hold ?? 1;
+    let at = 0;
+    let oldest = 0;
+    for (let i = 0; i < state.triangles.length; i++) {
+        const triangle = state.triangles[i];
+        const age = Math.max(0, elapsed - triangle.delay);
+        oldest = Math.max(oldest, age);
+        // Not linear: a break holds, then opens. The throw settles after a
+        // beat, so a shard that lands stays where it fell instead of sliding
+        // outward for the rest of its life and smearing the pile flat.
+        const thrown = Math.pow(Math.min(age, preset.settle ?? age), hold);
+        const lift = (preset.lift ?? 0) * triangle.lift;
+        let x = triangle.originX + triangle.driftX * thrown;
+        // Out on the burst curve, up on a brief kick, then down under gravity.
+        let y = triangle.originY + triangle.driftY * thrown - lift * age - preset.buoyancy * age * age;
+        if (y > state.floor) y = state.floor;
+        const turn = triangle.spin * age;
+        const cos = Math.cos(turn), sin = Math.sin(turn);
+        for (let corner = 0; corner < 3; corner++) {
+            const lx = triangle.local[corner * 2], ly = triangle.local[corner * 2 + 1];
+            positions[at++] = x + lx * cos - ly * sin;
+            positions[at++] = y + lx * sin + ly * cos;
+        }
+    }
+    state.geometry.getBuffer("aPosition").update();
+    const remaining = Math.max(0, 1 - oldest / preset.shardLife);
+    state.mesh.alpha = Math.pow(remaining, preset.fadePower);
+};
+
 Sprite_Enemy.prototype.createParticleCollapse = function(preset) {
     if (!PIXI.Particle) {
         return null;
@@ -1644,6 +1884,13 @@ Sprite_Enemy.prototype.createParticleCollapse = function(preset) {
 
     const ParticleLayer = PIXI.__v8ParticleContainer || PIXI.ParticleContainer;
     const cell = preset.cellSize;
+    // Where the middle of the art sits in the same coordinates the cells use,
+    // and how far its corner is, so a burst can be aimed and timed from it.
+    const centreX = offset.x + width / 2 - width * anchorX;
+    const centreY = offset.y + height / 2 - height * anchorY;
+    const burstSpeed = preset.burst || 0;
+    const burstRadius = Math.max(1, Math.hypot(width, height) / 2);
+    const spinRange = preset.spin ?? 0.14;
     const columns = Math.ceil(width / cell);
     const rows = Math.ceil(height / cell);
     // The alpha map spans the whole bitmap; cells index into it with the
@@ -1686,18 +1933,36 @@ Sprite_Enemy.prototype.createParticleCollapse = function(preset) {
             const originY = offset.y + y + h / 2 - height * anchorY;
             particle.x = originX;
             particle.y = originY;
-            const delay = Math.round(
-                (1 - row / rows + Math.random() * 0.34) * preset.waveSpread
-            );
+            let delay, driftX, driftY;
+            if (burstSpeed > 0) {
+                // The break runs outward from the middle rather than up from
+                // the feet, and every cell is thrown along its own line out.
+                const awayX = originX - centreX, awayY = originY - centreY;
+                const reach = Math.hypot(awayX, awayY) || 0.0001;
+                const speed = burstSpeed * (0.45 + Math.random() * 0.8);
+                delay = Math.round(
+                    (reach / burstRadius) * preset.waveSpread * 0.55 + Math.random() * preset.waveSpread * 0.45
+                );
+                driftX = (awayX / reach) * speed + (Math.random() - 0.5) * 0.4;
+                // A shard is thrown out along its own line and kicked a little
+                // upward, so the break opens before gravity closes it.
+                driftY = (awayY / reach) * speed * 0.7 - 0.25 - Math.random() * 0.5;
+            } else {
+                delay = Math.round(
+                    (1 - row / rows + Math.random() * 0.34) * preset.waveSpread
+                );
+                driftX = (Math.random() - 0.5) * 0.9;
+                driftY = -0.35 - Math.random() * 0.75;
+            }
             longestDelay = Math.max(longestDelay, delay);
             shards.push({
                 particle: particle,
                 originX: originX,
                 originY: originY,
                 delay: delay,
-                driftX: (Math.random() - 0.5) * 0.9,
-                driftY: -0.35 - Math.random() * 0.75,
-                spin: (Math.random() - 0.5) * 0.14,
+                driftX: driftX,
+                driftY: driftY,
+                spin: (Math.random() - 0.5) * spinRange,
                 phase: Math.random() * Math.PI * 2,
                 released: false
             });
@@ -1866,6 +2131,17 @@ Sprite_Enemy.prototype.updateParticleCollapse = function() {
     }
     const preset = state.preset;
     const elapsed = state.duration - this._effectDuration;
+    if (state.fragments) {
+        for (let i = 0; i < state.layers.length; i++) {
+            state.layers[i].x = this.x;
+            state.layers[i].y = this.y;
+        }
+        this.updateFragmentCollapse(state, elapsed);
+        if (this._effectDuration <= 0) {
+            this.destroyParticleCollapse();
+        }
+        return;
+    }
 
     for (let i = 0; i < state.layers.length; i++) {
         state.layers[i].x = this.x;
@@ -1891,7 +2167,8 @@ Sprite_Enemy.prototype.updateParticleCollapse = function() {
         particle.y = shard.originY + shard.driftY * age;
         particle.rotation += shard.spin;
         const remaining = Math.max(0, 1 - age / preset.shardLife);
-        particle.scaleX = 0.35 + remaining * 0.65;
+        const shrink = preset.shrink ?? 0.65;
+        particle.scaleX = (1 - shrink) + remaining * shrink;
         particle.scaleY = particle.scaleX;
         particle.alpha = Math.pow(remaining, preset.fadePower);
         if (preset.tint) {
@@ -2034,6 +2311,11 @@ Sprite_Enemy.prototype.destroyParticleCollapse = function() {
         return;
     }
     this._particleCollapse = null;
+    if (state.fragments) {
+        if (state.mesh.parent) state.mesh.parent.removeChild(state.mesh);
+        state.mesh.destroy({ children: false, texture: true, textureSource: false });
+        return;
+    }
     // Each shard holds a Texture of its own, and a v8 Texture subscribes to its
     // source's resize event. Left undestroyed, one collapse pins thousands of
     // listeners to a session-lived, ImageManager-cached battler source.

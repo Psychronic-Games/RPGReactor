@@ -5524,6 +5524,10 @@ Game_Enemy.prototype.performCollapse = function() {
             this.requestEffect("wispCollapse");
             SoundManager.playEnemyCollapse();
             break;
+        case 7:
+            this.requestEffect("shatterCollapse");
+            SoundManager.playEnemyCollapse();
+            break;
     }
 };
 

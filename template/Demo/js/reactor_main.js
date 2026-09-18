@@ -4,7 +4,7 @@
 // RPG Reactor runtime revision: 20260912.2
 // The same stamp, reachable from the F12 console: which engine is this
 // window actually running? Type RPG_REACTOR_RUNTIME_REVISION to see.
-globalThis.RPG_REACTOR_RUNTIME_REVISION = "20260918.1";
+globalThis.RPG_REACTOR_RUNTIME_REVISION = "20260918.2";
 //=============================================================================
 
 const scriptUrls = [

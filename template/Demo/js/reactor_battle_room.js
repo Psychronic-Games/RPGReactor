@@ -419,12 +419,22 @@
             const box = new T.Box3().setFromObject(object);
             if (!Number.isFinite(box.min.y) || !Number.isFinite(box.max.y)) return 0;
             const height = Math.max(.05, box.max.y - box.min.y);
-            const shards = BattleRoomView.surfaceShards(object, Math.round(Math.min(6000, Math.max(1200, height * 2500))), T);
+            const wanted = preset.count || Math.round(Math.min(6000, Math.max(1200, height * 2500)));
+            const shards = BattleRoomView.surfaceShards(object, wanted, T);
             if (!shards) return 0;
             const count = shards.count, delay = new Float32Array(count), seed = new Float32Array(count), size = new Float32Array(count);
+            const centre = box.getCenter(new T.Vector3());
+            const burstRadius = Math.max(.001, box.getSize(new T.Vector3()).length() / 2);
             for (let i = 0; i < count; i++) {
                 const y = shards.position[i * 3 + 1];
-                delay[i] = (y - box.min.y) / height * preset.waveSpread + Math.random() * 6;
+                if (preset.burst) {
+                    // The break opens outward from the middle, so a shard's turn
+                    // comes by how far out it sits, not by how high.
+                    const dx = shards.position[i * 3] - centre.x, dy = y - centre.y, dz = shards.position[i * 3 + 2] - centre.z;
+                    delay[i] = Math.hypot(dx, dy, dz) / burstRadius * preset.waveSpread * .55 + Math.random() * preset.waveSpread * .45;
+                } else {
+                    delay[i] = (y - box.min.y) / height * preset.waveSpread + Math.random() * 6;
+                }
                 seed[i] = Math.random() * 1000; size[i] = height * preset.shardSize * (.7 + Math.random() * .6);
             }
             const geometry = new T.BufferGeometry();
@@ -433,8 +443,17 @@
             geometry.setAttribute('aDelay', new T.BufferAttribute(delay, 1));
             geometry.setAttribute('aSeed', new T.BufferAttribute(seed, 1));
             geometry.setAttribute('aSize', new T.BufferAttribute(size, 1));
-            const material = BattleRoomView.shardMaterial(T, preset, false);
-            const points = new T.Points(geometry, material); points.frustumCulled = false; points.renderOrder = 5; points.userData.__reactorOverlay = true;
+            let points;
+            if (preset.fragments) {
+                // Glass breaks into polygons, so the shard layer is real geometry
+                // rather than point sprites, which are square whatever the mask.
+                points = new T.Mesh(
+                    BattleRoomView.fragmentGeometry(shards, height * (preset.fragmentSize || .03), T, preset.spin === undefined ? .22 : preset.spin),
+                    BattleRoomView.fragmentMaterial(T, preset, centre, this.uniforms, box.min.y));
+            } else {
+                points = new T.Points(geometry, BattleRoomView.shardMaterial(T, preset, false, centre));
+            }
+            points.frustumCulled = false; points.renderOrder = 5; points.userData.__reactorOverlay = true;
             this.scene.add(points);
             let sparks = null;
             if (preset.spark && preset.spark.count > 0) {
@@ -448,7 +467,7 @@
                 const g = new T.BufferGeometry();
                 g.setAttribute('position', new T.BufferAttribute(sp, 3)); g.setAttribute('color', new T.BufferAttribute(sc, 3));
                 g.setAttribute('aDelay', new T.BufferAttribute(sd, 1)); g.setAttribute('aSeed', new T.BufferAttribute(ss, 1)); g.setAttribute('aSize', new T.BufferAttribute(sz, 1));
-                sparks = new T.Points(g, BattleRoomView.shardMaterial(T, preset, true)); sparks.frustumCulled = false; sparks.renderOrder = 6; sparks.userData.__reactorOverlay = true;
+                sparks = new T.Points(g, BattleRoomView.shardMaterial(T, preset, true, centre)); sparks.frustumCulled = false; sparks.renderOrder = 6; sparks.userData.__reactorOverlay = true;
                 this.scene.add(sparks);
             }
             record.dissolve = { points, sparks, preset, start: this.frame, duration: Math.round(preset.waveSpread + preset.shardLife + 8), minY: box.min.y, maxY: box.max.y, done: false };
@@ -464,7 +483,10 @@
             record.object?.traverse(node => { for (const m of [node.material].flat().filter(Boolean)) { const u = m.userData?.rrDissolve || (m.userData = m.userData || {}, m.userData.rrDissolve = { value: -1e9 }); u.value = front; } });
             record.dissolveShadow = Math.max(0, 1 - t / preset.waveSpread);
             const scale = this.camera?.isOrthographicCamera ? (this.height || 624) / Math.max(.001, (this.camera.top - this.camera.bottom)) : (this.height || 624) / (2 * Math.tan(((this.camera?.fov || 40) * Math.PI) / 360));
-            for (const p of [d.points, d.sparks]) if (p) { p.material.uniforms.uTime.value = t; p.material.uniforms.uScale.value = scale; p.material.uniforms.uOrtho.value = this.camera?.isOrthographicCamera ? 1 : 0; }
+            for (const p of [d.points, d.sparks]) if (p) {
+                const u = p.material.uniforms; u.uTime.value = t;
+                if (u.uScale) { u.uScale.value = scale; u.uOrtho.value = this.camera?.isOrthographicCamera ? 1 : 0; }
+            }
             if (t >= d.duration && !d.done) {
                 d.done = true;
                 if (record.object) record.object.visible = false;
@@ -486,7 +508,20 @@
                 ember: { waveSpread: 45, shardLife: 70, shardSize: .022, buoyancy: .022, curl: .25, curlFrequency: .16, fadePower: 1.6, tint: [1, .35, .12],   tintStrength: .85,
                          spark: { count: 500, colour: [1, .55, .25], life: .55, size: .5, buoyancy: 2.4, curl: .6, fade: 1.2, peak: 1, core: .3 } },
                 wisp:  { waveSpread: 45, shardLife: 70, shardSize: .026, buoyancy: .012, curl: .16, curlFrequency: .09, fadePower: 1.7, tint: [.37, .91, .66], tintStrength: .85,
-                         spark: { count: 600, colour: [.55, 1, .8], life: 1.3, size: 1.1, buoyancy: .8, curl: .5, fade: 1.3, peak: .55, core: 0 } }
+                         spark: { count: 600, colour: [.55, 1, .8], life: 1.3, size: 1.1, buoyancy: .8, curl: .5, fade: 1.3, peak: .55, core: 0 } },
+                // Glass, the counterpart of the sprite's Shatter: the three
+                // above are dissolves, where a wave climbs the model and what
+                // it passes drifts off. This one breaks -- every shard leaves
+                // at once, thrown out from the middle and falling, keeping its
+                // size and its own colour. `hard` cuts each one as a sharp
+                // fragment instead of a soft blob.
+                shatter: { waveSpread: 3, shardLife: 115, shardSize: .030, buoyancy: 0, curl: 0, curlFrequency: 0, fadePower: .45, tint: [0, 0, 0], tintStrength: 0,
+                         burst: .0032, gravity: .00075, shrink: 0, hard: 1, settle: 30,
+                         // Few and large, so each piece is a recognisable plate of
+                         // the model rather than grit, and `hold` keeps them in
+                         // place for a beat before they let go.
+                         fragments: true, count: 700, fragmentSize: .05, glint: .22, hold: 1.5, spin: .09,
+                         spark: { count: 260, colour: [.87, .95, 1], life: .25, size: .45, buoyancy: 1.6, curl: .4, fade: 2.4, peak: 1, core: .35 } }
             });
         }
         /**
@@ -519,7 +554,7 @@
                 }
             });
             if (!triangles.length || !(total > 0)) return null;
-            const position = new Float32Array(count * 3), color = new Float32Array(count * 3);
+            const position = new Float32Array(count * 3), color = new Float32Array(count * 3), normal = new Float32Array(count * 3);
             const pick = value => { let lo = 0, hi = triangles.length - 1; while (lo < hi) { const mid = (lo + hi) >> 1; if (triangles[mid].cumulative < value) lo = mid + 1; else hi = mid; } return triangles[lo]; };
             for (let k = 0; k < count; k++) {
                 const tri = pick(Math.random() * total);
@@ -528,8 +563,131 @@
                 position[k * 3] = tri.ax * r0 + tri.bx * r1 + tri.cx * r2; position[k * 3 + 1] = tri.ay * r0 + tri.by * r1 + tri.cy * r2; position[k * 3 + 2] = tri.az * r0 + tri.bz * r1 + tri.cz * r2;
                 const rgb = BattleRoomView.surfaceColour(tri, r0, r1, r2, T);
                 color[k * 3] = rgb[0]; color[k * 3 + 1] = rgb[1]; color[k * 3 + 2] = rgb[2];
+                const nx = (tri.by - tri.ay) * (tri.cz - tri.az) - (tri.bz - tri.az) * (tri.cy - tri.ay);
+                const ny = (tri.bz - tri.az) * (tri.cx - tri.ax) - (tri.bx - tri.ax) * (tri.cz - tri.az);
+                const nz = (tri.bx - tri.ax) * (tri.cy - tri.ay) - (tri.by - tri.ay) * (tri.cx - tri.ax);
+                const len = Math.hypot(nx, ny, nz) || 1;
+                normal[k * 3] = nx / len; normal[k * 3 + 1] = ny / len; normal[k * 3 + 2] = nz / len;
             }
-            return { position, color, count };
+            return { position, color, normal, count };
+        }
+        /**
+         * The model's surface as a field of loose triangles: glass, not grit.
+         *
+         * A point sprite is a screen-aligned square however it is masked, which
+         * reads as specks; a shard of glass has to be a real polygon that
+         * tumbles. Each fragment is three vertices cut in the tangent plane of
+         * the surface at a sampled point, at irregular angles and radii so no
+         * two are the same shape, carrying the middle it turns about, the axis
+         * it turns on and the colour the model wears there.
+         */
+        static fragmentGeometry(shards, size, T, spinRate = .22) {
+            const count = shards.count, vertices = count * 3;
+            const position = new Float32Array(vertices * 3), centre = new Float32Array(vertices * 3);
+            const colour = new Float32Array(vertices * 3), axis = new Float32Array(vertices * 3), facing = new Float32Array(vertices * 3);
+            const spin = new Float32Array(vertices), delay = new Float32Array(vertices), seed = new Float32Array(vertices);
+            const n = new T.Vector3(), t1 = new T.Vector3(), t2 = new T.Vector3(), up = new T.Vector3(0, 1, 0), side = new T.Vector3(1, 0, 0);
+            for (let i = 0; i < count; i++) {
+                n.fromArray(shards.normal, i * 3);
+                if (!Number.isFinite(n.x) || n.lengthSq() < .5) n.set(0, 0, 1);
+                t1.crossVectors(n, Math.abs(n.y) > .9 ? side : up).normalize();
+                t2.crossVectors(n, t1).normalize();
+                const turn = Math.random() * Math.PI * 2, scale = size * (.6 + Math.random() * .9);
+                const ax = Math.random() - .5, ay = Math.random() - .5, az = Math.random() - .5;
+                const alen = Math.hypot(ax, ay, az) || 1;
+                for (let v = 0; v < 3; v++) {
+                    const at = (i * 3 + v) * 3;
+                    // Irregular by construction: each corner takes its own angle and reach.
+                    const angle = turn + v * 2.0944 + (Math.random() - .5) * .9, reach = scale * (.55 + Math.random() * .8);
+                    position[at] = (t1.x * Math.cos(angle) + t2.x * Math.sin(angle)) * reach;
+                    position[at + 1] = (t1.y * Math.cos(angle) + t2.y * Math.sin(angle)) * reach;
+                    position[at + 2] = (t1.z * Math.cos(angle) + t2.z * Math.sin(angle)) * reach;
+                    centre[at] = shards.position[i * 3]; centre[at + 1] = shards.position[i * 3 + 1]; centre[at + 2] = shards.position[i * 3 + 2];
+                    colour[at] = shards.color[i * 3]; colour[at + 1] = shards.color[i * 3 + 1]; colour[at + 2] = shards.color[i * 3 + 2];
+                    axis[at] = ax / alen; axis[at + 1] = ay / alen; axis[at + 2] = az / alen;
+                    facing[at] = n.x; facing[at + 1] = n.y; facing[at + 2] = n.z;
+                    spin[i * 3 + v] = (Math.random() - .5) * spinRate; seed[i * 3 + v] = Math.random() * 1000;
+                }
+                // One delay for the whole fragment, or it would tear itself apart.
+                const share = Math.random();
+                for (let v = 0; v < 3; v++) { delay[i * 3 + v] = share; spin[i * 3 + v] = spin[i * 3]; seed[i * 3 + v] = seed[i * 3]; }
+            }
+            const geometry = new T.BufferGeometry();
+            geometry.setAttribute('position', new T.BufferAttribute(position, 3));
+            geometry.setAttribute('aCentre', new T.BufferAttribute(centre, 3));
+            geometry.setAttribute('color', new T.BufferAttribute(colour, 3));
+            geometry.setAttribute('aAxis', new T.BufferAttribute(axis, 3));
+            geometry.setAttribute('aNormal', new T.BufferAttribute(facing, 3));
+            geometry.setAttribute('aSpin', new T.BufferAttribute(spin, 1));
+            geometry.setAttribute('aDelay', new T.BufferAttribute(delay, 1));
+            geometry.setAttribute('aSeed', new T.BufferAttribute(seed, 1));
+            return geometry;
+        }
+        /** The fragments' material: each shard turns about its own middle, is thrown out from the model's, and falls. */
+        static fragmentMaterial(T, preset, centre, roomUniforms, floor) {
+            const R = root.Reactor3D;
+            const lit = !!(R && R.LightGrid && R.LIGHT_GLSL && roomUniforms);
+            if (lit) { try { R.LightGrid.ensure(roomUniforms); } catch (error) { /* the room draws unlit */ } }
+            const material = new T.ShaderMaterial({
+                uniforms: {
+                    uTime: { value: 0 }, uLife: { value: preset.shardLife }, uWave: { value: preset.waveSpread },
+                    uBurst: { value: preset.burst || 0 }, uGravity: { value: preset.gravity || 0 },
+                    uHold: { value: preset.hold === undefined ? 1 : preset.hold },
+                    uFloor: { value: floor === undefined ? -1e9 : floor },
+                    uSettle: { value: preset.settle === undefined ? 1e9 : preset.settle },
+                    uFadePower: { value: preset.fadePower }, uCentre: { value: (centre || new T.Vector3()).clone() },
+                    uTint: { value: new T.Vector3(...preset.tint) }, uTintStrength: { value: preset.tintStrength || 0 },
+                    uGlint: { value: preset.glint === undefined ? .45 : preset.glint }
+                },
+                defines: lit ? { RR_LIT: '' } : {},
+                vertexShader: [
+                    'attribute vec3 aCentre; attribute vec3 aAxis; attribute vec3 aNormal; attribute float aSpin; attribute float aDelay; attribute float aSeed;',
+                    'uniform float uTime, uLife, uWave, uBurst, uGravity, uHold, uFloor, uSettle; uniform vec3 uCentre;',
+                    'varying vec3 vColor; varying float vRemaining; varying vec3 vNormalV; varying vec3 vRRWorldPos;',
+                    // Rodrigues: turn a corner about the shard's own axis.
+                    'vec3 turn(vec3 v, vec3 k, float a) { return v * cos(a) + cross(k, v) * sin(a) + k * dot(k, v) * (1.0 - cos(a)); }',
+                    'void main() {',
+                    '  vec3 away = aCentre - uCentre;',
+                    '  float reach = max(0.001, length(away));',
+                    '  float delay = aDelay * uWave;',
+                    '  float age = max(0.0, uTime - delay);',
+                    '  vRemaining = clamp(1.0 - age / uLife, 0.0, 1.0);',
+                    '  vColor = color;',
+                    '  vec3 local = turn(position, aAxis, aSpin * age);',
+                    // Not linear: a break holds, then opens. pow(age, uHold)
+                    // barely moves a shard for the first frames and then throws it.
+                    // The throw settles after a beat: a shard that lands stays where it fell.
+                    '  float thrown = pow(min(age, uSettle), uHold) * (0.5 + 0.95 * fract(aSeed * 0.0137));',
+                    '  vec3 middle = aCentre + (away / reach) * uBurst * thrown;',
+                    '  middle.y -= uGravity * age * age;',
+                    // Glass lands: a shard stops at the floor the model stood on and lies there.
+                    '  middle.y = max(uFloor, middle.y);',
+                    '  vRRWorldPos = (modelMatrix * vec4(middle + local, 1.0)).xyz;',
+                    '  vec4 mv = modelViewMatrix * vec4(middle + local, 1.0);',
+                    '  vNormalV = normalize(mat3(modelViewMatrix) * turn(aNormal, aAxis, aSpin * age));',
+                    '  gl_Position = projectionMatrix * mv;',
+                    '}'].join('\n'),
+                fragmentShader: (lit ? R.LightGrid.glsl(R.LIGHT_GLSL) : '') + [
+                    'uniform float uFadePower, uTintStrength, uGlint; uniform vec3 uTint;',
+                    'varying vec3 vColor; varying float vRemaining; varying vec3 vNormalV;',
+                    // The light block brings its own vRRWorldPos; declaring it twice will not compile.
+                    lit ? '' : 'varying vec3 vRRWorldPos;',
+                    'void main() {',
+                    '  if (vRemaining <= 0.0) discard;',
+                    '  vec3 colour = mix(vColor, uTint, uTintStrength);',
+                    // Lit where the model stood, so a shard reads as a piece of it and not a dark chip.
+                    '#ifdef RR_LIT',
+                    '  colour *= rrLight(vRRWorldPos);',
+                    '#endif',
+                    // A face turned toward the eye catches the light, the way a turning shard of glass flashes.
+                    '  float facing = abs(normalize(vNormalV).z);',
+                    '  colour += vec3(smoothstep(0.86, 1.0, facing) * uGlint);',
+                    '  gl_FragColor = vec4(colour, pow(vRemaining, uFadePower));',
+                    '}'].join('\n'),
+                vertexColors: true, transparent: true, side: T.DoubleSide, depthWrite: false
+            });
+            if (lit) for (const key of Object.keys(roomUniforms)) material.uniforms[key] = roomUniforms[key];
+            return material;
         }
         /** The colour of a spot on a triangle: texture pixel when readable, times material colour and vertex colour. */
         static surfaceColour(tri, r0, r1, r2, T) {
@@ -565,7 +723,7 @@
             return pixels;
         }
         /** The shard material: each point runs its own clock from its release, drifts up and curls, shrinks and fades; sparks are the additive kind. */
-        static shardMaterial(T, preset, sparks) {
+        static shardMaterial(T, preset, sparks, centre) {
             const s = preset.spark || { life: .55, size: .5, buoyancy: 2.4, curl: .6, fade: 1.2, peak: 1, core: .3 };
             return new T.ShaderMaterial({
                 uniforms: { uTime: { value: 0 }, uScale: { value: 300 }, uOrtho: { value: 0 },
@@ -578,10 +736,17 @@
                     // A spark is already its own colour; only a shard walks to the preset's tint.
                     uTintStrength: { value: sparks ? 0 : preset.tintStrength },
                     uPeak: { value: sparks ? s.peak : 1 },
-                    uCore: { value: sparks ? s.core : .3 } },
+                    uCore: { value: sparks ? s.core : .3 },
+                    uCentre: { value: (centre || new T.Vector3()).clone() },
+                    // A spark is struck by the break, not thrown by it, so it keeps the drift the others have.
+                    uBurst: { value: sparks ? 0 : (preset.burst || 0) },
+                    uGravity: { value: sparks ? 0 : (preset.gravity || 0) },
+                    uShrink: { value: preset.shrink === undefined ? .65 : preset.shrink },
+                    uHard: { value: sparks ? 0 : (preset.hard || 0) } },
                 vertexShader: [
                     'attribute float aDelay; attribute float aSeed; attribute float aSize;',
                     'uniform float uTime, uScale, uOrtho, uLife, uBuoyancy, uCurl, uCurlFrequency;',
+                    'uniform float uBurst, uGravity, uShrink; uniform vec3 uCentre;',
                     'varying vec3 vColor; varying float vRemaining;',
                     'void main() {',
                     '  float age = uTime - aDelay;',
@@ -593,19 +758,27 @@
                     '    p.y += uBuoyancy * age * (0.6 + 0.8 * t);',
                     '    p.x += uCurl * t * sin(aSeed + age * uCurlFrequency);',
                     '    p.z += uCurl * t * cos(aSeed * 1.7 + age * uCurlFrequency * 0.9);',
+                    '    if (uBurst > 0.0) {',
+                    '      vec3 away = position - uCentre;',
+                    '      p += (away / max(0.001, length(away))) * uBurst * age * (0.5 + 0.95 * fract(aSeed * 0.0137));',
+                    '      p.y -= uGravity * age * age;',   // a real fall, not a drift
+                    '    }',
                     '  }',
                     '  vec4 mv = modelViewMatrix * vec4(p, 1.0);',
                     '  gl_Position = projectionMatrix * mv;',
-                    '  float size = aSize * (0.35 + 0.65 * remaining) * uScale;',
+                    '  float size = aSize * ((1.0 - uShrink) + uShrink * remaining) * uScale;',
                     '  gl_PointSize = vRemaining > 0.0 ? (uOrtho > 0.5 ? size : size / max(0.05, -mv.z)) : 0.0;',
                     '  if (vRemaining <= 0.0) gl_Position = vec4(2.0, 2.0, 2.0, 1.0);',
                     '}'].join('\n'),
                 fragmentShader: [
-                    'uniform float uFadePower, uTintStrength, uPeak, uCore; uniform vec3 uTint;',
+                    'uniform float uFadePower, uTintStrength, uPeak, uCore, uHard; uniform vec3 uTint;',
                     'varying vec3 vColor; varying float vRemaining;',
                     'void main() {',
                     '  vec2 d = gl_PointCoord - 0.5;',
-                    '  float edge = 1.0 - smoothstep(uCore, 0.5, length(d));',
+                    '  float soft = 1.0 - smoothstep(uCore, 0.5, length(d));',
+                    // Glass reads as a cut fragment, so its mask has an edge rather than a falloff.
+                    '  float hard = 1.0 - step(0.42, abs(d.x) + abs(d.y));',
+                    '  float edge = mix(soft, hard, uHard);',
                     '  float alpha = pow(vRemaining, uFadePower) * edge * uPeak;',
                     '  if (alpha <= 0.002) discard;',
                     '  vec3 colour = mix(vColor, uTint, uTintStrength * (1.0 - vRemaining * 0.6));',

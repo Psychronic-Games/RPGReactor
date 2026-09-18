@@ -440,10 +440,47 @@ test('a room model dissolves for Ash and Ember: shards off its surface in its co
     assert.ok(wisp.spark.peak<1&&wisp.spark.core===0,'its sparks never saturate and have no opaque core, so they accumulate into a glow');
     assert.ok(wisp.spark.life>Room.DISSOLVE.ember.spark.life&&wisp.spark.size>Room.DISSOLVE.ember.spark.size,'and live longer and larger than embers');
     assert.equal(Room.DISSOLVE.ash.spark,null,'ash strikes no sparks');
+    // Shatter is a break, not a dissolve: it throws its shards outward from the middle and lets them fall.
+    const shatter=Room.DISSOLVE.shatter;assert.ok(shatter,'the room knows Shatter');
+    assert.ok(shatter.burst>0&&shatter.gravity>0,'it bursts outward and falls');
+    assert.equal(shatter.shrink,0,'its shards keep their size');
+    assert.equal(shatter.hard,1,'and are cut as sharp fragments');
+    assert.ok(shatter.waveSpread<Room.DISSOLVE.ash.waveSpread/3,'it breaks at once rather than climbing');
+    assert.ok(!Room.DISSOLVE.ember.burst&&!Room.DISSOLVE.wisp.burst,'the dissolves do not burst');
+    // A shattering model still runs the same clock and frees itself.
+    const other={object:new THREE.Group(),spec:{size:2},position:{x:1,y:1}};
+    const m2=new THREE.Mesh(new THREE.BoxGeometry(1,2,1),new THREE.MeshStandardMaterial());m2.position.set(1.5,1,1.5);other.object.add(m2);view.scene.add(other.object);view.models.set('enemy:1',other);
+    view.frame=500;const sf=view.startDissolve('enemy:1','shatter');assert.ok(sf>0,'it runs');
+    const sd=other.dissolve,sdelay=sd.points.geometry.getAttribute('aDelay');
+    let maxDelay=0;for(let i=0;i<sdelay.count;i++)maxDelay=Math.max(maxDelay,sdelay.getX(i));
+    assert.ok(maxDelay<=shatter.waveSpread+1,'every shard leaves within the short wave');
+    view.frame=500+sf;view.updateDissolve(other);assert.equal(other.object.visible,false,'and the model is gone at the end');
     // The front rises with the frames.
     assert.ok(material.userData.rrDissolve.value<0.2,'the front starts at the feet');
     view.frame=100+22;view.updateDissolve(record);const half=material.userData.rrDissolve.value;assert.ok(half>.8&&half<1.3,`half way up at half the wave (${half.toFixed(2)})`);
     assert.equal(d.points.material.uniforms.uTime.value,22);assert.ok(record.dissolveShadow<.6&&record.dissolveShadow>.4,'the floor shadow fades with the wave');
     view.frame=100+frames;view.updateDissolve(record);
     assert.equal(d.done,true);assert.equal(object.visible,false,'the model is gone');assert.equal(d.points,null,'the shards are freed');assert.equal(view.scene.children.filter(c=>c.isPoints).length,0);
+});
+
+test('Shatter is wired end to end: the trait, both emitters, and a mesh of triangles in a flat battle', () => {
+    const fs = require('node:fs'), path = require('node:path');
+    const read = file => fs.readFileSync(path.join(__dirname, '../../runtime', file), 'utf8');
+    const objects = read('reactor_objects.js'), sprites = read('reactor_sprites.js');
+    // The trait's eighth value reaches the sprite, which reaches the preset.
+    assert.match(objects, /case 7:\s*\n\s*this\.requestEffect\("shatterCollapse"\)/, 'Collapse Effect 7 asks for the shatter');
+    assert.match(sprites, /case "shatterCollapse":\s*\n\s*this\.startParticleCollapse\("shatter"\)/, 'and the sprite starts that preset');
+    assert.match(sprites, /case "shatterCollapse":\s*\n\s*case "wispCollapse":/, 'and it updates with the other particle collapses');
+    // Glass is polygons, so the flat battle builds a mesh rather than particles.
+    assert.match(sprites, /createFragmentCollapse = function/, 'the mesh path exists');
+    assert.match(sprites, /updateFragmentCollapse = function/, 'and moves its corners itself');
+    assert.match(sprites, /preset\.fragments \? this\.createFragmentCollapse\(preset\) : this\.createParticleCollapse\(preset\)/, 'and a fragment preset takes it');
+    assert.match(sprites, /new PIXI\.MeshGeometry\(/, 'one geometry for the whole break');
+    // The preset itself: a break, not a dissolve.
+    const preset = sprites.slice(sprites.indexOf('    shatter: {'), sprites.indexOf('    wisp: {'));
+    assert.match(preset, /fragments: true/);
+    assert.match(preset, /burst: [0-9.]+/, 'thrown outward');
+    assert.match(preset, /settle: \d+/, 'and settling, so a landed shard stays where it fell');
+    assert.match(preset, /buoyancy: -[0-9.]+/, 'a negative buoyancy is gravity');
+    assert.ok(/shrink: 0\b/.test(preset), 'its shards keep their size');
 });
