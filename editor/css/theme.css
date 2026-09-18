@@ -1972,6 +1972,32 @@ input[type="number"]::-webkit-outer-spin-button {
     }
 }
 
+/* The collapse sound belongs to the Collapse Effect row above it: same grid
+ * columns, drawn closer and with a quieter label so it reads as a detail of
+ * that row rather than a trait of its own. It carries no radio, so its first
+ * column stays empty. */
+.rr-trait-row.rr-trait-subrow {
+    margin-top: 6px;
+}
+.rr-trait-row.rr-trait-subrow .rr-trait-label {
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+}
+.rr-trait-row .collapse-se-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    max-width: 100%;
+}
+.rr-trait-row .collapse-se-button .collapse-se-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.rr-trait-row .collapse-se-icon {
+    flex: 0 0 auto;
+}
+
 /* ---------- Modal ---------------------------------------------------------- */
 
 .rr-modal-overlay {

@@ -522,3 +522,49 @@ test("an enemy can carry its own collapse sound, chosen beside the effect and st
     const enemies = fs.readFileSync(path.join(editorRoot, 'src/database/DatabaseEnemyEditor.js'), 'utf8');
     assert.equal((enemies.match(/\}, 'enemies'\);/g) || []).length, 2, 'both trait dialogs say which record they edit');
 });
+
+// The control shipped as a bare button in the dropdown's own column: it read as
+// a greyed-out field, said nothing about sound, and its click died on a project
+// path DatabaseCommonUI had copied before any project was open.
+test('the collapse sound names itself, looks like a picker and opens above the trait dialog', () => {
+    const fs = require('node:fs'), path = require('node:path');
+    const editorRoot = path.resolve(__dirname, '..');
+    const source = fs.readFileSync(path.join(editorRoot, 'src/database/DatabaseTraitEditor.js'), 'utf8');
+
+    const prior = { escape: globalThis.rrEscapeHtml, help: globalThis.TraitHelp, window: globalThis.window };
+    globalThis.rrEscapeHtml = require(path.join(editorRoot, 'src/utils/HtmlEscape.js'));
+    globalThis.TraitHelp = require(path.join(editorRoot, 'src/database/TraitHelp.js'));
+    if (!globalThis.window) globalThis.window = {};
+    try {
+        const TraitEditor = new Function(`${source}\nreturn DatabaseTraitEditor;`)();
+        const render = recordType => {
+            const editor = Object.create(TraitEditor.prototype);
+            editor.recordType = recordType;
+            editor._collapseSe = null;
+            const container = { innerHTML: '', querySelectorAll: () => [], querySelector: () => null };
+            editor.createOtherTab(container, { code: 63, dataId: 1, value: 0 });
+            return container.innerHTML;
+        };
+        const html = render('enemies');
+        assert.match(html, /rr-trait-subrow/, 'the sound is its own row, not a second control in the dropdown column');
+        assert.match(html, /class="rr-trait-label">Collapse Sound</, 'and the row says what it is');
+        assert.match(html, /class="collapse-se-button rr-btn-chip"/, 'drawn as a button, not as a filled-in field');
+        assert.match(html, /class="collapse-se-icon"/, 'with a speaker beside the name');
+        assert.match(html, /<span class="collapse-se-name">System default<\/span>/);
+        assert.doesNotMatch(render('states'), /collapse-se-button/, 'only the record the runtime reads the sound from offers it');
+    } finally {
+        globalThis.rrEscapeHtml = prior.escape;
+        globalThis.TraitHelp = prior.help;
+        if (prior.window === undefined) delete globalThis.window; else globalThis.window = prior.window;
+    }
+
+    // Opened at the trait dialog's own z-index or below, the picker appears behind it.
+    const zIndex = Number((source.match(/zIndex: (\d+),/) || [])[1]);
+    const overlay = Number((fs.readFileSync(path.join(editorRoot, 'css/theme.css'), 'utf8')
+        .match(/\.rr-modal-overlay \{[^}]*z-index: (\d+)/) || [])[1]);
+    assert.ok(zIndex > overlay, `the picker (${zIndex}) has to sit above the trait dialog (${overlay})`);
+
+    assert.match(source, /_projectPath\(\) \{/, 'the open project is asked for');
+    assert.doesNotMatch(source, /const projectPath = this\.commonUI\?\.currentProject\?\.path;/,
+        'never the copy taken before a project was open');
+});

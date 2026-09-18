@@ -460,8 +460,7 @@ class DatabaseTraitEditor {
                 control: this._selectHTML('collapse-select', 63, this._hintedOptions(63, trait,
                     ['Normal', 'Boss', 'Instant', 'No Disappear', 'Ash', 'Ember', 'Wisp', 'Shatter'].map(label => this._t(label)),
                     help ? help.collapseEffects() : []))
-                    + this._collapseSoundHTML()
-            }),
+            }) + this._collapseSoundHTML(),
             this._rowHTML(trait, {
                 code: 64, label: this._t('Party Ability'),
                 control: this._selectHTML('party-select', 64, this._hintedOptions(64, trait,
@@ -487,9 +486,42 @@ class DatabaseTraitEditor {
         if (this.recordType !== 'enemies') return '';
         const chosen = this._collapseSe && this._collapseSe.name;
         const label = chosen ? this._collapseSe.name : this._t('System default');
-        return `<button type="button" class="collapse-se-button database-field-value"`
-            + ` title="${rrEscapeHtml(this._t('The sound this enemy makes as it collapses.'))}"`
-            + `>${rrEscapeHtml(label)}</button>`;
+        const tip = this._t('The sound this enemy makes as it collapses.');
+        // A speaker, drawn plainly enough to read at the size of the text
+        // beside it, so the row is a sound before anyone reads its label.
+        const speaker = '<svg class="collapse-se-icon" viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">'
+            + '<path d="M2 6h3l4-3.5v11L5 10H2z" fill="currentColor"></path>'
+            + '<path d="M11.2 5.4a3.4 3.4 0 0 1 0 5.2" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"></path>'
+            + '</svg>';
+        return `
+            <div class="rr-trait-row rr-trait-subrow" data-rr-help="${rrEscapeHtml(tip)}">
+                <span></span>
+                <span class="rr-trait-label">${rrEscapeHtml(this._t('Collapse Sound'))}</span>
+                <span class="rr-trait-control">
+                    <button type="button" class="collapse-se-button rr-btn-chip" title="${rrEscapeHtml(tip)}">
+                        ${speaker}<span class="collapse-se-name">${rrEscapeHtml(label)}</span>
+                    </button>
+                </span>
+                <span class="rr-trait-prefix"></span>
+                <span class="rr-trait-value"></span>
+                <span class="rr-trait-unit"></span>
+            </div>`;
+    }
+
+    /**
+     * The open project, asked for rather than remembered: DatabaseCommonUI
+     * takes its copy when the editor is constructed, which is before any
+     * project is open, so that copy is null for the whole session.
+     */
+    _projectPath() {
+        const manager = this.commonUI && this.commonUI.projectManager;
+        const live = manager && typeof manager.getCurrentProject === 'function' ? manager.getCurrentProject() : null;
+        if (live && live.path) return live.path;
+        const controller = globalThis.reactor && globalThis.reactor.projectController;
+        const open = controller && (typeof controller.getCurrentProject === 'function'
+            ? controller.getCurrentProject() : controller.currentProject);
+        if (open && open.path) return open.path;
+        return (this.commonUI && this.commonUI.currentProject && this.commonUI.currentProject.path) || '';
     }
 
     _storedCollapseSe(entry, recordType) {
@@ -507,7 +539,7 @@ class DatabaseTraitEditor {
         if (!button || typeof button.addEventListener !== 'function') return;
         button.addEventListener('click', event => {
             event.preventDefault();
-            const projectPath = this.commonUI?.currentProject?.path;
+            const projectPath = this._projectPath();
             if (!projectPath || typeof RRAudioPickerModal === 'undefined' || typeof RRAssetFiles === 'undefined') return;
             const path = require('path'), fs = require('fs');
             const folder = path.join(projectPath, 'audio', 'se');
@@ -523,7 +555,9 @@ class DatabaseTraitEditor {
                     pan: current.pan === undefined ? 0 : current.pan
                 },
                 loopDefault: false,
-                zIndex: 10010,
+                // Above the trait dialog's own overlay (10500), or the picker
+                // opens behind the dialog that asked for it.
+                zIndex: 22000,
                 // Choosing nothing is how the system default is restored.
                 onOk: result => {
                     this._collapseSe = result && result.name
@@ -534,7 +568,8 @@ class DatabaseTraitEditor {
                             pan: result.pan === undefined ? 0 : result.pan
                         }
                         : null;
-                    button.textContent = this._collapseSe ? this._collapseSe.name : this._t('System default');
+                    const name = button.querySelector('.collapse-se-name') || button;
+                    name.textContent = this._collapseSe ? this._collapseSe.name : this._t('System default');
                 }
             });
         });
