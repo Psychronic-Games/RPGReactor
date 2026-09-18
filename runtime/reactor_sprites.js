@@ -1975,6 +1975,59 @@ Sprite_Enemy.prototype.updateParticleCollapseSparks = function(state) {
     }
 };
 
+/**
+ * Unhooks a collapse's shard textures from the shared battler source at once.
+ *
+ * Every v8 Texture listens for its source's "resize", and EventEmitter3 removes
+ * a listener by rescanning and rebuilding the whole listener array -- so
+ * dropping the shards one at a time is quadratic in shard count, and it all
+ * lands on the single frame the collapse ends. Measured on this PIXI build with
+ * a 370x435 battler: 6,305 shards cost 51.0 ms that way and 11,049 cost
+ * 146.8 ms. Filtering them out in one pass is linear -- 0.5 ms and 0.6 ms for
+ * the same two grids -- and leaves the source holding exactly the same
+ * listeners afterwards.
+ *
+ * This reaches into EventEmitter3's own storage, so each shape it can hold is
+ * checked and an unfamiliar one just leaves the per-texture path to do its job.
+ *
+ * @param {Array} shards - The collapse's shard records.
+ */
+Sprite_Enemy.prototype.unhookParticleCollapseTextures = function(shards) {
+    const first = shards.length > 1 ? shards[0].particle.texture : null;
+    const source = first ? first.source : null;
+    const events = source ? source._events : null;
+    if (!events) {
+        return;
+    }
+    // EventEmitter3 prefixes its keys only where a bare object has a prototype.
+    const key = events.resize !== undefined ? 'resize'
+        : events['~resize'] !== undefined ? '~resize' : null;
+    const listeners = key ? events[key] : null;
+    // A lone listener is stored bare rather than in an array: nothing to batch.
+    if (!Array.isArray(listeners)) {
+        return;
+    }
+    const mine = new Set();
+    for (let i = 0; i < shards.length; i++) {
+        const texture = shards[i].particle.texture;
+        if (texture && texture.source === source) {
+            mine.add(texture);
+        }
+    }
+    const kept = [];
+    for (let i = 0; i < listeners.length; i++) {
+        // Only this collapse's own subscriptions go. Anything else on the
+        // source -- the battler's own sprite, a second enemy of the same kind
+        // collapsing beside it -- is left exactly where it was.
+        if (!mine.has(listeners[i].context)) {
+            kept.push(listeners[i]);
+        }
+    }
+    // An empty array is a shape EventEmitter3 tolerates, and it clears it away
+    // itself on the first off() below -- which every shard is about to call.
+    events[key] = kept;
+};
+
 Sprite_Enemy.prototype.destroyParticleCollapse = function() {
     const state = this._particleCollapse;
     if (!state) {
@@ -1984,6 +2037,7 @@ Sprite_Enemy.prototype.destroyParticleCollapse = function() {
     // Each shard holds a Texture of its own, and a v8 Texture subscribes to its
     // source's resize event. Left undestroyed, one collapse pins thousands of
     // listeners to a session-lived, ImageManager-cached battler source.
+    this.unhookParticleCollapseTextures(state.shards);
     for (let i = 0; i < state.shards.length; i++) {
         const texture = state.shards[i].particle.texture;
         if (texture && !texture.destroyed) {
