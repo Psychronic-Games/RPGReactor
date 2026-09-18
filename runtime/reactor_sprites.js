@@ -1465,6 +1465,10 @@ Sprite_Enemy.PARTICLE_COLLAPSE = {
         tint: 0,
         sparks: 0
     },
+    // `tintRamp` is how many frames a shard takes to reach the preset tint.
+    // It defaults to 22, which outlasts a short preset's whole shard life --
+    // a fast preset has to shorten it or its shards die before they colour.
+    //
     // Spark fields below are read only when `sparks` is above zero. They
     // describe a soft blob on a ballistic path: how it is coloured, how many
     // are struck, how long each lives and how quickly it fades. One emitter
@@ -1491,6 +1495,7 @@ Sprite_Enemy.PARTICLE_COLLAPSE = {
         curlFrequency: 0.16,
         fadePower: 1.6,
         tint: 0xff5a1e,
+        tintRamp: 22,
         sparks: 600,
         sparkHot: 0xff5a10,
         sparkCool: 0xfff0c0,
@@ -1523,6 +1528,7 @@ Sprite_Enemy.PARTICLE_COLLAPSE = {
         curlFrequency: 0.09,
         fadePower: 1.7,
         tint: 0x5fe8a8,
+        tintRamp: 22,
         sparks: 700,
         sparkHot: 0x3fe0a0,
         sparkCool: 0xe8fff4,
@@ -1890,7 +1896,7 @@ Sprite_Enemy.prototype.updateParticleCollapse = function() {
         particle.alpha = Math.pow(remaining, preset.fadePower);
         if (preset.tint) {
             particle.tint = Sprite_Enemy.blendParticleCollapseTint(
-                0xffffff, preset.tint, Math.min(1, age / 22)
+                0xffffff, preset.tint, Math.min(1, age / (preset.tintRamp ?? 22))
             );
             if (state.sparks && age < 30 && Math.random() < (preset.emitWhileAging ?? 0.012)) {
                 this.emitParticleCollapseSpark(state, particle.x, particle.y);
