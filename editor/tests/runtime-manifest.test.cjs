@@ -129,3 +129,32 @@ test('three.js is deliberately absent from the boot manifest', () => {
     assert.equal(fs.existsSync(path.join(runtimeRoot, 'libs', 'three.js')), true,
         'but it does ship in the runtime bundle');
 });
+
+// Two revisions are written in reactor_main.js and they mean different things:
+// the comment is what ProjectManager compares to decide whether a project's own
+// js/ copy is stale, and the global is what the running game reports. They
+// drifted six days apart -- the global moved through 20260915.1, .16.1, .17.1
+// and four 18s while the comment stayed at 20260912.2 -- because four feature
+// tests pinned the comment's literal value, so bumping it meant editing them
+// and the global got bumped alone instead. A project already refreshed under
+// this engine version then read as current and never took another runtime.
+test('the revision the updater compares and the revision the game reports are the same', () => {
+    const main = fs.readFileSync(path.join(runtimeRoot, 'reactor_main.js'), 'utf8');
+    const stated = main.match(/RPG Reactor runtime revision:\s*([\w.-]+)/)?.[1];
+    const reported = main.match(/RPG_REACTOR_RUNTIME_REVISION\s*=\s*"([\w.-]+)"/)?.[1];
+    assert.ok(stated, 'reactor_main.js states a runtime revision in its header');
+    assert.ok(reported, 'reactor_main.js sets RPG_REACTOR_RUNTIME_REVISION');
+    assert.equal(stated, reported,
+        'the header comment decides whether a project refreshes; bump it with the global');
+
+    // And the bundled projects carry that same runtime, or they are running an older engine.
+    const templates = path.join(workspaceRoot, 'template');
+    const behind = [];
+    for (const name of fs.readdirSync(templates)) {
+        const copy = path.join(templates, name, 'js', 'reactor_main.js');
+        if (!fs.existsSync(copy)) continue;
+        const source = fs.readFileSync(copy, 'utf8');
+        if (source.match(/RPG Reactor runtime revision:\s*([\w.-]+)/)?.[1] !== stated) behind.push(name);
+    }
+    assert.deepEqual(behind, [], 'run editor/build-scripts/sync-runtime.cjs');
+});

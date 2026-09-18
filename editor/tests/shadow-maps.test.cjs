@@ -507,7 +507,7 @@ test('both viewports render the maps once a frame before the first pass, and the
     const marks = editor.match(/const driver = this\.animateModel\([^\n]*\);\n[\s\S]{0,400}?Reactor3D\.Shadows\.markCaster\(object, this\.movesOnItsOwn\(template, driver\)\);/g) || [];
     assert.equal(marks.length, 2, 'event models and props');
 
-    assert.match(read('runtime/reactor_main.js'), /runtime revision: 20260912\.2/);
+    assert.match(read('runtime/reactor_main.js'), /runtime revision: \d{8}\.\d+/);
 });
 
 test("a casting light's maps hold their origin until the light has drifted a quarter tile", () => {

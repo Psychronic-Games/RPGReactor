@@ -1,5 +1,11 @@
 # Handoff - 0.98.6 In Progress
 
+## 2026-09-18 — The revision that decides a refresh had stopped moving
+
+- **`reactor_main.js` states its revision twice and they are not interchangeable.** The header comment `// RPG Reactor runtime revision: X` is what `ProjectManager.ensureProjectRuntime` compares between the source and a project's own `js/reactor_main.js`; `globalThis.RPG_REACTOR_RUNTIME_REVISION` is what the running game reports. **Bump both.** The comment sat at 20260912.2 through six days of global bumps, so any project whose `js/` already said 0.98.7 read as current and never refreshed — every runtime fix in that window reached new projects only.
+- It froze because four feature tests pinned the comment's literal value as a bump check, which made moving it a four-file edit. They match `\d{8}\.\d+` now, and `runtime-manifest.test.cjs` asserts comment === global and that every bundled project carries it.
+- Note the other half of the condition: `targetVersion === engineVersion && projectData.engineVersion === engineVersion && currentRevision`. A project last opened under an older **version** still refreshes, which is why this was invisible until 0.98.7 had been out locally for a few days. Related: [[feedback-project-runtime-drift]].
+
 ## 2026-09-18 — A save's list entry was read a few frames too late
 
 - **`DataManager.saveGame` computed `makeSavefileInfo()` inside the write's `.then`.** Between asking for a save and the write landing, the game moves: `Scene_Battle.terminate` fires the autosave and the playtest checkpoint, the scene changes to `Scene_Map`, and a transfer calls `DataManager.loadDataFile`, which parks `$dataMap` at `null` for the whole XHR. Stock `makeSavefileInfo` never touches the map; **VisuStella SaveCore reads `$dataMap.displayName`**, so it threw inside the promise — file written, `saveGlobalInfo` never reached, a save on disk the list cannot show. Reported from Haven as a console warning after every battle. The info is read before the write is awaited now. Runtime 20260918.4, synced.
