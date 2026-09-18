@@ -434,6 +434,12 @@ test('a room model dissolves for Ash and Ember: shards off its surface in its co
     let low=Infinity,high=-Infinity;for(let i=0;i<delay.count;i++){low=Math.min(low,delay.getX(i));high=Math.max(high,delay.getX(i));}
     assert.ok(low>=0&&high<=51,'release runs from the feet over the wave');
     assert.equal(view.startDissolve('enemy:0','ash'),frames,'asked twice, one dissolve');
+    // Wisp is a third kind in 2D; without a preset of its own here it would fall back to Ash and dissolve grey.
+    const wisp=Room.DISSOLVE.wisp;assert.ok(wisp,'the room knows Wisp');
+    assert.ok(wisp.tint[1]>wisp.tint[0]&&wisp.tint[1]>wisp.tint[2],'its shards are green, not fire');
+    assert.ok(wisp.spark.peak<1&&wisp.spark.core===0,'its sparks never saturate and have no opaque core, so they accumulate into a glow');
+    assert.ok(wisp.spark.life>Room.DISSOLVE.ember.spark.life&&wisp.spark.size>Room.DISSOLVE.ember.spark.size,'and live longer and larger than embers');
+    assert.equal(Room.DISSOLVE.ash.spark,null,'ash strikes no sparks');
     // The front rises with the frames.
     assert.ok(material.userData.rrDissolve.value<0.2,'the front starts at the feet');
     view.frame=100+22;view.updateDissolve(record);const half=material.userData.rrDissolve.value;assert.ok(half>.8&&half<1.3,`half way up at half the wave (${half.toFixed(2)})`);

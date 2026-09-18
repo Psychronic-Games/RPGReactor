@@ -437,12 +437,13 @@
             const points = new T.Points(geometry, material); points.frustumCulled = false; points.renderOrder = 5; points.userData.__reactorOverlay = true;
             this.scene.add(points);
             let sparks = null;
-            if (preset.sparks > 0) {
-                const n = Math.min(preset.sparks, count), sp = new Float32Array(n * 3), sc = new Float32Array(n * 3), sd = new Float32Array(n), ss = new Float32Array(n), sz = new Float32Array(n);
+            if (preset.spark && preset.spark.count > 0) {
+                const s = preset.spark;
+                const n = Math.min(s.count, count), sp = new Float32Array(n * 3), sc = new Float32Array(n * 3), sd = new Float32Array(n), ss = new Float32Array(n), sz = new Float32Array(n);
                 for (let i = 0; i < n; i++) {
                     const from = Math.floor(Math.random() * count);
-                    sp.set(shards.position.subarray(from * 3, from * 3 + 3), i * 3); sc.set([1, .55, .25], i * 3);
-                    sd[i] = delay[from] + Math.random() * 4; ss[i] = Math.random() * 1000; sz[i] = height * preset.shardSize * .5;
+                    sp.set(shards.position.subarray(from * 3, from * 3 + 3), i * 3); sc.set(s.colour, i * 3);
+                    sd[i] = delay[from] + Math.random() * 4; ss[i] = Math.random() * 1000; sz[i] = height * preset.shardSize * s.size;
                 }
                 const g = new T.BufferGeometry();
                 g.setAttribute('position', new T.BufferAttribute(sp, 3)); g.setAttribute('color', new T.BufferAttribute(sc, 3));
@@ -473,8 +474,19 @@
         }
         static get DISSOLVE() {
             return BattleRoomView._dissolve || (BattleRoomView._dissolve = {
-                ash:   { waveSpread: 45, shardLife: 70, shardSize: .022, buoyancy: .010, curl: .12, curlFrequency: .11, fadePower: 2,   tint: [0, 0, 0],        tintStrength: 0,   sparks: 0 },
-                ember: { waveSpread: 45, shardLife: 70, shardSize: .022, buoyancy: .022, curl: .25, curlFrequency: .16, fadePower: 1.6, tint: [1, .35, .12],    tintStrength: .85, sparks: 500 }
+                // A spark layer is described, not coded: `spark` scales the
+                // shard numbers (life, size, buoyancy, curl) and sets its own
+                // fade, `peak` (the highest alpha one spark reaches) and
+                // `core` (the radius that stays at full strength). A blob that
+                // saturates on its own reads as hot grit; one that peaks below
+                // full with no core lets overlapping sparks accumulate, and
+                // accumulation is what the eye reads as glow -- which is the
+                // whole difference between Ember and Wisp.
+                ash:   { waveSpread: 45, shardLife: 70, shardSize: .022, buoyancy: .010, curl: .12, curlFrequency: .11, fadePower: 2,   tint: [0, 0, 0],       tintStrength: 0,   spark: null },
+                ember: { waveSpread: 45, shardLife: 70, shardSize: .022, buoyancy: .022, curl: .25, curlFrequency: .16, fadePower: 1.6, tint: [1, .35, .12],   tintStrength: .85,
+                         spark: { count: 500, colour: [1, .55, .25], life: .55, size: .5, buoyancy: 2.4, curl: .6, fade: 1.2, peak: 1, core: .3 } },
+                wisp:  { waveSpread: 45, shardLife: 70, shardSize: .026, buoyancy: .012, curl: .16, curlFrequency: .09, fadePower: 1.7, tint: [.37, .91, .66], tintStrength: .85,
+                         spark: { count: 600, colour: [.55, 1, .8], life: 1.3, size: 1.1, buoyancy: .8, curl: .5, fade: 1.3, peak: .55, core: 0 } }
             });
         }
         /**
@@ -554,8 +566,19 @@
         }
         /** The shard material: each point runs its own clock from its release, drifts up and curls, shrinks and fades; sparks are the additive kind. */
         static shardMaterial(T, preset, sparks) {
+            const s = preset.spark || { life: .55, size: .5, buoyancy: 2.4, curl: .6, fade: 1.2, peak: 1, core: .3 };
             return new T.ShaderMaterial({
-                uniforms: { uTime: { value: 0 }, uScale: { value: 300 }, uOrtho: { value: 0 }, uLife: { value: sparks ? Math.round(preset.shardLife * .55) : preset.shardLife }, uBuoyancy: { value: sparks ? preset.buoyancy * 2.4 : preset.buoyancy }, uCurl: { value: sparks ? preset.curl * .6 : preset.curl }, uCurlFrequency: { value: preset.curlFrequency }, uFadePower: { value: sparks ? 1.2 : preset.fadePower }, uTint: { value: new T.Vector3(...preset.tint) }, uTintStrength: { value: sparks ? 1 : preset.tintStrength } },
+                uniforms: { uTime: { value: 0 }, uScale: { value: 300 }, uOrtho: { value: 0 },
+                    uLife: { value: sparks ? Math.round(preset.shardLife * s.life) : preset.shardLife },
+                    uBuoyancy: { value: sparks ? preset.buoyancy * s.buoyancy : preset.buoyancy },
+                    uCurl: { value: sparks ? preset.curl * s.curl : preset.curl },
+                    uCurlFrequency: { value: preset.curlFrequency },
+                    uFadePower: { value: sparks ? s.fade : preset.fadePower },
+                    uTint: { value: new T.Vector3(...preset.tint) },
+                    // A spark is already its own colour; only a shard walks to the preset's tint.
+                    uTintStrength: { value: sparks ? 0 : preset.tintStrength },
+                    uPeak: { value: sparks ? s.peak : 1 },
+                    uCore: { value: sparks ? s.core : .3 } },
                 vertexShader: [
                     'attribute float aDelay; attribute float aSeed; attribute float aSize;',
                     'uniform float uTime, uScale, uOrtho, uLife, uBuoyancy, uCurl, uCurlFrequency;',
@@ -578,12 +601,12 @@
                     '  if (vRemaining <= 0.0) gl_Position = vec4(2.0, 2.0, 2.0, 1.0);',
                     '}'].join('\n'),
                 fragmentShader: [
-                    'uniform float uFadePower, uTintStrength; uniform vec3 uTint;',
+                    'uniform float uFadePower, uTintStrength, uPeak, uCore; uniform vec3 uTint;',
                     'varying vec3 vColor; varying float vRemaining;',
                     'void main() {',
                     '  vec2 d = gl_PointCoord - 0.5;',
-                    '  float edge = 1.0 - smoothstep(0.30, 0.5, length(d));',
-                    '  float alpha = pow(vRemaining, uFadePower) * edge;',
+                    '  float edge = 1.0 - smoothstep(uCore, 0.5, length(d));',
+                    '  float alpha = pow(vRemaining, uFadePower) * edge * uPeak;',
                     '  if (alpha <= 0.002) discard;',
                     '  vec3 colour = mix(vColor, uTint, uTintStrength * (1.0 - vRemaining * 0.6));',
                     '  gl_FragColor = vec4(colour, alpha);',

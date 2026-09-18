@@ -1,5 +1,9 @@
 # Handoff - 0.98.6 In Progress
 
+## 2026-09-18 — PR #65 merged (Wisp collapse, tunable sparks) and the 3D presets brought level
+
+- Merged cleanly (`b0ca53a`); see [PR-INTEGRATION-2026-09-18-pr65.md](PR-INTEGRATION-2026-09-18-pr65.md). **A new collapse kind has to be added in two places**: `Sprite_Enemy.PARTICLE_COLLAPSE` in `reactor_sprites.js` for flat battles, and `BattleRoomView.DISSOLVE` in `reactor_battle_room.js` for battle rooms, because `P.installRoomAnchors` passes the preset name straight through to `room.startDissolve` and an unknown name falls back to `ash`. The 3D preset now carries its own `spark` object (`count`, `colour`, `life`/`size`/`buoyancy`/`curl` as multipliers on the shard numbers, `fade`, `peak`, `core`); `peak` below 1 with `core` 0 is what makes overlapping sparks accumulate into a glow rather than read as grit. Runtime 20260918.1.
+
 ## 2026-09-18 — PR #64 merged (editor reads the project's parameter names)
 
 - Merged cleanly (`a4920cd`); reviewed as a draft, no defects found; see [PR-INTEGRATION-2026-09-18.md](PR-INTEGRATION-2026-09-18.md). **Any editor surface that names a base parameter must call `globalThis.rrParamNames(translate)` from `src/utils/ParamNames.js`, never its own literal list** — the two literal lists left in `DatabaseEditorUI.js` are the Terms page's own field labels and must stay literal. The util falls back to the translated English default for a slot the project has not renamed, so sandboxed tests that assert English labels keep passing; a vm context needs `tests/helpers/param-names.cjs` or it throws `rrParamNames is not a function` on the first row rendered. Editor-only, no runtime revision bump. New guard: `editor-sources-parse.test.cjs` parses every script `index.html` loads.
