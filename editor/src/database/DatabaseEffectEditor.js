@@ -45,8 +45,12 @@ class DatabaseEffectEditor {
                 const name = state ? state.name : `${tt('State')} #${effect.dataId}`;
                 return `${name} (${Math.round(effect.value1 * 100)}%)${DatabaseEffectEditor.durationSummary(effect, tt)}`;
             }
-            case 31: case 32:
-                return `${p[effect.dataId] || tt('Param')} (${effect.value1} ${tt('turns')})`;
+            case 31: case 32: {
+                const name = p[effect.dataId] || tt('Param');
+                const rate = Math.abs(Number(effect.value2) || 0);
+                const strength = rate > 0 ? `, ${Math.round(rate * 100)}%` : '';
+                return `${name} (${effect.value1} ${tt('turns')}${strength})`;
+            }
             case 33: case 34:
                 return `${p[effect.dataId] || tt('Param')}`;
             case 41: {
@@ -408,6 +412,7 @@ class DatabaseEffectEditor {
                 value: this._numberHTML(32, 'value1', rrEscapeHtml(effect.code === 32 ? effect.value1 : 5), 'min="1"'),
                 unit: tt('turns')
             }),
+            this._buffStrengthRowHTML(effect),
             this._rowHTML(effect, {
                 code: 33, label: tt('Remove Buff'),
                 control: this._selectHTML(33, paramOpts)
@@ -418,6 +423,79 @@ class DatabaseEffectEditor {
             })
         ].join('');
         this.setupEffectRadioInputs(container, effect);
+        this.setupBuffStrengthInputs(container, effect);
+    }
+
+    /**
+     * Add Buff and Add Debuff may each say how far one stack moves the
+     * parameter, instead of the standard rate: ticked, the box is that
+     * rate (`value2`, which RPG Maker leaves at 0); unticked, the box
+     * shows the standard rate greyed and `value2` stays 0, so the runtime
+     * keeps whatever the standard is. Stacks add up, so this is the
+     * strength of each stack rather than of the whole stack. One row
+     * serves both codes, since an effect can only be one of them.
+     */
+    _buffStrengthRowHTML(effect) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        const applies = effect.code === 31 || effect.code === 32;
+        const on = applies && Math.abs(Number(effect.value2) || 0) > 0;
+        const pct = on
+            ? Math.round(Math.abs(Number(effect.value2)) * 100)
+            : DatabaseEffectEditor.STANDARD_BUFF_PERCENT;
+        return `
+            <div class="effect-buff-strength rr-trait-row" data-code="31" style="margin-top: 6px;">
+                <input type="checkbox" class="effect-buff-strength-override" style="margin: 0; justify-self: center;" ${on ? 'checked' : ''} ${applies ? '' : 'disabled'}>
+                <span class="rr-trait-label" style="color: var(--color-text-muted);">${tt('Strength')}</span>
+                <span style="grid-column: 3 / -1; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                    <input type="number" class="effect-buff-strength-value database-field-value" min="1" step="1" value="${pct}" style="width: 84px; box-sizing: border-box;" ${on ? '' : 'disabled'}>
+                    <span style="color: var(--color-text-muted);">%</span>
+                    <span style="font-size: 11px; color: var(--color-text-muted);">${tt('per stack')}</span>
+                </span>
+            </div>`;
+    }
+
+    /** Read the Strength row into the effect (codes 31 and 32 only). */
+    _readBuffStrength(container, effect) {
+        const row = container.querySelector ? container.querySelector('.effect-buff-strength') : null;
+        if (!row) return;
+        if (effect.code !== 31 && effect.code !== 32) {
+            effect.value2 = 0;
+            return;
+        }
+        const override = row.querySelector('.effect-buff-strength-override');
+        const input = row.querySelector('.effect-buff-strength-value');
+        if (override && override.checked && !override.disabled && input) {
+            // 0 already means "the standard rate", so the box cannot go there.
+            effect.value2 = Math.max(1, Math.floor(parseFloat(input.value) || 0)) / 100;
+        } else {
+            effect.value2 = 0;
+        }
+    }
+
+    setupBuffStrengthInputs(container, effect) {
+        const row = container.querySelector ? container.querySelector('.effect-buff-strength') : null;
+        if (!row) return;
+        const override = row.querySelector('.effect-buff-strength-override');
+        const input = row.querySelector('.effect-buff-strength-value');
+        if (!override || !input) return;
+        const refresh = () => {
+            const applies = effect.code === 31 || effect.code === 32;
+            // Greyed, not cleared: a detour through Remove Buff and back must
+            // not cost the strength that was already typed in.
+            override.disabled = !applies;
+            input.disabled = !applies || !override.checked;
+            // Unticked, the greyed box says what the runtime will actually
+            // use rather than keeping a stale figure on screen.
+            if (!override.checked) input.value = DatabaseEffectEditor.STANDARD_BUFF_PERCENT;
+            this._readBuffStrength(container, effect);
+        };
+        override.addEventListener('change', refresh);
+        input.addEventListener('input', () => this._readBuffStrength(container, effect));
+        // Registered after setupEffectRadioInputs, so `effect.code` is already
+        // the newly picked one by the time this runs.
+        for (const radio of container.querySelectorAll('input[type="radio"]')) {
+            radio.addEventListener('click', refresh);
+        }
     }
 
     createSpecialTab(container, effect) {
@@ -577,6 +655,7 @@ class DatabaseEffectEditor {
                     effect.value1 = val1Input ? parseFloat(val1Input.value) || 0 : 0;
                     effect.value2 = val2Input ? parseFloat(val2Input.value) || 0 : 0;
                     if (code === 42) this._readGrowRange(container, effect);
+                    if (code === 31 || code === 32) this._readBuffStrength(container, effect);
                 }
             });
         });
@@ -626,6 +705,13 @@ class DatabaseEffectEditor {
         return true;
     }
 }
+
+/**
+ * What one buff stack is worth when the effect names no strength --
+ * `Game_BattlerBase.BUFF_RATE_PER_STACK` in the runtime, as a percent.
+ * Only ever shown, never stored: an unticked row writes 0.
+ */
+DatabaseEffectEditor.STANDARD_BUFF_PERCENT = 25;
 
 /** ", 3–6 turns" for an Add State effect that overrides the state's duration. */
 DatabaseEffectEditor.durationSummary = function(effect, tt) {
