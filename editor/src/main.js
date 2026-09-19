@@ -106,6 +106,11 @@ class RPGReactor {
             this.resetSidebarScroll();
             this.scaleToolbarIcons();
         });
+        // The bar's natural width also moves when its labels change: a language
+        // switch rewrites them, and the web font that sets them arrives after
+        // the first layout, so a measurement taken at show time is too narrow.
+        window.addEventListener('rr-language-changed', () => this.scaleToolbarIcons());
+        document.fonts?.ready?.then?.(() => this.scaleToolbarIcons());
 
         // Initialize Project Controller
         this.projectController = new ProjectController(
@@ -980,34 +985,42 @@ class RPGReactor {
     scaleToolbarIcons() {
         const toolbar = document.getElementById('toolbar');
         if (!toolbar || toolbar.style.display === 'none') return;
+        const last = toolbar.lastElementChild;
+        if (!last) return;
 
         const maxSize = 32;
         const minSize = 16;
 
-        // Temporarily set to max size and allow overflow for accurate measurement
+        // Measure on a single row at full size, with overflow allowed: a wrapped
+        // bar reports no overflow at all, and scrollWidth is an integer that
+        // reads a few pixels short of the true width of a row of fractional
+        // labels, so the bounding rects decide.
         toolbar.style.setProperty('--toolbar-icon-size', maxSize + 'px');
         toolbar.style.overflow = 'visible';
+        toolbar.style.flexWrap = 'nowrap';
 
-        // Force reflow to get accurate scrollWidth at full icon size
-        const naturalWidth = toolbar.scrollWidth;
-        const availableWidth = toolbar.clientWidth;
+        const barRect = toolbar.getBoundingClientRect();
+        const paddingRight = parseFloat(getComputedStyle(toolbar).paddingRight) || 0;
+        const availableRight = barRect.right - paddingRight;
+        const overflowAt = () => last.getBoundingClientRect().right - availableRight;
 
-        // Restore overflow
-        toolbar.style.overflow = '';
-
-        if (naturalWidth <= availableWidth) {
-            // Plenty of room, use full size
-            return;
+        const overflow = overflowAt();
+        if (overflow > 0) {
+            // Solve for icon size: iconCount * newSize + fixedWidth <= availableWidth,
+            // then verify on the real layout and step down until the last group
+            // is inside the bar or the icons are as small as they may be.
+            const iconCount = toolbar.querySelectorAll('.tool-button img, .tool-button svg').length || 1;
+            let newSize = Math.max(minSize, Math.min(maxSize, Math.floor(maxSize - overflow / iconCount)));
+            toolbar.style.setProperty('--toolbar-icon-size', newSize + 'px');
+            while (newSize > minSize && overflowAt() > 0) {
+                newSize -= 1;
+                toolbar.style.setProperty('--toolbar-icon-size', newSize + 'px');
+            }
         }
 
-        // Calculate how much space the icons occupy vs fixed elements (labels, separators, gaps, padding)
-        const iconCount = toolbar.querySelectorAll('.tool-button img, .tool-button svg').length;
-        const totalIconWidth = iconCount * maxSize;
-        const fixedWidth = naturalWidth - totalIconWidth;
-
-        // Solve for icon size: iconCount * newSize + fixedWidth <= availableWidth
-        const newSize = Math.max(minSize, Math.min(maxSize, Math.floor((availableWidth - fixedWidth) / iconCount)));
-        toolbar.style.setProperty('--toolbar-icon-size', newSize + 'px');
+        // Restore overflow and wrapping
+        toolbar.style.overflow = '';
+        toolbar.style.flexWrap = '';
     }
 
     // ==========================================

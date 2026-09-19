@@ -2460,7 +2460,10 @@ class DatabaseEditorUI {
             svBox.className = 'graphic-preview-box';
 
             const svLabel = document.createElement('div');
-            svLabel.textContent = tt('SV Battler');
+            // Titled for what the slot is, not for which kind of graphic it
+            // holds: the Graphic Type dropdown beneath says SV sheet, character
+            // set, static image or 3D model.
+            svLabel.textContent = tt('Battler');
             svLabel.className = 'graphic-preview-label';
             svBox.appendChild(svLabel);
 

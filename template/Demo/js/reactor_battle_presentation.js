@@ -223,7 +223,10 @@
             // A model with no room to stand in, and an animation's carrier, fly as a dot (the carrier's is clear).
             else if(step.type==='projectile'&&(!step.iconSource||['color','model','animation'].includes(step.iconSource))){const size=step.iconSource==='animation'?2:step.size||8;bitmap=new Bitmap(size,size);if(step.iconSource!=='animation')bitmap.fillAll(step.color||'#ffcc55');owned=true;}
             else{bitmap=ImageManager.loadSystem('IconSet');const size=ImageManager.iconWidth||32,index=B.visualIcon(step,step.sourceRole==='user'?subject:battler,manager._action?.item?.());rect={x:index%16*size,y:Math.floor(index/16)*size,width:size,height:size};}
-            const graphic=new Sprite(bitmap);if(rect)graphic.setFrame(rect.x,rect.y,rect.width,rect.height);graphic.anchor.set(step.gripX??.5,step.gripY??.5);ss._battleField.addChild(graphic);
+            const graphic=new Sprite(bitmap);if(rect)graphic.setFrame(rect.x,rect.y,rect.width,rect.height);graphic.anchor.set(step.gripX??.5,step.gripY??.5);
+            // A held picture drawn "behind" its holder goes just under that battler's sprite; otherwise it is above every battler, as the field's extras are.
+            const holder=step.type==='weapon'&&step.layer==='behind'?ss.findTargetSprite(battler):null;
+            if(holder&&holder.parent===ss._battleField)ss._battleField.addChildAt(graphic,ss._battleField.getChildIndex(holder));else ss._battleField.addChild(graphic);
             return {key:prefix+(serial++),graphic,rect,owned,step};
         };
         const draw=(entry,p0,rotation,visible=true)=>{let p=p0;
@@ -243,7 +246,7 @@
             }
             if(!p||graphic.bitmap.isReady?.()===false){graphic.visible=false;return;}
             const rect=entry.rect||{x:0,y:0,width:graphic.bitmap.width,height:graphic.bitmap.height};if(!rect.width||!rect.height)return;
-            if(room){room.sequenceBillboard(entry.key,graphic.bitmap.canvas,rect,p,{...step,rotation,visible});graphic.visible=false;}
+            if(room){room.sequenceBillboard(entry.key,graphic.bitmap.canvas,rect,p,{...step,rotation,visible,ownerKey:entry.owner?._reactorRoomKey||null});graphic.visible=false;}
             else{graphic.x=p.x*48;graphic.y=(p.y-(p.z||0))*48;graphic.rotation=rotation*Math.PI/180;graphic.scale.set(step.scale??1);graphic.visible=visible;}
             entry.point={...p};
         };
@@ -944,7 +947,7 @@
             const actor=battler.isActor(),index=actor?$gameParty.battleMembers().indexOf(battler):battler.index();
             const key=(actor?'actor:':'enemy:')+index;live.add(key);
             sprite._reactorRoomKey=key;
-            if(!sprite._reactorRoomPosition)sprite._reactorRoomPosition=B.position(room.settings,actor?'actors':'enemies',index);
+            if(!sprite._reactorRoomPosition)sprite._reactorRoomPosition={...B.position(room.settings,actor?'actors':'enemies',index),layer:actor?1:0};
             const p=sprite._reactorRoomPosition;
             const spec=actor?Reactor3D.actorSlotSpec(battler.actorId(),'battler'):Reactor3D.databaseModelSpec('enemies',battler.enemyId());
             const main=sprite._mainSprite||sprite;

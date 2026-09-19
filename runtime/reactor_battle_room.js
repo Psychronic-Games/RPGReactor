@@ -133,7 +133,13 @@
             }
             if (record.object) {
                 const p = record.position;
-                record.object.position.set(p.x + .5, (p.z || 0) + (record.billboard ? record.height/2 : 0), p.y + .5);
+                // Seen from above, a picture's height and its lift both read as
+                // depth up the screen: a battler stands with its feet on its pose
+                // (the flat battle's anchor), and a held or thrown picture, which
+                // arrives with half its height already taken off z, sits centred
+                // on its point. In 3D the same numbers are the picture's rise.
+                const flat = this.settings?.projection === '2d' && record.billboard;
+                record.object.position.set(p.x + .5, (p.z || 0) + (record.billboard ? record.height/2 : 0), p.y + .5 - (flat ? (p.z || 0) + record.height/2 : 0));
                 if (!record.billboard && key.startsWith('prop:')) {
                     // Props store map direction and degree rotations; battler poses
                     // instead combine a normalized model with sequence-facing keys.
@@ -202,7 +208,11 @@
             const ctx = r.canvas.getContext('2d');ctx.clearRect(0,0,r.canvas.width,r.canvas.height);
             ctx.drawImage(source,frame.x,frame.y,frame.width,frame.height,0,0,width,heightPx);r.texture.needsUpdate=true;
             r.height=height;r.object.scale.set(height*frame.width/frame.height*(position.scale??1)*(position.scaleX??1)*(position.flipX?-1:1),height*(position.scale??1)*(position.scaleY??1),1);
-            this.place(key,position);r.object.quaternion.copy(this.camera.quaternion);
+            // Sequence visuals are placed after render()'s own facing pass, so
+            // the turn a held or thrown picture carries is applied here as
+            // well; without it a swung weapon faced the camera at 0° whatever
+            // its step said.
+            this.place(key,position);r.object.quaternion.copy(this.camera.quaternion);r.object.rotateZ((position.rotateZ||0)*Math.PI/180);
         }
         /**
          * The hand (or named bone) an attachment names, as a frame: its world
@@ -354,7 +364,7 @@
         }
         sequenceBillboard(key,source,frame,point,step={}) {
             const scale=step.scale??1,height=frame.height/48*scale,width=frame.width/48*scale;
-            this.billboard(key,source,frame,{x:point.x,y:point.y,z:point.z-height/2,rotateZ:-(step.rotation||0),flipX:!!step.flipX},height);
+            this.billboard(key,source,frame,{x:point.x,y:point.y,z:point.z-height/2,rotateZ:-(step.rotation||0),flipX:!!step.flipX,behind:step.layer==='behind',ownerKey:step.ownerKey||null},height);
             const record=this.billboards.get(key);if(!record)return;
             const q=this.camera.quaternion.clone().multiply(new root.THREE.Quaternion().setFromAxisAngle(new root.THREE.Vector3(0,0,1),-(step.rotation||0)*Math.PI/180));
             const offset=new root.THREE.Vector3((.5-(step.gripX??.5))*width,((step.gripY??.5)-.5)*height,0).applyQuaternion(q);record.object.position.add(offset);
@@ -1045,7 +1055,22 @@
         }
         render() {
             if(this.disposed||!this.renderer)return;
-            const R=root.Reactor3D;this.frame++;this.aim();for(const r of this.billboards.values()){r.object.quaternion.copy(this.camera.quaternion);r.object.rotateZ((r.position?.rotateZ||0)*Math.PI/180);}this.world.setAnimationFrame(Math.floor(this.frame/30));
+            const R=root.Reactor3D;this.frame++;this.aim();
+            // Flat projection: pictures stack as the flat battle stacks its
+            // sprites. Enemies stand in their row order, the lower one in
+            // front; actors are added after every enemy and so stand in front
+            // of all of them (a position's `layer`, 1 for an actor); a held or
+            // thrown thing is above every battler. Depth by distance to a
+            // top-down camera had put the taller picture in front instead.
+            const flat=this.settings?.projection==='2d';
+            const standing=r=>(r.position?.layer||0)*1e5+(r.position?.y||0)*1000;
+            for(const [key,r] of this.billboards){r.object.quaternion.copy(this.camera.quaternion);r.object.rotateZ((r.position?.rotateZ||0)*Math.PI/180);
+                if(flat){
+                    // A held picture drawn "behind" its holder goes just under that battler; every other extra is above all of them.
+                    const owner=r.position?.behind&&r.position.ownerKey?this.billboards.get(r.position.ownerKey):null;
+                    r.object.renderOrder=String(key).startsWith('extra:')?(owner?standing(owner)-1:1e6+(r.position?.y||0)*1000):standing(r);
+                    if(r.object.material.depthTest){r.object.material.depthTest=false;r.object.material.depthWrite=false;}}}
+            this.world.setAnimationFrame(Math.floor(this.frame/30));
             for(const r of this.billboards.values())this.applyRecoil(r);
             for(const r of this.models.values())if(r.dissolve)this.updateDissolve(r);
             for(const r of [...this.models.values(),...this.billboards.values()])if(r.shadow)this.updateShadow(r);

@@ -19209,13 +19209,32 @@ class I18nManager {
 
     observe() {
         if (this._observer || typeof MutationObserver === 'undefined' || !document.body) return;
+        // An added element may bring untranslated labels anywhere beneath it,
+        // so it earns a pass over the document. Replaced text (a counter, a
+        // status line, this pass's own writes) earns a look at the element
+        // that holds it and nothing more: a preview rewriting a label every
+        // frame used to buy a whole-document pass every frame, which on a
+        // large project starved everything else on the thread.
+        this._observerTargets = this._observerTargets || new Set();
         this._observer = new MutationObserver((mutations) => {
-            if (!mutations.some(m => m.addedNodes && m.addedNodes.length)) return;
+            let whole = false;
+            for (const m of mutations) {
+                if (!m.addedNodes || !m.addedNodes.length) continue;
+                for (const node of m.addedNodes) {
+                    if (node.nodeType === 1) { whole = true; break; }
+                    if (node.nodeType === 3 && m.target && m.target.nodeType === 1) this._observerTargets.add(m.target);
+                }
+                if (whole) break;
+            }
+            if (whole) this._observerWhole = true;
+            else if (!this._observerTargets.size) return;
             if (this._observerPending) return;
             this._observerPending = true;
             setTimeout(() => {
                 this._observerPending = false;
-                this.applyText(document);
+                const targets = [...this._observerTargets]; this._observerTargets.clear();
+                if (this._observerWhole) { this._observerWhole = false; this.applyText(document); return; }
+                for (const target of targets) if (target.isConnected) this.applyText(target.parentElement || target);
             }, 0);
         });
         this._observer.observe(document.body, { childList: true, subtree: true });
@@ -19665,6 +19684,149 @@ Object.assign(RR_TEXT_TRANSLATIONS.ja, { 'Colored Dot': '色付きの点', 'Skil
 Object.assign(RR_TEXT_TRANSLATIONS.es, { 'Colored Dot': 'Punto de color', 'Skill / Item (icon or 3D model)': 'Habilidad / Objeto (icono o modelo 3D)', 'Thrown To': 'Lanzado a', 'Starts From': 'Empieza desde', 'Position Offset': 'Desplazamiento de posición', 'Arrive': 'Llegada', 'Look': 'Aspecto', 'Rotation (degrees)': 'Rotación (grados)', 'Choose Animation…': 'Elegir animación…', 'Skill / Item': 'Habilidad / Objeto', 'Size (pixels)': 'Tamaño (píxeles)', 'Current Target': 'Objetivo actual', 'No 3D models in this project yet. Import one in Database › 3D Models.': 'Este proyecto aún no tiene modelos 3D. Importa uno en Base de datos › Modelos 3D.', 'Choose a 3D model for the projectile.': 'Elige un modelo 3D para el proyectil.', 'Choose an animation for the projectile.': 'Elige una animación para el proyectil.', 'Drag the arrows in the preview, or slide. From the hand: X is forward of the thrower, Z is up.': 'Arrastra las flechas en la vista previa, o desliza. Desde la mano: X es hacia delante del lanzador, Z es arriba.', 'Drag the arrows in the preview, or slide. From the thrower’s feet: X is forward, Z is height.': 'Arrastra las flechas en la vista previa, o desliza. Desde los pies del lanzador: X es hacia delante, Z es la altura.', 'Where it lands on the target, and how high the arc rises on the way.': 'Dónde cae sobre el objetivo y cuánto sube el arco por el camino.', 'Turn and spin the picture; scale the picture or model.': 'Gira y hace rotar la imagen; escala la imagen o el modelo.' });
 Object.assign(RR_TEXT_TRANSLATIONS['zh-Hant'], { 'Colored Dot': '彩色圓點', 'Skill / Item (icon or 3D model)': '技能／道具（圖示或 3D 模型）', 'Thrown To': '投向', 'Starts From': '起點', 'Position Offset': '位置偏移', 'Arrive': '到達', 'Look': '外觀', 'Rotation (degrees)': '旋轉（度）', 'Choose Animation…': '選擇動畫…', 'Skill / Item': '技能／道具', 'Size (pixels)': '大小（像素）', 'Current Target': '目前目標', 'No 3D models in this project yet. Import one in Database › 3D Models.': '此專案尚無 3D 模型。請在資料庫 › 3D 模型中匯入。', 'Choose a 3D model for the projectile.': '請為投射物選擇 3D 模型。', 'Choose an animation for the projectile.': '請為投射物選擇動畫。', 'Drag the arrows in the preview, or slide. From the hand: X is forward of the thrower, Z is up.': '拖曳預覽中的箭頭，或使用滑桿。從手部起算：X 為投擲者前方，Z 為上方。', 'Drag the arrows in the preview, or slide. From the thrower’s feet: X is forward, Z is height.': '拖曳預覽中的箭頭，或使用滑桿。從投擲者腳下起算：X 為前方，Z 為高度。', 'Where it lands on the target, and how high the arc rises on the way.': '落在目標的何處，以及途中弧線升多高。', 'Turn and spin the picture; scale the picture or model.': '旋轉與自轉圖片；縮放圖片或模型。' });
 Object.assign(RR_TEXT_TRANSLATIONS['zh-Hans'], { 'Colored Dot': '彩色圆点', 'Skill / Item (icon or 3D model)': '技能／道具（图标或 3D 模型）', 'Thrown To': '投向', 'Starts From': '起点', 'Position Offset': '位置偏移', 'Arrive': '到达', 'Look': '外观', 'Rotation (degrees)': '旋转（度）', 'Choose Animation…': '选择动画…', 'Skill / Item': '技能／道具', 'Size (pixels)': '大小（像素）', 'Current Target': '当前目标', 'No 3D models in this project yet. Import one in Database › 3D Models.': '此项目尚无 3D 模型。请在数据库 › 3D 模型中导入。', 'Choose a 3D model for the projectile.': '请为投射物选择 3D 模型。', 'Choose an animation for the projectile.': '请为投射物选择动画。', 'Drag the arrows in the preview, or slide. From the hand: X is forward of the thrower, Z is up.': '拖动预览中的箭头，或使用滑块。从手部起算：X 为投掷者前方，Z 为上方。', 'Drag the arrows in the preview, or slide. From the thrower’s feet: X is forward, Z is height.': '拖动预览中的箭头，或使用滑块。从投掷者脚下起算：X 为前方，Z 为高度。', 'Where it lands on the target, and how high the arc rises on the way.': '落在目标的何处，以及途中弧线升多高。', 'Turn and spin the picture; scale the picture or model.': '旋转与自转图片；缩放图片或模型。' });
+// Classes: the target level control in the Parameter Curves header.
+Object.assign(RR_TEXT_TRANSLATIONS["ja"], {"The level these curves are balanced for. Clear it to follow the actors of this class again.": "これらの曲線が調整されているレベルです。空にすると、再びこの職業のアクターに従います。", "The highest Max Level among the actors of this class. Type a level to balance the curves for that instead.": "この職業のアクターの中で最も高い最大レベルです。レベルを入力すると、代わりにそのレベルに向けて曲線を調整します。"});
+Object.assign(RR_TEXT_TRANSLATIONS["zh-Hant"], {"The level these curves are balanced for. Clear it to follow the actors of this class again.": "這些曲線所平衡的等級。清除後將重新跟隨此職業的角色。", "The highest Max Level among the actors of this class. Type a level to balance the curves for that instead.": "此職業角色中最高的最高等級。輸入一個等級，改為以該等級平衡曲線。"});
+Object.assign(RR_TEXT_TRANSLATIONS["zh-Hans"], {"The level these curves are balanced for. Clear it to follow the actors of this class again.": "这些曲线所平衡的等级。清除后将重新跟随此职业的角色。", "The highest Max Level among the actors of this class. Type a level to balance the curves for that instead.": "此职业角色中最高的最大级别。输入一个等级，改为以该等级平衡曲线。"});
+Object.assign(RR_TEXT_TRANSLATIONS["ko"], {"The level these curves are balanced for. Clear it to follow the actors of this class again.": "이 곡선들이 균형을 맞춘 레벨입니다. 비우면 다시 이 직업의 액터를 따릅니다.", "The highest Max Level among the actors of this class. Type a level to balance the curves for that instead.": "이 직업 액터 중 가장 높은 최대 레벨입니다. 레벨을 입력하면 대신 그 레벨에 맞춰 곡선을 조정합니다."});
+Object.assign(RR_TEXT_TRANSLATIONS["es"], {"The level these curves are balanced for. Clear it to follow the actors of this class again.": "El nivel para el que están equilibradas estas curvas. Bórralo para volver a seguir a los personajes de esta clase.", "The highest Max Level among the actors of this class. Type a level to balance the curves for that instead.": "El nivel máximo más alto entre los personajes de esta clase. Escribe un nivel para equilibrar las curvas para ese nivel."});
+Object.assign(RR_TEXT_TRANSLATIONS["pt"], {"The level these curves are balanced for. Clear it to follow the actors of this class again.": "O nível para o qual estas curvas estão equilibradas. Limpe-o para voltar a seguir os personagens desta classe.", "The highest Max Level among the actors of this class. Type a level to balance the curves for that instead.": "O nível máximo mais alto entre os personagens desta classe. Digite um nível para equilibrar as curvas para ele."});
+Object.assign(RR_TEXT_TRANSLATIONS["fr"], {"The level these curves are balanced for. Clear it to follow the actors of this class again.": "Le niveau pour lequel ces courbes sont équilibrées. Effacez-le pour suivre à nouveau les personnages de cette classe.", "The highest Max Level among the actors of this class. Type a level to balance the curves for that instead.": "Le niveau max le plus élevé parmi les personnages de cette classe. Saisissez un niveau pour équilibrer les courbes pour celui-ci."});
+Object.assign(RR_TEXT_TRANSLATIONS["it"], {"The level these curves are balanced for. Clear it to follow the actors of this class again.": "Il livello per cui queste curve sono bilanciate. Cancellalo per seguire di nuovo i personaggi di questa classe.", "The highest Max Level among the actors of this class. Type a level to balance the curves for that instead.": "Il livello massimo più alto tra i personaggi di questa classe. Digita un livello per bilanciare le curve su quello."});
+Object.assign(RR_TEXT_TRANSLATIONS["de"], {"The level these curves are balanced for. Clear it to follow the actors of this class again.": "Das Level, für das diese Kurven ausbalanciert sind. Leeren, um wieder den Akteuren dieser Klasse zu folgen.", "The highest Max Level among the actors of this class. Type a level to balance the curves for that instead.": "Das höchste Max-Level unter den Akteuren dieser Klasse. Gib ein Level ein, um die Kurven stattdessen dafür auszubalancieren."});
+Object.assign(RR_TEXT_TRANSLATIONS["ru"], {"The level these curves are balanced for. Clear it to follow the actors of this class again.": "Уровень, под который сбалансированы эти кривые. Очистите поле, чтобы снова следовать персонажам этого класса.", "The highest Max Level among the actors of this class. Type a level to balance the curves for that instead.": "Наибольший максимальный уровень среди персонажей этого класса. Введите уровень, чтобы сбалансировать кривые под него."});
+Object.assign(RR_TEXT_TRANSLATIONS["pl"], {"The level these curves are balanced for. Clear it to follow the actors of this class again.": "Poziom, dla którego te krzywe są zbalansowane. Wyczyść go, aby znów podążać za postaciami tej klasy.", "The highest Max Level among the actors of this class. Type a level to balance the curves for that instead.": "Najwyższy maksymalny poziom wśród postaci tej klasy. Wpisz poziom, aby zamiast tego zbalansować krzywe dla niego."});
+Object.assign(RR_TEXT_TRANSLATIONS["el"], {"The level these curves are balanced for. Clear it to follow the actors of this class again.": "Το επίπεδο για το οποίο είναι ισορροπημένες αυτές οι καμπύλες. Καθαρίστε το για να ακολουθεί ξανά τους ήρωες αυτής της κλάσης.", "The highest Max Level among the actors of this class. Type a level to balance the curves for that instead.": "Το υψηλότερο μέγιστο επίπεδο μεταξύ των ηρώων αυτής της κλάσης. Πληκτρολογήστε ένα επίπεδο για να ισορροπήσετε τις καμπύλες για αυτό."});
+Object.assign(RR_TEXT_TRANSLATIONS["ar"], {"The level these curves are balanced for. Clear it to follow the actors of this class again.": "المستوى الذي وُزنت له هذه المنحنيات. امسحه ليتبع شخصيات هذه الفئة مرة أخرى.", "The highest Max Level among the actors of this class. Type a level to balance the curves for that instead.": "أعلى مستوى أقصى بين شخصيات هذه الفئة. اكتب مستوى لموازنة المنحنيات له بدلاً من ذلك."});
+Object.assign(RR_TEXT_TRANSLATIONS["tr"], {"The level these curves are balanced for. Clear it to follow the actors of this class again.": "Bu eğrilerin dengelendiği seviye. Bu sınıfın aktörlerini yeniden izlemek için temizleyin.", "The highest Max Level among the actors of this class. Type a level to balance the curves for that instead.": "Bu sınıfın aktörleri arasındaki en yüksek maksimum seviye. Eğrileri bunun yerine o seviyeye göre dengelemek için bir seviye yazın."});
+Object.assign(RR_TEXT_TRANSLATIONS["id"], {"The level these curves are balanced for. Clear it to follow the actors of this class again.": "Level yang menjadi acuan keseimbangan kurva ini. Kosongkan untuk kembali mengikuti aktor kelas ini.", "The highest Max Level among the actors of this class. Type a level to balance the curves for that instead.": "Tingkat maks tertinggi di antara aktor kelas ini. Ketik sebuah level untuk menyeimbangkan kurva ke level itu."});
+Object.assign(RR_TEXT_TRANSLATIONS["vi"], {"The level these curves are balanced for. Clear it to follow the actors of this class again.": "Cấp độ mà các đường cong này được cân bằng. Xóa để theo lại các nhân vật của lớp này.", "The highest Max Level among the actors of this class. Type a level to balance the curves for that instead.": "Cấp độ tối đa cao nhất trong các nhân vật của lớp này. Nhập một cấp độ để cân bằng các đường cong cho cấp độ đó."});
+Object.assign(RR_TEXT_TRANSLATIONS["th"], {"The level these curves are balanced for. Clear it to follow the actors of this class again.": "เลเวลที่เส้นโค้งเหล่านี้ถูกปรับสมดุลไว้ ล้างค่าเพื่อกลับไปตามตัวละครของอาชีพนี้", "The highest Max Level among the actors of this class. Type a level to balance the curves for that instead.": "ระดับสูงสุดที่มากที่สุดในบรรดาตัวละครของอาชีพนี้ พิมพ์เลเวลเพื่อปรับสมดุลเส้นโค้งสำหรับเลเวลนั้นแทน"});
+Object.assign(RR_TEXT_TRANSLATIONS["ja"], {"Actors of this class stop at Lv{level}": "この職業のアクターはLv{level}で止まります"});
+// Actors: the battler preview box is titled for the slot; the Graphic Type dropdown names the kind.
+Object.assign(RR_TEXT_TRANSLATIONS["ja"], {"Battler": "バトラー"});
+Object.assign(RR_TEXT_TRANSLATIONS["zh-Hant"], {"Battler": "戰士"});
+Object.assign(RR_TEXT_TRANSLATIONS["zh-Hans"], {"Battler": "战士"});
+Object.assign(RR_TEXT_TRANSLATIONS["ko"], {"Battler": "배틀러"});
+Object.assign(RR_TEXT_TRANSLATIONS["es"], {"Battler": "Combatiente"});
+Object.assign(RR_TEXT_TRANSLATIONS["pt"], {"Battler": "Combatente"});
+Object.assign(RR_TEXT_TRANSLATIONS["fr"], {"Battler": "Combattant"});
+Object.assign(RR_TEXT_TRANSLATIONS["it"], {"Battler": "Combattente"});
+Object.assign(RR_TEXT_TRANSLATIONS["de"], {"Battler": "Kämpfer"});
+Object.assign(RR_TEXT_TRANSLATIONS["ru"], {"Battler": "Баттлер"});
+Object.assign(RR_TEXT_TRANSLATIONS["pl"], {"Battler": "Postać bojowa"});
+Object.assign(RR_TEXT_TRANSLATIONS["el"], {"Battler": "Μαχητής"});
+Object.assign(RR_TEXT_TRANSLATIONS["ar"], {"Battler": "باتلر"});
+Object.assign(RR_TEXT_TRANSLATIONS["tr"], {"Battler": "Savaşçı"});
+Object.assign(RR_TEXT_TRANSLATIONS["id"], {"Battler": "Petarung"});
+Object.assign(RR_TEXT_TRANSLATIONS["vi"], {"Battler": "Chiến binh"});
+Object.assign(RR_TEXT_TRANSLATIONS["th"], {"Battler": "แบทเทิลเลอร์"});
+// Action Sequences: the number beside the name, and where an assignment names one.
+Object.assign(RR_TEXT_TRANSLATIONS["ja"], {"Sequence number": "シーケンス番号"});
+Object.assign(RR_TEXT_TRANSLATIONS["zh-Hant"], {"Sequence number": "序列編號"});
+Object.assign(RR_TEXT_TRANSLATIONS["zh-Hans"], {"Sequence number": "序列编号"});
+Object.assign(RR_TEXT_TRANSLATIONS["ko"], {"Sequence number": "시퀀스 번호"});
+Object.assign(RR_TEXT_TRANSLATIONS["es"], {"Sequence number": "Número de secuencia"});
+Object.assign(RR_TEXT_TRANSLATIONS["pt"], {"Sequence number": "Número da sequência"});
+Object.assign(RR_TEXT_TRANSLATIONS["fr"], {"Sequence number": "Numéro de la séquence"});
+Object.assign(RR_TEXT_TRANSLATIONS["it"], {"Sequence number": "Numero della sequenza"});
+Object.assign(RR_TEXT_TRANSLATIONS["de"], {"Sequence number": "Sequenznummer"});
+Object.assign(RR_TEXT_TRANSLATIONS["ru"], {"Sequence number": "Номер последовательности"});
+Object.assign(RR_TEXT_TRANSLATIONS["pl"], {"Sequence number": "Numer sekwencji"});
+Object.assign(RR_TEXT_TRANSLATIONS["el"], {"Sequence number": "Αριθμός ακολουθίας"});
+Object.assign(RR_TEXT_TRANSLATIONS["ar"], {"Sequence number": "رقم التسلسل"});
+Object.assign(RR_TEXT_TRANSLATIONS["tr"], {"Sequence number": "Sekans numarası"});
+Object.assign(RR_TEXT_TRANSLATIONS["id"], {"Sequence number": "Nomor sekuens"});
+Object.assign(RR_TEXT_TRANSLATIONS["vi"], {"Sequence number": "Số thứ tự chuỗi"});
+Object.assign(RR_TEXT_TRANSLATIONS["th"], {"Sequence number": "หมายเลขซีเควนซ์"});
+// Action Sequences: the audio picker titles for BGM and BGS command steps.
+Object.assign(RR_TEXT_TRANSLATIONS["ja"], {"Select BGM": "BGMを選択", "Select BGS": "BGSを選択"});
+Object.assign(RR_TEXT_TRANSLATIONS["zh-Hant"], {"Select BGM": "選擇 BGM", "Select BGS": "選擇 BGS"});
+Object.assign(RR_TEXT_TRANSLATIONS["zh-Hans"], {"Select BGM": "选择 BGM", "Select BGS": "选择 BGS"});
+Object.assign(RR_TEXT_TRANSLATIONS["ko"], {"Select BGM": "BGM 선택", "Select BGS": "BGS 선택"});
+Object.assign(RR_TEXT_TRANSLATIONS["es"], {"Select BGM": "Seleccionar BGM", "Select BGS": "Seleccionar BGS"});
+Object.assign(RR_TEXT_TRANSLATIONS["pt"], {"Select BGM": "Selecionar BGM", "Select BGS": "Selecionar BGS"});
+Object.assign(RR_TEXT_TRANSLATIONS["fr"], {"Select BGM": "Sélectionner une BGM", "Select BGS": "Sélectionner un BGS"});
+Object.assign(RR_TEXT_TRANSLATIONS["it"], {"Select BGM": "Seleziona BGM", "Select BGS": "Seleziona BGS"});
+Object.assign(RR_TEXT_TRANSLATIONS["de"], {"Select BGM": "BGM auswählen", "Select BGS": "BGS auswählen"});
+Object.assign(RR_TEXT_TRANSLATIONS["ru"], {"Select BGM": "Выбрать BGM", "Select BGS": "Выбрать BGS"});
+Object.assign(RR_TEXT_TRANSLATIONS["pl"], {"Select BGM": "Wybierz BGM", "Select BGS": "Wybierz BGS"});
+Object.assign(RR_TEXT_TRANSLATIONS["el"], {"Select BGM": "Επιλογή BGM", "Select BGS": "Επιλογή BGS"});
+Object.assign(RR_TEXT_TRANSLATIONS["ar"], {"Select BGM": "اختيار موسيقى الخلفية", "Select BGS": "اختيار صوت الخلفية"});
+Object.assign(RR_TEXT_TRANSLATIONS["tr"], {"Select BGM": "BGM seç", "Select BGS": "BGS seç"});
+Object.assign(RR_TEXT_TRANSLATIONS["id"], {"Select BGM": "Pilih BGM", "Select BGS": "Pilih BGS"});
+Object.assign(RR_TEXT_TRANSLATIONS["vi"], {"Select BGM": "Chọn BGM", "Select BGS": "Chọn BGS"});
+Object.assign(RR_TEXT_TRANSLATIONS["th"], {"Select BGM": "เลือก BGM", "Select BGS": "เลือก BGS"});
+// Action Sequences: what an attack animation step will play, and where it comes from.
+Object.assign(RR_TEXT_TRANSLATIONS["ja"], {"Plays {animation}, the action’s own.": "{animation}を再生します（アクション自身のアニメーション）。", "Plays {animation}, from {weapon}.": "{animation}を再生します（{weapon}のアニメーション）。", "No weapon animation in hand: plays {animation}.": "手にした武器にアニメーションがないため、{animation}を再生します。"});
+Object.assign(RR_TEXT_TRANSLATIONS["zh-Hant"], {"Plays {animation}, the action’s own.": "播放{animation}（此行動自身的動畫）。", "Plays {animation}, from {weapon}.": "播放{animation}（來自{weapon}）。", "No weapon animation in hand: plays {animation}.": "手中武器沒有動畫：播放{animation}。"});
+Object.assign(RR_TEXT_TRANSLATIONS["zh-Hans"], {"Plays {animation}, the action’s own.": "播放{animation}（此行动自身的动画）。", "Plays {animation}, from {weapon}.": "播放{animation}（来自{weapon}）。", "No weapon animation in hand: plays {animation}.": "手中武器没有动画：播放{animation}。"});
+Object.assign(RR_TEXT_TRANSLATIONS["ko"], {"Plays {animation}, the action’s own.": "{animation}을(를) 재생합니다 (행동 자체의 애니메이션).", "Plays {animation}, from {weapon}.": "{animation}을(를) 재생합니다 ({weapon}의 애니메이션).", "No weapon animation in hand: plays {animation}.": "손에 든 무기에 애니메이션이 없어 {animation}을(를) 재생합니다."});
+Object.assign(RR_TEXT_TRANSLATIONS["es"], {"Plays {animation}, the action’s own.": "Reproduce {animation}, la propia de la acción.", "Plays {animation}, from {weapon}.": "Reproduce {animation}, de {weapon}.", "No weapon animation in hand: plays {animation}.": "Sin animación de arma en la mano: reproduce {animation}."});
+Object.assign(RR_TEXT_TRANSLATIONS["pt"], {"Plays {animation}, the action’s own.": "Reproduz {animation}, a própria da ação.", "Plays {animation}, from {weapon}.": "Reproduz {animation}, de {weapon}.", "No weapon animation in hand: plays {animation}.": "Sem animação de arma na mão: reproduz {animation}."});
+Object.assign(RR_TEXT_TRANSLATIONS["fr"], {"Plays {animation}, the action’s own.": "Joue {animation}, celle de l’action.", "Plays {animation}, from {weapon}.": "Joue {animation}, celle de {weapon}.", "No weapon animation in hand: plays {animation}.": "Aucune animation d’arme en main : joue {animation}."});
+Object.assign(RR_TEXT_TRANSLATIONS["it"], {"Plays {animation}, the action’s own.": "Riproduce {animation}, quella dell’azione.", "Plays {animation}, from {weapon}.": "Riproduce {animation}, di {weapon}.", "No weapon animation in hand: plays {animation}.": "Nessuna animazione dell’arma in mano: riproduce {animation}."});
+Object.assign(RR_TEXT_TRANSLATIONS["de"], {"Plays {animation}, the action’s own.": "Spielt {animation}, die eigene der Aktion.", "Plays {animation}, from {weapon}.": "Spielt {animation}, von {weapon}.", "No weapon animation in hand: plays {animation}.": "Keine Waffenanimation in der Hand: spielt {animation}."});
+Object.assign(RR_TEXT_TRANSLATIONS["ru"], {"Plays {animation}, the action’s own.": "Воспроизводит {animation} — собственную анимацию действия.", "Plays {animation}, from {weapon}.": "Воспроизводит {animation} — анимацию оружия {weapon}.", "No weapon animation in hand: plays {animation}.": "У оружия в руке нет анимации: воспроизводит {animation}."});
+Object.assign(RR_TEXT_TRANSLATIONS["pl"], {"Plays {animation}, the action’s own.": "Odtwarza {animation}, własną animację akcji.", "Plays {animation}, from {weapon}.": "Odtwarza {animation}, z {weapon}.", "No weapon animation in hand: plays {animation}.": "Broń w ręce nie ma animacji: odtwarza {animation}."});
+Object.assign(RR_TEXT_TRANSLATIONS["el"], {"Plays {animation}, the action’s own.": "Παίζει {animation}, τη δική της της ενέργειας.", "Plays {animation}, from {weapon}.": "Παίζει {animation}, από το {weapon}.", "No weapon animation in hand: plays {animation}.": "Χωρίς κίνηση όπλου στο χέρι: παίζει {animation}."});
+Object.assign(RR_TEXT_TRANSLATIONS["ar"], {"Plays {animation}, the action’s own.": "يشغّل {animation}، وهي رسوم الإجراء نفسه.", "Plays {animation}, from {weapon}.": "يشغّل {animation}، من {weapon}.", "No weapon animation in hand: plays {animation}.": "لا رسوم لسلاح في اليد: يشغّل {animation}."});
+Object.assign(RR_TEXT_TRANSLATIONS["tr"], {"Plays {animation}, the action’s own.": "{animation} oynatılır; eylemin kendi animasyonu.", "Plays {animation}, from {weapon}.": "{animation} oynatılır; {weapon} silahının animasyonu.", "No weapon animation in hand: plays {animation}.": "Eldeki silahın animasyonu yok: {animation} oynatılır."});
+Object.assign(RR_TEXT_TRANSLATIONS["id"], {"Plays {animation}, the action’s own.": "Memutar {animation}, milik aksi itu sendiri.", "Plays {animation}, from {weapon}.": "Memutar {animation}, dari {weapon}.", "No weapon animation in hand: plays {animation}.": "Tidak ada animasi senjata di tangan: memutar {animation}."});
+Object.assign(RR_TEXT_TRANSLATIONS["vi"], {"Plays {animation}, the action’s own.": "Phát {animation}, hoạt ảnh riêng của hành động.", "Plays {animation}, from {weapon}.": "Phát {animation}, từ {weapon}.", "No weapon animation in hand: plays {animation}.": "Không có hoạt ảnh vũ khí trên tay: phát {animation}."});
+Object.assign(RR_TEXT_TRANSLATIONS["th"], {"Plays {animation}, the action’s own.": "เล่น {animation} ซึ่งเป็นแอนิเมชันของการกระทำเอง", "Plays {animation}, from {weapon}.": "เล่น {animation} จาก {weapon}", "No weapon animation in hand: plays {animation}.": "ไม่มีแอนิเมชันอาวุธในมือ: เล่น {animation}"});
+// Action Sequences: a held picture in front of or behind its holder.
+Object.assign(RR_TEXT_TRANSLATIONS["ja"], {"In front of the battler": "バトラーの前", "Behind the battler": "バトラーの後ろ"});
+Object.assign(RR_TEXT_TRANSLATIONS["zh-Hant"], {"In front of the battler": "在戰士前方", "Behind the battler": "在戰士後方"});
+Object.assign(RR_TEXT_TRANSLATIONS["zh-Hans"], {"In front of the battler": "在战士前方", "Behind the battler": "在战士后方"});
+Object.assign(RR_TEXT_TRANSLATIONS["ko"], {"In front of the battler": "배틀러 앞", "Behind the battler": "배틀러 뒤"});
+Object.assign(RR_TEXT_TRANSLATIONS["es"], {"In front of the battler": "Delante del combatiente", "Behind the battler": "Detrás del combatiente"});
+Object.assign(RR_TEXT_TRANSLATIONS["pt"], {"In front of the battler": "À frente do combatente", "Behind the battler": "Atrás do combatente"});
+Object.assign(RR_TEXT_TRANSLATIONS["fr"], {"In front of the battler": "Devant le combattant", "Behind the battler": "Derrière le combattant"});
+Object.assign(RR_TEXT_TRANSLATIONS["it"], {"In front of the battler": "Davanti al combattente", "Behind the battler": "Dietro il combattente"});
+Object.assign(RR_TEXT_TRANSLATIONS["de"], {"In front of the battler": "Vor dem Kämpfer", "Behind the battler": "Hinter dem Kämpfer"});
+Object.assign(RR_TEXT_TRANSLATIONS["ru"], {"In front of the battler": "Перед баттлером", "Behind the battler": "Позади баттлера"});
+Object.assign(RR_TEXT_TRANSLATIONS["pl"], {"In front of the battler": "Przed postacią bojową", "Behind the battler": "Za postacią bojową"});
+Object.assign(RR_TEXT_TRANSLATIONS["el"], {"In front of the battler": "Μπροστά από τον μαχητή", "Behind the battler": "Πίσω από τον μαχητή"});
+Object.assign(RR_TEXT_TRANSLATIONS["ar"], {"In front of the battler": "أمام المقاتل", "Behind the battler": "خلف المقاتل"});
+Object.assign(RR_TEXT_TRANSLATIONS["tr"], {"In front of the battler": "Savaşçının önünde", "Behind the battler": "Savaşçının arkasında"});
+Object.assign(RR_TEXT_TRANSLATIONS["id"], {"In front of the battler": "Di depan petarung", "Behind the battler": "Di belakang petarung"});
+Object.assign(RR_TEXT_TRANSLATIONS["vi"], {"In front of the battler": "Phía trước chiến binh", "Behind the battler": "Phía sau chiến binh"});
+Object.assign(RR_TEXT_TRANSLATIONS["th"], {"In front of the battler": "ด้านหน้าตัวละครต่อสู้", "Behind the battler": "ด้านหลังตัวละครต่อสู้"});
+// Classes: the Parameter Curves dialog (tabs, Quick Setting, Level › Value, paintable graph).
+Object.assign(RR_TEXT_TRANSLATIONS["ja"], {"Quick Setting": "クイック設定", "Generate Curve...": "曲線生成..."});
+Object.assign(RR_TEXT_TRANSLATIONS["zh-Hant"], {"Quick Setting": "快速設定", "Generate Curve...": "生成曲線..."});
+Object.assign(RR_TEXT_TRANSLATIONS["zh-Hans"], {"Quick Setting": "快速设置", "Generate Curve...": "生成曲线..."});
+Object.assign(RR_TEXT_TRANSLATIONS["ko"], {"Quick Setting": "빠른 설정", "Generate Curve...": "커브 생성..."});
+Object.assign(RR_TEXT_TRANSLATIONS["es"], {"Quick Setting": "Ajuste rápido", "Generate Curve...": "Generar curva..."});
+Object.assign(RR_TEXT_TRANSLATIONS["pt"], {"Quick Setting": "Ajuste rápido", "Generate Curve...": "Gerar curva..."});
+Object.assign(RR_TEXT_TRANSLATIONS["fr"], {"Quick Setting": "Réglage rapide", "Generate Curve...": "Générer la courbe..."});
+Object.assign(RR_TEXT_TRANSLATIONS["it"], {"Quick Setting": "Impostazione rapida", "Generate Curve...": "Genera curva..."});
+Object.assign(RR_TEXT_TRANSLATIONS["de"], {"Quick Setting": "Schnelleinstellung", "Generate Curve...": "Kurve erzeugen..."});
+Object.assign(RR_TEXT_TRANSLATIONS["ru"], {"Quick Setting": "Быстрая настройка", "Generate Curve...": "Генерировать кривую..."});
+Object.assign(RR_TEXT_TRANSLATIONS["pl"], {"Quick Setting": "Szybkie ustawienie", "Generate Curve...": "Generuj krzywą..."});
+Object.assign(RR_TEXT_TRANSLATIONS["el"], {"Quick Setting": "Γρήγορη ρύθμιση", "Generate Curve...": "Δημιουργία καμπύλης..."});
+Object.assign(RR_TEXT_TRANSLATIONS["ar"], {"Quick Setting": "إعداد سريع", "Generate Curve...": "منحنى توليد..."});
+Object.assign(RR_TEXT_TRANSLATIONS["tr"], {"Quick Setting": "Hızlı ayar", "Generate Curve...": "Eğri Oluştur..."});
+Object.assign(RR_TEXT_TRANSLATIONS["id"], {"Quick Setting": "Pengaturan cepat", "Generate Curve...": "Hasilkan Kurva..."});
+Object.assign(RR_TEXT_TRANSLATIONS["vi"], {"Quick Setting": "Cài đặt nhanh", "Generate Curve...": "Tạo đường cong..."});
+Object.assign(RR_TEXT_TRANSLATIONS["th"], {"Quick Setting": "ตั้งค่าด่วน", "Generate Curve...": "สร้างเส้นโค้ง..."});
+Object.assign(RR_TEXT_TRANSLATIONS["zh-Hant"], {"Actors of this class stop at Lv{level}": "此職業的角色止於Lv{level}"});
+Object.assign(RR_TEXT_TRANSLATIONS["zh-Hans"], {"Actors of this class stop at Lv{level}": "此职业的角色止于Lv{level}"});
+Object.assign(RR_TEXT_TRANSLATIONS["ko"], {"Actors of this class stop at Lv{level}": "이 직업의 액터는 Lv{level}에서 멈춥니다"});
+Object.assign(RR_TEXT_TRANSLATIONS["es"], {"Actors of this class stop at Lv{level}": "Los personajes de esta clase se detienen en Nv{level}"});
+Object.assign(RR_TEXT_TRANSLATIONS["pt"], {"Actors of this class stop at Lv{level}": "Os personagens desta classe param no Nv{level}"});
+Object.assign(RR_TEXT_TRANSLATIONS["fr"], {"Actors of this class stop at Lv{level}": "Les personnages de cette classe s'arrêtent au Nv{level}"});
+Object.assign(RR_TEXT_TRANSLATIONS["it"], {"Actors of this class stop at Lv{level}": "I personaggi di questa classe si fermano al Lv{level}"});
+Object.assign(RR_TEXT_TRANSLATIONS["de"], {"Actors of this class stop at Lv{level}": "Die Akteure dieser Klasse enden bei Lv{level}"});
+Object.assign(RR_TEXT_TRANSLATIONS["ru"], {"Actors of this class stop at Lv{level}": "Персонажи этого класса останавливаются на ур. {level}"});
+Object.assign(RR_TEXT_TRANSLATIONS["pl"], {"Actors of this class stop at Lv{level}": "Postacie tej klasy zatrzymują się na poz. {level}"});
+Object.assign(RR_TEXT_TRANSLATIONS["el"], {"Actors of this class stop at Lv{level}": "Οι ήρωες αυτής της κλάσης σταματούν στο Επ. {level}"});
+Object.assign(RR_TEXT_TRANSLATIONS["ar"], {"Actors of this class stop at Lv{level}": "تتوقف شخصيات هذه الفئة عند المستوى {level}"});
+Object.assign(RR_TEXT_TRANSLATIONS["tr"], {"Actors of this class stop at Lv{level}": "Bu sınıfın aktörleri Sv{level} seviyesinde durur"});
+Object.assign(RR_TEXT_TRANSLATIONS["id"], {"Actors of this class stop at Lv{level}": "Aktor kelas ini berhenti di Lv{level}"});
+Object.assign(RR_TEXT_TRANSLATIONS["vi"], {"Actors of this class stop at Lv{level}": "Nhân vật của lớp này dừng ở Cấp {level}"});
+Object.assign(RR_TEXT_TRANSLATIONS["th"], {"Actors of this class stop at Lv{level}": "ตัวละครของอาชีพนี้หยุดที่เลเวล {level}"});
 Object.assign(RR_TEXT_TRANSLATIONS.ru, { 'Colored Dot': 'Цветная точка', 'Skill / Item (icon or 3D model)': 'Навык / Предмет (иконка или 3D-модель)', 'Thrown To': 'Бросить в', 'Starts From': 'Начало', 'Position Offset': 'Смещение позиции', 'Arrive': 'Прибытие', 'Look': 'Вид', 'Rotation (degrees)': 'Поворот (градусы)', 'Choose Animation…': 'Выбрать анимацию…', 'Skill / Item': 'Навык / Предмет', 'Size (pixels)': 'Размер (пиксели)', 'Current Target': 'Текущая цель', 'No 3D models in this project yet. Import one in Database › 3D Models.': 'В этом проекте пока нет 3D-моделей. Импортируйте её в База данных › 3D-модели.', 'Choose a 3D model for the projectile.': 'Выберите 3D-модель для снаряда.', 'Choose an animation for the projectile.': 'Выберите анимацию для снаряда.', 'Drag the arrows in the preview, or slide. From the hand: X is forward of the thrower, Z is up.': 'Тяните стрелки в предпросмотре или двигайте ползунок. От руки: X — вперёд от бросающего, Z — вверх.', 'Drag the arrows in the preview, or slide. From the thrower’s feet: X is forward, Z is height.': 'Тяните стрелки в предпросмотре или двигайте ползунок. От ног бросающего: X — вперёд, Z — высота.', 'Where it lands on the target, and how high the arc rises on the way.': 'Куда он попадает на цели и как высоко поднимается дуга по пути.', 'Turn and spin the picture; scale the picture or model.': 'Поворачивает и вращает картинку; масштабирует картинку или модель.' });
 Object.assign(RR_TEXT_TRANSLATIONS.pt, { 'Colored Dot': 'Ponto colorido', 'Skill / Item (icon or 3D model)': 'Habilidade / Item (ícone ou modelo 3D)', 'Thrown To': 'Lançado para', 'Starts From': 'Começa de', 'Position Offset': 'Deslocamento de posição', 'Arrive': 'Chegada', 'Look': 'Aparência', 'Rotation (degrees)': 'Rotação (graus)', 'Choose Animation…': 'Escolher animação…', 'Skill / Item': 'Habilidade / Item', 'Size (pixels)': 'Tamanho (pixels)', 'Current Target': 'Alvo atual', 'No 3D models in this project yet. Import one in Database › 3D Models.': 'Este projeto ainda não tem modelos 3D. Importe um em Banco de dados › Modelos 3D.', 'Choose a 3D model for the projectile.': 'Escolha um modelo 3D para o projétil.', 'Choose an animation for the projectile.': 'Escolha uma animação para o projétil.', 'Drag the arrows in the preview, or slide. From the hand: X is forward of the thrower, Z is up.': 'Arraste as setas na pré-visualização, ou deslize. Da mão: X é à frente de quem lança, Z é para cima.', 'Drag the arrows in the preview, or slide. From the thrower’s feet: X is forward, Z is height.': 'Arraste as setas na pré-visualização, ou deslize. Dos pés de quem lança: X é à frente, Z é a altura.', 'Where it lands on the target, and how high the arc rises on the way.': 'Onde cai no alvo e quão alto o arco sobe no caminho.', 'Turn and spin the picture; scale the picture or model.': 'Gira e faz rodar a imagem; escala a imagem ou o modelo.' });
 Object.assign(RR_TEXT_TRANSLATIONS.de, { 'Colored Dot': 'Farbiger Punkt', 'Skill / Item (icon or 3D model)': 'Fähigkeit / Gegenstand (Symbol oder 3D-Modell)', 'Thrown To': 'Geworfen auf', 'Starts From': 'Startet von', 'Position Offset': 'Positionsversatz', 'Arrive': 'Ankunft', 'Look': 'Aussehen', 'Rotation (degrees)': 'Drehung (Grad)', 'Choose Animation…': 'Animation wählen…', 'Skill / Item': 'Fähigkeit / Gegenstand', 'Size (pixels)': 'Größe (Pixel)', 'Current Target': 'Aktuelles Ziel', 'No 3D models in this project yet. Import one in Database › 3D Models.': 'Dieses Projekt hat noch keine 3D-Modelle. Importiere eines unter Datenbank › 3D-Modelle.', 'Choose a 3D model for the projectile.': 'Wähle ein 3D-Modell für das Geschoss.', 'Choose an animation for the projectile.': 'Wähle eine Animation für das Geschoss.', 'Drag the arrows in the preview, or slide. From the hand: X is forward of the thrower, Z is up.': 'Ziehe die Pfeile in der Vorschau oder schiebe die Regler. Von der Hand: X ist vor dem Werfer, Z ist oben.', 'Drag the arrows in the preview, or slide. From the thrower’s feet: X is forward, Z is height.': 'Ziehe die Pfeile in der Vorschau oder schiebe die Regler. Von den Füßen des Werfers: X ist vorn, Z ist die Höhe.', 'Where it lands on the target, and how high the arc rises on the way.': 'Wo es am Ziel landet und wie hoch der Bogen unterwegs steigt.', 'Turn and spin the picture; scale the picture or model.': 'Dreht und wirbelt das Bild; skaliert Bild oder Modell.' });

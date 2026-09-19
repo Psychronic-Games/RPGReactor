@@ -40,10 +40,12 @@ class BattlePresentationEditor {
         const body=this.element('div','database-section-content');panel.append(body);
         const value=()=>settings[kind]?.[record.id]||{mode:'inherit'};
         const assignedCount=()=>{const v=value();if(v.mode==='sequence'||v.mode==='existing')return 1;return Object.values(v.phases||{}).filter(p=>p?.mode&&p.mode!=='inherit').length+Object.values(v.states||{}).filter(p=>p?.mode&&p.mode!=='inherit').length;};
-        const describe=()=>{const v=value(),count=assignedCount();status.textContent=v.mode==='sequence'?this.text(this.message('Sequence: {name}',{name:this.db.data.actionSequences?.[v.sequenceId]?.name||'#'+v.sequenceId})):v.mode==='existing'?this.text('Engine / plugin action'):count?this.text(this.message('{n} assigned',{n:count})):this.text('Using defaults');};
+        // A sequence is named as the Action Sequences list names it: its name, then its number.
+        const sequenceLabel=id=>{const s=this.db.data.actionSequences?.[id];return s?`${s.name||''} #${id}`.trim():'#'+id;};
+        const describe=()=>{const v=value(),count=assignedCount();status.textContent=v.mode==='sequence'?this.text(this.message('Sequence: {name}',{name:sequenceLabel(v.sequenceId)})):v.mode==='existing'?this.text('Engine / plugin action'):count?this.text(this.message('{n} assigned',{n:count})):this.text('Using defaults');};
         panel.open=assignedCount()>0;panel.ontoggle=()=>{this.assignmentOpen=panel.open;};if(this.assignmentOpen!==undefined)panel.open=this.assignmentOpen;
         const set=binding=>{settings[kind]||={};settings[kind][record.id]=binding;this.changed();};
-        const openSequence=id=>{const sequence=this.db.data.actionSequences?.[id];if(sequence){this.parent.openDatabase('actionSequences');this.parent.showDatabaseDetail(sequence,'actionSequences');}};
+        const openSequence=id=>{const sequence=this.db.data.actionSequences?.[id];if(sequence){this.parent.openDatabase('actionSequences');this.parent.showDatabaseDetail(sequence,'actionSequences');this.parent._activeDatabaseList?.reveal?.(id);}};
         const level=kind==='items'?'skills':kind==='enemies'?'actors':kind;
         const isAttack=['weapons','actors','enemies'].includes(kind);
         // Fold a legacy unarmed override into the actor's own phases.
@@ -73,7 +75,7 @@ class BattlePresentationEditor {
             const sequences=(this.db.data.actionSequences||[]).filter(s=>s&&B.purpose(s)==='action');
             // "None" says where the action comes from instead, level by level down the chain.
             const noneLabel=kind==='skills'||kind==='items'?'None (the weapon, class or battler’s)':kind==='weapons'?'None (the class or battler’s)':kind==='classes'?'None (the battler’s own)':'None (the built-in action)';
-            const options=[['inherit',noneLabel],['existing','Use Engine / Plugin Action'],...(current.mode==='phases'?[['phases','Per-phase assignments (older)']]:[]),...sequences.map(s=>['sequence:'+s.id,s.name||'#'+s.id,true])];
+            const options=[['inherit',noneLabel],['existing','Use Engine / Plugin Action'],...(current.mode==='phases'?[['phases','Per-phase assignments (older)']]:[]),...sequences.map(s=>['sequence:'+s.id,sequenceLabel(s.id),true])];
             if(current.mode==='sequence'&&!this.db.data.actionSequences?.[current.sequenceId])options.push(['sequence:'+current.sequenceId,this.message('Missing Sequence #{id}',{id:current.sequenceId})]);
             const controls=this.element('div','rr-battle-assignment-controls');row.append(controls);
             const pick=this.select(options,current.mode==='sequence'?'sequence:'+current.sequenceId:current.mode==='existing'?'existing':current.mode==='phases'?'phases':'inherit',id=>{
@@ -302,7 +304,7 @@ class BattlePresentationEditor {
             if(kind==='actors'){
                 api.canvasBox.style.display='none';api.pane.style.display='none';explicitPane.style.display='flex';
                 if(api.nameTag2d)api.nameTag2d.style.display='';
-                this.setText(api.label,(B.graphicModes.find(([m])=>m===g.mode)||[])[1]||g.mode);
+                this.setText(api.label,'Battler');
                 this.setText(button,resolved.type==='model'?'Change Model':'Change Image');
                 button.onclick=explicitChange;
             }else{

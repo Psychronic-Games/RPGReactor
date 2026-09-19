@@ -8,6 +8,7 @@ class DatabaseActionSequenceEditor {
         const U=this.ui,B=ReactorBattleData;this.host=U.element('div','rr-sequence-editor');container.append(this.host);
         // The name, hits and undo live at the top of the middle column, so the step list and the inspector start at the top of the workspace.
         const toolbar=U.element('div','rr-battle-toolbar rr-sequence-header');
+        const number=U.element('span','rr-sequence-id','#'+sequence.id,true);number.setAttribute('data-rr-i18n-skip','1');number.title=U.text('Sequence number');toolbar.append(number);
         const name=U.element('input','database-field-value');name.value=sequence.name;name.setAttribute('aria-label','Name');name.onchange=()=>{this.edit(()=>sequence.name=name.value);this.parent._activeDatabaseList?.refresh();};toolbar.append(name);
         // An older whole action shows its steps under Execute with every phase provided; saved with the next edit.
         B.migrateSequence(sequence);
@@ -18,6 +19,8 @@ class DatabaseActionSequenceEditor {
         this.previewProjection||='3d';
         const sampleActions=[...(this.db.data.items||[]).filter(Boolean).map(r=>['items:'+r.id,U.message('Item: {name}',{name:r.name})]),...(this.db.data.skills||[]).filter(Boolean).map(r=>['skills:'+r.id,U.message('Skill: {name}',{name:r.name})])];const assigned=B.references(this.ui.settings(),sequence.id,this.db.data.actionSequences).find(r=>['skills','items'].includes(r.kind)),itemAction=sequence.steps.some(s=>s.iconSource==='action');this.sampleAction=sampleActions.some(([id])=>id===prefs.sampleAction)?prefs.sampleAction:assigned?assigned.kind+':'+assigned.id:sampleActions.find(([id])=>id.startsWith(itemAction?'items:':'skills:'))?.[0]||sampleActions[0]?.[0]||'skills:1';
         const weaponChoices=[['','Equipped'],...(this.db.data.weapons||[]).filter(w=>w&&w.name).map(w=>[w.id,w.name,true])];
+        // A sequence assigned to weapons previews holding the first of them, so its attack animation and icon are that weapon's rather than the cast actor's; the choice can still be changed and is remembered.
+        if(!this.sampleWeapon&&!this.sampleWeaponChosen){const assignedWeapon=B.references(this.ui.settings(),sequence.id,this.db.data.actionSequences).find(r=>r.kind==='weapons'&&this.db.getWeapon(r.id));if(assignedWeapon)this.sampleWeapon=assignedWeapon.id;}
         const workspace=U.element('div','rr-battle-workspace');this.host.append(workspace);const center=U.element('div','rr-sequence-center');workspace.append(center);center.append(toolbar);const inspectorCard=U.section('Battler Motion');inspectorCard.panel.classList.add('rr-sequence-inspector-card');this.inspectorHeader=inspectorCard.panel.querySelector('.database-section-header');this.inspector=inspectorCard.body;this.inspector.classList.add('rr-battle-inspector');workspace.append(inspectorCard.panel);
         // One grid for the preview's cast and stand-ins: two aligned rows of four, not three toolbars.
         const cast=U.element('div','rr-sequence-preview-grid rr-sequence-cast');cast.dataset.sequenceCast='';center.append(cast);
@@ -29,7 +32,7 @@ class DatabaseActionSequenceEditor {
         const castHint=U.text('Preview cast only. In battle, whichever battler uses this sequence plays it.');
         for(const role of ['user','target']){const select=U.field(cast,role==='user'?'User':'Target',U.select(choices,this.castKinds[role]+':'+this.cast[role],value=>{const [kind,id]=value.split(':');this.castKinds[role]=kind;this.cast[role]=Number(id);this.savePrefs();this.loadCast();}));select.title=castHint;select.parentElement.title=castHint;}
         U.field(cast,'Skill / Item',U.select(sampleActions,this.sampleAction,value=>{this.clearPreviewMedia();this.sampleAction=value;this.frame=0;this.playing=false;this.savePrefs();}));
-        U.field(cast,'Weapon in Hand',U.select(weaponChoices,this.sampleWeapon||'',value=>{this.sampleWeapon=Number(value)||0;this.weaponModels={};this.savePrefs();this.drawInspector();this.paint();}));
+        U.field(cast,'Weapon in Hand',U.select(weaponChoices,this.sampleWeapon||'',value=>{this.sampleWeapon=Number(value)||0;this.sampleWeaponChosen=true;this.weaponModels={};this.savePrefs();this.drawInspector();this.paint();}));
         U.field(cast,'Targets',U.select([[1,'1'],[2,'2'],[3,'3'],[4,'4']],this.targetCount,value=>{this.targetCount=Number(value);this.savePrefs();this.controls.targetsChanged();this.drawInspector();}));
         const mirror=U.element('input');mirror.type='checkbox';mirror.checked=!!this.mirrored;mirror.onchange=()=>{this.mirrored=mirror.checked;this.savePrefs();};U.field(cast,'Swap Sides',mirror).parentElement.classList.add('rr-sequence-preview-check');
         // Scene is the backdrop: an empty grid, the project's battleback pair, or a Battle Room from Troops. Every choice is listed; one the project cannot offer is greyed and says why.
@@ -96,14 +99,14 @@ class DatabaseActionSequenceEditor {
         if(this.scene?.kind==='battle'){this.previewProjection='2d-vertical';this.scene={...this.scene,kind:this.scene.floor||this.scene.wall?'battleback':'grid'};}
         for(const role of ['user','target']){const kind=mine.castKinds?.[role],id=Number(mine.cast?.[role]);if(['actors','enemies'].includes(kind)&&id>0){this.castKinds[role]=kind;this.cast[role]=id;}}
         if([1,2,3,4].includes(mine.targetCount))this.targetCount=mine.targetCount;
-        this.mirrored=!!mine.mirrored;if(Number(mine.sampleWeapon)>0&&this.db.getWeapon(Number(mine.sampleWeapon)))this.sampleWeapon=Number(mine.sampleWeapon);
+        this.mirrored=!!mine.mirrored;this.sampleWeaponChosen=false;if(mine.sampleWeapon==='equipped')this.sampleWeaponChosen=true;else if(Number(mine.sampleWeapon)>0&&this.db.getWeapon(Number(mine.sampleWeapon))){this.sampleWeapon=Number(mine.sampleWeapon);this.sampleWeaponChosen=true;}
         const orbit=shared.orbit&&Number.isFinite(shared.orbit.yaw)&&Number.isFinite(shared.orbit.pitch)?{yaw:shared.orbit.yaw,pitch:shared.orbit.pitch}:null,pan=shared.pan&&Number.isFinite(shared.pan.x)&&Number.isFinite(shared.pan.y)?{x:shared.pan.x,y:shared.pan.y}:null;
         return {sampleAction:typeof mine.sampleAction==='string'?mine.sampleAction:null,distance:Number(shared.distance)||0,follow:!!shared.follow,orbit,pan};
     }
     savePrefs(){
         const key=this.prefsKey();if(!key||!this.sequence)return;const all=this.readPrefs();
         all.shared={projection:this.previewProjection,scene:this.scene,distance:this.controls?.distance,follow:!!this.controls?.follow,orbit:this.controls?.orbit||null,pan:this.controls?.pan||null};
-        (all.sequences||={})[this.sequence.id]={castKinds:{...this.castKinds},cast:{...this.cast},targetCount:this.targetCount,mirrored:!!this.mirrored,sampleWeapon:this.sampleWeapon||0,sampleAction:this.sampleAction};
+        (all.sequences||={})[this.sequence.id]={castKinds:{...this.castKinds},cast:{...this.cast},targetCount:this.targetCount,mirrored:!!this.mirrored,sampleWeapon:this.sampleWeapon||(this.sampleWeaponChosen?'equipped':0),sampleAction:this.sampleAction};
         try{localStorage.setItem(key,JSON.stringify(all));}catch(error){/* storage refused: the choices still stand for this session */}
     }
     showStarterMenu(anchor){
@@ -281,7 +284,7 @@ class DatabaseActionSequenceEditor {
             title=t('Play Sound')+': '+(step.audio?.name||t('None'));details.push('SE');
         }else if(step.type==='animation'){
             const animation=step.animationId?this.db?.getAnimation?.(step.animationId):null;
-            title=role+': '+(animation?.name||(step.animationId?t('Animation')+' #'+step.animationId:t('None')));details.push(t('Show Animation'));
+            title=role+': '+(step.animationSource==='action'?t('Current Action'):step.animationSource==='weapon'?t('Weapon Attack'):animation?.name||(step.animationId?t('Animation')+' #'+step.animationId:t('None')));details.push(t('Show Animation'));
         }else if(step.type==='weapon'){
             const mode=ReactorBattleData.weaponMode(step);title=t(mode==='hide'?'Hide':mode==='move'?'Move':'Show')+': '+t('Weapon');
             if(mode==='show')details.push(step.iconSource==='icon'?t('Icon')+' #'+(step.iconIndex||0):t(step.iconSource==='action'?'Skill / Item':'Equipped Weapon'));
@@ -337,6 +340,23 @@ class DatabaseActionSequenceEditor {
                 if(!Number.isInteger(id)||id<0||this.host!==host||!host.isConnected||this.parent.currentProject!==project||this.sequence!==sequence||sequence.steps[this.selected]!==step)return;
                 if(id===(step.animationId||0))return;
                 this.edit(()=>step.animationId=id);this.drawInspector();
+            }
+        });
+    }
+    /** A Sound Effect, BGM or BGS command step: the file and its levels live on the step itself. */
+    pickCommandAudio(step){
+        const project=this.parent.currentProject,host=this.host,sequence=this.sequence,kind=step.type;
+        if(!project?.path||typeof RRAudioPickerModal==='undefined'||!['se','bgm','bgs'].includes(kind))return;
+        const current={name:step.name||'',volume:step.volume??90,pitch:step.pitch??100,pan:step.pan??0};
+        this.playing=false;for(const sound of this.sounds||[])sound.pause();
+        RRAudioPickerModal.open({
+            title:kind==='se'?'Select Sound Effect':kind==='bgm'?'Select BGM':'Select BGS',folderLabel:kind.toUpperCase(),
+            files:RRAssetFiles.listUnique(require('path').join(project.path,'audio',kind),RRAssetFiles.AUDIO_EXTENSIONS),
+            selected:current.name,levels:{volume:current.volume,pitch:current.pitch,pan:current.pan},loopDefault:kind!=='se',zIndex:22000,
+            onOk:result=>{
+                if(!result||this.host!==host||!host.isConnected||this.parent.currentProject!==project||this.sequence!==sequence||sequence.steps[this.selected]!==step)return;
+                const next={...current,...result};if(JSON.stringify(next)===JSON.stringify(current))return;
+                this.edit(()=>Object.assign(step,{name:next.name,volume:next.volume,pitch:next.pitch,pan:next.pan}));this.drawInspector();
             }
         });
     }
@@ -468,7 +488,7 @@ class DatabaseActionSequenceEditor {
         }
         for(const field of [...(B.commands[step.type]?.fields||[]),...(B.extraFields[step.type]||[])]){
             const value=step[field.key]??field.value;
-            const secondary=((B.extraFields[step.type]||[]).includes(field)&&!['weaponGraphic','attachment','iconSource','destination','arc','flight'].includes(field.key))||[...(['picture','icon','plane'].includes(step.type)?[]:['index']),'angle','spin','scale','layer','space',...(step.type==='opacity'?[]:['opacity']),'volume','pitch','pan','show','equipIndex','scrollX','scrollY'].includes(field.key);
+            const secondary=((B.extraFields[step.type]||[]).includes(field)&&!['weaponGraphic','attachment','iconSource','destination','arc','flight',...(step.type==='weapon'?['layer']:[])].includes(field.key))||[...(['picture','icon','plane'].includes(step.type)?[]:['index']),'angle','spin','scale',...(step.type==='weapon'?[]:['layer']),'space',...(step.type==='opacity'?[]:['opacity']),'volume','pitch','pan','show','equipIndex','scrollX','scrollY'].includes(field.key);
             const fieldHost=secondary?advanced:this.inspector;
             // An operation only exposes the fields it actually consumes.
             const operation=step.operation||B.commandDefaults(step.type).operation;
@@ -480,7 +500,7 @@ class DatabaseActionSequenceEditor {
             if(step.type==='pose'&&operation==='clear'&&field.key!=='operation')continue;
             if(step.type==='battlelog'&&operation!=='text'&&field.key==='text')continue;
             if(step.type==='weapon'&&(field.key==='mode'||step.weaponGraphic!=='sheet'&&['weaponImageId','weaponFrame'].includes(field.key)))continue;
-            if(step.type==='weapon'&&ReactorBattleData.weaponMode(step)!=='show'&&['weaponGraphic','attachment','bone','gripX','gripY','equipIndex'].includes(field.key))continue;
+            if(step.type==='weapon'&&ReactorBattleData.weaponMode(step)!=='show'&&['weaponGraphic','attachment','bone','gripX','gripY','equipIndex','layer'].includes(field.key))continue;
             // The Held By choice above stands in for a model's grip; the raw number stays for icons.
             if(step.type==='weapon'&&field.key==='gripY'&&this.weaponModelSpec(step,B.roleKey(step).startsWith('target')?'target0':'user'))continue;
             // The projectile panel below owns everything but the rarely touched Advanced rows.
@@ -490,7 +510,15 @@ class DatabaseActionSequenceEditor {
             if(['weapon','projectile'].includes(step.type)&&field.key==='equipIndex'&&(step.iconSource||(step.type==='projectile'?'color':'weapon'))!=='weapon')continue;
             if(step.type==='motion'&&['motionIndex','motionFrames','motionSpeed','motionLoop'].includes(field.key)&&(B.hasPose(step)||this.models?.[step.role==='user'||step.role==='subject'?'user':'target']))continue;
             const folder=field.key==='name'?(step.type==='projectile'&&step.iconSource==='picture'?'img/pictures':(['bgm','bgs','se'].includes(step.type)?'audio/'+step.type:['picture','plane'].includes(step.type)?'img/pictures':step.type==='movie'?'movies':null)):field.key==='floor'?'img/battlebacks1':field.key==='background'?'img/battlebacks2':null;
-            if(folder){const path=require('path'),extensions=folder.startsWith('audio')?RRAssetFiles.AUDIO_EXTENSIONS:folder==='movies'?['.webm','.mp4']:['.png','.webp'];const files=RRAssetFiles.listNames(path.join(this.parent.currentProject.path,folder),extensions);U.field(fieldHost,field.label,U.select([['','None'],...files.map(name=>[name,name,true])],value,v=>{change(field.key,v);if(['operation','weaponGraphic','source','iconSource','attachment'].includes(field.key))this.drawInspector();}));}
+            // An audio file is chosen in the audio picker, with its volume, pitch and pan, as sounds are chosen everywhere else in the editor.
+            if(['bgm','bgs','se'].includes(step.type)&&['volume','pitch','pan'].includes(field.key))continue;
+            if(folder&&folder.startsWith('audio')){
+                const group=U.element('div','rr-sequence-sound-field'),name=U.element('input','database-field-value');name.readOnly=true;name.value=step.name||U.text('None');name.title=name.value;name.dataset.sequenceSoundName='';
+                const picker=U.button('Choose Sound…',()=>this.pickCommandAudio(step));picker.dataset.sequenceSoundPicker='';group.append(name,picker);U.field(fieldHost,field.label,group);
+                const a={volume:90,pitch:100,pan:0,...step},summary=U.element('div','rr-battle-help');summary.dataset.sequenceSoundProperties='';summary.textContent=U.text('Volume')+': '+a.volume+'% · '+U.text('Pitch')+': '+a.pitch+'% · '+U.text('Pan')+': '+a.pan;fieldHost.append(summary);
+                continue;
+            }
+            if(folder){const path=require('path'),extensions=folder==='movies'?['.webm','.mp4']:['.png','.webp'];const files=RRAssetFiles.listNames(path.join(this.parent.currentProject.path,folder),extensions);U.field(fieldHost,field.label,U.select([['','None'],...files.map(name=>[name,name,true])],value,v=>{change(field.key,v);if(['operation','weaponGraphic','source','iconSource','attachment'].includes(field.key))this.drawInspector();}));}
             else if(field.key==='sequenceId')U.field(fieldHost,field.label,U.select((this.db.data.actionSequences||[]).filter(s=>s&&B.purpose(s)==='routine'&&s.id!==this.sequence.id).map(s=>[s.id,s.name||'#'+s.id,true]),value,v=>change(field.key,Number(v))));
             else if(field.type==='number')U.number(fieldHost,field.label,value,v=>change(field.key,v),1);
             else if(field.type==='select')U.field(fieldHost,field.label,U.select(field.options.map(v=>[v,B.optionLabel(v)]),value,v=>{change(field.key,v);if(['operation','weaponGraphic','source','iconSource','attachment'].includes(field.key))this.drawInspector();}));
@@ -540,6 +568,12 @@ class DatabaseActionSequenceEditor {
             if(!step.animationSource||step.animationSource==='id'){
             const label=AnimationPickerModal.label(this.db.getAnimations(),step.animationId||0),picker=U.button(label,()=>this.pickAnimation(step),true);picker.classList.add('rr-sequence-animation-picker');picker.dataset.sequenceAnimationPicker='';picker.title=label;picker.setAttribute('data-rr-i18n-skip','');
             U.field(this.inspector,'Animation',picker);
+            }else{
+                // The engine's own rule, made visible: an action with an animation of its own plays it; a normal attack plays the held weapon's; a hand with no weapon animation plays the bare-hands one.
+                const resolved=this.previewAnimationId(step),animation=this.db.getAnimation(resolved),animationName=animation?.name||(resolved?U.text('Animation')+' #'+resolved:U.text('None'));
+                const action=this.previewAction(),weapon=this.previewBattler('user').equips()[0];
+                const note=step.animationSource==='action'&&action?.animationId>0?U.message('Plays {animation}, the action’s own.',{animation:animationName}):weapon?.animationId>0?U.message('Plays {animation}, from {weapon}.',{animation:animationName,weapon:weapon.name}):U.message('No weapon animation in hand: plays {animation}.',{animation:animationName});
+                const help=U.element('p','rr-battle-help',note);help.dataset.sequenceAnimationResolved='';this.inspector.append(help);
             }
             for(const key of ['x','y','z','scale'])U.number(advanced,key==='scale'?'Scale':U.message('{axis} (tiles)',{axis:key.toUpperCase()}),step.animationTransform?.[key]??(key==='scale'?1:0),v=>change('animationTransform',{...step.animationTransform,[key]:Math.max(key==='scale'?.01:-1000,Math.min(key==='scale'?100:1000,v))}));
         }
@@ -696,7 +730,7 @@ class DatabaseActionSequenceEditor {
                 for(const key of keys){const ticket=this.preview?.playAnimation(key,animationId,cue.step.animationTransform);if(ticket)tickets.push(ticket);else {
                     const animation=this.db.getAnimation(animationId);
                     if(animation?.frames?.length&&typeof RRAnimationPreviewLayer!=='undefined'){
-                        const layer=new RRAnimationPreviewLayer(this.stage),entry={layer,key,transform:{...cue.step.animationTransform}},scale=entry.transform.scale??1;
+                        const layer=new RRAnimationPreviewLayer(this.stage),entry={layer,key,position:animation.position,transform:{...cue.step.animationTransform}},scale=entry.transform.scale??1;
                         layer.play(animation,this.parent.currentProject.path,{transform:{scale},onSound:se=>this.playPreviewSound(se)});this.animationLayers.push(entry);
                         const created=Date.now();tickets.push({isPlaying:()=>layer.active&&(layer.mv.ready||Date.now()-created<15000),cancel:()=>layer.dispose()});
                     }
@@ -878,7 +912,7 @@ class DatabaseActionSequenceEditor {
                 const otherKey=key==='user'?'target0':'user',other=view.models.get(otherKey),at=poses[otherKey]?{...poses[otherKey],height:.6*(view.modelHeight?view.modelHeight(otherKey):2)}:null;
                 const hold=()=>{if(!view.models.get(id))return;const placement={...B.heldPlacement(p,poses[key]?.facing||0,step,spec),visible:step.visible!==false};if(step.type==='weapon'&&view.holdHeld&&poses[key])view.holdHeld(key,id,step,poses[key],at,placement);else view.place(id,placement);const rec=view.models.get(id);if(rec?.object)rec.object.visible=step.visible!==false;};
                 hold();(this._holds||=new Map()).set(id,hold);return;}
-            const img=this.previewPropImage(step,key);if(!img||!p)return;live.add(id);view.sequenceBillboard(id,img.source,img.frame,this.liftPose(view)(p),step);
+            const img=this.previewPropImage(step,key);if(!img||!p)return;live.add(id);view.sequenceBillboard(id,img.source,img.frame,this.liftPose(view)(p),{...step,ownerKey:key});
             // An animation projectile plays its animation on the carrier once per flight; the carrier moving moves the animation.
             if(step.type==='projectile'&&step.iconSource==='animation'&&step.animationId>0){this.flightAnimations||=new Map();if(!this.flightAnimations.has(id))this.flightAnimations.set(id,view.playAnimation(id,step.animationId,{})||null);}};
         for(const [key,step] of held)if(step&&poses[key])draw('extra:held:'+key,step,key,view.attachmentPoint(key,step,poses[key]));
@@ -911,7 +945,7 @@ class DatabaseActionSequenceEditor {
             for(const key of ['user','target0','target1','target2','target3']){
                 const role=key==='user'?'user':'target',p=poses[key],image=this.images[role],motion=this.controls.mode==='formation'?{name:'idle',start:0}:this.motionFor(key);
                 if(image&&p){const {bitmap,actor,graphic}=image,held=visuals.held[key],facingYaw=p.facing??B.facingToward(p,role==='user'?poses.target:poses.user),frame=B.graphicFrame(graphic,bitmap.width,bitmap.height,held?.name||motion.name,held?held.frame*(graphic.speed||12):Math.max(0,this.frame-motion.start),facingYaw);
-                    view.billboard(key,bitmap.image,frame,{...lift(p),rotateZ:-(p.rotateZ||0),flipX:graphic.type==='character'?!!graphic.mirror:(actor?p.facing>0:p.facing<0)!==!!graphic.mirror},Math.max(.2,frame.height/48)*(graphic.scale||1));
+                    view.billboard(key,bitmap.image,frame,{...lift(p),rotateZ:-(p.rotateZ||0),flipX:graphic.type==='character'?!!graphic.mirror:(actor?p.facing>0:p.facing<0)!==!!graphic.mirror,layer:actor?1:0},Math.max(.2,frame.height/48)*(graphic.scale||1));
                 }
                 const record=view.models.get(key)||view.billboards.get(key);if(record?.object){record.object.visible=!!p;record.object.traverse?.(object=>{for(const material of Array.isArray(object.material)?object.material:[object.material])if(material){material.transparent=true;material.opacity=visuals.opacity[key]??1;}});if(p){view.place(key,{...(view.billboards.has(key)?lift(p):p),facing:p.facing??B.facingToward(p,role==='user'?poses.target:poses.user)});record.action=motion.name==='idle'?null:{name:motion.name,start:motion.start};if(motion.name==='idle'&&record.binding)record.binding.movingAt=undefined;}}
             }
@@ -919,10 +953,15 @@ class DatabaseActionSequenceEditor {
             this.controls.sync(poses);view.seekAnimations=true;view.effectsPaused=!this.playing;view.frame=this.frame-1;view.render();ctx.drawImage(view.renderer.domElement,visuals.shake||0,0,width,height);this.paintSequenceLayers(ctx,visuals,poses,view,width,height);
             for(const entry of [...this.animationLayers||[]]){
                 const {layer,key,transform:t}=entry,p=poses[key];if(!layer.active){layer.dispose();this.animationLayers.splice(this.animationLayers.indexOf(entry),1);continue;}
-                if(p){const a=view.project({x:p.x+(t.x||0),y:p.y+(t.y||0),z:p.z+1.25+(t.z||0)}),b=view.project({...p,z:p.z+1}),c=view.project(p),ratio=this.canvas.clientWidth/width;layer.moveTo(a.x*ratio,a.y*ratio,Math.max(64,Math.hypot(b.x-c.x,b.y-c.y)*8*ratio));layer.setSpan(2.5);}
+                // Flat projection: a cell pixel is a game pixel (a tile is 48 of them), and the animation sits where its position says, at the picture's head, middle or feet; in 3D it fits a model's span.
+                // Height is projected through the lift, as the pictures are: seen from above, a tile of height is a tile up the screen, and projected raw it is nothing at all.
+                const flat=view.settings?.projection==='2d',pictureHeight=view.billboards.get(key)?.height||2,anchorZ=flat?(entry.position===0?pictureHeight:entry.position===2?0:pictureHeight/2):1.25,lift=this.liftPose(view);
+                if(p){const a=view.project(lift({x:p.x+(t.x||0),y:p.y+(t.y||0),z:(p.z||0)+anchorZ+(t.z||0)})),b=view.project(lift({...p,z:(p.z||0)+1})),c=view.project(lift(p)),ratio=this.canvas.clientWidth/width;layer.moveTo(a.x*ratio,a.y*ratio,Math.max(64,Math.hypot(b.x-c.x,b.y-c.y)*8*ratio));layer.setSpan(flat?layer.screenHeight/48:2.5);}
             }
             for(const key of ['user',...Array.from({length:this.targetCount},(_,i)=>'target'+i)]){const p=view.project(poses[key]);ctx.fillStyle=key===this.controls.activeKey()?'#ffcc33':key==='user'?'#55aaff':'#ff6680';ctx.beginPath();ctx.arc(p.x,p.y,5*width/Math.max(1,this.canvas.clientWidth),0,Math.PI*2);ctx.fill();ctx.fillStyle='#fff';ctx.font=Math.round(12*width/Math.max(1,this.canvas.clientWidth))+'px sans-serif';ctx.textAlign='center';ctx.fillText((key==='user'?this.ui.text('User'):this.ui.text(this.ui.message('Target {n}',{n:Number(key.slice(6))+1}))),p.x,p.y+(key==='user'?20:38)*width/Math.max(1,this.canvas.clientWidth));ctx.textAlign='left';}
         }else{ctx.fillStyle='#ddd';ctx.font='14px sans-serif';ctx.fillText('Loading preview…',20,30);}
-        this.scrub.max=Math.max(B.duration(this.sequence),this.stepPlayback?.end||0);this.scrub.value=this.frame;const elapsed=this.frame-(this.stepPlayback?.start||0),duration=this.stepPlayback?this.stepPlayback.end-this.stepPlayback.start:B.duration(this.sequence);this.time.textContent=this.ui.text(this.ui.message('{frame} / {duration} frames · {seconds}s',{frame:Math.round(elapsed),duration,seconds:(elapsed/60).toFixed(2)}));
+        this.scrub.max=Math.max(B.duration(this.sequence),this.stepPlayback?.end||0);this.scrub.value=this.frame;const elapsed=this.frame-(this.stepPlayback?.start||0),duration=this.stepPlayback?this.stepPlayback.end-this.stepPlayback.start:B.duration(this.sequence);const readout=this.ui.text(this.ui.message('{frame} / {duration} frames · {seconds}s',{frame:Math.round(elapsed),duration,seconds:(elapsed/60).toFixed(2)}));
+        // Written only when it changes: every paint runs this, and replacing a text node is a mutation the translation observer answers with a pass.
+        if(this.time.textContent!==readout)this.time.textContent=readout;
     }
 }

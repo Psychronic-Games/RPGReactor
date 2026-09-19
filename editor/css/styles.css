@@ -212,6 +212,11 @@
             flex-shrink: 0;
             align-items: center;
             overflow: hidden;
+            /* The icon scaler keeps the bar on one row down to 16px icons; below
+               that, or whenever it has not run yet, the last groups wrap onto a
+               second row instead of being clipped off the right edge. */
+            flex-wrap: wrap;
+            row-gap: 6px;
         }
 
         .tool-button {
@@ -2250,6 +2255,19 @@
 
         .database-field-value:hover {
             border-color: var(--color-accent-border-strong);
+        }
+
+        /* Class curve dialogs: the sliders take the theme's accent, and the
+           number fields beside them are the same themed field as the rest of
+           the database rather than the browser's default control. */
+        .param-curve-modal input[type="range"],
+        .param-curves-modal input[type="range"] {
+            accent-color: var(--color-accent-bright);
+        }
+        .param-curve-modal input[type="number"].database-field-value,
+        .param-curves-modal input[type="number"].database-field-value {
+            text-align: center;
+            padding: 5px 6px;
         }
 
         .database-field-value:focus {
@@ -4975,6 +4993,7 @@ details.mp-section:not([open]) > .mp-section-body { display:none; }
 .rr-sequence-editor { height:100%;min-height:0;box-sizing:border-box;display:flex;flex-direction:column;gap:10px;padding:12px;overflow:hidden; }
 .rr-sequence-editor > * { flex-shrink:0; }
 .rr-sequence-editor .rr-battle-toolbar { margin:0; }
+.rr-sequence-header > .rr-sequence-id { color:var(--color-text-muted);font-size:12px;font-variant-numeric:tabular-nums;white-space:nowrap;padding:0 2px; }
 .rr-sequence-header > input { flex:1;min-width:100px;width:140px; }
 .rr-sequence-editor .rr-battle-workspace { flex:1;min-height:260px;grid-template-columns:clamp(180px,20%,260px) minmax(0,1fr) 250px; }
 .rr-sequence-center { display:flex;flex-direction:column;gap:8px;min-height:0; }

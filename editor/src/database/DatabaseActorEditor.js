@@ -80,7 +80,7 @@ class DatabaseActorEditor {
             const slots = [
                 { slot: 'character', label: 'Character Model' },
                 { slot: 'face', label: 'Face Model', framing: true },
-                { slot: 'battler', label: 'Battler Model' }
+                { slot: 'battler', label: 'Battler' }
             ];
             slots.forEach((entry, index) => {
                 if (!boxes[index]) return;

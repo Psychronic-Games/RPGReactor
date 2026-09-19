@@ -248,7 +248,7 @@
     };
     B.extraFields={
         motion:[n('motionIndex','Custom Motion Index (0 = named motion)'),n('motionFrames','Motion Frames (0 = graphic default)'),n('motionSpeed','Motion Speed (0 = graphic default)'),pick('motionLoop','Motion Playback',['default','loop','once','hold'])],
-        weapon:[pick('weaponGraphic','Drawn As',['icon','sheet']),n('weaponImageId','Weapon Sheet Image ID',1),n('weaponFrame','Weapon Frame (1–3)',1)],
+        weapon:[pick('weaponGraphic','Drawn As',['icon','sheet']),n('weaponImageId','Weapon Sheet Image ID',1),n('weaponFrame','Weapon Frame (1–3)',1),pick('layer','Layer',['front','behind'])],
         move:[pick('moveMode','Movement',['anchor','forward','backward','position']),n('speed','Speed (frames per tile, 0 = use Duration)'),n('arc','Arc (jump height in tiles along the move)')]
     };
     B.types.push(...Object.keys(B.commands));
@@ -346,7 +346,7 @@
         const source=step.iconSource||'weapon',equipment=battler?.equips?.()||battler?.weapons?.()||[];
         return Math.max(0,Math.floor(source==='icon'?step.iconIndex||0:(source==='action'?item:equipment[Math.max(0,(step.equipIndex||1)-1)])?.iconIndex||0));
     };
-    B.optionLabel=value=>({allTargets:'All Targets',fadeIn:'Fade In',fadeOut:'Fade Out',elseIf:'Else If',mhp:'Max HP',mmp:'Max MP',atk:'Attack',def:'Defense',mat:'Magic Attack',mdf:'Magic Defense',agi:'Agility',luk:'Luck',hp:'HP',mp:'MP',tp:'TP',bgm:'BGM',bgs:'BGS',se:'SE'}[value]||String(value).replace(/([a-z])([A-Z])/g,'$1 $2').replace(/^./,c=>c.toUpperCase()));
+    B.optionLabel=value=>({allTargets:'All Targets',fadeIn:'Fade In',fadeOut:'Fade Out',elseIf:'Else If',mhp:'Max HP',mmp:'Max MP',atk:'Attack',def:'Defense',mat:'Magic Attack',mdf:'Magic Defense',agi:'Agility',luk:'Luck',hp:'HP',mp:'MP',tp:'TP',bgm:'BGM',bgs:'BGS',se:'SE',front:'In front of the battler',behind:'Behind the battler'}[value]||String(value).replace(/([a-z])([A-Z])/g,'$1 $2').replace(/^./,c=>c.toUpperCase()));
     B.targetGroups=['user','subject','target','allTargets','actors','enemies','battlers','friends','opponents'];
     B.targetFilters=['all','alive','dead','active','inactive','movable','moved','other','random'];
     B.selectTargets=(step,context)=>{

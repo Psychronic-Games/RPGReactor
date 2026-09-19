@@ -75,7 +75,7 @@ test('the curve dialog anchors on a target level, not the engine cap', () => {
     assert.match(classEditorSource, /const plotLevel = Math\.max\(2, Math\.min\(capLevel, Math\.floor\(Number\(options\?\.maxLevel\) \|\| capLevel\)\)\)/);
     // The EXP table enumerates the target domain rather than all 999 levels.
     assert.match(classEditorSource, /const maxLevel = targetLevel;/);
-    assert.match(classEditorSource, /class="exp-target-input"/);
+    assert.match(classEditorSource, /class="exp-target-level"/);
 });
 
 test('the EXP graph box fits the dialog instead of asserting a height', () => {
@@ -166,7 +166,8 @@ test('moving the target level re-anchors the view without moving the curve', () 
     // The dialog reads the working curve at the new target and regenerates from
     // it. Because the generator is a pure power curve, that has to be a no-op on
     // every stored value — otherwise changing the target silently rebalances the
-    // class. This is the property the dialog's syncTarget relies on.
+    // class. This is the property the Generate Curve dialog relies on when the
+    // class's target level changes between one opening and the next.
     for (const exponent of [0.6, 1.0, 1.8]) {
         const cap = globalThis.RR_LIMITS.ACTOR_LEVEL;
         const original = editor._generateParamCurve(40, 900, exponent, cap + 1, 99);
@@ -280,4 +281,140 @@ test('the curve dialog labels are translated in every locale', () => {
         const count = (catalog.match(new RegExp(`"${phrase}":`, 'g')) || []).length;
         assert.equal(count, count99, `${phrase} is missing from ${count99 - count} locale(s)`);
     }
+});
+
+test('a class keeps the target level it was given, and forgets it when cleared', () => {
+    const actors = [null, { id: 1, classId: 1, maxLevel: 60 }];
+    const updates = [];
+    const owner = Object.create(DatabaseClassEditor.prototype);
+    owner.databaseManager = { getActors: () => actors, updateClass: (id, data) => updates.push([id, data]) };
+    const cls = { id: 1, name: 'Hero' };
+
+    // Nothing chosen: the actors decide, and the record carries no field.
+    assert.equal(owner._targetLevelFor(cls), 60);
+    assert.equal('targetLevel' in cls, false);
+
+    // A chosen level wins over the actors, above 99 included, and is stored.
+    assert.equal(owner._setTargetLevel(cls, '150'), 150);
+    assert.equal(cls.targetLevel, 150);
+    assert.equal(owner._targetLevelFor(cls), 150);
+    assert.equal(updates.length, 1, 'the choice is written through the database manager');
+
+    // Out-of-range input clamps into the engine domain.
+    assert.equal(owner._setTargetLevel(cls, 5000), globalThis.RR_LIMITS.ACTOR_LEVEL);
+    assert.equal(owner._setTargetLevel(cls, '1'), 60, 'a level below 2 is no choice at all');
+    assert.equal('targetLevel' in cls, false);
+
+    // Clearing the field returns the class to its actors.
+    owner._setTargetLevel(cls, 120);
+    assert.equal(owner._setTargetLevel(cls, ''), 60);
+    assert.equal('targetLevel' in cls, false);
+    assert.equal(owner._setTargetLevel(cls, null), 60);
+    assert.equal('targetLevel' in cls, false);
+
+    // A stored level read back from disk is honoured as-is.
+    assert.equal(owner._targetLevelFor({ id: 1, targetLevel: 250 }), 250);
+    assert.equal(owner._targetLevelFor({ id: 1, targetLevel: 'x' }), 60);
+});
+
+test('the Parameter Curves header is the one place a target level is set', () => {
+    // The grid header control, its listener, and the rebuild it triggers.
+    assert.match(classEditorSource, /class="rr-class-target-input database-field-value" min="2" max="\$\{capLevel\}" value="\$\{targetLevel\}"/);
+    assert.match(classEditorSource, /querySelector\('\.rr-class-target-input'\)\?\.addEventListener\('change'/);
+    assert.match(classEditorSource, /_setTargetLevel\(classEntry, e\.target\.value\);\s*this\.commonUI\?\.updateStatus\?\.\([^\n]*\);\s*this\.refreshClassDetail\(classEntry\);/);
+    // Neither dialog edits it any more: Generate Curve reads it out beside its
+    // label, EXP Curve shows it in the tab bar, and neither stores anything.
+    assert.doesNotMatch(classEditorSource, /rr-pc-target-input/);
+    assert.doesNotMatch(classEditorSource, /exp-target-input/);
+    assert.match(classEditorSource, /<span class="rr-pc-target-hint"/);
+    assert.match(classEditorSource, /<span class="exp-target-level"[^>]*>\$\{targetLevel\}<\/span>/);
+    assert.equal((classEditorSource.match(/_setTargetLevel\(/g) || []).length, 2, 'the setter is defined once and called from the header only');
+    // The game stops actors at their own Max Level; the header says so when
+    // the curves are balanced past it.
+    assert.match(classEditorSource, /const capNote = actorsCap !== null && targetLevel > actorsCap/);
+});
+
+test('the header notes when the target is past where the actors of the class stop', () => {
+    const owner = Object.create(DatabaseClassEditor.prototype);
+    owner.databaseManager = { getActors: () => [null, { id: 1, classId: 1, maxLevel: 60 }, { id: 2, classId: 1, maxLevel: 75 }, { id: 3, classId: 2, maxLevel: 120 }] };
+    assert.equal(owner._actorsCapFor({ id: 1 }), 75);
+    assert.equal(owner._actorsCapFor({ id: 2 }), 120);
+    assert.equal(owner._actorsCapFor({ id: 9 }), null, 'a class nobody uses has no cap to compare against');
+    assert.equal(owner._actorsCapFor(null), 120, 'null asks across the whole database');
+    const bare = Object.create(DatabaseClassEditor.prototype);
+    assert.equal(bare._actorsCapFor({ id: 1 }), null);
+});
+
+test('the target level tooltips are translated in every locale', () => {
+    const manager = source('I18nManager.js');
+    const locales = (manager.match(/^\s*"([a-zA-Z-]+)": \{$/gm) || []).length;
+    for (const phrase of [
+        'The level these curves are balanced for. Clear it to follow the actors of this class again.',
+        'The highest Max Level among the actors of this class. Type a level to balance the curves for that instead.',
+        'Actors of this class stop at Lv{level}',
+        'Quick Setting',
+        'Generate Curve...'
+    ]) {
+        assert.match(classEditorSource, new RegExp(`tt\\('${phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}'\\)`));
+        const count = (manager.match(new RegExp(`Object\\.assign\\(RR_TEXT_TRANSLATIONS\\["[a-zA-Z-]+"\\], \\{[^\\n]*"${phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`, 'g')) || []).length;
+        assert.equal(count, 17, `${phrase} is translated in ${count} locales, not 17`);
+    }
+});
+
+test('Parameter Curves is a per-level editor with the generator as a step inside it', () => {
+    // A grid cell opens the dialog on that parameter's tab; the generator is
+    // reached from the dialog and hands its curve back instead of saving.
+    assert.match(classEditorSource, /this\.showParameterCurvesDialog\(classEntry, parseInt\(cell\.dataset\.paramIdx\)\)/);
+    assert.match(classEditorSource, /showParameterCurveModal\(classEntry, paramIdx, paramName, color, options = \{\}\)/);
+    assert.match(classEditorSource, /if \(typeof options\.onApply === 'function'\) \{\s*options\.onApply\(workingValues\.slice\(\)\);\s*close\(\);\s*return;/);
+    // The MZ furniture: eight tabs, Quick Setting A–E, Level › Value, a graph
+    // that is painted with the pointer, OK for every parameter at once.
+    assert.match(classEditorSource, /class="pcd-tab" role="tab" data-param-idx="\$\{idx\}"/);
+    assert.match(classEditorSource, /\$\{tt\('Quick Setting'\)\}/);
+    assert.match(classEditorSource, /class="pcd-level database-field-value" min="1" max="\$\{capLevel\}"/);
+    assert.match(classEditorSource, /class="pcd-value database-field-value" min="1"/);
+    assert.match(classEditorSource, /\$\{tt\('Generate Curve\.\.\.'\)\}/);
+    assert.match(classEditorSource, /canvas\.addEventListener\('pointerdown'/);
+    assert.match(classEditorSource, /touched\.forEach\(idx => \{ classEntry\.params\[idx\] = working\[idx\]\.slice\(\); \}\);/);
+    // The graph runs to the class's target level, not to 99.
+    assert.match(classEditorSource, /const barW = plotW \/ targetLevel;/);
+    // Keyboard: Escape closes, arrows move between the tabs.
+    assert.match(classEditorSource, /RRKeyboardNavigation\?\.modal\(overlay, \{ onEscape: close, container: \(\) => modal \}\)/);
+    assert.match(classEditorSource, /RRKeyboardNavigation\?\.roving\(modal\.querySelector\('\.pcd-tabs'\)/);
+});
+
+test('a curve is materialised across the engine domain from whatever the class stores', () => {
+    const cap = globalThis.RR_LIMITS.ACTOR_LEVEL;
+    // A stock 100-entry MZ array continues past 99 on the runtime's own extrapolation.
+    const stock = new Array(100).fill(0).map((_, level) => level === 0 ? 10 : 10 + level * 5);
+    const curve = editor._materializeCurve(stock, cap);
+    assert.equal(curve.length, cap + 1);
+    assert.equal(curve[1], 15);
+    assert.equal(curve[99], 505);
+    assert.equal(curve[150], globalThis.rrClassParamAtLevel(stock, 150));
+    assert.equal(curve[0], curve[1], 'index 0 mirrors Lv1, as the stored arrays do');
+    // Nothing stored at all is a flat zero, not a throw.
+    assert.equal(editor._materializeCurve(undefined, cap)[50], 0);
+});
+
+test('Quick Setting presets rise from A to E and anchor at the target level', () => {
+    const quick = DatabaseClassEditor.QUICK_SETTINGS;
+    assert.deepEqual(quick.names, ['A', 'B', 'C', 'D', 'E']);
+    for (const paramIdx of [0, 1, 2, 7]) {
+        let previous = null;
+        for (const name of quick.names) {
+            const [lv1, lvTarget] = quick.presetFor(paramIdx, name);
+            assert.ok(lvTarget > lv1, `${name} rises`);
+            if (previous) assert.ok(lv1 >= previous[0] && lvTarget > previous[1], `${name} is stronger than the one before`);
+            previous = [lv1, lvTarget];
+        }
+    }
+    assert.deepEqual(quick.presetFor(0, 'E'), [700, 8500]);
+    assert.deepEqual(quick.presetFor(4, 'nope'), quick.presetFor(4, 'C'), 'an unknown preset is the middle one');
+    // Applied through the generator at a Lv150 target, E lands its value at Lv150.
+    const cap = globalThis.RR_LIMITS.ACTOR_LEVEL;
+    const curve = editor._generateParamCurve(700, 8500, 1, cap + 1, 150, 99999);
+    assert.equal(curve[1], 700);
+    assert.equal(curve[150], 8500);
+    assert.ok(curve[99] < 8500, 'Lv99 is on the way there, not the end');
 });
