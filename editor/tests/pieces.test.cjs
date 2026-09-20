@@ -178,7 +178,7 @@ test('every kind makes closed, outward-facing geometry that a turn moves as one'
             assert.equal(geometry.attributes.color.count, position.count);
             const box = new THREE.Box3().setFromBufferAttribute(position);
             assert.ok(box.min.x >= 3 - 1e-6 && box.max.x <= 4 + 1e-6 && box.min.z >= 4 - 1e-6 && box.max.z <= 5 + 1e-6, kind + ' rot ' + rot + ' stays in its cell');
-            assert.ok(box.min.y >= 2 - 1e-6 && box.max.y <= 2 + Math.max(R.pieceHeight(kind), 1.5) + 1e-6, kind + ' stays in its levels');
+            assert.ok(box.min.y >= (kind === 'stair' ? 0 : 2) - 1e-6 && box.max.y <= 2 + Math.max(R.pieceHeight(kind), 1.5) + 1e-6, kind + ' stays in its levels (a stair above the ground stands on a solid down to it)');
             if (R.pieceHeight(kind) > 1) assert.ok(box.max.y > 2 + R.pieceHeight(kind) - 0.1, kind + ' stands a storey tall');
             // Every face winds outward: the centroid-to-face dot with the normal is positive.
             const centre = box.getCenter(new THREE.Vector3());
@@ -617,7 +617,10 @@ test('inside a building the roof and the wall in the camera\'s way are cut aroun
     const stepped = mapWith([1, 2, 3].map(i => ({ id: i, kind: 'wall', x: i, y: 1, z: 0, rot: 0, material: '' })));
     stepped.reactor3d.terrain = new Array((stepped.width + 1) * (stepped.height + 1)).fill(0).map((v, i) => (i % (stepped.width + 1)) >= 4 ? 1 : 0); stepped.reactor3d.terrainWidth = stepped.width;
     assert.equal(R.pieceGeometry(R.piecesOf(stepped), stepped).attributes.position.count / 3, 3 * 12 - 2 * 2, 'a step under the third keeps the two faces on either side of that step, and no others');
-    assert.match(runtime, /if \(rrBayer < rrThin\) discard;/, 'a wall in the way is dithered thin, not cut');
+    assert.match(runtime, /if \(rrBayer < rrThin\) discard;/, 'a model in the way is dithered thin');
+    assert.match(runtime, /if \(rrOff2 < rrCutRadius \* 0\.6 && rrLineY - rrCutRadius < rrCutFocus\.y \+ 3\.5\) discard;/, 'a wall in the way is cut to knee height along the corridor to the camera');
+    assert.match(runtime, /material\.__reactorPieces \? "\\t\\tif \(false\) \{"/, 'pieces never dither');
+    { const run = R.pieceShapes('stair', { kind: 'stair', z: 3 }); assert.equal(run.length, 5); assert.deepEqual(run[4].box, [0, -3, 0, 1, 0, 1], 'a stair above the ground stands on a solid down to it'); assert.equal(R.pieceShapes('stair', { kind: 'stair', z: 0 }).length, 4); }
     { const map = mapWith([{ id: 1, kind: 'wall', x: 4, y: 4, z: 0, rot: 0, material: '', group: 3 }, { id: 2, kind: 'floor', x: 4, y: 4, z: 5, rot: 0, material: '', group: 3 }]); const cover = R.pieceCoverAt(map, 4.5, 4.5, 0); assert.deepEqual(cover, { x0: 4 - R.CUTAWAY_MARGIN, y0: 4 - R.CUTAWAY_MARGIN, x1: 5 + R.CUTAWAY_MARGIN, y1: 5 + R.CUTAWAY_MARGIN }, 'the cut box reaches a hair past the outer faces'); }
     assert.match(runtime, /this\.setPieceSides\(cutState === "none" \? THREE\.FrontSide : THREE\.DoubleSide\);/, 'piece materials are two-sided while a cut is on, so a sliced wall reads as solid');
     assert.match(runtime, /if \(vRRCutPos\.y > rrCutTop && vRRCutPos\.x >= rrCutBox\.x[^\n]*discard;\\n\\t#include <alphatest_fragment>/, 'the shadow pass takes the storey cut too: a cut roof casts no shadow into the room');

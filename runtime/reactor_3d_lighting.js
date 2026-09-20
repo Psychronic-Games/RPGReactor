@@ -620,10 +620,29 @@ Reactor3D.injectCutaway = function(material, shader) {
         "#include <map_fragment>",
         [
             material.__reactorPieces ? "if (vRRWorldPos.y > rrCutTop && vRRWorldPos.x >= rrCutBox.x && vRRWorldPos.z >= rrCutBox.y && vRRWorldPos.x <= rrCutBox.z && vRRWorldPos.z <= rrCutBox.w) discard;" : "",
-            // A wall in the way fades rather than opens: an ordered dither
-            // thins it towards the line of sight, which needs no blending
-            // and no sorting inside a merged mesh. Floors (anything at or
-            // under the player's feet) are never thinned.
+            // A wall in the way is cut to knee height along a straight corridor
+            // from the camera to the player (a dithered wall showed its own
+            // inside layers through itself once those were drawn): only its
+            // columns within the corridor, only while the sight line is low
+            // enough to have met a storey there, never a floor. A placed
+            // model has no knee, so it fades in the sight line instead: an
+            // ordered dither, which needs no blending and no sorting.
+            material.__reactorPieces ? [
+                "if (rrCutRadius > 0.0 && vRRWorldPos.y > rrCutFocus.y - 0.6) {",
+                "\tvec2 rrSight2 = rrCutFocus.xz - rrCutEye.xz;",
+                "\tfloat rrSight2Length = length(rrSight2);",
+                "\tif (rrSight2Length > 0.001) {",
+                "\t\tvec2 rrSight2Dir = rrSight2 / rrSight2Length;",
+                "\t\tvec2 rrToHere2 = vRRWorldPos.xz - rrCutEye.xz;",
+                "\t\tfloat rrAlong2 = dot(rrToHere2, rrSight2Dir);",
+                "\t\tif (rrAlong2 > 0.0 && rrAlong2 < rrSight2Length - 0.3) {",
+                "\t\t\tfloat rrOff2 = length(rrToHere2 - rrSight2Dir * rrAlong2);",
+                "\t\t\tfloat rrLineY = rrCutEye.y + (rrCutFocus.y - rrCutEye.y) * (rrAlong2 / rrSight2Length);",
+                "\t\t\tif (rrOff2 < rrCutRadius * 0.6 && rrLineY - rrCutRadius < rrCutFocus.y + 3.5) discard;",
+                "\t\t}",
+                "\t}",
+                "}"
+            ].join("\n\t") : "",
             "if (rrCutRadius > 0.0 && vRRWorldPos.y > rrCutFocus.y - 1.2) {",
             "\tvec3 rrSight = rrCutFocus - rrCutEye;",
             "\tfloat rrSightLength = length(rrSight);",
@@ -634,7 +653,7 @@ Reactor3D.injectCutaway = function(material, shader) {
             // A model stops well short of the party: the party's own models
             // stand around the focus and must never thin. A wall stops short
             // by a hair, since a wall the party stands against is in the way.
-            material.__reactorPieces ? "\t\tif (rrAlong > 0.0 && rrAlong < rrSightLength - 0.3) {" : "\t\tif (rrAlong > 0.0 && rrAlong < rrSightLength - 3.5) {",
+            material.__reactorPieces ? "\t\tif (false) {" : "\t\tif (rrAlong > 0.0 && rrAlong < rrSightLength - 3.5) {",
             "\t\t\tfloat rrOff = length(rrToHere - rrSightDir * rrAlong);",
             "\t\t\tfloat rrThin = (1.0 - smoothstep(rrCutRadius * 0.6, rrCutRadius, rrOff)) * 0.92;",
             "\t\t\tif (rrThin > 0.0) {",

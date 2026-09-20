@@ -708,7 +708,12 @@ Reactor3D.pieceShapes = function(kind, piece) {
         case "block": return [box(0, 0, 0, 1, 1, 1)];
         case "floor": return [box(0, 0, 0, 1, this.PIECE_FLOOR_THICKNESS, 1)];
         case "pillar": return [box(0.24, 0, 0.24, 0.76, 0.12, 0.76), { column: [0.5, 0.5, 0.2, 0.12, S - 0.12] }, box(0.24, S - 0.12, 0.24, 0.76, S, 0.76)];
-        case "stair": return [0, 1, 2, 3].map(i => box(0, 0, i * 0.25, 1, (i + 1) * 0.25, 1));
+        case "stair": {
+            const steps = [0, 1, 2, 3].map(i => box(0, 0, i * 0.25, 1, (i + 1) * 0.25, 1));
+            // A step above the ground stands on a solid down to it: a plan lays no slab under a stair, and the ground showed through the run.
+            const drop = piece && Number.isFinite(piece.z) && piece.z > 0 ? piece.z : 0;
+            return drop > 0 ? steps.concat([box(0, -drop, 0, 1, 0, 1)]) : steps;
+        }
         case "ramp": return [{ wedge: true }];
         case "roof": return [{ gable: true }];
         // A doorway is a wall with its bottom gone: a lintel band across the
