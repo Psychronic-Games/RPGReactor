@@ -272,6 +272,20 @@ class PieceBuilderManager {
         return this.structures().find(entry => entry.file === this.structure)?.plan || null;
     }
 
+    /** A plan's part by file name, for plans made of plans. */
+    resolvePlan(name) {
+        return this.structures().find(entry => entry.file === name || entry.file === name + '.json' || entry.name === name)?.plan || null;
+    }
+
+    /** The plan's own pieces as one geometry at the origin: the stamp's ghost. */
+    ghostGeometryFor(plan, rot = 0, scale = 1) {
+        const SP = typeof RRStructurePlan !== 'undefined' ? RRStructurePlan : null;
+        if (!SP || typeof Reactor3D === 'undefined' || !plan) return null;
+        const shaped = SP.transform(plan, rot, scale);
+        const pieces = SP.build(shaped, 0, 0, 1, 0, name => this.resolvePlan(name));
+        return Reactor3D.pieceGeometry(pieces, null);
+    }
+
     /**
      * Put a plan down with its top-left cell at (x, y): the terrain under
      * it is levelled to its mean, whatever stood on the footprint goes, and
@@ -320,7 +334,8 @@ class PieceBuilderManager {
         elevation.relocatePropsOff(map, X0, Y0, W, H);
         const kept = elevation.pieces(map).filter(piece => piece.group !== record.group && !(piece.x >= X0 && piece.x < X0 + W && piece.y >= Y0 && piece.y < Y0 + H));
         const firstId = kept.reduce((max, piece) => Math.max(max, piece.id), 0) + 1;
-        elevation.restorePieces(map, kept.concat(SP.build(shaped, X0, Y0, firstId, record.group)));
+        elevation.restorePieces(map, kept.concat(SP.build(shaped, X0, Y0, firstId, record.group, name => this.resolvePlan(name))));
+        record.spots = SP.spots(shaped, X0, Y0, name => this.resolvePlan(name));
         elevation.setStructure(map, record);
         window.reactor?.modelPropsManager?.render?.();
         return true;

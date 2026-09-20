@@ -1695,10 +1695,13 @@ class MapEditor3D {
         const key = stamp ? (bounds ? 'move:' + manager.selectedGroup : 'stamp:' + manager.structure) : (erase ? 'erase' : manager.kind) + ':' + manager.rot;
         if (!this.pieceGhost || this.pieceGhost.userData.key !== key) {
             this.hidePieceGhost(true);
-            // A plan's ghost is its footprint: a slab the size of the plan.
-            const geometry = stamp
-                ? new THREE.BoxGeometry(stamp.size[0], 0.3, stamp.size[1]).translate(stamp.size[0] / 2, 0.15, stamp.size[1] / 2)
-                : Reactor3D.pieceGeometry([{ id: 0, kind: erase ? 'block' : manager.kind, x: 0, y: 0, z: 0, rot: manager.rot, material: '' }], null);
+            // A plan's ghost is the building itself, translucent; a selected
+            // building being moved shows its footprint as a slab.
+            const silhouette = stamp && !bounds ? manager.ghostGeometryFor(stamp) : null;
+            const geometry = silhouette
+                || (stamp
+                    ? new THREE.BoxGeometry(stamp.size[0], 0.3, stamp.size[1]).translate(stamp.size[0] / 2, 0.15, stamp.size[1] / 2)
+                    : Reactor3D.pieceGeometry([{ id: 0, kind: erase ? 'block' : manager.kind, x: 0, y: 0, z: 0, rot: manager.rot, material: '' }], null));
             const material = new THREE.MeshBasicMaterial({ color: erase ? 0xff6b6b : bounds ? 0x7dff9a : stamp ? 0xffd166 : 0x7fd8ff, transparent: true, opacity: erase ? 0.35 : 0.5, depthWrite: false });
             this.pieceGhost = new THREE.Mesh(geometry, material);
             this.pieceGhost.renderOrder = 998;

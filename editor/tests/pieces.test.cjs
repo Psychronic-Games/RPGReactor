@@ -417,7 +417,7 @@ test('a structure plan builds rooms, walls, doors on shared walls, a stairwell a
     // The panel offers the plans and stamps one on a click; the CLI stamps one on a project.
     const manager = read('editor/src/PieceBuilderManager.js');
     assert.match(manager, /path\.join\(projectPath, '3d', 'Structures'\)/);
-    assert.match(manager, /elevation\.restorePieces\(map, kept\.concat\(SP\.build\(shaped, X0, Y0, firstId, record\.group\)\)\);/, 'a stamp keeps what stands off the footprint and tags its own pieces');
+    assert.match(managerSource, /elevation\.restorePieces\(map, kept\.concat\(SP\.build\(shaped, X0, Y0, firstId, record\.group, name => this\.resolvePlan\(name\)\)\)\);/, 'a stamp keeps what stands off the footprint, tags its own pieces, and resolves its parts');
     assert.match(manager, /return \{ pieces: elevation\.piecesSnapshot\(map\), terrain: elevation\.terrainSnapshot\(map\), structures: elevation\.structures\(map\) \};/, 'one undo step: pieces, ground and building records');
     assert.match(read('editor/src/MapEditor3D.js'), /if \(target && this\.pieceManager\(\)\.mode === 'stamp'\) \{[\s\S]{0,300}this\.pieceManager\(\)\.stampAt\(target\.x, target\.y\);/);
     assert.match(read('editor/index.html'), /src\/utils\/StructurePlan\.js/);
@@ -538,4 +538,44 @@ test('the camera never stands inside a wall or roof, and a cut roof does not sto
     assert.equal(R.clearCameraPath(camera, focus, house), false, 'a clear line is left alone');
     assert.equal(R.clearCameraPath(camera, focus, mapWith([])), false, 'no pieces: nothing to do');
     assert.equal((read('runtime/reactor_3d.js').match(/keepOutOfWalls\(camera, resolved\);/g) || []).length, 2, 'the game camera asks after aiming, on both paths');
+});
+
+test('a plan of plans: parts, paths and named spots stamp as one and walk as one', () => {
+    loadThree();
+    const R = require(path.resolve(__dirname, '..', '..', 'runtime/reactor_3d.js'));
+    const SP = require(path.resolve(__dirname, '..', '..', 'editor/src/utils/StructurePlan.js'));
+    const cottage = JSON.parse(read('template/Demo/3d/Structures/Cottage.json'));
+    const hamlet = JSON.parse(read('template/Demo/3d/Structures/Hamlet.json'));
+    const resolve = name => (name === 'Cottage.json' ? cottage : null);
+    const pieces = SP.build(hamlet, 100, 100, 1, 9, resolve);
+    assert.ok(pieces.length > 4 * 600, 'four cottages and the paths');
+    assert.ok(pieces.every(p => p.group === 9), 'one building: the hamlet');
+    assert.ok(pieces.some(p => p.kind === 'floor' && p.material === 'Sand' && p.x === 109 && p.y === 120), 'a sand path');
+    const ids = new Set(pieces.map(p => p.id));
+    assert.equal(ids.size, pieces.length, 'ids stay unique across parts');
+    const spots = SP.spots(hamlet, 100, 100, resolve);
+    assert.deepEqual([...spots.start], [109, 120]); assert.deepEqual([...spots['north.bed']], [106, 106]);
+    assert.deepEqual([...spots['east.bed']], [149, 108], 'a part turned once carries its spots turned');
+    const walk = SP.validate(hamlet, pieces, 100, 100, 200, 200, R, resolve);
+    assert.ok(walk, 'a plan of parts starts from its start spot');
+    assert.deepEqual([...walk.start && [walk.start.x, walk.start.y]], [109, 120]);
+    const missed = Object.entries(walk.report).filter(([, r]) => !r.reached).map(([k]) => k);
+    assert.deepEqual(missed, [], 'every room of every cottage is walked to from the start');
+    assert.ok('north.room' in walk.report && 'west.kitchen' in walk.report);
+    // Turning the hamlet turns its parts about the whole.
+    const turned = SP.transform(hamlet, 1, 1);
+    assert.deepEqual(turned.size, [48, 64]);
+    assert.equal(turned.parts[0].rot, 1); assert.deepEqual([...turned.spots.start], [48 - 1 - 20, 9]);
+    // The editor: the stamp ghost is the building itself, records keep spots, sibling plans resolve by name.
+    const manager = read('editor/src/PieceBuilderManager.js');
+    assert.match(manager, /ghostGeometryFor\(plan, rot = 0, scale = 1\)/);
+    assert.match(manager, /record\.spots = SP\.spots\(shaped, X0, Y0, name => this\.resolvePlan\(name\)\);/);
+    assert.match(read('editor/src/MapEditor3D.js'), /const silhouette = stamp && !bounds \? manager\.ghostGeometryFor\(stamp\) : null;/);
+    const context = {}; context.window = context;
+    vm.runInNewContext(read('editor/src/utils/MapElevation.js'), context);
+    const E = context.RRMapElevation;
+    const map = { width: 10, height: 10, reactor3d: { version: 1 } };
+    E.setPiece(map, { kind: 'wall', x: 1, y: 1, z: 0 }); map.reactor3d.pieces[0].group = 1;
+    E.setStructure(map, { group: 1, plan: 'Hamlet.json', x: 0, y: 0, rot: 0, scale: 1, spots: { well: [3, 4] } });
+    assert.deepEqual({ ...E.structureOf(map, 1).spots }, { well: [3, 4] });
 });

@@ -1,0 +1,86 @@
+{
+  "name": "Hamlet",
+  "size": [
+    64,
+    48
+  ],
+  "storey": 5,
+  "materials": {
+    "path": "Sand"
+  },
+  "floors": [],
+  "parts": [
+    {
+      "name": "north",
+      "plan": "Cottage.json",
+      "at": [
+        4,
+        4
+      ],
+      "rot": 0
+    },
+    {
+      "name": "east",
+      "plan": "Cottage.json",
+      "at": [
+        40,
+        6
+      ],
+      "rot": 1
+    },
+    {
+      "name": "south",
+      "plan": "Cottage.json",
+      "at": [
+        8,
+        32
+      ],
+      "rot": 2
+    },
+    {
+      "name": "west",
+      "plan": "Cottage.json",
+      "at": [
+        38,
+        30
+      ],
+      "rot": 3
+    }
+  ],
+  "paths": [
+    [
+      9,
+      16,
+      10,
+      31
+    ],
+    [
+      9,
+      23,
+      45,
+      24
+    ],
+    [
+      44,
+      18,
+      45,
+      31
+    ],
+    [
+      9,
+      27,
+      10,
+      31
+    ]
+  ],
+  "spots": {
+    "start": [
+      9,
+      20
+    ],
+    "well": [
+      27,
+      20
+    ]
+  }
+}

@@ -1,0 +1,71 @@
+{
+  "name": "Cottage",
+  "size": [
+    16,
+    12
+  ],
+  "storey": 5,
+  "materials": {
+    "wall": "Stone",
+    "inner": "Plaster",
+    "floor": "Wood",
+    "wet": "Stone",
+    "roof": "Thatch",
+    "stair": "Wood"
+  },
+  "floors": [
+    {
+      "rooms": {
+        "room": [
+          1,
+          1,
+          9,
+          10
+        ],
+        "kitchen": [
+          11,
+          1,
+          14,
+          10
+        ]
+      },
+      "doors": [
+        [
+          "room",
+          "outside",
+          3
+        ],
+        [
+          "room",
+          "kitchen",
+          3
+        ]
+      ],
+      "wet": [
+        "kitchen"
+      ]
+    }
+  ],
+  "stairs": [],
+  "roof": {
+    "pitch": 4
+  },
+  "windows": {
+    "every": 5,
+    "width": 2
+  },
+  "spots": {
+    "hearth": [
+      12,
+      3
+    ],
+    "bed": [
+      2,
+      2
+    ],
+    "table": [
+      5,
+      6
+    ]
+  }
+}

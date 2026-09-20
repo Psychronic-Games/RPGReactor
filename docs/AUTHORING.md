@@ -95,6 +95,34 @@ A building as a person describes it. Everything else is derived.
 - Floor is laid under every doorway and wall cell as well as every room,
   and a ceiling over every top-floor room under the roof.
 
+### Plans of plans
+
+A plan can be made of other plans, so a hamlet is one page and a city is
+districts of hamlets:
+
+```json
+{
+  "name": "Hamlet", "size": [64, 48], "storey": 5, "floors": [],
+  "materials": { "path": "Sand" },
+  "parts": [
+    { "name": "north", "plan": "Cottage.json", "at": [4, 4], "rot": 0 },
+    { "name": "east",  "plan": "Cottage.json", "at": [40, 6], "rot": 1 }
+  ],
+  "paths": [[9, 16, 10, 31], [9, 23, 45, 24]],
+  "spots": { "start": [9, 20], "well": [27, 20] }
+}
+```
+
+- `parts`: sibling files under `3d/Structures`, each at a corner `at` in
+  the plan's cells, turned `rot` quarter turns, grown `scale`. A stamped
+  plan of parts is one building: it moves and turns as one.
+- `paths`: paved strips `[x0, y0, x1, y1]` (floor slabs of the `path`
+  material, or a fifth entry naming one).
+- `spots`: named cells. A stamped building keeps them in its record as
+  map cells, prefixed by the part's name (`north.bed`), so a story can
+  say "the innkeeper stands at `inn.counter`". A plan of parts is walked
+  from its `start` spot.
+
 Stamp it from a shell, which levels the ground under it, moves placed
 models off the footprint, and reports which rooms the engine can walk to
 from the front door:
@@ -146,6 +174,6 @@ and keep slopes under 0.75 tile per tile where characters must walk;
 
 ## What is not here yet
 
-Furniture and named spots inside rooms, events placed from a plan, rivers
+Furniture inside rooms, events placed at a plan's spots, rivers
 that flow (a sheet has waves but no current), hip roofs, and a per-transfer floor (a transfer always lands on the ground
 floor). Add them to this page as they land.

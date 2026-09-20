@@ -754,7 +754,9 @@
         const list = mapData && mapData.reactor3d && Array.isArray(mapData.reactor3d.structures) ? mapData.reactor3d.structures : [];
         return list.filter(entry => entry && Number(entry.group) > 0 && typeof entry.plan === 'string').map(entry => ({
             group: Math.floor(Number(entry.group)), plan: entry.plan, x: Math.floor(Number(entry.x)) || 0, y: Math.floor(Number(entry.y)) || 0,
-            rot: ((Math.floor(Number(entry.rot)) || 0) % 4 + 4) % 4, scale: Math.max(1, Math.min(4, Math.floor(Number(entry.scale)) || 1))
+            rot: ((Math.floor(Number(entry.rot)) || 0) % 4 + 4) % 4, scale: Math.max(1, Math.min(4, Math.floor(Number(entry.scale)) || 1)),
+            // Named places the plan declared, in map cells: a story's "at the inn's counter".
+            spots: entry.spots && typeof entry.spots === 'object' ? Object.assign({}, entry.spots) : {}
         }));
     };
     const structureOf = (mapData, group) => structures(mapData).find(entry => entry.group === group) || null;
@@ -762,7 +764,7 @@
         const sidecar = ensure(mapData);
         if (!sidecar || !record || !(Number(record.group) > 0)) return false;
         const list = structures(mapData).filter(entry => entry.group !== record.group);
-        list.push({ group: record.group, plan: record.plan, x: record.x, y: record.y, rot: record.rot || 0, scale: record.scale || 1 });
+        list.push({ group: record.group, plan: record.plan, x: record.x, y: record.y, rot: record.rot || 0, scale: record.scale || 1, spots: record.spots && typeof record.spots === 'object' ? record.spots : {} });
         sidecar.structures = list;
         return true;
     };

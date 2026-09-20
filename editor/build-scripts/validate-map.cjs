@@ -44,7 +44,8 @@ for (const record of E.structures(map)) {
     const planFile = path.join(project, '3d', 'Structures', record.plan);
     if (!fs.existsSync(planFile)) { problems.push(`building ${record.group} names a plan that is missing: ${record.plan}`); continue; }
     const plan = SP.transform(JSON.parse(fs.readFileSync(planFile, 'utf8')), record.rot, record.scale);
-    const report = SP.validate(plan, pieces, record.x, record.y, map.width, map.height, Reactor3D);
+    const resolve = name => { const file = path.join(path.dirname(planFile), /\.json$/i.test(name) ? name : name + '.json'); return fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : null; };
+    const report = SP.validate(plan, pieces, record.x, record.y, map.width, map.height, Reactor3D, resolve);
     if (!report) { problems.push(`building ${record.group} (${record.plan}) has no front door`); continue; }
     const missed = Object.entries(report.report).filter(([, r]) => !r.reached).map(([name]) => name);
     if (missed.length) problems.push(`building ${record.group} (${record.plan} at ${record.x}, ${record.y}): cannot walk to ${missed.join(', ')}`);

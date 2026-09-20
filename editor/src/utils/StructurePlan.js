@@ -95,9 +95,56 @@
         return wall.filter(c => chosen.has(alongX ? c[0] : c[1]));
     }
 
-    /** Build the plan's pieces at (X0, Y0). Ids run from `firstId`. */
-    function build(plan, X0 = 0, Y0 = 0, firstId = 1, group = 0) {
+    /**
+     * A plan may be made of other plans: `parts: [{ plan, at: [x, y], rot }]`
+     * name sibling files, so a hamlet is three cottages and an inn on one
+     * page, and a city is districts of hamlets. `paths: [[x0, y0, x1, y1]]`
+     * are paved strips (floor slabs, the `path` material). `spots: { name:
+     * [x, y] }` are named places a story can refer to later — the inn's
+     * counter, the well. `resolve(name)` hands back a named plan's object;
+     * the editor and the CLI read `3d/Structures/<name>`.
+     */
+    function build(plan, X0 = 0, Y0 = 0, firstId = 1, group = 0, resolve = null) {
+        const pieces = buildOwn(plan, X0, Y0, firstId, group);
+        let id = pieces.reduce((m, piece) => Math.max(m, piece.id), firstId - 1) + 1;
+        const M = Object.assign({ path: '' }, plan.materials || {});
+        for (const strip of plan.paths || []) {
+            const x0 = Math.min(strip[0], strip[2]), x1 = Math.max(strip[0], strip[2]), y0 = Math.min(strip[1], strip[3]), y1 = Math.max(strip[1], strip[3]);
+            for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) {
+                const piece = { id: id++, kind: 'floor', x: X0 + x, y: Y0 + y, z: 0, rot: 0, material: strip[4] || M.path || '' };
+                if (group > 0) piece.group = group;
+                pieces.push(piece);
+            }
+        }
+        for (const part of plan.parts || []) {
+            const inner = typeof resolve === 'function' ? resolve(part.plan) : null;
+            if (!inner) continue;
+            const shaped = transform(inner, part.rot || 0, part.scale || 1);
+            const built = build(shaped, X0 + (part.at ? part.at[0] : 0), Y0 + (part.at ? part.at[1] : 0), id, group, resolve);
+            for (const piece of built) pieces.push(piece);
+            id = pieces.reduce((m, piece) => Math.max(m, piece.id), id) + 1;
+        }
+        return pieces;
+    }
+
+    /** Every named spot of a plan and its parts, in map cells for a stamp at (X0, Y0). */
+    function spots(plan, X0 = 0, Y0 = 0, resolve = null, out = {}) {
+        for (const [name, at] of Object.entries(plan.spots || {})) out[name] = [X0 + at[0], Y0 + at[1]];
+        for (const part of plan.parts || []) {
+            const inner = typeof resolve === 'function' ? resolve(part.plan) : null;
+            if (!inner) continue;
+            const shaped = transform(inner, part.rot || 0, part.scale || 1);
+            const prefix = part.name ? part.name + '.' : '';
+            const own = spots(shaped, X0 + (part.at ? part.at[0] : 0), Y0 + (part.at ? part.at[1] : 0), resolve, {});
+            for (const [name, at] of Object.entries(own)) out[prefix + name] = at;
+        }
+        return out;
+    }
+
+    /** Build one plan's own rooms, walls, doors, windows, stairs and roof at (X0, Y0). */
+    function buildOwn(plan, X0 = 0, Y0 = 0, firstId = 1, group = 0) {
         const [W, H] = plan.size;
+        if (!(plan.floors || []).length) return [];
         const S = Number(plan.storey) > 0 ? Math.floor(plan.storey) : 5;
         const M = Object.assign({ wall: '', inner: '', floor: '', wet: '', roof: '', stair: '' }, plan.materials || {});
         const pieces = [];
@@ -195,6 +242,9 @@
         if (k > 1) {
             const grow = rect => [rect[0] * k, rect[1] * k, (rect[2] + 1) * k - 1, (rect[3] + 1) * k - 1];
             out.size = [out.size[0] * k, out.size[1] * k];
+            for (const name of Object.keys(out.spots || {})) out.spots[name] = [out.spots[name][0] * k, out.spots[name][1] * k];
+            out.paths = (out.paths || []).map(strip => grow(strip).concat(strip.slice(4)));
+            for (const part of out.parts || []) { part.at = [(part.at ? part.at[0] : 0) * k, (part.at ? part.at[1] : 0) * k]; part.scale = (part.scale || 1) * k; }
             for (const level of out.floors || []) {
                 for (const name of Object.keys(level.rooms || {})) level.rooms[name] = grow(level.rooms[name]);
                 level.doors = (level.doors || []).map(d => [d[0], d[1], (Number(d[2]) || 2) * k]);
@@ -210,6 +260,14 @@
             const rect = r => { const [ax, ay] = point(r[0], r[3]); const [bx, by] = point(r[2], r[1]); return [Math.min(ax, bx), Math.min(ay, by), Math.max(ax, bx), Math.max(ay, by)]; };
             for (const level of out.floors || []) for (const name of Object.keys(level.rooms || {})) level.rooms[name] = rect(level.rooms[name]);
             for (const stair of out.stairs || []) { stair.from = point(stair.from[0], stair.from[1]); stair.dir = DIR_CW[stair.dir] || 'east'; }
+            for (const name of Object.keys(out.spots || {})) out.spots[name] = point(out.spots[name][0], out.spots[name][1]);
+            out.paths = (out.paths || []).map(strip => rect(strip).concat(strip.slice(4)));
+            // A part turns about the whole: its own turn adds one, and its corner moves with its footprint.
+            for (const part of out.parts || []) {
+                const inner = part._size || [1, 1];
+                const r = rect([part.at ? part.at[0] : 0, part.at ? part.at[1] : 0, (part.at ? part.at[0] : 0) + inner[0] - 1, (part.at ? part.at[1] : 0) + inner[1] - 1]);
+                part.at = [r[0], r[1]]; part.rot = ((part.rot || 0) + 1) % 4; part._size = [inner[1], inner[0]];
+            }
             out.size = [H, W];
         }
         return out;
@@ -238,11 +296,19 @@
      * carrying the walker's height as the game does; which room middles
      * were reached, and the moves (MZ directions) to each.
      */
-    function validate(plan, pieces, X0, Y0, mapWidth, mapHeight, Reactor3D) {
+    function validate(plan, pieces, X0, Y0, mapWidth, mapHeight, Reactor3D, resolve = null) {
         const R = Reactor3D || root.Reactor3D;
         if (!R || !R.terrainBlocks) return null;
         const map = { width: mapWidth, height: mapHeight, reactor3d: { version: 1, elevation: new Array(mapWidth * mapHeight).fill(0), pieces } };
-        const door = entrance(plan);
+        // A plan of parts is walked from its own `start` spot (or its first part's front door).
+        let door = entrance(plan);
+        if (!door && plan.spots && plan.spots.start) door = { door: plan.spots.start, outside: plan.spots.start };
+        if (!door && (plan.parts || []).length && typeof resolve === 'function') {
+            const part = plan.parts[0], inner = resolve(part.plan);
+            const shaped = inner ? transform(inner, part.rot || 0, part.scale || 1) : null;
+            const innerDoor = shaped ? entrance(shaped) : null;
+            if (innerDoor) door = { door: innerDoor.door, outside: [innerDoor.outside[0] + (part.at ? part.at[0] : 0), innerDoor.outside[1] + (part.at ? part.at[1] : 0)] };
+        }
         if (!door) return null;
         const start = { x: X0 + door.outside[0], y: Y0 + door.outside[1], near: 0 };
         const key = s => s.x + ',' + s.y + ',' + Math.round(s.near * 10);
@@ -262,22 +328,30 @@
                 queue.push(next);
             }
         }
-        const S = Number(plan.storey) > 0 ? Math.floor(plan.storey) : 5;
         const report = {};
-        (plan.floors || []).forEach((level, index) => {
-            for (const [name, rect] of Object.entries(level.rooms || {})) {
-                const tx = X0 + Math.floor((rect[0] + rect[2]) / 2), ty = Y0 + Math.floor((rect[1] + rect[3]) / 2), near = index * S + 0.1;
-                let hit = null;
-                for (const s of seen.values()) if (s.x === tx && s.y === ty && Math.abs(s.near - near) < 0.3) { hit = s; break; }
-                const moves = [];
-                for (let s = hit; s && s.from; s = s.from) moves.unshift(s.dir);
-                report[name] = hit ? { reached: true, steps: moves.length, moves } : { reached: false };
+        const rooms = (target, ox, oy, prefix) => {
+            const S = Number(target.storey) > 0 ? Math.floor(target.storey) : 5;
+            (target.floors || []).forEach((level, index) => {
+                for (const [name, rect] of Object.entries(level.rooms || {})) {
+                    const tx = X0 + ox + Math.floor((rect[0] + rect[2]) / 2), ty = Y0 + oy + Math.floor((rect[1] + rect[3]) / 2), near = index * S + 0.1;
+                    let hit = null;
+                    for (const s of seen.values()) if (s.x === tx && s.y === ty && Math.abs(s.near - near) < 0.3) { hit = s; break; }
+                    const moves = [];
+                    for (let s = hit; s && s.from; s = s.from) moves.unshift(s.dir);
+                    report[prefix + name] = hit ? { reached: true, steps: moves.length, moves } : { reached: false };
+                }
+            });
+            for (const part of target.parts || []) {
+                const inner = typeof resolve === 'function' ? resolve(part.plan) : null;
+                if (!inner) continue;
+                rooms(transform(inner, part.rot || 0, part.scale || 1), ox + (part.at ? part.at[0] : 0), oy + (part.at ? part.at[1] : 0), prefix + (part.name || part.plan.replace(/\.json$/i, '')) + '.');
             }
-        });
+        };
+        rooms(plan, 0, 0, '');
         return { start, report, states: seen.size };
     }
 
-    const api = { build, transform, validate, entrance, doorCells, sharedWall, DIRS };
+    const api = { build, buildOwn, spots, transform, validate, entrance, doorCells, sharedWall, DIRS };
     root.RRStructurePlan = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof globalThis !== 'undefined' ? globalThis : window);
