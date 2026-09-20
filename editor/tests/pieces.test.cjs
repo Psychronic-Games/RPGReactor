@@ -443,6 +443,7 @@ test('inside a building the roof and the wall in the camera\'s way are cut aroun
     assert.match(runtime, /if \(rrBayer < rrThin\) discard;/, 'a wall in the way is dithered thin, not cut');
     assert.match(runtime, /!\(material\.__reactorPieces \|\| material\.__reactorModel\)/, 'placed models thin in the sight line too');
     assert.match(runtime, /material\.__reactorPieces \? "if \(vRRWorldPos\.y > rrCutTop/, 'but only pieces lose their storey');
+    assert.match(runtime, /rrAlong < rrSightLength - 3\.5\) \{"/, 'a model stops thinning well before the party, so the party never dissolves');
     assert.match(runtime, /vRRWorldPos\.y > rrCutFocus\.y - 1\.2/, 'floors under the player are never thinned');
     assert.match(read('runtime/reactor_sprites.js'), /state\.scene\.updateCutaway\(state\.viewport\.camera \? state\.viewport\.camera\(\) : null, \$dataMap, \$gamePlayer\);/);
     const house = mapWith([
@@ -505,4 +506,34 @@ test('the flat map shows a building as a plan from above', () => {
     assert.deepEqual(drawn.find(g => g.style.color === M.OVERLAY_COLOURS.wall).rects, [[2 * 48 + 1, 3 * 48 + 1, 46, 46]]);
     assert.match(read('editor/src/main.js'), /this\.pieceBuilderManager\?\.setMap\(/, 'every loaded map hands itself to the overlay');
     assert.match(read('editor/src/PieceBuilderManager.js'), /announce\(terrainToo = false, region = null\) \{\s*this\.render2D\(\);/, 'every edit redraws it');
+});
+
+test('the camera never stands inside a wall or roof, and a cut roof does not stop it', () => {
+    const THREE = loadThree();
+    const R = require(path.resolve(__dirname, '..', '..', 'runtime/reactor_3d.js'));
+    const house = mapWith([
+        { id: 1, kind: 'wall', x: 4, y: 2, z: 0, rot: 0, material: '' },
+        { id: 2, kind: 'floor', x: 2, y: 2, z: 0, rot: 0, material: '' },
+        { id: 3, kind: 'ramp', x: 2, y: 2, z: 5, rot: 0, material: '', group: 3 },
+        { id: 4, kind: 'doorway', x: 3, y: 2, z: 0, rot: 0, material: '' },
+        { id: 5, kind: 'stair', x: 6, y: 2, z: 0, rot: 0, material: '' }
+    ]);
+    assert.equal(R.pieceSolidAt(house, 4.5, 2.5, 2.5), true, 'inside a wall');
+    assert.equal(R.pieceSolidAt(house, 4.5, 2.5, 5.5), false, 'above it');
+    assert.equal(R.pieceSolidAt(house, 2.5, 0.05, 2.5), false, 'a floor is open');
+    assert.equal(R.pieceSolidAt(house, 3.5, 2.5, 2), false, 'a doorway is open');
+    assert.equal(R.pieceSolidAt(house, 2.5, 5.5, 2.5), true, 'inside a roof ramp');
+    assert.equal(R.pieceSolidAt(house, 2.5, 5.5, 2.5, { top: 4.5, box: [2, 2, 3, 3] }), false, 'a cut-away roof is not solid');
+    assert.equal(R.pieceSolidAt(house, 6.5, 0.1, 2.2), true, 'inside a stair\'s low step');
+    assert.equal(R.pieceSolidAt(house, 6.5, 0.4, 2.2), false, 'just over the low end of the slope');
+    assert.equal(R.pieceSolidAt(house, 6.5, 0.5, 2.8), true, 'inside the stair\'s high end');
+    const camera = new THREE.PerspectiveCamera();
+    camera.position.set(8.5, 2.5, 2.5); camera.updateMatrixWorld();
+    const focus = { x: 2.5, y: 1.3, z: 2.5 };
+    assert.equal(R.clearCameraPath(camera, focus, house), true);
+    assert.ok(camera.position.x < 4 && camera.position.x > 2.5, 'stopped short of the wall at x 4: ' + camera.position.x.toFixed(2));
+    camera.position.set(2.5, 8, 6.5); camera.updateMatrixWorld();
+    assert.equal(R.clearCameraPath(camera, focus, house), false, 'a clear line is left alone');
+    assert.equal(R.clearCameraPath(camera, focus, mapWith([])), false, 'no pieces: nothing to do');
+    assert.equal((read('runtime/reactor_3d.js').match(/keepOutOfWalls\(camera, resolved\);/g) || []).length, 2, 'the game camera asks after aiming, on both paths');
 });

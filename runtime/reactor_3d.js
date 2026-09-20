@@ -8681,9 +8681,12 @@ Reactor3D.injectCutaway = function(material, shader) {
             "\t\tvec3 rrSightDir = rrSight / rrSightLength;",
             "\t\tvec3 rrToHere = vRRWorldPos - rrCutEye;",
             "\t\tfloat rrAlong = dot(rrToHere, rrSightDir);",
-            "\t\tif (rrAlong > 0.0 && rrAlong < rrSightLength - 0.3) {",
+            // A model stops well short of the party: the party's own models
+            // stand around the focus and must never thin. A wall stops short
+            // by a hair, since a wall the party stands against is in the way.
+            material.__reactorPieces ? "\t\tif (rrAlong > 0.0 && rrAlong < rrSightLength - 0.3) {" : "\t\tif (rrAlong > 0.0 && rrAlong < rrSightLength - 3.5) {",
             "\t\t\tfloat rrOff = length(rrToHere - rrSightDir * rrAlong);",
-            "\t\t\tfloat rrThin = (1.0 - smoothstep(rrCutRadius * 0.5, rrCutRadius, rrOff)) * 0.85;",
+            "\t\t\tfloat rrThin = (1.0 - smoothstep(rrCutRadius * 0.6, rrCutRadius, rrOff)) * 0.92;",
             "\t\t\tif (rrThin > 0.0) {",
             "\t\t\t\tvec2 rrPx = floor(gl_FragCoord.xy);",
             "\t\t\t\tfloat rrA = mod(rrPx.x, 2.0), rrB = mod(rrPx.y, 2.0);",
@@ -8745,8 +8748,61 @@ Reactor3D.MapScene.prototype.updateCutaway = function(camera, mapData, character
     shared.rrCutFocus.value[0] = x; shared.rrCutFocus.value[1] = ground + 1.5; shared.rrCutFocus.value[2] = z;
     shared.rrCutRadius.value = Reactor3D.CUTAWAY_RADIUS;
 };
+/**
+ * Whether a world point is inside a piece's solid: a wall, block, window,
+ * pillar, fence or roof volume on its cell (floors and doorways are open,
+ * a stair or ramp counts under its slope). Pieces the cutaway has removed
+ * (above `cut.top` inside `cut.box`) are not solid: the camera may sit
+ * where a roof was.
+ */
+Reactor3D.pieceSolidAt = function(mapData, wx, wy, wz, cut) {
+    const index = this.pieceIndex(mapData);
+    if (!index) return false;
+    const x = Math.floor(wx), y = Math.floor(wz);
+    const stack = index.cells.get(y * 65536 + x);
+    if (!stack) return false;
+    if (cut && wy > cut.top && wx >= cut.box[0] && wz >= cut.box[1] && wx <= cut.box[2] && wz <= cut.box[3]) return false;
+    const base = this.pieceBaseAt(mapData, x, y);
+    const h = wy - base;
+    const u = wx - x, v = wz - y;
+    for (const piece of stack) {
+        if (piece.kind === "floor" || piece.kind === "doorway") continue;
+        if (h < piece.z || h > piece.z + this.pieceHeight(piece.kind)) continue;
+        if (piece.kind === "stair" || piece.kind === "ramp") { if (h > this.pieceTop(piece, u, v)) continue; }
+        return true;
+    }
+    return false;
+};
+
+/**
+ * Keep a camera out of the walls: step from the point it looks at toward
+ * where it wants to stand, and stop short of the first solid piece. The
+ * camera keeps its aim; only its distance shortens. Nothing happens on a
+ * map without pieces.
+ */
+Reactor3D.clearCameraPath = function(camera, focus, mapData) {
+    if (!camera || !focus || !mapData || !this.hasPieces(mapData)) return false;
+    const shared = this._cutawayUniforms;
+    const cut = shared && shared.rrCutRadius.value > 0 ? { top: shared.rrCutTop.value, box: shared.rrCutBox.value } : null;
+    const from = focus, to = camera.position;
+    const dx = to.x - from.x, dy = to.y - from.y, dz = to.z - from.z;
+    const length = Math.hypot(dx, dy, dz);
+    if (length < 0.5) return false;
+    const step = 0.2;
+    let free = length;
+    for (let d = 0.6; d < length; d += step) {
+        const t = d / length;
+        if (this.pieceSolidAt(mapData, from.x + dx * t, from.y + dy * t, from.z + dz * t, cut)) { free = Math.max(0.5, d - 0.4); break; }
+    }
+    if (free >= length) return false;
+    const t = free / length;
+    camera.position.set(from.x + dx * t, from.y + dy * t, from.z + dz * t);
+    camera.updateMatrixWorld();
+    return true;
+};
+
 /** How wide the opening in a wall between the camera and the player is, in tiles. */
-Reactor3D.CUTAWAY_RADIUS = 2.6;
+Reactor3D.CUTAWAY_RADIUS = 4.5;
 
 Reactor3D.injectDissolve = function(material, shader) {
     if (!material || !shader || shader.fragmentShader.indexOf("vRRWorldPos") < 0) return;
@@ -20530,6 +20586,7 @@ Reactor3D.installPropHooks = function() {
                 ez - Math.cos(yaw) * Math.cos(pitch)
             );
             camera.updateMatrixWorld();
+            keepOutOfWalls(camera, resolved);
             return;
         }
         if (Reactor3D.aimCamera) {
@@ -20538,7 +20595,16 @@ Reactor3D.installPropHooks = function() {
                 yaw: resolved.yaw,
                 distance: resolved.distance / scale
             });
+            keepOutOfWalls(camera, resolved);
         }
+    }
+
+    // A camera on the player never stands inside a built wall or roof: it
+    // comes in along its own line of sight until it is clear.
+    function keepOutOfWalls(camera, resolved) {
+        if (!resolved.playerRelative && resolved.focus !== "player") return;
+        if (!Reactor3D.clearCameraPath || typeof $dataMap === "undefined") return;
+        Reactor3D.clearCameraPath(camera, { x: resolved.x + 0.5, y: resolved.y + 1.2, z: resolved.z + 0.5 }, $dataMap);
     }
 
     //-------------------------------------------------------------------------
