@@ -28,6 +28,10 @@ project; a person can use it to find where anything lives.
 `MapNNN.json` stays ordinary RPG Maker data. Everything 3D is in the
 sidecar `MapNNN.r3d.json`, so a project with no 3D maps has no sidecars.
 
+In the editor, Database › Structures is a form over these files: draw rooms
+on the plan, click walls for doors, pick a style, and Save writes the file
+back the way it was read.
+
 The rules the engine applies to terrain, pieces and water (where the
 ground is, what blocks a step, how deep the water stands) are in
 `runtime/reactor_3d_world.js`, readable without three.js; the checks above
@@ -99,6 +103,10 @@ A building as a person describes it. Everything else is derived.
   the outside, never beside a door.
 - Floor is laid under every doorway and wall cell as well as every room,
   and a ceiling over every top-floor room under the roof.
+- A room may wear its own materials: `"materials": { "hall": { "floor":
+  "Stone", "wall": "Wood" } }` on the floor. The floor is the room's; the
+  wall applies to inner walls that touch the room (the first neighbouring
+  room that says wins), never to the outer wall, which stays the building's.
 
 ### Plans of plans
 
@@ -119,7 +127,9 @@ districts of hamlets:
 ```
 
 - `parts`: sibling files under `3d/Structures`, each at a corner `at` in
-  the plan's cells, turned `rot` quarter turns, grown `scale`. A stamped
+  the plan's cells, turned `rot` quarter turns, grown `scale`. A part may
+  carry `materials` of its own, laid over the plan's, so one cottage file
+  stands as stone here and timber there. A stamped
   plan of parts is one building: it moves and turns as one.
 - `paths`: paved strips `[x0, y0, x1, y1]` (floor slabs of the `path`
   material, or a fifth entry naming one).

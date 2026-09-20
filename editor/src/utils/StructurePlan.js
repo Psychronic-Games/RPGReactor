@@ -120,6 +120,9 @@
             const inner = typeof resolve === 'function' ? resolve(part.plan) : null;
             if (!inner) continue;
             const shaped = transform(inner, part.rot || 0, part.scale || 1);
+            // A part wears what it is told: its own materials over the plan's, so one
+            // cottage plan stands as stone here and timber there.
+            if (part.materials && typeof part.materials === 'object') shaped.materials = Object.assign({}, shaped.materials || {}, part.materials);
             const built = build(shaped, X0 + (part.at ? part.at[0] : 0), Y0 + (part.at ? part.at[1] : 0), id, group, resolve);
             for (const piece of built) pieces.push(piece);
             id = pieces.reduce((m, piece) => Math.max(m, piece.id), id) + 1;
@@ -276,13 +279,25 @@
                 if (open.has(key)) continue;
                 const room = roomAt(rooms, x, y);
                 const outer = x === 0 || x === W - 1 || y === 0 || y === H - 1;
-                if (room) { put('floor', x, y, z, 0, wet.has(room) ? M.wet : M.floor); continue; }
+                // A room may name its own floor, and the walls that touch it:
+                // `materials: { hall: { floor: "Stone", wall: "Wood" } }` on the
+                // floor. An inner wall between two rooms takes the first
+                // neighbouring room that says; the outer wall stays the building's.
+                const own = level.materials && typeof level.materials === 'object' ? level.materials : null;
+                if (room) { put('floor', x, y, z, 0, (own && own[room] && own[room].floor) || (wet.has(room) ? M.wet : M.floor)); continue; }
+                let wallMaterial = outer ? M.wall : M.inner;
+                if (own && !outer) {
+                    for (const [nx, ny] of [[x, y - 1], [x + 1, y], [x, y + 1], [x - 1, y]]) {
+                        const near = roomAt(rooms, nx, ny);
+                        if (near && own[near] && own[near].wall) { wallMaterial = own[near].wall; break; }
+                    }
+                }
                 // Floor under a doorway (a threshold) and under every wall, so
                 // nothing built shows the ground through a door or a cut wall.
                 put('floor', x, y, z, 0, M.floor);
-                if (doors.has(key)) { put('doorway', x, y, z, 0, outer ? M.wall : M.inner); continue; }
+                if (doors.has(key)) { put('doorway', x, y, z, 0, wallMaterial); continue; }
                 if (windowCells.has(key)) { put('window', x, y, z, 0, M.wall); continue; }
-                put('wall', x, y, z, 0, outer ? M.wall : M.inner);
+                put('wall', x, y, z, 0, wallMaterial);
             }
         });
         for (const c of stairCells) put('stair', c.x, c.y, c.z, c.rot, M.stair);
