@@ -812,10 +812,11 @@ Reactor3D.emitPiece = function(piece, base, out, hidden) {
             // never seen, and a cutaway through a wall would have shown it.
             if (!(skip.top && y1 >= boxTop - 1e-6)) quad(p(x0, y1, v0), p(x0, y1, v1), p(x1, y1, v1), p(x1, y1, v0)); // top
             if (!(skip.bottom && y0 <= 1e-6)) quad(p(x0, y0, v0), p(x1, y0, v0), p(x1, y0, v1), p(x0, y0, v1)); // bottom
-            if (!(skip.south && v1 >= 1 - 1e-6)) quad(p(x0, y0, v1), p(x1, y0, v1), p(x1, y1, v1), p(x0, y1, v1)); // south
-            if (!(skip.north && v0 <= 1e-6)) quad(p(x1, y0, v0), p(x0, y0, v0), p(x0, y1, v0), p(x1, y1, v0)); // north
-            if (!(skip.east && x1 >= 1 - 1e-6)) quad(p(x1, y0, v1), p(x1, y0, v0), p(x1, y1, v0), p(x1, y1, v1)); // east
-            if (!(skip.west && x0 <= 1e-6)) quad(p(x0, y0, v0), p(x0, y0, v1), p(x0, y1, v1), p(x0, y1, v0)); // west
+            const side = (covered, atEdge, emit) => { for (const [a, b] of (atEdge ? Reactor3D.visibleSpans(y0, y1, covered) : [[y0, y1]])) emit(a, b); };
+            side(skip.south, v1 >= 1 - 1e-6, (a, b) => quad(p(x0, a, v1), p(x1, a, v1), p(x1, b, v1), p(x0, b, v1))); // south
+            side(skip.north, v0 <= 1e-6, (a, b) => quad(p(x1, a, v0), p(x0, a, v0), p(x0, b, v0), p(x1, b, v0))); // north
+            side(skip.east, x1 >= 1 - 1e-6, (a, b) => quad(p(x1, a, v1), p(x1, a, v0), p(x1, b, v0), p(x1, b, v1))); // east
+            side(skip.west, x0 <= 1e-6, (a, b) => quad(p(x0, a, v0), p(x0, a, v1), p(x0, b, v1), p(x0, b, v0))); // west
         } else if (shape.wedge) {
             // Flat at v 0, a full level at v 1.
             const p = place;
@@ -1032,13 +1033,54 @@ Reactor3D.emitPiece = function(piece, base, out, hidden) {
  * it: a row of them through a cut or a faded wall is a sawtooth.
  */
 Reactor3D.HIDDEN_FACE_KINDS = ["wall", "block", "window", "doorway"];
+/** Height ranges sorted and joined where they touch. */
+Reactor3D.mergeRanges = function(ranges) {
+    const sorted = ranges.slice().sort((a, b) => a[0] - b[0]);
+    const out = [];
+    for (const [a, b] of sorted) {
+        const last = out[out.length - 1];
+        if (last && a <= last[1] + 1e-6) last[1] = Math.max(last[1], b);
+        else out.push([a, b]);
+    }
+    return out;
+};
+/** The parts of [y0, y1] that `covered` (true, false, or ranges) leaves showing. */
+Reactor3D.visibleSpans = function(y0, y1, covered) {
+    if (covered === true) return [];
+    if (!covered || !covered.length) return [[y0, y1]];
+    const spans = [];
+    let at = y0;
+    for (const [a, b] of covered) {
+        if (b <= at + 1e-6) continue;
+        if (a >= y1 - 1e-6) break;
+        if (a > at + 1e-6) spans.push([at, Math.min(a, y1)]);
+        at = Math.max(at, b);
+        if (at >= y1 - 1e-6) break;
+    }
+    if (at < y1 - 1e-6) spans.push([at, y1]);
+    return spans;
+};
 Reactor3D.hiddenFacesOf = function(piece, mapData) {
     if (!this.HIDDEN_FACE_KINDS.includes(piece.kind) && piece.kind !== "floor") return null;
     const height = this.pieceHeight(piece.kind);
-    // A wall, or the wall-high pieces set in a wall (a window's sill and header, a doorway's header reach the cell's sides).
+    // What a neighbouring cell covers of a shared face, as height ranges from
+    // the piece's base: a wall or block all of it (true); a window its sill
+    // and header, a doorway its header, and the hole between stays open, so
+    // the face shows there as the side of the opening. Nothing: false.
     const solidAt = (x, y, z, h) => {
         const stack = mapData ? this.piecesAt(mapData, x, y) : null;
-        return !!stack && stack.some(other => this.HIDDEN_FACE_KINDS.includes(other.kind) && other.z === z && this.pieceHeight(other.kind) === h);
+        if (!stack) return false;
+        let ranges = [];
+        for (const other of stack) {
+            if (!this.HIDDEN_FACE_KINDS.includes(other.kind) || other.z !== z || this.pieceHeight(other.kind) !== h) continue;
+            if (other.kind === "wall" || other.kind === "block") return true;
+            for (const shape of this.pieceShapes(other.kind, other)) {
+                if (!shape.box) continue;
+                const [x0, y0, v0, x1, y1, v1] = shape.box;
+                if (x0 <= 1e-6 && x1 >= 1 - 1e-6 && v0 <= 1e-6 && v1 >= 1 - 1e-6) ranges.push([y0, y1]);
+            }
+        }
+        return ranges.length ? this.mergeRanges(ranges) : false;
     };
     const stoneAt = (x, y, z, h) => {
         const stack = mapData ? this.piecesAt(mapData, x, y) : null;
@@ -1186,6 +1228,31 @@ Reactor3D.MapScene.prototype.pieceMaterial = function(name, load) {
     return material;
 };
 
+/** The see-through twin of a piece material: what the sight corridor holds is drawn with this, at a third. */
+Reactor3D.MapScene.prototype.pieceGhostMaterial = function(name, load) {
+    if (!this._pieceGhostMaterials) this._pieceGhostMaterials = new Map();
+    let material = this._pieceGhostMaterials.get(name);
+    if (material) return material;
+    const look = Reactor3D.materialLook(name);
+    const texture = look.glass ? null : this.materialTexture(name, load);
+    material = new THREE.MeshBasicMaterial({
+        map: texture || null,
+        color: texture ? 0xffffff : look.glass ? 0xbfe6ff : 0x9a9a9a,
+        vertexColors: true, side: THREE.FrontSide, transparent: true, opacity: Reactor3D.GHOST_OPACITY, depthWrite: false
+    });
+    material.__reactorShaded = true;
+    material.__reactorPieces = true;
+    material.__reactorGhost = true;
+    material.__reactorSelfLit = look.glow;
+    material.userData.rrPieceMaterial = name;
+    Reactor3D.litMaterial(material);
+    this._materials.push(material);
+    this._pieceGhostMaterials.set(name, material);
+    return material;
+};
+/** How much of a wall in the way is still seen. */
+Reactor3D.GHOST_OPACITY = 0.35;
+
 /** Lay the pieces of the chunks named in `keys` (every chunk when null). */
 Reactor3D.MapScene.prototype.layPieceChunks = function(mapData, load, keys) {
     const pieces = Reactor3D.piecesOf(mapData);
@@ -1216,6 +1283,18 @@ Reactor3D.MapScene.prototype.layPieceChunks = function(mapData, load, keys) {
             this._meshes.push(mesh);
             this._pieceMeshes.push(mesh);
             if (Reactor3D.Shadows && Reactor3D.Shadows.markCaster) Reactor3D.Shadows.markCaster(mesh, false);
+            // The chunk again for the ghost pass: the same geometry, drawn translucent where a wall is in the way, shown only while a cut is on.
+            if (!Reactor3D.materialLook(name).glass) {
+                const ghost = new THREE.Mesh(geometry, this.pieceGhostMaterial(name, load));
+                ghost.userData.pieceGhost = true;
+                ghost.userData.pieceChunk = key;
+                ghost.renderOrder = 4;
+                ghost.visible = !!this._cutLook;
+                group.add(ghost);
+                ghost.updateMatrix();
+                ghost.matrixAutoUpdate = false;
+                (this._pieceGhosts = this._pieceGhosts || []).push(ghost);
+            }
         }
     }
 };
@@ -1243,6 +1322,12 @@ Reactor3D.MapScene.prototype.updatePieces = function(mapData, load, region) {
         }
     }
     const wanted = keys ? new Set(keys) : null;
+    const ghosts = [];
+    for (const ghost of this._pieceGhosts || []) {
+        if (wanted && !wanted.has(ghost.userData.pieceChunk)) { ghosts.push(ghost); continue; }
+        if (ghost.parent) ghost.parent.remove(ghost);
+    }
+    this._pieceGhosts = ghosts;
     const kept = [];
     for (const mesh of this._pieceMeshes || []) {
         if (wanted && !wanted.has(mesh.userData.pieceChunk)) { kept.push(mesh); continue; }

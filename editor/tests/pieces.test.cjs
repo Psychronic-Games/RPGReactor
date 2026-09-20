@@ -231,7 +231,7 @@ test('the scene lays pieces down per material and can lay them again alone', () 
     const again = scene.updatePieces(map, load);
     assert.equal(again.length, 1);
     assert.equal(scene._meshes.length, 1, 'the old piece meshes left the scene\'s list');
-    assert.equal(scene._piecesGroup.children.length, 1);
+    assert.equal(scene._piecesGroup.children.length, 2, 'the chunk and its see-through twin for the sight corridor');
     assert.equal(asked.length, 2, 'textures are made once per scene');
     assert.equal(again[0].material, stone.material, 'and so are materials: chunks share them');
     // Chunks: pieces far apart are separate meshes, and an edit relays only its own chunk.
@@ -618,18 +618,24 @@ test('inside a building the roof and the wall in the camera\'s way are cut aroun
     const winRow = mapWith([{ id: 1, kind: 'wall', x: 1, y: 1, z: 0, rot: 0, material: '' }, { id: 2, kind: 'window', x: 2, y: 1, z: 0, rot: 0, material: '' }, { id: 3, kind: 'wall', x: 3, y: 1, z: 0, rot: 0, material: '' }]);
     const winAlone = R.pieceGeometry([{ id: 2, kind: 'window', x: 2, y: 1, z: 0, rot: 0, material: '' }], mapWith([])).attributes.position.count / 3;
     assert.equal(winAlone, 2 * 12, 'a lone window: a sill and a header, six faces each');
-    assert.equal(R.pieceGeometry(R.piecesOf(winRow), winRow).attributes.position.count / 3, 2 * 12 + winAlone - 2 * 2 - 2 * 2 * 2, 'a window set between walls: each wall drops its face against the window, the sill and header drop theirs against each wall, the faces round the hole stay');
+    assert.equal(R.pieceGeometry(R.piecesOf(winRow), winRow).attributes.position.count / 3, 2 * 12 + winAlone - 2 * 2 * 2 + 2 * 2 - 2 * 2, 'a window set between walls: each wall keeps the part of its face beside the hole (the side of the opening) and drops the parts behind the sill and header; the sill and header drop theirs against each wall; the faces round the hole stay');
+    { const doorRow = mapWith([{ id: 1, kind: 'wall', x: 1, y: 1, z: 0, rot: 0, material: '' }, { id: 2, kind: 'doorway', x: 2, y: 1, z: 0, rot: 0, material: '' }]);
+      const wallOnly = R.pieceGeometry(R.piecesOf(doorRow).filter(q => q.kind === 'wall'), doorRow).attributes.position.count / 3;
+      assert.equal(wallOnly, 12, 'a wall beside a doorway keeps its face there but for the header: the jamb the door is walked past');
+      assert.deepEqual(R.visibleSpans(0, 5, [[0, 1.5], [3.6, 5]]), [[1.5, 3.6]]); assert.deepEqual(R.visibleSpans(0, 5, true), []); assert.deepEqual(R.visibleSpans(0, 5, false), [[0, 5]]); assert.deepEqual(R.mergeRanges([[3, 5], [0, 1], [1, 2]]), [[0, 2], [3, 5]]); }
     const stepped = mapWith([1, 2, 3].map(i => ({ id: i, kind: 'wall', x: i, y: 1, z: 0, rot: 0, material: '' })));
     stepped.reactor3d.terrain = new Array((stepped.width + 1) * (stepped.height + 1)).fill(0).map((v, i) => (i % (stepped.width + 1)) >= 4 ? 1 : 0); stepped.reactor3d.terrainWidth = stepped.width;
     assert.equal(R.pieceGeometry(R.piecesOf(stepped), stepped).attributes.position.count / 3, 3 * 12 - 2 * 2, 'a step under the third keeps the two faces on either side of that step, and no others');
     assert.match(runtime, /if \(rrBayer < rrThin\) discard;/, 'a model in the way is dithered thin');
-    assert.match(runtime, /if \(rrOff2 < rrCutRadius \* 0\.6 && rrLineY - rrCutRadius < rrCutFocus\.y \+ 3\.5\) discard;/, 'a wall in the way is cut to knee height along the corridor to the camera');
+    assert.match(runtime, /rrInWay = rrOff2 < rrCutRadius \* 0\.6 && rrLineY - rrCutRadius < rrCutFocus\.y \+ 3\.5;/, 'a wall in the way is what the sight corridor holds');
+    assert.match(runtime, /if \(rrGhost > 0\.5\) \{ if \(!rrInWay\) discard; \} else if \(rrInWay\) discard;/, 'the solid pass leaves it out and the ghost pass draws only it');
+    assert.match(source3D(), /transparent: true, opacity: Reactor3D\.GHOST_OPACITY, depthWrite: false/, 'the ghost pass is translucent');
     assert.match(runtime, /material\.__reactorPieces \? "\\t\\tif \(false\) \{"/, 'pieces never dither');
     { const run = R.pieceShapes('stair', { kind: 'stair', z: 3 }); assert.equal(run.length, 5); assert.deepEqual(run[4].box, [0, -3, 0, 1, 0, 1], 'a stair above the ground stands on a solid down to it'); assert.equal(R.pieceShapes('stair', { kind: 'stair', z: 0 }).length, 4); }
     { const map = mapWith([{ id: 1, kind: 'wall', x: 4, y: 4, z: 0, rot: 0, material: '', group: 3 }, { id: 2, kind: 'floor', x: 4, y: 4, z: 5, rot: 0, material: '', group: 3 }]); const cover = R.pieceCoverAt(map, 4.5, 4.5, 0); assert.ok(cover.x0 <= 4 - R.CUTAWAY_MARGIN && cover.x1 >= 5 + R.CUTAWAY_MARGIN && cover.x0 <= 4 - R.CUTAWAY_REACH, 'the cut box reaches a hair past the outer faces and the stretch around the player'); }
     assert.match(runtime, /if \(!gl_FrontFacing\) diffuseColor\.rgb \*= 0\.45;/, 'the inside of a sliced piece is a flat dark cross-section');
     assert.ok(R.CUTAWAY_DROP > 0.6 && R.CUTAWAY_DROP < 1, 'the cut plane sits under a doorway header');
-    assert.match(runtime, /this\.setPieceSides\(cutState === "none" \? THREE\.FrontSide : THREE\.DoubleSide\);/, 'piece materials are two-sided while a cut is on, so a sliced wall reads as solid');
+    assert.match(runtime, /this\.setCutLook\(cutState !== "none"\);/, 'piece materials are two-sided and the ghost pass shows while a cut is on');
     assert.match(runtime, /if \(vRRCutPos\.y > rrCutTop && vRRCutPos\.x >= rrCutBox\.x[^\n]*discard;\\n\\t#include <alphatest_fragment>/, 'the shadow pass takes the storey cut too: a cut roof casts no shadow into the room');
     assert.match(runtime, /if \(cutState !== this\._cutState\) \{\n\s*this\._cutState = cutState;\n\s*if \(Reactor3D\.Shadows && Reactor3D\.Shadows\.invalidate\) Reactor3D\.Shadows\.invalidate\(\);/, 'the static shadows are drawn again when the cut changes');
     { const THREEx = loadThree(); const stone = new THREEx.MeshBasicMaterial(); stone.__reactorPieces = true; const caster = R.Shadows.casterMaterialFor(stone, false); assert.ok(caster.__rrCaster && typeof caster.onBeforeCompile === 'function' && caster.customProgramCacheKey() === 'reactor3d-caster-pieces', 'pieces get their own caster material'); assert.equal(R.Shadows.casterMaterialFor(new THREEx.MeshBasicMaterial(), false).customProgramCacheKey, THREEx.Material.prototype.customProgramCacheKey, 'other casters are unchanged'); }

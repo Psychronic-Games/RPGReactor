@@ -616,19 +616,21 @@ Reactor3D.injectCutaway = function(material, shader) {
     const shared = this.cutawayUniforms();
     for (const name of Object.keys(shared)) shader.uniforms[name] = shared[name];
     if (shader.fragmentShader.indexOf("uniform float rrCutTop;") >= 0) return;
-    shader.fragmentShader = "uniform float rrCutTop;\nuniform vec3 rrCutEye;\nuniform vec3 rrCutFocus;\nuniform float rrCutRadius;\nuniform vec4 rrCutBox;\n" + shader.fragmentShader.replace(
+    shader.uniforms.rrGhost = { value: material.__reactorGhost ? 1 : 0 };
+    shader.fragmentShader = "uniform float rrCutTop;\nuniform vec3 rrCutEye;\nuniform vec3 rrCutFocus;\nuniform float rrCutRadius;\nuniform vec4 rrCutBox;\nuniform float rrGhost;\n" + shader.fragmentShader.replace(
         "#include <map_fragment>",
         [
             material.__reactorPieces ? "if (vRRWorldPos.y > rrCutTop && vRRWorldPos.x >= rrCutBox.x && vRRWorldPos.z >= rrCutBox.y && vRRWorldPos.x <= rrCutBox.z && vRRWorldPos.z <= rrCutBox.w) discard;" : "",
-            // A wall in the way is cut to knee height along a straight corridor
-            // from the camera to the player (a dithered wall showed its own
-            // inside layers through itself once those were drawn): only its
-            // columns within the corridor, only while the sight line is low
-            // enough to have met a storey there, never a floor. A placed
-            // model has no knee, so it fades in the sight line instead: an
-            // ordered dither, which needs no blending and no sorting.
+            // A wall in the way is seen through, not cut: the columns of pieces
+            // within a straight corridor from the camera to the player, where
+            // the sight line is low enough to have met a storey, leave the
+            // solid pass and are drawn by the translucent ghost pass instead
+            // (the same chunk again with `rrGhost`), so the wall is still
+            // there to see. Never a floor. A placed model fades in the sight
+            // line with an ordered dither, which needs no blending.
             material.__reactorPieces ? [
-                "if (rrCutRadius > 0.0 && vRRWorldPos.y > rrCutFocus.y - 0.6) {",
+                "bool rrInWay = false;",
+                "if (rrCutRadius > 0.0 && vRRWorldPos.y > rrCutFocus.y - 1.4) {",
                 "\tvec2 rrSight2 = rrCutFocus.xz - rrCutEye.xz;",
                 "\tfloat rrSight2Length = length(rrSight2);",
                 "\tif (rrSight2Length > 0.001) {",
@@ -638,10 +640,11 @@ Reactor3D.injectCutaway = function(material, shader) {
                 "\t\tif (rrAlong2 > 0.0 && rrAlong2 < rrSight2Length - 0.3) {",
                 "\t\t\tfloat rrOff2 = length(rrToHere2 - rrSight2Dir * rrAlong2);",
                 "\t\t\tfloat rrLineY = rrCutEye.y + (rrCutFocus.y - rrCutEye.y) * (rrAlong2 / rrSight2Length);",
-                "\t\t\tif (rrOff2 < rrCutRadius * 0.6 && rrLineY - rrCutRadius < rrCutFocus.y + 3.5) discard;",
+                "\t\t\trrInWay = rrOff2 < rrCutRadius * 0.6 && rrLineY - rrCutRadius < rrCutFocus.y + 3.5;",
                 "\t\t}",
                 "\t}",
-                "}"
+                "}",
+                "if (rrGhost > 0.5) { if (!rrInWay) discard; } else if (rrInWay) discard;"
             ].join("\n\t") : "",
             "if (rrCutRadius > 0.0 && vRRWorldPos.y > rrCutFocus.y - 1.2) {",
             "\tvec3 rrSight = rrCutFocus - rrCutEye;",
@@ -738,17 +741,19 @@ Reactor3D.MapScene.prototype.updateCutaway = function(camera, mapData, character
         // A cut wall is a box sliced open: its inside faces are drawn while a
         // cut is on, so the slice reads as stone rather than a trough with
         // the ground showing through it. Outside, front faces only.
-        this.setPieceSides(cutState === "none" ? THREE.FrontSide : THREE.DoubleSide);
+        this.setCutLook(cutState !== "none");
     }
     shared.rrCutEye.value[0] = eye.x; shared.rrCutEye.value[1] = eye.y; shared.rrCutEye.value[2] = eye.z;
     shared.rrCutFocus.value[0] = x; shared.rrCutFocus.value[1] = ground + 1.5; shared.rrCutFocus.value[2] = z;
     shared.rrCutRadius.value = Reactor3D.CUTAWAY_RADIUS;
 };
-Reactor3D.MapScene.prototype.setPieceSides = function(side) {
+Reactor3D.MapScene.prototype.setCutLook = function(on) {
     for (const material of (this._pieceMaterials && this._pieceMaterials.values()) || []) {
         if (material.side === THREE.DoubleSide && material.transparent) continue; // glass keeps its two sides
-        material.side = side;
+        material.side = on ? THREE.DoubleSide : THREE.FrontSide;
     }
+    for (const ghost of this._pieceGhosts || []) ghost.visible = on;
+    this._cutLook = on;
 };
 
 /**
@@ -871,7 +876,7 @@ Reactor3D.litMaterial = function(material) {
     };
     const earlierKey = material.customProgramCacheKey;
     material.customProgramCacheKey = function() {
-        return (typeof earlierKey === "function" ? earlierKey.call(this) : "") + "|reactor3d-lit" + (this.__reactorPieces ? "|cutaway" : this.__reactorModel ? "|sightline" : "")
+        return (typeof earlierKey === "function" ? earlierKey.call(this) : "") + "|reactor3d-lit" + (this.__reactorPieces ? "|cutaway" : this.__reactorModel ? "|sightline" : "") + (this.__reactorGhost ? "|ghost" : "")
             + (Reactor3D.Shadows.active() ? "|shadows" + Reactor3D.Shadows.quality().taps : "");
     };
     return material;

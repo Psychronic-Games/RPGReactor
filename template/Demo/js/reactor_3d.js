@@ -7134,8 +7134,10 @@ Reactor3D.MapScene.prototype.clear = function() {
     // lay its quad into the next.
     this._build = (this._build || 0) + 1;
     this._pieceMeshes = [];
+    this._pieceGhosts = [];
     this._waterMeshes = [];
     this._pieceMaterials = null;
+    this._pieceGhostMaterials = null;
     this._materialTextures = null;
     // The light pools live in the pass groups rather than in `_meshes`, so
     // they have to be let go of by name or a rebuilt map keeps the old ones.
