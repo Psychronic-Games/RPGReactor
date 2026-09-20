@@ -59,9 +59,13 @@ test('a sheet is a rectangle at a level; deep water blocks, shallows wade, dry l
     assert.equal(R.waterOf(masked)[0].mask, '111101111');
     assert.equal(R.waterLevelAt(masked, 1, 1), 1); assert.equal(R.waterLevelAt(masked, 2, 2), null, 'the dry cell in the middle');
     assert.equal(R.terrainBlocks(masked, 2, 2, 1, 2, 0), true, 'into the water: blocked'); assert.equal(R.terrainBlocks(masked, 1, 2, 2, 2, 0), false, 'onto the dry cell: fine');
-    const geometry = R.waterGeometry(R.waterOf(masked)[0], masked);
+    const geometry = R.waterGeometry(R.waterOf(masked)[0], masked, false);
     assert.equal(geometry.index.count, 8 * 6, 'a quad per wet cell'); assert.equal(geometry.attributes.position.count, 16, 'corners shared');
     assert.equal(geometry.attributes.rrDepth.count, 16);
+    const shore = R.waterGeometry(R.waterOf(masked)[0], masked);
+    assert.equal(shore.index.count, 25 * 6, 'with the shore: the ring of bank cells round the wet ones too, and the dry middle cell (wet-adjacent)');
+    const edge = R.waterGeometry(R.normalizeWater({ x0: 0, y0: 0, x1: 1, y1: 0, level: 1, mask: "10" }, masked), masked);
+    assert.equal(edge.index.count, 4 * 6, 'the shore ring stops at the map edge');
     assert.equal(R.normalizeWater({ x0: 1, y0: 1, x1: 3, y1: 3, level: 1, mask: '111111111' }).mask, undefined, 'a full mask is no mask');
     assert.equal(R.normalizeWater({ x0: 1, y0: 1, x1: 3, y1: 3, level: 1, mask: '1111' }).mask, undefined, 'a mask of the wrong length is ignored');
 });

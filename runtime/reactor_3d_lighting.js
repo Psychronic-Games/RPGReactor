@@ -668,9 +668,14 @@ Reactor3D.pieceCoverAt = function(mapData, wx, wz, near) {
     const cover = stack.find(piece => piece.z >= head - 1e-6 && piece.kind !== "doorway");
     if (!cover) return null;
     const box = cover.group ? index.groups.get(cover.group) : null;
-    return box ? { x0: box.x0, y0: box.y0, x1: box.x1 + 1, y1: box.y1 + 1 }
+    // A hair past the outer faces: a face on the box's own edge interpolates
+    // a whisker outside it and escaped the cut (the whole upper west wall,
+    // seen from the west, dithered into a mess).
+    const m = this.CUTAWAY_MARGIN;
+    return box ? { x0: box.x0 - m, y0: box.y0 - m, x1: box.x1 + 1 + m, y1: box.y1 + 1 + m }
         : { x0: x - this.CUTAWAY_REACH, y0: y - this.CUTAWAY_REACH, x1: x + this.CUTAWAY_REACH + 1, y1: y + this.CUTAWAY_REACH + 1 };
 };
+Reactor3D.CUTAWAY_MARGIN = 0.05;
 /** How far, in tiles, the top cut reaches around a player under hand-laid pieces. */
 Reactor3D.CUTAWAY_REACH = 24;
 
@@ -698,10 +703,26 @@ Reactor3D.MapScene.prototype.updateCutaway = function(camera, mapData, character
     const cutTop = covered ? Math.floor(ground + 1e-6) + Reactor3D.PIECE_STOREY - 0.5 : 1e9;
     shared.rrCutTop.value = eye.y > cutTop ? cutTop : 1e9;
     if (covered) { shared.rrCutBox.value[0] = covered.x0; shared.rrCutBox.value[1] = covered.y0; shared.rrCutBox.value[2] = covered.x1; shared.rrCutBox.value[3] = covered.y1; }
+    const cutState = shared.rrCutTop.value === 1e9 ? "none" : shared.rrCutTop.value + ":" + shared.rrCutBox.value.join(",");
+    if (cutState !== this._cutState) {
+        this._cutState = cutState;
+        if (Reactor3D.Shadows && Reactor3D.Shadows.invalidate) Reactor3D.Shadows.invalidate();
+        // A cut wall is a box sliced open: its inside faces are drawn while a
+        // cut is on, so the slice reads as stone rather than a trough with
+        // the ground showing through it. Outside, front faces only.
+        this.setPieceSides(cutState === "none" ? THREE.FrontSide : THREE.DoubleSide);
+    }
     shared.rrCutEye.value[0] = eye.x; shared.rrCutEye.value[1] = eye.y; shared.rrCutEye.value[2] = eye.z;
     shared.rrCutFocus.value[0] = x; shared.rrCutFocus.value[1] = ground + 1.5; shared.rrCutFocus.value[2] = z;
     shared.rrCutRadius.value = Reactor3D.CUTAWAY_RADIUS;
 };
+Reactor3D.MapScene.prototype.setPieceSides = function(side) {
+    for (const material of (this._pieceMaterials && this._pieceMaterials.values()) || []) {
+        if (material.side === THREE.DoubleSide && material.transparent) continue; // glass keeps its two sides
+        material.side = side;
+    }
+};
+
 /**
  * Whether a world point is inside a piece's solid: a wall, block, window,
  * pillar, fence or roof volume on its cell (floors and doorways are open,
@@ -1205,6 +1226,25 @@ Reactor3D.Shadows = {
             depth.__rrCaster = true;
             return depth;
         };
+        if (first && first.__reactorPieces) {
+            // Pieces: the storey cut applies in the shadow pass too, else a roof the
+            // player stands under, gone from the picture, still darkens the room.
+            const pool = this._casterMaterials || (this._casterMaterials = {});
+            const key = "pieces" + flipped;
+            if (!pool[key]) {
+                const depth = make();
+                const shared = Reactor3D.cutawayUniforms();
+                depth.onBeforeCompile = function(shader) {
+                    for (const name of ["rrCutTop", "rrCutBox"]) shader.uniforms[name] = shared[name];
+                    shader.vertexShader = "varying vec3 vRRCutPos;\n" + shader.vertexShader.replace("#include <project_vertex>", "#include <project_vertex>\n\tvRRCutPos = (modelMatrix * vec4(transformed, 1.0)).xyz;");
+                    shader.fragmentShader = "uniform float rrCutTop;\nuniform vec4 rrCutBox;\nvarying vec3 vRRCutPos;\n" + shader.fragmentShader.replace("#include <alphatest_fragment>",
+                        "if (vRRCutPos.y > rrCutTop && vRRCutPos.x >= rrCutBox.x && vRRCutPos.z >= rrCutBox.y && vRRCutPos.x <= rrCutBox.z && vRRCutPos.z <= rrCutBox.w) discard;\n\t#include <alphatest_fragment>");
+                };
+                depth.customProgramCacheKey = function() { return "reactor3d-caster-pieces"; };
+                pool[key] = depth;
+            }
+            return pool[key];
+        }
         if (first && first.alphaTest > 0) {
             if (!first.__reactorCasterMaterial) {
                 const cutout = make();

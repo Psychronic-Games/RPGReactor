@@ -223,7 +223,7 @@ test('the scene lays pieces down per material and can lay them again alone', () 
     assert.deepEqual(asked.sort(), ['Stone', 'Wood']);
     const stone = scene._pieceMeshes.find(m => m.userData.pieceMaterial === 'Stone');
     assert.ok(stone.material.map && stone.material.map.wrapS === THREE.RepeatWrapping, 'a material image repeats');
-    assert.equal(stone.geometry.attributes.position.count, 2 * 8 * 3, 'two blocks side by side on the ground: four faces each (no bottom, no shared face), eight triangles');
+    assert.equal(stone.geometry.attributes.position.count, 2 * 10 * 3, 'two blocks side by side on the ground: five faces each (a bottom, no shared face), ten triangles');
     assert.equal(scene._pieceMeshes.find(m => m.userData.pieceMaterial === 'Wood').material.map, null, 'a missing image draws plain');
     assert.equal(stone.matrixAutoUpdate, false, 'still, like the rest of the world');
     assert.equal(scene._meshes.length, 3);
@@ -603,9 +603,26 @@ test('inside a building the roof and the wall in the camera\'s way are cut aroun
     const row = mapWith([1, 2, 3].map(i => ({ id: i, kind: 'wall', x: i, y: 1, z: 0, rot: 0, material: '' })));
     const rowTris = R.pieceGeometry(R.piecesOf(row), row).attributes.position.count / 3;
     const lone = R.pieceGeometry([{ id: 1, kind: 'wall', x: 1, y: 1, z: 0, rot: 0, material: '' }], mapWith([])).attributes.position.count / 3;
-    assert.equal(lone, 10, 'a lone wall on the ground: five faces, ten triangles (no bottom)');
-    assert.equal(rowTris, 3 * 10 - 4 * 2, 'three in a row: the four faces they press together are gone');
+    assert.equal(lone, 12, 'a lone wall on the ground: six faces (the bottom is what a cut wall shows from above)');
+    assert.equal(rowTris, 3 * 12 - 4 * 2, 'three in a row: the four faces they press together are gone');
+    // On a shaped map too, wherever the neighbours stand on the same ground; a step in the ground between them keeps the faces (no seam).
+    const shaped = mapWith([1, 2, 3].map(i => ({ id: i, kind: 'wall', x: i, y: 1, z: 0, rot: 0, material: '' })));
+    shaped.reactor3d.terrain = new Array((shaped.width + 1) * (shaped.height + 1)).fill(1.5); shaped.reactor3d.terrainWidth = shaped.width;
+    assert.ok(R.hasTerrain(shaped));
+    assert.equal(R.pieceGeometry(R.piecesOf(shaped), shaped).attributes.position.count / 3, 3 * 12 - 4 * 2, 'a shaped map that is level under the row hides the same faces (they were a sawtooth through every cut wall)');
+    const winRow = mapWith([{ id: 1, kind: 'wall', x: 1, y: 1, z: 0, rot: 0, material: '' }, { id: 2, kind: 'window', x: 2, y: 1, z: 0, rot: 0, material: '' }, { id: 3, kind: 'wall', x: 3, y: 1, z: 0, rot: 0, material: '' }]);
+    const winAlone = R.pieceGeometry([{ id: 2, kind: 'window', x: 2, y: 1, z: 0, rot: 0, material: '' }], mapWith([])).attributes.position.count / 3;
+    assert.equal(winAlone, 2 * 12, 'a lone window: a sill and a header, six faces each');
+    assert.equal(R.pieceGeometry(R.piecesOf(winRow), winRow).attributes.position.count / 3, 2 * 12 + winAlone - 2 * 2 - 2 * 2 * 2, 'a window set between walls: each wall drops its face against the window, the sill and header drop theirs against each wall, the faces round the hole stay');
+    const stepped = mapWith([1, 2, 3].map(i => ({ id: i, kind: 'wall', x: i, y: 1, z: 0, rot: 0, material: '' })));
+    stepped.reactor3d.terrain = new Array((stepped.width + 1) * (stepped.height + 1)).fill(0).map((v, i) => (i % (stepped.width + 1)) >= 4 ? 1 : 0); stepped.reactor3d.terrainWidth = stepped.width;
+    assert.equal(R.pieceGeometry(R.piecesOf(stepped), stepped).attributes.position.count / 3, 3 * 12 - 2 * 2, 'a step under the third keeps the two faces on either side of that step, and no others');
     assert.match(runtime, /if \(rrBayer < rrThin\) discard;/, 'a wall in the way is dithered thin, not cut');
+    { const map = mapWith([{ id: 1, kind: 'wall', x: 4, y: 4, z: 0, rot: 0, material: '', group: 3 }, { id: 2, kind: 'floor', x: 4, y: 4, z: 5, rot: 0, material: '', group: 3 }]); const cover = R.pieceCoverAt(map, 4.5, 4.5, 0); assert.deepEqual(cover, { x0: 4 - R.CUTAWAY_MARGIN, y0: 4 - R.CUTAWAY_MARGIN, x1: 5 + R.CUTAWAY_MARGIN, y1: 5 + R.CUTAWAY_MARGIN }, 'the cut box reaches a hair past the outer faces'); }
+    assert.match(runtime, /this\.setPieceSides\(cutState === "none" \? THREE\.FrontSide : THREE\.DoubleSide\);/, 'piece materials are two-sided while a cut is on, so a sliced wall reads as solid');
+    assert.match(runtime, /if \(vRRCutPos\.y > rrCutTop && vRRCutPos\.x >= rrCutBox\.x[^\n]*discard;\\n\\t#include <alphatest_fragment>/, 'the shadow pass takes the storey cut too: a cut roof casts no shadow into the room');
+    assert.match(runtime, /if \(cutState !== this\._cutState\) \{\n\s*this\._cutState = cutState;\n\s*if \(Reactor3D\.Shadows && Reactor3D\.Shadows\.invalidate\) Reactor3D\.Shadows\.invalidate\(\);/, 'the static shadows are drawn again when the cut changes');
+    { const THREEx = loadThree(); const stone = new THREEx.MeshBasicMaterial(); stone.__reactorPieces = true; const caster = R.Shadows.casterMaterialFor(stone, false); assert.ok(caster.__rrCaster && typeof caster.onBeforeCompile === 'function' && caster.customProgramCacheKey() === 'reactor3d-caster-pieces', 'pieces get their own caster material'); assert.equal(R.Shadows.casterMaterialFor(new THREEx.MeshBasicMaterial(), false).customProgramCacheKey, THREEx.Material.prototype.customProgramCacheKey, 'other casters are unchanged'); }
     // A floor slab shows only the faces that can be seen: none inside a
     // wall's cell, no seam against the slab next door, and its underside
     // only where nothing stands beneath (the ceiling of the room below).
@@ -637,7 +654,7 @@ test('inside a building the roof and the wall in the camera\'s way are cut aroun
     assert.equal(R.pieceCoverAt(house, 6.5, 6.5, 0), null, 'open ground');
     assert.deepEqual({ ...R.pieceCoverAt(house, 2.5, 2.5, 0.1) }, { x0: 2 - R.CUTAWAY_REACH, y0: 2 - R.CUTAWAY_REACH, x1: 3 + R.CUTAWAY_REACH, y1: 3 + R.CUTAWAY_REACH }, 'hand-laid: a stretch around the cell');
     const grouped = mapWith([{ id: 1, kind: 'floor', x: 4, y: 4, z: 5, rot: 0, material: '', group: 7 }, { id: 2, kind: 'wall', x: 6, y: 7, z: 0, rot: 0, material: '', group: 7 }]);
-    assert.deepEqual({ ...R.pieceCoverAt(grouped, 4.5, 4.5, 0) }, { x0: 4, y0: 4, x1: 7, y1: 8 }, 'stamped: the building\'s own footprint');
+    { const m = R.CUTAWAY_MARGIN; assert.deepEqual({ ...R.pieceCoverAt(grouped, 4.5, 4.5, 0) }, { x0: 4 - m, y0: 4 - m, x1: 7 + m, y1: 8 + m }, 'stamped: the building\'s own footprint, a hair past its outer faces'); }
     const scene = Object.create(R.MapScene.prototype);
     const camera = new THREE.PerspectiveCamera(); camera.position.set(10, 8, 12); camera.updateMatrixWorld();
     const shared = R.cutawayUniforms();

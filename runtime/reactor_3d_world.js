@@ -794,19 +794,23 @@ Reactor3D.emitPiece = function(piece, base, out, hidden) {
         }
     };
     const quad = (a, b, c, d) => { tri(a, b, c); tri(a, c, d); };
-    for (const shape of this.pieceShapes(piece.kind, piece)) {
+    const shapes = this.pieceShapes(piece.kind, piece);
+    // The highest box face of the piece: the top the skip rule speaks of (a window's header, not its sill).
+    let boxTop = 0;
+    for (const shape of shapes) if (shape.box) boxTop = Math.max(boxTop, shape.box[4]);
+    for (const shape of shapes) {
         if (shape.box) {
             const [x0, y0, v0, x1, y1, v1] = shape.box;
             const p = (x, y, v) => place(x, y, v);
             // Wound to face outward, whichever way the piece is turned. A
             // face pressed against a neighbouring solid is left out: it was
             // never seen, and a cutaway through a wall would have shown it.
-            if (!skip.top) quad(p(x0, y1, v0), p(x0, y1, v1), p(x1, y1, v1), p(x1, y1, v0)); // top
-            if (!skip.bottom) quad(p(x0, y0, v0), p(x1, y0, v0), p(x1, y0, v1), p(x0, y0, v1)); // bottom
-            if (!skip.south) quad(p(x0, y0, v1), p(x1, y0, v1), p(x1, y1, v1), p(x0, y1, v1)); // south
-            if (!skip.north) quad(p(x1, y0, v0), p(x0, y0, v0), p(x0, y1, v0), p(x1, y1, v0)); // north
-            if (!skip.east) quad(p(x1, y0, v1), p(x1, y0, v0), p(x1, y1, v0), p(x1, y1, v1)); // east
-            if (!skip.west) quad(p(x0, y0, v0), p(x0, y0, v1), p(x0, y1, v1), p(x0, y1, v0)); // west
+            if (!(skip.top && y1 >= boxTop - 1e-6)) quad(p(x0, y1, v0), p(x0, y1, v1), p(x1, y1, v1), p(x1, y1, v0)); // top
+            if (!(skip.bottom && y0 <= 1e-6)) quad(p(x0, y0, v0), p(x1, y0, v0), p(x1, y0, v1), p(x0, y0, v1)); // bottom
+            if (!(skip.south && v1 >= 1 - 1e-6)) quad(p(x0, y0, v1), p(x1, y0, v1), p(x1, y1, v1), p(x0, y1, v1)); // south
+            if (!(skip.north && v0 <= 1e-6)) quad(p(x1, y0, v0), p(x0, y0, v0), p(x0, y1, v0), p(x1, y1, v0)); // north
+            if (!(skip.east && x1 >= 1 - 1e-6)) quad(p(x1, y0, v1), p(x1, y0, v0), p(x1, y1, v0), p(x1, y1, v1)); // east
+            if (!(skip.west && x0 <= 1e-6)) quad(p(x0, y0, v0), p(x0, y0, v1), p(x0, y1, v1), p(x0, y1, v0)); // west
         } else if (shape.wedge) {
             // Flat at v 0, a full level at v 1.
             const p = place;
@@ -1015,20 +1019,28 @@ Reactor3D.emitPiece = function(piece, base, out, hidden) {
 /**
  * Which faces of a full cube (a wall, a block) touch another full cube of
  * the same footing: those faces are dropped. The sides only where the
- * neighbour spans the same levels; a wall's top under another wall, a
- * block's bottom on a block; and a bottom on the map's ground level.
+ * neighbour spans the same levels and stands on the same ground (to a
+ * hair: a shaped map is never exactly flat, and a wall row on a slope
+ * keeps its sides so no seam opens); a wall's top under another wall, a
+ * block's bottom on a block; and a bottom on the map's ground level. A
+ * face kept between two walls is never seen whole, but the cutaway shows
+ * it: a row of them through a cut or a faded wall is a sawtooth.
  */
+Reactor3D.HIDDEN_FACE_KINDS = ["wall", "block", "window", "doorway"];
 Reactor3D.hiddenFacesOf = function(piece, mapData) {
-    if (piece.kind !== "wall" && piece.kind !== "block" && piece.kind !== "floor") return null;
+    if (!this.HIDDEN_FACE_KINDS.includes(piece.kind) && piece.kind !== "floor") return null;
     const height = this.pieceHeight(piece.kind);
+    // A wall, or the wall-high pieces set in a wall (a window's sill and header, a doorway's header reach the cell's sides).
     const solidAt = (x, y, z, h) => {
+        const stack = mapData ? this.piecesAt(mapData, x, y) : null;
+        return !!stack && stack.some(other => this.HIDDEN_FACE_KINDS.includes(other.kind) && other.z === z && this.pieceHeight(other.kind) === h);
+    };
+    const stoneAt = (x, y, z, h) => {
         const stack = mapData ? this.piecesAt(mapData, x, y) : null;
         return !!stack && stack.some(other => (other.kind === "wall" || other.kind === "block") && other.z === z && this.pieceHeight(other.kind) === h);
     };
-    const flat = mapData && !this.hasTerrain(mapData) && this.elevationAt(mapData, piece.x, piece.y) === this.elevationAt(mapData, piece.x + 1, piece.y)
-        && this.elevationAt(mapData, piece.x, piece.y) === this.elevationAt(mapData, piece.x - 1, piece.y)
-        && this.elevationAt(mapData, piece.x, piece.y) === this.elevationAt(mapData, piece.x, piece.y + 1)
-        && this.elevationAt(mapData, piece.x, piece.y) === this.elevationAt(mapData, piece.x, piece.y - 1);
+    const here = mapData ? this.pieceBaseAt(mapData, piece.x, piece.y) : 0;
+    const level = (x, y) => !!mapData && Math.abs(this.pieceBaseAt(mapData, x, y) - here) < 0.02;
     if (piece.kind === "floor") {
         // A slab is laid under every wall of a plan, so a doorway has a
         // threshold and a cut wall never shows the ground. Inside a wall it
@@ -1045,22 +1057,23 @@ Reactor3D.hiddenFacesOf = function(piece, mapData) {
             return !!stack && stack.some(other => other.z === piece.z && (other.kind === "floor" || other.kind === "wall" || other.kind === "block"));
         };
         return {
-            east: enclosed || (flat && covered(piece.x + 1, piece.y)),
-            west: enclosed || (flat && covered(piece.x - 1, piece.y)),
-            south: enclosed || (flat && covered(piece.x, piece.y + 1)),
-            north: enclosed || (flat && covered(piece.x, piece.y - 1)),
+            east: enclosed || (level(piece.x + 1, piece.y) && covered(piece.x + 1, piece.y)),
+            west: enclosed || (level(piece.x - 1, piece.y) && covered(piece.x - 1, piece.y)),
+            south: enclosed || (level(piece.x, piece.y + 1) && covered(piece.x, piece.y + 1)),
+            north: enclosed || (level(piece.x, piece.y - 1) && covered(piece.x, piece.y - 1)),
             top: enclosed,
-            bottom: piece.z === 0 || solidAt(piece.x, piece.y, piece.z - 1, 1) || solidAt(piece.x, piece.y, piece.z - this.PIECE_STOREY, this.PIECE_STOREY)
+            bottom: piece.z === 0 || stoneAt(piece.x, piece.y, piece.z - 1, 1) || stoneAt(piece.x, piece.y, piece.z - this.PIECE_STOREY, this.PIECE_STOREY)
         };
     }
     // Rotation does not change a cube, so the faces are named in world terms and the cube is emitted unturned.
     return {
-        east: flat && solidAt(piece.x + 1, piece.y, piece.z, height),
-        west: flat && solidAt(piece.x - 1, piece.y, piece.z, height),
-        south: flat && solidAt(piece.x, piece.y + 1, piece.z, height),
-        north: flat && solidAt(piece.x, piece.y - 1, piece.z, height),
-        top: solidAt(piece.x, piece.y, piece.z + height, 1) || solidAt(piece.x, piece.y, piece.z + height, this.PIECE_STOREY),
-        bottom: piece.z === 0 || solidAt(piece.x, piece.y, piece.z - 1, 1) || solidAt(piece.x, piece.y, piece.z - this.PIECE_STOREY, this.PIECE_STOREY)
+        east: level(piece.x + 1, piece.y) && solidAt(piece.x + 1, piece.y, piece.z, height),
+        west: level(piece.x - 1, piece.y) && solidAt(piece.x - 1, piece.y, piece.z, height),
+        south: level(piece.x, piece.y + 1) && solidAt(piece.x, piece.y + 1, piece.z, height),
+        north: level(piece.x, piece.y - 1) && solidAt(piece.x, piece.y - 1, piece.z, height),
+        top: stoneAt(piece.x, piece.y, piece.z + height, 1) || stoneAt(piece.x, piece.y, piece.z + height, this.PIECE_STOREY),
+        // The bottom stays on the ground too: it is what a cut wall shows from above, else the ground.
+        bottom: stoneAt(piece.x, piece.y, piece.z - 1, 1) || stoneAt(piece.x, piece.y, piece.z - this.PIECE_STOREY, this.PIECE_STOREY)
     };
 };
 
@@ -1312,27 +1325,38 @@ Reactor3D.waterMaterial = function(texture) {
  * vertex per tile corner so the waves and the shoreline have something to
  * move; each vertex knows how deep the water is under it (`rrDepth`). UVs run
  * over the sheet's box so the image repeats once per tile.
+ *
+ * The quads reach one cell past the wet cells (`shore`, on by default): a
+ * bank cell is dry at its middle but its ground dips under the level toward
+ * the pond, and the sheet must be there for the shoreline to be where the
+ * ground crosses the water rather than a square cut at the cell's edge.
+ * Where the bank stands above the level the ground hides the sheet.
  */
-Reactor3D.waterGeometry = function(region, mapData) {
+Reactor3D.waterGeometry = function(region, mapData, shore = true) {
     const w = region.x1 - region.x0 + 1, h = region.y1 - region.y0 + 1;
+    const reach = shore && region.mask ? 1 : 0;
+    const gw = w + 2 * reach, gh = h + 2 * reach;
     const positions = [], uvs = [], depth = [], index = [];
     const ids = new Map();
+    const wet = (cx, cy) => cx >= 0 && cy >= 0 && cx < w && cy < h && (!region.mask || region.mask[cy * w + cx] === "1");
     const corner = (cx, cy) => {
-        const key = cy * (w + 1) + cx;
+        const key = (cy + reach) * (gw + 1) + (cx + reach);
         let id = ids.get(key);
         if (id === undefined) {
             id = positions.length / 3;
             ids.set(key, id);
             const wx = region.x0 + cx, wz = region.y0 + cy;
             positions.push(wx, region.level, wz);
-            uvs.push(cx / w, 1 - cy / h);
+            uvs.push((cx + reach) / gw, 1 - (cy + reach) / gh);
             const gx = Math.max(0, Math.min(mapData.width - 1e-3, wx)), gz = Math.max(0, Math.min(mapData.height - 1e-3, wz));
             depth.push(region.level - Reactor3D.groundHeightAt(mapData, gx, gz, 0));
         }
         return id;
     };
-    for (let cy = 0; cy < h; cy++) for (let cx = 0; cx < w; cx++) {
-        if (region.mask && region.mask[cy * w + cx] !== "1") continue;
+    for (let cy = -reach; cy < h + reach; cy++) for (let cx = -reach; cx < w + reach; cx++) {
+        const wx = region.x0 + cx, wz = region.y0 + cy;
+        if (wx < 0 || wz < 0 || wx >= mapData.width || wz >= mapData.height) continue;
+        if (!wet(cx, cy) && !(reach && (wet(cx - 1, cy) || wet(cx + 1, cy) || wet(cx, cy - 1) || wet(cx, cy + 1) || wet(cx - 1, cy - 1) || wet(cx + 1, cy - 1) || wet(cx - 1, cy + 1) || wet(cx + 1, cy + 1)))) continue;
         const a = corner(cx, cy), b = corner(cx + 1, cy), c = corner(cx + 1, cy + 1), d = corner(cx, cy + 1);
         index.push(a, d, b, b, d, c);
     }
@@ -1349,7 +1373,8 @@ Reactor3D.waterGeometry = function(region, mapData) {
 Reactor3D.MapScene.prototype.addWater = function(mapData, load) {
     this._waterMeshes = this._waterMeshes || [];
     for (const region of Reactor3D.waterOf(mapData)) {
-        const w = region.x1 - region.x0 + 1, h = region.y1 - region.y0 + 1;
+        const shore = region.mask ? 1 : 0;
+        const w = region.x1 - region.x0 + 1 + 2 * shore, h = region.y1 - region.y0 + 1 + 2 * shore;
         const geometry = Reactor3D.waterGeometry(region, mapData);
         // The image repeats once per tile, drifting.
         const texture = this.materialTexture(region.material, load);
