@@ -76,9 +76,14 @@ class BuildHotbar {
     toggle(on) { if (on === undefined ? !this.visible : on) this.show(); else this.hide(); }
 
     /** The slot the manager's state names. */
+    /** Whether Lighting or Media Surfaces holds the map while the bar is up. */
+    docked() { const owner = window.reactor?.mapTool; return owner === 'lighting' ? 'light' : owner === 'media' ? 'screen' : null; }
+
     activeSlot() {
         const manager = this.manager();
         if (!manager) return 'wall';
+        const docked = this.docked();
+        if (docked) return docked;
         if (manager.mode === 'select') return 'select';
         if (manager.mode === 'erase') return 'hammer';
         if (manager.mode === 'stamp' || manager.mode === 'move') return 'blueprint';
@@ -90,13 +95,14 @@ class BuildHotbar {
     pick(slot) {
         const manager = this.manager();
         if (!manager) return;
+        // Screens and lights have their own editors: the slot opens the one for the map, and the bar stays.
+        if (slot === 'screen') { if (this.docked() !== 'screen') window.reactor?.mediaSurfaceManager?.open?.(); return; }
+        if (slot === 'light') { if (this.docked() !== 'light') window.reactor?.lightingManager?.setActive?.(true); return; }
+        if (this.docked()) manager.activate();
         if (slot === 'select') manager.setMode('select');
         else if (slot === 'ramp') manager.setKind('wedge');
         else if (BuildHotbar.PIECES.includes(slot)) manager.setKind(slot);
         else if (slot === 'hammer') manager.setMode('erase');
-        // Screens and lights have their own editors: the slot opens the one for the map.
-        else if (slot === 'screen') { window.reactor?.mediaSurfaceManager?.open?.(); return; }
-        else if (slot === 'light') { window.reactor?.lightingManager?.setActive?.(true); return; }
         else if (slot === 'shape') { const kinds = this.shapeKinds(); if (!kinds.includes(manager.kind) || manager.kind === 'wedge') manager.setKind(manager.lastShape || 'cylinder'); else manager.setMode('place'); }
         else if (slot === 'blueprint') { const plans = manager.structures(true); if (plans.length) { if (!manager.structure) manager.structure = plans[0].file; manager.setMode('stamp'); } }
         this.render();
@@ -138,6 +144,7 @@ class BuildHotbar {
             <div class="rr-build-row rr-build-slots">${BuildHotbar.SLOTS.map(button).join('')}</div>
             <div class="rr-build-hint">${this._t('build.level')} <b class="rr-build-level">${manager.level}</b> · ${this._t('build.keys')}</div>`;
         root.querySelectorAll('.rr-build-slot').forEach(el => el.addEventListener('click', () => this.pick(el.dataset.slot)));
+        if (this.panel && this.visible) this.panel.style.display = this.docked() ? 'none' : 'flex';
         this.renderPanel();
     }
 

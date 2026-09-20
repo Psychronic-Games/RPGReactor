@@ -726,7 +726,12 @@ class RPGReactor {
             if (owner !== 'lighting') this.lightingManager?.setActive(false);
             if (owner !== 'models') this.modelPropsManager?.deactivate();
             if (owner !== 'terrain') this.terrainManager?.deactivate();
-            if (owner !== 'pieces') { this.pieceBuilderManager?.deactivate(); this.buildHotbar?.hide(false); }
+            if (owner !== 'pieces') {
+                this.pieceBuilderManager?.deactivate();
+                // Lighting and Media Surfaces are part of building: opened from the bar (or over it), the bar stays and shows which is in hand.
+                if (this.buildHotbar?.visible && (owner === 'lighting' || owner === 'media')) this.buildHotbar.render();
+                else this.buildHotbar?.hide(false);
+            }
             if (owner !== 'events' && this.eventManager?.eventMode) this.eventManager.setEventMode(false);
             const map = this.mapEditor, palette = this.tilesetPaletteViewer;
             if (owner !== 'paint') {
@@ -751,8 +756,10 @@ class RPGReactor {
 
     syncMapToolButtons() {
         const owner = this.mapTool, map = this.mapEditor;
+        const building = owner === 'pieces' || (!!this.buildHotbar?.visible && (owner === 'lighting' || owner === 'media'));
         for (const [selector,tool] of [['#toolbar-event-manager-btn','events'],['[data-action="media-surfaces"]','media'],['[data-action="lighting-tool"]','lighting'],['[data-action="build-tool"]','pieces']]) {
-            const button=document.querySelector(selector);button?.classList.toggle('active',owner===tool);button?.setAttribute('aria-pressed',String(owner===tool));
+            const on = tool === 'pieces' ? building : owner === tool;
+            const button=document.querySelector(selector);button?.classList.toggle('active',on);button?.setAttribute('aria-pressed',String(on));
         }
         document.querySelectorAll('.tool-draw-mode').forEach(button=>{
             const active=owner==='paint'&&!map?.shadowPenMode&&button.dataset.tool===map?.currentTool;
@@ -769,6 +776,8 @@ class RPGReactor {
 
     releaseMapTool(owner) {
         if (this._changingMapTool || this.mapTool !== owner) return;
+        // Closing the Lighting or Media Surfaces panel with the build bar up hands the map back to the bar.
+        if (this.buildHotbar?.visible && (owner === 'lighting' || owner === 'media')) { this.buildHotbar.show(); return; }
         const palette=this.tilesetPaletteViewer;
         if (palette) palette.selectLayer(palette.currentLayer || 'A');
         else this.claimMapTool('paint');

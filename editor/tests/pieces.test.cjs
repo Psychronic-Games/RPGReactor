@@ -272,7 +272,7 @@ test('building happens in the world: the hammer in the toolbar opens a bar over 
     assert.match(mainSource, /this\.buildHotbar = new BuildHotbar\(this\.projectController\)/);
     assert.match(mainSource, /this\.buildHotbar\.mount\(document\.getElementById\('canvas-container'\)\)/, 'mounted over the map canvas');
     assert.match(mainSource, /\['\[data-action="build-tool"\]','pieces'\]/, 'the button lights while building');
-    assert.match(mainSource, /if \(owner !== 'pieces'\) \{ this\.pieceBuilderManager\?\.deactivate\(\); this\.buildHotbar\?\.hide\(false\); \}/, 'another owner puts the tool down and the bar away');
+    assert.match(mainSource, /else this\.buildHotbar\?\.hide\(false\);/, 'another owner puts the tool down and the bar away');
     assert.match(mainSource, /new PieceBuilderManager\(this\.projectController\)/);
     const barSource = read('editor/src/BuildHotbar.js');
     assert.match(barSource, /static PIECES = \['floor', 'wall', 'doorway', 'window', 'glass', 'stair', 'ramp', 'roof', 'pillar', 'fence', 'block'\]/, 'the slots a child reaches for first, by the kinds\' own names');
@@ -281,8 +281,13 @@ test('building happens in the world: the hammer in the toolbar opens a bar over 
     assert.match(barSource, /if \(\/\^\[0-9\]\$\/\.test\(event\.key\)\)/, 'number keys pick slots');
     const managerSrc = read('editor/src/PieceBuilderManager.js');
     assert.doesNotMatch(managerSrc, /placeEffectAt/, 'the builder places no screens or lights of its own');
-    assert.match(barSource, /else if \(slot === 'screen'\) \{ window\.reactor\?\.mediaSurfaceManager\?\.open\?\.\(\); return; \}/, 'the Screen slot opens the Media Surfaces panel');
-    assert.match(barSource, /else if \(slot === 'light'\) \{ window\.reactor\?\.lightingManager\?\.setActive\?\.\(true\); return; \}/, 'the Light slot opens the Lighting panel');
+    assert.match(barSource, /if \(slot === 'screen'\) \{ if \(this\.docked\(\) !== 'screen'\) window\.reactor\?\.mediaSurfaceManager\?\.open\?\.\(\); return; \}/, 'the Screen slot opens the Media Surfaces panel');
+    assert.match(barSource, /if \(slot === 'light'\) \{ if \(this\.docked\(\) !== 'light'\) window\.reactor\?\.lightingManager\?\.setActive\?\.\(true\); return; \}/, 'the Light slot opens the Lighting panel');
+    assert.match(barSource, /if \(this\.docked\(\)\) manager\.activate\(\);/, 'picking a piece again takes the map back from that panel');
+    assert.match(mainSource, /if \(this\.buildHotbar\?\.visible && \(owner === 'lighting' \|\| owner === 'media'\)\) this\.buildHotbar\.render\(\);/, 'the bar stays up while Lighting or Media Surfaces hold the map');
+    assert.match(mainSource, /const building = owner === 'pieces' \|\| \(!!this\.buildHotbar\?\.visible && \(owner === 'lighting' \|\| owner === 'media'\)\);/, 'the Build button stays lit beside theirs');
+    assert.match(mainSource, /if \(this\.buildHotbar\?\.visible && \(owner === 'lighting' \|\| owner === 'media'\)\) \{ this\.buildHotbar\.show\(\); return; \}/, 'closing their panel hands the map back to the bar');
+    { const html = read('editor/index.html'); assert.ok(html.indexOf('data-action="build-tool"') < html.indexOf('data-action="lighting-tool"') && html.indexOf('data-action="lighting-tool"') < html.indexOf('data-action="media-surfaces"'), 'Build sits left of Lighting and Media Surfaces in the toolbar'); }
     assert.match(managerSrc, /if \(!stack\.length\) return this\.removeEffectAt\(map, target\);/, 'the hammer takes screens and lights too');
     // Select: a placed piece is picked up, edited in place, moved, turned and removed; a stair run climbs; a ramp is a sized wedge.
     const ctx2 = { console, window: {}, document: { addEventListener() {}, removeEventListener() {}, dispatchEvent() {} }, CustomEvent: class { constructor(t, i) { this.type = t; this.detail = i && i.detail; } } };
