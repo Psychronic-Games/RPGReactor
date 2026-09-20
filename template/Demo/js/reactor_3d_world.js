@@ -1228,6 +1228,58 @@ Reactor3D.MapScene.prototype.pieceMaterial = function(name, load) {
     return material;
 };
 
+/**
+ * Caps over the cut: a top laid over every wall-high piece the cut plane
+ * passes through inside `box` (x0, z0, x1, z1 in world tiles), so the
+ * storey the player stands in reads as though it had no floor above it.
+ * One mesh per material in the pieces group, wearing the piece material
+ * (its top mapping: the image by world x and z); made again when the cut
+ * changes and dropped when it ends. A doorway's header sits under the
+ * plane, so a doorway gets none and stays an opening.
+ */
+Reactor3D.MapScene.prototype.updateCutCaps = function(mapData, cutTop, box) {
+    for (const mesh of this._cutCaps || []) { if (mesh.parent) mesh.parent.remove(mesh); mesh.geometry.dispose(); }
+    this._cutCaps = [];
+    if (!mapData || !Number.isFinite(cutTop) || cutTop >= 1e8 || !box || !this._scene) return;
+    const index = Reactor3D.pieceIndex(mapData);
+    if (!index) return;
+    const byMaterial = new Map();
+    for (const piece of index.list) {
+        if (!Reactor3D.CAPPED_KINDS.includes(piece.kind)) continue;
+        if (piece.x + 1 < box[0] || piece.x > box[2] || piece.y + 1 < box[1] || piece.y > box[3]) continue;
+        const base = Reactor3D.pieceBaseAt(mapData, piece.x, piece.y) + piece.z;
+        if (!(base < cutTop - 1e-6 && base + Reactor3D.pieceHeight(piece.kind) > cutTop + 1e-6)) continue;
+        let list = byMaterial.get(piece.material);
+        if (!list) byMaterial.set(piece.material, list = []);
+        list.push(piece);
+    }
+    const group = this.piecesGroup();
+    // A hair under the plane, so the cut itself never takes the cap.
+    const y = cutTop - 0.01;
+    for (const [name, list] of byMaterial) {
+        const positions = [], uvs = [], colors = [];
+        for (const piece of list) {
+            const x0 = piece.x, x1 = piece.x + 1, z0 = piece.y, z1 = piece.y + 1;
+            for (const [x, z] of [[x0, z0], [x0, z1], [x1, z1], [x0, z0], [x1, z1], [x1, z0]]) { positions.push(x, y, z); uvs.push(x, z); colors.push(1, 1, 1); }
+        }
+        const geometry = new THREE.BufferGeometry();
+        geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(positions), 3));
+        geometry.setAttribute("uv", new THREE.BufferAttribute(new Float32Array(uvs), 2));
+        geometry.setAttribute("color", new THREE.BufferAttribute(new Float32Array(colors), 3));
+        geometry.computeVertexNormals();
+        geometry.computeBoundingSphere();
+        const mesh = new THREE.Mesh(geometry, this.pieceMaterial(name, null));
+        mesh.userData.pieceCap = true;
+        mesh.renderOrder = -5;
+        group.add(mesh);
+        mesh.updateMatrix();
+        mesh.matrixAutoUpdate = false;
+        this._cutCaps.push(mesh);
+    }
+};
+/** The kinds a cap is laid over: full-cell pieces a storey tall or stacked to one. */
+Reactor3D.CAPPED_KINDS = ["wall", "block", "window", "glass"];
+
 /** The see-through twin of a piece material: what the sight corridor holds is drawn with this, at a third. */
 Reactor3D.MapScene.prototype.pieceGhostMaterial = function(name, load) {
     if (!this._pieceGhostMaterials) this._pieceGhostMaterials = new Map();

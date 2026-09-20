@@ -7135,6 +7135,7 @@ Reactor3D.MapScene.prototype.clear = function() {
     this._build = (this._build || 0) + 1;
     this._pieceMeshes = [];
     this._pieceGhosts = [];
+    this._cutCaps = [];
     this._waterMeshes = [];
     this._pieceMaterials = null;
     this._pieceGhostMaterials = null;

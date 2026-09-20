@@ -677,18 +677,7 @@ Reactor3D.injectCutaway = function(material, shader) {
             "\t}",
             "}",
             "#include <map_fragment>",
-            // Looking into a sliced piece meets its inside faces (drawn while a
-            // cut is on): they wear the material as a top surface would, laid
-            // flat by world position, so the slice reads as the wall's top.
-            material.__reactorPieces ? [
-                "if (!gl_FrontFacing) {",
-                "#ifdef USE_MAP",
-                "\tdiffuseColor.rgb = diffuse * texture2D(map, vec2(vRRWorldPos.x, vRRWorldPos.z)).rgb;",
-                "#else",
-                "\tdiffuseColor.rgb = diffuse;",
-                "#endif",
-                "}"
-            ].join("\n\t") : ""
+            ""
         ].join("\n\t")
     );
 };
@@ -758,16 +747,13 @@ Reactor3D.MapScene.prototype.updateCutaway = function(camera, mapData, character
         // cut is on, so the slice reads as stone rather than a trough with
         // the ground showing through it. Outside, front faces only.
         this.setCutLook(cutState !== "none");
+        if (this.updateCutCaps) this.updateCutCaps(mapData, shared.rrCutTop.value, cutState === "none" ? null : shared.rrCutBox.value);
     }
     shared.rrCutEye.value[0] = eye.x; shared.rrCutEye.value[1] = eye.y; shared.rrCutEye.value[2] = eye.z;
     shared.rrCutFocus.value[0] = x; shared.rrCutFocus.value[1] = ground + 1.5; shared.rrCutFocus.value[2] = z;
     shared.rrCutRadius.value = Reactor3D.CUTAWAY_RADIUS;
 };
 Reactor3D.MapScene.prototype.setCutLook = function(on) {
-    for (const material of (this._pieceMaterials && this._pieceMaterials.values()) || []) {
-        if (material.side === THREE.DoubleSide && material.transparent) continue; // glass keeps its two sides
-        material.side = on ? THREE.DoubleSide : THREE.FrontSide;
-    }
     for (const ghost of this._pieceGhosts || []) ghost.visible = on;
     this._cutLook = on;
 };
