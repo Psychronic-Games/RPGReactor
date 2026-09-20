@@ -180,15 +180,39 @@ Reactor3D.SHAPE_KINDS = ["box", "wedge", "pyramid", "prism", "hull", "spike", "c
  * the top is against the bottom, 0 a point, 1 straight; a fin's tip
  * against its root). A shape without them wears its kind's own.
  */
-Reactor3D.SHAPE_PARAMS = { hull: { sides: 8, taper: 0.8 }, spike: { sides: 6, taper: 0 }, capsule: { sides: 24 }, dish: { sides: 32 }, fin: { taper: 0.4 } };
+Reactor3D.SHAPE_PARAMS = { hull: { sides: 8, taper: 0.8 }, spike: { sides: 6, taper: 0 }, capsule: { sides: 24 }, dish: { sides: 32 }, fin: { taper: 0.4 }, cylinder: { sweep: 360 }, tube: { sweep: 360, thick: 0.3 }, ring: { sweep: 360, thick: 0.2 } };
 Reactor3D.shapeParams = function(piece) {
     const own = this.SHAPE_PARAMS[piece.kind] || {};
     const out = {};
     if ("sides" in own) { const n = Math.round(Number(piece.sides)); out.sides = Number.isFinite(n) ? Math.max(3, Math.min(32, n)) : own.sides; }
     if ("taper" in own) { const t = Number(piece.taper); out.taper = Number.isFinite(t) ? Math.max(0, Math.min(1, t)) : own.taper; }
+    // How much of the circle a round shape goes round, in degrees, the arc centred on its
+    // back (+v) so the opening faces forward: a horseshoe deck, a curved console, a bent pipe.
+    if ("sweep" in own) { const a = Number(piece.sweep); out.sweep = Number.isFinite(a) ? Math.max(1, Math.min(360, Math.round(a))) : own.sweep; }
+    // How thick a hollow shape's wall is, as a fraction of its half width: a rail is thin, a silo thick.
+    if ("thick" in own) { const t = Number(piece.thick); out.thick = Number.isFinite(t) ? Math.max(0.02, Math.min(1, t)) : own.thick; }
     return out;
 };
-Reactor3D.PIECE_KINDS = ["wall", "block", "floor", "pillar", "stair", "ramp", "roof", "doorway", "window", "fence"].concat(Reactor3D.SHAPE_KINDS);
+/** Whether a ground point of a swept shape, at `lx`, `lz` from its middle in its own frame, lies within the arc. */
+Reactor3D.withinSweep = function(sweep, lx, lz, slack) {
+    if (!(sweep < 360)) return true;
+    const a = Math.atan2(lz, lx);
+    let away = Math.abs(a - Math.PI / 2);
+    if (away > Math.PI) away = Math.PI * 2 - away;
+    return away <= (sweep / 2) * Math.PI / 180 + (slack || 0);
+};
+Reactor3D.PIECE_KINDS = ["wall", "block", "floor", "pillar", "stair", "ramp", "roof", "doorway", "window", "fence", "glass"].concat(Reactor3D.SHAPE_KINDS);
+/**
+ * What a material's name says about how it is drawn: a name beginning
+ * "Glass" is see-through (tinted, a third opaque, both faces), a name
+ * ending "Glow" is lit from within (full bright whatever the lights, so a
+ * console face or a light strip reads as a light source). Any other name
+ * is a tileable image under img/materials, shaded by the lights.
+ */
+Reactor3D.materialLook = function(name) {
+    const text = String(name || "");
+    return { glass: /^glass/i.test(text), glow: /glow$/i.test(text) };
+};
 Reactor3D.isShapeKind = function(kind) { return this.SHAPE_KINDS.includes(kind); };
 /** The shapes with an open middle: only their walls block. */
 Reactor3D.HOLLOW_KINDS = ["tube", "ring", "arch", "tunnel"];
@@ -237,13 +261,15 @@ Reactor3D.shapePlacer = function(piece, base) {
  * an arch or tunnel in its posts. `slack` widens the solid part so the
  * rim's cells block too.
  */
-Reactor3D.shapeSolidAt = function(kind, lx, lz, hw, hd, slack) {
+Reactor3D.shapeSolidAt = function(kind, lx, lz, hw, hd, slack, sweep, thick) {
     const s = slack || 0;
+    if (sweep < 360 && !this.withinSweep(sweep, lx, lz, 0.1)) return false;
+    const wall = Number.isFinite(thick) ? thick : (kind === "ring" ? 0.2 : 0.3);
     const inside = (kw, kd, grow) => { const a = hw * kw + grow, b = hd * kd + grow; return a > 0 && b > 0 && (lx * lx) / (a * a) + (lz * lz) / (b * b) <= 1; };
     switch (kind) {
         case "cylinder": case "cone": case "dome": case "sphere": case "hull": case "spike": case "capsule": case "dish": return inside(1, 1, s);
-        case "tube": return inside(1, 1, s) && !inside(0.7, 0.7, -s);
-        case "ring": return inside(1, 1, s) && !inside(0.6, 0.6, -s);
+        case "tube": return inside(1, 1, s) && !inside(1 - wall, 1 - wall, -s);
+        case "ring": return inside(1, 1, s) && !inside(1 - 2 * wall, 1 - 2 * wall, -s);
         case "arch": case "tunnel": return Math.abs(lx) <= hw + s && Math.abs(lz) <= hd + s && Math.abs(lx) >= hw * 0.7 - s;
         default: return Math.abs(lx) <= hw + s && Math.abs(lz) <= hd + s;
     }
@@ -285,7 +311,8 @@ Reactor3D.pieceFootprint = function(piece) {
             if (x < 0 || y < 0) continue;
             const px = x + 0.5 - cx, pz = y + 0.5 - cz;
             const u = px * Math.cos(-angle) - pz * Math.sin(-angle), v = px * Math.sin(-angle) + pz * Math.cos(-angle);
-            if (this.shapeSolidAt(piece.kind, u, v, hw, hd, SLACK)) cells.push([x, y]);
+            const params = this.shapeParams(piece);
+            if (this.shapeSolidAt(piece.kind, u, v, hw, hd, SLACK, params.sweep, params.thick)) cells.push([x, y]);
         }
     }
     if (!cells.length && !this.HOLLOW_KINDS.includes(piece.kind)) cells.push([piece.x, piece.y]);
@@ -328,7 +355,7 @@ Reactor3D.PIECE_FLOOR_THICKNESS = 0.1;
  */
 Reactor3D.PIECE_STOREY = 5;
 Reactor3D.pieceHeight = function(kind) {
-    return kind === "wall" || kind === "doorway" || kind === "window" || kind === "pillar" ? this.PIECE_STOREY : 1;
+    return kind === "wall" || kind === "doorway" || kind === "window" || kind === "pillar" || kind === "glass" ? this.PIECE_STOREY : 1;
 };
 
 Reactor3D.normalizePiece = function(raw, mapData) {
@@ -363,6 +390,8 @@ Reactor3D.normalizePiece = function(raw, mapData) {
         const own = this.SHAPE_PARAMS[kind] || {};
         if ("sides" in own && Number.isFinite(Number(raw.sides))) piece.sides = Math.max(3, Math.min(32, Math.round(Number(raw.sides))));
         if ("taper" in own && Number.isFinite(Number(raw.taper))) piece.taper = Math.max(0, Math.min(1, Math.round(Number(raw.taper) * 100) / 100));
+        if ("sweep" in own && Number.isFinite(Number(raw.sweep))) piece.sweep = Math.max(1, Math.min(360, Math.round(Number(raw.sweep))));
+        if ("thick" in own && Number.isFinite(Number(raw.thick))) piece.thick = Math.max(0.02, Math.min(1, Math.round(Number(raw.thick) * 100) / 100));
     }
     return piece;
 };
@@ -649,6 +678,9 @@ Reactor3D.pieceShapes = function(kind, piece) {
         // under the hole and a header over it.
         case "doorway": return [box(0, S - 0.6, 0, 1, S, 1)];
         case "window": return [box(0, 0, 0, 1, 1.5, 1), box(0, S - 1.4, 0, 1, S, 1)];
+        // A pane the height of a wall, thin, in the middle of the cell: a viewport, or
+        // the glass a plan sets in every window's hole.
+        case "glass": return [box(0, 0, 0.45, 1, S, 0.55)];
         // Waist high on a three-tile character; it still blocks a cell.
         case "fence": return [box(0.05, 0, 0.42, 0.15, 1.5, 0.58), box(0.85, 0, 0.42, 0.95, 1.5, 0.58), box(0, 0.5, 0.45, 1, 0.62, 0.55), box(0, 1.15, 0.45, 1, 1.27, 0.55)];
         // The shapes fill the unit cell; their size stretches the cell.
@@ -656,14 +688,14 @@ Reactor3D.pieceShapes = function(kind, piece) {
         case "wedge": return [{ wedge: true }];
         case "prism": return [{ gable: true }];
         case "pyramid": return [{ pyramid: true }];
-        case "cylinder": return [{ column: [0.5, 0.5, 0.5, 0, 1, 32] }];
-        case "tube": return [{ tube: [0.5, 0.5, 0.5, 0.35, 0, 1, 32] }];
+        case "cylinder": return [{ column: [0.5, 0.5, 0.5, 0, 1, 32, params.sweep] }];
+        case "tube": return [{ tube: [0.5, 0.5, 0.5, 0.5 * (1 - params.thick), 0, 1, 32, params.sweep] }];
         case "cone": return [{ cone: [0.5, 0.5, 0.5, 0, 1, 32] }];
         case "dome": return [{ dome: [0.5, 0.5, 0.5, 0, 32, 10] }];
         case "sphere": return [{ sphere: [0.5, 0.5, 0.5, 0.5, 32, 16] }];
         // An arch is a wall with a round-topped opening through it; a tunnel is the same, deep.
         case "arch": case "tunnel": return [{ arch: [0.15, 0.5, 0.35, 24] }];
-        case "ring": return [{ torus: [0.5, 0.5, 0.5, 0.4, 0.1, 0.5, 32, 16] }];
+        case "ring": return [{ torus: [0.5, 0.5, 0.5, 0.5 - params.thick / 2, params.thick / 2, 0.5, 32, 16, params.sweep] }];
         // Ship parts: a hull segment and a spike are sided prisms that taper (flats touch
         // the cell), a capsule a column with domed ends, a dish a shallow bowl, a fin a
         // swept plate standing on its root.
@@ -750,15 +782,20 @@ Reactor3D.emitPiece = function(piece, base, out, hidden) {
             tri(p(1, 0, 0), p(1, 1, 0.5), p(1, 0, 1)); // east gable
             tri(p(0, 0, 0), p(0, 0, 1), p(0, 1, 0.5)); // west gable
         } else if (shape.column) {
-            const [ccx, ccv, r, y0, y1, segs] = shape.column;
-            const segments = segs || 12;
+            // Round the circle, or round an arc of it centred on +v with flat faces at the ends.
+            const [ccx, ccv, r, y0, y1, segs, sweep] = shape.column;
+            const segments = segs || 12, arc = (sweep || 360) * Math.PI / 180, start = Math.PI / 2 - arc / 2;
+            const at = i => { const a = start + (i / segments) * arc; return [ccx + Math.cos(a) * r, ccv + Math.sin(a) * r]; };
             for (let i = 0; i < segments; i++) {
-                const a0 = (i / segments) * Math.PI * 2, a1 = ((i + 1) / segments) * Math.PI * 2;
-                const x0 = ccx + Math.cos(a0) * r, v0 = ccv + Math.sin(a0) * r;
-                const x1 = ccx + Math.cos(a1) * r, v1 = ccv + Math.sin(a1) * r;
+                const [x0, v0] = at(i), [x1, v1] = at(i + 1);
                 quad(place(x0, y0, v0), place(x0, y1, v0), place(x1, y1, v1), place(x1, y0, v1));
                 tri(place(ccx, y1, ccv), place(x1, y1, v1), place(x0, y1, v0));
                 tri(place(ccx, y0, ccv), place(x0, y0, v0), place(x1, y0, v1));
+            }
+            if (arc < Math.PI * 2 - 1e-6) {
+                const [xs, vs] = at(0), [xe, ve] = at(segments);
+                quad(place(ccx, y0, ccv), place(ccx, y1, ccv), place(xs, y1, vs), place(xs, y0, vs)); // the face at the start
+                quad(place(xe, y0, ve), place(xe, y1, ve), place(ccx, y1, ccv), place(ccx, y0, ccv)); // and at the end
             }
         } else if (shape.cone) {
             const [ccx, ccv, r, y0, y1, segs] = shape.cone;
@@ -809,12 +846,17 @@ Reactor3D.emitPiece = function(piece, base, out, hidden) {
             }
         } else if (shape.tube) {
             // A column with a hole down its middle: the inner wall faces the hole, the ends are rings.
-            const [ccx, ccv, r, ri, y0, y1, segs] = shape.tube;
-            const segments = segs || 24;
+            const [ccx, ccv, r, ri, y0, y1, segs, sweep] = shape.tube;
+            const segments = segs || 24, arc = (sweep || 360) * Math.PI / 180, start = Math.PI / 2 - arc / 2;
+            const ring = (i, rad) => { const a = start + (i / segments) * arc; return [ccx + Math.cos(a) * rad, ccv + Math.sin(a) * rad]; };
+            if (arc < Math.PI * 2 - 1e-6) {
+                const os = ring(0, r), ns = ring(0, ri), oe = ring(segments, r), ne = ring(segments, ri);
+                quad(place(ns[0], y0, ns[1]), place(ns[0], y1, ns[1]), place(os[0], y1, os[1]), place(os[0], y0, os[1])); // the face at the start
+                quad(place(oe[0], y0, oe[1]), place(oe[0], y1, oe[1]), place(ne[0], y1, ne[1]), place(ne[0], y0, ne[1])); // and at the end
+            }
             for (let i = 0; i < segments; i++) {
-                const a0 = (i / segments) * Math.PI * 2, a1 = ((i + 1) / segments) * Math.PI * 2;
-                const o0 = [ccx + Math.cos(a0) * r, ccv + Math.sin(a0) * r], o1 = [ccx + Math.cos(a1) * r, ccv + Math.sin(a1) * r];
-                const n0 = [ccx + Math.cos(a0) * ri, ccv + Math.sin(a0) * ri], n1 = [ccx + Math.cos(a1) * ri, ccv + Math.sin(a1) * ri];
+                const o0 = ring(i, r), o1 = ring(i + 1, r);
+                const n0 = ring(i, ri), n1 = ring(i + 1, ri);
                 quad(place(o0[0], y0, o0[1]), place(o0[0], y1, o0[1]), place(o1[0], y1, o1[1]), place(o1[0], y0, o1[1])); // outside
                 quad(place(n1[0], y0, n1[1]), place(n1[0], y1, n1[1]), place(n0[0], y1, n0[1]), place(n0[0], y0, n0[1])); // inside
                 quad(place(o0[0], y1, o0[1]), place(n0[0], y1, n0[1]), place(n1[0], y1, n1[1]), place(o1[0], y1, o1[1])); // top ring
@@ -823,14 +865,19 @@ Reactor3D.emitPiece = function(piece, base, out, hidden) {
         } else if (shape.torus) {
             // A ring lying flat: the tube's cross-section is `rh` wide and `rv` tall, so a
             // one-tile-tall ring's tube stands the full height.
-            const [ccx, ccy, ccv, R, rh, rv, segs, tsegs] = shape.torus;
-            const segments = segs || 24, around = tsegs || 8;
+            const [ccx, ccy, ccv, R, rh, rv, segs, tsegs, sweep] = shape.torus;
+            const segments = segs || 24, around = tsegs || 8, arc = (sweep || 360) * Math.PI / 180, start = Math.PI / 2 - arc / 2;
             const at = (i, j) => {
-                const a = (i / segments) * Math.PI * 2, b = (j / around) * Math.PI * 2;
+                const a = start + (i / segments) * arc, b = (j / around) * Math.PI * 2;
                 const rad = R + Math.cos(b) * rh;
                 return place(ccx + Math.cos(a) * rad, ccy + Math.sin(b) * rv, ccv + Math.sin(a) * rad);
             };
             for (let j = 0; j < around; j++) for (let i = 0; i < segments; i++) quad(at(i, j), at(i, j + 1), at(i + 1, j + 1), at(i + 1, j));
+            if (arc < Math.PI * 2 - 1e-6) {
+                // A disc closes each end of the bent pipe.
+                const centre = i => { const a = start + (i / segments) * arc; return place(ccx + Math.cos(a) * R, ccy, ccv + Math.sin(a) * R); };
+                for (let j = 0; j < around; j++) { tri(centre(0), at(0, j), at(0, j + 1)); tri(centre(segments), at(segments, j + 1), at(segments, j)); }
+            }
         } else if (shape.frustum) {
             // A sided prism fitted to the cell (a flat faces forward; the polygon is stretched so
             // its box is the cell's, so four sides make a box), its top ring `taper` as wide as its
@@ -1059,15 +1106,20 @@ Reactor3D.MapScene.prototype.pieceMaterial = function(name, load) {
     if (!this._pieceMaterials) this._pieceMaterials = new Map();
     let material = this._pieceMaterials.get(name);
     if (material) return material;
-    const texture = this.materialTexture(name, load);
+    const look = Reactor3D.materialLook(name);
+    const texture = look.glass ? null : this.materialTexture(name, load);
     material = new THREE.MeshBasicMaterial({
         map: texture || null,
-        color: texture ? 0xffffff : 0x9a9a9a,
+        color: texture ? 0xffffff : look.glass ? 0xbfe6ff : 0x9a9a9a,
         vertexColors: true,
-        side: THREE.FrontSide
+        side: look.glass ? THREE.DoubleSide : THREE.FrontSide,
+        transparent: look.glass,
+        opacity: look.glass ? 0.32 : 1,
+        depthWrite: !look.glass
     });
     material.__reactorShaded = true;
     material.__reactorPieces = true;
+    material.__reactorSelfLit = look.glow;
     material.userData.rrPieceMaterial = name;
     Reactor3D.litMaterial(material);
     this._materials.push(material);
@@ -1097,7 +1149,8 @@ Reactor3D.MapScene.prototype.layPieceChunks = function(mapData, load, keys) {
             mesh.userData.pieces = true;
             mesh.userData.pieceMaterial = name;
             mesh.userData.pieceChunk = key;
-            mesh.renderOrder = -5;
+            // Glass draws after everything solid, so what is behind it shows through.
+            mesh.renderOrder = Reactor3D.materialLook(name).glass ? 5 : -5;
             group.add(mesh);
             mesh.updateMatrix();
             mesh.matrixAutoUpdate = false;

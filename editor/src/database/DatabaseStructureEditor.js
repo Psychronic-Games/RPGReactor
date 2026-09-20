@@ -17,15 +17,18 @@
  * people go anywhere, and Undo takes any of it back.
  */
 class DatabaseStructureEditor {
-    static MATERIAL_ROLES = ['wall', 'inner', 'floor', 'wet', 'roof', 'stair', 'path'];
+    static MATERIAL_ROLES = ['wall', 'inner', 'floor', 'wet', 'roof', 'stair', 'path', 'glass'];
     static DIRECTIONS = ['south', 'north', 'east', 'west'];
     static FACINGS = [[2, 'Down'], [4, 'Left'], [6, 'Right'], [8, 'Up']];
     static SIZE_MIN = 4;
     static SIZE_MAX = 200;
-    static TOOLS = ['select', 'room', 'door', 'window', 'stairs', 'person', 'shape'];
+    static TOOLS = ['select', 'room', 'door', 'window', 'stairs', 'person', 'shape', 'effect'];
+    /** What an effect can be, the way the 3D Models page attaches them: a screen, a light, an animation. */
+    static EFFECT_KINDS = ['screen', 'light', 'animation'];
+    static EFFECT_DEFAULTS = { screen: { width: 4, height: 2.25, z: 1, media: '' }, light: { color: '#9fd8ff', radius: 6, intensity: 1.2, z: 4 }, animation: { animation: 0, z: 0 } };
     static SHAPE_KINDS = ['box', 'wedge', 'pyramid', 'prism', 'hull', 'spike', 'cylinder', 'capsule', 'tube', 'cone', 'dome', 'sphere', 'dish', 'fin', 'arch', 'tunnel', 'ring'];
     /** The settings a kind carries beyond its size, with what it wears until told otherwise. */
-    static SHAPE_PARAMS = { hull: { sides: 8, taper: 0.8 }, spike: { sides: 6, taper: 0 }, capsule: { sides: 24 }, dish: { sides: 32 }, fin: { taper: 0.4 } };
+    static SHAPE_PARAMS = { hull: { sides: 8, taper: 0.8 }, spike: { sides: 6, taper: 0 }, capsule: { sides: 24 }, dish: { sides: 32 }, fin: { taper: 0.4 }, cylinder: { sweep: 360 }, tube: { sweep: 360, thick: 0.3 }, ring: { sweep: 360, thick: 0.2 } };
     /** What a shape is first placed at, in tiles: wide enough to see, tall enough to matter. */
     static SHAPE_DEFAULTS = { box: [4, 3, 4], wedge: [4, 2, 4], pyramid: [4, 4, 4], prism: [4, 3, 6], cylinder: [4, 6, 4], tube: [6, 5, 6], cone: [4, 4, 4], dome: [4, 2, 4], sphere: [4, 4, 4], arch: [3, 4, 1], tunnel: [4, 4, 8], ring: [6, 1, 6], hull: [4, 6, 4], spike: [1, 4, 1], capsule: [2, 6, 2], dish: [4, 1, 4], fin: [3, 3, 0.25], tower: [4, 6, 4] };
     /** The three things the 3D handles do to a selected shape. */
@@ -53,6 +56,8 @@ class DatabaseStructureEditor {
         this._previewTimer = null;
         this._hover = null;
         this._shape = { kind: 'cylinder', size: [4, 6, 4] };
+        this._effect = { kind: 'screen' };
+        this._peek = null;
         this._gizmoMode = 'move';
         this._sizeLock = false;
         this._redraw = 0;
@@ -116,6 +121,11 @@ class DatabaseStructureEditor {
             lock: `<path d="M4 7h8v7H4z M5.5 7V5a2.5 2.5 0 0 1 5 0v2" ${stroke}/>`,
             unlock: `<path d="M4 7h8v7H4z M5.5 7V5a2.5 2.5 0 0 1 5 0" ${stroke}/>`,
             duplicate: `<path d="M5 5h8v8H5z M3 11V3h8" ${stroke}/>`,
+            effect: `<path d="M8 2l1.6 4.4L14 8l-4.4 1.6L8 14l-1.6-4.4L2 8l4.4-1.6z" ${stroke}/>`,
+            peek: `<path d="M2 8s2.5-4 6-4 6 4 6 4-2.5 4-6 4-6-4-6-4z" ${stroke}/><circle cx="8" cy="8" r="1.8" fill="currentColor"/>`,
+            screen: `<path d="M2 3.5h12v8H2z M6 13.5h4 M7 6.5l3 2-3 2z" ${stroke}/>`,
+            light: `<path d="M8 2v2M8 12v2M2 8h2M12 8h2M3.8 3.8l1.4 1.4M10.8 10.8l1.4 1.4M3.8 12.2l1.4-1.4M10.8 5.2l1.4-1.4" ${stroke}/><circle cx="8" cy="8" r="2.5" fill="currentColor"/>`,
+            animation: `<path d="M8 2l1.6 4.4L14 8l-4.4 1.6L8 14l-1.6-4.4L2 8l4.4-1.6z" fill="currentColor"/>`,
             north: `<path d="M8 13V3M4 7l4-4 4 4" ${stroke}/>`,
             south: `<path d="M8 3v10M4 9l4 4 4-4" ${stroke}/>`,
             west: `<path d="M13 8H3M7 4L3 8l4 4" ${stroke}/>`,
@@ -207,9 +217,19 @@ class DatabaseStructureEditor {
             floor: int(stair?.floor, 0, 0, 20), from: [int(stair?.from?.[0], 0, 0, this.SIZE_MAX), int(stair?.from?.[1], 0, 0, this.SIZE_MAX)],
             dir: this.DIRECTIONS.includes(stair?.dir) ? stair.dir : 'north', width: int(stair?.width, 1, 1, 8)
         }));
-        plan.roof = { pitch: int(plan.roof?.pitch, 2, 0, 20) };
+        // A roof of so many rows, or none at all (`pitch: null`): a bridge, a hangar, a flat-topped tower.
+        plan.roof = { pitch: plan.roof && plan.roof.pitch === null ? null : int(plan.roof?.pitch, 2, 0, 20) };
         plan.windows = { every: int(plan.windows?.every, 6, 0, 60), width: int(plan.windows?.width, 2, 1, 8) };
         plan.spots = Object.fromEntries(Object.entries(plan.spots || {}).map(([name, cell]) => [name, [int(cell?.[0], 0, 0, this.SIZE_MAX), int(cell?.[1], 0, 0, this.SIZE_MAX)]]));
+        plan.effects = (Array.isArray(plan.effects) ? plan.effects : []).filter(fx => fx && this.EFFECT_KINDS.includes(fx.type)).map(fx => {
+            const own = this.EFFECT_DEFAULTS[fx.type];
+            const num = (v, fallback, lo, hi) => { const k = Number(v); return Number.isFinite(k) ? Math.max(lo, Math.min(hi, Math.round(k * 100) / 100)) : fallback; };
+            const out = { name: String(fx.name || fx.type), type: fx.type, at: [int(fx.at?.[0], 0, 0, this.SIZE_MAX), int(fx.at?.[1], 0, 0, this.SIZE_MAX)], z: num(fx.z, own.z, 0, 120) };
+            if (fx.type === 'screen') Object.assign(out, { facing: this.DIRECTIONS.includes(fx.facing) ? fx.facing : 'south', width: num(fx.width, own.width, 0.25, 60), height: num(fx.height, own.height, 0.25, 60), media: String(fx.media || ''), audio: fx.audio === true, scanlines: num(fx.scanlines, 0, 0, 1) });
+            else if (fx.type === 'light') Object.assign(out, { color: /^#[0-9a-f]{6}$/i.test(String(fx.color)) ? String(fx.color).toLowerCase() : own.color, radius: num(fx.radius, own.radius, 0.5, 60), intensity: num(fx.intensity, own.intensity, 0, 4) });
+            else Object.assign(out, { animation: Math.max(0, Math.floor(Number(fx.animation) || 0)) });
+            return out;
+        });
         plan.events = (Array.isArray(plan.events) ? plan.events : []).map(event => ({
             spot: String(event?.spot || ''), name: String(event?.name || ''), template: String(event?.template || ''), direction: [2, 4, 6, 8].includes(Number(event?.direction)) ? Number(event.direction) : 2
         }));
@@ -230,6 +250,8 @@ class DatabaseStructureEditor {
             const own = this.SHAPE_PARAMS[shape.kind] || {};
             if ('sides' in own && Number.isFinite(Number(shape.sides))) out.sides = Math.max(3, Math.min(32, Math.round(Number(shape.sides))));
             if ('taper' in own && Number.isFinite(Number(shape.taper))) out.taper = Math.max(0, Math.min(1, Math.round(Number(shape.taper) * 100) / 100));
+            if ('sweep' in own && Number.isFinite(Number(shape.sweep))) out.sweep = Math.max(1, Math.min(360, Math.round(Number(shape.sweep))));
+            if ('thick' in own && Number.isFinite(Number(shape.thick))) out.thick = Math.max(0.02, Math.min(1, Math.round(Number(shape.thick) * 100) / 100));
             return out;
         });
         plan.paths = (Array.isArray(plan.paths) ? plan.paths : []).filter(Array.isArray).map(strip => {
@@ -261,6 +283,15 @@ class DatabaseStructureEditor {
         if (plan.floors.length || had.has('windows')) fields.windows = { every: plan.windows.every, width: plan.windows.width };
         if (Object.keys(plan.spots).length || had.has('spots')) fields.spots = Object.fromEntries(Object.entries(plan.spots).map(([name, cell]) => [name, cell.slice()]));
         if (plan.events.length || had.has('events')) fields.events = plan.events.map(event => ({ ...event }));
+        if (plan.effects.length || had.has('effects')) fields.effects = plan.effects.map(fx => {
+            const own = DatabaseStructureEditor.EFFECT_DEFAULTS[fx.type];
+            const out = { name: fx.name, type: fx.type, at: fx.at.slice() };
+            if (fx.z !== own.z) out.z = fx.z;
+            if (fx.type === 'screen') { out.facing = fx.facing; if (fx.width !== own.width) out.width = fx.width; if (fx.height !== own.height) out.height = fx.height; if (fx.media) out.media = fx.media; if (fx.audio) out.audio = true; if (fx.scanlines) out.scanlines = fx.scanlines; }
+            else if (fx.type === 'light') { if (fx.color !== own.color) out.color = fx.color; if (fx.radius !== own.radius) out.radius = fx.radius; if (fx.intensity !== own.intensity) out.intensity = fx.intensity; }
+            else out.animation = fx.animation;
+            return out;
+        });
         if (plan.parts.length || had.has('parts')) fields.parts = plan.parts.map(part => {
             const p = { name: part.name, plan: part.plan, at: part.at.slice(), rot: part.rot };
             if (part.scale !== 1) p.scale = part.scale;
@@ -280,6 +311,8 @@ class DatabaseStructureEditor {
             const own = DatabaseStructureEditor.SHAPE_PARAMS[shape.kind] || {};
             if ('sides' in own && shape.sides !== undefined && shape.sides !== own.sides) out.sides = shape.sides;
             if ('taper' in own && shape.taper !== undefined && shape.taper !== own.taper) out.taper = shape.taper;
+            if ('sweep' in own && shape.sweep !== undefined && shape.sweep !== own.sweep) out.sweep = shape.sweep;
+            if ('thick' in own && shape.thick !== undefined && shape.thick !== own.thick) out.thick = shape.thick;
             if (shape.material) out.material = shape.material;
             return out;
         });
@@ -405,6 +438,7 @@ class DatabaseStructureEditor {
                     </div>
                     <div style="flex:1;min-width:0;position:relative;border-left:1px solid var(--color-border);background:var(--color-bg-deep);">
                         <canvas class="rr-structures-3d" style="position:absolute;inset:0;width:100%;height:100%;cursor:grab;"></canvas>
+                        <button type="button" class="rr-btn-secondary rr-structures-peek" title="${rrEscapeHtml(this._t('Look inside: the ceiling and roof left off'))}" aria-pressed="false" style="position:absolute;top:8px;right:8px;width:28px;height:28px;padding:0;display:flex;align-items:center;justify-content:center;">${DatabaseStructureEditor.icon('peek')}</button>
                         <div class="rr-structures-report" style="position:absolute;left:8px;bottom:8px;right:8px;padding:6px 8px;font-size:11px;line-height:1.4;color:var(--color-text-muted);background:color-mix(in srgb, var(--color-bg-panel) 85%, transparent);border-radius:3px;pointer-events:none;"></div>
                     </div>
                 </div>
@@ -412,6 +446,12 @@ class DatabaseStructureEditor {
                 <div class="rr-structures-more" style="border-top:1px solid var(--color-border);max-height:38%;overflow-y:auto;flex:0 0 auto;"></div>
             </div>`;
         this._bindOrbit(detailEl.querySelector('.rr-structures-3d'));
+        detailEl.querySelector('.rr-structures-peek')?.addEventListener('click', () => {
+            const plan = this.current?.plan;
+            const now = this._peek === null ? (plan ? plan.roof.pitch === null : true) : this._peek;
+            this._peek = !now;
+            this.draw3D(this._report);
+        });
         this._bindPlanGestures(detailEl.querySelector('.rr-structures-plan'));
         this.render();
     }
@@ -588,7 +628,7 @@ class DatabaseStructureEditor {
         const strip = this._detail?.querySelector('.rr-structures-tools');
         if (!strip || !this.current) return;
         const tt = text => this._t(text);
-        const labels = { select: tt('Select'), room: tt('Room'), door: tt('Door'), window: tt('Window'), stairs: tt('Stairs'), person: tt('Person'), shape: tt('Shape') };
+        const labels = { select: tt('Select'), room: tt('Room'), door: tt('Door'), window: tt('Window'), stairs: tt('Stairs'), person: tt('Person'), shape: tt('Shape'), effect: tt('Effect') };
         const button = (name, title, extra = '') => `<button type="button" class="rr-btn-secondary rr-structures-tool" data-tool="${name}" title="${rrEscapeHtml(title)}" aria-label="${rrEscapeHtml(title)}" style="width:30px;height:30px;padding:0;display:flex;align-items:center;justify-content:center;${extra}">${DatabaseStructureEditor.icon(name)}</button>`;
         strip.innerHTML = DatabaseStructureEditor.TOOLS.map(name => button(name, labels[name], name === this.tool ? 'border-color:var(--color-accent);background:var(--color-bg-hover);color:var(--color-text-strong);' : ''))
             .join('')
@@ -708,7 +748,9 @@ class DatabaseStructureEditor {
                 + `<button type="button" class="rr-btn-secondary rr-structures-shape-lock" title="${rrEscapeHtml(tt('Keep the proportions'))}" aria-pressed="${this._sizeLock}" style="width:26px;height:26px;padding:0;display:flex;align-items:center;justify-content:center;${this._sizeLock ? 'border-color:var(--color-accent);' : ''}">${DatabaseStructureEditor.icon(this._sizeLock ? 'lock' : 'unlock')}</button>`;
             const own = DatabaseStructureEditor.SHAPE_PARAMS[shape.kind] || {};
             if (mode === 'size' && 'sides' in own) numbers += field('rr-structures-shape-param', tt('Sides'), shape.sides ?? own.sides, 3, 32, 1, 'sides');
-            if (mode === 'size' && 'taper' in own) numbers += field('rr-structures-shape-param', tt('Taper'), shape.taper ?? own.taper, 0, 1, 0.05, 'taper');
+            if (mode === 'size' && 'taper' in own) numbers += field('rr-structures-shape-param', tt('Top') + ' %', Math.round((shape.taper ?? own.taper) * 100), 0, 100, 5, 'taper');
+            if (mode === 'size' && 'sweep' in own) numbers += field('rr-structures-shape-param', tt('Around') + ' °', shape.sweep ?? own.sweep, 15, 360, 15, 'sweep');
+            if (mode === 'size' && 'thick' in own) numbers += field('rr-structures-shape-param', tt('Wall') + ' %', Math.round((shape.thick ?? own.thick) * 100), 2, 100, 2, 'thick');
             html = `${kindLabel(tt('Shape'))}
                 ${this._shapePickHtml('rr-structures-shape-pick', shape.kind)}
                 ${modes}
@@ -723,6 +765,30 @@ class DatabaseStructureEditor {
                 ${this._field(tt('Who'), this._selectHtml('rr-structures-person', [['', tt('Nobody')], ['blank', tt('Blank event')]].concat(templates.map(name => [name, name])), event ? (event.template || 'blank') : '', 'style="width:120px;"'))}
                 ${event ? this._field(tt('Name'), `<input type="text" class="database-field-value rr-structures-person-name" value="${rrEscapeHtml(event.name)}" style="width:110px;">`) : ''}
                 ${event ? this._field(tt('Facing'), facingArrows('rr-structures-person-facing', event.direction)) : ''}`;
+        } else if (this.tool === 'effect' && floor) {
+            const kinds = `<span style="display:inline-flex;gap:2px;">${DatabaseStructureEditor.EFFECT_KINDS.map(kind => `<button type="button" class="rr-btn-secondary rr-structures-next-effect" data-kind="${kind}" title="${rrEscapeHtml(this.effectName(kind))}" aria-pressed="${kind === this._effect.kind}" style="width:26px;height:26px;padding:0;display:flex;align-items:center;justify-content:center;${kind === this._effect.kind ? 'border-color:var(--color-accent);' : ''}">${DatabaseStructureEditor.icon(kind)}</button>`).join('')}</span>`;
+            html = `${kindLabel(tt('Effect'))} ${kinds} <span style="color:var(--color-text-muted);">${rrEscapeHtml(this.effectName(this._effect.kind))}: ${tt(this._effect.kind === 'screen' ? 'click a wall; the screen faces the room.' : this._effect.kind === 'light' ? 'click a cell; the light hangs above it.' : 'click a cell; the animation plays there over and over.')}</span>`;
+        } else if (sel && sel.kind === 'effect' && plan.effects[sel.key]) {
+            const fx = plan.effects[sel.key];
+            const field = (cls, label, value, min, max, step, key) => this._field(label, `<input type="number" class="database-field-value ${cls}" data-key="${key}" value="${value}" min="${min}" max="${max}" step="${step}" style="width:64px;">`);
+            let fields = '';
+            if (fx.type === 'screen') {
+                const media = this.mediaChoices();
+                fields = this._field(tt('Media'), this._selectHtml('rr-structures-effect-media', [['', tt('None')]].concat(media.map(name => [name, name])), fx.media, 'style="width:200px;"'))
+                    + field('rr-structures-effect-num', tt('Width'), fx.width, 0.25, 60, 0.25, 'width') + field('rr-structures-effect-num', tt('Height'), fx.height, 0.25, 60, 0.25, 'height') + field('rr-structures-effect-num', tt('Up'), fx.z, 0, 120, 0.25, 'z')
+                    + this._field(tt('Facing'), arrows('rr-structures-effect-facing', fx.facing))
+                    + this._field(tt('Sound'), `<input type="checkbox" class="system-checkbox rr-structures-effect-audio" ${fx.audio ? 'checked' : ''}>`);
+            } else if (fx.type === 'light') {
+                fields = this._field(tt('Colour'), `<input type="color" class="rr-structures-effect-color" value="${fx.color}" style="width:36px;height:26px;padding:0;border:1px solid var(--color-border-input);background:none;">`)
+                    + field('rr-structures-effect-num', tt('Radius'), fx.radius, 0.5, 60, 0.5, 'radius') + field('rr-structures-effect-num', tt('Strength'), fx.intensity, 0, 4, 0.1, 'intensity') + field('rr-structures-effect-num', tt('Up'), fx.z, 0, 120, 0.25, 'z');
+            } else {
+                const animations = this.animationChoices();
+                fields = this._field(tt('Animation'), this._selectHtml('rr-structures-effect-animation', [[0, tt('None')]].concat(animations.map(a => [a.id, a.id + ': ' + a.name])), fx.animation, 'style="width:200px;"'))
+                    + field('rr-structures-effect-num', tt('Up'), fx.z, 0, 120, 0.25, 'z');
+            }
+            html = `${kindLabel(this.effectName(fx.type))}
+                ${this._field(tt('Name'), `<input type="text" class="database-field-value rr-structures-effect-name" value="${rrEscapeHtml(fx.name)}" style="width:100px;">`)}
+                ${fields}`;
         } else if (this.tool === 'shape' && floor) {
             const pending = this._shape;
             const num = (i, min, max, step) => `<input type="number" class="database-field-value rr-structures-next-size" data-i="${i}" value="${pending.size[i]}" min="${min}" max="${max}" step="${step}" style="width:52px;">`;
@@ -738,6 +804,7 @@ class DatabaseStructureEditor {
                 window: tt('Click an outer wall for a window. Drag a window along the wall.'),
                 stairs: tt('Click a cell inside a room to start stairs there. Each cell climbs one tile.'),
                 shape: tt('Pick a shape and click the plan to put it there. Select it to move, turn and size it with the handles in the 3D view.'),
+                effect: tt('Click a wall for a screen, or any cell for a light or an animation. They go on the map with the building.'),
                 person: tt('Click a cell to put a person there. Pick who from the templates under 3d/Structures/events.')
             };
             html = `<span style="color:var(--color-text-muted);">${floor ? hints[this.tool] : tt('No floors: a plan of parts, or an empty plan. Add a floor to draw rooms.')}</span>`;
@@ -782,6 +849,18 @@ class DatabaseStructureEditor {
         }));
         for (const input of box.querySelectorAll('.rr-structures-next-size')) input.addEventListener('change', () => { const v = Number(input.value); this._shape.size[Number(input.dataset.i)] = Number.isFinite(v) && v > 0 ? Math.min(60, v) : 1; });
         this._syncGizmo();
+        for (const button of box.querySelectorAll('.rr-structures-next-effect')) button.addEventListener('click', () => { this._effect.kind = button.dataset.kind; this.renderInspector(); });
+        const fx = sel && sel.kind === 'effect' ? plan.effects[sel.key] : null;
+        if (fx) {
+            const changed = () => { this.markDirty(); this.renderInspector(); };
+            box.querySelector('.rr-structures-effect-name')?.addEventListener('change', event => { const name = event.target.value.trim(); if (!name) { event.target.value = fx.name; return; } this.pushHistory(); fx.name = name; changed(); });
+            box.querySelector('.rr-structures-effect-media')?.addEventListener('change', event => { this.pushHistory(); fx.media = event.target.value; changed(); });
+            box.querySelector('.rr-structures-effect-animation')?.addEventListener('change', event => { this.pushHistory(); fx.animation = Math.max(0, Math.floor(Number(event.target.value)) || 0); changed(); });
+            box.querySelector('.rr-structures-effect-audio')?.addEventListener('change', event => { this.pushHistory(); fx.audio = !!event.target.checked; changed(); });
+            box.querySelector('.rr-structures-effect-color')?.addEventListener('change', event => { this.pushHistory(); fx.color = String(event.target.value).toLowerCase(); changed(); });
+            for (const button of box.querySelectorAll('.rr-structures-effect-facing')) button.addEventListener('click', () => { this.pushHistory(); fx.facing = button.dataset.dir; changed(); });
+            for (const input of box.querySelectorAll('.rr-structures-effect-num')) input.addEventListener('change', () => { const v = Number(input.value); if (!Number.isFinite(v)) { this.renderInspector(); return; } this.pushHistory(); fx[input.dataset.key] = Math.round(v * 100) / 100; changed(); });
+        }
         box.querySelector('.rr-structures-shape-pick')?.addEventListener('click', event => this.openShapePicker(event.currentTarget, plan.shapes[sel.key]?.kind, DatabaseStructureEditor.SHAPE_KINDS, kind => { this.pushHistory(); plan.shapes[sel.key].kind = kind; this.markDirty(); this.renderInspector(); }));
         for (const button of box.querySelectorAll('.rr-structures-shape-mode')) button.addEventListener('click', () => { this._gizmoMode = button.dataset.mode; this.renderInspector(); });
         box.querySelector('.rr-structures-shape-lock')?.addEventListener('click', () => { this._sizeLock = !this._sizeLock; this.renderInspector(); });
@@ -806,7 +885,7 @@ class DatabaseStructureEditor {
             const shape = plan.shapes[sel.key], key = input.dataset.i, v = Number(input.value);
             if (!shape || !Number.isFinite(v)) { this.renderInspector(); return; }
             this.pushHistory();
-            if (key === 'sides') shape.sides = Math.max(3, Math.min(32, Math.round(v))); else shape.taper = Math.max(0, Math.min(1, Math.round(v * 100) / 100));
+            if (key === 'sides') shape.sides = Math.max(3, Math.min(32, Math.round(v))); else if (key === 'sweep') shape.sweep = Math.max(15, Math.min(360, Math.round(v))); else if (key === 'thick') shape.thick = Math.max(0.02, Math.min(1, Math.round(v) / 100)); else shape.taper = Math.max(0, Math.min(1, Math.round(v) / 100));
             this.markDirty(); this.renderInspector();
         });
         for (const input of box.querySelectorAll('.rr-structures-shape-turn')) input.addEventListener('change', () => {
@@ -858,6 +937,7 @@ class DatabaseStructureEditor {
         else if (sel.kind === 'window' && floor) floor.windows.splice(sel.key, 1);
         else if (sel.kind === 'stair') plan.stairs.splice(sel.key, 1);
         else if (sel.kind === 'shape') plan.shapes.splice(sel.key, 1);
+        else if (sel.kind === 'effect') plan.effects.splice(sel.key, 1);
         else if (sel.kind === 'spot') { delete plan.spots[sel.key]; plan.events = plan.events.filter(item => item.spot !== sel.key); }
         this.selection = null;
         this.markDirty();
@@ -872,7 +952,7 @@ class DatabaseStructureEditor {
         const tt = text => this._t(text);
         const plan = this.current.plan;
         const materialNames = this.materials();
-        const roleLabels = { wall: tt('Wall'), inner: tt('Inner wall'), floor: tt('Floor'), wet: tt('Wet floor'), roof: tt('Roof'), stair: tt('Stair'), path: tt('Path') };
+        const roleLabels = { glass: tt('Glass'), wall: tt('Wall'), inner: tt('Inner wall'), floor: tt('Floor'), wet: tt('Wet floor'), roof: tt('Roof'), stair: tt('Stair'), path: tt('Path') };
         const styleNames = Object.keys(DatabaseStructureEditor.STYLES);
         const otherPlans = this.records().filter(entry => entry !== this.current.entry).map(entry => [entry.file || entry.name, entry.name]);
         const fold = (key, title, count, body) => {
@@ -906,7 +986,8 @@ class DatabaseStructureEditor {
         more.innerHTML = fold('materials', tt('Materials'), null, row(...DatabaseStructureEditor.MATERIAL_ROLES.map(materialField)))
             + fold('building', tt('Building'), null, row(
                 this._field(tt('Storey (tiles)'), this._numberHtml('rr-structures-field', plan.storey, 'data-path="storey" min="3" max="12"')),
-                this._field(tt('Roof pitch (rows)'), this._numberHtml('rr-structures-field', plan.roof.pitch, 'data-path="roof.pitch" min="0" max="20"')),
+                this._field(tt('Roof'), `<input type="checkbox" class="system-checkbox rr-structures-roof-on" ${plan.roof.pitch !== null ? 'checked' : ''}>`),
+                plan.roof.pitch !== null ? this._field(tt('Roof pitch (rows)'), this._numberHtml('rr-structures-field', plan.roof.pitch, 'data-path="roof.pitch" min="0" max="20"')) : '',
                 this._field(tt('A window every (cells)'), this._numberHtml('rr-structures-field', plan.windows.every, 'data-path="windows.every" min="0" max="60"')),
                 this._field(tt('Window width'), this._numberHtml('rr-structures-field', plan.windows.width, 'data-path="windows.width" min="1" max="8"'))))
             + fold('parts', tt('Parts'), plan.parts.length + plan.paths.length, `
@@ -926,6 +1007,7 @@ class DatabaseStructureEditor {
         for (const button of more.querySelectorAll('.rr-structures-material')) {
             button.addEventListener('click', () => this.openMaterialPicker(button, name => { this.pushHistory(); plan.materials[button.dataset.role] = name; this.markDirty(); this.renderBar(); this.renderMore(); }));
         }
+        more.querySelector('.rr-structures-roof-on')?.addEventListener('change', event => { this.pushHistory(); plan.roof.pitch = event.target.checked ? 2 : null; this.markDirty(); this.renderMore(); this.renderFloorTabs?.(); });
         for (const input of more.querySelectorAll('.rr-structures-field')) {
             input.addEventListener('change', () => {
                 this.pushHistory();
@@ -1031,6 +1113,8 @@ class DatabaseStructureEditor {
         const plan = this.current?.plan, floor = this.currentFloor();
         if (!plan || !floor) return null;
         const floorIndex = this.currentFloorIndex();
+        const effect = plan.effects.findIndex(fx => fx.at[0] === x && fx.at[1] === y);
+        if (effect >= 0) return { kind: 'effect', key: effect };
         const spot = Object.entries(plan.spots).find(([, at]) => at[0] === x && at[1] === y);
         if (spot) return { kind: 'spot', key: spot[0] };
         const stair = plan.stairs.findIndex(s => s.floor === floorIndex && s.from[0] === x && s.from[1] === y);
@@ -1092,7 +1176,9 @@ class DatabaseStructureEditor {
         const hit = this.hitAt(cell.x, cell.y);
         // A door, window, stairs or person is picked up by any tool; a room only
         // by Select and Room, since the other tools place things inside rooms.
-        if (hit && (hit.kind !== 'room' || this.tool === 'select' || this.tool === 'room') && !(hit.kind === 'shape' && this.tool === 'shape')) {
+        // A door, window, stairs, person or effect is picked up by any tool; a room only by Select and
+        // Room, and a shape only by Select, since the other tools place things on and beside shapes.
+        if (hit && (hit.kind !== 'room' || this.tool === 'select' || this.tool === 'room') && !(hit.kind === 'shape' && this.tool !== 'select')) {
             this.selection = hit;
             const g = { mode: 'move', target: hit, start: cell, moved: false, snapshot: JSON.stringify(this.current.plan) };
             if (hit.kind === 'room') {
@@ -1145,6 +1231,8 @@ class DatabaseStructureEditor {
                 plan.stairs[t.key].from = [cell.x, cell.y];
             } else if (t.kind === 'spot') {
                 plan.spots[t.key] = [cell.x, cell.y];
+            } else if (t.kind === 'effect') {
+                plan.effects[t.key].at = [cell.x, cell.y];
             } else if (t.kind === 'shape') {
                 plan.shapes[t.key].at = [cell.x, cell.y];
             }
@@ -1217,6 +1305,23 @@ class DatabaseStructureEditor {
                 this.selection = { kind: 'shape', key: plan.shapes.length - 1 };
             }
             this.markDirty();
+        } else if (this.tool === 'effect') {
+            const kind = this._effect.kind, own = DatabaseStructureEditor.EFFECT_DEFAULTS[kind];
+            // A screen goes on a wall and faces the room beside it; a light or an animation goes anywhere.
+            let facing = 'south';
+            if (kind === 'screen') {
+                if (room) { this.selection = null; return; }
+                const beside = [['south', 0, 1], ['north', 0, -1], ['east', 1, 0], ['west', -1, 0]].find(([, dx, dy]) => this.roomAtCell(cell.x + dx, cell.y + dy, floor));
+                if (!beside) { this.selection = null; return; }
+                facing = beside[0];
+            }
+            this.pushHistory();
+            const name = DatabaseStructureEditor.freshName(plan.effects.map(f => f.name), this.effectName(kind).toLowerCase());
+            const fx = Object.assign({ name, type: kind, at: [cell.x, cell.y] }, JSON.parse(JSON.stringify(own)));
+            if (kind === 'screen') Object.assign(fx, { facing, audio: false, scanlines: 0 });
+            plan.effects.push(fx);
+            this.selection = { kind: 'effect', key: plan.effects.length - 1 };
+            this.markDirty();
         } else if (this.tool === 'person') {
             this.pushHistory();
             const name = DatabaseStructureEditor.freshName(Object.keys(plan.spots), this._t('person'));
@@ -1281,7 +1386,7 @@ class DatabaseStructureEditor {
             if (top || bottom) return 'ns-resize';
             return 'move';
         }
-        if (hit && hit.kind !== 'room' && !(hit.kind === 'shape' && this.tool === 'shape')) return 'move';
+        if (hit && hit.kind !== 'room' && !(hit.kind === 'shape' && this.tool !== 'select')) return 'move';
         if (this.tool === 'select') return 'default';
         return this.tool === 'room' ? 'crosshair' : 'copy';
     }
@@ -1438,6 +1543,27 @@ class DatabaseStructureEditor {
             }
             ctx.restore();
         }
+        // Effects: a screen is a bar on the side of its wall that faces the room, a light a dot with rays, an animation a star.
+        for (const fx of plan.effects) {
+            const cx = ox + (fx.at[0] + 0.5) * cell, cy = oy + (fx.at[1] + 0.5) * cell;
+            ctx.save();
+            if (fx.type === 'screen') {
+                const [dx, dy] = { north: [0, -1], south: [0, 1], east: [1, 0], west: [-1, 0] }[fx.facing] || [0, 1];
+                ctx.fillStyle = '#4fd1ff';
+                const along = dx ? 0.18 : 0.8, across = dx ? 0.8 : 0.18;
+                ctx.fillRect(cx + dx * cell * 0.3 - along * cell / 2, cy + dy * cell * 0.3 - across * cell / 2, along * cell, across * cell);
+                ctx.fillStyle = '#10222c'; ctx.beginPath(); ctx.moveTo(cx - cell * 0.1, cy - cell * 0.12); ctx.lineTo(cx + cell * 0.14, cy); ctx.lineTo(cx - cell * 0.1, cy + cell * 0.12); ctx.closePath(); ctx.fill();
+            } else if (fx.type === 'light') {
+                ctx.strokeStyle = fx.color; ctx.fillStyle = fx.color; ctx.lineWidth = Math.max(1, cell * 0.08);
+                ctx.beginPath(); ctx.arc(cx, cy, cell * 0.16, 0, Math.PI * 2); ctx.fill();
+                for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2; ctx.beginPath(); ctx.moveTo(cx + Math.cos(a) * cell * 0.24, cy + Math.sin(a) * cell * 0.24); ctx.lineTo(cx + Math.cos(a) * cell * 0.4, cy + Math.sin(a) * cell * 0.4); ctx.stroke(); }
+            } else {
+                ctx.fillStyle = '#ff7ad9'; ctx.beginPath();
+                for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i / 10 * Math.PI * 2, r = i % 2 ? cell * 0.16 : cell * 0.4; ctx.lineTo(cx + Math.cos(a) * r, cy + Math.sin(a) * r); }
+                ctx.closePath(); ctx.fill();
+            }
+            ctx.restore();
+        }
         // Stairs point the way they rise; hand-placed windows show even before the build catches up.
         const arrow = { north: [0, -1], south: [0, 1], west: [-1, 0], east: [1, 0] };
         for (const s of plan.stairs) {
@@ -1458,6 +1584,7 @@ class DatabaseStructureEditor {
             if (hit.kind === 'window' && floorNow.windows[hit.key]) { const [x, y] = floorNow.windows[hit.key]; return [[x, y, x, y]]; }
             if (hit.kind === 'stair' && plan.stairs[hit.key]) { const f = plan.stairs[hit.key].from; return [[f[0], f[1], f[0], f[1]]]; }
             if (hit.kind === 'spot' && plan.spots[hit.key]) { const a = plan.spots[hit.key]; return [[a[0], a[1], a[0], a[1]]]; }
+            if (hit.kind === 'effect' && plan.effects[hit.key]) { const a = plan.effects[hit.key].at; return [[a[0], a[1], a[0], a[1]]]; }
             if (hit.kind === 'shape' && plan.shapes[hit.key]) { const b = DatabaseStructureEditor.shapeBounds(plan.shapes[hit.key]); return [[Math.floor(b.x0 + 1e-6), Math.floor(b.y0 + 1e-6), Math.ceil(b.x1 - 1e-6) - 1, Math.ceil(b.y1 - 1e-6) - 1]]; }
             return null;
         };
@@ -1526,9 +1653,16 @@ class DatabaseStructureEditor {
         const plan = this.current?.plan;
         if (!plan) return;
         const [W, H] = plan.size;
-        const mapData = { width: W, height: H, reactor3d: { version: 1, elevation: new Array(W * H).fill(0), pieces: report.built } };
+        // Looking inside: the top floor's ceiling and the roof are left off. On unless the plan
+        // has a roof to look at, until the button says otherwise.
+        const peek = this._peek === null ? plan.roof.pitch === null : this._peek;
+        const lid = plan.storey * Math.max(1, plan.floors.length);
+        const shown = peek ? report.built.filter(piece => !(piece.z >= lid - 1e-6 && !DatabaseStructureEditor.SHAPE_KINDS.includes(piece.kind))) : report.built;
+        const mapData = { width: W, height: H, reactor3d: { version: 1, elevation: new Array(W * H).fill(0), pieces: shown } };
         const byMaterial = new Map();
-        for (const piece of report.built) { const key = piece.material || ''; if (!byMaterial.has(key)) byMaterial.set(key, []); byMaterial.get(key).push(piece); }
+        const peekButton = this._detail?.querySelector('.rr-structures-peek');
+        if (peekButton) { peekButton.setAttribute('aria-pressed', String(peek)); peekButton.style.borderColor = peek ? 'var(--color-accent)' : ''; }
+        for (const piece of shown) { const key = piece.material || ''; if (!byMaterial.has(key)) byMaterial.set(key, []); byMaterial.get(key).push(piece); }
         for (const [name, pieces] of byMaterial) {
             const geometry = Reactor3D.pieceGeometry(pieces, mapData);
             const mesh = new THREE.Mesh(geometry, this._material3D(name));
@@ -1546,6 +1680,7 @@ class DatabaseStructureEditor {
         preview.centre = { x: W / 2, y: plan.storey * Math.max(1, plan.floors.length) / 2, z: H / 2 };
         this._layoutHandles(preview, plan);
         this._layoutProxies(preview, plan);
+        this._layoutEffects(preview, plan);
         this._setGhost(preview, null);
         this._syncGizmo(preview);
         if (!preview.distance || preview.autoDistance) { preview.distance = Math.max(W, H) * 1.3 + 6; preview.autoDistance = true; }
@@ -1571,10 +1706,10 @@ class DatabaseStructureEditor {
         }
         const [W, H] = plan.size, floors = Math.max(1, plan.floors.length), S = plan.storey;
         const roofZ = floors * S;
-        const pitch = Math.max(0, Math.min(Math.floor((H - 1) / 2), plan.roof.pitch));
+        const pitch = Math.max(0, Math.min(Math.floor((H - 1) / 2), plan.roof.pitch || 0));
         const radius = Math.max(0.35, Math.min(1.2, Math.max(W, H) * 0.03));
         const show = plan.floors.length > 0;
-        preview.handles.pitch.visible = show;
+        preview.handles.pitch.visible = show && plan.roof.pitch !== null;
         preview.handles.storey.visible = show;
         preview.handles.pitch.scale.setScalar(radius);
         preview.handles.storey.scale.setScalar(radius);
@@ -1643,7 +1778,7 @@ class DatabaseStructureEditor {
                 camera.updateProjectionMatrix();
                 preview.dirty = true;
             }
-            if (preview.dirty) {
+            if (preview.dirty || preview.live) {
                 const c = preview.centre, d = preview.distance || 20;
                 camera.position.set(c.x + Math.cos(preview.yaw) * Math.cos(preview.pitch) * d, c.y + Math.sin(preview.pitch) * d, c.z + Math.sin(preview.yaw) * Math.cos(preview.pitch) * d);
                 camera.lookAt(c.x, c.y, c.z);
@@ -1672,7 +1807,7 @@ class DatabaseStructureEditor {
             const handle = this.current && typeof THREE !== 'undefined' ? this._handleAt(canvas, event.clientX, event.clientY) : null;
             if (handle) {
                 const plan = this.current.plan;
-                drag = { handle, y: event.clientY, start: handle === 'pitch' ? plan.roof.pitch : plan.storey, snapshot: JSON.stringify(plan), changed: false };
+                drag = { handle, y: event.clientY, start: handle === 'pitch' ? (plan.roof.pitch || 0) : plan.storey, snapshot: JSON.stringify(plan), changed: false };
                 canvas.style.cursor = 'ns-resize';
                 this._showHandleLabel((handle === 'pitch' ? tt('Roof pitch') : tt('Storey')) + ': ' + drag.start, event.clientX, event.clientY);
             } else {
@@ -1778,6 +1913,7 @@ class DatabaseStructureEditor {
         for (const handle of Object.values(preview.handles || {})) { handle.geometry.dispose(); handle.material.dispose(); }
         this._disposeGizmo(preview);
         this._clearProxies(preview);
+        this._clearEffects(preview);
         preview.ground?.geometry.dispose();
         this._showHandleLabel(null);
         preview.renderer.dispose();
@@ -1829,6 +1965,8 @@ class DatabaseStructureEditor {
         const piece = { kind: shape.kind, x: shape.at[0], y: shape.at[1], z: shape.z, rot: 0, size: shape.size, angle: shape.angle, tilt: shape.tilt || 0, roll: shape.roll || 0, offset: shape.offset || [0, 0] };
         if (shape.sides !== undefined) piece.sides = shape.sides;
         if (shape.taper !== undefined) piece.taper = shape.taper;
+        if (shape.sweep !== undefined) piece.sweep = shape.sweep;
+        if (shape.thick !== undefined) piece.thick = shape.thick;
         return piece;
     }
 
@@ -1891,15 +2029,26 @@ class DatabaseStructureEditor {
         const rect = (u0, v0, u1, v1) => [[u0, v0], [u1, v0], [u1, v1], [u0, v1]];
         const own = this.SHAPE_PARAMS[kind] || {};
         const sides = 'sides' in own ? Math.max(3, Math.min(32, Math.round(Number(shape && shape.sides !== undefined ? shape.sides : own.sides)))) : 32;
+        const sweep = 'sweep' in own ? Math.max(1, Math.min(360, Number(shape && shape.sweep !== undefined ? shape.sweep : own.sweep))) : 360;
+        const thick = 'thick' in own ? Math.max(0.02, Math.min(1, Number(shape && shape.thick !== undefined ? shape.thick : own.thick))) : 0.3;
+        // An arc of the circle centred on +v, as a sector (solid) or an annular sector (hollow).
+        const arc = (ro, ri) => {
+            const a = sweep * Math.PI / 180, start = Math.PI / 2 - a / 2, n = 32;
+            const outer = Array.from({ length: n + 1 }, (_, i) => [Math.cos(start + i / n * a) * ro, Math.sin(start + i / n * a) * ro]);
+            if (!ri) return outer.concat([[0, 0]]);
+            const inner = Array.from({ length: n + 1 }, (_, i) => [Math.cos(start + (n - i) / n * a) * ri, Math.sin(start + (n - i) / n * a) * ri]);
+            return outer.concat(inner);
+        };
         switch (kind) {
-            case 'cylinder': case 'cone': case 'dome': case 'sphere': case 'capsule': case 'dish': return { solid: [circle(0.5, sides === 32 ? 32 : sides)] };
+            case 'cylinder': return sweep < 360 ? { solid: [arc(0.5, 0)] } : { solid: [circle(0.5)] };
+            case 'cone': case 'dome': case 'sphere': case 'capsule': case 'dish': return { solid: [circle(0.5, sides === 32 ? 32 : sides)] };
             case 'hull': case 'spike': {
                 const poly = circle(1, sides, Math.PI / sides);
                 const mx = Math.max(...poly.map(q => Math.abs(q[0]))), mz = Math.max(...poly.map(q => Math.abs(q[1])));
                 return { solid: [poly.map(([u, v]) => [u / mx * 0.5, v / mz * 0.5])] };
             }
-            case 'tube': return { solid: [circle(0.5), circle(0.35)], open: rect(-0.5, -0.5, 0.5, 0.5) };
-            case 'ring': return { solid: [circle(0.5), circle(0.3)], open: rect(-0.5, -0.5, 0.5, 0.5) };
+            case 'tube': { const ri = 0.5 * (1 - thick); return sweep < 360 ? { solid: [arc(0.5, ri)], open: rect(-0.5, -0.5, 0.5, 0.5) } : { solid: [circle(0.5), circle(ri)], open: rect(-0.5, -0.5, 0.5, 0.5) }; }
+            case 'ring': { const ri = 0.5 * (1 - 2 * thick); return sweep < 360 ? { solid: [arc(0.5, ri)], open: rect(-0.5, -0.5, 0.5, 0.5) } : { solid: [circle(0.5), circle(ri)], open: rect(-0.5, -0.5, 0.5, 0.5) }; }
             case 'arch': case 'tunnel': return { solid: [rect(-0.5, -0.5, -0.35, 0.5), rect(0.35, -0.5, 0.5, 0.5)], open: rect(-0.5, -0.5, 0.5, 0.5) };
             default: return { solid: [rect(-0.5, -0.5, 0.5, 0.5)] };
         }
@@ -2004,6 +2153,91 @@ class DatabaseStructureEditor {
             mesh.userData.shape = index;
             preview.proxies.add(mesh);
         });
+    }
+
+    /** Screens as planes showing their media, lights as coloured balls, animations as stars, on the preview. */
+    _layoutEffects(preview, plan) {
+        if (!preview.effects) { preview.effects = new THREE.Group(); preview.scene.add(preview.effects); }
+        this._clearEffects(preview);
+        const dirs = { north: [0, -1, 180], south: [0, 1, 0], east: [1, 0, 90], west: [-1, 0, 270] };
+        for (const fx of plan.effects) {
+            const [x, y] = fx.at;
+            let mesh;
+            if (fx.type === 'screen') {
+                const [dx, dy, yaw] = dirs[fx.facing] || dirs.south;
+                const material = new THREE.MeshBasicMaterial({ color: 0x0c1a2a, side: THREE.DoubleSide });
+                const url = this.mediaUrl(fx.media);
+                if (url && /\.(webm|mp4|ogv|m4v)$/i.test(fx.media)) {
+                    const video = document.createElement('video');
+                    video.src = url; video.muted = true; video.loop = true; video.playsInline = true; video.crossOrigin = 'anonymous';
+                    video.play().catch(() => {});
+                    material.map = new THREE.VideoTexture(video); material.color.set(0xffffff);
+                    if (THREE.SRGBColorSpace) material.map.colorSpace = THREE.SRGBColorSpace;
+                    preview.effects.userData.videos = (preview.effects.userData.videos || []).concat(video);
+                    preview.live = true;
+                } else if (url) {
+                    material.map = new THREE.TextureLoader().load(url, () => { preview.dirty = true; }); material.color.set(0xffffff);
+                    if (THREE.SRGBColorSpace) material.map.colorSpace = THREE.SRGBColorSpace;
+                }
+                mesh = new THREE.Mesh(new THREE.PlaneGeometry(fx.width, fx.height), material);
+                mesh.position.set(x + 0.5 + dx * 0.52, fx.z + fx.height / 2, y + 0.5 + dy * 0.52);
+                mesh.rotation.y = yaw * Math.PI / 180;
+            } else if (fx.type === 'light') {
+                mesh = new THREE.Mesh(new THREE.SphereGeometry(0.25, 12, 8), new THREE.MeshBasicMaterial({ color: new THREE.Color(fx.color) }));
+                mesh.position.set(x + 0.5, fx.z, y + 0.5);
+                const halo = new THREE.Mesh(new THREE.SphereGeometry(Math.max(0.5, fx.radius * 0.25), 12, 8), new THREE.MeshBasicMaterial({ color: new THREE.Color(fx.color), transparent: true, opacity: 0.12, depthWrite: false }));
+                mesh.add(halo);
+            } else {
+                mesh = new THREE.Mesh(new THREE.OctahedronGeometry(0.35), new THREE.MeshBasicMaterial({ color: 0xff7ad9 }));
+                mesh.position.set(x + 0.5, fx.z + 0.6, y + 0.5);
+            }
+            preview.effects.add(mesh);
+        }
+        preview.dirty = true;
+    }
+
+    _clearEffects(preview) {
+        if (!preview.effects) return;
+        for (const video of preview.effects.userData.videos || []) { try { video.pause(); video.removeAttribute('src'); video.load(); } catch (error) { /* gone */ } }
+        preview.effects.userData.videos = [];
+        preview.live = false;
+        for (const mesh of preview.effects.children.slice()) {
+            preview.effects.remove(mesh);
+            mesh.traverse(node => { node.geometry?.dispose?.(); if (node.material) { node.material.map?.dispose?.(); node.material.dispose?.(); } });
+        }
+    }
+
+    /** A screen's media as a URL the preview can play: movies and pictures of the project. */
+    mediaUrl(name) {
+        const node = this._node(), root = this.projectPath();
+        if (!node || !root || !name) return null;
+        const file = /\.(webm|mp4|ogv|m4v)$/i.test(name) ? node.path.join(root, 'movies', name) : node.path.join(root, 'img', 'pictures', name);
+        try {
+            const stat = node.fs.statSync(file);
+            if (stat.size > 40 * 1024 * 1024) return null;
+            const ext = name.split('.').pop().toLowerCase();
+            const mime = { webm: 'video/webm', mp4: 'video/mp4', ogv: 'video/ogg', m4v: 'video/mp4', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp' }[ext] || 'application/octet-stream';
+            return 'data:' + mime + ';base64,' + node.fs.readFileSync(file).toString('base64');
+        } catch (error) { return null; }
+    }
+
+    /** The movies and pictures a screen can show. */
+    mediaChoices() {
+        const node = this._node(), root = this.projectPath();
+        if (!node || !root) return [];
+        const list = dir => { try { return node.fs.readdirSync(node.path.join(root, ...dir)).filter(f => !f.startsWith('.')); } catch (error) { return []; } };
+        return list(['movies']).filter(f => /\.(webm|mp4|ogv|m4v)$/i.test(f)).concat(list(['img', 'pictures']).filter(f => /\.(png|jpe?g|gif|webp)$/i.test(f))).sort();
+    }
+
+    /** The database's animations, for an animation effect. */
+    animationChoices() {
+        const list = this.databaseManager?.data?.animations || (typeof window !== 'undefined' && window.reactor?.databaseManager?.data?.animations) || [];
+        return list.filter(a => a && a.id > 0).map(a => ({ id: a.id, name: a.name || '' }));
+    }
+
+    /** An effect kind's name for people. */
+    effectName(kind) {
+        return this._t(kind === 'screen' ? 'Screen' : kind === 'light' ? 'Light' : 'Animation');
     }
 
     _clearProxies(preview) {

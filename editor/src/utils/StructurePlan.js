@@ -240,6 +240,79 @@
         return out;
     }
 
+    /**
+     * A plan's effects, the way the 3D Models page attaches them to a model:
+     * `effects: [{ name, type, at: [x, y], z, facing, ... }]`, `type` one of
+     * `screen` (a media surface on a wall: `media` a movie or picture,
+     * `width`/`height` in tiles), `light` (`color`, `radius`, `intensity`)
+     * or `animation` (a database `animation` id, played over and over).
+     * Listed in map cells for a stamp at (X0, Y0), parts' effects prefixed.
+     */
+    function effectsOf(plan, X0 = 0, Y0 = 0, resolve = null, prefix = '', out = []) {
+        for (const fx of plan.effects || []) {
+            if (!fx || !Array.isArray(fx.at)) continue;
+            out.push(Object.assign({}, fx, { key: prefix + (fx.name || 'effect'), at: [X0 + fx.at[0], Y0 + fx.at[1]] }));
+        }
+        for (const part of plan.parts || []) {
+            const inner = typeof resolve === 'function' ? resolve(part.plan) : null;
+            if (!inner) continue;
+            effectsOf(transform(inner, part.rot || 0, part.scale || 1), X0 + (part.at ? part.at[0] : 0), Y0 + (part.at ? part.at[1] : 0), resolve, prefix + (part.name ? part.name + '.' : ''), out);
+        }
+        return out;
+    }
+
+    const FACING_YAW = { south: 0, east: 90, north: 180, west: 270 };
+    /**
+     * Put a stamp's effects on the map: screens as media-surface rows and
+     * lights as map lights, each marked with the group so a re-stamp or a
+     * removal takes only its own; animations come back as event requests
+     * for `placeEvents`, each a parallel event that shows its animation on
+     * itself again and again.
+     */
+    function placeEffects(mapData, group, wanted) {
+        if (!mapData) return [];
+        const sidecar = mapData.reactor3d || (mapData.reactor3d = { version: 1 });
+        const tag = 'structure:' + group;
+        const surfaces = (Array.isArray(sidecar.mediaSurfaces) ? sidecar.mediaSurfaces : []).filter(row => !(row && row.structure === group));
+        const lights = (Array.isArray(sidecar.lights) ? sidecar.lights : []).filter(light => !(light && light.tag === tag));
+        const events = [];
+        let nextSurface = surfaces.reduce((m, row) => Math.max(m, Number(row && row.id) || 0), 0) + 1;
+        let nextLight = lights.length + 1;
+        for (const fx of wanted) {
+            const [x, y] = fx.at;
+            if (x < 0 || y < 0 || x >= mapData.width || y >= mapData.height) continue;
+            const z = Number(fx.z) || 0;
+            if (fx.type === 'screen') {
+                const [dx, dy] = DIRS[fx.facing] || DIRS.south;
+                const w = Number(fx.width) > 0 ? Number(fx.width) : 4, h = Number(fx.height) > 0 ? Number(fx.height) : 2.25;
+                surfaces.push({ id: nextSurface++, target: 'map', movie: String(fx.media || ''), x: x + 0.5 + dx * 0.52, y: y + 0.5 + dy * 0.52, z,
+                    width: Math.round(w * 48), height: Math.round(h * 48), rotationX: 0, rotationY: FACING_YAW[fx.facing] || 0, rotationZ: 0, scaleX: 1, scaleY: 1,
+                    opacity: 255, loop: true, muted: fx.audio !== true, volume: 100, playbackRate: 1, layer: 3, depth: 0, cullingDistance: 0, scanlines: Number(fx.scanlines) || 0, wait: false, structure: group });
+            } else if (fx.type === 'light') {
+                while (lights.some(l => l && l.id === 'light' + nextLight)) nextLight++;
+                lights.push({ id: 'light' + nextLight++, type: 'point', x: x + 0.5, y: y + 0.5, height: Math.round(z * 48), yaw: 0, pitch: 0,
+                    radius: Number(fx.radius) > 0 ? Number(fx.radius) : 6, angle: 70, width: 0.08, color: String(fx.color || '#9fd8ff'), intensity: Number.isFinite(Number(fx.intensity)) ? Number(fx.intensity) : 1.2,
+                    occlude: true, shadow: false, on: true, body: false, tag, attach: null, flicker: 0, pulse: null });
+            } else if (fx.type === 'animation' && Number(fx.animation) > 0) {
+                events.push({ key: fx.key, name: fx.name || 'effect', template: '', direction: 2, at: [x, y], animation: Math.floor(Number(fx.animation)) });
+            }
+        }
+        if (surfaces.length) sidecar.mediaSurfaces = surfaces; else delete sidecar.mediaSurfaces;
+        if (lights.length) sidecar.lights = lights; else delete sidecar.lights;
+        return events;
+    }
+
+    /** Take a group's screens and lights off the map; its animation events go with `removeGroupEvents`. */
+    function removeGroupEffects(mapData, group) {
+        const sidecar = mapData && mapData.reactor3d;
+        if (!sidecar) return false;
+        const tag = 'structure:' + group;
+        let changed = false;
+        if (Array.isArray(sidecar.mediaSurfaces)) { const kept = sidecar.mediaSurfaces.filter(row => !(row && row.structure === group)); changed = kept.length !== sidecar.mediaSurfaces.length; if (kept.length) sidecar.mediaSurfaces = kept; else delete sidecar.mediaSurfaces; }
+        if (Array.isArray(sidecar.lights)) { const kept = sidecar.lights.filter(light => !(light && light.tag === tag)); changed = changed || kept.length !== sidecar.lights.length; if (kept.length) sidecar.lights = kept; else delete sidecar.lights; }
+        return changed;
+    }
+
     const EVENT_TAG = /<structure:(\d+)>\s*<spot:([^>]+)>/;
     function eventTag(group, key) { return `<structure:${group}><spot:${key}>`; }
     function blankEvent(id, x, y) {
@@ -276,6 +349,11 @@
             event = template && Array.isArray(template.pages) && template.pages.length
                 ? Object.assign(JSON.parse(JSON.stringify(template)), { id, x: entry.at[0], y: entry.at[1] })
                 : blankEvent(id, entry.at[0], entry.at[1]);
+            if (entry.animation > 0 && !template) {
+                const page = event.pages[0];
+                page.trigger = 4; page.through = true; page.priorityType = 0;
+                page.list = [{ code: 212, indent: 0, parameters: [0, entry.animation, true] }, { code: 0, indent: 0, parameters: [] }];
+            }
             event.name = entry.name;
             event.note = eventTag(group, entry.key) + (typeof event.note === 'string' && event.note && !EVENT_TAG.test(event.note) ? ' ' + event.note : '');
             for (const page of event.pages) if (page && page.image) page.image.direction = entry.direction;
@@ -303,7 +381,7 @@
         const [W, H] = plan.size;
         if (!(plan.floors || []).length) return [];
         const S = Number(plan.storey) > 0 ? Math.floor(plan.storey) : 5;
-        const M = Object.assign({ wall: '', inner: '', floor: '', wet: '', roof: '', stair: '' }, plan.materials || {});
+        const M = Object.assign({ wall: '', inner: '', floor: '', wet: '', roof: '', stair: '', glass: '' }, plan.materials || {});
         const pieces = [];
         let id = firstId;
         const put = (kind, x, y, z, rot, material, extra) => {
@@ -323,6 +401,8 @@
             if (Array.isArray(shape.offset) && (Number(shape.offset[0]) || Number(shape.offset[1]))) extra.offset = [Number(shape.offset[0]) || 0, Number(shape.offset[1]) || 0];
             if (Number.isFinite(Number(shape.sides))) extra.sides = Number(shape.sides);
             if (Number.isFinite(Number(shape.taper))) extra.taper = Number(shape.taper);
+            if (Number.isFinite(Number(shape.sweep))) extra.sweep = Number(shape.sweep);
+            if (Number.isFinite(Number(shape.thick))) extra.thick = Number(shape.thick);
             put(shape.kind, shape.at[0], shape.at[1], Number(shape.z) || 0, 0, shape.material || M.wall, extra);
         }
         const floors = Array.isArray(plan.floors) ? plan.floors : [];
@@ -395,7 +475,8 @@
                 // nothing built shows the ground through a door or a cut wall.
                 put('floor', x, y, z, 0, M.floor);
                 if (doors.has(key)) { put('doorway', x, y, z, 0, wallMaterial); continue; }
-                if (windowCells.has(key)) { put('window', x, y, z, 0, M.wall); continue; }
+                // A window is its sill and header with a pane of glass between them.
+                if (windowCells.has(key)) { put('window', x, y, z, 0, M.wall); put('glass', x, y, z, 0, M.glass || 'Glass'); continue; }
                 put('wall', x, y, z, 0, wallMaterial);
             }
         });
@@ -439,6 +520,7 @@
             const grow = rect => [rect[0] * k, rect[1] * k, (rect[2] + 1) * k - 1, (rect[3] + 1) * k - 1];
             out.size = [out.size[0] * k, out.size[1] * k];
             for (const name of Object.keys(out.spots || {})) out.spots[name] = [out.spots[name][0] * k, out.spots[name][1] * k];
+            for (const fx of out.effects || []) { fx.at = [fx.at[0] * k + Math.floor((k - 1) / 2), fx.at[1] * k + Math.floor((k - 1) / 2)]; fx.z = (Number(fx.z) || 0) * k; if (fx.width) fx.width *= k; if (fx.height) fx.height *= k; if (fx.radius) fx.radius *= k; }
             out.paths = (out.paths || []).map(strip => grow(strip).concat(strip.slice(4)));
             for (const part of out.parts || []) { part.at = [(part.at ? part.at[0] : 0) * k, (part.at ? part.at[1] : 0) * k]; part.scale = (part.scale || 1) * k; }
             for (const level of out.floors || []) {
@@ -487,6 +569,7 @@
                 if (Array.isArray(shape.offset)) shape.offset = [-(Number(shape.offset[1]) || 0), Number(shape.offset[0]) || 0];
             }
             for (const name of Object.keys(out.spots || {})) out.spots[name] = point(out.spots[name][0], out.spots[name][1]);
+            for (const fx of out.effects || []) { fx.at = point(fx.at[0], fx.at[1]); if (fx.facing) fx.facing = DIR_CW[fx.facing] || fx.facing; }
             out.paths = (out.paths || []).map(strip => rect(strip).concat(strip.slice(4)));
             // A part turns about the whole: its own turn adds one, and its corner moves with its footprint.
             for (const part of out.parts || []) {
@@ -560,13 +643,22 @@
             const S = Number(target.storey) > 0 ? Math.floor(target.storey) : 5;
             (target.floors || []).forEach((level, index) => {
                 for (const [name, rect] of Object.entries(level.rooms || {})) {
-                    const tx = X0 + ox + Math.floor((rect[0] + rect[2]) / 2), ty = Y0 + oy + Math.floor((rect[1] + rect[3]) / 2), near = index * S + 0.1;
-                    let hit = null;
-                    for (const s of seen.values()) if (s.x === tx && s.y === ty && Math.abs(s.near - near) < 0.3) { hit = s; break; }
+                    // A room is reached when the walk stands on any of its cells at its level (furniture
+                    // may fill its middle); the nearest to its middle gives the route, and the count of
+                    // cells never stood on says how much of it is furniture or cut off.
+                    const near = index * S + 0.1, mx = X0 + ox + (rect[0] + rect[2]) / 2, my = Y0 + oy + (rect[1] + rect[3]) / 2;
+                    let hit = null, open = 0;
+                    const cells = (rect[2] - rect[0] + 1) * (rect[3] - rect[1] + 1);
+                    for (const s of seen.values()) {
+                        const rx = s.x - X0 - ox, ry = s.y - Y0 - oy;
+                        if (rx < rect[0] || rx > rect[2] || ry < rect[1] || ry > rect[3] || Math.abs(s.near - near) >= 0.3) continue;
+                        open++;
+                        if (!hit || Math.hypot(s.x + 0.5 - mx, s.y + 0.5 - my) < Math.hypot(hit.x + 0.5 - mx, hit.y + 0.5 - my)) hit = s;
+                    }
                     const moves = [];
                     for (let s = hit; s && s.from; s = s.from) moves.unshift(s.dir);
                     // A tower calls every floor's room by the same name: the report tells the floors apart.
-                    report[prefix + (index ? name + ' (' + (index + 1) + ')' : name)] = hit ? { reached: true, steps: moves.length, moves } : { reached: false };
+                    report[prefix + (index ? name + ' (' + (index + 1) + ')' : name)] = hit ? { reached: true, steps: moves.length, moves, open, cells } : { reached: false, open: 0, cells };
                 }
             });
             for (const part of target.parts || []) {
@@ -579,7 +671,7 @@
         return { start, report, states: seen.size };
     }
 
-    const api = { build, buildOwn, spots, eventsOf, placeEvents, removeGroupEvents, eventTag, EVENT_TAG, transform, validate, entrance, doorCells, doorWall, sharedWall, isWallCell, isOuterWallCell, canWindow, buildingBox, buildingBoxes, DIRS };
+    const api = { build, buildOwn, spots, eventsOf, effectsOf, placeEffects, removeGroupEffects, placeEvents, removeGroupEvents, eventTag, EVENT_TAG, transform, validate, entrance, doorCells, doorWall, sharedWall, isWallCell, isOuterWallCell, canWindow, buildingBox, buildingBoxes, DIRS };
     root.RRStructurePlan = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof globalThis !== 'undefined' ? globalThis : window);

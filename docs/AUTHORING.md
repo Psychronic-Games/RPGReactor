@@ -32,7 +32,10 @@ In the editor, Database › Structures is a builder over these files: a new
 plan is an empty page. Draw rooms on it, click walls for doors and windows,
 put stairs and people down, pick a shape from the picker and click it down
 (one placed on another sits on top), drag any of them, undo, pick a style,
-and Apply writes the file back the way it was read. A selected shape wears
+and Apply writes the file back the way it was read. The Effect tool puts a screen on a wall,
+a light or an animation on any cell; the preview plays the screens' media.
+The eye button on the 3D view looks inside (the ceiling and roof left off),
+on by itself for a building with no roof. A selected shape wears
 handles in the 3D view: arrows move it (a face dragged near another shape's
 face clicks onto it), rings turn, tilt and roll it, cubes size it (with the
 lock, in proportion); the same numbers sit in the line under the plan, and a
@@ -173,6 +176,23 @@ districts of hamlets:
   are hollow: only their walls block, so they are walked into and through.
   `material` falls back to the wall's. A quarter turn of the plan adds ninety
   degrees and turns the offset; tilt and roll are the shape's own and stay.
+  A `cylinder`, `tube` or `ring` may go part way round: `sweep` in degrees,
+  the arc centred on the shape's back so the opening faces forward (a tube
+  swept 230 is a horseshoe deck, a thin tube segment a curved console); a
+  `tube` or `ring` may have a `thick` wall (a fraction of its half width;
+  a rail is 0.04). Steps of up to three quarters of a tile are walked, so a
+  raised deck 0.7 tall is walked up onto with no stair.
+- `effects`: `[{ name, type, at: [x, y], z, ... }]`, what the building
+  shows, the way a model's effects are attached: a `screen` (a media surface
+  on a wall: `facing` the room, `width` and `height` in tiles, `media` a
+  movie under movies/ or a picture under img/pictures), a `light` (`color`,
+  `radius`, `intensity`, a map light) or an `animation` (a database
+  `animation` id, played over and over on a parallel event). A stamp writes
+  them onto the map marked with the building's group; a re-stamp or a
+  removal takes only its own. `roof: { pitch: null }` is a building with no
+  roof at all. Materials named `Glass…` draw see-through and `…Glow` draw
+  lit from within, with no image needed; every window gets a pane of
+  `materials.glass` (`Glass` unless the plan says).
 - `spots`: named cells. A stamped building keeps them in its record as
   map cells, prefixed by the part's name (`north.bed`), so a story can
   say "the innkeeper stands at `inn.counter`". A plan of parts is walked

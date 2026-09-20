@@ -36,6 +36,7 @@ if (raw.length !== pieces.length) problems.push(`${raw.length - pieces.length} p
 // Materials with no image.
 const materialsDir = path.join(project, 'img', 'materials');
 for (const name of E.pieceMaterials(map)) {
+    if (/^glass/i.test(name)) continue; // drawn see-through, no image wanted
     const found = ['.png', '.jpg', '.jpeg', '.webp'].some(ext => fs.existsSync(path.join(materialsDir, name + ext)));
     if (!found) problems.push(`material "${name}" has no image under img/materials (pieces draw plain grey)`);
 }

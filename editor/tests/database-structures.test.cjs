@@ -439,3 +439,68 @@ test('shapes with handles: the picker defaults, a middle anywhere, sizes that ke
     assert.deepEqual([...turned.shapes[0].offset], [-0.5, 0.25]);
     assert.equal(turned.shapes[0].tilt, 20); assert.equal(turned.shapes[0].roll, 40); assert.equal(turned.shapes[0].angle, 90);
 });
+
+test('screens, lights and animations on a plan: kept in the file, drawn on the page, put on the map with the building, taken off with it', () => {
+    const { DatabaseStructureEditor: E, RRStructurePlan: SP } = loadEditor();
+    const Reactor3D = require(path.join(repoRoot, 'runtime', 'reactor_3d.js'));
+    const plan = E.normalizePlan({ name: 'Deck', size: [20, 16], storey: 9, materials: { wall: 'Panel', glass: 'Glass' },
+        floors: [{ rooms: { bridge: [2, 2, 15, 12] }, doors: [['bridge', 'outside', 3, 8, 'south']], windows: [[1, 5]] }], roof: { pitch: null },
+        shapes: [{ kind: 'tube', at: [8, 7], size: [12, 0.7, 9], sweep: 230, thick: 0.3 }, { kind: 'ring', at: [8, 7], z: 0.75, size: [9, 0.15, 6.5], sweep: 230, thick: 0.04 }],
+        effects: [{ name: 'viewscreen', type: 'screen', at: [8, 1], facing: 'south', width: 8, height: 3, z: 1.5, media: 'Starfield.webm' }, { name: 'lamp', type: 'light', at: [8, 6], z: 8, color: '#9fd8ff', radius: 10 }, { name: 'shimmer', type: 'animation', at: [3, 3], animation: 41 }] });
+    assert.equal(plan.roof.pitch, null, 'a plan may have no roof at all');
+    assert.equal(plan.effects.length, 3);
+    assert.equal(plan.effects[0].facing, 'south'); assert.equal(plan.effects[1].intensity, 1.2, 'a light wears the default strength'); assert.equal(plan.effects[2].z, 0);
+    const trimmed = E.trimPlan(plan);
+    assert.equal(trimmed.roof.pitch, null);
+    assert.equal(JSON.stringify(trimmed.effects[1]), JSON.stringify({ name: 'lamp', type: 'light', at: [8, 6], z: 8, radius: 10 }), 'a light writes only what differs from the defaults');
+    assert.equal(JSON.stringify(trimmed.shapes[1]), JSON.stringify({ kind: 'ring', at: [8, 7], z: 0.75, size: [9, 0.15, 6.5], sweep: 230, thick: 0.04 }), 'a swept, thin ring keeps both settings');
+    // The build: glass in every window, no roof, the horseshoe walkable in one step.
+    const report = E.report(plan, () => null, Reactor3D);
+    assert.ok(report.built.some(p => p.kind === 'glass' && p.material === 'Glass'), 'a window has a pane of glass');
+    assert.ok(!report.built.some(p => p.kind === 'ramp'), 'no roof');
+    assert.deepEqual([...report.reached], ['bridge'], 'the deck is walked up onto and the pit walked into');
+    // On the map: the stamp places the screen as a media surface, the light as a map light, the animation as a parallel event.
+    const map = { width: 30, height: 30, events: [null], reactor3d: { version: 1 } };
+    const wanted = SP.effectsOf(plan, 5, 5, null);
+    const requests = SP.placeEffects(map, 3, wanted);
+    assert.equal(map.reactor3d.mediaSurfaces.length, 1);
+    const row = map.reactor3d.mediaSurfaces[0];
+    assert.equal(row.movie, 'Starfield.webm'); assert.equal(row.target, 'map'); assert.equal(row.structure, 3);
+    assert.ok(Math.abs(row.x - 13.5) < 1e-9 && Math.abs(row.y - (6.5 + 0.52)) < 1e-9, 'stood just in front of its wall, toward the room');
+    assert.equal(row.width, 8 * 48); assert.equal(row.rotationY, 0, 'facing south');
+    assert.equal(map.reactor3d.lights.length, 1); assert.equal(map.reactor3d.lights[0].tag, 'structure:3'); assert.equal(map.reactor3d.lights[0].height, 8 * 48); assert.equal(map.reactor3d.lights[0].body, false);
+    assert.equal(requests.length, 1); assert.equal(requests[0].animation, 41);
+    SP.placeEvents(map, 3, requests, null);
+    const event = map.events.find(Boolean);
+    assert.equal(event.pages[0].trigger, 4, 'a parallel event');
+    assert.deepEqual([...event.pages[0].list[0].parameters], [0, 41, true], 'shows its animation on itself and waits, so it plays over and over');
+    // Turned a quarter, the screen faces the turned wall; removed, the map is clean again.
+    const turned = SP.transform(plan, 1, 1);
+    assert.equal(turned.effects[0].facing, 'west');
+    assert.equal(SP.removeGroupEffects(map, 3), true);
+    assert.equal('mediaSurfaces' in map.reactor3d, false); assert.equal('lights' in map.reactor3d, false);
+    assert.equal(SP.removeGroupEvents(map, 3), 1);
+    // The page: the Effect tool places a screen only on a wall beside a room, facing the room; a light anywhere; picks and moves them; undo.
+    const editor = new E(null, { getCurrentProject: () => null }, null, null);
+    editor.renderInspector = () => {}; editor.renderMore = () => {}; editor.renderTools = () => {}; editor.schedulePreview = () => {}; editor.render = () => {}; editor._detail = null;
+    editor.parentEditor = { _markDatabaseMutation() {}, refreshDatabaseListLabel() {} };
+    editor.current = { entry: { id: 1, name: 'Deck', file: 'Deck.json', plan }, plan };
+    editor._planGeom = { ox: 0, oy: 0, cell: 10 };
+    editor.tool = 'effect'; editor._effect.kind = 'screen';
+    editor.beginPlanGesture({ x: 5, y: 5 }); editor.endPlanGesture({ x: 5, y: 5 });
+    assert.equal(plan.effects.length, 3, 'inside a room is no place for a screen');
+    editor.beginPlanGesture({ x: 16, y: 7 }); editor.endPlanGesture({ x: 16, y: 7 });
+    assert.equal(plan.effects.length, 4); assert.equal(plan.effects[3].facing, 'west', 'on the east wall it faces west, into the room');
+    assert.deepEqual({ ...editor.selection }, { kind: 'effect', key: 3 });
+    editor._effect.kind = 'light';
+    editor.beginPlanGesture({ x: 5, y: 5 }); editor.endPlanGesture({ x: 5, y: 5 });
+    assert.equal(plan.effects[4].type, 'light'); assert.equal(plan.effects[4].z, 4);
+    assert.deepEqual({ ...editor.hitAt(5, 5) }, { kind: 'effect', key: 4 }, 'an effect is picked before the shape under it');
+    editor.tool = 'select';
+    editor.beginPlanGesture({ x: 5, y: 5 }); editor.updatePlanGesture({ x: 6, y: 6 }); editor.endPlanGesture({ x: 6, y: 6 });
+    assert.deepEqual([...plan.effects[4].at], [6, 6], 'dragged');
+    editor.removeSelection(); assert.equal(plan.effects.length, 4);
+    editor.undo(); assert.equal(plan.effects.length, 5, 'undo brings it back');
+    assert.equal(editor.effectName('screen').length > 0, true);
+    assert.ok(E.shapeOutline('tube', { sweep: 230 }).solid[0].length > 40, 'a swept tube draws an annular sector on the plan');
+});

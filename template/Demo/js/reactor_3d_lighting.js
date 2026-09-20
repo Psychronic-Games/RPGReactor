@@ -426,6 +426,7 @@ Reactor3D.lightGlsl = function(shadows, taps) {
         "uniform vec4 rrLightColor[" + this.SHADER_LIGHTS + "];",
         "uniform vec4 rrLightAim[" + this.SHADER_LIGHTS + "];",
         "uniform vec3 rrAmbient;",
+        "uniform float rrSelfLit;",
         "varying vec3 vRRWorldPos;",
         "vec3 rrLight(vec3 p) {",
         "\tvec3 sum = rrAmbient;",
@@ -554,7 +555,7 @@ Reactor3D.injectLightShader = function(shader, renderer) {
     shader.fragmentShader = this.LightGrid.glsl(shadows ? this.lightGlsl(true, this.Shadows.quality().taps) : this.LIGHT_GLSL)
         + shader.fragmentShader.replace(
             "vec4 diffuseColor = vec4( diffuse, opacity );",
-            "vec4 diffuseColor = vec4( diffuse * rrLight(vRRWorldPos), opacity );"
+            "vec4 diffuseColor = vec4( diffuse * mix(rrLight(vRRWorldPos), vec3(1.0), rrSelfLit), opacity );"
         );
 };
 
@@ -813,6 +814,8 @@ Reactor3D.litMaterial = function(material) {
     material.onBeforeCompile = function(shader, renderer) {
         if (typeof earlier === "function") earlier.call(this, shader, renderer);
         Reactor3D.injectLightShader(shader, renderer);
+        // A self-lit material (a Glow) ignores the lights: its own uniform, one per material.
+        shader.uniforms.rrSelfLit = { value: this.__reactorSelfLit ? 1 : 0 };
         Reactor3D.injectBlendColor(this, shader);
         Reactor3D.injectDissolve(this, shader);
         Reactor3D.injectCutaway(this, shader);

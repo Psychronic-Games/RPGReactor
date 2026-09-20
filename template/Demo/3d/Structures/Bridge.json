@@ -1,0 +1,1108 @@
+{
+  "name": "Bridge",
+  "size": [
+    44,
+    34
+  ],
+  "storey": 9,
+  "materials": {
+    "wall": "Panel",
+    "inner": "Panel",
+    "floor": "Steel",
+    "wet": "Grate",
+    "roof": "Panel",
+    "stair": "Steel",
+    "path": "Grate",
+    "glass": "Glass"
+  },
+  "floors": [
+    {
+      "rooms": {
+        "bridge": [
+          6,
+          3,
+          37,
+          26
+        ],
+        "airlock": [
+          28,
+          28,
+          35,
+          31
+        ],
+        "ready room": [
+          1,
+          10,
+          4,
+          19
+        ],
+        "turbolift": [
+          39,
+          12,
+          42,
+          17
+        ]
+      },
+      "doors": [
+        [
+          "bridge",
+          "airlock",
+          5
+        ],
+        [
+          "airlock",
+          "outside",
+          3,
+          31,
+          "south"
+        ],
+        [
+          "bridge",
+          "ready room",
+          2
+        ],
+        [
+          "bridge",
+          "turbolift",
+          3
+        ]
+      ],
+      "windows": [
+        [
+          5,
+          6
+        ],
+        [
+          5,
+          7
+        ],
+        [
+          5,
+          22
+        ],
+        [
+          5,
+          23
+        ],
+        [
+          38,
+          6
+        ],
+        [
+          38,
+          7
+        ],
+        [
+          38,
+          22
+        ],
+        [
+          38,
+          23
+        ]
+      ],
+      "materials": {
+        "airlock": {
+          "floor": "Grate"
+        },
+        "ready room": {
+          "floor": "Carpet"
+        },
+        "turbolift": {
+          "floor": "Grate"
+        }
+      }
+    }
+  ],
+  "roof": {
+    "pitch": null
+  },
+  "windows": {
+    "every": 0,
+    "width": 2
+  },
+  "shapes": [
+    {
+      "kind": "tube",
+      "at": [
+        21,
+        16
+      ],
+      "z": 0.1,
+      "size": [
+        32,
+        0.7,
+        24
+      ],
+      "material": "Steel",
+      "sweep": 230
+    },
+    {
+      "kind": "box",
+      "at": [
+        21,
+        26
+      ],
+      "z": 0.1,
+      "size": [
+        32,
+        0.7,
+        3
+      ],
+      "offset": [
+        0.5,
+        0
+      ],
+      "material": "Steel"
+    },
+    {
+      "kind": "ring",
+      "at": [
+        21,
+        16
+      ],
+      "z": 0.75,
+      "size": [
+        22.6,
+        0.12,
+        17
+      ],
+      "material": "StripGlow",
+      "sweep": 230,
+      "thick": 0.04
+    },
+    {
+      "kind": "tube",
+      "at": [
+        21,
+        16
+      ],
+      "z": 0.1,
+      "size": [
+        32,
+        0.35,
+        24
+      ],
+      "material": "Grate",
+      "sweep": 250
+    },
+    {
+      "kind": "tube",
+      "at": [
+        21,
+        16
+      ],
+      "z": 0.1,
+      "size": [
+        32,
+        0.175,
+        24
+      ],
+      "material": "Grate",
+      "sweep": 270
+    },
+    {
+      "kind": "tube",
+      "at": [
+        21,
+        16
+      ],
+      "z": 0.8,
+      "size": [
+        26,
+        1.0,
+        19.5
+      ],
+      "material": "Panel",
+      "sweep": 60
+    },
+    {
+      "kind": "tube",
+      "at": [
+        21,
+        16
+      ],
+      "z": 1.8,
+      "size": [
+        26,
+        0.35,
+        19.5
+      ],
+      "material": "ConsoleGlow",
+      "sweep": 60
+    },
+    {
+      "kind": "ring",
+      "at": [
+        21,
+        16
+      ],
+      "z": 1.7,
+      "size": [
+        23.5,
+        0.15,
+        17.6
+      ],
+      "material": "Steel",
+      "sweep": 230,
+      "thick": 0.04
+    },
+    {
+      "kind": "box",
+      "at": [
+        10,
+        23
+      ],
+      "z": 0.8,
+      "size": [
+        5,
+        1.0,
+        2.2
+      ],
+      "material": "Panel",
+      "angle": 45
+    },
+    {
+      "kind": "wedge",
+      "at": [
+        10,
+        23
+      ],
+      "z": 1.8,
+      "size": [
+        5,
+        0.5,
+        2.0
+      ],
+      "material": "ConsoleGlow",
+      "angle": 225
+    },
+    {
+      "kind": "box",
+      "at": [
+        32,
+        23
+      ],
+      "z": 0.8,
+      "size": [
+        5,
+        1.0,
+        2.2
+      ],
+      "material": "Panel",
+      "angle": 315
+    },
+    {
+      "kind": "wedge",
+      "at": [
+        32,
+        23
+      ],
+      "z": 1.8,
+      "size": [
+        5,
+        0.5,
+        2.0
+      ],
+      "material": "ConsoleGlow",
+      "angle": 495
+    },
+    {
+      "kind": "box",
+      "at": [
+        7,
+        9
+      ],
+      "z": 0.8,
+      "size": [
+        2.2,
+        1.0,
+        4.5
+      ],
+      "material": "Panel"
+    },
+    {
+      "kind": "wedge",
+      "at": [
+        7,
+        9
+      ],
+      "z": 1.8,
+      "size": [
+        4.5,
+        0.5,
+        2.0
+      ],
+      "material": "ConsoleGlow",
+      "angle": 90
+    },
+    {
+      "kind": "box",
+      "at": [
+        36,
+        9
+      ],
+      "z": 0.8,
+      "size": [
+        2.2,
+        1.0,
+        4.5
+      ],
+      "material": "Panel"
+    },
+    {
+      "kind": "wedge",
+      "at": [
+        36,
+        9
+      ],
+      "z": 1.8,
+      "size": [
+        4.5,
+        0.5,
+        2.0
+      ],
+      "material": "ConsoleGlow",
+      "angle": 270
+    },
+    {
+      "kind": "box",
+      "at": [
+        7,
+        20
+      ],
+      "z": 0.8,
+      "size": [
+        2.2,
+        1.0,
+        4.5
+      ],
+      "material": "Panel"
+    },
+    {
+      "kind": "wedge",
+      "at": [
+        7,
+        20
+      ],
+      "z": 1.8,
+      "size": [
+        4.5,
+        0.5,
+        2.0
+      ],
+      "material": "ConsoleGlow",
+      "angle": 90
+    },
+    {
+      "kind": "box",
+      "at": [
+        36,
+        20
+      ],
+      "z": 0.8,
+      "size": [
+        2.2,
+        1.0,
+        4.5
+      ],
+      "material": "Panel"
+    },
+    {
+      "kind": "wedge",
+      "at": [
+        36,
+        20
+      ],
+      "z": 1.8,
+      "size": [
+        4.5,
+        0.5,
+        2.0
+      ],
+      "material": "ConsoleGlow",
+      "angle": 270
+    },
+    {
+      "kind": "box",
+      "at": [
+        17,
+        7
+      ],
+      "z": 0.1,
+      "size": [
+        5,
+        1.0,
+        2.0
+      ],
+      "material": "Panel"
+    },
+    {
+      "kind": "wedge",
+      "at": [
+        17,
+        7
+      ],
+      "z": 1.1,
+      "size": [
+        5,
+        0.5,
+        1.8
+      ],
+      "material": "ConsoleGlow",
+      "angle": 180
+    },
+    {
+      "kind": "box",
+      "at": [
+        25,
+        7
+      ],
+      "z": 0.1,
+      "size": [
+        5,
+        1.0,
+        2.0
+      ],
+      "material": "Panel"
+    },
+    {
+      "kind": "wedge",
+      "at": [
+        25,
+        7
+      ],
+      "z": 1.1,
+      "size": [
+        5,
+        0.5,
+        1.8
+      ],
+      "material": "ConsoleGlow",
+      "angle": 180
+    },
+    {
+      "kind": "box",
+      "at": [
+        21,
+        15
+      ],
+      "z": 0.1,
+      "size": [
+        1.8,
+        0.7,
+        1.8
+      ],
+      "material": "Carpet"
+    },
+    {
+      "kind": "box",
+      "at": [
+        21,
+        15
+      ],
+      "z": 0.8,
+      "size": [
+        1.8,
+        1.6,
+        0.4
+      ],
+      "material": "Carpet",
+      "offset": [
+        0,
+        0.5
+      ]
+    },
+    {
+      "kind": "box",
+      "at": [
+        17,
+        15
+      ],
+      "z": 0.1,
+      "size": [
+        1.4,
+        0.7,
+        1.4
+      ],
+      "material": "Carpet"
+    },
+    {
+      "kind": "box",
+      "at": [
+        17,
+        15
+      ],
+      "z": 0.8,
+      "size": [
+        1.4,
+        1.6,
+        0.4
+      ],
+      "material": "Carpet",
+      "offset": [
+        0,
+        0.5
+      ]
+    },
+    {
+      "kind": "box",
+      "at": [
+        25,
+        15
+      ],
+      "z": 0.1,
+      "size": [
+        1.4,
+        0.7,
+        1.4
+      ],
+      "material": "Carpet"
+    },
+    {
+      "kind": "box",
+      "at": [
+        25,
+        15
+      ],
+      "z": 0.8,
+      "size": [
+        1.4,
+        1.6,
+        0.4
+      ],
+      "material": "Carpet",
+      "offset": [
+        0,
+        0.5
+      ]
+    },
+    {
+      "kind": "box",
+      "at": [
+        21,
+        12
+      ],
+      "z": 0.1,
+      "size": [
+        11,
+        0.9,
+        0.2
+      ],
+      "material": "Steel"
+    },
+    {
+      "kind": "box",
+      "at": [
+        21,
+        12
+      ],
+      "z": 0.75,
+      "size": [
+        11,
+        0.15,
+        0.2
+      ],
+      "material": "StripGlow"
+    },
+    {
+      "kind": "hull",
+      "at": [
+        6,
+        5
+      ],
+      "z": 0.1,
+      "size": [
+        1.2,
+        8.8,
+        1.2
+      ],
+      "material": "Steel",
+      "sides": 8,
+      "taper": 1
+    },
+    {
+      "kind": "hull",
+      "at": [
+        37,
+        5
+      ],
+      "z": 0.1,
+      "size": [
+        1.2,
+        8.8,
+        1.2
+      ],
+      "material": "Steel",
+      "sides": 8,
+      "taper": 1
+    },
+    {
+      "kind": "hull",
+      "at": [
+        6,
+        25
+      ],
+      "z": 0.1,
+      "size": [
+        1.2,
+        8.8,
+        1.2
+      ],
+      "material": "Steel",
+      "sides": 8,
+      "taper": 1
+    },
+    {
+      "kind": "hull",
+      "at": [
+        37,
+        25
+      ],
+      "z": 0.1,
+      "size": [
+        1.2,
+        8.8,
+        1.2
+      ],
+      "material": "Steel",
+      "sides": 8,
+      "taper": 1
+    },
+    {
+      "kind": "arch",
+      "at": [
+        31,
+        27
+      ],
+      "z": 0,
+      "size": [
+        7,
+        8,
+        1.4
+      ],
+      "material": "Steel"
+    },
+    {
+      "kind": "ring",
+      "at": [
+        21,
+        12
+      ],
+      "z": 8.5,
+      "size": [
+        20,
+        0.4,
+        14
+      ],
+      "material": "StripGlow"
+    },
+    {
+      "kind": "ring",
+      "at": [
+        21,
+        16
+      ],
+      "z": 8.5,
+      "size": [
+        34,
+        0.4,
+        26
+      ],
+      "material": "StripGlow",
+      "sweep": 230
+    },
+    {
+      "kind": "box",
+      "at": [
+        21,
+        3
+      ],
+      "z": 1.4,
+      "size": [
+        26,
+        0.3,
+        0.5
+      ],
+      "material": "Steel",
+      "offset": [
+        0.5,
+        0.4
+      ]
+    },
+    {
+      "kind": "box",
+      "at": [
+        21,
+        3
+      ],
+      "z": 8.4,
+      "size": [
+        26,
+        0.3,
+        0.5
+      ],
+      "material": "Steel",
+      "offset": [
+        0.5,
+        0.4
+      ]
+    },
+    {
+      "kind": "box",
+      "at": [
+        8,
+        3
+      ],
+      "z": 1.4,
+      "size": [
+        0.4,
+        7.2,
+        0.5
+      ],
+      "material": "Steel",
+      "offset": [
+        0,
+        0.4
+      ]
+    },
+    {
+      "kind": "box",
+      "at": [
+        34,
+        3
+      ],
+      "z": 1.4,
+      "size": [
+        0.4,
+        7.2,
+        0.5
+      ],
+      "material": "Steel",
+      "offset": [
+        0,
+        0.4
+      ]
+    },
+    {
+      "kind": "box",
+      "at": [
+        2,
+        14
+      ],
+      "z": 0.1,
+      "size": [
+        2.4,
+        1.0,
+        1.4
+      ],
+      "material": "Panel"
+    },
+    {
+      "kind": "cylinder",
+      "at": [
+        40,
+        14
+      ],
+      "z": 0.1,
+      "size": [
+        3,
+        0.12,
+        3
+      ],
+      "material": "StripGlow",
+      "sides": 24
+    }
+  ],
+  "effects": [
+    {
+      "name": "viewscreen",
+      "type": "screen",
+      "at": [
+        21,
+        2
+      ],
+      "facing": "south",
+      "width": 24,
+      "height": 7,
+      "z": 1.6,
+      "media": "Starfield.webm"
+    },
+    {
+      "name": "ready room screen",
+      "type": "screen",
+      "at": [
+        0,
+        14
+      ],
+      "facing": "east",
+      "width": 3,
+      "height": 1.7,
+      "z": 3,
+      "media": "RPGReactor-Computer-Console-Interface.mp4"
+    },
+    {
+      "name": "airlock screen",
+      "type": "screen",
+      "at": [
+        31,
+        32
+      ],
+      "facing": "north",
+      "width": 3,
+      "height": 1.7,
+      "z": 3,
+      "media": "RPGReactor-Computer-Console-Interface.mp4"
+    },
+    {
+      "name": "aft screen left",
+      "type": "screen",
+      "at": [
+        10,
+        27
+      ],
+      "facing": "north",
+      "width": 5,
+      "height": 2.4,
+      "z": 3.4,
+      "media": "RPGReactor-Computer-Console-Interface.mp4"
+    },
+    {
+      "name": "aft screen right",
+      "type": "screen",
+      "at": [
+        32,
+        27
+      ],
+      "facing": "north",
+      "width": 5,
+      "height": 2.4,
+      "z": 3.4,
+      "media": "RPGReactor-Computer-Console-Interface.mp4"
+    },
+    {
+      "name": "port screen 9",
+      "type": "screen",
+      "at": [
+        5,
+        9
+      ],
+      "facing": "east",
+      "width": 4,
+      "height": 2.25,
+      "z": 3.4,
+      "media": "RPGReactor-Computer-Console-Interface.mp4"
+    },
+    {
+      "name": "starboard screen 9",
+      "type": "screen",
+      "at": [
+        38,
+        9
+      ],
+      "facing": "west",
+      "width": 4,
+      "height": 2.25,
+      "z": 3.4,
+      "media": "RPGReactor-Computer-Console-Interface.mp4"
+    },
+    {
+      "name": "port screen 20",
+      "type": "screen",
+      "at": [
+        5,
+        20
+      ],
+      "facing": "east",
+      "width": 4,
+      "height": 2.25,
+      "z": 3.4,
+      "media": "RPGReactor-Computer-Console-Interface.mp4"
+    },
+    {
+      "name": "starboard screen 20",
+      "type": "screen",
+      "at": [
+        38,
+        20
+      ],
+      "facing": "west",
+      "width": 4,
+      "height": 2.25,
+      "z": 3.4,
+      "media": "RPGReactor-Computer-Console-Interface.mp4"
+    },
+    {
+      "name": "light 17 6",
+      "type": "light",
+      "at": [
+        17,
+        6
+      ],
+      "z": 8.2,
+      "color": "#9fd8ff",
+      "radius": 12,
+      "intensity": 1.2
+    },
+    {
+      "name": "light 25 6",
+      "type": "light",
+      "at": [
+        25,
+        6
+      ],
+      "z": 8.2,
+      "color": "#9fd8ff",
+      "radius": 12,
+      "intensity": 1.2
+    },
+    {
+      "name": "light 12 14",
+      "type": "light",
+      "at": [
+        12,
+        14
+      ],
+      "z": 8.2,
+      "color": "#9fd8ff",
+      "radius": 12,
+      "intensity": 1.2
+    },
+    {
+      "name": "light 30 14",
+      "type": "light",
+      "at": [
+        30,
+        14
+      ],
+      "z": 8.2,
+      "color": "#9fd8ff",
+      "radius": 12,
+      "intensity": 1.2
+    },
+    {
+      "name": "light 21 11",
+      "type": "light",
+      "at": [
+        21,
+        11
+      ],
+      "z": 8.2,
+      "color": "#9fd8ff",
+      "radius": 12,
+      "intensity": 1.2
+    },
+    {
+      "name": "light 21 18",
+      "type": "light",
+      "at": [
+        21,
+        18
+      ],
+      "z": 8.2,
+      "color": "#9fd8ff",
+      "radius": 12,
+      "intensity": 1.2
+    },
+    {
+      "name": "light 10 22",
+      "type": "light",
+      "at": [
+        10,
+        22
+      ],
+      "z": 8.2,
+      "color": "#9fd8ff",
+      "radius": 12,
+      "intensity": 1.2
+    },
+    {
+      "name": "light 32 22",
+      "type": "light",
+      "at": [
+        32,
+        22
+      ],
+      "z": 8.2,
+      "color": "#9fd8ff",
+      "radius": 12,
+      "intensity": 1.2
+    },
+    {
+      "name": "command light",
+      "type": "light",
+      "at": [
+        21,
+        15
+      ],
+      "z": 8.2,
+      "color": "#ffc79a",
+      "radius": 9,
+      "intensity": 1.0
+    },
+    {
+      "name": "airlock light",
+      "type": "light",
+      "at": [
+        31,
+        30
+      ],
+      "z": 7.8,
+      "color": "#ff6b5a",
+      "radius": 6,
+      "intensity": 1.0
+    },
+    {
+      "name": "ready room light",
+      "type": "light",
+      "at": [
+        2,
+        14
+      ],
+      "z": 7.5,
+      "color": "#ffe1b8",
+      "radius": 6,
+      "intensity": 0.9
+    },
+    {
+      "name": "turbolift light",
+      "type": "light",
+      "at": [
+        40,
+        14
+      ],
+      "z": 7.5,
+      "color": "#9fd8ff",
+      "radius": 5,
+      "intensity": 1.1
+    }
+  ],
+  "spots": {
+    "conn": [
+      17,
+      9
+    ],
+    "ops": [
+      25,
+      9
+    ],
+    "tactical": [
+      16,
+      24
+    ]
+  },
+  "events": [
+    {
+      "spot": "conn",
+      "name": "Conn officer",
+      "template": "villager",
+      "direction": 8
+    },
+    {
+      "spot": "tactical",
+      "name": "Tactical officer",
+      "template": "villager",
+      "direction": 8
+    }
+  ]
+}

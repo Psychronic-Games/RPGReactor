@@ -60,7 +60,7 @@ class PieceBuilderManager {
     }
 
     /** The colour a kind shows in the flat map's overlay. */
-    static OVERLAY_COLOURS = { wall: 0x9a9a9a, block: 0x8c8c8c, floor: 0xc99a5b, pillar: 0xdcdcdc, stair: 0xa87b4a, ramp: 0xb05a4a, roof: 0xc1443c, doorway: 0x3fa34d, window: 0x5b9fe8, fence: 0xb8864b, dome: 0xb07a9a, cylinder: 0x8f8fa8, cone: 0xb8a04b, box: 0x8c8c8c, wedge: 0xb05a4a, pyramid: 0xb8a04b, prism: 0xc1443c, tube: 0x8f8fa8, sphere: 0xb07a9a, arch: 0x3fa34d, tunnel: 0x3fa34d, ring: 0xb07a9a, hull: 0x8f8fa8, spike: 0xb8a04b, capsule: 0x8f8fa8, dish: 0x8fa8a8, fin: 0xa88f8f };
+    static OVERLAY_COLOURS = { wall: 0x9a9a9a, block: 0x8c8c8c, floor: 0xc99a5b, pillar: 0xdcdcdc, stair: 0xa87b4a, ramp: 0xb05a4a, roof: 0xc1443c, doorway: 0x3fa34d, window: 0x5b9fe8, fence: 0xb8864b, glass: 0x9fd8ff, dome: 0xb07a9a, cylinder: 0x8f8fa8, cone: 0xb8a04b, box: 0x8c8c8c, wedge: 0xb05a4a, pyramid: 0xb8a04b, prism: 0xc1443c, tube: 0x8f8fa8, sphere: 0xb07a9a, arch: 0x3fa34d, tunnel: 0x3fa34d, ring: 0xb07a9a, hull: 0x8f8fa8, spike: 0xb8a04b, capsule: 0x8f8fa8, dish: 0x8fa8a8, fin: 0xa88f8f };
 
     /**
      * What each cell shows in the flat map: its topmost piece's kind and
@@ -145,6 +145,7 @@ class PieceBuilderManager {
         doorway: 'M5 20V5h14v15 M9 20v-9h6v9',
         window: 'M4 4h16v16H4z M9 8h6v6H9z M12 8v6 M9 11h6',
         fence: 'M5 21V9l2-3 2 3v12 M15 21V9l2-3 2 3v12 M9 12h6 M9 17h6',
+        glass: 'M5 3h14v18H5z M8 6l-2 2 M12 6l-6 6 M16 6l-8 8',
         dome: 'M3 17a9 9 0 0 1 18 0 M3 17h18v3H3z M12 8v-3',
         cylinder: 'M5 6a7 2.5 0 0 0 14 0a7 2.5 0 0 0-14 0 M5 6v12a7 2.5 0 0 0 14 0V6',
         cone: 'M12 3l8 16H4z M4 19a8 2 0 0 0 16 0',
@@ -356,6 +357,13 @@ class PieceBuilderManager {
         elevation.setStructure(map, record);
         // The building's people: events at its spots, moved with it, kept when edited.
         const wanted = SP.eventsOf(shaped, X0, Y0, name => this.resolvePlan(name));
+        // Its screens, lights and animations: surfaces and lights on the map, animations as events.
+        const effects = SP.effectsOf(shaped, X0, Y0, name => this.resolvePlan(name));
+        if (effects.length || SP.removeGroupEffects(map, record.group)) {
+            for (const request of SP.placeEffects(map, record.group, effects)) wanted.push(request);
+            window.reactor?.lightingManager?.render?.();
+            window.reactor?.mediaSurfaceManager?.render?.();
+        }
         if (wanted.length) {
             SP.placeEvents(map, record.group, wanted, name => this.loadEventTemplate(name));
             this._eventsChanged = true;
@@ -484,6 +492,7 @@ class PieceBuilderManager {
         if (!map || !elevation || !this.selectedGroup) return false;
         const saved = this._snapshot(map);
         if (typeof RRStructurePlan !== 'undefined' && RRStructurePlan.removeGroupEvents(map, this.selectedGroup)) this._eventsChanged = true;
+        if (typeof RRStructurePlan !== 'undefined' && RRStructurePlan.removeGroupEffects(map, this.selectedGroup)) { window.reactor?.lightingManager?.render?.(); window.reactor?.mediaSurfaceManager?.render?.(); }
         if (!elevation.removePieceGroup(map, this.selectedGroup)) return false;
         this.undoStack.push(saved); this.redoStack.length = 0;
         this.selectedGroup = 0;

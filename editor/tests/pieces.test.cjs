@@ -772,6 +772,27 @@ test('the round pieces: a shape has a size and a turn, blocks its round footprin
     boxy.positions.forEach((v, i) => { if (i % 3 !== 1) assert.ok(v >= 1 - 1e-9 && v <= 2 + 1e-9, 'a four-sided hull fills its cell exactly, like a box'); });
     assert.deepEqual({ ...R.shapeParams({ kind: 'hull' }) }, { sides: 8, taper: 0.8 }, 'a hull wears eight sides and a slight taper until told otherwise');
     assert.equal('sides' in R.normalizePiece({ kind: 'box', x: 1, y: 1, sides: 9 }, map), false, 'a box has no sides setting');
+    // Round shapes go part way round: a half cylinder is half the volume, a horseshoe tube opens forward.
+    const half = { positions: [], uvs: [], colors: [] };
+    R.emitPiece(R.normalizePiece({ kind: 'cylinder', x: 2, y: 2, size: [1, 1, 1], sweep: 180 }, map), 0, half, null);
+    let halfVolume = 0;
+    for (let i = 0; i + 8 < half.positions.length; i += 9) { const P = half.positions; const a = [P[i] - 2.5, P[i + 1], P[i + 2] - 2.5], b = [P[i + 3] - 2.5, P[i + 4], P[i + 5] - 2.5], c = [P[i + 6] - 2.5, P[i + 7], P[i + 8] - 2.5]; halfVolume += (a[0] * (b[1] * c[2] - b[2] * c[1]) - a[1] * (b[0] * c[2] - b[2] * c[0]) + a[2] * (b[0] * c[1] - b[1] * c[0])) / 6; }
+    assert.ok(Math.abs(halfVolume - Math.PI / 8) < 0.01, 'a cylinder swept half way is half a cylinder, closed by two flat faces');
+    const horseshoe = R.pieceFootprint(R.normalizePiece({ kind: 'tube', x: 10, y: 10, size: [10, 1, 8], sweep: 220 }, map));
+    assert.ok(!horseshoe.some(c => c[1] < 8), 'a horseshoe swept 220 degrees is open at the front (north)');
+    assert.ok(horseshoe.some(c => c[1] > 12), 'and solid at the back');
+    // A hollow shape's wall can be thin: a rail ring blocks a narrow band, not a quarter of its width.
+    const fat = R.pieceFootprint(R.normalizePiece({ kind: 'ring', x: 10, y: 10, size: [20, 1, 20] }, map)).length;
+    const thin = R.pieceFootprint(R.normalizePiece({ kind: 'ring', x: 10, y: 10, size: [20, 1, 20], thick: 0.04 }, map)).length;
+    assert.ok(thin < fat / 2, `a thin ring blocks far fewer cells (${thin}) than a fat one (${fat})`);
+    assert.equal(R.normalizePiece({ kind: 'ring', x: 1, y: 1, thick: 0.04 }, map).thick, 0.04);
+    // Glass is a see-through pane the height of a wall; a Glow material is lit from within.
+    assert.ok(R.PIECE_KINDS.includes('glass'));
+    assert.equal(R.pieceHeight('glass'), R.PIECE_STOREY);
+    assert.deepEqual({ ...R.materialLook('Glass') }, { glass: true, glow: false });
+    assert.deepEqual({ ...R.materialLook('ConsoleGlow') }, { glass: false, glow: true });
+    assert.deepEqual({ ...R.materialLook('Stone') }, { glass: false, glow: false });
+    assert.match(read('runtime/reactor_3d_lighting.js'), /mix\(rrLight\(vRRWorldPos\), vec3\(1\.0\), rrSelfLit\)/, 'the lit shader lets a self-lit material ignore the lights');
     // Hollow shapes block only their walls: a tube's middle, an arch's opening, are walked into.
     const tube = R.normalizePiece({ kind: 'tube', x: 10, y: 10, size: [6, 5, 6] }, map);
     const tubeCells = R.pieceFootprint(tube).map(c => c.join(','));
@@ -800,5 +821,5 @@ test('the round pieces: a shape has a size and a turn, blocks its round footprin
     // The palette lists the kinds with their own icons and names in every locale.
     const palette = read('editor/src/PieceBuilderManager.js');
     for (const kind of ['dome', 'cylinder', 'cone']) assert.match(palette, new RegExp(`\\b${kind}: '`), kind + ' has an icon');
-    assert.match(read('editor/src/utils/MapElevation.js'), /'box', 'wedge', 'pyramid', 'prism', 'hull', 'spike', 'cylinder', 'capsule', 'tube', 'cone', 'dome', 'sphere', 'dish', 'fin', 'arch', 'tunnel', 'ring'\]/, 'the editor keeps the same kinds');
+    assert.match(read('editor/src/utils/MapElevation.js'), /'window', 'fence', 'glass'\]/, 'the editor keeps the same kinds');
 });
