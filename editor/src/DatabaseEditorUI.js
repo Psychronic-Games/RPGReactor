@@ -2530,7 +2530,7 @@ class DatabaseEditorUI {
             graphicsContainer.appendChild(svBox);
             preview.appendChild(graphicsContainer);
 
-        } else if ((type === 'items' || type === 'weapons' || type === 'armors' || type === 'skills') && entry.iconIndex !== undefined) {
+        } else if ((type === 'items' || type === 'weapons' || type === 'armors' || type === 'skills' || type === 'states') && entry.iconIndex !== undefined) {
             // Show item icon with click handler
             const iconWrapper = document.createElement('div');
             iconWrapper.style.cssText = `
