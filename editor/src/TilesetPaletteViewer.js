@@ -126,6 +126,8 @@ class TilesetPaletteViewer {
                     ${this.createLayerTab('R', TilesetPaletteViewer.tabIcon('region'))}
                     ${this.createLayerTab('O', TilesetPaletteViewer.tabIcon('object3d'))}
                     ${this.createLayerTab('M', TilesetPaletteViewer.tabIcon('model3d'), '3D-M')}
+                    ${this.createLayerTab('T', TilesetPaletteViewer.tabIcon('terrain'), '3D-T')}
+                    ${this.createLayerTab('B', TilesetPaletteViewer.tabIcon('pieces'), '3D-B')}
                 </div>
 
                 <!-- Tileset Preview Canvas -->
@@ -144,6 +146,10 @@ class TilesetPaletteViewer {
 
                 <!-- Model props UI Container (shown when M tab is active) -->
                 <div id="model-props-ui-container" style="flex: 1; display: none; min-height: 0;"></div>
+
+                <!-- Terrain UI Container (shown when T tab is active) -->
+                <div id="terrain-ui-container" style="flex: 1; display: none; min-height: 0;"></div>
+                <div id="pieces-ui-container" style="flex: 1; display: none; min-height: 0;"></div>
 
                 <!-- Selection Info -->
                 <div id="selection-info" style="padding: 8px; background-color: var(--color-bg-list-item); border-top: 1px solid var(--color-border); font-size: 10px; color: var(--color-text-muted); flex-shrink: 0;">
@@ -186,6 +192,20 @@ class TilesetPaletteViewer {
             return open + cells.map(([x, y, fill]) =>
                 `<rect x="${x}" y="${y}" width="5.5" height="5.5" rx="1.2" fill="${fill}"/>`
             ).join('') + '</svg>';
+        }
+        if (kind === 'pieces') {
+            // Two blocks and a gable on them: things built on the ground.
+            return open
+                + '<path d="M1.5 9.5h6v5h-6z" fill="#c9a06b" stroke="#7a5a30" stroke-width=".8"/>'
+                + '<path d="M8.5 9.5h6v5h-6z" fill="#b8b8b8" stroke="#666666" stroke-width=".8"/>'
+                + '<path d="M1 9.5l7-6 7 6z" fill="#c1443c" stroke="#7a2a24" stroke-width=".8"/></svg>';
+        }
+        if (kind === 'terrain') {
+            // Two green hills on a strip of ground: land with a shape.
+            return open
+                + '<path d="M1 14.5h14v1H1z" fill="#6b7a8a"/>'
+                + '<path d="M1 14.5c2-6 4.5-8 7-7.5 1.5.3 2.3 1.6 3.5 1.2 1.5-.5 2.3-2 3.5-1.7v8z" fill="#3fa34d"/>'
+                + '<path d="M1 14.5c1.5-3.2 3.2-5 5-5.3 2.4-.4 3.6 2.4 6.2 2.6 1.1.1 2-.4 2.8-.9v3.6z" fill="#2c7a3a"/></svg>';
         }
         if (kind === 'model3d') {
             // A model on a stand: a teal monitor-shaped block on a plinth,
@@ -375,8 +395,10 @@ class TilesetPaletteViewer {
 
         if (this.mapEditor?.shadowPenMode) this.mapEditor.setShadowPenMode(false);
         this.currentLayer = layerName;
-        if (layerName !== 'M') this.lastPaintLayer = layerName;
-        window.reactor?.claimMapTool?.(layerName === 'M' ? 'models' : 'paint');
+        // M and T are tools, not paint layers: a return to painting goes back
+        // to the last tile layer, and each claims the map for its own tool.
+        if (layerName !== 'M' && layerName !== 'T' && layerName !== 'B') this.lastPaintLayer = layerName;
+        window.reactor?.claimMapTool?.(layerName === 'M' ? 'models' : layerName === 'T' ? 'terrain' : layerName === 'B' ? 'pieces' : 'paint');
 
         // Update tab styles
         document.querySelectorAll('.tileset-layer-tab').forEach(tab => {
@@ -399,8 +421,14 @@ class TilesetPaletteViewer {
 
         const object3dContainer = document.getElementById('object3d-ui-container');
         const modelPropsContainer = document.getElementById('model-props-ui-container');
+        const terrainContainer = document.getElementById('terrain-ui-container');
+        if (terrainContainer) terrainContainer.style.display = layerName === 'T' ? 'flex' : 'none';
+        const piecesContainer = document.getElementById('pieces-ui-container');
+        if (piecesContainer) piecesContainer.style.display = layerName === 'B' ? 'flex' : 'none';
 
         if (layerName !== 'M') this.onModelPropsTabLeft?.();
+        if (layerName !== 'T') this.onTerrainTabLeft?.();
+        if (layerName !== 'B') this.onPiecesTabLeft?.();
         if (layerName === 'R') {
             // Show region UI, hide tileset preview
             if (tilesetContainer) tilesetContainer.style.display = 'none';
@@ -420,6 +448,22 @@ class TilesetPaletteViewer {
             if (modelPropsContainer) modelPropsContainer.style.display = 'none';
             if (selectionInfo) selectionInfo.style.display = 'none';
             this.onObject3DTabSelected?.();
+        } else if (layerName === 'T') {
+            // Terrain: the brushes that shape a 3D map's ground, painted in the 3D view.
+            if (tilesetContainer) tilesetContainer.style.display = 'none';
+            if (regionContainer) regionContainer.style.display = 'none';
+            if (object3dContainer) object3dContainer.style.display = 'none';
+            if (modelPropsContainer) modelPropsContainer.style.display = 'none';
+            if (selectionInfo) selectionInfo.style.display = 'none';
+            this.onTerrainTabSelected?.();
+        } else if (layerName === 'B') {
+            // Pieces: the 3D tileset, laid in the 3D view.
+            if (tilesetContainer) tilesetContainer.style.display = 'none';
+            if (regionContainer) regionContainer.style.display = 'none';
+            if (object3dContainer) object3dContainer.style.display = 'none';
+            if (modelPropsContainer) modelPropsContainer.style.display = 'none';
+            if (selectionInfo) selectionInfo.style.display = 'none';
+            this.onPiecesTabSelected?.();
         } else if (layerName === 'M') {
             // Model props: 3D models placed on the map from a list.
             if (tilesetContainer) tilesetContainer.style.display = 'none';

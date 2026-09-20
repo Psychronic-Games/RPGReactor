@@ -5561,6 +5561,9 @@ Spriteset_Map.prototype.updateReactor3D = function() {
     // _realX/_realY interpolate between cells, so the camera glides rather than
     // stepping a whole tile at a time.
     this.updateReactor3DCamera();
+    if (state.scene.updateSky) state.scene.updateSky(state.viewport.camera ? state.viewport.camera() : null, Graphics.frameCount);
+    // Inside a built house the roof and any wall in the way are cut around the player.
+    if (state.scene.updateCutaway) state.scene.updateCutaway(state.viewport.camera ? state.viewport.camera() : null, $dataMap, $gamePlayer);
     this.updateReactor3DLights(state);
     state.scene.updateDestination($gameTemp, $dataMap, Graphics.frameCount);
     // Warm any template that landed after the scene started (the pass
@@ -5905,8 +5908,9 @@ Spriteset_Map.prototype.updateReactor3DCamera = function() {
     const cameras = typeof RPGReactorCamera3D !== "undefined" ? RPGReactorCamera3D : null;
     if (cameras && cameras.update(this)) return;
     const focus = this.reactor3DCameraFocus();
-    const height = Reactor3D.elevationAt(
-        $dataMap, Math.round(focus.x), Math.round(focus.y));
+    // The floor the player is on, in a house with two.
+    const height = Reactor3D.groundHeightAt($dataMap, focus.x + 0.5, focus.y + 0.5,
+        typeof $gamePlayer !== "undefined" && $gamePlayer ? $gamePlayer._reactorGround : undefined);
     // Zoom is a scale on the 2D screen, and a distance in three dimensions:
     // zooming in halves how far away the camera stands rather than making the
     // picture bigger, which is the same thing on a flat map and the right thing

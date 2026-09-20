@@ -111,6 +111,7 @@
         return {
             triangleCount,
             order,
+            bounds,
             nodeBounds: Float32Array.from(nodeBounds),
             nodeLeft: Int32Array.from(nodeLeft),
             nodeRight: Int32Array.from(nodeRight),
@@ -244,7 +245,58 @@
         return best;
     }
 
-    const MeshBvh = { build, forGeometry, raycastLocal, raycastMeshes, LEAF_SIZE };
+    /**
+     * Vertices moved but no triangle was added or removed: grow or shrink
+     * every node's box in place instead of building the tree again. Nodes
+     * are numbered parent-before-children, so walking them backwards meets
+     * every child before its parent. A geometry with no tree yet needs
+     * nothing; it is built on its first ask.
+     */
+    function refit(geometry) {
+        const tree = geometry ? cache.get(geometry) : null;
+        if (!tree) return false;
+        const position = geometry.attributes && geometry.attributes.position;
+        if (!position) return false;
+        const pos = position.array;
+        const { bounds, corner, triangleCount, order, nodeBounds, nodeLeft, nodeRight, nodeOffset, nodeCount } = tree;
+        for (let t = 0; t < triangleCount; t++) {
+            let minX = Infinity, minY = Infinity, minZ = Infinity, maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+            for (let k = 0; k < 3; k++) {
+                const v = corner(t, k) * 3;
+                const x = pos[v], y = pos[v + 1], z = pos[v + 2];
+                if (x < minX) minX = x; if (x > maxX) maxX = x;
+                if (y < minY) minY = y; if (y > maxY) maxY = y;
+                if (z < minZ) minZ = z; if (z > maxZ) maxZ = z;
+            }
+            bounds[t * 6] = minX; bounds[t * 6 + 1] = minY; bounds[t * 6 + 2] = minZ;
+            bounds[t * 6 + 3] = maxX; bounds[t * 6 + 4] = maxY; bounds[t * 6 + 5] = maxZ;
+        }
+        for (let id = nodeLeft.length - 1; id >= 0; id--) {
+            const b = id * 6;
+            let minX = Infinity, minY = Infinity, minZ = Infinity, maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+            if (nodeLeft[id] < 0) {
+                const first = nodeOffset[id], count = nodeCount[id];
+                for (let i = first; i < first + count; i++) {
+                    const t = order[i] * 6;
+                    if (bounds[t] < minX) minX = bounds[t]; if (bounds[t + 3] > maxX) maxX = bounds[t + 3];
+                    if (bounds[t + 1] < minY) minY = bounds[t + 1]; if (bounds[t + 4] > maxY) maxY = bounds[t + 4];
+                    if (bounds[t + 2] < minZ) minZ = bounds[t + 2]; if (bounds[t + 5] > maxZ) maxZ = bounds[t + 5];
+                }
+            } else {
+                for (const child of [nodeLeft[id], nodeRight[id]]) {
+                    const c = child * 6;
+                    if (nodeBounds[c] < minX) minX = nodeBounds[c]; if (nodeBounds[c + 3] > maxX) maxX = nodeBounds[c + 3];
+                    if (nodeBounds[c + 1] < minY) minY = nodeBounds[c + 1]; if (nodeBounds[c + 4] > maxY) maxY = nodeBounds[c + 4];
+                    if (nodeBounds[c + 2] < minZ) minZ = nodeBounds[c + 2]; if (nodeBounds[c + 5] > maxZ) maxZ = nodeBounds[c + 5];
+                }
+            }
+            nodeBounds[b] = minX; nodeBounds[b + 1] = minY; nodeBounds[b + 2] = minZ;
+            nodeBounds[b + 3] = maxX; nodeBounds[b + 4] = maxY; nodeBounds[b + 5] = maxZ;
+        }
+        return true;
+    }
+
+    const MeshBvh = { build, forGeometry, refit, raycastLocal, raycastMeshes, LEAF_SIZE };
     root.RRMeshBvh = MeshBvh;
     if (typeof module !== 'undefined' && module.exports) module.exports = MeshBvh;
 })(typeof globalThis !== 'undefined' ? globalThis : window);

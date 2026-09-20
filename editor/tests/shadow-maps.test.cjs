@@ -482,7 +482,7 @@ test('both viewports render the maps once a frame before the first pass, and the
     assert.match(three, /Reactor3D\.Shadows\._renderer === this\._renderer\) Reactor3D\.Shadows\.dispose\(\);/);
     // The picture a map stands on (a pinned parallax as ground) is lit like
     // the tiles over it: it is the whole floor of a parallax room.
-    assert.match(three, /geometry\.translate\(width \/ 2, lift, height \/ 2\);[\s\S]{0,2600}?material\.__reactorShaded = true;\n\s*Reactor3D\.litMaterial\(material\);\n\s*this\._materials\.push\(material\);\n\n\s*const mesh = new THREE\.Mesh\(geometry, material\);\n\s*\/\/ Beneath the tile geometry/);
+    assert.match(three, /const geometry = this\.groundPlane\(width, height, lift\);[\s\S]{0,2600}?material\.__reactorShaded = true;\n\s*Reactor3D\.litMaterial\(material\);\n\s*this\._materials\.push\(material\);\n\n\s*const mesh = new THREE\.Mesh\(geometry, material\);\n\s*\/\/ Beneath the tile geometry/);
     // The static rows draw models at their coarsest level, through three's ordinary render with the casters swapped to depth materials.
     assert.match(three, /const swapped = this\._swapCasters\(this\._static\);\s*try \{\s*this\._atCoarsestLod\(\(\) => \{/);
     assert.match(three, /Reactor3D\.SHADOW_LAYER_STATIC, this\._static, tile\.candidate && tile\.candidate\.carrier\);/, 'a light never shadows from the model it rides');

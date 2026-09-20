@@ -7769,7 +7769,12 @@ Game_CharacterBase.prototype.isMapPassable = function(x, y, d) {
     const x2 = $gameMap.roundXWithDirection(x, d);
     const y2 = $gameMap.roundYWithDirection(y, d);
     const d2 = this.reverseDir(d);
-    return $gameMap.isPassable(x, y, d) && $gameMap.isPassable(x2, y2, d2);
+    if (!($gameMap.isPassable(x, y, d) && $gameMap.isPassable(x2, y2, d2))) return false;
+    // A 3D map's terrain can be too steep to climb between two cells the
+    // tiles would otherwise allow.
+    if (typeof Reactor3D !== "undefined" && Reactor3D.terrainBlocks && typeof $dataMap !== "undefined"
+        && Reactor3D.isMap3D && Reactor3D.isMap3D($dataMap) && Reactor3D.terrainBlocks($dataMap, x, y, x2, y2, this._reactorGround)) return false;
+    return true;
 };
 
 Game_CharacterBase.prototype.isCollidedWithCharacters = function(x, y) {
@@ -7798,9 +7803,13 @@ Game_CharacterBase.prototype.copyPosition = function(character) {
     this._realX = character._realX;
     this._realY = character._realY;
     this._direction = character._direction;
+    // The same floor of the house, too.
+    this._reactorGround = character._reactorGround;
 };
 
 Game_CharacterBase.prototype.locate = function(x, y) {
+    // A placed character starts on the ground floor of whatever stands here.
+    this._reactorGround = undefined;
     this.setPosition(x, y);
     this.straighten();
     this.refreshBushDepth();
@@ -7872,8 +7881,7 @@ Game_CharacterBase.prototype.reactor3DScreenPoint = function() {
     // The ground, and the same ground the sprite is drawn on: this feeds
     // `screenX`/`screenY`, which plugins read to place their own overlays, and
     // the two have to agree.
-    const ground = Reactor3D.elevationAt(
-        $dataMap, Math.round(this._realX), Math.round(this._realY));
+    const ground = Reactor3D.characterGround($dataMap, this);
     // The middle of the cell, matching the foot of every standing prop in the
     // 3D scene. The 2D `screenY` below draws a sprite's feet on the cell's
     // bottom edge, which is a screen convention rather than a world position.

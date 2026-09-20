@@ -1,0 +1,617 @@
+/**
+ * PieceBuilderManager - the Pieces tab: a 3D tileset painted on a 3D map.
+ *
+ * A piece is a block of one kind (wall block, floor, pillar, stair, ramp,
+ * gable roof, doorway, window, fence) on a cell at a level, turned in
+ * quarter turns, wearing a material image from img/materials. Laying them
+ * happens in the 3D view (MapEditor3D asks `active` and calls
+ * `beginStroke` / `paintAt` / `endStroke` with a cell and level); this owns
+ * the chosen piece, the panel and an undo stack of whole piece lists.
+ */
+class PieceBuilderManager {
+    constructor(projectController) {
+        this.projectController = projectController;
+        this.active = false;
+        this.kind = 'wall';
+        this.rot = 0;
+        this.level = 0;
+        this.material = '';
+        this.mode = 'place';
+        this.structure = '';
+        this.selectedGroup = 0;
+        this.panel = null;
+        this.undoStack = [];
+        this.redoStack = [];
+        this._stroke = null;
+        this._onKeyDown = event => this.handleKey(event);
+        this._materialsCache = null;
+    }
+
+    _t(key, params) { return window.I18n ? window.I18n.t(key, params) : key; }
+    elevation() { return typeof RRMapElevation !== 'undefined' ? RRMapElevation : (window.RRMapElevation || null); }
+    currentMap() { return this.projectController?.getTilemapManager?.()?.currentMap || null; }
+    projectPath() {
+        const pc = this.projectController;
+        const project = pc?.getCurrentProject ? pc.getCurrentProject() : pc?.currentProject;
+        return project?.path || null;
+    }
+    kinds() { return this.elevation()?.PIECE_KINDS || ['wall', 'block', 'floor', 'pillar', 'stair', 'ramp', 'roof', 'doorway', 'window', 'fence']; }
+
+    /** The images under img/materials, each once, as {name, url}. */
+    materials(refresh = false) {
+        if (this._materialsCache && !refresh) return this._materialsCache;
+        const projectPath = this.projectPath();
+        let list = [];
+        try {
+            if (projectPath && typeof RRAssetFiles !== 'undefined' && typeof require === 'function') {
+                const path = require('path');
+                const directory = path.join(projectPath, 'img', 'materials');
+                list = RRAssetFiles.listImages(directory).map(record => ({
+                    name: record.imageReference || record.name,
+                    url: RRAssetFiles.imageUrlFor(directory, record.imageReference || record.name)
+                }));
+            }
+        } catch (error) {
+            console.warn('The materials folder could not be read.', error);
+            list = [];
+        }
+        this._materialsCache = list;
+        return list;
+    }
+
+    static ICONS = {
+        wall: 'M4 4h16v17H4z M4 9h16 M4 15h16 M10 4v5 M14 9v6 M8 15v6',
+        block: 'M4 7l8-4 8 4v10l-8 4-8-4z M4 7l8 4 8-4 M12 11v10',
+        floor: 'M3 13l9-4 9 4-9 4z M3 13v2l9 4 9-4v-2',
+        pillar: 'M8 4h8 M9 4v16 M15 4v16 M7 20h10 M9 6h6',
+        stair: 'M3 20h5v-4h4v-4h4v-4h5 M3 20v-4h5 M8 16v-4h4 M12 12V8h4',
+        ramp: 'M3 19h18V7z M3 19v2h18v-2',
+        roof: 'M3 14l9-9 9 9 M5 14v6h14v-6 M9 20v-4h6v4',
+        doorway: 'M5 20V5h14v15 M9 20v-9h6v9',
+        window: 'M4 4h16v16H4z M9 8h6v6H9z M12 8v6 M9 11h6',
+        fence: 'M5 21V9l2-3 2 3v12 M15 21V9l2-3 2 3v12 M9 12h6 M9 17h6'
+    };
+
+    initializeUI(container) {
+        if (!container) return;
+        this.panel = container;
+        const t = key => this._t(key);
+        if (!container.querySelector('.rr-pieces-panel')) {
+            const icon = kind => `<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="${PieceBuilderManager.ICONS[kind]}" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/></svg>`;
+            container.innerHTML = `
+                <div class="rr-pieces-panel" style="display: flex; flex-direction: column; gap: 10px; padding: 10px; overflow-y: auto; min-height: 0;">
+                    <div style="font-size: 11px; color: var(--color-text-muted); line-height: 1.4;" data-i18n="pieces.hint">${t('pieces.hint')}</div>
+                    <div class="database-field-label" style="font-size: 11px; margin: 0;" data-i18n="pieces.piece">${t('pieces.piece')}</div>
+                    <div class="rr-pieces-kinds" role="radiogroup" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px;">
+                        ${this.kinds().map(kind => `<button type="button" class="rr-btn-secondary rr-pieces-kind" data-piece-kind="${kind}" role="radio" aria-checked="${kind === this.kind}" style="display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 5px 2px; font-size: 11px;">${icon(kind)}<span data-i18n="pieces.kind.${kind}">${t('pieces.kind.' + kind)}</span></button>`).join('')}
+                    </div>
+                    <div class="database-field-label" style="font-size: 11px; margin: 0;" data-i18n="pieces.material">${t('pieces.material')}</div>
+                    <div class="rr-pieces-materials" role="radiogroup" style="display: flex; flex-wrap: wrap; gap: 4px;"></div>
+                    <div class="rr-pieces-materials-hint" style="font-size: 11px; color: var(--color-text-muted); line-height: 1.4;" data-i18n="pieces.materialsHint">${t('pieces.materialsHint')}</div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; align-items: center; font-size: 11px; color: var(--color-text-muted);">
+                        <button type="button" class="rr-btn-secondary rr-pieces-turn" style="padding: 5px;"><span data-i18n="pieces.turn">${t('pieces.turn')}</span> <span class="rr-pieces-rot-value" style="color: var(--color-text);">0°</span></button>
+                        <div style="display: flex; align-items: center; gap: 4px; justify-content: center;">
+                            <button type="button" class="rr-btn-secondary rr-pieces-level-down" style="padding: 4px 8px;" aria-label="-">−</button>
+                            <span><span data-i18n="pieces.level">${t('pieces.level')}</span> <span class="rr-pieces-level-value" style="color: var(--color-text);">0</span></span>
+                            <button type="button" class="rr-btn-secondary rr-pieces-level-up" style="padding: 4px 8px;" aria-label="+">+</button>
+                        </div>
+                    </div>
+                    <div class="database-field-label" style="font-size: 11px; margin: 0;" data-i18n="pieces.structure">${t('pieces.structure')}</div>
+                    <div style="display: flex; gap: 4px; align-items: center;">
+                        <select class="rr-pieces-structure database-field-value" style="flex: 1; min-width: 0;"></select>
+                        <button type="button" class="rr-btn-secondary rr-pieces-stamp" role="radio" aria-checked="false" style="padding: 5px 8px; font-size: 12px; white-space: nowrap;" data-i18n="pieces.stamp">${t('pieces.stamp')}</button>
+                    </div>
+                    <div class="rr-pieces-structure-hint" style="font-size: 11px; color: var(--color-text-muted); line-height: 1.4;" data-i18n="pieces.stampHint">${t('pieces.stampHint')}</div>
+                    <div class="rr-pieces-modes" role="radiogroup" style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px;">
+                        ${['place', 'erase', 'move'].map(mode => `<button type="button" class="rr-btn-secondary rr-pieces-mode" data-piece-mode="${mode}" role="radio" aria-checked="${mode === this.mode}" style="padding: 6px 4px; font-size: 12px;" data-i18n="pieces.${mode}">${t('pieces.' + mode)}</button>`).join('')}
+                        <button type="button" class="rr-btn-secondary rr-pieces-remove-structure" style="padding: 6px 4px; font-size: 12px;" disabled data-i18n="pieces.removeStructure">${t('pieces.removeStructure')}</button>
+                    </div>
+                    <div class="rr-pieces-transform" style="display: none; gap: 4px; align-items: center; font-size: 11px; color: var(--color-text-muted);">
+                        <button type="button" class="rr-btn-secondary rr-pieces-rotate-structure" style="padding: 5px 8px;" data-i18n="pieces.rotate">${t('pieces.rotate')}</button>
+                        <span data-i18n="pieces.scale">${t('pieces.scale')}</span>
+                        <button type="button" class="rr-btn-secondary rr-pieces-scale-down" style="padding: 4px 8px;" aria-label="-">−</button>
+                        <span class="rr-pieces-scale-value" style="color: var(--color-text);">1</span>
+                        <button type="button" class="rr-btn-secondary rr-pieces-scale-up" style="padding: 4px 8px;" aria-label="+">+</button>
+                    </div>
+                    <div style="font-size: 11px; color: var(--color-text-muted); line-height: 1.4;" data-i18n="pieces.moveHint">${t('pieces.moveHint')}</div>
+                    <div style="display: flex; gap: 4px; flex-wrap: wrap;">
+                        <button type="button" class="rr-btn-secondary rr-pieces-undo" style="flex: 1; padding: 5px;" data-i18n="pieces.undo">${t('pieces.undo')}</button>
+                        <button type="button" class="rr-btn-secondary rr-pieces-redo" style="flex: 1; padding: 5px;" data-i18n="pieces.redo">${t('pieces.redo')}</button>
+                    </div>
+                    <button type="button" class="rr-btn-secondary rr-pieces-clear" style="padding: 5px;" data-i18n="pieces.clear">${t('pieces.clear')}</button>
+                    <div class="rr-pieces-status" style="font-size: 11px; color: var(--color-text-muted);" data-rr-i18n-skip></div>
+                    <div style="font-size: 11px; color: var(--color-text-muted); line-height: 1.4;" data-i18n="pieces.keys">${t('pieces.keys')}</div>
+                </div>`;
+            container.querySelectorAll('.rr-pieces-kind').forEach(button => button.addEventListener('click', () => this.setKind(button.dataset.pieceKind)));
+            container.querySelectorAll('.rr-pieces-mode').forEach(button => button.addEventListener('click', () => this.setMode(button.dataset.pieceMode)));
+            container.querySelector('.rr-pieces-turn').addEventListener('click', () => this.turn());
+            container.querySelector('.rr-pieces-level-down').addEventListener('click', () => this.setLevel(this.level - 1));
+            container.querySelector('.rr-pieces-level-up').addEventListener('click', () => this.setLevel(this.level + 1));
+            container.querySelector('.rr-pieces-undo').addEventListener('click', () => this.undo());
+            container.querySelector('.rr-pieces-redo').addEventListener('click', () => this.redo());
+            container.querySelector('.rr-pieces-clear').addEventListener('click', () => this.clear());
+            container.querySelector('.rr-pieces-remove-structure').addEventListener('click', () => this.removeSelectedGroup());
+            container.querySelector('.rr-pieces-rotate-structure').addEventListener('click', () => this.rotateSelected());
+            container.querySelector('.rr-pieces-scale-down').addEventListener('click', () => this.scaleSelected(-1));
+            container.querySelector('.rr-pieces-scale-up').addEventListener('click', () => this.scaleSelected(1));
+            container.querySelector('.rr-pieces-structure').addEventListener('change', event => { this.structure = event.target.value || ''; if (this.structure) this.setMode('stamp'); });
+            container.querySelector('.rr-pieces-stamp').addEventListener('click', () => this.setMode(this.mode === 'stamp' ? 'place' : 'stamp'));
+        }
+        this.renderStructures(true);
+        this.renderMaterials(true);
+        this.refreshStatus();
+        this._syncPanel();
+    }
+
+    /** The swatches: a plain one, then every image in img/materials. */
+    renderMaterials(refresh = false) {
+        const holder = this.panel?.querySelector('.rr-pieces-materials');
+        if (!holder) return;
+        const materials = this.materials(refresh);
+        if (materials.length && !materials.some(entry => entry.name === this.material)) this.material = this.material || '';
+        // An <img>, not a CSS background: the editor page cannot load a
+        // project file as a stylesheet image, while an image element can.
+        const swatch = (name, inner, title) => `<button type="button" class="rr-pieces-material" data-piece-material="${name.replace(/"/g, '&quot;')}" role="radio" aria-checked="${name === this.material}" title="${title.replace(/"/g, '&quot;')}" style="width: 34px; height: 34px; border-radius: 4px; border: 2px solid var(--color-border-input); padding: 0; cursor: pointer; overflow: hidden; background: linear-gradient(135deg, #9a9a9a, #6f6f6f);">${inner}</button>`;
+        holder.innerHTML = swatch('', '', this._t('pieces.plain'))
+            + materials.map(entry => swatch(entry.name, `<img src="${entry.url.replace(/"/g, '&quot;')}" alt="" draggable="false" style="width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none;">`, entry.name)).join('');
+        holder.querySelectorAll('.rr-pieces-material').forEach(button => button.addEventListener('click', () => this.setMaterial(button.dataset.pieceMaterial)));
+        const hint = this.panel.querySelector('.rr-pieces-materials-hint');
+        if (hint) hint.style.display = materials.length ? 'none' : '';
+    }
+
+    /** The plans under 3d/Structures, by name. */
+    structures(refresh = false) {
+        if (this._structuresCache && !refresh) return this._structuresCache;
+        let list = [];
+        try {
+            const projectPath = this.projectPath();
+            if (projectPath && typeof require === 'function') {
+                const fs = require('fs'), path = require('path');
+                const directory = path.join(projectPath, '3d', 'Structures');
+                if (fs.existsSync(directory)) {
+                    for (const file of fs.readdirSync(directory).filter(name => /\.json$/i.test(name)).sort()) {
+                        try {
+                            const plan = JSON.parse(fs.readFileSync(path.join(directory, file), 'utf8'));
+                            if (plan && Array.isArray(plan.size) && Array.isArray(plan.floors)) list.push({ file, name: plan.name || file.replace(/\.json$/i, ''), plan });
+                        } catch (error) { console.warn(`${file} is not a structure plan.`, error); }
+                    }
+                }
+            }
+        } catch (error) { list = []; }
+        this._structuresCache = list;
+        return list;
+    }
+
+    renderStructures(refresh = false) {
+        const select = this.panel?.querySelector('.rr-pieces-structure');
+        if (!select) return;
+        const list = this.structures(refresh);
+        select.innerHTML = `<option value="">${this._t(list.length ? 'pieces.structureNone' : 'pieces.noStructures')}</option>`
+            + list.map(entry => `<option value="${entry.file.replace(/"/g, '&quot;')}">${entry.name.replace(/</g, '&lt;')} (${entry.plan.size[0]}×${entry.plan.size[1]})</option>`).join('');
+        select.value = list.some(entry => entry.file === this.structure) ? this.structure : '';
+        if (!select.value) this.structure = '';
+        select.disabled = !list.length;
+    }
+
+    structurePlan() {
+        return this.structures().find(entry => entry.file === this.structure)?.plan || null;
+    }
+
+    /**
+     * Put a plan down with its top-left cell at (x, y): the terrain under
+     * it is levelled to its mean, whatever stood on the footprint goes, and
+     * the plan's pieces take its place — one undo step for the lot.
+     */
+    stampAt(x, y) {
+        const map = this.currentMap(), elevation = this.elevation(), plan = this.structurePlan();
+        const SP = typeof RRStructurePlan !== 'undefined' ? RRStructurePlan : null;
+        if (!map || !elevation || !plan || !SP) return false;
+        const [W, H] = plan.size;
+        const X0 = Math.max(0, Math.min(map.width - W, Math.floor(x))), Y0 = Math.max(0, Math.min(map.height - H, Math.floor(y)));
+        if (W > map.width || H > map.height) return false;
+        this.undoStack.push(this._snapshot(map));
+        if (this.undoStack.length > 50) this.undoStack.shift();
+        this.redoStack.length = 0;
+        if (elevation.hasTerrain(map)) {
+            const grid = elevation.terrain(map), stride = map.width + 1;
+            let sum = 0, n = 0;
+            for (let yy = Y0; yy <= Y0 + H; yy++) for (let xx = X0; xx <= X0 + W; xx++) { sum += Number(grid[yy * stride + xx]) || 0; n++; }
+            const mean = Math.round((sum / n) * 1000) / 1000;
+            for (let yy = Y0; yy <= Y0 + H; yy++) for (let xx = X0; xx <= X0 + W; xx++) grid[yy * stride + xx] = mean;
+        }
+        const group = elevation.nextPieceGroup(map);
+        this._lay(map, plan, { group, plan: this.structure, x: X0, y: Y0, rot: 0, scale: 1 });
+        this.announce(true);
+        this.refreshStatus();
+        return true;
+    }
+
+    /** Build a plan's pieces for a structure record: the pad levelled, the footprint cleared, models pushed off. */
+    _lay(map, plan, record) {
+        const elevation = this.elevation(), SP = typeof RRStructurePlan !== 'undefined' ? RRStructurePlan : null;
+        if (!elevation || !SP) return false;
+        const shaped = SP.transform(plan, record.rot, record.scale);
+        const [W, H] = shaped.size;
+        const X0 = Math.max(0, Math.min(map.width - W, record.x)), Y0 = Math.max(0, Math.min(map.height - H, record.y));
+        if (W > map.width || H > map.height) return false;
+        record.x = X0; record.y = Y0;
+        if (elevation.hasTerrain(map)) {
+            const grid = elevation.terrain(map), stride = map.width + 1;
+            let sum = 0, n = 0;
+            for (let yy = Y0; yy <= Y0 + H; yy++) for (let xx = X0; xx <= X0 + W; xx++) { sum += Number(grid[yy * stride + xx]) || 0; n++; }
+            const mean = Math.round((sum / n) * 1000) / 1000;
+            for (let yy = Y0; yy <= Y0 + H; yy++) for (let xx = X0; xx <= X0 + W; xx++) grid[yy * stride + xx] = mean;
+        }
+        elevation.relocatePropsOff(map, X0, Y0, W, H);
+        const kept = elevation.pieces(map).filter(piece => piece.group !== record.group && !(piece.x >= X0 && piece.x < X0 + W && piece.y >= Y0 && piece.y < Y0 + H));
+        const firstId = kept.reduce((max, piece) => Math.max(max, piece.id), 0) + 1;
+        elevation.restorePieces(map, kept.concat(SP.build(shaped, X0, Y0, firstId, record.group)));
+        elevation.setStructure(map, record);
+        window.reactor?.modelPropsManager?.render?.();
+        return true;
+    }
+
+    /** The selected structure, built again from its plan with a changed record. */
+    _restamp(map, change) {
+        const elevation = this.elevation();
+        const record = elevation.structureOf(map, this.selectedGroup);
+        if (!record) return false;
+        const plan = this.structures().find(entry => entry.file === record.plan)?.plan;
+        if (!plan) return false;
+        const saved = this._snapshot(map);
+        if (!this._lay(map, plan, Object.assign(record, change))) return false;
+        this.undoStack.push(saved); if (this.undoStack.length > 50) this.undoStack.shift(); this.redoStack.length = 0;
+        this.announce(true); this.refreshStatus(); this._ghostChanged();
+        return true;
+    }
+
+    rotateSelected() {
+        const map = this.currentMap(), elevation = this.elevation();
+        if (!map || !elevation || !this.selectedGroup) return false;
+        if (elevation.structureOf(map, this.selectedGroup)) return this._restamp(map, { rot: (elevation.structureOf(map, this.selectedGroup).rot + 1) % 4 });
+        const saved = elevation.piecesSnapshot(map);
+        if (!elevation.rotatePieceGroup(map, this.selectedGroup)) return false;
+        this.undoStack.push(saved); this.redoStack.length = 0;
+        this.announce(); this.refreshStatus(); this._ghostChanged();
+        return true;
+    }
+
+    scaleSelected(delta) {
+        const map = this.currentMap(), elevation = this.elevation();
+        if (!map || !elevation || !this.selectedGroup) return false;
+        const record = elevation.structureOf(map, this.selectedGroup);
+        if (!record) return false;
+        const scale = Math.max(1, Math.min(4, record.scale + delta));
+        return scale === record.scale ? false : this._restamp(map, { scale });
+    }
+
+    nudgeSelected(dx, dy) {
+        const map = this.currentMap(), elevation = this.elevation();
+        if (!map || !elevation || !this.selectedGroup) return false;
+        const bounds = elevation.pieceGroupBounds(map, this.selectedGroup);
+        return bounds ? this.moveSelectedTo(bounds.x0 + dx, bounds.y0 + dy) : false;
+    }
+
+    /** Move mode, first click: the structure the pointed piece belongs to. */
+    selectGroupAt(target) {
+        this._selectionChanged = true;
+        const map = this.currentMap(), elevation = this.elevation();
+        if (!map || !elevation || !target) return false;
+        const stack = elevation.pieces(map).filter(piece => piece.x === target.x && piece.y === target.y);
+        const piece = stack.find(p => p.z === target.z) || stack.reduce((best, p) => (!best || p.z > best.z ? p : best), null);
+        if (!piece) { this.selectedGroup = 0; this._flash('pieces.notStructure'); this._ghostChanged(); return false; }
+        if (!piece.group) {
+            // A loose piece: everything touching it becomes one building, so a
+            // house built by hand moves as one too.
+            const saved = elevation.piecesSnapshot(map);
+            const group = elevation.groupConnectedPieces(map, target.x, target.y);
+            if (!group) { this.selectedGroup = 0; this._flash('pieces.notStructure'); this._ghostChanged(); return false; }
+            this.undoStack.push(saved); this.redoStack.length = 0;
+            this.selectedGroup = group;
+            this._syncPanel();
+            this._flash('pieces.grouped', { count: elevation.pieceGroup(map, group).length });
+            this._ghostChanged();
+            return true;
+        }
+        this.selectedGroup = piece.group;
+        this._syncPanel();
+        this.refreshStatus();
+        this._ghostChanged();
+        return true;
+    }
+
+    /** Move mode, second click: the selected structure's top-left cell goes here, ground levelled under it. */
+    moveSelectedTo(x, y) {
+        const map = this.currentMap(), elevation = this.elevation();
+        if (!map || !elevation || !this.selectedGroup) return false;
+        const bounds = elevation.pieceGroupBounds(map, this.selectedGroup);
+        if (!bounds) { this.selectedGroup = 0; return false; }
+        // A stamped building is built again at the new place; a hand-built group slides.
+        if (elevation.structureOf(map, this.selectedGroup)) return this._restamp(map, { x: Math.floor(x), y: Math.floor(y) });
+        const W = bounds.x1 - bounds.x0 + 1, H = bounds.y1 - bounds.y0 + 1;
+        const X0 = Math.max(0, Math.min(map.width - W, Math.floor(x))), Y0 = Math.max(0, Math.min(map.height - H, Math.floor(y)));
+        const saved = this._snapshot(map);
+        if (!elevation.movePieceGroup(map, this.selectedGroup, X0, Y0)) return false;
+        elevation.relocatePropsOff(map, X0, Y0, W, H);
+        this.undoStack.push(saved);
+        if (this.undoStack.length > 50) this.undoStack.shift();
+        this.redoStack.length = 0;
+        if (elevation.hasTerrain(map)) {
+            const grid = elevation.terrain(map), stride = map.width + 1;
+            let sum = 0, n = 0;
+            for (let yy = Y0; yy <= Y0 + H; yy++) for (let xx = X0; xx <= X0 + W; xx++) { sum += Number(grid[yy * stride + xx]) || 0; n++; }
+            const mean = Math.round((sum / n) * 1000) / 1000;
+            for (let yy = Y0; yy <= Y0 + H; yy++) for (let xx = X0; xx <= X0 + W; xx++) grid[yy * stride + xx] = mean;
+        }
+        this.announce(true);
+        this.refreshStatus();
+        this._ghostChanged();
+        return true;
+    }
+
+    /** Everything a building edit can touch: pieces, the ground, the building records. */
+    _snapshot(map) {
+        const elevation = this.elevation();
+        return { pieces: elevation.piecesSnapshot(map), terrain: elevation.terrainSnapshot(map), structures: elevation.structures(map) };
+    }
+
+    removeSelectedGroup() {
+        const map = this.currentMap(), elevation = this.elevation();
+        if (!map || !elevation || !this.selectedGroup) return false;
+        const saved = this._snapshot(map);
+        if (!elevation.removePieceGroup(map, this.selectedGroup)) return false;
+        this.undoStack.push(saved); this.redoStack.length = 0;
+        this.selectedGroup = 0;
+        this.announce(); this.refreshStatus(); this._ghostChanged();
+        return true;
+    }
+
+    selectedGroupBounds() {
+        const map = this.currentMap(), elevation = this.elevation();
+        return map && elevation && this.selectedGroup ? elevation.pieceGroupBounds(map, this.selectedGroup) : null;
+    }
+
+    _flash(key, params) {
+        const status = this.panel?.querySelector('.rr-pieces-status');
+        if (status) status.textContent = this._t(key, params);
+    }
+
+    _syncPanel() {
+        const panel = this.panel;
+        if (!panel) return;
+        const stamp = panel.querySelector('.rr-pieces-stamp');
+        if (stamp) stamp.setAttribute('aria-checked', String(this.mode === 'stamp'));
+        const remove = panel.querySelector('.rr-pieces-remove-structure');
+        if (remove) remove.disabled = !this.selectedGroup;
+        const transform = panel.querySelector('.rr-pieces-transform');
+        if (transform) {
+            const map = this.currentMap(), elevation = this.elevation();
+            const record = map && elevation && this.selectedGroup ? elevation.structureOf(map, this.selectedGroup) : null;
+            transform.style.display = this.mode === 'move' && this.selectedGroup ? 'flex' : 'none';
+            const scaleValue = panel.querySelector('.rr-pieces-scale-value');
+            if (scaleValue) scaleValue.textContent = record ? String(record.scale) : '–';
+            for (const cls of ['.rr-pieces-scale-down', '.rr-pieces-scale-up']) { const b = panel.querySelector(cls); if (b) b.disabled = !record; }
+        }
+        panel.querySelectorAll('.rr-pieces-kind').forEach(button => button.setAttribute('aria-checked', String(button.dataset.pieceKind === this.kind)));
+        panel.querySelectorAll('.rr-pieces-mode').forEach(button => button.setAttribute('aria-checked', String(button.dataset.pieceMode === this.mode)));
+        panel.querySelectorAll('.rr-pieces-material').forEach(button => button.setAttribute('aria-checked', String(button.dataset.pieceMaterial === this.material)));
+        const rot = panel.querySelector('.rr-pieces-rot-value');
+        if (rot) rot.textContent = (this.rot * 90) + '°';
+        const level = panel.querySelector('.rr-pieces-level-value');
+        if (level) level.textContent = String(this.level);
+    }
+
+    setKind(kind) { if (this.kinds().includes(kind)) { this.kind = kind; this.mode = 'place'; this._syncPanel(); this._ghostChanged(); } }
+    setMode(mode) {
+        if (mode !== 'place' && mode !== 'erase' && mode !== 'stamp' && mode !== 'move') return;
+        if (mode === 'stamp' && !this.structurePlan()) mode = 'place';
+        if (mode !== 'move') this.selectedGroup = 0;
+        this.mode = mode; this._syncPanel(); this.refreshStatus(); this._ghostChanged();
+    }
+    setMaterial(name) { this.material = String(name || ''); this._syncPanel(); }
+    turn(steps = 1) { this.rot = ((this.rot + steps) % 4 + 4) % 4; this._syncPanel(); this._ghostChanged(); }
+    setLevel(level) {
+        const max = this.elevation()?.PIECE_MAX_LEVEL ?? 30;
+        this.level = Math.max(0, Math.min(max, Math.floor(Number(level)) || 0));
+        this._syncPanel();
+        this._ghostChanged();
+    }
+    _ghostChanged() { window.reactor?.mapEditor3D?.refreshPieceGhost?.(); }
+
+    refreshStatus() {
+        const status = this.panel?.querySelector('.rr-pieces-status');
+        if (!status) return;
+        const map = this.currentMap(), elevation = this.elevation();
+        const is3D = !!(map && elevation && elevation.hasNote(map));
+        if (this.mode === 'move' && this.selectedGroup) {
+            status.textContent = this._t('pieces.structureSelected', { count: elevation.pieceGroup(map, this.selectedGroup).length });
+            return;
+        }
+        status.textContent = !map ? '' : !is3D ? this._t('pieces.needs3D') : this._t('pieces.count', { count: elevation.pieces(map).length });
+    }
+
+    activate() {
+        window.reactor?.claimMapTool?.('pieces');
+        this.renderStructures(true);
+        const mapEditor = window.reactor?.mapEditor;
+        if (!this.active) this._resumeMapEditor = !!mapEditor?.enabled;
+        this.active = true;
+        mapEditor?.setEnabled?.(false);
+        document.addEventListener('keydown', this._onKeyDown);
+        const map = this.currentMap();
+        if (map && this.elevation()?.hasNote(map)) {
+            const toggle = document.getElementById('map-3d-view');
+            if (toggle && !toggle.checked) toggle.click();
+        }
+        this.renderMaterials(true);
+        this.refreshStatus();
+    }
+
+    deactivate() {
+        if (!this.active) return;
+        this.active = false;
+        this._stroke = null;
+        document.removeEventListener('keydown', this._onKeyDown);
+        window.reactor?.mapEditor3D?.hidePieceGhost?.();
+        const mapEditor = window.reactor?.mapEditor;
+        if (mapEditor && this._resumeMapEditor) {
+            mapEditor.setEnabled(true);
+            mapEditor.setupMapInteraction?.();
+        }
+    }
+
+    /** The piece as it would be laid at a target `{x, y, z}`. */
+    pieceFor(target) {
+        return { kind: this.kind, x: target.x, y: target.y, z: target.z, rot: this.rot, material: this.material };
+    }
+
+    /**
+     * A stroke starts with the click and lays a piece on every new cell
+     * or level the drag reaches; the same cell twice does nothing, so a
+     * slow drag and a fast one leave the same row.
+     */
+    beginStroke(target, mode = this.mode) {
+        const map = this.currentMap(), elevation = this.elevation();
+        if (!map || !elevation || !target) return false;
+        this.undoStack.push(elevation.piecesSnapshot(map));
+        if (this.undoStack.length > 50) this.undoStack.shift();
+        this.redoStack.length = 0;
+        this._stroke = { mode, moved: false, last: null };
+        return this.dab(target);
+    }
+
+    paintAt(target) {
+        if (!this._stroke || !target) return false;
+        const last = this._stroke.last;
+        if (last && last.x === target.x && last.y === target.y && last.z === target.z) return false;
+        return this.dab(target);
+    }
+
+    dab(target) {
+        const map = this.currentMap(), elevation = this.elevation();
+        if (!map || !elevation || !target || !this._stroke) return false;
+        this._stroke.last = { x: target.x, y: target.y, z: target.z };
+        // A hand edit inside a building: the new piece joins the building,
+        // and the building stops following its plan (it would be built
+        // again from the plan on the next move and lose the edit), while it
+        // still moves and turns as one.
+        const group = elevation.pieceGroupAt(map, target.x, target.y);
+        const piece = this.pieceFor(target);
+        if (group) piece.group = group;
+        const changed = this._stroke.mode === 'erase'
+            ? this.eraseAt(map, target)
+            : !!elevation.setPiece(map, piece) && this._changedSince(map);
+        if (changed && group && elevation.structureOf(map, group)) {
+            elevation.removeStructure(map, group);
+            this._flash('pieces.detached');
+            this._flashed = true;
+        }
+        if (changed) { this._stroke.moved = true; this.announce(); }
+        return changed;
+    }
+
+    /** setPiece returns the id even when nothing changed; the list identity says whether it did. */
+    _changedSince(map) {
+        const now = map.reactor3d?.pieces;
+        const changed = now !== this._lastList;
+        this._lastList = now;
+        return changed;
+    }
+
+    /** Take the piece at the level, else the top piece on the cell. */
+    eraseAt(map, target) {
+        const elevation = this.elevation();
+        if (elevation.removePiece(map, target.x, target.y, target.z)) return true;
+        const stack = elevation.pieces(map).filter(piece => piece.x === target.x && piece.y === target.y);
+        if (!stack.length) return false;
+        const top = stack.reduce((best, piece) => (piece.z > best.z ? piece : best), stack[0]);
+        return elevation.removePiece(map, top.x, top.y, top.z);
+    }
+
+    endStroke() {
+        if (this._stroke && !this._stroke.moved) this.undoStack.pop();
+        this._stroke = null;
+        if (this._flashed) this._flashed = false; else this.refreshStatus();
+    }
+
+    /** One piece off, outside a stroke: the right-click. */
+    removeAt(target) {
+        const map = this.currentMap(), elevation = this.elevation();
+        if (!map || !elevation || !target) return false;
+        const saved = elevation.piecesSnapshot(map);
+        if (!this.eraseAt(map, target)) return false;
+        this.undoStack.push(saved);
+        this.redoStack.length = 0;
+        this.announce();
+        this.refreshStatus();
+        return true;
+    }
+
+    handleKey(event) {
+        if (!this.active) return;
+        const target = event.target;
+        if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName) && target.type !== 'range') return;
+        if (target?.isContentEditable) return;
+        if (window.reactor?.uiManager?.isEditorModalOpenForGlobalShortcuts?.()) return;
+        const key = String(event.key || '').toLowerCase();
+        if (event.ctrlKey || event.metaKey) {
+            if (key === 'z' && !event.shiftKey) { event.preventDefault(); this.undo(); }
+            else if (key === 'y' || (key === 'z' && event.shiftKey)) { event.preventDefault(); this.redo(); }
+            return;
+        }
+        if (event.altKey) return;
+        if (key === 'r' && !(this.mode === 'move' && this.selectedGroup)) { event.preventDefault(); this.turn(event.shiftKey ? -1 : 1); }
+        else if (key === 'e') { event.preventDefault(); this.setLevel(this.level + 1); }
+        else if (key === 'q') { event.preventDefault(); this.setLevel(this.level - 1); }
+        else if (key === 'x') { event.preventDefault(); this.setMode(this.mode === 'erase' ? 'place' : 'erase'); }
+        else if (key === 'm') { event.preventDefault(); this.setMode(this.mode === 'move' ? 'place' : 'move'); }
+        else if (this.mode === 'move' && this.selectedGroup && key === 'r') { event.preventDefault(); this.rotateSelected(); }
+        else if (this.mode === 'move' && this.selectedGroup && (key === ']' || key === '[')) { event.preventDefault(); this.scaleSelected(key === ']' ? 1 : -1); }
+        else if (this.mode === 'move' && this.selectedGroup && /^arrow(left|right|up|down)$/.test(key)) {
+            event.preventDefault();
+            const step = event.shiftKey ? 5 : 1;
+            this.nudgeSelected(key === 'arrowleft' ? -step : key === 'arrowright' ? step : 0, key === 'arrowup' ? -step : key === 'arrowdown' ? step : 0);
+        }
+        else if ((key === 'delete' || key === 'backspace') && this.mode === 'move' && this.selectedGroup) { event.preventDefault(); this.removeSelectedGroup(); }
+        else if (key === 'escape' && this.mode === 'move' && this.selectedGroup) { event.preventDefault(); this.selectedGroup = 0; this.refreshStatus(); this._ghostChanged(); }
+        else if (key === 'escape' && this.mode !== 'place') { event.preventDefault(); this.setMode('place'); }
+    }
+
+    undo() { this._swap(this.undoStack, this.redoStack); }
+    redo() { this._swap(this.redoStack, this.undoStack); }
+    _swap(from, to) {
+        const map = this.currentMap(), elevation = this.elevation();
+        if (!map || !elevation || !from.length) return;
+        const entry = from.pop();
+        const whole = entry && !Array.isArray(entry) && entry.pieces;
+        to.push(whole ? this._snapshot(map) : elevation.piecesSnapshot(map));
+        elevation.restorePieces(map, whole ? entry.pieces : entry);
+        if (whole) {
+            if (entry.terrain) elevation.restoreTerrain(map, entry.terrain); else elevation.clearTerrain(map);
+            elevation.restoreStructures(map, entry.structures);
+        }
+        this.announce(!!whole); this.refreshStatus(); this._syncPanel();
+    }
+
+    clear() {
+        const map = this.currentMap(), elevation = this.elevation();
+        if (!map || !elevation || !elevation.hasPieces(map)) return;
+        this.undoStack.push(elevation.piecesSnapshot(map)); this.redoStack.length = 0;
+        elevation.clearPieces(map);
+        this.announce(); this.refreshStatus();
+    }
+
+    /** The pieces changed: the 3D view lays them down again in place, and the map is dirty. */
+    announce(terrainToo = false) {
+        const mapEditor = window.reactor?.mapEditor;
+        if (typeof mapEditor?.onElevationChanged === 'function') mapEditor.onElevationChanged(this.currentMap());
+        if (typeof document === 'undefined' || typeof CustomEvent !== 'function') return;
+        // A stamp levels the ground as well: the terrain goes first (in
+        // place, the whole map), then the pieces are laid on it.
+        if (terrainToo) document.dispatchEvent(new CustomEvent('rr-map-edited', { detail: { mapId: this.currentMap()?.id, terrain: true, region: null } }));
+        document.dispatchEvent(new CustomEvent('rr-map-edited', { detail: { mapId: this.currentMap()?.id, pieces: true } }));
+    }
+}
+
+if (typeof window !== 'undefined') window.PieceBuilderManager = PieceBuilderManager;
+if (typeof module !== 'undefined' && module.exports) module.exports = PieceBuilderManager;

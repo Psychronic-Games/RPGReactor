@@ -2446,14 +2446,18 @@ class ProjectController {
         checkbox.checked = !!(elevation && elevation.hasNote(mapData));
         options.style.display = checkbox.checked ? 'block' : 'none';
 
-        const room = elevation ? elevation.room(mapData) : { height: 4, floor: '', walls: '', ceiling: '' };
+        const room = elevation ? elevation.room(mapData) : { height: 4, floor: '', walls: '', ceiling: '', sky: '', skyScrollX: 0, skyScrollY: 0 };
         const height = document.getElementById('map-3d-height-input');
         if (height) height.value = room.height;
-        for (const piece of ['floor', 'walls', 'ceiling']) {
+        for (const piece of ['floor', 'walls', 'ceiling', 'sky']) {
             const select = document.getElementById(`map-3d-${piece}-select`);
             if (!select) continue;
             this.fillParallaxSelect(select, room[piece]);
         }
+        const skySx = document.getElementById('map-3d-sky-sx-input');
+        if (skySx) skySx.value = room.skyScrollX || 0;
+        const skySy = document.getElementById('map-3d-sky-sy-input');
+        if (skySy) skySy.value = room.skyScrollY || 0;
 
         // The default camera: a mode, and blank overrides meaning "the mode's own".
         const camera = elevation && elevation.camera ? elevation.camera(mapData) : { mode: 'fixed' };
@@ -2486,7 +2490,10 @@ class ProjectController {
             height: elevation ? elevation.clampRoomHeight(height) : height,
             floor: value('map-3d-floor-select'),
             walls: value('map-3d-walls-select'),
-            ceiling: value('map-3d-ceiling-select')
+            ceiling: value('map-3d-ceiling-select'),
+            sky: value('map-3d-sky-select'),
+            skyScrollX: parseFloat(value('map-3d-sky-sx-input')) || 0,
+            skyScrollY: parseFloat(value('map-3d-sky-sy-input')) || 0
         };
     }
 
@@ -2515,7 +2522,8 @@ class ProjectController {
         const titles = {
             floor: 'mapProps.pickFloor',
             walls: 'mapProps.pickWalls',
-            ceiling: 'mapProps.pickCeiling'
+            ceiling: 'mapProps.pickCeiling',
+            sky: 'mapProps.pickSky'
         };
         picker.showImagePicker(
             this._t(titles[piece] || 'mapProps.pickFloor'),
@@ -2552,6 +2560,16 @@ class ProjectController {
         target.width = mapData.width;
         target.height = mapData.height;
         let changed = false;
+        // A resized map reloads from disk afterwards. The sidecar in hand
+        // (heights, terrain, props, lights) has to be refitted to the new
+        // size and written first, or the reload brings back the old file at
+        // the old size and everything shaped since the last save is gone.
+        const sidecarBefore = target.reactor3d;
+        if (sidecarBefore && typeof sidecarBefore === 'object'
+            && (sidecarBefore.width !== mapData.width || sidecarBefore.height !== mapData.height)) {
+            elevation.ensure(target);
+            changed = true;
+        }
         if (this.isCreatingNewMap) {
             target.reactor3d = target.reactor3d || { version: 1 };
             target.reactor3d.lighting = { ambient: 1, ambientColour: '#ffffff' };
@@ -2897,7 +2915,7 @@ class ProjectController {
         this._bindMapPropertiesListener('map-3d-checkbox', 'change', (e) => {
             document.getElementById('map-3d-options').style.display = e.target.checked ? 'block' : 'none';
         });
-        for (const piece of ['floor', 'walls', 'ceiling']) {
+        for (const piece of ['floor', 'walls', 'ceiling', 'sky']) {
             this._bindMapPropertiesListener(`map-3d-${piece}-browse-btn`, 'click',
                 () => this.openRoomImagePicker(piece));
         }
@@ -3277,6 +3295,8 @@ class ProjectController {
             let dimensionsChanged = false;
             let tilesetChanged = false;
             const was3D = !!(elevation && elevation.hasNote(this.currentEditingMap));
+            const parallaxKeys = ['parallaxName', 'parallaxShow', 'parallaxLoopX', 'parallaxLoopY', 'parallaxSx', 'parallaxSy'];
+            const parallaxChanged = parallaxKeys.some(key => (this.currentEditingMap ? this.currentEditingMap[key] : undefined) !== mapData[key]);
             if (this.tilemapManager && this.tilemapManager.currentMap && this.tilemapManager.currentMap.id === mapData.id) {
                 dimensionsChanged =
                     this.tilemapManager.currentMap.width !== mapData.width ||
@@ -3326,8 +3346,9 @@ class ProjectController {
                 } else {
                     // Just re-render parallax to reflect changes
                     await this.tilemapManager.renderParallax();
-                    // The room and the switch are drawn by the 3D view.
-                    if (roomChanged || was3D !== wants3D) this.refreshMap3DView();
+                    // The room, the switch and the map's parallax (a ground
+                    // or the sky, in 3D) are drawn by the 3D view.
+                    if (roomChanged || was3D !== wants3D || parallaxChanged) this.refreshMap3DView();
                 }
             }
 

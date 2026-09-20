@@ -243,6 +243,316 @@ Reactor3D.isMap3D = function(mapData) {
 
 Reactor3D.DEFAULT_ELEVATION = 0;
 
+//-----------------------------------------------------------------------------
+// Terrain
+//
+// Elevation is one whole number per tile: terraces, cliffs, floors. Terrain is
+// the rolling ground on top of it — a height at every tile *corner*,
+// `(width + 1) * (height + 1)` of them, fractional, in tiles — and the map's
+// meshes are bent through it after they are built, so a tile's top becomes a
+// bilinear patch and the cliff faces stay attached at their corners. Absent
+// until painted; a map without it is exactly what it was.
+
+Reactor3D.TERRAIN_MAX = 60;
+/** Steeper than this, in tiles of rise per tile walked, and a step is blocked. */
+Reactor3D.TERRAIN_SLOPE_LIMIT = 0.75;
+
+Reactor3D.terrainOf = function(mapData) {
+    const sidecar = mapData && mapData.reactor3d;
+    const grid = sidecar && sidecar.terrain;
+    if (!grid || typeof grid.length !== "number") return null;
+    const size = (mapData.width + 1) * (mapData.height + 1);
+    if (grid.length === size) return grid;
+    // A map resized after its terrain was painted: refit the grid from the
+    // width it was made for, keeping every corner that still exists.
+    const oldWidth = Number(sidecar.terrainWidth) > 0 ? Number(sidecar.terrainWidth) : Number(sidecar.width) || 0;
+    const stride = oldWidth + 1;
+    if (!(oldWidth > 0) || grid.length % stride !== 0) return null;
+    const grown = new Array(size).fill(0);
+    const rows = Math.min(grid.length / stride, mapData.height + 1), cols = Math.min(stride, mapData.width + 1);
+    for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) grown[y * (mapData.width + 1) + x] = Number(grid[y * stride + x]) || 0;
+    sidecar.terrain = grown;
+    sidecar.terrainWidth = mapData.width;
+    return grown;
+};
+
+Reactor3D.hasTerrain = function(mapData) {
+    const grid = this.terrainOf(mapData);
+    if (!grid) return false;
+    for (let i = 0; i < grid.length; i++) if (grid[i]) return true;
+    return false;
+};
+
+/** The terrain's rise at a world point (tile `x` spans world x..x+1), bilinear over its corners. */
+Reactor3D.terrainHeightAt = function(mapData, wx, wz) {
+    const grid = this.terrainOf(mapData);
+    if (!grid) return 0;
+    const width = mapData.width, height = mapData.height;
+    const gx = Math.max(0, Math.min(width, wx)), gz = Math.max(0, Math.min(height, wz));
+    const x0 = Math.min(width - 1, Math.floor(gx)), z0 = Math.min(height - 1, Math.floor(gz));
+    const fx = gx - x0, fz = gz - z0, stride = width + 1;
+    const h00 = grid[z0 * stride + x0] || 0, h10 = grid[z0 * stride + x0 + 1] || 0;
+    const h01 = grid[(z0 + 1) * stride + x0] || 0, h11 = grid[(z0 + 1) * stride + x0 + 1] || 0;
+    return (h00 * (1 - fx) + h10 * fx) * (1 - fz) + (h01 * (1 - fx) + h11 * fx) * fz;
+};
+
+/** Where the ground is at a world point: the cell's elevation plus the terrain's rise there. */
+Reactor3D.groundHeightAt = function(mapData, wx, wz, near) {
+    const base = this.elevationAt(mapData, Math.floor(wx), Math.floor(wz)) + this.terrainHeightAt(mapData, wx, wz);
+    // `near` is a world height; the piece stacks count from the cell's ground.
+    return base + this.pieceSurfaceAt(mapData, wx, wz, Number.isFinite(near) ? near - base : 0);
+};
+
+/** The ground under a character, at the middle of its cell as it moves between cells. */
+Reactor3D.characterGround = function(mapData, character) {
+    if (!character) return this.DEFAULT_ELEVATION;
+    const x = Number.isFinite(character._realX) ? character._realX : character.x || 0;
+    const y = Number.isFinite(character._realY) ? character._realY : character.y || 0;
+    // Where the character last stood decides which floor of a house it is
+    // on; `locate` forgets it, so a transfer lands on the ground floor.
+    const ground = this.groundHeightAt(mapData, x + 0.5, y + 0.5, character._reactorGround);
+    character._reactorGround = ground;
+    return ground;
+};
+
+/**
+ * A step between two cells the terrain makes too steep to take: the rise
+ * from either cell's middle to the middle of the edge between them, or
+ * across the whole step. The edge is checked as well as the centres so a
+ * ridge on the shared corner, which two flat centres would not see, still
+ * blocks.
+ */
+Reactor3D.terrainBlocks = function(mapData, x, y, x2, y2, near) {
+    // Pieces stand on the same rule: a floor is a small step, a block a
+    // whole level, a stair a slope that stays under the limit. `near` is
+    // the height the character stands at now, which picks its floor.
+    if (!mapData || (!this.terrainOf(mapData) && !this.hasPieces(mapData))) return false;
+    const limit = this.TERRAIN_SLOPE_LIMIT;
+    const from = this.groundHeightAt(mapData, x + 0.5, y + 0.5, near);
+    const edge = this.groundHeightAt(mapData, (x + x2) / 2 + 0.5, (y + y2) / 2 + 0.5, from);
+    const to = this.groundHeightAt(mapData, x2 + 0.5, y2 + 0.5, edge);
+    if (Math.abs(edge - from) > limit || Math.abs(to - edge) > limit) return true;
+    // A stair rises a whole tile across its cell, so two stairs in a row
+    // stand a tile apart at their middles and each half of the step is a
+    // half tile: built to be climbed, judged by its halves.
+    if (this.stairAt(mapData, x, y) || this.stairAt(mapData, x2, y2)) return false;
+    return Math.abs(to - from) > limit;
+};
+
+Reactor3D.stairAt = function(mapData, x, y) {
+    const stack = this.piecesAt(mapData, x, y);
+    return !!stack && stack.some(piece => piece.kind === "stair");
+};
+
+/**
+ * Bend the built meshes through the terrain: every vertex rises by the field
+ * at its own x/z, so a tile top follows its corners, a cliff face stays
+ * joined to the top it hangs from, and a standing cut-out (whose vertices
+ * share an anchor) rides up whole. Tops and sides of a terrace keep their
+ * relative shape. Nothing to do on a map without terrain.
+ */
+Reactor3D.displaceByTerrain = function(built, mapData) {
+    if (!built || !built.groups || !this.hasTerrain(mapData)) return built;
+    for (const group of built.groups) {
+        const positions = group.positions;
+        if (!positions) continue;
+        for (let i = 0; i < positions.length; i += 3) {
+            positions[i + 1] += this.terrainHeightAt(mapData, positions[i], positions[i + 2]);
+        }
+    }
+    return built;
+};
+
+//-----------------------------------------------------------------------------
+// Pieces
+//
+// A 3D tileset. A piece is a block painted on a cell at a level: a wall
+// cube, a floor slab, a pillar, a stair, a ramp, a gable, a doorway, a
+// window, a fence. Pieces snap to whole cells, turn in quarter turns and
+// stack in whole levels on top of the ground (elevation plus terrain), so a
+// house is a rectangle of blocks dragged out, a doorway dropped in, and a
+// roof laid across — the way a 2D map is tiles rather than pictures. Each
+// piece names a *material*, a tileable image under img/materials, which is
+// what makes a wall stone or plaster.
+//
+// Stored in the sidecar as `pieces: [{id, kind, x, y, z, rot, material}]`.
+// The ground under a character is the top of the highest piece on its cell
+// (`pieceSurfaceAt`), so a floor at level 1 is walked on and a stair climbs
+// to it; anything a character cannot step up onto (a block, a fence) blocks
+// through the same rise rule the terrain uses.
+
+Reactor3D.PIECE_KINDS = ["wall", "block", "floor", "pillar", "stair", "ramp", "roof", "doorway", "window", "fence"];
+Reactor3D.PIECE_MAX_LEVEL = 30;
+Reactor3D.PIECE_FLOOR_THICKNESS = 0.1;
+/**
+ * A storey, in tiles. The bundled characters stand three tiles tall, a
+ * little under 1.8 m, so a tile is about 0.6 m and a room a person walks
+ * into is five tiles to the ceiling: a 3 m storey. The pieces a character
+ * walks past or through are a storey tall — a wall, a doorway, a window, a
+ * pillar — and a block is the one-tile brick (a 60 cm cube) for garden
+ * walls, steps and anything built up by hand.
+ */
+Reactor3D.PIECE_STOREY = 5;
+Reactor3D.pieceHeight = function(kind) {
+    return kind === "wall" || kind === "doorway" || kind === "window" || kind === "pillar" ? this.PIECE_STOREY : 1;
+};
+
+Reactor3D.normalizePiece = function(raw, mapData) {
+    if (!raw || typeof raw !== "object") return null;
+    const kind = this.PIECE_KINDS.includes(raw.kind) ? raw.kind : null;
+    if (!kind) return null;
+    const x = Math.floor(Number(raw.x)), y = Math.floor(Number(raw.y));
+    if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || y < 0) return null;
+    if (mapData && (x >= mapData.width || y >= mapData.height)) return null;
+    const z = Math.max(0, Math.min(this.PIECE_MAX_LEVEL, Math.floor(Number(raw.z)) || 0));
+    const rot = ((Math.floor(Number(raw.rot)) || 0) % 4 + 4) % 4;
+    const material = typeof raw.material === "string" ? raw.material.trim() : "";
+    const id = Number(raw.id);
+    const piece = { id: Number.isFinite(id) && id > 0 ? Math.floor(id) : 0, kind, x, y, z, rot, material };
+    const group = Number(raw.group);
+    if (Number.isFinite(group) && group > 0) piece.group = Math.floor(group);
+    return piece;
+};
+
+/**
+ * The map's pieces, indexed by cell. Cached against the sidecar's own
+ * array: the editor writes a new array on every change, so an edit is a
+ * new index and a frame's many ground lookups share one.
+ */
+Reactor3D.pieceIndex = function(mapData) {
+    const sidecar = mapData && mapData.reactor3d;
+    const raw = sidecar && sidecar.pieces;
+    if (!Array.isArray(raw) || !raw.length) return null;
+    const memo = this._pieceIndexMemo || (this._pieceIndexMemo = new WeakMap());
+    const known = memo.get(raw);
+    if (known) return known;
+    const cells = new Map();
+    const list = [];
+    for (const entry of raw) {
+        const piece = this.normalizePiece(entry, mapData);
+        if (!piece) continue;
+        list.push(piece);
+        const key = piece.y * 65536 + piece.x;
+        let stack = cells.get(key);
+        if (!stack) cells.set(key, stack = []);
+        stack.push(piece);
+    }
+    // Each cell's stack from the ground up, which is the order the surface
+    // rule reads it in.
+    for (const stack of cells.values()) stack.sort((a, b) => a.z - b.z);
+    // Each stamped building's footprint, so a cutaway reaches its walls and no further.
+    const groups = new Map();
+    for (const piece of list) {
+        if (!piece.group) continue;
+        const box = groups.get(piece.group) || { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity };
+        box.x0 = Math.min(box.x0, piece.x); box.y0 = Math.min(box.y0, piece.y); box.x1 = Math.max(box.x1, piece.x); box.y1 = Math.max(box.y1, piece.y);
+        groups.set(piece.group, box);
+    }
+    const index = { list, cells, groups };
+    memo.set(raw, index);
+    return index;
+};
+
+Reactor3D.piecesOf = function(mapData) {
+    const index = this.pieceIndex(mapData);
+    return index ? index.list : [];
+};
+
+Reactor3D.hasPieces = function(mapData) {
+    return !!this.pieceIndex(mapData);
+};
+
+Reactor3D.piecesAt = function(mapData, x, y) {
+    const index = this.pieceIndex(mapData);
+    if (!index) return null;
+    return index.cells.get(y * 65536 + x) || null;
+};
+
+/**
+ * A point in a cell (u, v in 0..1, +v south) seen from the piece's own
+ * frame, undoing its quarter turns: a stair rises along its own +v
+ * whichever way it was turned.
+ */
+Reactor3D.pieceLocal = function(piece, u, v) {
+    let du = u - 0.5, dv = v - 0.5;
+    for (let i = 0; i < piece.rot; i++) {
+        const next = dv;
+        dv = -du;
+        du = next;
+    }
+    return { u: du + 0.5, v: dv + 0.5 };
+};
+
+/**
+ * How high a piece's walkable top stands over the cell's ground at a
+ * point of the cell.
+ */
+Reactor3D.pieceTop = function(piece, u, v) {
+    switch (piece.kind) {
+        case "floor": return piece.z + this.PIECE_FLOOR_THICKNESS;
+        case "stair":
+        case "ramp": {
+            const local = this.pieceLocal(piece, u, v);
+            return piece.z + Math.max(0, Math.min(1, local.v));
+        }
+        // A doorway is stood in at its threshold: the level it is laid at,
+        // which is the ground downstairs and the floor's level upstairs.
+        case "doorway": return piece.z;
+        default: return piece.z + this.pieceHeight(piece.kind);
+    }
+};
+
+/**
+ * What a character on the cell stands on, over the cell's ground, at a
+ * world point, given how high the character already stands (`near`).
+ *
+ * The stack is read from the ground up. A piece whose foot is within a
+ * level and a step of the surface so far joins it (a floor on blocks, a
+ * wall on a wall). A piece higher than that opens a gap, and the gap is
+ * where the character's own height decides: within reach of the piece's
+ * foot, the character is on the upper layer and the surface jumps to it;
+ * out of reach, the character is on the lower layer and the reading
+ * stops. So a house has two walkable floors — downstairs you stand on the
+ * ground-floor slab under the upper floor, and coming up the stairs you
+ * arrive on the upper floor — a roof of ramps over either is never
+ * walked on, a doorway under a wall is the ground, a floor two levels up
+ * with nothing under it is a bridge walked under from below and a floor
+ * arrived at from a stair.
+ */
+Reactor3D.pieceSurfaceAt = function(mapData, wx, wz, near) {
+    const index = this.pieceIndex(mapData);
+    if (!index) return 0;
+    const x = Math.floor(wx), y = Math.floor(wz);
+    const stack = index.cells.get(y * 65536 + x);
+    if (!stack) return 0;
+    const reach = 1 + this.TERRAIN_SLOPE_LIMIT + 1e-6;
+    const standing = Number.isFinite(near) ? near : 0;
+    let surface = 0;
+    const u = wx - x, v = wz - y;
+    for (const piece of stack) {
+        if (piece.z > surface + reach) {
+            if (standing + reach < piece.z) break;
+            surface = Math.max(0, this.pieceTop(piece, u, v));
+            continue;
+        }
+        const height = this.pieceTop(piece, u, v);
+        if (height > surface) surface = height;
+    }
+    return surface;
+};
+
+/** The ground a piece stands on: the cell's elevation plus the terrain at its middle. */
+Reactor3D.pieceBaseAt = function(mapData, x, y) {
+    return this.elevationAt(mapData, x, y) + this.terrainHeightAt(mapData, x + 0.5, y + 0.5);
+};
+
+/** The Y of every vertex as built, kept so the terrain can lift it again later. */
+Reactor3D.terrainBaseY = function(positions) {
+    const base = new Float32Array(positions.length / 3);
+    for (let i = 0, j = 0; i < positions.length; i += 3, j++) base[j] = positions[i + 1];
+    return base;
+};
+
 Reactor3D.elevationAt = function(mapData, x, y) {
     if (!mapData) return this.DEFAULT_ELEVATION;
     const sidecar = mapData.reactor3d;
@@ -5020,15 +5330,12 @@ Reactor3D.MapScene.prototype.addParallaxGround = function(bitmap, tileSize, inde
     const height = (bitmap.height || 0) / size;
     if (!(width > 0) || !(height > 0)) return;
 
-    const geometry = new THREE.PlaneGeometry(width, height);
-    // PlaneGeometry stands up in XY and is centred on its origin; the ground
-    // lies in XZ with the map's corner at zero.
-    geometry.rotateX(-Math.PI / 2);
     // Each layer a hair above the last, in the order the author stacked them,
-    // so two coplanar floors do not fight over every pixel.
+    // so two coplanar floors do not fight over every pixel. The plane lies
+    // in XZ with the map's corner at zero, and follows the terrain.
     const lift = Reactor3D.PARALLAX_GROUND_DROP
         + (index || 0) * Reactor3D.PARALLAX_LAYER_STEP;
-    geometry.translate(width / 2, lift, height / 2);
+    const geometry = this.groundPlane(width, height, lift);
 
     const material = new THREE.MeshBasicMaterial({
         map: texture,
@@ -5104,21 +5411,45 @@ Reactor3D.roomFor = function(mapData) {
     const room = sidecar && sidecar.room;
     if (!room || typeof room !== "object") return null;
     const name = value => (typeof value === "string" ? value.trim() : "");
+    const scroll = value => {
+        const number = Number(value);
+        return Number.isFinite(number) ? Math.max(-32, Math.min(32, Math.round(number * 1000) / 1000)) : 0;
+    };
     const parsed = {
         height: this.clampRoomHeight(room.height),
         floor: name(room.floor),
         walls: name(room.walls),
-        ceiling: name(room.ceiling)
+        ceiling: name(room.ceiling),
+        sky: name(room.sky),
+        skyScrollX: scroll(room.skyScrollX),
+        skyScrollY: scroll(room.skyScrollY)
     };
-    return parsed.floor || parsed.walls || parsed.ceiling ? parsed : null;
+    return parsed.floor || parsed.walls || parsed.ceiling || parsed.sky ? parsed : null;
 };
 
-/** Every parallax name the room uses, once each, for a loader to fetch. */
+/**
+ * The sky a 3D map stands under: the room's own, else the map's parallax
+ * when that parallax is a backdrop rather than a ground (no `!` prefix). A
+ * 2D map draws such a parallax as a scrolling wallpaper behind everything;
+ * in 3D the same image is wrapped around the camera instead, so turning
+ * the view turns the sky, and its scroll speeds drift it. Null: no sky.
+ */
+Reactor3D.skyFor = function(mapData) {
+    const room = this.roomFor(mapData);
+    if (room && room.sky) return { name: room.sky, scrollX: room.skyScrollX, scrollY: room.skyScrollY };
+    const name = mapData && typeof mapData.parallaxName === "string" ? mapData.parallaxName.trim() : "";
+    if (!name || this.parallaxIsGround(mapData)) return null;
+    return { name, scrollX: Number(mapData.parallaxSx) || 0, scrollY: Number(mapData.parallaxSy) || 0 };
+};
+
+/** Every parallax name the room and its sky use, once each, for a loader to fetch. */
 Reactor3D.roomImageNames = function(mapData) {
     const room = this.roomFor(mapData);
-    if (!room) return [];
     const names = [];
-    for (const name of [room.floor, room.walls, room.ceiling]) {
+    const pieces = room ? [room.floor, room.walls, room.ceiling] : [];
+    const sky = this.skyFor(mapData);
+    if (sky) pieces.push(sky.name);
+    for (const name of pieces) {
         if (name && names.indexOf(name) < 0) names.push(name);
     }
     return names;
@@ -5174,9 +5505,7 @@ Reactor3D.MapScene.prototype.addRoomPiece = function(piece, bitmap, roomHeight, 
         // Under the parallax grounds, which sit a hair under the tiles: a
         // parallax room drawn over a floor still wins every pixel it covers.
         const y = Reactor3D.PARALLAX_GROUND_DROP - Reactor3D.PARALLAX_LAYER_STEP;
-        const geometry = new THREE.PlaneGeometry(width, height);
-        geometry.rotateX(-Math.PI / 2);
-        geometry.translate(width / 2, y, height / 2);
+        const geometry = this.groundPlane(width, height, y);
         // Tiled at the image's own scale, so a 480px floor texture covers
         // ten tiles however large the map is.
         surfaces.push({ geometry, repeat: [width / imageWidth, height / imageHeight] });
@@ -5242,6 +5571,464 @@ Reactor3D.MapScene.prototype.addRoomPiece = function(piece, bitmap, roomHeight, 
         this.belowGroup().add(mesh);
         this._meshes.push(mesh);
     }
+};
+
+/**
+ * A ground plane `width` x `height` tiles from the map's corner, lying in XZ
+ * at `y`: one quad on a flat map, a grid of tile-sized cells bent through the
+ * terrain on a shaped one (`build` sets `_terrainMap` first). Segments are
+ * capped so a giant parallax does not become a giant mesh.
+ */
+Reactor3D.MapScene.prototype.groundPlane = function(width, height, y) {
+    const map = this._terrainMap;
+    const segX = map ? Math.max(1, Math.min(256, Math.round(width))) : 1;
+    const segY = map ? Math.max(1, Math.min(256, Math.round(height))) : 1;
+    const geometry = new THREE.PlaneGeometry(width, height, segX, segY);
+    geometry.rotateX(-Math.PI / 2);
+    geometry.translate(width / 2, y, height / 2);
+    if (map) {
+        const positions = geometry.attributes.position.array;
+        for (let i = 0; i < positions.length; i += 3) {
+            positions[i + 1] += Reactor3D.terrainHeightAt(map, positions[i], positions[i + 2]);
+        }
+        geometry.attributes.position.needsUpdate = true;
+        geometry.computeVertexNormals();
+        geometry.computeBoundingSphere();
+        // A plane's every vertex starts at one height; `updateTerrain` lifts
+        // from there and re-lights it (`terrainPlane`).
+        geometry.userData.terrainBaseY = y;
+        geometry.userData.terrainPlane = true;
+    }
+    return geometry;
+};
+
+/**
+ * Bend the built scene through the terrain again, in place, after the grid
+ * changed under it. Only vertices inside `region` (corner-grid bounds
+ * `{x0, x1, z0, z1}` in tiles, or null for the whole map) are touched: a
+ * brush dab moves a few hundred vertices instead of throwing the scene away
+ * and building it again, which is what made every dab pause and reset the
+ * sky's drift. Returns the geometries it changed, or null when the scene was
+ * built without terrain vertices and has to be rebuilt to get them.
+ */
+Reactor3D.MapScene.prototype.updateTerrain = function(mapData, region) {
+    if (!this._terrainMap || !mapData || !Reactor3D.terrainOf(mapData)) return null;
+    const x0 = region ? region.x0 - 1e-3 : -Infinity, x1 = region ? region.x1 + 1e-3 : Infinity;
+    const z0 = region ? region.z0 - 1e-3 : -Infinity, z1 = region ? region.z1 + 1e-3 : Infinity;
+    const changed = [];
+    const seen = new Set();
+    for (const mesh of this._meshes) {
+        const geometry = mesh && mesh.geometry;
+        if (!geometry || seen.has(geometry)) continue;
+        const base = geometry.userData && geometry.userData.terrainBaseY;
+        if (base === undefined || base === null) continue;
+        seen.add(geometry);
+        const attribute = geometry.attributes.position;
+        const positions = attribute.array;
+        const constant = typeof base === "number";
+        let moved = false;
+        for (let i = 0, j = 0; i < positions.length; i += 3, j++) {
+            const x = positions[i], z = positions[i + 2];
+            if (x < x0 || x > x1 || z < z0 || z > z1) continue;
+            const y = (constant ? base : base[j]) + Reactor3D.terrainHeightAt(mapData, x, z);
+            if (positions[i + 1] !== y) { positions[i + 1] = y; moved = true; }
+        }
+        if (!moved) continue;
+        attribute.needsUpdate = true;
+        if (geometry.userData.terrainPlane) geometry.computeVertexNormals();
+        if (geometry.boundingBox) geometry.computeBoundingBox();
+        geometry.computeBoundingSphere();
+        changed.push(geometry);
+    }
+    if (changed.length && Reactor3D.Shadows && Reactor3D.Shadows.invalidate) Reactor3D.Shadows.invalidate();
+    return changed;
+};
+
+/**
+ * The shape of each kind in its own unit cell: x east, y up, v south, all
+ * 0..1. A piece is a few boxes, a wedge (rises along +v), a gable (a ridge
+ * across the middle, eaves at v 0 and 1) or a column. Turned by `rot`
+ * quarter turns about the cell's middle when it is laid down.
+ */
+Reactor3D.pieceShapes = function(kind) {
+    const box = (x0, y0, v0, x1, y1, v1) => ({ box: [x0, y0, v0, x1, y1, v1] });
+    const S = this.PIECE_STOREY;
+    switch (kind) {
+        case "wall": return [box(0, 0, 0, 1, S, 1)];
+        case "block": return [box(0, 0, 0, 1, 1, 1)];
+        case "floor": return [box(0, 0, 0, 1, this.PIECE_FLOOR_THICKNESS, 1)];
+        case "pillar": return [box(0.24, 0, 0.24, 0.76, 0.12, 0.76), { column: [0.5, 0.5, 0.2, 0.12, S - 0.12] }, box(0.24, S - 0.12, 0.24, 0.76, S, 0.76)];
+        case "stair": return [0, 1, 2, 3].map(i => box(0, 0, i * 0.25, 1, (i + 1) * 0.25, 1));
+        case "ramp": return [{ wedge: true }];
+        case "roof": return [{ gable: true }];
+        // A doorway is a wall with its bottom gone: a lintel band across the
+        // top and nothing under it, the whole cell wide. The walls either
+        // side are the posts, so two doorways side by side are one opening
+        // two tiles wide — 1.2 m, a door a person walks through — and one
+        // alone is a narrow 60 cm gap. A window is the same with a sill
+        // under the hole and a header over it.
+        case "doorway": return [box(0, S - 0.6, 0, 1, S, 1)];
+        case "window": return [box(0, 0, 0, 1, 1.5, 1), box(0, S - 1.4, 0, 1, S, 1)];
+        // Waist high on a three-tile character; it still blocks a cell.
+        case "fence": return [box(0.05, 0, 0.42, 0.15, 1.5, 0.58), box(0.85, 0, 0.42, 0.95, 1.5, 0.58), box(0, 0.5, 0.45, 1, 0.62, 0.55), box(0, 1.15, 0.45, 1, 1.27, 0.55)];
+        default: return [];
+    }
+};
+
+/**
+ * Triangles for one piece, in world units, appended to flat arrays.
+ * Faces carry planar world-space UVs (one image repeat per tile, so a row
+ * of blocks tiles seamlessly) and a per-vertex shade by facing, which is
+ * the only lighting a flat-shaded block gets: tops bright, undersides
+ * dark, the four sides each their own tone so edges read.
+ */
+Reactor3D.emitPiece = function(piece, base, out, hidden) {
+    const cx = piece.x + 0.5, cz = piece.y + 0.5, oy = base + piece.z;
+    const rot = piece.rot;
+    const skip = hidden || {};
+    const place = (x, y, v) => {
+        let dx = x - 0.5, dz = v - 0.5;
+        for (let i = 0; i < rot; i++) {
+            const next = -dz;
+            dz = dx;
+            dx = next;
+        }
+        return [cx + dx, oy + y, cz + dz];
+    };
+    const shadeFor = (nx, ny, nz) => {
+        if (ny > 0.7) return 1;
+        if (ny < -0.7) return 0.5;
+        const side = 0.62 + 0.16 * (nx * 0.5 + 0.5) + 0.12 * (nz * 0.5 + 0.5);
+        return ny > 0 ? side + (1 - side) * ny : side;
+    };
+    const tri = (a, b, c) => {
+        const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2];
+        const vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
+        let nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+        const length = Math.hypot(nx, ny, nz) || 1;
+        nx /= length; ny /= length; nz /= length;
+        const shade = shadeFor(nx, ny, nz);
+        const ax = Math.abs(nx), ay = Math.abs(ny), az = Math.abs(nz);
+        for (const p of [a, b, c]) {
+            out.positions.push(p[0], p[1], p[2]);
+            if (ay >= ax && ay >= az) out.uvs.push(p[0], p[2]);
+            else if (ax >= az) out.uvs.push(p[2], p[1]);
+            else out.uvs.push(p[0], p[1]);
+            out.colors.push(shade, shade, shade);
+        }
+    };
+    const quad = (a, b, c, d) => { tri(a, b, c); tri(a, c, d); };
+    for (const shape of this.pieceShapes(piece.kind)) {
+        if (shape.box) {
+            const [x0, y0, v0, x1, y1, v1] = shape.box;
+            const p = (x, y, v) => place(x, y, v);
+            // Wound to face outward, whichever way the piece is turned. A
+            // face pressed against a neighbouring solid is left out: it was
+            // never seen, and a cutaway through a wall would have shown it.
+            if (!skip.top) quad(p(x0, y1, v0), p(x0, y1, v1), p(x1, y1, v1), p(x1, y1, v0)); // top
+            if (!skip.bottom) quad(p(x0, y0, v0), p(x1, y0, v0), p(x1, y0, v1), p(x0, y0, v1)); // bottom
+            if (!skip.south) quad(p(x0, y0, v1), p(x1, y0, v1), p(x1, y1, v1), p(x0, y1, v1)); // south
+            if (!skip.north) quad(p(x1, y0, v0), p(x0, y0, v0), p(x0, y1, v0), p(x1, y1, v0)); // north
+            if (!skip.east) quad(p(x1, y0, v1), p(x1, y0, v0), p(x1, y1, v0), p(x1, y1, v1)); // east
+            if (!skip.west) quad(p(x0, y0, v0), p(x0, y0, v1), p(x0, y1, v1), p(x0, y1, v0)); // west
+        } else if (shape.wedge) {
+            // Flat at v 0, a full level at v 1.
+            const p = place;
+            quad(p(0, 0, 0), p(0, 1, 1), p(1, 1, 1), p(1, 0, 0)); // slope
+            quad(p(0, 0, 0), p(1, 0, 0), p(1, 0, 1), p(0, 0, 1)); // bottom
+            quad(p(0, 0, 1), p(1, 0, 1), p(1, 1, 1), p(0, 1, 1)); // back wall
+            tri(p(1, 0, 0), p(1, 1, 1), p(1, 0, 1)); // east
+            tri(p(0, 0, 0), p(0, 0, 1), p(0, 1, 1)); // west
+        } else if (shape.gable) {
+            const p = place;
+            quad(p(0, 0, 0), p(0, 1, 0.5), p(1, 1, 0.5), p(1, 0, 0)); // north slope
+            quad(p(0, 1, 0.5), p(0, 0, 1), p(1, 0, 1), p(1, 1, 0.5)); // south slope
+            quad(p(0, 0, 0), p(1, 0, 0), p(1, 0, 1), p(0, 0, 1)); // bottom
+            tri(p(1, 0, 0), p(1, 1, 0.5), p(1, 0, 1)); // east gable
+            tri(p(0, 0, 0), p(0, 0, 1), p(0, 1, 0.5)); // west gable
+        } else if (shape.column) {
+            const [ccx, ccv, r, y0, y1] = shape.column;
+            const segments = 12;
+            for (let i = 0; i < segments; i++) {
+                const a0 = (i / segments) * Math.PI * 2, a1 = ((i + 1) / segments) * Math.PI * 2;
+                const x0 = ccx + Math.cos(a0) * r, v0 = ccv + Math.sin(a0) * r;
+                const x1 = ccx + Math.cos(a1) * r, v1 = ccv + Math.sin(a1) * r;
+                quad(place(x0, y0, v0), place(x0, y1, v0), place(x1, y1, v1), place(x1, y0, v1));
+                tri(place(ccx, y1, ccv), place(x1, y1, v1), place(x0, y1, v0));
+                tri(place(ccx, y0, ccv), place(x0, y0, v0), place(x1, y0, v1));
+            }
+        }
+    }
+    return out;
+};
+
+/**
+ * Which faces of a full cube (a wall, a block) touch another full cube of
+ * the same footing: those faces are dropped. The sides only where the
+ * neighbour spans the same levels; a wall's top under another wall, a
+ * block's bottom on a block; and a bottom on the map's ground level.
+ */
+Reactor3D.hiddenFacesOf = function(piece, mapData) {
+    if (piece.kind !== "wall" && piece.kind !== "block") return null;
+    const height = this.pieceHeight(piece.kind);
+    const solidAt = (x, y, z, h) => {
+        const stack = mapData ? this.piecesAt(mapData, x, y) : null;
+        return !!stack && stack.some(other => (other.kind === "wall" || other.kind === "block") && other.z === z && this.pieceHeight(other.kind) === h);
+    };
+    const flat = mapData && !this.hasTerrain(mapData) && this.elevationAt(mapData, piece.x, piece.y) === this.elevationAt(mapData, piece.x + 1, piece.y)
+        && this.elevationAt(mapData, piece.x, piece.y) === this.elevationAt(mapData, piece.x - 1, piece.y)
+        && this.elevationAt(mapData, piece.x, piece.y) === this.elevationAt(mapData, piece.x, piece.y + 1)
+        && this.elevationAt(mapData, piece.x, piece.y) === this.elevationAt(mapData, piece.x, piece.y - 1);
+    // Rotation does not change a cube, so the faces are named in world terms and the cube is emitted unturned.
+    return {
+        east: flat && solidAt(piece.x + 1, piece.y, piece.z, height),
+        west: flat && solidAt(piece.x - 1, piece.y, piece.z, height),
+        south: flat && solidAt(piece.x, piece.y + 1, piece.z, height),
+        north: flat && solidAt(piece.x, piece.y - 1, piece.z, height),
+        top: solidAt(piece.x, piece.y, piece.z + height, 1) || solidAt(piece.x, piece.y, piece.z + height, this.PIECE_STOREY),
+        bottom: piece.z === 0 || solidAt(piece.x, piece.y, piece.z - 1, 1) || solidAt(piece.x, piece.y, piece.z - this.PIECE_STOREY, this.PIECE_STOREY)
+    };
+};
+
+/** A geometry of the given pieces, each on its own cell's ground. */
+Reactor3D.pieceGeometry = function(pieces, mapData) {
+    const out = { positions: [], uvs: [], colors: [] };
+    for (const piece of pieces) {
+        const base = mapData ? this.pieceBaseAt(mapData, piece.x, piece.y) : 0;
+        const hidden = this.hiddenFacesOf(piece, mapData);
+        this.emitPiece(hidden ? Object.assign({}, piece, { rot: 0 }) : piece, base, out, hidden);
+    }
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(out.positions), 3));
+    geometry.setAttribute("uv", new THREE.BufferAttribute(new Float32Array(out.uvs), 2));
+    geometry.setAttribute("color", new THREE.BufferAttribute(new Float32Array(out.colors), 3));
+    geometry.computeVertexNormals();
+    geometry.computeBoundingSphere();
+    return geometry;
+};
+
+Reactor3D.defaultMaterialLoader = function(name) {
+    if (!name || typeof ImageManager === "undefined" || !ImageManager || typeof ImageManager.loadBitmap !== "function") return null;
+    return ImageManager.loadBitmap("img/materials/", name);
+};
+
+/** The group the pieces stand in: part of the world, drawn with the ground pass. */
+Reactor3D.MapScene.prototype.piecesGroup = function() {
+    if (!this._piecesGroup) {
+        this._piecesGroup = new THREE.Group();
+        this._piecesGroup.name = "pieces";
+        this._scene.add(this._piecesGroup);
+    }
+    return this._piecesGroup;
+};
+
+/**
+ * A material's texture, repeating, made once per scene. A bitmap still
+ * loading (the game's ImageManager hands those out) fills the texture when
+ * it arrives; the wall is drawn plain until then and textured a frame later.
+ */
+Reactor3D.MapScene.prototype.materialTexture = function(name, load) {
+    if (!name) return null;
+    if (!this._materialTextures) this._materialTextures = {};
+    if (this._materialTextures[name] !== undefined) return this._materialTextures[name];
+    let bitmap = null;
+    try { bitmap = typeof load === "function" ? load(name) : null; } catch (error) { bitmap = null; }
+    if (!bitmap) { this._materialTextures[name] = null; return null; }
+    const texture = new THREE.Texture();
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
+    texture.magFilter = THREE.LinearFilter;
+    texture.minFilter = THREE.LinearMipmapLinearFilter;
+    if (THREE.SRGBColorSpace) texture.colorSpace = THREE.SRGBColorSpace;
+    const fill = () => {
+        const source = bitmap.image || bitmap.canvas;
+        if (!source) return;
+        texture.image = source;
+        texture.needsUpdate = true;
+    };
+    if (bitmap.isReady && !bitmap.isReady()) {
+        if (typeof bitmap.addLoadListener === "function") bitmap.addLoadListener(fill);
+    } else {
+        fill();
+    }
+    this._textures.push(texture);
+    this._materialTextures[name] = texture;
+    return texture;
+};
+
+/** Lay every piece down: one mesh per material, cast into the static shadow rows. */
+Reactor3D.MapScene.prototype.addPieces = function(mapData, load) {
+    const pieces = Reactor3D.piecesOf(mapData);
+    this._pieceMeshes = this._pieceMeshes || [];
+    if (!pieces.length) return;
+    const byMaterial = new Map();
+    for (const piece of pieces) {
+        let list = byMaterial.get(piece.material);
+        if (!list) byMaterial.set(piece.material, list = []);
+        list.push(piece);
+    }
+    const group = this.piecesGroup();
+    for (const [name, list] of byMaterial) {
+        const geometry = Reactor3D.pieceGeometry(list, mapData);
+        const texture = this.materialTexture(name, load);
+        const material = new THREE.MeshBasicMaterial({
+            map: texture || null,
+            color: texture ? 0xffffff : 0x9a9a9a,
+            vertexColors: true,
+            side: THREE.FrontSide
+        });
+        material.__reactorShaded = true;
+        material.__reactorPieces = true;
+        material.userData.rrPieceMaterial = name;
+        Reactor3D.litMaterial(material);
+        const mesh = new THREE.Mesh(geometry, material);
+        mesh.userData.pieces = true;
+        mesh.userData.pieceMaterial = name;
+        mesh.renderOrder = -5;
+        group.add(mesh);
+        mesh.updateMatrix();
+        mesh.matrixAutoUpdate = false;
+        this._meshes.push(mesh);
+        this._materials.push(material);
+        this._pieceMeshes.push(mesh);
+        if (Reactor3D.Shadows && Reactor3D.Shadows.markCaster) Reactor3D.Shadows.markCaster(mesh, false);
+    }
+};
+
+/**
+ * Lay the pieces down again after an edit. Only the piece meshes go; the
+ * tiles, ground, room and sky stay as they are, so a block dropped in the
+ * editor is a few thousand triangles rebuilt and nothing else.
+ */
+Reactor3D.MapScene.prototype.updatePieces = function(mapData, load) {
+    for (const mesh of this._pieceMeshes || []) {
+        if (mesh.parent) mesh.parent.remove(mesh);
+        mesh.geometry.dispose();
+        mesh.material.dispose();
+        const at = this._meshes.indexOf(mesh);
+        if (at >= 0) this._meshes.splice(at, 1);
+        const m = this._materials.indexOf(mesh.material);
+        if (m >= 0) this._materials.splice(m, 1);
+        if (Reactor3D.Shadows && Reactor3D.Shadows._static) Reactor3D.Shadows._static.delete(mesh);
+    }
+    this._pieceMeshes = [];
+    this.addPieces(mapData, load);
+    if (Reactor3D.Shadows && Reactor3D.Shadows.invalidate) Reactor3D.Shadows.invalidate();
+    return this._pieceMeshes.slice();
+};
+
+/**
+ * The sky: a sphere of the image around the camera, inside face only, drawn
+ * before everything and never lit, fogged or written to depth. It follows
+ * the camera each frame (`updateSky`), so it is never reached and has no
+ * edge; the image repeats around it at its own scale so a tileable
+ * parallax joins seamlessly, and drifts by the room's scroll speeds the
+ * way a 2D parallax scrolls. Radius well inside the camera's far plane.
+ */
+Reactor3D.SKY_RADIUS = 160;
+Reactor3D.SKY_REPEATS = 4;
+
+Reactor3D.MapScene.prototype.addSky = function(sky, load, tileSize) {
+    if (!sky || !sky.name || typeof load !== "function") return;
+    let bitmap = null;
+    try {
+        bitmap = load(sky.name);
+    } catch (error) {
+        console.warn(`Reactor3D: sky "${sky.name}" could not be loaded.`, error);
+    }
+    this.addSkyImage(sky, bitmap, tileSize);
+};
+
+Reactor3D.MapScene.prototype.addSkyImage = function(sky, bitmap, tileSize) {
+    if (!bitmap) return;
+    if (bitmap.isReady && !bitmap.isReady()) {
+        if (typeof bitmap.addLoadListener === "function") {
+            const build = this._build;
+            bitmap.addLoadListener(() => {
+                if (this._scene && this._build === build) this.addSkyImage(sky, bitmap, tileSize);
+            });
+        }
+        return;
+    }
+    const size = tileSize || 48;
+    const imageWidth = (bitmap.width || 0) / size;
+    const imageHeight = (bitmap.height || 0) / size;
+    if (!(imageWidth > 0) || !(imageHeight > 0)) return;
+    const texture = this.textureFor(bitmap);
+    if (!texture) return;
+    const radius = Reactor3D.SKY_RADIUS;
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
+    // A quarter turn of sky per image, at the image's own aspect: tiled at
+    // its pixel scale a 1800px sky repeated twenty-seven times around and
+    // read as a pattern of specks, not clouds.
+    texture.repeat.set(Reactor3D.SKY_REPEATS, Math.max(1, Math.round(Reactor3D.SKY_REPEATS * 0.5 * (imageWidth / imageHeight))));
+    texture.generateMipmaps = true;
+    texture.minFilter = THREE.LinearMipmapLinearFilter;
+    texture.magFilter = THREE.LinearFilter;
+    texture.needsUpdate = true;
+    const material = new THREE.MeshBasicMaterial({
+        map: texture, side: THREE.BackSide, depthWrite: false, depthTest: false, fog: false
+    });
+    this._materials.push(material);
+    const geometry = new THREE.SphereGeometry(radius, 48, 24);
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.renderOrder = -100;
+    mesh.frustumCulled = false;
+    mesh.castShadow = false;
+    mesh.receiveShadow = false;
+    mesh.userData.roomPiece = "sky";
+    mesh.userData.sky = {
+        // Image pixels a frame, as texture units: one image is one unit.
+        driftX: (Number(sky.scrollX) || 0) / Math.max(1, bitmap.width || 1),
+        driftY: (Number(sky.scrollY) || 0) / Math.max(1, bitmap.height || 1),
+        frame: null
+    };
+    this.belowGroup().add(mesh);
+    this._meshes.push(mesh);
+    this._sky = mesh;
+};
+
+/**
+ * Where the sky's drift has got to, and putting a new sky back there: the
+ * editor rebuilds the scene on an edit, and a sky that started over each
+ * time visibly jumped back while the map was being worked on.
+ */
+Reactor3D.MapScene.prototype.skyOffset = function() {
+    const texture = this._sky && this._sky.material && this._sky.material.map;
+    return texture ? { x: texture.offset.x, y: texture.offset.y } : null;
+};
+
+Reactor3D.MapScene.prototype.setSkyOffset = function(offset) {
+    const texture = this._sky && this._sky.material && this._sky.material.map;
+    if (!texture || !offset) return;
+    if (Number.isFinite(offset.x)) texture.offset.x = offset.x;
+    if (Number.isFinite(offset.y)) texture.offset.y = offset.y;
+};
+
+/** Each frame: the sky stands around the camera and drifts by the frames elapsed. */
+Reactor3D.MapScene.prototype.updateSky = function(camera, frame) {
+    const mesh = this._sky;
+    if (!mesh || !mesh.parent) return;
+    if (camera) {
+        mesh.position.copy(camera.position);
+        // The sky sits in the scene's mesh list, which `freezeStaticMeshes`
+        // stops recomposing every frame; it is the one mesh that moves, so
+        // its matrix is written here. Left frozen, the sphere stayed where
+        // the camera stood when the scene was built, and a camera pulled
+        // far back looked out past its edge at nothing.
+        if (mesh.matrixAutoUpdate === false) mesh.updateMatrix();
+    }
+    const drift = mesh.userData.sky;
+    if (!drift || !Number.isFinite(frame)) return;
+    if (drift.frame !== null && (drift.driftX || drift.driftY)) {
+        const elapsed = Math.max(0, Math.min(60, frame - drift.frame));
+        const texture = mesh.material.map;
+        // Positive X scrolls the image left across the view, as a 2D parallax does.
+        texture.offset.x = ((texture.offset.x + drift.driftX * elapsed) % 1 + 1) % 1;
+        texture.offset.y = ((texture.offset.y + drift.driftY * elapsed) % 1 + 1) % 1;
+    }
+    drift.frame = frame;
 };
 
 /** Skip a room floor only while an intact, opaque parallax hides it. */
@@ -5417,6 +6204,7 @@ Reactor3D.MapScene.prototype.setPass = function(which) {
     // they hang off the scene directly, and left untoggled they re-rendered
     // over the star-flagged tiles in the above pass.
     if (this._modelsGroup) this._modelsGroup.visible = all || world || which === "below";
+    if (this._piecesGroup) this._piecesGroup.visible = all || world || which === "below";
     // The lights' glowing bodies stand in the world with the models: walls
     // hide them, and they are added into the frame like any other glow.
     if (this._lightBodyGroup) this._lightBodyGroup.visible = all || world || which === "below";
@@ -5833,6 +6621,18 @@ Reactor3D.MapScene.prototype.build = function(mapData, bitmaps, options) {
         }
     });
 
+    // The floor and the parallax grounds are one quad each; on a shaped map
+    // they are cut into a grid and bent through the terrain like the tiles.
+    // A map with a terrain grid at all counts, flat or not: the editor's
+    // brush then moves the vertices it already has instead of rebuilding.
+    this._terrainMap = Reactor3D.terrainOf(mapData) ? mapData : null;
+    if (this._terrainMap) {
+        for (const group of built.groups) {
+            if (group.positions) group.baseY = Reactor3D.terrainBaseY(group.positions);
+        }
+    }
+    Reactor3D.displaceByTerrain(built, mapData);
+
     // What each cell's surface ended up at, so a sprite standing on a shop's
     // roof is drawn on the roof rather than on the street below it.
     Reactor3D._surface = built.surface
@@ -5852,6 +6652,9 @@ Reactor3D.MapScene.prototype.build = function(mapData, bitmaps, options) {
         || (name => Reactor3D.defaultParallaxLoader(name));
     this.addParallaxGrounds(Reactor3D.parallaxGroundLayers(mapData), loadParallax, tileSize);
     this.addRoom(Reactor3D.roomFor(mapData), loadParallax, tileSize, mapData.width, mapData.height);
+    this.addSky(Reactor3D.skyFor(mapData), loadParallax, tileSize);
+    // The 3D tileset: blocks on cells, on top of the ground just laid.
+    this.addPieces(mapData, settings.loadMaterial || (name => Reactor3D.defaultMaterialLoader(name)));
 
     for (const group of built.groups) {
         const texture = this.textureFor(bitmaps && bitmaps[group.setNumber]);
@@ -5860,6 +6663,9 @@ Reactor3D.MapScene.prototype.build = function(mapData, bitmaps, options) {
         const geometry = new THREE.BufferGeometry();
         geometry.setAttribute("position", new THREE.BufferAttribute(group.positions, 3));
         geometry.setAttribute("uv", new THREE.BufferAttribute(group.uvs, 2));
+        // Where each vertex sits before the terrain lifts it, so a brush
+        // stroke can lift it again in place (`updateTerrain`).
+        if (group.baseY) geometry.userData.terrainBaseY = group.baseY;
         // What each quad may sample. See `clampToTile`: this is what keeps a
         // tile inside its own square of the sheet at any zoom.
         if (group.bounds) {
@@ -6717,6 +7523,7 @@ Reactor3D.MapScene.prototype.lightBodies = function() {
             let glow = glows[index];
             if (!glow) {
                 glow = new THREE.Mesh(Reactor3D.sphereBodyGeometry(), Reactor3D.lightBodyMaterial());
+                glow.material.uniforms.alongFade.value = 0;
                 glow.renderOrder = 11;
                 group.add(glow);
                 glows[index] = glow;
@@ -6763,7 +7570,9 @@ Reactor3D.MapScene.prototype.lightBodies = function() {
                 glow.position.set(light.x, light.y, light.z);
                 // The haze is smaller than the reach: the reach is where the
                 // light stops falling on things, not a ball of fog that size.
-                const haze = light.radius * 0.45;
+                // A lamp's haze grows with its reach; a sun's reach is the
+                // whole map, and its ball stays a ball in the sky.
+                const haze = Math.min(light.radius * 0.45, Reactor3D.LIGHT_HAZE_MAX);
                 glow.scale.set(haze, haze, haze);
                 glow.material.uniforms.colour.value.setRGB(light.r, light.g, light.b);
                 glow.material.uniforms.strength.value = Reactor3D.VOLUME_GLOW * 0.6 * light.intensity;
@@ -6829,7 +7638,12 @@ Reactor3D.lightBodyMaterial = function() {
     return new THREE.ShaderMaterial({
         uniforms: {
             colour: { value: new THREE.Color(1, 1, 1) },
-            strength: { value: 0.3 }
+            strength: { value: 0.3 },
+            // 1 fades the body along -Y, which is a cone's length from its
+            // apex; 0 keeps it whole, which is what a sphere wants — with the
+            // fade on, its lower half faded to nothing and a big glow read
+            // as a half circle.
+            alongFade: { value: 1 }
         },
         vertexShader: [
             "varying float vAlong;",
@@ -6846,13 +7660,14 @@ Reactor3D.lightBodyMaterial = function() {
         fragmentShader: [
             "uniform vec3 colour;",
             "uniform float strength;",
+            "uniform float alongFade;",
             "varying float vAlong;",
             "varying vec3 vNormalW;",
             "varying vec3 vToEye;",
             "void main() {",
             "\tfloat facing = abs(dot(normalize(vNormalW), normalize(vToEye)));",
             "\tfloat soft = pow(facing, 1.6);",
-            "\tfloat along = 1.0 - vAlong;",
+            "\tfloat along = 1.0 - vAlong * alongFade;",
             "\tfloat a = strength * soft * along * along;",
             "\tgl_FragColor = vec4(colour * a, a);",
             "}"
@@ -6909,6 +7724,8 @@ Reactor3D.MapScene.prototype.clear = function() {
     // Counted per build: a load listener taken out during one build must not
     // lay its quad into the next.
     this._build = (this._build || 0) + 1;
+    this._pieceMeshes = [];
+    this._materialTextures = null;
     // The light pools live in the pass groups rather than in `_meshes`, so
     // they have to be let go of by name or a rebuilt map keeps the old ones.
     for (const kind of Object.keys(this._pools || {})) {
@@ -7316,6 +8133,8 @@ Reactor3D.VOLUME_LIGHT_GAIN = 2;
 
 /** How strongly a light's own body glows, before its intensity. */
 Reactor3D.VOLUME_GLOW = 0.55;
+/** The largest glow ball a point light's body grows to, in tiles. */
+Reactor3D.LIGHT_HAZE_MAX = 10;
 
 /** A plugin light says nothing about height: carried at waist level. */
 Reactor3D.PLUGIN_LIGHT_HEIGHT = 0.5;
@@ -7771,6 +8590,117 @@ Reactor3D.injectBlendColor = function(material, shader) {
  * collapse in a battle room). A plain {value} object in userData, as the
  * blend colour is, so a cloned material owns one and the shader reads it.
  */
+/**
+ * The cutaway: what a player inside a building must not have in the way.
+ * Two cuts, both in the pieces' fragment shader so a merged wall mesh
+ * needs no splitting: everything above `rrCutTop` (the storey the player
+ * stands in, so the roof and the floors above go), and everything inside
+ * a tube of `rrCutRadius` around the line from the eye to the player, so
+ * a wall the camera looks through is opened where it hides the party.
+ * One set of values for every piece material, written once a frame by
+ * `updateCutaway`; 1e9 and 0 mean no cut, which is what the editor shows.
+ */
+Reactor3D.cutawayUniforms = function() {
+    if (!this._cutawayUniforms) {
+        this._cutawayUniforms = {
+            rrCutTop: { value: 1e9 },
+            rrCutEye: { value: [0, 0, 0] },
+            rrCutFocus: { value: [0, 0, 0] },
+            rrCutRadius: { value: 0 },
+            // The footprint the top cut reaches: x0, z0, x1, z1 in world tiles.
+            rrCutBox: { value: [0, 0, 0, 0] }
+        };
+    }
+    return this._cutawayUniforms;
+};
+
+Reactor3D.injectCutaway = function(material, shader) {
+    if (!material || !shader || !material.__reactorPieces || shader.fragmentShader.indexOf("vRRWorldPos") < 0) return;
+    const shared = this.cutawayUniforms();
+    for (const name of Object.keys(shared)) shader.uniforms[name] = shared[name];
+    if (shader.fragmentShader.indexOf("uniform float rrCutTop;") >= 0) return;
+    shader.fragmentShader = "uniform float rrCutTop;\nuniform vec3 rrCutEye;\nuniform vec3 rrCutFocus;\nuniform float rrCutRadius;\nuniform vec4 rrCutBox;\n" + shader.fragmentShader.replace(
+        "#include <map_fragment>",
+        [
+            "if (vRRWorldPos.y > rrCutTop && vRRWorldPos.x >= rrCutBox.x && vRRWorldPos.z >= rrCutBox.y && vRRWorldPos.x <= rrCutBox.z && vRRWorldPos.z <= rrCutBox.w) discard;",
+            // A wall in the way fades rather than opens: an ordered dither
+            // thins it towards the line of sight, which needs no blending
+            // and no sorting inside a merged mesh. Floors (anything at or
+            // under the player's feet) are never thinned.
+            "if (rrCutRadius > 0.0 && vRRWorldPos.y > rrCutFocus.y - 1.2) {",
+            "\tvec3 rrSight = rrCutFocus - rrCutEye;",
+            "\tfloat rrSightLength = length(rrSight);",
+            "\tif (rrSightLength > 0.001) {",
+            "\t\tvec3 rrSightDir = rrSight / rrSightLength;",
+            "\t\tvec3 rrToHere = vRRWorldPos - rrCutEye;",
+            "\t\tfloat rrAlong = dot(rrToHere, rrSightDir);",
+            "\t\tif (rrAlong > 0.0 && rrAlong < rrSightLength - 0.3) {",
+            "\t\t\tfloat rrOff = length(rrToHere - rrSightDir * rrAlong);",
+            "\t\t\tfloat rrThin = (1.0 - smoothstep(rrCutRadius * 0.5, rrCutRadius, rrOff)) * 0.85;",
+            "\t\t\tif (rrThin > 0.0) {",
+            "\t\t\t\tvec2 rrPx = floor(gl_FragCoord.xy);",
+            "\t\t\t\tfloat rrA = mod(rrPx.x, 2.0), rrB = mod(rrPx.y, 2.0);",
+            "\t\t\t\tfloat rrC = mod(floor(rrPx.x * 0.5), 2.0), rrD = mod(floor(rrPx.y * 0.5), 2.0);",
+            "\t\t\t\tfloat rrBayer = (4.0 * (2.0 * rrA + rrB * (3.0 - 4.0 * rrA)) + (2.0 * rrC + rrD * (3.0 - 4.0 * rrC)) + 0.5) / 16.0;",
+            "\t\t\t\tif (rrBayer < rrThin) discard;",
+            "\t\t\t}",
+            "\t\t}",
+            "\t}",
+            "}",
+            "#include <map_fragment>"
+        ].join("\n\t")
+    );
+};
+
+/**
+ * What stands over a character's head on its cell — a roof, a floor above —
+ * as the footprint the cut should reach: the building it belongs to, or
+ * a stretch of map around the cell for pieces laid by hand. Null in the open.
+ */
+Reactor3D.pieceCoverAt = function(mapData, wx, wz, near) {
+    const index = this.pieceIndex(mapData);
+    if (!index) return null;
+    const x = Math.floor(wx), y = Math.floor(wz);
+    const stack = index.cells.get(y * 65536 + x);
+    if (!stack) return null;
+    const base = this.elevationAt(mapData, x, y) + this.terrainHeightAt(mapData, wx, wz);
+    const head = (Number.isFinite(near) ? near : 0) - base + this.PIECE_STOREY - 0.5;
+    const cover = stack.find(piece => piece.z >= head - 1e-6 && piece.kind !== "doorway");
+    if (!cover) return null;
+    const box = cover.group ? index.groups.get(cover.group) : null;
+    return box ? { x0: box.x0, y0: box.y0, x1: box.x1 + 1, y1: box.y1 + 1 }
+        : { x0: x - this.CUTAWAY_REACH, y0: y - this.CUTAWAY_REACH, x1: x + this.CUTAWAY_REACH + 1, y1: y + this.CUTAWAY_REACH + 1 };
+};
+/** How far, in tiles, the top cut reaches around a player under hand-laid pieces. */
+Reactor3D.CUTAWAY_REACH = 24;
+
+/**
+ * Each frame in the game: the cut follows the player and the camera. A
+ * player under a roof loses everything above the storey they stand in;
+ * a wall between the camera and the player is opened whether they are
+ * inside or out.
+ */
+Reactor3D.MapScene.prototype.updateCutaway = function(camera, mapData, character) {
+    const shared = Reactor3D.cutawayUniforms();
+    if (!camera || !mapData || !character || !Reactor3D.hasPieces(mapData)) {
+        shared.rrCutTop.value = 1e9;
+        shared.rrCutRadius.value = 0;
+        return;
+    }
+    const x = (Number.isFinite(character._realX) ? character._realX : character.x || 0) + 0.5;
+    const z = (Number.isFinite(character._realY) ? character._realY : character.y || 0) + 0.5;
+    const ground = Reactor3D.characterGround(mapData, character);
+    const covered = Reactor3D.pieceCoverAt(mapData, x, z, ground);
+    shared.rrCutTop.value = covered ? Math.floor(ground + 1e-6) + Reactor3D.PIECE_STOREY - 0.5 : 1e9;
+    if (covered) { shared.rrCutBox.value[0] = covered.x0; shared.rrCutBox.value[1] = covered.y0; shared.rrCutBox.value[2] = covered.x1; shared.rrCutBox.value[3] = covered.y1; }
+    const eye = camera.getWorldPosition(Reactor3D._cutEye || (Reactor3D._cutEye = new THREE.Vector3()));
+    shared.rrCutEye.value[0] = eye.x; shared.rrCutEye.value[1] = eye.y; shared.rrCutEye.value[2] = eye.z;
+    shared.rrCutFocus.value[0] = x; shared.rrCutFocus.value[1] = ground + 1.5; shared.rrCutFocus.value[2] = z;
+    shared.rrCutRadius.value = Reactor3D.CUTAWAY_RADIUS;
+};
+/** How wide the opening in a wall between the camera and the player is, in tiles. */
+Reactor3D.CUTAWAY_RADIUS = 2.6;
+
 Reactor3D.injectDissolve = function(material, shader) {
     if (!material || !shader || shader.fragmentShader.indexOf("vRRWorldPos") < 0) return;
     material.userData = material.userData || {};
@@ -7826,10 +8756,11 @@ Reactor3D.litMaterial = function(material) {
         Reactor3D.injectLightShader(shader, renderer);
         Reactor3D.injectBlendColor(this, shader);
         Reactor3D.injectDissolve(this, shader);
+        Reactor3D.injectCutaway(this, shader);
     };
     const earlierKey = material.customProgramCacheKey;
     material.customProgramCacheKey = function() {
-        return (typeof earlierKey === "function" ? earlierKey.call(this) : "") + "|reactor3d-lit"
+        return (typeof earlierKey === "function" ? earlierKey.call(this) : "") + "|reactor3d-lit" + (this.__reactorPieces ? "|cutaway" : "")
             + (Reactor3D.Shadows.active() ? "|shadows" + Reactor3D.Shadows.quality().taps : "");
     };
     return material;
@@ -7942,7 +8873,11 @@ Reactor3D.viewFrustum = function() {
     if (typeof THREE === "undefined") return null;
     const camera = this.activeCamera();
     if (!camera) return null;
-    const stamp = (typeof Graphics !== "undefined" && Graphics.frameCount) || 0;
+    // The game stamps frames with Graphics; the editor has no Graphics and
+    // counts its own drawn frames in `cullFrame`. Without either the frustum
+    // was built once for the first camera pose and every light was culled
+    // against it for the rest of the session.
+    const stamp = (typeof Graphics !== "undefined" && Graphics.frameCount) || this.cullFrame || 0;
     if (this._frustumAt === stamp && this._frustumCamera === camera && this._frustum) {
         return this._frustum;
     }
@@ -17751,26 +18686,69 @@ Reactor3D.updateAnchoredAnimations = function(holder) {
 };
 
 /**
- * In third person the player looks where the camera looks: the head bone
+ * The joint that carries a model's head, for the look to pitch: the rig's
+ * own Head joint first, then a joint named Head, then any head-named joint
+ * that is not a tip (head_end, headfront). A rig mapped onto a file's joints
+ * marks plain Groups as joints, so the test is isRigJoint, never isBone
+ * alone: on every bundled actor the head is a Group, and a Bone-only search
+ * found nothing and leaned the whole body instead.
+ */
+Reactor3D.findHeadJoint = function(object) {
+    let best = null;
+    let bestRank = Infinity;
+    const tip = /(_end$|end$|tip|top|front)/i;
+    object.traverse(node => {
+        if (!this.isRigJoint(node)) return;
+        const part = (node.userData && node.userData.parts && node.userData.parts[0] && node.userData.parts[0].name) || "";
+        const name = node.name || "";
+        const rank = /^head$/i.test(part) ? 0
+            : /^head$/i.test(name) ? 1
+            : /head/i.test(name) && !tip.test(name) ? 2
+            : /head/i.test(part) && !tip.test(part) ? 3
+            : Infinity;
+        if (rank < bestRank) { best = node; bestRank = rank; }
+    });
+    return best;
+};
+
+/**
+ * In third person the player looks where the camera looks: the head joint
  * pitches with the look when the model has one, else the body leans a
- * little. Applied after the animation pass, on top of the bone's pose.
+ * little. Applied after the animation pass, on top of the joint's pose. The
+ * pitch turns about the model's own side axis, carried into the joint's
+ * parent frame, so a joint authored on any axis nods rather than rolls; and
+ * a joint no clip rewrote since last frame is put back before the new lean
+ * goes on, so an idle model does not wind its head up frame by frame.
  */
 Reactor3D.applyLookLean = function(object, character) {
     if (!object || !this.Camera || typeof $gamePlayer === "undefined" || character !== $gamePlayer) return;
     const lean = this.Camera.lookLean() * Math.PI / 180;
     if (!object.userData.__reactorHeadSearched) {
         object.userData.__reactorHeadSearched = true;
-        let head = null;
-        object.traverse(node => { if (!head && node.isBone && /head/i.test(node.name)) head = node; });
-        object.userData.__reactorHead = head;
+        object.userData.__reactorHead = this.findHeadJoint(object);
     }
     const head = object.userData.__reactorHead;
-    if (head) {
-        head.rotation.x += lean;
-        head.updateMatrix();
-    } else {
+    if (!head) {
         object.rotation.x += lean;
+        return;
     }
+    const memo = head.userData.__reactorLean || (head.userData.__reactorLean = {
+        base: new THREE.Quaternion(), result: new THREE.Quaternion(), applied: false
+    });
+    if (memo.applied && head.quaternion.equals(memo.result)) head.quaternion.copy(memo.base);
+    memo.base.copy(head.quaternion);
+    if (lean) {
+        const scratch = Reactor3D._leanScratch || (Reactor3D._leanScratch = {
+            model: new THREE.Quaternion(), parent: new THREE.Quaternion(), turn: new THREE.Quaternion(), axis: new THREE.Vector3()
+        });
+        object.getWorldQuaternion(scratch.model);
+        (head.parent || object).getWorldQuaternion(scratch.parent).invert();
+        scratch.axis.set(1, 0, 0).applyQuaternion(scratch.model).applyQuaternion(scratch.parent).normalize();
+        head.quaternion.premultiply(scratch.turn.setFromAxisAngle(scratch.axis, lean));
+    }
+    memo.result.copy(head.quaternion);
+    memo.applied = true;
+    head.updateMatrix();
 };
 
 /** Placement and event overrides are percentages; old maps default to 100. */
@@ -18342,11 +19320,8 @@ Reactor3D.MapScene.prototype.syncCharacterModels = function(characters) {
         const fit = (spec.size > 0 ? spec.size : 2) / span;
         const scale = fit * (spec.scale > 0 ? spec.scale : 1);
         const stretch = spec.stretch || [1, 1, 1];
-        const ground = Reactor3D.elevationAt(
-            typeof $dataMap !== "undefined" ? $dataMap : null,
-            Math.round(character._realX),
-            Math.round(character._realY)
-        );
+        const ground = Reactor3D.characterGround(
+            typeof $dataMap !== "undefined" ? $dataMap : null, character);
         object.scale.set(scale * stretch[0], scale * stretch[1], scale * stretch[2]);
         if (lodEye) Reactor3D.pickLod(object, Reactor3D.instanceSpan(object), lodEye, holder.spec);
         Reactor3D.applyEventModelPose(object, spec, Reactor3D.characterModelDir8(character));
@@ -18605,11 +19580,8 @@ Reactor3D.MapScene.prototype._updateCharacterBillboard = function(holder, sprite
     const tw = map && map.tileWidth ? map.tileWidth() : 48;
     const th = map && map.tileHeight ? map.tileHeight() : 48;
     holder.object.scale.set(frame.width / tw, frame.height / th, 1);
-    const ground = Reactor3D.elevationAt(
-        typeof $dataMap !== "undefined" ? $dataMap : null,
-        Math.round(character._realX),
-        Math.round(character._realY)
-    );
+    const ground = Reactor3D.characterGround(
+        typeof $dataMap !== "undefined" ? $dataMap : null, character);
     const viewport = Reactor3D.viewport();
     const camera = viewport && viewport.camera && viewport.camera();
     // The same half-cell step towards the camera the tile cut-out shader
@@ -19526,8 +20498,9 @@ Reactor3D.installPropHooks = function() {
     // The running game
 
     function elevationAt(x, y) {
-        if (!Reactor3D || !Reactor3D.elevationAt || typeof $dataMap === "undefined") return 0;
-        return Reactor3D.elevationAt($dataMap, Math.round(x), Math.round(y)) || 0;
+        if (!Reactor3D || !Reactor3D.groundHeightAt || typeof $dataMap === "undefined") return 0;
+        const near = typeof $gamePlayer !== "undefined" && $gamePlayer ? $gamePlayer._reactorGround : undefined;
+        return Reactor3D.groundHeightAt($dataMap, x + 0.5, y + 0.5, near) || 0;
     }
 
     function gameContext(spriteset) {

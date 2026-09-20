@@ -772,6 +772,10 @@
             position: absolute;
             bottom: 0;
             right: 0;
+            /* With the bars, above the 3D view's canvas (z-index 5) and
+               input surface (6): without it the sky showed through the
+               square where the two bars meet. */
+            z-index: 1000;
             width: 14px;
             height: 14px;
             background-color: var(--color-bg-surface);
@@ -4993,6 +4997,10 @@ details.mp-section:not([open]) > .mp-section-body { display:none; }
 .rr-sequence-editor { height:100%;min-height:0;box-sizing:border-box;display:flex;flex-direction:column;gap:10px;padding:12px;overflow:hidden; }
 .rr-sequence-editor > * { flex-shrink:0; }
 .rr-sequence-editor .rr-battle-toolbar { margin:0; }
+.rr-terrain-mode[aria-checked="true"] { background: var(--color-accent); color: var(--color-bg-deep); border-color: var(--color-accent); font-weight: 700; }
+.rr-terrain-panel input[type="range"] { accent-color: var(--color-accent-bright); width: 100%; }
+.rr-pieces-kind[aria-checked="true"], .rr-pieces-mode[aria-checked="true"] { background: var(--color-accent); color: var(--color-bg-deep); border-color: var(--color-accent); font-weight: 700; }
+.rr-pieces-material[aria-checked="true"] { border-color: var(--color-accent) !important; box-shadow: 0 0 0 1px var(--color-accent); }
 .rr-sequence-header > .rr-sequence-id { color:var(--color-text-muted);font-size:12px;font-variant-numeric:tabular-nums;white-space:nowrap;padding:0 2px; }
 .rr-sequence-header > input { flex:1;min-width:100px;width:140px; }
 .rr-sequence-editor .rr-battle-workspace { flex:1;min-height:260px;grid-template-columns:clamp(180px,20%,260px) minmax(0,1fr) 250px; }

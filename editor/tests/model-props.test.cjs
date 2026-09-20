@@ -257,3 +257,16 @@ test('changing maps rebinds prop picking and clears selection, drags, and map-lo
     assert.equal(manager.drag, null);
     assert.equal(manager._undo.length + manager._redo.length, 0);
 });
+
+test('a right-click or Escape lets go of the selected model, in 3D and on the flat map', () => {
+    const view = fs.readFileSync(path.join(editorRoot, 'src', 'MapEditor3D.js'), 'utf8');
+    const menu = view.slice(view.indexOf('this._onContextMenu = event =>'), view.indexOf('const cube = this.eventAt(event.clientX, event.clientY);'));
+    assert.match(menu, /if \(this\.canEditProps\(\)\) \{[\s\S]*manager\.select\(null, \{ fromThree: true \}\);[\s\S]*this\.selectProp\(null\);[\s\S]*return;/, 'a right-click with the models tool up deselects before the event menu is considered');
+    assert.ok(menu.indexOf('this.canEditProps()') < menu.indexOf('this.canSelectEvents()'), 'models before events');
+    const manager = fs.readFileSync(path.join(editorRoot, 'src', 'ModelPropsManager.js'), 'utf8');
+    assert.match(manager, /else if \(event\.key === 'Escape'\) \{\s*event\.preventDefault\(\);\s*this\.select\(null\);/);
+    assert.match(manager, /if \(event\.data\.button === 2\) \{\s*if \(this\.selectedId\) this\.select\(null\);\s*return;/, 'the flat map answers the right button the same way');
+    const i18n = fs.readFileSync(path.join(editorRoot, 'src', 'I18nManager.js'), 'utf8');
+    assert.equal((i18n.match(/'props\.hintPlace': '/g) || []).length, 18);
+    assert.match(i18n, /'props\.hintPlace': 'Click the map to place it\. Click a placed model to select it, drag to move, Delete to remove, right-click or Esc to deselect\.'/);
+});

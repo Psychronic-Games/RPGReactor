@@ -1434,6 +1434,42 @@ class LightingManager {
         return input;
     }
 
+    /**
+     * The kind of a placed light. The three shapes come first; under them,
+     * every single-light preset in the tray, so a light placed as a lamp
+     * can be made a candle, a neon tube or the sun without placing it
+     * again — it keeps its place and its name and takes the preset's look.
+     */
+    _typeSelect(light, commit) {
+        const select = this._el('select', 'lit-select');
+        const group = (label, entries) => {
+            const holder = this._el('optgroup');
+            holder.label = label;
+            for (const [value, text] of entries) {
+                const option = this._el('option', '', text);
+                option.value = value;
+                holder.appendChild(option);
+            }
+            select.appendChild(holder);
+        };
+        group(this._k('lit.types'), [['point', this._k('lit.point')], ['spot', this._k('lit.spot')], ['beam', this._k('lit.beam')]]);
+        const shapes = ['point', 'spot', 'beam'];
+        const presets = this._presets().filter(preset => preset.template && !preset.template.compound && !shapes.includes(preset.key));
+        if (presets.length) group(this._k('lit.presets'), presets.map(preset => ['preset:' + preset.key, preset.label]));
+        select.value = light.type;
+        select.addEventListener('change', () => {
+            const value = select.value;
+            if (value.startsWith('preset:')) {
+                const look = typeof RRMapLights !== 'undefined' && RRMapLights.presetLook ? RRMapLights.presetLook(value.slice(7)) : null;
+                if (look) commit(look);
+                else select.value = light.type;
+                return;
+            }
+            commit({ type: value });
+        });
+        return select;
+    }
+
     _select(options, value, onChange) {
         const select = this._el('select', 'lit-select');
         for (const [optionValue, label] of options) {
@@ -1709,6 +1745,10 @@ class LightingManager {
                 + line('M18 46L52 12', '#ffffff', 1.5)
                 + metal('M4 42L13 33L30 50L21 60H11L4 53Z')
                 + glow('M15 36L27 48L31 44L19 32Z') + line('M42 5H59V22M42 13V22H51', '#24bdf3');
+            case 'sun': return line('M32 3V13M32 51V61M3 32H13M51 32H61M12 12L19 19M45 45L52 52M52 12L45 19M19 45L12 52', INK, 7)
+                + line('M32 3V13M32 51V61M3 32H13M51 32H61M12 12L19 19M45 45L52 52M52 12L45 19M19 45L12 52', colour, 3.5)
+                + glow('M32 17A15 15 0 1 1 31.9 17Z')
+                + line('M25 29A9 9 0 0 1 35 24', '#ffffff', 2);
             case 'streetlamp': return base + metal('M21 55V9L27 3H50L56 9V16H28V55Z')
                 + glow('M38 19L29 44H59L50 19Z') + metal('M34 13H54V23H34Z')
                 + line('M25 21V48', '#24bdf3');
@@ -1983,9 +2023,7 @@ class LightingManager {
             event.stopPropagation();
         });
         body.appendChild(this._row(this._k(light.compoundId ? 'lit.componentId' : 'lit.id'), id));
-        body.appendChild(this._row(this._k('lit.type'), this._select(
-            [['point', this._k('lit.point')], ['spot', this._k('lit.spot')], ['beam', this._k('lit.beam')]],
-            light.type, value => commit({ type: value }))));
+        body.appendChild(this._row(this._k('lit.type'), this._typeSelect(light, commit)));
 
         // The light itself.
         const look = this._group(body, this._k('lit.section.light'), 'light');

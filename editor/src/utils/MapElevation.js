@@ -22,7 +22,7 @@
     // Twenty tiles is about a six-storey building at RPG Maker's scale, and far
     // past anything the camera can frame. The ceiling exists so a stuck key or
     // a bad drag cannot write a spike a thousand tiles high into a project.
-    const MAX = 20;
+    const MAX = 100;
     const MIN = 0;
 
     const clamp = value => {
@@ -60,6 +60,14 @@
                 }
             }
             sidecar.elevation = grown;
+        }
+        // The terrain grid moves with the same resize, from the width it was
+        // made for; done here, before the recorded width advances, so a map
+        // made larger keeps every hill it had.
+        if (Array.isArray(sidecar.terrain) && sidecar.terrain.length !== (mapData.width + 1) * (mapData.height + 1)) {
+            const oldWidth = Number(sidecar.terrainWidth) > 0 ? Number(sidecar.terrainWidth) : Number(sidecar.width) || 0;
+            sidecar.terrain = regrowTerrain(mapData, sidecar.terrain, oldWidth);
+            sidecar.terrainWidth = mapData.width;
         }
         sidecar.width = mapData.width;
         sidecar.height = mapData.height;
@@ -116,7 +124,160 @@
     /** Whether anything has been painted, which decides if a file is written. */
     const isFlat = mapData => {
         const heights = snapshot(mapData);
-        return !heights || heights.every(value => !value);
+        return (!heights || heights.every(value => !value)) && !hasTerrain(mapData);
+    };
+
+    /*
+     * Terrain: a fractional height at every tile corner, `(width+1)*(height+1)`
+     * of them, on top of the whole-tile elevation. The runtime bends the map's
+     * meshes through it (`Reactor3D.displaceByTerrain`) and stands characters
+     * on it (`groundHeightAt`). Absent until painted.
+     */
+    const TERRAIN_MAX = 60;
+    const TERRAIN_MODES = ['raise', 'lower', 'smooth', 'flatten'];
+    const terrainSize = mapData => (mapData.width + 1) * (mapData.height + 1);
+
+    /**
+     * Fit a terrain grid to the map's current size, keeping every corner
+     * that still exists. `oldWidth` is the width the grid was made for:
+     * `terrainWidth` when the sidecar recorded it, else the elevation's own
+     * recorded width, which the same resize moved. A map made larger keeps
+     * its hills; a map made smaller keeps the hills that fit.
+     */
+    function regrowTerrain(mapData, grid, oldWidth) {
+        const size = terrainSize(mapData);
+        const grown = new Array(size).fill(0);
+        const oldStride = oldWidth > 0 ? oldWidth + 1 : 0;
+        if (Array.isArray(grid) && oldStride && grid.length % oldStride === 0) {
+            const rows = Math.min(grid.length / oldStride, mapData.height + 1);
+            const cols = Math.min(oldStride, mapData.width + 1);
+            for (let y = 0; y < rows; y++) {
+                for (let x = 0; x < cols; x++) grown[y * (mapData.width + 1) + x] = Number(grid[y * oldStride + x]) || 0;
+            }
+        }
+        return grown;
+    }
+
+    /** The grid, fitted to the map on the way out if a resize left it the old size. */
+    const terrain = mapData => {
+        const sidecar = mapData && mapData.reactor3d;
+        const grid = sidecar && sidecar.terrain;
+        if (!Array.isArray(grid)) return null;
+        if (grid.length !== terrainSize(mapData)) {
+            const oldWidth = Number(sidecar.terrainWidth) > 0 ? Number(sidecar.terrainWidth) : Number(sidecar.width) || 0;
+            sidecar.terrain = regrowTerrain(mapData, grid, oldWidth);
+            sidecar.terrainWidth = mapData.width;
+        }
+        return sidecar.terrain;
+    };
+
+    const hasTerrain = mapData => {
+        const grid = terrain(mapData);
+        return !!grid && grid.some(value => value);
+    };
+
+    /** The corner grid, created flat if the map has none; resized like the elevation. */
+    const ensureTerrain = mapData => {
+        const sidecar = ensure(mapData);
+        if (!sidecar) return null;
+        const size = terrainSize(mapData);
+        if (!Array.isArray(sidecar.terrain)) sidecar.terrain = new Array(size).fill(0);
+        else if (sidecar.terrain.length !== size) terrain(mapData);
+        sidecar.terrainWidth = mapData.width;
+        return sidecar.terrain;
+    };
+
+    const terrainAt = (mapData, cx, cy) => {
+        const grid = terrain(mapData);
+        if (!grid || cx < 0 || cy < 0 || cx > mapData.width || cy > mapData.height) return 0;
+        return Number(grid[cy * (mapData.width + 1) + cx]) || 0;
+    };
+
+    /**
+     * One dab of the brush at a world point (`x`, `y` in tiles, corner space:
+     * corner `i` stands at world `i`). Raise and lower move every corner within
+     * `radius` by `strength` scaled by a soft falloff; smooth pulls each
+     * corner towards the mean of its neighbours; flatten pulls towards
+     * `reference`, the height under the stroke's first touch. Returns whether
+     * anything moved.
+     */
+    const paintTerrain = (mapData, x, y, options = {}) => {
+        const grid = ensureTerrain(mapData);
+        if (!grid) return false;
+        const mode = TERRAIN_MODES.includes(options.mode) ? options.mode : 'raise';
+        const radius = Math.max(0.5, Math.min(64, Number(options.radius) || 3));
+        const strength = Math.max(0.01, Math.min(4, Number(options.strength) || 0.25));
+        const stride = mapData.width + 1;
+        const x0 = Math.max(0, Math.floor(x - radius)), x1 = Math.min(mapData.width, Math.ceil(x + radius));
+        const y0 = Math.max(0, Math.floor(y - radius)), y1 = Math.min(mapData.height, Math.ceil(y + radius));
+        const before = mode === 'smooth' ? grid.slice() : null;
+        let changed = false;
+        for (let cy = y0; cy <= y1; cy++) {
+            for (let cx = x0; cx <= x1; cx++) {
+                const distance = Math.hypot(cx - x, cy - y);
+                if (distance > radius) continue;
+                const t = 1 - distance / radius;
+                const falloff = t * t * (3 - 2 * t);
+                const index = cy * stride + cx;
+                const current = Number(grid[index]) || 0;
+                let next = current;
+                if (mode === 'raise') next = current + strength * falloff;
+                else if (mode === 'lower') next = current - strength * falloff;
+                else if (mode === 'smooth') {
+                    let sum = 0, count = 0;
+                    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+                        const nx = cx + dx, ny = cy + dy;
+                        if (nx < 0 || ny < 0 || nx > mapData.width || ny > mapData.height) continue;
+                        sum += Number(before[ny * stride + nx]) || 0; count++;
+                    }
+                    next = current + ((sum / count) - current) * Math.min(1, strength * 2) * falloff;
+                } else {
+                    const reference = Number(options.reference) || 0;
+                    next = current + (reference - current) * Math.min(1, strength * 2) * falloff;
+                }
+                next = Math.max(-TERRAIN_MAX, Math.min(TERRAIN_MAX, Math.round(next * 1000) / 1000));
+                if (next !== current) { grid[index] = next; changed = true; }
+            }
+        }
+        // A vertex between two corners samples both, so the tiles either
+        // side of the touched corners move as well; that is the region the
+        // 3D view re-lifts in place.
+        return changed ? { x0: Math.max(0, x0 - 1), x1: Math.min(mapData.width, x1 + 1), z0: Math.max(0, y0 - 1), z1: Math.min(mapData.height, y1 + 1) } : false;
+    };
+
+    /** The terrain's rise at a world point, bilinear over its corners; what the runtime asks. */
+    const terrainHeightAt = (mapData, wx, wz) => {
+        const grid = terrain(mapData);
+        if (!grid) return 0;
+        const width = mapData.width, height = mapData.height;
+        const gx = Math.max(0, Math.min(width, wx)), gz = Math.max(0, Math.min(height, wz));
+        const x0 = Math.min(width - 1, Math.floor(gx)), z0 = Math.min(height - 1, Math.floor(gz));
+        const fx = gx - x0, fz = gz - z0, stride = width + 1;
+        const h = i => Number(grid[i]) || 0;
+        return (h(z0 * stride + x0) * (1 - fx) + h(z0 * stride + x0 + 1) * fx) * (1 - fz)
+            + (h((z0 + 1) * stride + x0) * (1 - fx) + h((z0 + 1) * stride + x0 + 1) * fx) * fz;
+    };
+
+    const terrainSnapshot = mapData => {
+        const grid = terrain(mapData);
+        return grid ? grid.slice() : null;
+    };
+
+    const restoreTerrain = (mapData, saved) => {
+        const sidecar = mapData && mapData.reactor3d;
+        if (!sidecar) return false;
+        if (!saved) { delete sidecar.terrain; delete sidecar.terrainWidth; return true; }
+        sidecar.terrain = saved.slice();
+        sidecar.terrainWidth = mapData.width;
+        return true;
+    };
+
+    /** Forget the terrain entirely: the map is its elevation again. */
+    const clearTerrain = mapData => {
+        const sidecar = mapData && mapData.reactor3d;
+        if (!sidecar || !sidecar.terrain) return false;
+        delete sidecar.terrain; delete sidecar.terrainWidth;
+        return true;
     };
 
     /**
@@ -151,10 +312,11 @@
             && Object.keys(sidecar3d.eventPreviews).length);
         const roomed = !!(sidecar3d && sidecar3d.room);
         const propped = !!(sidecar3d && Array.isArray(sidecar3d.props) && sidecar3d.props.length);
+        const built = !!(sidecar3d && ((Array.isArray(sidecar3d.pieces) && sidecar3d.pieces.length) || (Array.isArray(sidecar3d.structures) && sidecar3d.structures.length)));
         const lit = !!(sidecar3d && ((Array.isArray(sidecar3d.lights) && sidecar3d.lights.length)
             || sidecar3d.lighting));
         const media = Array.isArray(sidecar3d?.mediaSurfaces) && sidecar3d.mediaSurfaces.length > 0;
-        if (isFlat(mapData) && !grouped && !media && !modeled && !lifted && !previewed && !roomed && !propped && !lit
+        if (isFlat(mapData) && !grouped && !media && !modeled && !lifted && !previewed && !roomed && !propped && !built && !lit
             && !(sidecar3d && sidecar3d.camera)) {
             if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
             return true;
@@ -237,16 +399,28 @@
     const normalizeRoom = room => {
         const source = room && typeof room === 'object' ? room : {};
         const name = value => (typeof value === 'string' ? value.trim() : '');
+        // Image pixels a frame, to a thousandth: a whole pixel a frame is
+        // already a brisk sky, and a slow one is a fraction of that.
+        const scroll = value => {
+            const number = Number(value);
+            return Number.isFinite(number) ? Math.max(-32, Math.min(32, Math.round(number * 1000) / 1000)) : 0;
+        };
         return {
             height: clampRoomHeight(source.height),
             floor: name(source.floor),
             walls: name(source.walls),
-            ceiling: name(source.ceiling)
+            ceiling: name(source.ceiling),
+            // The sky: beyond the room, around the camera, drifting by
+            // `skyScrollX/Y` image pixels a frame as a 2D parallax scrolls.
+            sky: name(source.sky),
+            skyScrollX: scroll(source.skyScrollX),
+            skyScrollY: scroll(source.skyScrollY)
         };
     };
 
     const isDefaultRoom = room =>
-        !room.floor && !room.walls && !room.ceiling && room.height === ROOM_DEFAULT_HEIGHT;
+        !room.floor && !room.walls && !room.ceiling && !room.sky && !room.skyScrollX && !room.skyScrollY
+        && room.height === ROOM_DEFAULT_HEIGHT;
 
     /** The map's room, defaults filled in. */
     const room = mapData => normalizeRoom(mapData && mapData.reactor3d && mapData.reactor3d.room);
@@ -448,7 +622,217 @@
         return writeProps(mapData, kept);
     };
 
+    /*
+     * Pieces: the 3D tileset. A piece is a block of one of a few kinds on a
+     * cell at a level, turned in quarter turns, wearing a material (an image
+     * under img/materials). The runtime lays them down (`Reactor3D.addPieces`)
+     * and stands characters on their tops. One piece per cell and level: a
+     * new one there replaces the old.
+     */
+    const PIECE_KINDS = ['wall', 'block', 'floor', 'pillar', 'stair', 'ramp', 'roof', 'doorway', 'window', 'fence'];
+    const PIECE_MAX_LEVEL = 30;
+    const normalizePiece = (raw, mapData) => {
+        if (!raw || typeof raw !== 'object' || !PIECE_KINDS.includes(raw.kind)) return null;
+        const x = Math.floor(Number(raw.x)), y = Math.floor(Number(raw.y));
+        if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || y < 0) return null;
+        if (mapData && (x >= mapData.width || y >= mapData.height)) return null;
+        const z = Math.max(0, Math.min(PIECE_MAX_LEVEL, Math.floor(Number(raw.z)) || 0));
+        const rot = ((Math.floor(Number(raw.rot)) || 0) % 4 + 4) % 4;
+        const material = typeof raw.material === 'string' ? raw.material.trim() : '';
+        const id = Number(raw.id);
+        const piece = { id: Number.isFinite(id) && id > 0 ? Math.floor(id) : 0, kind: raw.kind, x, y, z, rot, material };
+        // Pieces stamped from one plan share a group, so the building moves as one.
+        const group = Number(raw.group);
+        if (Number.isFinite(group) && group > 0) piece.group = Math.floor(group);
+        return piece;
+    };
+    const pieces = mapData => {
+        const sidecar = mapData && mapData.reactor3d;
+        const list = sidecar && Array.isArray(sidecar.pieces) ? sidecar.pieces : [];
+        return list.map(raw => normalizePiece(raw, mapData)).filter(Boolean);
+    };
+    const hasPieces = mapData => pieces(mapData).length > 0;
+    const pieceAt = (mapData, x, y, z) => pieces(mapData).find(piece => piece.x === x && piece.y === y && piece.z === z) || null;
+    // Always a new array: the runtime indexes pieces by the array itself.
+    const writePieces = (mapData, list) => {
+        if (!list.length) {
+            if (mapData.reactor3d) delete mapData.reactor3d.pieces;
+            return true;
+        }
+        const sidecar = ensure(mapData);
+        if (!sidecar) return false;
+        sidecar.pieces = list.slice();
+        return true;
+    };
+    /** Put a piece on a cell at a level, replacing whatever was there; the piece's id, or 0. */
+    const setPiece = (mapData, values) => {
+        if (!mapData) return 0;
+        const list = pieces(mapData);
+        const next = normalizePiece(Object.assign({}, values, { id: 0 }), mapData);
+        if (!next) return 0;
+        const at = list.findIndex(piece => piece.x === next.x && piece.y === next.y && piece.z === next.z);
+        const same = at >= 0 && list[at].kind === next.kind && list[at].rot === next.rot && list[at].material === next.material;
+        if (same) return list[at].id;
+        next.id = at >= 0 ? list[at].id : list.reduce((max, piece) => Math.max(max, piece.id), 0) + 1;
+        if (at >= 0) list[at] = next; else list.push(next);
+        return writePieces(mapData, list) ? next.id : 0;
+    };
+    const removePiece = (mapData, x, y, z) => {
+        if (!mapData) return false;
+        const list = pieces(mapData);
+        const kept = list.filter(piece => !(piece.x === x && piece.y === y && piece.z === z));
+        if (kept.length === list.length) return false;
+        return writePieces(mapData, kept);
+    };
+    const piecesSnapshot = mapData => pieces(mapData);
+    const restorePieces = (mapData, saved) => writePieces(mapData, Array.isArray(saved) ? saved.map(raw => normalizePiece(raw, mapData)).filter(Boolean) : []);
+    const clearPieces = mapData => writePieces(mapData, []);
+    /** The next free group number. */
+    const nextPieceGroup = mapData => pieces(mapData).reduce((max, piece) => Math.max(max, piece.group || 0), 0) + 1;
+    const pieceGroup = (mapData, group) => pieces(mapData).filter(piece => piece.group === group);
+    /** The cells a group covers: {x0, y0, x1, y1} inclusive, or null. */
+    const pieceGroupBounds = (mapData, group) => {
+        const list = pieceGroup(mapData, group);
+        if (!list.length) return null;
+        const bounds = { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity };
+        for (const piece of list) { bounds.x0 = Math.min(bounds.x0, piece.x); bounds.y0 = Math.min(bounds.y0, piece.y); bounds.x1 = Math.max(bounds.x1, piece.x); bounds.y1 = Math.max(bounds.y1, piece.y); }
+        return bounds;
+    };
+    /**
+     * Move a group so its top-left cell lands on (x, y). Refused when any
+     * piece would leave the map; whatever stood on the new footprint (other
+     * than the group itself) goes, as a stamp would take it.
+     */
+    const movePieceGroup = (mapData, group, x, y) => {
+        if (!mapData) return false;
+        const bounds = pieceGroupBounds(mapData, group);
+        if (!bounds) return false;
+        const dx = Math.floor(x) - bounds.x0, dy = Math.floor(y) - bounds.y0;
+        if (!dx && !dy) return false;
+        const nx0 = bounds.x0 + dx, ny0 = bounds.y0 + dy, nx1 = bounds.x1 + dx, ny1 = bounds.y1 + dy;
+        if (nx0 < 0 || ny0 < 0 || nx1 >= mapData.width || ny1 >= mapData.height) return false;
+        const list = pieces(mapData);
+        const moved = [];
+        for (const piece of list) {
+            if (piece.group === group) moved.push(Object.assign({}, piece, { x: piece.x + dx, y: piece.y + dy }));
+            else if (!(piece.x >= nx0 && piece.x <= nx1 && piece.y >= ny0 && piece.y <= ny1)) moved.push(piece);
+        }
+        return writePieces(mapData, moved);
+    };
+    const removePieceGroup = (mapData, group) => {
+        if (!mapData) return false;
+        const list = pieces(mapData);
+        const kept = list.filter(piece => piece.group !== group);
+        if (kept.length === list.length) return false;
+        removeStructure(mapData, group);
+        return writePieces(mapData, kept);
+    };
+    /** Turn a hand-built group a quarter turn clockwise about its footprint. */
+    const rotatePieceGroup = (mapData, group) => {
+        const bounds = pieceGroupBounds(mapData, group);
+        if (!bounds) return false;
+        const w = bounds.x1 - bounds.x0 + 1, h = bounds.y1 - bounds.y0 + 1;
+        if (bounds.x0 + h > mapData.width || bounds.y0 + w > mapData.height) return false;
+        const list = pieces(mapData).map(piece => piece.group !== group ? piece
+            : Object.assign({}, piece, { x: bounds.x0 + (h - 1 - (piece.y - bounds.y0)), y: bounds.y0 + (piece.x - bounds.x0), rot: (piece.rot + 1) % 4 }));
+        return writePieces(mapData, list);
+    };
+    /*
+     * Stamped structures: which plan a group came from and how it stands,
+     * so the building can be moved, turned or grown by building it again.
+     * `structures: [{ group, plan, x, y, rot, scale }]` in the sidecar.
+     */
+    const structures = mapData => {
+        const list = mapData && mapData.reactor3d && Array.isArray(mapData.reactor3d.structures) ? mapData.reactor3d.structures : [];
+        return list.filter(entry => entry && Number(entry.group) > 0 && typeof entry.plan === 'string').map(entry => ({
+            group: Math.floor(Number(entry.group)), plan: entry.plan, x: Math.floor(Number(entry.x)) || 0, y: Math.floor(Number(entry.y)) || 0,
+            rot: ((Math.floor(Number(entry.rot)) || 0) % 4 + 4) % 4, scale: Math.max(1, Math.min(4, Math.floor(Number(entry.scale)) || 1))
+        }));
+    };
+    const structureOf = (mapData, group) => structures(mapData).find(entry => entry.group === group) || null;
+    const setStructure = (mapData, record) => {
+        const sidecar = ensure(mapData);
+        if (!sidecar || !record || !(Number(record.group) > 0)) return false;
+        const list = structures(mapData).filter(entry => entry.group !== record.group);
+        list.push({ group: record.group, plan: record.plan, x: record.x, y: record.y, rot: record.rot || 0, scale: record.scale || 1 });
+        sidecar.structures = list;
+        return true;
+    };
+    const restoreStructures = (mapData, list) => {
+        const sidecar = mapData && mapData.reactor3d;
+        if (!sidecar) return false;
+        if (Array.isArray(list) && list.length) sidecar.structures = list.map(entry => Object.assign({}, entry)); else delete sidecar.structures;
+        return true;
+    };
+    const removeStructure = (mapData, group) => {
+        const sidecar = mapData && mapData.reactor3d;
+        if (!sidecar) return false;
+        const list = structures(mapData).filter(entry => entry.group !== group);
+        if (list.length) sidecar.structures = list; else delete sidecar.structures;
+        return true;
+    };
+    /**
+     * Placed models standing on a footprint are set down just outside it,
+     * on the nearest edge, so a building stamped over a tree does not
+     * swallow the tree. Returns how many moved.
+     */
+    const relocatePropsOff = (mapData, x0, y0, w, h) => {
+        if (!mapData || !mapData.reactor3d || !Array.isArray(mapData.reactor3d.props)) return 0;
+        let moved = 0;
+        for (const prop of props(mapData)) {
+            if (!(prop.x >= x0 && prop.x < x0 + w && prop.y >= y0 && prop.y < y0 + h)) continue;
+            const left = prop.x - x0, right = x0 + w - prop.x, top = prop.y - y0, bottom = y0 + h - prop.y;
+            const nearest = Math.min(left, right, top, bottom);
+            let nx = prop.x, ny = prop.y;
+            // Two cells clear, so a door or a path along the wall stays open.
+            if (nearest === left) nx = x0 - 2; else if (nearest === right) nx = x0 + w + 1; else if (nearest === top) ny = y0 - 2; else ny = y0 + h + 1;
+            nx = Math.max(0, Math.min(mapData.width - 1, nx)); ny = Math.max(0, Math.min(mapData.height - 1, ny));
+            if (updateProp(mapData, prop.id, { x: nx, y: ny })) moved++;
+        }
+        return moved;
+    };
+    /** The building a cell belongs to: a piece's group there, else a group whose footprint holds the cell. */
+    const pieceGroupAt = (mapData, x, y) => {
+        const list = pieces(mapData);
+        const here = list.find(piece => piece.x === x && piece.y === y && piece.group);
+        if (here) return here.group;
+        for (const group of new Set(list.map(piece => piece.group).filter(Boolean))) {
+            const bounds = pieceGroupBounds(mapData, group);
+            if (bounds && x >= bounds.x0 && x <= bounds.x1 && y >= bounds.y0 && y <= bounds.y1) return group;
+        }
+        return 0;
+    };
+    /**
+     * Make a building of the loose pieces touching the one at a cell: every
+     * ungrouped piece reachable across shared cell edges (and up and down a
+     * stack) joins one new group. The group, or 0 when nothing is there.
+     */
+    const groupConnectedPieces = (mapData, x, y) => {
+        const list = pieces(mapData);
+        const byCell = new Map();
+        for (const piece of list) { if (piece.group) continue; const key = piece.x + ',' + piece.y; (byCell.get(key) || byCell.set(key, []).get(key)).push(piece); }
+        if (!byCell.has(x + ',' + y)) return 0;
+        const group = nextPieceGroup(mapData);
+        const seen = new Set([x + ',' + y]);
+        const queue = [[x, y]];
+        while (queue.length) {
+            const [cx, cy] = queue.shift();
+            for (const piece of byCell.get(cx + ',' + cy) || []) piece.group = group;
+            for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+                const key = (cx + dx) + ',' + (cy + dy);
+                if (byCell.has(key) && !seen.has(key)) { seen.add(key); queue.push([cx + dx, cy + dy]); }
+            }
+        }
+        return writePieces(mapData, list) ? group : 0;
+    };
+    /** Every material the map's pieces wear, each once. */
+    const pieceMaterials = mapData => Array.from(new Set(pieces(mapData).map(piece => piece.material).filter(Boolean))).sort();
+
     const api = {
+        PIECE_KINDS, PIECE_MAX_LEVEL, normalizePiece, pieces, hasPieces, pieceAt, setPiece, removePiece,
+        piecesSnapshot, restorePieces, clearPieces, pieceMaterials,
+        nextPieceGroup, pieceGroup, pieceGroupBounds, pieceGroupAt, groupConnectedPieces, movePieceGroup, removePieceGroup, rotatePieceGroup,
+        structures, structureOf, setStructure, restoreStructures, removeStructure, relocatePropsOff,
         SUFFIX, VERSION, MODE_3D, MAX, MIN,
         CAMERA_MODES, camera, setCamera,
         PROP_MAX_LIFT, PROP_DIRECTIONS, normalizeProp, props, propById, addProp, updateProp, removeProp,
@@ -456,7 +840,9 @@
         ROOM_DEFAULT_HEIGHT, ROOM_MIN_HEIGHT, ROOM_MAX_HEIGHT,
         clampRoomHeight, room, setRoom,
         clamp, fileNameFor, ensure, at, setAt, raiseAt,
-        snapshot, restore, isFlat, save
+        snapshot, restore, isFlat, save,
+        TERRAIN_MAX, TERRAIN_MODES, terrain, hasTerrain, ensureTerrain, terrainAt, terrainHeightAt,
+        paintTerrain, terrainSnapshot, restoreTerrain, clearTerrain
     };
     root.RRMapElevation = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;

@@ -1,0 +1,27 @@
+{
+  "name": "Manor",
+  "size": [64, 44],
+  "storey": 5,
+  "materials": { "wall": "Stone", "inner": "Plaster", "floor": "Wood", "wet": "Stone", "roof": "RoofTile", "stair": "Wood" },
+  "floors": [
+    {
+      "rooms": {
+        "hall": [24, 28, 39, 42], "living": [1, 22, 22, 42], "dining": [1, 1, 22, 20], "great": [24, 1, 39, 26],
+        "kitchen": [41, 1, 62, 17], "study": [41, 19, 62, 30], "bath": [41, 32, 62, 42]
+      },
+      "doors": [["hall", "outside", 6], ["hall", "great", 6], ["hall", "living", 3], ["hall", "bath", 3], ["great", "dining", 3], ["great", "kitchen", 3], ["great", "study", 3], ["living", "dining", 3]],
+      "wet": ["bath", "kitchen"]
+    },
+    {
+      "rooms": {
+        "gallery": [24, 1, 39, 42], "master": [1, 22, 22, 42], "bedroom2": [1, 1, 22, 20],
+        "bedroom3": [41, 1, 62, 17], "bedroom4": [41, 19, 62, 30], "bath2": [41, 32, 62, 42]
+      },
+      "doors": [["gallery", "master", 3], ["gallery", "bedroom2", 3], ["gallery", "bedroom3", 3], ["gallery", "bedroom4", 3], ["gallery", "bath2", 3]],
+      "wet": ["bath2"]
+    }
+  ],
+  "stairs": [{ "floor": 0, "from": [37, 41], "dir": "north", "width": 2 }],
+  "roof": { "pitch": 8 },
+  "windows": { "every": 6, "width": 2 }
+}

@@ -1,0 +1,127 @@
+# Authoring a world in RPG Reactor, by hand or by generator
+
+RPG Reactor is built so a person and an AI can work on the same project.
+Every authoring surface below has three faces: a tool in the editor, a
+plain file a person can read and a generator can write, and a check that
+proves the data works with the engine's own rules. Hand edits are never
+overwritten by generation.
+
+This page is the contract. A generator should read it before touching a
+project; a person can use it to find where anything lives.
+
+## Where things live
+
+| Surface | File (per map, beside `data/MapNNN.json`) | Editor tool | Check |
+| --- | --- | --- | --- |
+| 3D switch | `<3d>` in the map note | Map Properties › 3D | — |
+| Tile elevation (terraces, cliffs) | `MapNNN.r3d.json` › `elevation` (one whole number per tile) | Map Properties, height brush | — |
+| Terrain (rolling ground) | `MapNNN.r3d.json` › `terrain` ((w+1)×(h+1) corner heights), `terrainWidth` | **3D-T** tab brushes | `editor/tests/terrain.test.cjs` rules |
+| Room (floor, walls, ceiling, sky) | `MapNNN.r3d.json` › `room` | Map Properties › 3D | — |
+| Pieces (the 3D tileset) | `MapNNN.r3d.json` › `pieces` | **3D-B** tab | `build-structure.cjs --check` walks them |
+| Buildings from a plan | `3d/Structures/*.json` (project-wide), placed as `MapNNN.r3d.json` › `structures` | 3D-B › Structure › Stamp / Move | `build-structure.cjs --check` |
+| Materials | `img/materials/*.png` (tileable) | swatches in 3D-B | — |
+| Placed models | `MapNNN.r3d.json` › `props` | **3D-M** tab | — |
+| Lights | `MapNNN.r3d.json` › `lights`, `lighting` | Lighting tool | — |
+| Events | `MapNNN.json` › `events` (RPG Maker data) | Event tool | — |
+
+`MapNNN.json` stays ordinary RPG Maker data. Everything 3D is in the
+sidecar `MapNNN.r3d.json`, so a project with no 3D maps has no sidecars.
+
+## Units
+
+A tile is one world unit. The bundled characters stand three tiles, so a
+tile is about 0.6 m. A storey (`PIECE_STOREY`) is 5 tiles. Doorways default
+to 3 cells wide (1.8 m); a front door is usually 4 to 6. Heights in the
+sidecar are in tiles; positions are cells (integers) for pieces and
+fractional tiles for models.
+
+## Pieces
+
+```json
+{ "id": 12, "kind": "wall", "x": 30, "y": 49, "z": 0, "rot": 0, "material": "Stone", "group": 2 }
+```
+
+- `kind`: `wall` (a storey tall), `block` (one tile cube), `floor` (a slab),
+  `pillar`, `stair` (rises one tile across the cell, toward its `rot`),
+  `ramp` (same, a slope), `roof` (a one-cell gable), `doorway` (a lintel
+  only: the opening is the whole cell, tile two side by side for a door),
+  `window` (a sill and a header), `fence`.
+- `x, y`: the cell. `z`: the level the piece's foot stands at, in tiles
+  above the ground. `rot`: quarter turns clockwise seen from above; `0`
+  rises or faces south.
+- `material`: a name under `img/materials` without extension, or `""` for
+  plain grey.
+- `group`: pieces of one building share a number. Optional.
+
+Rules the engine applies, so a generator can predict them: a character
+stands on the top of the lowest stack reachable from where it already is,
+so a floor over a room is a ceiling from below and a floor from the stairs;
+a step higher than 0.75 tile is blocked, which is what makes a wall a wall
+and a stair a stair; a doorway is walked through at its own level; a stair
+climbs one tile per cell, so a storey is five stair cells.
+
+## Structure plans
+
+A building as a person describes it. Everything else is derived.
+
+```json
+{
+  "name": "Cottage", "size": [14, 10], "storey": 5,
+  "materials": { "wall": "Stone", "inner": "Plaster", "floor": "Wood", "wet": "Stone", "roof": "RoofTile", "stair": "Wood" },
+  "floors": [
+    { "rooms": { "hall": [1, 1, 6, 8], "kitchen": [8, 1, 12, 8] },
+      "doors": [["hall", "outside", 3], ["hall", "kitchen", 3]],
+      "wet": ["kitchen"] },
+    { "rooms": { "landing": [1, 1, 6, 8], "bedroom": [8, 1, 12, 8] },
+      "doors": [["landing", "bedroom", 3]] }
+  ],
+  "stairs": [{ "floor": 0, "from": [5, 7], "dir": "north", "width": 1 }],
+  "roof": { "pitch": 2 },
+  "windows": { "every": 6, "width": 2 }
+}
+```
+
+- `rooms`: `[x0, y0, x1, y1]`, inclusive, in the plan's own cells. Leave
+  one cell between rooms and one around the outside: those cells become
+  walls. Walls can be thicker; doors cut through whatever thickness.
+- `doors`: `[roomA, roomB, width]`, centred on the wall the two rooms share.
+  `"outside"` is the outer wall (south first, then north, east, west).
+- `stairs`: `from` is the bottom step's cell, `dir` the way it climbs, one
+  cell per tile of rise; the floor above is left open over the run.
+- `roof`: ramps step up `pitch` rows from each eave, a flat top between,
+  gables closed with blocks. `windows`: a pair every `every` cells along
+  the outside, never beside a door.
+- Floor is laid under every doorway and wall cell as well as every room.
+
+Stamp it from a shell, which levels the ground under it, moves placed
+models off the footprint, and reports which rooms the engine can walk to
+from the front door:
+
+```
+node editor/build-scripts/build-structure.cjs <project> <mapId> <plan.json> <x> <y> [--check]
+```
+
+`--check` writes nothing. A room reported `MISS` means the plan has a door
+into a wall or a stair that lands nowhere; fix the plan, not the pieces.
+
+In the editor the same plan is in the 3D-B tab's Structure list; Stamp
+puts it where you click, Move picks a whole building up (click a wall),
+R turns it, `[` `]` scale it. A building keeps its plan in
+`structures: [{ group, plan, x, y, rot, scale }]`, and turning or scaling
+builds it again from the plan. **Editing a stamped building by hand
+detaches it from its plan**: the hand edit stays, the building still moves
+and turns as one, scale is off.
+
+## Terrain and elevation
+
+`terrain` is a height at every tile corner, bilinear between; `elevation`
+is a whole number per tile that the tile builder turns into terraces with
+cliff faces. Both add. A generator writing hills should write `terrain`
+and keep slopes under 0.75 tile per tile where characters must walk;
+`build-structure.cjs` levels a building's pad itself.
+
+## What is not here yet
+
+Furniture and named spots inside rooms, events placed from a plan, water,
+hip roofs, a per-transfer floor (a transfer always lands on the ground
+floor), and the 2D view of pieces. Add them to this page as they land.

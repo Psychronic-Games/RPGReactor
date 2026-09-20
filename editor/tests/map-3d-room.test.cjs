@@ -16,12 +16,12 @@ test('the room is written to the sidecar only when it says something', () => {
     assert.equal(map.reactor3d, undefined);
 
     assert.equal(Elevation.setRoom(map, { height: 6 }), true);
-    assert.deepEqual(map.reactor3d.room, { height: 6, floor: '', walls: '', ceiling: '' });
+    assert.deepEqual(map.reactor3d.room, { height: 6, floor: '', walls: '', ceiling: '', sky: '', skyScrollX: 0, skyScrollY: 0 });
     assert.equal(map.reactor3d.mode, '3d');
 
     assert.equal(Elevation.setRoom(map, { height: 6, walls: ' Wall ' }), true);
     assert.equal(map.reactor3d.room.walls, 'Wall');
-    assert.deepEqual(Elevation.room(map), { height: 6, floor: '', walls: 'Wall', ceiling: '' });
+    assert.deepEqual(Elevation.room(map), { height: 6, floor: '', walls: 'Wall', ceiling: '', sky: '', skyScrollX: 0, skyScrollY: 0 });
 
     // Back to defaults drops the room, so an untouched map does not keep a file.
     assert.equal(Elevation.setRoom(map, { height: 4 }), true);

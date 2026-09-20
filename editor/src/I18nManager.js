@@ -13806,6 +13806,25 @@ Object.assign(RR_I18N_STRINGS.en, {
     'mapProps.pickFloor': 'Select Parallax Floor',
     'mapProps.pickWalls': 'Select Parallax Walls',
     'mapProps.pickCeiling': 'Select Parallax Ceiling',
+    'mapProps.parallaxSky': 'Parallax Sky:',
+    'mapProps.skyScrollX': 'Sky Scroll X:',
+    'mapProps.skyScrollY': 'Sky Scroll Y:',
+    'mapProps.pickSky': 'Select Parallax Sky',
+    'terrain.hint': 'Pick a brush, then drag across the ground in the 3D view. A click nudges the ground once; a drag builds as it goes. The blue ring is the brush.',
+    'terrain.brush': 'Brush',
+    'terrain.keys': 'Ctrl+Z undoes a stroke, Ctrl+Y redoes.',
+    'terrain.raise': 'Raise',
+    'terrain.lower': 'Lower',
+    'terrain.smooth': 'Smooth',
+    'terrain.flatten': 'Flatten',
+    'terrain.radius': 'Radius',
+    'terrain.strength': 'Strength',
+    'terrain.clear': 'Flatten whole map',
+    'terrain.needs3D': 'This map is not a 3D map. Tick 3D Map in Map Properties first.',
+    'terrain.shaped': 'The ground has been shaped.',
+    'terrain.flat': 'The ground is flat.',
+    'terrain.undo': 'Undo',
+    'terrain.redo': 'Redo',
     'mapProps.sidecarNotSaved': 'The map\'s 3D settings could not be saved.'
 });
 Object.assign(RR_I18N_STRINGS.ja, {
@@ -13822,6 +13841,25 @@ Object.assign(RR_I18N_STRINGS.ja, {
     'mapProps.pickFloor': '遠景の床を選択',
     'mapProps.pickWalls': '遠景の壁を選択',
     'mapProps.pickCeiling': '遠景の天井を選択',
+    'mapProps.parallaxSky': '遠景の空:',
+    'mapProps.skyScrollX': '空のスクロール X:',
+    'mapProps.skyScrollY': '空のスクロール Y:',
+    'mapProps.pickSky': '遠景の空を選択',
+    'terrain.hint': 'ブラシを選び、3Dビューで地面をドラッグします。クリックは1回だけ地面を動かし、ドラッグは通った所を盛り上げます。青い輪がブラシです。',
+    'terrain.brush': 'ブラシ',
+    'terrain.keys': 'Ctrl+Zでストロークを元に戻し、Ctrl+Yでやり直します。',
+    'terrain.raise': '盛り上げ',
+    'terrain.lower': '掘り下げ',
+    'terrain.smooth': 'なめらか',
+    'terrain.flatten': '平坦化',
+    'terrain.radius': '半径',
+    'terrain.strength': '強さ',
+    'terrain.clear': 'マップ全体を平らにする',
+    'terrain.needs3D': 'このマップは3Dマップではありません。まずマップの設定で「3Dマップ」を有効にしてください。',
+    'terrain.shaped': '地面は成形されています。',
+    'terrain.flat': '地面は平らです。',
+    'terrain.undo': '元に戻す',
+    'terrain.redo': 'やり直す',
     'mapProps.sidecarNotSaved': 'マップの3D設定を保存できませんでした。'
 });
 Object.assign(RR_I18N_STRINGS.es, {
@@ -13838,6 +13876,25 @@ Object.assign(RR_I18N_STRINGS.es, {
     'mapProps.pickFloor': 'Seleccionar suelo de paralaje',
     'mapProps.pickWalls': 'Seleccionar paredes de paralaje',
     'mapProps.pickCeiling': 'Seleccionar techo de paralaje',
+    'mapProps.parallaxSky': 'Cielo de paralaje:',
+    'mapProps.skyScrollX': 'Desplazamiento del cielo X:',
+    'mapProps.skyScrollY': 'Desplazamiento del cielo Y:',
+    'mapProps.pickSky': 'Seleccionar cielo de paralaje',
+    'terrain.hint': 'Elige un pincel y arrastra sobre el terreno en la vista 3D. Un clic empuja el suelo una vez; un arrastre lo va construyendo. El anillo azul es el pincel.',
+    'terrain.brush': 'Pincel',
+    'terrain.keys': 'Ctrl+Z deshace un trazo, Ctrl+Y lo rehace.',
+    'terrain.raise': 'Elevar',
+    'terrain.lower': 'Bajar',
+    'terrain.smooth': 'Suavizar',
+    'terrain.flatten': 'Aplanar',
+    'terrain.radius': 'Radio',
+    'terrain.strength': 'Fuerza',
+    'terrain.clear': 'Aplanar todo el mapa',
+    'terrain.needs3D': 'Este mapa no es un mapa 3D. Marca primero Mapa 3D en las propiedades del mapa.',
+    'terrain.shaped': 'El terreno ha sido modelado.',
+    'terrain.flat': 'El terreno es plano.',
+    'terrain.undo': 'Deshacer',
+    'terrain.redo': 'Rehacer',
     'mapProps.sidecarNotSaved': 'No se pudieron guardar los ajustes 3D del mapa.'
 });
 Object.assign(RR_I18N_STRINGS['zh-Hant'], {
@@ -13854,6 +13911,25 @@ Object.assign(RR_I18N_STRINGS['zh-Hant'], {
     'mapProps.pickFloor': '選擇遠景地板',
     'mapProps.pickWalls': '選擇遠景牆壁',
     'mapProps.pickCeiling': '選擇遠景天花板',
+    'mapProps.parallaxSky': '遠景天空:',
+    'mapProps.skyScrollX': '天空捲動 X:',
+    'mapProps.skyScrollY': '天空捲動 Y:',
+    'mapProps.pickSky': '選擇遠景天空',
+    'terrain.hint': '選一支筆刷，然後在 3D 檢視中拖過地面。單擊推動地面一次；拖曳則沿途堆高。藍色圓環就是筆刷。',
+    'terrain.brush': '筆刷',
+    'terrain.keys': 'Ctrl+Z 復原一筆，Ctrl+Y 重做。',
+    'terrain.raise': '抬高',
+    'terrain.lower': '降低',
+    'terrain.smooth': '平滑',
+    'terrain.flatten': '整平',
+    'terrain.radius': '半徑',
+    'terrain.strength': '強度',
+    'terrain.clear': '整平整張地圖',
+    'terrain.needs3D': '此地圖不是 3D 地圖。請先在地圖屬性中勾選「3D 地圖」。',
+    'terrain.shaped': '地面已被塑形。',
+    'terrain.flat': '地面是平的。',
+    'terrain.undo': '復原',
+    'terrain.redo': '重做',
     'mapProps.sidecarNotSaved': '無法儲存地圖的 3D 設定。'
 });
 Object.assign(RR_I18N_STRINGS['zh-Hans'], {
@@ -13870,6 +13946,25 @@ Object.assign(RR_I18N_STRINGS['zh-Hans'], {
     'mapProps.pickFloor': '选择远景地板',
     'mapProps.pickWalls': '选择远景墙壁',
     'mapProps.pickCeiling': '选择远景天花板',
+    'mapProps.parallaxSky': '远景天空:',
+    'mapProps.skyScrollX': '天空滚动 X:',
+    'mapProps.skyScrollY': '天空滚动 Y:',
+    'mapProps.pickSky': '选择远景天空',
+    'terrain.hint': '选一支笔刷，然后在 3D 视图中拖过地面。单击推动地面一次；拖动则沿途堆高。蓝色圆环就是笔刷。',
+    'terrain.brush': '笔刷',
+    'terrain.keys': 'Ctrl+Z 撤销一笔，Ctrl+Y 重做。',
+    'terrain.raise': '抬高',
+    'terrain.lower': '降低',
+    'terrain.smooth': '平滑',
+    'terrain.flatten': '整平',
+    'terrain.radius': '半径',
+    'terrain.strength': '强度',
+    'terrain.clear': '整平整张地图',
+    'terrain.needs3D': '此地图不是 3D 地图。请先在地图属性中勾选“3D 地图”。',
+    'terrain.shaped': '地面已被塑形。',
+    'terrain.flat': '地面是平的。',
+    'terrain.undo': '撤销',
+    'terrain.redo': '重做',
     'mapProps.sidecarNotSaved': '无法保存地图的 3D 设置。'
 });
 Object.assign(RR_I18N_STRINGS.ru, {
@@ -13886,6 +13981,25 @@ Object.assign(RR_I18N_STRINGS.ru, {
     'mapProps.pickFloor': 'Выбрать пол (параллакс)',
     'mapProps.pickWalls': 'Выбрать стены (параллакс)',
     'mapProps.pickCeiling': 'Выбрать потолок (параллакс)',
+    'mapProps.parallaxSky': 'Небо (параллакс):',
+    'mapProps.skyScrollX': 'Прокрутка неба X:',
+    'mapProps.skyScrollY': 'Прокрутка неба Y:',
+    'mapProps.pickSky': 'Выбрать небо (параллакс)',
+    'terrain.hint': 'Выберите кисть и проведите по земле в 3D-виде. Щелчок сдвигает землю один раз; протяжка наращивает по пути. Синее кольцо — это кисть.',
+    'terrain.brush': 'Кисть',
+    'terrain.keys': 'Ctrl+Z отменяет штрих, Ctrl+Y повторяет.',
+    'terrain.raise': 'Поднять',
+    'terrain.lower': 'Опустить',
+    'terrain.smooth': 'Сгладить',
+    'terrain.flatten': 'Выровнять',
+    'terrain.radius': 'Радиус',
+    'terrain.strength': 'Сила',
+    'terrain.clear': 'Выровнять всю карту',
+    'terrain.needs3D': 'Эта карта не 3D. Сначала отметьте «3D-карта» в свойствах карты.',
+    'terrain.shaped': 'Рельеф сформирован.',
+    'terrain.flat': 'Рельеф плоский.',
+    'terrain.undo': 'Отменить',
+    'terrain.redo': 'Повторить',
     'mapProps.sidecarNotSaved': 'Не удалось сохранить 3D-настройки карты.'
 });
 Object.assign(RR_I18N_STRINGS.pt, {
@@ -13902,6 +14016,25 @@ Object.assign(RR_I18N_STRINGS.pt, {
     'mapProps.pickFloor': 'Selecionar piso de paralaxe',
     'mapProps.pickWalls': 'Selecionar paredes de paralaxe',
     'mapProps.pickCeiling': 'Selecionar teto de paralaxe',
+    'mapProps.parallaxSky': 'Céu de paralaxe:',
+    'mapProps.skyScrollX': 'Rolagem do céu X:',
+    'mapProps.skyScrollY': 'Rolagem do céu Y:',
+    'mapProps.pickSky': 'Selecionar céu de paralaxe',
+    'terrain.hint': 'Escolha um pincel e arraste sobre o chão na vista 3D. Um clique empurra o chão uma vez; um arrasto vai construindo. O anel azul é o pincel.',
+    'terrain.brush': 'Pincel',
+    'terrain.keys': 'Ctrl+Z desfaz um traço, Ctrl+Y refaz.',
+    'terrain.raise': 'Elevar',
+    'terrain.lower': 'Baixar',
+    'terrain.smooth': 'Suavizar',
+    'terrain.flatten': 'Aplanar',
+    'terrain.radius': 'Raio',
+    'terrain.strength': 'Força',
+    'terrain.clear': 'Aplanar o mapa inteiro',
+    'terrain.needs3D': 'Este mapa não é um mapa 3D. Marque primeiro Mapa 3D nas propriedades do mapa.',
+    'terrain.shaped': 'O terreno foi modelado.',
+    'terrain.flat': 'O terreno é plano.',
+    'terrain.undo': 'Desfazer',
+    'terrain.redo': 'Refazer',
     'mapProps.sidecarNotSaved': 'Não foi possível salvar as configurações 3D do mapa.'
 });
 Object.assign(RR_I18N_STRINGS.de, {
@@ -13918,6 +14051,25 @@ Object.assign(RR_I18N_STRINGS.de, {
     'mapProps.pickFloor': 'Parallax-Boden wählen',
     'mapProps.pickWalls': 'Parallax-Wände wählen',
     'mapProps.pickCeiling': 'Parallax-Decke wählen',
+    'mapProps.parallaxSky': 'Parallaxe-Himmel:',
+    'mapProps.skyScrollX': 'Himmel-Scrollen X:',
+    'mapProps.skyScrollY': 'Himmel-Scrollen Y:',
+    'mapProps.pickSky': 'Parallaxe-Himmel wählen',
+    'terrain.hint': 'Pinsel wählen, dann in der 3D-Ansicht über den Boden ziehen. Ein Klick stößt den Boden einmal an; ein Zug baut unterwegs auf. Der blaue Ring ist der Pinsel.',
+    'terrain.brush': 'Pinsel',
+    'terrain.keys': 'Strg+Z macht einen Strich rückgängig, Strg+Y wiederholt ihn.',
+    'terrain.raise': 'Anheben',
+    'terrain.lower': 'Absenken',
+    'terrain.smooth': 'Glätten',
+    'terrain.flatten': 'Einebnen',
+    'terrain.radius': 'Radius',
+    'terrain.strength': 'Stärke',
+    'terrain.clear': 'Ganze Karte einebnen',
+    'terrain.needs3D': 'Diese Karte ist keine 3D-Karte. Zuerst in den Karteneigenschaften 3D-Karte ankreuzen.',
+    'terrain.shaped': 'Der Boden wurde geformt.',
+    'terrain.flat': 'Der Boden ist flach.',
+    'terrain.undo': 'Rückgängig',
+    'terrain.redo': 'Wiederholen',
     'mapProps.sidecarNotSaved': 'Die 3D-Einstellungen der Karte konnten nicht gespeichert werden.'
 });
 Object.assign(RR_I18N_STRINGS.fr, {
@@ -13934,6 +14086,25 @@ Object.assign(RR_I18N_STRINGS.fr, {
     'mapProps.pickFloor': 'Choisir le sol parallaxe',
     'mapProps.pickWalls': 'Choisir les murs parallaxe',
     'mapProps.pickCeiling': 'Choisir le plafond parallaxe',
+    'mapProps.parallaxSky': 'Ciel de parallaxe :',
+    'mapProps.skyScrollX': 'Défilement du ciel X :',
+    'mapProps.skyScrollY': 'Défilement du ciel Y :',
+    'mapProps.pickSky': 'Sélectionner le ciel de parallaxe',
+    'terrain.hint': 'Choisissez un pinceau, puis faites glisser sur le sol dans la vue 3D. Un clic pousse le sol une fois ; un glissement construit en avançant. L’anneau bleu est le pinceau.',
+    'terrain.brush': 'Pinceau',
+    'terrain.keys': 'Ctrl+Z annule un tracé, Ctrl+Y le rétablit.',
+    'terrain.raise': 'Élever',
+    'terrain.lower': 'Abaisser',
+    'terrain.smooth': 'Lisser',
+    'terrain.flatten': 'Aplanir',
+    'terrain.radius': 'Rayon',
+    'terrain.strength': 'Force',
+    'terrain.clear': 'Aplanir toute la carte',
+    'terrain.needs3D': 'Cette carte n’est pas une carte 3D. Cochez d’abord Carte 3D dans les propriétés de la carte.',
+    'terrain.shaped': 'Le sol a été modelé.',
+    'terrain.flat': 'Le sol est plat.',
+    'terrain.undo': 'Annuler',
+    'terrain.redo': 'Rétablir',
     'mapProps.sidecarNotSaved': 'Les réglages 3D de la carte n’ont pas pu être enregistrés.'
 });
 Object.assign(RR_I18N_STRINGS.el, {
@@ -13950,6 +14121,25 @@ Object.assign(RR_I18N_STRINGS.el, {
     'mapProps.pickFloor': 'Επιλογή δαπέδου παράλλαξης',
     'mapProps.pickWalls': 'Επιλογή τοίχων παράλλαξης',
     'mapProps.pickCeiling': 'Επιλογή οροφής παράλλαξης',
+    'mapProps.parallaxSky': 'Ουρανός παράλλαξης:',
+    'mapProps.skyScrollX': 'Κύλιση ουρανού X:',
+    'mapProps.skyScrollY': 'Κύλιση ουρανού Y:',
+    'mapProps.pickSky': 'Επιλογή ουρανού παράλλαξης',
+    'terrain.hint': 'Διαλέξτε πινέλο και σύρετε πάνω στο έδαφος στην προβολή 3D. Ένα κλικ σπρώχνει το έδαφος μία φορά· το σύρσιμο χτίζει καθώς προχωρά. Ο μπλε δακτύλιος είναι το πινέλο.',
+    'terrain.brush': 'Πινέλο',
+    'terrain.keys': 'Ctrl+Z αναιρεί μια πινελιά, Ctrl+Y την επαναφέρει.',
+    'terrain.raise': 'Ανύψωση',
+    'terrain.lower': 'Χαμήλωμα',
+    'terrain.smooth': 'Εξομάλυνση',
+    'terrain.flatten': 'Ισοπέδωση',
+    'terrain.radius': 'Ακτίνα',
+    'terrain.strength': 'Ένταση',
+    'terrain.clear': 'Ισοπέδωση όλου του χάρτη',
+    'terrain.needs3D': 'Αυτός ο χάρτης δεν είναι 3D. Τσεκάρετε πρώτα το Χάρτης 3D στις ιδιότητες του χάρτη.',
+    'terrain.shaped': 'Το έδαφος έχει διαμορφωθεί.',
+    'terrain.flat': 'Το έδαφος είναι επίπεδο.',
+    'terrain.undo': 'Αναίρεση',
+    'terrain.redo': 'Επανάληψη',
     'mapProps.sidecarNotSaved': 'Δεν ήταν δυνατή η αποθήκευση των ρυθμίσεων 3D του χάρτη.'
 });
 Object.assign(RR_I18N_STRINGS.ko, {
@@ -13966,6 +14156,25 @@ Object.assign(RR_I18N_STRINGS.ko, {
     'mapProps.pickFloor': '원경 바닥 선택',
     'mapProps.pickWalls': '원경 벽 선택',
     'mapProps.pickCeiling': '원경 천장 선택',
+    'mapProps.parallaxSky': '원경 하늘:',
+    'mapProps.skyScrollX': '하늘 스크롤 X:',
+    'mapProps.skyScrollY': '하늘 스크롤 Y:',
+    'mapProps.pickSky': '원경 하늘 선택',
+    'terrain.hint': '브러시를 고른 뒤 3D 뷰에서 지면을 드래그하세요. 클릭은 지면을 한 번 밀고, 드래그는 지나간 자리를 쌓습니다. 파란 고리가 브러시입니다.',
+    'terrain.brush': '브러시',
+    'terrain.keys': 'Ctrl+Z로 획을 취소하고 Ctrl+Y로 다시 실행합니다.',
+    'terrain.raise': '올리기',
+    'terrain.lower': '내리기',
+    'terrain.smooth': '부드럽게',
+    'terrain.flatten': '평탄화',
+    'terrain.radius': '반경',
+    'terrain.strength': '강도',
+    'terrain.clear': '맵 전체 평탄화',
+    'terrain.needs3D': '이 맵은 3D 맵이 아닙니다. 먼저 맵 속성에서 3D 맵을 켜세요.',
+    'terrain.shaped': '지형이 다듬어졌습니다.',
+    'terrain.flat': '지형이 평평합니다.',
+    'terrain.undo': '실행 취소',
+    'terrain.redo': '다시 실행',
     'mapProps.sidecarNotSaved': '맵의 3D 설정을 저장할 수 없습니다.'
 });
 Object.assign(RR_I18N_STRINGS.ar, {
@@ -13982,6 +14191,25 @@ Object.assign(RR_I18N_STRINGS.ar, {
     'mapProps.pickFloor': 'اختيار أرضية المنظر البعيد',
     'mapProps.pickWalls': 'اختيار جدران المنظر البعيد',
     'mapProps.pickCeiling': 'اختيار سقف المنظر البعيد',
+    'mapProps.parallaxSky': 'سماء المنظر البعيد:',
+    'mapProps.skyScrollX': 'تمرير السماء X:',
+    'mapProps.skyScrollY': 'تمرير السماء Y:',
+    'mapProps.pickSky': 'اختيار سماء المنظر البعيد',
+    'terrain.hint': 'اختر فرشاة ثم اسحب فوق الأرض في العرض ثلاثي الأبعاد. النقرة تدفع الأرض مرة واحدة؛ والسحب يبني أثناء الحركة. الحلقة الزرقاء هي الفرشاة.',
+    'terrain.brush': 'الفرشاة',
+    'terrain.keys': 'Ctrl+Z يتراجع عن ضربة، وCtrl+Y يعيدها.',
+    'terrain.raise': 'رفع',
+    'terrain.lower': 'خفض',
+    'terrain.smooth': 'تنعيم',
+    'terrain.flatten': 'تسوية',
+    'terrain.radius': 'نصف القطر',
+    'terrain.strength': 'القوة',
+    'terrain.clear': 'تسوية الخريطة كلها',
+    'terrain.needs3D': 'هذه الخريطة ليست ثلاثية الأبعاد. فعّل «خريطة ثلاثية الأبعاد» في خصائص الخريطة أولاً.',
+    'terrain.shaped': 'تم تشكيل الأرض.',
+    'terrain.flat': 'الأرض مستوية.',
+    'terrain.undo': 'تراجع',
+    'terrain.redo': 'إعادة',
     'mapProps.sidecarNotSaved': 'تعذر حفظ إعدادات الأبعاد الثلاثية للخريطة.'
 });
 Object.assign(RR_I18N_STRINGS.it, {
@@ -13998,6 +14226,25 @@ Object.assign(RR_I18N_STRINGS.it, {
     'mapProps.pickFloor': 'Seleziona pavimento parallasse',
     'mapProps.pickWalls': 'Seleziona pareti parallasse',
     'mapProps.pickCeiling': 'Seleziona soffitto parallasse',
+    'mapProps.parallaxSky': 'Cielo parallasse:',
+    'mapProps.skyScrollX': 'Scorrimento del cielo X:',
+    'mapProps.skyScrollY': 'Scorrimento del cielo Y:',
+    'mapProps.pickSky': 'Seleziona il cielo parallasse',
+    'terrain.hint': 'Scegli un pennello, poi trascina sul terreno nella vista 3D. Un clic spinge il suolo una volta; un trascinamento lo costruisce strada facendo. L’anello blu è il pennello.',
+    'terrain.brush': 'Pennello',
+    'terrain.keys': 'Ctrl+Z annulla un tratto, Ctrl+Y lo ripete.',
+    'terrain.raise': 'Alza',
+    'terrain.lower': 'Abbassa',
+    'terrain.smooth': 'Leviga',
+    'terrain.flatten': 'Spiana',
+    'terrain.radius': 'Raggio',
+    'terrain.strength': 'Forza',
+    'terrain.clear': 'Spiana tutta la mappa',
+    'terrain.needs3D': 'Questa mappa non è una mappa 3D. Spunta prima Mappa 3D nelle proprietà della mappa.',
+    'terrain.shaped': 'Il terreno è stato modellato.',
+    'terrain.flat': 'Il terreno è piatto.',
+    'terrain.undo': 'Annulla',
+    'terrain.redo': 'Ripeti',
     'mapProps.sidecarNotSaved': 'Impossibile salvare le impostazioni 3D della mappa.'
 });
 Object.assign(RR_I18N_STRINGS.pl, {
@@ -14014,6 +14261,25 @@ Object.assign(RR_I18N_STRINGS.pl, {
     'mapProps.pickFloor': 'Wybierz podłogę paralaksy',
     'mapProps.pickWalls': 'Wybierz ściany paralaksy',
     'mapProps.pickCeiling': 'Wybierz sufit paralaksy',
+    'mapProps.parallaxSky': 'Niebo paralaksy:',
+    'mapProps.skyScrollX': 'Przewijanie nieba X:',
+    'mapProps.skyScrollY': 'Przewijanie nieba Y:',
+    'mapProps.pickSky': 'Wybierz niebo paralaksy',
+    'terrain.hint': 'Wybierz pędzel i przeciągnij po gruncie w widoku 3D. Kliknięcie popycha grunt raz; przeciąganie buduje po drodze. Niebieski pierścień to pędzel.',
+    'terrain.brush': 'Pędzel',
+    'terrain.keys': 'Ctrl+Z cofa pociągnięcie, Ctrl+Y ponawia.',
+    'terrain.raise': 'Podnieś',
+    'terrain.lower': 'Obniż',
+    'terrain.smooth': 'Wygładź',
+    'terrain.flatten': 'Wyrównaj',
+    'terrain.radius': 'Promień',
+    'terrain.strength': 'Siła',
+    'terrain.clear': 'Wyrównaj całą mapę',
+    'terrain.needs3D': 'Ta mapa nie jest mapą 3D. Najpierw zaznacz Mapa 3D we właściwościach mapy.',
+    'terrain.shaped': 'Teren został ukształtowany.',
+    'terrain.flat': 'Teren jest płaski.',
+    'terrain.undo': 'Cofnij',
+    'terrain.redo': 'Ponów',
     'mapProps.sidecarNotSaved': 'Nie udało się zapisać ustawień 3D mapy.'
 });
 Object.assign(RR_I18N_STRINGS.id, {
@@ -14030,6 +14296,25 @@ Object.assign(RR_I18N_STRINGS.id, {
     'mapProps.pickFloor': 'Pilih lantai paralaks',
     'mapProps.pickWalls': 'Pilih dinding paralaks',
     'mapProps.pickCeiling': 'Pilih langit-langit paralaks',
+    'mapProps.parallaxSky': 'Langit paralaks:',
+    'mapProps.skyScrollX': 'Gulir langit X:',
+    'mapProps.skyScrollY': 'Gulir langit Y:',
+    'mapProps.pickSky': 'Pilih langit paralaks',
+    'terrain.hint': 'Pilih kuas, lalu seret di atas tanah pada tampilan 3D. Klik mendorong tanah sekali; seretan membangun sepanjang jalan. Cincin biru adalah kuasnya.',
+    'terrain.brush': 'Kuas',
+    'terrain.keys': 'Ctrl+Z mengurungkan goresan, Ctrl+Y mengulanginya.',
+    'terrain.raise': 'Naikkan',
+    'terrain.lower': 'Turunkan',
+    'terrain.smooth': 'Haluskan',
+    'terrain.flatten': 'Ratakan',
+    'terrain.radius': 'Radius',
+    'terrain.strength': 'Kekuatan',
+    'terrain.clear': 'Ratakan seluruh peta',
+    'terrain.needs3D': 'Peta ini bukan peta 3D. Centang Peta 3D di properti peta terlebih dahulu.',
+    'terrain.shaped': 'Tanah telah dibentuk.',
+    'terrain.flat': 'Tanah rata.',
+    'terrain.undo': 'Urungkan',
+    'terrain.redo': 'Ulangi',
     'mapProps.sidecarNotSaved': 'Pengaturan 3D peta tidak dapat disimpan.'
 });
 Object.assign(RR_I18N_STRINGS.vi, {
@@ -14046,6 +14331,25 @@ Object.assign(RR_I18N_STRINGS.vi, {
     'mapProps.pickFloor': 'Chọn sàn parallax',
     'mapProps.pickWalls': 'Chọn tường parallax',
     'mapProps.pickCeiling': 'Chọn trần parallax',
+    'mapProps.parallaxSky': 'Bầu trời parallax:',
+    'mapProps.skyScrollX': 'Cuộn bầu trời X:',
+    'mapProps.skyScrollY': 'Cuộn bầu trời Y:',
+    'mapProps.pickSky': 'Chọn bầu trời parallax',
+    'terrain.hint': 'Chọn một cọ rồi kéo trên mặt đất trong chế độ xem 3D. Nhấp đẩy mặt đất một lần; kéo sẽ bồi đắp dọc đường. Vòng xanh là cọ.',
+    'terrain.brush': 'Cọ',
+    'terrain.keys': 'Ctrl+Z hoàn tác một nét, Ctrl+Y làm lại.',
+    'terrain.raise': 'Nâng',
+    'terrain.lower': 'Hạ',
+    'terrain.smooth': 'Làm mịn',
+    'terrain.flatten': 'San phẳng',
+    'terrain.radius': 'Bán kính',
+    'terrain.strength': 'Cường độ',
+    'terrain.clear': 'San phẳng toàn bộ bản đồ',
+    'terrain.needs3D': 'Bản đồ này không phải bản đồ 3D. Hãy bật Bản đồ 3D trong thuộc tính bản đồ trước.',
+    'terrain.shaped': 'Mặt đất đã được tạo hình.',
+    'terrain.flat': 'Mặt đất bằng phẳng.',
+    'terrain.undo': 'Hoàn tác',
+    'terrain.redo': 'Làm lại',
     'mapProps.sidecarNotSaved': 'Không thể lưu cài đặt 3D của bản đồ.'
 });
 Object.assign(RR_I18N_STRINGS.th, {
@@ -14062,6 +14366,25 @@ Object.assign(RR_I18N_STRINGS.th, {
     'mapProps.pickFloor': 'เลือกพื้นพารัลแลกซ์',
     'mapProps.pickWalls': 'เลือกผนังพารัลแลกซ์',
     'mapProps.pickCeiling': 'เลือกเพดานพารัลแลกซ์',
+    'mapProps.parallaxSky': 'ท้องฟ้าพารัลแลกซ์:',
+    'mapProps.skyScrollX': 'เลื่อนท้องฟ้า X:',
+    'mapProps.skyScrollY': 'เลื่อนท้องฟ้า Y:',
+    'mapProps.pickSky': 'เลือกท้องฟ้าพารัลแลกซ์',
+    'terrain.hint': 'เลือกแปรง แล้วลากบนพื้นในมุมมอง 3D คลิกจะดันพื้นหนึ่งครั้ง ลากจะก่อพื้นไปตามทาง วงแหวนสีน้ำเงินคือแปรง',
+    'terrain.brush': 'แปรง',
+    'terrain.keys': 'Ctrl+Z เลิกทำหนึ่งเส้น Ctrl+Y ทำซ้ำ',
+    'terrain.raise': 'ยกขึ้น',
+    'terrain.lower': 'กดลง',
+    'terrain.smooth': 'ทำให้เรียบ',
+    'terrain.flatten': 'ปรับระดับ',
+    'terrain.radius': 'รัศมี',
+    'terrain.strength': 'ความแรง',
+    'terrain.clear': 'ปรับระดับทั้งแผนที่',
+    'terrain.needs3D': 'แผนที่นี้ไม่ใช่แผนที่ 3D โปรดติ๊ก แผนที่ 3D ในคุณสมบัติแผนที่ก่อน',
+    'terrain.shaped': 'พื้นดินถูกปั้นแล้ว',
+    'terrain.flat': 'พื้นดินเรียบ',
+    'terrain.undo': 'เลิกทำ',
+    'terrain.redo': 'ทำซ้ำ',
     'mapProps.sidecarNotSaved': 'ไม่สามารถบันทึกการตั้งค่า 3D ของแผนที่ได้'
 });
 Object.assign(RR_I18N_STRINGS.tr, {
@@ -14078,6 +14401,25 @@ Object.assign(RR_I18N_STRINGS.tr, {
     'mapProps.pickFloor': 'Paralaks zemin seç',
     'mapProps.pickWalls': 'Paralaks duvarlar seç',
     'mapProps.pickCeiling': 'Paralaks tavan seç',
+    'mapProps.parallaxSky': 'Paralaks gökyüzü:',
+    'mapProps.skyScrollX': 'Gökyüzü kaydırma X:',
+    'mapProps.skyScrollY': 'Gökyüzü kaydırma Y:',
+    'mapProps.pickSky': 'Paralaks gökyüzü seç',
+    'terrain.hint': 'Bir fırça seçin, sonra 3D görünümde zemin üzerinde sürükleyin. Tıklama zemini bir kez iter; sürükleme yol boyunca biriktirir. Mavi halka fırçadır.',
+    'terrain.brush': 'Fırça',
+    'terrain.keys': 'Ctrl+Z bir vuruşu geri alır, Ctrl+Y yineler.',
+    'terrain.raise': 'Yükselt',
+    'terrain.lower': 'Alçalt',
+    'terrain.smooth': 'Yumuşat',
+    'terrain.flatten': 'Düzle',
+    'terrain.radius': 'Yarıçap',
+    'terrain.strength': 'Güç',
+    'terrain.clear': 'Tüm haritayı düzle',
+    'terrain.needs3D': 'Bu harita bir 3D harita değil. Önce harita özelliklerinde 3D Harita\'yı işaretleyin.',
+    'terrain.shaped': 'Zemin şekillendirildi.',
+    'terrain.flat': 'Zemin düz.',
+    'terrain.undo': 'Geri al',
+    'terrain.redo': 'Yinele',
     'mapProps.sidecarNotSaved': 'Haritanın 3B ayarları kaydedilemedi.'
 });
 
@@ -14644,7 +14986,7 @@ Object.assign(RR_I18N_STRINGS.tr, {
 // Model props palette (hand-written).
 Object.assign(RR_I18N_STRINGS.en, {
     'props.noModel': 'No model chosen',
-    'props.hintPlace': 'Click the map to place it. Click a placed model to select it, drag to move, Delete to remove.',
+    'props.hintPlace': 'Click the map to place it. Click a placed model to select it, drag to move, Delete to remove, right-click or Esc to deselect.',
     'props.hintChoose': 'Choose a model from the list below.',
     'props.size': 'Size',
     'props.scale': 'Scale',
@@ -14662,7 +15004,7 @@ Object.assign(RR_I18N_STRINGS.en, {
 });
 Object.assign(RR_I18N_STRINGS.ja, {
     'props.noModel': 'モデル未選択',
-    'props.hintPlace': 'マップをクリックして配置。配置済みのモデルはクリックで選択、ドラッグで移動、Delete で削除。',
+    'props.hintPlace': 'マップをクリックして配置。配置済みのモデルはクリックで選択、ドラッグで移動、Delete で削除、右クリックまたは Esc で選択解除。',
     'props.hintChoose': '下のリストからモデルを選択してください。',
     'props.size': 'サイズ',
     'props.scale': 'スケール',
@@ -14680,7 +15022,7 @@ Object.assign(RR_I18N_STRINGS.ja, {
 });
 Object.assign(RR_I18N_STRINGS.es, {
     'props.noModel': 'Ningún modelo elegido',
-    'props.hintPlace': 'Haz clic en el mapa para colocarlo. Clic en un modelo colocado para seleccionarlo, arrastra para mover, Supr para quitar.',
+    'props.hintPlace': 'Haz clic en el mapa para colocarlo. Clic en un modelo colocado para seleccionarlo, arrastra para mover, Supr para quitar, clic derecho o Esc para deseleccionar.',
     'props.hintChoose': 'Elige un modelo de la lista de abajo.',
     'props.size': 'Tamaño',
     'props.scale': 'Escala',
@@ -14698,7 +15040,7 @@ Object.assign(RR_I18N_STRINGS.es, {
 });
 Object.assign(RR_I18N_STRINGS['zh-Hant'], {
     'props.noModel': '未選擇模型',
-    'props.hintPlace': '點擊地圖放置。點擊已放置的模型可選取，拖曳移動，Delete 移除。',
+    'props.hintPlace': '點擊地圖放置。點擊已放置的模型可選取，拖曳移動，Delete 移除，右鍵或 Esc 取消選取。',
     'props.hintChoose': '從下方清單選擇模型。',
     'props.size': '大小',
     'props.scale': '縮放',
@@ -14716,7 +15058,7 @@ Object.assign(RR_I18N_STRINGS['zh-Hant'], {
 });
 Object.assign(RR_I18N_STRINGS['zh-Hans'], {
     'props.noModel': '未选择模型',
-    'props.hintPlace': '点击地图放置。点击已放置的模型可选中，拖动移动，Delete 移除。',
+    'props.hintPlace': '点击地图放置。点击已放置的模型可选中，拖动移动，Delete 移除，右键或 Esc 取消选择。',
     'props.hintChoose': '从下方列表选择模型。',
     'props.size': '大小',
     'props.scale': '缩放',
@@ -14734,7 +15076,7 @@ Object.assign(RR_I18N_STRINGS['zh-Hans'], {
 });
 Object.assign(RR_I18N_STRINGS.ru, {
     'props.noModel': 'Модель не выбрана',
-    'props.hintPlace': 'Щёлкните по карте, чтобы поставить. Щелчок по модели выбирает её, перетаскивание двигает, Delete удаляет.',
+    'props.hintPlace': 'Щёлкните по карте, чтобы поставить. Щелчок по модели выбирает её, перетаскивание двигает, Delete удаляет, правая кнопка или Esc снимает выделение.',
     'props.hintChoose': 'Выберите модель из списка ниже.',
     'props.size': 'Размер',
     'props.scale': 'Масштаб',
@@ -14752,7 +15094,7 @@ Object.assign(RR_I18N_STRINGS.ru, {
 });
 Object.assign(RR_I18N_STRINGS.pt, {
     'props.noModel': 'Nenhum modelo escolhido',
-    'props.hintPlace': 'Clique no mapa para colocar. Clique em um modelo colocado para selecioná-lo, arraste para mover, Delete para remover.',
+    'props.hintPlace': 'Clique no mapa para colocar. Clique em um modelo colocado para selecioná-lo, arraste para mover, Delete para remover, botão direito ou Esc para desselecionar.',
     'props.hintChoose': 'Escolha um modelo na lista abaixo.',
     'props.size': 'Tamanho',
     'props.scale': 'Escala',
@@ -14770,7 +15112,7 @@ Object.assign(RR_I18N_STRINGS.pt, {
 });
 Object.assign(RR_I18N_STRINGS.de, {
     'props.noModel': 'Kein Modell gewählt',
-    'props.hintPlace': 'Auf die Karte klicken, um es zu setzen. Ein gesetztes Modell anklicken wählt es, Ziehen bewegt, Entf entfernt.',
+    'props.hintPlace': 'Auf die Karte klicken, um es zu setzen. Ein gesetztes Modell anklicken wählt es, Ziehen bewegt, Entf entfernt, Rechtsklick oder Esc hebt die Auswahl auf.',
     'props.hintChoose': 'Wähle unten ein Modell aus der Liste.',
     'props.size': 'Größe',
     'props.scale': 'Skalierung',
@@ -14788,7 +15130,7 @@ Object.assign(RR_I18N_STRINGS.de, {
 });
 Object.assign(RR_I18N_STRINGS.fr, {
     'props.noModel': 'Aucun modèle choisi',
-    'props.hintPlace': 'Cliquez sur la carte pour le placer. Cliquez sur un modèle placé pour le sélectionner, glissez pour déplacer, Suppr pour retirer.',
+    'props.hintPlace': 'Cliquez sur la carte pour le placer. Cliquez sur un modèle placé pour le sélectionner, glissez pour déplacer, Suppr pour retirer, clic droit ou Échap pour désélectionner.',
     'props.hintChoose': 'Choisissez un modèle dans la liste ci-dessous.',
     'props.size': 'Taille',
     'props.scale': 'Échelle',
@@ -14806,7 +15148,7 @@ Object.assign(RR_I18N_STRINGS.fr, {
 });
 Object.assign(RR_I18N_STRINGS.el, {
     'props.noModel': 'Δεν επιλέχθηκε μοντέλο',
-    'props.hintPlace': 'Κάντε κλικ στον χάρτη για τοποθέτηση. Κλικ σε τοποθετημένο μοντέλο το επιλέγει, σύρσιμο το μετακινεί, Delete το αφαιρεί.',
+    'props.hintPlace': 'Κάντε κλικ στον χάρτη για τοποθέτηση. Κλικ σε τοποθετημένο μοντέλο το επιλέγει, σύρσιμο το μετακινεί, Delete το αφαιρεί, δεξί κλικ ή Esc αποεπιλέγει.',
     'props.hintChoose': 'Επιλέξτε μοντέλο από την παρακάτω λίστα.',
     'props.size': 'Μέγεθος',
     'props.scale': 'Κλίμακα',
@@ -14824,7 +15166,7 @@ Object.assign(RR_I18N_STRINGS.el, {
 });
 Object.assign(RR_I18N_STRINGS.ko, {
     'props.noModel': '선택된 모델 없음',
-    'props.hintPlace': '맵을 클릭해 배치합니다. 배치된 모델을 클릭하면 선택, 드래그로 이동, Delete로 제거합니다.',
+    'props.hintPlace': '맵을 클릭해 배치합니다. 배치된 모델을 클릭하면 선택, 드래그로 이동, Delete로 제거, 우클릭 또는 Esc로 선택 해제합니다.',
     'props.hintChoose': '아래 목록에서 모델을 선택하세요.',
     'props.size': '크기',
     'props.scale': '배율',
@@ -14842,7 +15184,7 @@ Object.assign(RR_I18N_STRINGS.ko, {
 });
 Object.assign(RR_I18N_STRINGS.ar, {
     'props.noModel': 'لم يتم اختيار نموذج',
-    'props.hintPlace': 'انقر على الخريطة لوضعه. انقر على نموذج موضوع لتحديده، واسحب لتحريكه، وDelete لإزالته.',
+    'props.hintPlace': 'انقر على الخريطة لوضعه. انقر على نموذج موضوع لتحديده، واسحب لتحريكه، وDelete لإزالته، وانقر بالزر الأيمن أو Esc لإلغاء التحديد.',
     'props.hintChoose': 'اختر نموذجًا من القائمة أدناه.',
     'props.size': 'الحجم',
     'props.scale': 'المقياس',
@@ -14860,7 +15202,7 @@ Object.assign(RR_I18N_STRINGS.ar, {
 });
 Object.assign(RR_I18N_STRINGS.it, {
     'props.noModel': 'Nessun modello scelto',
-    'props.hintPlace': 'Clicca sulla mappa per posizionarlo. Clicca un modello posizionato per selezionarlo, trascina per spostare, Canc per rimuovere.',
+    'props.hintPlace': 'Clicca sulla mappa per posizionarlo. Clicca un modello posizionato per selezionarlo, trascina per spostare, Canc per rimuovere, clic destro o Esc per deselezionare.',
     'props.hintChoose': 'Scegli un modello dall’elenco qui sotto.',
     'props.size': 'Dimensione',
     'props.scale': 'Scala',
@@ -14878,7 +15220,7 @@ Object.assign(RR_I18N_STRINGS.it, {
 });
 Object.assign(RR_I18N_STRINGS.pl, {
     'props.noModel': 'Nie wybrano modelu',
-    'props.hintPlace': 'Kliknij mapę, aby umieścić. Kliknięcie umieszczonego modelu zaznacza go, przeciąganie przesuwa, Delete usuwa.',
+    'props.hintPlace': 'Kliknij mapę, aby umieścić. Kliknięcie umieszczonego modelu zaznacza go, przeciąganie przesuwa, Delete usuwa, prawy przycisk lub Esc odznacza.',
     'props.hintChoose': 'Wybierz model z listy poniżej.',
     'props.size': 'Rozmiar',
     'props.scale': 'Skala',
@@ -14896,7 +15238,7 @@ Object.assign(RR_I18N_STRINGS.pl, {
 });
 Object.assign(RR_I18N_STRINGS.id, {
     'props.noModel': 'Belum ada model dipilih',
-    'props.hintPlace': 'Klik peta untuk menempatkannya. Klik model yang sudah ditempatkan untuk memilih, seret untuk memindahkan, Delete untuk menghapus.',
+    'props.hintPlace': 'Klik peta untuk menempatkannya. Klik model yang sudah ditempatkan untuk memilih, seret untuk memindahkan, Delete untuk menghapus, klik kanan atau Esc untuk membatalkan pilihan.',
     'props.hintChoose': 'Pilih model dari daftar di bawah.',
     'props.size': 'Ukuran',
     'props.scale': 'Skala',
@@ -14914,7 +15256,7 @@ Object.assign(RR_I18N_STRINGS.id, {
 });
 Object.assign(RR_I18N_STRINGS.vi, {
     'props.noModel': 'Chưa chọn mô hình',
-    'props.hintPlace': 'Nhấp vào bản đồ để đặt. Nhấp vào mô hình đã đặt để chọn, kéo để di chuyển, Delete để xóa.',
+    'props.hintPlace': 'Nhấp vào bản đồ để đặt. Nhấp vào mô hình đã đặt để chọn, kéo để di chuyển, Delete để xóa, nhấp chuột phải hoặc Esc để bỏ chọn.',
     'props.hintChoose': 'Chọn một mô hình từ danh sách bên dưới.',
     'props.size': 'Kích thước',
     'props.scale': 'Tỷ lệ',
@@ -14932,7 +15274,7 @@ Object.assign(RR_I18N_STRINGS.vi, {
 });
 Object.assign(RR_I18N_STRINGS.th, {
     'props.noModel': 'ยังไม่ได้เลือกโมเดล',
-    'props.hintPlace': 'คลิกแผนที่เพื่อวาง คลิกโมเดลที่วางแล้วเพื่อเลือก ลากเพื่อย้าย กด Delete เพื่อลบ',
+    'props.hintPlace': 'คลิกแผนที่เพื่อวาง คลิกโมเดลที่วางแล้วเพื่อเลือก ลากเพื่อย้าย กด Delete เพื่อลบ คลิกขวาหรือ Esc เพื่อยกเลิกการเลือก',
     'props.hintChoose': 'เลือกโมเดลจากรายการด้านล่าง',
     'props.size': 'ขนาด',
     'props.scale': 'สเกล',
@@ -14950,7 +15292,7 @@ Object.assign(RR_I18N_STRINGS.th, {
 });
 Object.assign(RR_I18N_STRINGS.tr, {
     'props.noModel': 'Model seçilmedi',
-    'props.hintPlace': 'Yerleştirmek için haritaya tıklayın. Yerleştirilmiş bir modele tıklamak seçer, sürüklemek taşır, Delete kaldırır.',
+    'props.hintPlace': 'Yerleştirmek için haritaya tıklayın. Yerleştirilmiş bir modele tıklamak seçer, sürüklemek taşır, Delete kaldırır, sağ tık veya Esc seçimi kaldırır.',
     'props.hintChoose': 'Aşağıdaki listeden bir model seçin.',
     'props.size': 'Boyut',
     'props.scale': 'Ölçek',
@@ -19377,6 +19719,46 @@ Object.assign(RR_I18N_STRINGS["id"], {"lit.preset.compound": "Cahaya gabungan", 
 Object.assign(RR_I18N_STRINGS["vi"], {"lit.preset.compound": "Đèn tổ hợp", "lit.preset.fluorescent": "Huỳnh quang", "lit.components": "Thành phần", "lit.component": "Thành phần", "lit.compoundName": "Tên", "lit.componentId": "ID phần", "lit.addComponent": "Thêm", "lit.removeComponent": "Xóa thành phần", "lit.componentHint": "Cài đặt bên dưới chỉnh sửa thành phần này. Kéo trên bản đồ để di chuyển toàn bộ đèn."});
 Object.assign(RR_I18N_STRINGS["th"], {"lit.preset.compound": "แสงแบบรวม", "lit.preset.fluorescent": "ฟลูออเรสเซนต์", "lit.components": "องค์ประกอบ", "lit.component": "องค์ประกอบ", "lit.compoundName": "ชื่อ", "lit.componentId": "ID ส่วน", "lit.addComponent": "เพิ่ม", "lit.removeComponent": "ลบองค์ประกอบ", "lit.componentHint": "การตั้งค่าด้านล่างแก้ไของค์ประกอบนี้ ลากบนแผนที่เพื่อย้ายแสงทั้งหมด"});
 Object.assign(RR_I18N_STRINGS["tr"], {"lit.preset.compound": "Bileşik Işık", "lit.preset.fluorescent": "Floresan", "lit.components": "Bileşenler", "lit.component": "Bileşen", "lit.compoundName": "Ad", "lit.componentId": "Parça ID", "lit.addComponent": "Ekle", "lit.removeComponent": "Bileşeni kaldır", "lit.componentHint": "Aşağıdaki ayarlar bu bileşeni düzenler. Işığın tamamını taşımak için haritada sürükleyin."});
+
+// Lighting: the Sun preset and the Type dropdown's groups (2026-09-19).
+Object.assign(RR_I18N_STRINGS["en"], {"lit.preset.sun": "Sun", "lit.types": "Types", "lit.presets": "Presets"});
+Object.assign(RR_I18N_STRINGS["ja"], {"lit.preset.sun": "太陽", "lit.types": "種類", "lit.presets": "プリセット"});
+Object.assign(RR_I18N_STRINGS["es"], {"lit.preset.sun": "Sol", "lit.types": "Tipos", "lit.presets": "Preajustes"});
+Object.assign(RR_I18N_STRINGS["zh-Hant"], {"lit.preset.sun": "太陽", "lit.types": "類型", "lit.presets": "預設"});
+Object.assign(RR_I18N_STRINGS["zh-Hans"], {"lit.preset.sun": "太阳", "lit.types": "类型", "lit.presets": "预设"});
+Object.assign(RR_I18N_STRINGS["ru"], {"lit.preset.sun": "Солнце", "lit.types": "Типы", "lit.presets": "Пресеты"});
+Object.assign(RR_I18N_STRINGS["pt"], {"lit.preset.sun": "Sol", "lit.types": "Tipos", "lit.presets": "Predefinições"});
+Object.assign(RR_I18N_STRINGS["de"], {"lit.preset.sun": "Sonne", "lit.types": "Typen", "lit.presets": "Vorlagen"});
+Object.assign(RR_I18N_STRINGS["fr"], {"lit.preset.sun": "Soleil", "lit.types": "Types", "lit.presets": "Préréglages"});
+Object.assign(RR_I18N_STRINGS["el"], {"lit.preset.sun": "Ήλιος", "lit.types": "Τύποι", "lit.presets": "Προεπιλογές"});
+Object.assign(RR_I18N_STRINGS["ko"], {"lit.preset.sun": "태양", "lit.types": "종류", "lit.presets": "프리셋"});
+Object.assign(RR_I18N_STRINGS["ar"], {"lit.preset.sun": "شمس", "lit.types": "الأنواع", "lit.presets": "إعدادات مسبقة"});
+Object.assign(RR_I18N_STRINGS["it"], {"lit.preset.sun": "Sole", "lit.types": "Tipi", "lit.presets": "Preimpostazioni"});
+Object.assign(RR_I18N_STRINGS["pl"], {"lit.preset.sun": "Słońce", "lit.types": "Typy", "lit.presets": "Ustawienia wstępne"});
+Object.assign(RR_I18N_STRINGS["id"], {"lit.preset.sun": "Matahari", "lit.types": "Jenis", "lit.presets": "Preset"});
+Object.assign(RR_I18N_STRINGS["vi"], {"lit.preset.sun": "Mặt trời", "lit.types": "Loại", "lit.presets": "Cài đặt sẵn"});
+Object.assign(RR_I18N_STRINGS["th"], {"lit.preset.sun": "ดวงอาทิตย์", "lit.types": "ประเภท", "lit.presets": "ค่าที่ตั้งไว้"});
+Object.assign(RR_I18N_STRINGS["tr"], {"lit.preset.sun": "Güneş", "lit.types": "Türler", "lit.presets": "Ön ayarlar"});
+
+// Pieces: the 3D tileset tab (2026-09-19).
+Object.assign(RR_I18N_STRINGS["en"], {"pieces.detached": "Edited by hand: this building no longer follows its plan. It still moves and turns as one; scale is off.", "pieces.grouped": "{count} touching pieces grouped as one building.", "pieces.rotate": "Rotate", "pieces.scale": "Scale", "pieces.move": "Move", "pieces.moveHint": "Move: click a piece of a building to pick the whole building, then click where its corner should go. Arrows nudge, R turns, [ ] scale a stamped building, Delete removes it, Esc lets go.", "pieces.removeStructure": "Remove building", "pieces.notStructure": "Not part of a building: only stamped structures move as one.", "pieces.structureSelected": "Building selected: {count} pieces. Click where to set it down.", "pieces.structure": "Structure", "pieces.stamp": "Stamp", "pieces.stampHint": "Choose a plan, then click the map: the ground is levelled and the whole building goes down in one step. Plans are JSON files under 3d/Structures.", "pieces.structureNone": "No plan", "pieces.noStructures": "No plans in 3d/Structures", "pieces.kind.wall": "Wall", "pieces.hint": "Pick a piece and a material, then click or drag on the 3D map. Click the side of a block to build beside it, its top to stack on it.", "pieces.piece": "Piece", "pieces.kind.block": "Block", "pieces.kind.floor": "Floor", "pieces.kind.pillar": "Pillar", "pieces.kind.stair": "Stairs", "pieces.kind.ramp": "Ramp", "pieces.kind.roof": "Roof", "pieces.kind.doorway": "Doorway", "pieces.kind.window": "Window", "pieces.kind.fence": "Fence", "pieces.material": "Material", "pieces.plain": "Plain", "pieces.materialsHint": "Put tileable images in img/materials to use them here.", "pieces.turn": "Turn", "pieces.level": "Level", "pieces.place": "Place", "pieces.erase": "Erase", "pieces.undo": "Undo", "pieces.redo": "Redo", "pieces.clear": "Remove all pieces", "pieces.keys": "R turns, Q / E change the level, X toggles Erase, right-click pulls a piece off, Ctrl+Z / Ctrl+Y undo and redo.", "pieces.needs3D": "Turn on 3D in Map Properties to build with pieces.", "pieces.count": "{count} pieces on this map"});
+Object.assign(RR_I18N_STRINGS["ja"], {"pieces.detached": "手作業で編集：この建物はプランに従わなくなりました。まとめて移動・回転はできますが、拡大はできません。", "pieces.grouped": "接する {count} 個のピースを1つの建物にまとめました。", "pieces.rotate": "回転", "pieces.scale": "拡大", "pieces.move": "移動", "pieces.moveHint": "移動：建物のピースをクリックして建物全体を選び、角を置く場所をクリック。矢印で微調整、R で回転、[ ] で配置した建物の拡大縮小、Delete で削除、Esc で解除。", "pieces.removeStructure": "建物を削除", "pieces.notStructure": "建物の一部ではありません。配置した構造物だけがまとめて移動できます。", "pieces.structureSelected": "建物を選択中：{count} ピース。置き場所をクリックしてください。", "pieces.structure": "建物", "pieces.stamp": "配置", "pieces.stampHint": "プランを選んでマップをクリック：地面を平らにし、建物全体を一度で配置します。プランは 3d/Structures の JSON ファイルです。", "pieces.structureNone": "プランなし", "pieces.noStructures": "3d/Structures にプランがありません", "pieces.kind.wall": "壁", "pieces.hint": "ピースと素材を選び、3Dマップをクリックまたはドラッグします。ブロックの側面をクリックすると隣に、上面をクリックすると上に積みます。", "pieces.piece": "ピース", "pieces.kind.block": "ブロック", "pieces.kind.floor": "床", "pieces.kind.pillar": "柱", "pieces.kind.stair": "階段", "pieces.kind.ramp": "スロープ", "pieces.kind.roof": "屋根", "pieces.kind.doorway": "出入口", "pieces.kind.window": "窓", "pieces.kind.fence": "柵", "pieces.material": "素材", "pieces.plain": "無地", "pieces.materialsHint": "img/materials にタイル可能な画像を置くとここで使えます。", "pieces.turn": "回転", "pieces.level": "階層", "pieces.place": "配置", "pieces.erase": "消去", "pieces.undo": "元に戻す", "pieces.redo": "やり直す", "pieces.clear": "すべてのピースを削除", "pieces.keys": "R で回転、Q / E で階層、X で消去切替、右クリックでピースを外す、Ctrl+Z / Ctrl+Y で元に戻す・やり直す。", "pieces.needs3D": "ピースを使うにはマップ設定で3Dをオンにしてください。", "pieces.count": "このマップのピース: {count}"});
+Object.assign(RR_I18N_STRINGS["es"], {"pieces.detached": "Editado a mano: este edificio ya no sigue su plano. Aún se mueve y gira como uno; la escala está desactivada.", "pieces.grouped": "{count} piezas contiguas agrupadas como un edificio.", "pieces.rotate": "Girar", "pieces.scale": "Escala", "pieces.move": "Mover", "pieces.moveHint": "Mover: haz clic en una pieza de un edificio para elegir todo el edificio y luego donde debe ir su esquina. Flechas ajustan, R gira, [ ] escalan un edificio estampado, Supr lo elimina, Esc lo suelta.", "pieces.removeStructure": "Quitar edificio", "pieces.notStructure": "No forma parte de un edificio: solo las estructuras estampadas se mueven juntas.", "pieces.structureSelected": "Edificio seleccionado: {count} piezas. Haz clic donde colocarlo.", "pieces.structure": "Estructura", "pieces.stamp": "Estampar", "pieces.stampHint": "Elige un plano y haz clic en el mapa: el suelo se nivela y todo el edificio se coloca de una vez. Los planos son archivos JSON en 3d/Structures.", "pieces.structureNone": "Sin plano", "pieces.noStructures": "No hay planos en 3d/Structures", "pieces.kind.wall": "Muro", "pieces.hint": "Elige una pieza y un material, luego haz clic o arrastra en el mapa 3D. Clic en el lado de un bloque para construir junto a él; en su parte superior para apilar.", "pieces.piece": "Pieza", "pieces.kind.block": "Bloque", "pieces.kind.floor": "Suelo", "pieces.kind.pillar": "Pilar", "pieces.kind.stair": "Escalera", "pieces.kind.ramp": "Rampa", "pieces.kind.roof": "Tejado", "pieces.kind.doorway": "Puerta", "pieces.kind.window": "Ventana", "pieces.kind.fence": "Valla", "pieces.material": "Material", "pieces.plain": "Liso", "pieces.materialsHint": "Pon imágenes repetibles en img/materials para usarlas aquí.", "pieces.turn": "Girar", "pieces.level": "Nivel", "pieces.place": "Colocar", "pieces.erase": "Borrar", "pieces.undo": "Deshacer", "pieces.redo": "Rehacer", "pieces.clear": "Quitar todas las piezas", "pieces.keys": "R gira, Q / E cambian el nivel, X alterna Borrar, clic derecho quita una pieza, Ctrl+Z / Ctrl+Y deshacen y rehacen.", "pieces.needs3D": "Activa 3D en Propiedades del mapa para construir con piezas.", "pieces.count": "{count} piezas en este mapa"});
+Object.assign(RR_I18N_STRINGS["zh-Hant"], {"pieces.detached": "已手動編輯：此建築不再跟隨平面圖。仍可整體移動與旋轉，但無法縮放。", "pieces.grouped": "已將 {count} 個相連的零件組成一棟建築。", "pieces.rotate": "旋轉", "pieces.scale": "縮放", "pieces.move": "移動", "pieces.moveHint": "移動：點擊建築的零件以選取整棟建築，再點擊角落要放的位置。方向鍵微調，R 旋轉，[ ] 縮放蓋章放置的建築，Delete 移除，Esc 放開。", "pieces.removeStructure": "移除建築", "pieces.notStructure": "不屬於任何建築：只有蓋章放置的結構才能整體移動。", "pieces.structureSelected": "已選取建築：{count} 個零件。點擊放置位置。", "pieces.structure": "建築", "pieces.stamp": "蓋章", "pieces.stampHint": "選擇平面圖後點擊地圖：地面會被整平，整棟建築一次放下。平面圖是 3d/Structures 下的 JSON 檔案。", "pieces.structureNone": "無平面圖", "pieces.noStructures": "3d/Structures 中沒有平面圖", "pieces.kind.wall": "牆", "pieces.hint": "選擇零件和材質，然後在 3D 地圖上點擊或拖曳。點擊方塊側面可在旁邊建造，點擊頂面可往上堆疊。", "pieces.piece": "零件", "pieces.kind.block": "方塊", "pieces.kind.floor": "地板", "pieces.kind.pillar": "柱子", "pieces.kind.stair": "樓梯", "pieces.kind.ramp": "斜坡", "pieces.kind.roof": "屋頂", "pieces.kind.doorway": "門口", "pieces.kind.window": "窗戶", "pieces.kind.fence": "圍欄", "pieces.material": "材質", "pieces.plain": "素面", "pieces.materialsHint": "將可平鋪的圖片放入 img/materials 即可在此使用。", "pieces.turn": "旋轉", "pieces.level": "層級", "pieces.place": "放置", "pieces.erase": "清除", "pieces.undo": "復原", "pieces.redo": "重做", "pieces.clear": "移除所有零件", "pieces.keys": "R 旋轉，Q / E 切換層級，X 切換清除，右鍵拆下零件，Ctrl+Z / Ctrl+Y 復原與重做。", "pieces.needs3D": "請在地圖屬性中開啟 3D 以使用零件建造。", "pieces.count": "此地圖有 {count} 個零件"});
+Object.assign(RR_I18N_STRINGS["zh-Hans"], {"pieces.detached": "已手动编辑：此建筑不再跟随平面图。仍可整体移动与旋转，但无法缩放。", "pieces.grouped": "已将 {count} 个相连的零件组成一栋建筑。", "pieces.rotate": "旋转", "pieces.scale": "缩放", "pieces.move": "移动", "pieces.moveHint": "移动：点击建筑的零件以选中整栋建筑，再点击角落要放的位置。方向键微调，R 旋转，[ ] 缩放盖章放置的建筑，Delete 移除，Esc 放开。", "pieces.removeStructure": "移除建筑", "pieces.notStructure": "不属于任何建筑：只有盖章放置的结构才能整体移动。", "pieces.structureSelected": "已选中建筑：{count} 个零件。点击放置位置。", "pieces.structure": "建筑", "pieces.stamp": "盖章", "pieces.stampHint": "选择平面图后点击地图：地面会被整平，整栋建筑一次放下。平面图是 3d/Structures 下的 JSON 文件。", "pieces.structureNone": "无平面图", "pieces.noStructures": "3d/Structures 中没有平面图", "pieces.kind.wall": "墙", "pieces.hint": "选择零件和材质，然后在 3D 地图上点击或拖动。点击方块侧面可在旁边建造，点击顶面可向上堆叠。", "pieces.piece": "零件", "pieces.kind.block": "方块", "pieces.kind.floor": "地板", "pieces.kind.pillar": "柱子", "pieces.kind.stair": "楼梯", "pieces.kind.ramp": "斜坡", "pieces.kind.roof": "屋顶", "pieces.kind.doorway": "门口", "pieces.kind.window": "窗户", "pieces.kind.fence": "围栏", "pieces.material": "材质", "pieces.plain": "素面", "pieces.materialsHint": "将可平铺的图片放入 img/materials 即可在此使用。", "pieces.turn": "旋转", "pieces.level": "层级", "pieces.place": "放置", "pieces.erase": "清除", "pieces.undo": "撤销", "pieces.redo": "重做", "pieces.clear": "移除所有零件", "pieces.keys": "R 旋转，Q / E 切换层级，X 切换清除，右键拆下零件，Ctrl+Z / Ctrl+Y 撤销与重做。", "pieces.needs3D": "请在地图属性中开启 3D 以使用零件建造。", "pieces.count": "此地图有 {count} 个零件"});
+Object.assign(RR_I18N_STRINGS["ru"], {"pieces.detached": "Отредактировано вручную: здание больше не следует плану. Оно по-прежнему перемещается и поворачивается целиком; масштаб отключён.", "pieces.grouped": "Соприкасающихся деталей объединено в одно здание: {count}.", "pieces.rotate": "Повернуть", "pieces.scale": "Масштаб", "pieces.move": "Переместить", "pieces.moveHint": "Переместить: щёлкните деталь здания, чтобы взять всё здание, затем щёлкните, где должен быть его угол. Стрелки сдвигают, R поворачивает, [ ] меняют масштаб поставленного здания, Delete удаляет, Esc отпускает.", "pieces.removeStructure": "Убрать здание", "pieces.notStructure": "Не часть здания: целиком перемещаются только поставленные строения.", "pieces.structureSelected": "Здание выбрано: деталей {count}. Щёлкните, куда его поставить.", "pieces.structure": "Строение", "pieces.stamp": "Поставить", "pieces.stampHint": "Выберите план и щёлкните по карте: земля выравнивается, и всё здание ставится за один шаг. Планы — JSON-файлы в 3d/Structures.", "pieces.structureNone": "Без плана", "pieces.noStructures": "В 3d/Structures нет планов", "pieces.kind.wall": "Стена", "pieces.hint": "Выберите деталь и материал, затем щёлкайте или тяните по 3D-карте. Щелчок по боку блока строит рядом, по верху — ставит сверху.", "pieces.piece": "Деталь", "pieces.kind.block": "Блок", "pieces.kind.floor": "Пол", "pieces.kind.pillar": "Колонна", "pieces.kind.stair": "Лестница", "pieces.kind.ramp": "Пандус", "pieces.kind.roof": "Крыша", "pieces.kind.doorway": "Дверной проём", "pieces.kind.window": "Окно", "pieces.kind.fence": "Забор", "pieces.material": "Материал", "pieces.plain": "Без текстуры", "pieces.materialsHint": "Положите бесшовные изображения в img/materials, чтобы использовать их здесь.", "pieces.turn": "Повернуть", "pieces.level": "Уровень", "pieces.place": "Поставить", "pieces.erase": "Стереть", "pieces.undo": "Отменить", "pieces.redo": "Повторить", "pieces.clear": "Убрать все детали", "pieces.keys": "R поворачивает, Q / E меняют уровень, X переключает стирание, правая кнопка снимает деталь, Ctrl+Z / Ctrl+Y отменяют и повторяют.", "pieces.needs3D": "Включите 3D в свойствах карты, чтобы строить из деталей.", "pieces.count": "Деталей на карте: {count}"});
+Object.assign(RR_I18N_STRINGS["pt"], {"pieces.detached": "Editado à mão: este prédio não segue mais a planta. Ainda se move e gira como um; a escala está desligada.", "pieces.grouped": "{count} peças encostadas agrupadas como um prédio.", "pieces.rotate": "Girar", "pieces.scale": "Escala", "pieces.move": "Mover", "pieces.moveHint": "Mover: clique em uma peça de um prédio para pegar o prédio inteiro, depois clique onde o canto deve ficar. Setas ajustam, R gira, [ ] mudam a escala de um prédio carimbado, Delete remove, Esc solta.", "pieces.removeStructure": "Remover prédio", "pieces.notStructure": "Não faz parte de um prédio: só estruturas carimbadas se movem juntas.", "pieces.structureSelected": "Prédio selecionado: {count} peças. Clique onde colocá-lo.", "pieces.structure": "Estrutura", "pieces.stamp": "Carimbar", "pieces.stampHint": "Escolha uma planta e clique no mapa: o terreno é nivelado e o prédio inteiro é colocado de uma vez. As plantas são arquivos JSON em 3d/Structures.", "pieces.structureNone": "Sem planta", "pieces.noStructures": "Nenhuma planta em 3d/Structures", "pieces.kind.wall": "Parede", "pieces.hint": "Escolha uma peça e um material e clique ou arraste no mapa 3D. Clique na lateral de um bloco para construir ao lado; no topo, para empilhar.", "pieces.piece": "Peça", "pieces.kind.block": "Bloco", "pieces.kind.floor": "Piso", "pieces.kind.pillar": "Pilar", "pieces.kind.stair": "Escada", "pieces.kind.ramp": "Rampa", "pieces.kind.roof": "Telhado", "pieces.kind.doorway": "Porta", "pieces.kind.window": "Janela", "pieces.kind.fence": "Cerca", "pieces.material": "Material", "pieces.plain": "Liso", "pieces.materialsHint": "Coloque imagens repetíveis em img/materials para usá-las aqui.", "pieces.turn": "Girar", "pieces.level": "Nível", "pieces.place": "Colocar", "pieces.erase": "Apagar", "pieces.undo": "Desfazer", "pieces.redo": "Refazer", "pieces.clear": "Remover todas as peças", "pieces.keys": "R gira, Q / E mudam o nível, X alterna Apagar, botão direito retira uma peça, Ctrl+Z / Ctrl+Y desfazem e refazem.", "pieces.needs3D": "Ative o 3D nas Propriedades do mapa para construir com peças.", "pieces.count": "{count} peças neste mapa"});
+Object.assign(RR_I18N_STRINGS["de"], {"pieces.detached": "Von Hand bearbeitet: Dieses Gebäude folgt seinem Plan nicht mehr. Es lässt sich weiter als Ganzes verschieben und drehen; Skalieren ist aus.", "pieces.grouped": "{count} zusammenhängende Teile zu einem Gebäude gruppiert.", "pieces.rotate": "Drehen", "pieces.scale": "Größe", "pieces.move": "Verschieben", "pieces.moveHint": "Verschieben: Ein Teil eines Gebäudes anklicken, um das ganze Gebäude zu nehmen, dann klicken, wohin seine Ecke soll. Pfeile rücken, R dreht, [ ] skalieren ein gesetztes Gebäude, Entf entfernt es, Esc lässt los.", "pieces.removeStructure": "Gebäude entfernen", "pieces.notStructure": "Gehört zu keinem Gebäude: nur gesetzte Bauten bewegen sich als Ganzes.", "pieces.structureSelected": "Gebäude gewählt: {count} Teile. Klicken, wo es hin soll.", "pieces.structure": "Gebäude", "pieces.stamp": "Setzen", "pieces.stampHint": "Plan wählen und auf die Karte klicken: Der Boden wird geebnet und das ganze Gebäude in einem Schritt gesetzt. Pläne sind JSON-Dateien unter 3d/Structures.", "pieces.structureNone": "Kein Plan", "pieces.noStructures": "Keine Pläne in 3d/Structures", "pieces.kind.wall": "Wand", "pieces.hint": "Teil und Material wählen, dann auf der 3D-Karte klicken oder ziehen. Ein Klick auf die Seite eines Blocks baut daneben, auf die Oberseite darauf.", "pieces.piece": "Teil", "pieces.kind.block": "Block", "pieces.kind.floor": "Boden", "pieces.kind.pillar": "Säule", "pieces.kind.stair": "Treppe", "pieces.kind.ramp": "Rampe", "pieces.kind.roof": "Dach", "pieces.kind.doorway": "Türöffnung", "pieces.kind.window": "Fenster", "pieces.kind.fence": "Zaun", "pieces.material": "Material", "pieces.plain": "Schlicht", "pieces.materialsHint": "Kachelbare Bilder in img/materials ablegen, um sie hier zu nutzen.", "pieces.turn": "Drehen", "pieces.level": "Ebene", "pieces.place": "Setzen", "pieces.erase": "Entfernen", "pieces.undo": "Rückgängig", "pieces.redo": "Wiederholen", "pieces.clear": "Alle Teile entfernen", "pieces.keys": "R dreht, Q / E wechseln die Ebene, X schaltet Entfernen um, Rechtsklick nimmt ein Teil ab, Strg+Z / Strg+Y machen rückgängig und wiederholen.", "pieces.needs3D": "3D in den Karteneigenschaften einschalten, um mit Teilen zu bauen.", "pieces.count": "{count} Teile auf dieser Karte"});
+Object.assign(RR_I18N_STRINGS["fr"], {"pieces.detached": "Modifié à la main : ce bâtiment ne suit plus son plan. Il se déplace et tourne encore d'un bloc ; l'échelle est désactivée.", "pieces.grouped": "{count} pièces contiguës regroupées en un bâtiment.", "pieces.rotate": "Tourner", "pieces.scale": "Échelle", "pieces.move": "Déplacer", "pieces.moveHint": "Déplacer : cliquez sur une pièce d'un bâtiment pour prendre tout le bâtiment, puis cliquez où doit aller son coin. Les flèches décalent, R tourne, [ ] changent l'échelle d'un bâtiment posé, Suppr le retire, Échap relâche.", "pieces.removeStructure": "Retirer le bâtiment", "pieces.notStructure": "Ne fait pas partie d'un bâtiment : seules les structures posées se déplacent d'un bloc.", "pieces.structureSelected": "Bâtiment sélectionné : {count} pièces. Cliquez où le poser.", "pieces.structure": "Bâtiment", "pieces.stamp": "Poser", "pieces.stampHint": "Choisissez un plan puis cliquez sur la carte : le sol est nivelé et tout le bâtiment est posé en une fois. Les plans sont des fichiers JSON dans 3d/Structures.", "pieces.structureNone": "Aucun plan", "pieces.noStructures": "Aucun plan dans 3d/Structures", "pieces.kind.wall": "Mur", "pieces.hint": "Choisissez une pièce et un matériau, puis cliquez ou glissez sur la carte 3D. Cliquez sur le côté d'un bloc pour construire à côté, sur son dessus pour empiler.", "pieces.piece": "Pièce", "pieces.kind.block": "Bloc", "pieces.kind.floor": "Sol", "pieces.kind.pillar": "Pilier", "pieces.kind.stair": "Escalier", "pieces.kind.ramp": "Rampe", "pieces.kind.roof": "Toit", "pieces.kind.doorway": "Porte", "pieces.kind.window": "Fenêtre", "pieces.kind.fence": "Clôture", "pieces.material": "Matériau", "pieces.plain": "Uni", "pieces.materialsHint": "Placez des images répétables dans img/materials pour les utiliser ici.", "pieces.turn": "Tourner", "pieces.level": "Niveau", "pieces.place": "Poser", "pieces.erase": "Effacer", "pieces.undo": "Annuler", "pieces.redo": "Rétablir", "pieces.clear": "Retirer toutes les pièces", "pieces.keys": "R tourne, Q / E changent le niveau, X bascule Effacer, clic droit retire une pièce, Ctrl+Z / Ctrl+Y annulent et rétablissent.", "pieces.needs3D": "Activez la 3D dans les propriétés de la carte pour construire avec des pièces.", "pieces.count": "{count} pièces sur cette carte"});
+Object.assign(RR_I18N_STRINGS["el"], {"pieces.detached": "Επεξεργασία με το χέρι: το κτίριο δεν ακολουθεί πια το σχέδιό του. Μετακινείται και περιστρέφεται ακόμη ως ένα· η κλίμακα είναι κλειστή.", "pieces.grouped": "{count} εφαπτόμενα κομμάτια ομαδοποιήθηκαν σε ένα κτίριο.", "pieces.rotate": "Περιστροφή", "pieces.scale": "Κλίμακα", "pieces.move": "Μετακίνηση", "pieces.moveHint": "Μετακίνηση: κλικ σε κομμάτι ενός κτιρίου για να πάρετε όλο το κτίριο, μετά κλικ εκεί που θα πάει η γωνία του. Βέλη μετακινούν, R περιστρέφει, [ ] αλλάζουν κλίμακα σε τοποθετημένο κτίριο, Delete το αφαιρεί, Esc το αφήνει.", "pieces.removeStructure": "Αφαίρεση κτιρίου", "pieces.notStructure": "Δεν ανήκει σε κτίριο: μόνο τοποθετημένα κτίρια μετακινούνται ως ένα.", "pieces.structureSelected": "Επιλεγμένο κτίριο: {count} κομμάτια. Κλικ εκεί που θα το ακουμπήσετε.", "pieces.structure": "Κτίριο", "pieces.stamp": "Τοποθέτηση", "pieces.stampHint": "Διαλέξτε σχέδιο και κάντε κλικ στον χάρτη: το έδαφος ισοπεδώνεται και όλο το κτίριο μπαίνει με ένα βήμα. Τα σχέδια είναι αρχεία JSON στο 3d/Structures.", "pieces.structureNone": "Χωρίς σχέδιο", "pieces.noStructures": "Δεν υπάρχουν σχέδια στο 3d/Structures", "pieces.kind.wall": "Τοίχος", "pieces.hint": "Διαλέξτε κομμάτι και υλικό, μετά κάντε κλικ ή σύρετε στον 3D χάρτη. Κλικ στο πλάι ενός μπλοκ χτίζει δίπλα του, στην κορυφή του στοιβάζει.", "pieces.piece": "Κομμάτι", "pieces.kind.block": "Μπλοκ", "pieces.kind.floor": "Δάπεδο", "pieces.kind.pillar": "Κολόνα", "pieces.kind.stair": "Σκάλα", "pieces.kind.ramp": "Ράμπα", "pieces.kind.roof": "Στέγη", "pieces.kind.doorway": "Άνοιγμα πόρτας", "pieces.kind.window": "Παράθυρο", "pieces.kind.fence": "Φράχτης", "pieces.material": "Υλικό", "pieces.plain": "Απλό", "pieces.materialsHint": "Βάλτε εικόνες που επαναλαμβάνονται στο img/materials για να τις χρησιμοποιήσετε εδώ.", "pieces.turn": "Περιστροφή", "pieces.level": "Επίπεδο", "pieces.place": "Τοποθέτηση", "pieces.erase": "Σβήσιμο", "pieces.undo": "Αναίρεση", "pieces.redo": "Επανάληψη", "pieces.clear": "Αφαίρεση όλων των κομματιών", "pieces.keys": "R περιστρέφει, Q / E αλλάζουν επίπεδο, X εναλλάσσει το Σβήσιμο, δεξί κλικ αφαιρεί κομμάτι, Ctrl+Z / Ctrl+Y αναιρούν και επαναλαμβάνουν.", "pieces.needs3D": "Ενεργοποιήστε το 3D στις Ιδιότητες χάρτη για να χτίσετε με κομμάτια.", "pieces.count": "{count} κομμάτια σε αυτόν τον χάρτη"});
+Object.assign(RR_I18N_STRINGS["ko"], {"pieces.detached": "직접 편집됨: 이 건물은 더 이상 도면을 따르지 않습니다. 통째로 이동과 회전은 되지만 크기 조절은 꺼집니다.", "pieces.grouped": "맞닿은 조각 {count}개를 하나의 건물로 묶었습니다.", "pieces.rotate": "회전", "pieces.scale": "크기", "pieces.move": "이동", "pieces.moveHint": "이동: 건물의 조각을 클릭해 건물 전체를 고른 뒤, 모서리를 놓을 곳을 클릭하세요. 방향키로 미세 이동, R 회전, [ ] 배치된 건물 크기 조절, Delete 제거, Esc 해제.", "pieces.removeStructure": "건물 제거", "pieces.notStructure": "건물의 일부가 아닙니다. 배치된 구조물만 통째로 이동합니다.", "pieces.structureSelected": "건물 선택됨: 조각 {count}개. 놓을 곳을 클릭하세요.", "pieces.structure": "건물", "pieces.stamp": "배치", "pieces.stampHint": "도면을 고르고 맵을 클릭하세요. 땅을 평평하게 하고 건물 전체를 한 번에 놓습니다. 도면은 3d/Structures의 JSON 파일입니다.", "pieces.structureNone": "도면 없음", "pieces.noStructures": "3d/Structures에 도면이 없습니다", "pieces.kind.wall": "벽", "pieces.hint": "조각과 재질을 고른 뒤 3D 맵을 클릭하거나 드래그하세요. 블록의 옆면을 클릭하면 옆에, 윗면을 클릭하면 위에 쌓습니다.", "pieces.piece": "조각", "pieces.kind.block": "블록", "pieces.kind.floor": "바닥", "pieces.kind.pillar": "기둥", "pieces.kind.stair": "계단", "pieces.kind.ramp": "경사로", "pieces.kind.roof": "지붕", "pieces.kind.doorway": "출입구", "pieces.kind.window": "창문", "pieces.kind.fence": "울타리", "pieces.material": "재질", "pieces.plain": "무늬 없음", "pieces.materialsHint": "타일링 가능한 이미지를 img/materials에 넣으면 여기서 쓸 수 있습니다.", "pieces.turn": "회전", "pieces.level": "층", "pieces.place": "배치", "pieces.erase": "지우기", "pieces.undo": "실행 취소", "pieces.redo": "다시 실행", "pieces.clear": "모든 조각 제거", "pieces.keys": "R 회전, Q / E 층 변경, X 지우기 전환, 우클릭으로 조각 떼기, Ctrl+Z / Ctrl+Y 실행 취소와 다시 실행.", "pieces.needs3D": "조각으로 건축하려면 맵 속성에서 3D를 켜세요.", "pieces.count": "이 맵의 조각 {count}개"});
+Object.assign(RR_I18N_STRINGS["ar"], {"pieces.detached": "عُدّل يدويًا: لم يعد هذا المبنى يتبع مخططه. ما زال يتحرك ويدور كوحدة واحدة؛ المقياس معطّل.", "pieces.grouped": "جُمعت {count} قطعة متلاصقة في مبنى واحد.", "pieces.rotate": "تدوير", "pieces.scale": "مقياس", "pieces.move": "نقل", "pieces.moveHint": "نقل: انقر على قطعة من مبنى لاختيار المبنى كله، ثم انقر حيث ينبغي أن يكون ركنه. الأسهم تحرّك، R يدوّر، [ ] يغيّران مقياس مبنى مختوم، Delete يحذفه وEsc يتركه.", "pieces.removeStructure": "إزالة المبنى", "pieces.notStructure": "ليس جزءًا من مبنى: المباني المختومة فقط تتحرك كوحدة واحدة.", "pieces.structureSelected": "تم اختيار المبنى: {count} قطعة. انقر حيث تريد وضعه.", "pieces.structure": "مبنى", "pieces.stamp": "ختم", "pieces.stampHint": "اختر مخططًا ثم انقر على الخريطة: تُسوّى الأرض ويوضع المبنى كاملًا بخطوة واحدة. المخططات ملفات JSON في 3d/Structures.", "pieces.structureNone": "بلا مخطط", "pieces.noStructures": "لا مخططات في 3d/Structures", "pieces.kind.wall": "جدار", "pieces.hint": "اختر قطعة ومادة، ثم انقر أو اسحب على الخريطة ثلاثية الأبعاد. انقر على جانب كتلة للبناء بجوارها، وعلى سطحها للتكديس فوقها.", "pieces.piece": "قطعة", "pieces.kind.block": "كتلة", "pieces.kind.floor": "أرضية", "pieces.kind.pillar": "عمود", "pieces.kind.stair": "درج", "pieces.kind.ramp": "منحدر", "pieces.kind.roof": "سقف", "pieces.kind.doorway": "مدخل", "pieces.kind.window": "نافذة", "pieces.kind.fence": "سياج", "pieces.material": "مادة", "pieces.plain": "سادة", "pieces.materialsHint": "ضع صورًا قابلة للتكرار في img/materials لاستخدامها هنا.", "pieces.turn": "تدوير", "pieces.level": "مستوى", "pieces.place": "وضع", "pieces.erase": "مسح", "pieces.undo": "تراجع", "pieces.redo": "إعادة", "pieces.clear": "إزالة كل القطع", "pieces.keys": "R للتدوير، Q / E لتغيير المستوى، X لتبديل المسح، النقر الأيمن لنزع قطعة، Ctrl+Z / Ctrl+Y للتراجع والإعادة.", "pieces.needs3D": "فعّل الوضع ثلاثي الأبعاد في خصائص الخريطة للبناء بالقطع.", "pieces.count": "{count} قطعة في هذه الخريطة"});
+Object.assign(RR_I18N_STRINGS["it"], {"pieces.detached": "Modificato a mano: questo edificio non segue più la sua pianta. Si sposta e ruota ancora come uno; la scala è disattivata.", "pieces.grouped": "{count} pezzi contigui raggruppati in un edificio.", "pieces.rotate": "Ruota", "pieces.scale": "Scala", "pieces.move": "Sposta", "pieces.moveHint": "Sposta: clicca un pezzo di un edificio per prendere tutto l'edificio, poi clicca dove deve andare il suo angolo. Le frecce spostano, R ruota, [ ] scalano un edificio posato, Canc lo rimuove, Esc lo lascia.", "pieces.removeStructure": "Rimuovi edificio", "pieces.notStructure": "Non fa parte di un edificio: solo le strutture posate si spostano insieme.", "pieces.structureSelected": "Edificio selezionato: {count} pezzi. Clicca dove posarlo.", "pieces.structure": "Edificio", "pieces.stamp": "Posa", "pieces.stampHint": "Scegli una pianta e clicca sulla mappa: il terreno viene livellato e l'intero edificio va giù in un colpo. Le piante sono file JSON in 3d/Structures.", "pieces.structureNone": "Nessuna pianta", "pieces.noStructures": "Nessuna pianta in 3d/Structures", "pieces.kind.wall": "Muro", "pieces.hint": "Scegli un pezzo e un materiale, poi clicca o trascina sulla mappa 3D. Clicca il lato di un blocco per costruire accanto, la cima per impilare.", "pieces.piece": "Pezzo", "pieces.kind.block": "Blocco", "pieces.kind.floor": "Pavimento", "pieces.kind.pillar": "Pilastro", "pieces.kind.stair": "Scala", "pieces.kind.ramp": "Rampa", "pieces.kind.roof": "Tetto", "pieces.kind.doorway": "Porta", "pieces.kind.window": "Finestra", "pieces.kind.fence": "Recinzione", "pieces.material": "Materiale", "pieces.plain": "Liscio", "pieces.materialsHint": "Metti immagini ripetibili in img/materials per usarle qui.", "pieces.turn": "Ruota", "pieces.level": "Livello", "pieces.place": "Posa", "pieces.erase": "Cancella", "pieces.undo": "Annulla", "pieces.redo": "Ripeti", "pieces.clear": "Rimuovi tutti i pezzi", "pieces.keys": "R ruota, Q / E cambiano livello, X alterna Cancella, clic destro toglie un pezzo, Ctrl+Z / Ctrl+Y annullano e ripetono.", "pieces.needs3D": "Attiva il 3D nelle Proprietà mappa per costruire con i pezzi.", "pieces.count": "{count} pezzi su questa mappa"});
+Object.assign(RR_I18N_STRINGS["pl"], {"pieces.detached": "Edytowany ręcznie: ten budynek nie podąża już za planem. Nadal przesuwa się i obraca w całości; skala jest wyłączona.", "pieces.grouped": "Zgrupowano {count} stykających się elementów w jeden budynek.", "pieces.rotate": "Obróć", "pieces.scale": "Skala", "pieces.move": "Przesuń", "pieces.moveHint": "Przesuń: kliknij element budynku, aby wziąć cały budynek, potem kliknij, gdzie ma być jego narożnik. Strzałki przesuwają, R obraca, [ ] skalują postawiony budynek, Delete usuwa, Esc puszcza.", "pieces.removeStructure": "Usuń budynek", "pieces.notStructure": "Nie należy do budynku: tylko postawione budowle przesuwają się w całości.", "pieces.structureSelected": "Wybrano budynek: elementów {count}. Kliknij, gdzie go postawić.", "pieces.structure": "Budynek", "pieces.stamp": "Postaw", "pieces.stampHint": "Wybierz plan i kliknij mapę: teren zostanie wyrównany, a cały budynek stanie w jednym kroku. Plany to pliki JSON w 3d/Structures.", "pieces.structureNone": "Brak planu", "pieces.noStructures": "Brak planów w 3d/Structures", "pieces.kind.wall": "Ściana", "pieces.hint": "Wybierz element i materiał, potem klikaj lub przeciągaj po mapie 3D. Kliknięcie boku bloku buduje obok, jego góry — na nim.", "pieces.piece": "Element", "pieces.kind.block": "Blok", "pieces.kind.floor": "Podłoga", "pieces.kind.pillar": "Filar", "pieces.kind.stair": "Schody", "pieces.kind.ramp": "Rampa", "pieces.kind.roof": "Dach", "pieces.kind.doorway": "Drzwi", "pieces.kind.window": "Okno", "pieces.kind.fence": "Płot", "pieces.material": "Materiał", "pieces.plain": "Gładki", "pieces.materialsHint": "Umieść kafelkowalne obrazy w img/materials, aby ich tu użyć.", "pieces.turn": "Obróć", "pieces.level": "Poziom", "pieces.place": "Ustaw", "pieces.erase": "Usuń", "pieces.undo": "Cofnij", "pieces.redo": "Ponów", "pieces.clear": "Usuń wszystkie elementy", "pieces.keys": "R obraca, Q / E zmieniają poziom, X przełącza Usuń, prawy przycisk zdejmuje element, Ctrl+Z / Ctrl+Y cofają i ponawiają.", "pieces.needs3D": "Włącz 3D we właściwościach mapy, aby budować z elementów.", "pieces.count": "Elementów na tej mapie: {count}"});
+Object.assign(RR_I18N_STRINGS["id"], {"pieces.detached": "Diedit manual: bangunan ini tidak lagi mengikuti denahnya. Masih bisa dipindah dan diputar sebagai satu; skala dimatikan.", "pieces.grouped": "{count} bagian yang bersentuhan dikelompokkan sebagai satu bangunan.", "pieces.rotate": "Putar", "pieces.scale": "Skala", "pieces.move": "Pindah", "pieces.moveHint": "Pindah: klik bagian dari bangunan untuk mengambil seluruh bangunan, lalu klik tempat sudutnya. Panah menggeser, R memutar, [ ] mengubah skala bangunan yang dipasang, Delete menghapus, Esc melepas.", "pieces.removeStructure": "Hapus bangunan", "pieces.notStructure": "Bukan bagian bangunan: hanya struktur yang dipasang bergerak sebagai satu.", "pieces.structureSelected": "Bangunan dipilih: {count} bagian. Klik tempat meletakkannya.", "pieces.structure": "Bangunan", "pieces.stamp": "Pasang", "pieces.stampHint": "Pilih denah lalu klik peta: tanah diratakan dan seluruh bangunan dipasang sekali jalan. Denah adalah berkas JSON di 3d/Structures.", "pieces.structureNone": "Tanpa denah", "pieces.noStructures": "Tidak ada denah di 3d/Structures", "pieces.kind.wall": "Dinding", "pieces.hint": "Pilih bagian dan material, lalu klik atau seret di peta 3D. Klik sisi balok untuk membangun di sebelahnya, klik atasnya untuk menumpuk.", "pieces.piece": "Bagian", "pieces.kind.block": "Balok", "pieces.kind.floor": "Lantai", "pieces.kind.pillar": "Pilar", "pieces.kind.stair": "Tangga", "pieces.kind.ramp": "Landai", "pieces.kind.roof": "Atap", "pieces.kind.doorway": "Pintu", "pieces.kind.window": "Jendela", "pieces.kind.fence": "Pagar", "pieces.material": "Material", "pieces.plain": "Polos", "pieces.materialsHint": "Taruh gambar yang bisa diulang di img/materials untuk dipakai di sini.", "pieces.turn": "Putar", "pieces.level": "Tingkat", "pieces.place": "Letakkan", "pieces.erase": "Hapus", "pieces.undo": "Urungkan", "pieces.redo": "Ulangi", "pieces.clear": "Hapus semua bagian", "pieces.keys": "R memutar, Q / E mengubah tingkat, X mengganti Hapus, klik kanan melepas bagian, Ctrl+Z / Ctrl+Y mengurungkan dan mengulangi.", "pieces.needs3D": "Nyalakan 3D di Properti Peta untuk membangun dengan bagian.", "pieces.count": "{count} bagian di peta ini"});
+Object.assign(RR_I18N_STRINGS["vi"], {"pieces.detached": "Đã chỉnh tay: tòa nhà này không còn theo bản vẽ. Vẫn di chuyển và xoay như một khối; tỷ lệ bị tắt.", "pieces.grouped": "Đã gộp {count} mảnh liền kề thành một tòa nhà.", "pieces.rotate": "Xoay", "pieces.scale": "Tỷ lệ", "pieces.move": "Di chuyển", "pieces.moveHint": "Di chuyển: nhấp vào một mảnh của tòa nhà để chọn cả tòa nhà, rồi nhấp vào nơi góc của nó sẽ đến. Phím mũi tên dịch, R xoay, [ ] đổi tỷ lệ tòa nhà đã đặt, Delete xóa, Esc bỏ.", "pieces.removeStructure": "Gỡ tòa nhà", "pieces.notStructure": "Không thuộc tòa nhà nào: chỉ công trình đã đặt mới di chuyển cùng nhau.", "pieces.structureSelected": "Đã chọn tòa nhà: {count} mảnh. Nhấp vào nơi đặt xuống.", "pieces.structure": "Công trình", "pieces.stamp": "Đặt", "pieces.stampHint": "Chọn một bản vẽ rồi nhấp vào bản đồ: mặt đất được san phẳng và cả tòa nhà được đặt trong một bước. Bản vẽ là tệp JSON trong 3d/Structures.", "pieces.structureNone": "Không có bản vẽ", "pieces.noStructures": "Không có bản vẽ trong 3d/Structures", "pieces.kind.wall": "Tường", "pieces.hint": "Chọn một mảnh và vật liệu, rồi nhấp hoặc kéo trên bản đồ 3D. Nhấp vào cạnh khối để xây bên cạnh, nhấp mặt trên để chồng lên.", "pieces.piece": "Mảnh", "pieces.kind.block": "Khối", "pieces.kind.floor": "Sàn", "pieces.kind.pillar": "Cột", "pieces.kind.stair": "Cầu thang", "pieces.kind.ramp": "Dốc", "pieces.kind.roof": "Mái", "pieces.kind.doorway": "Cửa", "pieces.kind.window": "Cửa sổ", "pieces.kind.fence": "Hàng rào", "pieces.material": "Vật liệu", "pieces.plain": "Trơn", "pieces.materialsHint": "Đặt ảnh lặp được vào img/materials để dùng ở đây.", "pieces.turn": "Xoay", "pieces.level": "Tầng", "pieces.place": "Đặt", "pieces.erase": "Xóa", "pieces.undo": "Hoàn tác", "pieces.redo": "Làm lại", "pieces.clear": "Gỡ tất cả mảnh", "pieces.keys": "R xoay, Q / E đổi tầng, X bật tắt Xóa, nhấp phải gỡ một mảnh, Ctrl+Z / Ctrl+Y hoàn tác và làm lại.", "pieces.needs3D": "Bật 3D trong Thuộc tính bản đồ để xây bằng mảnh.", "pieces.count": "{count} mảnh trên bản đồ này"});
+Object.assign(RR_I18N_STRINGS["th"], {"pieces.detached": "แก้ไขด้วยมือ: อาคารนี้ไม่ตามแบบแปลนอีกต่อไป ยังย้ายและหมุนทั้งหลังได้ แต่ปรับขนาดไม่ได้", "pieces.grouped": "จัดกลุ่มชิ้นส่วนที่ติดกัน {count} ชิ้นเป็นอาคารเดียว", "pieces.rotate": "หมุน", "pieces.scale": "ขนาด", "pieces.move": "ย้าย", "pieces.moveHint": "ย้าย: คลิกชิ้นส่วนของอาคารเพื่อเลือกทั้งอาคาร แล้วคลิกตำแหน่งที่มุมของมันควรอยู่ ปุ่มลูกศรขยับ R หมุน [ ] ปรับขนาดอาคารที่วางลง Delete ลบ Esc ปล่อย", "pieces.removeStructure": "ลบอาคาร", "pieces.notStructure": "ไม่ใช่ส่วนของอาคาร: เฉพาะสิ่งก่อสร้างที่วางลงเท่านั้นที่ย้ายทั้งหลังได้", "pieces.structureSelected": "เลือกอาคารแล้ว: {count} ชิ้น คลิกตำแหน่งที่จะวาง", "pieces.structure": "สิ่งก่อสร้าง", "pieces.stamp": "วางลง", "pieces.stampHint": "เลือกแบบแปลนแล้วคลิกแผนที่: พื้นจะถูกปรับให้เรียบและวางทั้งอาคารในขั้นตอนเดียว แบบแปลนเป็นไฟล์ JSON ใน 3d/Structures", "pieces.structureNone": "ไม่มีแบบแปลน", "pieces.noStructures": "ไม่มีแบบแปลนใน 3d/Structures", "pieces.kind.wall": "กำแพง", "pieces.hint": "เลือกชิ้นส่วนและวัสดุ แล้วคลิกหรือลากบนแผนที่ 3D คลิกด้านข้างของบล็อกเพื่อสร้างข้างๆ คลิกด้านบนเพื่อวางซ้อน", "pieces.piece": "ชิ้นส่วน", "pieces.kind.block": "บล็อก", "pieces.kind.floor": "พื้น", "pieces.kind.pillar": "เสา", "pieces.kind.stair": "บันได", "pieces.kind.ramp": "ทางลาด", "pieces.kind.roof": "หลังคา", "pieces.kind.doorway": "ประตู", "pieces.kind.window": "หน้าต่าง", "pieces.kind.fence": "รั้ว", "pieces.material": "วัสดุ", "pieces.plain": "เรียบ", "pieces.materialsHint": "ใส่ภาพที่ต่อกันได้ใน img/materials เพื่อใช้ที่นี่", "pieces.turn": "หมุน", "pieces.level": "ชั้น", "pieces.place": "วาง", "pieces.erase": "ลบ", "pieces.undo": "เลิกทำ", "pieces.redo": "ทำซ้ำ", "pieces.clear": "ลบชิ้นส่วนทั้งหมด", "pieces.keys": "R หมุน, Q / E เปลี่ยนชั้น, X สลับโหมดลบ, คลิกขวาเพื่อถอดชิ้นส่วน, Ctrl+Z / Ctrl+Y เลิกทำและทำซ้ำ", "pieces.needs3D": "เปิด 3D ในคุณสมบัติแผนที่เพื่อสร้างด้วยชิ้นส่วน", "pieces.count": "ชิ้นส่วนบนแผนที่นี้ {count} ชิ้น"});
+Object.assign(RR_I18N_STRINGS["tr"], {"pieces.detached": "Elle düzenlendi: bu bina artık planını izlemiyor. Yine de tek parça taşınıp döndürülür; ölçek kapalı.", "pieces.grouped": "Birbirine değen {count} parça tek bina olarak gruplandı.", "pieces.rotate": "Döndür", "pieces.scale": "Ölçek", "pieces.move": "Taşı", "pieces.moveHint": "Taşı: Bir binanın parçasına tıklayarak tüm binayı seçin, sonra köşesinin gideceği yere tıklayın. Oklar kaydırır, R döndürür, [ ] yerleştirilmiş binayı ölçekler, Delete kaldırır, Esc bırakır.", "pieces.removeStructure": "Binayı kaldır", "pieces.notStructure": "Bir binanın parçası değil: yalnızca yerleştirilmiş yapılar tek parça taşınır.", "pieces.structureSelected": "Bina seçildi: {count} parça. Bırakılacağı yere tıklayın.", "pieces.structure": "Yapı", "pieces.stamp": "Yerleştir", "pieces.stampHint": "Bir plan seçip haritaya tıklayın: zemin düzlenir ve tüm bina tek adımda yerleşir. Planlar 3d/Structures altındaki JSON dosyalarıdır.", "pieces.structureNone": "Plan yok", "pieces.noStructures": "3d/Structures içinde plan yok", "pieces.kind.wall": "Duvar", "pieces.hint": "Bir parça ve malzeme seçin, sonra 3B haritada tıklayın ya da sürükleyin. Bir bloğun yanına tıklamak yanına, üstüne tıklamak üstüne inşa eder.", "pieces.piece": "Parça", "pieces.kind.block": "Blok", "pieces.kind.floor": "Zemin", "pieces.kind.pillar": "Sütun", "pieces.kind.stair": "Merdiven", "pieces.kind.ramp": "Rampa", "pieces.kind.roof": "Çatı", "pieces.kind.doorway": "Kapı", "pieces.kind.window": "Pencere", "pieces.kind.fence": "Çit", "pieces.material": "Malzeme", "pieces.plain": "Düz", "pieces.materialsHint": "Burada kullanmak için döşenebilir görselleri img/materials klasörüne koyun.", "pieces.turn": "Döndür", "pieces.level": "Kat", "pieces.place": "Yerleştir", "pieces.erase": "Sil", "pieces.undo": "Geri al", "pieces.redo": "Yinele", "pieces.clear": "Tüm parçaları kaldır", "pieces.keys": "R döndürür, Q / E katı değiştirir, X Sil'i açıp kapatır, sağ tık bir parçayı söker, Ctrl+Z / Ctrl+Y geri alır ve yineler.", "pieces.needs3D": "Parçalarla inşa etmek için Harita Özellikleri'nde 3B'yi açın.", "pieces.count": "Bu haritada {count} parça"});
 
 // The map toolbar's media-surface toggle. Its tooltip was translated from the
 // start; the word beside the checkbox was not, so it read "Video" in all 18.

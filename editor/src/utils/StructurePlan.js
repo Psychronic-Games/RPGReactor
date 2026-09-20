@@ -1,0 +1,277 @@
+/**
+ * StructurePlan - a building described the way a person describes one.
+ *
+ * A plan names rooms as rectangles on a grid, says which rooms connect and
+ * how wide the opening is, where the stairs run, and what the roof does.
+ * From that the walls are whatever is left between rooms, every door is
+ * centred on the wall the two rooms share, windows are spaced along the
+ * outside walls where no door is, the stairwell is left open in the floor
+ * above, and the roof steps up from each eave. The result is a list of
+ * pieces (`RRMapElevation.setPiece` records) at a map position.
+ *
+ * Written to be read and written by hand and by a generator alike:
+ *
+ *   {
+ *     "name": "Manor", "size": [48, 32], "storey": 5,
+ *     "materials": { "wall": "Stone", "inner": "Plaster", "floor": "Wood", "wet": "Stone", "roof": "RoofTile", "stair": "Wood" },
+ *     "floors": [
+ *       { "rooms": { "hall": [18, 20, 29, 30], "living": [1, 17, 16, 30] },
+ *         "doors": [["hall", "outside", 4], ["hall", "living", 2]],
+ *         "wet": ["bath", "kitchen"] },
+ *       { "rooms": { ... }, "doors": [ ... ] }
+ *     ],
+ *     "stairs": [{ "floor": 0, "from": [27, 29], "dir": "north", "width": 2 }],
+ *     "roof": { "pitch": 6 },
+ *     "windows": { "every": 6, "width": 2 }
+ *   }
+ *
+ * Rooms are [x0, y0, x1, y1], inclusive, in the plan's own cells; walls
+ * are the cells no room claims, so leave one cell between rooms and one
+ * around the outside. "outside" as a door's other room is the outer wall.
+ * `validate` walks the built plan with the engine's own passability from
+ * outside the front door and says which rooms it reached.
+ */
+(function(root) {
+    'use strict';
+
+    // dx, dy, and the stair's quarter turns: rot 0 rises south, each turn is clockwise seen from above, so 1 rises west, 2 north, 3 east.
+    const DIRS = { north: [0, -1, 2], south: [0, 1, 0], west: [-1, 0, 1], east: [1, 0, 3] };
+
+    const inRoom = (rect, x, y) => x >= rect[0] && x <= rect[2] && y >= rect[1] && y <= rect[3];
+    const roomAt = (rooms, x, y) => {
+        for (const name of Object.keys(rooms)) if (inRoom(rooms[name], x, y)) return name;
+        return null;
+    };
+
+    /**
+     * The wall between two rooms (or a room and the outside): every cell of
+     * the gap between them, however thick the wall is, ordered along the
+     * wall and then through it. Rooms are neighbours when the gap between
+     * them holds no other room.
+     */
+    function sharedWall(rooms, size, a, b) {
+        const A = rooms[a];
+        if (!A) return [];
+        const [W, H] = size;
+        const clear = (x0, y0, x1, y1) => !Object.keys(rooms).some(name => { const r = rooms[name]; return !(r[2] < x0 || r[0] > x1 || r[3] < y0 || r[1] > y1); });
+        const column = (x0, x1, y0, y1) => { const cells = []; for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) cells.push([x, y]); return cells; };
+        const row = (y0, y1, x0, x1) => { const cells = []; for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) cells.push([x, y]); return cells; };
+        if (b === 'outside') {
+            if (A[3] < H - 1 && clear(A[0], A[3] + 1, A[2], H - 1)) return row(A[3] + 1, H - 1, A[0], A[2]);
+            if (A[1] > 0 && clear(A[0], 0, A[2], A[1] - 1)) return row(0, A[1] - 1, A[0], A[2]);
+            if (A[2] < W - 1 && clear(A[2] + 1, A[1], W - 1, A[3])) return column(A[2] + 1, W - 1, A[1], A[3]);
+            if (A[0] > 0 && clear(0, A[1], A[0] - 1, A[3])) return column(0, A[0] - 1, A[1], A[3]);
+            return [];
+        }
+        const B = rooms[b];
+        if (!B) return [];
+        const yLo = Math.max(A[1], B[1]), yHi = Math.min(A[3], B[3]);
+        const xLo = Math.max(A[0], B[0]), xHi = Math.min(A[2], B[2]);
+        if (yLo <= yHi) {
+            const left = A[2] < B[0] ? A : B, right = left === A ? B : A;
+            if (right[0] - left[2] >= 2 && clear(left[2] + 1, yLo, right[0] - 1, yHi)) return column(left[2] + 1, right[0] - 1, yLo, yHi);
+        }
+        if (xLo <= xHi) {
+            const top = A[3] < B[1] ? A : B, bottom = top === A ? B : A;
+            if (bottom[1] - top[3] >= 2 && clear(xLo, top[3] + 1, xHi, bottom[1] - 1)) return row(top[3] + 1, bottom[1] - 1, xLo, xHi);
+        }
+        return [];
+    }
+
+    /** The door cells: `width` cells centred along the wall, through its whole thickness. */
+    function doorCells(rooms, size, door) {
+        const [a, b, width] = door;
+        const wall = sharedWall(rooms, size, a, b);
+        if (!wall.length) return [];
+        // The wall runs along whichever axis has more distinct values.
+        const xs = new Set(wall.map(c => c[0])), ys = new Set(wall.map(c => c[1]));
+        const alongX = xs.size >= ys.size;
+        const along = Array.from(alongX ? xs : ys).sort((p, q) => p - q);
+        // Three cells (1.8 m) unless the plan says: a doorway a character
+        // walks through without brushing the posts.
+        const w = Math.max(1, Math.min(along.length, Number(width) || 3));
+        const start = Math.floor((along.length - w) / 2);
+        const chosen = new Set(along.slice(start, start + w));
+        return wall.filter(c => chosen.has(alongX ? c[0] : c[1]));
+    }
+
+    /** Build the plan's pieces at (X0, Y0). Ids run from `firstId`. */
+    function build(plan, X0 = 0, Y0 = 0, firstId = 1, group = 0) {
+        const [W, H] = plan.size;
+        const S = Number(plan.storey) > 0 ? Math.floor(plan.storey) : 5;
+        const M = Object.assign({ wall: '', inner: '', floor: '', wet: '', roof: '', stair: '' }, plan.materials || {});
+        const pieces = [];
+        let id = firstId;
+        const put = (kind, x, y, z, rot, material) => {
+            const piece = { id: id++, kind, x: X0 + x, y: Y0 + y, z, rot: rot || 0, material: material || '' };
+            if (group > 0) piece.group = group;
+            pieces.push(piece);
+        };
+        const floors = Array.isArray(plan.floors) ? plan.floors : [];
+        // Stairs: cells per step, and the cells the floor above leaves open.
+        const stairCells = [];
+        for (const stair of plan.stairs || []) {
+            const dir = DIRS[stair.dir] || DIRS.north;
+            const width = Math.max(1, Number(stair.width) || 1);
+            const floor = Number(stair.floor) || 0;
+            for (let i = 0; i < S; i++) for (let k = 0; k < width; k++) {
+                const x = stair.from[0] + dir[0] * i + (dir[1] !== 0 ? k : 0);
+                const y = stair.from[1] + dir[1] * i + (dir[0] !== 0 ? k : 0);
+                stairCells.push({ x, y, z: floor * S + i, rot: dir[2], floor });
+            }
+        }
+        const windows = plan.windows === false ? null : Object.assign({ every: 6, width: 2 }, plan.windows || {});
+        floors.forEach((level, index) => {
+            const z = index * S;
+            const rooms = level.rooms || {};
+            const wet = new Set(level.wet || []);
+            const doors = new Set();
+            for (const door of level.doors || []) for (const [x, y] of doorCells(rooms, plan.size, door)) doors.add(x + ',' + y);
+            // No slab over a stair (the stairwell) nor under one (the stair is the floor there).
+            const open = new Set(stairCells.filter(c => c.floor === index - 1 || c.floor === index).map(c => c.x + ',' + c.y));
+            // Windows along the outer walls: a pair every `every` cells, never on a door or its neighbour.
+            const windowCells = new Set();
+            if (windows) {
+                const nearDoor = (x, y) => doors.has(x + ',' + y) || doors.has((x + 1) + ',' + y) || doors.has((x - 1) + ',' + y) || doors.has(x + ',' + (y + 1)) || doors.has(x + ',' + (y - 1));
+                const along = (cells) => {
+                    for (let i = 0; i + windows.width <= cells.length; i += windows.every) {
+                        const run = cells.slice(i + Math.floor(windows.every / 2) - 1, i + Math.floor(windows.every / 2) - 1 + windows.width);
+                        if (run.length === windows.width && run.every(([x, y]) => !nearDoor(x, y) && roomAt(rooms, x, y - 1) || roomAt(rooms, x, y + 1) || roomAt(rooms, x - 1, y) || roomAt(rooms, x + 1, y))) run.forEach(([x, y]) => windowCells.add(x + ',' + y));
+                    }
+                };
+                const top = [], bottom = [], left = [], right = [];
+                for (let x = 1; x < W - 1; x++) { top.push([x, 0]); bottom.push([x, H - 1]); }
+                for (let y = 1; y < H - 1; y++) { left.push([0, y]); right.push([W - 1, y]); }
+                along(top); along(bottom); along(left); along(right);
+            }
+            for (let x = 0; x < W; x++) for (let y = 0; y < H; y++) {
+                const key = x + ',' + y;
+                if (open.has(key)) continue;
+                const room = roomAt(rooms, x, y);
+                const outer = x === 0 || x === W - 1 || y === 0 || y === H - 1;
+                if (room) { put('floor', x, y, z, 0, wet.has(room) ? M.wet : M.floor); continue; }
+                // Floor under a doorway (a threshold) and under every wall, so
+                // nothing built shows the ground through a door or a cut wall.
+                put('floor', x, y, z, 0, M.floor);
+                if (doors.has(key)) { put('doorway', x, y, z, 0, outer ? M.wall : M.inner); continue; }
+                if (windowCells.has(key)) { put('window', x, y, z, 0, M.wall); continue; }
+                put('wall', x, y, z, 0, outer ? M.wall : M.inner);
+            }
+        });
+        for (const c of stairCells) put('stair', c.x, c.y, c.z, c.rot, M.stair);
+        // Roof: ramps up from each eave for `pitch` rows, a flat top between, gables of blocks at the ends.
+        const roof = Object.assign({ pitch: 6 }, plan.roof || {});
+        const roofZ = floors.length * S;
+        const pitch = Math.max(0, Math.min(Math.floor((H - 1) / 2), Math.floor(roof.pitch)));
+        if (floors.length && roof.pitch !== null) {
+            for (let x = 0; x < W; x++) {
+                for (let i = 0; i < pitch; i++) { put('ramp', x, i, roofZ + i, 0, M.roof); put('ramp', x, H - 1 - i, roofZ + i, 2, M.roof); }
+                for (let y = pitch; y <= H - 1 - pitch; y++) put('floor', x, y, roofZ + pitch, 0, M.roof);
+            }
+            for (const gx of [0, W - 1]) for (let y = 1; y < H - 1; y++) {
+                const height = Math.min(y, H - 1 - y, pitch);
+                for (let z = roofZ; z < roofZ + height; z++) put('block', gx, y, z, 0, M.wall);
+            }
+        }
+        return pieces;
+    }
+
+    /**
+     * The same plan turned `rot` quarter turns clockwise and with its rooms
+     * `scale` times as big. Rooms, stairs and the size turn and grow; doors
+     * are between rooms and follow; windows keep their spacing per cell.
+     * Walls stay one cell between rooms, so at scale 2 they are two thick.
+     */
+    function transform(plan, rot = 0, scale = 1) {
+        const turns = ((Math.floor(rot) || 0) % 4 + 4) % 4;
+        const k = Math.max(1, Math.min(4, Math.floor(scale) || 1));
+        let out = JSON.parse(JSON.stringify(plan));
+        if (k > 1) {
+            const grow = rect => [rect[0] * k, rect[1] * k, (rect[2] + 1) * k - 1, (rect[3] + 1) * k - 1];
+            out.size = [out.size[0] * k, out.size[1] * k];
+            for (const level of out.floors || []) {
+                for (const name of Object.keys(level.rooms || {})) level.rooms[name] = grow(level.rooms[name]);
+                level.doors = (level.doors || []).map(d => [d[0], d[1], (Number(d[2]) || 2) * k]);
+            }
+            for (const stair of out.stairs || []) { stair.from = [stair.from[0] * k, stair.from[1] * k]; stair.width = (Number(stair.width) || 1) * k; }
+            if (out.windows && out.windows !== false) out.windows = { every: (out.windows.every || 6) * k, width: (out.windows.width || 2) * k };
+            if (out.roof) out.roof = Object.assign({}, out.roof, { pitch: (Number(out.roof.pitch) || 6) * k });
+        }
+        const DIR_CW = { north: 'east', east: 'south', south: 'west', west: 'north' };
+        for (let t = 0; t < turns; t++) {
+            const [W, H] = out.size;
+            const point = (x, y) => [H - 1 - y, x];
+            const rect = r => { const [ax, ay] = point(r[0], r[3]); const [bx, by] = point(r[2], r[1]); return [Math.min(ax, bx), Math.min(ay, by), Math.max(ax, bx), Math.max(ay, by)]; };
+            for (const level of out.floors || []) for (const name of Object.keys(level.rooms || {})) level.rooms[name] = rect(level.rooms[name]);
+            for (const stair of out.stairs || []) { stair.from = point(stair.from[0], stair.from[1]); stair.dir = DIR_CW[stair.dir] || 'east'; }
+            out.size = [H, W];
+        }
+        return out;
+    }
+
+    /** Where the front door is, in plan cells: the middle of the first "outside" door on floor 0. */
+    function entrance(plan) {
+        const level = (plan.floors || [])[0];
+        if (!level) return null;
+        const door = (level.doors || []).find(d => d[1] === 'outside' || d[0] === 'outside');
+        if (!door) return null;
+        const a = door[0] === 'outside' ? door[1] : door[0];
+        const cells = doorCells(level.rooms || {}, plan.size, [a, 'outside', door[2]]);
+        if (!cells.length) return null;
+        const [W, H] = plan.size;
+        // The door cell on the outer face, and the cell just beyond it.
+        const face = [[([, y]) => y === H - 1], [([, y]) => y === 0], [([x]) => x === W - 1], [([x]) => x === 0]]
+            .map(([test]) => cells.filter(test)).find(list => list.length) || cells;
+        const [x, y] = face[Math.floor(face.length / 2)];
+        const outside = y === H - 1 ? [x, y + 1] : y === 0 ? [x, y - 1] : x === W - 1 ? [x + 1, y] : [x - 1, y];
+        return { door: [x, y], outside };
+    }
+
+    /**
+     * Walk the built plan with the engine from outside the front door,
+     * carrying the walker's height as the game does; which room middles
+     * were reached, and the moves (MZ directions) to each.
+     */
+    function validate(plan, pieces, X0, Y0, mapWidth, mapHeight, Reactor3D) {
+        const R = Reactor3D || root.Reactor3D;
+        if (!R || !R.terrainBlocks) return null;
+        const map = { width: mapWidth, height: mapHeight, reactor3d: { version: 1, elevation: new Array(mapWidth * mapHeight).fill(0), pieces } };
+        const door = entrance(plan);
+        if (!door) return null;
+        const start = { x: X0 + door.outside[0], y: Y0 + door.outside[1], near: 0 };
+        const key = s => s.x + ',' + s.y + ',' + Math.round(s.near * 10);
+        const seen = new Map([[key(start), start]]);
+        const queue = [start];
+        const STEPS = [[0, -1, 8], [0, 1, 2], [-1, 0, 4], [1, 0, 6]];
+        while (queue.length) {
+            const s = queue.shift();
+            for (const [dx, dy, dir] of STEPS) {
+                const x2 = s.x + dx, y2 = s.y + dy;
+                if (x2 < 0 || y2 < 0 || x2 >= mapWidth || y2 >= mapHeight) continue;
+                if (R.terrainBlocks(map, s.x, s.y, x2, y2, s.near)) continue;
+                const next = { x: x2, y: y2, near: R.groundHeightAt(map, x2 + 0.5, y2 + 0.5, s.near), from: s, dir };
+                const k = key(next);
+                if (seen.has(k)) continue;
+                seen.set(k, next);
+                queue.push(next);
+            }
+        }
+        const S = Number(plan.storey) > 0 ? Math.floor(plan.storey) : 5;
+        const report = {};
+        (plan.floors || []).forEach((level, index) => {
+            for (const [name, rect] of Object.entries(level.rooms || {})) {
+                const tx = X0 + Math.floor((rect[0] + rect[2]) / 2), ty = Y0 + Math.floor((rect[1] + rect[3]) / 2), near = index * S + 0.1;
+                let hit = null;
+                for (const s of seen.values()) if (s.x === tx && s.y === ty && Math.abs(s.near - near) < 0.3) { hit = s; break; }
+                const moves = [];
+                for (let s = hit; s && s.from; s = s.from) moves.unshift(s.dir);
+                report[name] = hit ? { reached: true, steps: moves.length, moves } : { reached: false };
+            }
+        });
+        return { start, report, states: seen.size };
+    }
+
+    const api = { build, transform, validate, entrance, doorCells, sharedWall, DIRS };
+    root.RRStructurePlan = api;
+    if (typeof module !== 'undefined' && module.exports) module.exports = api;
+})(typeof globalThis !== 'undefined' ? globalThis : window);

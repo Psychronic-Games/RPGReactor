@@ -225,6 +225,14 @@ class RPGReactor {
             if (!this.modelPropsManager && typeof ModelPropsManager !== 'undefined') {
                 this.modelPropsManager = new ModelPropsManager(this.projectController);
             }
+            if (!this.terrainManager && typeof TerrainManager !== 'undefined') {
+                this.terrainManager = new TerrainManager(this.projectController);
+                this.projectController.terrainManager = this.terrainManager;
+            }
+            if (!this.pieceBuilderManager && typeof PieceBuilderManager !== 'undefined') {
+                this.pieceBuilderManager = new PieceBuilderManager(this.projectController);
+                this.projectController.pieceBuilderManager = this.pieceBuilderManager;
+            }
             if (this.modelPropsManager) {
                 this.projectController.modelPropsManager = this.modelPropsManager;
                 this.modelPropsManager.setMap(
@@ -707,6 +715,8 @@ class RPGReactor {
             }
             if (owner !== 'lighting') this.lightingManager?.setActive(false);
             if (owner !== 'models') this.modelPropsManager?.deactivate();
+            if (owner !== 'terrain') this.terrainManager?.deactivate();
+            if (owner !== 'pieces') this.pieceBuilderManager?.deactivate();
             if (owner !== 'events' && this.eventManager?.eventMode) this.eventManager.setEventMode(false);
             const map = this.mapEditor, palette = this.tilesetPaletteViewer;
             if (owner !== 'paint') {
@@ -717,7 +727,7 @@ class RPGReactor {
             } else {
                 // A drawing button is an explicit return to painting, even
                 // when the model tab was the last visible palette context.
-                if (palette?.currentLayer === 'M') palette.selectLayer(palette.lastPaintLayer || 'A');
+                if (palette?.currentLayer === 'M' || palette?.currentLayer === 'T' || palette?.currentLayer === 'B') palette.selectLayer(palette.lastPaintLayer || 'A');
                 if (map && !map.currentTool && !map.shadowPenMode) map.setTool('pencil');
                 this.projectController?.getRegionManager?.()?.setVisible(palette?.currentLayer === 'R');
                 this.projectController?.getObject3DManager?.()?.setVisible(palette?.currentLayer === 'O');
@@ -739,7 +749,7 @@ class RPGReactor {
             button.classList.toggle('active',active);button.setAttribute('aria-pressed',String(active));
         });
         document.querySelectorAll('.tileset-layer-tab').forEach(tab=>{
-            const active=tab.dataset.layer===this.tilesetPaletteViewer?.currentLayer && (owner==='paint'||owner==='models'&&tab.dataset.layer==='M');
+            const active=tab.dataset.layer===this.tilesetPaletteViewer?.currentLayer && (owner==='paint'||owner==='models'&&tab.dataset.layer==='M'||owner==='terrain'&&tab.dataset.layer==='T'||owner==='pieces'&&tab.dataset.layer==='B');
             tab.classList.toggle('active',active);tab.setAttribute('aria-selected',String(active));
             tab.style.backgroundColor=active?'var(--color-bg-hover)':'var(--color-bg-menubar)';
             tab.style.borderColor=active?'var(--color-accent)':'var(--color-border-input)';
@@ -880,6 +890,44 @@ class RPGReactor {
             };
             this.tilesetPaletteViewer.onModelPropsTabLeft = () => {
                 this.modelPropsManager?.deactivate();
+            };
+            // The terrain tab: brushes for a 3D map's ground, painted in the 3D view.
+            this.tilesetPaletteViewer.onTerrainTabSelected = () => {
+                const container = document.getElementById('terrain-ui-container');
+                const manager = this.terrainManager;
+                if (!container || !manager) return;
+                manager.initializeUI(container);
+                if (this.eventManager && this.eventManager.eventMode) {
+                    this.eventManager.setEventMode(false);
+                    this.mapEditor?.setEnabled(true);
+                    this.mapEditor?.setupMapInteraction();
+                    document.getElementById('toolbar-event-manager-btn')?.classList.remove('active');
+                }
+                manager.activate();
+                this.projectController.getRegionManager()?.setVisible(false);
+                this.projectController.getObject3DManager()?.setVisible(false);
+            };
+            this.tilesetPaletteViewer.onTerrainTabLeft = () => {
+                this.terrainManager?.deactivate();
+            };
+            // The pieces tab: the 3D tileset, laid in the 3D view.
+            this.tilesetPaletteViewer.onPiecesTabSelected = () => {
+                const container = document.getElementById('pieces-ui-container');
+                const manager = this.pieceBuilderManager;
+                if (!container || !manager) return;
+                manager.initializeUI(container);
+                if (this.eventManager && this.eventManager.eventMode) {
+                    this.eventManager.setEventMode(false);
+                    this.mapEditor?.setEnabled(true);
+                    this.mapEditor?.setupMapInteraction();
+                    document.getElementById('toolbar-event-manager-btn')?.classList.remove('active');
+                }
+                manager.activate();
+                this.projectController.getRegionManager()?.setVisible(false);
+                this.projectController.getObject3DManager()?.setVisible(false);
+            };
+            this.tilesetPaletteViewer.onPiecesTabLeft = () => {
+                this.pieceBuilderManager?.deactivate();
             };
 
             // Set up tileset layer selection callback - disable event mode when switching to tileset mode

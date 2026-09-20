@@ -210,7 +210,7 @@ test('a character stands on the ground, not on what was built there', () => {
     // And where the sprite is drawn is where `screenX`/`screenY` say it is,
     // or every plugin that places an overlay on a character draws it somewhere
     // the character is not.
-    assert.match(objects, /const ground = Reactor3D\.elevationAt\(/);
+    assert.match(objects, /const ground = Reactor3D\.characterGround\(\$dataMap, this\);/);
 });
 
 test('the above pass says where it sorts to', () => {

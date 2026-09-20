@@ -377,7 +377,13 @@ class MapEditor3D {
             this._rebuildTimer = null;
             this.rebuild().catch(error => this.fail(error));
         };
-        this._onMapEdited = () => {
+        this._onMapEdited = event => {
+            // The terrain brush says what it moved; the vertices are already
+            // there and are lifted in place. A scene built before the map
+            // had a terrain grid has no such vertices and rebuilds once.
+            if (event?.detail?.terrain && this.updateTerrainInPlace(event.detail.region)) return;
+            // Pieces are laid down again on their own; the rest of the scene stays.
+            if (event?.detail?.pieces && this.updatePiecesInPlace()) return;
             const since = Date.now() - (this._lastRebuildAt || 0);
             if (since >= REBUILD_INTERVAL) {
                 clearTimeout(this._rebuildTimer);
@@ -753,8 +759,11 @@ class MapEditor3D {
         // Loaded before the scene is built, because building it is synchronous
         // and a parallax that arrives afterwards would arrive to no scene.
         const parallaxes = await this.loadParallaxes(mapData);
+        const materials = await this.loadMaterials(mapData);
         if (!this.rebuildIsCurrent(request, renderer)) return false;
 
+        // A rebuilt sky would start its drift over; carry the old one's on.
+        const skyOffset = this.mapScene?.skyOffset?.() || null;
         this.clearScene();
         this.mapScene = new Reactor3D.MapScene(mapData, bitmaps, {
             flags: tileset.flags,
@@ -764,9 +773,12 @@ class MapEditor3D {
             // running in the editor, so the pictures come off disk instead —
             // without which a parallax-mapped map previews as its bare tile
             // layers, which on a parallax map is very close to nothing.
-            loadParallax: name => parallaxes[name] || null
+            loadParallax: name => parallaxes[name] || null,
+            // The pieces' material images, off disk the same way.
+            loadMaterial: name => materials[name] || null
         });
         this.mapScene.setPass('all');
+        if (skyOffset) this.mapScene.setSkyOffset?.(skyOffset);
         this.applyAtmosphere(mapData);
         this.buildGrid(mapData);
         this.buildHoverCell();
@@ -1309,7 +1321,9 @@ class MapEditor3D {
         const eventZ = Reactor3D.eventZAt ? Reactor3D.eventZAt(mapData, event.id) : 0;
         const elevation = (facade
             ? facade.height + facade.lift
-            : Reactor3D.elevationAt(mapData, event.x, event.y)) + eventZ;
+            : Reactor3D.groundHeightAt
+                ? Reactor3D.groundHeightAt(mapData, event.x + 0.5, event.y + 0.5)
+                : Reactor3D.elevationAt(mapData, event.x, event.y)) + eventZ;
         const z = facade ? facade.z : event.y + 0.5;
 
         // A flat event lies on the ground; everything else stands on it.
@@ -1469,6 +1483,7 @@ class MapEditor3D {
      */
     buildHoverCell() {
         if (!this.mapScene) return;
+        this.terrainRing = null;
         const points = [0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 0];
         const geometry = new THREE.BufferGeometry();
         geometry.setAttribute('position',
@@ -1480,6 +1495,241 @@ class MapEditor3D {
         this.hoverCell.renderOrder = 998;
         this.hoverCell.visible = false;
         this.mapScene.scene().add(this.hoverCell);
+    }
+
+    /**
+     * The terrain brush's ring: a circle of the brush's radius laid on the
+     * ground, each point at the ground's own height so it drapes over a hill.
+     * Shown while the terrain tab is up and the pointer is over the map.
+     */
+    /**
+     * Bend the scene through the changed terrain without rebuilding it:
+     * the runtime re-lifts the vertices, the pick trees follow, and the
+     * things standing on the ground are set back down on it.
+     */
+    updateTerrainInPlace(region) {
+        const mapData = this.currentMap();
+        if (!mapData || !this.mapScene?.updateTerrain) return false;
+        const changed = this.mapScene.updateTerrain(mapData, region || null);
+        if (!changed) return false;
+        if (typeof RRMeshBvh !== 'undefined' && RRMeshBvh.refit) {
+            for (const geometry of changed) RRMeshBvh.refit(geometry);
+        }
+        const manager = this.propsManager?.();
+        for (const object of this.propGroup?.children || []) {
+            const prop = manager?.prop?.(object.userData?.propId);
+            if (prop) this.placeProp(object, prop, mapData);
+        }
+        this.syncPropRings?.();
+        for (const child of this.eventGroup?.children || []) {
+            if (child.userData?.event && child.userData.box) this.placeEvent(child);
+        }
+        this._lastActiveAt = performance.now();
+        return true;
+    }
+
+    pieceManager() {
+        return this.projectController?.pieceBuilderManager || window.reactor?.pieceBuilderManager || null;
+    }
+
+    canEditPieces() {
+        if (this.projectController?.mediaSurfacePreviewManager?.authoring) return false;
+        return !!this.pieceManager()?.active;
+    }
+
+    /**
+     * The material images the map's pieces wear, plus the one chosen in the
+     * panel, off disk once each and kept by name.
+     */
+    async loadMaterials(mapData) {
+        const projectPath = this.projectPath();
+        if (!projectPath || !this.path || typeof RRMapElevation === 'undefined') return {};
+        const names = new Set(RRMapElevation.pieceMaterials ? RRMapElevation.pieceMaterials(mapData) : []);
+        const chosen = this.pieceManager()?.material;
+        if (chosen) names.add(chosen);
+        if (!names.size) return {};
+        if (!this.materialImages) this.materialImages = {};
+        const directory = this.path.join(projectPath, 'img', 'materials');
+        const loaded = {};
+        const pending = [];
+        for (const name of names) {
+            if (!name || loaded[name]) continue;
+            const cached = this.materialImages[name];
+            if (cached) { loaded[name] = cached; continue; }
+            const imageUrl = typeof RRAssetFiles !== 'undefined' ? RRAssetFiles.imageUrlFor(directory, name) : '';
+            if (!imageUrl) continue;
+            pending.push(new Promise(resolve => {
+                const image = new Image();
+                image.onload = () => {
+                    const bitmap = { image, width: image.naturalWidth, height: image.naturalHeight };
+                    this.materialImages[name] = bitmap;
+                    loaded[name] = bitmap;
+                    resolve();
+                };
+                image.onerror = () => resolve();
+                image.src = imageUrl;
+            }));
+        }
+        if (pending.length) await Promise.all(pending);
+        return loaded;
+    }
+
+    /** Lay the pieces down again without a rebuild; true when the scene can. */
+    updatePiecesInPlace() {
+        const mapData = this.currentMap();
+        const scene = this.mapScene;
+        if (!mapData || !scene?.updatePieces) return false;
+        const request = this._rebuildGeneration;
+        this.loadMaterials(mapData).then(materials => {
+            if (this.mapScene !== scene || this._rebuildGeneration !== request) return;
+            scene.updatePieces(mapData, name => materials[name] || null);
+            this._lastActiveAt = performance.now();
+        }).catch(error => console.error('The pieces could not be laid down again.', error));
+        return true;
+    }
+
+    /** The outward normal of one triangle of a mesh whose geometry is in world units. */
+    triangleNormal(mesh, triangle) {
+        const position = mesh?.geometry?.attributes?.position;
+        if (!position || !Number.isInteger(triangle)) return null;
+        const index = mesh.geometry.index ? mesh.geometry.index.array : null;
+        const corner = k => index ? index[triangle * 3 + k] : triangle * 3 + k;
+        const a = new THREE.Vector3().fromBufferAttribute(position, corner(0));
+        const b = new THREE.Vector3().fromBufferAttribute(position, corner(1));
+        const c = new THREE.Vector3().fromBufferAttribute(position, corner(2));
+        return b.sub(a).cross(c.sub(a)).normalize();
+    }
+
+    /**
+     * Where a piece would go for the pointer: the cell and level under it.
+     * The top of a piece means the level above it (a brick on a brick); the
+     * side of a piece means the cell beyond that side at the same level (a
+     * brick beside a brick); the ground means level 0. The panel's level
+     * raises that floor for building in the air. For `erase`, the piece
+     * pointed at itself.
+     */
+    pieceTargetAt(clientX, clientY, options = {}) {
+        const mapData = this.currentMap();
+        if (!mapData || !this.mapScene || !this.camera || !this.canvas || typeof Reactor3D === 'undefined') return null;
+        const rect = this.canvas.getBoundingClientRect();
+        if (!rect.width || !rect.height) return null;
+        this._raycaster = this._raycaster || new THREE.Raycaster();
+        this._raycaster.setFromCamera(new THREE.Vector2(
+            ((clientX - rect.left) / rect.width) * 2 - 1,
+            -((clientY - rect.top) / rect.height) * 2 + 1
+        ), this.camera);
+        const hit = this.raycastMapMeshes();
+        let point = hit ? hit.point : null;
+        if (!point) {
+            const ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+            point = this._raycaster.ray.intersectPlane(ground, new THREE.Vector3());
+        }
+        if (!point) return null;
+        const manager = this.pieceManager();
+        const erase = !!options.erase || manager?.mode === 'erase';
+        const onPiece = !!(hit && hit.object?.userData?.pieces);
+        const normal = onPiece ? this.triangleNormal(hit.object, hit.triangle) : null;
+        const top = !!(normal && normal.y > 0.5);
+        const side = !!(normal && Math.abs(normal.y) <= 0.5);
+        let x = Math.floor(point.x), y = Math.floor(point.z);
+        // A side face is on the cell's edge: placing goes to the cell beyond
+        // it, erasing and selecting to the cell the face belongs to.
+        if (side) { const into = erase ? -0.5 : 0.5; x = Math.floor(point.x + normal.x * into); y = Math.floor(point.z + normal.z * into); }
+        x = Math.max(0, Math.min(mapData.width - 1, x));
+        y = Math.max(0, Math.min(mapData.height - 1, y));
+        const base = Reactor3D.pieceBaseAt(mapData, x, y);
+        const rel = point.y - base;
+        let z;
+        if (erase) z = top ? Math.max(0, Math.round(rel) - 1) : Math.max(0, Math.floor(rel + 0.02));
+        else z = Math.max(manager?.level || 0, top ? Math.round(rel) : Math.max(0, Math.floor(rel + 0.02)));
+        const max = RRMapElevation?.PIECE_MAX_LEVEL ?? 30;
+        return { x, y, z: Math.min(max, z) };
+    }
+
+    /** The chosen piece, translucent, where it would land. */
+    updatePieceGhost(target) {
+        const manager = this.pieceManager();
+        const mapData = this.currentMap();
+        if (!this.canEditPieces() || !target || !this.mapScene || !manager || !mapData) { this.hidePieceGhost(); return; }
+        const erase = manager.mode === 'erase';
+        const bounds = manager.mode === 'move' ? manager.selectedGroupBounds() : null;
+        const stamp = manager.mode === 'stamp' ? manager.structurePlan() : bounds ? { size: [bounds.x1 - bounds.x0 + 1, bounds.y1 - bounds.y0 + 1] } : null;
+        if (manager.mode === 'move' && !bounds) { this.hidePieceGhost(); return; }
+        const key = stamp ? (bounds ? 'move:' + manager.selectedGroup : 'stamp:' + manager.structure) : (erase ? 'erase' : manager.kind) + ':' + manager.rot;
+        if (!this.pieceGhost || this.pieceGhost.userData.key !== key) {
+            this.hidePieceGhost(true);
+            // A plan's ghost is its footprint: a slab the size of the plan.
+            const geometry = stamp
+                ? new THREE.BoxGeometry(stamp.size[0], 0.3, stamp.size[1]).translate(stamp.size[0] / 2, 0.15, stamp.size[1] / 2)
+                : Reactor3D.pieceGeometry([{ id: 0, kind: erase ? 'block' : manager.kind, x: 0, y: 0, z: 0, rot: manager.rot, material: '' }], null);
+            const material = new THREE.MeshBasicMaterial({ color: erase ? 0xff6b6b : bounds ? 0x7dff9a : stamp ? 0xffd166 : 0x7fd8ff, transparent: true, opacity: erase ? 0.35 : 0.5, depthWrite: false });
+            this.pieceGhost = new THREE.Mesh(geometry, material);
+            this.pieceGhost.renderOrder = 998;
+            this.pieceGhost.userData.key = key;
+            this.mapScene.scene().add(this.pieceGhost);
+        }
+        const base = Reactor3D.pieceBaseAt(mapData, target.x, target.y);
+        if (stamp) {
+            const x = Math.max(0, Math.min(mapData.width - stamp.size[0], target.x)), y = Math.max(0, Math.min(mapData.height - stamp.size[1], target.y));
+            this.pieceGhost.position.set(x, base, y);
+        } else this.pieceGhost.position.set(target.x, base + target.z, target.y);
+        this.pieceGhost.visible = true;
+        this._lastGhostTarget = target;
+        this._lastActiveAt = performance.now();
+    }
+
+    /** The panel changed piece, turn or mode: the ghost follows where it stood. */
+    refreshPieceGhost() {
+        if (this._lastGhostTarget) this.updatePieceGhost(this._lastGhostTarget);
+    }
+
+    hidePieceGhost(dispose = false) {
+        if (!this.pieceGhost) return;
+        if (dispose) {
+            this.pieceGhost.parent?.remove(this.pieceGhost);
+            this.pieceGhost.geometry.dispose();
+            this.pieceGhost.material.dispose();
+            this.pieceGhost = null;
+        } else {
+            this.pieceGhost.visible = false;
+        }
+        this._lastActiveAt = performance.now();
+    }
+
+    buildTerrainRing() {
+        if (!this.mapScene || this.terrainRing) return;
+        const segments = 64; // points around the ring
+        const geometry = new THREE.BufferGeometry();
+        geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array((segments + 1) * 3), 3));
+        this.terrainRing = new THREE.Line(geometry, new THREE.LineBasicMaterial({
+            color: 0x7fd8ff, transparent: true, opacity: 0.95, depthTest: false
+        }));
+        this.terrainRing.renderOrder = 999;
+        this.terrainRing.visible = false;
+        this.mapScene.scene().add(this.terrainRing);
+    }
+
+    updateTerrainRing(point) {
+        const mapData = this.currentMap();
+        if (!this.canEditTerrain() || !point || !mapData) {
+            if (this.terrainRing) this.terrainRing.visible = false;
+            return;
+        }
+        if (!this.terrainRing) this.buildTerrainRing();
+        if (!this.terrainRing) return;
+        const radius = this.terrainManager()?.radius || 3;
+        const positions = this.terrainRing.geometry.attributes.position;
+        const segments = positions.count - 1;
+        const cx = point.x + 0.5, cz = point.y + 0.5;
+        for (let i = 0; i <= segments; i++) {
+            const angle = (i / segments) * Math.PI * 2;
+            const x = cx + Math.cos(angle) * radius, z = cz + Math.sin(angle) * radius;
+            positions.setXYZ(i, x, Reactor3D.groundHeightAt(mapData, x, z) + 0.06, z);
+        }
+        positions.needsUpdate = true;
+        this.terrainRing.geometry.computeBoundingSphere();
+        this.terrainRing.visible = true;
+        this._lastActiveAt = performance.now();
     }
 
     /** How many cells the brush in hand covers, for sizing the outline. */
@@ -1624,6 +1874,15 @@ class MapEditor3D {
         return !!this.propsManager()?.active;
     }
 
+    terrainManager() {
+        return this.projectController?.terrainManager || window.reactor?.terrainManager || null;
+    }
+
+    canEditTerrain() {
+        if (this.projectController?.mediaSurfacePreviewManager?.authoring) return false;
+        return !!this.terrainManager()?.active;
+    }
+
     buildProps(mapData, request = this._rebuildGeneration) {
         this.disposeProps();
         if (!this.mapScene || typeof RREventPreviewModels === 'undefined' || !Reactor3D.normalizeModelSpec) return;
@@ -1664,7 +1923,10 @@ class MapEditor3D {
     }
 
     placeProp(object, prop, mapData = this.currentMap()) {
-        const elevation = Reactor3D.elevationAt(mapData, Math.round(prop.x), Math.round(prop.y));
+        // The ground under the prop's foot: the cell's elevation plus the terrain's rise there.
+        const elevation = Reactor3D.groundHeightAt
+            ? Reactor3D.groundHeightAt(mapData, prop.x + 0.5, prop.y + 0.5)
+            : Reactor3D.elevationAt(mapData, Math.round(prop.x), Math.round(prop.y));
         object.position.set(prop.x + 0.5, elevation + prop.z, prop.y + 0.5);
         if (object.userData.pickBox) object.userData.pickBox.setFromObject(object);
     }
@@ -2817,7 +3079,7 @@ class MapEditor3D {
         }
         this.billboards = [];
         this.labels = [];
-        for (const key of ['grid', 'hoverCell']) {
+        for (const key of ['grid', 'hoverCell', 'pieceGhost']) {
             const mesh = this[key];
             if (!mesh) continue;
             mesh.geometry.dispose();
@@ -2875,6 +3137,30 @@ class MapEditor3D {
             // the camera moves, and the raycast is not free.
             this.seatPivot();
 
+            // The pieces tool: a left click lays the chosen piece where the
+            // pointer stands, and a drag lays one on every cell it crosses.
+            if (event.button === 0 && !event.shiftKey && !event.ctrlKey && !event.altKey && this.canEditPieces()) {
+                const target = this.pieceTargetAt(event.clientX, event.clientY);
+                if (target && this.pieceManager().mode === 'move') {
+                    // First click picks the structure under the pointer; the next sets it down.
+                    this.pointer.pan = false;
+                    this.pointer.propHold = true;
+                    const manager = this.pieceManager();
+                    if (manager.selectedGroup) manager.moveSelectedTo(target.x, target.y);
+                    else manager.selectGroupAt(this.pieceTargetAt(event.clientX, event.clientY, { erase: true }) || target);
+                } else if (target && this.pieceManager().mode === 'stamp') {
+                    // A whole plan, once, where the click lands.
+                    this.pointer.pan = false;
+                    this.pointer.propHold = true;
+                    this.pieceManager().stampAt(target.x, target.y);
+                } else if (target) {
+                    this.pointer.pieces = true;
+                    this.pointer.pan = false;
+                    this.pieceManager().beginStroke(target);
+                    this.updatePieceGhost(target);
+                }
+            }
+
             // A left drag paints when the palette has tiles selected, exactly
             // as it does on the 2D canvas, and orbits when it does not. Holding
             // Ctrl orbits regardless, for turning the view without clearing the
@@ -2888,11 +3174,23 @@ class MapEditor3D {
                 }
             }
 
+            // With the terrain tab up: a left drag shapes the ground under the
+            // pointer. Ctrl still orbits.
+            if (event.button === 0 && !event.shiftKey && !event.ctrlKey && !event.altKey
+                && !this.pointer.paint && this.canEditTerrain()) {
+                const point = this.groundPointAt(event.clientX, event.clientY);
+                if (point) {
+                    this.pointer.terrain = true;
+                    this.terrainManager().beginStroke(point);
+                    if (this.canvas) this.canvas.style.cursor = 'crosshair';
+                }
+            }
+
             // With the props tab up: a ring turns the selected prop, a prop
             // is picked up and carried freely, and the bare ground takes a
             // new prop. Ctrl still orbits.
             if (event.button === 0 && !event.shiftKey && !event.ctrlKey && !event.altKey
-                && !this.pointer.paint && this.canEditProps()) {
+                && !this.pointer.paint && !this.pointer.terrain && this.canEditProps()) {
                 const manager = this.propsManager();
                 const arrow = this.selectedPropId && this.propArrows && typeof RRAxisArrows3D !== 'undefined' && this.canvas
                     ? RRAxisArrows3D.pick(THREE, this.propArrows, this.camera, this.canvas.getBoundingClientRect(), event.clientX, event.clientY)
@@ -2971,6 +3269,11 @@ class MapEditor3D {
             const dy = event.clientY - this.pointer.y;
             this.pointer.x = event.clientX;
             this.pointer.y = event.clientY;
+            if (this.pointer.pieces) {
+                const target = this.pieceTargetAt(event.clientX, event.clientY);
+                if (target) { this.pieceManager()?.paintAt(target); this.updatePieceGhost(target); }
+                return;
+            }
             if (this.pointer.paint) {
                 const tile = this.tileAt(event.clientX, event.clientY);
                 if (tile) {
@@ -2981,6 +3284,9 @@ class MapEditor3D {
                     // "nothing happened" from "already at that height".
                     window.reactor?.updateMapCoordinates?.(tile.x, tile.y);
                 }
+            } else if (this.pointer.terrain) {
+                const point = this.groundPointAt(event.clientX, event.clientY);
+                if (point) { this.terrainManager()?.paintAt(point); this.updateTerrainRing(point); }
             } else if (this.pointer.propArrow) {
                 this.dragPropAlongAxis(this.pointer.propArrow, event.clientX, event.clientY);
             } else if (this.pointer.propRing) {
@@ -3024,6 +3330,15 @@ class MapEditor3D {
                 this.endPaint();
                 return;
             }
+            if (drag && drag.pieces) {
+                this.pieceManager()?.endStroke();
+                return;
+            }
+            if (drag && drag.terrain) {
+                this.terrainManager()?.endStroke();
+                if (this.canvas) this.canvas.style.cursor = '';
+                return;
+            }
             if (!drag || drag.pan || drag.look) return;
             if (drag.propHold) {
                 this.finishPropDrag();
@@ -3063,6 +3378,27 @@ class MapEditor3D {
             if (event.ctrlKey || event.altKey) return;
             const drag = this.pointer;
             if (drag && Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) > 4) return;
+
+            // With the pieces tool up, a right-click pulls off the piece under
+            // the pointer, the way a brick comes off a model.
+            if (this.canEditPieces()) {
+                const manager = this.pieceManager();
+                const target = this.pieceTargetAt(event.clientX, event.clientY, { erase: true });
+                if (target) manager.removeAt(target);
+                return;
+            }
+            // With the models tool up, a right-click lets go of the selected
+            // model — on the model or on the ground alike. Placing one
+            // selects it, and the panel's Deselect button was the only way
+            // back to placing the next.
+            if (this.canEditProps()) {
+                const manager = this.propsManager();
+                if (manager?.selectedId) {
+                    manager.select(null, { fromThree: true });
+                    this.selectProp(null);
+                }
+                return;
+            }
             if (!this.canSelectEvents()) return;
 
             const cube = this.eventAt(event.clientX, event.clientY);
@@ -3342,7 +3678,11 @@ class MapEditor3D {
      * pointer move costs one cast rather than one per question.
      */
     updateHover(clientX, clientY, tile = this.tileAt(clientX, clientY)) {
-        this.updateHoverCell(tile);
+        this.updateHoverCell(this.canEditTerrain() ? null : tile);
+        if (this.canEditTerrain()) this.updateTerrainRing(this.groundPointAt(clientX, clientY));
+        else if (this.terrainRing) this.terrainRing.visible = false;
+        if (this.canEditPieces()) this.updatePieceGhost(this.pieceTargetAt(clientX, clientY));
+        else this.hidePieceGhost();
         if (!this.canvas) return;
         if (this.canEditProps()) {
             // The prop pick (a box per prop) is throttled to 30 Hz; the
@@ -3677,6 +4017,9 @@ class MapEditor3D {
     previewActive(now) {
         if (this.projectController?.mediaSurfacePreviewManager?.previewActive?.()) return true;
         if (this.flying()) return true;
+        // A drifting sky is a moving picture: drawn at the idle rate it steps.
+        const sky = this.mapScene?._sky?.userData?.sky;
+        if (sky && (sky.driftX || sky.driftY)) return true;
         // A playing effect is a moving picture: the quad takes a new frame
         // of it only when this view renders, so the idle rate would show it
         // at ten frames a second.
@@ -3704,12 +4047,17 @@ class MapEditor3D {
         // a light off the side of *this* viewport is skipped here too.
         if (typeof Reactor3D !== 'undefined') {
             Reactor3D.cullCamera = this.camera;
+            // The cull frustum is rebuilt once per stamped frame; the game
+            // stamps with Graphics, which this view has none of.
+            Reactor3D.cullFrame = (Reactor3D.cullFrame || 0) + 1;
             // Shadows spend their moving-caster rows around the eye: here
             // that is the orbit target, not a camera hung above the map.
             if (Reactor3D.Shadows) Reactor3D.Shadows.focus = () => this.view && this.view.target;
         }
         this.animateAutotiles(now);
         this.animateEventPreviews(now);
+        // The sky stands around the editor's camera and drifts at the game's frame rate.
+        this.mapScene.updateSky?.(this.camera, now / (1000 / 60));
         this.pickPropLods();
         this.projectController?.mediaSurfacePreviewManager?.updateThree?.();
         // Lights are map content: feed the compositor on every drawn frame,
