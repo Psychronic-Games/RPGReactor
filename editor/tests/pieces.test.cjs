@@ -479,8 +479,8 @@ test('a structure plan builds rooms, walls, doors on shared walls, a stairwell a
     assert.match(managerSource, /const shaped = SP\.transform\(plan, record\.rot, record\.scale\);/);
     assert.match(managerSource, /elevation\.relocatePropsOff\(map, X0, Y0, W, H\);/);
     const report = SP.validate(plan, pieces, 10, 10, 40, 40, R);
-    assert.deepEqual(Object.fromEntries(Object.entries(report.report).map(([k, v]) => [k, v.reached])), { hall: true, kitchen: true, landing: true, bedroom: true }, 'every room on both floors is walked to from the front door');
-    assert.ok(report.report.bedroom.steps > report.report.landing.steps);
+    assert.deepEqual(Object.fromEntries(Object.entries(report.report).map(([k, v]) => [k, v.reached])), { hall: true, kitchen: true, 'landing (2)': true, 'bedroom (2)': true }, 'every room on both floors is walked to from the front door');
+    assert.ok(report.report['bedroom (2)'].steps > report.report['landing (2)'].steps);
     // A plan whose rooms do not touch has no door between them, and the walk says so.
     const broken = JSON.parse(JSON.stringify(plan)); broken.floors[0].doors = [['hall', 'outside', 2]];
     const walk = SP.validate(broken, SP.build(broken, 0, 0), 0, 0, 30, 30, R);

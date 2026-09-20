@@ -57,7 +57,7 @@ fractional tiles for models.
   only: the opening is the whole cell, tile two side by side for a door),
   `window` (a sill and a header), `fence`.
 - `x, y`: the cell. `z`: the level the piece's foot stands at, in tiles
-  above the ground. `rot`: quarter turns clockwise seen from above; `0`
+  above the ground, up to 120 (twenty-four storeys of five). `rot`: quarter turns clockwise seen from above; `0`
   rises or faces south.
 - `material`: a name under `img/materials` without extension, or `""` for
   plain grey.

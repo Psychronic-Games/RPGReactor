@@ -630,7 +630,7 @@
      * new one there replaces the old.
      */
     const PIECE_KINDS = ['wall', 'block', 'floor', 'pillar', 'stair', 'ramp', 'roof', 'doorway', 'window', 'fence'];
-    const PIECE_MAX_LEVEL = 30;
+    const PIECE_MAX_LEVEL = 120;
     const normalizePiece = (raw, mapData) => {
         if (!raw || typeof raw !== 'object' || !PIECE_KINDS.includes(raw.kind)) return null;
         const x = Math.floor(Number(raw.x)), y = Math.floor(Number(raw.y));

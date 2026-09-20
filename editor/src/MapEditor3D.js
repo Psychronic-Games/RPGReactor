@@ -1687,7 +1687,7 @@ class MapEditor3D {
         let z;
         if (erase) z = top ? Math.max(0, Math.round(rel) - 1) : Math.max(0, Math.floor(rel + 0.02));
         else z = Math.max(manager?.level || 0, top ? Math.round(rel) : Math.max(0, Math.floor(rel + 0.02)));
-        const max = RRMapElevation?.PIECE_MAX_LEVEL ?? 30;
+        const max = RRMapElevation?.PIECE_MAX_LEVEL ?? 120;
         return { x, y, z: Math.min(max, z) };
     }
 

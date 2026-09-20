@@ -42,6 +42,7 @@ Development cycle in progress. Session detail lives in the [handoff](docs/HANDOF
 
 ### Fixed
 
+- **A tower keeps its top.** Pieces could stand no higher than level 30, so a plan past six storeys lost its upper floors and roof to the store's clamp without a word. The cap is 120 levels, twenty-four storeys, in the game and the editor alike, and the walk report tells same-named rooms on different floors apart.
 - **The 3D-B tab no longer lights the tileset's B sheet.** The pieces tab was keyed by the same letter as the tileset's second sheet, so picking either lit both, claimed the pieces tool, and showed sheet B while a building was being laid. The pieces tab has its own key now.
 - **No band of floorboard round the foot of a building.** A plan lays a floor slab under every wall so a doorway has a threshold, and the slab's edges showed as a strip of the floor material along the outside of every wall at ground and at each storey. A slab inside a wall's cell now shows no face at all, and slabs side by side share no seam, which also draws a large floor in a third of the triangles.
 - **The ceiling is there when you look up from inside.** The cut that takes the roof off the building you stand in applied from every camera, so first person and a low third-person orbit saw sky through the room. The cut now applies only from a camera above it.

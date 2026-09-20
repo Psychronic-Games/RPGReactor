@@ -433,7 +433,8 @@
                     for (const s of seen.values()) if (s.x === tx && s.y === ty && Math.abs(s.near - near) < 0.3) { hit = s; break; }
                     const moves = [];
                     for (let s = hit; s && s.from; s = s.from) moves.unshift(s.dir);
-                    report[prefix + name] = hit ? { reached: true, steps: moves.length, moves } : { reached: false };
+                    // A tower calls every floor's room by the same name: the report tells the floors apart.
+                    report[prefix + (index ? name + ' (' + (index + 1) + ')' : name)] = hit ? { reached: true, steps: moves.length, moves } : { reached: false };
                 }
             });
             for (const part of target.parts || []) {

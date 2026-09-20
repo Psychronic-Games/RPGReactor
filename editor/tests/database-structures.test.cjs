@@ -200,3 +200,21 @@ test('drawing on the plan: a drag makes a room, a drag moves or resizes it, a cl
     editor.removeRoom(first);
     assert.deepEqual(Object.keys(floor.rooms), []);
 });
+
+test('a tower of eight floors is stored whole and walked to its top', () => {
+    // PIECE_MAX_LEVEL once stopped at 30: a plan past six storeys lost its top
+    // rows to the store's clamp, and the walk failed for a plan that was right.
+    const { DatabaseStructureEditor: E, RRStructurePlan: SP } = loadEditor();
+    const Reactor3D = require(path.join(repoRoot, 'runtime', 'reactor_3d.js'));
+    const floors = [];
+    for (let i = 0; i < 8; i++) floors.push({ rooms: { room: [1, 1, 8, 8] }, doors: i === 0 ? [['room', 'outside', 3]] : [] });
+    const stairs = [];
+    for (let i = 0; i < 7; i++) stairs.push({ floor: i, from: [7, 7], dir: 'north', width: 1 });
+    const plan = E.normalizePlan({ name: 'Tower', size: [10, 10], storey: 5, floors, stairs, roof: { pitch: 2 }, windows: { every: 4, width: 1 } });
+    const report = E.report(plan, () => null, Reactor3D);
+    assert.ok(Reactor3D.PIECE_MAX_LEVEL >= 8 * 5 + 2, 'the level cap clears eight storeys and a roof');
+    assert.equal(Math.max(...report.built.map(piece => piece.z)), 42, 'the roof ridge stands at its built height');
+    assert.deepEqual([...report.missing], [], 'every floor is reached');
+    assert.deepEqual([...report.reached].sort(), ['room', 'room (2)', 'room (3)', 'room (4)', 'room (5)', 'room (6)', 'room (7)', 'room (8)'], 'floors that share a room name are told apart');
+    assert.equal(SP.build(plan, 0, 0, 1, 0, null).every(piece => piece.z <= Reactor3D.PIECE_MAX_LEVEL), true);
+});

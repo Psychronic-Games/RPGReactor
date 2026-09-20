@@ -519,7 +519,7 @@ class PieceBuilderManager {
     setMaterial(name) { this.material = String(name || ''); this._syncPanel(); }
     turn(steps = 1) { this.rot = ((this.rot + steps) % 4 + 4) % 4; this._syncPanel(); this._ghostChanged(); }
     setLevel(level) {
-        const max = this.elevation()?.PIECE_MAX_LEVEL ?? 30;
+        const max = this.elevation()?.PIECE_MAX_LEVEL ?? 120;
         this.level = Math.max(0, Math.min(max, Math.floor(Number(level)) || 0));
         this._syncPanel();
         this._ghostChanged();

@@ -163,7 +163,8 @@ Reactor3D.displaceByTerrain = function(built, mapData) {
 // through the same rise rule the terrain uses.
 
 Reactor3D.PIECE_KINDS = ["wall", "block", "floor", "pillar", "stair", "ramp", "roof", "doorway", "window", "fence"];
-Reactor3D.PIECE_MAX_LEVEL = 30;
+// Levels a piece may stand at: 24 storeys of five tiles, so a tower plan is never cut short by the store.
+Reactor3D.PIECE_MAX_LEVEL = 120;
 Reactor3D.PIECE_FLOOR_THICKNESS = 0.1;
 /**
  * A storey, in tiles. The bundled characters stand three tiles tall, a
