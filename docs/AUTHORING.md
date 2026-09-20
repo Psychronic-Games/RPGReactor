@@ -56,7 +56,11 @@ fractional tiles for models.
   `pillar`, `stair` (rises one tile across the cell, toward its `rot`),
   `ramp` (same, a slope), `roof` (a one-cell gable), `doorway` (a lintel
   only: the opening is the whole cell, tile two side by side for a door),
-  `window` (a sill and a header), `fence`.
+  `window` (a sill and a header), `fence`; and the round pieces `dome`,
+  `cylinder` and `cone`, which also carry `size: [w, h, d]` in tiles (the
+  cell is the middle of the footprint) and `angle` in degrees. A round piece
+  blocks every cell its footprint covers, as a wall of its height; nothing
+  walks on it.
 - `x, y`: the cell. `z`: the level the piece's foot stands at, in tiles
   above the ground, up to 120 (twenty-four storeys of five). `rot`: quarter turns clockwise seen from above; `0`
   rises or faces south.
@@ -140,6 +144,10 @@ districts of hamlets:
   plan of parts is one building: it moves and turns as one.
 - `paths`: paved strips `[x0, y0, x1, y1]` (floor slabs of the `path`
   material, or a fifth entry naming one).
+- `shapes`: `[{ kind, at: [x, y], z, size: [w, h, d], angle, material }]`,
+  the round pieces on a plan: a tower is a `cylinder` five across and eight
+  tall with a `dome` at `z` 8 on it; a tent is a `cone`. `material` falls
+  back to the wall's. A quarter turn of the plan adds ninety degrees.
 - `spots`: named cells. A stamped building keeps them in its record as
   map cells, prefixed by the part's name (`north.bed`), so a story can
   say "the innkeeper stands at `inn.counter`". A plan of parts is walked

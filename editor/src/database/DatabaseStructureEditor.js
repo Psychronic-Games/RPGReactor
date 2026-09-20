@@ -22,7 +22,8 @@ class DatabaseStructureEditor {
     static FACINGS = [[2, 'Down'], [4, 'Left'], [6, 'Right'], [8, 'Up']];
     static SIZE_MIN = 4;
     static SIZE_MAX = 200;
-    static TOOLS = ['select', 'room', 'door', 'window', 'stairs', 'person'];
+    static TOOLS = ['select', 'room', 'door', 'window', 'stairs', 'person', 'shape'];
+    static SHAPE_KINDS = ['dome', 'cylinder', 'cone'];
     static HISTORY = 100;
 
     constructor(databaseManager, projectController, commonUI, parentEditor) {
@@ -79,6 +80,10 @@ class DatabaseStructureEditor {
             undo: `<path d="M3 7h7a3 3 0 0 1 0 6H6M3 7l3-3M3 7l3 3" ${stroke}/>`,
             redo: `<path d="M13 7H6a3 3 0 0 0 0 6h4M13 7l-3-3M13 7l-3 3" ${stroke}/>`,
             remove: `<path d="M4 4l8 8M12 4l-8 8" ${stroke}/>`,
+            shape: `<path d="M2 12a6 6 0 0 1 12 0M2 12h12v2H2z" ${stroke}/>`,
+            dome: `<path d="M2 12a6 6 0 0 1 12 0M2 12h12v2H2z" ${stroke}/>`,
+            cylinder: `<path d="M3.5 4a4.5 1.5 0 0 0 9 0a4.5 1.5 0 0 0-9 0M3.5 4v8a4.5 1.5 0 0 0 9 0V4" ${stroke}/>`,
+            cone: `<path d="M8 2l5.5 11h-11z M2.5 13a5.5 1.3 0 0 0 11 0" ${stroke}/>`,
             north: `<path d="M8 13V3M4 7l4-4 4 4" ${stroke}/>`,
             south: `<path d="M8 3v10M4 9l4 4 4-4" ${stroke}/>`,
             west: `<path d="M13 8H3M7 4L3 8l4 4" ${stroke}/>`,
@@ -178,6 +183,12 @@ class DatabaseStructureEditor {
             rot: int(part?.rot, 0, 0, 3), scale: int(part?.scale, 1, 1, 4),
             materials: part?.materials && typeof part.materials === 'object' ? Object.fromEntries(Object.entries(part.materials).map(([role, name]) => [role, String(name || '')])) : {}
         }));
+        plan.shapes = (Array.isArray(plan.shapes) ? plan.shapes : []).filter(shape => shape && this.SHAPE_KINDS.includes(shape.kind)).map(shape => {
+            const size = Array.isArray(shape.size) ? shape.size : [];
+            const n = (v, fallback) => { const k = Number(v); return Number.isFinite(k) && k > 0 ? Math.min(60, Math.round(k * 100) / 100) : fallback; };
+            return { kind: shape.kind, at: [int(shape.at?.[0], 0, 0, this.SIZE_MAX), int(shape.at?.[1], 0, 0, this.SIZE_MAX)], z: int(shape.z, 0, 0, 120),
+                size: [n(size[0], 3), n(size[1], 2), n(size[2], n(size[0], 3))], angle: ((Math.round(Number(shape.angle)) || 0) % 360 + 360) % 360, material: String(shape.material || '') };
+        });
         plan.paths = (Array.isArray(plan.paths) ? plan.paths : []).filter(Array.isArray).map(strip => {
             const out = [0, 1, 2, 3].map(i => int(strip[i], 0, 0, this.SIZE_MAX));
             if (strip[4]) out.push(String(strip[4]));
@@ -215,6 +226,14 @@ class DatabaseStructureEditor {
             return p;
         });
         if (plan.paths.length || had.has('paths')) fields.paths = plan.paths.map(strip => strip.slice());
+        if (plan.shapes.length || had.has('shapes')) fields.shapes = plan.shapes.map(shape => {
+            const out = { kind: shape.kind, at: shape.at.slice() };
+            if (shape.z) out.z = shape.z;
+            out.size = shape.size.slice();
+            if (shape.angle) out.angle = shape.angle;
+            if (shape.material) out.material = shape.material;
+            return out;
+        });
         // The file's own order first, then anything new at the end.
         const out = {};
         for (const key of plan._had || []) if (key in fields) out[key] = fields[key];
@@ -514,7 +533,7 @@ class DatabaseStructureEditor {
         const strip = this._detail?.querySelector('.rr-structures-tools');
         if (!strip || !this.current) return;
         const tt = text => this._t(text);
-        const labels = { select: tt('Select'), room: tt('Room'), door: tt('Door'), window: tt('Window'), stairs: tt('Stairs'), person: tt('Person') };
+        const labels = { select: tt('Select'), room: tt('Room'), door: tt('Door'), window: tt('Window'), stairs: tt('Stairs'), person: tt('Person'), shape: tt('Shape') };
         const button = (name, title, extra = '') => `<button type="button" class="rr-btn-secondary rr-structures-tool" data-tool="${name}" title="${rrEscapeHtml(title)}" aria-label="${rrEscapeHtml(title)}" style="width:30px;height:30px;padding:0;display:flex;align-items:center;justify-content:center;${extra}">${DatabaseStructureEditor.icon(name)}</button>`;
         strip.innerHTML = DatabaseStructureEditor.TOOLS.map(name => button(name, labels[name], name === this.tool ? 'border-color:var(--color-accent);background:var(--color-bg-hover);color:var(--color-text-strong);' : ''))
             .join('')
@@ -617,6 +636,16 @@ class DatabaseStructureEditor {
             html = `${kindLabel(tt('Stairs'))}
                 ${this._field(tt('Rises'), arrows('rr-structures-stair-dir', stair.dir))}
                 ${this._field(tt('Width'), this._numberHtml('rr-structures-stair-width', stair.width, 'min="1" max="8"'))}`;
+        } else if (sel && sel.kind === 'shape' && plan.shapes[sel.key]) {
+            const shape = plan.shapes[sel.key];
+            const kinds = `<span style="display:inline-flex;gap:2px;">${DatabaseStructureEditor.SHAPE_KINDS.map(kind => `<button type="button" class="rr-btn-secondary rr-structures-shape-kind" data-kind="${kind}" title="${rrEscapeHtml(tt(kind === 'dome' ? 'Dome' : kind === 'cylinder' ? 'Cylinder' : 'Cone'))}" aria-pressed="${kind === shape.kind}" style="width:26px;height:26px;padding:0;display:flex;align-items:center;justify-content:center;${kind === shape.kind ? 'border-color:var(--color-accent);' : ''}">${DatabaseStructureEditor.icon(kind)}</button>`).join('')}</span>`;
+            const num = (i, min, max, step) => `<input type="number" class="database-field-value rr-structures-shape-size" data-i="${i}" value="${shape.size[i]}" min="${min}" max="${max}" step="${step}" style="width:52px;">`;
+            html = `${kindLabel(tt('Shape'))}
+                ${this._field(tt('Kind'), kinds)}
+                ${this._field(tt('Size'), `${num(0, 0.5, 60, 0.5)}<span>×</span>${num(1, 0.25, 60, 0.25)}<span>×</span>${num(2, 0.5, 60, 0.5)}`)}
+                ${this._field(tt('Height'), `<input type="number" class="database-field-value rr-structures-shape-z" value="${shape.z}" min="0" max="120" step="1" style="width:52px;">`)}
+                ${this._field(tt('Angle'), `<input type="number" class="database-field-value rr-structures-shape-angle" value="${shape.angle}" min="0" max="359" step="5" style="width:56px;">`)}
+                ${this._field(tt('Material'), this._materialPickerHtml('rr-structures-shape-material', shape.material, '', tt("Building's own")))}`;
         } else if (sel && sel.kind === 'spot' && plan.spots[sel.key]) {
             const event = plan.events.find(item => item.spot === sel.key) || null;
             const templates = this.eventTemplates();
@@ -632,6 +661,7 @@ class DatabaseStructureEditor {
                 door: tt('Click a wall between two rooms for a door, an outer wall beside a room for the front door. Drag a door along its wall.'),
                 window: tt('Click an outer wall for a window. Drag a window along the wall.'),
                 stairs: tt('Click a cell inside a room to start stairs there. Each cell climbs one tile.'),
+                shape: tt('Click a cell to put a dome, a cylinder or a cone there, at its own size and turn. Drag it anywhere.'),
                 person: tt('Click a cell to put a person there. Pick who from the templates under 3d/Structures/events.')
             };
             html = `<span style="color:var(--color-text-muted);">${floor ? hints[this.tool] : tt('No floors: a plan of parts, or an empty plan. Add a floor to draw rooms.')}</span>`;
@@ -668,6 +698,11 @@ class DatabaseStructureEditor {
         box.querySelector('.rr-structures-door-width')?.addEventListener('change', event => { this.pushHistory(); floor.doors[sel.key][2] = number(event.target, 1, 12); this.markDirty(); });
         for (const button of box.querySelectorAll('.rr-structures-stair-dir')) button.addEventListener('click', () => { this.pushHistory(); plan.stairs[sel.key].dir = button.dataset.dir; this.markDirty(); this.renderInspector(); });
         box.querySelector('.rr-structures-stair-width')?.addEventListener('change', event => { this.pushHistory(); plan.stairs[sel.key].width = number(event.target, 1, 8); this.markDirty(); });
+        for (const button of box.querySelectorAll('.rr-structures-shape-kind')) button.addEventListener('click', () => { this.pushHistory(); plan.shapes[sel.key].kind = button.dataset.kind; this.markDirty(); this.renderInspector(); });
+        for (const input of box.querySelectorAll('.rr-structures-shape-size')) input.addEventListener('change', () => { this.pushHistory(); const v = Number(input.value); plan.shapes[sel.key].size[Number(input.dataset.i)] = Number.isFinite(v) && v > 0 ? Math.min(60, v) : 1; this.markDirty(); });
+        box.querySelector('.rr-structures-shape-z')?.addEventListener('change', event => { this.pushHistory(); plan.shapes[sel.key].z = Math.max(0, Math.min(120, Math.floor(Number(event.target.value)) || 0)); this.markDirty(); });
+        box.querySelector('.rr-structures-shape-angle')?.addEventListener('change', event => { this.pushHistory(); plan.shapes[sel.key].angle = ((Math.round(Number(event.target.value)) || 0) % 360 + 360) % 360; this.markDirty(); });
+        box.querySelector('.rr-structures-shape-material')?.addEventListener('click', event => this.openMaterialPicker(event.currentTarget, name => { this.pushHistory(); plan.shapes[sel.key].material = name; this.markDirty(); this.renderInspector(); }));
         box.querySelector('.rr-structures-spot-name')?.addEventListener('change', event => {
             const oldName = sel.key, newName = event.target.value.trim();
             if (!newName || (newName !== oldName && plan.spots[newName])) { event.target.value = oldName; return; }
@@ -708,6 +743,7 @@ class DatabaseStructureEditor {
         } else if (sel.kind === 'door' && floor) floor.doors.splice(sel.key, 1);
         else if (sel.kind === 'window' && floor) floor.windows.splice(sel.key, 1);
         else if (sel.kind === 'stair') plan.stairs.splice(sel.key, 1);
+        else if (sel.kind === 'shape') plan.shapes.splice(sel.key, 1);
         else if (sel.kind === 'spot') { delete plan.spots[sel.key]; plan.events = plan.events.filter(item => item.spot !== sel.key); }
         this.selection = null;
         this.markDirty();
@@ -890,9 +926,27 @@ class DatabaseStructureEditor {
         for (let i = 0; i < floor.doors.length; i++) if (this.doorCellsOf(i, floor).some(([cx, cy]) => cx === x && cy === y)) return { kind: 'door', key: i };
         const window = floor.windows.findIndex(([wx, wy]) => wx === x && wy === y);
         if (window >= 0) return { kind: 'window', key: window };
+        for (let i = plan.shapes.length - 1; i >= 0; i--) if (this.shapeCells(plan.shapes[i]).some(([sx, sy]) => sx === x && sy === y)) return { kind: 'shape', key: i };
         const room = this.roomAtCell(x, y, floor);
         if (room) return { kind: 'room', key: room };
         return null;
+    }
+
+    /** The cells a shape covers, from the runtime's own rule when it is loaded, else its box. */
+    shapeCells(shape) {
+        const piece = { kind: shape.kind, x: shape.at[0], y: shape.at[1], z: shape.z, rot: 0, size: shape.size, angle: shape.angle };
+        if (typeof Reactor3D !== 'undefined' && Reactor3D.pieceFootprint) return Reactor3D.pieceFootprint(piece);
+        // Without the runtime: the same round rule, a cell counting when its middle lies in the turned ellipse.
+        const [w, , d] = shape.size, cells = [], angle = -(shape.angle || 0) * Math.PI / 180, cx = shape.at[0] + 0.5, cz = shape.at[1] + 0.5;
+        const reach = Math.max(w, d) / 2 + 1;
+        for (let y = Math.floor(cz - reach); y <= Math.ceil(cz + reach); y++) for (let x = Math.floor(cx - reach); x <= Math.ceil(cx + reach); x++) {
+            if (x < 0 || y < 0) continue;
+            const px = x + 0.5 - cx, pz = y + 0.5 - cz;
+            const u = px * Math.cos(angle) - pz * Math.sin(angle), v = px * Math.sin(angle) + pz * Math.cos(angle);
+            if ((u * u) / ((w / 2 + 0.15) ** 2) + (v * v) / ((d / 2 + 0.15) ** 2) <= 1) cells.push([x, y]);
+        }
+        if (!cells.length) cells.push([shape.at[0], shape.at[1]]);
+        return cells;
     }
 
     onRing(x, y) {
@@ -967,6 +1021,8 @@ class DatabaseStructureEditor {
                 plan.stairs[t.key].from = [cell.x, cell.y];
             } else if (t.kind === 'spot') {
                 plan.spots[t.key] = [cell.x, cell.y];
+            } else if (t.kind === 'shape') {
+                plan.shapes[t.key].at = [cell.x, cell.y];
             }
         }
         this._reportStale = true;
@@ -1019,6 +1075,12 @@ class DatabaseStructureEditor {
         } else if (this.tool === 'stairs') {
             if (room) { this.pushHistory(); plan.stairs.push({ floor: floorIndex, from: [cell.x, cell.y], dir: 'north', width: 1 }); this.selection = { kind: 'stair', key: plan.stairs.length - 1 }; this.markDirty(); }
             else this.selection = null;
+        } else if (this.tool === 'shape') {
+            this.pushHistory();
+            const last = plan.shapes[plan.shapes.length - 1];
+            plan.shapes.push({ kind: last ? last.kind : 'dome', at: [cell.x, cell.y], z: 0, size: last ? last.size.slice() : [3, 2, 3], angle: 0, material: last ? last.material : '' });
+            this.selection = { kind: 'shape', key: plan.shapes.length - 1 };
+            this.markDirty();
         } else if (this.tool === 'person') {
             this.pushHistory();
             const name = DatabaseStructureEditor.freshName(Object.keys(plan.spots), this._t('person'));
@@ -1208,6 +1270,19 @@ class DatabaseStructureEditor {
             ctx.fillStyle = colours('--color-text');
             for (const [name, r] of Object.entries(floorNow.rooms)) ctx.fillText(name, ox + ((r[0] + r[2] + 1) / 2) * cell, oy + ((r[1] + r[3] + 1) / 2) * cell);
         }
+        // Shapes: an ellipse of their footprint with the kind's symbol, above whatever the build laid.
+        for (const shape of plan.shapes) {
+            const [w, , d] = shape.size, angle = shape.angle * Math.PI / 180;
+            ctx.save();
+            ctx.translate(ox + (shape.at[0] + 0.5) * cell, oy + (shape.at[1] + 0.5) * cell);
+            ctx.rotate(angle);
+            ctx.fillStyle = shape.kind === 'dome' ? '#b07a9a' : shape.kind === 'cone' ? '#b8a04b' : '#8f8fa8'; ctx.globalAlpha = 0.75;
+            ctx.beginPath(); ctx.ellipse(0, 0, Math.max(2, w * cell / 2), Math.max(2, d * cell / 2), 0, 0, Math.PI * 2); ctx.fill();
+            ctx.globalAlpha = 1; ctx.strokeStyle = colours('--color-text'); ctx.lineWidth = 1;
+            if (shape.kind === 'dome') { ctx.beginPath(); ctx.ellipse(0, 0, Math.max(1, w * cell / 4), Math.max(1, d * cell / 4), 0, 0, Math.PI * 2); ctx.stroke(); }
+            else if (shape.kind === 'cone') { ctx.beginPath(); ctx.moveTo(-w * cell / 2, 0); ctx.lineTo(w * cell / 2, 0); ctx.moveTo(0, -d * cell / 2); ctx.lineTo(0, d * cell / 2); ctx.stroke(); }
+            ctx.restore();
+        }
         // Stairs point the way they rise; hand-placed windows show even before the build catches up.
         const arrow = { north: [0, -1], south: [0, 1], west: [-1, 0], east: [1, 0] };
         for (const s of plan.stairs) {
@@ -1228,6 +1303,7 @@ class DatabaseStructureEditor {
             if (hit.kind === 'window' && floorNow.windows[hit.key]) { const [x, y] = floorNow.windows[hit.key]; return [[x, y, x, y]]; }
             if (hit.kind === 'stair' && plan.stairs[hit.key]) { const f = plan.stairs[hit.key].from; return [[f[0], f[1], f[0], f[1]]]; }
             if (hit.kind === 'spot' && plan.spots[hit.key]) { const a = plan.spots[hit.key]; return [[a[0], a[1], a[0], a[1]]]; }
+            if (hit.kind === 'shape' && plan.shapes[hit.key]) { const cells = this.shapeCells(plan.shapes[hit.key]); if (!cells.length) return null; const xs = cells.map(c => c[0]), ys = cells.map(c => c[1]); return [[Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)]]; }
             return null;
         };
         const accent = colours('--color-accent');
@@ -1312,8 +1388,64 @@ class DatabaseStructureEditor {
         preview.ground.scale.set(W + 2, H + 2, 1);
         preview.ground.position.set(W / 2, -0.01, H / 2);
         preview.centre = { x: W / 2, y: plan.storey * Math.max(1, plan.floors.length) / 2, z: H / 2 };
+        this._layoutHandles(preview, plan);
         if (!preview.distance || preview.autoDistance) { preview.distance = Math.max(W, H) * 1.3 + 6; preview.autoDistance = true; }
         preview.dirty = true;
+    }
+
+    /**
+     * Two handles on the building: one on the roof's ridge for its pitch,
+     * one at the top of the walls for the storey. Dragging either up or
+     * down changes the number, one per few pixels, and the building
+     * rebuilds as it goes.
+     */
+    _layoutHandles(preview, plan) {
+        if (!preview.handles) {
+            const make = key => {
+                const mesh = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 12), new THREE.MeshBasicMaterial({ color: 0xf0c060, depthTest: false, transparent: true, opacity: 0.9 }));
+                mesh.renderOrder = 10;
+                mesh.userData.handle = key;
+                preview.scene.add(mesh);
+                return mesh;
+            };
+            preview.handles = { pitch: make('pitch'), storey: make('storey') };
+        }
+        const [W, H] = plan.size, floors = Math.max(1, plan.floors.length), S = plan.storey;
+        const roofZ = floors * S;
+        const pitch = Math.max(0, Math.min(Math.floor((H - 1) / 2), plan.roof.pitch));
+        const radius = Math.max(0.35, Math.min(1.2, Math.max(W, H) * 0.03));
+        const show = plan.floors.length > 0;
+        preview.handles.pitch.visible = show;
+        preview.handles.storey.visible = show;
+        preview.handles.pitch.scale.setScalar(radius);
+        preview.handles.storey.scale.setScalar(radius);
+        preview.handles.pitch.position.set(W / 2, roofZ + pitch + 0.2, H / 2);
+        preview.handles.storey.position.set(W + 0.3, roofZ, H + 0.3);
+    }
+
+    /** The handle under a canvas point, if any. */
+    _handleAt(canvas, clientX, clientY) {
+        const preview = this._preview;
+        if (!preview || !preview.handles) return null;
+        const rect = canvas.getBoundingClientRect();
+        const ray = new THREE.Raycaster();
+        ray.setFromCamera(new THREE.Vector2(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1), preview.camera);
+        const hits = ray.intersectObjects(Object.values(preview.handles).filter(h => h.visible), false);
+        return hits.length ? hits[0].object.userData.handle : null;
+    }
+
+    _showHandleLabel(text, x, y) {
+        let label = this._detail?.querySelector('.rr-structures-handle-label');
+        if (!label) {
+            label = document.createElement('div');
+            label.className = 'rr-structures-handle-label';
+            label.style.cssText = 'position:fixed;z-index:10015;padding:3px 8px;font-size:12px;border-radius:3px;background:var(--color-bg-panel);border:1px solid var(--color-accent);color:var(--color-text-strong);pointer-events:none;';
+            this._detail?.appendChild(label);
+        }
+        if (!text) { label.remove(); return; }
+        label.textContent = text;
+        label.style.left = (x + 14) + 'px';
+        label.style.top = (y - 28) + 'px';
     }
 
     _material3D(name) {
@@ -1367,15 +1499,61 @@ class DatabaseStructureEditor {
     _bindOrbit(canvas) {
         if (!canvas) return;
         let drag = null;
-        canvas.addEventListener('pointerdown', event => { drag = { x: event.clientX, y: event.clientY }; canvas.setPointerCapture?.(event.pointerId); });
+        const tt = text => this._t(text);
+        const PIXELS_PER_STEP = 14;
+        canvas.addEventListener('pointerdown', event => {
+            if (event.button !== 0) return;
+            const handle = this.current && typeof THREE !== 'undefined' ? this._handleAt(canvas, event.clientX, event.clientY) : null;
+            if (handle) {
+                const plan = this.current.plan;
+                drag = { handle, y: event.clientY, start: handle === 'pitch' ? plan.roof.pitch : plan.storey, snapshot: JSON.stringify(plan), changed: false };
+                canvas.style.cursor = 'ns-resize';
+                this._showHandleLabel((handle === 'pitch' ? tt('Roof pitch') : tt('Storey')) + ': ' + drag.start, event.clientX, event.clientY);
+            } else {
+                drag = { x: event.clientX, y: event.clientY };
+            }
+            canvas.setPointerCapture?.(event.pointerId);
+        });
         canvas.addEventListener('pointermove', event => {
-            if (!drag || !this._preview) return;
+            if (!this._preview) return;
+            if (!drag) {
+                const handle = this.current && typeof THREE !== 'undefined' ? this._handleAt(canvas, event.clientX, event.clientY) : null;
+                canvas.style.cursor = handle ? 'ns-resize' : 'grab';
+                return;
+            }
+            if (drag.handle) {
+                const plan = this.current.plan;
+                const steps = Math.round((drag.y - event.clientY) / PIXELS_PER_STEP);
+                const value = drag.handle === 'pitch' ? Math.max(0, Math.min(20, drag.start + steps)) : Math.max(3, Math.min(12, drag.start + steps));
+                const current = drag.handle === 'pitch' ? plan.roof.pitch : plan.storey;
+                this._showHandleLabel((drag.handle === 'pitch' ? tt('Roof pitch') : tt('Storey')) + ': ' + value, event.clientX, event.clientY);
+                if (value !== current) {
+                    if (drag.handle === 'pitch') plan.roof.pitch = value; else plan.storey = value;
+                    drag.changed = true;
+                    this._reportStale = true;
+                    this.schedulePreview();
+                }
+                return;
+            }
             this._preview.yaw += (event.clientX - drag.x) * 0.01;
             this._preview.pitch = Math.max(0.05, Math.min(1.5, this._preview.pitch + (event.clientY - drag.y) * 0.01));
             drag = { x: event.clientX, y: event.clientY };
             this._preview.dirty = true;
         });
-        const stop = () => { drag = null; };
+        const stop = () => {
+            if (drag && drag.handle) {
+                this._showHandleLabel(null);
+                canvas.style.cursor = 'grab';
+                if (drag.changed) {
+                    this._history.push(drag.snapshot);
+                    if (this._history.length > DatabaseStructureEditor.HISTORY) this._history.shift();
+                    this._future.length = 0;
+                    this.markDirty();
+                    this.renderMore();
+                }
+            }
+            drag = null;
+        };
         canvas.addEventListener('pointerup', stop);
         canvas.addEventListener('pointercancel', stop);
         canvas.addEventListener('wheel', event => {
@@ -1393,7 +1571,9 @@ class DatabaseStructureEditor {
         cancelAnimationFrame(preview.raf);
         for (const mesh of preview.meshes) mesh.geometry.dispose();
         for (const material of preview.materials.values()) { material.map?.dispose(); material.dispose(); }
+        for (const handle of Object.values(preview.handles || {})) { handle.geometry.dispose(); handle.material.dispose(); }
         preview.ground?.geometry.dispose();
+        this._showHandleLabel(null);
         preview.renderer.dispose();
         this._preview = null;
     }

@@ -629,7 +629,8 @@
      * and stands characters on their tops. One piece per cell and level: a
      * new one there replaces the old.
      */
-    const PIECE_KINDS = ['wall', 'block', 'floor', 'pillar', 'stair', 'ramp', 'roof', 'doorway', 'window', 'fence'];
+    const PIECE_KINDS = ['wall', 'block', 'floor', 'pillar', 'stair', 'ramp', 'roof', 'doorway', 'window', 'fence', 'dome', 'cylinder', 'cone'];
+    const SHAPE_KINDS = ['dome', 'cylinder', 'cone'];
     const PIECE_MAX_LEVEL = 120;
     const normalizePiece = (raw, mapData) => {
         if (!raw || typeof raw !== 'object' || !PIECE_KINDS.includes(raw.kind)) return null;
@@ -644,6 +645,14 @@
         // Pieces stamped from one plan share a group, so the building moves as one.
         const group = Number(raw.group);
         if (Number.isFinite(group) && group > 0) piece.group = Math.floor(group);
+        // A shape has a size in tiles and a free turn in degrees.
+        if (SHAPE_KINDS.includes(raw.kind)) {
+            const size = Array.isArray(raw.size) ? raw.size : [];
+            const n = (v, fallback) => { const k = Number(v); return Number.isFinite(k) && k > 0 ? Math.min(60, Math.round(k * 100) / 100) : fallback; };
+            piece.size = [n(size[0], 1), n(size[1], 1), n(size[2], n(size[0], 1))];
+            const angle = Number(raw.angle);
+            piece.angle = Number.isFinite(angle) ? ((Math.round(angle) % 360) + 360) % 360 : 0;
+        }
         return piece;
     };
     const pieces = mapData => {
@@ -883,7 +892,7 @@
 
     const api = {
         WATER_MAX_LEVEL, normalizeWater, water, hasWater, addWater, removeWaterAt, waterSnapshot, restoreWater,
-        PIECE_KINDS, PIECE_MAX_LEVEL, normalizePiece, pieces, hasPieces, pieceAt, setPiece, removePiece,
+        PIECE_KINDS, SHAPE_KINDS, PIECE_MAX_LEVEL, normalizePiece, pieces, hasPieces, pieceAt, setPiece, removePiece,
         piecesSnapshot, restorePieces, clearPieces, pieceMaterials,
         nextPieceGroup, pieceGroup, pieceGroupBounds, pieceGroupAt, groupConnectedPieces, movePieceGroup, removePieceGroup, rotatePieceGroup,
         structures, structureOf, setStructure, restoreStructures, removeStructure, relocatePropsOff,

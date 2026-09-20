@@ -720,3 +720,34 @@ test('a plan places events at its spots; a hand-edited event survives a re-stamp
     const steward = north.events.find(e => e && e.name === 'Steward');
     assert.ok(steward && /<structure:\d+><spot:desk>/.test(steward.note), 'the Steward is tagged with his building and spot');
 });
+
+test('the round pieces: a shape has a size and a turn, blocks its round footprint, and builds as a mesh', () => {
+    const THREE = loadThree();
+    const R = require(path.resolve(__dirname, '..', '..', 'runtime/reactor_3d.js'));
+    const map = { width: 20, height: 20, reactor3d: { version: 1, elevation: new Array(400).fill(0), pieces: [
+        { id: 1, kind: 'cylinder', x: 5, y: 5, z: 0, rot: 0, material: 'Stone', size: [5, 8, 5] },
+        { id: 2, kind: 'dome', x: 5, y: 5, z: 8, rot: 0, material: 'RoofTile', size: [5, 2.5, 5] },
+        { id: 3, kind: 'cone', x: 12, y: 5, z: 0, rot: 0, material: 'Thatch', size: [3, 4, 3], angle: 30 },
+        { id: 4, kind: 'dome', x: 12, y: 12, z: 0, rot: 0, material: '' } ] } };
+    const list = R.piecesOf(map);
+    assert.equal(list.length, 4);
+    assert.deepEqual([...list[0].size], [5, 8, 5], 'a shape keeps its size');
+    assert.equal(list[2].angle, 30, 'and its turn');
+    assert.deepEqual([...list[3].size], [1, 1, 1], 'a shape with no size is one cell');
+    assert.equal(R.pieceFootprint(list[0]).length, 21, 'a five-wide cylinder covers a round footprint, not a square');
+    assert.equal(R.pieceFootprint(list[3]).length, 1);
+    assert.ok(Math.abs(R.pieceSurfaceAt(map, 5.5, 5.5, 0) - 10.5) < 1e-9, 'the tower with its dome is ten and a half tiles tall');
+    assert.ok(Math.abs(R.pieceSurfaceAt(map, 7.5, 5.5, 0) - 10.5) < 1e-9, 'and just as tall at its rim');
+    assert.equal(R.pieceSurfaceAt(map, 9.5, 5.5, 0), 0, 'the ground beside it is the ground');
+    assert.equal(R.terrainBlocks(map, 8, 5, 7, 5, 0), true, 'a step into the tower is blocked');
+    assert.equal(R.terrainBlocks(map, 2, 3, 3, 3, 0), false, 'the corner outside the round footprint is walkable');
+    const geometry = R.pieceGeometry(list, map);
+    assert.ok(geometry.attributes.position.count / 3 > 600, 'domes, a cylinder and a cone are many triangles');
+    geometry.computeBoundingBox();
+    assert.ok(Math.abs(geometry.boundingBox.max.y - 10.5) < 1e-6, 'the mesh reaches the dome\'s top');
+    assert.ok(geometry.boundingBox.min.x >= 2.9 && geometry.boundingBox.min.x <= 3.1, 'the cylinder spans its width about its cell');
+    // The palette lists the kinds with their own icons and names in every locale.
+    const palette = read('editor/src/PieceBuilderManager.js');
+    for (const kind of ['dome', 'cylinder', 'cone']) assert.match(palette, new RegExp(`\\b${kind}: '`), kind + ' has an icon');
+    assert.match(read('editor/src/utils/MapElevation.js'), /'fence', 'dome', 'cylinder', 'cone'\]/, 'the editor keeps the same kinds');
+});

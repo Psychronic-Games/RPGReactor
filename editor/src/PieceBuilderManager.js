@@ -60,7 +60,7 @@ class PieceBuilderManager {
     }
 
     /** The colour a kind shows in the flat map's overlay. */
-    static OVERLAY_COLOURS = { wall: 0x9a9a9a, block: 0x8c8c8c, floor: 0xc99a5b, pillar: 0xdcdcdc, stair: 0xa87b4a, ramp: 0xb05a4a, roof: 0xc1443c, doorway: 0x3fa34d, window: 0x5b9fe8, fence: 0xb8864b };
+    static OVERLAY_COLOURS = { wall: 0x9a9a9a, block: 0x8c8c8c, floor: 0xc99a5b, pillar: 0xdcdcdc, stair: 0xa87b4a, ramp: 0xb05a4a, roof: 0xc1443c, doorway: 0x3fa34d, window: 0x5b9fe8, fence: 0xb8864b, dome: 0xb07a9a, cylinder: 0x8f8fa8, cone: 0xb8a04b };
 
     /**
      * What each cell shows in the flat map: its topmost piece's kind and
@@ -144,7 +144,10 @@ class PieceBuilderManager {
         roof: 'M3 14l9-9 9 9 M5 14v6h14v-6 M9 20v-4h6v4',
         doorway: 'M5 20V5h14v15 M9 20v-9h6v9',
         window: 'M4 4h16v16H4z M9 8h6v6H9z M12 8v6 M9 11h6',
-        fence: 'M5 21V9l2-3 2 3v12 M15 21V9l2-3 2 3v12 M9 12h6 M9 17h6'
+        fence: 'M5 21V9l2-3 2 3v12 M15 21V9l2-3 2 3v12 M9 12h6 M9 17h6',
+        dome: 'M3 17a9 9 0 0 1 18 0 M3 17h18v3H3z M12 8v-3',
+        cylinder: 'M5 6a7 2.5 0 0 0 14 0a7 2.5 0 0 0-14 0 M5 6v12a7 2.5 0 0 0 14 0V6',
+        cone: 'M12 3l8 16H4z M4 19a8 2 0 0 0 16 0'
     };
 
     initializeUI(container) {

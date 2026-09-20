@@ -290,3 +290,44 @@ test('a tower of eight floors is stored whole and walked to its top', () => {
     assert.deepEqual([...report.reached].sort(), ['room', 'room (2)', 'room (3)', 'room (4)', 'room (5)', 'room (6)', 'room (7)', 'room (8)'], 'floors that share a room name are told apart');
     assert.equal(SP.build(plan, 0, 0, 1, 0, null).every(piece => piece.z <= Reactor3D.PIECE_MAX_LEVEL), true);
 });
+
+test('shapes on a plan: placed at a size and a turn, drawn, moved, turned with the plan, and kept in the file', () => {
+    const { DatabaseStructureEditor: E, RRStructurePlan: SP } = loadEditor();
+    const Reactor3D = require(path.join(repoRoot, 'runtime', 'reactor_3d.js'));
+    const original = { name: 'T', size: [16, 16], storey: 5, floors: [{ rooms: { hall: [1, 1, 6, 6] }, doors: [['hall', 'outside', 3]] }], roof: { pitch: 2 }, windows: { every: 6, width: 2 }, shapes: [{ kind: 'cylinder', at: [11, 11], size: [5, 8, 5], material: 'Stone' }, { kind: 'dome', at: [11, 11], z: 8, size: [5, 2.5, 5], angle: 15, material: 'RoofTile' }] };
+    const plan = E.normalizePlan(JSON.parse(JSON.stringify(original)));
+    assert.equal(JSON.stringify(E.trimPlan(plan)), JSON.stringify(original), 'the file comes back as it was');
+    const built = SP.build(plan, 0, 0, 1, 0, null);
+    const shapes = built.filter(piece => ['dome', 'cylinder', 'cone'].includes(piece.kind));
+    assert.equal(shapes.length, 2);
+    assert.deepEqual([...shapes[0].size], [5, 8, 5]);
+    assert.equal(shapes[1].angle, 15);
+    const turned = SP.transform(plan, 1, 1);
+    assert.equal(turned.shapes[1].angle, 105, 'a quarter turn adds ninety degrees');
+    assert.deepEqual([...turned.shapes[0].at], [4, 11], 'and moves the shape with the plan');
+    const grown = SP.transform(plan, 0, 2);
+    assert.deepEqual([...grown.shapes[0].size], [10, 16, 10], 'a scale grows the shape');
+    // The page: the Shape tool puts one down, a drag moves it, the inspector's kind and size are its own.
+    const editor = new E(null, { getCurrentProject: () => null }, null, null);
+    editor.renderInspector = () => {}; editor.renderMore = () => {}; editor.renderTools = () => {}; editor.schedulePreview = () => {}; editor.render = () => {}; editor._detail = null;
+    editor.parentEditor = { _markDatabaseMutation() {}, refreshDatabaseListLabel() {} };
+    editor.current = { entry: { id: 1, name: 'T', file: 'T.json', plan }, plan };
+    editor._planGeom = { ox: 0, oy: 0, cell: 10 };
+    editor.tool = 'shape';
+    // (3,12) would be inside the hall's front door, which cuts through every wall row down to the ring; place clear of it.
+    editor.beginPlanGesture({ x: 14, y: 3 }); editor.endPlanGesture({ x: 14, y: 3 });
+    assert.equal(plan.shapes.length, 3);
+    assert.equal(JSON.stringify(plan.shapes[2]), JSON.stringify({ kind: 'dome', at: [14, 3], z: 0, size: [5, 2.5, 5], angle: 0, material: 'RoofTile' }), 'a new shape takes after the last one placed');
+    assert.deepEqual({ ...editor.selection }, { kind: 'shape', key: 2 });
+    editor.tool = 'select';
+    assert.deepEqual({ ...editor.hitAt(12, 12) }, { kind: 'shape', key: 1 }, 'the topmost shape under the cell is the one picked');
+    editor.beginPlanGesture({ x: 14, y: 3 }); editor.updatePlanGesture({ x: 13, y: 4 }); editor.endPlanGesture({ x: 13, y: 4 });
+    assert.deepEqual([...plan.shapes[2].at], [13, 4], 'dragged');
+    assert.ok(editor.shapeCells(plan.shapes[0]).length === Reactor3D.pieceFootprint({ kind: 'cylinder', x: 11, y: 11, z: 0, rot: 0, size: [5, 8, 5], angle: 0 }).length, 'the page and the runtime agree on the footprint');
+    editor.removeSelection();
+    assert.equal(plan.shapes.length, 2);
+    editor.undo();
+    assert.equal(plan.shapes.length, 3, 'undo brings the shape back');
+    const report = E.report(plan, () => null, Reactor3D);
+    assert.ok(report.pieces > 100 && (report.triangles === null || report.triangles > 1000), 'the report builds the shapes too (triangles need three.js, absent here)');
+});

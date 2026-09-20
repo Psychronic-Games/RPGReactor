@@ -162,7 +162,45 @@ Reactor3D.displaceByTerrain = function(built, mapData) {
 // to it; anything a character cannot step up onto (a block, a fence) blocks
 // through the same rise rule the terrain uses.
 
-Reactor3D.PIECE_KINDS = ["wall", "block", "floor", "pillar", "stair", "ramp", "roof", "doorway", "window", "fence"];
+Reactor3D.PIECE_KINDS = ["wall", "block", "floor", "pillar", "stair", "ramp", "roof", "doorway", "window", "fence", "dome", "cylinder", "cone"];
+/**
+ * Shapes: the round pieces. Unlike the cell pieces they have a size in
+ * tiles (`size: [w, h, d]`, the cell they stand on being the middle of
+ * the footprint) and a free turn in degrees (`angle`), so a tower is a
+ * cylinder five tiles across with a dome on top, and a market tent a
+ * cone. The cells a shape's footprint covers block like a wall of its
+ * height; nothing walks on a dome.
+ */
+Reactor3D.SHAPE_KINDS = ["dome", "cylinder", "cone"];
+Reactor3D.isShapeKind = function(kind) { return this.SHAPE_KINDS.includes(kind); };
+/** A shape's [w, h, d] in tiles; a cell piece is one by one by its height. */
+Reactor3D.shapeSize = function(piece) {
+    const size = Array.isArray(piece.size) ? piece.size : null;
+    const n = (v, fallback) => (Number.isFinite(Number(v)) && Number(v) > 0 ? Number(v) : fallback);
+    return size ? [n(size[0], 1), n(size[1], 1), n(size[2], n(size[0], 1))] : [1, this.pieceHeight(piece.kind), 1];
+};
+/** The cells a piece's footprint covers: one for a cell piece, w by d round the middle for a shape. */
+Reactor3D.pieceFootprint = function(piece) {
+    if (!this.isShapeKind(piece.kind)) return [[piece.x, piece.y]];
+    const [w, , d] = this.shapeSize(piece);
+    const angle = (Number(piece.angle) || 0) * Math.PI / 180;
+    // The footprint of a turned box: its corners turned, then every cell the box covers.
+    const hw = w / 2, hd = d / 2, cx = piece.x + 0.5, cz = piece.y + 0.5;
+    const corners = [[-hw, -hd], [hw, -hd], [hw, hd], [-hw, hd]].map(([u, v]) => [cx + u * Math.cos(angle) - v * Math.sin(angle), cz + u * Math.sin(angle) + v * Math.cos(angle)]);
+    const x0 = Math.floor(Math.min(...corners.map(c => c[0])) + 1e-6), x1 = Math.ceil(Math.max(...corners.map(c => c[0])) - 1e-6) - 1;
+    const y0 = Math.floor(Math.min(...corners.map(c => c[1])) + 1e-6), y1 = Math.ceil(Math.max(...corners.map(c => c[1])) - 1e-6) - 1;
+    // The pieces are round: a cell counts when its middle lies inside the
+    // turned ellipse, with a little slack so the rim's cells block too.
+    const cells = [];
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+        if (x < 0 || y < 0) continue;
+        const px = x + 0.5 - cx, pz = y + 0.5 - cz;
+        const u = px * Math.cos(-angle) - pz * Math.sin(-angle), v = px * Math.sin(-angle) + pz * Math.cos(-angle);
+        if ((u * u) / ((hw + 0.15) * (hw + 0.15)) + (v * v) / ((hd + 0.15) * (hd + 0.15)) <= 1) cells.push([x, y]);
+    }
+    if (!cells.length) cells.push([piece.x, piece.y]);
+    return cells;
+};
 // Levels a piece may stand at: 24 storeys of five tiles, so a tower plan is never cut short by the store.
 Reactor3D.PIECE_MAX_LEVEL = 120;
 Reactor3D.PIECE_FLOOR_THICKNESS = 0.1;
@@ -193,6 +231,13 @@ Reactor3D.normalizePiece = function(raw, mapData) {
     const piece = { id: Number.isFinite(id) && id > 0 ? Math.floor(id) : 0, kind, x, y, z, rot, material };
     const group = Number(raw.group);
     if (Number.isFinite(group) && group > 0) piece.group = Math.floor(group);
+    if (this.isShapeKind(kind)) {
+        const size = Array.isArray(raw.size) ? raw.size : [];
+        const n = (v, fallback) => { const k = Number(v); return Number.isFinite(k) && k > 0 ? Math.min(60, Math.round(k * 100) / 100) : fallback; };
+        piece.size = [n(size[0], 1), n(size[1], 1), n(size[2], n(size[0], 1))];
+        const angle = Number(raw.angle);
+        piece.angle = Number.isFinite(angle) ? ((Math.round(angle) % 360) + 360) % 360 : 0;
+    }
     return piece;
 };
 
@@ -214,10 +259,14 @@ Reactor3D.pieceIndex = function(mapData) {
         const piece = this.normalizePiece(entry, mapData);
         if (!piece) continue;
         list.push(piece);
-        const key = piece.y * 65536 + piece.x;
-        let stack = cells.get(key);
-        if (!stack) cells.set(key, stack = []);
-        stack.push(piece);
+        // A shape stands on every cell of its footprint: the cell rule sees a
+        // stand-in there of the shape's height, so nothing walks into a tower.
+        for (const [fx, fy] of this.pieceFootprint(piece)) {
+            const key = fy * 65536 + fx;
+            let stack = cells.get(key);
+            if (!stack) cells.set(key, stack = []);
+            stack.push(fx === piece.x && fy === piece.y ? piece : Object.assign({}, piece, { x: fx, y: fy, standIn: true }));
+        }
     }
     // Each cell's stack from the ground up, which is the order the surface
     // rule reads it in.
@@ -280,6 +329,7 @@ Reactor3D.pieceTop = function(piece, u, v) {
         // A doorway is stood in at its threshold: the level it is laid at,
         // which is the ground downstairs and the floor's level upstairs.
         case "doorway": return piece.z;
+        case "dome": case "cylinder": case "cone": return piece.z + this.shapeSize(piece)[1];
         default: return piece.z + this.pieceHeight(piece.kind);
     }
 };
@@ -467,6 +517,10 @@ Reactor3D.pieceShapes = function(kind) {
         case "window": return [box(0, 0, 0, 1, 1.5, 1), box(0, S - 1.4, 0, 1, S, 1)];
         // Waist high on a three-tile character; it still blocks a cell.
         case "fence": return [box(0.05, 0, 0.42, 0.15, 1.5, 0.58), box(0.85, 0, 0.42, 0.95, 1.5, 0.58), box(0, 0.5, 0.45, 1, 0.62, 0.55), box(0, 1.15, 0.45, 1, 1.27, 0.55)];
+        // The round pieces fill the unit cell; their size stretches the cell.
+        case "cylinder": return [{ column: [0.5, 0.5, 0.5, 0, 1, 32] }];
+        case "cone": return [{ cone: [0.5, 0.5, 0.5, 0, 1, 32] }];
+        case "dome": return [{ dome: [0.5, 0.5, 0.5, 0, 32, 10] }];
         default: return [];
     }
 };
@@ -482,14 +536,20 @@ Reactor3D.emitPiece = function(piece, base, out, hidden) {
     const cx = piece.x + 0.5, cz = piece.y + 0.5, oy = base + piece.z;
     const rot = piece.rot;
     const skip = hidden || {};
+    // A shape is the unit cell stretched to its size and turned by its angle.
+    const shape = this.isShapeKind(piece.kind);
+    const [sw, sh, sd] = shape ? this.shapeSize(piece) : [1, 1, 1];
+    const angle = shape ? (Number(piece.angle) || 0) * Math.PI / 180 : 0;
+    const cosA = Math.cos(angle), sinA = Math.sin(angle);
     const place = (x, y, v) => {
-        let dx = x - 0.5, dz = v - 0.5;
+        let dx = (x - 0.5) * sw, dz = (v - 0.5) * sd;
         for (let i = 0; i < rot; i++) {
             const next = -dz;
             dz = dx;
             dx = next;
         }
-        return [cx + dx, oy + y, cz + dz];
+        if (angle) { const tx = dx * cosA - dz * sinA; dz = dx * sinA + dz * cosA; dx = tx; }
+        return [cx + dx, oy + y * sh, cz + dz];
     };
     const shadeFor = (nx, ny, nz) => {
         if (ny > 0.7) return 1;
@@ -543,8 +603,8 @@ Reactor3D.emitPiece = function(piece, base, out, hidden) {
             tri(p(1, 0, 0), p(1, 1, 0.5), p(1, 0, 1)); // east gable
             tri(p(0, 0, 0), p(0, 0, 1), p(0, 1, 0.5)); // west gable
         } else if (shape.column) {
-            const [ccx, ccv, r, y0, y1] = shape.column;
-            const segments = 12;
+            const [ccx, ccv, r, y0, y1, segs] = shape.column;
+            const segments = segs || 12;
             for (let i = 0; i < segments; i++) {
                 const a0 = (i / segments) * Math.PI * 2, a1 = ((i + 1) / segments) * Math.PI * 2;
                 const x0 = ccx + Math.cos(a0) * r, v0 = ccv + Math.sin(a0) * r;
@@ -552,6 +612,32 @@ Reactor3D.emitPiece = function(piece, base, out, hidden) {
                 quad(place(x0, y0, v0), place(x0, y1, v0), place(x1, y1, v1), place(x1, y0, v1));
                 tri(place(ccx, y1, ccv), place(x1, y1, v1), place(x0, y1, v0));
                 tri(place(ccx, y0, ccv), place(x0, y0, v0), place(x1, y0, v1));
+            }
+        } else if (shape.cone) {
+            const [ccx, ccv, r, y0, y1, segs] = shape.cone;
+            const segments = segs || 24;
+            for (let i = 0; i < segments; i++) {
+                const a0 = (i / segments) * Math.PI * 2, a1 = ((i + 1) / segments) * Math.PI * 2;
+                const x0 = ccx + Math.cos(a0) * r, v0 = ccv + Math.sin(a0) * r;
+                const x1 = ccx + Math.cos(a1) * r, v1 = ccv + Math.sin(a1) * r;
+                tri(place(x0, y0, v0), place(ccx, y1, ccv), place(x1, y0, v1));
+                tri(place(ccx, y0, ccv), place(x0, y0, v0), place(x1, y0, v1));
+            }
+        } else if (shape.dome) {
+            // A half sphere in rings of quads, closed by a disc underneath.
+            const [ccx, ccv, r, y0, segs, ringCount] = shape.dome;
+            const segments = segs || 24, rings = ringCount || 8;
+            const at = (i, j) => {
+                const a = (i / segments) * Math.PI * 2, t = (j / rings) * (Math.PI / 2);
+                return place(ccx + Math.cos(a) * Math.cos(t) * r, y0 + Math.sin(t), ccv + Math.sin(a) * Math.cos(t) * r);
+            };
+            for (let j = 0; j < rings; j++) for (let i = 0; i < segments; i++) {
+                if (j === rings - 1) tri(at(i, j), at(i + 1, j), at(i, j + 1));
+                else quad(at(i, j), at(i + 1, j), at(i + 1, j + 1), at(i, j + 1));
+            }
+            for (let i = 0; i < segments; i++) {
+                const a0 = (i / segments) * Math.PI * 2, a1 = ((i + 1) / segments) * Math.PI * 2;
+                tri(place(ccx, y0, ccv), place(ccx + Math.cos(a0) * r, y0, ccv + Math.sin(a0) * r), place(ccx + Math.cos(a1) * r, y0, ccv + Math.sin(a1) * r));
             }
         }
     }
