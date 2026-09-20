@@ -152,7 +152,7 @@ test('the database wires the page in: category, title key, script, detail cleanu
     const source = read('editor/src/database/DatabaseStructureEditor.js');
     assert.match(source, /window\.Reactor3D\?\.extensionsLoaded\?\.\(\)/, 'the 3D preview waits for the whole runtime, not the bare core');
     assert.match(source, /palette\.structures\?\.\(true\)/, 'Use on the map refreshes the palette\'s Structure list');
-    assert.match(source, /selectLayer\?\.\('P'\)/, 'Use on the map picks the pieces tab by its own key');
+    assert.match(source, /buildHotbar\.show\(\)/, 'Use on the map opens the build bar over the 3D view');
     assert.match(source, /document\.getElementById\('database-ok-btn'\)\?\.click\(\);/, 'Use on the map saves and closes as OK does');
 });
 

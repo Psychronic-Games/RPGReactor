@@ -273,8 +273,23 @@
         if (!mapData) return [];
         const sidecar = mapData.reactor3d || (mapData.reactor3d = { version: 1 });
         const tag = 'structure:' + group;
-        const surfaces = (Array.isArray(sidecar.mediaSurfaces) ? sidecar.mediaSurfaces : []).filter(row => !(row && row.structure === group));
-        const lights = (Array.isArray(sidecar.lights) ? sidecar.lights : []).filter(light => !(light && light.tag === tag));
+        sidecar.mediaSurfaces = (Array.isArray(sidecar.mediaSurfaces) ? sidecar.mediaSurfaces : []).filter(row => !(row && row.structure === group));
+        sidecar.lights = (Array.isArray(sidecar.lights) ? sidecar.lights : []).filter(light => !(light && light.tag === tag));
+        return addEffects(mapData, wanted, group);
+    }
+
+    /**
+     * Put effects on the map as they are: screens as media-surface rows,
+     * lights as map lights, marked with `group` when there is one (a
+     * building's), plain when placed by hand. Animations come back as event
+     * requests for `placeEvents`.
+     */
+    function addEffects(mapData, wanted, group) {
+        if (!mapData) return [];
+        const sidecar = mapData.reactor3d || (mapData.reactor3d = { version: 1 });
+        const tag = group ? 'structure:' + group : '';
+        const surfaces = Array.isArray(sidecar.mediaSurfaces) ? sidecar.mediaSurfaces : [];
+        const lights = Array.isArray(sidecar.lights) ? sidecar.lights : [];
         const events = [];
         let nextSurface = surfaces.reduce((m, row) => Math.max(m, Number(row && row.id) || 0), 0) + 1;
         let nextLight = lights.length + 1;
@@ -285,9 +300,11 @@
             if (fx.type === 'screen') {
                 const [dx, dy] = DIRS[fx.facing] || DIRS.south;
                 const w = Number(fx.width) > 0 ? Number(fx.width) : 4, h = Number(fx.height) > 0 ? Number(fx.height) : 2.25;
-                surfaces.push({ id: nextSurface++, target: 'map', movie: String(fx.media || ''), x: x + 0.5 + dx * 0.52, y: y + 0.5 + dy * 0.52, z,
+                const row = { id: nextSurface++, target: 'map', movie: String(fx.media || ''), x: x + 0.5 + dx * 0.52, y: y + 0.5 + dy * 0.52, z,
                     width: Math.round(w * 48), height: Math.round(h * 48), rotationX: 0, rotationY: FACING_YAW[fx.facing] || 0, rotationZ: 0, scaleX: 1, scaleY: 1,
-                    opacity: 255, loop: true, muted: fx.audio !== true, volume: 100, playbackRate: 1, layer: 3, depth: 0, cullingDistance: 0, scanlines: Number(fx.scanlines) || 0, wait: false, structure: group });
+                    opacity: 255, loop: true, muted: fx.audio !== true, volume: 100, playbackRate: 1, layer: 3, depth: 0, cullingDistance: 0, scanlines: Number(fx.scanlines) || 0, wait: false };
+                if (group) row.structure = group;
+                surfaces.push(row);
             } else if (fx.type === 'light') {
                 while (lights.some(l => l && l.id === 'light' + nextLight)) nextLight++;
                 lights.push({ id: 'light' + nextLight++, type: 'point', x: x + 0.5, y: y + 0.5, height: Math.round(z * 48), yaw: 0, pitch: 0,
@@ -671,7 +688,7 @@
         return { start, report, states: seen.size };
     }
 
-    const api = { build, buildOwn, spots, eventsOf, effectsOf, placeEffects, removeGroupEffects, placeEvents, removeGroupEvents, eventTag, EVENT_TAG, transform, validate, entrance, doorCells, doorWall, sharedWall, isWallCell, isOuterWallCell, canWindow, buildingBox, buildingBoxes, DIRS };
+    const api = { build, buildOwn, spots, eventsOf, effectsOf, placeEffects, addEffects, removeGroupEffects, placeEvents, removeGroupEvents, eventTag, EVENT_TAG, transform, validate, entrance, doorCells, doorWall, sharedWall, isWallCell, isOuterWallCell, canWindow, buildingBox, buildingBoxes, DIRS };
     root.RRStructurePlan = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof globalThis !== 'undefined' ? globalThis : window);

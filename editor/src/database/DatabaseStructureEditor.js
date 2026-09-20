@@ -427,23 +427,18 @@ class DatabaseStructureEditor {
         this._history = [];
         this._future = [];
         const tt = text => this._t(text);
+        // A saved building: its name, a look at it, and the way onto the map. Building
+        // happens in the world (the Build toggle over the 3D map), not in a form here.
         detailEl.innerHTML = `
             <div class="rr-structures" style="display:flex;flex-direction:column;height:100%;min-height:0;font-size:12px;">
                 <div class="rr-structures-bar" style="display:flex;align-items:center;gap:14px;padding:6px 10px;border-bottom:1px solid var(--color-border);flex-wrap:wrap;"></div>
                 <div style="display:flex;flex:1;min-height:220px;">
-                    <div class="rr-structures-tools" style="width:40px;flex:0 0 40px;display:flex;flex-direction:column;align-items:center;gap:4px;padding:6px 0;border-right:1px solid var(--color-border);background:var(--color-bg-menubar);"></div>
-                    <div style="flex:1;min-width:0;position:relative;background:var(--color-bg-panel);">
-                        <canvas class="rr-structures-plan" tabindex="0" style="position:absolute;inset:0;width:100%;height:100%;cursor:crosshair;outline:none;"></canvas>
-                        <div class="rr-structures-floors" style="position:absolute;top:6px;left:8px;display:flex;gap:3px;align-items:center;"></div>
-                    </div>
-                    <div style="flex:1;min-width:0;position:relative;border-left:1px solid var(--color-border);background:var(--color-bg-deep);">
+                    <div style="flex:1;min-width:0;position:relative;background:var(--color-bg-deep);">
                         <canvas class="rr-structures-3d" style="position:absolute;inset:0;width:100%;height:100%;cursor:grab;"></canvas>
                         <button type="button" class="rr-btn-secondary rr-structures-peek" title="${rrEscapeHtml(this._t('Look inside: the ceiling and roof left off'))}" aria-pressed="false" style="position:absolute;top:8px;right:8px;width:28px;height:28px;padding:0;display:flex;align-items:center;justify-content:center;">${DatabaseStructureEditor.icon('peek')}</button>
                         <div class="rr-structures-report" style="position:absolute;left:8px;bottom:8px;right:8px;padding:6px 8px;font-size:11px;line-height:1.4;color:var(--color-text-muted);background:color-mix(in srgb, var(--color-bg-panel) 85%, transparent);border-radius:3px;pointer-events:none;"></div>
                     </div>
                 </div>
-                <div class="rr-structures-inspector" style="border-top:1px solid var(--color-border);padding:6px 10px;min-height:34px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;"></div>
-                <div class="rr-structures-more" style="border-top:1px solid var(--color-border);max-height:38%;overflow-y:auto;flex:0 0 auto;"></div>
             </div>`;
         this._bindOrbit(detailEl.querySelector('.rr-structures-3d'));
         detailEl.querySelector('.rr-structures-peek')?.addEventListener('click', () => {
@@ -600,13 +595,17 @@ class DatabaseStructureEditor {
         const materialNames = this.materials();
         const styleNames = Object.keys(DatabaseStructureEditor.STYLES);
         const style = DatabaseStructureEditor.styleOf(plan.materials, materialNames);
-        bar.innerHTML = `
+        const card = !bar.closest('.rr-structures').querySelector('.rr-structures-plan');
+        bar.innerHTML = card ? `
+            ${this._field(tt('Name'), `<input type="text" class="database-field-value rr-structures-name" value="${rrEscapeHtml(plan.name)}" style="width:150px;">`)}
+            <span style="color:var(--color-text-muted);">${tt('A saved building. Build on the map with the Build toggle, then stamp this where you like.')}</span>
+            <button type="button" class="rr-btn-secondary rr-structures-use" style="margin-left:auto;">${tt('Use on the map')}</button>` : `
             ${this._field(tt('Name'), `<input type="text" class="database-field-value rr-structures-name" value="${rrEscapeHtml(plan.name)}" style="width:150px;">`)}
             ${this._field(tt('Style'), this._selectHtml('rr-structures-style', styleNames.map(name => [name, tt(name)]).concat([['', tt('Custom')]]), style || '', 'style="width:140px;"'))}
             ${this._field(tt('Size'), `${this._numberHtml('rr-structures-size', plan.size[0], `data-i="0" min="${DatabaseStructureEditor.SIZE_MIN}" max="${DatabaseStructureEditor.SIZE_MAX}"`)}<span>×</span>${this._numberHtml('rr-structures-size', plan.size[1], `data-i="1" min="${DatabaseStructureEditor.SIZE_MIN}" max="${DatabaseStructureEditor.SIZE_MAX}"`)}`)}
             <button type="button" class="rr-btn-secondary rr-structures-use" style="margin-left:auto;">${tt('Use on the map')}</button>`;
         bar.querySelector('.rr-structures-name').addEventListener('input', event => this.setName(event.target.value));
-        bar.querySelector('.rr-structures-style').addEventListener('change', event => {
+        bar.querySelector('.rr-structures-style')?.addEventListener('change', event => {
             if (!event.target.value) return;
             this.pushHistory();
             Object.assign(plan.materials, DatabaseStructureEditor.styleMaterials(event.target.value, materialNames));
@@ -1075,11 +1074,11 @@ class DatabaseStructureEditor {
             if ((!closed || !entry.file) && Date.now() - started < 5000) return setTimeout(settle, 100);
             const palette = reactor?.pieceBuilderManager;
             if (!palette || !entry.file) return;
-            reactor.tilesetPaletteViewer?.selectLayer?.('P');
             palette.structures?.(true);
             palette.structure = entry.file;
-            palette.renderStructures?.(true);
+            if (reactor.buildHotbar) reactor.buildHotbar.show(); else palette.activate?.();
             palette.setMode?.('stamp');
+            reactor.buildHotbar?.render?.();
             if (palette.panel) palette._syncPanel?.();
         };
         setTimeout(settle, 100);

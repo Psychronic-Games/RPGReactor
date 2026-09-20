@@ -232,6 +232,12 @@ class RPGReactor {
             if (!this.pieceBuilderManager && typeof PieceBuilderManager !== 'undefined') {
                 this.pieceBuilderManager = new PieceBuilderManager(this.projectController);
                 this.projectController.pieceBuilderManager = this.pieceBuilderManager;
+                // The bar over the 3D view is the builder's face; the old panel stays unmounted.
+                if (typeof BuildHotbar !== 'undefined') {
+                    this.buildHotbar = new BuildHotbar(this.projectController);
+                    this.projectController.buildHotbar = this.buildHotbar;
+                    this.buildHotbar.mount(document.getElementById('canvas-container'));
+                }
             }
             if (this.modelPropsManager) {
                 this.projectController.modelPropsManager = this.modelPropsManager;
@@ -369,6 +375,11 @@ class RPGReactor {
             // Ticked or unticked by hand: that is the map's preference from now on.
             this.projectController.rememberMap3DView(
                 this.projectController.tilemapManager?.currentMap?.id, active);
+        });
+        // Build: the hammer in the toolbar opens the bar over the 3D view and takes the map tool.
+        document.getElementById('map-build')?.addEventListener('change', (event) => {
+            if (!this.buildHotbar) { event.currentTarget.checked = false; return; }
+            if (event.currentTarget.checked) this.buildHotbar.show(); else this.buildHotbar.hide();
         });
         document.getElementById('map-video-previews')?.addEventListener('change', (event) => {
             this.optionsManager.setShowVideoPreviews(event.currentTarget.checked);
@@ -720,7 +731,7 @@ class RPGReactor {
             if (owner !== 'lighting') this.lightingManager?.setActive(false);
             if (owner !== 'models') this.modelPropsManager?.deactivate();
             if (owner !== 'terrain') this.terrainManager?.deactivate();
-            if (owner !== 'pieces') this.pieceBuilderManager?.deactivate();
+            if (owner !== 'pieces') { this.pieceBuilderManager?.deactivate(); this.buildHotbar?.hide(false); }
             if (owner !== 'events' && this.eventManager?.eventMode) this.eventManager.setEventMode(false);
             const map = this.mapEditor, palette = this.tilesetPaletteViewer;
             if (owner !== 'paint') {

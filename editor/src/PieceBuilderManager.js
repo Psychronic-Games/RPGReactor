@@ -25,6 +25,75 @@ class PieceBuilderManager {
         this._stroke = null;
         this._onKeyDown = event => this.handleKey(event);
         this._materialsCache = null;
+        // What the next shape, screen or light is made of.
+        this.shapeScale = 1;
+        this.lastShape = 'cylinder';
+        this.screenMedia = '';
+        this.lightColour = '#9fd8ff';
+    }
+
+    /** The movies and pictures a screen can show. */
+    mediaChoices() {
+        const projectPath = this.projectPath();
+        if (!projectPath || typeof require !== 'function') return [];
+        try {
+            const fs = require('fs'), path = require('path');
+            const list = dir => { try { return fs.readdirSync(path.join(projectPath, ...dir)).filter(f => !f.startsWith('.')); } catch (error) { return []; } };
+            const media = list(['movies']).filter(f => /\.(webm|mp4|ogv|m4v)$/i.test(f)).concat(list(['img', 'pictures']).filter(f => /\.(png|jpe?g|gif|webp)$/i.test(f))).sort();
+            if (!this.screenMedia && media.length) this.screenMedia = media.find(f => /starfield/i.test(f)) || media[0];
+            return media;
+        } catch (error) { return []; }
+    }
+
+    /** A shape's size for the next placement: its kind's own, scaled. */
+    shapeSizeFor(kind) {
+        const E = typeof DatabaseStructureEditor !== 'undefined' ? DatabaseStructureEditor : null;
+        const base = (E && E.SHAPE_DEFAULTS && E.SHAPE_DEFAULTS[kind]) || [2, 2, 2];
+        return base.map(v => Math.max(0.25, Math.round(v * this.shapeScale * 4) / 4));
+    }
+
+    /**
+     * A screen on the wall face pointed at, or a light over the cell: written
+     * straight onto the map, no plan, undone with the pieces.
+     */
+    placeEffectAt(target) {
+        const map = this.currentMap(), SP = typeof RRStructurePlan !== 'undefined' ? RRStructurePlan : null;
+        if (!map || !SP || !target) return false;
+        let fx = null;
+        if (this.mode === 'screen') {
+            if (!target.side || !target.faceCell) { this._flash('build.screenNeedsWall'); return false; }
+            const E = typeof DatabaseStructureEditor !== 'undefined' ? DatabaseStructureEditor.EFFECT_DEFAULTS.screen : { width: 4, height: 2.25 };
+            fx = { type: 'screen', name: 'screen', at: [target.faceCell.x, target.faceCell.y], facing: target.side, width: E.width, height: E.height, z: Math.max(0, Math.round((target.height - E.height / 2) * 4) / 4), media: this.screenMedia || '' };
+        } else if (this.mode === 'light') {
+            fx = { type: 'light', name: 'light', at: [target.x, target.y], z: Math.round((target.side ? target.height : target.height + 2.5) * 4) / 4, color: this.lightColour, radius: 8, intensity: 1.2 };
+        }
+        if (!fx) return false;
+        this.undoStack.push(this._snapshot(map)); if (this.undoStack.length > 50) this.undoStack.shift(); this.redoStack.length = 0;
+        SP.addEffects(map, [fx], null);
+        this._effectsChanged();
+        return true;
+    }
+
+    /** The nearest screen or light within a tile of the cell, taken off the map. */
+    removeEffectAt(map, target) {
+        const sidecar = map && map.reactor3d;
+        if (!sidecar) return false;
+        const near = (x, y) => Math.abs(x - (target.x + 0.5)) <= 1 && Math.abs(y - (target.y + 0.5)) <= 1;
+        const rows = Array.isArray(sidecar.mediaSurfaces) ? sidecar.mediaSurfaces : [];
+        const row = rows.find(r => r && r.target === 'map' && near(Number(r.x), Number(r.y)));
+        if (row) { sidecar.mediaSurfaces = rows.filter(r => r !== row); if (!sidecar.mediaSurfaces.length) delete sidecar.mediaSurfaces; this._effectsChanged(); return true; }
+        const lights = Array.isArray(sidecar.lights) ? sidecar.lights : [];
+        const light = lights.find(l => l && near(Number(l.x), Number(l.y)));
+        if (light) { sidecar.lights = lights.filter(l => l !== light); if (!sidecar.lights.length) delete sidecar.lights; this._effectsChanged(); return true; }
+        return false;
+    }
+
+    _effectsChanged() {
+        window.reactor?.lightingManager?.render?.();
+        window.reactor?.mediaSurfaceManager?.render?.();
+        this.projectController?.mediaSurfacePreviewManager?.refresh?.();
+        window.reactor?.mapEditor3D?.refreshLights?.();
+        this.announce(false);
     }
 
     _t(key, params) { return window.I18n ? window.I18n.t(key, params) : key; }
@@ -484,7 +553,9 @@ class PieceBuilderManager {
     /** Everything a building edit can touch: pieces, the ground, the building records. */
     _snapshot(map) {
         const elevation = this.elevation();
-        return { pieces: elevation.piecesSnapshot(map), terrain: elevation.terrainSnapshot(map), structures: elevation.structures(map) };
+        const sidecar = map.reactor3d || {};
+        return { pieces: elevation.piecesSnapshot(map), terrain: elevation.terrainSnapshot(map), structures: elevation.structures(map),
+            surfaces: JSON.stringify(sidecar.mediaSurfaces || null), lights: JSON.stringify(sidecar.lights || null) };
     }
 
     removeSelectedGroup() {
@@ -508,9 +579,11 @@ class PieceBuilderManager {
     _flash(key, params) {
         const status = this.panel?.querySelector('.rr-pieces-status');
         if (status) status.textContent = this._t(key, params);
+        window.reactor?.buildHotbar?.flash?.(this._t(key, params));
     }
 
     _syncPanel() {
+        this._syncBar();
         const panel = this.panel;
         if (!panel) return;
         const stamp = panel.querySelector('.rr-pieces-stamp');
@@ -534,10 +607,12 @@ class PieceBuilderManager {
         const level = panel.querySelector('.rr-pieces-level-value');
         if (level) level.textContent = String(this.level);
     }
+    /** The bar over the 3D view follows the same state as the panel. */
+    _syncBar() { window.reactor?.buildHotbar?.sync?.(); }
 
     setKind(kind) { if (this.kinds().includes(kind)) { this.kind = kind; this.mode = 'place'; this._syncPanel(); this._ghostChanged(); } }
     setMode(mode) {
-        if (mode !== 'place' && mode !== 'erase' && mode !== 'stamp' && mode !== 'move') return;
+        if (mode !== 'place' && mode !== 'erase' && mode !== 'stamp' && mode !== 'move' && mode !== 'screen' && mode !== 'light') return;
         if (mode === 'stamp' && !this.structurePlan()) mode = 'place';
         if (mode !== 'move') this.selectedGroup = 0;
         this.mode = mode; this._syncPanel(); this.refreshStatus(); this._ghostChanged();
@@ -596,7 +671,10 @@ class PieceBuilderManager {
 
     /** The piece as it would be laid at a target `{x, y, z}`. */
     pieceFor(target) {
-        return { kind: this.kind, x: target.x, y: target.y, z: target.z, rot: this.rot, material: this.material };
+        const piece = { kind: this.kind, x: target.x, y: target.y, z: target.z, rot: this.rot, material: this.material };
+        const E = this.elevation();
+        if (E && E.SHAPE_KINDS && E.SHAPE_KINDS.includes(this.kind)) piece.size = this.shapeSizeFor(this.kind);
+        return piece;
     }
 
     /**
@@ -712,7 +790,7 @@ class PieceBuilderManager {
         const elevation = this.elevation();
         if (elevation.removePiece(map, target.x, target.y, target.z)) return true;
         const stack = elevation.pieces(map).filter(piece => piece.x === target.x && piece.y === target.y);
-        if (!stack.length) return false;
+        if (!stack.length) return this.removeEffectAt(map, target);
         const top = stack.reduce((best, piece) => (piece.z > best.z ? piece : best), stack[0]);
         return elevation.removePiece(map, top.x, top.y, top.z);
     }
@@ -753,6 +831,7 @@ class PieceBuilderManager {
         else if (key === 'e') { event.preventDefault(); this.setLevel(this.level + 1); }
         else if (key === 'q') { event.preventDefault(); this.setLevel(this.level - 1); }
         else if (key === 'x') { event.preventDefault(); this.setMode(this.mode === 'erase' ? 'place' : 'erase'); }
+        else if ((key === ']' || key === '[') && !(this.mode === 'move' && this.selectedGroup)) { event.preventDefault(); this.shapeScale = Math.max(0.25, Math.min(8, Math.round((this.shapeScale * (key === ']' ? 1.25 : 0.8)) * 100) / 100)); this._syncPanel(); this._ghostChanged(); }
         else if (key === 'm') { event.preventDefault(); this.setMode(this.mode === 'move' ? 'place' : 'move'); }
         else if (this.mode === 'move' && this.selectedGroup && key === 'r') { event.preventDefault(); this.rotateSelected(); }
         else if (this.mode === 'move' && this.selectedGroup && (key === ']' || key === '[')) { event.preventDefault(); this.scaleSelected(key === ']' ? 1 : -1); }
@@ -778,6 +857,13 @@ class PieceBuilderManager {
         if (whole) {
             if (entry.terrain) elevation.restoreTerrain(map, entry.terrain); else elevation.clearTerrain(map);
             elevation.restoreStructures(map, entry.structures);
+            if (entry.surfaces !== undefined) {
+                const sidecar = map.reactor3d || (map.reactor3d = { version: 1 });
+                const surfaces = JSON.parse(entry.surfaces), lights = JSON.parse(entry.lights);
+                if (surfaces) sidecar.mediaSurfaces = surfaces; else delete sidecar.mediaSurfaces;
+                if (lights) sidecar.lights = lights; else delete sidecar.lights;
+                this._effectsChanged();
+            }
         }
         this.announce(!!whole); this.refreshStatus(); this._syncPanel();
     }

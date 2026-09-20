@@ -3631,6 +3631,100 @@
             opacity: 0;
         }
 
+        /* Build mode: the bar over the 3D view. */
+        .rr-build-hotbar {
+            position: absolute;
+            left: 50%;
+            bottom: 12px;
+            transform: translateX(-50%);
+            z-index: 7;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+            max-width: calc(100% - 24px);
+            pointer-events: none;
+        }
+        .rr-build-row {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 6px 8px;
+            border-radius: 12px;
+            background-color: rgba(10, 12, 16, 0.78);
+            border: 1px solid var(--color-border);
+            pointer-events: auto;
+            max-width: 100%;
+            overflow-x: auto;
+        }
+        .rr-build-context:empty { display: none; }
+        .rr-build-slot {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 2px;
+            width: 62px;
+            height: 58px;
+            padding: 4px 2px 3px;
+            border-radius: 8px;
+            border: 1px solid transparent;
+            background: transparent;
+            color: var(--color-text);
+            cursor: pointer;
+            font-size: 10px;
+            line-height: 1;
+        }
+        .rr-build-slot:hover { background: rgba(255, 255, 255, 0.06); }
+        .rr-build-slot[aria-pressed="true"] { border-color: var(--color-accent); background: color-mix(in srgb, var(--color-accent) 18%, transparent); color: var(--color-text-strong); }
+        .rr-build-slot-label { white-space: nowrap; max-width: 58px; overflow: hidden; text-overflow: ellipsis; }
+        .rr-build-slot-key { position: absolute; top: 2px; right: 5px; font-size: 9px; color: var(--color-text-muted); }
+        .rr-build-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 4px 8px;
+            border-radius: 8px;
+            border: 1px solid transparent;
+            background: transparent;
+            color: var(--color-text);
+            cursor: pointer;
+            font-size: 11px;
+            white-space: nowrap;
+        }
+        .rr-build-chip svg { width: 18px; height: 18px; }
+        .rr-build-chip:hover { background: rgba(255, 255, 255, 0.06); }
+        .rr-build-chip[aria-pressed="true"] { border-color: var(--color-accent); background: color-mix(in srgb, var(--color-accent) 18%, transparent); }
+        .rr-build-swatch {
+            width: 28px;
+            height: 28px;
+            padding: 0;
+            border-radius: 6px;
+            border: 2px solid transparent;
+            background-size: cover;
+            background-color: #333;
+            cursor: pointer;
+            flex: 0 0 auto;
+        }
+        .rr-build-swatch[aria-pressed="true"] { border-color: var(--color-accent); }
+        .rr-build-swatch-plain { display: block; width: 100%; height: 100%; border-radius: 4px; border: 1px dashed var(--color-border-input); box-sizing: border-box; }
+        .rr-build-note { font-size: 11px; color: var(--color-text-muted); padding: 0 6px; white-space: nowrap; }
+        .rr-build-hint { font-size: 11px; color: var(--color-text-muted); white-space: nowrap; pointer-events: none; text-shadow: 0 1px 2px rgba(0,0,0,.8); }
+        .rr-build-hint b { color: var(--color-text-strong); font-weight: 600; }
+        .rr-build-flash {
+            font-size: 12px;
+            color: var(--color-text-strong);
+            padding: 4px 12px;
+            border-radius: 10px;
+            background-color: rgba(10, 12, 16, 0.85);
+            border: 1px solid var(--color-accent);
+            opacity: 0;
+            transition: opacity .25s ease;
+            pointer-events: none;
+        }
+        .rr-build-flash.is-shown { opacity: 1; }
+
         /* Database > User Interfaces: layers | primary canvas | inspector. */
         .rr-ui-editor [hidden] {
             display: none !important;

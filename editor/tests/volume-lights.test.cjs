@@ -78,7 +78,7 @@ test('a lit material composes with earlier injections and keys its program apart
     assert.deepEqual(calls, ['earlier'], 'the earlier hook ran first');
     assert.ok(shader.vertexShader.startsWith('varying vec3 vRRWorldPos;\n/*E*/'));
     assert.match(shader.vertexShader, /#include <project_vertex>\n\tvRRWorldPos = \(modelMatrix \* vec4\(transformed, 1\.0\)\)\.xyz;/);
-    assert.match(shader.fragmentShader, /vec4 diffuseColor = vec4\( diffuse \* rrLight\(vRRWorldPos\), opacity \);/);
+    assert.match(shader.fragmentShader, /vec4 diffuseColor = vec4\( diffuse \* mix\(rrLight\(vRRWorldPos\), vec3\(1\.0\), rrSelfLit\), opacity \);/);
     assert.match(shader.fragmentShader, /uniform vec4 rrLightPos\[32\];/);
     assert.match(shader.fragmentShader, /smoothstep\(aim\.w, mix\(aim\.w, 1\.0, 0\.35\), c\)/, 'a cone is soft at its rim');
     const uniforms = Reactor3D.lightUniforms();

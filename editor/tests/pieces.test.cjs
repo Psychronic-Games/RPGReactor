@@ -254,25 +254,32 @@ test('the scene lays pieces down per material and can lay them again alone', () 
     assert.match(source3D(), /this\.addPieces\(mapData, settings\.loadMaterial \|\| \(name => Reactor3D\.defaultMaterialLoader\(name\)\)\);/);
 });
 
-test('the 3D-B tab is registered everywhere a palette tab has to be, with its strings', () => {
-    const palette = read('editor/src/TilesetPaletteViewer.js');
-    assert.match(palette, /createLayerTab\('P', TilesetPaletteViewer\.tabIcon\('pieces'\), '3D-B'\)/, 'the tab, keyed P: B is the tileset sheet');
-    assert.match(palette, /if \(layerName !== 'M' && layerName !== 'T' && layerName !== 'P'\) this\.lastPaintLayer = layerName;/, 'not a paint layer');
-    assert.match(palette, /layerName === 'P' \? 'pieces' : 'paint'/, 'claims the map for its own tool');
-    assert.match(palette, /piecesContainer\.style\.display = layerName === 'P' \? 'flex' : 'none'/, 'shows its container');
-    assert.match(palette, /if \(layerName !== 'P'\) this\.onPiecesTabLeft\?\.\(\);/);
-    assert.match(palette, /\} else if \(layerName === 'P'\) \{[\s\S]*this\.onPiecesTabSelected\?\.\(\);/);
-    const main = read('editor/src/main.js');
-    assert.match(main, /if \(owner !== 'pieces'\) this\.pieceBuilderManager\?\.deactivate\(\);/, 'another owner puts the tool down');
-    assert.match(main, /owner==='pieces'&&tab\.dataset\.layer==='P'/, 'the tab lights');
-    assert.match(main, /palette\?\.currentLayer === 'P'\) palette\.selectLayer\(palette\.lastPaintLayer \|\| 'A'\)/, 'a drawing button returns to painting');
-    assert.match(main, /onPiecesTabSelected = \(\) => \{/);
-    assert.match(main, /new PieceBuilderManager\(this\.projectController\)/);
-    assert.match(read('editor/index.html'), /src\/PieceBuilderManager\.js/);
-    const view = read('editor/src/MapEditor3D.js');
-    assert.match(view, /if \(event\?\.detail\?\.pieces && this\.updatePiecesInPlace\(event\.detail\.region \|\| null\)\) return;/, 'a piece edit never rebuilds the scene');
-    assert.match(view, /loadMaterial: name => materials\[name\] \|\| null/);
-    assert.match(view, /if \(this\.canEditPieces\(\)\) \{\s*const manager = this\.pieceManager\(\);\s*const target = this\.pieceTargetAt\(event\.clientX, event\.clientY, \{ erase: true \}\);/, 'a right-click pulls a piece off');
+test('building happens in the world: the hammer in the toolbar opens a bar over the 3D view, and the pieces tab is gone', () => {
+    const paletteSource = read('editor/src/TilesetPaletteViewer.js');
+    assert.doesNotMatch(paletteSource, /createLayerTab\('P'/, 'no pieces tab in the palette');
+    const htmlSource = read('editor/index.html');
+    assert.match(htmlSource, /id="map-build" type="checkbox"/, 'the Build toggle beside the 3D one');
+    assert.match(htmlSource, /src\/BuildHotbar\.js/, 'the bar is loaded');
+    assert.match(htmlSource, /src\/PieceBuilderManager\.js/);
+    const mainSource = read('editor/src/main.js');
+    assert.match(mainSource, /this\.buildHotbar = new BuildHotbar\(this\.projectController\)/);
+    assert.match(mainSource, /this\.buildHotbar\.mount\(document\.getElementById\('canvas-container'\)\)/, 'mounted over the map canvas');
+    assert.match(mainSource, /getElementById\('map-build'\)\?\.addEventListener\('change'/, 'the toggle shows and hides it');
+    assert.match(mainSource, /if \(owner !== 'pieces'\) \{ this\.pieceBuilderManager\?\.deactivate\(\); this\.buildHotbar\?\.hide\(false\); \}/, 'another owner puts the tool down and the bar away');
+    assert.match(mainSource, /new PieceBuilderManager\(this\.projectController\)/);
+    const barSource = read('editor/src/BuildHotbar.js');
+    assert.match(barSource, /static PIECES = \['floor', 'wall', 'doorway', 'window', 'glass', 'stairs', 'ramp', 'roof', 'pillar', 'fence', 'block'\]/, 'the slots a child reaches for first');
+    assert.match(barSource, /static EXTRA = \['shape', 'screen', 'light', 'hammer', 'blueprint'\]/);
+    assert.match(barSource, /if \(\/\^\[0-9\]\$\/\.test\(event\.key\)\)/, 'number keys pick slots');
+    const managerSrc = read('editor/src/PieceBuilderManager.js');
+    assert.match(managerSrc, /mode !== 'screen' && mode !== 'light'/, 'screens and lights are modes of the one tool');
+    assert.match(managerSrc, /placeEffectAt\(target\) \{/);
+    assert.match(managerSrc, /if \(!stack\.length\) return this\.removeEffectAt\(map, target\);/, 'the hammer takes screens and lights too');
+    const viewSource = read('editor/src/MapEditor3D.js');
+    assert.match(viewSource, /if \(event\?\.detail\?\.pieces && this\.updatePiecesInPlace\(event\.detail\.region \|\| null\)\) return;/, 'a piece edit never rebuilds the scene');
+    assert.match(viewSource, /loadMaterial: name => materials\[name\] \|\| null/);
+    assert.match(viewSource, /return \{ x, y, z: Math\.min\(max, z\), side: sideName, faceCell, height: Math\.max\(0, rel\), top \};/, 'a target knows the face it points at');
+    assert.match(viewSource, /mode === 'screen' \|\| this\.pieceManager\(\)\.mode === 'light'\)\) \{[\s\S]{0,300}placeEffectAt\(target\)/, 'a click places a screen or a light');
     const i18n = read('editor/src/I18nManager.js');
     for (const key of ['pieces.hint', 'pieces.piece', 'pieces.kind.wall', 'pieces.kind.block', 'pieces.kind.fence', 'pieces.material', 'pieces.plain', 'pieces.materialsHint', 'pieces.turn', 'pieces.level', 'pieces.place', 'pieces.erase', 'pieces.undo', 'pieces.redo', 'pieces.clear', 'pieces.keys', 'pieces.needs3D', 'pieces.count']) {
         assert.equal((i18n.match(new RegExp('"' + key.replace(/\./g, '\\.') + '": "', 'g')) || []).length, 18, key + ' in 18 locales');
@@ -489,7 +496,7 @@ test('a structure plan builds rooms, walls, doors on shared walls, a stairwell a
     const manager = read('editor/src/PieceBuilderManager.js');
     assert.match(manager, /path\.join\(projectPath, '3d', 'Structures'\)/);
     assert.match(managerSource, /elevation\.restorePieces\(map, kept\.concat\(SP\.build\(shaped, X0, Y0, firstId, record\.group, name => this\.resolvePlan\(name\)\)\)\);/, 'a stamp keeps what stands off the footprint, tags its own pieces, and resolves its parts');
-    assert.match(manager, /return \{ pieces: elevation\.piecesSnapshot\(map\), terrain: elevation\.terrainSnapshot\(map\), structures: elevation\.structures\(map\) \};/, 'one undo step: pieces, ground and building records');
+    assert.match(manager, /return \{ pieces: elevation\.piecesSnapshot\(map\), terrain: elevation\.terrainSnapshot\(map\), structures: elevation\.structures\(map\),\s*surfaces: JSON\.stringify\(sidecar\.mediaSurfaces \|\| null\), lights: JSON\.stringify\(sidecar\.lights \|\| null\) \};/, 'one undo step: pieces, ground and building records');
     assert.match(read('editor/src/MapEditor3D.js'), /if \(target && this\.pieceManager\(\)\.mode === 'stamp'\) \{[\s\S]{0,300}this\.pieceManager\(\)\.stampAt\(target\.x, target\.y\);/);
     assert.match(read('editor/index.html'), /src\/utils\/StructurePlan\.js/);
     assert.ok(fs.existsSync(path.resolve(__dirname, '..', '..', 'editor/build-scripts/build-structure.cjs')));
