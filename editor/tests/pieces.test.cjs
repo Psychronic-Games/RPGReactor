@@ -310,6 +310,76 @@ test('the 3D-B tab is registered everywhere a palette tab has to be, with its st
     assert.equal(context.RRMapElevation.pieceAt(map, 1, 1, 0), null, 'erase mode takes the piece under the pointer');
 });
 
+test('a rectangle stroke lines its edge with walls, fills it with floors, and follows the pointer', () => {
+    const context = { console, window: {}, document: { addEventListener() {}, removeEventListener() {}, dispatchEvent() {} }, CustomEvent: class { constructor(t, i) { this.type = t; this.detail = i && i.detail; } } };
+    context.window = context;
+    vm.runInNewContext(read('editor/src/utils/MapElevation.js'), context);
+    vm.runInNewContext(read('editor/src/PieceBuilderManager.js'), context);
+    const E = context.RRMapElevation;
+    const map = { id: 3, width: 8, height: 8, reactor3d: { version: 1 } };
+    const manager = new context.PieceBuilderManager({ getTilemapManager: () => ({ currentMap: map }) });
+    manager.material = 'Stone';
+    // Ctrl held from the click: the rectangle between the first cell and the pointer, walls round its edge.
+    assert.equal(manager.beginStroke({ x: 1, y: 1, z: 0 }, undefined, { rectangle: true }), true);
+    assert.equal(manager.paintAt({ x: 4, y: 3, z: 0 }, { rectangle: true }), true);
+    assert.equal(E.pieces(map).length, 10, 'a 4 by 3 rectangle: ten cells on its edge, none inside');
+    assert.equal(E.pieceAt(map, 2, 2, 0), null, 'the inside is open');
+    assert.equal(manager.paintAt({ x: 2, y: 2, z: 0 }), true, 'once a rectangle, the stroke stays one');
+    assert.equal(E.pieces(map).length, 4, 'a rectangle that shrinks leaves nothing behind');
+    assert.equal(manager.paintAt({ x: 2, y: 2, z: 0 }), false, 'the same corner again lays nothing');
+    manager.endStroke();
+    assert.equal(manager.undoStack.length, 1, 'one rectangle, one undo step');
+    manager.undo();
+    assert.equal(E.hasPieces(map), false);
+    manager.redo();
+    // Ctrl pressed after the click: the run so far becomes a rectangle from where it started. Floors fill.
+    manager.setKind('floor');
+    manager.beginStroke({ x: 0, y: 0, z: 2 });
+    manager.paintAt({ x: 1, y: 0, z: 2 });
+    assert.equal(manager.paintAt({ x: 2, y: 2, z: 2 }, { rectangle: true }), true);
+    const floors = E.pieces(map).filter(piece => piece.kind === 'floor');
+    assert.equal(floors.length, 9, 'a 3 by 3 floor fills its rectangle');
+    assert.ok(floors.every(piece => piece.z === 2), 'at the level of the first piece');
+    manager.endStroke();
+    // An erase rectangle takes everything at that level inside it.
+    manager.setMode('erase');
+    manager.beginStroke({ x: 0, y: 0, z: 2 }, undefined, { rectangle: true });
+    manager.paintAt({ x: 2, y: 2, z: 2 });
+    manager.endStroke();
+    assert.equal(E.pieces(map).filter(piece => piece.kind === 'floor').length, 0);
+    assert.equal(E.pieces(map).length, 4, 'the walls at level 0 were not in its way');
+});
+
+test('a placing stroke stays on the plane of its first piece; an erasing one follows the pieces', () => {
+    const THREE = loadThree();
+    const R = require(path.resolve(__dirname, '..', '..', 'runtime/reactor_3d.js'));
+    const source = read('editor/src/MapEditor3D.js');
+    const MapEditor3D = vm.runInNewContext(source + '\nMapEditor3D;', {
+        console: Object.assign(Object.create(console), { warn() {}, error() {} }), window: {},
+        document: { addEventListener() {}, removeEventListener() {}, querySelectorAll: () => [] },
+        Reactor3D: R, THREE, require, setTimeout, clearTimeout
+    });
+    const view = new MapEditor3D({});
+    const map = mapWith([]);
+    view.currentMap = () => map;
+    view.canvas = { getBoundingClientRect: () => ({ left: 0, top: 0, width: 200, height: 200 }) };
+    view.pieceManager = () => ({ level: 0, mode: 'place' });
+    view.camera = new THREE.PerspectiveCamera(50, 1, 0.1, 100);
+    view.camera.position.set(5.5, 12, 5.5); view.camera.lookAt(5.5, 0, 5.5);
+    view.camera.updateProjectionMatrix(); view.camera.updateMatrixWorld();
+    // The stroke began three levels up on cell (5,5): its plane is three tiles above that cell's ground.
+    view.pointer = { pieceStroke: view.pieceStrokePlane({ x: 5, y: 5, z: 3 }) };
+    assert.deepEqual({ ...view.pointer.pieceStroke }, { z: 3, planeY: 3 });
+    assert.deepEqual({ ...view.pieceStrokeTargetAt(100, 100) }, { x: 5, y: 5, z: 3 }, 'straight down from the camera: the anchor cell, at the stroke\'s level');
+    const moved = view.pieceStrokeTargetAt(140, 100);
+    assert.equal(moved.z, 3, 'the drag stays at the level whatever it crosses');
+    assert.ok(moved.x > 5 && moved.y === 5, 'and moves with the pointer along the plane');
+    view.camera.lookAt(5.5, 40, 5.5); view.camera.updateMatrixWorld();
+    assert.equal(view.pieceStrokeTargetAt(100, 100), null, 'a camera looking up never meets the plane: the drag lands nowhere');
+    view.pieceManager = () => ({ level: 0, mode: 'erase' });
+    assert.deepEqual({ ...view.pieceStrokePlane({ x: 5, y: 5, z: 3 }) }, { erase: true }, 'erasing keeps following the pieces themselves');
+});
+
 test('a structure plan builds rooms, walls, doors on shared walls, a stairwell and a roof, and the engine can walk it', () => {
     const THREE = loadThree();
     const R = require(path.resolve(__dirname, '..', '..', 'runtime/reactor_3d.js'));

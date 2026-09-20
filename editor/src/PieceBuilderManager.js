@@ -576,23 +576,76 @@ class PieceBuilderManager {
     /**
      * A stroke starts with the click and lays a piece on every new cell
      * or level the drag reaches; the same cell twice does nothing, so a
-     * slow drag and a fast one leave the same row.
+     * slow drag and a fast one leave the same row. The 3D view keeps the
+     * drag on the plane of the first piece, so a run of walls stays a run
+     * and never climbs onto the wall it just laid. A rectangle stroke
+     * (Ctrl held) lays the rectangle between the first cell and the
+     * pointer instead: a floor or a block fills it, anything else lines
+     * its edge, and every move lays it again from the stroke's start so
+     * the rectangle follows the pointer.
      */
-    beginStroke(target, mode = this.mode) {
+    beginStroke(target, mode = this.mode, options = {}) {
         const map = this.currentMap(), elevation = this.elevation();
         if (!map || !elevation || !target) return false;
-        this.undoStack.push(elevation.piecesSnapshot(map));
+        const snapshot = elevation.piecesSnapshot(map);
+        this.undoStack.push(snapshot);
         if (this.undoStack.length > 50) this.undoStack.shift();
         this.redoStack.length = 0;
-        this._stroke = { mode, moved: false, last: null };
+        this._stroke = { mode, moved: false, last: null, anchor: { x: target.x, y: target.y, z: target.z }, snapshot, rectangle: !!options.rectangle };
         return this.dab(target);
     }
 
-    paintAt(target) {
+    paintAt(target, options = {}) {
         if (!this._stroke || !target) return false;
+        if (options.rectangle || this._stroke.rectangle) return this.layRectangle(target);
         const last = this._stroke.last;
         if (last && last.x === target.x && last.y === target.y && last.z === target.z) return false;
         return this.dab(target);
+    }
+
+    /** Kinds that fill a rectangle; the rest line its edge. */
+    static fillsRectangle(kind) { return kind === 'floor' || kind === 'block'; }
+
+    /** The cells of the rectangle between the stroke's anchor and `target`, at the anchor's level. */
+    rectangleCells(target) {
+        const a = this._stroke.anchor;
+        const x0 = Math.min(a.x, target.x), x1 = Math.max(a.x, target.x);
+        const y0 = Math.min(a.y, target.y), y1 = Math.max(a.y, target.y);
+        const fill = this._stroke.mode === 'erase' || PieceBuilderManager.fillsRectangle(this.kind);
+        const cells = [];
+        for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+            if (fill || x === x0 || x === x1 || y === y0 || y === y1) cells.push({ x, y, z: a.z });
+        }
+        return { cells, x0, y0, x1, y1 };
+    }
+
+    layRectangle(target) {
+        const map = this.currentMap(), elevation = this.elevation();
+        if (!map || !elevation || !target || !this._stroke) return false;
+        const last = this._stroke.last;
+        if (this._stroke.rectangle && last && last.x === target.x && last.y === target.y) return false;
+        this._stroke.rectangle = true;
+        this._stroke.last = { x: target.x, y: target.y, z: this._stroke.anchor.z };
+        // From the stroke's start again, so a rectangle that shrinks leaves nothing behind.
+        elevation.restorePieces(map, this._stroke.snapshot);
+        const { cells, x0, y0, x1, y1 } = this.rectangleCells(target);
+        const group = elevation.pieceGroupAt(map, this._stroke.anchor.x, this._stroke.anchor.y);
+        let changed = false;
+        for (const cell of cells) {
+            if (this._stroke.mode === 'erase') { if (this.eraseAt(map, cell)) changed = true; continue; }
+            const piece = this.pieceFor(cell);
+            if (group) piece.group = group;
+            if (elevation.setPiece(map, piece)) changed = true;
+        }
+        if (changed && group && elevation.structureOf(map, group)) {
+            elevation.removeStructure(map, group);
+            this._flash('pieces.detached');
+            this._flashed = true;
+        }
+        this._lastList = map.reactor3d?.pieces;
+        this._stroke.moved = true;
+        this.announce(false, { x0: x0 - 1, y0: y0 - 1, x1: x1 + 1, y1: y1 + 1 });
+        return changed;
     }
 
     dab(target) {

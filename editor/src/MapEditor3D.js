@@ -1691,6 +1691,43 @@ class MapEditor3D {
         return { x, y, z: Math.min(max, z) };
     }
 
+    /**
+     * The plane a placing stroke stays on: the level of its first piece,
+     * at that cell's ground. A drag then lays a run at one level, however
+     * the pieces it has just laid would catch the pointer. Erasing keeps
+     * following the pieces themselves.
+     */
+    pieceStrokePlane(target) {
+        const mapData = this.currentMap();
+        const manager = this.pieceManager();
+        if (!mapData || !target || typeof Reactor3D === 'undefined') return null;
+        if (manager?.mode === 'erase') return { erase: true };
+        return { z: target.z, planeY: Reactor3D.pieceBaseAt(mapData, target.x, target.y) + target.z };
+    }
+
+    /** Where a stroke in progress lands under the pointer: on its plane, at its level. */
+    pieceStrokeTargetAt(clientX, clientY) {
+        const stroke = this.pointer?.pieceStroke;
+        if (!stroke || stroke.erase) return this.pieceTargetAt(clientX, clientY);
+        const mapData = this.currentMap();
+        if (!mapData || !this.camera || !this.canvas) return null;
+        const rect = this.canvas.getBoundingClientRect();
+        if (!rect.width || !rect.height) return null;
+        this._raycaster = this._raycaster || new THREE.Raycaster();
+        this._raycaster.setFromCamera(new THREE.Vector2(
+            ((clientX - rect.left) / rect.width) * 2 - 1,
+            -((clientY - rect.top) / rect.height) * 2 + 1
+        ), this.camera);
+        const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -stroke.planeY);
+        const point = this._raycaster.ray.intersectPlane(plane, new THREE.Vector3());
+        if (!point) return null;
+        return {
+            x: Math.max(0, Math.min(mapData.width - 1, Math.floor(point.x))),
+            y: Math.max(0, Math.min(mapData.height - 1, Math.floor(point.z))),
+            z: stroke.z
+        };
+    }
+
     /** The chosen piece, translucent, where it would land. */
     updatePieceGhost(target) {
         const manager = this.pieceManager();
@@ -3187,7 +3224,8 @@ class MapEditor3D {
 
             // The pieces tool: a left click lays the chosen piece where the
             // pointer stands, and a drag lays one on every cell it crosses.
-            if (event.button === 0 && !event.shiftKey && !event.ctrlKey && !event.altKey && this.canEditPieces()) {
+            if (event.button === 0 && !event.shiftKey && !event.altKey && this.canEditPieces()
+                && (!event.ctrlKey || this.pieceManager().mode === 'place' || this.pieceManager().mode === 'erase')) {
                 const target = this.pieceTargetAt(event.clientX, event.clientY);
                 if (target && this.pieceManager().mode === 'move') {
                     // First click picks the structure under the pointer; the next sets it down.
@@ -3204,7 +3242,8 @@ class MapEditor3D {
                 } else if (target) {
                     this.pointer.pieces = true;
                     this.pointer.pan = false;
-                    this.pieceManager().beginStroke(target);
+                    this.pointer.pieceStroke = this.pieceStrokePlane(target);
+                    this.pieceManager().beginStroke(target, undefined, { rectangle: event.ctrlKey });
                     this.updatePieceGhost(target);
                 }
             }
@@ -3318,8 +3357,8 @@ class MapEditor3D {
             this.pointer.x = event.clientX;
             this.pointer.y = event.clientY;
             if (this.pointer.pieces) {
-                const target = this.pieceTargetAt(event.clientX, event.clientY);
-                if (target) { this.pieceManager()?.paintAt(target); this.updatePieceGhost(target); }
+                const target = this.pieceStrokeTargetAt(event.clientX, event.clientY);
+                if (target) { this.pieceManager()?.paintAt(target, { rectangle: event.ctrlKey }); this.updatePieceGhost(target); }
                 return;
             }
             if (this.pointer.paint) {
@@ -3379,6 +3418,7 @@ class MapEditor3D {
                 return;
             }
             if (drag && drag.pieces) {
+                this.pointer.pieceStroke = null;
                 this.pieceManager()?.endStroke();
                 return;
             }
