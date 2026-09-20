@@ -42,6 +42,10 @@ class DatabaseStructureEditor {
         this._detail = null;
         this._preview = null;
         this._previewTimer = null;
+        this._hover = null;
+        this._redraw = 0;
+        this._reportStale = false;
+        this._picker = null;
     }
 
     _t(text, params) {
@@ -389,7 +393,9 @@ class DatabaseStructureEditor {
     markDirty() {
         if (!this.current) return;
         this.parentEditor?._markDatabaseMutation?.();
+        this._reportStale = true;
         this.renderTools();
+        this.requestPlanRedraw();
         this.schedulePreview();
     }
 
@@ -418,6 +424,53 @@ class DatabaseStructureEditor {
 
     _numberHtml(cls, value, attrs = '') {
         return `<input type="number" class="database-field-value ${cls}" value="${Number(value)}" step="1" style="width:52px;" ${attrs}>`;
+    }
+
+    /**
+     * A material as a swatch: the image itself, or a plain square, and the
+     * name. Clicking opens a grid of every material in the project.
+     * `blank` names what the empty choice means here (plain, or the
+     * building's own).
+     */
+    _materialPickerHtml(cls, value, attrs, blank) {
+        const url = value ? this.materialUrl(value) : null;
+        const face = url ? `<img src="${rrEscapeHtml(url)}" alt="" draggable="false" style="width:22px;height:22px;object-fit:cover;border-radius:3px;display:block;pointer-events:none;">`
+            : `<span style="width:22px;height:22px;border-radius:3px;background:var(--color-bg-deep);border:1px dashed var(--color-border-input);display:block;"></span>`;
+        return `<button type="button" class="rr-btn-secondary rr-structures-material-pick ${cls}" data-value="${rrEscapeHtml(value || '')}" data-blank="${rrEscapeHtml(blank)}" ${attrs} style="display:inline-flex;align-items:center;gap:6px;padding:2px 8px 2px 2px;height:28px;text-transform:none;font-size:12px;max-width:150px;">${face}<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${rrEscapeHtml(value || blank)}</span></button>`;
+    }
+
+    /** The grid under a swatch button; a click chooses, Escape or a click elsewhere closes. */
+    openMaterialPicker(button, onPick) {
+        this.closeMaterialPicker();
+        const blank = button.dataset.blank || '';
+        const current = button.dataset.value || '';
+        const names = this.materials();
+        const swatch = (name, inner, title) => `<button type="button" class="rr-structures-swatch" data-name="${rrEscapeHtml(name)}" title="${rrEscapeHtml(title)}" aria-checked="${name === current}" style="width:44px;height:44px;padding:0;border-radius:4px;border:2px solid ${name === current ? 'var(--color-accent)' : 'var(--color-border-input)'};background:var(--color-bg-deep);overflow:hidden;cursor:pointer;">${inner}</button>`;
+        const grid = document.createElement('div');
+        grid.className = 'rr-structures-picker';
+        grid.setAttribute('role', 'listbox');
+        grid.style.cssText = 'position:fixed;z-index:10020;display:grid;grid-template-columns:repeat(6, 44px);gap:4px;padding:8px;background:var(--color-bg-panel);border:1px solid var(--color-border);border-radius:4px;box-shadow:0 6px 18px rgba(0,0,0,.35);';
+        grid.innerHTML = swatch('', `<span style="display:block;width:100%;height:100%;border:1px dashed var(--color-border-input);box-sizing:border-box;"></span>`, blank)
+            + names.map(name => swatch(name, `<img src="${rrEscapeHtml(this.materialUrl(name) || '')}" alt="" draggable="false" style="width:100%;height:100%;object-fit:cover;display:block;pointer-events:none;">`, name)).join('')
+            + `<div style="grid-column:1 / -1;font-size:11px;color:var(--color-text-muted);padding-top:2px;">${rrEscapeHtml(this._t('Any tileable image under img/materials is a material.'))}</div>`;
+        const rect = button.getBoundingClientRect();
+        grid.style.left = Math.max(8, Math.min(window.innerWidth - 300, rect.left)) + 'px';
+        grid.style.top = (rect.bottom + 4 + 260 > window.innerHeight ? rect.top - 4 - 260 : rect.bottom + 4) + 'px';
+        document.body.appendChild(grid);
+        for (const el of grid.querySelectorAll('.rr-structures-swatch')) el.addEventListener('click', () => { onPick(el.dataset.name); this.closeMaterialPicker(); });
+        const away = event => { if (!grid.contains(event.target) && event.target !== button) this.closeMaterialPicker(); };
+        const key = event => { if (event.key === 'Escape') this.closeMaterialPicker(); };
+        setTimeout(() => { document.addEventListener('pointerdown', away, true); document.addEventListener('keydown', key, true); }, 0);
+        this._picker = { grid, away, key };
+    }
+
+    closeMaterialPicker() {
+        const picker = this._picker;
+        if (!picker) return;
+        document.removeEventListener('pointerdown', picker.away, true);
+        document.removeEventListener('keydown', picker.key, true);
+        picker.grid.remove();
+        this._picker = null;
     }
 
     _field(text, control) {
@@ -540,7 +593,6 @@ class DatabaseStructureEditor {
         const plan = this.current.plan;
         const floor = this.currentFloor();
         const materialNames = this.materials();
-        const ownOptions = [['', tt("Building's own")]].concat(materialNames.map(name => [name, name]));
         const arrows = (cls, current) => `<span style="display:inline-flex;gap:2px;">${DatabaseStructureEditor.DIRECTIONS.map(dir => `<button type="button" class="rr-btn-secondary ${cls}" data-dir="${dir}" title="${rrEscapeHtml(tt(dir))}" aria-pressed="${dir === current}" style="width:26px;height:26px;padding:0;display:flex;align-items:center;justify-content:center;${dir === current ? 'border-color:var(--color-accent);' : ''}">${DatabaseStructureEditor.icon(dir)}</button>`).join('')}</span>`;
         const facingArrows = (cls, current) => `<span style="display:inline-flex;gap:2px;">${[[8, 'north'], [4, 'west'], [6, 'east'], [2, 'south']].map(([value, dir]) => `<button type="button" class="rr-btn-secondary ${cls}" data-facing="${value}" title="${rrEscapeHtml(tt(DatabaseStructureEditor.FACINGS.find(([v]) => v === value)[1]))}" aria-pressed="${value === current}" style="width:26px;height:26px;padding:0;display:flex;align-items:center;justify-content:center;${value === current ? 'border-color:var(--color-accent);' : ''}">${DatabaseStructureEditor.icon(dir)}</button>`).join('')}</span>`;
         const sel = this.selection;
@@ -550,8 +602,8 @@ class DatabaseStructureEditor {
             const own = floor.materials[sel.key] || { floor: '', wall: '' };
             html = `${kindLabel(tt('Room'))}
                 ${this._field(tt('Name'), `<input type="text" class="database-field-value rr-structures-room-name" value="${rrEscapeHtml(sel.key)}" style="width:110px;">`)}
-                ${this._field(tt('Floor'), this._selectHtml('rr-structures-room-material', ownOptions, own.floor, 'data-role="floor" style="width:110px;"'))}
-                ${this._field(tt('Wall'), this._selectHtml('rr-structures-room-material', ownOptions, own.wall, 'data-role="wall" style="width:110px;"'))}
+                ${this._field(tt('Floor'), this._materialPickerHtml('rr-structures-room-material', own.floor, 'data-role="floor"', tt("Building's own")))}
+                ${this._field(tt('Wall'), this._materialPickerHtml('rr-structures-room-material', own.wall, 'data-role="wall"', tt("Building's own")))}
                 ${this._field(tt('Wet'), `<input type="checkbox" class="system-checkbox rr-structures-wet" ${floor.wet.includes(sel.key) ? 'checked' : ''}>`)}`;
         } else if (sel && sel.kind === 'door' && floor && floor.doors[sel.key]) {
             const door = floor.doors[sel.key];
@@ -599,13 +651,13 @@ class DatabaseStructureEditor {
             this.selection = { kind: 'room', key: newName };
             this.markDirty(); this.renderInspector();
         });
-        for (const input of box.querySelectorAll('.rr-structures-room-material')) {
-            input.addEventListener('change', () => {
+        for (const button of box.querySelectorAll('.rr-structures-room-material')) {
+            button.addEventListener('click', () => this.openMaterialPicker(button, name => {
                 this.pushHistory();
                 const own = floor.materials[sel.key] || (floor.materials[sel.key] = { floor: '', wall: '' });
-                own[input.dataset.role] = input.value;
-                this.markDirty();
-            });
+                own[button.dataset.role] = name;
+                this.markDirty(); this.renderInspector();
+            }));
         }
         box.querySelector('.rr-structures-wet')?.addEventListener('change', event => {
             this.pushHistory();
@@ -670,7 +722,6 @@ class DatabaseStructureEditor {
         const tt = text => this._t(text);
         const plan = this.current.plan;
         const materialNames = this.materials();
-        const materialOptions = [['', tt('Plain')]].concat(materialNames.map(name => [name, name]));
         const roleLabels = { wall: tt('Wall'), inner: tt('Inner wall'), floor: tt('Floor'), wet: tt('Wet floor'), roof: tt('Roof'), stair: tt('Stair'), path: tt('Path') };
         const styleNames = Object.keys(DatabaseStructureEditor.STYLES);
         const otherPlans = this.records().filter(entry => entry !== this.current.entry).map(entry => [entry.file || entry.name, entry.name]);
@@ -683,7 +734,7 @@ class DatabaseStructureEditor {
             </div>`;
         const remove = (kind, index) => `<button type="button" class="rr-btn-secondary rr-structures-row-remove" data-rows="${kind}" data-index="${index}" title="${rrEscapeHtml(tt('Remove'))}" style="padding:2px 6px;">✕</button>`;
         const add = kind => `<button type="button" class="rr-btn-secondary rr-structures-row-add" data-rows="${kind}" style="padding:2px 8px;font-size:11px;">${tt('Add')}</button>`;
-        const materialField = role => this._field(roleLabels[role], this._selectHtml('rr-structures-material', materialOptions, plan.materials[role], `data-role="${role}" style="width:100px;"`));
+        const materialField = role => this._field(roleLabels[role], this._materialPickerHtml('rr-structures-material', plan.materials[role], `data-role="${role}"`, tt('Plain')));
         const partStyle = part => DatabaseStructureEditor.styleOf(Object.assign({}, DatabaseStructureEditor.styleMaterials('', null), part.materials || {}), null);
         const partsBody = plan.parts.map((part, index) => `
             <input type="text" class="database-field-value rr-structures-part" data-index="${index}" data-prop="name" value="${rrEscapeHtml(part.name)}" style="min-width:0;">
@@ -698,7 +749,7 @@ class DatabaseStructureEditor {
             ${this._selectHtml('rr-structures-path', [['', tt('Path material')]].concat(materialNames.map(name => [name, name])), strip[4] || '', `data-index="${index}" data-i="4"`)}
             ${remove('paths', index)}`).join('');
         more.innerHTML = `
-            <div class="database-section-header rr-structures-fold" style="display:flex;align-items:center;gap:8px;cursor:pointer;"><span style="flex:0 0 12px;font-size:10px;color:var(--color-text-muted);">${open ? '▾' : '▸'}</span><span style="flex:1;">${tt('More')}</span><span style="font-weight:normal;color:var(--color-text-muted);font-size:11px;">${tt('Materials, roof, windows, parts')}</span></div>
+            <div class="sidebar-header rr-structures-fold" style="display:flex;align-items:center;gap:8px;"><span style="flex:0 0 12px;font-size:10px;color:var(--color-text-muted);">${open ? '▾' : '▸'}</span><span style="flex:1;">${tt('More')}</span><span style="font-weight:normal;text-transform:none;color:var(--color-text-muted);font-size:11px;">${tt('Materials, roof, windows, parts')}</span></div>
             <div class="database-section-content" style="${open ? '' : 'display:none;'}padding:6px 10px 10px;">
                 ${row(...['wall', 'inner', 'floor', 'wet'].map(materialField))}
                 ${row(...['roof', 'stair', 'path'].map(materialField))}
@@ -724,8 +775,8 @@ class DatabaseStructureEditor {
         const materialNames = this.materials();
         const number = (input, min, max) => Math.max(min, Math.min(max, Math.floor(Number(input.value)) || 0));
         more.querySelector('.rr-structures-fold').addEventListener('click', () => { this._open.more = !this._open.more; this.renderMore(); });
-        for (const input of more.querySelectorAll('.rr-structures-material')) {
-            input.addEventListener('change', () => { this.pushHistory(); plan.materials[input.dataset.role] = input.value; this.markDirty(); this.renderBar(); });
+        for (const button of more.querySelectorAll('.rr-structures-material')) {
+            button.addEventListener('click', () => this.openMaterialPicker(button, name => { this.pushHistory(); plan.materials[button.dataset.role] = name; this.markDirty(); this.renderBar(); this.renderMore(); }));
         }
         for (const input of more.querySelectorAll('.rr-structures-field')) {
             input.addEventListener('change', () => {
@@ -918,7 +969,14 @@ class DatabaseStructureEditor {
                 plan.spots[t.key] = [cell.x, cell.y];
             }
         }
-        this.schedulePreview();
+        this._reportStale = true;
+        this.requestPlanRedraw();
+    }
+
+    /** The plan alone, on the next frame: what a drag needs, without the build behind it. */
+    requestPlanRedraw() {
+        if (this._redraw || typeof requestAnimationFrame !== 'function') return;
+        this._redraw = requestAnimationFrame(() => { this._redraw = 0; this.drawPlan(this._report); });
     }
 
     endPlanGesture(cell) {
@@ -1010,6 +1068,22 @@ class DatabaseStructureEditor {
         return this.addDoorAt(x, y);
     }
 
+    /** What the pointer would do here: move, resize from an edge, place, or nothing. */
+    cursorFor(cell, hit) {
+        if (!cell || !this.currentFloor() || this.floor === 'roof') return 'default';
+        if (hit && hit.kind === 'room' && (this.tool === 'select' || this.tool === 'room')) {
+            const r = this.currentFloor().rooms[hit.key];
+            const left = cell.x === r[0] && r[2] > r[0], right = cell.x === r[2] && r[2] > r[0], top = cell.y === r[1] && r[3] > r[1], bottom = cell.y === r[3] && r[3] > r[1];
+            if ((left || right) && (top || bottom)) return (left && top) || (right && bottom) ? 'nwse-resize' : 'nesw-resize';
+            if (left || right) return 'ew-resize';
+            if (top || bottom) return 'ns-resize';
+            return 'move';
+        }
+        if (hit && hit.kind !== 'room') return 'move';
+        if (this.tool === 'select') return 'default';
+        return this.tool === 'room' ? 'crosshair' : 'copy';
+    }
+
     _bindPlanGestures(canvas) {
         if (!canvas) return;
         const cellOf = event => { const rect = canvas.getBoundingClientRect(); return this.cellAt(event.clientX - rect.left, event.clientY - rect.top); };
@@ -1020,7 +1094,15 @@ class DatabaseStructureEditor {
             canvas.focus?.();
             if (this.beginPlanGesture(cell)) { canvas.setPointerCapture?.(event.pointerId); this.schedulePreview(); }
         });
-        canvas.addEventListener('pointermove', event => { if (this._gesture) this.updatePlanGesture(cellOf(event) || this._gesture.start); });
+        canvas.addEventListener('pointermove', event => {
+            if (this._gesture) { this.updatePlanGesture(cellOf(event) || this._gesture.start); return; }
+            const cell = cellOf(event);
+            const hit = cell ? this.hitAt(cell.x, cell.y) : null;
+            const key = hit ? hit.kind + ':' + hit.key : '';
+            canvas.style.cursor = this.cursorFor(cell, hit);
+            if (key !== (this._hover ? this._hover.kind + ':' + this._hover.key : '')) { this._hover = hit; this.requestPlanRedraw(); }
+        });
+        canvas.addEventListener('pointerleave', () => { if (this._hover) { this._hover = null; this.requestPlanRedraw(); } });
         const finish = event => { if (this._gesture) this.endPlanGesture(cellOf(event)); };
         canvas.addEventListener('pointerup', finish);
         canvas.addEventListener('pointercancel', finish);
@@ -1044,6 +1126,7 @@ class DatabaseStructureEditor {
         const R = typeof Reactor3D !== 'undefined' ? Reactor3D : null;
         const report = this.current ? DatabaseStructureEditor.report(this.current.plan, name => this.resolve(name), R) : null;
         this._report = report;
+        this._reportStale = false;
         this.drawPlan(report);
         this.drawReport(report);
         this.draw3D(report);
@@ -1110,6 +1193,21 @@ class DatabaseStructureEditor {
             ctx.fillText(name, cx, cy - Math.max(7, cell * 0.9));
         }
         const floorNow = this.currentFloor(), sel = this.selection;
+        // While the build behind the plan is stale (a drag, an edit not yet
+        // rebuilt), the rooms, doors and windows are drawn from the plan's
+        // own data on top, so what moves under the hand moves at once.
+        if (floorNow && this.floor !== 'roof' && (this._reportStale || this._gesture)) {
+            for (const [, r] of Object.entries(floorNow.rooms)) {
+                ctx.fillStyle = tint.floor; ctx.globalAlpha = 0.5;
+                ctx.fillRect(ox + r[0] * cell, oy + r[1] * cell, (r[2] - r[0] + 1) * cell, (r[3] - r[1] + 1) * cell);
+            }
+            ctx.globalAlpha = 0.95;
+            for (let i = 0; i < floorNow.doors.length; i++) for (const [dx, dy] of this.doorCellsOf(i, floorNow)) { ctx.fillStyle = tint.doorway; ctx.fillRect(ox + dx * cell, oy + dy * cell, cell, cell); }
+            for (const [wx, wy] of floorNow.windows) { ctx.fillStyle = tint.window; ctx.fillRect(ox + wx * cell, oy + wy * cell, cell, cell); }
+            ctx.globalAlpha = 1;
+            ctx.fillStyle = colours('--color-text');
+            for (const [name, r] of Object.entries(floorNow.rooms)) ctx.fillText(name, ox + ((r[0] + r[2] + 1) / 2) * cell, oy + ((r[1] + r[3] + 1) / 2) * cell);
+        }
         // Stairs point the way they rise; hand-placed windows show even before the build catches up.
         const arrow = { north: [0, -1], south: [0, 1], west: [-1, 0], east: [1, 0] };
         for (const s of plan.stairs) {
@@ -1122,19 +1220,35 @@ class DatabaseStructureEditor {
             ctx.moveTo(cx + dx * cell * 0.3, cy + dy * cell * 0.3); ctx.lineTo(cx + dx * cell * 0.3 - (dx - dy) * cell * 0.2, cy + dy * cell * 0.3 - (dy + dx) * cell * 0.2); ctx.stroke();
             ctx.lineWidth = 1;
         }
-        ctx.strokeStyle = colours('--color-accent'); ctx.lineWidth = 2;
-        const outline = (x0, y0, x1, y1) => ctx.strokeRect(ox + x0 * cell + 1, oy + y0 * cell + 1, (x1 - x0 + 1) * cell - 2, (y1 - y0 + 1) * cell - 2);
-        if (floorNow && this.floor !== 'roof' && sel?.kind === 'room' && floorNow.rooms[sel.key]) {
-            const r = floorNow.rooms[sel.key]; outline(r[0], r[1], r[2], r[3]);
-        } else if (floorNow && sel?.kind === 'door' && floorNow.doors[sel.key]) {
-            for (const [dx, dy] of this.doorCellsOf(sel.key, floorNow)) outline(dx, dy, dx, dy);
-        } else if (floorNow && sel?.kind === 'window' && floorNow.windows[sel.key]) {
-            const [wx, wy] = floorNow.windows[sel.key]; outline(wx, wy, wx, wy);
-        } else if (sel?.kind === 'stair' && plan.stairs[sel.key]) {
-            const s = plan.stairs[sel.key]; outline(s.from[0], s.from[1], s.from[0], s.from[1]);
-        } else if (sel?.kind === 'spot' && plan.spots[sel.key]) {
-            const at = plan.spots[sel.key];
-            ctx.beginPath(); ctx.arc(ox + (at[0] + 0.5) * cell, oy + (at[1] + 0.5) * cell, Math.max(5, cell * 0.55), 0, Math.PI * 2); ctx.stroke();
+        // The hovered thing is lit faintly; the selected one is outlined, filled, and a room gets corner handles.
+        const boxOf = hit => {
+            if (!hit || !floorNow) return null;
+            if (hit.kind === 'room' && this.floor !== 'roof' && floorNow.rooms[hit.key]) { const r = floorNow.rooms[hit.key]; return [r]; }
+            if (hit.kind === 'door' && floorNow.doors[hit.key]) return this.doorCellsOf(hit.key, floorNow).map(([x, y]) => [x, y, x, y]);
+            if (hit.kind === 'window' && floorNow.windows[hit.key]) { const [x, y] = floorNow.windows[hit.key]; return [[x, y, x, y]]; }
+            if (hit.kind === 'stair' && plan.stairs[hit.key]) { const f = plan.stairs[hit.key].from; return [[f[0], f[1], f[0], f[1]]]; }
+            if (hit.kind === 'spot' && plan.spots[hit.key]) { const a = plan.spots[hit.key]; return [[a[0], a[1], a[0], a[1]]]; }
+            return null;
+        };
+        const accent = colours('--color-accent');
+        const hoverBoxes = this._hover && !(sel && this._hover.kind === sel.kind && String(this._hover.key) === String(sel.key)) ? boxOf(this._hover) : null;
+        if (hoverBoxes) {
+            ctx.strokeStyle = accent; ctx.globalAlpha = 0.5; ctx.lineWidth = 1.5;
+            for (const [x0, y0, x1, y1] of hoverBoxes) ctx.strokeRect(ox + x0 * cell + 1, oy + y0 * cell + 1, (x1 - x0 + 1) * cell - 2, (y1 - y0 + 1) * cell - 2);
+            ctx.globalAlpha = 1;
+        }
+        const selBoxes = boxOf(sel);
+        if (selBoxes) {
+            ctx.fillStyle = accent; ctx.globalAlpha = 0.22;
+            for (const [x0, y0, x1, y1] of selBoxes) ctx.fillRect(ox + x0 * cell, oy + y0 * cell, (x1 - x0 + 1) * cell, (y1 - y0 + 1) * cell);
+            ctx.globalAlpha = 1; ctx.strokeStyle = accent; ctx.lineWidth = 2.5;
+            for (const [x0, y0, x1, y1] of selBoxes) ctx.strokeRect(ox + x0 * cell + 1, oy + y0 * cell + 1, (x1 - x0 + 1) * cell - 2, (y1 - y0 + 1) * cell - 2);
+            if (sel.kind === 'room') {
+                const [x0, y0, x1, y1] = selBoxes[0], h = Math.max(3, Math.min(6, cell * 0.35));
+                ctx.fillStyle = accent;
+                for (const [hx, hy] of [[x0, y0], [x1 + 1, y0], [x0, y1 + 1], [x1 + 1, y1 + 1]]) ctx.fillRect(ox + hx * cell - h, oy + hy * cell - h, h * 2, h * 2);
+            }
+            if (sel.kind === 'spot') { const a = plan.spots[sel.key]; ctx.beginPath(); ctx.arc(ox + (a[0] + 0.5) * cell, oy + (a[1] + 0.5) * cell, Math.max(6, cell * 0.6), 0, Math.PI * 2); ctx.stroke(); }
         }
         ctx.lineWidth = 1;
         if (this._gesture && this._gesture.mode === 'draw' && this._gesture.moved) {
@@ -1287,6 +1401,9 @@ class DatabaseStructureEditor {
     /** Called by the database when the page is left. */
     detach() {
         clearTimeout(this._previewTimer);
+        this.closeMaterialPicker();
+        if (this._redraw && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(this._redraw);
+        this._redraw = 0;
         this._disposePreview();
         this._detail = null;
     }
