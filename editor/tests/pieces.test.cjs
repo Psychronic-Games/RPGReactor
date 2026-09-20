@@ -444,6 +444,20 @@ test('inside a building the roof and the wall in the camera\'s way are cut aroun
     assert.equal(lone, 10, 'a lone wall on the ground: five faces, ten triangles (no bottom)');
     assert.equal(rowTris, 3 * 10 - 4 * 2, 'three in a row: the four faces they press together are gone');
     assert.match(runtime, /if \(rrBayer < rrThin\) discard;/, 'a wall in the way is dithered thin, not cut');
+    // A floor slab shows only the faces that can be seen: none inside a
+    // wall's cell, no seam against the slab next door, and its underside
+    // only where nothing stands beneath (the ceiling of the room below).
+    const tris = (pieces, map) => R.pieceGeometry(pieces, map).attributes.position.count / 3;
+    const loneFloor = mapWith([{ id: 1, kind: 'floor', x: 1, y: 1, z: 0, rot: 0, material: '' }]);
+    assert.equal(tris(R.piecesOf(loneFloor), loneFloor), 10, 'a lone slab on the ground: top and four sides');
+    const underWall = mapWith([{ id: 1, kind: 'floor', x: 1, y: 1, z: 0, rot: 0, material: '' }, { id: 2, kind: 'wall', x: 1, y: 1, z: 0, rot: 0, material: '' }]);
+    assert.equal(tris(R.piecesOf(underWall).filter(q => q.kind === 'floor'), underWall), 0, 'a slab under a wall is never seen: no band of floor round the foot of a building');
+    const pair = mapWith([{ id: 1, kind: 'floor', x: 1, y: 1, z: 0, rot: 0, material: '' }, { id: 2, kind: 'floor', x: 2, y: 1, z: 0, rot: 0, material: '' }]);
+    assert.equal(tris(R.piecesOf(pair), pair), 2 * 10 - 2 * 2, 'two slabs side by side: the seam between them is gone');
+    const ceiling = mapWith([{ id: 1, kind: 'floor', x: 1, y: 1, z: 5, rot: 0, material: '' }]);
+    assert.equal(tris(R.piecesOf(ceiling), ceiling), 12, 'a slab over an open room keeps its underside: it is the ceiling');
+    const overWall = mapWith([{ id: 1, kind: 'wall', x: 1, y: 1, z: 0, rot: 0, material: '' }, { id: 2, kind: 'floor', x: 1, y: 1, z: 5, rot: 0, material: '' }]);
+    assert.equal(tris(R.piecesOf(overWall).filter(q => q.kind === 'floor'), overWall), 10, 'a slab resting on a wall has no underside to show');
     assert.match(runtime, /!\(material\.__reactorPieces \|\| material\.__reactorModel\)/, 'placed models thin in the sight line too');
     assert.match(runtime, /material\.__reactorPieces \? "if \(vRRWorldPos\.y > rrCutTop/, 'but only pieces lose their storey');
     assert.match(runtime, /rrAlong < rrSightLength - 3\.5\) \{"/, 'a model stops thinning well before the party, so the party never dissolves');
@@ -467,12 +481,22 @@ test('inside a building the roof and the wall in the camera\'s way are cut aroun
     const shared = R.cutawayUniforms();
     scene.updateCutaway(camera, house, { _realX: 2, _realY: 2 });
     assert.ok(Math.abs(shared.rrCutTop.value - 4.5) < 1e-9, 'downstairs: cut half a tile under the upper floor');
+    // A camera under that ceiling (first person, a low orbit) keeps it:
+    // cutting it from there shows the sky through the room.
+    camera.position.set(3, 2.5, 4); camera.updateMatrixWorld();
+    scene.updateCutaway(camera, house, { _realX: 2, _realY: 2 });
+    assert.equal(shared.rrCutTop.value, 1e9, 'a camera under the ceiling sees the ceiling');
+    assert.equal(shared.rrCutRadius.value, R.CUTAWAY_RADIUS, 'the wall in its way still thins');
+    camera.position.set(10, 8, 12); camera.updateMatrixWorld();
+    scene.updateCutaway(camera, house, { _realX: 2, _realY: 2 });
+    assert.ok(Math.abs(shared.rrCutTop.value - 4.5) < 1e-9, 'and from above, the cut returns');
     assert.deepEqual(shared.rrCutBox.value, [2 - R.CUTAWAY_REACH, 2 - R.CUTAWAY_REACH, 3 + R.CUTAWAY_REACH, 3 + R.CUTAWAY_REACH]);
     assert.deepEqual(shared.rrCutEye.value, [10, 8, 12]);
     assert.ok(Math.abs(shared.rrCutFocus.value[1] - 1.6) < 1e-9, 'the sight line ends at chest height');
     assert.equal(shared.rrCutRadius.value, R.CUTAWAY_RADIUS);
+    camera.position.set(10, 12, 12); camera.updateMatrixWorld();
     scene.updateCutaway(camera, house, { _realX: 2, _realY: 2, _reactorGround: 5.1 });
-    assert.ok(Math.abs(shared.rrCutTop.value - 9.5) < 1e-9, 'upstairs: the roof goes, the storey stays');
+    assert.ok(Math.abs(shared.rrCutTop.value - 9.5) < 1e-9, 'upstairs, seen from above the roof: the roof goes, the storey stays');
     scene.updateCutaway(camera, house, { _realX: 6, _realY: 6 });
     assert.equal(shared.rrCutTop.value, 1e9, 'outside: nothing overhead is cut');
     assert.equal(shared.rrCutRadius.value, R.CUTAWAY_RADIUS, 'but a wall in the way still opens');

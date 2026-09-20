@@ -564,7 +564,7 @@ Reactor3D.emitPiece = function(piece, base, out, hidden) {
  * block's bottom on a block; and a bottom on the map's ground level.
  */
 Reactor3D.hiddenFacesOf = function(piece, mapData) {
-    if (piece.kind !== "wall" && piece.kind !== "block") return null;
+    if (piece.kind !== "wall" && piece.kind !== "block" && piece.kind !== "floor") return null;
     const height = this.pieceHeight(piece.kind);
     const solidAt = (x, y, z, h) => {
         const stack = mapData ? this.piecesAt(mapData, x, y) : null;
@@ -574,6 +574,30 @@ Reactor3D.hiddenFacesOf = function(piece, mapData) {
         && this.elevationAt(mapData, piece.x, piece.y) === this.elevationAt(mapData, piece.x - 1, piece.y)
         && this.elevationAt(mapData, piece.x, piece.y) === this.elevationAt(mapData, piece.x, piece.y + 1)
         && this.elevationAt(mapData, piece.x, piece.y) === this.elevationAt(mapData, piece.x, piece.y - 1);
+    if (piece.kind === "floor") {
+        // A slab is laid under every wall of a plan, so a doorway has a
+        // threshold and a cut wall never shows the ground. Inside a wall it
+        // is never seen, and its sides would fight the wall's own faces for
+        // the bottom tenth of a tile: a band of floorboard round the foot of
+        // every building. A side against a neighbouring slab at the same
+        // level is a seam inside one floor, and a side against a
+        // neighbouring wall is covered by it. The underside stays wherever
+        // nothing stands beneath: that is the ceiling of the room below.
+        const stackHere = mapData ? this.piecesAt(mapData, piece.x, piece.y) : null;
+        const enclosed = !!stackHere && stackHere.some(other => (other.kind === "wall" || other.kind === "block") && other.z === piece.z);
+        const covered = (x, y) => {
+            const stack = mapData ? this.piecesAt(mapData, x, y) : null;
+            return !!stack && stack.some(other => other.z === piece.z && (other.kind === "floor" || other.kind === "wall" || other.kind === "block"));
+        };
+        return {
+            east: enclosed || (flat && covered(piece.x + 1, piece.y)),
+            west: enclosed || (flat && covered(piece.x - 1, piece.y)),
+            south: enclosed || (flat && covered(piece.x, piece.y + 1)),
+            north: enclosed || (flat && covered(piece.x, piece.y - 1)),
+            top: enclosed,
+            bottom: piece.z === 0 || solidAt(piece.x, piece.y, piece.z - 1, 1) || solidAt(piece.x, piece.y, piece.z - this.PIECE_STOREY, this.PIECE_STOREY)
+        };
+    }
     // Rotation does not change a cube, so the faces are named in world terms and the cube is emitted unturned.
     return {
         east: flat && solidAt(piece.x + 1, piece.y, piece.z, height),

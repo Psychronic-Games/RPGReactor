@@ -675,9 +675,12 @@ Reactor3D.CUTAWAY_REACH = 24;
 
 /**
  * Each frame in the game: the cut follows the player and the camera. A
- * player under a roof loses everything above the storey they stand in;
- * a wall between the camera and the player is opened whether they are
- * inside or out.
+ * player under a roof loses everything above the storey they stand in,
+ * but only while the camera looks in from above that cut: a camera that
+ * is itself under the ceiling (first person, a low third-person orbit)
+ * has nothing overhead in its way, and cutting the ceiling from it would
+ * show the sky through the room. A wall between the camera and the
+ * player is opened whether they are inside or out.
  */
 Reactor3D.MapScene.prototype.updateCutaway = function(camera, mapData, character) {
     const shared = Reactor3D.cutawayUniforms();
@@ -690,9 +693,10 @@ Reactor3D.MapScene.prototype.updateCutaway = function(camera, mapData, character
     const z = (Number.isFinite(character._realY) ? character._realY : character.y || 0) + 0.5;
     const ground = Reactor3D.characterGround(mapData, character);
     const covered = Reactor3D.pieceCoverAt(mapData, x, z, ground);
-    shared.rrCutTop.value = covered ? Math.floor(ground + 1e-6) + Reactor3D.PIECE_STOREY - 0.5 : 1e9;
-    if (covered) { shared.rrCutBox.value[0] = covered.x0; shared.rrCutBox.value[1] = covered.y0; shared.rrCutBox.value[2] = covered.x1; shared.rrCutBox.value[3] = covered.y1; }
     const eye = camera.getWorldPosition(Reactor3D._cutEye || (Reactor3D._cutEye = new THREE.Vector3()));
+    const cutTop = covered ? Math.floor(ground + 1e-6) + Reactor3D.PIECE_STOREY - 0.5 : 1e9;
+    shared.rrCutTop.value = eye.y > cutTop ? cutTop : 1e9;
+    if (covered) { shared.rrCutBox.value[0] = covered.x0; shared.rrCutBox.value[1] = covered.y0; shared.rrCutBox.value[2] = covered.x1; shared.rrCutBox.value[3] = covered.y1; }
     shared.rrCutEye.value[0] = eye.x; shared.rrCutEye.value[1] = eye.y; shared.rrCutEye.value[2] = eye.z;
     shared.rrCutFocus.value[0] = x; shared.rrCutFocus.value[1] = ground + 1.5; shared.rrCutFocus.value[2] = z;
     shared.rrCutRadius.value = Reactor3D.CUTAWAY_RADIUS;
