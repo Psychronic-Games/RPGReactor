@@ -219,7 +219,7 @@ class Database3DEditor {
         detailEl.innerHTML = `
             <div style="display:flex;flex-direction:row;gap:0;height:100%;min-height:0;">
                 <div class="r3d-browser-column" style="width:220px;flex:0 0 220px;display:flex;flex-direction:column;border-right:1px solid var(--color-border);min-height:0;">
-                    <div style="padding:6px 10px;font-weight:bold;color:var(--color-text);border-bottom:1px solid var(--color-border);">${this._t('Models')}</div>
+                    <div class="database-section-title">${window.I18n?.tDbType ? window.I18n.tDbType('reactor3d', '3D Models') : '3D Models'}</div>
                     <div class="database-search-container" style="padding:8px;background-color:var(--color-bg-menubar);border-bottom:1px solid var(--color-border);flex-shrink:0;">
                         <input type="text" class="r3d-model-search" placeholder="${this._t('Search files...')}"
                             style="width:100%;padding:6px 10px;background-color:var(--color-bg-panel);border:1px solid var(--color-border-input);border-radius:3px;color:var(--color-text);font-size:12px;box-sizing:border-box;">
