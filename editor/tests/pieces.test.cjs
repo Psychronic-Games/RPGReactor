@@ -627,13 +627,14 @@ test('inside a building the roof and the wall in the camera\'s way are cut aroun
     stepped.reactor3d.terrain = new Array((stepped.width + 1) * (stepped.height + 1)).fill(0).map((v, i) => (i % (stepped.width + 1)) >= 4 ? 1 : 0); stepped.reactor3d.terrainWidth = stepped.width;
     assert.equal(R.pieceGeometry(R.piecesOf(stepped), stepped).attributes.position.count / 3, 3 * 12 - 2 * 2, 'a step under the third keeps the two faces on either side of that step, and no others');
     assert.match(runtime, /if \(rrBayer < rrThin\) discard;/, 'a model in the way is dithered thin');
-    assert.match(runtime, /rrInWay = rrOff2 < rrCutRadius \* 0\.6 && rrLineY - rrCutRadius < rrCutFocus\.y \+ 3\.5;/, 'a wall in the way is what the sight corridor holds');
+    assert.match(runtime, /rrInWay = rrOff2 < rrGhostWidth && rrLineY - 1\.0 < rrCutFocus\.y \+ 3\.5;/, 'a wall in the way is what a corridor the party\'s width holds, where the sight line passes through a storey');
+    assert.ok(R.GHOST_WIDTH > 0.8 && R.GHOST_WIDTH < 2, 'the corridor is about the party\'s width, so a wall beside the party is not in the way');
     assert.match(runtime, /if \(rrGhost > 0\.5\) \{ if \(!rrInWay\) discard; \} else if \(rrInWay\) discard;/, 'the solid pass leaves it out and the ghost pass draws only it');
     assert.match(source3D(), /transparent: true, opacity: Reactor3D\.GHOST_OPACITY, depthWrite: false/, 'the ghost pass is translucent');
     assert.match(runtime, /material\.__reactorPieces \? "\\t\\tif \(false\) \{"/, 'pieces never dither');
     { const run = R.pieceShapes('stair', { kind: 'stair', z: 3 }); assert.equal(run.length, 5); assert.deepEqual(run[4].box, [0, -3, 0, 1, 0, 1], 'a stair above the ground stands on a solid down to it'); assert.equal(R.pieceShapes('stair', { kind: 'stair', z: 0 }).length, 4); }
     { const map = mapWith([{ id: 1, kind: 'wall', x: 4, y: 4, z: 0, rot: 0, material: '', group: 3 }, { id: 2, kind: 'floor', x: 4, y: 4, z: 5, rot: 0, material: '', group: 3 }]); const cover = R.pieceCoverAt(map, 4.5, 4.5, 0); assert.ok(cover.x0 <= 4 - R.CUTAWAY_MARGIN && cover.x1 >= 5 + R.CUTAWAY_MARGIN && cover.x0 <= 4 - R.CUTAWAY_REACH, 'the cut box reaches a hair past the outer faces and the stretch around the player'); }
-    assert.match(runtime, /if \(!gl_FrontFacing\) diffuseColor\.rgb \*= 0\.45;/, 'the inside of a sliced piece is a flat dark cross-section');
+    assert.match(runtime, /diffuseColor\.rgb = diffuse \* texture2D\(map, vec2\(vRRWorldPos\.x, vRRWorldPos\.z\)\)\.rgb;/, 'the inside of a sliced piece wears the material as a top surface');
     assert.ok(R.CUTAWAY_DROP > 0.6 && R.CUTAWAY_DROP < 1, 'the cut plane sits under a doorway header');
     assert.match(runtime, /this\.setCutLook\(cutState !== "none"\);/, 'piece materials are two-sided and the ghost pass shows while a cut is on');
     assert.match(runtime, /if \(vRRCutPos\.y > rrCutTop && vRRCutPos\.x >= rrCutBox\.x[^\n]*discard;\\n\\t#include <alphatest_fragment>/, 'the shadow pass takes the storey cut too: a cut roof casts no shadow into the room');

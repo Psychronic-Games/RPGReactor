@@ -603,11 +603,16 @@ Reactor3D.cutawayUniforms = function() {
             rrCutFocus: { value: [0, 0, 0] },
             rrCutRadius: { value: 0 },
             // The footprint the top cut reaches: x0, z0, x1, z1 in world tiles.
-            rrCutBox: { value: [0, 0, 0, 0] }
+            rrCutBox: { value: [0, 0, 0, 0] },
+            // Half the width of the see-through corridor: the party's own width and a little.
+            rrGhostWidth: { value: Reactor3D.GHOST_WIDTH }
         };
     }
     return this._cutawayUniforms;
 };
+
+/** How far either side of the line of sight a wall is seen through: the party's own width and a little. */
+Reactor3D.GHOST_WIDTH = 1.2;
 
 Reactor3D.injectCutaway = function(material, shader) {
     // Pieces take both cuts; a placed model (a tree in front of the door)
@@ -617,17 +622,19 @@ Reactor3D.injectCutaway = function(material, shader) {
     for (const name of Object.keys(shared)) shader.uniforms[name] = shared[name];
     if (shader.fragmentShader.indexOf("uniform float rrCutTop;") >= 0) return;
     shader.uniforms.rrGhost = { value: material.__reactorGhost ? 1 : 0 };
-    shader.fragmentShader = "uniform float rrCutTop;\nuniform vec3 rrCutEye;\nuniform vec3 rrCutFocus;\nuniform float rrCutRadius;\nuniform vec4 rrCutBox;\nuniform float rrGhost;\n" + shader.fragmentShader.replace(
+    shader.fragmentShader = "uniform float rrCutTop;\nuniform vec3 rrCutEye;\nuniform vec3 rrCutFocus;\nuniform float rrCutRadius;\nuniform vec4 rrCutBox;\nuniform float rrGhost;\nuniform float rrGhostWidth;\n" + shader.fragmentShader.replace(
         "#include <map_fragment>",
         [
             material.__reactorPieces ? "if (vRRWorldPos.y > rrCutTop && vRRWorldPos.x >= rrCutBox.x && vRRWorldPos.z >= rrCutBox.y && vRRWorldPos.x <= rrCutBox.z && vRRWorldPos.z <= rrCutBox.w) discard;" : "",
             // A wall in the way is seen through, not cut: the columns of pieces
-            // within a straight corridor from the camera to the player, where
-            // the sight line is low enough to have met a storey, leave the
-            // solid pass and are drawn by the translucent ghost pass instead
-            // (the same chunk again with `rrGhost`), so the wall is still
-            // there to see. Never a floor. A placed model fades in the sight
-            // line with an ordered dither, which needs no blending.
+            // within a corridor the party's width from the camera to the
+            // player, where the sight line at that column is low enough to
+            // pass through a storey standing there, leave the solid pass and
+            // are drawn by the translucent ghost pass instead (the same chunk
+            // again with `rrGhost`), so the wall is still there to see. A
+            // wall beside the party is not in the way, however near. Never a
+            // floor. A placed model fades in the sight line with an ordered
+            // dither, which needs no blending.
             material.__reactorPieces ? [
                 "bool rrInWay = false;",
                 "if (rrCutRadius > 0.0 && vRRWorldPos.y > rrCutFocus.y - 1.4) {",
@@ -640,7 +647,7 @@ Reactor3D.injectCutaway = function(material, shader) {
                 "\t\tif (rrAlong2 > 0.0 && rrAlong2 < rrSight2Length - 0.3) {",
                 "\t\t\tfloat rrOff2 = length(rrToHere2 - rrSight2Dir * rrAlong2);",
                 "\t\t\tfloat rrLineY = rrCutEye.y + (rrCutFocus.y - rrCutEye.y) * (rrAlong2 / rrSight2Length);",
-                "\t\t\trrInWay = rrOff2 < rrCutRadius * 0.6 && rrLineY - rrCutRadius < rrCutFocus.y + 3.5;",
+                "\t\t\trrInWay = rrOff2 < rrGhostWidth && rrLineY - 1.0 < rrCutFocus.y + 3.5;",
                 "\t\t}",
                 "\t}",
                 "}",
@@ -671,8 +678,17 @@ Reactor3D.injectCutaway = function(material, shader) {
             "}",
             "#include <map_fragment>",
             // Looking into a sliced piece meets its inside faces (drawn while a
-            // cut is on): shown flat and dark, they read as the cut's own face.
-            material.__reactorPieces ? "if (!gl_FrontFacing) diffuseColor.rgb *= 0.45;" : ""
+            // cut is on): they wear the material as a top surface would, laid
+            // flat by world position, so the slice reads as the wall's top.
+            material.__reactorPieces ? [
+                "if (!gl_FrontFacing) {",
+                "#ifdef USE_MAP",
+                "\tdiffuseColor.rgb = diffuse * texture2D(map, vec2(vRRWorldPos.x, vRRWorldPos.z)).rgb;",
+                "#else",
+                "\tdiffuseColor.rgb = diffuse;",
+                "#endif",
+                "}"
+            ].join("\n\t") : ""
         ].join("\n\t")
     );
 };
