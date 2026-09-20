@@ -631,9 +631,10 @@ Reactor3D.emitPiece = function(piece, base, out, hidden) {
                 const a = (i / segments) * Math.PI * 2, t = (j / rings) * (Math.PI / 2);
                 return place(ccx + Math.cos(a) * Math.cos(t) * r, y0 + Math.sin(t), ccv + Math.sin(a) * Math.cos(t) * r);
             };
+            // Wound up the ring first, then round it, like the column's side: the normal points out.
             for (let j = 0; j < rings; j++) for (let i = 0; i < segments; i++) {
-                if (j === rings - 1) tri(at(i, j), at(i + 1, j), at(i, j + 1));
-                else quad(at(i, j), at(i + 1, j), at(i + 1, j + 1), at(i, j + 1));
+                if (j === rings - 1) tri(at(i, j), at(i, j + 1), at(i + 1, j));
+                else quad(at(i, j), at(i, j + 1), at(i + 1, j + 1), at(i + 1, j));
             }
             for (let i = 0; i < segments; i++) {
                 const a0 = (i / segments) * Math.PI * 2, a1 = ((i + 1) / segments) * Math.PI * 2;

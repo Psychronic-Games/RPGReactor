@@ -38,6 +38,53 @@
     const DIRS = { north: [0, -1, 2], south: [0, 1, 0], west: [-1, 0, 1], east: [1, 0, 3] };
 
     const inRoom = (rect, x, y) => x >= rect[0] && x <= rect[2] && y >= rect[1] && y <= rect[3];
+    /** A cell no room claims that touches a room, even at a corner: where a wall stands. */
+    function isWallCell(rooms, size, x, y) {
+        if (x < 0 || y < 0 || x >= size[0] || y >= size[1] || roomAt(rooms, x, y)) return false;
+        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if ((dx || dy) && roomAt(rooms, x + dx, y + dy)) return true;
+        return false;
+    }
+    /** A wall cell with open ground or the page's edge on one of its four sides: the building's outside. */
+    function isOuterWallCell(rooms, size, x, y) {
+        if (!isWallCell(rooms, size, x, y)) return false;
+        for (const [dx, dy] of Object.values(DIRS)) {
+            const nx = x + dx, ny = y + dy;
+            if (nx < 0 || ny < 0 || nx >= size[0] || ny >= size[1]) return true;
+            if (!roomAt(rooms, nx, ny) && !isWallCell(rooms, size, nx, ny)) return true;
+        }
+        return false;
+    }
+    /** An outer wall cell with a room straight behind it: where a window can look out. */
+    function canWindow(rooms, size, x, y) {
+        return isOuterWallCell(rooms, size, x, y) && Object.values(DIRS).some(([dx, dy]) => roomAt(rooms, x + dx, y + dy));
+    }
+    /**
+     * The bounds of each building on a floor: rooms whose walls touch are one
+     * building and share a roof; rooms with open ground between them are two.
+     * Empty with no rooms.
+     */
+    function buildingBoxes(rooms, size) {
+        const rects = Object.values(rooms || {}).filter(Array.isArray);
+        if (!rects.length) return [];
+        // Each room's box with its walls; boxes that overlap or touch merge until none do.
+        let boxes = rects.map(r => [Math.max(0, r[0] - 1), Math.max(0, r[1] - 1), Math.min(size[0] - 1, r[2] + 1), Math.min(size[1] - 1, r[3] + 1)]);
+        for (let merged = true; merged;) {
+            merged = false;
+            for (let i = 0; i < boxes.length && !merged; i++) for (let j = i + 1; j < boxes.length; j++) {
+                const a = boxes[i], b = boxes[j];
+                if (a[0] > b[2] || b[0] > a[2] || a[1] > b[3] || b[1] > a[3]) continue;
+                boxes[i] = [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[2], b[2]), Math.max(a[3], b[3])];
+                boxes.splice(j, 1); merged = true; break;
+            }
+        }
+        return boxes;
+    }
+    /** The bounds of all of a floor's rooms and their walls together, or null with no rooms. */
+    function buildingBox(rooms, size) {
+        const boxes = buildingBoxes(rooms, size);
+        if (!boxes.length) return null;
+        return [Math.min(...boxes.map(b => b[0])), Math.min(...boxes.map(b => b[1])), Math.max(...boxes.map(b => b[2])), Math.max(...boxes.map(b => b[3]))];
+    }
     const roomAt = (rooms, x, y) => {
         for (const name of Object.keys(rooms)) if (inRoom(rooms[name], x, y)) return name;
         return null;
@@ -49,7 +96,7 @@
      * wall and then through it. Rooms are neighbours when the gap between
      * them holds no other room.
      */
-    function sharedWall(rooms, size, a, b) {
+    function sharedWall(rooms, size, a, b, side = null) {
         const A = rooms[a];
         if (!A) return [];
         const [W, H] = size;
@@ -57,11 +104,18 @@
         const column = (x0, x1, y0, y1) => { const cells = []; for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) cells.push([x, y]); return cells; };
         const row = (y0, y1, x0, x1) => { const cells = []; for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) cells.push([x, y]); return cells; };
         if (b === 'outside') {
-            if (A[3] < H - 1 && clear(A[0], A[3] + 1, A[2], H - 1)) return row(A[3] + 1, H - 1, A[0], A[2]);
-            if (A[1] > 0 && clear(A[0], 0, A[2], A[1] - 1)) return row(0, A[1] - 1, A[0], A[2]);
-            if (A[2] < W - 1 && clear(A[2] + 1, A[1], W - 1, A[3])) return column(A[2] + 1, W - 1, A[1], A[3]);
-            if (A[0] > 0 && clear(0, A[1], A[0] - 1, A[3])) return column(0, A[0] - 1, A[1], A[3]);
-            return [];
+            // The one wall beside the room on the side the door names, or else the first
+            // side that faces open ground: south, north, east, west.
+            const faces = (cells, dx, dy) => cells.some(([x, y]) => x + dx < 0 || y + dy < 0 || x + dx >= W || y + dy >= H || (!roomAt(rooms, x + dx, y + dy) && !isWallCell(rooms, size, x + dx, y + dy)));
+            const strip = (cells, dx, dy) => cells.length && cells.every(([x, y]) => isWallCell(rooms, size, x, y)) && faces(cells, dx, dy) ? cells : null;
+            const sides = {
+                south: () => A[3] < H - 1 && strip(row(A[3] + 1, A[3] + 1, A[0], A[2]), 0, 1),
+                north: () => A[1] > 0 && strip(row(A[1] - 1, A[1] - 1, A[0], A[2]), 0, -1),
+                east: () => A[2] < W - 1 && strip(column(A[2] + 1, A[2] + 1, A[1], A[3]), 1, 0),
+                west: () => A[0] > 0 && strip(column(A[0] - 1, A[0] - 1, A[1], A[3]), -1, 0),
+            };
+            if (sides[side]) return sides[side]() || [];
+            return sides.south() || sides.north() || sides.east() || sides.west() || [];
         }
         const B = rooms[b];
         if (!B) return [];
@@ -83,7 +137,7 @@
      * row, and the sorted positions along it. Null when the rooms share no wall.
      */
     function doorWall(rooms, size, door) {
-        const wall = sharedWall(rooms, size, door[0], door[1]);
+        const wall = sharedWall(rooms, size, door[0], door[1], door[4]);
         if (!wall.length) return null;
         const xs = new Set(wall.map(c => c[0])), ys = new Set(wall.map(c => c[1]));
         const alongX = xs.size >= ys.size;
@@ -290,30 +344,34 @@
             // Windows along the outer walls: a pair every `every` cells, never on a door or its neighbour,
             // and any cell the floor names in `windows: [[x, y]]`, placed by hand.
             const windowCells = new Set();
+            const windowable = (x, y) => canWindow(rooms, plan.size, x, y);
             for (const cell of level.windows || []) {
                 if (!Array.isArray(cell)) continue;
                 const [wx, wy] = cell;
-                const onRing = wx === 0 || wx === W - 1 || wy === 0 || wy === H - 1;
-                if (onRing && !doors.has(wx + ',' + wy)) windowCells.add(wx + ',' + wy);
+                if (windowable(wx, wy) && !doors.has(wx + ',' + wy)) windowCells.add(wx + ',' + wy);
             }
-            if (windows) {
+            if (windows && windows.every > 0) {
                 const nearDoor = (x, y) => doors.has(x + ',' + y) || doors.has((x + 1) + ',' + y) || doors.has((x - 1) + ',' + y) || doors.has(x + ',' + (y + 1)) || doors.has(x + ',' + (y - 1));
                 const along = (cells) => {
                     for (let i = 0; i + windows.width <= cells.length; i += windows.every) {
                         const run = cells.slice(i + Math.floor(windows.every / 2) - 1, i + Math.floor(windows.every / 2) - 1 + windows.width);
-                        if (run.length === windows.width && run.every(([x, y]) => !nearDoor(x, y) && roomAt(rooms, x, y - 1) || roomAt(rooms, x, y + 1) || roomAt(rooms, x - 1, y) || roomAt(rooms, x + 1, y))) run.forEach(([x, y]) => windowCells.add(x + ',' + y));
+                        if (run.length === windows.width && run.every(([x, y]) => !nearDoor(x, y) && windowable(x, y))) run.forEach(([x, y]) => windowCells.add(x + ',' + y));
                     }
                 };
-                const top = [], bottom = [], left = [], right = [];
-                for (let x = 1; x < W - 1; x++) { top.push([x, 0]); bottom.push([x, H - 1]); }
-                for (let y = 1; y < H - 1; y++) { left.push([0, y]); right.push([W - 1, y]); }
-                along(top); along(bottom); along(left); along(right);
+                // Along each side of each building's box, where the wall faces open ground.
+                for (const [bx0, by0, bx1, by1] of buildingBoxes(rooms, plan.size)) {
+                    const top = [], bottom = [], left = [], right = [];
+                    for (let x = bx0 + 1; x < bx1; x++) { top.push([x, by0]); bottom.push([x, by1]); }
+                    for (let y = by0 + 1; y < by1; y++) { left.push([bx0, y]); right.push([bx1, y]); }
+                    along(top); along(bottom); along(left); along(right);
+                }
             }
             for (let x = 0; x < W; x++) for (let y = 0; y < H; y++) {
                 const key = x + ',' + y;
                 if (open.has(key)) continue;
                 const room = roomAt(rooms, x, y);
-                const outer = x === 0 || x === W - 1 || y === 0 || y === H - 1;
+                if (!room && !isWallCell(rooms, plan.size, x, y)) continue;
+                const outer = !room && isOuterWallCell(rooms, plan.size, x, y);
                 // A room may name its own floor, and the walls that touch it:
                 // `materials: { hall: { floor: "Stone", wall: "Wood" } }` on the
                 // floor. An inner wall between two rooms takes the first
@@ -343,16 +401,18 @@
         if (top) for (const [name, rect] of Object.entries(top.rooms || {})) {
             for (let x = rect[0]; x <= rect[2]; x++) for (let y = rect[1]; y <= rect[3]; y++) put('floor', x, y, roofZ, 0, M.inner || M.floor);
         }
-        // Roof: ramps up from each eave for `pitch` rows, a flat top between, gables of blocks at the ends.
+        // A roof over each building of the top floor (its rooms and their walls): ramps up
+        // from each eave for `pitch` rows, a flat top between, gables of blocks at the ends.
         const roof = Object.assign({ pitch: 6 }, plan.roof || {});
-        const pitch = Math.max(0, Math.min(Math.floor((H - 1) / 2), Math.floor(roof.pitch)));
-        if (floors.length && roof.pitch !== null) {
-            for (let x = 0; x < W; x++) {
-                for (let i = 0; i < pitch; i++) { put('ramp', x, i, roofZ + i, 0, M.roof); put('ramp', x, H - 1 - i, roofZ + i, 2, M.roof); }
-                for (let y = pitch; y <= H - 1 - pitch; y++) put('floor', x, y, roofZ + pitch, 0, M.roof);
+        if (roof.pitch !== null) for (const [bx0, by0, bx1, by1] of buildingBoxes(top ? top.rooms : {}, plan.size)) {
+            const bh = by1 - by0 + 1;
+            const pitch = Math.max(0, Math.min(Math.floor((bh - 1) / 2), Math.floor(roof.pitch)));
+            for (let x = bx0; x <= bx1; x++) {
+                for (let i = 0; i < pitch; i++) { put('ramp', x, by0 + i, roofZ + i, 0, M.roof); put('ramp', x, by1 - i, roofZ + i, 2, M.roof); }
+                for (let y = by0 + pitch; y <= by1 - pitch; y++) put('floor', x, y, roofZ + pitch, 0, M.roof);
             }
-            for (const gx of [0, W - 1]) for (let y = 1; y < H - 1; y++) {
-                const height = Math.min(y, H - 1 - y, pitch);
+            for (const gx of [bx0, bx1]) for (let y = by0 + 1; y < by1; y++) {
+                const height = Math.min(y - by0, by1 - y, pitch);
                 for (let z = roofZ; z < roofZ + height; z++) put('block', gx, y, z, 0, M.wall);
             }
         }
@@ -377,7 +437,12 @@
             for (const part of out.parts || []) { part.at = [(part.at ? part.at[0] : 0) * k, (part.at ? part.at[1] : 0) * k]; part.scale = (part.scale || 1) * k; }
             for (const level of out.floors || []) {
                 for (const name of Object.keys(level.rooms || {})) level.rooms[name] = grow(level.rooms[name]);
-                level.doors = (level.doors || []).map(d => d.length > 3 && Number.isFinite(Number(d[3])) ? [d[0], d[1], (Number(d[2]) || 2) * k, Number(d[3]) * k + Math.floor((k - 1) / 2)] : [d[0], d[1], (Number(d[2]) || 2) * k]);
+                level.doors = (level.doors || []).map(d => {
+                    // Width and anchor grow; the side, if the door names one, stays.
+                    const grown = d.length > 3 && Number.isFinite(Number(d[3])) ? [d[0], d[1], (Number(d[2]) || 2) * k, Number(d[3]) * k + Math.floor((k - 1) / 2)] : [d[0], d[1], (Number(d[2]) || 2) * k];
+                    if (grown.length > 3 && d.length > 4) grown.push(d[4]);
+                    return grown;
+                });
                 level.windows = (level.windows || []).map(([x, y]) => [x * k, y * k]);
             }
             for (const stair of out.stairs || []) { stair.from = [stair.from[0] * k, stair.from[1] * k]; stair.width = (Number(stair.width) || 1) * k; }
@@ -396,7 +461,9 @@
                 level.doors = (level.doors || []).map(d => {
                     if (d.length < 4 || !Number.isFinite(Number(d[3]))) return d;
                     const found = doorWall(level.rooms || {}, [W, H], d);
-                    return [d[0], d[1], d[2], found && !found.alongX ? H - 1 - Number(d[3]) : Number(d[3])];
+                    const turned = [d[0], d[1], d[2], found && !found.alongX ? H - 1 - Number(d[3]) : Number(d[3])];
+                    if (d.length > 4) turned.push(DIR_CW[d[4]] || d[4]);
+                    return turned;
                 });
                 level.windows = (level.windows || []).map(([x, y]) => point(x, y));
                 for (const name of Object.keys(level.rooms || {})) level.rooms[name] = rect(level.rooms[name]);
@@ -423,14 +490,15 @@
         const door = (level.doors || []).find(d => d[1] === 'outside' || d[0] === 'outside');
         if (!door) return null;
         const a = door[0] === 'outside' ? door[1] : door[0];
-        const cells = doorCells(level.rooms || {}, plan.size, [a, 'outside', door[2]]);
+        const cells = doorCells(level.rooms || {}, plan.size, [a, 'outside', door[2], door[3], door[4]]);
         if (!cells.length) return null;
         const [W, H] = plan.size;
         // The door cell on the outer face, and the cell just beyond it.
         const face = [[([, y]) => y === H - 1], [([, y]) => y === 0], [([x]) => x === W - 1], [([x]) => x === 0]]
             .map(([test]) => cells.filter(test)).find(list => list.length) || cells;
         const [x, y] = face[Math.floor(face.length / 2)];
-        const outside = y === H - 1 ? [x, y + 1] : y === 0 ? [x, y - 1] : x === W - 1 ? [x + 1, y] : [x - 1, y];
+        const room = level.rooms[a];
+        const outside = y > room[3] ? [x, y + 1] : y < room[1] ? [x, y - 1] : x > room[2] ? [x + 1, y] : [x - 1, y];
         return { door: [x, y], outside };
     }
 
@@ -495,7 +563,7 @@
         return { start, report, states: seen.size };
     }
 
-    const api = { build, buildOwn, spots, eventsOf, placeEvents, removeGroupEvents, eventTag, EVENT_TAG, transform, validate, entrance, doorCells, doorWall, sharedWall, DIRS };
+    const api = { build, buildOwn, spots, eventsOf, placeEvents, removeGroupEvents, eventTag, EVENT_TAG, transform, validate, entrance, doorCells, doorWall, sharedWall, isWallCell, isOuterWallCell, canWindow, buildingBox, buildingBoxes, DIRS };
     root.RRStructurePlan = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof globalThis !== 'undefined' ? globalThis : window);

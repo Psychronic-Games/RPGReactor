@@ -53,11 +53,31 @@ test('normalizing fills defaults and clamps, and trimming drops what is default'
     assert.equal('stairs' in trimmed, true, 'the file had a stairs list, so it keeps one');
 });
 
-test('a new plan is a cottage the engine can walk through', () => {
+/** The cottage two rooms drawn on a new page make. */
+function cottagePlan(E, name) {
+    const plan = E.newPlan(name);
+    plan.floors[0].rooms = { hall: [1, 1, 6, 8], kitchen: [8, 1, 12, 8] };
+    plan.floors[0].doors = [['hall', 'outside', 3], ['hall', 'kitchen', 3]];
+    plan.floors[0].wet = ['kitchen'];
+    return plan;
+}
+
+test('a new plan is an empty page; two rooms drawn on it are a cottage the engine can walk through', () => {
     const { DatabaseStructureEditor: E } = loadEditor();
     const Reactor3D = require(path.join(repoRoot, 'runtime', 'reactor_3d.js'));
-    const plan = E.newPlan('Test');
+    const empty = E.newPlan('Test');
+    assert.equal(E.isEmpty(empty), true, 'nothing on the page yet');
+    assert.equal(empty.floors.length, 1, 'one floor to draw on');
+    assert.deepEqual([...empty.size], [20, 16]);
+    assert.equal(empty.materials.wall, 'Stone', 'a style is set so the first room looks like something');
+    assert.equal(E.report(empty, () => null, Reactor3D).pieces, 0, 'an empty page builds nothing');
+    const plan = cottagePlan(E, 'Test');
+    assert.equal(E.isEmpty(plan), false);
     const report = E.report(plan, () => null, Reactor3D);
+    // Walls stand only beside the rooms: the page's far side stays open ground.
+    assert.ok(report.built.every(piece => piece.x <= 13), 'nothing built past the kitchen\'s wall');
+    assert.ok(report.built.some(piece => piece.kind === 'window'), 'windows in the outer walls');
+    assert.ok(!report.built.some(piece => piece.kind === 'ramp' && piece.x > 13), 'the roof covers the building, not the page');
     assert.ok(report.pieces > 50, 'walls, floors, a door, windows and a roof');
     assert.ok(report.entrance && report.entrance.door, 'a front door');
     assert.deepEqual([...report.reached].sort(), ['hall', 'kitchen'], 'both rooms are reached from the front door');
@@ -85,7 +105,7 @@ test('the database manager reads plans as records and writes records back as pla
         manager.fs = fs; manager.path = path;
         const folder = path.join(root, '3d', 'Structures');
         fs.mkdirSync(folder, { recursive: true });
-        fs.writeFileSync(path.join(folder, 'Cottage.json'), JSON.stringify(E.trimPlan(E.newPlan('Cottage')), null, 2) + '\n');
+        fs.writeFileSync(path.join(folder, 'Cottage.json'), JSON.stringify(E.trimPlan(cottagePlan(E, 'Cottage')), null, 2) + '\n');
         fs.writeFileSync(path.join(folder, 'notes.json'), '{"not": "a plan"}');
         manager.data.structures = await manager.loadStructures(root);
         assert.equal(manager.data.structures[0], null, 'the null slot every category keeps');
@@ -214,18 +234,22 @@ test('drawing on the plan: rooms are drawn, moved and resized; doors, windows, s
     assert.equal(floor.doors[0][3], 3, 'slid up its wall');
     assert.deepEqual(cellsOf(0), ['8,3', '8,4', '8,5']);
     click(15, 5);
-    assert.equal(JSON.stringify(floor.doors[1]), JSON.stringify([second, 'outside', 3, 5]), 'a ring cell beside a room is the front door');
+    assert.equal(JSON.stringify(floor.doors[1]), JSON.stringify([second, 'outside', 3, 5, 'east']), 'an outer wall cell beside a room is the front door, on the side clicked');
+    assert.deepEqual(cellsOf(1), ['15,4', '15,5', '15,6'], 'through the east wall, not the first side that faces open ground');
+    assert.equal(editor.addDoorAt(0, 4), false, 'open ground beside the wall is not a wall');
     assert.equal(editor.addDoorAt(0, 0), false, 'a corner touches no room');
     assert.equal(editor.addDoorAt(4, 4), false, 'inside a room is not a wall');
-    // Window tool: a click on the ring places one; a drag slides it round the outside; not onto a corner.
+    // Window tool: a click on a room's outer wall places one; a drag slides it along; not onto a corner or open ground.
     editor.tool = 'window';
-    click(0, 4);
-    assert.equal(JSON.stringify(floor.windows), JSON.stringify([[0, 4]]));
+    click(1, 4);
+    assert.equal(JSON.stringify(floor.windows), JSON.stringify([[1, 4]]));
     assert.deepEqual({ ...editor.selection }, { kind: 'window', key: 0 });
-    stroke([0, 4], [0, 7]);
-    assert.equal(JSON.stringify(floor.windows), JSON.stringify([[0, 7]]));
-    stroke([0, 7], [0, 0]);
-    assert.equal(JSON.stringify(floor.windows), JSON.stringify([[0, 7]]), 'a corner is not a wall');
+    stroke([1, 4], [1, 6]);
+    assert.equal(JSON.stringify(floor.windows), JSON.stringify([[1, 6]]));
+    stroke([1, 6], [1, 7]);
+    assert.equal(JSON.stringify(floor.windows), JSON.stringify([[1, 6]]), 'the building\'s corner has no room behind it');
+    stroke([1, 6], [0, 4]);
+    assert.equal(JSON.stringify(floor.windows), JSON.stringify([[1, 6]]), 'open ground beside the wall is no wall');
     click(4, 4);
     assert.equal(floor.windows.length, 1, 'inside a room is no window');
     // Stairs tool: a click in a room starts stairs; a drag moves them; a wall cell starts none.
@@ -247,7 +271,7 @@ test('drawing on the plan: rooms are drawn, moved and resized; doors, windows, s
     // A press on any of them selects it, whatever the tool.
     editor.tool = 'room';
     click(12, 9); assert.deepEqual({ ...editor.selection }, { kind: 'stair', key: 0 });
-    click(0, 7); assert.deepEqual({ ...editor.selection }, { kind: 'window', key: 0 });
+    click(1, 6); assert.deepEqual({ ...editor.selection }, { kind: 'window', key: 0 });
     click(8, 4); assert.deepEqual({ ...editor.selection }, { kind: 'door', key: 0 });
     click(5, 5); assert.deepEqual({ ...editor.selection }, { kind: 'spot', key: who });
     // Remove takes the selection; Undo brings it back, Redo takes it again; a moved room undoes to where it was.
@@ -315,10 +339,14 @@ test('shapes on a plan: placed at a size and a turn, drawn, moved, turned with t
     editor._planGeom = { ox: 0, oy: 0, cell: 10 };
     editor.tool = 'shape';
     editor._shape = { kind: 'dome', size: [5, 2.5, 5] };
-    // (3,12) would be inside the hall's front door, which cuts through every wall row down to the ring; place clear of it.
     editor.beginPlanGesture({ x: 14, y: 3 }); editor.endPlanGesture({ x: 14, y: 3 });
     assert.equal(plan.shapes.length, 3);
-    assert.equal(JSON.stringify(plan.shapes[2]), JSON.stringify({ kind: 'dome', at: [14, 3], z: 0, size: [5, 2.5, 5], angle: 0, material: '' }), 'a new shape is what the tool says');
+    assert.equal(JSON.stringify(plan.shapes[2]), JSON.stringify({ kind: 'dome', at: [14, 3], z: 0, size: [5, 2.5, 5], angle: 0, material: '' }), 'a new shape is what the tool says (a dome wears the roof material once the plan has one)');
+    // A shape placed on another sits on top of it: a dome on the cylinder's dome, at ten and a half.
+    editor.beginPlanGesture({ x: 11, y: 11 }); editor.endPlanGesture({ x: 11, y: 11 });
+    assert.equal(plan.shapes[3].z, 10.5, 'stacked on the tallest shape under the click');
+    editor.undo();
+    assert.equal(plan.shapes.length, 3);
     // A tower is a cylinder with a dome on top, in one click, the dome in the roof's material.
     plan.materials.roof = 'RoofTile';
     editor._shape = { kind: 'tower', size: [4, 6, 4] };
@@ -336,6 +364,7 @@ test('shapes on a plan: placed at a size and a turn, drawn, moved, turned with t
     assert.deepEqual({ ...editor.hitAt(12, 12) }, { kind: 'shape', key: 1 }, 'the topmost shape under the cell is the one picked');
     editor.beginPlanGesture({ x: 14, y: 3 }); editor.updatePlanGesture({ x: 13, y: 4 }); editor.endPlanGesture({ x: 13, y: 4 });
     assert.deepEqual([...plan.shapes[2].at], [13, 4], 'dragged');
+    assert.equal(new E(null, { getCurrentProject: () => null }, null, null)._shape.kind, 'cylinder', 'the tool starts on a plain cylinder');
     assert.ok(editor.shapeCells(plan.shapes[0]).length === Reactor3D.pieceFootprint({ kind: 'cylinder', x: 11, y: 11, z: 0, rot: 0, size: [5, 8, 5], angle: 0 }).length, 'the page and the runtime agree on the footprint');
     editor.removeSelection();
     assert.equal(plan.shapes.length, 2);

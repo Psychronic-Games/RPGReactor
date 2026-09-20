@@ -743,6 +743,24 @@ test('the round pieces: a shape has a size and a turn, blocks its round footprin
     assert.equal(R.terrainBlocks(map, 2, 3, 3, 3, 0), false, 'the corner outside the round footprint is walkable');
     const geometry = R.pieceGeometry(list, map);
     assert.ok(geometry.attributes.position.count / 3 > 600, 'domes, a cylinder and a cone are many triangles');
+    // Every face of a round piece looks out from its axis (or straight down, the base), never in:
+    // a dome wound the other way showed its inside from outside.
+    for (const piece of list) {
+        const one = R.pieceGeometry([piece], map);
+        const pos = one.attributes.position.array;
+        const cx = piece.x + 0.5, cz = piece.y + 0.5;
+        let inward = 0, faces = 0;
+        for (let i = 0; i + 8 < pos.length; i += 9) {
+            const a = [pos[i], pos[i + 1], pos[i + 2]], b = [pos[i + 3], pos[i + 4], pos[i + 5]], c = [pos[i + 6], pos[i + 7], pos[i + 8]];
+            const u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], v = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+            const n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+            const mx = (a[0] + b[0] + c[0]) / 3 - cx, mz = (a[2] + b[2] + c[2]) / 3 - cz;
+            const radial = n[0] * mx + n[2] * mz;
+            faces++;
+            if (radial < -1e-9 || (Math.abs(radial) <= 1e-9 && n[1] > 0 && piece.kind !== 'cylinder')) inward++;
+        }
+        assert.equal(inward, 0, piece.kind + ': no face looks inward (' + faces + ' faces)');
+    }
     geometry.computeBoundingBox();
     assert.ok(Math.abs(geometry.boundingBox.max.y - 10.5) < 1e-6, 'the mesh reaches the dome\'s top');
     assert.ok(geometry.boundingBox.min.x >= 2.9 && geometry.boundingBox.min.x <= 3.1, 'the cylinder spans its width about its cell');

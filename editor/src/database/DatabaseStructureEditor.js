@@ -44,7 +44,7 @@ class DatabaseStructureEditor {
         this._preview = null;
         this._previewTimer = null;
         this._hover = null;
-        this._shape = { kind: 'tower', size: [4, 6, 4] };
+        this._shape = { kind: 'cylinder', size: [4, 6, 4] };
         this._redraw = 0;
         this._reportStale = false;
         this._picker = null;
@@ -162,7 +162,10 @@ class DatabaseStructureEditor {
             rooms: Object.fromEntries(Object.entries(floor?.rooms || {}).map(([name, rect]) => [name, [0, 1, 2, 3].map(i => int(rect?.[i], 0, 0, this.SIZE_MAX))])),
             doors: (floor?.doors || []).filter(Array.isArray).map(door => {
                 const out = [String(door[0] || ''), String(door[1] || 'outside'), int(door[2], 3, 1, 12)];
-                if (door.length > 3 && Number.isFinite(Number(door[3]))) out.push(int(door[3], 0, 0, this.SIZE_MAX));
+                const anchored = door.length > 3 && Number.isFinite(Number(door[3]));
+                if (anchored) out.push(int(door[3], 0, 0, this.SIZE_MAX));
+                // A front door may say which side of the room it is on.
+                if (anchored && ['north', 'south', 'east', 'west'].includes(door[4])) out.push(door[4]);
                 return out;
             }),
             windows: (floor?.windows || []).filter(Array.isArray).map(cell => [int(cell[0], 0, 0, this.SIZE_MAX), int(cell[1], 0, 0, this.SIZE_MAX)]),
@@ -244,13 +247,19 @@ class DatabaseStructureEditor {
     }
 
     /** A cottage to start from: two rooms, a front door, a door between, a window every six cells. */
+    /** An empty page with one floor and a style: the building is whatever gets drawn on it. */
     static newPlan(name) {
         return this.normalizePlan({
-            name, size: [14, 10], storey: 5,
+            name, size: [20, 16], storey: 5,
             materials: this.styleMaterials('Stone and tile'),
-            floors: [{ rooms: { hall: [1, 1, 6, 8], kitchen: [8, 1, 12, 8] }, doors: [['hall', 'outside', 3], ['hall', 'kitchen', 3]], wet: ['kitchen'] }],
+            floors: [{ rooms: {}, doors: [] }],
             roof: { pitch: 2 }, windows: { every: 6, width: 2 }
         });
+    }
+
+    /** Whether any floor has a room, or the plan a shape or a part: something to build. */
+    static isEmpty(plan) {
+        return !plan || (!plan.floors.some(floor => Object.keys(floor.rooms || {}).length) && !plan.shapes.length && !plan.parts.length);
     }
 
     /** Every room name on every floor, once, plus "outside". */
@@ -618,7 +627,7 @@ class DatabaseStructureEditor {
         const materialNames = this.materials();
         const arrows = (cls, current) => `<span style="display:inline-flex;gap:2px;">${DatabaseStructureEditor.DIRECTIONS.map(dir => `<button type="button" class="rr-btn-secondary ${cls}" data-dir="${dir}" title="${rrEscapeHtml(tt(dir))}" aria-pressed="${dir === current}" style="width:26px;height:26px;padding:0;display:flex;align-items:center;justify-content:center;${dir === current ? 'border-color:var(--color-accent);' : ''}">${DatabaseStructureEditor.icon(dir)}</button>`).join('')}</span>`;
         const facingArrows = (cls, current) => `<span style="display:inline-flex;gap:2px;">${[[8, 'north'], [4, 'west'], [6, 'east'], [2, 'south']].map(([value, dir]) => `<button type="button" class="rr-btn-secondary ${cls}" data-facing="${value}" title="${rrEscapeHtml(tt(DatabaseStructureEditor.FACINGS.find(([v]) => v === value)[1]))}" aria-pressed="${value === current}" style="width:26px;height:26px;padding:0;display:flex;align-items:center;justify-content:center;${value === current ? 'border-color:var(--color-accent);' : ''}">${DatabaseStructureEditor.icon(dir)}</button>`).join('')}</span>`;
-        const sel = this.selection;
+        const sel = this.tool === 'shape' ? null : this.selection;
         const kindLabel = text => `<span style="font-weight:600;color:var(--color-text-strong);">${text}</span>`;
         let html = '';
         if (sel && sel.kind === 'room' && floor && floor.rooms[sel.key]) {
@@ -660,12 +669,12 @@ class DatabaseStructureEditor {
                 ${event ? this._field(tt('Facing'), facingArrows('rr-structures-person-facing', event.direction)) : ''}`;
         } else if (this.tool === 'shape' && floor) {
             const pending = this._shape;
-            const kinds = `<span style="display:inline-flex;gap:2px;">${['tower', ...DatabaseStructureEditor.SHAPE_KINDS].map(kind => `<button type="button" class="rr-btn-secondary rr-structures-next-kind" data-kind="${kind}" title="${rrEscapeHtml(tt(kind === 'tower' ? 'Tower' : kind === 'dome' ? 'Dome' : kind === 'cylinder' ? 'Cylinder' : 'Cone'))}" aria-pressed="${kind === pending.kind}" style="width:26px;height:26px;padding:0;display:flex;align-items:center;justify-content:center;${kind === pending.kind ? 'border-color:var(--color-accent);' : ''}">${DatabaseStructureEditor.icon(kind)}</button>`).join('')}</span>`;
+            const kinds = `<span style="display:inline-flex;gap:2px;">${[...DatabaseStructureEditor.SHAPE_KINDS, 'tower'].map(kind => `<button type="button" class="rr-btn-secondary rr-structures-next-kind" data-kind="${kind}" title="${rrEscapeHtml(tt(kind === 'tower' ? 'Tower' : kind === 'dome' ? 'Dome' : kind === 'cylinder' ? 'Cylinder' : 'Cone'))}" aria-pressed="${kind === pending.kind}" style="width:26px;height:26px;padding:0;display:flex;align-items:center;justify-content:center;${kind === pending.kind ? 'border-color:var(--color-accent);' : ''}">${DatabaseStructureEditor.icon(kind)}</button>`).join('')}</span>`;
             const num = (i, min, max, step) => `<input type="number" class="database-field-value rr-structures-next-size" data-i="${i}" value="${pending.size[i]}" min="${min}" max="${max}" step="${step}" style="width:52px;">`;
             html = `${kindLabel(tt('Shape'))}
                 ${this._field(tt('Kind'), kinds)}
                 ${this._field(tt('Size'), `${num(0, 0.5, 60, 0.5)}<span>×</span>${num(1, 0.25, 60, 0.25)}<span>×</span>${num(2, 0.5, 60, 0.5)}`)}
-                <span style="color:var(--color-text-muted);">${tt('Click the plan to place it. A tower is a cylinder with a dome on top.')}</span>`;
+                <span style="color:var(--color-text-muted);">${tt('Click the plan to place it; on another shape, it sits on top. A tower is a cylinder with a dome on it.')}</span>`;
         } else {
             const hints = {
                 select: tt('Click anything on the plan to select it, drag to move it. Delete removes it.'),
@@ -710,7 +719,14 @@ class DatabaseStructureEditor {
         box.querySelector('.rr-structures-door-width')?.addEventListener('change', event => { this.pushHistory(); floor.doors[sel.key][2] = number(event.target, 1, 12); this.markDirty(); });
         for (const button of box.querySelectorAll('.rr-structures-stair-dir')) button.addEventListener('click', () => { this.pushHistory(); plan.stairs[sel.key].dir = button.dataset.dir; this.markDirty(); this.renderInspector(); });
         box.querySelector('.rr-structures-stair-width')?.addEventListener('change', event => { this.pushHistory(); plan.stairs[sel.key].width = number(event.target, 1, 8); this.markDirty(); });
-        for (const button of box.querySelectorAll('.rr-structures-next-kind')) button.addEventListener('click', () => { this._shape.kind = button.dataset.kind; this.renderInspector(); });
+        for (const button of box.querySelectorAll('.rr-structures-next-kind')) button.addEventListener('click', () => {
+            const kind = button.dataset.kind, size = this._shape.size;
+            // A dome is half as tall as it is wide unless told otherwise; the others keep their height.
+            if (kind === 'dome' && this._shape.kind !== 'dome') size[1] = Math.round(size[0] * 2) / 4;
+            else if (this._shape.kind === 'dome' && kind !== 'dome') size[1] = Math.max(size[1], Math.round(size[0] * 6) / 4);
+            this._shape.kind = kind;
+            this.renderInspector();
+        });
         for (const input of box.querySelectorAll('.rr-structures-next-size')) input.addEventListener('change', () => { const v = Number(input.value); this._shape.size[Number(input.dataset.i)] = Number.isFinite(v) && v > 0 ? Math.min(60, v) : 1; });
         for (const button of box.querySelectorAll('.rr-structures-shape-kind')) button.addEventListener('click', () => { this.pushHistory(); plan.shapes[sel.key].kind = button.dataset.kind; this.markDirty(); this.renderInspector(); });
         for (const input of box.querySelectorAll('.rr-structures-shape-size')) input.addEventListener('change', () => { this.pushHistory(); const v = Number(input.value); plan.shapes[sel.key].size[Number(input.dataset.i)] = Number.isFinite(v) && v > 0 ? Math.min(60, v) : 1; this.markDirty(); });
@@ -945,6 +961,16 @@ class DatabaseStructureEditor {
     }
 
     /** The cells a shape covers, from the runtime's own rule when it is loaded, else its box. */
+    /** The top of the tallest shape whose footprint covers the cell, or the ground. */
+    shapeTopAt(x, y) {
+        let top = 0;
+        for (const shape of this.current.plan.shapes) {
+            if (!this.shapeCells(shape).some(([sx, sy]) => sx === x && sy === y)) continue;
+            top = Math.max(top, Math.round(((shape.z || 0) + shape.size[1]) * 4) / 4);
+        }
+        return top;
+    }
+
     shapeCells(shape) {
         const piece = { kind: shape.kind, x: shape.at[0], y: shape.at[1], z: shape.z, rot: 0, size: shape.size, angle: shape.angle };
         if (typeof Reactor3D !== 'undefined' && Reactor3D.pieceFootprint) return Reactor3D.pieceFootprint(piece);
@@ -961,10 +987,12 @@ class DatabaseStructureEditor {
         return cells;
     }
 
+    /** Whether a window may go here: an outer wall of this floor's rooms. */
     onRing(x, y) {
-        const [W, H] = this.current.plan.size;
-        const corner = (x === 0 || x === W - 1) && (y === 0 || y === H - 1);
-        return !corner && (x === 0 || x === W - 1 || y === 0 || y === H - 1);
+        const floor = this.currentFloor();
+        const SP = typeof RRStructurePlan !== 'undefined' ? RRStructurePlan : null;
+        if (!floor || !SP || !SP.canWindow) return false;
+        return SP.canWindow(floor.rooms, this.current.plan.size, x, y);
     }
 
     /**
@@ -980,7 +1008,7 @@ class DatabaseStructureEditor {
         const hit = this.hitAt(cell.x, cell.y);
         // A door, window, stairs or person is picked up by any tool; a room only
         // by Select and Room, since the other tools place things inside rooms.
-        if (hit && (hit.kind !== 'room' || this.tool === 'select' || this.tool === 'room')) {
+        if (hit && (hit.kind !== 'room' || this.tool === 'select' || this.tool === 'room') && !(hit.kind === 'shape' && this.tool === 'shape')) {
             this.selection = hit;
             const g = { mode: 'move', target: hit, start: cell, moved: false, snapshot: JSON.stringify(this.current.plan) };
             if (hit.kind === 'room') {
@@ -1091,13 +1119,16 @@ class DatabaseStructureEditor {
             this.pushHistory();
             const { kind, size } = this._shape;
             const [w, h, d] = size;
+            // On top of whatever shape already covers the cell, so a dome lands on its cylinder
+            // and a second cylinder makes a tier; a dome wears the roof's material.
+            const z = this.shapeTopAt(cell.x, cell.y);
+            const material = kind => kind === 'dome' ? plan.materials.roof || '' : '';
             if (kind === 'tower') {
-                // A cylinder with a dome on top: the dome half as tall as it is wide, wearing the roof's material.
-                plan.shapes.push({ kind: 'cylinder', at: [cell.x, cell.y], z: 0, size: [w, h, d], angle: 0, material: '' });
-                plan.shapes.push({ kind: 'dome', at: [cell.x, cell.y], z: Math.round(h * 4) / 4, size: [w, Math.round(w * 2) / 4, d], angle: 0, material: plan.materials.roof || '' });
+                plan.shapes.push({ kind: 'cylinder', at: [cell.x, cell.y], z, size: [w, h, d], angle: 0, material: '' });
+                plan.shapes.push({ kind: 'dome', at: [cell.x, cell.y], z: Math.round((z + h) * 4) / 4, size: [w, Math.round(w * 2) / 4, d], angle: 0, material: material('dome') });
                 this.selection = { kind: 'shape', key: plan.shapes.length - 2 };
             } else {
-                plan.shapes.push({ kind, at: [cell.x, cell.y], z: 0, size: [w, h, d], angle: 0, material: '' });
+                plan.shapes.push({ kind, at: [cell.x, cell.y], z, size: [w, h, d], angle: 0, material: material(kind) });
                 this.selection = { kind: 'shape', key: plan.shapes.length - 1 };
             }
             this.markDirty();
@@ -1126,16 +1157,20 @@ class DatabaseStructureEditor {
         if (!floor || !plan || this.roomAtCell(x, y, floor)) return false;
         const [W, H] = plan.size;
         const n = this.roomAtCell(x, y - 1, floor), s = this.roomAtCell(x, y + 1, floor), w = this.roomAtCell(x - 1, y, floor), e = this.roomAtCell(x + 1, y, floor);
-        let pair = null, alongX = null;
+        const SP = typeof RRStructurePlan !== 'undefined' ? RRStructurePlan : null;
+        let pair = null, alongX = null, side = null;
         if (n && s && n !== s) { pair = [n, s]; alongX = true; }
         else if (w && e && w !== e) { pair = [w, e]; alongX = false; }
-        else if (x === 0 || x === W - 1 || y === 0 || y === H - 1) {
-            const beside = [n, s, w, e].filter(Boolean);
-            if (beside.length) { pair = [beside[0], 'outside']; alongX = y === 0 || y === H - 1; }
+        else if (SP && SP.isOuterWallCell && SP.isOuterWallCell(floor.rooms, plan.size, x, y)) {
+            // A front door on the side of the room the click is on.
+            if (n) { pair = [n, 'outside']; side = 'south'; alongX = true; }
+            else if (s) { pair = [s, 'outside']; side = 'north'; alongX = true; }
+            else if (w) { pair = [w, 'outside']; side = 'east'; alongX = false; }
+            else if (e) { pair = [e, 'outside']; side = 'west'; alongX = false; }
         }
         if (!pair) return false;
         this.pushHistory();
-        floor.doors.push([pair[0], pair[1], 3, alongX ? x : y]);
+        floor.doors.push(side ? [pair[0], pair[1], 3, alongX ? x : y, side] : [pair[0], pair[1], 3, alongX ? x : y]);
         this.selection = { kind: 'door', key: floor.doors.length - 1 };
         this.markDirty();
         return true;
@@ -1161,7 +1196,7 @@ class DatabaseStructureEditor {
             if (top || bottom) return 'ns-resize';
             return 'move';
         }
-        if (hit && hit.kind !== 'room') return 'move';
+        if (hit && hit.kind !== 'room' && !(hit.kind === 'shape' && this.tool === 'shape')) return 'move';
         if (this.tool === 'select') return 'default';
         return this.tool === 'room' ? 'crosshair' : 'copy';
     }
@@ -1367,6 +1402,7 @@ class DatabaseStructureEditor {
         const lines = [];
         lines.push(this._t('Pieces: {count}', { count: report.pieces }) + (report.triangles === null ? '' : ', ' + this._t('triangles: {count}', { count: report.triangles.toLocaleString() })));
         if (report.error) lines.push(rrEscapeHtml(report.error));
+        else if (DatabaseStructureEditor.isEmpty(this.current.plan)) lines.push(this._t('Draw a room to start the building, or place a shape.'));
         else if (!this.current.plan.floors.length && this.current.plan.parts.length) lines.push(this._t('A plan of parts is walked from its start spot.'));
         else if (!report.entrance) lines.push(this._t('No front door: add a door to outside on the ground floor.'));
         else if (report.missing.length) lines.push(`<span style="color:var(--color-danger, #e05c4e);">${this._t('Not reachable from the front door: {rooms}', { rooms: rrEscapeHtml(report.missing.join(', ')) })}</span>`);
