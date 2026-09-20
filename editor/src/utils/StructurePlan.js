@@ -78,19 +78,39 @@
         return [];
     }
 
-    /** The door cells: `width` cells centred along the wall, through its whole thickness. */
-    function doorCells(rooms, size, door) {
-        const [a, b, width] = door;
-        const wall = sharedWall(rooms, size, a, b);
-        if (!wall.length) return [];
-        // The wall runs along whichever axis has more distinct values.
+    /**
+     * A door's wall and the axis it runs along: `alongX` when the wall is a
+     * row, and the sorted positions along it. Null when the rooms share no wall.
+     */
+    function doorWall(rooms, size, door) {
+        const wall = sharedWall(rooms, size, door[0], door[1]);
+        if (!wall.length) return null;
         const xs = new Set(wall.map(c => c[0])), ys = new Set(wall.map(c => c[1]));
         const alongX = xs.size >= ys.size;
-        const along = Array.from(alongX ? xs : ys).sort((p, q) => p - q);
+        return { wall, alongX, along: Array.from(alongX ? xs : ys).sort((p, q) => p - q) };
+    }
+
+    /**
+     * The door cells: `width` cells along the wall, through its whole
+     * thickness, centred on the wall unless the door says where: a fourth
+     * entry is the position along the wall (the x of a row, the y of a
+     * column) the door is centred on, clamped so the whole door stays in
+     * the wall.
+     */
+    function doorCells(rooms, size, door) {
+        const found = doorWall(rooms, size, door);
+        if (!found) return [];
+        const { wall, alongX, along } = found;
         // Three cells (1.8 m) unless the plan says: a doorway a character
         // walks through without brushing the posts.
-        const w = Math.max(1, Math.min(along.length, Number(width) || 3));
-        const start = Math.floor((along.length - w) / 2);
+        const w = Math.max(1, Math.min(along.length, Number(door[2]) || 3));
+        let start = Math.floor((along.length - w) / 2);
+        if (Number.isFinite(Number(door[3])) && door[3] !== null && door[3] !== undefined) {
+            const at = Number(door[3]);
+            let nearest = 0;
+            for (let i = 1; i < along.length; i++) if (Math.abs(along[i] - at) < Math.abs(along[nearest] - at)) nearest = i;
+            start = Math.max(0, Math.min(along.length - w, nearest - Math.floor(w / 2)));
+        }
         const chosen = new Set(along.slice(start, start + w));
         return wall.filter(c => chosen.has(alongX ? c[0] : c[1]));
     }
@@ -259,8 +279,15 @@
             for (const door of level.doors || []) for (const [x, y] of doorCells(rooms, plan.size, door)) doors.add(x + ',' + y);
             // No slab over a stair (the stairwell) nor under one (the stair is the floor there).
             const open = new Set(stairCells.filter(c => c.floor === index - 1 || c.floor === index).map(c => c.x + ',' + c.y));
-            // Windows along the outer walls: a pair every `every` cells, never on a door or its neighbour.
+            // Windows along the outer walls: a pair every `every` cells, never on a door or its neighbour,
+            // and any cell the floor names in `windows: [[x, y]]`, placed by hand.
             const windowCells = new Set();
+            for (const cell of level.windows || []) {
+                if (!Array.isArray(cell)) continue;
+                const [wx, wy] = cell;
+                const onRing = wx === 0 || wx === W - 1 || wy === 0 || wy === H - 1;
+                if (onRing && !doors.has(wx + ',' + wy)) windowCells.add(wx + ',' + wy);
+            }
             if (windows) {
                 const nearDoor = (x, y) => doors.has(x + ',' + y) || doors.has((x + 1) + ',' + y) || doors.has((x - 1) + ',' + y) || doors.has(x + ',' + (y + 1)) || doors.has(x + ',' + (y - 1));
                 const along = (cells) => {
@@ -342,7 +369,8 @@
             for (const part of out.parts || []) { part.at = [(part.at ? part.at[0] : 0) * k, (part.at ? part.at[1] : 0) * k]; part.scale = (part.scale || 1) * k; }
             for (const level of out.floors || []) {
                 for (const name of Object.keys(level.rooms || {})) level.rooms[name] = grow(level.rooms[name]);
-                level.doors = (level.doors || []).map(d => [d[0], d[1], (Number(d[2]) || 2) * k]);
+                level.doors = (level.doors || []).map(d => d.length > 3 && Number.isFinite(Number(d[3])) ? [d[0], d[1], (Number(d[2]) || 2) * k, Number(d[3]) * k + Math.floor((k - 1) / 2)] : [d[0], d[1], (Number(d[2]) || 2) * k]);
+                level.windows = (level.windows || []).map(([x, y]) => [x * k, y * k]);
             }
             for (const stair of out.stairs || []) { stair.from = [stair.from[0] * k, stair.from[1] * k]; stair.width = (Number(stair.width) || 1) * k; }
             if (out.windows && out.windows !== false) out.windows = { every: (out.windows.every || 6) * k, width: (out.windows.width || 2) * k };
@@ -353,7 +381,17 @@
             const [W, H] = out.size;
             const point = (x, y) => [H - 1 - y, x];
             const rect = r => { const [ax, ay] = point(r[0], r[3]); const [bx, by] = point(r[2], r[1]); return [Math.min(ax, bx), Math.min(ay, by), Math.max(ax, bx), Math.max(ay, by)]; };
-            for (const level of out.floors || []) for (const name of Object.keys(level.rooms || {})) level.rooms[name] = rect(level.rooms[name]);
+            for (const level of out.floors || []) {
+                // A door's anchor is a position along its wall: a row's x becomes the
+                // turned column's y unchanged; a column's y becomes H-1-y, the new x.
+                level.doors = (level.doors || []).map(d => {
+                    if (d.length < 4 || !Number.isFinite(Number(d[3]))) return d;
+                    const found = doorWall(level.rooms || {}, [W, H], d);
+                    return [d[0], d[1], d[2], found && !found.alongX ? H - 1 - Number(d[3]) : Number(d[3])];
+                });
+                level.windows = (level.windows || []).map(([x, y]) => point(x, y));
+                for (const name of Object.keys(level.rooms || {})) level.rooms[name] = rect(level.rooms[name]);
+            }
             for (const stair of out.stairs || []) { stair.from = point(stair.from[0], stair.from[1]); stair.dir = DIR_CW[stair.dir] || 'east'; }
             for (const name of Object.keys(out.spots || {})) out.spots[name] = point(out.spots[name][0], out.spots[name][1]);
             out.paths = (out.paths || []).map(strip => rect(strip).concat(strip.slice(4)));
@@ -447,7 +485,7 @@
         return { start, report, states: seen.size };
     }
 
-    const api = { build, buildOwn, spots, eventsOf, placeEvents, removeGroupEvents, eventTag, EVENT_TAG, transform, validate, entrance, doorCells, sharedWall, DIRS };
+    const api = { build, buildOwn, spots, eventsOf, placeEvents, removeGroupEvents, eventTag, EVENT_TAG, transform, validate, entrance, doorCells, doorWall, sharedWall, DIRS };
     root.RRStructurePlan = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof globalThis !== 'undefined' ? globalThis : window);

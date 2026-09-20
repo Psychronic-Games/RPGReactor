@@ -28,9 +28,10 @@ project; a person can use it to find where anything lives.
 `MapNNN.json` stays ordinary RPG Maker data. Everything 3D is in the
 sidecar `MapNNN.r3d.json`, so a project with no 3D maps has no sidecars.
 
-In the editor, Database › Structures is a form over these files: draw rooms
-on the plan, click walls for doors, pick a style, and Save writes the file
-back the way it was read.
+In the editor, Database › Structures is a builder over these files: draw
+rooms on the plan, click walls for doors and windows, put stairs and people
+down, drag any of them, undo, pick a style, and Apply writes the file back
+the way it was read.
 
 The rules the engine applies to terrain, pieces and water (where the
 ground is, what blocks a step, how deep the water stands) are in
@@ -94,8 +95,14 @@ A building as a person describes it. Everything else is derived.
 - `rooms`: `[x0, y0, x1, y1]`, inclusive, in the plan's own cells. Leave
   one cell between rooms and one around the outside: those cells become
   walls. Walls can be thicker; doors cut through whatever thickness.
-- `doors`: `[roomA, roomB, width]`, centred on the wall the two rooms share.
-  `"outside"` is the outer wall (south first, then north, east, west).
+- `doors`: `[roomA, roomB, width]`, centred on the wall the two rooms share,
+  or `[roomA, roomB, width, at]` to put the door where the plan says: `at`
+  is the position along the wall (the x of a wall that runs east to west,
+  the y of one that runs north to south), clamped so the door stays in the
+  wall. `"outside"` is the outer wall (south first, then north, east, west).
+- `windows` on a floor: `[[x, y], ...]` cells on the outer ring with a
+  window each, beside whatever the plan's window rhythm places. A rhythm of
+  `every: 0` leaves only the windows placed by hand.
 - `stairs`: `from` is the bottom step's cell, `dir` the way it climbs, one
   cell per tile of rise; the floor above is left open over the run.
 - `roof`: ramps step up `pitch` rows from each eave, a flat top between,

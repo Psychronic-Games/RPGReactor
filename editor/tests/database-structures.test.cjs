@@ -171,69 +171,106 @@ test('a style names a set of materials, and a set that is its own is Custom', ()
     assert.equal(E.styleMaterials('Stone and thatch', ['Stone']).roof, '', 'a material the project lacks is left plain');
 });
 
-test('drawing on the plan: a drag makes a room, a drag moves or resizes it, a click puts a door through a wall', () => {
+test('drawing on the plan: rooms are drawn, moved and resized; doors, windows, stairs and people are placed and picked up again; undo takes it back', () => {
     const { DatabaseStructureEditor: E } = loadEditor();
     const editor = new E(null, { getCurrentProject: () => null }, null, null);
-    editor.renderInspector = () => {}; editor.renderMore = () => {}; editor.schedulePreview = () => {}; editor._detail = null;
-    let dirty = 0; editor.markDirty = () => { dirty++; };
+    editor.renderInspector = () => {}; editor.renderMore = () => {}; editor.renderTools = () => {}; editor.schedulePreview = () => {}; editor.render = () => {}; editor._detail = null;
+    editor.parentEditor = { _markDatabaseMutation() { editor._dirty = (editor._dirty || 0) + 1; }, refreshDatabaseListLabel() {} };
+    editor.eventTemplates = () => ['villager'];
     const plan = E.normalizePlan({ name: 'D', size: [16, 12], floors: [{ rooms: {}, doors: [] }] });
     editor.current = { entry: { id: 1, name: 'D', file: 'D.json', plan }, plan };
     editor._planGeom = { ox: 0, oy: 0, cell: 10 };
+    const floor = plan.floors[0];
+    const press = (x, y) => editor.beginPlanGesture({ x, y });
+    const drag = (x, y) => editor.updatePlanGesture({ x, y });
+    const release = (x, y) => editor.endPlanGesture({ x, y });
+    const stroke = (from, to) => { press(...from); drag(...to); release(...to); };
+    const click = (x, y) => { press(x, y); release(x, y); };
     assert.deepEqual({ ...editor.cellAt(35, 25) }, { x: 3, y: 2 });
     assert.equal(editor.cellAt(500, 25), null, 'outside the plan');
-    const floor = plan.floors[0];
-    // Draw: press on empty ground, drag, release.
-    editor.beginPlanGesture({ x: 2, y: 2 }); editor.updatePlanGesture({ x: 6, y: 5 }); editor.endPlanGesture({ x: 6, y: 5 });
+    // Room tool: a drag on empty ground draws; it stops one cell inside the ring, where the walls go.
+    editor.tool = 'room';
+    stroke([2, 2], [6, 5]);
     const [first] = Object.keys(floor.rooms);
-    assert.ok(first, 'a room was made');
     assert.deepEqual([...floor.rooms[first]], [2, 2, 6, 5]);
-    assert.deepEqual({ ...editor.selection }, { kind: 'room', key: first }, 'and selected');
-    assert.ok(dirty > 0, 'the database hears about it');
-    // A drag that reaches the plan's edge stops one cell short: that cell is the wall.
-    editor.beginPlanGesture({ x: 9, y: 2 }); editor.updatePlanGesture({ x: 40, y: 40 }); editor.endPlanGesture({ x: 40, y: 40 });
+    assert.deepEqual({ ...editor.selection }, { kind: 'room', key: first });
+    stroke([9, 2], [40, 40]);
     const second = Object.keys(floor.rooms)[1];
     assert.deepEqual([...floor.rooms[second]], [9, 2, 14, 10]);
-    // Move: press inside, drag.
-    editor.beginPlanGesture({ x: 4, y: 3 }); editor.updatePlanGesture({ x: 4, y: 4 }); editor.endPlanGesture({ x: 4, y: 4 });
+    // Whatever the tool, a press on a room moves it, a press on its edge resizes it.
+    editor.tool = 'select';
+    stroke([4, 3], [4, 4]);
     assert.deepEqual([...floor.rooms[first]], [2, 3, 6, 6], 'moved down one');
-    // Resize: press on the right edge, drag.
-    editor.beginPlanGesture({ x: 6, y: 4 }); editor.updatePlanGesture({ x: 7, y: 4 }); editor.endPlanGesture({ x: 7, y: 4 });
+    stroke([6, 4], [7, 4]);
     assert.deepEqual([...floor.rooms[first]], [2, 3, 7, 6], 'right edge out by one');
-    // Click the wall between the two rooms: a door. Click again: gone.
-    assert.equal(editor.toggleDoorAt(8, 4), true);
-    assert.deepEqual(floor.doors.map(door => [...door]), [[first, second, 3]]);
-    assert.equal(editor.toggleDoorAt(8, 5), true, 'the same wall from another cell');
-    assert.deepEqual(floor.doors, []);
-    // Click the outer wall beside a room that touches it: the front door.
-    assert.equal(editor.toggleDoorAt(15, 5), true);
-    assert.deepEqual(floor.doors.map(door => [...door]), [[second, 'outside', 3]]);
-    assert.equal(editor.toggleDoorAt(0, 4), false, 'a ring cell two walls from a room is no door');
-    assert.equal(editor.toggleDoorAt(0, 0), false, 'a corner touches no room');
-    assert.equal(editor.toggleDoorAt(4, 4), false, 'inside a room is not a wall');
-    // A click with no drag on a room selects it; Delete removes it with its doors.
-    editor.selection = null;
-    editor.beginPlanGesture({ x: 10, y: 5 }); editor.endPlanGesture({ x: 10, y: 5 });
-    assert.deepEqual({ ...editor.selection }, { kind: 'room', key: second });
-    editor.removeSelection();
-    assert.deepEqual(Object.keys(floor.rooms), [first]);
-    assert.deepEqual(floor.doors, [], 'its front door went with it');
-    editor.removeRoom(first);
-    assert.deepEqual(Object.keys(floor.rooms), []);
-    // The stairs and spot tools place with a click and select with another.
-    floor.rooms.hall = [1, 1, 8, 8];
+    // Door tool: a click on the wall between the rooms puts a door where the click was; a drag slides it.
+    editor.tool = 'door';
+    click(8, 5);
+    assert.equal(JSON.stringify(floor.doors), JSON.stringify([[first, second, 3, 5]]), 'the door carries where along the wall it sits');
+    assert.deepEqual({ ...editor.selection }, { kind: 'door', key: 0 });
+    const cellsOf = i => Array.from(editor.doorCellsOf(i), c => c.join(',')).sort();
+    assert.deepEqual(cellsOf(0), ['8,4', '8,5', '8,6'], 'three cells centred on the click');
+    stroke([8, 5], [8, 3]);
+    assert.equal(floor.doors[0][3], 3, 'slid up its wall');
+    assert.deepEqual(cellsOf(0), ['8,3', '8,4', '8,5']);
+    click(15, 5);
+    assert.equal(JSON.stringify(floor.doors[1]), JSON.stringify([second, 'outside', 3, 5]), 'a ring cell beside a room is the front door');
+    assert.equal(editor.addDoorAt(0, 0), false, 'a corner touches no room');
+    assert.equal(editor.addDoorAt(4, 4), false, 'inside a room is not a wall');
+    // Window tool: a click on the ring places one; a drag slides it round the outside; not onto a corner.
+    editor.tool = 'window';
+    click(0, 4);
+    assert.equal(JSON.stringify(floor.windows), JSON.stringify([[0, 4]]));
+    assert.deepEqual({ ...editor.selection }, { kind: 'window', key: 0 });
+    stroke([0, 4], [0, 7]);
+    assert.equal(JSON.stringify(floor.windows), JSON.stringify([[0, 7]]));
+    stroke([0, 7], [0, 0]);
+    assert.equal(JSON.stringify(floor.windows), JSON.stringify([[0, 7]]), 'a corner is not a wall');
+    click(4, 4);
+    assert.equal(floor.windows.length, 1, 'inside a room is no window');
+    // Stairs tool: a click in a room starts stairs; a drag moves them; a wall cell starts none.
     editor.tool = 'stairs';
-    editor.beginPlanGesture({ x: 7, y: 7 }); editor.endPlanGesture({ x: 7, y: 7 });
-    assert.equal(JSON.stringify(plan.stairs), JSON.stringify([{ floor: 0, from: [7, 7], dir: 'north', width: 1 }]));
-    assert.deepEqual({ ...editor.selection }, { kind: 'stair', key: 0 });
-    editor.beginPlanGesture({ x: 0, y: 0 }); editor.endPlanGesture({ x: 0, y: 0 });
-    assert.equal(plan.stairs.length, 1, 'a wall cell starts no stairs');
-    editor.tool = 'spot';
-    editor.beginPlanGesture({ x: 3, y: 3 }); editor.endPlanGesture({ x: 3, y: 3 });
-    const [spotName] = Object.keys(plan.spots);
-    assert.ok(spotName && plan.spots[spotName][0] === 3, 'a spot at the clicked cell');
-    assert.deepEqual({ ...editor.selection }, { kind: 'spot', key: spotName });
+    click(10, 8);
+    assert.equal(JSON.stringify(plan.stairs), JSON.stringify([{ floor: 0, from: [10, 8], dir: 'north', width: 1 }]));
+    stroke([10, 8], [12, 9]);
+    assert.equal(JSON.stringify(plan.stairs[0].from), JSON.stringify([12, 9]));
+    click(0, 3);
+    assert.equal(plan.stairs.length, 1);
+    // Person tool: a click puts a spot and someone at it; a drag moves them.
+    editor.tool = 'person';
+    click(3, 4);
+    const [who] = Object.keys(plan.spots);
+    assert.ok(who && JSON.stringify(plan.spots[who]) === JSON.stringify([3, 4]));
+    assert.equal(JSON.stringify(plan.events), JSON.stringify([{ spot: who, name: '', template: 'villager', direction: 2 }]), 'the first template stands there');
+    stroke([3, 4], [5, 5]);
+    assert.equal(JSON.stringify(plan.spots[who]), JSON.stringify([5, 5]));
+    // A press on any of them selects it, whatever the tool.
+    editor.tool = 'room';
+    click(12, 9); assert.deepEqual({ ...editor.selection }, { kind: 'stair', key: 0 });
+    click(0, 7); assert.deepEqual({ ...editor.selection }, { kind: 'window', key: 0 });
+    click(8, 4); assert.deepEqual({ ...editor.selection }, { kind: 'door', key: 0 });
+    click(5, 5); assert.deepEqual({ ...editor.selection }, { kind: 'spot', key: who });
+    // Remove takes the selection; Undo brings it back, Redo takes it again; a moved room undoes to where it was.
     editor.removeSelection();
     assert.deepEqual(Object.keys(plan.spots), []);
+    assert.equal(editor.undo(), true);
+    assert.deepEqual(Object.keys(editor.current.plan.spots), [who], 'undo restores the person');
+    assert.equal(editor.redo(), true);
+    assert.deepEqual(Object.keys(editor.current.plan.spots), []);
+    assert.equal(editor.current.plan, plan, 'the record keeps the same plan object through undo');
+    const before = JSON.stringify(plan.floors[0].rooms[first]);
+    editor.tool = 'select'; stroke([4, 4], [4, 5]);
+    assert.notEqual(JSON.stringify(plan.floors[0].rooms[first]), before);
+    editor.undo();
+    assert.equal(JSON.stringify(plan.floors[0].rooms[first]), before, 'a move undoes to where the room was');
+    assert.ok(editor._dirty > 0, 'the database heard about all of it');
+});
+
+test('a door anchor and hand-placed windows round-trip through the form', () => {
+    const { DatabaseStructureEditor: E } = loadEditor();
+    const original = { name: 'W', size: [14, 10], storey: 5, floors: [{ rooms: { hall: [1, 1, 6, 8] }, doors: [['hall', 'outside', 3, 2]], windows: [[0, 3], [6, 9]] }], roof: { pitch: 2 }, windows: { every: 0, width: 2 } };
+    const back = E.trimPlan(E.normalizePlan(JSON.parse(JSON.stringify(original))));
+    assert.equal(JSON.stringify(back), JSON.stringify(original));
 });
 
 test('a tower of eight floors is stored whole and walked to its top', () => {

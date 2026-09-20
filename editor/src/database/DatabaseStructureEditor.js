@@ -1,17 +1,20 @@
 /**
  * DatabaseStructureEditor - Database > Structures.
  *
- * A structure plan is a file under the project's 3d/Structures folder: a
- * building as a person describes it (rooms as rectangles, doors between
- * named rooms, stairs, a roof pitch, windows, named spots and the people
- * at them), or a plan of plans (parts placed on a page, with paths). The
- * palette's 3D-B tab stamps the same files, and `build-structure.cjs`
- * builds them from a shell, so this page is a form over that file and
- * nothing else: what it saves is what everything else reads.
+ * A structure plan is one record of the database, backed by a file under
+ * the project's 3d/Structures folder: a building as a person describes it
+ * (rooms as rectangles, doors between named rooms, windows, stairs, named
+ * spots and the people at them), or a plan of plans. The palette's 3D-B
+ * tab stamps the same files and `build-structure.cjs` builds them from a
+ * shell, so what this page saves is what everything else reads.
  *
- * Three columns: the plans in the folder; the form; the plan drawn from
- * above (the pieces it builds, one floor at a time) and in 3D, with the
- * engine's own walk from the front door saying which rooms it reaches.
+ * The page is the building. A strip of tools down the left (select, room,
+ * door, window, stairs, person, undo, redo), the plan drawn from above
+ * filling one pane and the whole building in 3D filling the other, one
+ * line under them for whatever is selected, and one fold for the numbers.
+ * Everything placed can be picked up again: a room moves and resizes, a
+ * door slides along its wall, a window along the outside, stairs and
+ * people go anywhere, and Undo takes any of it back.
  */
 class DatabaseStructureEditor {
     static MATERIAL_ROLES = ['wall', 'inner', 'floor', 'wet', 'roof', 'stair', 'path'];
@@ -19,6 +22,8 @@ class DatabaseStructureEditor {
     static FACINGS = [[2, 'Down'], [4, 'Left'], [6, 'Right'], [8, 'Up']];
     static SIZE_MIN = 4;
     static SIZE_MAX = 200;
+    static TOOLS = ['select', 'room', 'door', 'window', 'stairs', 'person'];
+    static HISTORY = 100;
 
     constructor(databaseManager, projectController, commonUI, parentEditor) {
         this.databaseManager = databaseManager;
@@ -29,12 +34,12 @@ class DatabaseStructureEditor {
         this.floor = 0;
         this.selection = null;
         this.tool = 'room';
-        this.doorWidth = 3;
         this._open = {};
         this._gesture = null;
         this._planGeom = null;
+        this._history = [];
+        this._future = [];
         this._detail = null;
-        this._listCache = null;
         this._preview = null;
         this._previewTimer = null;
     }
@@ -56,9 +61,26 @@ class DatabaseStructureEditor {
         return project?.path || null;
     }
 
-    directory() {
-        const node = this._node(), root = this.projectPath();
-        return node && root ? node.path.join(root, '3d', 'Structures') : null;
+    /** A 16px symbol for a tool, drawn like the map toolbar's: a plain signifier. */
+    static icon(name) {
+        const open = '<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">';
+        const stroke = 'fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"';
+        const paths = {
+            select: `<path d="M3.5 2.5l8.5 6.5-3.8.6 2.4 4.2-1.8 1-2.4-4.2-2.9 2.6z" fill="currentColor"/>`,
+            room: `<rect x="2.5" y="2.5" width="11" height="11" rx="1" ${stroke}/>`,
+            door: `<path d="M1.5 13.5h3.5M11 13.5h3.5M5 13.5V4.5M5 4.5a6.5 6.5 0 0 1 6 6" ${stroke}/>`,
+            window: `<rect x="2.5" y="2.5" width="11" height="11" ${stroke}/><path d="M8 2.5v11M2.5 8h11" ${stroke}/>`,
+            stairs: `<path d="M1.5 14.5h4v-4h4v-4h4v-4" ${stroke}/>`,
+            person: `<circle cx="8" cy="4.5" r="2.6" fill="currentColor"/><path d="M2.5 14.5a5.5 5.5 0 0 1 11 0z" fill="currentColor"/>`,
+            undo: `<path d="M3 7h7a3 3 0 0 1 0 6H6M3 7l3-3M3 7l3 3" ${stroke}/>`,
+            redo: `<path d="M13 7H6a3 3 0 0 0 0 6h4M13 7l-3-3M13 7l-3 3" ${stroke}/>`,
+            remove: `<path d="M4 4l8 8M12 4l-8 8" ${stroke}/>`,
+            north: `<path d="M8 13V3M4 7l4-4 4 4" ${stroke}/>`,
+            south: `<path d="M8 3v10M4 9l4 4 4-4" ${stroke}/>`,
+            west: `<path d="M13 8H3M7 4L3 8l4 4" ${stroke}/>`,
+            east: `<path d="M3 8h10M9 4l4 4-4 4" ${stroke}/>`
+        };
+        return open + (paths[name] || '') + '</svg>';
     }
 
     // ---- Files and lookups --------------------------------------------------
@@ -127,7 +149,12 @@ class DatabaseStructureEditor {
         for (const role of this.MATERIAL_ROLES) plan.materials[role] = String(plan.materials[role] || '');
         plan.floors = (Array.isArray(plan.floors) ? plan.floors : []).map(floor => ({
             rooms: Object.fromEntries(Object.entries(floor?.rooms || {}).map(([name, rect]) => [name, [0, 1, 2, 3].map(i => int(rect?.[i], 0, 0, this.SIZE_MAX))])),
-            doors: (floor?.doors || []).filter(Array.isArray).map(door => [String(door[0] || ''), String(door[1] || 'outside'), int(door[2], 3, 1, 12)]),
+            doors: (floor?.doors || []).filter(Array.isArray).map(door => {
+                const out = [String(door[0] || ''), String(door[1] || 'outside'), int(door[2], 3, 1, 12)];
+                if (door.length > 3 && Number.isFinite(Number(door[3]))) out.push(int(door[3], 0, 0, this.SIZE_MAX));
+                return out;
+            }),
+            windows: (floor?.windows || []).filter(Array.isArray).map(cell => [int(cell[0], 0, 0, this.SIZE_MAX), int(cell[1], 0, 0, this.SIZE_MAX)]),
             wet: (floor?.wet || []).map(String),
             materials: Object.fromEntries(Object.entries(floor?.materials && typeof floor.materials === 'object' ? floor.materials : {})
                 .map(([room, own]) => [room, { floor: String(own?.floor || ''), wall: String(own?.wall || '') }]))
@@ -164,6 +191,7 @@ class DatabaseStructureEditor {
         fields.floors = plan.floors.map(floor => {
             const f = { rooms: Object.fromEntries(Object.entries(floor.rooms).map(([name, rect]) => [name, rect.slice()])) };
             if (floor.doors.length) f.doors = floor.doors.map(door => door.slice());
+            if (floor.windows.length) f.windows = floor.windows.map(cell => cell.slice());
             if (floor.wet.length) f.wet = floor.wet.slice();
             const own = Object.entries(floor.materials || {}).filter(([room]) => room in floor.rooms)
                 .map(([room, m]) => [room, Object.fromEntries(Object.entries(m).filter(([, name]) => name))]).filter(([, m]) => Object.keys(m).length);
@@ -273,11 +301,10 @@ class DatabaseStructureEditor {
 
     // ---- The page -------------------------------------------------------
 
-    static TOOLS = ['room', 'door', 'stairs', 'spot'];
-
     /**
      * One record's plan, edited in place: the database's list, clipboard,
-     * undo and Apply see every change as they do for any other record.
+     * undo of whole records and Apply see every change as they do for any
+     * other record. Undo here is finer: every placement on the plan.
      */
     showStructureDetail(detailEl, entry) {
         this._detail = detailEl;
@@ -286,23 +313,25 @@ class DatabaseStructureEditor {
         this.current = { entry, plan: entry.plan };
         this.floor = 0;
         this.selection = null;
-        this.tool = this.tool || 'room';
+        this._history = [];
+        this._future = [];
         const tt = text => this._t(text);
         detailEl.innerHTML = `
-            <div class="rr-structures" style="display:flex;flex-direction:column;height:100%;min-height:0;">
-                <div class="rr-structures-bar" style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-bottom:1px solid var(--color-border);flex-wrap:wrap;font-size:12px;"></div>
-                <div style="display:flex;flex:1;min-height:200px;">
+            <div class="rr-structures" style="display:flex;flex-direction:column;height:100%;min-height:0;font-size:12px;">
+                <div class="rr-structures-bar" style="display:flex;align-items:center;gap:14px;padding:6px 10px;border-bottom:1px solid var(--color-border);flex-wrap:wrap;"></div>
+                <div style="display:flex;flex:1;min-height:220px;">
+                    <div class="rr-structures-tools" style="width:40px;flex:0 0 40px;display:flex;flex-direction:column;align-items:center;gap:4px;padding:6px 0;border-right:1px solid var(--color-border);background:var(--color-bg-menubar);"></div>
                     <div style="flex:1;min-width:0;position:relative;background:var(--color-bg-panel);">
                         <canvas class="rr-structures-plan" tabindex="0" style="position:absolute;inset:0;width:100%;height:100%;cursor:crosshair;outline:none;"></canvas>
-                        <div class="rr-structures-floors" style="position:absolute;top:8px;left:8px;display:flex;gap:4px;align-items:center;"></div>
+                        <div class="rr-structures-floors" style="position:absolute;top:6px;left:8px;display:flex;gap:3px;align-items:center;"></div>
                     </div>
-                    <div style="width:300px;flex:0 0 300px;display:flex;flex-direction:column;border-left:1px solid var(--color-border);background:var(--color-bg-deep);min-height:0;">
-                        <div style="position:relative;flex:1;min-height:120px;"><canvas class="rr-structures-3d" style="position:absolute;inset:0;width:100%;height:100%;cursor:grab;"></canvas></div>
-                        <div class="rr-structures-report" style="padding:8px 10px;font-size:11px;color:var(--color-text-muted);border-top:1px solid var(--color-border);line-height:1.5;"></div>
+                    <div style="flex:1;min-width:0;position:relative;border-left:1px solid var(--color-border);background:var(--color-bg-deep);">
+                        <canvas class="rr-structures-3d" style="position:absolute;inset:0;width:100%;height:100%;cursor:grab;"></canvas>
+                        <div class="rr-structures-report" style="position:absolute;left:8px;bottom:8px;right:8px;padding:6px 8px;font-size:11px;line-height:1.4;color:var(--color-text-muted);background:color-mix(in srgb, var(--color-bg-panel) 85%, transparent);border-radius:3px;pointer-events:none;"></div>
                     </div>
                 </div>
-                <div class="rr-structures-inspector" style="border-top:1px solid var(--color-border);padding:8px 10px;min-height:40px;font-size:12px;"></div>
-                <div class="rr-structures-more database-detail-wrapper db-page" style="border-top:1px solid var(--color-border);max-height:40%;overflow-y:auto;flex:0 0 auto;"></div>
+                <div class="rr-structures-inspector" style="border-top:1px solid var(--color-border);padding:6px 10px;min-height:34px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;"></div>
+                <div class="rr-structures-more" style="border-top:1px solid var(--color-border);max-height:38%;overflow-y:auto;flex:0 0 auto;"></div>
             </div>`;
         this._bindOrbit(detailEl.querySelector('.rr-structures-3d'));
         this._bindPlanGestures(detailEl.querySelector('.rr-structures-plan'));
@@ -311,16 +340,56 @@ class DatabaseStructureEditor {
 
     render() {
         this.renderBar();
+        this.renderTools();
         this.renderFloorTabs();
         this.renderInspector();
         this.renderMore();
         this.schedulePreview();
     }
 
-    /** An edit: the database owns the dirty state; the list shows the name. */
+    // ---- History ---------------------------------------------------------
+
+    /** Before a change: the plan as it is, so Undo can bring it back. */
+    pushHistory() {
+        if (!this.current) return;
+        this._history.push(JSON.stringify(this.current.plan));
+        if (this._history.length > DatabaseStructureEditor.HISTORY) this._history.shift();
+        this._future.length = 0;
+    }
+
+    undo() {
+        if (!this.current || !this._history.length) return false;
+        this._future.push(JSON.stringify(this.current.plan));
+        this.restore(this._history.pop());
+        return true;
+    }
+
+    redo() {
+        if (!this.current || !this._future.length) return false;
+        this._history.push(JSON.stringify(this.current.plan));
+        this.restore(this._future.pop());
+        return true;
+    }
+
+    /** The plan object stays the record's own; only its contents change. */
+    restore(json) {
+        const plan = this.current.plan;
+        const next = DatabaseStructureEditor.normalizePlan(JSON.parse(json));
+        for (const key of Object.keys(plan)) delete plan[key];
+        Object.assign(plan, next);
+        this.current.entry.name = plan.name;
+        this.parentEditor?.refreshDatabaseListLabel?.(this.current.entry, 'structures');
+        if (this.floor !== 'roof') this.floor = Math.max(0, Math.min(plan.floors.length - 1, this.floor));
+        this.selection = null;
+        this.parentEditor?._markDatabaseMutation?.();
+        this.render();
+    }
+
+    /** An edit: the database owns the dirty state; the previews follow. */
     markDirty() {
         if (!this.current) return;
         this.parentEditor?._markDatabaseMutation?.();
+        this.renderTools();
         this.schedulePreview();
     }
 
@@ -329,7 +398,7 @@ class DatabaseStructureEditor {
         entry.name = name;
         plan.name = name;
         this.parentEditor?.refreshDatabaseListLabel?.(entry, 'structures');
-        this.markDirty();
+        this.parentEditor?._markDatabaseMutation?.();
     }
 
     currentFloor() {
@@ -338,15 +407,24 @@ class DatabaseStructureEditor {
         return plan.floors[this.floor === 'roof' ? plan.floors.length - 1 : this.floor] || null;
     }
 
+    currentFloorIndex() {
+        const plan = this.current?.plan;
+        return this.floor === 'roof' ? plan.floors.length - 1 : this.floor;
+    }
+
     _selectHtml(cls, options, value, attrs = '') {
         return `<select class="database-field-value ${cls}" ${attrs}>${options.map(([v, label]) => `<option value="${rrEscapeHtml(String(v))}"${String(v) === String(value) ? ' selected' : ''}>${rrEscapeHtml(label)}</option>`).join('')}</select>`;
     }
 
     _numberHtml(cls, value, attrs = '') {
-        return `<input type="number" class="database-field-value ${cls}" value="${Number(value)}" step="1" style="width:64px;" ${attrs}>`;
+        return `<input type="number" class="database-field-value ${cls}" value="${Number(value)}" step="1" style="width:52px;" ${attrs}>`;
     }
 
-    /** Name, style, size, the tools, and the way onto the map: one row. */
+    _field(text, control) {
+        return `<label style="display:flex;align-items:center;gap:6px;color:var(--color-text-muted);white-space:nowrap;">${text}${control}</label>`;
+    }
+
+    /** Name, style and size on the left; the way onto the map on the right. */
     renderBar() {
         const bar = this._detail?.querySelector('.rr-structures-bar');
         if (!bar || !this.current) return;
@@ -355,31 +433,53 @@ class DatabaseStructureEditor {
         const materialNames = this.materials();
         const styleNames = Object.keys(DatabaseStructureEditor.STYLES);
         const style = DatabaseStructureEditor.styleOf(plan.materials, materialNames);
-        const toolLabels = { room: tt('Room'), door: tt('Door'), stairs: tt('Stairs'), spot: tt('Spot') };
-        const label = (text, control) => `<label style="display:flex;align-items:center;gap:6px;color:var(--color-text-muted);">${text}${control}</label>`;
         bar.innerHTML = `
-            ${label(tt('Name'), `<input type="text" class="database-field-value rr-structures-name" value="${rrEscapeHtml(plan.name)}" style="width:140px;">`)}
-            ${label(tt('Style'), this._selectHtml('rr-structures-style', styleNames.map(name => [name, tt(name)]).concat([['', tt('Custom')]]), style || '', 'style="width:150px;"'))}
-            ${label(tt('Size'), `${this._numberHtml('rr-structures-size', plan.size[0], `data-i="0" min="${DatabaseStructureEditor.SIZE_MIN}" max="${DatabaseStructureEditor.SIZE_MAX}" style="width:56px;"`)}<span>×</span>${this._numberHtml('rr-structures-size', plan.size[1], `data-i="1" min="${DatabaseStructureEditor.SIZE_MIN}" max="${DatabaseStructureEditor.SIZE_MAX}" style="width:56px;"`)}`)}
-            <span style="display:flex;gap:2px;margin-left:auto;" role="radiogroup">${DatabaseStructureEditor.TOOLS.map(tool => `<button type="button" class="rr-btn-secondary rr-structures-tool" data-tool="${tool}" role="radio" aria-checked="${tool === this.tool}" style="${tool === this.tool ? 'font-weight:bold;border-color:var(--color-accent);' : ''}">${toolLabels[tool]}</button>`).join('')}</span>
-            <button type="button" class="rr-btn-secondary rr-structures-use">${tt('Use on the map')}</button>`;
+            ${this._field(tt('Name'), `<input type="text" class="database-field-value rr-structures-name" value="${rrEscapeHtml(plan.name)}" style="width:150px;">`)}
+            ${this._field(tt('Style'), this._selectHtml('rr-structures-style', styleNames.map(name => [name, tt(name)]).concat([['', tt('Custom')]]), style || '', 'style="width:140px;"'))}
+            ${this._field(tt('Size'), `${this._numberHtml('rr-structures-size', plan.size[0], `data-i="0" min="${DatabaseStructureEditor.SIZE_MIN}" max="${DatabaseStructureEditor.SIZE_MAX}"`)}<span>×</span>${this._numberHtml('rr-structures-size', plan.size[1], `data-i="1" min="${DatabaseStructureEditor.SIZE_MIN}" max="${DatabaseStructureEditor.SIZE_MAX}"`)}`)}
+            <button type="button" class="rr-btn-secondary rr-structures-use" style="margin-left:auto;">${tt('Use on the map')}</button>`;
         bar.querySelector('.rr-structures-name').addEventListener('input', event => this.setName(event.target.value));
         bar.querySelector('.rr-structures-style').addEventListener('change', event => {
             if (!event.target.value) return;
+            this.pushHistory();
             Object.assign(plan.materials, DatabaseStructureEditor.styleMaterials(event.target.value, materialNames));
             this.markDirty();
             this.renderMore();
         });
         for (const input of bar.querySelectorAll('.rr-structures-size')) {
-            input.addEventListener('input', () => {
+            input.addEventListener('change', () => {
+                this.pushHistory();
                 plan.size[Number(input.dataset.i)] = Math.max(DatabaseStructureEditor.SIZE_MIN, Math.min(DatabaseStructureEditor.SIZE_MAX, Math.floor(Number(input.value)) || DatabaseStructureEditor.SIZE_MIN));
                 this.markDirty();
             });
         }
-        for (const button of bar.querySelectorAll('.rr-structures-tool')) {
-            button.addEventListener('click', () => { this.tool = button.dataset.tool; this.renderBar(); this.renderInspector(); });
-        }
         bar.querySelector('.rr-structures-use').addEventListener('click', () => this.useOnMap());
+    }
+
+    /** The tool strip: what a press on empty ground makes, and undo, redo, remove. */
+    renderTools() {
+        const strip = this._detail?.querySelector('.rr-structures-tools');
+        if (!strip || !this.current) return;
+        const tt = text => this._t(text);
+        const labels = { select: tt('Select'), room: tt('Room'), door: tt('Door'), window: tt('Window'), stairs: tt('Stairs'), person: tt('Person') };
+        const button = (name, title, extra = '') => `<button type="button" class="rr-btn-secondary rr-structures-tool" data-tool="${name}" title="${rrEscapeHtml(title)}" aria-label="${rrEscapeHtml(title)}" style="width:30px;height:30px;padding:0;display:flex;align-items:center;justify-content:center;${extra}">${DatabaseStructureEditor.icon(name)}</button>`;
+        strip.innerHTML = DatabaseStructureEditor.TOOLS.map(name => button(name, labels[name], name === this.tool ? 'border-color:var(--color-accent);background:var(--color-bg-hover);color:var(--color-text-strong);' : ''))
+            .join('')
+            + `<span style="height:1px;width:22px;background:var(--color-border);margin:4px 0;"></span>`
+            + button('undo', tt('Undo'), this._history.length ? '' : 'opacity:.4;')
+            + button('redo', tt('Redo'), this._future.length ? '' : 'opacity:.4;')
+            + button('remove', tt('Remove'), this.selection ? '' : 'opacity:.4;');
+        for (const el of strip.querySelectorAll('.rr-structures-tool')) {
+            el.addEventListener('click', () => {
+                const name = el.dataset.tool;
+                if (name === 'undo') return this.undo();
+                if (name === 'redo') return this.redo();
+                if (name === 'remove') return this.removeSelection();
+                this.tool = name;
+                this.renderTools();
+                this.renderInspector();
+            });
+        }
     }
 
     renderFloorTabs() {
@@ -389,8 +489,8 @@ class DatabaseStructureEditor {
         if (!plan) { strip.innerHTML = ''; return; }
         const tt = text => this._t(text);
         const count = plan.floors.length;
-        const tab = (value, text, pressed, title = '') => `<button type="button" class="rr-btn-secondary rr-structures-floor-tab" data-floor="${value}" aria-pressed="${pressed}" title="${rrEscapeHtml(title)}" style="font-size:11px;padding:2px 8px;${pressed ? 'font-weight:bold;border-color:var(--color-accent);' : ''}">${text}</button>`;
-        strip.innerHTML = `<span style="font-size:11px;color:var(--color-text-muted);margin-right:4px;">${tt('Floor')}</span>`
+        const tab = (value, text, pressed, title = '') => `<button type="button" class="rr-btn-secondary rr-structures-floor-tab" data-floor="${value}" aria-pressed="${pressed}" title="${rrEscapeHtml(title)}" style="font-size:11px;padding:2px 7px;${pressed ? 'font-weight:bold;border-color:var(--color-accent);' : ''}">${text}</button>`;
+        strip.innerHTML = `<span style="font-size:11px;color:var(--color-text-muted);margin-right:3px;">${tt('Floor')}</span>`
             + Array.from({ length: count }, (_, i) => tab(i, i + 1, i === this.floor)).join('')
             + (count ? tab('roof', tt('Roof'), this.floor === 'roof') : '')
             + tab('add', '+', false, tt('Add floor'))
@@ -402,17 +502,18 @@ class DatabaseStructureEditor {
                 if (value === 'remove') return this.removeFloor();
                 this.floor = value === 'roof' ? 'roof' : Number(value);
                 this.selection = null;
-                this.renderFloorTabs(); this.renderInspector(); this.schedulePreview();
+                this.renderFloorTabs(); this.renderInspector(); this.renderTools(); this.schedulePreview();
             });
         }
     }
 
     addFloor() {
         const plan = this.current.plan;
+        this.pushHistory();
         // A new floor copies the one below it: the rooms usually line up, and a landing is easier to trim than to draw.
         const below = plan.floors[plan.floors.length - 1];
-        plan.floors.push(below ? { rooms: Object.fromEntries(Object.entries(below.rooms).map(([name, rect]) => [name, rect.slice()])), doors: below.doors.filter(door => door[1] !== 'outside' && door[0] !== 'outside').map(door => door.slice()), wet: [], materials: {} }
-            : { rooms: {}, doors: [], wet: [], materials: {} });
+        plan.floors.push(below ? { rooms: Object.fromEntries(Object.entries(below.rooms).map(([name, rect]) => [name, rect.slice()])), doors: below.doors.filter(door => door[1] !== 'outside' && door[0] !== 'outside').map(door => door.slice()), wet: [], materials: {}, windows: [] }
+            : { rooms: {}, doors: [], wet: [], materials: {}, windows: [] });
         this.floor = plan.floors.length - 1;
         this.selection = null;
         this.markDirty();
@@ -421,7 +522,8 @@ class DatabaseStructureEditor {
 
     removeFloor() {
         const plan = this.current.plan;
-        const index = this.floor === 'roof' ? plan.floors.length - 1 : this.floor;
+        const index = this.currentFloorIndex();
+        this.pushHistory();
         plan.floors.splice(index, 1);
         plan.stairs = plan.stairs.filter(stair => stair.floor < plan.floors.length);
         this.floor = Math.max(0, index - 1);
@@ -430,7 +532,7 @@ class DatabaseStructureEditor {
         this.render();
     }
 
-    /** What is selected, or what the tool does: one strip under the plan. */
+    /** What is selected, in a line; or what the tool does, in a sentence. */
     renderInspector() {
         const box = this._detail?.querySelector('.rr-structures-inspector');
         if (!box || !this.current) return;
@@ -439,40 +541,46 @@ class DatabaseStructureEditor {
         const floor = this.currentFloor();
         const materialNames = this.materials();
         const ownOptions = [['', tt("Building's own")]].concat(materialNames.map(name => [name, name]));
-        const field = (text, control) => `<label style="display:flex;align-items:center;gap:6px;color:var(--color-text-muted);">${text}${control}</label>`;
-        const remove = `<button type="button" class="rr-btn-secondary rr-structures-remove-selection" style="margin-left:auto;">${tt('Remove')}</button>`;
+        const arrows = (cls, current) => `<span style="display:inline-flex;gap:2px;">${DatabaseStructureEditor.DIRECTIONS.map(dir => `<button type="button" class="rr-btn-secondary ${cls}" data-dir="${dir}" title="${rrEscapeHtml(tt(dir))}" aria-pressed="${dir === current}" style="width:26px;height:26px;padding:0;display:flex;align-items:center;justify-content:center;${dir === current ? 'border-color:var(--color-accent);' : ''}">${DatabaseStructureEditor.icon(dir)}</button>`).join('')}</span>`;
+        const facingArrows = (cls, current) => `<span style="display:inline-flex;gap:2px;">${[[8, 'north'], [4, 'west'], [6, 'east'], [2, 'south']].map(([value, dir]) => `<button type="button" class="rr-btn-secondary ${cls}" data-facing="${value}" title="${rrEscapeHtml(tt(DatabaseStructureEditor.FACINGS.find(([v]) => v === value)[1]))}" aria-pressed="${value === current}" style="width:26px;height:26px;padding:0;display:flex;align-items:center;justify-content:center;${value === current ? 'border-color:var(--color-accent);' : ''}">${DatabaseStructureEditor.icon(dir)}</button>`).join('')}</span>`;
         const sel = this.selection;
+        const kindLabel = text => `<span style="font-weight:600;color:var(--color-text-strong);">${text}</span>`;
         let html = '';
         if (sel && sel.kind === 'room' && floor && floor.rooms[sel.key]) {
             const own = floor.materials[sel.key] || { floor: '', wall: '' };
-            html = `<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-                ${field(tt('Room'), `<input type="text" class="database-field-value rr-structures-room-name" value="${rrEscapeHtml(sel.key)}" style="width:120px;">`)}
-                ${field(tt('Room floor'), this._selectHtml('rr-structures-room-material', ownOptions, own.floor, 'data-role="floor" style="width:120px;"'))}
-                ${field(tt('Room wall'), this._selectHtml('rr-structures-room-material', ownOptions, own.wall, 'data-role="wall" style="width:120px;"'))}
-                ${field(tt('Wet floor'), `<input type="checkbox" class="system-checkbox rr-structures-wet" ${floor.wet.includes(sel.key) ? 'checked' : ''}>`)}
-                ${remove}</div>`;
+            html = `${kindLabel(tt('Room'))}
+                ${this._field(tt('Name'), `<input type="text" class="database-field-value rr-structures-room-name" value="${rrEscapeHtml(sel.key)}" style="width:110px;">`)}
+                ${this._field(tt('Floor'), this._selectHtml('rr-structures-room-material', ownOptions, own.floor, 'data-role="floor" style="width:110px;"'))}
+                ${this._field(tt('Wall'), this._selectHtml('rr-structures-room-material', ownOptions, own.wall, 'data-role="wall" style="width:110px;"'))}
+                ${this._field(tt('Wet'), `<input type="checkbox" class="system-checkbox rr-structures-wet" ${floor.wet.includes(sel.key) ? 'checked' : ''}>`)}`;
+        } else if (sel && sel.kind === 'door' && floor && floor.doors[sel.key]) {
+            const door = floor.doors[sel.key];
+            html = `${kindLabel(door[0] === 'outside' || door[1] === 'outside' ? tt('Front door') : tt('Door'))}
+                <span style="color:var(--color-text-muted);">${rrEscapeHtml(door[0])} ↔ ${rrEscapeHtml(door[1] === 'outside' ? tt('Outside') : door[1])}</span>
+                ${this._field(tt('Width'), this._numberHtml('rr-structures-door-width', door[2], 'min="1" max="12"'))}`;
+        } else if (sel && sel.kind === 'window' && floor && floor.windows[sel.key]) {
+            html = `${kindLabel(tt('Window'))}<span style="color:var(--color-text-muted);">${tt('Drag it along the wall.')}</span>`;
         } else if (sel && sel.kind === 'stair' && plan.stairs[sel.key]) {
             const stair = plan.stairs[sel.key];
-            html = `<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-                ${field(tt('Stairs'), `<span>${stair.from[0]}, ${stair.from[1]}</span>`)}
-                ${field(tt('Rises'), this._selectHtml('rr-structures-stair-dir', DatabaseStructureEditor.DIRECTIONS.map(dir => [dir, tt(dir)]), stair.dir, 'style="width:110px;"'))}
-                ${field(tt('Width'), this._numberHtml('rr-structures-stair-width', stair.width, 'min="1" max="8"'))}
-                ${remove}</div>`;
+            html = `${kindLabel(tt('Stairs'))}
+                ${this._field(tt('Rises'), arrows('rr-structures-stair-dir', stair.dir))}
+                ${this._field(tt('Width'), this._numberHtml('rr-structures-stair-width', stair.width, 'min="1" max="8"'))}`;
         } else if (sel && sel.kind === 'spot' && plan.spots[sel.key]) {
             const event = plan.events.find(item => item.spot === sel.key) || null;
             const templates = this.eventTemplates();
-            html = `<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-                ${field(tt('Spot'), `<input type="text" class="database-field-value rr-structures-spot-name" value="${rrEscapeHtml(sel.key)}" style="width:120px;">`)}
-                ${field(tt('Person'), this._selectHtml('rr-structures-person', [['', tt('Nobody')], ['blank', tt('Blank event')]].concat(templates.map(name => [name, name])), event ? (event.template || 'blank') : '', 'style="width:130px;"'))}
-                ${event ? field(tt('Name'), `<input type="text" class="database-field-value rr-structures-person-name" value="${rrEscapeHtml(event.name)}" style="width:120px;">`) : ''}
-                ${event ? field(tt('Facing'), this._selectHtml('rr-structures-person-facing', DatabaseStructureEditor.FACINGS.map(([v, l]) => [v, tt(l)]), event.direction, 'style="width:90px;"')) : ''}
-                ${remove}</div>`;
+            html = `${kindLabel(tt('Person'))}
+                ${this._field(tt('Spot'), `<input type="text" class="database-field-value rr-structures-spot-name" value="${rrEscapeHtml(sel.key)}" style="width:100px;">`)}
+                ${this._field(tt('Who'), this._selectHtml('rr-structures-person', [['', tt('Nobody')], ['blank', tt('Blank event')]].concat(templates.map(name => [name, name])), event ? (event.template || 'blank') : '', 'style="width:120px;"'))}
+                ${event ? this._field(tt('Name'), `<input type="text" class="database-field-value rr-structures-person-name" value="${rrEscapeHtml(event.name)}" style="width:110px;">`) : ''}
+                ${event ? this._field(tt('Facing'), facingArrows('rr-structures-person-facing', event.direction)) : ''}`;
         } else {
             const hints = {
-                room: tt('Drag on the plan to draw a room. Drag a room to move it, its edge to resize it. Click a wall for a door, an outer wall for the front door. Delete removes the selected room.'),
-                door: tt('Click a wall between two rooms for a door, or an outer wall beside a room for the front door. Click it again to take the door away.'),
-                stairs: tt('Click a cell inside a room to start stairs there. Each cell climbs one tile, so a storey is that many cells. Click stairs to select them.'),
-                spot: tt('Click a cell to name a spot. A person can stand at it, and a story can send someone there.')
+                select: tt('Click anything on the plan to select it, drag to move it. Delete removes it.'),
+                room: tt('Drag on the plan to draw a room. Drag a room to move it, its edge to resize it.'),
+                door: tt('Click a wall between two rooms for a door, an outer wall beside a room for the front door. Drag a door along its wall.'),
+                window: tt('Click an outer wall for a window. Drag a window along the wall.'),
+                stairs: tt('Click a cell inside a room to start stairs there. Each cell climbs one tile.'),
+                person: tt('Click a cell to put a person there. Pick who from the templates under 3d/Structures/events.')
             };
             html = `<span style="color:var(--color-text-muted);">${floor ? hints[this.tool] : tt('No floors: a plan of parts, or an empty plan. Add a floor to draw rooms.')}</span>`;
         }
@@ -482,80 +590,80 @@ class DatabaseStructureEditor {
 
     bindInspector(box) {
         const plan = this.current.plan, floor = this.currentFloor(), sel = this.selection;
+        const number = (input, min, max) => Math.max(min, Math.min(max, Math.floor(Number(input.value)) || min));
         box.querySelector('.rr-structures-room-name')?.addEventListener('change', event => {
             const oldName = sel.key, newName = event.target.value.trim();
             if (!floor || !newName || newName === 'outside' || (newName !== oldName && floor.rooms[newName])) { event.target.value = oldName; return; }
+            this.pushHistory();
             this.renameRoom(floor, oldName, newName);
             this.selection = { kind: 'room', key: newName };
             this.markDirty(); this.renderInspector();
         });
         for (const input of box.querySelectorAll('.rr-structures-room-material')) {
             input.addEventListener('change', () => {
+                this.pushHistory();
                 const own = floor.materials[sel.key] || (floor.materials[sel.key] = { floor: '', wall: '' });
                 own[input.dataset.role] = input.value;
                 this.markDirty();
             });
         }
         box.querySelector('.rr-structures-wet')?.addEventListener('change', event => {
+            this.pushHistory();
             floor.wet = floor.wet.filter(other => other !== sel.key);
             if (event.target.checked) floor.wet.push(sel.key);
             this.markDirty();
         });
-        box.querySelector('.rr-structures-stair-dir')?.addEventListener('change', event => { plan.stairs[sel.key].dir = event.target.value; this.markDirty(); });
-        box.querySelector('.rr-structures-stair-width')?.addEventListener('input', event => { plan.stairs[sel.key].width = Math.max(1, Math.min(8, Math.floor(Number(event.target.value)) || 1)); this.markDirty(); });
+        box.querySelector('.rr-structures-door-width')?.addEventListener('change', event => { this.pushHistory(); floor.doors[sel.key][2] = number(event.target, 1, 12); this.markDirty(); });
+        for (const button of box.querySelectorAll('.rr-structures-stair-dir')) button.addEventListener('click', () => { this.pushHistory(); plan.stairs[sel.key].dir = button.dataset.dir; this.markDirty(); this.renderInspector(); });
+        box.querySelector('.rr-structures-stair-width')?.addEventListener('change', event => { this.pushHistory(); plan.stairs[sel.key].width = number(event.target, 1, 8); this.markDirty(); });
         box.querySelector('.rr-structures-spot-name')?.addEventListener('change', event => {
             const oldName = sel.key, newName = event.target.value.trim();
             if (!newName || (newName !== oldName && plan.spots[newName])) { event.target.value = oldName; return; }
-            const entries = Object.entries(plan.spots).map(([name, cell]) => [name === oldName ? newName : name, cell]);
-            plan.spots = Object.fromEntries(entries);
+            this.pushHistory();
+            plan.spots = Object.fromEntries(Object.entries(plan.spots).map(([name, cell]) => [name === oldName ? newName : name, cell]));
             for (const item of plan.events) if (item.spot === oldName) item.spot = newName;
             this.selection = { kind: 'spot', key: newName };
             this.markDirty(); this.renderInspector();
         });
         box.querySelector('.rr-structures-person')?.addEventListener('change', event => {
+            this.pushHistory();
             const value = event.target.value;
+            const had = plan.events.find(item => item.spot === sel.key);
             plan.events = plan.events.filter(item => item.spot !== sel.key);
-            if (value) plan.events.push({ spot: sel.key, name: '', template: value === 'blank' ? '' : value, direction: 2 });
+            if (value) plan.events.push({ spot: sel.key, name: had ? had.name : '', template: value === 'blank' ? '' : value, direction: had ? had.direction : 2 });
             this.markDirty(); this.renderInspector();
         });
-        box.querySelector('.rr-structures-person-name')?.addEventListener('input', event => { const item = plan.events.find(e => e.spot === sel.key); if (item) { item.name = event.target.value; this.markDirty(); } });
-        box.querySelector('.rr-structures-person-facing')?.addEventListener('change', event => { const item = plan.events.find(e => e.spot === sel.key); if (item) { item.direction = Number(event.target.value); this.markDirty(); } });
-        box.querySelector('.rr-structures-remove-selection')?.addEventListener('click', () => this.removeSelection());
+        box.querySelector('.rr-structures-person-name')?.addEventListener('change', event => { const item = plan.events.find(e => e.spot === sel.key); if (item) { this.pushHistory(); item.name = event.target.value; this.markDirty(); } });
+        for (const button of box.querySelectorAll('.rr-structures-person-facing')) button.addEventListener('click', () => { const item = plan.events.find(e => e.spot === sel.key); if (item) { this.pushHistory(); item.direction = Number(button.dataset.facing); this.markDirty(); this.renderInspector(); } });
     }
 
     renameRoom(floor, oldName, newName) {
-        const entries = Object.entries(floor.rooms).map(([name, rect]) => [name === oldName ? newName : name, rect]);
-        floor.rooms = Object.fromEntries(entries);
-        floor.doors = floor.doors.map(door => [door[0] === oldName ? newName : door[0], door[1] === oldName ? newName : door[1], door[2]]);
+        floor.rooms = Object.fromEntries(Object.entries(floor.rooms).map(([name, rect]) => [name === oldName ? newName : name, rect]));
+        floor.doors = floor.doors.map(door => [door[0] === oldName ? newName : door[0], door[1] === oldName ? newName : door[1], ...door.slice(2)]);
         floor.wet = floor.wet.map(name => (name === oldName ? newName : name));
         if (floor.materials[oldName]) { floor.materials[newName] = floor.materials[oldName]; delete floor.materials[oldName]; }
     }
 
-    removeRoom(name) {
-        const floor = this.currentFloor();
-        if (!floor || !name || !floor.rooms[name]) return;
-        delete floor.rooms[name];
-        floor.doors = floor.doors.filter(door => door[0] !== name && door[1] !== name);
-        floor.wet = floor.wet.filter(other => other !== name);
-        delete floor.materials[name];
-        if (this.selection?.kind === 'room' && this.selection.key === name) this.selection = null;
-        this.markDirty();
-        this.renderInspector();
-    }
-
     removeSelection() {
-        const sel = this.selection, plan = this.current?.plan;
+        const sel = this.selection, plan = this.current?.plan, floor = this.currentFloor();
         if (!sel || !plan) return;
-        if (sel.kind === 'room') return this.removeRoom(sel.key);
-        if (sel.kind === 'stair') plan.stairs.splice(sel.key, 1);
-        if (sel.kind === 'spot') { delete plan.spots[sel.key]; plan.events = plan.events.filter(item => item.spot !== sel.key); }
+        this.pushHistory();
+        if (sel.kind === 'room' && floor) {
+            delete floor.rooms[sel.key];
+            floor.doors = floor.doors.filter(door => door[0] !== sel.key && door[1] !== sel.key);
+            floor.wet = floor.wet.filter(other => other !== sel.key);
+            delete floor.materials[sel.key];
+        } else if (sel.kind === 'door' && floor) floor.doors.splice(sel.key, 1);
+        else if (sel.kind === 'window' && floor) floor.windows.splice(sel.key, 1);
+        else if (sel.kind === 'stair') plan.stairs.splice(sel.key, 1);
+        else if (sel.kind === 'spot') { delete plan.spots[sel.key]; plan.events = plan.events.filter(item => item.spot !== sel.key); }
         this.selection = null;
         this.markDirty();
         this.renderInspector();
         this.renderMore();
     }
 
-    /** Everything that is a number rather than a shape, behind one fold. */
+    /** The numbers, behind one fold: materials, storey, roof, windows, parts and paths. */
     renderMore() {
         const more = this._detail?.querySelector('.rr-structures-more');
         if (!more || !this.current) return;
@@ -567,14 +675,15 @@ class DatabaseStructureEditor {
         const styleNames = Object.keys(DatabaseStructureEditor.STYLES);
         const otherPlans = this.records().filter(entry => entry !== this.current.entry).map(entry => [entry.file || entry.name, entry.name]);
         const open = !!this._open.more;
+        const row = (...fields) => `<div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:4px 0;">${fields.join('')}</div>`;
         const rows = (kind, header, body, empty) => `
-            <div class="rr-structures-rows" data-rows="${kind}" style="display:grid;grid-template-columns:${header.cols};gap:6px 8px;align-items:center;font-size:11px;">
+            <div class="rr-structures-rows" data-rows="${kind}" style="display:grid;grid-template-columns:${header.cols};gap:4px 8px;align-items:center;font-size:11px;">
                 ${header.labels.map(label => `<span style="color:var(--color-text-muted);">${label}</span>`).join('')}<span></span>
                 ${body || `<span style="grid-column:1 / -1;color:var(--color-text-muted);">${empty}</span>`}
             </div>`;
-        const remove = (kind, index) => `<button type="button" class="rr-btn-secondary rr-structures-remove" data-rows="${kind}" data-index="${index}" title="${rrEscapeHtml(tt('Remove'))}">✕</button>`;
-        const add = kind => `<button type="button" class="rr-btn-secondary rr-structures-add" data-rows="${kind}">${tt('Add')}</button>`;
-        const materialCol = role => `<span class="db-col"><label>${roleLabels[role]}</label>${this._selectHtml('rr-structures-material', materialOptions, plan.materials[role], `data-role="${role}"`)}</span>`;
+        const remove = (kind, index) => `<button type="button" class="rr-btn-secondary rr-structures-row-remove" data-rows="${kind}" data-index="${index}" title="${rrEscapeHtml(tt('Remove'))}" style="padding:2px 6px;">✕</button>`;
+        const add = kind => `<button type="button" class="rr-btn-secondary rr-structures-row-add" data-rows="${kind}" style="padding:2px 8px;font-size:11px;">${tt('Add')}</button>`;
+        const materialField = role => this._field(roleLabels[role], this._selectHtml('rr-structures-material', materialOptions, plan.materials[role], `data-role="${role}" style="width:100px;"`));
         const partStyle = part => DatabaseStructureEditor.styleOf(Object.assign({}, DatabaseStructureEditor.styleMaterials('', null), part.materials || {}), null);
         const partsBody = plan.parts.map((part, index) => `
             <input type="text" class="database-field-value rr-structures-part" data-index="${index}" data-prop="name" value="${rrEscapeHtml(part.name)}" style="min-width:0;">
@@ -590,23 +699,21 @@ class DatabaseStructureEditor {
             ${remove('paths', index)}`).join('');
         more.innerHTML = `
             <div class="database-section-header rr-structures-fold" style="display:flex;align-items:center;gap:8px;cursor:pointer;"><span style="flex:0 0 12px;font-size:10px;color:var(--color-text-muted);">${open ? '▾' : '▸'}</span><span style="flex:1;">${tt('More')}</span><span style="font-weight:normal;color:var(--color-text-muted);font-size:11px;">${tt('Materials, roof, windows, parts')}</span></div>
-            <div class="database-section-content" style="${open ? '' : 'display:none;'}">
-                <div class="db-form">
-                    <div class="db-row-cols">${['wall', 'inner', 'floor', 'wet'].map(materialCol).join('')}</div>
-                    <div class="db-row-cols">${['roof', 'stair', 'path'].map(materialCol).join('')}</div>
-                    <div class="db-row-cols">
-                        <span class="db-col"><label>${tt('Storey (tiles)')}</label>${this._numberHtml('rr-structures-field', plan.storey, 'data-path="storey" min="3" max="12"')}</span>
-                        <span class="db-col"><label>${tt('Roof pitch (rows)')}</label>${this._numberHtml('rr-structures-field', plan.roof.pitch, 'data-path="roof.pitch" min="0" max="20"')}</span>
-                        <span class="db-col"><label>${tt('A window every (cells)')}</label>${this._numberHtml('rr-structures-field', plan.windows.every, 'data-path="windows.every" min="0" max="60"')}</span>
-                        <span class="db-col"><label>${tt('Window width')}</label>${this._numberHtml('rr-structures-field', plan.windows.width, 'data-path="windows.width" min="1" max="8"')}</span>
-                    </div>
-                    <div style="grid-column:1 / -1;font-size:11px;color:var(--color-text-muted);margin-top:4px;">${tt('Any tileable image under img/materials is a material.')}</div>
-                </div>
+            <div class="database-section-content" style="${open ? '' : 'display:none;'}padding:6px 10px 10px;">
+                ${row(...['wall', 'inner', 'floor', 'wet'].map(materialField))}
+                ${row(...['roof', 'stair', 'path'].map(materialField))}
+                ${row(
+                    this._field(tt('Storey (tiles)'), this._numberHtml('rr-structures-field', plan.storey, 'data-path="storey" min="3" max="12"')),
+                    this._field(tt('Roof pitch (rows)'), this._numberHtml('rr-structures-field', plan.roof.pitch, 'data-path="roof.pitch" min="0" max="20"')),
+                    this._field(tt('A window every (cells)'), this._numberHtml('rr-structures-field', plan.windows.every, 'data-path="windows.every" min="0" max="60"')),
+                    this._field(tt('Window width'), this._numberHtml('rr-structures-field', plan.windows.width, 'data-path="windows.width" min="1" max="8"'))
+                )}
+                <div style="font-size:11px;color:var(--color-text-muted);">${tt('Any tileable image under img/materials is a material.')} ${tt('A window every 0 cells means only the windows you place.')}</div>
                 <div class="database-field-label" style="font-size:11px;margin-top:10px;">${tt('Parts and paths')}</div>
                 <div style="font-size:11px;color:var(--color-text-muted);margin-bottom:6px;">${tt('A plan can be made of other plans: a hamlet is cottages at corners, turned in quarter turns, with paved paths between.')}</div>
-                ${rows('parts', { cols: 'minmax(70px,1fr) minmax(90px,1fr) 64px 64px 64px minmax(90px,1fr) 28px', labels: [tt('Part'), tt('Plan'), 'x', 'y', tt('Turn'), tt('Style')] }, partsBody, tt('No parts.'))}
+                ${rows('parts', { cols: 'minmax(70px,1fr) minmax(90px,1fr) 52px 52px 52px minmax(90px,1fr) 28px', labels: [tt('Part'), tt('Plan'), 'x', 'y', tt('Turn'), tt('Style')] }, partsBody, tt('No parts.'))}
                 <div style="margin:4px 0 10px;">${add('parts')}</div>
-                ${rows('paths', { cols: '64px 64px 64px 64px minmax(90px,1fr) 28px', labels: ['x0', 'y0', 'x1', 'y1', tt('Material')] }, pathsBody, tt('No paths.'))}
+                ${rows('paths', { cols: '52px 52px 52px 52px minmax(90px,1fr) 28px', labels: ['x0', 'y0', 'x1', 'y1', tt('Material')] }, pathsBody, tt('No paths.'))}
                 <div style="margin-top:4px;">${add('paths')}</div>
             </div>`;
         this.bindMore(more);
@@ -618,10 +725,11 @@ class DatabaseStructureEditor {
         const number = (input, min, max) => Math.max(min, Math.min(max, Math.floor(Number(input.value)) || 0));
         more.querySelector('.rr-structures-fold').addEventListener('click', () => { this._open.more = !this._open.more; this.renderMore(); });
         for (const input of more.querySelectorAll('.rr-structures-material')) {
-            input.addEventListener('change', () => { plan.materials[input.dataset.role] = input.value; this.markDirty(); this.renderBar(); });
+            input.addEventListener('change', () => { this.pushHistory(); plan.materials[input.dataset.role] = input.value; this.markDirty(); this.renderBar(); });
         }
         for (const input of more.querySelectorAll('.rr-structures-field')) {
-            input.addEventListener('input', () => {
+            input.addEventListener('change', () => {
+                this.pushHistory();
                 const keys = input.dataset.path.split('.');
                 let target = plan;
                 for (const key of keys.slice(0, -1)) target = target[key];
@@ -630,7 +738,8 @@ class DatabaseStructureEditor {
             });
         }
         for (const input of more.querySelectorAll('.rr-structures-part')) {
-            input.addEventListener(input.tagName === 'SELECT' ? 'change' : 'input', () => {
+            input.addEventListener('change', () => {
+                this.pushHistory();
                 const part = plan.parts[Number(input.dataset.index)];
                 const prop = input.dataset.prop;
                 if (prop === 'x') part.at[0] = number(input, 0, DatabaseStructureEditor.SIZE_MAX);
@@ -642,7 +751,8 @@ class DatabaseStructureEditor {
             });
         }
         for (const input of more.querySelectorAll('.rr-structures-path')) {
-            input.addEventListener(input.tagName === 'SELECT' ? 'change' : 'input', () => {
+            input.addEventListener('change', () => {
+                this.pushHistory();
                 const strip = plan.paths[Number(input.dataset.index)];
                 const i = Number(input.dataset.i);
                 if (i === 4) { if (input.value) strip[4] = input.value; else strip.length = 4; }
@@ -650,16 +760,18 @@ class DatabaseStructureEditor {
                 this.markDirty();
             });
         }
-        for (const button of more.querySelectorAll('.rr-structures-add')) {
+        for (const button of more.querySelectorAll('.rr-structures-row-add')) {
             button.addEventListener('click', () => {
+                this.pushHistory();
                 if (button.dataset.rows === 'parts') plan.parts.push({ name: DatabaseStructureEditor.freshName(plan.parts.map(part => part.name), this._t('part')), plan: '', at: [0, 0], rot: 0, scale: 1, materials: {} });
                 else plan.paths.push([0, 0, 0, 0]);
                 this._open.more = true;
                 this.markDirty(); this.renderMore();
             });
         }
-        for (const button of more.querySelectorAll('.rr-structures-remove')) {
+        for (const button of more.querySelectorAll('.rr-structures-row-remove')) {
             button.addEventListener('click', () => {
+                this.pushHistory();
                 if (button.dataset.rows === 'parts') plan.parts.splice(Number(button.dataset.index), 1); else plan.paths.splice(Number(button.dataset.index), 1);
                 this.markDirty(); this.renderMore();
             });
@@ -709,25 +821,63 @@ class DatabaseStructureEditor {
         return null;
     }
 
+    doorCellsOf(index, floor = this.currentFloor()) {
+        const SP = typeof RRStructurePlan !== 'undefined' ? RRStructurePlan : null;
+        if (!SP || !floor || !floor.doors[index]) return [];
+        try { return SP.doorCells(floor.rooms, this.current.plan.size, floor.doors[index]); } catch (error) { return []; }
+    }
+
+    /** What stands on a cell, nearest to the hand first: a person, stairs, a door, a window, a room. */
+    hitAt(x, y) {
+        const plan = this.current?.plan, floor = this.currentFloor();
+        if (!plan || !floor) return null;
+        const floorIndex = this.currentFloorIndex();
+        const spot = Object.entries(plan.spots).find(([, at]) => at[0] === x && at[1] === y);
+        if (spot) return { kind: 'spot', key: spot[0] };
+        const stair = plan.stairs.findIndex(s => s.floor === floorIndex && s.from[0] === x && s.from[1] === y);
+        if (stair >= 0) return { kind: 'stair', key: stair };
+        for (let i = 0; i < floor.doors.length; i++) if (this.doorCellsOf(i, floor).some(([cx, cy]) => cx === x && cy === y)) return { kind: 'door', key: i };
+        const window = floor.windows.findIndex(([wx, wy]) => wx === x && wy === y);
+        if (window >= 0) return { kind: 'window', key: window };
+        const room = this.roomAtCell(x, y, floor);
+        if (room) return { kind: 'room', key: room };
+        return null;
+    }
+
+    onRing(x, y) {
+        const [W, H] = this.current.plan.size;
+        const corner = (x === 0 || x === W - 1) && (y === 0 || y === H - 1);
+        return !corner && (x === 0 || x === W - 1 || y === 0 || y === H - 1);
+    }
+
     /**
-     * What a press on a cell starts: inside a room, a move; on a room's
-     * edge, a resize of that edge; on empty ground, a new room drawn from
-     * here. A press that never moves is a click, answered on release.
+     * A press on the plan. On something already there, whatever the tool,
+     * it is picked up: a room moves (or resizes from its edge), a door
+     * slides along its wall, a window along the outside, stairs and people
+     * go anywhere. On empty ground the tool decides what a drag or a click
+     * makes; the press that never moves is answered on release.
      */
     beginPlanGesture(cell) {
         const floor = this.currentFloor();
         if (!floor || !cell) return null;
-        if (this.tool !== 'room') { this._gesture = { mode: 'click', start: cell, moved: false }; return this._gesture; }
-        const room = this.roomAtCell(cell.x, cell.y, floor);
-        if (room) {
-            const r = floor.rooms[room];
-            const edges = { left: cell.x === r[0] && r[2] > r[0], right: cell.x === r[2] && r[2] > r[0], top: cell.y === r[1] && r[3] > r[1], bottom: cell.y === r[3] && r[3] > r[1] };
-            const resize = Object.values(edges).some(Boolean);
-            this._gesture = { mode: resize ? 'resize' : 'move', room, edges, start: cell, from: r.slice(), moved: false };
-            this.selection = { kind: 'room', key: room };
-        } else {
-            this._gesture = { mode: 'draw', start: cell, rect: [cell.x, cell.y, cell.x, cell.y], moved: false };
+        const hit = this.hitAt(cell.x, cell.y);
+        // A door, window, stairs or person is picked up by any tool; a room only
+        // by Select and Room, since the other tools place things inside rooms.
+        if (hit && (hit.kind !== 'room' || this.tool === 'select' || this.tool === 'room')) {
+            this.selection = hit;
+            const g = { mode: 'move', target: hit, start: cell, moved: false, snapshot: JSON.stringify(this.current.plan) };
+            if (hit.kind === 'room') {
+                const r = floor.rooms[hit.key];
+                const edges = { left: cell.x === r[0] && r[2] > r[0], right: cell.x === r[2] && r[2] > r[0], top: cell.y === r[1] && r[3] > r[1], bottom: cell.y === r[3] && r[3] > r[1] };
+                if (Object.values(edges).some(Boolean)) { g.mode = 'resize'; g.edges = edges; }
+                g.from = r.slice();
+            }
+            this._gesture = g;
+            this.renderInspector(); this.renderTools();
+            return g;
         }
+        if (this.tool === 'room') this._gesture = { mode: 'draw', start: cell, rect: [cell.x, cell.y, cell.x, cell.y], moved: false };
+        else this._gesture = { mode: 'click', start: cell, moved: false };
         return this._gesture;
     }
 
@@ -742,17 +892,31 @@ class DatabaseStructureEditor {
         const clampX = v => Math.max(1, Math.min(W - 2, v)), clampY = v => Math.max(1, Math.min(H - 2, v));
         if (g.mode === 'draw') {
             g.rect = [clampX(Math.min(g.start.x, cell.x)), clampY(Math.min(g.start.y, cell.y)), clampX(Math.max(g.start.x, cell.x)), clampY(Math.max(g.start.y, cell.y))];
-        } else if (g.mode === 'move') {
-            const r = g.from, w = r[2] - r[0], h = r[3] - r[1];
-            const x0 = Math.max(1, Math.min(W - 2 - w, r[0] + cell.x - g.start.x)), y0 = Math.max(1, Math.min(H - 2 - h, r[1] + cell.y - g.start.y));
-            floor.rooms[g.room] = [x0, y0, x0 + w, y0 + h];
         } else if (g.mode === 'resize') {
             const r = g.from.slice();
             if (g.edges.left) r[0] = Math.min(clampX(cell.x), r[2]);
             if (g.edges.right) r[2] = Math.max(clampX(cell.x), r[0]);
             if (g.edges.top) r[1] = Math.min(clampY(cell.y), r[3]);
             if (g.edges.bottom) r[3] = Math.max(clampY(cell.y), r[1]);
-            floor.rooms[g.room] = r;
+            floor.rooms[g.target.key] = r;
+        } else if (g.mode === 'move') {
+            const t = g.target;
+            if (t.kind === 'room') {
+                const r = g.from, w = r[2] - r[0], h = r[3] - r[1];
+                const x0 = Math.max(1, Math.min(W - 2 - w, r[0] + cell.x - g.start.x)), y0 = Math.max(1, Math.min(H - 2 - h, r[1] + cell.y - g.start.y));
+                floor.rooms[t.key] = [x0, y0, x0 + w, y0 + h];
+            } else if (t.kind === 'door') {
+                const SP = typeof RRStructurePlan !== 'undefined' ? RRStructurePlan : null;
+                const door = floor.doors[t.key];
+                const found = SP && SP.doorWall ? SP.doorWall(floor.rooms, plan.size, door) : null;
+                if (found) door[3] = found.alongX ? cell.x : cell.y;
+            } else if (t.kind === 'window') {
+                if (this.onRing(cell.x, cell.y)) floor.windows[t.key] = [cell.x, cell.y];
+            } else if (t.kind === 'stair') {
+                plan.stairs[t.key].from = [cell.x, cell.y];
+            } else if (t.kind === 'spot') {
+                plan.spots[t.key] = [cell.x, cell.y];
+            }
         }
         this.schedulePreview();
     }
@@ -763,70 +927,87 @@ class DatabaseStructureEditor {
         const floor = this.currentFloor();
         if (!g || !floor) return;
         if (!g.moved) {
-            this.clickPlan(g.start);
+            if (g.mode === 'click' || g.mode === 'draw') this.clickPlan(g.start);
+            else { this.renderInspector(); this.renderTools(); }
             return;
         }
         if (g.mode === 'draw') {
+            this.pushHistory();
             const name = DatabaseStructureEditor.freshName(Object.keys(floor.rooms), this._t('room'));
             floor.rooms[name] = g.rect;
             this.selection = { kind: 'room', key: name };
+        } else if (g.snapshot) {
+            // The move was applied as it went; the state before it is what Undo returns to.
+            this._history.push(g.snapshot);
+            if (this._history.length > DatabaseStructureEditor.HISTORY) this._history.shift();
+            this._future.length = 0;
         }
         this.markDirty();
         this.renderInspector();
     }
 
-    /**
-     * A click on the plan, by tool. Room: a room selects itself, a wall
-     * cell gets a door. Door: the same, and nothing else. Stairs: stairs
-     * here select themselves, a room cell starts new stairs. Spot: a spot
-     * here selects itself, any other cell becomes one.
-     */
+    /** A click on empty ground, by tool. */
     clickPlan(cell) {
         const plan = this.current?.plan, floor = this.currentFloor();
         if (!plan || !floor) return;
+        const floorIndex = this.currentFloorIndex();
         const room = this.roomAtCell(cell.x, cell.y, floor);
-        const floorIndex = this.floor === 'roof' ? plan.floors.length - 1 : this.floor;
-        if (this.tool === 'room' || this.tool === 'door') {
-            if (room) this.selection = { kind: 'room', key: room };
-            else if (!this.toggleDoorAt(cell.x, cell.y)) this.selection = null;
-        } else if (this.tool === 'stairs') {
-            const index = plan.stairs.findIndex(stair => stair.floor === floorIndex && stair.from[0] === cell.x && stair.from[1] === cell.y);
-            if (index >= 0) this.selection = { kind: 'stair', key: index };
-            else if (room) { plan.stairs.push({ floor: floorIndex, from: [cell.x, cell.y], dir: 'north', width: 1 }); this.selection = { kind: 'stair', key: plan.stairs.length - 1 }; this.markDirty(); }
+        if (this.tool === 'select') this.selection = null;
+        else if (this.tool === 'room') this.selection = null;
+        else if (this.tool === 'door') { if (!this.addDoorAt(cell.x, cell.y)) this.selection = null; }
+        else if (this.tool === 'window') {
+            if (this.onRing(cell.x, cell.y) && !room) { this.pushHistory(); floor.windows.push([cell.x, cell.y]); this.selection = { kind: 'window', key: floor.windows.length - 1 }; this.markDirty(); }
             else this.selection = null;
-        } else if (this.tool === 'spot') {
-            const hit = Object.entries(plan.spots).find(([, at]) => at[0] === cell.x && at[1] === cell.y);
-            if (hit) this.selection = { kind: 'spot', key: hit[0] };
-            else { const name = DatabaseStructureEditor.freshName(Object.keys(plan.spots), this._t('spot')); plan.spots[name] = [cell.x, cell.y]; this.selection = { kind: 'spot', key: name }; this.markDirty(); }
+        } else if (this.tool === 'stairs') {
+            if (room) { this.pushHistory(); plan.stairs.push({ floor: floorIndex, from: [cell.x, cell.y], dir: 'north', width: 1 }); this.selection = { kind: 'stair', key: plan.stairs.length - 1 }; this.markDirty(); }
+            else this.selection = null;
+        } else if (this.tool === 'person') {
+            this.pushHistory();
+            const name = DatabaseStructureEditor.freshName(Object.keys(plan.spots), this._t('person'));
+            plan.spots[name] = [cell.x, cell.y];
+            const templates = this.eventTemplates();
+            plan.events.push({ spot: name, name: '', template: templates[0] || '', direction: 2 });
+            this.selection = { kind: 'spot', key: name };
+            this.markDirty();
         }
         this.renderInspector();
+        this.renderTools();
         this.schedulePreview();
     }
 
     /**
-     * A door through the wall cell at (x, y): between the two rooms either
-     * side of it, or from the one room beside it to outside when the cell is
-     * on the plan's edge. The same pair again takes the door away. Doors are
-     * centred on the shared wall by the builder, so the click names the
-     * wall, not the exact cell. False when the cell is not a wall between anything.
+     * A door through the wall cell at (x, y), where the click was: between
+     * the two rooms either side of it, or from the one room beside it to
+     * outside when the cell is on the plan's edge. False when the cell is
+     * not a wall between anything.
      */
-    toggleDoorAt(x, y) {
+    addDoorAt(x, y) {
         const floor = this.currentFloor(), plan = this.current?.plan;
         if (!floor || !plan || this.roomAtCell(x, y, floor)) return false;
         const [W, H] = plan.size;
         const n = this.roomAtCell(x, y - 1, floor), s = this.roomAtCell(x, y + 1, floor), w = this.roomAtCell(x - 1, y, floor), e = this.roomAtCell(x + 1, y, floor);
-        let pair = null;
-        if (n && s && n !== s) pair = [n, s];
-        else if (w && e && w !== e) pair = [w, e];
+        let pair = null, alongX = null;
+        if (n && s && n !== s) { pair = [n, s]; alongX = true; }
+        else if (w && e && w !== e) { pair = [w, e]; alongX = false; }
         else if (x === 0 || x === W - 1 || y === 0 || y === H - 1) {
             const beside = [n, s, w, e].filter(Boolean);
-            if (beside.length) pair = [beside[0], 'outside'];
+            if (beside.length) { pair = [beside[0], 'outside']; alongX = y === 0 || y === H - 1; }
         }
         if (!pair) return false;
-        const index = floor.doors.findIndex(door => (door[0] === pair[0] && door[1] === pair[1]) || (door[0] === pair[1] && door[1] === pair[0]));
-        if (index >= 0) floor.doors.splice(index, 1); else floor.doors.push([pair[0], pair[1], this.doorWidth]);
+        this.pushHistory();
+        floor.doors.push([pair[0], pair[1], 3, alongX ? x : y]);
+        this.selection = { kind: 'door', key: floor.doors.length - 1 };
         this.markDirty();
         return true;
+    }
+
+    /** Kept for the tests and the palette: a door toggled by the wall it names. */
+    toggleDoorAt(x, y) {
+        const floor = this.currentFloor();
+        if (!floor) return false;
+        const hit = this.hitAt(x, y);
+        if (hit && hit.kind === 'door') { this.pushHistory(); floor.doors.splice(hit.key, 1); this.selection = null; this.markDirty(); return true; }
+        return this.addDoorAt(x, y);
     }
 
     _bindPlanGestures(canvas) {
@@ -844,7 +1025,10 @@ class DatabaseStructureEditor {
         canvas.addEventListener('pointerup', finish);
         canvas.addEventListener('pointercancel', finish);
         canvas.addEventListener('keydown', event => {
+            const key = event.key.toLowerCase();
             if ((event.key === 'Delete' || event.key === 'Backspace') && this.selection) { event.preventDefault(); this.removeSelection(); }
+            else if ((event.ctrlKey || event.metaKey) && key === 'z' && !event.shiftKey) { event.preventDefault(); this.undo(); }
+            else if ((event.ctrlKey || event.metaKey) && (key === 'y' || (key === 'z' && event.shiftKey))) { event.preventDefault(); this.redo(); }
         });
     }
 
@@ -917,22 +1101,40 @@ class DatabaseStructureEditor {
             ctx.fillText(part.name, ox + (part.at[0] + turned[0] * k / 2) * cell, oy + (part.at[1] + turned[1] * k / 2) * cell);
         }
         for (const [name, at] of Object.entries(plan.spots)) {
-            ctx.fillStyle = colours('--color-accent');
-            ctx.beginPath(); ctx.arc(ox + (at[0] + 0.5) * cell, oy + (at[1] + 0.5) * cell, Math.max(2, cell * 0.3), 0, Math.PI * 2); ctx.fill();
+            const cx = ox + (at[0] + 0.5) * cell, cy = oy + (at[1] + 0.5) * cell, r = Math.max(2, cell * 0.16);
+            const person = plan.events.some(item => item.spot === name);
+            ctx.fillStyle = person ? '#f0c060' : colours('--color-accent');
+            ctx.beginPath(); ctx.arc(cx, cy - r * 1.2, r, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.arc(cx, cy + r * 1.6, r * 1.9, Math.PI, 0); ctx.fill();
             ctx.fillStyle = colours('--color-text');
-            ctx.fillText(name, ox + (at[0] + 0.5) * cell, oy + (at[1] + 0.5) * cell - Math.max(6, cell * 0.8));
+            ctx.fillText(name, cx, cy - Math.max(7, cell * 0.9));
         }
         const floorNow = this.currentFloor(), sel = this.selection;
+        // Stairs point the way they rise; hand-placed windows show even before the build catches up.
+        const arrow = { north: [0, -1], south: [0, 1], west: [-1, 0], east: [1, 0] };
+        for (const s of plan.stairs) {
+            if (s.floor !== floorIndex || this.floor === 'roof') continue;
+            const [dx, dy] = arrow[s.dir] || [0, -1];
+            const cx = ox + (s.from[0] + 0.5) * cell, cy = oy + (s.from[1] + 0.5) * cell;
+            ctx.strokeStyle = colours('--color-text'); ctx.lineWidth = Math.max(1, cell * 0.12);
+            ctx.beginPath(); ctx.moveTo(cx - dx * cell * 0.3, cy - dy * cell * 0.3); ctx.lineTo(cx + dx * cell * 0.3, cy + dy * cell * 0.3); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(cx + dx * cell * 0.3, cy + dy * cell * 0.3); ctx.lineTo(cx + dx * cell * 0.3 - (dx + dy) * cell * 0.2, cy + dy * cell * 0.3 - (dy - dx) * cell * 0.2);
+            ctx.moveTo(cx + dx * cell * 0.3, cy + dy * cell * 0.3); ctx.lineTo(cx + dx * cell * 0.3 - (dx - dy) * cell * 0.2, cy + dy * cell * 0.3 - (dy + dx) * cell * 0.2); ctx.stroke();
+            ctx.lineWidth = 1;
+        }
         ctx.strokeStyle = colours('--color-accent'); ctx.lineWidth = 2;
+        const outline = (x0, y0, x1, y1) => ctx.strokeRect(ox + x0 * cell + 1, oy + y0 * cell + 1, (x1 - x0 + 1) * cell - 2, (y1 - y0 + 1) * cell - 2);
         if (floorNow && this.floor !== 'roof' && sel?.kind === 'room' && floorNow.rooms[sel.key]) {
-            const r = floorNow.rooms[sel.key];
-            ctx.strokeRect(ox + r[0] * cell + 1, oy + r[1] * cell + 1, (r[2] - r[0] + 1) * cell - 2, (r[3] - r[1] + 1) * cell - 2);
+            const r = floorNow.rooms[sel.key]; outline(r[0], r[1], r[2], r[3]);
+        } else if (floorNow && sel?.kind === 'door' && floorNow.doors[sel.key]) {
+            for (const [dx, dy] of this.doorCellsOf(sel.key, floorNow)) outline(dx, dy, dx, dy);
+        } else if (floorNow && sel?.kind === 'window' && floorNow.windows[sel.key]) {
+            const [wx, wy] = floorNow.windows[sel.key]; outline(wx, wy, wx, wy);
         } else if (sel?.kind === 'stair' && plan.stairs[sel.key]) {
-            const s = plan.stairs[sel.key];
-            ctx.strokeRect(ox + s.from[0] * cell + 1, oy + s.from[1] * cell + 1, cell - 2, cell - 2);
+            const s = plan.stairs[sel.key]; outline(s.from[0], s.from[1], s.from[0], s.from[1]);
         } else if (sel?.kind === 'spot' && plan.spots[sel.key]) {
             const at = plan.spots[sel.key];
-            ctx.beginPath(); ctx.arc(ox + (at[0] + 0.5) * cell, oy + (at[1] + 0.5) * cell, Math.max(4, cell * 0.5), 0, Math.PI * 2); ctx.stroke();
+            ctx.beginPath(); ctx.arc(ox + (at[0] + 0.5) * cell, oy + (at[1] + 0.5) * cell, Math.max(5, cell * 0.55), 0, Math.PI * 2); ctx.stroke();
         }
         ctx.lineWidth = 1;
         if (this._gesture && this._gesture.mode === 'draw' && this._gesture.moved) {
