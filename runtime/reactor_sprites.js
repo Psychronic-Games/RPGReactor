@@ -5562,6 +5562,7 @@ Spriteset_Map.prototype.updateReactor3D = function() {
     // stepping a whole tile at a time.
     this.updateReactor3DCamera();
     if (state.scene.updateSky) state.scene.updateSky(state.viewport.camera ? state.viewport.camera() : null, Graphics.frameCount);
+    if (state.scene.updateWater) state.scene.updateWater(Graphics.frameCount);
     // Inside a built house the roof and any wall in the way are cut around the player.
     if (state.scene.updateCutaway) state.scene.updateCutaway(state.viewport.camera ? state.viewport.camera() : null, $dataMap, $gamePlayer);
     this.updateReactor3DLights(state);

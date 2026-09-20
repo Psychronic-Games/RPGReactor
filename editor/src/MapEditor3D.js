@@ -384,6 +384,7 @@ class MapEditor3D {
             if (event?.detail?.terrain && this.updateTerrainInPlace(event.detail.region)) return;
             // Pieces are laid down again on their own; the rest of the scene stays.
             if (event?.detail?.pieces && this.updatePiecesInPlace(event.detail.region || null)) return;
+            if (event?.detail?.water && this.updateWaterInPlace()) return;
             const since = Date.now() - (this._lastRebuildAt || 0);
             if (since >= REBUILD_INTERVAL) {
                 clearTimeout(this._rebuildTimer);
@@ -1547,6 +1548,8 @@ class MapEditor3D {
         const names = new Set(RRMapElevation.pieceMaterials ? RRMapElevation.pieceMaterials(mapData) : []);
         const chosen = this.pieceManager()?.material;
         if (chosen) names.add(chosen);
+        const waterMaterial = this.terrainManager()?.waterMaterial;
+        if (waterMaterial) names.add(waterMaterial);
         if (!names.size) return {};
         if (!this.materialImages) this.materialImages = {};
         const directory = this.path.join(projectPath, 'img', 'materials');
@@ -1586,6 +1589,40 @@ class MapEditor3D {
             this._lastActiveAt = performance.now();
         }).catch(error => console.error('The pieces could not be laid down again.', error));
         return true;
+    }
+
+    /** Lay the water sheets again without a rebuild. */
+    updateWaterInPlace() {
+        const mapData = this.currentMap();
+        const scene = this.mapScene;
+        if (!mapData || !scene?.updateWaterSheets) return false;
+        const request = this._rebuildGeneration;
+        this.loadMaterials(mapData).then(materials => {
+            if (this.mapScene !== scene || this._rebuildGeneration !== request) return;
+            scene.updateWaterSheets(mapData, name => materials[name] || null);
+            this._lastActiveAt = performance.now();
+        }).catch(error => console.error('The water could not be laid again.', error));
+        return true;
+    }
+
+    /** A translucent slab where a water sheet is being drawn. */
+    showWaterGhost(rect, level) {
+        if (!this.mapScene || !rect) return;
+        if (!this.waterGhost) {
+            this.waterGhost = new THREE.Mesh(new THREE.BoxGeometry(1, 0.08, 1), new THREE.MeshBasicMaterial({ color: 0x4fb3ff, transparent: true, opacity: 0.45, depthWrite: false }));
+            this.waterGhost.renderOrder = 998;
+            this.mapScene.scene().add(this.waterGhost);
+        }
+        const w = rect.x1 - rect.x0 + 1, h = rect.y1 - rect.y0 + 1;
+        this.waterGhost.scale.set(w, 1, h);
+        this.waterGhost.position.set(rect.x0 + w / 2, level, rect.y0 + h / 2);
+        this.waterGhost.visible = true;
+        this._lastActiveAt = performance.now();
+    }
+
+    hideWaterGhost() {
+        if (this.waterGhost) this.waterGhost.visible = false;
+        this._lastActiveAt = performance.now();
     }
 
     /** The outward normal of one triangle of a mesh whose geometry is in world units. */
@@ -3079,7 +3116,7 @@ class MapEditor3D {
         }
         this.billboards = [];
         this.labels = [];
-        for (const key of ['grid', 'hoverCell', 'pieceGhost']) {
+        for (const key of ['grid', 'hoverCell', 'pieceGhost', 'waterGhost']) {
             const mesh = this[key];
             if (!mesh) continue;
             mesh.geometry.dispose();
@@ -4058,6 +4095,7 @@ class MapEditor3D {
         this.animateEventPreviews(now);
         // The sky stands around the editor's camera and drifts at the game's frame rate.
         this.mapScene.updateSky?.(this.camera, now / (1000 / 60));
+        this.mapScene.updateWater?.(now / (1000 / 60));
         this.pickPropLods();
         this.projectController?.mediaSurfacePreviewManager?.updateThree?.();
         // Lights are map content: feed the compositor on every drawn frame,

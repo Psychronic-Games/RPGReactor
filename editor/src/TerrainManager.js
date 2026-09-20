@@ -12,6 +12,8 @@ class TerrainManager {
         this.mode = 'raise';
         this.radius = 3;
         this.strength = 0.5;
+        this.waterLevel = 0.4;
+        this.waterMaterial = 'Water';
         this._onKeyDown = event => this.handleKey(event);
         this.panel = null;
         this.undoStack = [];
@@ -19,7 +21,7 @@ class TerrainManager {
         this._stroke = null;
     }
 
-    _t(key) { return window.I18n ? window.I18n.t(key) : key; }
+    _t(key, params) { return window.I18n ? window.I18n.t(key, params) : key; }
     elevation() { return typeof RRMapElevation !== 'undefined' ? RRMapElevation : (window.RRMapElevation || null); }
     currentMap() { return this.projectController?.getTilemapManager?.()?.currentMap || null; }
 
@@ -48,6 +50,16 @@ class TerrainManager {
                         <button type="button" class="rr-btn-secondary rr-terrain-redo" style="flex: 1; padding: 5px;" data-i18n="terrain.redo">${t('terrain.redo')}</button>
                     </div>
                     <button type="button" class="rr-btn-secondary rr-terrain-clear" style="padding: 5px;" data-i18n="terrain.clear">${t('terrain.clear')}</button>
+                    <div class="database-field-label" style="font-size: 11px; margin: 6px 0 0;" data-i18n="terrain.water">${t('terrain.water')}</div>
+                    <div style="font-size: 11px; color: var(--color-text-muted); line-height: 1.4;" data-i18n="terrain.waterHint">${t('terrain.waterHint')}</div>
+                    <div class="rr-terrain-water-modes" role="radiogroup" style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px;">
+                        <button type="button" class="rr-btn-secondary rr-terrain-mode" data-terrain-mode="water" role="radio" aria-checked="false" style="padding: 6px 4px; font-size: 12px;" data-i18n="terrain.waterPaint">${t('terrain.waterPaint')}</button>
+                        <button type="button" class="rr-btn-secondary rr-terrain-mode" data-terrain-mode="drain" role="radio" aria-checked="false" style="padding: 6px 4px; font-size: 12px;" data-i18n="terrain.waterErase">${t('terrain.waterErase')}</button>
+                    </div>
+                    <label style="display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: var(--color-text-muted);">
+                        <span><span data-i18n="terrain.waterLevel">${t('terrain.waterLevel')}</span> <span class="rr-terrain-water-level-value" style="color: var(--color-text);">${this.waterLevel}</span></span>
+                        <input type="range" class="rr-terrain-water-level" min="-10" max="30" step="0.1" value="${this.waterLevel}" data-no-stepper>
+                    </label>
                     <div class="rr-terrain-status" style="font-size: 11px; color: var(--color-text-muted);" data-rr-i18n-skip></div>
                     <div style="font-size: 11px; color: var(--color-text-muted); line-height: 1.4;" data-i18n="terrain.keys">${t('terrain.keys')}</div>
                 </div>`;
@@ -59,13 +71,16 @@ class TerrainManager {
             container.querySelector('.rr-terrain-undo').addEventListener('click', () => this.undo());
             container.querySelector('.rr-terrain-redo').addEventListener('click', () => this.redo());
             container.querySelector('.rr-terrain-clear').addEventListener('click', () => this.clear());
+            const level = container.querySelector('.rr-terrain-water-level');
+            level.addEventListener('input', () => { this.waterLevel = Math.round((Number(level.value) || 0) * 10) / 10; container.querySelector('.rr-terrain-water-level-value').textContent = this.waterLevel; });
         }
         this.refreshStatus();
     }
 
     setMode(mode) {
-        if (!this.elevation()?.TERRAIN_MODES.includes(mode)) return;
+        if (!this.elevation()?.TERRAIN_MODES.includes(mode) && mode !== 'water' && mode !== 'drain') return;
         this.mode = mode;
+        window.reactor?.mapEditor3D?.hideWaterGhost?.();
         this.panel?.querySelectorAll('.rr-terrain-mode').forEach(button => button.setAttribute('aria-checked', String(button.dataset.terrainMode === mode)));
     }
 
@@ -75,6 +90,7 @@ class TerrainManager {
         const map = this.currentMap(), elevation = this.elevation();
         const is3D = !!(map && elevation && elevation.hasNote(map));
         status.textContent = !map ? '' : !is3D ? this._t('terrain.needs3D') : elevation.hasTerrain(map) ? this._t('terrain.shaped') : this._t('terrain.flat');
+        if (map && is3D && elevation.hasWater?.(map)) status.textContent += ' ' + this._t('terrain.waterCount', { count: elevation.water(map).length });
     }
 
     activate() {
@@ -115,6 +131,20 @@ class TerrainManager {
     beginStroke(point) {
         const map = this.currentMap(), elevation = this.elevation();
         if (!map || !elevation || !point) return false;
+        // Water: a drag draws the sheet's rectangle; a click in Remove drains the cell's sheets.
+        if (this.mode === 'water' || this.mode === 'drain') {
+            const cell = { x: Math.floor(point.x + 0.5), y: Math.floor(point.y + 0.5) };
+            if (this.mode === 'drain') {
+                const saved = elevation.waterSnapshot(map);
+                if (!elevation.removeWaterAt(map, cell.x, cell.y)) return false;
+                this.undoStack.push({ water: saved }); if (this.undoStack.length > 50) this.undoStack.shift(); this.redoStack.length = 0;
+                this.announce(null, true); this.refreshStatus();
+                return true;
+            }
+            this._stroke = { water: true, start: cell, end: cell, moved: false, last: null };
+            window.reactor?.mapEditor3D?.showWaterGhost?.({ x0: cell.x, y0: cell.y, x1: cell.x, y1: cell.y }, this.waterLevel);
+            return true;
+        }
         this.undoStack.push(elevation.terrainSnapshot(map));
         if (this.undoStack.length > 50) this.undoStack.shift();
         this.redoStack.length = 0;
@@ -125,6 +155,12 @@ class TerrainManager {
 
     paintAt(point) {
         if (!this._stroke || !point) return false;
+        if (this._stroke.water) {
+            this._stroke.end = { x: Math.floor(point.x + 0.5), y: Math.floor(point.y + 0.5) };
+            const a = this._stroke.start, b = this._stroke.end;
+            window.reactor?.mapEditor3D?.showWaterGhost?.({ x0: Math.min(a.x, b.x), y0: Math.min(a.y, b.y), x1: Math.max(a.x, b.x), y1: Math.max(a.y, b.y) }, this.waterLevel);
+            return true;
+        }
         const last = this._stroke.last;
         const spacing = Math.max(0.35, this.radius * 0.25);
         if (last && Math.hypot(point.x - last.x, point.y - last.y) < spacing) return false;
@@ -153,6 +189,20 @@ class TerrainManager {
     }
 
     endStroke() {
+        if (this._stroke && this._stroke.water) {
+            const map = this.currentMap(), elevation = this.elevation();
+            const a = this._stroke.start, b = this._stroke.end;
+            this._stroke = null;
+            window.reactor?.mapEditor3D?.hideWaterGhost?.();
+            if (!map || !elevation) return;
+            const saved = elevation.waterSnapshot(map);
+            if (elevation.addWater(map, { x0: Math.min(a.x, b.x), y0: Math.min(a.y, b.y), x1: Math.max(a.x, b.x), y1: Math.max(a.y, b.y), level: this.waterLevel, material: this.waterMaterial })) {
+                this.undoStack.push({ water: saved }); if (this.undoStack.length > 50) this.undoStack.shift(); this.redoStack.length = 0;
+                this.announce(null, true);
+            }
+            this.refreshStatus();
+            return;
+        }
         if (this._stroke && !this._stroke.moved) this.undoStack.pop();
         this._stroke = null;
         this.refreshStatus();
@@ -163,8 +213,15 @@ class TerrainManager {
     _swap(from, to) {
         const map = this.currentMap(), elevation = this.elevation();
         if (!map || !elevation || !from.length) return;
+        const entry = from.pop();
+        if (entry && !Array.isArray(entry) && entry.water) {
+            to.push({ water: elevation.waterSnapshot(map) });
+            elevation.restoreWater(map, entry.water);
+            this.announce(null, true); this.refreshStatus();
+            return;
+        }
         to.push(elevation.terrainSnapshot(map));
-        elevation.restoreTerrain(map, from.pop());
+        elevation.restoreTerrain(map, entry);
         this.announce(); this.refreshStatus();
     }
 
@@ -183,10 +240,14 @@ class TerrainManager {
      * resets the sky's drift. `region` is the corner range a dab touched,
      * or nothing for the whole map (undo, redo, flatten).
      */
-    announce(region = null) {
+    announce(region = null, waterToo = false) {
         const mapEditor = window.reactor?.mapEditor;
         if (typeof mapEditor?.onElevationChanged === 'function') mapEditor.onElevationChanged(this.currentMap());
         if (typeof document === 'undefined' || typeof CustomEvent !== 'function') return;
+        if (waterToo) {
+            document.dispatchEvent(new CustomEvent('rr-map-edited', { detail: { mapId: this.currentMap()?.id, water: true } }));
+            return;
+        }
         document.dispatchEvent(new CustomEvent('rr-map-edited', {
             detail: { mapId: this.currentMap()?.id, terrain: true, region: region && typeof region === 'object' ? region : null }
         }));

@@ -208,7 +208,7 @@ test('the runtime and the editor load the listed levels and pick per frame', () 
     assert.match(preview, /if \(Array\.isArray\(sidecar\.lods\) && Reactor3D\.attachLodLevels && !loaded\.userData\.animated\) \{/);
     assert.match(preview, /if \(!fs\.existsSync\(lodPath\)\) continue;/);
     const editor = read('editor/src/MapEditor3D.js');
-    assert.match(editor, /this\.animateEventPreviews\(now\);\n(?:\s*\/\/[^\n]*\n|\s*this\.mapScene\.updateSky\?\.\([^\n]*\n)*\s*this\.pickPropLods\(\);/);
+    assert.match(editor, /this\.animateEventPreviews\(now\);\n(?:\s*\/\/[^\n]*\n|\s*this\.mapScene\.update(?:Sky|Water)\?\.\([^\n]*\n)*\s*this\.pickPropLods\(\);/);
     assert.match(editor, /Reactor3D\.pickLod\(object, Reactor3D\.instanceSpan\(object\), eye, undefined, screen\);/, 'the editor hands pickLod its own screen pair');
 });
 

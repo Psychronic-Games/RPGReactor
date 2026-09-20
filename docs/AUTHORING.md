@@ -20,6 +20,7 @@ project; a person can use it to find where anything lives.
 | Pieces (the 3D tileset) | `MapNNN.r3d.json` › `pieces` | **3D-B** tab; drawn as a plan on the flat map too | `validate-map.cjs` |
 | Buildings from a plan | `3d/Structures/*.json` (project-wide), placed as `MapNNN.r3d.json` › `structures` | 3D-B › Structure › Stamp / Move | `build-structure.cjs --check` |
 | Materials | `img/materials/*.png` (tileable) | swatches in 3D-B | — |
+| Water | `MapNNN.r3d.json` › `water` (rectangles with a `level`) | **3D-T** › Paint water | `validate-map.cjs` |
 | Placed models | `MapNNN.r3d.json` › `props` | **3D-M** tab | — |
 | Lights | `MapNNN.r3d.json` › `lights`, `lighting` | Lighting tool | — |
 | Events | `MapNNN.json` › `events` (RPG Maker data) | Event tool | — |
@@ -120,6 +121,20 @@ builds it again from the plan. **Editing a stamped building by hand
 detaches it from its plan**: the hand edit stays, the building still moves
 and turns as one, scale is off.
 
+## Water
+
+```json
+{ "x0": 8, "y0": 30, "x1": 20, "y1": 40, "level": 0.4, "material": "Water" }
+```
+
+A sheet over the cells `x0..x1, y0..y1` (inclusive) at world height
+`level`. The ground decides what it is: a cell whose ground is more than
+0.45 tile under the level is deep and cannot be walked into; shallower is
+waded. So a lake is terrain lowered under a sheet, a beach is the slope at
+its rim, and a river is a long thin sheet over a trough. `material` is an
+image under `img/materials`; the runtime waves it, tints it by depth and
+fades it out at the shore.
+
 ## Terrain and elevation
 
 `terrain` is a height at every tile corner, bilinear between; `elevation`
@@ -130,6 +145,6 @@ and keep slopes under 0.75 tile per tile where characters must walk;
 
 ## What is not here yet
 
-Furniture and named spots inside rooms, events placed from a plan, water,
-hip roofs, and a per-transfer floor (a transfer always lands on the ground
+Furniture and named spots inside rooms, events placed from a plan, rivers
+that flow (a sheet has waves but no current), hip roofs, and a per-transfer floor (a transfer always lands on the ground
 floor). Add them to this page as they land.

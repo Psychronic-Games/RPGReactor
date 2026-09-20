@@ -312,7 +312,7 @@
             && Object.keys(sidecar3d.eventPreviews).length);
         const roomed = !!(sidecar3d && sidecar3d.room);
         const propped = !!(sidecar3d && Array.isArray(sidecar3d.props) && sidecar3d.props.length);
-        const built = !!(sidecar3d && ((Array.isArray(sidecar3d.pieces) && sidecar3d.pieces.length) || (Array.isArray(sidecar3d.structures) && sidecar3d.structures.length)));
+        const built = !!(sidecar3d && ((Array.isArray(sidecar3d.pieces) && sidecar3d.pieces.length) || (Array.isArray(sidecar3d.structures) && sidecar3d.structures.length) || (Array.isArray(sidecar3d.water) && sidecar3d.water.length)));
         const lit = !!(sidecar3d && ((Array.isArray(sidecar3d.lights) && sidecar3d.lights.length)
             || sidecar3d.lighting));
         const media = Array.isArray(sidecar3d?.mediaSurfaces) && sidecar3d.mediaSurfaces.length > 0;
@@ -833,10 +833,54 @@
         }
         return writePieces(mapData, list) ? group : 0;
     };
+    /*
+     * Water: rectangles of cells under a sheet at one height. A shore is
+     * the terrain sloping below it; the runtime blocks water deeper than a
+     * wade. `water: [{x0, y0, x1, y1, level, material}]` in the sidecar.
+     */
+    const WATER_MAX_LEVEL = 60;
+    const normalizeWater = (raw, mapData) => {
+        if (!raw || typeof raw !== 'object') return null;
+        let x0 = Math.floor(Number(raw.x0)), y0 = Math.floor(Number(raw.y0)), x1 = Math.floor(Number(raw.x1)), y1 = Math.floor(Number(raw.y1));
+        if (![x0, y0, x1, y1].every(Number.isFinite)) return null;
+        if (x1 < x0) [x0, x1] = [x1, x0];
+        if (y1 < y0) [y0, y1] = [y1, y0];
+        if (mapData) { x0 = Math.max(0, x0); y0 = Math.max(0, y0); x1 = Math.min(mapData.width - 1, x1); y1 = Math.min(mapData.height - 1, y1); }
+        if (x1 < x0 || y1 < y0) return null;
+        const level = Math.max(-WATER_MAX_LEVEL, Math.min(WATER_MAX_LEVEL, Number(raw.level) || 0));
+        return { x0, y0, x1, y1, level: Math.round(level * 100) / 100, material: typeof raw.material === 'string' ? raw.material.trim() : '' };
+    };
+    const water = mapData => {
+        const list = mapData && mapData.reactor3d && Array.isArray(mapData.reactor3d.water) ? mapData.reactor3d.water : [];
+        return list.map(raw => normalizeWater(raw, mapData)).filter(Boolean);
+    };
+    const hasWater = mapData => water(mapData).length > 0;
+    const writeWater = (mapData, list) => {
+        if (!list.length) { if (mapData.reactor3d) delete mapData.reactor3d.water; return true; }
+        const sidecar = ensure(mapData);
+        if (!sidecar) return false;
+        sidecar.water = list.slice();
+        return true;
+    };
+    const addWater = (mapData, region) => {
+        const next = normalizeWater(region, mapData);
+        if (!next) return false;
+        return writeWater(mapData, water(mapData).concat([next]));
+    };
+    /** Remove every sheet over a cell. */
+    const removeWaterAt = (mapData, x, y) => {
+        const list = water(mapData);
+        const kept = list.filter(region => !(x >= region.x0 && x <= region.x1 && y >= region.y0 && y <= region.y1));
+        if (kept.length === list.length) return false;
+        return writeWater(mapData, kept);
+    };
+    const waterSnapshot = mapData => water(mapData);
+    const restoreWater = (mapData, saved) => writeWater(mapData, Array.isArray(saved) ? saved.map(raw => normalizeWater(raw, mapData)).filter(Boolean) : []);
     /** Every material the map's pieces wear, each once. */
-    const pieceMaterials = mapData => Array.from(new Set(pieces(mapData).map(piece => piece.material).filter(Boolean))).sort();
+    const pieceMaterials = mapData => Array.from(new Set(pieces(mapData).map(piece => piece.material).concat(water(mapData).map(region => region.material)).filter(Boolean))).sort();
 
     const api = {
+        WATER_MAX_LEVEL, normalizeWater, water, hasWater, addWater, removeWaterAt, waterSnapshot, restoreWater,
         PIECE_KINDS, PIECE_MAX_LEVEL, normalizePiece, pieces, hasPieces, pieceAt, setPiece, removePiece,
         piecesSnapshot, restorePieces, clearPieces, pieceMaterials,
         nextPieceGroup, pieceGroup, pieceGroupBounds, pieceGroupAt, groupConnectedPieces, movePieceGroup, removePieceGroup, rotatePieceGroup,

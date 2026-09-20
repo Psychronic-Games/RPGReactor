@@ -326,11 +326,13 @@ Reactor3D.terrainBlocks = function(mapData, x, y, x2, y2, near) {
     // Pieces stand on the same rule: a floor is a small step, a block a
     // whole level, a stair a slope that stays under the limit. `near` is
     // the height the character stands at now, which picks its floor.
-    if (!mapData || (!this.terrainOf(mapData) && !this.hasPieces(mapData))) return false;
+    if (!mapData || (!this.terrainOf(mapData) && !this.hasPieces(mapData) && !this.hasWater(mapData))) return false;
     const limit = this.TERRAIN_SLOPE_LIMIT;
     const from = this.groundHeightAt(mapData, x + 0.5, y + 0.5, near);
     const edge = this.groundHeightAt(mapData, (x + x2) / 2 + 0.5, (y + y2) / 2 + 0.5, from);
     const to = this.groundHeightAt(mapData, x2 + 0.5, y2 + 0.5, edge);
+    // Water deeper than a wade is not walked into.
+    if (this.waterDepthAt(mapData, x2 + 0.5, y2 + 0.5, edge) > this.WATER_WADE) return true;
     if (Math.abs(edge - from) > limit || Math.abs(to - edge) > limit) return true;
     // A stair rises a whole tile across its cell, so two stairs in a row
     // stand a tile apart at their middles and each half of the step is a
@@ -544,6 +546,61 @@ Reactor3D.pieceSurfaceAt = function(mapData, wx, wz, near) {
 /** The ground a piece stands on: the cell's elevation plus the terrain at its middle. */
 Reactor3D.pieceBaseAt = function(mapData, x, y) {
     return this.elevationAt(mapData, x, y) + this.terrainHeightAt(mapData, x + 0.5, y + 0.5);
+};
+
+//-----------------------------------------------------------------------------
+// Water
+//
+// A region of the map under a sheet of water at one world height, drawn as
+// a moving translucent plane. Ground below the sheet by more than a wade is
+// impassable; a shore is terrain sloping under it. Stored in the sidecar as
+// `water: [{ x0, y0, x1, y1, level, material }]`, cells inclusive.
+
+Reactor3D.WATER_WADE = 0.45;
+Reactor3D.WATER_MAX_LEVEL = 60;
+
+Reactor3D.normalizeWater = function(raw, mapData) {
+    if (!raw || typeof raw !== "object") return null;
+    let x0 = Math.floor(Number(raw.x0)), y0 = Math.floor(Number(raw.y0)), x1 = Math.floor(Number(raw.x1)), y1 = Math.floor(Number(raw.y1));
+    if (![x0, y0, x1, y1].every(Number.isFinite)) return null;
+    if (x1 < x0) [x0, x1] = [x1, x0];
+    if (y1 < y0) [y0, y1] = [y1, y0];
+    if (mapData) { x0 = Math.max(0, x0); y0 = Math.max(0, y0); x1 = Math.min(mapData.width - 1, x1); y1 = Math.min(mapData.height - 1, y1); }
+    if (x1 < x0 || y1 < y0) return null;
+    const level = Math.max(-this.WATER_MAX_LEVEL, Math.min(this.WATER_MAX_LEVEL, Number(raw.level) || 0));
+    return { x0, y0, x1, y1, level: Math.round(level * 100) / 100, material: typeof raw.material === "string" ? raw.material.trim() : "" };
+};
+
+Reactor3D.waterOf = function(mapData) {
+    const sidecar = mapData && mapData.reactor3d;
+    const raw = sidecar && sidecar.water;
+    if (!Array.isArray(raw) || !raw.length) return [];
+    const memo = this._waterMemo || (this._waterMemo = new WeakMap());
+    const known = memo.get(raw);
+    if (known) return known;
+    const list = raw.map(entry => this.normalizeWater(entry, mapData)).filter(Boolean);
+    memo.set(raw, list);
+    return list;
+};
+
+Reactor3D.hasWater = function(mapData) {
+    return this.waterOf(mapData).length > 0;
+};
+
+/** The water level over a cell, or null on dry land; the highest sheet wins. */
+Reactor3D.waterLevelAt = function(mapData, x, y) {
+    let level = null;
+    for (const region of this.waterOf(mapData)) {
+        if (x >= region.x0 && x <= region.x1 && y >= region.y0 && y <= region.y1 && (level === null || region.level > level)) level = region.level;
+    }
+    return level;
+};
+
+/** How deep the water stands over the ground at a world point; 0 on dry land. */
+Reactor3D.waterDepthAt = function(mapData, wx, wz, near) {
+    const level = this.waterLevelAt(mapData, Math.floor(wx), Math.floor(wz));
+    if (level === null) return 0;
+    return Math.max(0, level - this.groundHeightAt(mapData, wx, wz, near));
 };
 
 /** The Y of every vertex as built, kept so the terrain can lift it again later. */
@@ -5961,6 +6018,130 @@ Reactor3D.MapScene.prototype.updatePieces = function(mapData, load, region) {
     return this._pieceMeshes.slice(before);
 };
 
+/** The one clock every water sheet reads. */
+Reactor3D.waterUniforms = function() {
+    if (!this._waterUniforms) this._waterUniforms = { rrWaveTime: { value: 0 } };
+    return this._waterUniforms;
+};
+
+/**
+ * Waves in the sheet's own shader: two swells cross the surface and lift
+ * the vertices, their slopes catch a glint from a fixed high light, the
+ * colour deepens with the water's depth, and the sheet fades out where
+ * the ground rises to meet it, so a shore is a shore. Cheap: a sum of
+ * sines in the vertex stage, one dot product in the fragment stage.
+ */
+Reactor3D.waterMaterial = function(texture) {
+    const material = new THREE.MeshBasicMaterial({
+        map: texture || null, color: 0xffffff, transparent: true, opacity: 1,
+        depthWrite: false, side: THREE.DoubleSide, forceSinglePass: true
+    });
+    material.__reactorShaded = true;
+    material.__reactorWater = true;
+    const shared = this.waterUniforms();
+    material.onBeforeCompile = function(shader) {
+        shader.uniforms.rrWaveTime = shared.rrWaveTime;
+        shader.vertexShader = "uniform float rrWaveTime;\nattribute float rrDepth;\nvarying float vRRDepth;\nvarying vec3 vRRWaveNormal;\n" + shader.vertexShader.replace(
+            "#include <begin_vertex>",
+            [
+                "#include <begin_vertex>",
+                "{",
+                "\tvec2 rrP = vec2(position.x, position.z);",
+                "\tvec2 rrK1 = vec2(0.9, 0.45), rrK2 = vec2(-0.35, 0.8);",
+                "\tfloat rrA1 = 0.07, rrA2 = 0.045;",
+                "\tfloat rrPh1 = dot(rrK1, rrP) - rrWaveTime * 1.1, rrPh2 = dot(rrK2, rrP) - rrWaveTime * 1.7;",
+                "\tfloat rrLift = rrA1 * sin(rrPh1) + rrA2 * sin(rrPh2);",
+                "\tfloat rrDx = rrA1 * cos(rrPh1) * rrK1.x + rrA2 * cos(rrPh2) * rrK2.x;",
+                "\tfloat rrDz = rrA1 * cos(rrPh1) * rrK1.y + rrA2 * cos(rrPh2) * rrK2.y;",
+                "\t// Waves die out in the shallows, so the sheet meets the shore flat.",
+                "\tfloat rrCalm = smoothstep(0.0, 0.8, rrDepth);",
+                "\ttransformed.y += rrLift * rrCalm;",
+                "\tvRRWaveNormal = normalize(vec3(-rrDx * rrCalm, 1.0, -rrDz * rrCalm));",
+                "\tvRRDepth = rrDepth;",
+                "}"
+            ].join("\n")
+        );
+        shader.fragmentShader = "varying float vRRDepth;\nvarying vec3 vRRWaveNormal;\n" + shader.fragmentShader.replace(
+            "#include <map_fragment>",
+            [
+                "#include <map_fragment>",
+                "{",
+                "\tvec3 rrShallow = vec3(0.55, 0.85, 0.95), rrDeep = vec3(0.10, 0.32, 0.58);",
+                "\tvec3 rrTint = mix(rrShallow, rrDeep, smoothstep(0.0, 2.5, vRRDepth));",
+                "\tvec3 rrLightDir = normalize(vec3(0.35, 1.0, 0.25));",
+                "\tvec3 rrViewDir = normalize(cameraPosition - vRRWorldPos);",
+                "\tvec3 rrHalf = normalize(rrLightDir + rrViewDir);",
+                "\tfloat rrGlint = pow(max(dot(vRRWaveNormal, rrHalf), 0.0), 48.0);",
+                "\tfloat rrFresnel = pow(1.0 - max(dot(vRRWaveNormal, rrViewDir), 0.0), 3.0);",
+                "\tdiffuseColor.rgb = mix(diffuseColor.rgb * rrTint, vec3(1.0), rrGlint * 0.7);",
+                "\tdiffuseColor.a *= (0.55 + 0.3 * smoothstep(0.0, 2.0, vRRDepth) + 0.15 * rrFresnel) * smoothstep(0.0, 0.35, vRRDepth);",
+                "}"
+            ].join("\n")
+        );
+    };
+    material.customProgramCacheKey = function() { return "reactor3d-water"; };
+    this.litMaterial(material);
+    return material;
+};
+
+/** The water sheets: one waving translucent plane per region, in the world's own pass. */
+Reactor3D.MapScene.prototype.addWater = function(mapData, load) {
+    this._waterMeshes = this._waterMeshes || [];
+    for (const region of Reactor3D.waterOf(mapData)) {
+        const w = region.x1 - region.x0 + 1, h = region.y1 - region.y0 + 1;
+        // A vertex per tile, so the waves and the shoreline have something to move.
+        const geometry = new THREE.PlaneGeometry(w, h, Math.min(128, w), Math.min(128, h));
+        geometry.rotateX(-Math.PI / 2);
+        geometry.translate(region.x0 + w / 2, region.level, region.y0 + h / 2);
+        const positions = geometry.attributes.position;
+        const depth = new Float32Array(positions.count);
+        for (let i = 0; i < positions.count; i++) {
+            const x = Math.max(0, Math.min(mapData.width - 1e-3, positions.getX(i)));
+            const z = Math.max(0, Math.min(mapData.height - 1e-3, positions.getZ(i)));
+            depth[i] = region.level - Reactor3D.groundHeightAt(mapData, x, z, 0);
+        }
+        geometry.setAttribute("rrDepth", new THREE.BufferAttribute(depth, 1));
+        // The image repeats once per tile, drifting.
+        const texture = this.materialTexture(region.material, load);
+        if (texture) { texture.repeat.set(w, h); }
+        const material = Reactor3D.waterMaterial(texture);
+        const mesh = new THREE.Mesh(geometry, material);
+        mesh.userData.water = region;
+        mesh.renderOrder = 6;
+        this.piecesGroup().add(mesh);
+        mesh.updateMatrix();
+        mesh.matrixAutoUpdate = false;
+        this._materials.push(material);
+        this._waterMeshes.push(mesh);
+    }
+};
+
+/** Each frame: the waves run and the image drifts. */
+Reactor3D.MapScene.prototype.updateWater = function(frame) {
+    if (!this._waterMeshes || !this._waterMeshes.length || !Number.isFinite(frame)) return;
+    Reactor3D.waterUniforms().rrWaveTime.value = frame / 60;
+    for (const mesh of this._waterMeshes) {
+        const texture = mesh.material.map;
+        if (!texture) continue;
+        texture.offset.x = (frame * 0.0015) % 1;
+        texture.offset.y = (frame * 0.0009) % 1;
+    }
+};
+
+/** Lay the water again after an edit; the rest of the scene stays. */
+Reactor3D.MapScene.prototype.updateWaterSheets = function(mapData, load) {
+    for (const mesh of this._waterMeshes || []) {
+        if (mesh.parent) mesh.parent.remove(mesh);
+        mesh.geometry.dispose();
+        const m = this._materials.indexOf(mesh.material);
+        if (m >= 0) this._materials.splice(m, 1);
+        mesh.material.dispose();
+    }
+    this._waterMeshes = [];
+    this.addWater(mapData, load);
+    return this._waterMeshes.slice();
+};
+
 /**
  * The sky: a sphere of the image around the camera, inside face only, drawn
  * before everything and never lit, fogged or written to depth. It follows
@@ -6699,6 +6880,7 @@ Reactor3D.MapScene.prototype.build = function(mapData, bitmaps, options) {
     this.addSky(Reactor3D.skyFor(mapData), loadParallax, tileSize);
     // The 3D tileset: blocks on cells, on top of the ground just laid.
     this.addPieces(mapData, settings.loadMaterial || (name => Reactor3D.defaultMaterialLoader(name)));
+    this.addWater(mapData, settings.loadMaterial || (name => Reactor3D.defaultMaterialLoader(name)));
 
     for (const group of built.groups) {
         const texture = this.textureFor(bitmaps && bitmaps[group.setNumber]);
@@ -7769,6 +7951,7 @@ Reactor3D.MapScene.prototype.clear = function() {
     // lay its quad into the next.
     this._build = (this._build || 0) + 1;
     this._pieceMeshes = [];
+    this._waterMeshes = [];
     this._pieceMaterials = null;
     this._materialTextures = null;
     // The light pools live in the pass groups rather than in `_meshes`, so
