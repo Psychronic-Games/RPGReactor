@@ -1614,7 +1614,19 @@ class MapEditor3D {
     }
 
     /** A translucent slab where a water sheet is being drawn. */
-    showWaterGhost(rect, level) {
+    /** The sheet under the pointer (its region), or null. */
+    waterMeshAt(clientX, clientY) {
+        const meshes = this.mapScene && this.mapScene._waterMeshes;
+        if (!meshes || !meshes.length || !this.camera || !this.canvas) return null;
+        const rect = this.canvas.getBoundingClientRect();
+        this._raycaster = this._raycaster || new THREE.Raycaster();
+        this._raycaster.setFromCamera(new THREE.Vector2(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1), this.camera);
+        const hit = this._raycaster.intersectObjects(meshes, false)[0];
+        return hit ? hit.object.userData.water || null : null;
+    }
+
+    /** A translucent ghost of a sheet: the hollow's own surface when the region has a mask (or the runtime can shape it), else its box. */
+    showWaterGhost(rect, level = rect.level) {
         if (!this.mapScene || !rect) return;
         if (!this.waterGhost) {
             this.waterGhost = new THREE.Mesh(new THREE.BoxGeometry(1, 0.08, 1), new THREE.MeshBasicMaterial({ color: 0x4fb3ff, transparent: true, opacity: 0.45, depthWrite: false }));
@@ -1622,8 +1634,17 @@ class MapEditor3D {
             this.mapScene.scene().add(this.waterGhost);
         }
         const w = rect.x1 - rect.x0 + 1, h = rect.y1 - rect.y0 + 1;
-        this.waterGhost.scale.set(w, 1, h);
-        this.waterGhost.position.set(rect.x0 + w / 2, level, rect.y0 + h / 2);
+        const mapData = this.currentMap();
+        if (mapData && typeof Reactor3D !== 'undefined' && Reactor3D.waterGeometry) {
+            const old = this.waterGhost.geometry;
+            this.waterGhost.geometry = Reactor3D.waterGeometry({ x0: rect.x0, y0: rect.y0, x1: rect.x1, y1: rect.y1, level: level + 0.04, mask: rect.mask }, mapData);
+            if (old) old.dispose();
+            this.waterGhost.scale.set(1, 1, 1);
+            this.waterGhost.position.set(0, 0, 0);
+        } else {
+            this.waterGhost.scale.set(w, 1, h);
+            this.waterGhost.position.set(rect.x0 + w / 2, level, rect.y0 + h / 2);
+        }
         this.waterGhost.visible = true;
         this._lastActiveAt = performance.now();
     }
@@ -1731,8 +1752,8 @@ class MapEditor3D {
         };
     }
 
-    /** Where the pointer's ray meets the ground plane (level 0), or null. */
-    groundPointAt(clientX, clientY, planeY = 0) {
+    /** Where the pointer's ray meets a level plane (world x, y = map cell axes), or null. */
+    planePointAt(clientX, clientY, planeY = 0) {
         if (!this.camera || !this.canvas) return null;
         const rect = this.canvas.getBoundingClientRect();
         this._raycaster = this._raycaster || new THREE.Raycaster();
@@ -3410,7 +3431,7 @@ class MapEditor3D {
                             // building can be boxed even where its floor covers the ground.
                             manager.selectAt(pick);
                             const planeY = pick && Number.isFinite(pick.top) ? pick.top : 0;
-                            const ground = this.groundPointAt(event.clientX, event.clientY, planeY);
+                            const ground = this.planePointAt(event.clientX, event.clientY, planeY);
                             if (ground) this.pointer.band = { start: ground, end: ground, planeY, started: false };
                         }
                     }
@@ -3445,8 +3466,12 @@ class MapEditor3D {
             // pointer. Ctrl still orbits.
             if (event.button === 0 && !event.shiftKey && !event.ctrlKey && !event.altKey
                 && !this.pointer.paint && this.canEditTerrain()) {
-                const point = this.groundPointAt(event.clientX, event.clientY);
-                if (point) {
+                // Remove takes the sheet drawn under the pointer first: a sheet standing
+                // high over the ground is not over the cell the ray meets beyond it.
+                const sheet = this.terrainManager().mode === 'drain' ? this.waterMeshAt(event.clientX, event.clientY) : null;
+                const point = sheet ? null : this.groundPointAt(event.clientX, event.clientY);
+                if (sheet) { this.pointer.terrain = true; this.terrainManager().drainRegion(sheet); }
+                else if (point) {
                     this.pointer.terrain = true;
                     this.terrainManager().beginStroke(point);
                     if (this.canvas) this.canvas.style.cursor = 'crosshair';
@@ -3546,7 +3571,7 @@ class MapEditor3D {
                 return;
             }
             if (this.pointer.band) {
-                const band = this.pointer.band, end = this.groundPointAt(event.clientX, event.clientY, band.planeY);
+                const band = this.pointer.band, end = this.planePointAt(event.clientX, event.clientY, band.planeY);
                 if (!end) return;
                 band.end = end;
                 if (!band.started && (Math.abs(end.x - band.start.x) > 0.3 || Math.abs(end.y - band.start.y) > 0.3)) { band.started = true; this.pieceManager()?.clearSelection(); }
@@ -4004,8 +4029,12 @@ class MapEditor3D {
      */
     updateHover(clientX, clientY, tile = this.tileAt(clientX, clientY)) {
         this.updateHoverCell(this.canEditTerrain() ? null : tile);
-        if (this.canEditTerrain()) this.updateTerrainRing(this.groundPointAt(clientX, clientY));
-        else if (this.terrainRing) this.terrainRing.visible = false;
+        if (this.canEditTerrain()) {
+            const manager = this.terrainManager(), point = this.groundPointAt(clientX, clientY);
+            const water = manager.mode === 'fill' || manager.mode === 'drain';
+            this.updateTerrainRing(water ? null : point);
+            manager.hoverAt?.(point);
+        } else if (this.terrainRing) this.terrainRing.visible = false;
         if (this.canEditPieces()) this.updatePieceGhost(this.pieceTargetAt(clientX, clientY));
         else this.hidePieceGhost();
         if (!this.canvas) return;

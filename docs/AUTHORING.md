@@ -20,7 +20,7 @@ project; a person can use it to find where anything lives.
 | Pieces (the 3D tileset) | `MapNNN.r3d.json` › `pieces` | **3D-B** tab; drawn as a plan on the flat map too | `validate-map.cjs` |
 | Buildings from a plan | `3d/Structures/*.json` (project-wide), placed as `MapNNN.r3d.json` › `structures` | Database › Structures (the form), 3D-B › Structure › Stamp / Move | `build-structure.cjs --check`, and the page's own walk |
 | Materials | `img/materials/*.png` (tileable) | swatches in 3D-B | — |
-| Water | `MapNNN.r3d.json` › `water` (rectangles with a `level`) | **3D-T** › Paint water | `validate-map.cjs` |
+| Water | `MapNNN.r3d.json` › `water` (a hollow's box, its `level`, a `mask` of the wet cells) | **3D-T** › Pour | `validate-map.cjs` |
 | Placed models | `MapNNN.r3d.json` › `props` | **3D-M** tab | — |
 | Lights | `MapNNN.r3d.json` › `lights`, `lighting` | Lighting tool | — |
 | Events | `MapNNN.json` › `events` (RPG Maker data) | Event tool | — |

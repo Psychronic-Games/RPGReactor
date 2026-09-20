@@ -261,4 +261,38 @@ test('water fills a hollow: it rises from the low point until it would spill, an
     assert.equal(ME.water(map).length, 1);
     ME.fillWaterAt(map, 11, 10, 'Water');
     assert.equal(ME.water(map).length, 1, 'filling the same hollow again replaces its sheet rather than stacking one on top');
+    const pond = ME.water(map)[0];
+    assert.ok(pond.mask && pond.mask.length === (pond.x1 - pond.x0 + 1) * (pond.y1 - pond.y0 + 1), 'a round pond in a square box carries a mask');
+    assert.equal(ME.waterCovers(pond, 10, 10), true); assert.equal(ME.waterCovers(pond, pond.x0, pond.y0), false, 'the box corner is dry');
+    assert.equal(JSON.stringify(ME.waterAt(map, 10, 10)), JSON.stringify(pond)); assert.equal(ME.waterAt(map, pond.x0, pond.y0), null);
+    assert.equal(ME.removeWaterAt(map, pond.x0, pond.y0), false, 'a click on the dry corner of the box removes nothing');
+    // Two hollows whose boxes overlap fill separately: an L of one and a pit in its elbow.
+    const map2 = { width: 30, height: 30, reactor3d: { version: 1, elevation: new Array(900).fill(0) } };
+    ME.ensureTerrain(map2);
+    const g2 = ME.terrain(map2);
+    const set = (x, y, v) => { g2[y * 31 + x] = v; };
+    for (let y = 5; y <= 20; y++) for (let x = 5; x <= 8; x++) set(x, y, -2);
+    for (let y = 17; y <= 20; y++) for (let x = 5; x <= 20; x++) set(x, y, -2);
+    for (let y = 8; y <= 11; y++) for (let x = 12; x <= 15; x++) set(x, y, -3);
+    const L = ME.waterBasin(map2, 6, 6), pit = ME.waterBasin(map2, 13, 9);
+    assert.ok(L && pit);
+    assert.ok(L.x0 <= 5 && L.x1 >= 20 && L.y1 >= 20, 'the L is one hollow');
+    assert.ok(pit.x0 >= 11 && pit.x1 <= 16 && pit.y0 >= 7 && pit.y1 <= 12, 'the pit is its own');
+    assert.ok(ME.fillWaterAt(map2, 6, 6, 'Water') && ME.fillWaterAt(map2, 13, 9, 'Water'));
+    assert.equal(ME.water(map2).length, 2, 'the pit is inside the L\'s box, but pouring one does not take the other');
+    assert.equal(ME.waterAt(map2, 13, 9).level, pit.level); assert.equal(ME.waterAt(map2, 6, 6).level, L.level);
+    assert.equal(ME.waterAt(map2, 13, 14), null, 'the ridge between them is dry');
+    assert.equal(ME.removeWaterRegion(map2, ME.waterAt(map2, 13, 9)), true); assert.equal(ME.water(map2).length, 1, 'one sheet removed by itself');
+    // A pond in a valley floor stays a pond: the water stops at the pond's rim instead of flooding the valley up to the hills.
+    const map3 = { width: 40, height: 40, reactor3d: { version: 1, elevation: new Array(1600).fill(0) } };
+    ME.ensureTerrain(map3);
+    const g3 = ME.terrain(map3);
+    for (let y = 0; y <= 40; y++) for (let x = 0; x <= 40; x++) g3[y * 41 + x] = (x < 3 || y < 3 || x > 37 || y > 37) ? 6 : 0;
+    for (let y = 18; y <= 21; y++) for (let x = 18; x <= 21; x++) g3[y * 41 + x] = -2;
+    const pond3 = ME.waterBasin(map3, 19, 19);
+    assert.ok(pond3 && pond3.level <= 0.25 && pond3.cells < 60, 'the pond fills to the valley floor, not to the hills: ' + JSON.stringify(pond3 && [pond3.level, pond3.cells]));
+    // A sheet from before masks: no mask, the whole box.
+    assert.equal(ME.waterCovers(ME.normalizeWater({ x0: 0, y0: 0, x1: 3, y1: 3, level: 1 }, map3), 3, 3), true);
+    assert.equal(ME.normalizeWater({ x0: 0, y0: 0, x1: 1, y1: 1, level: 1, mask: '1111' }, map3).mask, undefined, 'a full mask is dropped');
+    assert.equal(ME.normalizeWater({ x0: -1, y0: 0, x1: 1, y1: 0, level: 1, mask: '110' }, map3).mask, '10', 'a mask is cut with its box at the map edge');
 });

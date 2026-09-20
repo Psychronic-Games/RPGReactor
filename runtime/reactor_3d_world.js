@@ -556,10 +556,13 @@ Reactor3D.pieceBaseAt = function(mapData, x, y) {
 //-----------------------------------------------------------------------------
 // Water
 //
-// A region of the map under a sheet of water at one world height, drawn as
-// a moving translucent plane. Ground below the sheet by more than a wade is
-// impassable; a shore is terrain sloping under it. Stored in the sidecar as
-// `water: [{ x0, y0, x1, y1, level, material }]`, cells inclusive.
+// Water poured into a hollow of the ground: a sheet at one world height over
+// the hollow's cells, drawn as a moving translucent plane. Ground below the
+// sheet by more than a wade is impassable; a shore is terrain sloping under
+// it. Stored in the sidecar as `water: [{ x0, y0, x1, y1, level, material,
+// mask }]`, cells inclusive; `mask` is one character per cell of the box,
+// row by row, "1" where the water is. A sheet without a mask (an older one)
+// covers its whole box.
 
 Reactor3D.WATER_WADE = 0.45;
 Reactor3D.WATER_MAX_LEVEL = 60;
@@ -573,7 +576,32 @@ Reactor3D.normalizeWater = function(raw, mapData) {
     if (mapData) { x0 = Math.max(0, x0); y0 = Math.max(0, y0); x1 = Math.min(mapData.width - 1, x1); y1 = Math.min(mapData.height - 1, y1); }
     if (x1 < x0 || y1 < y0) return null;
     const level = Math.max(-this.WATER_MAX_LEVEL, Math.min(this.WATER_MAX_LEVEL, Number(raw.level) || 0));
-    return { x0, y0, x1, y1, level: Math.round(level * 100) / 100, material: typeof raw.material === "string" ? raw.material.trim() : "" };
+    const region = { x0, y0, x1, y1, level: Math.round(level * 100) / 100, material: typeof raw.material === "string" ? raw.material.trim() : "" };
+    const mask = this.waterMaskFor(raw, region);
+    if (mask) region.mask = mask;
+    return region;
+};
+
+/** The raw sheet's mask cut to the region's box (the box may have been clamped to the map), or null when it covers the box. */
+Reactor3D.waterMaskFor = function(raw, region) {
+    if (typeof raw.mask !== "string" || !raw.mask.length) return null;
+    const rx0 = Math.floor(Number(raw.x0)), ry0 = Math.floor(Number(raw.y0)), rx1 = Math.floor(Number(raw.x1)), ry1 = Math.floor(Number(raw.y1));
+    const rw = Math.abs(rx1 - rx0) + 1, rh = Math.abs(ry1 - ry0) + 1, ox = Math.min(rx0, rx1), oy = Math.min(ry0, ry1);
+    if (raw.mask.length !== rw * rh) return null;
+    const w = region.x1 - region.x0 + 1, h = region.y1 - region.y0 + 1;
+    let out = "", full = true;
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+        const c = raw.mask[(region.y0 + y - oy) * rw + (region.x0 + x - ox)] === "1" ? "1" : "0";
+        if (c === "0") full = false;
+        out += c;
+    }
+    return full ? null : out;
+};
+
+/** Whether a sheet stands over a cell. */
+Reactor3D.waterCovers = function(region, x, y) {
+    if (x < region.x0 || x > region.x1 || y < region.y0 || y > region.y1) return false;
+    return !region.mask || region.mask[(y - region.y0) * (region.x1 - region.x0 + 1) + (x - region.x0)] === "1";
 };
 
 Reactor3D.waterOf = function(mapData) {
@@ -596,7 +624,7 @@ Reactor3D.hasWater = function(mapData) {
 Reactor3D.waterLevelAt = function(mapData, x, y) {
     let level = null;
     for (const region of this.waterOf(mapData)) {
-        if (x >= region.x0 && x <= region.x1 && y >= region.y0 && y <= region.y1 && (level === null || region.level > level)) level = region.level;
+        if (this.waterCovers(region, x, y) && (level === null || region.level > level)) level = region.level;
     }
     return level;
 };
@@ -1279,23 +1307,50 @@ Reactor3D.waterMaterial = function(texture) {
     return material;
 };
 
-/** The water sheets: one waving translucent plane per region, in the world's own pass. */
+/**
+ * A sheet's surface: one quad per cell the water covers, corners shared, a
+ * vertex per tile corner so the waves and the shoreline have something to
+ * move; each vertex knows how deep the water is under it (`rrDepth`). UVs run
+ * over the sheet's box so the image repeats once per tile.
+ */
+Reactor3D.waterGeometry = function(region, mapData) {
+    const w = region.x1 - region.x0 + 1, h = region.y1 - region.y0 + 1;
+    const positions = [], uvs = [], depth = [], index = [];
+    const ids = new Map();
+    const corner = (cx, cy) => {
+        const key = cy * (w + 1) + cx;
+        let id = ids.get(key);
+        if (id === undefined) {
+            id = positions.length / 3;
+            ids.set(key, id);
+            const wx = region.x0 + cx, wz = region.y0 + cy;
+            positions.push(wx, region.level, wz);
+            uvs.push(cx / w, 1 - cy / h);
+            const gx = Math.max(0, Math.min(mapData.width - 1e-3, wx)), gz = Math.max(0, Math.min(mapData.height - 1e-3, wz));
+            depth.push(region.level - Reactor3D.groundHeightAt(mapData, gx, gz, 0));
+        }
+        return id;
+    };
+    for (let cy = 0; cy < h; cy++) for (let cx = 0; cx < w; cx++) {
+        if (region.mask && region.mask[cy * w + cx] !== "1") continue;
+        const a = corner(cx, cy), b = corner(cx + 1, cy), c = corner(cx + 1, cy + 1), d = corner(cx, cy + 1);
+        index.push(a, d, b, b, d, c);
+    }
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+    geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
+    geometry.setAttribute("rrDepth", new THREE.Float32BufferAttribute(depth, 1));
+    geometry.setIndex(index);
+    geometry.computeVertexNormals();
+    return geometry;
+};
+
+/** The water sheets: one waving translucent surface per sheet, in the world's own pass. */
 Reactor3D.MapScene.prototype.addWater = function(mapData, load) {
     this._waterMeshes = this._waterMeshes || [];
     for (const region of Reactor3D.waterOf(mapData)) {
         const w = region.x1 - region.x0 + 1, h = region.y1 - region.y0 + 1;
-        // A vertex per tile, so the waves and the shoreline have something to move.
-        const geometry = new THREE.PlaneGeometry(w, h, Math.min(128, w), Math.min(128, h));
-        geometry.rotateX(-Math.PI / 2);
-        geometry.translate(region.x0 + w / 2, region.level, region.y0 + h / 2);
-        const positions = geometry.attributes.position;
-        const depth = new Float32Array(positions.count);
-        for (let i = 0; i < positions.count; i++) {
-            const x = Math.max(0, Math.min(mapData.width - 1e-3, positions.getX(i)));
-            const z = Math.max(0, Math.min(mapData.height - 1e-3, positions.getZ(i)));
-            depth[i] = region.level - Reactor3D.groundHeightAt(mapData, x, z, 0);
-        }
-        geometry.setAttribute("rrDepth", new THREE.BufferAttribute(depth, 1));
+        const geometry = Reactor3D.waterGeometry(region, mapData);
         // The image repeats once per tile, drifting.
         const texture = this.materialTexture(region.material, load);
         if (texture) { texture.repeat.set(w, h); }

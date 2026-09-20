@@ -53,11 +53,25 @@ test('a sheet is a rectangle at a level; deep water blocks, shallows wade, dry l
     assert.equal(scene._scene.getObjectByName('pieces').children.length, 1, 'the old sheets left the scene');
     assert.match(read('runtime/reactor_sprites.js'), /state\.scene\.updateWater\(Graphics\.frameCount\)/);
     assert.match(source3D(), /this\.addWater\(mapData, settings\.loadMaterial/);
+    // A masked sheet: water only where the mask says, in the walk and in the mesh.
+    const masked = { width: 6, height: 6, reactor3d: { version: 1, elevation: new Array(36).fill(0), terrain: new Array(49).fill(0), terrainWidth: 6,
+        water: [{ x0: 1, y0: 1, x1: 3, y1: 3, level: 1, material: 'Water', mask: '111' + '101' + '111' }] } };
+    assert.equal(R.waterOf(masked)[0].mask, '111101111');
+    assert.equal(R.waterLevelAt(masked, 1, 1), 1); assert.equal(R.waterLevelAt(masked, 2, 2), null, 'the dry cell in the middle');
+    assert.equal(R.terrainBlocks(masked, 2, 2, 1, 2, 0), true, 'into the water: blocked'); assert.equal(R.terrainBlocks(masked, 1, 2, 2, 2, 0), false, 'onto the dry cell: fine');
+    const geometry = R.waterGeometry(R.waterOf(masked)[0], masked);
+    assert.equal(geometry.index.count, 8 * 6, 'a quad per wet cell'); assert.equal(geometry.attributes.position.count, 16, 'corners shared');
+    assert.equal(geometry.attributes.rrDepth.count, 16);
+    assert.equal(R.normalizeWater({ x0: 1, y0: 1, x1: 3, y1: 3, level: 1, mask: '111111111' }).mask, undefined, 'a full mask is no mask');
+    assert.equal(R.normalizeWater({ x0: 1, y0: 1, x1: 3, y1: 3, level: 1, mask: '1111' }).mask, undefined, 'a mask of the wrong length is ignored');
 });
 
-test('the terrain tab lays a sheet with a rectangle drag, removes one with a click, and undoes both', () => {
+test('the terrain tab pours into a hollow, previews it under the pointer, removes the sheet under a click, and undoes both', () => {
     const E = loadElevation();
-    const map = { id: 2, width: 20, height: 20, reactor3d: { version: 1 } };
+    const map = { id: 2, width: 20, height: 20, reactor3d: { version: 1, elevation: new Array(400).fill(0) } };
+    E.ensureTerrain(map);
+    const grid = E.terrain(map);
+    for (let y = 0; y <= 20; y++) for (let x = 0; x <= 20; x++) grid[y * 21 + x] = Math.hypot(x - 5, y - 6) < 2.5 ? -2 : 0;
     assert.equal(E.addWater(map, { x0: 5, y0: 5, x1: 2, y1: 9, level: 0.37, material: 'Water' }), true);
     assert.deepEqual({ ...E.water(map)[0] }, { x0: 2, y0: 5, x1: 5, y1: 9, level: 0.37, material: 'Water' });
     assert.equal(E.removeWaterAt(map, 10, 10), false); assert.equal(E.removeWaterAt(map, 3, 6), true); assert.equal(E.hasWater(map), false);
@@ -70,16 +84,27 @@ test('the terrain tab lays a sheet with a rectangle drag, removes one with a cli
     context.RRMapElevation = E;
     vm.runInNewContext(read('editor/src/TerrainManager.js'), context);
     const manager = new context.TerrainManager({ getTilemapManager: () => ({ currentMap: map }) });
-    manager.setMode('water'); manager.waterLevel = 0.5;
-    assert.equal(manager.beginStroke({ x: 3, y: 3 }), true);
-    assert.equal(manager.paintAt({ x: 8, y: 6 }), true);
-    assert.deepEqual({ ...context.ghost[0] }, { x0: 3, y0: 3, x1: 8, y1: 6 }, 'the ghost follows the drag');
-    manager.endStroke();
-    assert.equal(context.ghost, null);
-    assert.deepEqual({ ...E.water(map)[0] }, { x0: 3, y0: 3, x1: 8, y1: 6, level: 0.5, material: 'Water' });
+    manager.setMode('water');
+    assert.notEqual(manager.mode, 'water', 'sheets are no longer painted by hand');
+    manager.setMode('fill');
+    manager.hoverAt({ x: 5, y: 6 });
+    assert.ok(context.ghost && context.ghost[0].level === 0 && context.ghost[0].mask, 'the pointer over a hollow shows what a click would fill');
+    manager.hoverAt({ x: 0, y: 0 });
+    assert.equal(context.ghost, null, 'open ground shows nothing');
+    assert.equal(manager.beginStroke({ x: 0, y: 0 }), false, 'nothing to fill on open ground');
+    assert.equal(manager.beginStroke({ x: 5, y: 6 }), true);
+    const pond = E.water(map)[0];
+    assert.ok(pond && pond.level === 0 && pond.material === 'Water' && pond.mask, 'poured to the rim');
     assert.equal(events[events.length - 1].detail.water, true, 'the 3D view lays the sheets again, nothing else');
+    assert.equal(manager.beginStroke({ x: 5, y: 6 }), false, 'already full');
+    assert.equal(E.water(map).length, 1);
     manager.setMode('drain');
-    assert.equal(manager.beginStroke({ x: 4, y: 4 }), true);
+    assert.equal(manager.beginStroke({ x: pond.x0, y: pond.y0 }), false, 'the dry corner of the box removes nothing');
+    assert.equal(manager.drainRegion({ ...pond }), true, 'the sheet drawn under the pointer goes');
+    assert.equal(E.hasWater(map), false);
+    assert.equal(manager.beginStroke({ x: 5, y: 6 }), false);
+    manager.undo(); assert.equal(E.water(map).length, 1);
+    assert.equal(manager.beginStroke({ x: 5, y: 6 }), true, 'a click on the water removes it');
     assert.equal(E.hasWater(map), false);
     manager.undo(); assert.equal(E.water(map).length, 1, 'undo brings the sheet back');
     manager.undo(); assert.equal(E.hasWater(map), false, 'and the one before takes it away again');
@@ -88,7 +113,9 @@ test('the terrain tab lays a sheet with a rectangle drag, removes one with a cli
     assert.match(view, /if \(event\?\.detail\?\.water && this\.updateWaterInPlace\(\)\) return;/);
     assert.match(view, /this\.mapScene\.updateWater\?\.\(now \/ \(1000 \/ 60\)\);/, 'the editor drifts the water too');
     const i18n = read('editor/src/I18nManager.js');
-    for (const key of ['terrain.water', 'terrain.waterPaint', 'terrain.waterErase', 'terrain.waterLevel', 'terrain.waterHint', 'terrain.waterCount']) {
+    assert.match(view, /const sheet = this\.terrainManager\(\)\.mode === 'drain' \? this\.waterMeshAt\(event\.clientX, event\.clientY\) : null;/, 'Remove picks the sheet drawn under the pointer');
+    assert.match(view, /manager\.hoverAt\?\.\(point\);/, 'the pointer previews the hollow');
+    for (const key of ['terrain.water', 'terrain.waterPour', 'terrain.waterErase', 'terrain.waterFull', 'terrain.waterHint', 'terrain.waterCount']) {
         assert.equal((i18n.match(new RegExp('"' + key.replace(/\./g, '\\.') + '": "', 'g')) || []).length, 18, key + ' in 18 locales');
     }
     assert.ok(fs.existsSync(path.resolve(__dirname, '..', '..', 'template/Demo/img/materials/Water.png')));

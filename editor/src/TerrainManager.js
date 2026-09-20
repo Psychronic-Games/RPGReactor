@@ -12,8 +12,8 @@ class TerrainManager {
         this.mode = 'raise';
         this.radius = 3;
         this.strength = 0.5;
-        this.waterLevel = 0.4;
         this.waterMaterial = 'Water';
+        this._preview = null;
         this._onKeyDown = event => this.handleKey(event);
         this.panel = null;
         this.undoStack = [];
@@ -52,15 +52,10 @@ class TerrainManager {
                     <button type="button" class="rr-btn-secondary rr-terrain-clear" style="padding: 5px;" data-i18n="terrain.clear">${t('terrain.clear')}</button>
                     <div class="database-field-label" style="font-size: 11px; margin: 6px 0 0;" data-i18n="terrain.water">${t('terrain.water')}</div>
                     <div style="font-size: 11px; color: var(--color-text-muted); line-height: 1.4;" data-i18n="terrain.waterHint">${t('terrain.waterHint')}</div>
-                    <div class="rr-terrain-water-modes" role="radiogroup" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px;">
-                        <button type="button" class="rr-btn-secondary rr-terrain-mode" data-terrain-mode="fill" role="radio" aria-checked="false" style="padding: 6px 4px; font-size: 12px;" data-i18n="terrain.waterFill">${t('terrain.waterFill')}</button>
-                        <button type="button" class="rr-btn-secondary rr-terrain-mode" data-terrain-mode="water" role="radio" aria-checked="false" style="padding: 6px 4px; font-size: 12px;" data-i18n="terrain.waterPaint">${t('terrain.waterPaint')}</button>
+                    <div class="rr-terrain-water-modes" role="radiogroup" style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px;">
+                        <button type="button" class="rr-btn-secondary rr-terrain-mode" data-terrain-mode="fill" role="radio" aria-checked="false" style="padding: 6px 4px; font-size: 12px;" data-i18n="terrain.waterPour">${t('terrain.waterPour')}</button>
                         <button type="button" class="rr-btn-secondary rr-terrain-mode" data-terrain-mode="drain" role="radio" aria-checked="false" style="padding: 6px 4px; font-size: 12px;" data-i18n="terrain.waterErase">${t('terrain.waterErase')}</button>
                     </div>
-                    <label style="display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: var(--color-text-muted);">
-                        <span><span data-i18n="terrain.waterLevel">${t('terrain.waterLevel')}</span> <span class="rr-terrain-water-level-value" style="color: var(--color-text);">${this.waterLevel}</span></span>
-                        <input type="range" class="rr-terrain-water-level" min="-10" max="30" step="0.1" value="${this.waterLevel}" data-no-stepper>
-                    </label>
                     <div class="rr-terrain-status" style="font-size: 11px; color: var(--color-text-muted);" data-rr-i18n-skip></div>
                     <div style="font-size: 11px; color: var(--color-text-muted); line-height: 1.4;" data-i18n="terrain.keys">${t('terrain.keys')}</div>
                 </div>`;
@@ -72,24 +67,30 @@ class TerrainManager {
             container.querySelector('.rr-terrain-undo').addEventListener('click', () => this.undo());
             container.querySelector('.rr-terrain-redo').addEventListener('click', () => this.redo());
             container.querySelector('.rr-terrain-clear').addEventListener('click', () => this.clear());
-            const level = container.querySelector('.rr-terrain-water-level');
-            level.addEventListener('input', () => { this.waterLevel = Math.round((Number(level.value) || 0) * 10) / 10; container.querySelector('.rr-terrain-water-level-value').textContent = this.waterLevel; });
         }
         this.refreshStatus();
     }
 
     setMode(mode) {
-        if (!this.elevation()?.TERRAIN_MODES.includes(mode) && mode !== 'water' && mode !== 'drain' && mode !== 'fill') return;
+        if (!this.elevation()?.TERRAIN_MODES.includes(mode) && mode !== 'drain' && mode !== 'fill') return;
         this.mode = mode;
         window.reactor?.mapEditor3D?.hideWaterGhost?.();
         this.panel?.querySelectorAll('.rr-terrain-mode').forEach(button => button.setAttribute('aria-checked', String(button.dataset.terrainMode === mode)));
     }
 
-    _flash(key) { const status = this.panel?.querySelector('.rr-terrain-status'); if (status) status.textContent = this._t(key); }
+    /** A word in the status for a moment (the stroke's end would otherwise write the plain status straight over it). */
+    _flash(key) {
+        const status = this.panel?.querySelector('.rr-terrain-status');
+        if (!status) return;
+        status.textContent = this._t(key);
+        this._flashUntil = Date.now() + 2500;
+        clearTimeout(this._flashTimer);
+        this._flashTimer = setTimeout(() => { this._flashUntil = 0; this.refreshStatus(); }, 2600);
+    }
 
     refreshStatus() {
         const status = this.panel?.querySelector('.rr-terrain-status');
-        if (!status) return;
+        if (!status || Date.now() < (this._flashUntil || 0)) return;
         const map = this.currentMap(), elevation = this.elevation();
         const is3D = !!(map && elevation && elevation.hasNote(map));
         status.textContent = !map ? '' : !is3D ? this._t('terrain.needs3D') : elevation.hasTerrain(map) ? this._t('terrain.shaped') : this._t('terrain.flat');
@@ -134,28 +135,11 @@ class TerrainManager {
     beginStroke(point) {
         const map = this.currentMap(), elevation = this.elevation();
         if (!map || !elevation || !point) return false;
-        // Water: a drag draws the sheet's rectangle; a click in Remove drains the cell's sheets.
-        if (this.mode === 'water' || this.mode === 'drain' || this.mode === 'fill') {
+        // Water: Pour fills the hollow under the click; Remove takes the sheet under it.
+        if (this.mode === 'fill') return this.pourAt(point);
+        if (this.mode === 'drain') {
             const cell = { x: Math.floor(point.x + 0.5), y: Math.floor(point.y + 0.5) };
-            if (this.mode === 'fill') {
-                // Fill the hollow under the click: the water rises until it would spill, one sheet.
-                const saved = elevation.waterSnapshot(map);
-                const sheet = elevation.fillWaterAt(map, cell.x, cell.y, this.waterMaterial);
-                if (!sheet) { this._flash?.('terrain.noBasin'); return false; }
-                this.undoStack.push({ water: saved }); if (this.undoStack.length > 50) this.undoStack.shift(); this.redoStack.length = 0;
-                this.announce(null, true); this.refreshStatus();
-                return true;
-            }
-            if (this.mode === 'drain') {
-                const saved = elevation.waterSnapshot(map);
-                if (!elevation.removeWaterAt(map, cell.x, cell.y)) return false;
-                this.undoStack.push({ water: saved }); if (this.undoStack.length > 50) this.undoStack.shift(); this.redoStack.length = 0;
-                this.announce(null, true); this.refreshStatus();
-                return true;
-            }
-            this._stroke = { water: true, start: cell, end: cell, moved: false, last: null };
-            window.reactor?.mapEditor3D?.showWaterGhost?.({ x0: cell.x, y0: cell.y, x1: cell.x, y1: cell.y }, this.waterLevel);
-            return true;
+            return this.drain(saved => elevation.removeWaterAt(map, cell.x, cell.y));
         }
         this.undoStack.push(elevation.terrainSnapshot(map));
         if (this.undoStack.length > 50) this.undoStack.shift();
@@ -165,14 +149,66 @@ class TerrainManager {
         return this.dab(point);
     }
 
+    /**
+     * Pour into the hollow under a point: the water rises until it would
+     * spill, one sheet over the hollow's cells. Nothing happens on open
+     * ground, or in a hollow already full to its rim; the status says which.
+     */
+    pourAt(point) {
+        const map = this.currentMap(), elevation = this.elevation();
+        if (!map || !elevation || !point) return false;
+        const cell = { x: Math.floor(point.x + 0.5), y: Math.floor(point.y + 0.5) };
+        const basin = this.basinAt(cell.x, cell.y);
+        if (!basin) { this._flash('terrain.noBasin'); return false; }
+        const standing = elevation.waterAt(map, cell.x, cell.y);
+        if (standing && standing.level >= basin.level - 1e-6) { this._flash('terrain.waterFull'); return false; }
+        const saved = elevation.waterSnapshot(map);
+        if (!elevation.fillWaterAt(map, cell.x, cell.y, this.waterMaterial)) return false;
+        this.undoStack.push({ water: saved }); if (this.undoStack.length > 50) this.undoStack.shift(); this.redoStack.length = 0;
+        this.announce(null, true); this.refreshStatus();
+        return true;
+    }
+
+    /** Remove the sheet the 3D view found under the pointer (so a sheet standing high over the ground still goes). */
+    drainRegion(region) {
+        const map = this.currentMap(), elevation = this.elevation();
+        if (!map || !elevation || !region) return false;
+        return this.drain(() => elevation.removeWaterRegion(map, region));
+    }
+
+    drain(remove) {
+        const map = this.currentMap(), elevation = this.elevation();
+        if (!map || !elevation) return false;
+        const saved = elevation.waterSnapshot(map);
+        if (!remove(saved)) return false;
+        this.undoStack.push({ water: saved }); if (this.undoStack.length > 50) this.undoStack.shift(); this.redoStack.length = 0;
+        this.announce(null, true); this.refreshStatus();
+        return true;
+    }
+
+    /** The hollow under a cell, remembered per cell until the ground changes. */
+    basinAt(x, y) {
+        const map = this.currentMap(), elevation = this.elevation();
+        if (!map || !elevation) return null;
+        const key = map.id + ':' + x + ',' + y;
+        if (!this._basins || this._basinsMap !== map) { this._basins = new Map(); this._basinsMap = map; }
+        if (!this._basins.has(key)) { this._basins.set(key, elevation.waterBasin(map, x, y)); if (this._basins.size > 400) this._basins.delete(this._basins.keys().next().value); }
+        return this._basins.get(key);
+    }
+
+    /** The pointer over the ground in Pour: a ghost of the hollow the click would fill. Elsewhere, no ghost. */
+    hoverAt(point) {
+        const view = window.reactor?.mapEditor3D;
+        if (this.mode !== 'fill' || !point) { if (this._preview) { view?.hideWaterGhost?.(); this._preview = null; } return; }
+        const cell = { x: Math.floor(point.x + 0.5), y: Math.floor(point.y + 0.5) };
+        if (this._preview && this._preview.x === cell.x && this._preview.y === cell.y) return;
+        this._preview = cell;
+        const basin = this.basinAt(cell.x, cell.y);
+        if (basin) view?.showWaterGhost?.(basin); else view?.hideWaterGhost?.();
+    }
+
     paintAt(point) {
         if (!this._stroke || !point) return false;
-        if (this._stroke.water) {
-            this._stroke.end = { x: Math.floor(point.x + 0.5), y: Math.floor(point.y + 0.5) };
-            const a = this._stroke.start, b = this._stroke.end;
-            window.reactor?.mapEditor3D?.showWaterGhost?.({ x0: Math.min(a.x, b.x), y0: Math.min(a.y, b.y), x1: Math.max(a.x, b.x), y1: Math.max(a.y, b.y) }, this.waterLevel);
-            return true;
-        }
         const last = this._stroke.last;
         const spacing = Math.max(0.35, this.radius * 0.25);
         if (last && Math.hypot(point.x - last.x, point.y - last.y) < spacing) return false;
@@ -201,20 +237,6 @@ class TerrainManager {
     }
 
     endStroke() {
-        if (this._stroke && this._stroke.water) {
-            const map = this.currentMap(), elevation = this.elevation();
-            const a = this._stroke.start, b = this._stroke.end;
-            this._stroke = null;
-            window.reactor?.mapEditor3D?.hideWaterGhost?.();
-            if (!map || !elevation) return;
-            const saved = elevation.waterSnapshot(map);
-            if (elevation.addWater(map, { x0: Math.min(a.x, b.x), y0: Math.min(a.y, b.y), x1: Math.max(a.x, b.x), y1: Math.max(a.y, b.y), level: this.waterLevel, material: this.waterMaterial })) {
-                this.undoStack.push({ water: saved }); if (this.undoStack.length > 50) this.undoStack.shift(); this.redoStack.length = 0;
-                this.announce(null, true);
-            }
-            this.refreshStatus();
-            return;
-        }
         if (this._stroke && !this._stroke.moved) this.undoStack.pop();
         this._stroke = null;
         this.refreshStatus();
@@ -253,6 +275,7 @@ class TerrainManager {
      * or nothing for the whole map (undo, redo, flatten).
      */
     announce(region = null, waterToo = false) {
+        this._basins = null; this._preview = null;
         const mapEditor = window.reactor?.mapEditor;
         if (typeof mapEditor?.onElevationChanged === 'function') mapEditor.onElevationChanged(this.currentMap());
         if (typeof document === 'undefined' || typeof CustomEvent !== 'function') return;
