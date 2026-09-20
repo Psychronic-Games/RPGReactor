@@ -530,10 +530,13 @@ test('the camera never stands inside a wall or roof, and a cut roof does not sto
     assert.equal(R.pieceSolidAt(house, 6.5, 0.4, 2.2), false, 'just over the low end of the slope');
     assert.equal(R.pieceSolidAt(house, 6.5, 0.5, 2.8), true, 'inside the stair\'s high end');
     const camera = new THREE.PerspectiveCamera();
-    camera.position.set(8.5, 2.5, 2.5); camera.updateMatrixWorld();
     const focus = { x: 2.5, y: 1.3, z: 2.5 };
-    assert.equal(R.clearCameraPath(camera, focus, house), true);
-    assert.ok(camera.position.x < 4 && camera.position.x > 2.5, 'stopped short of the wall at x 4: ' + camera.position.x.toFixed(2));
+    camera.position.set(8.5, 2.5, 2.5); camera.updateMatrixWorld();
+    assert.equal(R.clearCameraPath(camera, focus, house), false, 'a wall between camera and player is left to the fade');
+    assert.equal(camera.position.x, 8.5);
+    camera.position.set(4.5, 2.5, 2.5); camera.updateMatrixWorld();
+    assert.equal(R.clearCameraPath(camera, focus, house), true, 'a camera inside the wall comes out of it');
+    assert.ok(camera.position.x < 4 && camera.position.x > 2.5, 'on the player\'s side of the wall at x 4: ' + camera.position.x.toFixed(2));
     camera.position.set(2.5, 8, 6.5); camera.updateMatrixWorld();
     assert.equal(R.clearCameraPath(camera, focus, house), false, 'a clear line is left alone');
     assert.equal(R.clearCameraPath(camera, focus, mapWith([])), false, 'no pieces: nothing to do');

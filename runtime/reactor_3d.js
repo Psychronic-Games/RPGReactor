@@ -8958,26 +8958,29 @@ Reactor3D.pieceSolidAt = function(mapData, wx, wy, wz, cut) {
 };
 
 /**
- * Keep a camera out of the walls: step from the point it looks at toward
- * where it wants to stand, and stop short of the first solid piece. The
- * camera keeps its aim; only its distance shortens. Nothing happens on a
- * map without pieces.
+ * Keep a camera out of the walls. A wall *between* the camera and the
+ * player is left alone: the sight-line fade sees through it, and a camera
+ * shoved in against every interior wall was a close-up of the player's
+ * back. Only a camera that would stand *inside* a solid piece moves: it
+ * comes in along its own line of sight until it is out of that solid,
+ * plus a margin. Nothing happens on a map without pieces.
  */
 Reactor3D.clearCameraPath = function(camera, focus, mapData) {
     if (!camera || !focus || !mapData || !this.hasPieces(mapData)) return false;
     const shared = this._cutawayUniforms;
     const cut = shared && shared.rrCutRadius.value > 0 ? { top: shared.rrCutTop.value, box: shared.rrCutBox.value } : null;
-    const from = focus, to = camera.position;
+    const to = camera.position;
+    if (!this.pieceSolidAt(mapData, to.x, to.y, to.z, cut)) return false;
+    const from = focus;
     const dx = to.x - from.x, dy = to.y - from.y, dz = to.z - from.z;
     const length = Math.hypot(dx, dy, dz);
     if (length < 0.5) return false;
     const step = 0.2;
-    let free = length;
-    for (let d = 0.6; d < length; d += step) {
+    let free = 0.5;
+    for (let d = length - step; d >= 0.5; d -= step) {
         const t = d / length;
-        if (this.pieceSolidAt(mapData, from.x + dx * t, from.y + dy * t, from.z + dz * t, cut)) { free = Math.max(0.5, d - 0.4); break; }
+        if (!this.pieceSolidAt(mapData, from.x + dx * t, from.y + dy * t, from.z + dz * t, cut)) { free = Math.max(0.5, d - 0.3); break; }
     }
-    if (free >= length) return false;
     const t = free / length;
     camera.position.set(from.x + dx * t, from.y + dy * t, from.z + dz * t);
     camera.updateMatrixWorld();
