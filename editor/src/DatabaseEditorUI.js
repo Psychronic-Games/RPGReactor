@@ -655,17 +655,12 @@ class DatabaseEditorUI {
                 this.reactor3dEditor.show(detailEl);
                 return;
             }
-            case 'structures': {
-                // Plans under 3d/Structures: files, not database records, so the page owns its own list.
-                const { detailEl } = this.prepareDatabaseSection('structures', this._dbTitle('structures', 'Structures'), { showListPanel: false });
-                if (!this.structureEditor) return;
-                this.structureEditor.projectController = {
-                    getCurrentProject: () => this.currentProject,
-                    mapEditor3D: this.callbacks.getMapEditor3D ? this.callbacks.getMapEditor3D() : (window.reactor && window.reactor.mapEditor3D)
-                };
-                this.structureEditor.show(detailEl);
-                return;
-            }
+            case 'structures':
+                // One record per plan file under 3d/Structures, read on load and
+                // written on save, so the list is the database's own.
+                data = this.databaseManager.getStructures();
+                title = this._dbTitle(type, 'Structures');
+                break;
             case 'system':
                 this.openDatabase('system1');
                 return;
@@ -1866,6 +1861,8 @@ class DatabaseEditorUI {
             this.actionSequenceEditor.show(detailEl, entry);
         } else if (type === 'quests' && this.questEditor) {
             this.questEditor.showQuestDetail(detailEl, entry);
+        } else if (type === 'structures' && this.structureEditor) {
+            this.structureEditor.showStructureDetail(detailEl, entry);
         } else if (type === 'musicSequences' && this.musicSequenceEditor) {
             this.musicSequenceEditor.show(detailEl, entry);
         } else {
@@ -2094,6 +2091,8 @@ class DatabaseEditorUI {
             quests: { name: 'New Quest', key: '', category: '', iconIndex: 0, difficulty: '', from: '', location: '', description: '', objectives: [], rewards: [], subtext: '', quotes: '', activation: { type: 'command', switchId: 0, variableId: 0, operator: '>=', value: 0 }, completion: { type: 'command', switchId: 0 }, note: '' },
             // Stored on System.json; reactor_managers.js reads this shape as it is.
             musicSequences: { name: 'New Sequence', sequence: { enabled: true, entries: [] } },
+            // A building plan, one file under 3d/Structures; the file is named on save.
+            structures: { name: 'New Plan', file: '', plan: typeof DatabaseStructureEditor !== 'undefined' ? DatabaseStructureEditor.newPlan('New Plan') : null },
         };
     }
 
@@ -2104,7 +2103,7 @@ class DatabaseEditorUI {
             actors: 9999, classes: 9999, skills: 9999, items: 9999,
             weapons: 9999, armors: 9999, enemies: 9999, troops: 9999,
             states: 9999, animations: 5000, tilesets: 1000, commonEvents: 9999,
-            userInterfaces: 9999, quests: 9999, musicSequences: 9999, actionSequences: 9999, elements: 512, skillTypes: 128, weaponTypes: 256,
+            userInterfaces: 9999, quests: 9999, structures: 9999, musicSequences: 9999, actionSequences: 9999, elements: 512, skillTypes: 128, weaponTypes: 256,
             armorTypes: 256, equipTypes: 128
         }[type] || 0;
     }

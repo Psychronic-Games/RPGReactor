@@ -74,29 +74,41 @@ test('a new plan is a cottage the engine can walk through', () => {
     assert.deepEqual([...shut.reached], []);
 });
 
-test('the page lists, writes, reads and names plan files in the project folder', () => {
-    const { DatabaseStructureEditor: E } = loadEditor();
+test('the database manager reads plans as records and writes records back as plans', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rr-structures-'));
     try {
-        const editor = new E(null, { getCurrentProject: () => ({ path: root }) }, null, null);
-        assert.equal(editor.list().length, 0, 'no folder yet: no plans');
-        const plan = E.newPlan('Cottage');
-        const file = editor.fileNameFor('My Cottage');
-        assert.equal(file, 'My-Cottage.json');
-        assert.equal(editor.write(file, plan), true);
-        assert.equal(fs.existsSync(path.join(root, '3d', 'Structures', file)), true, 'the folder is made');
-        const text = fs.readFileSync(path.join(root, '3d', 'Structures', file), 'utf8');
-        assert.ok(text.endsWith('}\n') && text.includes('\n  "name"'), 'two-space indent and a trailing newline, like a hand-written file');
-        assert.equal(editor.list().length, 1);
-        assert.equal(editor.list()[0].name, 'Cottage');
-        assert.equal(editor.fileNameFor('My Cottage'), 'My-Cottage-2.json', 'a second file of the same name is numbered');
-        const back = editor.read(file);
-        assert.equal(JSON.stringify(E.trimPlan(back)), JSON.stringify(E.trimPlan(plan)));
-        fs.writeFileSync(path.join(root, '3d', 'Structures', 'broken.json'), '{not json');
-        const listed = editor.list(true);
-        assert.equal(listed.length, 2);
-        assert.ok(listed.find(entry => entry.file === 'broken.json').error, 'a file that is not a plan is listed with its error, not hidden');
-        assert.equal(editor.resolve('My-Cottage'), listed.find(entry => entry.file === file).plan, 'a part names a plan by file or name');
+        const { DatabaseStructureEditor: E } = loadEditor();
+        const context = { console, window: {}, document: { addEventListener() {} }, require, setTimeout, clearTimeout, module: { exports: {} }, DatabaseStructureEditor: E, RRJson: { read: (fsx, file) => JSON.parse(fsx.readFileSync(file, 'utf8')) } };
+        context.window = context;
+        vm.runInNewContext(read('editor/src/DatabaseManager.js') + '\n;globalThis.DatabaseManager = DatabaseManager;', context);
+        const manager = new context.DatabaseManager();
+        manager.fs = fs; manager.path = path;
+        const folder = path.join(root, '3d', 'Structures');
+        fs.mkdirSync(folder, { recursive: true });
+        fs.writeFileSync(path.join(folder, 'Cottage.json'), JSON.stringify(E.trimPlan(E.newPlan('Cottage')), null, 2) + '\n');
+        fs.writeFileSync(path.join(folder, 'notes.json'), '{"not": "a plan"}');
+        manager.data.structures = await manager.loadStructures(root);
+        assert.equal(manager.data.structures[0], null, 'the null slot every category keeps');
+        assert.equal(manager.getStructures().length, 1, 'a file that is not a plan is left alone');
+        const cottage = manager.getStructures()[0];
+        assert.equal(cottage.file, 'Cottage.json');
+        assert.equal(cottage.name, 'Cottage');
+        // A new record with no file yet, and a pasted record carrying the file it was copied from.
+        manager.data.structures.push({ id: 2, name: 'Tower', file: '', plan: E.newPlan('Tower') });
+        manager.data.structures.push({ id: 3, name: 'Cottage copy', file: 'Cottage.json', plan: JSON.parse(JSON.stringify(cottage.plan)) });
+        assert.equal(await manager.saveStructures(root), true);
+        assert.deepEqual(fs.readdirSync(folder).sort(), ['Cottage-copy.json', 'Cottage.json', 'Tower.json', 'notes.json'], 'the new one is named after its plan, the pasted one after its own name since its file was taken');
+        assert.equal(manager.data.structures[2].file, 'Tower.json');
+        assert.equal(manager.data.structures[3].file, 'Cottage-copy.json');
+        // A cleared record takes its file with it.
+        cottage.name = '';
+        assert.equal(await manager.saveStructures(root), true);
+        assert.deepEqual(fs.readdirSync(folder).sort(), ['Cottage-copy.json', 'Tower.json', 'notes.json'], 'the cleared plan\'s file went; the file that is not a plan stays');
+        assert.equal(JSON.parse(fs.readFileSync(path.join(folder, 'Tower.json'), 'utf8')).name, 'Tower');
+        assert.ok(fs.readFileSync(path.join(folder, 'Tower.json'), 'utf8').endsWith('}\n'), 'written the way a person writes one');
+        assert.equal(manager.getDirtyKeys().includes('structures'), false, 'saved is clean');
+        manager.data.structures[2].plan.storey = 6;
+        assert.equal(manager.getDirtyKeys().includes('structures'), true, 'an edit to a plan is unsaved work');
     } finally {
         fs.rmSync(root, { recursive: true, force: true });
     }
@@ -105,15 +117,22 @@ test('the page lists, writes, reads and names plan files in the project folder',
 test('the database wires the page in: category, title key, script, detail cleanup', () => {
     const ui = read('editor/src/DatabaseEditorUI.js');
     assert.match(ui, /\{ name: 'Structures', type: 'structures' \}/);
-    assert.match(ui, /case 'structures': \{/);
+    assert.match(ui, /case 'structures':\s*\n[\s\S]*?data = this\.databaseManager\.getStructures\(\);/, 'a standard category: the list, search, New and Delete, clipboard and undo are the database\'s own');
+    assert.match(ui, /type === 'structures' && this\.structureEditor\)\s*\{\s*this\.structureEditor\.showStructureDetail\(detailEl, entry\);/);
+    assert.match(ui, /structures: \{ name: 'New Plan', file: '', plan: /, 'New makes a cottage');
     assert.match(ui, /this\.structureEditor\?\.detach\?\.\(\);/, 'leaving the page releases its preview');
     assert.match(ui, /new DatabaseStructureEditor\(databaseManager/);
+    const manager = read('editor/src/DatabaseManager.js');
+    assert.match(manager, /loaded\.structures = await this\.loadStructures\(projectPath\);/);
+    assert.match(manager, /if \(!await this\.saveStructures\(projectPath\)\) failed\.push\('3d\/Structures'\);/);
+    assert.match(manager, /structures: 9999,/);
     assert.match(read('editor/src/I18nManager.js'), /structures: 'menu\.structures'/);
     assert.match(read('editor/index.html'), /<script src="src\/database\/DatabaseStructureEditor\.js"><\/script>/);
     const source = read('editor/src/database/DatabaseStructureEditor.js');
     assert.match(source, /window\.Reactor3D\?\.extensionsLoaded\?\.\(\)/, 'the 3D preview waits for the whole runtime, not the bare core');
-    assert.match(source, /palette\.structures\(true\)/, 'a save refreshes the palette\'s Structure list');
+    assert.match(source, /palette\.structures\?\.\(true\)/, 'Use on the map refreshes the palette\'s Structure list');
     assert.match(source, /selectLayer\?\.\('P'\)/, 'Use on the map picks the pieces tab by its own key');
+    assert.match(source, /document\.getElementById\('database-ok-btn'\)\?\.click\(\);/, 'Use on the map saves and closes as OK does');
 });
 
 test('a room and a part may wear their own materials, and the file keeps them', () => {
@@ -155,9 +174,10 @@ test('a style names a set of materials, and a set that is its own is Custom', ()
 test('drawing on the plan: a drag makes a room, a drag moves or resizes it, a click puts a door through a wall', () => {
     const { DatabaseStructureEditor: E } = loadEditor();
     const editor = new E(null, { getCurrentProject: () => null }, null, null);
-    editor.renderForm = () => {}; editor.schedulePreview = () => {}; editor._detail = null;
+    editor.renderInspector = () => {}; editor.renderMore = () => {}; editor.schedulePreview = () => {}; editor._detail = null;
+    let dirty = 0; editor.markDirty = () => { dirty++; };
     const plan = E.normalizePlan({ name: 'D', size: [16, 12], floors: [{ rooms: {}, doors: [] }] });
-    editor.current = { file: 'D.json', plan, dirty: false };
+    editor.current = { entry: { id: 1, name: 'D', file: 'D.json', plan }, plan };
     editor._planGeom = { ox: 0, oy: 0, cell: 10 };
     assert.deepEqual({ ...editor.cellAt(35, 25) }, { x: 3, y: 2 });
     assert.equal(editor.cellAt(500, 25), null, 'outside the plan');
@@ -167,8 +187,8 @@ test('drawing on the plan: a drag makes a room, a drag moves or resizes it, a cl
     const [first] = Object.keys(floor.rooms);
     assert.ok(first, 'a room was made');
     assert.deepEqual([...floor.rooms[first]], [2, 2, 6, 5]);
-    assert.equal(editor.selectedRoom, first, 'and selected');
-    assert.equal(editor.current.dirty, true);
+    assert.deepEqual({ ...editor.selection }, { kind: 'room', key: first }, 'and selected');
+    assert.ok(dirty > 0, 'the database hears about it');
     // A drag that reaches the plan's edge stops one cell short: that cell is the wall.
     editor.beginPlanGesture({ x: 9, y: 2 }); editor.updatePlanGesture({ x: 40, y: 40 }); editor.endPlanGesture({ x: 40, y: 40 });
     const second = Object.keys(floor.rooms)[1];
@@ -191,14 +211,29 @@ test('drawing on the plan: a drag makes a room, a drag moves or resizes it, a cl
     assert.equal(editor.toggleDoorAt(0, 0), false, 'a corner touches no room');
     assert.equal(editor.toggleDoorAt(4, 4), false, 'inside a room is not a wall');
     // A click with no drag on a room selects it; Delete removes it with its doors.
-    editor.selectedRoom = null;
+    editor.selection = null;
     editor.beginPlanGesture({ x: 10, y: 5 }); editor.endPlanGesture({ x: 10, y: 5 });
-    assert.equal(editor.selectedRoom, second);
-    editor.removeRoom();
+    assert.deepEqual({ ...editor.selection }, { kind: 'room', key: second });
+    editor.removeSelection();
     assert.deepEqual(Object.keys(floor.rooms), [first]);
     assert.deepEqual(floor.doors, [], 'its front door went with it');
     editor.removeRoom(first);
     assert.deepEqual(Object.keys(floor.rooms), []);
+    // The stairs and spot tools place with a click and select with another.
+    floor.rooms.hall = [1, 1, 8, 8];
+    editor.tool = 'stairs';
+    editor.beginPlanGesture({ x: 7, y: 7 }); editor.endPlanGesture({ x: 7, y: 7 });
+    assert.equal(JSON.stringify(plan.stairs), JSON.stringify([{ floor: 0, from: [7, 7], dir: 'north', width: 1 }]));
+    assert.deepEqual({ ...editor.selection }, { kind: 'stair', key: 0 });
+    editor.beginPlanGesture({ x: 0, y: 0 }); editor.endPlanGesture({ x: 0, y: 0 });
+    assert.equal(plan.stairs.length, 1, 'a wall cell starts no stairs');
+    editor.tool = 'spot';
+    editor.beginPlanGesture({ x: 3, y: 3 }); editor.endPlanGesture({ x: 3, y: 3 });
+    const [spotName] = Object.keys(plan.spots);
+    assert.ok(spotName && plan.spots[spotName][0] === 3, 'a spot at the clicked cell');
+    assert.deepEqual({ ...editor.selection }, { kind: 'spot', key: spotName });
+    editor.removeSelection();
+    assert.deepEqual(Object.keys(plan.spots), []);
 });
 
 test('a tower of eight floors is stored whole and walked to its top', () => {
