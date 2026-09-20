@@ -17,7 +17,7 @@ project; a person can use it to find where anything lives.
 | Tile elevation (terraces, cliffs) | `MapNNN.r3d.json` › `elevation` (one whole number per tile) | Map Properties, height brush | — |
 | Terrain (rolling ground) | `MapNNN.r3d.json` › `terrain` ((w+1)×(h+1) corner heights), `terrainWidth` | **3D-T** tab brushes | `editor/tests/terrain.test.cjs` rules |
 | Room (floor, walls, ceiling, sky) | `MapNNN.r3d.json` › `room` | Map Properties › 3D | — |
-| Pieces (the 3D tileset) | `MapNNN.r3d.json` › `pieces` | **3D-B** tab | `build-structure.cjs --check` walks them |
+| Pieces (the 3D tileset) | `MapNNN.r3d.json` › `pieces` | **3D-B** tab; drawn as a plan on the flat map too | `validate-map.cjs` |
 | Buildings from a plan | `3d/Structures/*.json` (project-wide), placed as `MapNNN.r3d.json` › `structures` | 3D-B › Structure › Stamp / Move | `build-structure.cjs --check` |
 | Materials | `img/materials/*.png` (tileable) | swatches in 3D-B | — |
 | Placed models | `MapNNN.r3d.json` › `props` | **3D-M** tab | — |
@@ -101,7 +101,15 @@ from the front door:
 node editor/build-scripts/build-structure.cjs <project> <mapId> <plan.json> <x> <y> [--check]
 ```
 
-`--check` writes nothing. A room reported `MISS` means the plan has a door
+`--check` writes nothing. To check a whole map at any time:
+
+```
+node editor/build-scripts/validate-map.cjs <project> <mapId>
+```
+
+which reports pieces off the map, materials with no image, models standing
+inside a building, rooms that cannot be walked to, uneven ground under a
+building, and the piece, triangle, model and light counts. A room reported `MISS` means the plan has a door
 into a wall or a stair that lands nowhere; fix the plan, not the pieces.
 
 In the editor the same plan is in the 3D-B tab's Structure list; Stamp
@@ -123,5 +131,5 @@ and keep slopes under 0.75 tile per tile where characters must walk;
 ## What is not here yet
 
 Furniture and named spots inside rooms, events placed from a plan, water,
-hip roofs, a per-transfer floor (a transfer always lands on the ground
-floor), and the 2D view of pieces. Add them to this page as they land.
+hip roofs, and a per-transfer floor (a transfer always lands on the ground
+floor). Add them to this page as they land.

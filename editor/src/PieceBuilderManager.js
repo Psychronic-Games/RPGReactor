@@ -59,6 +59,81 @@ class PieceBuilderManager {
         return list;
     }
 
+    /** The colour a kind shows in the flat map's overlay. */
+    static OVERLAY_COLOURS = { wall: 0x9a9a9a, block: 0x8c8c8c, floor: 0xc99a5b, pillar: 0xdcdcdc, stair: 0xa87b4a, ramp: 0xb05a4a, roof: 0xc1443c, doorway: 0x3fa34d, window: 0x5b9fe8, fence: 0xb8864b };
+
+    /**
+     * What each cell shows in the flat map: its topmost piece's kind and
+     * level, so a building reads as a plan from above — walls grey, floors
+     * tan, doors green, windows blue, roofs red — one entry per cell.
+     */
+    static cellSummary(pieces, storey = 5) {
+        // The ground storey is the plan: a roof over it is not what an author
+        // wants to see from above. A cell with nothing in the ground storey
+        // (an overhang, a bridge) shows its topmost piece instead.
+        const cells = new Map();
+        for (const piece of pieces) {
+            const key = piece.x + ',' + piece.y;
+            const top = cells.get(key);
+            const better = !top
+                || (piece.z < storey && top.z >= storey)
+                || (piece.z < storey) === (top.z < storey) && (piece.z > top.z || (piece.z === top.z && piece.kind !== 'floor' && top.kind === 'floor'));
+            if (better) cells.set(key, { x: piece.x, y: piece.y, z: piece.z, kind: piece.kind });
+        }
+        return Array.from(cells.values());
+    }
+
+    /** The map changed under the tool: the flat overlay follows it. */
+    setMap(mapData, tilemapManager) {
+        this.tilemapManager = tilemapManager || this.tilemapManager;
+        this.selectedGroup = 0;
+        this.undoStack = []; this.redoStack = [];
+        this.render2D();
+        if (this.panel) { this.renderStructures(true); this.refreshStatus(); this._syncPanel(); }
+    }
+
+    _ensureOverlay() {
+        const parent = this.tilemapManager?.container;
+        if (!parent || typeof PIXI === 'undefined') return null;
+        if (this.overlay && this.overlay.parent !== parent) {
+            this.overlay.parent?.removeChild(this.overlay);
+            if (!this.overlay.destroyed) this.overlay.destroy({ children: true });
+            this.overlay = null;
+        }
+        if (!this.overlay) {
+            this.overlay = new PIXI.Container();
+            this.overlay.label = 'pieces overlay';
+            this.overlay.eventMode = 'none';
+            parent.addChild(this.overlay);
+        }
+        return this.overlay;
+    }
+
+    /**
+     * Draw the pieces on the flat map. Pieces are map content, so this is
+     * drawn whichever tab is up: the 2D view is otherwise blind to a house.
+     */
+    render2D() {
+        const container = this._ensureOverlay();
+        if (!container) return;
+        for (const child of container.removeChildren()) child.destroy({ children: true });
+        const map = this.currentMap(), elevation = this.elevation();
+        if (!map || !elevation) return;
+        const cells = PieceBuilderManager.cellSummary(elevation.pieces(map));
+        if (!cells.length) return;
+        const tw = this.tilemapManager?.TILE_WIDTH || 48, th = this.tilemapManager?.TILE_HEIGHT || tw;
+        const byKind = new Map();
+        for (const cell of cells) (byKind.get(cell.kind) || byKind.set(cell.kind, []).get(cell.kind)).push(cell);
+        for (const [kind, list] of byKind) {
+            const graphics = new PIXI.Graphics();
+            for (const cell of list) graphics.rect(cell.x * tw + 1, cell.y * th + 1, tw - 2, th - 2);
+            // Higher pieces a little bolder, so an upper floor reads over a lower one.
+            graphics.fill({ color: PieceBuilderManager.OVERLAY_COLOURS[kind] || 0x888888, alpha: 0.45 });
+            graphics.eventMode = 'none';
+            container.addChild(graphics);
+        }
+    }
+
     static ICONS = {
         wall: 'M4 4h16v17H4z M4 9h16 M4 15h16 M10 4v5 M14 9v6 M8 15v6',
         block: 'M4 7l8-4 8 4v10l-8 4-8-4z M4 7l8 4 8-4 M12 11v10',
@@ -506,7 +581,9 @@ class PieceBuilderManager {
             this._flash('pieces.detached');
             this._flashed = true;
         }
-        if (changed) { this._stroke.moved = true; this.announce(); }
+        // The cells the edit could have changed: the cell and its neighbours
+        // (a hidden face between touching walls belongs to both).
+        if (changed) { this._stroke.moved = true; this.announce(false, { x0: target.x - 1, y0: target.y - 1, x1: target.x + 1, y1: target.y + 1 }); }
         return changed;
     }
 
@@ -542,7 +619,7 @@ class PieceBuilderManager {
         if (!this.eraseAt(map, target)) return false;
         this.undoStack.push(saved);
         this.redoStack.length = 0;
-        this.announce();
+        this.announce(false, { x0: target.x - 1, y0: target.y - 1, x1: target.x + 1, y1: target.y + 1 });
         this.refreshStatus();
         return true;
     }
@@ -602,14 +679,16 @@ class PieceBuilderManager {
     }
 
     /** The pieces changed: the 3D view lays them down again in place, and the map is dirty. */
-    announce(terrainToo = false) {
+    announce(terrainToo = false, region = null) {
+        this.render2D();
         const mapEditor = window.reactor?.mapEditor;
         if (typeof mapEditor?.onElevationChanged === 'function') mapEditor.onElevationChanged(this.currentMap());
         if (typeof document === 'undefined' || typeof CustomEvent !== 'function') return;
         // A stamp levels the ground as well: the terrain goes first (in
-        // place, the whole map), then the pieces are laid on it.
+        // place, the whole map), then the pieces are laid on it. `region`
+        // is the cells an edit touched, so only their chunks are relaid.
         if (terrainToo) document.dispatchEvent(new CustomEvent('rr-map-edited', { detail: { mapId: this.currentMap()?.id, terrain: true, region: null } }));
-        document.dispatchEvent(new CustomEvent('rr-map-edited', { detail: { mapId: this.currentMap()?.id, pieces: true } }));
+        document.dispatchEvent(new CustomEvent('rr-map-edited', { detail: { mapId: this.currentMap()?.id, pieces: true, region: region || null } }));
     }
 }
 

@@ -239,6 +239,10 @@ class RPGReactor {
                     this.projectController.getTilemapManager().currentMap,
                     this.projectController.getTilemapManager());
             }
+            // Pieces are map content too: their flat overlay follows every map.
+            this.pieceBuilderManager?.setMap(
+                this.projectController.getTilemapManager().currentMap,
+                this.projectController.getTilemapManager());
 
             // Lighting is map content too: the toolbar tool edits it live.
             if (!this.lightingManager && typeof LightingManager !== 'undefined') {

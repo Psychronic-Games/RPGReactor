@@ -655,13 +655,21 @@
     const pieceAt = (mapData, x, y, z) => pieces(mapData).find(piece => piece.x === x && piece.y === y && piece.z === z) || null;
     // Always a new array: the runtime indexes pieces by the array itself.
     const writePieces = (mapData, list) => {
+        const sidecar = mapData.reactor3d;
         if (!list.length) {
-            if (mapData.reactor3d) delete mapData.reactor3d.pieces;
+            if (sidecar) { delete sidecar.pieces; delete sidecar.structures; }
             return true;
         }
-        const sidecar = ensure(mapData);
-        if (!sidecar) return false;
-        sidecar.pieces = list.slice();
+        const target = ensure(mapData);
+        if (!target) return false;
+        target.pieces = list.slice();
+        // A building record whose pieces are all gone is stale: a re-stamp
+        // over the same footprint left one behind per run.
+        if (Array.isArray(target.structures)) {
+            const live = new Set(list.map(piece => piece.group).filter(Boolean));
+            const kept = target.structures.filter(entry => live.has(Math.floor(Number(entry.group))));
+            if (kept.length) target.structures = kept; else delete target.structures;
+        }
         return true;
     };
     /** Put a piece on a cell at a level, replacing whatever was there; the piece's id, or 0. */

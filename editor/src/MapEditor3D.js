@@ -383,7 +383,7 @@ class MapEditor3D {
             // had a terrain grid has no such vertices and rebuilds once.
             if (event?.detail?.terrain && this.updateTerrainInPlace(event.detail.region)) return;
             // Pieces are laid down again on their own; the rest of the scene stays.
-            if (event?.detail?.pieces && this.updatePiecesInPlace()) return;
+            if (event?.detail?.pieces && this.updatePiecesInPlace(event.detail.region || null)) return;
             const since = Date.now() - (this._lastRebuildAt || 0);
             if (since >= REBUILD_INTERVAL) {
                 clearTimeout(this._rebuildTimer);
@@ -1575,14 +1575,14 @@ class MapEditor3D {
     }
 
     /** Lay the pieces down again without a rebuild; true when the scene can. */
-    updatePiecesInPlace() {
+    updatePiecesInPlace(region = null) {
         const mapData = this.currentMap();
         const scene = this.mapScene;
         if (!mapData || !scene?.updatePieces) return false;
         const request = this._rebuildGeneration;
         this.loadMaterials(mapData).then(materials => {
             if (this.mapScene !== scene || this._rebuildGeneration !== request) return;
-            scene.updatePieces(mapData, name => materials[name] || null);
+            scene.updatePieces(mapData, name => materials[name] || null, region);
             this._lastActiveAt = performance.now();
         }).catch(error => console.error('The pieces could not be laid down again.', error));
         return true;

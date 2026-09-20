@@ -214,7 +214,7 @@ test('the scene lays pieces down per material and can lay them again alone', () 
     const asked = [];
     const load = name => { asked.push(name); return name === 'Stone' ? { image: canvas, width: 4, height: 4 } : null; };
     scene.addPieces(map, load);
-    assert.equal(scene._pieceMeshes.length, 3, 'one mesh per material, the plain one included');
+    assert.equal(scene._pieceMeshes.length, 3, 'one mesh per material per chunk; these four pieces share one chunk');
     assert.deepEqual(asked.sort(), ['Stone', 'Wood']);
     const stone = scene._pieceMeshes.find(m => m.userData.pieceMaterial === 'Stone');
     assert.ok(stone.material.map && stone.material.map.wrapS === THREE.RepeatWrapping, 'a material image repeats');
@@ -228,6 +228,26 @@ test('the scene lays pieces down per material and can lay them again alone', () 
     assert.equal(scene._meshes.length, 1, 'the old piece meshes left the scene\'s list');
     assert.equal(scene._piecesGroup.children.length, 1);
     assert.equal(asked.length, 2, 'textures are made once per scene');
+    assert.equal(again[0].material, stone.material, 'and so are materials: chunks share them');
+    // Chunks: pieces far apart are separate meshes, and an edit relays only its own chunk.
+    const wide = { width: 64, height: 64, reactor3d: { version: 1, elevation: new Array(64 * 64).fill(0), pieces: [
+        { id: 1, kind: 'block', x: 1, y: 1, z: 0, rot: 0, material: 'Stone' }, { id: 2, kind: 'block', x: 40, y: 40, z: 0, rot: 0, material: 'Stone' }, { id: 3, kind: 'block', x: 41, y: 40, z: 0, rot: 0, material: 'Stone' }
+    ] } };
+    const chunked = Object.create(R.MapScene.prototype);
+    chunked._scene = new THREE.Scene(); chunked._meshes = []; chunked._materials = []; chunked._textures = [];
+    chunked.addPieces(wide, load);
+    assert.equal(chunked._pieceMeshes.length, 2, 'two chunks, one material');
+    const far = chunked._pieceMeshes.find(m => m.userData.pieceChunk === R.pieceChunkKey(40, 40));
+    const near = chunked._pieceMeshes.find(m => m.userData.pieceChunk === R.pieceChunkKey(1, 1));
+    wide.reactor3d.pieces = wide.reactor3d.pieces.concat([{ id: 4, kind: 'block', x: 2, y: 1, z: 0, rot: 0, material: 'Stone' }]);
+    const relaid = chunked.updatePieces(wide, load, { x0: 1, y0: 0, x1: 3, y1: 2 });
+    assert.equal(relaid.length, 1, 'one chunk relaid');
+    assert.equal(relaid[0].userData.pieceChunk, R.pieceChunkKey(1, 1));
+    assert.ok(chunked._pieceMeshes.includes(far), 'the far chunk was left alone');
+    assert.ok(!chunked._pieceMeshes.includes(near), 'the edited chunk was replaced');
+    assert.equal(chunked._pieceMeshes.length, 2);
+    assert.match(read('editor/src/PieceBuilderManager.js'), /this\.announce\(false, \{ x0: target\.x - 1, y0: target\.y - 1, x1: target\.x \+ 1, y1: target\.y \+ 1 \}\)/, 'a dab names its cells');
+    assert.match(read('editor/src/MapEditor3D.js'), /scene\.updatePieces\(mapData, name => materials\[name\] \|\| null, region\);/);
     // The game's default loader asks ImageManager for img/materials.
     assert.match(read('runtime/reactor_3d.js'), /ImageManager\.loadBitmap\("img\/materials\/", name\)/);
     assert.match(read('runtime/reactor_3d.js'), /this\.addPieces\(mapData, settings\.loadMaterial \|\| \(name => Reactor3D\.defaultMaterialLoader\(name\)\)\);/);
@@ -249,7 +269,7 @@ test('the 3D-B tab is registered everywhere a palette tab has to be, with its st
     assert.match(main, /new PieceBuilderManager\(this\.projectController\)/);
     assert.match(read('editor/index.html'), /src\/PieceBuilderManager\.js/);
     const view = read('editor/src/MapEditor3D.js');
-    assert.match(view, /if \(event\?\.detail\?\.pieces && this\.updatePiecesInPlace\(\)\) return;/, 'a piece edit never rebuilds the scene');
+    assert.match(view, /if \(event\?\.detail\?\.pieces && this\.updatePiecesInPlace\(event\.detail\.region \|\| null\)\) return;/, 'a piece edit never rebuilds the scene');
     assert.match(view, /loadMaterial: name => materials\[name\] \|\| null/);
     assert.match(view, /if \(this\.canEditPieces\(\)\) \{\s*const manager = this\.pieceManager\(\);\s*const target = this\.pieceTargetAt\(event\.clientX, event\.clientY, \{ erase: true \}\);/, 'a right-click pulls a piece off');
     const i18n = read('editor/src/I18nManager.js');
@@ -376,6 +396,9 @@ test('a structure plan builds rooms, walls, doors on shared walls, a stairwell a
     assert.match(manager2, /const group = elevation\.groupConnectedPieces\(map, target\.x, target\.y\);/, 'Move mode on a loose piece groups its neighbours');
     assert.match(manager2, /if \(changed && group && elevation\.structureOf\(map, group\)\) \{\s*elevation\.removeStructure\(map, group\);/, 'a hand edit detaches the plan');
     assert.match(manager2, /if \(group\) piece\.group = group;/, 'and the new piece joins the building');
+    E.setStructure(map, { group: 9, plan: 'Gone.json', x: 0, y: 0, rot: 0, scale: 1 });
+    E.setPiece(map, { kind: 'block', x: 30, y: 30, z: 0 });
+    assert.equal(E.structureOf(map, 9), null, 'a record with no pieces is dropped on the next write');
     assert.equal(E.removePieceGroup(map, 1), true);
     assert.equal(E.structureOf(map, 1), null, 'the record goes with the pieces');
     const managerSource = read('editor/src/PieceBuilderManager.js');
@@ -418,6 +441,8 @@ test('inside a building the roof and the wall in the camera\'s way are cut aroun
     assert.equal(lone, 10, 'a lone wall on the ground: five faces, ten triangles (no bottom)');
     assert.equal(rowTris, 3 * 10 - 4 * 2, 'three in a row: the four faces they press together are gone');
     assert.match(runtime, /if \(rrBayer < rrThin\) discard;/, 'a wall in the way is dithered thin, not cut');
+    assert.match(runtime, /!\(material\.__reactorPieces \|\| material\.__reactorModel\)/, 'placed models thin in the sight line too');
+    assert.match(runtime, /material\.__reactorPieces \? "if \(vRRWorldPos\.y > rrCutTop/, 'but only pieces lose their storey');
     assert.match(runtime, /vRRWorldPos\.y > rrCutFocus\.y - 1\.2/, 'floors under the player are never thinned');
     assert.match(read('runtime/reactor_sprites.js'), /state\.scene\.updateCutaway\(state\.viewport\.camera \? state\.viewport\.camera\(\) : null, \$dataMap, \$gamePlayer\);/);
     const house = mapWith([
@@ -449,6 +474,35 @@ test('inside a building the roof and the wall in the camera\'s way are cut aroun
     assert.equal(shared.rrCutRadius.value, R.CUTAWAY_RADIUS, 'but a wall in the way still opens');
     scene.updateCutaway(null, house, null);
     assert.equal(shared.rrCutRadius.value, 0, 'no player, no cut: the editor');
-    const materialSource = runtime.slice(runtime.indexOf('Reactor3D.MapScene.prototype.addPieces'), runtime.indexOf('Reactor3D.MapScene.prototype.updatePieces'));
+    const materialSource = runtime.slice(runtime.indexOf('Reactor3D.MapScene.prototype.pieceMaterial'), runtime.indexOf('Reactor3D.MapScene.prototype.layPieceChunks'));
     assert.match(materialSource, /material\.__reactorPieces = true;/);
+});
+
+test('the flat map shows a building as a plan from above', () => {
+    const context = { console, window: {}, document: { addEventListener() {}, removeEventListener() {}, dispatchEvent() {} }, CustomEvent: class { constructor(t, i) { this.type = t; this.detail = i && i.detail; } } };
+    context.window = context;
+    vm.runInNewContext(read('editor/src/PieceBuilderManager.js'), context);
+    const M = context.PieceBuilderManager;
+    const cells = M.cellSummary([
+        { x: 1, y: 1, z: 0, kind: 'floor' }, { x: 1, y: 1, z: 0, kind: 'wall' },
+        { x: 2, y: 1, z: 0, kind: 'floor' }, { x: 2, y: 1, z: 5, kind: 'floor' }, { x: 2, y: 1, z: 10, kind: 'ramp' },
+        { x: 3, y: 1, z: 0, kind: 'doorway' }, { x: 3, y: 1, z: 0, kind: 'floor' }
+    ]);
+    assert.deepEqual([...cells.map(c => [c.x, c.y, c.kind, c.z].join(':'))], ['1:1:wall:0', '2:1:floor:0', '3:1:doorway:0'], 'the ground storey is the plan: a roof over a floor is not shown, and on one level a wall or door beats the slab under it');
+    assert.deepEqual([...M.cellSummary([{ x: 5, y: 5, z: 10, kind: 'ramp' }, { x: 5, y: 5, z: 5, kind: 'floor' }]).map(c => c.kind + ':' + c.z)], ['ramp:10'], 'nothing in the ground storey: the topmost piece');
+    for (const kind of ['wall', 'block', 'floor', 'pillar', 'stair', 'ramp', 'roof', 'doorway', 'window', 'fence']) assert.ok(M.OVERLAY_COLOURS[kind] > 0, kind + ' has a colour');
+    // Drawn on the tilemap's container, whichever tab is up, and after every edit.
+    const drawn = [];
+    context.PIXI = { Container: class { constructor() { this.children = []; this.destroyed = false; } addChild(c) { this.children.push(c); c.parent = this; } removeChildren() { const c = this.children; this.children = []; return c; } removeChild() {} destroy() { this.destroyed = true; } },
+        Graphics: class { constructor() { this.rects = []; } rect(x, y, w, h) { this.rects.push([x, y, w, h]); return this; } fill(style) { this.style = style; drawn.push(this); return this; } destroy() {} } };
+    vm.runInNewContext(read('editor/src/utils/MapElevation.js'), context);
+    const map = { id: 1, width: 8, height: 8, reactor3d: { version: 1, pieces: [{ id: 1, kind: 'wall', x: 2, y: 3, z: 0, rot: 0, material: '' }, { id: 2, kind: 'floor', x: 3, y: 3, z: 0, rot: 0, material: '' }] } };
+    const stage = new context.PIXI.Container();
+    const manager = new M({ getTilemapManager: () => ({ currentMap: map, container: stage, TILE_WIDTH: 48, TILE_HEIGHT: 48 }) });
+    manager.setMap(map, { currentMap: map, container: stage, TILE_WIDTH: 48, TILE_HEIGHT: 48 });
+    assert.equal(stage.children.length, 1, 'one overlay container on the map');
+    assert.equal(drawn.length, 2, 'one graphics per kind');
+    assert.deepEqual(drawn.find(g => g.style.color === M.OVERLAY_COLOURS.wall).rects, [[2 * 48 + 1, 3 * 48 + 1, 46, 46]]);
+    assert.match(read('editor/src/main.js'), /this\.pieceBuilderManager\?\.setMap\(/, 'every loaded map hands itself to the overlay');
+    assert.match(read('editor/src/PieceBuilderManager.js'), /announce\(terrainToo = false, region = null\) \{\s*this\.render2D\(\);/, 'every edit redraws it');
 });

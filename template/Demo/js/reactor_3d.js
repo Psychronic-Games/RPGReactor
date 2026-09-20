@@ -5856,65 +5856,109 @@ Reactor3D.MapScene.prototype.materialTexture = function(name, load) {
     return texture;
 };
 
-/** Lay every piece down: one mesh per material, cast into the static shadow rows. */
-Reactor3D.MapScene.prototype.addPieces = function(mapData, load) {
+/**
+ * Pieces are laid in chunks: one mesh per material per PIECE_CHUNK-cell
+ * square of the map. A chunk off screen is culled whole, and an edit
+ * relays only the chunks it touches — on a ten-thousand-piece map that is
+ * a few milliseconds instead of fifty.
+ */
+Reactor3D.PIECE_CHUNK = 16;
+
+Reactor3D.pieceChunkKey = function(x, y) {
+    return Math.floor(x / this.PIECE_CHUNK) * 65536 + Math.floor(y / this.PIECE_CHUNK);
+};
+
+/** One material's material object, shared by every chunk that wears it. */
+Reactor3D.MapScene.prototype.pieceMaterial = function(name, load) {
+    if (!this._pieceMaterials) this._pieceMaterials = new Map();
+    let material = this._pieceMaterials.get(name);
+    if (material) return material;
+    const texture = this.materialTexture(name, load);
+    material = new THREE.MeshBasicMaterial({
+        map: texture || null,
+        color: texture ? 0xffffff : 0x9a9a9a,
+        vertexColors: true,
+        side: THREE.FrontSide
+    });
+    material.__reactorShaded = true;
+    material.__reactorPieces = true;
+    material.userData.rrPieceMaterial = name;
+    Reactor3D.litMaterial(material);
+    this._materials.push(material);
+    this._pieceMaterials.set(name, material);
+    return material;
+};
+
+/** Lay the pieces of the chunks named in `keys` (every chunk when null). */
+Reactor3D.MapScene.prototype.layPieceChunks = function(mapData, load, keys) {
     const pieces = Reactor3D.piecesOf(mapData);
-    this._pieceMeshes = this._pieceMeshes || [];
-    if (!pieces.length) return;
-    const byMaterial = new Map();
+    const wanted = keys ? new Set(keys) : null;
+    const byChunk = new Map();
     for (const piece of pieces) {
+        const key = Reactor3D.pieceChunkKey(piece.x, piece.y);
+        if (wanted && !wanted.has(key)) continue;
+        let byMaterial = byChunk.get(key);
+        if (!byMaterial) byChunk.set(key, byMaterial = new Map());
         let list = byMaterial.get(piece.material);
         if (!list) byMaterial.set(piece.material, list = []);
         list.push(piece);
     }
     const group = this.piecesGroup();
-    for (const [name, list] of byMaterial) {
-        const geometry = Reactor3D.pieceGeometry(list, mapData);
-        const texture = this.materialTexture(name, load);
-        const material = new THREE.MeshBasicMaterial({
-            map: texture || null,
-            color: texture ? 0xffffff : 0x9a9a9a,
-            vertexColors: true,
-            side: THREE.FrontSide
-        });
-        material.__reactorShaded = true;
-        material.__reactorPieces = true;
-        material.userData.rrPieceMaterial = name;
-        Reactor3D.litMaterial(material);
-        const mesh = new THREE.Mesh(geometry, material);
-        mesh.userData.pieces = true;
-        mesh.userData.pieceMaterial = name;
-        mesh.renderOrder = -5;
-        group.add(mesh);
-        mesh.updateMatrix();
-        mesh.matrixAutoUpdate = false;
-        this._meshes.push(mesh);
-        this._materials.push(material);
-        this._pieceMeshes.push(mesh);
-        if (Reactor3D.Shadows && Reactor3D.Shadows.markCaster) Reactor3D.Shadows.markCaster(mesh, false);
+    for (const [key, byMaterial] of byChunk) {
+        for (const [name, list] of byMaterial) {
+            const geometry = Reactor3D.pieceGeometry(list, mapData);
+            const mesh = new THREE.Mesh(geometry, this.pieceMaterial(name, load));
+            mesh.userData.pieces = true;
+            mesh.userData.pieceMaterial = name;
+            mesh.userData.pieceChunk = key;
+            mesh.renderOrder = -5;
+            group.add(mesh);
+            mesh.updateMatrix();
+            mesh.matrixAutoUpdate = false;
+            this._meshes.push(mesh);
+            this._pieceMeshes.push(mesh);
+            if (Reactor3D.Shadows && Reactor3D.Shadows.markCaster) Reactor3D.Shadows.markCaster(mesh, false);
+        }
     }
 };
 
+/** Lay every piece down, cast into the static shadow rows. */
+Reactor3D.MapScene.prototype.addPieces = function(mapData, load) {
+    this._pieceMeshes = this._pieceMeshes || [];
+    if (!Reactor3D.hasPieces(mapData)) return;
+    this.layPieceChunks(mapData, load, null);
+};
+
 /**
- * Lay the pieces down again after an edit. Only the piece meshes go; the
- * tiles, ground, room and sky stay as they are, so a block dropped in the
- * editor is a few thousand triangles rebuilt and nothing else.
+ * Lay the pieces down again after an edit. Only the chunks `region`
+ * (cell bounds {x0, y0, x1, y1}, inclusive; null for all) touches are
+ * dropped and laid again; the tiles, ground, room, sky and every other
+ * chunk stay as they are. Returns the meshes laid.
  */
-Reactor3D.MapScene.prototype.updatePieces = function(mapData, load) {
+Reactor3D.MapScene.prototype.updatePieces = function(mapData, load, region) {
+    let keys = null;
+    if (region) {
+        keys = [];
+        const size = Reactor3D.PIECE_CHUNK;
+        for (let cy = Math.floor(Math.max(0, region.y0) / size); cy <= Math.floor(Math.max(0, region.y1) / size); cy++) {
+            for (let cx = Math.floor(Math.max(0, region.x0) / size); cx <= Math.floor(Math.max(0, region.x1) / size); cx++) keys.push(cx * 65536 + cy);
+        }
+    }
+    const wanted = keys ? new Set(keys) : null;
+    const kept = [];
     for (const mesh of this._pieceMeshes || []) {
+        if (wanted && !wanted.has(mesh.userData.pieceChunk)) { kept.push(mesh); continue; }
         if (mesh.parent) mesh.parent.remove(mesh);
         mesh.geometry.dispose();
-        mesh.material.dispose();
         const at = this._meshes.indexOf(mesh);
         if (at >= 0) this._meshes.splice(at, 1);
-        const m = this._materials.indexOf(mesh.material);
-        if (m >= 0) this._materials.splice(m, 1);
         if (Reactor3D.Shadows && Reactor3D.Shadows._static) Reactor3D.Shadows._static.delete(mesh);
     }
-    this._pieceMeshes = [];
-    this.addPieces(mapData, load);
+    this._pieceMeshes = kept;
+    const before = kept.length;
+    if (Reactor3D.hasPieces(mapData)) this.layPieceChunks(mapData, load, keys);
     if (Reactor3D.Shadows && Reactor3D.Shadows.invalidate) Reactor3D.Shadows.invalidate();
-    return this._pieceMeshes.slice();
+    return this._pieceMeshes.slice(before);
 };
 
 /**
@@ -7725,6 +7769,7 @@ Reactor3D.MapScene.prototype.clear = function() {
     // lay its quad into the next.
     this._build = (this._build || 0) + 1;
     this._pieceMeshes = [];
+    this._pieceMaterials = null;
     this._materialTextures = null;
     // The light pools live in the pass groups rather than in `_meshes`, so
     // they have to be let go of by name or a rebuilt map keeps the old ones.
@@ -8615,14 +8660,16 @@ Reactor3D.cutawayUniforms = function() {
 };
 
 Reactor3D.injectCutaway = function(material, shader) {
-    if (!material || !shader || !material.__reactorPieces || shader.fragmentShader.indexOf("vRRWorldPos") < 0) return;
+    // Pieces take both cuts; a placed model (a tree in front of the door)
+    // only thins in the sight line, since it has no storey to cut above.
+    if (!material || !shader || !(material.__reactorPieces || material.__reactorModel) || shader.fragmentShader.indexOf("vRRWorldPos") < 0) return;
     const shared = this.cutawayUniforms();
     for (const name of Object.keys(shared)) shader.uniforms[name] = shared[name];
     if (shader.fragmentShader.indexOf("uniform float rrCutTop;") >= 0) return;
     shader.fragmentShader = "uniform float rrCutTop;\nuniform vec3 rrCutEye;\nuniform vec3 rrCutFocus;\nuniform float rrCutRadius;\nuniform vec4 rrCutBox;\n" + shader.fragmentShader.replace(
         "#include <map_fragment>",
         [
-            "if (vRRWorldPos.y > rrCutTop && vRRWorldPos.x >= rrCutBox.x && vRRWorldPos.z >= rrCutBox.y && vRRWorldPos.x <= rrCutBox.z && vRRWorldPos.z <= rrCutBox.w) discard;",
+            material.__reactorPieces ? "if (vRRWorldPos.y > rrCutTop && vRRWorldPos.x >= rrCutBox.x && vRRWorldPos.z >= rrCutBox.y && vRRWorldPos.x <= rrCutBox.z && vRRWorldPos.z <= rrCutBox.w) discard;" : "",
             // A wall in the way fades rather than opens: an ordered dither
             // thins it towards the line of sight, which needs no blending
             // and no sorting inside a merged mesh. Floors (anything at or
@@ -8760,7 +8807,7 @@ Reactor3D.litMaterial = function(material) {
     };
     const earlierKey = material.customProgramCacheKey;
     material.customProgramCacheKey = function() {
-        return (typeof earlierKey === "function" ? earlierKey.call(this) : "") + "|reactor3d-lit" + (this.__reactorPieces ? "|cutaway" : "")
+        return (typeof earlierKey === "function" ? earlierKey.call(this) : "") + "|reactor3d-lit" + (this.__reactorPieces ? "|cutaway" : this.__reactorModel ? "|sightline" : "")
             + (Reactor3D.Shadows.active() ? "|shadows" + Reactor3D.Shadows.quality().taps : "");
     };
     return material;
