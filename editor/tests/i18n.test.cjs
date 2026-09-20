@@ -531,7 +531,7 @@ test('every database navigation category has a localized keyed title', () => {
     assert.ok(start>=0);
     const catalog=source.slice(start,source.indexOf('];',start));
     const types=[...catalog.matchAll(/type: '([^']+)'/g)].map(m=>m[1]);
-    assert.equal(types.length,21);
+    assert.equal(types.length,22);
     for(const type of types) {
         const key=dbTypes[type];assert.ok(key,`${type} needs a database title key`);
         for(const {id} of RR_LANGUAGES)assert.ok(RR_I18N_STRINGS[id][key],`${id}: ${type}`);

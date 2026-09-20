@@ -256,16 +256,16 @@ test('the scene lays pieces down per material and can lay them again alone', () 
 
 test('the 3D-B tab is registered everywhere a palette tab has to be, with its strings', () => {
     const palette = read('editor/src/TilesetPaletteViewer.js');
-    assert.match(palette, /createLayerTab\('B', TilesetPaletteViewer\.tabIcon\('pieces'\), '3D-B'\)/, 'the tab');
-    assert.match(palette, /if \(layerName !== 'M' && layerName !== 'T' && layerName !== 'B'\) this\.lastPaintLayer = layerName;/, 'not a paint layer');
-    assert.match(palette, /layerName === 'B' \? 'pieces' : 'paint'/, 'claims the map for its own tool');
-    assert.match(palette, /piecesContainer\.style\.display = layerName === 'B' \? 'flex' : 'none'/, 'shows its container');
-    assert.match(palette, /if \(layerName !== 'B'\) this\.onPiecesTabLeft\?\.\(\);/);
-    assert.match(palette, /\} else if \(layerName === 'B'\) \{[\s\S]*this\.onPiecesTabSelected\?\.\(\);/);
+    assert.match(palette, /createLayerTab\('P', TilesetPaletteViewer\.tabIcon\('pieces'\), '3D-B'\)/, 'the tab, keyed P: B is the tileset sheet');
+    assert.match(palette, /if \(layerName !== 'M' && layerName !== 'T' && layerName !== 'P'\) this\.lastPaintLayer = layerName;/, 'not a paint layer');
+    assert.match(palette, /layerName === 'P' \? 'pieces' : 'paint'/, 'claims the map for its own tool');
+    assert.match(palette, /piecesContainer\.style\.display = layerName === 'P' \? 'flex' : 'none'/, 'shows its container');
+    assert.match(palette, /if \(layerName !== 'P'\) this\.onPiecesTabLeft\?\.\(\);/);
+    assert.match(palette, /\} else if \(layerName === 'P'\) \{[\s\S]*this\.onPiecesTabSelected\?\.\(\);/);
     const main = read('editor/src/main.js');
     assert.match(main, /if \(owner !== 'pieces'\) this\.pieceBuilderManager\?\.deactivate\(\);/, 'another owner puts the tool down');
-    assert.match(main, /owner==='pieces'&&tab\.dataset\.layer==='B'/, 'the tab lights');
-    assert.match(main, /palette\?\.currentLayer === 'B'\) palette\.selectLayer\(palette\.lastPaintLayer \|\| 'A'\)/, 'a drawing button returns to painting');
+    assert.match(main, /owner==='pieces'&&tab\.dataset\.layer==='P'/, 'the tab lights');
+    assert.match(main, /palette\?\.currentLayer === 'P'\) palette\.selectLayer\(palette\.lastPaintLayer \|\| 'A'\)/, 'a drawing button returns to painting');
     assert.match(main, /onPiecesTabSelected = \(\) => \{/);
     assert.match(main, /new PieceBuilderManager\(this\.projectController\)/);
     assert.match(read('editor/index.html'), /src\/PieceBuilderManager\.js/);

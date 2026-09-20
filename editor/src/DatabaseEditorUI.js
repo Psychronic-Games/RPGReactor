@@ -36,6 +36,8 @@ class DatabaseEditorUI {
         this.stateEditor = new DatabaseStateEditor(databaseManager, { getCurrentProject: () => this.currentProject }, this.commonUI, this);
         this.questEditor = typeof DatabaseQuestEditor !== 'undefined'
             ? new DatabaseQuestEditor(databaseManager, { getCurrentProject: () => this.currentProject }, this.commonUI, this) : null;
+        this.structureEditor = typeof DatabaseStructureEditor !== 'undefined'
+            ? new DatabaseStructureEditor(databaseManager, { getCurrentProject: () => this.currentProject }, this.commonUI, this) : null;
         this.musicSequenceEditor = typeof DatabaseMusicSequenceEditor !== 'undefined'
             ? new DatabaseMusicSequenceEditor(databaseManager, { getCurrentProject: () => this.currentProject }, this) : null;
         this.animationEditor = new DatabaseAnimationEditor(databaseManager, { getCurrentProject: () => this.currentProject }, this.commonUI, this);
@@ -293,6 +295,7 @@ class DatabaseEditorUI {
         this.userInterfaceEditor?.detach?.();
         this.reactor3dEditor?._disposePreview?.();
         if (this.reactor3dEditor) this.reactor3dEditor._detail = null;
+        this.structureEditor?.detach?.();
         if (typeof document !== 'undefined') {
             const detail = document.getElementById?.('database-detail');
             if (detail) detail.innerHTML = '';
@@ -650,6 +653,17 @@ class DatabaseEditorUI {
                         ? window.reactor.projectController.refreshMap3DView() : undefined
                 };
                 this.reactor3dEditor.show(detailEl);
+                return;
+            }
+            case 'structures': {
+                // Plans under 3d/Structures: files, not database records, so the page owns its own list.
+                const { detailEl } = this.prepareDatabaseSection('structures', this._dbTitle('structures', 'Structures'), { showListPanel: false });
+                if (!this.structureEditor) return;
+                this.structureEditor.projectController = {
+                    getCurrentProject: () => this.currentProject,
+                    mapEditor3D: this.callbacks.getMapEditor3D ? this.callbacks.getMapEditor3D() : (window.reactor && window.reactor.mapEditor3D)
+                };
+                this.structureEditor.show(detailEl);
                 return;
             }
             case 'system':
@@ -1771,6 +1785,7 @@ class DatabaseEditorUI {
             { name: 'Animations', type: 'animations' },
             { name: 'Tilesets', type: 'tilesets' },
             { name: '3D Models', type: 'reactor3d' },
+            { name: 'Structures', type: 'structures' },
             { name: 'Common Events', type: 'commonEvents' },
             { name: 'User Interfaces', type: 'userInterfaces' },
             { name: 'Action Sequences', type: 'actionSequences' },

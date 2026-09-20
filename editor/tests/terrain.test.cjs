@@ -102,7 +102,7 @@ test('every ground surface and every stander goes through the terrain', () => {
     assert.match(editor3d, /if \(point\) \{ this\.terrainManager\(\)\?\.paintAt\(point\); this\.updateTerrainRing\(point\); \}/);
     assert.match(editor3d, /updateTerrainRing\(point\) \{/);
     assert.match(read('editor/src/main.js'), /owner==='terrain'&&tab\.dataset\.layer==='T'/);
-    assert.match(read('editor/src/TilesetPaletteViewer.js'), /layerName === 'T' \? 'terrain' : layerName === 'B' \? 'pieces' : 'paint'/);
+    assert.match(read('editor/src/TilesetPaletteViewer.js'), /layerName === 'T' \? 'terrain' : layerName === 'P' \? 'pieces' : 'paint'/);
     assert.match(editor3d, /this\.terrainManager\(\)\?\.endStroke\(\);/);
     // The drifting sky keeps the editor rendering, at fractional frames.
     assert.match(editor3d, /if \(sky && \(sky\.driftX \|\| sky\.driftY\)\) return true;/);

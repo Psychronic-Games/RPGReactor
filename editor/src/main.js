@@ -731,7 +731,7 @@ class RPGReactor {
             } else {
                 // A drawing button is an explicit return to painting, even
                 // when the model tab was the last visible palette context.
-                if (palette?.currentLayer === 'M' || palette?.currentLayer === 'T' || palette?.currentLayer === 'B') palette.selectLayer(palette.lastPaintLayer || 'A');
+                if (palette?.currentLayer === 'M' || palette?.currentLayer === 'T' || palette?.currentLayer === 'P') palette.selectLayer(palette.lastPaintLayer || 'A');
                 if (map && !map.currentTool && !map.shadowPenMode) map.setTool('pencil');
                 this.projectController?.getRegionManager?.()?.setVisible(palette?.currentLayer === 'R');
                 this.projectController?.getObject3DManager?.()?.setVisible(palette?.currentLayer === 'O');
@@ -753,7 +753,7 @@ class RPGReactor {
             button.classList.toggle('active',active);button.setAttribute('aria-pressed',String(active));
         });
         document.querySelectorAll('.tileset-layer-tab').forEach(tab=>{
-            const active=tab.dataset.layer===this.tilesetPaletteViewer?.currentLayer && (owner==='paint'||owner==='models'&&tab.dataset.layer==='M'||owner==='terrain'&&tab.dataset.layer==='T'||owner==='pieces'&&tab.dataset.layer==='B');
+            const active=tab.dataset.layer===this.tilesetPaletteViewer?.currentLayer && (owner==='paint'||owner==='models'&&tab.dataset.layer==='M'||owner==='terrain'&&tab.dataset.layer==='T'||owner==='pieces'&&tab.dataset.layer==='P');
             tab.classList.toggle('active',active);tab.setAttribute('aria-selected',String(active));
             tab.style.backgroundColor=active?'var(--color-bg-hover)':'var(--color-bg-menubar)';
             tab.style.borderColor=active?'var(--color-accent)':'var(--color-border-input)';
