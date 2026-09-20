@@ -44,6 +44,7 @@ class DatabaseStructureEditor {
         this._preview = null;
         this._previewTimer = null;
         this._hover = null;
+        this._shape = { kind: 'tower', size: [4, 6, 4] };
         this._redraw = 0;
         this._reportStale = false;
         this._picker = null;
@@ -84,6 +85,7 @@ class DatabaseStructureEditor {
             dome: `<path d="M2 12a6 6 0 0 1 12 0M2 12h12v2H2z" ${stroke}/>`,
             cylinder: `<path d="M3.5 4a4.5 1.5 0 0 0 9 0a4.5 1.5 0 0 0-9 0M3.5 4v8a4.5 1.5 0 0 0 9 0V4" ${stroke}/>`,
             cone: `<path d="M8 2l5.5 11h-11z M2.5 13a5.5 1.3 0 0 0 11 0" ${stroke}/>`,
+            tower: `<path d="M4 7a4 4 0 0 1 8 0M4 7v6.5a4 1.2 0 0 0 8 0V7" ${stroke}/>`,
             north: `<path d="M8 13V3M4 7l4-4 4 4" ${stroke}/>`,
             south: `<path d="M8 3v10M4 9l4 4 4-4" ${stroke}/>`,
             west: `<path d="M13 8H3M7 4L3 8l4 4" ${stroke}/>`,
@@ -548,8 +550,10 @@ class DatabaseStructureEditor {
                 if (name === 'redo') return this.redo();
                 if (name === 'remove') return this.removeSelection();
                 this.tool = name;
+                this.selection = null;
                 this.renderTools();
                 this.renderInspector();
+                this.requestPlanRedraw();
             });
         }
     }
@@ -654,6 +658,14 @@ class DatabaseStructureEditor {
                 ${this._field(tt('Who'), this._selectHtml('rr-structures-person', [['', tt('Nobody')], ['blank', tt('Blank event')]].concat(templates.map(name => [name, name])), event ? (event.template || 'blank') : '', 'style="width:120px;"'))}
                 ${event ? this._field(tt('Name'), `<input type="text" class="database-field-value rr-structures-person-name" value="${rrEscapeHtml(event.name)}" style="width:110px;">`) : ''}
                 ${event ? this._field(tt('Facing'), facingArrows('rr-structures-person-facing', event.direction)) : ''}`;
+        } else if (this.tool === 'shape' && floor) {
+            const pending = this._shape;
+            const kinds = `<span style="display:inline-flex;gap:2px;">${['tower', ...DatabaseStructureEditor.SHAPE_KINDS].map(kind => `<button type="button" class="rr-btn-secondary rr-structures-next-kind" data-kind="${kind}" title="${rrEscapeHtml(tt(kind === 'tower' ? 'Tower' : kind === 'dome' ? 'Dome' : kind === 'cylinder' ? 'Cylinder' : 'Cone'))}" aria-pressed="${kind === pending.kind}" style="width:26px;height:26px;padding:0;display:flex;align-items:center;justify-content:center;${kind === pending.kind ? 'border-color:var(--color-accent);' : ''}">${DatabaseStructureEditor.icon(kind)}</button>`).join('')}</span>`;
+            const num = (i, min, max, step) => `<input type="number" class="database-field-value rr-structures-next-size" data-i="${i}" value="${pending.size[i]}" min="${min}" max="${max}" step="${step}" style="width:52px;">`;
+            html = `${kindLabel(tt('Shape'))}
+                ${this._field(tt('Kind'), kinds)}
+                ${this._field(tt('Size'), `${num(0, 0.5, 60, 0.5)}<span>×</span>${num(1, 0.25, 60, 0.25)}<span>×</span>${num(2, 0.5, 60, 0.5)}`)}
+                <span style="color:var(--color-text-muted);">${tt('Click the plan to place it. A tower is a cylinder with a dome on top.')}</span>`;
         } else {
             const hints = {
                 select: tt('Click anything on the plan to select it, drag to move it. Delete removes it.'),
@@ -698,6 +710,8 @@ class DatabaseStructureEditor {
         box.querySelector('.rr-structures-door-width')?.addEventListener('change', event => { this.pushHistory(); floor.doors[sel.key][2] = number(event.target, 1, 12); this.markDirty(); });
         for (const button of box.querySelectorAll('.rr-structures-stair-dir')) button.addEventListener('click', () => { this.pushHistory(); plan.stairs[sel.key].dir = button.dataset.dir; this.markDirty(); this.renderInspector(); });
         box.querySelector('.rr-structures-stair-width')?.addEventListener('change', event => { this.pushHistory(); plan.stairs[sel.key].width = number(event.target, 1, 8); this.markDirty(); });
+        for (const button of box.querySelectorAll('.rr-structures-next-kind')) button.addEventListener('click', () => { this._shape.kind = button.dataset.kind; this.renderInspector(); });
+        for (const input of box.querySelectorAll('.rr-structures-next-size')) input.addEventListener('change', () => { const v = Number(input.value); this._shape.size[Number(input.dataset.i)] = Number.isFinite(v) && v > 0 ? Math.min(60, v) : 1; });
         for (const button of box.querySelectorAll('.rr-structures-shape-kind')) button.addEventListener('click', () => { this.pushHistory(); plan.shapes[sel.key].kind = button.dataset.kind; this.markDirty(); this.renderInspector(); });
         for (const input of box.querySelectorAll('.rr-structures-shape-size')) input.addEventListener('change', () => { this.pushHistory(); const v = Number(input.value); plan.shapes[sel.key].size[Number(input.dataset.i)] = Number.isFinite(v) && v > 0 ? Math.min(60, v) : 1; this.markDirty(); });
         box.querySelector('.rr-structures-shape-z')?.addEventListener('change', event => { this.pushHistory(); plan.shapes[sel.key].z = Math.max(0, Math.min(120, Math.floor(Number(event.target.value)) || 0)); this.markDirty(); });
@@ -751,7 +765,7 @@ class DatabaseStructureEditor {
         this.renderMore();
     }
 
-    /** The numbers, behind one fold: materials, storey, roof, windows, parts and paths. */
+    /** What is not drawn: the materials, the building's numbers, and the parts of a plan of plans, each behind its own fold. */
     renderMore() {
         const more = this._detail?.querySelector('.rr-structures-more');
         if (!more || !this.current) return;
@@ -761,8 +775,13 @@ class DatabaseStructureEditor {
         const roleLabels = { wall: tt('Wall'), inner: tt('Inner wall'), floor: tt('Floor'), wet: tt('Wet floor'), roof: tt('Roof'), stair: tt('Stair'), path: tt('Path') };
         const styleNames = Object.keys(DatabaseStructureEditor.STYLES);
         const otherPlans = this.records().filter(entry => entry !== this.current.entry).map(entry => [entry.file || entry.name, entry.name]);
-        const open = !!this._open.more;
-        const row = (...fields) => `<div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:4px 0;">${fields.join('')}</div>`;
+        const fold = (key, title, count, body) => {
+            const open = !!this._open[key];
+            const badge = !open && count ? ` <span style="font-weight:normal;text-transform:none;color:var(--color-text-muted);">(${count})</span>` : '';
+            return `<div class="sidebar-header rr-structures-fold" data-fold="${key}" style="display:flex;align-items:center;gap:8px;"><span style="flex:0 0 12px;font-size:10px;color:var(--color-text-muted);">${open ? '▾' : '▸'}</span><span style="flex:1;">${title}${badge}</span></div>
+                <div class="database-section-content" style="${open ? '' : 'display:none;'}padding:8px 10px 10px;">${body}</div>`;
+        };
+        const row = (...fields) => `<div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">${fields.join('')}</div>`;
         const rows = (kind, header, body, empty) => `
             <div class="rr-structures-rows" data-rows="${kind}" style="display:grid;grid-template-columns:${header.cols};gap:4px 8px;align-items:center;font-size:11px;">
                 ${header.labels.map(label => `<span style="color:var(--color-text-muted);">${label}</span>`).join('')}<span></span>
@@ -784,25 +803,18 @@ class DatabaseStructureEditor {
             ${[0, 1, 2, 3].map(i => this._numberHtml('rr-structures-path', strip[i], `data-index="${index}" data-i="${i}" min="0" max="${DatabaseStructureEditor.SIZE_MAX}"`)).join('')}
             ${this._selectHtml('rr-structures-path', [['', tt('Path material')]].concat(materialNames.map(name => [name, name])), strip[4] || '', `data-index="${index}" data-i="4"`)}
             ${remove('paths', index)}`).join('');
-        more.innerHTML = `
-            <div class="sidebar-header rr-structures-fold" style="display:flex;align-items:center;gap:8px;"><span style="flex:0 0 12px;font-size:10px;color:var(--color-text-muted);">${open ? '▾' : '▸'}</span><span style="flex:1;">${tt('More')}</span><span style="font-weight:normal;text-transform:none;color:var(--color-text-muted);font-size:11px;">${tt('Materials, roof, windows, parts')}</span></div>
-            <div class="database-section-content" style="${open ? '' : 'display:none;'}padding:6px 10px 10px;">
-                ${row(...['wall', 'inner', 'floor', 'wet'].map(materialField))}
-                ${row(...['roof', 'stair', 'path'].map(materialField))}
-                ${row(
-                    this._field(tt('Storey (tiles)'), this._numberHtml('rr-structures-field', plan.storey, 'data-path="storey" min="3" max="12"')),
-                    this._field(tt('Roof pitch (rows)'), this._numberHtml('rr-structures-field', plan.roof.pitch, 'data-path="roof.pitch" min="0" max="20"')),
-                    this._field(tt('A window every (cells)'), this._numberHtml('rr-structures-field', plan.windows.every, 'data-path="windows.every" min="0" max="60"')),
-                    this._field(tt('Window width'), this._numberHtml('rr-structures-field', plan.windows.width, 'data-path="windows.width" min="1" max="8"'))
-                )}
-                <div style="font-size:11px;color:var(--color-text-muted);">${tt('Any tileable image under img/materials is a material.')} ${tt('A window every 0 cells means only the windows you place.')}</div>
-                <div class="database-field-label" style="font-size:11px;margin-top:10px;">${tt('Parts and paths')}</div>
-                <div style="font-size:11px;color:var(--color-text-muted);margin-bottom:6px;">${tt('A plan can be made of other plans: a hamlet is cottages at corners, turned in quarter turns, with paved paths between.')}</div>
+        more.innerHTML = fold('materials', tt('Materials'), null, row(...DatabaseStructureEditor.MATERIAL_ROLES.map(materialField)))
+            + fold('building', tt('Building'), null, row(
+                this._field(tt('Storey (tiles)'), this._numberHtml('rr-structures-field', plan.storey, 'data-path="storey" min="3" max="12"')),
+                this._field(tt('Roof pitch (rows)'), this._numberHtml('rr-structures-field', plan.roof.pitch, 'data-path="roof.pitch" min="0" max="20"')),
+                this._field(tt('A window every (cells)'), this._numberHtml('rr-structures-field', plan.windows.every, 'data-path="windows.every" min="0" max="60"')),
+                this._field(tt('Window width'), this._numberHtml('rr-structures-field', plan.windows.width, 'data-path="windows.width" min="1" max="8"'))))
+            + fold('parts', tt('Parts'), plan.parts.length + plan.paths.length, `
+                <div style="font-size:11px;color:var(--color-text-muted);margin-bottom:6px;">${tt('Other plans placed on this one, and paved paths between them.')}</div>
                 ${rows('parts', { cols: 'minmax(70px,1fr) minmax(90px,1fr) 52px 52px 52px minmax(90px,1fr) 28px', labels: [tt('Part'), tt('Plan'), 'x', 'y', tt('Turn'), tt('Style')] }, partsBody, tt('No parts.'))}
                 <div style="margin:4px 0 10px;">${add('parts')}</div>
                 ${rows('paths', { cols: '52px 52px 52px 52px minmax(90px,1fr) 28px', labels: ['x0', 'y0', 'x1', 'y1', tt('Material')] }, pathsBody, tt('No paths.'))}
-                <div style="margin-top:4px;">${add('paths')}</div>
-            </div>`;
+                <div style="margin-top:4px;">${add('paths')}</div>`);
         this.bindMore(more);
     }
 
@@ -810,7 +822,7 @@ class DatabaseStructureEditor {
         const plan = this.current.plan;
         const materialNames = this.materials();
         const number = (input, min, max) => Math.max(min, Math.min(max, Math.floor(Number(input.value)) || 0));
-        more.querySelector('.rr-structures-fold').addEventListener('click', () => { this._open.more = !this._open.more; this.renderMore(); });
+        for (const header of more.querySelectorAll('.rr-structures-fold')) header.addEventListener('click', () => { const key = header.dataset.fold; this._open[key] = !this._open[key]; this.renderMore(); });
         for (const button of more.querySelectorAll('.rr-structures-material')) {
             button.addEventListener('click', () => this.openMaterialPicker(button, name => { this.pushHistory(); plan.materials[button.dataset.role] = name; this.markDirty(); this.renderBar(); this.renderMore(); }));
         }
@@ -852,7 +864,7 @@ class DatabaseStructureEditor {
                 this.pushHistory();
                 if (button.dataset.rows === 'parts') plan.parts.push({ name: DatabaseStructureEditor.freshName(plan.parts.map(part => part.name), this._t('part')), plan: '', at: [0, 0], rot: 0, scale: 1, materials: {} });
                 else plan.paths.push([0, 0, 0, 0]);
-                this._open.more = true;
+                this._open.parts = true;
                 this.markDirty(); this.renderMore();
             });
         }
@@ -1077,9 +1089,17 @@ class DatabaseStructureEditor {
             else this.selection = null;
         } else if (this.tool === 'shape') {
             this.pushHistory();
-            const last = plan.shapes[plan.shapes.length - 1];
-            plan.shapes.push({ kind: last ? last.kind : 'dome', at: [cell.x, cell.y], z: 0, size: last ? last.size.slice() : [3, 2, 3], angle: 0, material: last ? last.material : '' });
-            this.selection = { kind: 'shape', key: plan.shapes.length - 1 };
+            const { kind, size } = this._shape;
+            const [w, h, d] = size;
+            if (kind === 'tower') {
+                // A cylinder with a dome on top: the dome half as tall as it is wide, wearing the roof's material.
+                plan.shapes.push({ kind: 'cylinder', at: [cell.x, cell.y], z: 0, size: [w, h, d], angle: 0, material: '' });
+                plan.shapes.push({ kind: 'dome', at: [cell.x, cell.y], z: Math.round(h * 4) / 4, size: [w, Math.round(w * 2) / 4, d], angle: 0, material: plan.materials.roof || '' });
+                this.selection = { kind: 'shape', key: plan.shapes.length - 2 };
+            } else {
+                plan.shapes.push({ kind, at: [cell.x, cell.y], z: 0, size: [w, h, d], angle: 0, material: '' });
+                this.selection = { kind: 'shape', key: plan.shapes.length - 1 };
+            }
             this.markDirty();
         } else if (this.tool === 'person') {
             this.pushHistory();

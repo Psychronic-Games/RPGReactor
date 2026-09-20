@@ -314,10 +314,23 @@ test('shapes on a plan: placed at a size and a turn, drawn, moved, turned with t
     editor.current = { entry: { id: 1, name: 'T', file: 'T.json', plan }, plan };
     editor._planGeom = { ox: 0, oy: 0, cell: 10 };
     editor.tool = 'shape';
+    editor._shape = { kind: 'dome', size: [5, 2.5, 5] };
     // (3,12) would be inside the hall's front door, which cuts through every wall row down to the ring; place clear of it.
     editor.beginPlanGesture({ x: 14, y: 3 }); editor.endPlanGesture({ x: 14, y: 3 });
     assert.equal(plan.shapes.length, 3);
-    assert.equal(JSON.stringify(plan.shapes[2]), JSON.stringify({ kind: 'dome', at: [14, 3], z: 0, size: [5, 2.5, 5], angle: 0, material: 'RoofTile' }), 'a new shape takes after the last one placed');
+    assert.equal(JSON.stringify(plan.shapes[2]), JSON.stringify({ kind: 'dome', at: [14, 3], z: 0, size: [5, 2.5, 5], angle: 0, material: '' }), 'a new shape is what the tool says');
+    // A tower is a cylinder with a dome on top, in one click, the dome in the roof's material.
+    plan.materials.roof = 'RoofTile';
+    editor._shape = { kind: 'tower', size: [4, 6, 4] };
+    editor.beginPlanGesture({ x: 3, y: 14 }); editor.endPlanGesture({ x: 3, y: 14 });
+    assert.equal(plan.shapes.length, 5);
+    assert.equal(JSON.stringify(plan.shapes[3]), JSON.stringify({ kind: 'cylinder', at: [3, 14], z: 0, size: [4, 6, 4], angle: 0, material: '' }));
+    assert.equal(JSON.stringify(plan.shapes[4]), JSON.stringify({ kind: 'dome', at: [3, 14], z: 6, size: [4, 2, 4], angle: 0, material: 'RoofTile' }));
+    assert.deepEqual({ ...editor.selection }, { kind: 'shape', key: 3 }, 'the cylinder is selected');
+    editor.removeSelection();
+    plan.shapes.splice(3, 1);
+    assert.equal(plan.shapes.length, 3, 'the tower is gone again');
+    editor.selection = { kind: 'shape', key: 2 };
     assert.deepEqual({ ...editor.selection }, { kind: 'shape', key: 2 });
     editor.tool = 'select';
     assert.deepEqual({ ...editor.hitAt(12, 12) }, { kind: 'shape', key: 1 }, 'the topmost shape under the cell is the one picked');
