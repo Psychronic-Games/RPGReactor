@@ -44,6 +44,8 @@ Development cycle in progress. Session detail lives in the [handoff](docs/HANDOF
 
 ### Fixed
 
+- **Delete with an event picked in the events column deleted the map.** The key only counted an event in event mode; an event picked in the column while painting tiles or building in 3D fell through to the map tree's selected map. A selected event now takes the key in any mode, unless the map tree itself has the focus.
+
 - **A tower keeps its top.** Pieces could stand no higher than level 30, so a plan past six storeys lost its upper floors and roof to the store's clamp without a word. The cap is 120 levels, twenty-four storeys, in the game and the editor alike, and the walk report tells same-named rooms on different floors apart.
 - **The 3D Models list is titled like every other section.**
 - **The 3D-B tab no longer lights the tileset's B sheet.** The pieces tab was keyed by the same letter as the tileset's second sheet, so picking either lit both, claimed the pieces tool, and showed sheet B while a building was being laid. The pieces tab has its own key now.

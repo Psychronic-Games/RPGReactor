@@ -795,14 +795,18 @@ class UIManager {
 
                 if (!isTextInput && !eventEditorOpen && this.callbacks.getEventManager) {
                     const eventManager = this.callbacks.getEventManager();
-                    if (eventManager && eventManager.eventMode && eventManager.selectedEvent) {
+                    // A selected event takes the key, whether it was picked on the map in event
+                    // mode or in the events column in any mode, unless the map tree itself has
+                    // the focus; the map (a confirmed, heavier deletion) only otherwise.
+                    const inMapTree = !!(activeElement && activeElement.closest && activeElement.closest('#maps-list, #quick-access-list'));
+                    if (eventManager && eventManager.selectedEvent && !inMapTree) {
                         e.preventDefault();
                         eventManager.deleteEvent(eventManager.selectedEvent);
                         return;
                     }
 
                     const selectedMap = document.querySelector('#maps-list .tree-item.selected[data-map-id], #quick-access-list .tree-item.selected[data-map-id]');
-                    if ((!eventManager || !eventManager.eventMode) && selectedMap && window.reactor?.projectController?.deleteMap) {
+                    if ((inMapTree || !(eventManager && eventManager.selectedEvent)) && selectedMap && window.reactor?.projectController?.deleteMap) {
                         e.preventDefault();
                         window.reactor.projectController.deleteMap(parseInt(selectedMap.getAttribute('data-map-id'), 10));
                     }
