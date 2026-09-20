@@ -243,3 +243,22 @@ test('the sky keeps its drift across a rebuild', () => {
     next.setSkyOffset(null);
     assert.equal(next._sky.material.map.offset.y, 0.1);
 });
+
+test('water fills a hollow: it rises from the low point until it would spill, and a refill replaces the sheet', () => {
+    const E = loadElevation ? loadElevation() : null;
+    const ME = E || (() => { const ctx = { module: { exports: {} }, window: {}, console }; ctx.globalThis = ctx; vm.runInNewContext(fs.readFileSync(path.resolve(__dirname, '..', 'src', 'utils', 'MapElevation.js'), 'utf8'), ctx); return ctx.module.exports; })();
+    const W = 20, H = 20;
+    const map = { width: W, height: H, reactor3d: { version: 1, elevation: new Array(W * H).fill(0) } };
+    ME.ensureTerrain(map);
+    const grid = ME.terrain(map);
+    for (let y = 0; y <= H; y++) for (let x = 0; x <= W; x++) grid[y * (W + 1) + x] = Math.hypot(x - 10, y - 10) < 4 ? -2 : 0;
+    const basin = ME.waterBasin(map, 10, 10);
+    assert.ok(basin, 'a hollow');
+    assert.equal(basin.level, 0, 'the water stands at the rim');
+    assert.ok(basin.x0 >= 5 && basin.x1 <= 14 && basin.cells > 20, 'over the hollow, not the map');
+    assert.equal(ME.waterBasin(map, 0, 0), null, 'flat ground at the edge holds no water');
+    assert.ok(ME.fillWaterAt(map, 10, 10, 'Water'));
+    assert.equal(ME.water(map).length, 1);
+    ME.fillWaterAt(map, 11, 10, 'Water');
+    assert.equal(ME.water(map).length, 1, 'filling the same hollow again replaces its sheet rather than stacking one on top');
+});

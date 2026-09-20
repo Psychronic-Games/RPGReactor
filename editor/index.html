@@ -201,6 +201,7 @@
             <button class="tool-button" data-action="audio-player" title="Audio Player" data-i18n-title="toolbar.title.audioPlayer"><img src="images/icon-speaker.svg" alt="" onerror="this.style.display='none'; this.parentElement.innerHTML='♪';"></button>
             <button class="tool-button" data-action="lighting-tool" title="Lighting Tool" data-i18n-title="toolbar.title.lighting"><img src="images/icon-lighting.svg" alt="" onerror="this.style.display='none'; this.parentElement.innerHTML='LT';"></button>
             <button class="tool-button" data-action="media-surfaces" title="Media Surfaces" aria-label="Media Surfaces"><img src="images/icon-media-surfaces.svg" alt=""></button>
+            <button class="tool-button" data-action="build-tool" title="Build in the world: pieces, shapes, screens and lights" data-i18n-title="toolbar.title.build"><img src="images/icon-build.svg" alt="" onerror="this.style.display='none'; this.parentElement.innerHTML='BD';"></button>
 
             <!-- Forge Section -->
             <div class="toolbar-separator"></div>
@@ -317,10 +318,6 @@
                                 <label class="map-info-item map-3d-view" title="Show the map in 3D" data-i18n-title="toolbar.title.map3DView">
                                     <input id="map-3d-view" type="checkbox" aria-label="Show the map in 3D" data-i18n-aria="toolbar.title.map3DView">
                                     <span>3D</span>
-                                </label>
-                                <label class="map-info-item map-build" title="Build in the world: pieces, shapes, screens and lights" data-i18n-title="toolbar.title.build">
-                                    <input id="map-build" type="checkbox" aria-label="Build in the world" data-i18n-aria="toolbar.title.build">
-                                    <span data-i18n="workspace.build">Build</span>
                                 </label>
                                 <label class="map-info-item map-video-previews" title="Show media surface previews" data-i18n-title="toolbar.title.videoPreviews">
                                     <input id="map-video-previews" type="checkbox" checked aria-label="Show media surface previews" data-i18n-aria="toolbar.title.videoPreviews">
@@ -1112,6 +1109,7 @@
     <script src="src/utils/PoseRings3D.js"></script>
     <script src="src/Object3DManager.js"></script>
     <script src="src/utils/AxisArrows3D.js"></script>
+    <script src="src/utils/ShapeGizmo3D.js"></script>
     <script src="src/utils/ModelPropEffects2D.js"></script>
     <script src="src/utils/FlatLightField2D.js"></script>
     <script src="src/utils/ModelPropShadows2D.js"></script>

@@ -702,19 +702,23 @@
         const list = pieces(mapData);
         const next = normalizePiece(Object.assign({}, values, { id: 0 }), mapData);
         if (!next) return 0;
-        const at = list.findIndex(piece => piece.x === next.x && piece.y === next.y && piece.z === next.z);
+        // A floor slab is the ground under whatever stands on its cell: it keeps its slot beside a wall
+        // or a block at the same level, and only another slab replaces it.
+        const at = list.findIndex(piece => piece.x === next.x && piece.y === next.y && piece.z === next.z && (piece.kind === 'floor') === (next.kind === 'floor'));
         const same = at >= 0 && list[at].kind === next.kind && list[at].rot === next.rot && list[at].material === next.material;
         if (same) return list[at].id;
         next.id = at >= 0 ? list[at].id : list.reduce((max, piece) => Math.max(max, piece.id), 0) + 1;
         if (at >= 0) list[at] = next; else list.push(next);
         return writePieces(mapData, list) ? next.id : 0;
     };
+    /** Take one piece off a cell at a level: what stands on the slab first, the slab itself only when nothing does. */
     const removePiece = (mapData, x, y, z) => {
         if (!mapData) return false;
         const list = pieces(mapData);
-        const kept = list.filter(piece => !(piece.x === x && piece.y === y && piece.z === z));
-        if (kept.length === list.length) return false;
-        return writePieces(mapData, kept);
+        const here = list.filter(piece => piece.x === x && piece.y === y && piece.z === z);
+        if (!here.length) return false;
+        const gone = here.find(piece => piece.kind !== 'floor') || here[0];
+        return writePieces(mapData, list.filter(piece => piece !== gone));
     };
     const piecesSnapshot = mapData => pieces(mapData);
     const restorePieces = (mapData, saved) => writePieces(mapData, Array.isArray(saved) ? saved.map(raw => normalizePiece(raw, mapData)).filter(Boolean) : []);
@@ -900,13 +904,57 @@
         if (kept.length === list.length) return false;
         return writeWater(mapData, kept);
     };
+    /**
+     * The basin under a cell: the water rises from that cell's ground a
+     * quarter tile at a time, spreading to every neighbour lower than it,
+     * until the next rise would spill over the map's edge or flood more
+     * than `maxCells`. The sheet is the basin's box at the last level that
+     * held. Null when the cell is not in a hollow (the water would run
+     * off at the first rise).
+     */
+    const waterBasin = (mapData, x, y, maxCells = 6000) => {
+        if (!mapData || !hasTerrain(mapData)) return null;
+        const W = mapData.width, H = mapData.height;
+        const ground = (cx, cy) => terrainHeightAt(mapData, cx + 0.5, cy + 0.5) + (Number(at(mapData, cx, cy)) || 0);
+        const start = ground(x, y);
+        let held = null;
+        for (let step = 1; step <= 60; step++) {
+            const level = Math.round((start + step * 0.25) * 100) / 100;
+            const seen = new Set([y * W + x]);
+            const queue = [[x, y]];
+            let leaks = false, x0 = x, y0 = y, x1 = x, y1 = y;
+            while (queue.length && !leaks) {
+                const [cx, cy] = queue.shift();
+                for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+                    const nx = cx + dx, ny = cy + dy;
+                    if (nx < 0 || ny < 0 || nx >= W || ny >= H) { leaks = true; break; }
+                    const key = ny * W + nx;
+                    if (seen.has(key) || ground(nx, ny) >= level - 0.05) continue;
+                    seen.add(key); queue.push([nx, ny]);
+                    x0 = Math.min(x0, nx); y0 = Math.min(y0, ny); x1 = Math.max(x1, nx); y1 = Math.max(y1, ny);
+                    if (seen.size > maxCells) { leaks = true; break; }
+                }
+            }
+            if (leaks) break;
+            held = { x0, y0, x1, y1, level, cells: seen.size };
+        }
+        return held;
+    };
+    /** Fill the basin under a cell: one sheet at the level it holds, any sheet it overlaps taken away. */
+    const fillWaterAt = (mapData, x, y, material) => {
+        const basin = waterBasin(mapData, x, y);
+        if (!basin) return null;
+        const kept = water(mapData).filter(region => region.x1 < basin.x0 || region.x0 > basin.x1 || region.y1 < basin.y0 || region.y0 > basin.y1);
+        const sheet = { x0: basin.x0, y0: basin.y0, x1: basin.x1, y1: basin.y1, level: basin.level, material: material || '' };
+        return writeWater(mapData, kept.concat([normalizeWater(sheet, mapData)])) ? sheet : null;
+    };
     const waterSnapshot = mapData => water(mapData);
     const restoreWater = (mapData, saved) => writeWater(mapData, Array.isArray(saved) ? saved.map(raw => normalizeWater(raw, mapData)).filter(Boolean) : []);
     /** Every material the map's pieces wear, each once. */
     const pieceMaterials = mapData => Array.from(new Set(pieces(mapData).map(piece => piece.material).concat(water(mapData).map(region => region.material)).filter(Boolean))).sort();
 
     const api = {
-        WATER_MAX_LEVEL, normalizeWater, water, hasWater, addWater, removeWaterAt, waterSnapshot, restoreWater,
+        WATER_MAX_LEVEL, normalizeWater, water, hasWater, addWater, removeWaterAt, waterBasin, fillWaterAt, waterSnapshot, restoreWater,
         PIECE_KINDS, SHAPE_KINDS, SHAPE_PARAMS, PIECE_MAX_LEVEL, normalizePiece, pieces, hasPieces, pieceAt, setPiece, removePiece,
         piecesSnapshot, restorePieces, clearPieces, pieceMaterials,
         nextPieceGroup, pieceGroup, pieceGroupBounds, pieceGroupAt, groupConnectedPieces, movePieceGroup, removePieceGroup, rotatePieceGroup,

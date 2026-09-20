@@ -376,11 +376,6 @@ class RPGReactor {
             this.projectController.rememberMap3DView(
                 this.projectController.tilemapManager?.currentMap?.id, active);
         });
-        // Build: the hammer in the toolbar opens the bar over the 3D view and takes the map tool.
-        document.getElementById('map-build')?.addEventListener('change', (event) => {
-            if (!this.buildHotbar) { event.currentTarget.checked = false; return; }
-            if (event.currentTarget.checked) this.buildHotbar.show(); else this.buildHotbar.hide();
-        });
         document.getElementById('map-video-previews')?.addEventListener('change', (event) => {
             this.optionsManager.setShowVideoPreviews(event.currentTarget.checked);
             this.mediaSurfacePreviewManager?.setEnabled(event.currentTarget.checked);
@@ -756,7 +751,7 @@ class RPGReactor {
 
     syncMapToolButtons() {
         const owner = this.mapTool, map = this.mapEditor;
-        for (const [selector,tool] of [['#toolbar-event-manager-btn','events'],['[data-action="media-surfaces"]','media'],['[data-action="lighting-tool"]','lighting']]) {
+        for (const [selector,tool] of [['#toolbar-event-manager-btn','events'],['[data-action="media-surfaces"]','media'],['[data-action="lighting-tool"]','lighting'],['[data-action="build-tool"]','pieces']]) {
             const button=document.querySelector(selector);button?.classList.toggle('active',owner===tool);button?.setAttribute('aria-pressed',String(owner===tool));
         }
         document.querySelectorAll('.tool-draw-mode').forEach(button=>{

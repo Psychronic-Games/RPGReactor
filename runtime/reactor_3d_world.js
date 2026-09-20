@@ -219,7 +219,9 @@ Reactor3D.HOLLOW_KINDS = ["tube", "ring", "arch", "tunnel"];
 /** A shape's middle on the ground: its cell's middle plus its offset, in tiles. */
 Reactor3D.shapeCentre = function(piece) {
     const o = Array.isArray(piece.offset) ? piece.offset : [0, 0];
-    return [piece.x + 0.5 + (Number(o[0]) || 0), piece.y + 0.5 + (Number(o[1]) || 0)];
+    // A stand-in on another cell of the footprint remembers the cell the shape stands on.
+    const ax = Array.isArray(piece.anchor) ? piece.anchor[0] : piece.x, ay = Array.isArray(piece.anchor) ? piece.anchor[1] : piece.y;
+    return [ax + 0.5 + (Number(o[0]) || 0), ay + 0.5 + (Number(o[1]) || 0)];
 };
 /** Whether a shape is turned off the vertical (a tilt or a roll). */
 Reactor3D.shapeTurned = function(piece) {
@@ -420,7 +422,7 @@ Reactor3D.pieceIndex = function(mapData) {
             const key = fy * 65536 + fx;
             let stack = cells.get(key);
             if (!stack) cells.set(key, stack = []);
-            stack.push(fx === piece.x && fy === piece.y ? piece : Object.assign({}, piece, { x: fx, y: fy, standIn: true }));
+            stack.push(fx === piece.x && fy === piece.y ? piece : Object.assign({}, piece, { x: fx, y: fy, standIn: true, anchor: [piece.x, piece.y] }));
         }
     }
     // Each cell's stack from the ground up, which is the order the surface
@@ -486,6 +488,17 @@ Reactor3D.pieceTop = function(piece, u, v) {
         case "doorway": return piece.z;
         default:
             if (this.isShapeKind(piece.kind)) {
+                // A wedge is a ramp: its top rises along its own +v, so a long low wedge is a
+                // slope walked in steps under the limit.
+                if (piece.kind === "wedge" && !this.shapeTurned(piece)) {
+                    const [w, h, d] = this.shapeSize(piece);
+                    const [cx, cz] = this.shapeCentre(piece);
+                    const angle = -((Number(piece.angle) || 0) + (Number(piece.rot) || 0) * 90) * Math.PI / 180;
+                    const px = (piece.x + (Number.isFinite(u) ? u : 0.5)) - cx, pz = (piece.y + (Number.isFinite(v) ? v : 0.5)) - cz;
+                    const lv = px * Math.sin(angle) + pz * Math.cos(angle);
+                    const t = Math.max(0, Math.min(1, lv / d + 0.5));
+                    return piece.z + h * t;
+                }
                 if (!this.shapeTurned(piece)) return piece.z + this.shapeSize(piece)[1];
                 const at = this.shapePlacer(piece, 0);
                 let top = -Infinity;

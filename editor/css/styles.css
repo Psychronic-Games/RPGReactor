@@ -3658,6 +3658,35 @@
             overflow-x: auto;
         }
         .rr-build-context:empty { display: none; }
+        .rr-build-panel {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            bottom: 96px;
+            width: 232px;
+            z-index: 7;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            padding: 10px 12px;
+            border-radius: 12px;
+            background-color: rgba(10, 12, 16, 0.82);
+            border: 1px solid var(--color-border);
+            overflow-y: auto;
+            font-size: 11px;
+            color: var(--color-text);
+        }
+        .rr-build-panel-head { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--color-text-strong); padding-bottom: 6px; border-bottom: 1px solid var(--color-border); }
+        .rr-build-section { display: flex; flex-direction: column; gap: 5px; }
+        .rr-build-section-title { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--color-text-muted); }
+        .rr-build-field { display: grid; grid-template-columns: 1fr 74px; align-items: center; gap: 6px; color: var(--color-text-muted); }
+        .rr-build-field input { width: 100%; box-sizing: border-box; }
+        .rr-build-swatches { display: flex; flex-wrap: wrap; gap: 4px; }
+        .rr-build-facing { display: flex; align-items: center; gap: 4px; }
+        .rr-build-facing .rr-build-chip { width: 34px; justify-content: center; font-size: 14px; }
+        .rr-build-modes { display: flex; gap: 4px; margin-bottom: 4px; }
+        .rr-build-wrap { white-space: normal; line-height: 1.4; padding: 0; }
+        .rr-build-remove { margin-top: 4px; }
         .rr-build-slot {
             position: relative;
             display: flex;

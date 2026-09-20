@@ -1731,17 +1731,97 @@ class MapEditor3D {
         };
     }
 
+    /** A press on the selected shape's handle, if any. */
+    grabShapeGizmo(clientX, clientY) {
+        const manager = this.pieceManager(), piece = manager && manager.selectedPiece();
+        if (!piece || !this.shapeGizmo || !manager.isShape(piece.kind) || typeof RRShapeGizmo3D === 'undefined') return null;
+        return RRShapeGizmo3D.grab(this.shapeGizmo, this.camera, this.canvas.getBoundingClientRect(), clientX, clientY, manager.gizmoMode, this.shapeView(piece));
+    }
+
+    /** The selected shape as the handles see it: its corners in the world, its size and turns. */
+    shapeView(piece) {
+        const mapData = this.currentMap();
+        const at = Reactor3D.shapePlacer(piece, Reactor3D.pieceBaseAt(mapData, piece.x, piece.y));
+        const corners = [];
+        for (const u of [0, 1]) for (const y of [0, 1]) for (const v of [0, 1]) corners.push(at(u, y, v));
+        return { corners, size: piece.size || [1, 1, 1], angle: piece.angle || 0, tilt: piece.tilt || 0, roll: piece.roll || 0 };
+    }
+
+    /** A handle drag applied to the selected shape as the pointer moves. */
+    dragShapeGizmo(drag, clientX, clientY) {
+        const manager = this.pieceManager(), piece = manager.selectedPiece();
+        if (!piece) return false;
+        const { held, start } = drag;
+        let patch = null;
+        if (held.mode === 'move') {
+            const t = Math.round(held.travel(clientX, clientY) * 4) / 4;
+            const ox = (start.offset || [0, 0])[0], oy = (start.offset || [0, 0])[1];
+            if (held.axis === 'x') return manager.moveSelectedPieceTo(start.x + 0.5 + ox + t, start.y + 0.5 + oy, undefined, false);
+            if (held.axis === 'z') return manager.moveSelectedPieceTo(start.x + 0.5 + ox, start.y + 0.5 + oy + t, undefined, false);
+            patch = { z: Math.max(0, Math.round((start.z + t) * 4) / 4) };
+        } else if (held.mode === 'turn') {
+            const deg = RRShapeGizmo3D.turn(this.shapeGizmo, held, this.camera, this.canvas.getBoundingClientRect(), clientX, clientY);
+            if (deg === null) return false;
+            patch = held.axis === 'yaw' ? { angle: (360 - deg) % 360 } : held.axis === 'pitch' ? { tilt: deg } : { roll: deg };
+        } else {
+            const t = held.travel(clientX, clientY);
+            const i = held.axis === 'u' ? 0 : held.axis === 'y' ? 1 : 2;
+            const size = (start.size || [1, 1, 1]).slice();
+            size[i] = Math.max(0.25, Math.min(60, Math.round((size[i] + t) * 4) / 4));
+            patch = { size };
+        }
+        return manager.updateSelected(patch, false);
+    }
+
+    /** The selected piece outlined, and a shape's handles on it; nothing when nothing is selected. */
+    refreshSelection() {
+        const manager = this.pieceManager(), mapData = this.currentMap();
+        const piece = manager && manager.mode === 'select' && mapData ? manager.selectedPiece() : null;
+        if (!this.mapScene || typeof THREE === 'undefined') return;
+        if (!piece) {
+            if (this.selectionOutline) this.selectionOutline.visible = false;
+            if (this.shapeGizmo) RRShapeGizmo3D.sync(this.shapeGizmo, null, null);
+            return;
+        }
+        const shape = manager.isShape(piece.kind);
+        // The outline: the twelve edges of the piece's box, turned as it is.
+        let corners;
+        if (shape) corners = this.shapeView(piece).corners;
+        else {
+            const base = Reactor3D.pieceBaseAt(mapData, piece.x, piece.y) + piece.z, h = Reactor3D.pieceHeight(piece.kind);
+            corners = [];
+            for (const u of [0, 1]) for (const y of [0, 1]) for (const v of [0, 1]) corners.push([piece.x + u, base + y * h, piece.y + v]);
+        }
+        const edges = [[0, 1], [0, 2], [0, 4], [1, 3], [1, 5], [2, 3], [2, 6], [3, 7], [4, 5], [4, 6], [5, 7], [6, 7]];
+        const positions = new Float32Array(edges.length * 6);
+        edges.forEach(([a, b], i) => { positions.set(corners[a], i * 6); positions.set(corners[b], i * 6 + 3); });
+        if (!this.selectionOutline) {
+            this.selectionOutline = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xffd166, depthTest: false, transparent: true, opacity: 0.95 }));
+            this.selectionOutline.renderOrder = 999;
+            this.mapScene.scene().add(this.selectionOutline);
+        }
+        this.selectionOutline.geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        this.selectionOutline.geometry.computeBoundingSphere();
+        this.selectionOutline.visible = true;
+        if (shape && typeof RRShapeGizmo3D !== 'undefined' && typeof RRAxisArrows3D !== 'undefined' && typeof RRPoseRings3D !== 'undefined') {
+            const reach = Math.max(...(piece.size || [1, 1, 1]));
+            if (!RRShapeGizmo3D.fits(this.shapeGizmo, reach)) { RRShapeGizmo3D.dispose(this.shapeGizmo); this.shapeGizmo = RRShapeGizmo3D.create(THREE, this.mapScene.scene(), reach); }
+            RRShapeGizmo3D.sync(this.shapeGizmo, this.shapeView(piece), manager.gizmoMode);
+        } else if (this.shapeGizmo) RRShapeGizmo3D.sync(this.shapeGizmo, null, null);
+        this._lastActiveAt = performance.now();
+    }
+
     /** The chosen piece, translucent, where it would land. */
     updatePieceGhost(target) {
         const manager = this.pieceManager();
         const mapData = this.currentMap();
-        if (!this.canEditPieces() || !target || !this.mapScene || !manager || !mapData) { this.hidePieceGhost(); return; }
+        if (!this.canEditPieces() || !target || !this.mapScene || !manager || !mapData || manager.mode === 'select') { this.hidePieceGhost(); return; }
         const erase = manager.mode === 'erase';
         const bounds = manager.mode === 'move' ? manager.selectedGroupBounds() : null;
         const stamp = manager.mode === 'stamp' ? manager.structurePlan() : bounds ? { size: [bounds.x1 - bounds.x0 + 1, bounds.y1 - bounds.y0 + 1] } : null;
         if (manager.mode === 'move' && !bounds) { this.hidePieceGhost(); return; }
         const effect = manager.mode === 'screen' || manager.mode === 'light' ? manager.mode : null;
-        const key = stamp ? (bounds ? 'move:' + manager.selectedGroup : 'stamp:' + manager.structure) : effect ? effect + ':' + (target.side || 'top') : (erase ? 'erase' : manager.kind) + ':' + manager.rot + ':' + manager.shapeScale;
+        const key = stamp ? (bounds ? 'move:' + manager.selectedGroup : 'stamp:' + manager.structure) : effect ? effect + ':' + (target.side || 'top') + ':' + JSON.stringify(manager.screenSize || null) : (erase ? 'erase' : manager.kind) + ':' + manager.rot + ':' + JSON.stringify([manager.sizeFor ? manager.sizeFor(manager.kind) : null, manager.params && manager.params[manager.kind]]);
         if (!this.pieceGhost || this.pieceGhost.userData.key !== key) {
             this.hidePieceGhost(true);
             // A plan's ghost is the building itself, translucent; a selected
@@ -1750,7 +1830,7 @@ class MapEditor3D {
             const geometry = silhouette
                 || (stamp
                     ? new THREE.BoxGeometry(stamp.size[0], 0.3, stamp.size[1]).translate(stamp.size[0] / 2, 0.15, stamp.size[1] / 2)
-                    : effect === 'screen' ? new THREE.PlaneGeometry(4, 2.25).translate(0, 1.125, 0)
+                    : effect === 'screen' ? new THREE.PlaneGeometry((manager.screenSize || [4, 2.25])[0], (manager.screenSize || [4, 2.25])[1]).translate(0, (manager.screenSize || [4, 2.25])[1] / 2, 0)
                     : effect === 'light' ? new THREE.SphereGeometry(0.3, 12, 8)
                     : Reactor3D.pieceGeometry([Object.assign({ id: 0, material: '' }, erase ? { kind: 'block', x: 0, y: 0, z: 0, rot: 0 } : manager.pieceFor({ x: 0, y: 0, z: 0 }))], null));
             const material = new THREE.MeshBasicMaterial({ color: erase ? 0xff6b6b : bounds ? 0x7dff9a : stamp ? 0xffd166 : effect === 'light' ? 0xffe36e : 0x7fd8ff, transparent: true, opacity: erase ? 0.35 : 0.5, depthWrite: false });
@@ -1768,7 +1848,7 @@ class MapEditor3D {
             const dirs = { north: [0, -1, Math.PI], south: [0, 1, 0], east: [1, 0, Math.PI / 2], west: [-1, 0, -Math.PI / 2] };
             const [dx, dy, yaw] = dirs[target.side] || [0, 1, 0];
             const cell = target.faceCell || target;
-            this.pieceGhost.position.set(cell.x + 0.5 + dx * 0.52, base + Math.max(0, (target.height || 0) - 1.125), cell.y + 0.5 + dy * 0.52);
+            this.pieceGhost.position.set(cell.x + 0.5 + dx * 0.52, base + Math.max(0, (target.height || 0) - (manager.screenSize || [4, 2.25])[1] / 2), cell.y + 0.5 + dy * 0.52);
             this.pieceGhost.rotation.set(0, yaw, 0);
             this.pieceGhost.visible = !!target.side;
             this._lastGhostTarget = target; this._lastActiveAt = performance.now();
@@ -3257,6 +3337,21 @@ class MapEditor3D {
                     this.pointer.pan = false;
                     this.pointer.propHold = true;
                     this.pieceManager().stampAt(target.x, target.y);
+                } else if (this.pieceManager().mode === 'select') {
+                    // Select: a handle of the selected shape first; else the piece under the pointer,
+                    // which a drag then moves.
+                    this.pointer.pan = false;
+                    this.pointer.propHold = true;
+                    const manager = this.pieceManager();
+                    const held = this.grabShapeGizmo(event.clientX, event.clientY);
+                    if (held) {
+                        this.pointer.gizmo = { held, snapshot: manager._snapshot(this.currentMap()), changed: false, start: JSON.parse(JSON.stringify(manager.selectedPiece())) };
+                    } else {
+                        const pick = this.pieceTargetAt(event.clientX, event.clientY, { erase: true });
+                        const before = manager.selected;
+                        const piece = pick ? manager.selectAt(pick) : null;
+                        if (piece && before === piece.id) this.pointer.pieceMove = { id: piece.id, snapshot: manager._snapshot(this.currentMap()), moved: false, planeY: Reactor3D.pieceBaseAt(this.currentMap(), piece.x, piece.y) + piece.z, dz: 0 };
+                    }
                 } else if (target && (this.pieceManager().mode === 'screen' || this.pieceManager().mode === 'light')) {
                     // A screen on the wall face pointed at, a light over the cell: one per click.
                     this.pointer.pan = false;
@@ -3384,6 +3479,25 @@ class MapEditor3D {
                 if (target) { this.pieceManager()?.paintAt(target, { rectangle: event.ctrlKey }); this.updatePieceGhost(target); }
                 return;
             }
+            if (this.pointer.gizmo) {
+                if (this.dragShapeGizmo(this.pointer.gizmo, event.clientX, event.clientY)) this.pointer.gizmo.changed = true;
+                return;
+            }
+            if (this.pointer.pieceMove) {
+                // The piece follows the pointer on the plane of its own base, so it slides rather than climbs.
+                const move = this.pointer.pieceMove, manager = this.pieceManager(), piece = manager && manager.selectedPiece();
+                if (!piece || !this.camera || !this.canvas) return;
+                const rect = this.canvas.getBoundingClientRect();
+                this._raycaster = this._raycaster || new THREE.Raycaster();
+                this._raycaster.setFromCamera(new THREE.Vector2(((event.clientX - rect.left) / rect.width) * 2 - 1, -((event.clientY - rect.top) / rect.height) * 2 + 1), this.camera);
+                const point = this._raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -move.planeY), new THREE.Vector3());
+                if (!point) return;
+                if (!move.grabOffset) { const [cx, cz] = manager.isShape(piece.kind) ? Reactor3D.shapeCentre(piece) : [piece.x + 0.5, piece.y + 0.5]; move.grabOffset = [cx - point.x, cz - point.z]; return; }
+                const cx = point.x + move.grabOffset[0], cz = point.z + move.grabOffset[1];
+                const snapped = manager.isShape(piece.kind) ? [Math.round(cx * 4) / 4, Math.round(cz * 4) / 4] : [Math.floor(cx) + 0.5, Math.floor(cz) + 0.5];
+                if (manager.moveSelectedPieceTo(snapped[0], snapped[1], undefined, false)) move.moved = true;
+                return;
+            }
             if (this.pointer.paint) {
                 const tile = this.tileAt(event.clientX, event.clientY);
                 if (tile) {
@@ -3441,8 +3555,17 @@ class MapEditor3D {
                 return;
             }
             if (drag && drag.pieces) {
-                this.pointer.pieceStroke = null;
+                drag.pieceStroke = null;
                 this.pieceManager()?.endStroke();
+                return;
+            }
+            if (drag && (drag.gizmo || drag.pieceMove)) {
+                // One undo step for the whole drag, taken when it started.
+                const manager = this.pieceManager();
+                const record = drag.gizmo || drag.pieceMove;
+                if (this.shapeGizmo && typeof RRShapeGizmo3D !== 'undefined') RRShapeGizmo3D.release(this.shapeGizmo);
+                if (record.changed || record.moved) { manager.undoStack.push(record.snapshot); if (manager.undoStack.length > 50) manager.undoStack.shift(); manager.redoStack.length = 0; }
+                manager?.refreshStatus?.();
                 return;
             }
             if (drag && drag.terrain) {

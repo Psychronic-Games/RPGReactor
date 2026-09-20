@@ -52,7 +52,8 @@ class TerrainManager {
                     <button type="button" class="rr-btn-secondary rr-terrain-clear" style="padding: 5px;" data-i18n="terrain.clear">${t('terrain.clear')}</button>
                     <div class="database-field-label" style="font-size: 11px; margin: 6px 0 0;" data-i18n="terrain.water">${t('terrain.water')}</div>
                     <div style="font-size: 11px; color: var(--color-text-muted); line-height: 1.4;" data-i18n="terrain.waterHint">${t('terrain.waterHint')}</div>
-                    <div class="rr-terrain-water-modes" role="radiogroup" style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px;">
+                    <div class="rr-terrain-water-modes" role="radiogroup" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px;">
+                        <button type="button" class="rr-btn-secondary rr-terrain-mode" data-terrain-mode="fill" role="radio" aria-checked="false" style="padding: 6px 4px; font-size: 12px;" data-i18n="terrain.waterFill">${t('terrain.waterFill')}</button>
                         <button type="button" class="rr-btn-secondary rr-terrain-mode" data-terrain-mode="water" role="radio" aria-checked="false" style="padding: 6px 4px; font-size: 12px;" data-i18n="terrain.waterPaint">${t('terrain.waterPaint')}</button>
                         <button type="button" class="rr-btn-secondary rr-terrain-mode" data-terrain-mode="drain" role="radio" aria-checked="false" style="padding: 6px 4px; font-size: 12px;" data-i18n="terrain.waterErase">${t('terrain.waterErase')}</button>
                     </div>
@@ -78,11 +79,13 @@ class TerrainManager {
     }
 
     setMode(mode) {
-        if (!this.elevation()?.TERRAIN_MODES.includes(mode) && mode !== 'water' && mode !== 'drain') return;
+        if (!this.elevation()?.TERRAIN_MODES.includes(mode) && mode !== 'water' && mode !== 'drain' && mode !== 'fill') return;
         this.mode = mode;
         window.reactor?.mapEditor3D?.hideWaterGhost?.();
         this.panel?.querySelectorAll('.rr-terrain-mode').forEach(button => button.setAttribute('aria-checked', String(button.dataset.terrainMode === mode)));
     }
+
+    _flash(key) { const status = this.panel?.querySelector('.rr-terrain-status'); if (status) status.textContent = this._t(key); }
 
     refreshStatus() {
         const status = this.panel?.querySelector('.rr-terrain-status');
@@ -132,8 +135,17 @@ class TerrainManager {
         const map = this.currentMap(), elevation = this.elevation();
         if (!map || !elevation || !point) return false;
         // Water: a drag draws the sheet's rectangle; a click in Remove drains the cell's sheets.
-        if (this.mode === 'water' || this.mode === 'drain') {
+        if (this.mode === 'water' || this.mode === 'drain' || this.mode === 'fill') {
             const cell = { x: Math.floor(point.x + 0.5), y: Math.floor(point.y + 0.5) };
+            if (this.mode === 'fill') {
+                // Fill the hollow under the click: the water rises until it would spill, one sheet.
+                const saved = elevation.waterSnapshot(map);
+                const sheet = elevation.fillWaterAt(map, cell.x, cell.y, this.waterMaterial);
+                if (!sheet) { this._flash?.('terrain.noBasin'); return false; }
+                this.undoStack.push({ water: saved }); if (this.undoStack.length > 50) this.undoStack.shift(); this.redoStack.length = 0;
+                this.announce(null, true); this.refreshStatus();
+                return true;
+            }
             if (this.mode === 'drain') {
                 const saved = elevation.waterSnapshot(map);
                 if (!elevation.removeWaterAt(map, cell.x, cell.y)) return false;

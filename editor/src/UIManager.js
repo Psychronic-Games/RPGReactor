@@ -1547,6 +1547,9 @@ class UIManager {
                     window.reactor.lightingManager.toggle();
                 }
                 break;
+            case 'build-tool':
+                window.reactor?.buildHotbar?.toggle();
+                break;
             case 'shadow-pen':
                 if (this.callbacks.disableEventModeIfActive) {
                     this.callbacks.disableEventModeIfActive();

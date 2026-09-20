@@ -30,7 +30,111 @@ class PieceBuilderManager {
         this.lastShape = 'cylinder';
         this.screenMedia = '';
         this.lightColour = '#9fd8ff';
+        // Sizes chosen in the specs panel, per kind; a stair run's length; the selected piece and its handle mode.
+        this.sizes = {};
+        this.stairSteps = 1;
+        this.selected = 0;
+        this.gizmoMode = 'move';
     }
+
+    // ---- Selection: a placed piece picked up again --------------------------
+
+    pieceById(id) { const map = this.currentMap(); return map && id ? (this.elevation()?.pieces(map) || []).find(piece => piece.id === id) || null : null; }
+    selectedPiece() { return this.pieceById(this.selected); }
+    isShape(kind) { const E = this.elevation(); return !!(E && E.SHAPE_KINDS && E.SHAPE_KINDS.includes(kind)); }
+
+    /** The piece under a target: the one on the cell at the level, else the shape whose footprint covers it. */
+    pieceAtTarget(target) {
+        const map = this.currentMap(), elevation = this.elevation();
+        if (!map || !elevation || !target) return null;
+        const exact = elevation.pieceAt(map, target.x, target.y, target.z);
+        if (exact) return exact;
+        const R = typeof Reactor3D !== 'undefined' ? Reactor3D : null;
+        const stack = R && R.piecesAt ? R.piecesAt(map, target.x, target.y) : null;
+        if (!stack || !stack.length) return null;
+        const wanted = Number.isFinite(target.height) ? target.height : target.z;
+        let best = null;
+        for (const entry of stack) {
+            const top = R.pieceTop(entry, 0.5, 0.5);
+            if (wanted < entry.z - 0.05 || wanted > top + 0.05) continue;
+            if (!best || entry.z >= best.z) best = entry;
+        }
+        if (!best) best = stack[stack.length - 1];
+        return this.pieceById(best.id);
+    }
+
+    selectAt(target) {
+        const piece = this.pieceAtTarget(target);
+        this.selected = piece ? piece.id : 0;
+        this._syncPanel(); this.refreshStatus(); this._ghostChanged();
+        return piece;
+    }
+
+    clearSelection() { if (!this.selected) return; this.selected = 0; this._syncPanel(); this._ghostChanged(); }
+
+    /** Change the selected piece in place (a material, a turn, a size, a move); the list keeps its ids. */
+    updateSelected(patch, record = true) {
+        const map = this.currentMap(), elevation = this.elevation();
+        const piece = this.selectedPiece();
+        if (!map || !elevation || !piece) return false;
+        const list = elevation.pieces(map);
+        const index = list.findIndex(entry => entry.id === piece.id);
+        if (index < 0) return false;
+        if (record) { this.undoStack.push(this._snapshot(map)); if (this.undoStack.length > 50) this.undoStack.shift(); this.redoStack.length = 0; }
+        const before = list[index];
+        const next = Object.assign({}, before, patch);
+        list[index] = next;
+        elevation.restorePieces(map, list);
+        const reach = this.isShape(next.kind) ? Math.ceil(Math.max(...(next.size || [1, 1, 1])) / 2) + 1 : 1;
+        this.announce(false, { x0: Math.min(before.x, next.x) - reach, y0: Math.min(before.y, next.y) - reach, x1: Math.max(before.x, next.x) + reach, y1: Math.max(before.y, next.y) + reach });
+        this._syncPanel(); this._ghostChanged();
+        return true;
+    }
+
+    /** The selected piece's middle to a point of the ground, in tiles (a shape at any quarter, a cell piece on its cell). */
+    moveSelectedPieceTo(cx, cy, z, record = true) {
+        const piece = this.selectedPiece();
+        if (!piece) return false;
+        const map = this.currentMap();
+        const clamp = (v, max) => Math.max(0, Math.min(max, v));
+        if (this.isShape(piece.kind)) {
+            const ax = clamp(Math.floor(cx), map.width - 1), ay = clamp(Math.floor(cy), map.height - 1);
+            const patch = { x: ax, y: ay, offset: [Math.round((cx - ax - 0.5) * 100) / 100, Math.round((cy - ay - 0.5) * 100) / 100] };
+            if (Number.isFinite(z)) patch.z = Math.max(0, Math.round(z * 4) / 4);
+            return this.updateSelected(patch, record);
+        }
+        const patch = { x: clamp(Math.floor(cx), map.width - 1), y: clamp(Math.floor(cy), map.height - 1) };
+        if (Number.isFinite(z)) patch.z = Math.max(0, Math.floor(z));
+        return this.updateSelected(patch, record);
+    }
+
+    turnSelected(steps = 1) {
+        const piece = this.selectedPiece();
+        if (!piece) return false;
+        return this.isShape(piece.kind) ? this.updateSelected({ angle: (((piece.angle || 0) + 90 * steps) % 360 + 360) % 360 }) : this.updateSelected({ rot: ((piece.rot + steps) % 4 + 4) % 4 });
+    }
+
+    removeSelected() {
+        const map = this.currentMap(), elevation = this.elevation(), piece = this.selectedPiece();
+        if (!map || !elevation || !piece) return false;
+        this.undoStack.push(this._snapshot(map)); if (this.undoStack.length > 50) this.undoStack.shift(); this.redoStack.length = 0;
+        elevation.restorePieces(map, elevation.pieces(map).filter(entry => entry.id !== piece.id));
+        this.selected = 0;
+        const reach = this.isShape(piece.kind) ? Math.ceil(Math.max(...(piece.size || [1, 1, 1])) / 2) + 1 : 1;
+        this.announce(false, { x0: piece.x - reach, y0: piece.y - reach, x1: piece.x + reach, y1: piece.y + reach });
+        this._syncPanel(); this.refreshStatus(); this._ghostChanged();
+        return true;
+    }
+
+    /** The size the next piece of a kind takes: the panel's choice, else the kind's own. */
+    sizeFor(kind) {
+        if (this.sizes[kind]) return this.sizes[kind].slice();
+        if (kind === 'wedge') return [2, 1, 3];
+        return this.shapeSizeFor(kind);
+    }
+    setSize(kind, size) { this.sizes[kind] = size.map(v => Math.max(0.25, Math.min(60, Math.round(v * 4) / 4))); this._syncPanel(); this._ghostChanged(); }
+    /** The way a piece's own +v points for its turn: the direction a stair climbs, a ramp rises. */
+    static stepOf(rot) { return [[0, 1], [-1, 0], [0, -1], [1, 0]][((rot % 4) + 4) % 4]; }
 
     /** The movies and pictures a screen can show. */
     mediaChoices() {
@@ -62,10 +166,10 @@ class PieceBuilderManager {
         let fx = null;
         if (this.mode === 'screen') {
             if (!target.side || !target.faceCell) { this._flash('build.screenNeedsWall'); return false; }
-            const E = typeof DatabaseStructureEditor !== 'undefined' ? DatabaseStructureEditor.EFFECT_DEFAULTS.screen : { width: 4, height: 2.25 };
-            fx = { type: 'screen', name: 'screen', at: [target.faceCell.x, target.faceCell.y], facing: target.side, width: E.width, height: E.height, z: Math.max(0, Math.round((target.height - E.height / 2) * 4) / 4), media: this.screenMedia || '' };
+            const size = this.screenSize || [4, 2.25];
+            fx = { type: 'screen', name: 'screen', at: [target.faceCell.x, target.faceCell.y], facing: target.side, width: size[0], height: size[1], z: Math.max(0, Math.round((target.height - size[1] / 2) * 4) / 4), media: this.screenMedia || '' };
         } else if (this.mode === 'light') {
-            fx = { type: 'light', name: 'light', at: [target.x, target.y], z: Math.round((target.side ? target.height : target.height + 2.5) * 4) / 4, color: this.lightColour, radius: 8, intensity: 1.2 };
+            fx = { type: 'light', name: 'light', at: [target.x, target.y], z: Math.round((target.side ? target.height : target.height + 2.5) * 4) / 4, color: this.lightColour, radius: this.lightRadius || 8, intensity: Number.isFinite(this.lightIntensity) ? this.lightIntensity : 1.2 };
         }
         if (!fx) return false;
         this.undoStack.push(this._snapshot(map)); if (this.undoStack.length > 50) this.undoStack.shift(); this.redoStack.length = 0;
@@ -612,7 +716,8 @@ class PieceBuilderManager {
 
     setKind(kind) { if (this.kinds().includes(kind)) { this.kind = kind; this.mode = 'place'; this._syncPanel(); this._ghostChanged(); } }
     setMode(mode) {
-        if (mode !== 'place' && mode !== 'erase' && mode !== 'stamp' && mode !== 'move' && mode !== 'screen' && mode !== 'light') return;
+        if (mode !== 'place' && mode !== 'erase' && mode !== 'stamp' && mode !== 'move' && mode !== 'screen' && mode !== 'light' && mode !== 'select') return;
+        if (mode !== 'select') this.selected = 0;
         if (mode === 'stamp' && !this.structurePlan()) mode = 'place';
         if (mode !== 'move') this.selectedGroup = 0;
         this.mode = mode; this._syncPanel(); this.refreshStatus(); this._ghostChanged();
@@ -625,7 +730,7 @@ class PieceBuilderManager {
         this._syncPanel();
         this._ghostChanged();
     }
-    _ghostChanged() { window.reactor?.mapEditor3D?.refreshPieceGhost?.(); }
+    _ghostChanged() { window.reactor?.mapEditor3D?.refreshPieceGhost?.(); window.reactor?.mapEditor3D?.refreshSelection?.(); }
 
     refreshStatus() {
         const status = this.panel?.querySelector('.rr-pieces-status');
@@ -673,7 +778,7 @@ class PieceBuilderManager {
     pieceFor(target) {
         const piece = { kind: this.kind, x: target.x, y: target.y, z: target.z, rot: this.rot, material: this.material };
         const E = this.elevation();
-        if (E && E.SHAPE_KINDS && E.SHAPE_KINDS.includes(this.kind)) piece.size = this.shapeSizeFor(this.kind);
+        if (E && E.SHAPE_KINDS && E.SHAPE_KINDS.includes(this.kind)) { piece.size = this.sizeFor(this.kind); Object.assign(piece, (this.params && this.params[this.kind]) || {}); }
         return piece;
     }
 
@@ -763,9 +868,18 @@ class PieceBuilderManager {
         const group = elevation.pieceGroupAt(map, target.x, target.y);
         const piece = this.pieceFor(target);
         if (group) piece.group = group;
-        const changed = this._stroke.mode === 'erase'
-            ? this.eraseAt(map, target)
-            : !!elevation.setPiece(map, piece) && this._changedSince(map);
+        let changed;
+        if (this._stroke.mode === 'erase') changed = this.eraseAt(map, target);
+        else if (piece.kind === 'stair' && this.stairSteps > 1) {
+            // A run of stairs: each one a cell on and a level up along the way it climbs.
+            const [dx, dy] = PieceBuilderManager.stepOf(piece.rot);
+            changed = false;
+            for (let i = 0; i < this.stairSteps; i++) {
+                const step = Object.assign({}, piece, { x: piece.x + dx * i, y: piece.y + dy * i, z: piece.z + i });
+                if (step.x < 0 || step.y < 0 || step.x >= map.width || step.y >= map.height) break;
+                if (elevation.setPiece(map, step) && this._changedSince(map)) changed = true;
+            }
+        } else changed = !!elevation.setPiece(map, piece) && this._changedSince(map);
         if (changed && group && elevation.structureOf(map, group)) {
             elevation.removeStructure(map, group);
             this._flash('pieces.detached');
@@ -773,7 +887,11 @@ class PieceBuilderManager {
         }
         // The cells the edit could have changed: the cell and its neighbours
         // (a hidden face between touching walls belongs to both).
-        if (changed) { this._stroke.moved = true; this.announce(false, { x0: target.x - 1, y0: target.y - 1, x1: target.x + 1, y1: target.y + 1 }); }
+        if (changed) {
+            this._stroke.moved = true;
+            const reach = this.isShape(piece.kind) ? Math.ceil(Math.max(...(piece.size || [1, 1, 1])) / 2) + 1 : Math.max(1, this.stairSteps);
+            this.announce(false, { x0: target.x - reach, y0: target.y - reach, x1: target.x + reach, y1: target.y + reach });
+        }
         return changed;
     }
 
@@ -827,7 +945,10 @@ class PieceBuilderManager {
             return;
         }
         if (event.altKey) return;
-        if (key === 'r' && !(this.mode === 'move' && this.selectedGroup)) { event.preventDefault(); this.turn(event.shiftKey ? -1 : 1); }
+        if (this.mode === 'select' && this.selected && key === 'r') { event.preventDefault(); this.turnSelected(event.shiftKey ? -1 : 1); }
+        else if (this.mode === 'select' && this.selected && (key === 'delete' || key === 'backspace')) { event.preventDefault(); this.removeSelected(); }
+        else if (this.mode === 'select' && this.selected && key === 'escape') { event.preventDefault(); this.clearSelection(); }
+        else if (key === 'r' && !(this.mode === 'move' && this.selectedGroup)) { event.preventDefault(); this.turn(event.shiftKey ? -1 : 1); }
         else if (key === 'e') { event.preventDefault(); this.setLevel(this.level + 1); }
         else if (key === 'q') { event.preventDefault(); this.setLevel(this.level - 1); }
         else if (key === 'x') { event.preventDefault(); this.setMode(this.mode === 'erase' ? 'place' : 'erase'); }
