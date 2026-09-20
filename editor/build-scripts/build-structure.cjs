@@ -64,6 +64,13 @@ console.log(`${plan.name || path.basename(planFile)}: ${built.length} pieces at 
 for (const [name, r] of rooms) console.log(`  ${r.reached ? 'ok  ' : 'MISS'} ${name}${r.reached ? ` (${r.steps} steps)` : ''}`);
 for (const [name, at] of Object.entries(SP.spots(plan, X0, Y0, resolve))) console.log(`  spot ${name} at (${at[0]}, ${at[1]})`);
 if (check) process.exit(rooms.every(([, r]) => r.reached) ? 0 : 1);
+const loadTemplate = name => { const file = path.join(path.dirname(planFile), 'events', /\.json$/i.test(name) ? name : name + '.json'); return fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : null; };
+const placedEvents = SP.placeEvents(map, group, SP.eventsOf(plan, X0, Y0, resolve), loadTemplate);
+if (placedEvents.length) {
+    const data = Object.assign({}, map); delete data.id; delete data.reactor3d;
+    fs.writeFileSync(stem + '.json', JSON.stringify(data, null, 2));
+    console.log(`${placedEvents.length} event(s) placed: ${placedEvents.map(e => `${e.name} (${e.x}, ${e.y})`).join(', ')}`);
+}
 const sidecar = E.ensure(map);
 fs.writeFileSync(stem + '.r3d.json', JSON.stringify(sidecar, null, 2));
 console.log(`wrote ${stem}.r3d.json (${E.pieces(map).length} pieces)`);

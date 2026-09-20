@@ -579,3 +579,46 @@ test('a plan of plans: parts, paths and named spots stamp as one and walk as one
     E.setStructure(map, { group: 1, plan: 'Hamlet.json', x: 0, y: 0, rot: 0, scale: 1, spots: { well: [3, 4] } });
     assert.deepEqual({ ...E.structureOf(map, 1).spots }, { well: [3, 4] });
 });
+
+test('a plan places events at its spots; a hand-edited event survives a re-stamp; a removed building takes its events', () => {
+    const SP = require(path.resolve(__dirname, '..', '..', 'editor/src/utils/StructurePlan.js'));
+    const cottage = JSON.parse(read('template/Demo/3d/Structures/Cottage.json'));
+    const hamlet = JSON.parse(read('template/Demo/3d/Structures/Hamlet.json'));
+    const resolve = name => (name === 'Cottage.json' ? cottage : null);
+    const wanted = SP.eventsOf(hamlet, 100, 100, resolve);
+    assert.equal(wanted.length, 4, 'one villager per cottage');
+    assert.deepEqual([...wanted.map(w => w.key)], ['north.table', 'east.table', 'south.table', 'west.table']);
+    assert.deepEqual([...wanted[0].at], [109, 110]);
+    const template = JSON.parse(read('template/Demo/3d/Structures/events/villager.json'));
+    const map = { width: 200, height: 200, events: [null, { id: 1, name: 'Existing', note: '', x: 5, y: 5, pages: [] }] };
+    const placed = SP.placeEvents(map, 8, wanted, name => (name === 'villager' ? template : null));
+    assert.equal(placed.length, 4);
+    assert.equal(placed[0].id, 2, 'ids continue after the map\'s own');
+    assert.equal(placed[0].name, 'Villager'); assert.equal(placed[0].note, '<structure:8><spot:north.table>');
+    assert.equal(placed[0].pages[0].list[1].parameters[0], 'Welcome to North Haven.', 'the template\'s page');
+    assert.notEqual(placed[0].pages, template.pages, 'a copy, not the template itself');
+    assert.equal(map.events.filter(Boolean).length, 5);
+    // A person edits the villager's page by hand; the building is moved and stamped again: the event moves, the page stays.
+    placed[0].pages[0].list[1].parameters[0] = 'Mind the well.';
+    const moved = SP.placeEvents(map, 8, SP.eventsOf(hamlet, 120, 100, resolve), () => template);
+    assert.equal(moved.length, 4); assert.equal(map.events.filter(Boolean).length, 5, 'no duplicates');
+    assert.deepEqual([map.events[2].x, map.events[2].y], [129, 110], 'moved with the building');
+    assert.equal(map.events[2].pages[0].list[1].parameters[0], 'Mind the well.', 'the hand edit survives');
+    // A spot the plan drops loses its event; a removed building loses them all; the map's own event stays.
+    const fewer = JSON.parse(JSON.stringify(hamlet)); fewer.parts = fewer.parts.slice(0, 2);
+    SP.placeEvents(map, 8, SP.eventsOf(fewer, 120, 100, resolve), () => template);
+    assert.equal(map.events.filter(Boolean).length, 3);
+    assert.equal(SP.removeGroupEvents(map, 8), 2);
+    assert.deepEqual([...map.events.filter(Boolean).map(e => e.name)], ['Existing']);
+    // A missing template still makes a plain event; a spot off the map is skipped.
+    const small = { width: 4, height: 4, events: [null] };
+    const plain = SP.placeEvents(small, 1, [{ key: 'a', name: 'A', template: 'nope', direction: 8, at: [1, 1] }, { key: 'b', name: 'B', template: '', direction: 2, at: [9, 9] }], () => null);
+    assert.equal(plain.length, 1); assert.equal(plain[0].pages[0].image.direction, 8);
+    // The editor and the CLI both place, and the Manor's Steward is on North Haven.
+    assert.match(read('editor/src/PieceBuilderManager.js'), /SP\.placeEvents\(map, record\.group, wanted, name => this\.loadEventTemplate\(name\)\);/);
+    assert.match(read('editor/src/PieceBuilderManager.js'), /RRStructurePlan\.removeGroupEvents\(map, this\.selectedGroup\)/);
+    assert.match(read('editor/build-scripts/build-structure.cjs'), /SP\.placeEvents\(map, group, SP\.eventsOf\(plan, X0, Y0, resolve\), loadTemplate\)/);
+    const north = JSON.parse(read('template/Demo/data/Map005.json'));
+    const steward = north.events.find(e => e && e.name === 'Steward');
+    assert.ok(steward && /<structure:\d+><spot:desk>/.test(steward.note), 'the Steward is tagged with his building and spot');
+});

@@ -337,8 +337,25 @@ class PieceBuilderManager {
         elevation.restorePieces(map, kept.concat(SP.build(shaped, X0, Y0, firstId, record.group, name => this.resolvePlan(name))));
         record.spots = SP.spots(shaped, X0, Y0, name => this.resolvePlan(name));
         elevation.setStructure(map, record);
+        // The building's people: events at its spots, moved with it, kept when edited.
+        const wanted = SP.eventsOf(shaped, X0, Y0, name => this.resolvePlan(name));
+        if (wanted.length) {
+            SP.placeEvents(map, record.group, wanted, name => this.loadEventTemplate(name));
+            this._eventsChanged = true;
+        }
         window.reactor?.modelPropsManager?.render?.();
         return true;
+    }
+
+    /** An event template under 3d/Structures/events, by name. */
+    loadEventTemplate(name) {
+        try {
+            const projectPath = this.projectPath();
+            if (!projectPath || typeof require !== 'function') return null;
+            const fs = require('fs'), path = require('path');
+            const file = path.join(projectPath, '3d', 'Structures', 'events', /\.json$/i.test(name) ? name : name + '.json');
+            return fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : null;
+        } catch (error) { console.warn(`Event template ${name} could not be read.`, error); return null; }
     }
 
     /** The selected structure, built again from its plan with a changed record. */
@@ -449,6 +466,7 @@ class PieceBuilderManager {
         const map = this.currentMap(), elevation = this.elevation();
         if (!map || !elevation || !this.selectedGroup) return false;
         const saved = this._snapshot(map);
+        if (typeof RRStructurePlan !== 'undefined' && RRStructurePlan.removeGroupEvents(map, this.selectedGroup)) this._eventsChanged = true;
         if (!elevation.removePieceGroup(map, this.selectedGroup)) return false;
         this.undoStack.push(saved); this.redoStack.length = 0;
         this.selectedGroup = 0;
@@ -704,6 +722,13 @@ class PieceBuilderManager {
         // is the cells an edit touched, so only their chunks are relaid.
         if (terrainToo) document.dispatchEvent(new CustomEvent('rr-map-edited', { detail: { mapId: this.currentMap()?.id, terrain: true, region: null } }));
         document.dispatchEvent(new CustomEvent('rr-map-edited', { detail: { mapId: this.currentMap()?.id, pieces: true, region: region || null } }));
+        // Events came or went with a building: the event tool and the 3D
+        // view's markers are redrawn (a plain edit notice rebuilds the view).
+        if (this._eventsChanged) {
+            this._eventsChanged = false;
+            window.reactor?.eventManager?.renderEvents?.();
+            document.dispatchEvent(new CustomEvent('rr-map-edited', { detail: { mapId: this.currentMap()?.id } }));
+        }
     }
 }
 

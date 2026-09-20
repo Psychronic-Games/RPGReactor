@@ -141,6 +141,86 @@
         return out;
     }
 
+    /**
+     * The events a plan asks for, with its parts' prefixed: `events:
+     * [{ spot, name, template, direction }]`. `template` names a file under
+     * `3d/Structures/events` holding an ordinary RPG Maker event (its pages
+     * are what matter; id, x and y are ignored). Each comes back with the
+     * spot's map cell and a `key` (`part.spot`) that names it on the map.
+     */
+    function eventsOf(plan, X0 = 0, Y0 = 0, resolve = null, prefix = '', out = []) {
+        const places = spots(plan, X0, Y0, null, {});
+        for (const wanted of plan.events || []) {
+            const at = places[wanted.spot];
+            if (!at) continue;
+            out.push({ key: prefix + wanted.spot, name: wanted.name || wanted.spot, template: wanted.template || '', direction: Number(wanted.direction) || 2, at: [at[0], at[1]] });
+        }
+        for (const part of plan.parts || []) {
+            const inner = typeof resolve === 'function' ? resolve(part.plan) : null;
+            if (!inner) continue;
+            eventsOf(transform(inner, part.rot || 0, part.scale || 1), X0 + (part.at ? part.at[0] : 0), Y0 + (part.at ? part.at[1] : 0), resolve, prefix + (part.name ? part.name + '.' : ''), out);
+        }
+        return out;
+    }
+
+    const EVENT_TAG = /<structure:(\d+)>\s*<spot:([^>]+)>/;
+    function eventTag(group, key) { return `<structure:${group}><spot:${key}>`; }
+    function blankEvent(id, x, y) {
+        return { id, name: `EV${String(id).padStart(3, '0')}`, note: '', x, y, pages: [{
+            conditions: { actorId: 1, actorValid: false, itemId: 1, itemValid: false, selfSwitchCh: 'A', selfSwitchValid: false, switch1Id: 1, switch1Valid: false, switch2Id: 1, switch2Valid: false, variableId: 1, variableValid: false, variableValue: 0 },
+            directionFix: false, image: { tileId: 0, characterName: '', direction: 2, pattern: 0, characterIndex: 0 },
+            moveFrequency: 3, moveRoute: { list: [{ code: 0, indent: null, parameters: [] }], repeat: true, skippable: false, wait: false },
+            moveSpeed: 3, moveType: 0, priorityType: 1, stepAnime: false, through: false, trigger: 0, walkAnime: true,
+            list: [{ code: 0, indent: 0, parameters: [] }]
+        }] };
+    }
+
+    /**
+     * Put a stamped building's events on the RPG Maker map. An event the
+     * building placed before (found by the tag in its note) is moved to
+     * its spot and otherwise left alone, so a hand-edited page survives a
+     * re-stamp; a new one is made from its template. `loadTemplate(name)`
+     * hands back the template's event object or null.
+     */
+    function placeEvents(mapData, group, wanted, loadTemplate) {
+        if (!mapData || !Array.isArray(mapData.events)) return [];
+        const placed = [];
+        const byKey = new Map();
+        for (const event of mapData.events) {
+            const tag = event && typeof event.note === 'string' ? EVENT_TAG.exec(event.note) : null;
+            if (tag && Number(tag[1]) === group) byKey.set(tag[2], event);
+        }
+        for (const entry of wanted) {
+            if (entry.at[0] < 0 || entry.at[1] < 0 || entry.at[0] >= mapData.width || entry.at[1] >= mapData.height) continue;
+            let event = byKey.get(entry.key);
+            if (event) { event.x = entry.at[0]; event.y = entry.at[1]; placed.push(event); byKey.delete(entry.key); continue; }
+            const id = mapData.events.reduce((max, e) => Math.max(max, e && e.id ? e.id : 0), 0) + 1;
+            const template = typeof loadTemplate === 'function' && entry.template ? loadTemplate(entry.template) : null;
+            event = template && Array.isArray(template.pages) && template.pages.length
+                ? Object.assign(JSON.parse(JSON.stringify(template)), { id, x: entry.at[0], y: entry.at[1] })
+                : blankEvent(id, entry.at[0], entry.at[1]);
+            event.name = entry.name;
+            event.note = eventTag(group, entry.key) + (typeof event.note === 'string' && event.note && !EVENT_TAG.test(event.note) ? ' ' + event.note : '');
+            for (const page of event.pages) if (page && page.image) page.image.direction = entry.direction;
+            while (mapData.events.length <= id) mapData.events.push(null);
+            mapData.events[id] = event;
+            placed.push(event);
+        }
+        // Spots the plan no longer names: their events go.
+        for (const stale of byKey.values()) { const at = mapData.events.indexOf(stale); if (at >= 0) mapData.events[at] = null; }
+        return placed;
+    }
+
+    function removeGroupEvents(mapData, group) {
+        if (!mapData || !Array.isArray(mapData.events)) return 0;
+        let removed = 0;
+        mapData.events.forEach((event, index) => {
+            const tag = event && typeof event.note === 'string' ? EVENT_TAG.exec(event.note) : null;
+            if (tag && Number(tag[1]) === group) { mapData.events[index] = null; removed++; }
+        });
+        return removed;
+    }
+
     /** Build one plan's own rooms, walls, doors, windows, stairs and roof at (X0, Y0). */
     function buildOwn(plan, X0 = 0, Y0 = 0, firstId = 1, group = 0) {
         const [W, H] = plan.size;
@@ -351,7 +431,7 @@
         return { start, report, states: seen.size };
     }
 
-    const api = { build, buildOwn, spots, transform, validate, entrance, doorCells, sharedWall, DIRS };
+    const api = { build, buildOwn, spots, eventsOf, placeEvents, removeGroupEvents, eventTag, EVENT_TAG, transform, validate, entrance, doorCells, sharedWall, DIRS };
     root.RRStructurePlan = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof globalThis !== 'undefined' ? globalThis : window);

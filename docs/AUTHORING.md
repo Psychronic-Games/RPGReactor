@@ -123,6 +123,22 @@ districts of hamlets:
   say "the innkeeper stands at `inn.counter`". A plan of parts is walked
   from its `start` spot.
 
+### People at spots
+
+```json
+"spots": { "desk": [52, 25] },
+"events": [{ "spot": "desk", "name": "Steward", "template": "villager", "direction": 2 }]
+```
+
+`template` names a file under `3d/Structures/events` holding an ordinary
+RPG Maker event (its pages are used; id, x and y are not). Stamping puts
+the event on the map at the spot with `<structure:N><spot:name>` in its
+note. Move or turn the building and the event moves with it; edit its
+pages by hand in the event editor and the edit stays through a re-stamp,
+because the event is found by its tag, not made again. Remove the
+building and its events go. A part's events keep the part's prefix
+(`north.table`).
+
 Stamp it from a shell, which levels the ground under it, moves placed
 models off the footprint, and reports which rooms the engine can walk to
 from the front door:
@@ -174,6 +190,6 @@ and keep slopes under 0.75 tile per tile where characters must walk;
 
 ## What is not here yet
 
-Furniture inside rooms, events placed at a plan's spots, rivers
+Furniture inside rooms, rivers
 that flow (a sheet has waves but no current), hip roofs, and a per-transfer floor (a transfer always lands on the ground
 floor). Add them to this page as they land.

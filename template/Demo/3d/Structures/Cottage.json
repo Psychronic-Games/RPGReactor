@@ -67,5 +67,13 @@
       5,
       6
     ]
-  }
+  },
+  "events": [
+    {
+      "spot": "table",
+      "name": "Villager",
+      "template": "villager",
+      "direction": 2
+    }
+  ]
 }
