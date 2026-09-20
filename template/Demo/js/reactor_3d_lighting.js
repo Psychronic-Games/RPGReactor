@@ -611,8 +611,13 @@ Reactor3D.cutawayUniforms = function() {
     return this._cutawayUniforms;
 };
 
-/** How far either side of the line of sight a wall is seen through: the party's own width and a little. */
-Reactor3D.GHOST_WIDTH = 1.2;
+/**
+ * Half the width of the see-through corridor at the party: the body and a
+ * little. The corridor narrows to nothing at the camera, so it holds only
+ * what the party is hidden behind; a wall beside the line, however near
+ * the party, is not in it.
+ */
+Reactor3D.GHOST_WIDTH = 0.6;
 
 Reactor3D.injectCutaway = function(material, shader) {
     // Pieces take both cuts; a placed model (a tree in front of the door)
@@ -647,7 +652,7 @@ Reactor3D.injectCutaway = function(material, shader) {
                 "\t\tif (rrAlong2 > 0.0 && rrAlong2 < rrSight2Length - 0.3) {",
                 "\t\t\tfloat rrOff2 = length(rrToHere2 - rrSight2Dir * rrAlong2);",
                 "\t\t\tfloat rrLineY = rrCutEye.y + (rrCutFocus.y - rrCutEye.y) * (rrAlong2 / rrSight2Length);",
-                "\t\t\trrInWay = rrOff2 < rrGhostWidth && rrLineY - 1.0 < rrCutFocus.y + 3.5;",
+                "\t\t\trrInWay = rrOff2 < rrGhostWidth * (rrAlong2 / rrSight2Length) && rrLineY - 1.0 < rrCutFocus.y + 3.5;",
                 "\t\t}",
                 "\t}",
                 "}",
@@ -728,6 +733,7 @@ Reactor3D.MapScene.prototype.updateCutaway = function(camera, mapData, character
     if (!camera || !mapData || !character || !Reactor3D.hasPieces(mapData)) {
         shared.rrCutTop.value = 1e9;
         shared.rrCutRadius.value = 0;
+        if (this._cutLook) this.setCutLook(false);
         return;
     }
     const x = (Number.isFinite(character._realX) ? character._realX : character.x || 0) + 0.5;
@@ -739,14 +745,13 @@ Reactor3D.MapScene.prototype.updateCutaway = function(camera, mapData, character
     const cutTop = covered ? Math.floor(ground + 1e-6) + Reactor3D.PIECE_STOREY - Reactor3D.CUTAWAY_DROP : 1e9;
     shared.rrCutTop.value = eye.y > cutTop ? cutTop : 1e9;
     if (covered) { shared.rrCutBox.value[0] = covered.x0; shared.rrCutBox.value[1] = covered.y0; shared.rrCutBox.value[2] = covered.x1; shared.rrCutBox.value[3] = covered.y1; }
+    // The see-through pass is live whenever the corridor is: a wall between
+    // the camera and the party is seen through inside a building or out.
+    if (!this._cutLook) this.setCutLook(true);
     const cutState = shared.rrCutTop.value === 1e9 ? "none" : shared.rrCutTop.value + ":" + shared.rrCutBox.value.join(",");
     if (cutState !== this._cutState) {
         this._cutState = cutState;
         if (Reactor3D.Shadows && Reactor3D.Shadows.invalidate) Reactor3D.Shadows.invalidate();
-        // A cut wall is a box sliced open: its inside faces are drawn while a
-        // cut is on, so the slice reads as stone rather than a trough with
-        // the ground showing through it. Outside, front faces only.
-        this.setCutLook(cutState !== "none");
         if (this.updateCutCaps) this.updateCutCaps(mapData, shared.rrCutTop.value, cutState === "none" ? null : shared.rrCutBox.value);
     }
     shared.rrCutEye.value[0] = eye.x; shared.rrCutEye.value[1] = eye.y; shared.rrCutEye.value[2] = eye.z;

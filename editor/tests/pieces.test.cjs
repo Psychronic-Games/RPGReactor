@@ -627,8 +627,9 @@ test('inside a building the roof and the wall in the camera\'s way are cut aroun
     stepped.reactor3d.terrain = new Array((stepped.width + 1) * (stepped.height + 1)).fill(0).map((v, i) => (i % (stepped.width + 1)) >= 4 ? 1 : 0); stepped.reactor3d.terrainWidth = stepped.width;
     assert.equal(R.pieceGeometry(R.piecesOf(stepped), stepped).attributes.position.count / 3, 3 * 12 - 2 * 2, 'a step under the third keeps the two faces on either side of that step, and no others');
     assert.match(runtime, /if \(rrBayer < rrThin\) discard;/, 'a model in the way is dithered thin');
-    assert.match(runtime, /rrInWay = rrOff2 < rrGhostWidth && rrLineY - 1\.0 < rrCutFocus\.y \+ 3\.5;/, 'a wall in the way is what a corridor the party\'s width holds, where the sight line passes through a storey');
-    assert.ok(R.GHOST_WIDTH > 0.8 && R.GHOST_WIDTH < 2, 'the corridor is about the party\'s width, so a wall beside the party is not in the way');
+    assert.match(runtime, /rrInWay = rrOff2 < rrGhostWidth \* \(rrAlong2 \/ rrSight2Length\) && rrLineY - 1\.0 < rrCutFocus\.y \+ 3\.5;/, 'a wall in the way is what a corridor narrowing from the party to the camera holds, where the sight line passes through a storey');
+    assert.ok(R.GHOST_WIDTH > 0.4 && R.GHOST_WIDTH < 1, 'the corridor is the body\'s width at the party, so a wall beside the party is not in the way');
+    assert.match(runtime, /if \(!this\._cutLook\) this\.setCutLook\(true\);/, 'the see-through pass is live inside or out, so nothing the corridor takes is ever simply missing');
     assert.match(runtime, /if \(rrGhost > 0\.5\) \{ if \(!rrInWay\) discard; \} else if \(rrInWay\) discard;/, 'the solid pass leaves it out and the ghost pass draws only it');
     assert.match(source3D(), /transparent: true, opacity: Reactor3D\.GHOST_OPACITY, depthWrite: false/, 'the ghost pass is translucent');
     assert.match(runtime, /material\.__reactorPieces \? "\\t\\tif \(false\) \{"/, 'pieces never dither');
@@ -643,7 +644,6 @@ test('inside a building the roof and the wall in the camera\'s way are cut aroun
       assert.ok(Math.abs(capScene._cutCaps[0].geometry.attributes.position.getY(0) - 4.34) < 1e-6, 'a hair under the plane');
       capScene.updateCutCaps(capMap, 1e9, null); assert.equal(capScene._cutCaps.length, 0, 'no cut, no caps'); }
     assert.ok(R.CUTAWAY_DROP > 0.6 && R.CUTAWAY_DROP < 1, 'the cut plane sits under a doorway header');
-    assert.match(runtime, /this\.setCutLook\(cutState !== "none"\);/, 'the ghost pass shows while a cut is on');
     assert.match(runtime, /if \(vRRCutPos\.y > rrCutTop && vRRCutPos\.x >= rrCutBox\.x[^\n]*discard;\\n\\t#include <alphatest_fragment>/, 'the shadow pass takes the storey cut too: a cut roof casts no shadow into the room');
     assert.match(runtime, /if \(cutState !== this\._cutState\) \{\n\s*this\._cutState = cutState;\n\s*if \(Reactor3D\.Shadows && Reactor3D\.Shadows\.invalidate\) Reactor3D\.Shadows\.invalidate\(\);/, 'the static shadows are drawn again when the cut changes');
     { const THREEx = loadThree(); const stone = new THREEx.MeshBasicMaterial(); stone.__reactorPieces = true; const caster = R.Shadows.casterMaterialFor(stone, false); assert.ok(caster.__rrCaster && typeof caster.onBeforeCompile === 'function' && caster.customProgramCacheKey() === 'reactor3d-caster-pieces', 'pieces get their own caster material'); assert.equal(R.Shadows.casterMaterialFor(new THREEx.MeshBasicMaterial(), false).customProgramCacheKey, THREEx.Material.prototype.customProgramCacheKey, 'other casters are unchanged'); }
