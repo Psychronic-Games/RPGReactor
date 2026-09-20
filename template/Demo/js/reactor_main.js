@@ -1,10 +1,10 @@
 //=============================================================================
 // reactor_main.js — RPG Reactor runtime entry point
 // RPG Reactor runtime version: 0.98.7
-// RPG Reactor runtime revision: 20260920.1
+// RPG Reactor runtime revision: 20260920.3
 // The same stamp, reachable from the F12 console: which engine is this
 // window actually running? Type RPG_REACTOR_RUNTIME_REVISION to see.
-globalThis.RPG_REACTOR_RUNTIME_REVISION = "20260920.1";
+globalThis.RPG_REACTOR_RUNTIME_REVISION = "20260920.3";
 //=============================================================================
 
 const scriptUrls = [
@@ -21,7 +21,9 @@ const scriptUrls = [
     // ~2 MB and loads on demand from Reactor3D.ensureLoaded(), so a project
     // with no 3D maps never downloads it.
     "js/reactor_3d.js",
+    "js/reactor_3d_lighting.js",
     "js/reactor_3d_world.js",
+    "js/reactor_3d_speech.js",
     "js/reactor_battle_data.js",
     "js/reactor_battle_room.js",
     "js/reactor_managers.js",
@@ -31,7 +33,6 @@ const scriptUrls = [
     "js/reactor_picture_extensions.js",
     "js/reactor_media_surfaces.js",
     "js/reactor_windows.js",
-    "js/reactor_speech_3d.js",
     "js/reactor_ui.js",
     "js/reactor_quests.js",
     "js/reactor_mv_compat.js",

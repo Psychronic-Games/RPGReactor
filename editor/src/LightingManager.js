@@ -518,7 +518,9 @@ class LightingManager {
     render(frame = this._frame) {
         const state = this._overlay;
         const map = this.map();
-        if (!state || !map || typeof Reactor3D === 'undefined') return;
+        // The runtime arrives one file at a time; a frame drawn between the
+        // core and its extensions has no lighting to read yet.
+        if (!state || !map || typeof Reactor3D === 'undefined' || !Reactor3D.extensionsLoaded?.()) return;
         const tw = this.tileSize();
 
         const ambient = this.ambient();
@@ -1188,7 +1190,7 @@ class LightingManager {
     feed3D() {
         const map3d = this.mapEditor3D();
         const scene = map3d?.mapScene;
-        if (!map3d?.isEnabled?.() || !scene || typeof Reactor3D === 'undefined') return;
+        if (!map3d?.isEnabled?.() || !scene || typeof Reactor3D === 'undefined' || !Reactor3D.extensionsLoaded?.()) return;
         const ambient = this.ambient();
         // Lights that placed models carry (a light-type model effect), resolved by the 3D view each frame.
         const modelLights = Array.isArray(Reactor3D._editorEffectLights) ? Reactor3D._editorEffectLights : [];

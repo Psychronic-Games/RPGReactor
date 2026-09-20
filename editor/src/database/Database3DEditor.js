@@ -843,7 +843,7 @@ class Database3DEditor {
         if (!this._templates) this._templates = {};
         const templates = this._templates;
         if (templates[entry.name]) return templates[entry.name];
-        const ready = (typeof window !== 'undefined' && window.THREE && window.Reactor3D)
+        const ready = (typeof window !== 'undefined' && window.THREE && window.Reactor3D?.extensionsLoaded?.())
             || (this.projectController.mapEditor3D && this.projectController.mapEditor3D.ensureLibraries
                 && await this.projectController.mapEditor3D.ensureLibraries());
         if (!ready) return null;
@@ -1643,7 +1643,7 @@ class Database3DEditor {
 
     async _drawPreviewNow(entry, gen) {
         const canvas = this._detail.querySelector('.r3d-db-canvas');
-        const ready = (typeof window !== 'undefined' && window.THREE && window.Reactor3D)
+        const ready = (typeof window !== 'undefined' && window.THREE && window.Reactor3D?.extensionsLoaded?.())
             || (this.projectController.mapEditor3D && this.projectController.mapEditor3D.ensureLibraries
                 && await this.projectController.mapEditor3D.ensureLibraries());
         if (!ready || gen !== this._gen || !canvas.isConnected) return;

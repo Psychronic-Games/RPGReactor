@@ -15,7 +15,7 @@
     let thumbCamera = null;
 
     async function ensureLibraries(mapEditor3D) {
-        if (typeof window !== 'undefined' && window.THREE && window.Reactor3D) return true;
+        if (typeof window !== 'undefined' && window.THREE && window.Reactor3D?.extensionsLoaded?.()) return true;
         if (mapEditor3D?.ensureLibraries) return !!(await mapEditor3D.ensureLibraries());
         return false;
     }

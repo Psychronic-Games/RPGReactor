@@ -77,7 +77,7 @@ Development cycle in progress. Session detail lives in the [handoff](docs/HANDOF
 
 ### Development
 
-- The 3D runtime is now a core file plus extension files, one per concern: `reactor_3d_world.js` holds terrain, pieces and water, and `reactor_3d.js` names its extensions so the game, the editor and the command-line tools all load the same set. Nothing a project or a plugin reaches changes: every name is still on `Reactor3D`.
+- The 3D runtime is now a core file plus extension files, one per concern: `reactor_3d_lighting.js` holds lights and shadows, `reactor_3d_world.js` terrain, pieces and water, and `reactor_3d_speech.js` (once `reactor_speech_3d.js`) the spoken models; `reactor_3d.js` names its extensions so the game, the editor and the command-line tools all load the same set. Nothing a project or a plugin reaches changes: every name is still on `Reactor3D`.
 - CI had been red since the 0.98.6 tag: two suites read Star Shift Rebellion, which is not in the repository. They now skip, or use the tracked fixture, where the project is absent. A fresh clone plus `npm ci --ignore-scripts` and `npm test` reproduces CI locally.
 - `event-command-names-i18n.test.cjs` holds every command and section of the event picker against every locale, loading the translation files in the app's order.
 - A translation can be present and still wrong for where it sits: the Collapse Sound row was translated on its own and ended up naming a different event than the Collapse Effect row above it in seven locales. `i18n.test.cjs` now pairs the two labels by their longest shared run of characters, two where the script writes without spaces and four elsewhere.

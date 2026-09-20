@@ -5936,6 +5936,8 @@ Spriteset_Map.prototype.updateReactor3DCamera = function() {
 if (typeof Reactor3D !== "undefined" && Reactor3D.Camera) {
     Reactor3D.Camera.installHooks();
     Reactor3D.Camera.registerCommands();
+    // Speech boots with the 3D core, before the scene and interpreter classes it hooks.
+    if (Reactor3D.Speech) Reactor3D.Speech.install();
 }
 if (typeof Reactor3D !== "undefined" && Reactor3D.installPropHooks) Reactor3D.installPropHooks();
 

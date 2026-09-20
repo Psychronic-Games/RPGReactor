@@ -124,7 +124,7 @@ class MapEditor3D {
 
     async ensureLibraries() {
         if (this.librariesLoaded) return true;
-        if (typeof window !== 'undefined' && window.pako && window.THREE && window.Reactor3D?.Speech) {
+        if (typeof window !== 'undefined' && window.pako && window.THREE && window.Reactor3D?.extensionsLoaded?.()) {
             this.librariesLoaded = true;
             this.configureWorkers();
             return true;
@@ -155,7 +155,6 @@ class MapEditor3D {
         for (const extension of w.Reactor3D.EXTENSIONS || []) {
             if (!w.Reactor3D[extension.namespace]) files.push(extension.file);
         }
-        if (!w.Reactor3D.Speech) files.push('reactor_speech_3d.js');
         return files;
     }
 

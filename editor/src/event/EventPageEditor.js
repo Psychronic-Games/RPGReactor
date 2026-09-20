@@ -982,7 +982,7 @@ class EventPageEditor {
         await new Promise(resolve => requestAnimationFrame(resolve));
         if (gen !== this._modelPreviewGen) return;
         const map3d = this.projectController && this.projectController.mapEditor3D;
-        const ready = (typeof window !== 'undefined' && window.THREE && window.Reactor3D)
+        const ready = (typeof window !== 'undefined' && window.THREE && window.Reactor3D?.extensionsLoaded?.())
             || (map3d && map3d.ensureLibraries && await map3d.ensureLibraries());
         if (gen !== this._modelPreviewGen || !canvas.isConnected) return;
         if (!ready || typeof THREE === 'undefined' || typeof Reactor3D === 'undefined') return;

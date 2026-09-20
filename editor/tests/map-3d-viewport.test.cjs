@@ -201,13 +201,12 @@ test('WebHost loads 3D viewport dependencies lazily from the bundled project', a
         '/project/js/libs/pako.min.js',
         '/project/js/libs/three.js',
         '/project/js/reactor_3d.js',
-        ...extensions.map(extension => '/project/js/' + extension.file),
-        '/project/js/reactor_speech_3d.js'
-    ], 'the core loads, then the extensions it names, then speech');
+        ...extensions.map(extension => '/project/js/' + extension.file)
+    ], 'the core loads, then the extensions it names');
     assert.equal(web.desktopLookup(), false, 'the browser does not ask for a desktop runtime path');
 
     assert.equal(await web.view.ensureLibraries(), true);
-    assert.equal(web.requested.length, 4 + extensions.length, 'a second request reuses the loaded globals');
+    assert.equal(web.requested.length, 3 + extensions.length, 'a second request reuses the loaded globals');
 });
 
 test('a missing Web 3D dependency reports its project path and can be retried', async () => {
