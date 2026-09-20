@@ -162,17 +162,78 @@ Reactor3D.displaceByTerrain = function(built, mapData) {
 // to it; anything a character cannot step up onto (a block, a fence) blocks
 // through the same rise rule the terrain uses.
 
-Reactor3D.PIECE_KINDS = ["wall", "block", "floor", "pillar", "stair", "ramp", "roof", "doorway", "window", "fence", "dome", "cylinder", "cone"];
 /**
- * Shapes: the round pieces. Unlike the cell pieces they have a size in
+ * Shapes: the free pieces. Unlike the cell pieces they have a size in
  * tiles (`size: [w, h, d]`, the cell they stand on being the middle of
- * the footprint) and a free turn in degrees (`angle`), so a tower is a
- * cylinder five tiles across with a dome on top, and a market tent a
- * cone. The cells a shape's footprint covers block like a wall of its
- * height; nothing walks on a dome.
+ * the footprint, `offset: [ox, oy]` a nudge of the middle within it), a
+ * free turn in degrees (`angle`, clockwise from above), and a `tilt` and
+ * `roll` in degrees about their own middle, so a tower is a cylinder five
+ * tiles across with a dome on top, a market tent a cone, and a fallen
+ * column a cylinder rolled onto its side. The cells a shape's solid parts
+ * cover block like a wall of its height; a tube, a ring, an arch and a
+ * tunnel are hollow, walked into and through.
  */
-Reactor3D.SHAPE_KINDS = ["dome", "cylinder", "cone"];
+Reactor3D.SHAPE_KINDS = ["box", "wedge", "pyramid", "prism", "cylinder", "tube", "cone", "dome", "sphere", "arch", "tunnel", "ring"];
+Reactor3D.PIECE_KINDS = ["wall", "block", "floor", "pillar", "stair", "ramp", "roof", "doorway", "window", "fence"].concat(Reactor3D.SHAPE_KINDS);
 Reactor3D.isShapeKind = function(kind) { return this.SHAPE_KINDS.includes(kind); };
+/** The shapes with an open middle: only their walls block. */
+Reactor3D.HOLLOW_KINDS = ["tube", "ring", "arch", "tunnel"];
+/** A shape's middle on the ground: its cell's middle plus its offset, in tiles. */
+Reactor3D.shapeCentre = function(piece) {
+    const o = Array.isArray(piece.offset) ? piece.offset : [0, 0];
+    return [piece.x + 0.5 + (Number(o[0]) || 0), piece.y + 0.5 + (Number(o[1]) || 0)];
+};
+/** Whether a shape is turned off the vertical (a tilt or a roll). */
+Reactor3D.shapeTurned = function(piece) {
+    return !!(((Number(piece.tilt) || 0) % 360) || ((Number(piece.roll) || 0) % 360));
+};
+/**
+ * The map from a shape's unit cell (u across, y up, v along, each 0..1)
+ * to the world: stretched to its size, rolled about its own forward axis,
+ * tilted about its sideways axis, turned about the vertical, all about
+ * the middle of its box, then stood at its cell with its lowest corner at
+ * its height, so a rolled column lies on the ground. `base` is the ground
+ * under the piece.
+ */
+Reactor3D.shapePlacer = function(piece, base) {
+    const [w, h, d] = this.shapeSize(piece);
+    const [cx, cz] = this.shapeCentre(piece);
+    const rad = deg => (Number(deg) || 0) * Math.PI / 180;
+    const yaw = -rad((Number(piece.angle) || 0) + (Number(piece.rot) || 0) * 90), tilt = rad(piece.tilt), roll = rad(piece.roll);
+    const cy = Math.cos(yaw), sy = Math.sin(yaw), ct = Math.cos(tilt), st = Math.sin(tilt), cr = Math.cos(roll), sr = Math.sin(roll);
+    const turned = this.shapeTurned(piece);
+    const spin = (u, y, v) => {
+        let x = (u - 0.5) * w, yy = (y - 0.5) * h, z = (v - 0.5) * d;
+        if (turned) {
+            let t = x * cr - yy * sr; yy = x * sr + yy * cr; x = t;
+            t = yy * ct - z * st; z = yy * st + z * ct; yy = t;
+        }
+        const tx = x * cy + z * sy; z = -x * sy + z * cy; x = tx;
+        return [x, yy, z];
+    };
+    let lowest = -h / 2;
+    if (turned) { lowest = Infinity; for (const u of [0, 1]) for (const y of [0, 1]) for (const v of [0, 1]) lowest = Math.min(lowest, spin(u, y, v)[1]); }
+    const oy = (Number(base) || 0) + (Number(piece.z) || 0) - lowest;
+    return (u, y, v) => { const q = spin(u, y, v); return [cx + q[0], oy + q[1], cz + q[2]]; };
+};
+/**
+ * Whether a point of the ground, `lx` across and `lz` along from a
+ * shape's middle in its own turned frame (tiles), is under a solid part
+ * of the shape: a round one inside its ellipse, a hollow one in its wall,
+ * an arch or tunnel in its posts. `slack` widens the solid part so the
+ * rim's cells block too.
+ */
+Reactor3D.shapeSolidAt = function(kind, lx, lz, hw, hd, slack) {
+    const s = slack || 0;
+    const inside = (kw, kd, grow) => { const a = hw * kw + grow, b = hd * kd + grow; return a > 0 && b > 0 && (lx * lx) / (a * a) + (lz * lz) / (b * b) <= 1; };
+    switch (kind) {
+        case "cylinder": case "cone": case "dome": case "sphere": return inside(1, 1, s);
+        case "tube": return inside(1, 1, s) && !inside(0.7, 0.7, -s);
+        case "ring": return inside(1, 1, s) && !inside(0.6, 0.6, -s);
+        case "arch": case "tunnel": return Math.abs(lx) <= hw + s && Math.abs(lz) <= hd + s && Math.abs(lx) >= hw * 0.7 - s;
+        default: return Math.abs(lx) <= hw + s && Math.abs(lz) <= hd + s;
+    }
+};
 /** A shape's [w, h, d] in tiles; a cell piece is one by one by its height. */
 Reactor3D.shapeSize = function(piece) {
     const size = Array.isArray(piece.size) ? piece.size : null;
@@ -182,24 +243,63 @@ Reactor3D.shapeSize = function(piece) {
 /** The cells a piece's footprint covers: one for a cell piece, w by d round the middle for a shape. */
 Reactor3D.pieceFootprint = function(piece) {
     if (!this.isShapeKind(piece.kind)) return [[piece.x, piece.y]];
+    const SLACK = 0.15;
     const [w, , d] = this.shapeSize(piece);
-    const angle = (Number(piece.angle) || 0) * Math.PI / 180;
-    // The footprint of a turned box: its corners turned, then every cell the box covers.
-    const hw = w / 2, hd = d / 2, cx = piece.x + 0.5, cz = piece.y + 0.5;
-    const corners = [[-hw, -hd], [hw, -hd], [hw, hd], [-hw, hd]].map(([u, v]) => [cx + u * Math.cos(angle) - v * Math.sin(angle), cz + u * Math.sin(angle) + v * Math.cos(angle)]);
-    const x0 = Math.floor(Math.min(...corners.map(c => c[0])) + 1e-6), x1 = Math.ceil(Math.max(...corners.map(c => c[0])) - 1e-6) - 1;
-    const y0 = Math.floor(Math.min(...corners.map(c => c[1])) + 1e-6), y1 = Math.ceil(Math.max(...corners.map(c => c[1])) - 1e-6) - 1;
-    // The pieces are round: a cell counts when its middle lies inside the
-    // turned ellipse, with a little slack so the rim's cells block too.
+    const hw = w / 2, hd = d / 2;
+    const [cx, cz] = this.shapeCentre(piece);
     const cells = [];
-    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
-        if (x < 0 || y < 0) continue;
-        const px = x + 0.5 - cx, pz = y + 0.5 - cz;
-        const u = px * Math.cos(-angle) - pz * Math.sin(-angle), v = px * Math.sin(-angle) + pz * Math.cos(-angle);
-        if ((u * u) / ((hw + 0.15) * (hw + 0.15)) + (v * v) / ((hd + 0.15) * (hd + 0.15)) <= 1) cells.push([x, y]);
+    if (this.shapeTurned(piece)) {
+        // Tilted or rolled: the shadow the turned box throws on the ground, the hull of
+        // its corners; a cell counts when its middle lies in it or within the slack of it.
+        const at = this.shapePlacer(piece, 0);
+        const pts = [];
+        for (const u of [0, 1]) for (const y of [0, 1]) for (const v of [0, 1]) { const q = at(u, y, v); pts.push([q[0], q[2]]); }
+        const hull = this.convexHull(pts);
+        const x0 = Math.floor(Math.min(...hull.map(c => c[0])) - SLACK), x1 = Math.ceil(Math.max(...hull.map(c => c[0])) + SLACK);
+        const y0 = Math.floor(Math.min(...hull.map(c => c[1])) - SLACK), y1 = Math.ceil(Math.max(...hull.map(c => c[1])) + SLACK);
+        for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+            if (x < 0 || y < 0) continue;
+            if (this.hullReach([x + 0.5, y + 0.5], hull) <= SLACK) cells.push([x, y]);
+        }
+    } else {
+        const angle = ((Number(piece.angle) || 0) + (Number(piece.rot) || 0) * 90) * Math.PI / 180;
+        const corners = [[-hw, -hd], [hw, -hd], [hw, hd], [-hw, hd]].map(([u, v]) => [cx + u * Math.cos(angle) - v * Math.sin(angle), cz + u * Math.sin(angle) + v * Math.cos(angle)]);
+        const x0 = Math.floor(Math.min(...corners.map(c => c[0])) - SLACK), x1 = Math.ceil(Math.max(...corners.map(c => c[0])) + SLACK) - 1;
+        const y0 = Math.floor(Math.min(...corners.map(c => c[1])) - SLACK), y1 = Math.ceil(Math.max(...corners.map(c => c[1])) + SLACK) - 1;
+        // A cell counts when its middle, seen from the shape's own frame, is under a solid part.
+        for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+            if (x < 0 || y < 0) continue;
+            const px = x + 0.5 - cx, pz = y + 0.5 - cz;
+            const u = px * Math.cos(-angle) - pz * Math.sin(-angle), v = px * Math.sin(-angle) + pz * Math.cos(-angle);
+            if (this.shapeSolidAt(piece.kind, u, v, hw, hd, SLACK)) cells.push([x, y]);
+        }
     }
-    if (!cells.length) cells.push([piece.x, piece.y]);
+    if (!cells.length && !this.HOLLOW_KINDS.includes(piece.kind)) cells.push([piece.x, piece.y]);
     return cells;
+};
+/** The convex hull of ground points [[x, z]], counter-clockwise, by monotone chain. */
+Reactor3D.convexHull = function(points) {
+    const pts = points.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    if (pts.length < 3) return pts;
+    const cross = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+    const lower = [], upper = [];
+    for (const q of pts) { while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], q) <= 1e-12) lower.pop(); lower.push(q); }
+    for (let i = pts.length - 1; i >= 0; i--) { const q = pts[i]; while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], q) <= 1e-12) upper.pop(); upper.push(q); }
+    return lower.slice(0, -1).concat(upper.slice(0, -1));
+};
+/** How far a ground point lies outside a convex hull: zero inside, else the distance to its edge. */
+Reactor3D.hullReach = function(point, hull) {
+    if (hull.length < 3) return Infinity;
+    let inside = true, nearest = Infinity;
+    for (let i = 0; i < hull.length; i++) {
+        const a = hull[i], b = hull[(i + 1) % hull.length];
+        const ex = b[0] - a[0], ez = b[1] - a[1];
+        if (ex * (point[1] - a[1]) - ez * (point[0] - a[0]) < 0) inside = false;
+        const len2 = ex * ex + ez * ez || 1;
+        const t = Math.max(0, Math.min(1, ((point[0] - a[0]) * ex + (point[1] - a[1]) * ez) / len2));
+        nearest = Math.min(nearest, Math.hypot(point[0] - (a[0] + ex * t), point[1] - (a[1] + ez * t)));
+    }
+    return inside ? 0 : nearest;
 };
 // Levels a piece may stand at: 24 storeys of five tiles, so a tower plan is never cut short by the store.
 Reactor3D.PIECE_MAX_LEVEL = 120;
@@ -224,7 +324,9 @@ Reactor3D.normalizePiece = function(raw, mapData) {
     const x = Math.floor(Number(raw.x)), y = Math.floor(Number(raw.y));
     if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || y < 0) return null;
     if (mapData && (x >= mapData.width || y >= mapData.height)) return null;
-    const z = Math.max(0, Math.min(this.PIECE_MAX_LEVEL, Math.floor(Number(raw.z)) || 0));
+    const shape = this.isShapeKind(kind);
+    // A shape stands at any quarter tile; a cell piece at a whole level.
+    const z = Math.max(0, Math.min(this.PIECE_MAX_LEVEL, shape ? Math.round((Number(raw.z) || 0) * 4) / 4 : Math.floor(Number(raw.z)) || 0));
     const rot = ((Math.floor(Number(raw.rot)) || 0) % 4 + 4) % 4;
     const material = typeof raw.material === "string" ? raw.material.trim() : "";
     const id = Number(raw.id);
@@ -237,6 +339,13 @@ Reactor3D.normalizePiece = function(raw, mapData) {
         piece.size = [n(size[0], 1), n(size[1], 1), n(size[2], n(size[0], 1))];
         const angle = Number(raw.angle);
         piece.angle = Number.isFinite(angle) ? ((Math.round(angle) % 360) + 360) % 360 : 0;
+        // A tilt, a roll and an offset only when they are something, so a plain shape stays plain.
+        const turn = v => { const k = Number(v); return Number.isFinite(k) ? ((Math.round(k) % 360) + 360) % 360 : 0; };
+        const tilt = turn(raw.tilt), roll = turn(raw.roll);
+        if (tilt) piece.tilt = tilt;
+        if (roll) piece.roll = roll;
+        const offset = Array.isArray(raw.offset) ? raw.offset.slice(0, 2).map(v => Math.max(-0.5, Math.min(0.5, Math.round((Number(v) || 0) * 100) / 100))) : null;
+        if (offset && (offset[0] || offset[1])) piece.offset = [offset[0] || 0, offset[1] || 0];
     }
     return piece;
 };
@@ -329,8 +438,15 @@ Reactor3D.pieceTop = function(piece, u, v) {
         // A doorway is stood in at its threshold: the level it is laid at,
         // which is the ground downstairs and the floor's level upstairs.
         case "doorway": return piece.z;
-        case "dome": case "cylinder": case "cone": return piece.z + this.shapeSize(piece)[1];
-        default: return piece.z + this.pieceHeight(piece.kind);
+        default:
+            if (this.isShapeKind(piece.kind)) {
+                if (!this.shapeTurned(piece)) return piece.z + this.shapeSize(piece)[1];
+                const at = this.shapePlacer(piece, 0);
+                let top = -Infinity;
+                for (const u of [0, 1]) for (const y of [0, 1]) for (const v of [0, 1]) top = Math.max(top, at(u, y, v)[1]);
+                return top;
+            }
+            return piece.z + this.pieceHeight(piece.kind);
     }
 };
 
@@ -517,10 +633,19 @@ Reactor3D.pieceShapes = function(kind) {
         case "window": return [box(0, 0, 0, 1, 1.5, 1), box(0, S - 1.4, 0, 1, S, 1)];
         // Waist high on a three-tile character; it still blocks a cell.
         case "fence": return [box(0.05, 0, 0.42, 0.15, 1.5, 0.58), box(0.85, 0, 0.42, 0.95, 1.5, 0.58), box(0, 0.5, 0.45, 1, 0.62, 0.55), box(0, 1.15, 0.45, 1, 1.27, 0.55)];
-        // The round pieces fill the unit cell; their size stretches the cell.
+        // The shapes fill the unit cell; their size stretches the cell.
+        case "box": return [box(0, 0, 0, 1, 1, 1)];
+        case "wedge": return [{ wedge: true }];
+        case "prism": return [{ gable: true }];
+        case "pyramid": return [{ pyramid: true }];
         case "cylinder": return [{ column: [0.5, 0.5, 0.5, 0, 1, 32] }];
+        case "tube": return [{ tube: [0.5, 0.5, 0.5, 0.35, 0, 1, 32] }];
         case "cone": return [{ cone: [0.5, 0.5, 0.5, 0, 1, 32] }];
         case "dome": return [{ dome: [0.5, 0.5, 0.5, 0, 32, 10] }];
+        case "sphere": return [{ sphere: [0.5, 0.5, 0.5, 0.5, 32, 16] }];
+        // An arch is a wall with a round-topped opening through it; a tunnel is the same, deep.
+        case "arch": case "tunnel": return [{ arch: [0.15, 0.5, 0.35, 24] }];
+        case "ring": return [{ torus: [0.5, 0.5, 0.5, 0.4, 0.1, 0.5, 32, 16] }];
         default: return [];
     }
 };
@@ -536,20 +661,17 @@ Reactor3D.emitPiece = function(piece, base, out, hidden) {
     const cx = piece.x + 0.5, cz = piece.y + 0.5, oy = base + piece.z;
     const rot = piece.rot;
     const skip = hidden || {};
-    // A shape is the unit cell stretched to its size and turned by its angle.
-    const shape = this.isShapeKind(piece.kind);
-    const [sw, sh, sd] = shape ? this.shapeSize(piece) : [1, 1, 1];
-    const angle = shape ? (Number(piece.angle) || 0) * Math.PI / 180 : 0;
-    const cosA = Math.cos(angle), sinA = Math.sin(angle);
+    // A shape is the unit cell stretched to its size, turned, tilted and rolled about its middle.
+    const placeShape = this.isShapeKind(piece.kind) ? this.shapePlacer(piece, base) : null;
     const place = (x, y, v) => {
-        let dx = (x - 0.5) * sw, dz = (v - 0.5) * sd;
+        if (placeShape) return placeShape(x, y, v);
+        let dx = x - 0.5, dz = v - 0.5;
         for (let i = 0; i < rot; i++) {
             const next = -dz;
             dz = dx;
             dx = next;
         }
-        if (angle) { const tx = dx * cosA - dz * sinA; dz = dx * sinA + dz * cosA; dx = tx; }
-        return [cx + dx, oy + y * sh, cz + dz];
+        return [cx + dx, oy + y, cz + dz];
     };
     const shadeFor = (nx, ny, nz) => {
         if (ny > 0.7) return 1;
@@ -639,6 +761,77 @@ Reactor3D.emitPiece = function(piece, base, out, hidden) {
             for (let i = 0; i < segments; i++) {
                 const a0 = (i / segments) * Math.PI * 2, a1 = ((i + 1) / segments) * Math.PI * 2;
                 tri(place(ccx, y0, ccv), place(ccx + Math.cos(a0) * r, y0, ccv + Math.sin(a0) * r), place(ccx + Math.cos(a1) * r, y0, ccv + Math.sin(a1) * r));
+            }
+        } else if (shape.pyramid) {
+            const p = place, apex = p(0.5, 1, 0.5);
+            quad(p(0, 0, 0), p(1, 0, 0), p(1, 0, 1), p(0, 0, 1)); // bottom
+            tri(p(1, 0, 0), p(0, 0, 0), apex); // north
+            tri(p(0, 0, 1), p(1, 0, 1), apex); // south
+            tri(p(1, 0, 1), p(1, 0, 0), apex); // east
+            tri(p(0, 0, 0), p(0, 0, 1), apex); // west
+        } else if (shape.sphere) {
+            // Rings of quads from pole to pole, wound up the ring first like the dome.
+            const [ccx, ccy, ccv, r, segs, ringCount] = shape.sphere;
+            const segments = segs || 24, rings = ringCount || 12;
+            const at = (i, j) => {
+                const a = (i / segments) * Math.PI * 2, t = -Math.PI / 2 + (j / rings) * Math.PI;
+                return place(ccx + Math.cos(a) * Math.cos(t) * r, ccy + Math.sin(t) * r, ccv + Math.sin(a) * Math.cos(t) * r);
+            };
+            for (let j = 0; j < rings; j++) for (let i = 0; i < segments; i++) {
+                if (j === 0) tri(at(i, j), at(i, j + 1), at(i + 1, j + 1));
+                else if (j === rings - 1) tri(at(i, j), at(i, j + 1), at(i + 1, j));
+                else quad(at(i, j), at(i, j + 1), at(i + 1, j + 1), at(i + 1, j));
+            }
+        } else if (shape.tube) {
+            // A column with a hole down its middle: the inner wall faces the hole, the ends are rings.
+            const [ccx, ccv, r, ri, y0, y1, segs] = shape.tube;
+            const segments = segs || 24;
+            for (let i = 0; i < segments; i++) {
+                const a0 = (i / segments) * Math.PI * 2, a1 = ((i + 1) / segments) * Math.PI * 2;
+                const o0 = [ccx + Math.cos(a0) * r, ccv + Math.sin(a0) * r], o1 = [ccx + Math.cos(a1) * r, ccv + Math.sin(a1) * r];
+                const n0 = [ccx + Math.cos(a0) * ri, ccv + Math.sin(a0) * ri], n1 = [ccx + Math.cos(a1) * ri, ccv + Math.sin(a1) * ri];
+                quad(place(o0[0], y0, o0[1]), place(o0[0], y1, o0[1]), place(o1[0], y1, o1[1]), place(o1[0], y0, o1[1])); // outside
+                quad(place(n1[0], y0, n1[1]), place(n1[0], y1, n1[1]), place(n0[0], y1, n0[1]), place(n0[0], y0, n0[1])); // inside
+                quad(place(o0[0], y1, o0[1]), place(n0[0], y1, n0[1]), place(n1[0], y1, n1[1]), place(o1[0], y1, o1[1])); // top ring
+                quad(place(o0[0], y0, o0[1]), place(o1[0], y0, o1[1]), place(n1[0], y0, n1[1]), place(n0[0], y0, n0[1])); // bottom ring
+            }
+        } else if (shape.torus) {
+            // A ring lying flat: the tube's cross-section is `rh` wide and `rv` tall, so a
+            // one-tile-tall ring's tube stands the full height.
+            const [ccx, ccy, ccv, R, rh, rv, segs, tsegs] = shape.torus;
+            const segments = segs || 24, around = tsegs || 8;
+            const at = (i, j) => {
+                const a = (i / segments) * Math.PI * 2, b = (j / around) * Math.PI * 2;
+                const rad = R + Math.cos(b) * rh;
+                return place(ccx + Math.cos(a) * rad, ccy + Math.sin(b) * rv, ccv + Math.sin(a) * rad);
+            };
+            for (let j = 0; j < around; j++) for (let i = 0; i < segments; i++) quad(at(i, j), at(i, j + 1), at(i + 1, j + 1), at(i + 1, j));
+        } else if (shape.arch) {
+            // A wall (the unit cell) with an opening through it along v: posts `post` wide, the
+            // opening straight up to `spring` and a half circle of `r` above, the band over it solid.
+            const [post, spring, r, segs] = shape.arch;
+            const p = place, segments = segs || 16;
+            const arc = i => { const t = Math.PI - (i / segments) * Math.PI; return [0.5 + Math.cos(t) * r, spring + Math.sin(t) * r]; }; // left to right
+            // A face in the u-y plane at v: `south` order is bottom-left, bottom-right, top-right, top-left.
+            const south = (a, b, c, d) => quad(p(a[0], a[1], 1), p(b[0], b[1], 1), p(c[0], c[1], 1), p(d[0], d[1], 1));
+            const north = (a, b, c, d) => quad(p(b[0], b[1], 0), p(a[0], a[1], 0), p(d[0], d[1], 0), p(c[0], c[1], 0));
+            for (const face of [south, north]) {
+                face([0, 0], [post, 0], [post, spring], [0, spring]); // left post
+                face([1 - post, 0], [1, 0], [1, spring], [1 - post, spring]); // right post
+                face([0, spring], [post, spring], [post, 1], [0, 1]); // over the left post
+                face([1 - post, spring], [1, spring], [1, 1], [1 - post, 1]); // over the right post
+                for (let i = 0; i < segments; i++) { const a = arc(i), b = arc(i + 1); face(a, b, [b[0], 1], [a[0], 1]); } // the band over the arc
+            }
+            quad(p(0, 1, 0), p(0, 1, 1), p(1, 1, 1), p(1, 1, 0)); // top
+            quad(p(0, 0, 0), p(post, 0, 0), p(post, 0, 1), p(0, 0, 1)); // under the left post
+            quad(p(1 - post, 0, 0), p(1, 0, 0), p(1, 0, 1), p(1 - post, 0, 1)); // under the right post
+            quad(p(1, 0, 1), p(1, 0, 0), p(1, 1, 0), p(1, 1, 1)); // east
+            quad(p(0, 0, 0), p(0, 0, 1), p(0, 1, 1), p(0, 1, 0)); // west
+            quad(p(post, 0, 1), p(post, 0, 0), p(post, spring, 0), p(post, spring, 1)); // the left post's inner face
+            quad(p(1 - post, 0, 0), p(1 - post, 0, 1), p(1 - post, spring, 1), p(1 - post, spring, 0)); // the right post's inner face
+            for (let i = 0; i < segments; i++) { // the underside of the arc, facing into the opening
+                const a = arc(i), b = arc(i + 1);
+                quad(p(a[0], a[1], 0), p(b[0], b[1], 0), p(b[0], b[1], 1), p(a[0], a[1], 1));
             }
         }
     }

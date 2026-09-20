@@ -23,7 +23,13 @@ class DatabaseStructureEditor {
     static SIZE_MIN = 4;
     static SIZE_MAX = 200;
     static TOOLS = ['select', 'room', 'door', 'window', 'stairs', 'person', 'shape'];
-    static SHAPE_KINDS = ['dome', 'cylinder', 'cone'];
+    static SHAPE_KINDS = ['box', 'wedge', 'pyramid', 'prism', 'cylinder', 'tube', 'cone', 'dome', 'sphere', 'arch', 'tunnel', 'ring'];
+    /** What a shape is first placed at, in tiles: wide enough to see, tall enough to matter. */
+    static SHAPE_DEFAULTS = { box: [4, 3, 4], wedge: [4, 2, 4], pyramid: [4, 4, 4], prism: [4, 3, 6], cylinder: [4, 6, 4], tube: [6, 5, 6], cone: [4, 4, 4], dome: [4, 2, 4], sphere: [4, 4, 4], arch: [3, 4, 1], tunnel: [4, 4, 8], ring: [6, 1, 6], tower: [4, 6, 4] };
+    /** The three things the 3D handles do to a selected shape. */
+    static GIZMO_MODES = ['move', 'turn', 'size'];
+    /** How close a dragged face comes to another shape's face before it clicks onto it, in tiles. */
+    static SNAP_REACH = 0.35;
     static HISTORY = 100;
 
     constructor(databaseManager, projectController, commonUI, parentEditor) {
@@ -45,6 +51,8 @@ class DatabaseStructureEditor {
         this._previewTimer = null;
         this._hover = null;
         this._shape = { kind: 'cylinder', size: [4, 6, 4] };
+        this._gizmoMode = 'move';
+        this._sizeLock = false;
         this._redraw = 0;
         this._reportStale = false;
         this._picker = null;
@@ -86,6 +94,21 @@ class DatabaseStructureEditor {
             cylinder: `<path d="M3.5 4a4.5 1.5 0 0 0 9 0a4.5 1.5 0 0 0-9 0M3.5 4v8a4.5 1.5 0 0 0 9 0V4" ${stroke}/>`,
             cone: `<path d="M8 2l5.5 11h-11z M2.5 13a5.5 1.3 0 0 0 11 0" ${stroke}/>`,
             tower: `<path d="M4 7a4 4 0 0 1 8 0M4 7v6.5a4 1.2 0 0 0 8 0V7" ${stroke}/>`,
+            box: `<path d="M8 2l5 3v6l-5 3-5-3V5z M8 8l5-3 M8 8v6 M8 8L3 5" ${stroke}/>`,
+            wedge: `<path d="M2 13h12L2 5z" ${stroke}/>`,
+            pyramid: `<path d="M8 2l6 11H2z M8 2v11" ${stroke}/>`,
+            prism: `<path d="M2 13h9L6.5 5z M6.5 5l2.5-2 5 8-2.5 2" ${stroke}/>`,
+            tube: `<path d="M3.5 4a4.5 1.5 0 0 0 9 0a4.5 1.5 0 0 0-9 0M3.5 4v8a4.5 1.5 0 0 0 9 0V4 M6 4a2 .7 0 0 0 4 0a2 .7 0 0 0-4 0" ${stroke}/>`,
+            sphere: `<path d="M8 2a6 6 0 1 0 0 12a6 6 0 1 0 0-12 M2 8h12 M8 2a3 6 0 0 0 0 12" ${stroke}/>`,
+            arch: `<path d="M2.5 14V7a5.5 5.5 0 0 1 11 0v7 M5.5 14V8a2.5 2.5 0 0 1 5 0v6" ${stroke}/>`,
+            tunnel: `<path d="M2.5 13V7.5a5.5 5.5 0 0 1 11 0V13 M5.5 13V8.5a2.5 2.5 0 0 1 5 0V13 M2.5 13h11 M5.5 8.5L3 5.5 M10.5 8.5L13 5.5" ${stroke}/>`,
+            ring: `<path d="M8 3a5.5 2.5 0 1 0 0 5a5.5 2.5 0 1 0 0-5 M8 4.6a2.2 .9 0 1 0 0 1.8a2.2 .9 0 1 0 0-1.8 M2.5 5.5v4a5.5 2.5 0 0 0 11 0v-4" ${stroke}/>`,
+            move: `<path d="M8 2v12M2 8h12M8 2l-2 2M8 2l2 2M8 14l-2-2M8 14l2-2M2 8l2-2M2 8l2 2M14 8l-2-2M14 8l-2 2" ${stroke}/>`,
+            turn: `<path d="M13 8a5 5 0 1 1-1.5-3.5M11.5 2v2.5H14" ${stroke}/>`,
+            size: `<path d="M3 13V8M3 13h5M3 13l4-4M13 3v5M13 3H8M13 3L9 7" ${stroke}/>`,
+            lock: `<path d="M4 7h8v7H4z M5.5 7V5a2.5 2.5 0 0 1 5 0v2" ${stroke}/>`,
+            unlock: `<path d="M4 7h8v7H4z M5.5 7V5a2.5 2.5 0 0 1 5 0" ${stroke}/>`,
+            duplicate: `<path d="M5 5h8v8H5z M3 11V3h8" ${stroke}/>`,
             north: `<path d="M8 13V3M4 7l4-4 4 4" ${stroke}/>`,
             south: `<path d="M8 3v10M4 9l4 4 4-4" ${stroke}/>`,
             west: `<path d="M13 8H3M7 4L3 8l4 4" ${stroke}/>`,
@@ -191,8 +214,11 @@ class DatabaseStructureEditor {
         plan.shapes = (Array.isArray(plan.shapes) ? plan.shapes : []).filter(shape => shape && this.SHAPE_KINDS.includes(shape.kind)).map(shape => {
             const size = Array.isArray(shape.size) ? shape.size : [];
             const n = (v, fallback) => { const k = Number(v); return Number.isFinite(k) && k > 0 ? Math.min(60, Math.round(k * 100) / 100) : fallback; };
-            return { kind: shape.kind, at: [int(shape.at?.[0], 0, 0, this.SIZE_MAX), int(shape.at?.[1], 0, 0, this.SIZE_MAX)], z: int(shape.z, 0, 0, 120),
-                size: [n(size[0], 3), n(size[1], 2), n(size[2], n(size[0], 3))], angle: ((Math.round(Number(shape.angle)) || 0) % 360 + 360) % 360, material: String(shape.material || '') };
+            const turn = v => ((Math.round(Number(v)) || 0) % 360 + 360) % 360;
+            const off = v => Math.max(-0.5, Math.min(0.5, Math.round((Number(v) || 0) * 100) / 100));
+            return { kind: shape.kind, at: [int(shape.at?.[0], 0, 0, this.SIZE_MAX), int(shape.at?.[1], 0, 0, this.SIZE_MAX)], z: Math.max(0, Math.min(120, Math.round((Number(shape.z) || 0) * 4) / 4)),
+                size: [n(size[0], 3), n(size[1], 2), n(size[2], n(size[0], 3))], angle: turn(shape.angle), tilt: turn(shape.tilt), roll: turn(shape.roll),
+                offset: [off(shape.offset?.[0]), off(shape.offset?.[1])], material: String(shape.material || '') };
         });
         plan.paths = (Array.isArray(plan.paths) ? plan.paths : []).filter(Array.isArray).map(strip => {
             const out = [0, 1, 2, 3].map(i => int(strip[i], 0, 0, this.SIZE_MAX));
@@ -236,6 +262,9 @@ class DatabaseStructureEditor {
             if (shape.z) out.z = shape.z;
             out.size = shape.size.slice();
             if (shape.angle) out.angle = shape.angle;
+            if (shape.tilt) out.tilt = shape.tilt;
+            if (shape.roll) out.roll = shape.roll;
+            if (shape.offset && (shape.offset[0] || shape.offset[1])) out.offset = shape.offset.slice();
             if (shape.material) out.material = shape.material;
             return out;
         });
@@ -650,15 +679,24 @@ class DatabaseStructureEditor {
                 ${this._field(tt('Rises'), arrows('rr-structures-stair-dir', stair.dir))}
                 ${this._field(tt('Width'), this._numberHtml('rr-structures-stair-width', stair.width, 'min="1" max="8"'))}`;
         } else if (sel && sel.kind === 'shape' && plan.shapes[sel.key]) {
+            // One shape: what it is, then one of three things to do to it (move, turn, size),
+            // with that thing's three numbers; the handles on the 3D view do the same by drag.
             const shape = plan.shapes[sel.key];
-            const kinds = `<span style="display:inline-flex;gap:2px;">${DatabaseStructureEditor.SHAPE_KINDS.map(kind => `<button type="button" class="rr-btn-secondary rr-structures-shape-kind" data-kind="${kind}" title="${rrEscapeHtml(tt(kind === 'dome' ? 'Dome' : kind === 'cylinder' ? 'Cylinder' : 'Cone'))}" aria-pressed="${kind === shape.kind}" style="width:26px;height:26px;padding:0;display:flex;align-items:center;justify-content:center;${kind === shape.kind ? 'border-color:var(--color-accent);' : ''}">${DatabaseStructureEditor.icon(kind)}</button>`).join('')}</span>`;
-            const num = (i, min, max, step) => `<input type="number" class="database-field-value rr-structures-shape-size" data-i="${i}" value="${shape.size[i]}" min="${min}" max="${max}" step="${step}" style="width:52px;">`;
+            const mode = this._gizmoMode;
+            const modes = `<span style="display:inline-flex;gap:2px;">${DatabaseStructureEditor.GIZMO_MODES.map(m => `<button type="button" class="rr-btn-secondary rr-structures-shape-mode" data-mode="${m}" title="${rrEscapeHtml(tt(m === 'move' ? 'Move' : m === 'turn' ? 'Turn' : 'Size'))}" aria-pressed="${m === mode}" style="width:26px;height:26px;padding:0;display:flex;align-items:center;justify-content:center;${m === mode ? 'border-color:var(--color-accent);' : ''}">${DatabaseStructureEditor.icon(m)}</button>`).join('')}</span>`;
+            const field = (cls, label, value, min, max, step, i) => this._field(label, `<input type="number" class="database-field-value ${cls}" data-i="${i}" value="${value}" min="${min}" max="${max}" step="${step}" style="width:64px;">`);
+            const [cx, cy] = DatabaseStructureEditor.shapeCentre(shape);
+            let numbers = '';
+            if (mode === 'move') numbers = field('rr-structures-shape-pos', 'X', cx, 0, DatabaseStructureEditor.SIZE_MAX, 0.25, 0) + field('rr-structures-shape-pos', 'Y', cy, 0, DatabaseStructureEditor.SIZE_MAX, 0.25, 1) + field('rr-structures-shape-pos', tt('Up'), shape.z, 0, 120, 0.25, 2);
+            else if (mode === 'turn') numbers = field('rr-structures-shape-turn', tt('Turn'), shape.angle, 0, 359, 5, 0) + field('rr-structures-shape-turn', tt('Tilt'), shape.tilt || 0, 0, 359, 5, 1) + field('rr-structures-shape-turn', tt('Roll'), shape.roll || 0, 0, 359, 5, 2);
+            else numbers = field('rr-structures-shape-size', tt('Width'), shape.size[0], 0.25, 60, 0.25, 0) + field('rr-structures-shape-size', tt('Height'), shape.size[1], 0.25, 60, 0.25, 1) + field('rr-structures-shape-size', tt('Depth'), shape.size[2], 0.25, 60, 0.25, 2)
+                + `<button type="button" class="rr-btn-secondary rr-structures-shape-lock" title="${rrEscapeHtml(tt('Keep the proportions'))}" aria-pressed="${this._sizeLock}" style="width:26px;height:26px;padding:0;display:flex;align-items:center;justify-content:center;${this._sizeLock ? 'border-color:var(--color-accent);' : ''}">${DatabaseStructureEditor.icon(this._sizeLock ? 'lock' : 'unlock')}</button>`;
             html = `${kindLabel(tt('Shape'))}
-                ${this._field(tt('Kind'), kinds)}
-                ${this._field(tt('Size'), `${num(0, 0.5, 60, 0.5)}<span>×</span>${num(1, 0.25, 60, 0.25)}<span>×</span>${num(2, 0.5, 60, 0.5)}`)}
-                ${this._field(tt('Height'), `<input type="number" class="database-field-value rr-structures-shape-z" value="${shape.z}" min="0" max="120" step="1" style="width:52px;">`)}
-                ${this._field(tt('Angle'), `<input type="number" class="database-field-value rr-structures-shape-angle" value="${shape.angle}" min="0" max="359" step="5" style="width:56px;">`)}
-                ${this._field(tt('Material'), this._materialPickerHtml('rr-structures-shape-material', shape.material, '', tt("Building's own")))}`;
+                ${this._shapePickHtml('rr-structures-shape-pick', shape.kind)}
+                ${modes}
+                ${numbers}
+                ${this._materialPickerHtml('rr-structures-shape-material', shape.material, `title="${rrEscapeHtml(tt('Material'))}"`, tt("Building's own"))}
+                <button type="button" class="rr-btn-secondary rr-structures-shape-duplicate" title="${rrEscapeHtml(tt('Duplicate'))}" style="width:26px;height:26px;padding:0;display:flex;align-items:center;justify-content:center;">${DatabaseStructureEditor.icon('duplicate')}</button>`;
         } else if (sel && sel.kind === 'spot' && plan.spots[sel.key]) {
             const event = plan.events.find(item => item.spot === sel.key) || null;
             const templates = this.eventTemplates();
@@ -669,11 +707,10 @@ class DatabaseStructureEditor {
                 ${event ? this._field(tt('Facing'), facingArrows('rr-structures-person-facing', event.direction)) : ''}`;
         } else if (this.tool === 'shape' && floor) {
             const pending = this._shape;
-            const kinds = `<span style="display:inline-flex;gap:2px;">${[...DatabaseStructureEditor.SHAPE_KINDS, 'tower'].map(kind => `<button type="button" class="rr-btn-secondary rr-structures-next-kind" data-kind="${kind}" title="${rrEscapeHtml(tt(kind === 'tower' ? 'Tower' : kind === 'dome' ? 'Dome' : kind === 'cylinder' ? 'Cylinder' : 'Cone'))}" aria-pressed="${kind === pending.kind}" style="width:26px;height:26px;padding:0;display:flex;align-items:center;justify-content:center;${kind === pending.kind ? 'border-color:var(--color-accent);' : ''}">${DatabaseStructureEditor.icon(kind)}</button>`).join('')}</span>`;
             const num = (i, min, max, step) => `<input type="number" class="database-field-value rr-structures-next-size" data-i="${i}" value="${pending.size[i]}" min="${min}" max="${max}" step="${step}" style="width:52px;">`;
             html = `${kindLabel(tt('Shape'))}
-                ${this._field(tt('Kind'), kinds)}
-                ${this._field(tt('Size'), `${num(0, 0.5, 60, 0.5)}<span>×</span>${num(1, 0.25, 60, 0.25)}<span>×</span>${num(2, 0.5, 60, 0.5)}`)}
+                ${this._shapePickHtml('rr-structures-next-pick', pending.kind)}
+                ${this._field(tt('Size'), `${num(0, 0.25, 60, 0.25)}<span>×</span>${num(1, 0.25, 60, 0.25)}<span>×</span>${num(2, 0.25, 60, 0.25)}`)}
                 <span style="color:var(--color-text-muted);">${tt('Click the plan to place it; on another shape, it sits on top. A tower is a cylinder with a dome on it.')}</span>`;
         } else {
             const hints = {
@@ -682,7 +719,7 @@ class DatabaseStructureEditor {
                 door: tt('Click a wall between two rooms for a door, an outer wall beside a room for the front door. Drag a door along its wall.'),
                 window: tt('Click an outer wall for a window. Drag a window along the wall.'),
                 stairs: tt('Click a cell inside a room to start stairs there. Each cell climbs one tile.'),
-                shape: tt('Click a cell to put a dome, a cylinder or a cone there, at its own size and turn. Drag it anywhere.'),
+                shape: tt('Pick a shape and click the plan to put it there. Select it to move, turn and size it with the handles in the 3D view.'),
                 person: tt('Click a cell to put a person there. Pick who from the templates under 3d/Structures/events.')
             };
             html = `<span style="color:var(--color-text-muted);">${floor ? hints[this.tool] : tt('No floors: a plan of parts, or an empty plan. Add a floor to draw rooms.')}</span>`;
@@ -719,19 +756,41 @@ class DatabaseStructureEditor {
         box.querySelector('.rr-structures-door-width')?.addEventListener('change', event => { this.pushHistory(); floor.doors[sel.key][2] = number(event.target, 1, 12); this.markDirty(); });
         for (const button of box.querySelectorAll('.rr-structures-stair-dir')) button.addEventListener('click', () => { this.pushHistory(); plan.stairs[sel.key].dir = button.dataset.dir; this.markDirty(); this.renderInspector(); });
         box.querySelector('.rr-structures-stair-width')?.addEventListener('change', event => { this.pushHistory(); plan.stairs[sel.key].width = number(event.target, 1, 8); this.markDirty(); });
-        for (const button of box.querySelectorAll('.rr-structures-next-kind')) button.addEventListener('click', () => {
-            const kind = button.dataset.kind, size = this._shape.size;
-            // A dome is half as tall as it is wide unless told otherwise; the others keep their height.
-            if (kind === 'dome' && this._shape.kind !== 'dome') size[1] = Math.round(size[0] * 2) / 4;
-            else if (this._shape.kind === 'dome' && kind !== 'dome') size[1] = Math.max(size[1], Math.round(size[0] * 6) / 4);
+        box.querySelector('.rr-structures-next-pick')?.addEventListener('click', event => this.openShapePicker(event.currentTarget, this._shape.kind, [...DatabaseStructureEditor.SHAPE_KINDS, 'tower'], kind => {
+            // A new kind comes at its own size, so a dome is low and a tunnel long.
             this._shape.kind = kind;
+            this._shape.size = (DatabaseStructureEditor.SHAPE_DEFAULTS[kind] || [4, 4, 4]).slice();
             this.renderInspector();
-        });
+        }));
         for (const input of box.querySelectorAll('.rr-structures-next-size')) input.addEventListener('change', () => { const v = Number(input.value); this._shape.size[Number(input.dataset.i)] = Number.isFinite(v) && v > 0 ? Math.min(60, v) : 1; });
-        for (const button of box.querySelectorAll('.rr-structures-shape-kind')) button.addEventListener('click', () => { this.pushHistory(); plan.shapes[sel.key].kind = button.dataset.kind; this.markDirty(); this.renderInspector(); });
-        for (const input of box.querySelectorAll('.rr-structures-shape-size')) input.addEventListener('change', () => { this.pushHistory(); const v = Number(input.value); plan.shapes[sel.key].size[Number(input.dataset.i)] = Number.isFinite(v) && v > 0 ? Math.min(60, v) : 1; this.markDirty(); });
-        box.querySelector('.rr-structures-shape-z')?.addEventListener('change', event => { this.pushHistory(); plan.shapes[sel.key].z = Math.max(0, Math.min(120, Math.floor(Number(event.target.value)) || 0)); this.markDirty(); });
-        box.querySelector('.rr-structures-shape-angle')?.addEventListener('change', event => { this.pushHistory(); plan.shapes[sel.key].angle = ((Math.round(Number(event.target.value)) || 0) % 360 + 360) % 360; this.markDirty(); });
+        this._syncGizmo();
+        box.querySelector('.rr-structures-shape-pick')?.addEventListener('click', event => this.openShapePicker(event.currentTarget, plan.shapes[sel.key]?.kind, DatabaseStructureEditor.SHAPE_KINDS, kind => { this.pushHistory(); plan.shapes[sel.key].kind = kind; this.markDirty(); this.renderInspector(); }));
+        for (const button of box.querySelectorAll('.rr-structures-shape-mode')) button.addEventListener('click', () => { this._gizmoMode = button.dataset.mode; this.renderInspector(); });
+        box.querySelector('.rr-structures-shape-lock')?.addEventListener('click', () => { this._sizeLock = !this._sizeLock; this.renderInspector(); });
+        box.querySelector('.rr-structures-shape-duplicate')?.addEventListener('click', () => this.duplicateShape(sel.key));
+        for (const input of box.querySelectorAll('.rr-structures-shape-size')) input.addEventListener('change', () => {
+            const shape = plan.shapes[sel.key], i = Number(input.dataset.i), v = Number(input.value);
+            if (!shape || !Number.isFinite(v) || v <= 0) { this.renderInspector(); return; }
+            this.pushHistory();
+            this.resizeShape(shape, i, Math.min(60, Math.round(v * 4) / 4), this._sizeLock);
+            this.markDirty(); this.renderInspector();
+        });
+        for (const input of box.querySelectorAll('.rr-structures-shape-pos')) input.addEventListener('change', () => {
+            const shape = plan.shapes[sel.key], i = Number(input.dataset.i), v = Number(input.value);
+            if (!shape || !Number.isFinite(v)) { this.renderInspector(); return; }
+            this.pushHistory();
+            const [cx, cy] = DatabaseStructureEditor.shapeCentre(shape);
+            if (i === 2) shape.z = Math.max(0, Math.min(120, Math.round(v * 4) / 4));
+            else DatabaseStructureEditor.placeShapeAt(shape, i === 0 ? v : cx, i === 1 ? v : cy);
+            this.markDirty(); this.renderInspector();
+        });
+        for (const input of box.querySelectorAll('.rr-structures-shape-turn')) input.addEventListener('change', () => {
+            const shape = plan.shapes[sel.key], i = Number(input.dataset.i), v = ((Math.round(Number(input.value)) || 0) % 360 + 360) % 360;
+            if (!shape) return;
+            this.pushHistory();
+            if (i === 0) shape.angle = v; else if (i === 1) shape.tilt = v; else shape.roll = v;
+            this.markDirty(); this.renderInspector();
+        });
         box.querySelector('.rr-structures-shape-material')?.addEventListener('click', event => this.openMaterialPicker(event.currentTarget, name => { this.pushHistory(); plan.shapes[sel.key].material = name; this.markDirty(); this.renderInspector(); }));
         box.querySelector('.rr-structures-spot-name')?.addEventListener('change', event => {
             const oldName = sel.key, newName = event.target.value.trim();
@@ -954,25 +1013,25 @@ class DatabaseStructureEditor {
         for (let i = 0; i < floor.doors.length; i++) if (this.doorCellsOf(i, floor).some(([cx, cy]) => cx === x && cy === y)) return { kind: 'door', key: i };
         const window = floor.windows.findIndex(([wx, wy]) => wx === x && wy === y);
         if (window >= 0) return { kind: 'window', key: window };
-        for (let i = plan.shapes.length - 1; i >= 0; i--) if (this.shapeCells(plan.shapes[i]).some(([sx, sy]) => sx === x && sy === y)) return { kind: 'shape', key: i };
+        for (let i = plan.shapes.length - 1; i >= 0; i--) if (DatabaseStructureEditor.shapeCovers(plan.shapes[i], x + 0.5, y + 0.5)) return { kind: 'shape', key: i };
         const room = this.roomAtCell(x, y, floor);
         if (room) return { kind: 'room', key: room };
         return null;
     }
 
     /** The cells a shape covers, from the runtime's own rule when it is loaded, else its box. */
-    /** The top of the tallest shape whose footprint covers the cell, or the ground. */
+    /** The top of the tallest shape whose box covers the cell, or the ground. */
     shapeTopAt(x, y) {
         let top = 0;
         for (const shape of this.current.plan.shapes) {
-            if (!this.shapeCells(shape).some(([sx, sy]) => sx === x && sy === y)) continue;
-            top = Math.max(top, Math.round(((shape.z || 0) + shape.size[1]) * 4) / 4);
+            if (!DatabaseStructureEditor.shapeCovers(shape, x + 0.5, y + 0.5)) continue;
+            top = Math.max(top, Math.round(DatabaseStructureEditor.shapeBounds(shape).z1 * 4) / 4);
         }
         return top;
     }
 
     shapeCells(shape) {
-        const piece = { kind: shape.kind, x: shape.at[0], y: shape.at[1], z: shape.z, rot: 0, size: shape.size, angle: shape.angle };
+        const piece = DatabaseStructureEditor.pieceOf(shape);
         if (typeof Reactor3D !== 'undefined' && Reactor3D.pieceFootprint) return Reactor3D.pieceFootprint(piece);
         // Without the runtime: the same round rule, a cell counting when its middle lies in the turned ellipse.
         const [w, , d] = shape.size, cells = [], angle = -(shape.angle || 0) * Math.PI / 180, cx = shape.at[0] + 0.5, cz = shape.at[1] + 0.5;
@@ -1123,12 +1182,13 @@ class DatabaseStructureEditor {
             // and a second cylinder makes a tier; a dome wears the roof's material.
             const z = this.shapeTopAt(cell.x, cell.y);
             const material = kind => kind === 'dome' ? plan.materials.roof || '' : '';
+            const fresh = (kind, z, size) => ({ kind, at: [cell.x, cell.y], z, size, angle: 0, tilt: 0, roll: 0, offset: [0, 0], material: material(kind) });
             if (kind === 'tower') {
-                plan.shapes.push({ kind: 'cylinder', at: [cell.x, cell.y], z, size: [w, h, d], angle: 0, material: '' });
-                plan.shapes.push({ kind: 'dome', at: [cell.x, cell.y], z: Math.round((z + h) * 4) / 4, size: [w, Math.round(w * 2) / 4, d], angle: 0, material: material('dome') });
+                plan.shapes.push(fresh('cylinder', z, [w, h, d]));
+                plan.shapes.push(fresh('dome', Math.round((z + h) * 4) / 4, [w, Math.round(w * 2) / 4, d]));
                 this.selection = { kind: 'shape', key: plan.shapes.length - 2 };
             } else {
-                plan.shapes.push({ kind, at: [cell.x, cell.y], z, size: [w, h, d], angle: 0, material: material(kind) });
+                plan.shapes.push(fresh(kind, z, [w, h, d]));
                 this.selection = { kind: 'shape', key: plan.shapes.length - 1 };
             }
             this.markDirty();
@@ -1325,17 +1385,32 @@ class DatabaseStructureEditor {
             ctx.fillStyle = colours('--color-text');
             for (const [name, r] of Object.entries(floorNow.rooms)) ctx.fillText(name, ox + ((r[0] + r[2] + 1) / 2) * cell, oy + ((r[1] + r[3] + 1) / 2) * cell);
         }
-        // Shapes: an ellipse of their footprint with the kind's symbol, above whatever the build laid.
+        // Shapes: each one's own outline on the ground, its solid parts filled in its kind's
+        // colour, a hollow one's box dashed; a tilted or rolled one shows the shadow of its box.
+        const tints = typeof PieceBuilderManager !== 'undefined' && PieceBuilderManager.OVERLAY_COLOURS ? PieceBuilderManager.OVERLAY_COLOURS : {};
+        const R = typeof Reactor3D !== 'undefined' ? Reactor3D : null;
         for (const shape of plan.shapes) {
             const [w, , d] = shape.size, angle = shape.angle * Math.PI / 180;
+            const [cx, cy] = DatabaseStructureEditor.shapeCentre(shape);
+            const tint = '#' + (tints[shape.kind] || 0x8f8fa8).toString(16).padStart(6, '0');
             ctx.save();
-            ctx.translate(ox + (shape.at[0] + 0.5) * cell, oy + (shape.at[1] + 0.5) * cell);
-            ctx.rotate(angle);
-            ctx.fillStyle = shape.kind === 'dome' ? '#b07a9a' : shape.kind === 'cone' ? '#b8a04b' : '#8f8fa8'; ctx.globalAlpha = 0.75;
-            ctx.beginPath(); ctx.ellipse(0, 0, Math.max(2, w * cell / 2), Math.max(2, d * cell / 2), 0, 0, Math.PI * 2); ctx.fill();
-            ctx.globalAlpha = 1; ctx.strokeStyle = colours('--color-text'); ctx.lineWidth = 1;
-            if (shape.kind === 'dome') { ctx.beginPath(); ctx.ellipse(0, 0, Math.max(1, w * cell / 4), Math.max(1, d * cell / 4), 0, 0, Math.PI * 2); ctx.stroke(); }
-            else if (shape.kind === 'cone') { ctx.beginPath(); ctx.moveTo(-w * cell / 2, 0); ctx.lineTo(w * cell / 2, 0); ctx.moveTo(0, -d * cell / 2); ctx.lineTo(0, d * cell / 2); ctx.stroke(); }
+            ctx.fillStyle = tint; ctx.strokeStyle = colours('--color-text'); ctx.lineWidth = 1;
+            const turned = R && R.shapeTurned && R.shapeTurned(DatabaseStructureEditor.pieceOf(shape));
+            if (turned && R.convexHull) {
+                const hull = R.convexHull(DatabaseStructureEditor.shapeCorners(shape).map(q => [q[0], q[2]]));
+                ctx.globalAlpha = 0.5; ctx.beginPath();
+                hull.forEach(([hx, hy], i) => i ? ctx.lineTo(ox + hx * cell, oy + hy * cell) : ctx.moveTo(ox + hx * cell, oy + hy * cell));
+                ctx.closePath(); ctx.fill(); ctx.globalAlpha = 1; ctx.setLineDash([4, 3]); ctx.stroke();
+            } else {
+                ctx.translate(ox + cx * cell, oy + cy * cell);
+                ctx.rotate(angle);
+                const outline = DatabaseStructureEditor.shapeOutline(shape.kind);
+                const trace = poly => { poly.forEach(([u, v], i) => i ? ctx.lineTo(u * w * cell, v * d * cell) : ctx.moveTo(u * w * cell, v * d * cell)); ctx.closePath(); };
+                ctx.globalAlpha = 0.75; ctx.beginPath();
+                for (const poly of outline.solid) trace(poly);
+                ctx.fill('evenodd'); ctx.globalAlpha = 1; ctx.stroke();
+                if (outline.open) { ctx.setLineDash([4, 3]); ctx.beginPath(); trace(outline.open); ctx.stroke(); }
+            }
             ctx.restore();
         }
         // Stairs point the way they rise; hand-placed windows show even before the build catches up.
@@ -1358,7 +1433,7 @@ class DatabaseStructureEditor {
             if (hit.kind === 'window' && floorNow.windows[hit.key]) { const [x, y] = floorNow.windows[hit.key]; return [[x, y, x, y]]; }
             if (hit.kind === 'stair' && plan.stairs[hit.key]) { const f = plan.stairs[hit.key].from; return [[f[0], f[1], f[0], f[1]]]; }
             if (hit.kind === 'spot' && plan.spots[hit.key]) { const a = plan.spots[hit.key]; return [[a[0], a[1], a[0], a[1]]]; }
-            if (hit.kind === 'shape' && plan.shapes[hit.key]) { const cells = this.shapeCells(plan.shapes[hit.key]); if (!cells.length) return null; const xs = cells.map(c => c[0]), ys = cells.map(c => c[1]); return [[Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)]]; }
+            if (hit.kind === 'shape' && plan.shapes[hit.key]) { const b = DatabaseStructureEditor.shapeBounds(plan.shapes[hit.key]); return [[Math.floor(b.x0 + 1e-6), Math.floor(b.y0 + 1e-6), Math.ceil(b.x1 - 1e-6) - 1, Math.ceil(b.y1 - 1e-6) - 1]]; }
             return null;
         };
         const accent = colours('--color-accent');
@@ -1445,6 +1520,9 @@ class DatabaseStructureEditor {
         preview.ground.position.set(W / 2, -0.01, H / 2);
         preview.centre = { x: W / 2, y: plan.storey * Math.max(1, plan.floors.length) / 2, z: H / 2 };
         this._layoutHandles(preview, plan);
+        this._layoutProxies(preview, plan);
+        this._setGhost(preview, null);
+        this._syncGizmo(preview);
         if (!preview.distance || preview.autoDistance) { preview.distance = Math.max(W, H) * 1.3 + 6; preview.autoDistance = true; }
         preview.dirty = true;
     }
@@ -1559,6 +1637,13 @@ class DatabaseStructureEditor {
         const PIXELS_PER_STEP = 14;
         canvas.addEventListener('pointerdown', event => {
             if (event.button !== 0) return;
+            const grab = this.current && typeof THREE !== 'undefined' ? this._grabGizmo(canvas, event.clientX, event.clientY) : null;
+            if (grab) {
+                drag = { gizmo: grab, snapshot: JSON.stringify(this.current.plan), changed: false };
+                canvas.style.cursor = 'grabbing';
+                canvas.setPointerCapture?.(event.pointerId);
+                return;
+            }
             const handle = this.current && typeof THREE !== 'undefined' ? this._handleAt(canvas, event.clientX, event.clientY) : null;
             if (handle) {
                 const plan = this.current.plan;
@@ -1566,7 +1651,7 @@ class DatabaseStructureEditor {
                 canvas.style.cursor = 'ns-resize';
                 this._showHandleLabel((handle === 'pitch' ? tt('Roof pitch') : tt('Storey')) + ': ' + drag.start, event.clientX, event.clientY);
             } else {
-                drag = { x: event.clientX, y: event.clientY };
+                drag = { x: event.clientX, y: event.clientY, downX: event.clientX, downY: event.clientY, moved: 0 };
             }
             canvas.setPointerCapture?.(event.pointerId);
         });
@@ -1574,7 +1659,20 @@ class DatabaseStructureEditor {
             if (!this._preview) return;
             if (!drag) {
                 const handle = this.current && typeof THREE !== 'undefined' ? this._handleAt(canvas, event.clientX, event.clientY) : null;
-                canvas.style.cursor = handle ? 'ns-resize' : 'grab';
+                canvas.style.cursor = handle ? 'ns-resize' : (this.current && typeof THREE !== 'undefined' && this._shapeAt(canvas, event.clientX, event.clientY) >= 0 ? 'pointer' : 'grab');
+                return;
+            }
+            if (drag.gizmo) {
+                if (this._dragGizmo(drag.gizmo, event.clientX, event.clientY)) {
+                    drag.changed = true;
+                    this._setGhost(this._preview, drag.gizmo.shape);
+                    this._syncGizmo(this._preview);
+                    this.requestPlanRedraw();
+                    const shape = drag.gizmo.shape, mode = drag.gizmo.mode;
+                    const [cx, cy] = DatabaseStructureEditor.shapeCentre(shape);
+                    const text = mode === 'move' ? `${cx}, ${cy}, ${shape.z}` : mode === 'turn' ? `${shape.angle}°, ${shape.tilt || 0}°, ${shape.roll || 0}°` : shape.size.join(' × ');
+                    this._showHandleLabel(text, event.clientX, event.clientY);
+                }
                 return;
             }
             if (drag.handle) {
@@ -1591,12 +1689,37 @@ class DatabaseStructureEditor {
                 }
                 return;
             }
+            drag.moved = (drag.moved || 0) + Math.abs(event.clientX - drag.x) + Math.abs(event.clientY - drag.y);
             this._preview.yaw += (event.clientX - drag.x) * 0.01;
             this._preview.pitch = Math.max(0.05, Math.min(1.5, this._preview.pitch + (event.clientY - drag.y) * 0.01));
             drag = { x: event.clientX, y: event.clientY };
             this._preview.dirty = true;
         });
-        const stop = () => {
+        const stop = event => {
+            if (drag && drag.gizmo) {
+                const g = this._preview && this._preview.gizmo;
+                if (g) { RRAxisArrows3D.emphasize(g.arrows, null, false); RRPoseRings3D.emphasize(g.rings, null, false); for (const axis of ['u', 'y', 'v']) g.cubes[axis].material.opacity = 0.9; }
+                this._showHandleLabel(null);
+                canvas.style.cursor = 'grab';
+                if (drag.changed) {
+                    this._history.push(drag.snapshot);
+                    if (this._history.length > DatabaseStructureEditor.HISTORY) this._history.shift();
+                    this._future.length = 0;
+                    this.markDirty();
+                    this.renderInspector();
+                } else if (this._preview) this._setGhost(this._preview, null);
+                drag = null;
+                return;
+            }
+            // A press that did not orbit picks the shape under it.
+            if (drag && !drag.handle && (drag.moved || 0) < 4 && event && this.current && typeof THREE !== 'undefined') {
+                const index = this._shapeAt(canvas, event.clientX, event.clientY);
+                if (index >= 0) {
+                    this.selection = { kind: 'shape', key: index };
+                    if (this.tool === 'shape') this.tool = 'select';
+                    this.renderInspector(); this.renderTools(); this.requestPlanRedraw();
+                }
+            }
             if (drag && drag.handle) {
                 this._showHandleLabel(null);
                 canvas.style.cursor = 'grab';
@@ -1628,10 +1751,365 @@ class DatabaseStructureEditor {
         for (const mesh of preview.meshes) mesh.geometry.dispose();
         for (const material of preview.materials.values()) { material.map?.dispose(); material.dispose(); }
         for (const handle of Object.values(preview.handles || {})) { handle.geometry.dispose(); handle.material.dispose(); }
+        this._disposeGizmo(preview);
+        this._clearProxies(preview);
         preview.ground?.geometry.dispose();
         this._showHandleLabel(null);
         preview.renderer.dispose();
         this._preview = null;
+    }
+
+    // ---- Shapes: pickers, placement, the numbers behind the handles ---------
+
+    /** The kind's name for people: the palette's own names, the Tower's phrase. */
+    kindName(kind) {
+        if (kind === 'tower') return this._t('Tower');
+        const key = 'pieces.kind.' + kind;
+        const name = typeof window !== 'undefined' && window.I18n && typeof window.I18n.t === 'function' ? window.I18n.t(key) : key;
+        return name && name !== key ? name : kind.charAt(0).toUpperCase() + kind.slice(1);
+    }
+
+    /** A button showing a kind's icon and name that opens the shape picker. */
+    _shapePickHtml(cls, kind) {
+        return `<button type="button" class="rr-btn-secondary ${cls}" data-kind="${rrEscapeHtml(kind)}" title="${rrEscapeHtml(this._t('Pick a shape'))}" style="display:inline-flex;align-items:center;gap:6px;height:28px;padding:2px 8px 2px 4px;text-transform:none;font-weight:normal;">${DatabaseStructureEditor.icon(kind)}<span>${rrEscapeHtml(this.kindName(kind))}</span><span style="opacity:.6;font-size:10px;">▾</span></button>`;
+    }
+
+    /** The grid of shapes under a kind button; a click chooses, Escape or a click elsewhere closes. */
+    openShapePicker(button, current, kinds, onPick) {
+        this.closeMaterialPicker();
+        const grid = document.createElement('div');
+        grid.className = 'rr-structures-picker rr-structures-shape-picker';
+        grid.setAttribute('role', 'listbox');
+        grid.style.cssText = 'position:fixed;z-index:10020;display:grid;grid-template-columns:repeat(4, 74px);gap:4px;padding:8px;background:var(--color-bg-panel);border:1px solid var(--color-border);border-radius:4px;box-shadow:0 6px 18px rgba(0,0,0,.35);';
+        grid.innerHTML = kinds.map(kind => `<button type="button" class="rr-btn-secondary rr-structures-shape-option" data-kind="${kind}" aria-checked="${kind === current}" style="display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 2px;font-size:11px;text-transform:none;font-weight:normal;${kind === current ? 'border-color:var(--color-accent);' : ''}"><span style="display:block;transform:scale(1.5);margin:4px 0 6px;">${DatabaseStructureEditor.icon(kind)}</span><span>${rrEscapeHtml(this.kindName(kind))}</span></button>`).join('');
+        const rect = button.getBoundingClientRect();
+        grid.style.left = Math.max(8, Math.min(window.innerWidth - 330, rect.left)) + 'px';
+        grid.style.top = (rect.bottom + 4 + 280 > window.innerHeight ? rect.top - 4 - 280 : rect.bottom + 4) + 'px';
+        document.body.appendChild(grid);
+        for (const el of grid.querySelectorAll('.rr-structures-shape-option')) el.addEventListener('click', () => { onPick(el.dataset.kind); this.closeMaterialPicker(); });
+        const away = event => { if (!grid.contains(event.target) && event.target !== button) this.closeMaterialPicker(); };
+        const key = event => { if (event.key === 'Escape') this.closeMaterialPicker(); };
+        setTimeout(() => { document.addEventListener('pointerdown', away, true); document.addEventListener('keydown', key, true); }, 0);
+        this._picker = { grid, away, key };
+    }
+
+    /** The selected shape, when the selection is one. */
+    selectedShape() {
+        const sel = this.selection;
+        return sel && sel.kind === 'shape' && this.current ? this.current.plan.shapes[sel.key] || null : null;
+    }
+
+    /** A plan's shape as the runtime's piece, stood at the plan's origin. */
+    static pieceOf(shape) {
+        return { kind: shape.kind, x: shape.at[0], y: shape.at[1], z: shape.z, rot: 0, size: shape.size, angle: shape.angle, tilt: shape.tilt || 0, roll: shape.roll || 0, offset: shape.offset || [0, 0] };
+    }
+
+    /** The shape's middle on the ground, in plan cells (its cell's middle plus its offset). */
+    static shapeCentre(shape) {
+        return [shape.at[0] + 0.5 + (shape.offset ? shape.offset[0] || 0 : 0), shape.at[1] + 0.5 + (shape.offset ? shape.offset[1] || 0 : 0)];
+    }
+
+    /** Put the shape's middle at a point of the ground: the cell under it, and the rest as its offset. */
+    static placeShapeAt(shape, cx, cy) {
+        const clamp = v => Math.max(0.5, Math.min(this.SIZE_MAX - 0.5, Math.round(v * 100) / 100));
+        cx = clamp(cx); cy = clamp(cy);
+        const ax = Math.min(this.SIZE_MAX - 1, Math.floor(cx)), ay = Math.min(this.SIZE_MAX - 1, Math.floor(cy));
+        shape.at = [ax, ay];
+        const ox = Math.round((cx - ax - 0.5) * 100) / 100, oy = Math.round((cy - ay - 0.5) * 100) / 100;
+        shape.offset = [ox, oy];
+        return shape;
+    }
+
+    /** The eight corners of the shape's turned box, [x, up, y] in plan units, via the runtime; a plain box without it. */
+    static shapeCorners(shape) {
+        const R = typeof Reactor3D !== 'undefined' ? Reactor3D : null;
+        const corners = [];
+        if (R && R.shapePlacer) {
+            const at = R.shapePlacer(this.pieceOf(shape), 0);
+            for (const u of [0, 1]) for (const y of [0, 1]) for (const v of [0, 1]) corners.push(at(u, y, v));
+            return corners;
+        }
+        const [cx, cy] = this.shapeCentre(shape), [w, h, d] = shape.size, a = (shape.angle || 0) * Math.PI / 180;
+        for (const u of [-0.5, 0.5]) for (const y of [0, 1]) for (const v of [-0.5, 0.5]) corners.push([cx + u * w * Math.cos(a) - v * d * Math.sin(a), shape.z + y * h, cy + u * w * Math.sin(a) + v * d * Math.cos(a)]);
+        return corners;
+    }
+
+    /** Where the shape's box reaches on the ground and up: { x0, x1, y0, y1, z0, z1 } in plan units. */
+    static shapeBounds(shape) {
+        const c = this.shapeCorners(shape);
+        return { x0: Math.min(...c.map(q => q[0])), x1: Math.max(...c.map(q => q[0])), z0: Math.min(...c.map(q => q[1])), z1: Math.max(...c.map(q => q[1])), y0: Math.min(...c.map(q => q[2])), y1: Math.max(...c.map(q => q[2])) };
+    }
+
+    /** Whether a point of the ground (plan units) is under the shape's turned box. */
+    static shapeCovers(shape, px, py) {
+        const R = typeof Reactor3D !== 'undefined' ? Reactor3D : null;
+        if (R && R.shapeTurned && R.shapeTurned(this.pieceOf(shape)) && R.convexHull && R.hullReach) {
+            return R.hullReach([px, py], R.convexHull(this.shapeCorners(shape).map(q => [q[0], q[2]]))) <= 1e-9;
+        }
+        const [cx, cy] = this.shapeCentre(shape), [w, , d] = shape.size, a = -(shape.angle || 0) * Math.PI / 180;
+        const dx = px - cx, dy = py - cy;
+        const u = dx * Math.cos(a) - dy * Math.sin(a), v = dx * Math.sin(a) + dy * Math.cos(a);
+        return Math.abs(u) <= w / 2 + 1e-9 && Math.abs(v) <= d / 2 + 1e-9;
+    }
+
+    /**
+     * The shape's outline on the plan, polygons in its own frame (u across,
+     * v along, -0.5..0.5 of its size): a circle for a round one, a ring for a
+     * hollow one, the two posts of an arch. `open` is the box round a hollow
+     * shape, drawn dashed.
+     */
+    static shapeOutline(kind) {
+        const circle = r => Array.from({ length: 32 }, (_, i) => [Math.cos(i / 32 * Math.PI * 2) * r, Math.sin(i / 32 * Math.PI * 2) * r]);
+        const rect = (u0, v0, u1, v1) => [[u0, v0], [u1, v0], [u1, v1], [u0, v1]];
+        switch (kind) {
+            case 'cylinder': case 'cone': case 'dome': case 'sphere': return { solid: [circle(0.5)] };
+            case 'tube': return { solid: [circle(0.5), circle(0.35)], open: rect(-0.5, -0.5, 0.5, 0.5) };
+            case 'ring': return { solid: [circle(0.5), circle(0.3)], open: rect(-0.5, -0.5, 0.5, 0.5) };
+            case 'arch': case 'tunnel': return { solid: [rect(-0.5, -0.5, -0.35, 0.5), rect(0.35, -0.5, 0.5, 0.5)], open: rect(-0.5, -0.5, 0.5, 0.5) };
+            default: return { solid: [rect(-0.5, -0.5, 0.5, 0.5)] };
+        }
+    }
+
+    /** Set one dimension of a shape; with the lock on, the other two follow in proportion. */
+    resizeShape(shape, i, value, lock) {
+        const snap = v => Math.max(0.25, Math.round(v * 4) / 4);
+        if (lock && shape.size[i] > 0) {
+            const k = value / shape.size[i];
+            shape.size = shape.size.map(v => Math.min(60, snap(v * k)));
+        }
+        shape.size[i] = Math.min(60, snap(value));
+    }
+
+    /** A copy of the shape beside it, selected. */
+    duplicateShape(index) {
+        const plan = this.current?.plan, shape = plan?.shapes[index];
+        if (!shape) return null;
+        this.pushHistory();
+        const copy = JSON.parse(JSON.stringify(shape));
+        const [cx, cy] = DatabaseStructureEditor.shapeCentre(shape);
+        const { x0, x1 } = DatabaseStructureEditor.shapeBounds(shape);
+        DatabaseStructureEditor.placeShapeAt(copy, cx + (x1 - x0) + 0.5, cy);
+        plan.shapes.push(copy);
+        this.selection = { kind: 'shape', key: plan.shapes.length - 1 };
+        this.markDirty(); this.renderInspector(); this.renderTools();
+        return copy;
+    }
+
+    /**
+     * Where a dragged shape clicks into place along one axis (0 x, 1 up, 2 y):
+     * its faces and middle against every other shape's, within reach; else
+     * the quarter-tile grid. `travel` is how far it has moved from `from`,
+     * the bounds it started with.
+     */
+    snapTravel(shape, axis, travel, from) {
+        const plan = this.current.plan;
+        const keys = [['x0', 'x1'], ['z0', 'z1'], ['y0', 'y1']][axis];
+        const mine = [from[keys[0]], from[keys[1]], (from[keys[0]] + from[keys[1]]) / 2];
+        let best = null;
+        for (const other of plan.shapes) {
+            if (other === shape) continue;
+            const b = DatabaseStructureEditor.shapeBounds(other);
+            const theirs = [b[keys[0]], b[keys[1]], (b[keys[0]] + b[keys[1]]) / 2];
+            for (const m of mine) for (const t of theirs) {
+                const need = t - m;
+                if (Math.abs(need - travel) <= DatabaseStructureEditor.SNAP_REACH && (!best || Math.abs(need - travel) < Math.abs(best - travel))) best = need;
+            }
+        }
+        return best === null ? Math.round(travel * 4) / 4 : Math.round(best * 100) / 100;
+    }
+
+    // ---- The handles on the 3D view ----------------------------------------
+
+    /** Arrows to move, rings to turn, cubes to size the selected shape, made once per preview. */
+    _ensureGizmo(preview, reach) {
+        if (typeof RRAxisArrows3D === 'undefined' || typeof RRPoseRings3D === 'undefined') return null;
+        const length = Math.max(1.5, Math.min(8, reach * 0.5 + 1));
+        let g = preview.gizmo;
+        if (g && Math.abs(g.length - length) > length * 0.3) { this._disposeGizmo(preview); g = null; }
+        if (g) return g;
+        const arrows = RRAxisArrows3D.create(THREE, length, 'shape-arrows');
+        const rings = RRPoseRings3D.create(THREE, length * 0.8, 'shape-rings');
+        const cubes = { root: new THREE.Group() };
+        const colours = { u: 0xff5c5c, y: 0x3ddc84, v: 0x5ca8ff };
+        for (const axis of ['u', 'y', 'v']) {
+            const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial({ color: colours[axis], depthTest: false, transparent: true, opacity: 0.9 }));
+            mesh.renderOrder = 8;
+            mesh.userData.axis = axis;
+            cubes.root.add(mesh);
+            cubes[axis] = mesh;
+        }
+        preview.scene.add(arrows.root, rings.root, cubes.root);
+        g = preview.gizmo = { length, arrows, rings, cubes, ghost: null };
+        return g;
+    }
+
+    _disposeGizmo(preview) {
+        const g = preview.gizmo;
+        if (!g) return;
+        RRAxisArrows3D.dispose(g.arrows);
+        RRPoseRings3D.dispose(g.rings);
+        preview.scene.remove(g.cubes.root);
+        for (const axis of ['u', 'y', 'v']) { g.cubes[axis].geometry.dispose(); g.cubes[axis].material.dispose(); }
+        this._setGhost(preview, null);
+        preview.gizmo = null;
+    }
+
+    /** One invisible box per shape, so a click on the 3D view can say which shape it hit. They outlive the handles. */
+    _layoutProxies(preview, plan) {
+        if (!preview.proxies) { preview.proxies = new THREE.Group(); preview.proxies.visible = false; preview.scene.add(preview.proxies); }
+        this._clearProxies(preview);
+        plan.shapes.forEach((shape, index) => {
+            const c = DatabaseStructureEditor.shapeCorners(shape);
+            const at = (u, y, v) => c[u * 4 + y * 2 + v];
+            const o = at(0, 0, 0), ex = at(1, 0, 0), ey = at(0, 1, 0), ez = at(0, 0, 1);
+            const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial({ visible: false }));
+            mesh.matrixAutoUpdate = false;
+            const mid = [0, 1, 2].map(i => (o[i] + at(1, 1, 1)[i]) / 2);
+            mesh.matrix.set(ex[0] - o[0], ey[0] - o[0], ez[0] - o[0], mid[0], ex[1] - o[1], ey[1] - o[1], ez[1] - o[1], mid[1], ex[2] - o[2], ey[2] - o[2], ez[2] - o[2], mid[2], 0, 0, 0, 1);
+            mesh.userData.shape = index;
+            preview.proxies.add(mesh);
+        });
+    }
+
+    _clearProxies(preview) {
+        if (!preview.proxies) return;
+        for (const mesh of preview.proxies.children.slice()) { preview.proxies.remove(mesh); mesh.geometry.dispose(); mesh.material.dispose(); }
+    }
+
+    /** Which shape a canvas point is over, by its box, or -1. */
+    _shapeAt(canvas, clientX, clientY) {
+        const preview = this._preview;
+        if (!preview || !preview.proxies) return -1;
+        const rect = canvas.getBoundingClientRect();
+        const ray = new THREE.Raycaster();
+        ray.setFromCamera(new THREE.Vector2(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1), preview.camera);
+        const hits = ray.intersectObjects(preview.proxies.children, false);
+        return hits.length ? hits[0].object.userData.shape : -1;
+    }
+
+    /** Put the handles on the selected shape for the current mode, or hide them. */
+    _syncGizmo(preview) {
+        preview = preview || this._preview;
+        if (!preview || typeof THREE === 'undefined') return;
+        const shape = this.selectedShape();
+        const show = !!shape && this.tool !== 'shape';
+        const g = show ? this._ensureGizmo(preview, Math.max(...shape.size)) : preview.gizmo;
+        if (!g) return;
+        const mode = this._gizmoMode;
+        g.arrows.root.visible = false; g.rings.root.visible = false; g.cubes.root.visible = false;
+        if (!show) { preview.dirty = true; return; }
+        const c = DatabaseStructureEditor.shapeCorners(shape);
+        const at = (u, y, v) => c[u * 4 + y * 2 + v];
+        const far = at(1, 1, 1), near = at(0, 0, 0);
+        const centre = new THREE.Vector3((near[0] + far[0]) / 2, (near[1] + far[1]) / 2, (near[2] + far[2]) / 2);
+        if (mode === 'move') RRAxisArrows3D.sync(g.arrows, centre, true);
+        else if (mode === 'turn') RRPoseRings3D.sync(g.rings, centre, -(shape.angle || 0), shape.tilt || 0, true);
+        else {
+            g.cubes.root.visible = true;
+            const size = Math.max(0.25, Math.min(0.8, Math.max(...shape.size) * 0.05 + 0.2));
+            const ends = { u: [at(1, 0, 0), at(1, 1, 1)], y: [at(0, 1, 0), at(1, 1, 1)], v: [at(0, 0, 1), at(1, 1, 1)] };
+            for (const axis of ['u', 'y', 'v']) {
+                const [a, b] = ends[axis];
+                const face = new THREE.Vector3((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2);
+                const dir = face.clone().sub(centre).normalize();
+                g.cubes[axis].position.copy(face.add(dir.multiplyScalar(size * 0.8)));
+                g.cubes[axis].scale.setScalar(size);
+                g.cubes[axis].userData.dir = dir.normalize();
+            }
+        }
+        preview.dirty = true;
+    }
+
+    /** The point on an axis line nearest the pointer's ray, as travel along it from the origin. */
+    _axisTravel(camera, rect, clientX, clientY, origin, direction) {
+        const ndc = new THREE.Vector2(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1);
+        const caster = new THREE.Raycaster();
+        caster.setFromCamera(ndc, camera);
+        const d = direction, o = caster.ray.origin, r = caster.ray.direction;
+        const w0 = new THREE.Vector3().subVectors(origin, o);
+        const a = d.dot(d), b = d.dot(r), cc = r.dot(r);
+        const pp = d.dot(w0), q = r.dot(w0);
+        const denom = a * cc - b * b;
+        if (Math.abs(denom) < 1e-9) return null;
+        return (b * q - cc * pp) / denom;
+    }
+
+    /** What a press on the 3D view grabs: a handle of the selected shape, or nothing. */
+    _grabGizmo(canvas, clientX, clientY) {
+        const preview = this._preview, g = preview && preview.gizmo, shape = this.selectedShape();
+        if (!g || !shape || this.tool === 'shape') return null;
+        const rect = canvas.getBoundingClientRect(), camera = preview.camera, mode = this._gizmoMode;
+        const from = DatabaseStructureEditor.shapeBounds(shape);
+        const start = { at: shape.at.slice(), offset: (shape.offset || [0, 0]).slice(), z: shape.z, size: shape.size.slice(), angle: shape.angle, tilt: shape.tilt || 0, roll: shape.roll || 0 };
+        if (mode === 'move') {
+            const grab = RRAxisArrows3D.pick(THREE, g.arrows, camera, rect, clientX, clientY);
+            if (!grab) return null;
+            RRAxisArrows3D.emphasize(g.arrows, grab.axis, true);
+            return { mode, axis: grab.axis, travel: grab.travel, shape, from, start };
+        }
+        if (mode === 'turn') {
+            const grab = RRPoseRings3D.pick(THREE, g.rings, camera, rect, clientX, clientY, { yaw: -(shape.angle || 0), pitch: shape.tilt || 0, roll: shape.roll || 0 });
+            if (!grab) return null;
+            RRPoseRings3D.emphasize(g.rings, grab.axis, true);
+            return { mode, ring: grab, shape, from, start };
+        }
+        const ray = new THREE.Raycaster();
+        ray.setFromCamera(new THREE.Vector2(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1), camera);
+        const hit = ray.intersectObjects(['u', 'y', 'v'].map(axis => g.cubes[axis]), false)[0];
+        if (!hit) return null;
+        const axis = hit.object.userData.axis, dir = hit.object.userData.dir.clone(), origin = hit.object.position.clone();
+        const t0 = this._axisTravel(camera, rect, clientX, clientY, origin, dir);
+        if (t0 === null) return null;
+        for (const key of ['u', 'y', 'v']) hit.object.parent.children.find(m => m.userData.axis === key).material.opacity = key === axis ? 1 : 0.25;
+        return { mode, axis, shape, from, start, travel: (cx, cy) => { const t = this._axisTravel(camera, rect, cx, cy, origin, dir); return t === null ? 0 : t - t0; } };
+    }
+
+    /** Apply a handle drag's pointer position to its shape; true when something changed. */
+    _dragGizmo(drag, clientX, clientY) {
+        const { shape, start } = drag;
+        const before = JSON.stringify([shape.at, shape.offset, shape.z, shape.size, shape.angle, shape.tilt, shape.roll]);
+        if (drag.mode === 'move') {
+            const t = drag.travel(clientX, clientY);
+            const axis = drag.axis === 'x' ? 0 : drag.axis === 'y' ? 1 : 2;
+            const snapped = this.snapTravel(shape, axis, t, drag.from);
+            if (axis === 1) shape.z = Math.max(0, Math.min(120, Math.round((start.z + snapped) * 4) / 4));
+            else {
+                const cx = start.at[0] + 0.5 + start.offset[0], cy = start.at[1] + 0.5 + start.offset[1];
+                DatabaseStructureEditor.placeShapeAt(shape, axis === 0 ? cx + snapped : cx, axis === 2 ? cy + snapped : cy);
+            }
+        } else if (drag.mode === 'turn') {
+            const value = RRPoseRings3D.drag(THREE, drag.ring, this._preview.camera, this._preview.canvas.getBoundingClientRect(), clientX, clientY);
+            if (value !== null) {
+                const deg = ((Math.round(value / 5) * 5) % 360 + 360) % 360;
+                if (drag.ring.axis === 'yaw') shape.angle = (360 - deg) % 360;
+                else if (drag.ring.axis === 'pitch') shape.tilt = deg;
+                else shape.roll = deg;
+            }
+        } else {
+            const t = drag.travel(clientX, clientY);
+            const i = drag.axis === 'u' ? 0 : drag.axis === 'y' ? 1 : 2;
+            shape.size = start.size.slice();
+            this.resizeShape(shape, i, start.size[i] + t, this._sizeLock);
+        }
+        return JSON.stringify([shape.at, shape.offset, shape.z, shape.size, shape.angle, shape.tilt, shape.roll]) !== before;
+    }
+
+    /** The dragged shape drawn on its own where it is now, over the building as it was. */
+    _setGhost(preview, shape) {
+        const g = preview.gizmo;
+        if (!g) return;
+        if (g.ghost) { preview.scene.remove(g.ghost); g.ghost.geometry.dispose(); g.ghost.material.dispose(); g.ghost = null; }
+        if (!shape || typeof Reactor3D === 'undefined' || !Reactor3D.pieceGeometry) { preview.dirty = true; return; }
+        const [W, H] = this.current.plan.size;
+        const piece = Object.assign({ id: 1, material: shape.material || '' }, DatabaseStructureEditor.pieceOf(shape));
+        const mapData = { width: W, height: H, reactor3d: { version: 1, elevation: new Array(W * H).fill(0), pieces: [piece] } };
+        try {
+            const geometry = Reactor3D.pieceGeometry([piece], mapData);
+            g.ghost = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color: 0xf0c060, transparent: true, opacity: 0.6, vertexColors: true }));
+            g.ghost.renderOrder = 4;
+            preview.scene.add(g.ghost);
+        } catch (error) { g.ghost = null; }
+        preview.dirty = true;
     }
 
     /** Called by the database when the page is left. */

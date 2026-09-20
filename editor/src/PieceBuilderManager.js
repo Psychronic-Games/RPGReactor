@@ -60,7 +60,7 @@ class PieceBuilderManager {
     }
 
     /** The colour a kind shows in the flat map's overlay. */
-    static OVERLAY_COLOURS = { wall: 0x9a9a9a, block: 0x8c8c8c, floor: 0xc99a5b, pillar: 0xdcdcdc, stair: 0xa87b4a, ramp: 0xb05a4a, roof: 0xc1443c, doorway: 0x3fa34d, window: 0x5b9fe8, fence: 0xb8864b, dome: 0xb07a9a, cylinder: 0x8f8fa8, cone: 0xb8a04b };
+    static OVERLAY_COLOURS = { wall: 0x9a9a9a, block: 0x8c8c8c, floor: 0xc99a5b, pillar: 0xdcdcdc, stair: 0xa87b4a, ramp: 0xb05a4a, roof: 0xc1443c, doorway: 0x3fa34d, window: 0x5b9fe8, fence: 0xb8864b, dome: 0xb07a9a, cylinder: 0x8f8fa8, cone: 0xb8a04b, box: 0x8c8c8c, wedge: 0xb05a4a, pyramid: 0xb8a04b, prism: 0xc1443c, tube: 0x8f8fa8, sphere: 0xb07a9a, arch: 0x3fa34d, tunnel: 0x3fa34d, ring: 0xb07a9a };
 
     /**
      * What each cell shows in the flat map: its topmost piece's kind and
@@ -147,7 +147,16 @@ class PieceBuilderManager {
         fence: 'M5 21V9l2-3 2 3v12 M15 21V9l2-3 2 3v12 M9 12h6 M9 17h6',
         dome: 'M3 17a9 9 0 0 1 18 0 M3 17h18v3H3z M12 8v-3',
         cylinder: 'M5 6a7 2.5 0 0 0 14 0a7 2.5 0 0 0-14 0 M5 6v12a7 2.5 0 0 0 14 0V6',
-        cone: 'M12 3l8 16H4z M4 19a8 2 0 0 0 16 0'
+        cone: 'M12 3l8 16H4z M4 19a8 2 0 0 0 16 0',
+        box: 'M12 3l8 4.5v9L12 21l-8-4.5v-9z M12 12l8-4.5 M12 12v9 M12 12L4 7.5',
+        wedge: 'M4 18h16l-16-9z M4 9v9 M20 18l-2 2H2l2-2',
+        pyramid: 'M12 4l9 14H3z M12 4v14 M3 18l9-3 9 3',
+        prism: 'M4 18h13L10.5 7z M10.5 7l3-3L20 15l-3 3',
+        tube: 'M5 6a7 2.5 0 0 0 14 0a7 2.5 0 0 0-14 0 M5 6v12a7 2.5 0 0 0 14 0V6 M9 6a3 1 0 0 0 6 0a3 1 0 0 0-6 0',
+        sphere: 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18 M3 12h18 M12 3a4.5 9 0 0 0 0 18',
+        arch: 'M4 20V10a8 8 0 0 1 16 0v10 M8 20v-9a4 4 0 0 1 8 0v9 M4 20h4 M16 20h4',
+        tunnel: 'M4 19V11a8 8 0 0 1 16 0v8 M8 19v-7a4 4 0 0 1 8 0v7 M4 19h4 M16 19h4 M8 12L5 8 M16 12l3-4',
+        ring: 'M12 4a8 4 0 1 0 0 8a8 4 0 1 0 0-8 M12 6.5a3.5 1.5 0 1 0 0 3a3.5 1.5 0 1 0 0-3 M4 8v6a8 4 0 0 0 16 0V8'
     };
 
     initializeUI(container) {

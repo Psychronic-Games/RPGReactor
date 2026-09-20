@@ -18,6 +18,7 @@ function loadEditor(extra = {}) {
         rrEscapeHtml: text => String(text), ...extra
     };
     context.window = context;
+    context.Reactor3D = require(path.join(repoRoot, 'runtime', 'reactor_3d.js'));
     vm.runInNewContext(read('editor/src/utils/StructurePlan.js'), context);
     context.RRStructurePlan = context.RRStructurePlan || context.module.exports;
     vm.runInNewContext(read('editor/src/database/DatabaseStructureEditor.js') + '\n;globalThis.DatabaseStructureEditor = DatabaseStructureEditor;', context);
@@ -341,7 +342,7 @@ test('shapes on a plan: placed at a size and a turn, drawn, moved, turned with t
     editor._shape = { kind: 'dome', size: [5, 2.5, 5] };
     editor.beginPlanGesture({ x: 14, y: 3 }); editor.endPlanGesture({ x: 14, y: 3 });
     assert.equal(plan.shapes.length, 3);
-    assert.equal(JSON.stringify(plan.shapes[2]), JSON.stringify({ kind: 'dome', at: [14, 3], z: 0, size: [5, 2.5, 5], angle: 0, material: '' }), 'a new shape is what the tool says (a dome wears the roof material once the plan has one)');
+    assert.equal(JSON.stringify(plan.shapes[2]), JSON.stringify({ kind: 'dome', at: [14, 3], z: 0, size: [5, 2.5, 5], angle: 0, tilt: 0, roll: 0, offset: [0, 0], material: '' }), 'a new shape is what the tool says (a dome wears the roof material once the plan has one)');
     // A shape placed on another sits on top of it: a dome on the cylinder's dome, at ten and a half.
     editor.beginPlanGesture({ x: 11, y: 11 }); editor.endPlanGesture({ x: 11, y: 11 });
     assert.equal(plan.shapes[3].z, 10.5, 'stacked on the tallest shape under the click');
@@ -352,8 +353,8 @@ test('shapes on a plan: placed at a size and a turn, drawn, moved, turned with t
     editor._shape = { kind: 'tower', size: [4, 6, 4] };
     editor.beginPlanGesture({ x: 3, y: 14 }); editor.endPlanGesture({ x: 3, y: 14 });
     assert.equal(plan.shapes.length, 5);
-    assert.equal(JSON.stringify(plan.shapes[3]), JSON.stringify({ kind: 'cylinder', at: [3, 14], z: 0, size: [4, 6, 4], angle: 0, material: '' }));
-    assert.equal(JSON.stringify(plan.shapes[4]), JSON.stringify({ kind: 'dome', at: [3, 14], z: 6, size: [4, 2, 4], angle: 0, material: 'RoofTile' }));
+    assert.equal(JSON.stringify(plan.shapes[3]), JSON.stringify({ kind: 'cylinder', at: [3, 14], z: 0, size: [4, 6, 4], angle: 0, tilt: 0, roll: 0, offset: [0, 0], material: '' }));
+    assert.equal(JSON.stringify(plan.shapes[4]), JSON.stringify({ kind: 'dome', at: [3, 14], z: 6, size: [4, 2, 4], angle: 0, tilt: 0, roll: 0, offset: [0, 0], material: 'RoofTile' }));
     assert.deepEqual({ ...editor.selection }, { kind: 'shape', key: 3 }, 'the cylinder is selected');
     editor.removeSelection();
     plan.shapes.splice(3, 1);
@@ -372,4 +373,63 @@ test('shapes on a plan: placed at a size and a turn, drawn, moved, turned with t
     assert.equal(plan.shapes.length, 3, 'undo brings the shape back');
     const report = E.report(plan, () => null, Reactor3D);
     assert.ok(report.pieces > 100 && (report.triangles === null || report.triangles > 1000), 'the report builds the shapes too (triangles need three.js, absent here)');
+});
+
+test('shapes with handles: the picker defaults, a middle anywhere, sizes that keep step, snapping onto a neighbour, a duplicate beside, hollow shapes picked in their middle', () => {
+    const { DatabaseStructureEditor: E } = loadEditor();
+    assert.deepEqual([...E.SHAPE_KINDS], [...E.Reactor3D?.SHAPE_KINDS || require(path.join(repoRoot, 'runtime', 'reactor_3d.js')).SHAPE_KINDS], 'the page offers every shape the runtime builds');
+    for (const kind of [...E.SHAPE_KINDS, 'tower']) assert.ok(Array.isArray(E.SHAPE_DEFAULTS[kind]) && E.SHAPE_DEFAULTS[kind].length === 3, kind + ' has a starting size');
+    // A middle at any quarter tile: the cell under it and the rest as an offset, both ways.
+    const shape = { kind: 'box', at: [0, 0], z: 0, size: [4, 3, 4], angle: 0, tilt: 0, roll: 0, offset: [0, 0], material: '' };
+    E.placeShapeAt(shape, 7.25, 3);
+    assert.deepEqual([...shape.at, ...shape.offset], [7, 3, -0.25, -0.5]);
+    assert.deepEqual([...E.shapeCentre(shape)], [7.25, 3]);
+    const trimmed = E.trimPlan(E.normalizePlan({ name: 'S', size: [20, 20], floors: [{ rooms: {}, doors: [] }], shapes: [Object.assign({}, shape, { z: 2.25, tilt: 30, roll: 0 })] }));
+    assert.equal(JSON.stringify(trimmed.shapes[0]), JSON.stringify({ kind: 'box', at: [7, 3], z: 2.25, size: [4, 3, 4], tilt: 30, offset: [-0.25, -0.5] }), 'the file carries a quarter height, a tilt and an offset, and nothing that is zero');
+    const back = E.normalizePlan(JSON.parse(JSON.stringify(trimmed)));
+    assert.equal(back.shapes[0].roll, 0); assert.equal(back.shapes[0].tilt, 30);
+    // The page with a plan: sizes, duplicates, snapping and picking.
+    const editor = new E(null, { getCurrentProject: () => null }, null, null);
+    editor.renderInspector = () => {}; editor.renderMore = () => {}; editor.renderTools = () => {}; editor.schedulePreview = () => {}; editor.render = () => {}; editor._detail = null;
+    editor.parentEditor = { _markDatabaseMutation() {}, refreshDatabaseListLabel() {} };
+    const plan = E.normalizePlan({ name: 'S', size: [30, 30], floors: [{ rooms: {}, doors: [] }], shapes: [
+        { kind: 'cylinder', at: [5, 5], size: [4, 6, 4] },
+        { kind: 'tube', at: [15, 15], size: [6, 5, 6] } ] });
+    editor.current = { entry: { id: 1, name: 'S', file: 'S.json', plan }, plan };
+    editor._planGeom = { ox: 0, oy: 0, cell: 10 };
+    const column = plan.shapes[0], tube = plan.shapes[1];
+    editor.resizeShape(column, 1, 8, false);
+    assert.deepEqual([...column.size], [4, 8, 4], 'one side alone');
+    editor.resizeShape(column, 0, 2, true);
+    assert.deepEqual([...column.size], [2, 4, 2], 'with the lock on the others follow in proportion');
+    assert.deepEqual({ ...editor.hitAt(15, 15) }, { kind: 'shape', key: 1 }, 'a tube is picked in its open middle');
+    assert.deepEqual({ ...editor.hitAt(12, 15) }, { kind: 'shape', key: 1 }, 'and at its wall');
+    assert.equal(editor.hitAt(11, 15), null, 'not outside its box');
+    assert.equal(editor.shapeTopAt(15, 15), 5, 'a shape placed in a tube\'s middle sits on the tube');
+    // Dragging the column's face toward the tube clicks onto the tube's face; a free drag lands on the quarter grid.
+    const from = E.shapeBounds(column);
+    const tubeBounds = E.shapeBounds(tube);
+    const butt = tubeBounds.x0 - from.x1;
+    assert.ok(Math.abs(editor.snapTravel(column, 0, butt + 0.3, from) - butt) < 1e-9, 'the column\'s far side snaps to the tube\'s near side');
+    assert.equal(editor.snapTravel(column, 0, 1.13, from), 1.25, 'else the quarter grid');
+    const lift = tubeBounds.z1 - from.z1;
+    assert.ok(Math.abs(editor.snapTravel(column, 1, lift + 0.1, from) - lift) < 1e-9, 'and up onto the tube\'s top');
+    const copy = editor.duplicateShape(0);
+    assert.equal(plan.shapes.length, 3);
+    assert.equal(copy.kind, 'cylinder');
+    assert.ok(E.shapeBounds(copy).x0 >= E.shapeBounds(column).x1, 'the duplicate stands beside the original, not on it');
+    assert.deepEqual({ ...editor.selection }, { kind: 'shape', key: 2 });
+    editor.undo();
+    assert.equal(plan.shapes.length, 2, 'undo takes the duplicate back');
+    // A tilted shape's outline on the plan is the shadow of its box, wider than its size.
+    const leaning = { kind: 'cylinder', at: [5, 5], z: 0, size: [2, 8, 2], angle: 0, tilt: 0, roll: 90, offset: [0, 0], material: '' };
+    const bounds = E.shapeBounds(leaning);
+    assert.ok(Math.abs((bounds.x1 - bounds.x0) - 8) < 1e-9 && Math.abs(bounds.z1 - 2) < 1e-9, 'a rolled column lies eight long and two tall');
+    assert.equal(E.shapeCovers(leaning, 9, 5.5), true, 'and is picked along its length');
+    assert.ok(E.shapeOutline('tube').solid.length === 2 && E.shapeOutline('arch').solid.length === 2 && E.shapeOutline('box').solid.length === 1, 'outlines: a ring for a tube, two posts for an arch, a square for a box');
+    // The plan turned a quarter turn carries the offset round with the cell.
+    const SP = loadEditor().RRStructurePlan;
+    const turned = SP.transform(E.normalizePlan({ name: 'T', size: [10, 10], floors: [], shapes: [{ kind: 'box', at: [2, 3], size: [1, 1, 1], offset: [0.25, 0.5], tilt: 20, roll: 40 }] }), 1, 1);
+    assert.deepEqual([...turned.shapes[0].offset], [-0.5, 0.25]);
+    assert.equal(turned.shapes[0].tilt, 20); assert.equal(turned.shapes[0].roll, 40); assert.equal(turned.shapes[0].angle, 90);
 });

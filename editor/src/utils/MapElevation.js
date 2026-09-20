@@ -629,15 +629,17 @@
      * and stands characters on their tops. One piece per cell and level: a
      * new one there replaces the old.
      */
-    const PIECE_KINDS = ['wall', 'block', 'floor', 'pillar', 'stair', 'ramp', 'roof', 'doorway', 'window', 'fence', 'dome', 'cylinder', 'cone'];
-    const SHAPE_KINDS = ['dome', 'cylinder', 'cone'];
+    const SHAPE_KINDS = ['box', 'wedge', 'pyramid', 'prism', 'cylinder', 'tube', 'cone', 'dome', 'sphere', 'arch', 'tunnel', 'ring'];
+    const PIECE_KINDS = ['wall', 'block', 'floor', 'pillar', 'stair', 'ramp', 'roof', 'doorway', 'window', 'fence'].concat(SHAPE_KINDS);
     const PIECE_MAX_LEVEL = 120;
     const normalizePiece = (raw, mapData) => {
         if (!raw || typeof raw !== 'object' || !PIECE_KINDS.includes(raw.kind)) return null;
         const x = Math.floor(Number(raw.x)), y = Math.floor(Number(raw.y));
         if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || y < 0) return null;
         if (mapData && (x >= mapData.width || y >= mapData.height)) return null;
-        const z = Math.max(0, Math.min(PIECE_MAX_LEVEL, Math.floor(Number(raw.z)) || 0));
+        const shape = SHAPE_KINDS.includes(raw.kind);
+        // A shape stands at any quarter tile; a cell piece at a whole level.
+        const z = Math.max(0, Math.min(PIECE_MAX_LEVEL, shape ? Math.round((Number(raw.z) || 0) * 4) / 4 : Math.floor(Number(raw.z)) || 0));
         const rot = ((Math.floor(Number(raw.rot)) || 0) % 4 + 4) % 4;
         const material = typeof raw.material === 'string' ? raw.material.trim() : '';
         const id = Number(raw.id);
@@ -652,6 +654,13 @@
             piece.size = [n(size[0], 1), n(size[1], 1), n(size[2], n(size[0], 1))];
             const angle = Number(raw.angle);
             piece.angle = Number.isFinite(angle) ? ((Math.round(angle) % 360) + 360) % 360 : 0;
+            // A tilt, a roll and an offset only when they are something, so a plain shape stays plain.
+            const turn = v => { const k = Number(v); return Number.isFinite(k) ? ((Math.round(k) % 360) + 360) % 360 : 0; };
+            const tilt = turn(raw.tilt), roll = turn(raw.roll);
+            if (tilt) piece.tilt = tilt;
+            if (roll) piece.roll = roll;
+            const offset = Array.isArray(raw.offset) ? raw.offset.slice(0, 2).map(v => Math.max(-0.5, Math.min(0.5, Math.round((Number(v) || 0) * 100) / 100))) : null;
+            if (offset && (offset[0] || offset[1])) piece.offset = [offset[0] || 0, offset[1] || 0];
         }
         return piece;
     };

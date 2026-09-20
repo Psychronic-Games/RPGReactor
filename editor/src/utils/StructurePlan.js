@@ -312,12 +312,16 @@
             if (extra) Object.assign(piece, extra);
             pieces.push(piece);
         };
-        // Shapes: `shapes: [{ kind, at: [x, y], z, size: [w, h, d], angle, material }]`,
-        // the round pieces, a dome on a tower or a tent, at their own size and turn.
+        // Shapes: `shapes: [{ kind, at: [x, y], z, size: [w, h, d], angle, tilt, roll, offset: [ox, oy], material }]`,
+        // the free pieces: a dome on a tower, a tent, a fallen column, at their own size and turn.
         for (const shape of plan.shapes || []) {
             if (!shape || !Array.isArray(shape.at)) continue;
             const size = Array.isArray(shape.size) ? shape.size : [1, 1, 1];
-            put(shape.kind, shape.at[0], shape.at[1], Number(shape.z) || 0, 0, shape.material || M.wall, { size: [size[0], size[1], size[2] === undefined ? size[0] : size[2]], angle: Number(shape.angle) || 0 });
+            const extra = { size: [size[0], size[1], size[2] === undefined ? size[0] : size[2]], angle: Number(shape.angle) || 0 };
+            if (Number(shape.tilt)) extra.tilt = Number(shape.tilt);
+            if (Number(shape.roll)) extra.roll = Number(shape.roll);
+            if (Array.isArray(shape.offset) && (Number(shape.offset[0]) || Number(shape.offset[1]))) extra.offset = [Number(shape.offset[0]) || 0, Number(shape.offset[1]) || 0];
+            put(shape.kind, shape.at[0], shape.at[1], Number(shape.z) || 0, 0, shape.material || M.wall, extra);
         }
         const floors = Array.isArray(plan.floors) ? plan.floors : [];
         // Stairs: cells per step, and the cells the floor above leaves open.
@@ -446,7 +450,12 @@
                 level.windows = (level.windows || []).map(([x, y]) => [x * k, y * k]);
             }
             for (const stair of out.stairs || []) { stair.from = [stair.from[0] * k, stair.from[1] * k]; stair.width = (Number(stair.width) || 1) * k; }
-            for (const shape of out.shapes || []) { shape.at = [shape.at[0] * k + Math.floor((k - 1) / 2), shape.at[1] * k + Math.floor((k - 1) / 2)]; shape.size = (shape.size || [1, 1, 1]).map((v, i) => (i === 1 ? v * k : v * k)); shape.z = (Number(shape.z) || 0) * k; }
+            for (const shape of out.shapes || []) {
+                shape.at = [shape.at[0] * k + Math.floor((k - 1) / 2), shape.at[1] * k + Math.floor((k - 1) / 2)];
+                shape.size = (shape.size || [1, 1, 1]).map(v => v * k);
+                shape.z = (Number(shape.z) || 0) * k;
+                if (Array.isArray(shape.offset)) shape.offset = shape.offset.map(v => (Number(v) || 0) * k);
+            }
             if (out.windows && out.windows !== false) out.windows = { every: (out.windows.every || 6) * k, width: (out.windows.width || 2) * k };
             if (out.roof) out.roof = Object.assign({}, out.roof, { pitch: (Number(out.roof.pitch) || 6) * k });
         }
@@ -469,7 +478,12 @@
                 for (const name of Object.keys(level.rooms || {})) level.rooms[name] = rect(level.rooms[name]);
             }
             for (const stair of out.stairs || []) { stair.from = point(stair.from[0], stair.from[1]); stair.dir = DIR_CW[stair.dir] || 'east'; }
-            for (const shape of out.shapes || []) { shape.at = point(shape.at[0], shape.at[1]); shape.angle = ((Number(shape.angle) || 0) + 90) % 360; }
+            for (const shape of out.shapes || []) {
+                shape.at = point(shape.at[0], shape.at[1]);
+                shape.angle = ((Number(shape.angle) || 0) + 90) % 360;
+                // The offset turns with the cell; the tilt and roll are the shape's own and stay.
+                if (Array.isArray(shape.offset)) shape.offset = [-(Number(shape.offset[1]) || 0), Number(shape.offset[0]) || 0];
+            }
             for (const name of Object.keys(out.spots || {})) out.spots[name] = point(out.spots[name][0], out.spots[name][1]);
             out.paths = (out.paths || []).map(strip => rect(strip).concat(strip.slice(4)));
             // A part turns about the whole: its own turn adds one, and its corner moves with its footprint.

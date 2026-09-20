@@ -743,29 +743,50 @@ test('the round pieces: a shape has a size and a turn, blocks its round footprin
     assert.equal(R.terrainBlocks(map, 2, 3, 3, 3, 0), false, 'the corner outside the round footprint is walkable');
     const geometry = R.pieceGeometry(list, map);
     assert.ok(geometry.attributes.position.count / 3 > 600, 'domes, a cylinder and a cone are many triangles');
-    // Every face of a round piece looks out from its axis (or straight down, the base), never in:
-    // a dome wound the other way showed its inside from outside.
-    for (const piece of list) {
-        const one = R.pieceGeometry([piece], map);
-        const pos = one.attributes.position.array;
-        const cx = piece.x + 0.5, cz = piece.y + 0.5;
-        let inward = 0, faces = 0;
-        for (let i = 0; i + 8 < pos.length; i += 9) {
-            const a = [pos[i], pos[i + 1], pos[i + 2]], b = [pos[i + 3], pos[i + 4], pos[i + 5]], c = [pos[i + 6], pos[i + 7], pos[i + 8]];
-            const u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], v = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
-            const n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
-            const mx = (a[0] + b[0] + c[0]) / 3 - cx, mz = (a[2] + b[2] + c[2]) / 3 - cz;
-            const radial = n[0] * mx + n[2] * mz;
-            faces++;
-            if (radial < -1e-9 || (Math.abs(radial) <= 1e-9 && n[1] > 0 && piece.kind !== 'cylinder')) inward++;
+    // Every shape is a closed solid wound outward: its signed volume (the divergence theorem over
+    // its triangles) is the true solid's, within the rounding of its segments. A dome wound the
+    // other way showed its inside from outside, and came out with a negative volume here.
+    const arch = 1 - (0.7 * 0.5 + Math.PI * 0.35 * 0.35 / 2);
+    const volumes = { box: 1, wedge: 0.5, pyramid: 1 / 3, prism: 0.5, cylinder: Math.PI / 4, tube: Math.PI / 4 * (1 - 0.49), cone: Math.PI / 12, dome: Math.PI / 6, sphere: Math.PI / 6, arch, tunnel: arch, ring: 2 * Math.PI * Math.PI * 0.4 * 0.1 * 0.5 };
+    assert.deepEqual(Object.keys(volumes).sort(), [...R.SHAPE_KINDS].sort(), 'every shape kind has a known volume');
+    for (const kind of R.SHAPE_KINDS) {
+        const out = { positions: [], uvs: [], colors: [] };
+        R.emitPiece({ kind, x: 2, y: 2, z: 0, rot: 0, material: '', size: [1, 1, 1] }, 0, out, null);
+        const P = out.positions;
+        let volume = 0;
+        for (let i = 0; i + 8 < P.length; i += 9) {
+            const a = [P[i] - 2.5, P[i + 1], P[i + 2] - 2.5], b = [P[i + 3] - 2.5, P[i + 4], P[i + 5] - 2.5], c = [P[i + 6] - 2.5, P[i + 7], P[i + 8] - 2.5];
+            volume += (a[0] * (b[1] * c[2] - b[2] * c[1]) - a[1] * (b[0] * c[2] - b[2] * c[0]) + a[2] * (b[0] * c[1] - b[1] * c[0])) / 6;
         }
-        assert.equal(inward, 0, piece.kind + ': no face looks inward (' + faces + ' faces)');
+        assert.ok(Math.abs(volume - volumes[kind]) / volumes[kind] < 0.05, `${kind}: volume ${volume.toFixed(4)} is the solid's ${volumes[kind].toFixed(4)}`);
     }
+    // Hollow shapes block only their walls: a tube's middle, an arch's opening, are walked into.
+    const tube = R.normalizePiece({ kind: 'tube', x: 10, y: 10, size: [6, 5, 6] }, map);
+    const tubeCells = R.pieceFootprint(tube).map(c => c.join(','));
+    assert.ok(!tubeCells.includes('10,10'), 'the middle of a tube is open');
+    assert.ok(tubeCells.includes('7,10') || tubeCells.includes('8,10'), 'its wall blocks');
+    const archway = R.normalizePiece({ kind: 'arch', x: 10, y: 10, size: [3, 4, 1] }, map);
+    assert.deepEqual(R.pieceFootprint(archway).map(c => c.join(',')).sort(), ['11,10', '9,10'], 'an arch is its two posts; the way through is open');
+    assert.equal(R.pieceFootprint(R.normalizePiece({ kind: 'box', x: 10, y: 10, size: [2, 1, 2], offset: [0.5, 0.5] }, map)).length, 4, 'a two-tile box with its middle on a cell corner covers its four cells');
+    assert.equal(R.pieceFootprint(R.normalizePiece({ kind: 'box', x: 10, y: 10, size: [2, 1, 2] }, map)).length, 9, 'centred on a cell it overhangs half of each neighbour, and those block too');
+    // A rolled column lies along the ground, resting on it, and its footprint is long.
+    const lying = R.normalizePiece({ kind: 'cylinder', x: 5, y: 5, z: 0, size: [2, 8, 2], roll: 90 }, map);
+    assert.equal(lying.roll, 90, 'the roll is kept');
+    const lyingCells = R.pieceFootprint(lying);
+    assert.equal(Math.max(...lyingCells.map(c => c[0])) - Math.min(...lyingCells.map(c => c[0])), 8, 'eight tiles long across the ground');
+    assert.ok(Math.abs(R.pieceTop(lying) - 2) < 1e-9, 'and two tiles tall, on the ground rather than floating at its pivot');
+    // A shape stands at a quarter tile, nudged by an offset; a plain shape carries neither field.
+    const nudged = R.normalizePiece({ kind: 'dome', x: 1, y: 1, z: 10.5, size: [4, 2], offset: [0.3, -0.25], tilt: 0 }, map);
+    assert.equal(nudged.z, 10.5);
+    assert.deepEqual([...nudged.offset], [0.3, -0.25]);
+    assert.deepEqual([...R.shapeCentre(nudged)], [1.8, 1.25]);
+    assert.equal('tilt' in nudged, false);
+    assert.equal(R.normalizePiece({ kind: 'wall', x: 1, y: 1, z: 2.5 }, map).z, 2, 'a cell piece still stands on a whole level');
     geometry.computeBoundingBox();
     assert.ok(Math.abs(geometry.boundingBox.max.y - 10.5) < 1e-6, 'the mesh reaches the dome\'s top');
     assert.ok(geometry.boundingBox.min.x >= 2.9 && geometry.boundingBox.min.x <= 3.1, 'the cylinder spans its width about its cell');
     // The palette lists the kinds with their own icons and names in every locale.
     const palette = read('editor/src/PieceBuilderManager.js');
     for (const kind of ['dome', 'cylinder', 'cone']) assert.match(palette, new RegExp(`\\b${kind}: '`), kind + ' has an icon');
-    assert.match(read('editor/src/utils/MapElevation.js'), /'fence', 'dome', 'cylinder', 'cone'\]/, 'the editor keeps the same kinds');
+    assert.match(read('editor/src/utils/MapElevation.js'), /'box', 'wedge', 'pyramid', 'prism', 'cylinder', 'tube', 'cone', 'dome', 'sphere', 'arch', 'tunnel', 'ring'\]/, 'the editor keeps the same kinds');
 });

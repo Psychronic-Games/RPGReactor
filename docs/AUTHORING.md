@@ -30,9 +30,13 @@ sidecar `MapNNN.r3d.json`, so a project with no 3D maps has no sidecars.
 
 In the editor, Database › Structures is a builder over these files: a new
 plan is an empty page. Draw rooms on it, click walls for doors and windows,
-put stairs and people down, place cylinders, domes and cones (one placed on
-another sits on top), drag any of them, undo, pick a style, and Apply writes
-the file back the way it was read.
+put stairs and people down, pick a shape from the picker and click it down
+(one placed on another sits on top), drag any of them, undo, pick a style,
+and Apply writes the file back the way it was read. A selected shape wears
+handles in the 3D view: arrows move it (a face dragged near another shape's
+face clicks onto it), rings turn, tilt and roll it, cubes size it (with the
+lock, in proportion); the same numbers sit in the line under the plan, and a
+click on a shape in the 3D view selects it.
 
 The rules the engine applies to terrain, pieces and water (where the
 ground is, what blocks a step, how deep the water stands) are in
@@ -149,10 +153,19 @@ districts of hamlets:
   plan of parts is one building: it moves and turns as one.
 - `paths`: paved strips `[x0, y0, x1, y1]` (floor slabs of the `path`
   material, or a fifth entry naming one).
-- `shapes`: `[{ kind, at: [x, y], z, size: [w, h, d], angle, material }]`,
-  the round pieces on a plan: a tower is a `cylinder` five across and eight
-  tall with a `dome` at `z` 8 on it; a tent is a `cone`. `material` falls
-  back to the wall's. A quarter turn of the plan adds ninety degrees.
+- `shapes`: `[{ kind, at: [x, y], z, size: [w, h, d], angle, tilt, roll,
+  offset: [ox, oy], material }]`, the free pieces on a plan: `box`, `wedge`,
+  `pyramid`, `prism`, `cylinder`, `tube`, `cone`, `dome`, `sphere`, `arch`,
+  `tunnel`, `ring`. `at` is the cell under the shape's middle and `offset` a
+  nudge of the middle within it (tiles, -0.5..0.5); `z` (quarter tiles) is
+  where its bottom sits; `angle` turns it about the vertical, `tilt` and
+  `roll` about its own middle, and a turned shape rests on its lowest corner,
+  so a rolled cylinder lies on the ground. A tower is a `cylinder` five across
+  and eight tall with a `dome` at `z` 8 on it; a tent is a `cone`; a corridor
+  a `tunnel` with an `arch` at each end. A tube, a ring, an arch and a tunnel
+  are hollow: only their walls block, so they are walked into and through.
+  `material` falls back to the wall's. A quarter turn of the plan adds ninety
+  degrees and turns the offset; tilt and roll are the shape's own and stay.
 - `spots`: named cells. A stamped building keeps them in its record as
   map cells, prefixed by the part's name (`north.bed`), so a story can
   say "the innkeeper stands at `inn.counter`". A plan of parts is walked
