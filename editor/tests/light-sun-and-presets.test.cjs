@@ -65,6 +65,8 @@ test('a preset gives an existing light its look and nothing else; the Sun is one
     const look = L.presetLook('sun');
     assert.deepEqual({ ...look }, { flicker: 0, pulse: null, type: 'point', color: '#fff3d2', radius: 150, intensity: 2, shadow: true });
     for (const key of ['x', 'y', 'height', 'id', 'key', 'tag', 'attach']) assert.equal(key in look, false, key + ' stays the light\'s own');
+    assert.equal(L.PRESETS.length % 4, 0, 'the tray fills its rows of four (no chip sits alone on a row)');
+    assert.equal(L.PRESETS.find(preset => preset.key === 'point'), undefined, 'no plain Point chip: a Lamp is the everyday point light');
     assert.equal(L.presetLook('candle').flicker, 0.6);
     assert.equal(L.presetLook('lamp').flicker, 0, 'a lamp made from a candle stops flickering');
     assert.equal(L.presetLook('alarm').pulse.period, 150);

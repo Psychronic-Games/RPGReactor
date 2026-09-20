@@ -33,8 +33,7 @@
      * preset only.
      */
     const PRESETS = [
-        { key: 'point', labelKey: 'lit.point',
-          template: { key: 'point', type: 'point', color: '#ffcf7d', radius: 3, intensity: 1, height: 1.5 } },
+        // No plain Point chip: a Lamp is the everyday point light, and Point stays a type in the drop-down.
         { key: 'spot', labelKey: 'lit.spot',
           template: { key: 'spot', type: 'spot', color: '#fff2cc', radius: 6, intensity: 1, height: 3, pitch: -60 } },
         { key: 'candle', labelKey: 'lit.preset.candle',
