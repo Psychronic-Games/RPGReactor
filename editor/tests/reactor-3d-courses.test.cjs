@@ -13,6 +13,7 @@
  * street, so the region walked south to the map's edge and stood every wall in
  * Moletown thirty-eight tiles up, putting the towers off the top of the screen.
  */
+const { source3D } = require('./helpers/runtime-3d-source.cjs');
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const test = require('node:test');
@@ -186,7 +187,7 @@ test('one helper resolves a standing place into a world point', () => {
     // Sprites, their scale and the lights all have to travel the same way to
     // reach the wall, or they arrive at different places.
     const fs = require('node:fs');
-    const three = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+    const three = source3D();
     const at = three.indexOf('Reactor3D.pointOf = function');
     assert.ok(at > -1, 'there is one place that does it');
     const body = three.slice(at, three.indexOf('\n};', at));

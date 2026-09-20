@@ -1235,8 +1235,7 @@ test('the clamp is injected where no other patch can remove it', () => {
      * clamps every sample to a zero-sized rectangle. Every cut-out on the map
      * became one transparent texel and no shader failed to compile.
      */
-    const runtime = require('node:fs').readFileSync(
-        path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+    const runtime = require('./helpers/runtime-3d-source.cjs').source3D();
     const clamp = runtime.slice(runtime.indexOf('Reactor3D.clampToTile = function'));
     const body = clamp.slice(0, clamp.indexOf('\n};'));
     assert.match(body, /replace\(\s*"void main\(\) \{",/, 'anchored at void main');

@@ -1,3 +1,4 @@
+const { source3D } = require('./helpers/runtime-3d-source.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -38,7 +39,7 @@ test('a wall hides the light behind it, height respected', () => {
 });
 
 test('the quads still skip and shorten through the occlusion switch', () => {
-    const source = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+    const source = source3D();
     assert.match(source, /Reactor3D\.LIGHT_OCCLUSION = true;/, 'and it can be turned off in one place');
     assert.match(source, /const beamReach = Reactor3D\.LIGHT_OCCLUSION\n/, 'cones clamp through the switch');
     assert.match(source, /pool\.count--;\n\s*continue;/, 'a hidden light writes no quad at all');

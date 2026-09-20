@@ -1,3 +1,4 @@
+const { source3D } = require('./helpers/runtime-3d-source.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -21,7 +22,7 @@ test('a selected video effect shows its movie, smoothly, and keeps its card', ()
 
 test('a video anchored to a part turns with the part', () => {
     const repoRoot = path.resolve(editorRoot, '..');
-    const three = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+    const three = source3D();
     assert.match(three, /child\.userData\.__restQuaternion = child\.quaternion\.clone\(\);/, 'the rest turn rides the node');
     assert.match(three, /Reactor3D\.effectAnchorQuaternion = function/, 'the pose delta is one shared helper');
     const surfaces = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_media_surfaces.js'), 'utf8');
@@ -148,7 +149,7 @@ test('a light effect previews the way the game lights: presets shared, a soft co
     assert.match(editor, /Reactor3D\.packLightUniforms\(packed, \{ intensity: this\.LIGHT_PREVIEW_AMBIENT/);
     assert.match(editor, /colour: 0xffffff }, this\._previewLighting\);/);
     assert.doesNotMatch(editor, /Reactor3D\.lightUniforms\(\)/, 'database preview never mutates the map lighting singleton');
-    const three = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+    const three = source3D();
     assert.match(three, /Reactor3D\.packLightUniforms = function\(lights, ambient, uniforms = this\.lightUniforms\(\)\) \{/);
     // Always / Moving / Idle keep a light on in the preview, like a movie.
     assert.match(editor, /: isLight \? true : Number\(raw\.animation\) > 0\);/);
@@ -184,7 +185,7 @@ test('a click on a rigged model binds the anchor to a bone, and a beam body surv
     const raycast = editor.slice(at, editor.indexOf('_partUnderPointer', at));
     assert.match(raycast, /if \(!node\.isSkinnedMesh[^\n]*\) return;\s*node\.computeBoundingBox\(\);\s*node\.computeBoundingSphere\(\);/);
     // The sphere/cone body fades to nothing at its silhouette; a beam seen along its length is all silhouette.
-    const three = fs.readFileSync(path.join(path.resolve(editorRoot, '..'), 'runtime', 'reactor_3d.js'), 'utf8');
+    const three = source3D();
     assert.match(three, /Reactor3D\.beamBodyMaterial = function\(\) \{/);
     assert.match(three, /float soft = mix\(0\.45, 1\.0, pow\(facing, 0\.5\)\);/, 'a floor of brightness at any angle');
     assert.match(three, /new THREE\.Mesh\(Reactor3D\.beamBodyGeometry\(\), Reactor3D\.beamBodyMaterial\(\)\)/, 'the game pool uses it');

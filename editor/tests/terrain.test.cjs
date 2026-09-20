@@ -3,6 +3,7 @@
 // sidecar; the runtime bends every built vertex, the room floor and the
 // parallax grounds through it, stands characters on it, and refuses a step
 // steeper than the slope limit.
+const { source3D } = require('./helpers/runtime-3d-source.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -16,9 +17,12 @@ function loadElevation() {
     return context.RRMapElevation;
 }
 function loadRuntime() {
-    const source = read('runtime/reactor_3d.js');
-    const body = source.slice(source.indexOf('Reactor3D.TERRAIN_MAX = 60;'), source.indexOf('Reactor3D.elevationAt = function(mapData, x, y) {'))
-        + source.slice(source.indexOf('Reactor3D.elevationAt = function(mapData, x, y) {'), source.indexOf('/**\n * The 3D object a cell\'s tile has been painted into'));
+    // The rules alone, without three.js: the world file's rules half and the
+    // core's elevationAt, evaluated against a bare namespace.
+    const world = read('runtime/reactor_3d_world.js');
+    const core = read('runtime/reactor_3d.js');
+    const body = world.slice(world.indexOf('Reactor3D.TERRAIN_MAX = 60;'), world.indexOf('// World meshes'))
+        + core.slice(core.indexOf('Reactor3D.elevationAt = function(mapData, x, y) {'), core.indexOf('/**\n * The 3D object a cell\'s tile has been painted into'));
     const Reactor3D = { DEFAULT_ELEVATION: 0 };
     vm.runInNewContext(body, { Reactor3D });
     return Reactor3D;
@@ -81,7 +85,7 @@ test('the runtime stands things on the terrain and blocks a step that is too ste
 });
 
 test('every ground surface and every stander goes through the terrain', () => {
-    const runtime = read('runtime/reactor_3d.js');
+    const runtime = source3D();
     assert.match(runtime, /Reactor3D\.displaceByTerrain\(built, mapData\);/);
     assert.match(runtime, /this\._terrainMap = Reactor3D\.terrainOf\(mapData\) \? mapData : null;/);
     assert.match(runtime, /const geometry = this\.groundPlane\(width, height, lift\);/);

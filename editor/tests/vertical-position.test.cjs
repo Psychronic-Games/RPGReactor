@@ -1,3 +1,4 @@
+const { source3D } = require('./helpers/runtime-3d-source.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -94,7 +95,7 @@ test('Face Ceiling, Face Ground and Rotate reach the drawn character', () => {
     } finally {
         delete global.Game_CharacterBase;
     }
-    const three = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+    const three = source3D();
     assert.match(three, /if \(posePitch\) object\.rotateX\(-posePitch \* Math\.PI \/ 2\);/, 'a model falls about its own axes, after facing');
     assert.match(three, /if \(poseSpin\) object\.rotateZ\(-poseSpin \* Math\.PI \/ 180\);/, 'and rolls the way a sprite turns');
     const sprites = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_sprites.js'), 'utf8');

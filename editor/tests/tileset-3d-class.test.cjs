@@ -1,3 +1,4 @@
+const { source3D } = require('./helpers/runtime-3d-source.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -6,7 +7,7 @@ const test = require('node:test');
 const repoRoot = path.resolve(__dirname, '..', '..');
 const editorRoot = path.resolve(__dirname, '..');
 const C = require(path.join(editorRoot, 'src', 'utils', 'Tileset3DClass.js'));
-const runtimeSource = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+const runtimeSource = source3D();
 
 test('the class values match the runtime that consumes them', () => {
     // The editor cannot load the runtime module, so the two hold the same

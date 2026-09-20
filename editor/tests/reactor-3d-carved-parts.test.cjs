@@ -1,3 +1,4 @@
+const { source3D } = require('./helpers/runtime-3d-source.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -440,12 +441,12 @@ test('the pivot is a movable fulcrum on the card and in the viewport', () => {
     // A click on the canvas lets an open dropdown dismiss itself.
     assert.match(editor, /active\.tagName === 'SELECT'/);
     // The game applies the same overrides the editor authors.
-    const runtime = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+    const runtime = source3D();
     assert.match(runtime, /Reactor3D\.applyPivotOverrides\(object, Reactor3D\.readModelPivots\(sidecar\)\)/);
 });
 
 test('the game sync carves the clone before binding and reads rules from one sidecar', () => {
-    const source = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+    const source = source3D();
     assert.match(source, /Reactor3D\.loadModelSidecar\(spec\.name\)/);
     const carve = source.indexOf('Reactor3D.carveModelParts(object, Reactor3D.readModelParts(sidecar))');
     const bind = source.indexOf('current.binding = Reactor3D.prepareModelInstance(object');
@@ -589,7 +590,7 @@ test('the 3D section carries the tool strip, part picking, and the edit card', (
 });
 
 test('the runtime latch lives in the sync path the game runs', () => {
-    const source = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+    const source = source3D();
     assert.match(source, /binding\.latch\[i\] = true;/);
     assert.match(source, /rules\[k\]\.hold\s*\n?\s*&& rules\[k\]\.part === rule\.part/);
     assert.match(source, /hold: keys\.length \? false : !!raw\.hold/);
@@ -599,7 +600,7 @@ test('selection overlays never join the carve-target numbering', () => {
     // The highlight overlays are children of the real meshes; counting
     // them as carve targets shifted mesh indexes and let a full-canvas
     // marquee report more triangles than the model has.
-    const runtime = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+    const runtime = source3D();
     assert.match(runtime, /!child\.userData\.__reactorOverlay/);
     const editor = fs.readFileSync(
         path.join(repoRoot, 'editor', 'src', 'database', 'Database3DEditor.js'), 'utf8');
@@ -693,7 +694,7 @@ test('timed effects parse, clamp, and fire once as the action clock passes', () 
 });
 
 test('the game sync fires effects and instances flash their own materials', () => {
-    const source = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+    const source = source3D();
     // Effects ride the action clock in the sync loop, once per play.
     assert.match(source, /holder\.fxKey !== fxKey/);
     assert.match(source, /Reactor3D\.modelEffectsToFire\(rule, duration, holder\.fxT, fxNow\)/);

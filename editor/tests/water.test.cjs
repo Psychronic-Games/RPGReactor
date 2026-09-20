@@ -1,6 +1,7 @@
 // Water: rectangles of cells under a sheet at one height. The runtime draws
 // a moving translucent plane, blocks water deeper than a wade, and the
 // terrain tab paints a sheet with a rectangle drag.
+const { source3D } = require('./helpers/runtime-3d-source.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -38,7 +39,7 @@ test('a sheet is a rectangle at a level; deep water blocks, shallows wade, dry l
     assert.ok(lake.material.transparent && lake.material.depthWrite === false && lake.material.__reactorWater);
     assert.equal(lake.geometry.attributes.rrDepth.count, lake.geometry.attributes.position.count, 'every vertex knows its depth');
     assert.ok(lake.geometry.attributes.rrDepth.array.some(d => d > 1.5) && lake.geometry.attributes.rrDepth.array.some(d => d < 0.5), 'deep in the middle, shallow at the rim');
-    const runtime = read('runtime/reactor_3d.js');
+    const runtime = source3D();
     assert.match(runtime, /transformed\.y \+= rrLift \* rrCalm;/, 'waves lift the vertices');
     assert.match(runtime, /smoothstep\(0\.0, 0\.35, vRRDepth\)/, 'and the sheet fades out on the shore');
     assert.match(runtime, /rrWaveTime\.value = frame \/ 60;/);
@@ -51,7 +52,7 @@ test('a sheet is a rectangle at a level; deep water blocks, shallows wade, dry l
     assert.equal(scene.updateWaterSheets(map, () => null).length, 1);
     assert.equal(scene._scene.getObjectByName('pieces').children.length, 1, 'the old sheets left the scene');
     assert.match(read('runtime/reactor_sprites.js'), /state\.scene\.updateWater\(Graphics\.frameCount\)/);
-    assert.match(read('runtime/reactor_3d.js'), /this\.addWater\(mapData, settings\.loadMaterial/);
+    assert.match(source3D(), /this\.addWater\(mapData, settings\.loadMaterial/);
 });
 
 test('the terrain tab lays a sheet with a rectangle drag, removes one with a click, and undoes both', () => {

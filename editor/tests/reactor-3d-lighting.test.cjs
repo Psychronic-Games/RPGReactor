@@ -7,6 +7,7 @@
  * this lights it — reading each plugin's own lights through a shim, and never
  * modifying the plugin.
  */
+const { source3D } = require('./helpers/runtime-3d-source.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -332,7 +333,7 @@ test('every surface takes the ambient, ground and cut-out alike', () => {
     // material colour. Normals mean nothing to a billboard — the shader
     // rewrites its vertices to face the camera — and they buy the ground
     // nothing either, when the lights are additive quads in their own pass.
-    const three = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+    const three = source3D();
     assert.match(three, /new THREE\.MeshBasicMaterial\(\{/);
     assert.match(three, /Reactor3D\.MapScene\.prototype\.syncLights = function/);
     assert.match(three, /material\.__reactorBillboard = true;/);
@@ -359,7 +360,7 @@ test('a street of lanterns is a street of lanterns', () => {
 });
 
 test('lights are geometry, not simulated lights', () => {
-    const three = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+    const three = source3D();
     // Nothing per-light — and, since the ambient is a plain multiplier on the
     // material colour, no three light of any kind.
     assert.doesNotMatch(three, /new THREE\.AmbientLight/);
@@ -422,7 +423,7 @@ test('the scene is told where to spend the budget', () => {
 test('a cone shines out of its source, not into it', () => {
     // `CanvasTexture` flips V by default, which would put the wide end of the
     // beam where the torch is and the source out at the far wall.
-    const three = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+    const three = source3D();
     assert.match(three, /_roundLight\.flipY = false;/);
     assert.match(three, /_coneLight\.flipY = false;/);
 
@@ -440,7 +441,7 @@ test('light is added to the scene, not painted over it', () => {
     // because a tree hides what is behind it; light covers nothing. Sharing one
     // pass blended a lantern as a pale disc painted on the ground rather than
     // as light falling on it — dim and oddly solid at once.
-    const three = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+    const three = source3D();
     const at = three.indexOf('Reactor3D.MapScene.prototype.setPass = function');
     const body = three.slice(at, three.indexOf('\n};', at));
     assert.match(body, /this\._lightGroup\.visible = which === "lights"/,
@@ -465,7 +466,7 @@ test('light is added to the scene, not painted over it', () => {
 test('the strength of a light is one number', () => {
     // A plugin's alphas were chosen against a flat overlay multiplied into a
     // dark screen, which is a different thing from a pool added to a lit one.
-    const three = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+    const three = source3D();
     assert.match(three, /Reactor3D\.LIGHT_GAIN = /);
     assert.match(three, /\* Reactor3D\.LIGHT_GAIN;/);
     assert.ok(Reactor3D.LIGHT_GAIN > 0);
@@ -501,7 +502,7 @@ test('lights stay the last thing drawn, however late a plugin adds a layer', () 
 test('a colour keeps its hue however bright the light is', () => {
     // Clamping happens per channel, so a colour with one channel over full
     // loses that channel's lead and the light drifts to white.
-    const three = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+    const three = source3D();
     assert.match(three, /const peak = Math\.max\(r, g, b\);/);
     assert.match(three, /if \(peak > 1\) \{ r \/= peak; g \/= peak; b \/= peak; \}/);
     assert.equal(Reactor3D.LIGHT_GAIN, 1, 'and gain does not push it there by default');
@@ -571,7 +572,7 @@ test('a pool sits where the thing casting it stands', () => {
     // alone lit the pavement while the sign it comes from had been stood
     // several tiles up and a couple further back, and the two slid apart as
     // the camera panned.
-    const three = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+    const three = source3D();
     assert.match(three, /const cz = facade \? facade\.z : light\.y \+ 1;/);
     assert.match(three, /const y = standsOn \+ lift \+ 0\.02/,
         'and a wall light keeps its height — the quad lies flat at it');
@@ -589,7 +590,7 @@ test('a sprite gets smaller the further away it stands', () => {
     // came out the same size wherever it stood, and the map was in perspective
     // while the people on it were not. A billboard turns to face the camera and
     // is never foreshortened, so its size is the plain perspective divide.
-    const three = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+    const three = source3D();
     const at = three.indexOf('Reactor3D.screenScaleAt = function');
     const body = three.slice(at, three.indexOf('\n};', at));
 
@@ -710,7 +711,7 @@ test('a cone is a triangle, so its picture has no seam to show', () => {
     // As a trapezoid the quad split into two triangles whose UVs interpolate
     // independently, and the crease along that diagonal read as a bright slit
     // straight up the middle of the beam.
-    const three = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+    const three = source3D();
     // Corners are in the billboard's own plane now, so the source is its
     // origin rather than a world position.
     assert.match(three, /\[0, 0\],\s*\n\s*\[0, 0\]/,
@@ -723,7 +724,7 @@ test('nothing occludes a light', () => {
     // A doorway standing between a lamp and its own pool sliced a bite out of
     // it; depth-testing light is wrong for a view whose ground is 3D and whose
     // people are flat.
-    const three = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+    const three = source3D();
     const at = three.indexOf('Reactor3D.MapScene.prototype.lightPool = function');
     const body = three.slice(at, three.indexOf('\n};', at));
     assert.match(body, /depthTest: false/);
@@ -752,7 +753,7 @@ test('the ground is not shaded by three, it is multiplied by the ambient', () =>
     // in 2D: three divides diffuse by pi, so "ambient 1" is nowhere near
     // "unlit", and the factor moves between releases. Nothing here needs a
     // light model — the lights are additive quads in a pass of their own.
-    const three = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+    const three = source3D();
     assert.doesNotMatch(three, /MeshLambertMaterial/);
     assert.doesNotMatch(three, /new THREE\.AmbientLight/);
     assert.match(three, /material\.color\.setRGB\(r, g, b\)/);
@@ -773,8 +774,7 @@ test('a cut-out is blended at the alpha it was painted at', () => {
     //
     // The opaque-core pass settles that at the root: fully opaque texels write
     // their colour and depth together before fractional alpha is blended.
-    const source = fs.readFileSync(
-        path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+    const source = source3D();
     const material = source.slice(source.indexOf('Reactor3D.billboardMaterial = function'));
     const body = material.slice(0, material.indexOf('material.onBeforeCompile'));
 
@@ -794,8 +794,7 @@ test('a cut-out is blended at the alpha it was painted at', () => {
 });
 
 test('flat shadows blend over a colour-bearing opaque core', () => {
-    const source = fs.readFileSync(
-        path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+    const source = source3D();
     const material = source.slice(source.indexOf(': new THREE.MeshBasicMaterial({'),
         source.indexOf('const target =', source.indexOf(': new THREE.MeshBasicMaterial({')));
 
@@ -810,8 +809,7 @@ test('flat shadows blend over a colour-bearing opaque core', () => {
 });
 
 test('multi-cell foliage gap fill stays faint and owns no opaque depth', () => {
-    const source = fs.readFileSync(
-        path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+    const source = source3D();
     assert.match(source, /material\.opacity = group\.underlay \? 0\.6 : 1/);
     assert.match(source, /opaqueCore\.opacity = group\.underlay \? 0\.6 : 1/,
         'the exact-opaque core rejects every underlay texel');
@@ -965,12 +963,12 @@ test('a sidecar ambient colour string reaches the compositors as a number', () =
     assert.equal(Reactor3D.ambientFor({}).colour, 0xffffff);
     // And late-built wall chunks join the ambient rather than staying white:
     // the cache keys on the material count too.
-    const source = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+    const source = source3D();
     assert.match(source, /this\._ambientCount !== this\._materials\.length/);
 });
 
 test('the sync march is gated on the interior rule and the per-light flag', () => {
-    const source = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+    const source = source3D();
     assert.match(source,
         /Reactor3D\.LIGHT_OCCLUSION && light\.occlude !== false && camera/);
     assert.match(source,

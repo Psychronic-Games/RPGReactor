@@ -32,6 +32,9 @@ function viewport(controller = {}, overrides = {}) {
     return new MapEditor3D(controller);
 }
 
+// The extension files the real core names; the mock core repeats them so the loader is tested against the real list.
+const extensions = require('../../runtime/reactor_3d.js').EXTENSIONS;
+
 function webViewport({ fail = '' } = {}) {
     const browserWindow = {};
     const requested = [];
@@ -60,7 +63,10 @@ function webViewport({ fail = '' } = {}) {
                     } else {
                         if (element.src.endsWith('/pako.min.js')) browserWindow.pako = {};
                         if (element.src.endsWith('/three.js')) browserWindow.THREE = {};
-                        if (element.src.endsWith('/reactor_3d.js')) browserWindow.Reactor3D = {};
+                        if (element.src.endsWith('/reactor_3d.js')) browserWindow.Reactor3D = { EXTENSIONS: extensions.map(extension => ({ ...extension })) };
+                        for (const extension of extensions) {
+                            if (element.src.endsWith('/' + extension.file)) browserWindow.Reactor3D[extension.namespace] = {};
+                        }
                         element.onload();
                     }
                 });
@@ -172,9 +178,10 @@ test('the runtime module is read from disk, not copied into the editor', () => {
     // the first time either changed, and seeing what the game will draw is the
     // entire point of the view.
     assert.match(source, /getRuntimePath/);
-    assert.match(source, /'libs', 'pako\.min\.js'/);
-    assert.match(source, /'libs', 'three\.js'/);
+    assert.match(source, /'libs\/pako\.min\.js'/);
+    assert.match(source, /'libs\/three\.js'/);
     assert.match(source, /'reactor_3d\.js'/);
+    assert.match(source, /Reactor3D\.EXTENSIONS/, 'the extensions come from the core, never a list of their own');
     assert.equal(fs.existsSync(path.join(repoRoot, 'runtime', 'libs', 'three.js')), true);
 });
 
@@ -194,12 +201,13 @@ test('WebHost loads 3D viewport dependencies lazily from the bundled project', a
         '/project/js/libs/pako.min.js',
         '/project/js/libs/three.js',
         '/project/js/reactor_3d.js',
+        ...extensions.map(extension => '/project/js/' + extension.file),
         '/project/js/reactor_speech_3d.js'
-    ]);
+    ], 'the core loads, then the extensions it names, then speech');
     assert.equal(web.desktopLookup(), false, 'the browser does not ask for a desktop runtime path');
 
     assert.equal(await web.view.ensureLibraries(), true);
-    assert.equal(web.requested.length, 4, 'a second request reuses the loaded globals');
+    assert.equal(web.requested.length, 4 + extensions.length, 'a second request reuses the loaded globals');
 });
 
 test('a missing Web 3D dependency reports its project path and can be retried', async () => {

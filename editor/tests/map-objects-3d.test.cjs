@@ -13,6 +13,7 @@
  * The measurements below are from Moletown, map 612 of Star Shift Rebellion —
  * three shop stalls whose flags slid against the walls they were painted on.
  */
+const { source3D } = require('./helpers/runtime-3d-source.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -452,8 +453,7 @@ test('a grouped building is not culled while it is still on screen', () => {
 
     // Which is why the sphere is grown by the furthest corner, plus the half
     // tile the shader steps everything towards the camera.
-    const runtime = fs.readFileSync(
-        path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+    const runtime = source3D();
     assert.match(runtime, /geometry\.boundingSphere\.radius \+= reach \+ 0\.5/);
     assert.match(runtime, /if \(group\.offsets\) \{\s*\n\s*geometry\.computeBoundingSphere\(\)/);
 });
@@ -565,7 +565,7 @@ test('cut-outs are drawn north to south, the way 2D draws', () => {
         'written north first, so the southern one paints over it');
 
     // The declaration of intent, so the sort cannot be dropped as redundant.
-    const runtime = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+    const runtime = source3D();
     assert.match(runtime, /objects\.sort\(\(a, b\) => \(a\.maxY - b\.maxY\) \|\| \(a\.minX - b\.minX\)\)/);
     assert.match(runtime, /wallRuns\.sort\(\(a, b\) => \(a\.faceY - b\.faceY\) \|\| \(a\.x - b\.x\)\)/,
         'walls sort the same way, for the same reason');

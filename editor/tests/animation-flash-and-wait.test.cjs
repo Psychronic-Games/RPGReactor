@@ -1,3 +1,4 @@
+const { source3D } = require('./helpers/runtime-3d-source.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -5,7 +6,7 @@ const test = require('node:test');
 
 const repoRoot = path.resolve(__dirname, '..', '..');
 const sprites = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_sprites.js'), 'utf8');
-const three = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+const three = source3D();
 const animEditor = fs.readFileSync(path.join(repoRoot, 'editor', 'src', 'database', 'DatabaseAnimationEditor.js'), 'utf8');
 const pma = fs.readFileSync(path.join(repoRoot, 'editor', 'src', 'event', 'commands', 'PlayModelAnimationEditor.js'), 'utf8');
 

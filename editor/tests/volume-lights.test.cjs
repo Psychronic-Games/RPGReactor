@@ -8,6 +8,7 @@
  * three dimensions, and each source stands in the world as a glowing body a
  * wall can hide.
  */
+const { source3D } = require('./helpers/runtime-3d-source.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -93,7 +94,7 @@ test('a lit material composes with earlier injections and keys its program apart
 });
 
 test('every surface of the map is lit: tiles, cut-outs, rooms, models, characters', () => {
-    const three = read('runtime/reactor_3d.js');
+    const three = source3D();
     const sites = [
         /"reactor3d-billboard-clamped" : "reactor3d-tile-clamped"\);\n\s*Reactor3D\.litMaterial\(material\);/,
         /"reactor3d-billboard-clamped" : "reactor3d-tile-clamped"\);\n\s*Reactor3D\.litMaterial\(opaqueCore\);/,
@@ -110,7 +111,7 @@ test('every surface of the map is lit: tiles, cut-outs, rooms, models, character
 });
 
 test('in volume mode syncLights writes uniforms and bodies, never quads or a pass', () => {
-    const three = read('runtime/reactor_3d.js');
+    const three = source3D();
     const at = three.indexOf('Reactor3D.MapScene.prototype.syncLights = function');
     const body = three.slice(at, three.indexOf('\n};', at));
     assert.match(body, /if \(Reactor3D\.lightModeFor\(\) === "volume"\) \{\n\s*this\.syncVolumeLights\(declared, focus\);\n\s*return;\n\s*\}/);
@@ -244,7 +245,7 @@ test('a beam is a constant-width cylinder of light: read, packed, shaded and bod
     assert.match(glsl, /if \(t < 0\.0 \|\| t > lp\.w\) continue;/, 'nothing behind the source or past the length');
 
     // Bodied: a cylinder aimed like the cone, and a flat bar in 2D.
-    const three = read('runtime/reactor_3d.js');
+    const three = source3D();
     assert.match(three, /new THREE\.CylinderGeometry\(1, 1, 1, 24, 1, true\)/);
     assert.match(three, /beamBody\.quaternion\.setFromUnitVectors\(down, aimVector\)/);
     assert.match(three, /for \(const list of \[cores, glows, cones, beams, dots\]\) \{/, 'disposed with the rest');
@@ -336,7 +337,7 @@ test('AmbientLight eases the map ambient through ambientFor, and the 3D path re-
     });
     const sprites = read('runtime/reactor_sprites.js');
     assert.match(sprites, /const key = ambient\.intensity \* 16777216 \+ ambient\.colour;\n\s*if \(key !== this\._reactor3dAmbientKey\)/);
-    const three = read('runtime/reactor_3d.js');
+    const three = source3D();
     for (const name of ['LightSwitch', 'TransformLight', 'AmbientLight']) {
         assert.match(three, new RegExp('registerCommand\\("RPGReactor", "' + name + '"'));
     }
@@ -372,7 +373,7 @@ test('a beam stops where it lands and leaves a dot there: the march, the models,
     } finally {
         Reactor3D.lightBlockHeightAt = savedBlock;
     }
-    const three = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+    const three = source3D();
     // The packer: the beam's reach is the landing, the next light is the dot on the surface, the body gets the hit.
     const scene = Object.create(Reactor3D.MapScene.prototype);
     const placed = [];

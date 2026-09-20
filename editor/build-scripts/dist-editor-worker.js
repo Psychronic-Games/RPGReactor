@@ -1267,7 +1267,7 @@ function buildWeb(stageRoot, stagingDir) {
     const runtimeSrc = runtimeCandidates.find(candidate => fs.existsSync(path.join(candidate, 'reactor_main.js')));
     if (runtimeSrc) {
         const requiredRuntimeFiles = [
-            'reactor_main.js', 'reactor_json.js', 'reactor_core.js', 'reactor_3d.js', 'reactor_managers.js',
+            'reactor_main.js', 'reactor_json.js', 'reactor_core.js', 'reactor_3d.js', 'reactor_3d_world.js', 'reactor_managers.js',
             'reactor_objects.js', 'reactor_scenes.js', 'reactor_sprites.js', 'reactor_picture_extensions.js',
             'reactor_media_surfaces.js', 'reactor_quests.js',
             'reactor_battle_data.js', 'reactor_battle_room.js', 'reactor_battle_presentation.js', 'reactor_battle_events.js',

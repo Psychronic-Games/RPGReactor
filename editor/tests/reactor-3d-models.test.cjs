@@ -1,3 +1,4 @@
+const { source3D } = require('./helpers/runtime-3d-source.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -126,7 +127,7 @@ test('a shipped Demo model is a real GLB', () => {
 });
 
 test('GLB materials are unlit like the rest of the 3D scene', () => {
-    const source = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+    const source = source3D();
     assert.match(source, /buildGlbTemplate[\s\S]*MeshBasicMaterial/);
     assert.match(source, /buildGlbTemplate[\s\S]*__reactorModel = true/);
     assert.match(source, /material\.__reactorModel/);
@@ -358,7 +359,7 @@ test('character billboards keep the canvas texture upright', () => {
     // flipY (true) for canvas uploads is what makes that the image's top.
     // flipY = false is a glTF convention — applied here it rendered every
     // character head-down on maps with event models.
-    const core3d = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+    const core3d = source3D();
     const at = core3d.indexOf('syncCharacterBillboards = function');
     assert.ok(at >= 0);
     const body = core3d.slice(at, core3d.indexOf('_clearCharacterBillboards = function', at));
@@ -383,7 +384,7 @@ test('a gliding model still occupies its trailing tiles', () => {
 });
 
 test('a moving step tests the footprint in both orientations', () => {
-    const core3d = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+    const core3d = source3D();
     const at = core3d.indexOf('Reactor3D.eventModelWouldOverlap = function(character, x, y, other, direction)');
     assert.ok(at >= 0, 'wouldOverlap accepts the movement direction');
     const body = core3d.slice(at, core3d.indexOf('\n};', at));
@@ -400,7 +401,7 @@ test('a moving step tests the footprint in both orientations', () => {
 });
 
 test('the rendered model turns at a paced rate instead of pivoting in one frame', () => {
-    const core3d = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+    const core3d = source3D();
     assert.match(core3d, /Reactor3D\.MODEL_TURN_SPEED = /);
     const at = core3d.indexOf('syncCharacterModels = function');
     const body = core3d.slice(at, core3d.indexOf('syncCharacterBillboards = function', at));
@@ -413,7 +414,7 @@ test('billboards depth-test as if standing upright at their anchor', () => {
     // The lean is a drawing device; depth-testing the leaned geometry buried
     // a sprite's head in the mesh behind it. Depth comes from a vertical twin
     // of each vertex, so in-front/behind settles per pixel by ground row.
-    const core3d = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+    const core3d = source3D();
     assert.match(core3d, /Reactor3D\.straightenBillboardDepth = function/);
     const chars = core3d.indexOf('syncCharacterBillboards = function');
     const charBody = core3d.slice(chars, core3d.indexOf('_updateCharacterBillboard = function', chars));
@@ -522,7 +523,7 @@ test('an above-characters event billboard rides the above pass', () => {
     // The tail wrapper that re-clamped models to below/all silently overrode
     // every pass the base method learned — the world pass rendered an empty
     // models group and every character and vehicle vanished.
-    const core3dTail = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+    const core3dTail = source3D();
     assert.doesNotMatch(core3dTail, /_reactorSetPassModels/,
         'setPass owns model visibility itself');
     assert.match(sprites, /modelsInWorld \? "world" : \(split \? "below" : "all"\)/,
@@ -532,7 +533,7 @@ test('an above-characters event billboard rides the above pass', () => {
     // cell snaps to that wall's plane (whatever its priority) and is pulled
     // just ahead of the coplanar wall quads — over its pedestal, never over
     // a genuinely nearer character.
-    const core3d = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+    const core3d = source3D();
     const update = core3d.slice(core3d.indexOf('_updateCharacterBillboard = function'),
         core3d.indexOf('_clearCharacterBillboards = function'));
     assert.match(update, /typeof character\.eventId === "function"/,
@@ -556,7 +557,7 @@ test('character billboards take the same footward step as tile cut-outs', () => 
     // billboard anchored at plain tile centre drifted off the tile art it
     // was authored over as the camera crossed the map, and only agreed at
     // dead centre — a console screen event slid off its tile-drawn pedestal.
-    const core3d = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+    const core3d = source3D();
     const at = core3d.indexOf('_updateCharacterBillboard = function');
     const body = core3d.slice(at, core3d.indexOf('_clearCharacterBillboards = function', at));
     assert.match(body, /camera\.matrixWorld/);
@@ -661,7 +662,7 @@ test('a model file keeps whatever extension case it shipped with', () => {
     }
 
     // And a note-based spec with no extension probes upper-case variants too.
-    const core3d = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+    const core3d = source3D();
     const at = core3d.indexOf('Reactor3D.loadModel = function');
     const body = core3d.slice(at, core3d.indexOf('\n};', at));
     assert.match(body, /next\.toUpperCase\(\)/);
@@ -900,7 +901,7 @@ test('animation rules turn a part about its pivot and reset when inactive', () =
 });
 
 test('the sync loop binds instances, loads rules, and plays queued actions', () => {
-    const source = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+    const source = source3D();
     assert.match(source, /current\.binding = Reactor3D\.prepareModelInstance\(object, object\.__reactorClips\)/);
     // Embedded clips: an animated GLB keeps its hierarchy (no flatten),
     // skinned meshes ride a real Skeleton on the GPU, instances rebind to

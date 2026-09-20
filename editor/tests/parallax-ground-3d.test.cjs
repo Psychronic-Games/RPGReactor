@@ -8,6 +8,7 @@
  * on Star Shift Freelancers, one opaque black autotile across the whole floor.
  * A map that renders perfectly and shows nothing.
  */
+const { source3D } = require('./helpers/runtime-3d-source.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -98,8 +99,7 @@ test('layers a plugin command creates are knowingly out of reach', () => {
     // They do not exist until an event runs, so there is nothing to read when
     // the map is built. Recorded here so the absence reads as a decision
     // rather than as an oversight.
-    const runtime = fs.readFileSync(
-        path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+    const runtime = source3D();
     assert.match(runtime, /plugin \*command\* are deliberately absent/);
 });
 

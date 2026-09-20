@@ -1,3 +1,4 @@
+const { source3D } = require('./helpers/runtime-3d-source.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -156,12 +157,12 @@ test('a map default camera is written to the sidecar only when it differs from t
 test('the runtime, editor, and manifest are wired for the camera module', () => {
     const main = read('runtime/reactor_main.js');
     assert.match(main, /runtime revision: \d{8}\.\d+/);
-    assert.doesNotMatch(main, /reactor_camera_3d/, 'the camera lives in reactor_3d.js, not a file of its own');
+    assert.doesNotMatch(main, /reactor_camera_3d/, 'the camera lives in the 3D core, not a file of its own');
 
     const sprites = read('runtime/reactor_sprites.js');
     assert.match(sprites, /if \(cameras && cameras\.update\(this\)\) return;/);
     assert.match(sprites, /Reactor3D\.Camera\.installHooks\(\);\s*Reactor3D\.Camera\.registerCommands\(\);/, 'hooks install once the game classes exist');
-    const module = read('runtime/reactor_3d.js');
+    const module = source3D();
     assert.match(module, /PluginManager\.registerCommand\(PLUGIN_NAME, COMMAND/);
     assert.match(module, /Sprite_Character\.prototype\.updateVisibility = function/);
     assert.equal((module.match(/Reactor3D\.characterHiddenByCamera\(character(?:, true)?\)/g) || []).length, 2, 'models and billboards use separate first-person visibility rules');

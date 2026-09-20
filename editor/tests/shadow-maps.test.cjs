@@ -8,6 +8,7 @@
  * go in a smaller dynamic atlas whose rows are rendered when one in reach
  * moved. Two samplers however many lights cast.
  */
+const { source3D } = require('./helpers/runtime-3d-source.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -345,7 +346,7 @@ test('both atlases are real depth textures in compare mode from the moment they 
     // draw time as a texture/sampler mismatch and drops the draw: every
     // lit surface would vanish. The atlas is made, cleared and bound before
     // the first program can name it.
-    const three = read('runtime/reactor_3d.js');
+    const three = source3D();
     const at = three.indexOf('_makeAtlas(renderer, size, rows) {');
     const body = three.slice(at, three.indexOf('\n    },', at));
     assert.match(body, /new THREE\.WebGLRenderTarget\(width, height, \{\s*format: THREE\.RedFormat,\s*type: THREE\.UnsignedByteType,/, 'a one-byte colour attachment nothing writes to');
@@ -375,7 +376,7 @@ test('both atlases are real depth textures in compare mode from the moment they 
 
 test('a light with nothing in reach takes no row; rows wait their turn and keep their last rendering; a moved light casts nothing until redrawn', () => {
     const shadows = Reactor3D.Shadows;
-    const three = read('runtime/reactor_3d.js');
+    const three = source3D();
     const render = three.slice(three.indexOf('    render(renderer, scene, mapData) {'), three.indexOf('\n    _publish(uniforms) {'));
     assert.match(render, /if \(this\._castersWithin\(candidate, candidate\.far\)\) wanted\.push\(candidate\);/, 'only lights with a caster in reach compete for a row');
     assert.match(render, /const assigned = this\.assign\(wanted, tiles\.length,/);
@@ -471,7 +472,7 @@ test('the dynamic budget is measured from the player, and a party of two reduced
 });
 
 test('both viewports render the maps once a frame before the first pass, and the game marks its casters', () => {
-    const three = read('runtime/reactor_3d.js');
+    const three = source3D();
     assert.match(three, /scene\.updateMatrixWorld\(\);\n\s*\/\/ The shadow maps, while every group is still visible\.\n\s*if \(mapScene\.renderShadows\) mapScene\.renderShadows\(this\._renderer, null\);/);
     assert.match(three, /group\.add\(object\);\n\s*\/\/ A prop never moves; its map is cached\. An event walks\.\n\s*Reactor3D\.Shadows\.markCaster\(object, !\(typeof character\.eventId === "function"\n\s*&& character\.eventId\(\) >= Reactor3D\.PROP_EVENT_BASE\)\);/);
     // The depth passes run from the sentinel's hook, inside the pass.
@@ -514,7 +515,7 @@ test("a casting light's maps hold their origin until the light has drifted a qua
     // A screen glow riding a monitor arm that keeps extending moved a hair
     // every frame, and a row keyed on the exact position redrew the
     // reactor and three consoles six faces each, every frame.
-    const three = read('runtime/reactor_3d.js');
+    const three = source3D();
     assert.match(three, /Reactor3D\.SHADOW_STATIC_MOVE = 0\.25;/);
     assert.match(three, /const held = tile\.far === far\s*&& Math\.hypot\(candidate\.x - tile\.origin\.x, candidate\.y - tile\.origin\.y, candidate\.z - tile\.origin\.z\) <= Reactor3D\.SHADOW_STATIC_MOVE;/);
     assert.match(three, /if \(held\) \{\s*tile\.want = null;\s*\} else \{\s*const origin = \{ x: candidate\.x, y: candidate\.y, z: candidate\.z \};/);

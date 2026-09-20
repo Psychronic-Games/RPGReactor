@@ -1,6 +1,7 @@
 // Pieces: the 3D tileset. Blocks on cells at levels, turned in quarter
 // turns, wearing a material; the runtime stands characters on their tops
 // and blocks what cannot be stepped onto through the terrain's rise rule.
+const { source3D } = require('./helpers/runtime-3d-source.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -132,7 +133,7 @@ test('the runtime stands on piece tops, climbs stairs, and blocks what is too ta
     assert.match(objects, /Reactor3D\.terrainBlocks\(\$dataMap, x, y, x2, y2, this\._reactorGround\)/);
     assert.match(objects, /Game_CharacterBase\.prototype\.locate = function\(x, y\) \{[\s\S]{0,200}this\._reactorGround = undefined;/);
     assert.match(objects, /this\._reactorGround = character\._reactorGround;/, 'a follower copying the leader copies the floor');
-    const runtime = read('runtime/reactor_3d.js');
+    const runtime = source3D();
     assert.match(runtime, /character\._reactorGround = ground;/);
     const walker = { _realX: 2, _realY: 2 };
     R.characterGround(house, walker);
@@ -249,8 +250,8 @@ test('the scene lays pieces down per material and can lay them again alone', () 
     assert.match(read('editor/src/PieceBuilderManager.js'), /this\.announce\(false, \{ x0: target\.x - 1, y0: target\.y - 1, x1: target\.x \+ 1, y1: target\.y \+ 1 \}\)/, 'a dab names its cells');
     assert.match(read('editor/src/MapEditor3D.js'), /scene\.updatePieces\(mapData, name => materials\[name\] \|\| null, region\);/);
     // The game's default loader asks ImageManager for img/materials.
-    assert.match(read('runtime/reactor_3d.js'), /ImageManager\.loadBitmap\("img\/materials\/", name\)/);
-    assert.match(read('runtime/reactor_3d.js'), /this\.addPieces\(mapData, settings\.loadMaterial \|\| \(name => Reactor3D\.defaultMaterialLoader\(name\)\)\);/);
+    assert.match(source3D(), /ImageManager\.loadBitmap\("img\/materials\/", name\)/);
+    assert.match(source3D(), /this\.addPieces\(mapData, settings\.loadMaterial \|\| \(name => Reactor3D\.defaultMaterialLoader\(name\)\)\);/);
 });
 
 test('the 3D-B tab is registered everywhere a palette tab has to be, with its strings', () => {
@@ -433,7 +434,7 @@ test('a structure plan builds rooms, walls, doors on shared walls, a stairwell a
 test('inside a building the roof and the wall in the camera\'s way are cut around the player', () => {
     const THREE = loadThree();
     const R = require(path.resolve(__dirname, '..', '..', 'runtime/reactor_3d.js'));
-    const runtime = read('runtime/reactor_3d.js');
+    const runtime = source3D();
     assert.match(runtime, /Reactor3D\.injectCutaway\(this, shader\);/, 'every lit material asks; only piece materials answer');
     assert.match(runtime, /if \(vRRWorldPos\.y > rrCutTop && vRRWorldPos\.x >= rrCutBox\.x/);
     // Faces between touching walls are not emitted: a row of three walls has no inner faces.
@@ -540,7 +541,7 @@ test('the camera never stands inside a wall or roof, and a cut roof does not sto
     camera.position.set(2.5, 8, 6.5); camera.updateMatrixWorld();
     assert.equal(R.clearCameraPath(camera, focus, house), false, 'a clear line is left alone');
     assert.equal(R.clearCameraPath(camera, focus, mapWith([])), false, 'no pieces: nothing to do');
-    assert.equal((read('runtime/reactor_3d.js').match(/keepOutOfWalls\(camera, resolved\);/g) || []).length, 2, 'the game camera asks after aiming, on both paths');
+    assert.equal((source3D().match(/keepOutOfWalls\(camera, resolved\);/g) || []).length, 2, 'the game camera asks after aiming, on both paths');
 });
 
 test('a plan of plans: parts, paths and named spots stamp as one and walk as one', () => {

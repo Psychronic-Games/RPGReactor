@@ -1,3 +1,4 @@
+const { source3D } = require('./helpers/runtime-3d-source.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -157,7 +158,7 @@ test("a placement's chosen animation plays on demand and repeats, whatever its a
 });
 
 test("a prop event's facing is written directly, past direction-fix", () => {
-    const three = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+    const three = source3D();
     assert.match(three, /event\.setDirection\(prop\.direction\);\n\s*event\._direction = prop\.direction;/,
         'setDirection is a no-op under the synthetic page\u2019s direction-fix');
 });
@@ -195,7 +196,7 @@ test('a turning body blocks only the arc it sweeps through, height respected', (
         'with no arc given the old whole-disc caution stands');
     delete R._glbCache[key];
 
-    const source = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+    const source = source3D();
     assert.match(source, /if \(!this\.charactersOverlapVertically\(character, other\)\) continue;[\s\S]{0,120}blockedBy\(other\._x, other\._y\)/,
         'canFace skips what is vertically clear');
     assert.match(source, /if \(!this\.charactersOverlapVertically\(character, other\)\) continue;[\s\S]{0,120}eventModelWouldOverlap/,

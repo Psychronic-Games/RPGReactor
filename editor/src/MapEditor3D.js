@@ -137,47 +137,54 @@ class MapEditor3D {
         return loaded;
     }
 
+    /**
+     * The runtime scripts the 3D view still needs, as paths under the
+     * project's js/. Asked twice: the core names its extension files
+     * (Reactor3D.EXTENSIONS), so the list past the core is known only once
+     * the core is in.
+     */
+    missingRuntimeScripts() {
+        const w = typeof window === 'undefined' ? {} : window;
+        const files = [];
+        if (!w.pako) files.push('libs/pako.min.js');
+        if (!w.THREE) files.push('libs/three.js');
+        if (!w.Reactor3D) {
+            files.push('reactor_3d.js');
+            return files;
+        }
+        for (const extension of w.Reactor3D.EXTENSIONS || []) {
+            if (!w.Reactor3D[extension.namespace]) files.push(extension.file);
+        }
+        if (!w.Reactor3D.Speech) files.push('reactor_speech_3d.js');
+        return files;
+    }
+
     async loadLibraries() {
         const host = typeof window !== 'undefined' ? window.RPGReactorWebHost : null;
+        let load;
         if (host?.mode === 'web' && host.projectRoot && typeof host.assetUrl === 'function') {
             const root = String(host.projectRoot).replace(/\/+$/, '');
-            const files = [];
-            if (!window.pako) files.push(`${root}/js/libs/pako.min.js`);
-            if (!window.THREE) files.push(`${root}/js/libs/three.js`);
-            if (!window.Reactor3D) files.push(`${root}/js/reactor_3d.js`);
-            if (!window.Reactor3D?.Speech) files.push(`${root}/js/reactor_speech_3d.js`);
-            try {
-                for (const file of files) {
-                    await this.injectScriptUrl(host.assetUrl(file), file);
-                }
-            } catch (error) {
-                this.lastError = error.message;
+            load = async file => {
+                const url = `${root}/js/${file}`;
+                await this.injectScriptUrl(host.assetUrl(url), url);
+            };
+        } else {
+            const runtimePath = this.projectController?.projectManager?.getRuntimePath?.();
+            if (!runtimePath || !this.fs || !this.path) {
+                this.lastError = 'The runtime directory could not be found.';
                 return false;
             }
-            return this.finishLibraryLoad();
-        }
-
-        const runtimePath = this.projectController?.projectManager?.getRuntimePath?.();
-        if (!runtimePath || !this.fs || !this.path) {
-            this.lastError = 'The runtime directory could not be found.';
-            return false;
-        }
-
-        const files = [];
-        if (typeof window === 'undefined' || !window.pako) files.push(this.path.join(runtimePath, 'libs', 'pako.min.js'));
-        if (typeof window === 'undefined' || !window.THREE) files.push(this.path.join(runtimePath, 'libs', 'three.js'));
-        if (typeof window === 'undefined' || !window.Reactor3D) files.push(this.path.join(runtimePath, 'reactor_3d.js'));
-        if (typeof window === 'undefined' || !window.Reactor3D?.Speech) files.push(this.path.join(runtimePath, 'reactor_speech_3d.js'));
-        for (const file of files) {
-            if (!this.fs.existsSync(file)) {
-                this.lastError = `Missing ${file}`;
-                return false;
-            }
+            load = async file => {
+                const full = this.path.join(runtimePath, ...file.split('/'));
+                if (!this.fs.existsSync(full)) throw new Error(`Missing ${full}`);
+                await this.injectScript(this.fs.readFileSync(full, 'utf8'), full);
+            };
         }
 
         try {
-            for (const file of files) {
-                await this.injectScript(this.fs.readFileSync(file, 'utf8'), file);
+            // Two passes: up to the core, then whatever the core names.
+            for (let pass = 0; pass < 2; pass++) {
+                for (const file of this.missingRuntimeScripts()) await load(file);
             }
         } catch (error) {
             this.lastError = error.message;
@@ -188,7 +195,9 @@ class MapEditor3D {
     }
 
     finishLibraryLoad() {
-        this.librariesLoaded = !!(window.pako && window.THREE && window.Reactor3D);
+        const runtime = window.Reactor3D;
+        this.librariesLoaded = !!(window.pako && window.THREE && runtime)
+            && (runtime.EXTENSIONS || []).every(extension => runtime[extension.namespace]);
         if (!this.librariesLoaded) this.lastError = 'A 3D runtime dependency did not load.';
         if (this.librariesLoaded) this.configureWorkers();
         return this.librariesLoaded;

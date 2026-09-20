@@ -3,11 +3,12 @@
 // joints marks plain Groups), the rig's Head part wins, and a tip joint such
 // as head_end never does; the pitch turns about the model's side axis and is
 // taken back off before the next frame's lean when no clip rewrote the joint.
+const { source3D } = require('./helpers/runtime-3d-source.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
-const source = fs.readFileSync(path.resolve(__dirname, '..', '..', 'runtime', 'reactor_3d.js'), 'utf8');
+const source = source3D();
 
 function loadHelpers() {
     const slice = (from, to) => source.slice(source.indexOf(from), source.indexOf(to));

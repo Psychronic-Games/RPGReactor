@@ -1,3 +1,4 @@
+const { source3D } = require('./helpers/runtime-3d-source.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -77,7 +78,7 @@ test('the runtime stands each prop in the map as a model-bound event', () => {
 });
 
 test('runtime hooks lift props and read their free position after the events are set up', () => {
-    const runtime = read('runtime/reactor_3d.js');
+    const runtime = source3D();
     assert.match(runtime, /Game_Map\.prototype\.setupEvents = function\(\) \{[\s\S]*?event\._realX = prop\.x;[\s\S]*?event\._reactorLift = prop\.z;[\s\S]*?event\.isMoving = function\(\) \{ return false; \};/,
         'a prop between tiles is not a character mid-step');
     assert.match(runtime, /ground \+ \(character\._reactorLift \|\| 0\)/);
@@ -150,7 +151,7 @@ test('props are chosen in the model picker and can start with an animation or ef
     const installed = { width: 4, height: 4, events: [null], reactor3d: { props: [{ id: 1, name: 'Props/console', x: 1, y: 1, animation: 'boot', effect: 'alarm' }] } };
     Reactor3D.installProps(installed);
     assert.equal(installed.events[Reactor3D.PROP_EVENT_BASE + 1].reactorProp.animation, 'boot');
-    const runtime = read('runtime/reactor_3d.js');
+    const runtime = source3D();
     assert.match(runtime, /const animations = Reactor3D\.propAnimationList\(prop\);\s*if \(animations\.length\) Reactor3D\.playModelSequence\(event, animations, !!prop\.repeat\);/, 'the list plays in order, looping as a whole');
     assert.match(runtime, /for \(const name of Reactor3D\.propEffectList\(prop\)\) Reactor3D\.playModelEffect\(event, name\);/, 'every chosen effect fires');
     assert.deepEqual(Reactor3D.propAnimationList({ animation: 'boot' }), ['boot']);

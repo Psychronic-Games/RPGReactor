@@ -2,13 +2,14 @@
 // pinned to the ground), wrapped around the camera and drifting by scroll
 // speeds; the editor's sidecar carries it, and a Map Properties save that
 // touches the parallax redraws the 3D view without a restart.
+const { source3D } = require('./helpers/runtime-3d-source.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
 const read = p => fs.readFileSync(path.resolve(__dirname, '..', '..', p), 'utf8');
-const runtime = read('runtime/reactor_3d.js');
+const runtime = source3D();
 
 function loadSky() {
     const slice = (from, to) => runtime.slice(runtime.indexOf(from), runtime.indexOf(to));

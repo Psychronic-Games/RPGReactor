@@ -8,6 +8,7 @@
  * a classified event tile is written into the map the builder sees, so it
  * becomes the same geometry a painted one would.
  */
+const { source3D } = require('./helpers/runtime-3d-source.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -178,7 +179,7 @@ test('star-flagged standing art still draws over characters', () => {
     // sprite you walked behind. Built into the scene it went to the ground
     // pass, where nothing can ever occlude a character drawn over it — so you
     // walked in front of every statue and lamp post on the map.
-    const three = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+    const three = source3D();
     const calls = three.match(/groupFor\([^)]*\)/g) || [];
     const unrouted = calls.filter(call => call.split(',').length < 3);
     assert.deepEqual(unrouted.map(c => c.trim()), [],
@@ -255,7 +256,7 @@ test('a sprite is scaled onto the quad a 3D object would occupy', () => {
     // BILLBOARD_TILT is 0 — world up. A sprite standing in for one has to
     // occupy exactly that, or it is a different size from the standing art
     // beside it and the gap moves as the view moves.
-    const three = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+    const three = source3D();
     const at = three.indexOf('Reactor3D.standScaleAt = function');
     const body = three.slice(at, three.indexOf('\n};', at));
     assert.match(body, /\.set\(1, 0, 0\)\.applyQuaternion\(camera\.quaternion\)/,
@@ -296,7 +297,7 @@ test('a sprite leans as a parallelogram, not a turned rectangle', () => {
     // perpendicular to the view and stays level on screen; only the vertical
     // edges lean. Rotating lifted the ground line, so a row of characters
     // looked like it was walking up a slope.
-    const three = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+    const three = source3D();
     const at = three.indexOf('Reactor3D.standScaleAt = function');
     const body = three.slice(at, three.indexOf('\n};', at));
     assert.match(body, /const skew = -Math\.atan2\(upX, -upY\);/);
@@ -401,7 +402,7 @@ test('a map can ask for a tilt of its own', () => {
 test('the props and the sprites read one number, so they cannot disagree', () => {
     // A cut-out and the sprite standing next to it have to lean by the same
     // amount or they are different shapes.
-    const three = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+    const three = source3D();
     // The shader bakes it in as a uniform when it compiles...
     assert.match(three, /shader\.uniforms\.tilt = \{ value: Reactor3D\.BILLBOARD_TILT \};/);
     // ...the sprite scaling reads the same field each frame, through the one

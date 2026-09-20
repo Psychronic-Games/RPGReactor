@@ -1,3 +1,4 @@
+const { source3D } = require('./helpers/runtime-3d-source.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -61,7 +62,7 @@ test('a sidecar holding only a room survives a save', () => {
 });
 
 test('the runtime builds the room from the sidecar with inward-facing walls', () => {
-    const runtime = read('runtime/reactor_3d.js');
+    const runtime = source3D();
     assert.match(runtime, /Reactor3D\.roomFor = function\(mapData\)/);
     assert.match(runtime, /Reactor3D\.roomImageNames = function\(mapData\)/);
     assert.match(runtime, /this\.addRoom\(Reactor3D\.roomFor\(mapData\), loadParallax, tileSize, mapData\.width, mapData\.height\)/);

@@ -16,6 +16,7 @@
  *   <3d ground>       stand on the ground, never on the object at this cell
  *   <no 3d object>    the same thing said the other way round
  */
+const { source3D } = require('./helpers/runtime-3d-source.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -89,8 +90,7 @@ test('a tagged event is not baked into the map as a prop either', () => {
 });
 
 test('the running game asks before putting an event on a wall', () => {
-    const runtime = fs.readFileSync(
-        path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+    const runtime = source3D();
     const place = runtime.slice(runtime.indexOf('Reactor3D.standingPlaceFor = function'));
     const body = place.slice(0, place.indexOf('\n};'));
     assert.match(body, /if \(data && this\.eventStaysOnGround\(data\.note\)\) return ground;/);
@@ -153,8 +153,7 @@ test('a sprite standing on the art is placed where the art is', () => {
 });
 
 test('the facade answer says it is standing on art', () => {
-    const runtime = fs.readFileSync(
-        path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+    const runtime = source3D();
     const place = runtime.slice(runtime.indexOf('Reactor3D.standingPlaceFor = function'));
     const body = place.slice(0, place.indexOf('\n};'));
     assert.match(body, /lift: facade\.lift, onArt: true/);

@@ -1,5 +1,5 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
-const source=fs.readFileSync(path.resolve(__dirname,'../../runtime/reactor_3d.js'),'utf8');
+const source=require('./helpers/runtime-3d-source.cjs').source3D();
 function setup(){
  const timers=[],deleted=[],readings=[],releases=[];let now=0,result=1,readFB='previous',pack='pack';
  const gl={READ_FRAMEBUFFER_BINDING:10,PIXEL_PACK_BUFFER_BINDING:11,READ_FRAMEBUFFER:12,PIXEL_PACK_BUFFER:13,

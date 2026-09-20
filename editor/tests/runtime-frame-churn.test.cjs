@@ -6,6 +6,7 @@
  * Points and Rectangles built through the ES6 bridge, and the hidden 2D
  * tilemap still painting under a 3D map. These pin the fixes.
  */
+const { source3D } = require('./helpers/runtime-3d-source.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -13,7 +14,7 @@ const test = require('node:test');
 
 const repoRoot = path.resolve(__dirname, '..', '..');
 const Reactor3D = require(path.join(repoRoot, 'runtime', 'reactor_3d.js'));
-const r3d = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+const r3d = source3D();
 const core = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_core.js'), 'utf8');
 
 test('every double-sided transparent material renders in one pass', () => {

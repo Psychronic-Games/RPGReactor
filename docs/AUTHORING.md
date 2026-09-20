@@ -28,6 +28,11 @@ project; a person can use it to find where anything lives.
 `MapNNN.json` stays ordinary RPG Maker data. Everything 3D is in the
 sidecar `MapNNN.r3d.json`, so a project with no 3D maps has no sidecars.
 
+The rules the engine applies to terrain, pieces and water (where the
+ground is, what blocks a step, how deep the water stands) are in
+`runtime/reactor_3d_world.js`, readable without three.js; the checks above
+run the same code the game does.
+
 ## Units
 
 A tile is one world unit. The bundled characters stand three tiles, so a
