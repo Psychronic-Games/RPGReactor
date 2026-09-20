@@ -340,6 +340,8 @@ test('a structure plan builds rooms, walls, doors on shared walls, a stairwell a
     assert.equal(at(5, 8, 5), 'floor', 'and closed beside them');
     assert.equal(at(7, 4, 5), 'doorway+floor', 'an upstairs door, with a threshold under it');
     assert.equal(at(3, 0, 10), 'ramp'); assert.equal(at(3, 9, 10), 'ramp'); assert.equal(at(3, 4, 12), 'floor', 'a flat top between the pitches');
+    assert.equal(at(3, 4, 10), 'floor', 'a ceiling over the top-floor room, under the roof');
+    assert.equal(at(7, 4, 10), '', 'none over a wall');
     assert.equal(at(0, 3, 10), 'block', 'a gable closes the end');
     assert.equal(at(0, 3, 11), 'block'); assert.equal(at(0, 1, 10), 'block'); assert.equal(at(0, 1, 11), 'ramp', 'and steps with the pitch: one block under the second row of ramps');
     // Turned a quarter: the size swaps, the rooms turn, the stair runs east, doors still land on shared walls.

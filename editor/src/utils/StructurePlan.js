@@ -159,9 +159,15 @@
             }
         });
         for (const c of stairCells) put('stair', c.x, c.y, c.z, c.rot, M.stair);
+        // A ceiling over every room of the top floor, so a window does not
+        // look at the underside of the roof; the roof sits on it.
+        const roofZ = floors.length * S;
+        const top = floors[floors.length - 1];
+        if (top) for (const [name, rect] of Object.entries(top.rooms || {})) {
+            for (let x = rect[0]; x <= rect[2]; x++) for (let y = rect[1]; y <= rect[3]; y++) put('floor', x, y, roofZ, 0, M.inner || M.floor);
+        }
         // Roof: ramps up from each eave for `pitch` rows, a flat top between, gables of blocks at the ends.
         const roof = Object.assign({ pitch: 6 }, plan.roof || {});
-        const roofZ = floors.length * S;
         const pitch = Math.max(0, Math.min(Math.floor((H - 1) / 2), Math.floor(roof.pitch)));
         if (floors.length && roof.pitch !== null) {
             for (let x = 0; x < W; x++) {

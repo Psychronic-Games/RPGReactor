@@ -92,7 +92,8 @@ A building as a person describes it. Everything else is derived.
 - `roof`: ramps step up `pitch` rows from each eave, a flat top between,
   gables closed with blocks. `windows`: a pair every `every` cells along
   the outside, never beside a door.
-- Floor is laid under every doorway and wall cell as well as every room.
+- Floor is laid under every doorway and wall cell as well as every room,
+  and a ceiling over every top-floor room under the roof.
 
 Stamp it from a shell, which levels the ground under it, moves placed
 models off the footprint, and reports which rooms the engine can walk to
