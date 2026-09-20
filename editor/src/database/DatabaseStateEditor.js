@@ -36,7 +36,7 @@ class DatabaseStateEditor {
             <div class="database-section-content"><div class="db-general-grid">
                 <div style="display: flex; flex-direction: column; align-items: center; gap: 6px;">
                     <label style="font-size: 11px; color: var(--color-text-muted); font-weight: 600;">${tt('Icon')}</label>
-                    <div id="state-icon-container-${state.id}" style="cursor: pointer;" title="${tt('Click to change icon')}"></div>
+                    <div id="state-icon-container-${state.id}"></div>
                 </div>
                 <div class="db-form">
                     <div class="db-row-cols">
@@ -88,10 +88,10 @@ class DatabaseStateEditor {
             if (!isCurrentDetail()) return;
             const iconContainer = document.getElementById(`state-icon-container-${state.id}`);
             if (iconContainer) {
-                this.parentEditor.addDatabasePreview(iconContainer, state, 'skills');
-                iconContainer.onclick = () => {
-                    this.parentEditor.selectIcon(state, 'states');
-                };
+                // 'states', not 'skills': the preview's own wrapper carries the
+                // click handler, and the type it is given decides which table
+                // selectIcon writes back to.
+                this.parentEditor.addDatabasePreview(iconContainer, state, 'states');
             }
         }, 0);
 

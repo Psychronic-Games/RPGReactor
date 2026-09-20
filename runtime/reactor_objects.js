@@ -2452,15 +2452,37 @@ Game_Action.prototype.itemEffectRemoveState = function(target, effect) {
     }
 };
 
+/**
+ * An Add Buff or Add Debuff effect may say how strong the stack it adds
+ * is, instead of the standard rate: `value2` is that rate (0.4 for 40%),
+ * and 0 -- which every RPG Maker-authored effect carries -- keeps the
+ * standard. Always a magnitude; Add Debuff's own direction makes it a
+ * reduction.
+ */
+Game_Action.effectBuffRate = function(effect) {
+    const rate = Math.abs(Number(effect && effect.value2) || 0);
+    return rate === 0 ? null : rate;
+};
+
 Game_Action.prototype.itemEffectAddBuff = function(target, effect) {
-    target.addBuff(effect.dataId, effect.value1);
+    target.setPendingBuffPotency(Game_Action.effectBuffRate(effect));
+    try {
+        target.addBuff(effect.dataId, effect.value1);
+    } finally {
+        target.setPendingBuffPotency(null);
+    }
     this.makeSuccess(target);
 };
 
 Game_Action.prototype.itemEffectAddDebuff = function(target, effect) {
     let chance = target.debuffRate(effect.dataId) * this.lukEffectRate(target);
     if (Math.random() < chance) {
-        target.addDebuff(effect.dataId, effect.value1);
+        target.setPendingBuffPotency(Game_Action.effectBuffRate(effect));
+        try {
+            target.addDebuff(effect.dataId, effect.value1);
+        } finally {
+            target.setPendingBuffPotency(null);
+        }
         this.makeSuccess(target);
     }
 };
@@ -3006,11 +3028,77 @@ Game_BattlerBase.prototype.updateStateTurns = function() {
 Game_BattlerBase.prototype.clearBuffs = function() {
     this._buffs = [0, 0, 0, 0, 0, 0, 0, 0];
     this._buffTurns = [0, 0, 0, 0, 0, 0, 0, 0];
+    this._buffPotency = [[], [], [], [], [], [], [], []];
 };
 
 Game_BattlerBase.prototype.eraseBuff = function(paramId) {
     this._buffs[paramId] = 0;
     this._buffTurns[paramId] = 0;
+    this.buffPotencyList(paramId).length = 0;
+};
+
+/** How much one stack moves a parameter when the effect named no strength. */
+Game_BattlerBase.BUFF_RATE_PER_STACK = 0.25;
+
+/**
+ * The strengths of a parameter's current buff or debuff stacks, one entry
+ * per stack, oldest first. An entry is the rate that stack contributes
+ * (0.4 for 40%), or null for "whatever the standard rate is", which is
+ * resolved when the rate is read rather than when the stack is added.
+ * Built on demand, so a save written before strengths existed still answers.
+ */
+Game_BattlerBase.prototype.buffPotencyList = function(paramId) {
+    if (!this._buffPotency) this._buffPotency = [];
+    if (!this._buffPotency[paramId]) this._buffPotency[paramId] = [];
+    return this._buffPotency[paramId];
+};
+
+/**
+ * The strength the effect being applied asked for, held only for as long
+ * as it takes that effect to move the stack. null means it named none.
+ */
+Game_BattlerBase.prototype.setPendingBuffPotency = function(rate) {
+    this._pendingBuffPotency = rate;
+};
+
+/**
+ * Keep the strengths in step with the stack count: a stack gained takes
+ * the strength the current effect asked for, a stack lost gives up the
+ * most recent one. A parameter's stacks are all buffs or all debuffs --
+ * the list empties as the count passes through zero -- so the direction
+ * belongs to the count, not to the entries, which are magnitudes.
+ */
+Game_BattlerBase.prototype.shiftBuffPotency = function(paramId, before, after) {
+    const list = this.buffPotencyList(paramId);
+    if (Math.abs(after) > Math.abs(before)) {
+        list.push(this._pendingBuffPotency ?? null);
+    } else {
+        list.pop();
+    }
+};
+
+/**
+ * A parameter's buff rate: every stack contributes its own strength and
+ * they add up, with a stack that named none taking `standard`. A list
+ * that has fallen out of step with the stack count -- a save from before
+ * strengths existed, or a plugin moving `_buffs` itself -- is ignored in
+ * favour of the standard rate for that many stacks, so the rate is never
+ * silently wrong.
+ */
+Game_BattlerBase.buffRateFromStacks = function(level, list, standard) {
+    const stacks = Math.abs(level || 0);
+    if (!Array.isArray(list) || list.length !== stacks) {
+        return Math.max(0, 1 + (level || 0) * standard);
+    }
+    const sign = level < 0 ? -1 : 1;
+    let rate = 1;
+    for (const entry of list) {
+        rate += sign * (entry === null || entry === undefined ? standard : entry);
+    }
+    // Three stacks of 30% land on 0.09999999999999998, which every display
+    // that floors a percent then reports as 9%. Round back to the figure
+    // that was authored.
+    return Math.max(0, Math.round(rate * 1e6) / 1e6);
 };
 
 Game_BattlerBase.prototype.buffLength = function() {
@@ -3043,13 +3131,17 @@ Game_BattlerBase.prototype.isMaxDebuffAffected = function(paramId) {
 
 Game_BattlerBase.prototype.increaseBuff = function(paramId) {
     if (!this.isMaxBuffAffected(paramId)) {
+        const before = this._buffs[paramId];
         this._buffs[paramId]++;
+        this.shiftBuffPotency(paramId, before, this._buffs[paramId]);
     }
 };
 
 Game_BattlerBase.prototype.decreaseBuff = function(paramId) {
     if (!this.isMaxDebuffAffected(paramId)) {
+        const before = this._buffs[paramId];
         this._buffs[paramId]--;
+        this.shiftBuffPotency(paramId, before, this._buffs[paramId]);
     }
 };
 
@@ -3185,7 +3277,11 @@ Game_BattlerBase.prototype.paramRate = function(paramId) {
 };
 
 Game_BattlerBase.prototype.paramBuffRate = function(paramId) {
-    return this._buffs[paramId] * 0.25 + 1.0;
+    return Game_BattlerBase.buffRateFromStacks(
+        this._buffs[paramId],
+        this._buffPotency ? this._buffPotency[paramId] : null,
+        Game_BattlerBase.BUFF_RATE_PER_STACK
+    );
 };
 
 Game_BattlerBase.prototype.param = function(paramId) {
