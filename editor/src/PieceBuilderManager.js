@@ -34,7 +34,90 @@ class PieceBuilderManager {
         this.sizes = {};
         this.stairSteps = 1;
         this.selected = 0;
+        this.selectedIds = [];
         this.gizmoMode = 'move';
+    }
+
+    // ---- A selection of many: a box dragged round them ----------------------
+
+    /** Every selected piece's id: the box's pieces, else the one piece. */
+    selectionIds() { return this.selectedIds.length ? this.selectedIds.slice() : (this.selected ? [this.selected] : []); }
+    selectionPieces() { const ids = new Set(this.selectionIds()); const map = this.currentMap(); return map ? (this.elevation()?.pieces(map) || []).filter(piece => ids.has(piece.id)) : []; }
+
+    /** Select every piece whose cell lies in the box (cells inclusive), at any level; a shape by the cell it stands on. */
+    selectInBox(x0, y0, x1, y1) {
+        const map = this.currentMap(), elevation = this.elevation();
+        if (!map || !elevation) return 0;
+        const lo = [Math.min(x0, x1), Math.min(y0, y1)], hi = [Math.max(x0, x1), Math.max(y0, y1)];
+        const ids = elevation.pieces(map).filter(piece => piece.x >= lo[0] && piece.x <= hi[0] && piece.y >= lo[1] && piece.y <= hi[1]).map(piece => piece.id);
+        this.selectedIds = ids.length > 1 ? ids : [];
+        this.selected = ids.length ? ids[0] : 0;
+        this._syncPanel(); this.refreshStatus(); this._ghostChanged();
+        return ids.length;
+    }
+
+    /** Change every selected piece: `patch` a record, or a function of the piece giving one. */
+    updateSelection(patch, record = true) {
+        const ids = new Set(this.selectionIds());
+        if (ids.size <= 1) return this.updateSelected(typeof patch === 'function' ? patch(this.selectedPiece()) : patch, record);
+        const map = this.currentMap(), elevation = this.elevation();
+        if (!map || !elevation) return false;
+        if (record) { this.undoStack.push(this._snapshot(map)); if (this.undoStack.length > 50) this.undoStack.shift(); this.redoStack.length = 0; }
+        const list = elevation.pieces(map);
+        let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+        for (let i = 0; i < list.length; i++) {
+            if (!ids.has(list[i].id)) continue;
+            const before = list[i];
+            list[i] = Object.assign({}, before, typeof patch === 'function' ? patch(before) : patch);
+            for (const q of [before, list[i]]) { x0 = Math.min(x0, q.x); y0 = Math.min(y0, q.y); x1 = Math.max(x1, q.x); y1 = Math.max(y1, q.y); }
+        }
+        elevation.restorePieces(map, list);
+        this.announce(false, { x0: x0 - 4, y0: y0 - 4, x1: x1 + 4, y1: y1 + 4 });
+        this._syncPanel(); this._ghostChanged();
+        return true;
+    }
+
+    /** The whole selection a number of cells across and along. */
+    moveSelectionBy(dx, dy, record = true) {
+        if (!dx && !dy) return false;
+        const map = this.currentMap();
+        const pieces = this.selectionPieces();
+        if (!map || !pieces.length) return false;
+        // Nothing leaves the map: the move is cut down to what fits.
+        for (const piece of pieces) { dx = Math.max(-piece.x, Math.min(map.width - 1 - piece.x, dx)); dy = Math.max(-piece.y, Math.min(map.height - 1 - piece.y, dy)); }
+        if (!dx && !dy) return false;
+        return this.updateSelection(piece => ({ x: piece.x + dx, y: piece.y + dy }), record);
+    }
+
+    /** The whole selection a quarter turn clockwise about its box: each piece turned and carried round. */
+    turnSelection(steps = 1) {
+        const pieces = this.selectionPieces();
+        if (pieces.length <= 1) return this.turnSelected(steps);
+        const x0 = Math.min(...pieces.map(p => p.x)), y0 = Math.min(...pieces.map(p => p.y)), x1 = Math.max(...pieces.map(p => p.x)), y1 = Math.max(...pieces.map(p => p.y));
+        const map = this.currentMap();
+        const n = ((steps % 4) + 4) % 4;
+        return this.updateSelection(piece => {
+            let x = piece.x - x0, y = piece.y - y0, w = x1 - x0, h = y1 - y0, offset = piece.offset ? piece.offset.slice() : null;
+            for (let i = 0; i < n; i++) { const nx = h - y; y = x; x = nx; const t = w; w = h; h = t; if (offset) offset = [-offset[1], offset[0]]; }
+            const out = { x: Math.max(0, Math.min(map.width - 1, x0 + x)), y: Math.max(0, Math.min(map.height - 1, y0 + y)) };
+            if (this.isShape(piece.kind)) { out.angle = (((piece.angle || 0) + 90 * n) % 360 + 360) % 360; if (offset) out.offset = offset; }
+            else out.rot = ((piece.rot + n) % 4 + 4) % 4;
+            return out;
+        });
+    }
+
+    removeSelection() {
+        const ids = new Set(this.selectionIds());
+        if (ids.size <= 1) return this.removeSelected();
+        const map = this.currentMap(), elevation = this.elevation();
+        if (!map || !elevation) return false;
+        this.undoStack.push(this._snapshot(map)); if (this.undoStack.length > 50) this.undoStack.shift(); this.redoStack.length = 0;
+        const gone = elevation.pieces(map).filter(piece => ids.has(piece.id));
+        elevation.restorePieces(map, elevation.pieces(map).filter(piece => !ids.has(piece.id)));
+        this.selectedIds = []; this.selected = 0;
+        this.announce(false, { x0: Math.min(...gone.map(p => p.x)) - 4, y0: Math.min(...gone.map(p => p.y)) - 4, x1: Math.max(...gone.map(p => p.x)) + 4, y1: Math.max(...gone.map(p => p.y)) + 4 });
+        this._syncPanel(); this.refreshStatus(); this._ghostChanged();
+        return true;
     }
 
     // ---- Selection: a placed piece picked up again --------------------------
@@ -65,12 +148,15 @@ class PieceBuilderManager {
 
     selectAt(target) {
         const piece = this.pieceAtTarget(target);
+        // A press on a piece already in a box selection keeps the box (so the box can be dragged).
+        if (piece && this.selectedIds.includes(piece.id)) { this.selected = piece.id; this._ghostChanged(); return piece; }
+        this.selectedIds = [];
         this.selected = piece ? piece.id : 0;
         this._syncPanel(); this.refreshStatus(); this._ghostChanged();
         return piece;
     }
 
-    clearSelection() { if (!this.selected) return; this.selected = 0; this._syncPanel(); this._ghostChanged(); }
+    clearSelection() { if (!this.selected && !this.selectedIds.length) return; this.selected = 0; this.selectedIds = []; this._syncPanel(); this._ghostChanged(); }
 
     /** Change the selected piece in place (a material, a turn, a size, a move); the list keeps its ids. */
     updateSelected(patch, record = true) {
@@ -717,7 +803,7 @@ class PieceBuilderManager {
     setKind(kind) { if (this.kinds().includes(kind)) { this.kind = kind; this.mode = 'place'; this._syncPanel(); this._ghostChanged(); } }
     setMode(mode) {
         if (mode !== 'place' && mode !== 'erase' && mode !== 'stamp' && mode !== 'move' && mode !== 'screen' && mode !== 'light' && mode !== 'select') return;
-        if (mode !== 'select') this.selected = 0;
+        if (mode !== 'select') { this.selected = 0; this.selectedIds = []; }
         if (mode === 'stamp' && !this.structurePlan()) mode = 'place';
         if (mode !== 'move') this.selectedGroup = 0;
         this.mode = mode; this._syncPanel(); this.refreshStatus(); this._ghostChanged();
@@ -945,8 +1031,8 @@ class PieceBuilderManager {
             return;
         }
         if (event.altKey) return;
-        if (this.mode === 'select' && this.selected && key === 'r') { event.preventDefault(); this.turnSelected(event.shiftKey ? -1 : 1); }
-        else if (this.mode === 'select' && this.selected && (key === 'delete' || key === 'backspace')) { event.preventDefault(); this.removeSelected(); }
+        if (this.mode === 'select' && this.selected && key === 'r') { event.preventDefault(); this.turnSelection(event.shiftKey ? -1 : 1); }
+        else if (this.mode === 'select' && this.selected && (key === 'delete' || key === 'backspace')) { event.preventDefault(); this.removeSelection(); }
         else if (this.mode === 'select' && this.selected && key === 'escape') { event.preventDefault(); this.clearSelection(); }
         else if (key === 'r' && !(this.mode === 'move' && this.selectedGroup)) { event.preventDefault(); this.turn(event.shiftKey ? -1 : 1); }
         else if (key === 'e') { event.preventDefault(); this.setLevel(this.level + 1); }

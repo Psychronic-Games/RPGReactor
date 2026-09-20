@@ -1,1 +1,18 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4l6 6-3 3-6-6z"/><path d="M11 7l-8 8 3 3 8-8"/><path d="M13 5l2-2"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Build">
+  <defs>
+    <linearGradient id="build-head" x1="30" y1="6" x2="56" y2="30" gradientUnits="userSpaceOnUse"><stop stop-color="#effaff"/><stop offset=".45" stop-color="#9aaac5"/><stop offset="1" stop-color="#455778"/></linearGradient>
+    <linearGradient id="build-face" x1="44" y1="8" x2="58" y2="22" gradientUnits="userSpaceOnUse"><stop stop-color="#9fe2ff"/><stop offset="1" stop-color="#24bdf3"/></linearGradient>
+    <linearGradient id="build-grip" x1="8" y1="36" x2="34" y2="60" gradientUnits="userSpaceOnUse"><stop stop-color="#fff59c"/><stop offset=".5" stop-color="#ffd529"/><stop offset="1" stop-color="#b06008"/></linearGradient>
+    <linearGradient id="build-block" x1="4" y1="6" x2="26" y2="28" gradientUnits="userSpaceOnUse"><stop stop-color="#123e68"/><stop offset="1" stop-color="#06111f"/></linearGradient>
+  </defs>
+  <!-- A block being set, and the hammer over it; ink under everything. -->
+  <path d="M3 8H25L29 12V30L25 34H3L-1 30V12Z" fill="#01030a"/>
+  <path d="M5 11H23L26 14V28L23 31H5L2 28V14Z" fill="url(#build-block)" stroke="#24bdf3" stroke-width="2"/>
+  <path d="M28 16L44 3L61 20L48 33L41 26L15 52L5 42L31 16Z" fill="#01030a"/>
+  <path d="M31 18L44 7L57 20L47 30L39 22L14 47L9 42L34 18Z" fill="url(#build-grip)"/>
+  <path d="M30 17L43 5L59 21L47 31L39 23Z" fill="#01030a"/>
+  <path d="M33 17L43 8L56 21L46 29L40 23Z" fill="url(#build-head)"/>
+  <path d="M46 10L54 18L50 22L42 14Z" fill="url(#build-face)"/>
+  <path d="M55 40L58 46L64 49L58 52L55 58L52 52L46 49L52 46Z" fill="#01030a"/>
+  <path d="M55 43L57 47L61 49L57 51L55 55L53 51L49 49L53 47Z" fill="#9fe2ff"/>
+</svg>

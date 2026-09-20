@@ -1731,6 +1731,35 @@ class MapEditor3D {
         };
     }
 
+    /** Where the pointer's ray meets the ground plane (level 0), or null. */
+    groundPointAt(clientX, clientY, planeY = 0) {
+        if (!this.camera || !this.canvas) return null;
+        const rect = this.canvas.getBoundingClientRect();
+        this._raycaster = this._raycaster || new THREE.Raycaster();
+        this._raycaster.setFromCamera(new THREE.Vector2(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1), this.camera);
+        const point = this._raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -planeY), new THREE.Vector3());
+        return point ? { x: point.x, y: point.z } : null;
+    }
+
+    /** The box being dragged on the ground in select mode, translucent. */
+    showSelectionBand(a, b, planeY = 0) {
+        if (!this.mapScene) return;
+        if (!this.selectionBand) {
+            this.selectionBand = new THREE.Mesh(new THREE.BoxGeometry(1, 0.06, 1), new THREE.MeshBasicMaterial({ color: 0xffd166, transparent: true, opacity: 0.25, depthWrite: false }));
+            this.selectionBand.renderOrder = 997;
+            this.mapScene.scene().add(this.selectionBand);
+        }
+        const x0 = Math.floor(Math.min(a.x, b.x)), y0 = Math.floor(Math.min(a.y, b.y)), x1 = Math.floor(Math.max(a.x, b.x)), y1 = Math.floor(Math.max(a.y, b.y));
+        const w = x1 - x0 + 1, h = y1 - y0 + 1;
+        this.selectionBand.scale.set(w, 1, h);
+        this.selectionBand.position.set(x0 + w / 2, planeY + 0.05, y0 + h / 2);
+        this.selectionBand.visible = true;
+        this._lastActiveAt = performance.now();
+        return { x0, y0, x1, y1 };
+    }
+
+    hideSelectionBand() { if (this.selectionBand) this.selectionBand.visible = false; }
+
     /** A press on the selected shape's handle, if any. */
     grabShapeGizmo(clientX, clientY) {
         const manager = this.pieceManager(), piece = manager && manager.selectedPiece();
@@ -1776,8 +1805,29 @@ class MapEditor3D {
     /** The selected piece outlined, and a shape's handles on it; nothing when nothing is selected. */
     refreshSelection() {
         const manager = this.pieceManager(), mapData = this.currentMap();
-        const piece = manager && manager.mode === 'select' && mapData ? manager.selectedPiece() : null;
+        const pieces = manager && manager.mode === 'select' && mapData ? manager.selectionPieces() : [];
+        const piece = pieces.length === 1 ? pieces[0] : null;
         if (!this.mapScene || typeof THREE === 'undefined') return;
+        if (pieces.length > 1) {
+            // Many: every one outlined, no handles.
+            const all = [];
+            for (const one of pieces) {
+                let c;
+                if (manager.isShape(one.kind)) c = this.shapeView(one).corners;
+                else { const base = Reactor3D.pieceBaseAt(mapData, one.x, one.y) + one.z, h = Reactor3D.pieceHeight(one.kind); c = []; for (const u of [0, 1]) for (const y of [0, 1]) for (const v of [0, 1]) c.push([one.x + u, base + y * h, one.y + v]); }
+                for (const [a, b] of [[0, 1], [0, 2], [0, 4], [1, 3], [1, 5], [2, 3], [2, 6], [3, 7], [4, 5], [4, 6], [5, 7], [6, 7]]) all.push(...c[a], ...c[b]);
+            }
+            if (!this.selectionOutline) {
+                this.selectionOutline = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xffd166, depthTest: false, transparent: true, opacity: 0.95 }));
+                this.selectionOutline.renderOrder = 999;
+                this.mapScene.scene().add(this.selectionOutline);
+            }
+            this.selectionOutline.geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(all), 3));
+            this.selectionOutline.geometry.computeBoundingSphere();
+            this.selectionOutline.visible = true;
+            if (this.shapeGizmo) RRShapeGizmo3D.sync(this.shapeGizmo, null, null);
+            return;
+        }
         if (!piece) {
             if (this.selectionOutline) this.selectionOutline.visible = false;
             if (this.shapeGizmo) RRShapeGizmo3D.sync(this.shapeGizmo, null, null);
@@ -3348,9 +3398,21 @@ class MapEditor3D {
                         this.pointer.gizmo = { held, snapshot: manager._snapshot(this.currentMap()), changed: false, start: JSON.parse(JSON.stringify(manager.selectedPiece())) };
                     } else {
                         const pick = this.pieceTargetAt(event.clientX, event.clientY, { erase: true });
-                        const before = manager.selected;
-                        const piece = pick ? manager.selectAt(pick) : null;
-                        if (piece && before === piece.id) this.pointer.pieceMove = { id: piece.id, snapshot: manager._snapshot(this.currentMap()), moved: false, planeY: Reactor3D.pieceBaseAt(this.currentMap(), piece.x, piece.y) + piece.z, dz: 0 };
+                        const wasSelected = manager.selectionIds();
+                        const under = pick ? manager.pieceAtTarget(pick) : null;
+                        if (under && wasSelected.includes(under.id)) {
+                            // A press on the selection: dragging slides it (all of it).
+                            manager.selectAt(pick);
+                            this.pointer.pieceMove = { id: under.id, snapshot: manager._snapshot(this.currentMap()), moved: false, planeY: Reactor3D.pieceBaseAt(this.currentMap(), under.x, under.y) + under.z, many: wasSelected.length > 1, cellsMoved: [0, 0] };
+                        } else {
+                            // A click picks what is under the pointer (or nothing); a drag from
+                            // here instead draws a box that selects everything inside it, so a
+                            // building can be boxed even where its floor covers the ground.
+                            manager.selectAt(pick);
+                            const planeY = pick && Number.isFinite(pick.top) ? pick.top : 0;
+                            const ground = this.groundPointAt(event.clientX, event.clientY, planeY);
+                            if (ground) this.pointer.band = { start: ground, end: ground, planeY, started: false };
+                        }
                     }
                 } else if (target && (this.pieceManager().mode === 'screen' || this.pieceManager().mode === 'light')) {
                     // A screen on the wall face pointed at, a light over the cell: one per click.
@@ -3483,6 +3545,28 @@ class MapEditor3D {
                 if (this.dragShapeGizmo(this.pointer.gizmo, event.clientX, event.clientY)) this.pointer.gizmo.changed = true;
                 return;
             }
+            if (this.pointer.band) {
+                const band = this.pointer.band, end = this.groundPointAt(event.clientX, event.clientY, band.planeY);
+                if (!end) return;
+                band.end = end;
+                if (!band.started && (Math.abs(end.x - band.start.x) > 0.3 || Math.abs(end.y - band.start.y) > 0.3)) { band.started = true; this.pieceManager()?.clearSelection(); }
+                if (band.started) this.showSelectionBand(band.start, end, band.planeY);
+                return;
+            }
+            if (this.pointer.pieceMove && this.pointer.pieceMove.many) {
+                // Many pieces: the whole selection slides by whole cells with the pointer.
+                const move = this.pointer.pieceMove, manager = this.pieceManager();
+                const rect = this.canvas.getBoundingClientRect();
+                this._raycaster = this._raycaster || new THREE.Raycaster();
+                this._raycaster.setFromCamera(new THREE.Vector2(((event.clientX - rect.left) / rect.width) * 2 - 1, -((event.clientY - rect.top) / rect.height) * 2 + 1), this.camera);
+                const point = this._raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -move.planeY), new THREE.Vector3());
+                if (!point) return;
+                if (!move.grabPoint) { move.grabPoint = [point.x, point.z]; return; }
+                const wantX = Math.round(point.x - move.grabPoint[0]), wantY = Math.round(point.z - move.grabPoint[1]);
+                const dx = wantX - move.cellsMoved[0], dy = wantY - move.cellsMoved[1];
+                if ((dx || dy) && manager.moveSelectionBy(dx, dy, false)) { move.cellsMoved = [wantX, wantY]; move.moved = true; }
+                return;
+            }
             if (this.pointer.pieceMove) {
                 // The piece follows the pointer on the plane of its own base, so it slides rather than climbs.
                 const move = this.pointer.pieceMove, manager = this.pieceManager(), piece = manager && manager.selectedPiece();
@@ -3557,6 +3641,13 @@ class MapEditor3D {
             if (drag && drag.pieces) {
                 drag.pieceStroke = null;
                 this.pieceManager()?.endStroke();
+                return;
+            }
+            if (drag && drag.band) {
+                if (!drag.band.started) return;
+                const box = this.showSelectionBand(drag.band.start, drag.band.end, drag.band.planeY);
+                this.hideSelectionBand();
+                if (box) this.pieceManager()?.selectInBox(box.x0, box.y0, box.x1, box.y1);
                 return;
             }
             if (drag && (drag.gizmo || drag.pieceMove)) {

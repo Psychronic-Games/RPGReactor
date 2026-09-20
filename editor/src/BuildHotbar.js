@@ -148,6 +148,7 @@ class BuildHotbar {
     /** What the panel edits: the selected piece when there is one, else what the slot will place. */
     subject() {
         const manager = this.manager();
+        if (manager.mode === 'select' && manager.selectionIds().length > 1) return { kind: 'many', placed: true, count: manager.selectionIds().length };
         const piece = manager.mode === 'select' ? manager.selectedPiece() : null;
         if (piece) return { piece, kind: piece.kind, shape: manager.isShape(piece.kind), placed: true };
         const active = this.activeSlot();
@@ -166,9 +167,13 @@ class BuildHotbar {
             + manager.materials().map(entry => `<button type="button" class="rr-build-swatch rr-build-material" data-material="${entry.name}" aria-pressed="${current === entry.name}" title="${entry.name}" style="background-image:url('${entry.url}');"></button>`).join('') + '</div>';
         const facing = rot => `<div class="rr-build-facing">${[[2, '↑'], [3, '→'], [0, '↓'], [1, '←']].map(([r, arrow]) => `<button type="button" class="rr-build-chip rr-build-rot" data-rot="${r}" aria-pressed="${r === rot}">${arrow}</button>`).join('')}<span class="rr-build-note">R</span></div>`;
         let head, body = '';
-        if (s.kind === 'select') {
+        if (s.kind === 'many') {
+            head = this._t('build.selectedMany', { count: s.count });
+            body = section(this._t('pieces.material'), swatches(null)) + section(this._t('build.direction'), `<div class="rr-build-facing"><button type="button" class="rr-build-chip rr-build-turn-all">${this.icon('turn', 18)}<span>${tt('Turn')}</span></button><span class="rr-build-note">R</span></div>`)
+                + `<div class="rr-build-note rr-build-wrap">${this._t('build.manyHint')}</div><button type="button" class="rr-btn-secondary rr-build-remove">${this._t('build.remove')}</button>`;
+        } else if (s.kind === 'select') {
             head = this._t('build.select');
-            body = `<div class="rr-build-note rr-build-wrap">${this._t('build.nothingSelected')}</div>`;
+            body = `<div class="rr-build-note rr-build-wrap">${this._t('build.nothingSelected')}</div><div class="rr-build-note rr-build-wrap">${this._t('build.boxHint')}</div>`;
         } else if (s.kind === 'hammer') {
             head = this._t('build.hammer');
             body = `<div class="rr-build-note rr-build-wrap">${this._t('build.hammerHint')}</div>`;
@@ -219,14 +224,15 @@ class BuildHotbar {
             }
             if (s.placed) body += `<button type="button" class="rr-btn-secondary rr-build-remove">${this._t('build.remove')}</button>`;
         }
-        panel.innerHTML = `<div class="rr-build-panel-head">${this.icon(s.kind === 'wedge' ? 'ramp' : s.kind, 20)}<span>${head}</span></div>${body}`;
+        panel.innerHTML = `<div class="rr-build-panel-head">${this.icon(s.kind === 'wedge' ? 'ramp' : s.kind === 'many' ? 'select' : s.kind, 20)}<span>${head}</span></div>${body}`;
         this.bindPanel(s);
     }
 
     bindPanel(s) {
         const panel = this.panel, manager = this.manager();
-        const placed = !!s.piece;
-        const edit = (patch, pending) => { if (placed) manager.updateSelected(patch); else pending(); this.renderPanel(); };
+        const placed = !!s.piece || s.kind === 'many';
+        const edit = (patch, pending) => { if (s.kind === 'many') manager.updateSelection(patch); else if (placed) manager.updateSelected(patch); else pending(); this.renderPanel(); };
+        panel.querySelector('.rr-build-turn-all')?.addEventListener('click', () => { manager.turnSelection(); this.renderPanel(); });
         panel.querySelectorAll('.rr-build-material').forEach(el => el.addEventListener('click', () => edit({ material: el.dataset.material }, () => manager.setMaterial(el.dataset.material))));
         panel.querySelectorAll('.rr-build-rot').forEach(el => el.addEventListener('click', () => { const r = Number(el.dataset.rot); edit(s.shape ? { angle: r * 90 } : { rot: r }, () => { manager.rot = r; manager._syncPanel(); manager._ghostChanged(); }); }));
         panel.querySelectorAll('.rr-build-size').forEach(el => el.addEventListener('change', () => {
@@ -249,7 +255,7 @@ class BuildHotbar {
         }));
         panel.querySelector('.rr-build-steps')?.addEventListener('change', event => { manager.stairSteps = Math.max(1, Math.min(60, Math.round(Number(event.target.value)) || 1)); this.renderPanel(); });
         panel.querySelectorAll('.rr-build-mode').forEach(el => el.addEventListener('click', () => { manager.gizmoMode = el.dataset.mode; manager._ghostChanged(); this.renderPanel(); }));
-        panel.querySelector('.rr-build-remove')?.addEventListener('click', () => { manager.removeSelected(); this.renderPanel(); });
+        panel.querySelector('.rr-build-remove')?.addEventListener('click', () => { manager.removeSelection(); this.renderPanel(); });
         panel.querySelector('.rr-build-media')?.addEventListener('change', event => { manager.screenMedia = event.target.value; });
         panel.querySelectorAll('.rr-build-fx').forEach(el => el.addEventListener('change', () => {
             const v = Number(el.value); if (!Number.isFinite(v)) { this.renderPanel(); return; }
@@ -273,7 +279,7 @@ class BuildHotbar {
         if (level) level.textContent = String(manager.level);
         // A selection change or a live drag redraws the panel, without stealing a field being typed in.
         if (document.activeElement && this.panel.contains(document.activeElement) && document.activeElement.tagName === 'INPUT') return;
-        const key = JSON.stringify([manager.selected, manager.mode, manager.kind, manager.material, manager.rot, manager.gizmoMode, manager.selectedPiece?.()]);
+        const key = JSON.stringify([manager.selected, manager.selectedIds, manager.mode, manager.kind, manager.material, manager.rot, manager.gizmoMode, manager.selectedPiece?.()]);
         if (key !== this._panelKey) { this._panelKey = key; this.renderPanel(); }
     }
 
