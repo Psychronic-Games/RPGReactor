@@ -60,7 +60,7 @@ class PieceBuilderManager {
     }
 
     /** The colour a kind shows in the flat map's overlay. */
-    static OVERLAY_COLOURS = { wall: 0x9a9a9a, block: 0x8c8c8c, floor: 0xc99a5b, pillar: 0xdcdcdc, stair: 0xa87b4a, ramp: 0xb05a4a, roof: 0xc1443c, doorway: 0x3fa34d, window: 0x5b9fe8, fence: 0xb8864b, dome: 0xb07a9a, cylinder: 0x8f8fa8, cone: 0xb8a04b, box: 0x8c8c8c, wedge: 0xb05a4a, pyramid: 0xb8a04b, prism: 0xc1443c, tube: 0x8f8fa8, sphere: 0xb07a9a, arch: 0x3fa34d, tunnel: 0x3fa34d, ring: 0xb07a9a };
+    static OVERLAY_COLOURS = { wall: 0x9a9a9a, block: 0x8c8c8c, floor: 0xc99a5b, pillar: 0xdcdcdc, stair: 0xa87b4a, ramp: 0xb05a4a, roof: 0xc1443c, doorway: 0x3fa34d, window: 0x5b9fe8, fence: 0xb8864b, dome: 0xb07a9a, cylinder: 0x8f8fa8, cone: 0xb8a04b, box: 0x8c8c8c, wedge: 0xb05a4a, pyramid: 0xb8a04b, prism: 0xc1443c, tube: 0x8f8fa8, sphere: 0xb07a9a, arch: 0x3fa34d, tunnel: 0x3fa34d, ring: 0xb07a9a, hull: 0x8f8fa8, spike: 0xb8a04b, capsule: 0x8f8fa8, dish: 0x8fa8a8, fin: 0xa88f8f };
 
     /**
      * What each cell shows in the flat map: its topmost piece's kind and
@@ -156,7 +156,12 @@ class PieceBuilderManager {
         sphere: 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18 M3 12h18 M12 3a4.5 9 0 0 0 0 18',
         arch: 'M4 20V10a8 8 0 0 1 16 0v10 M8 20v-9a4 4 0 0 1 8 0v9 M4 20h4 M16 20h4',
         tunnel: 'M4 19V11a8 8 0 0 1 16 0v8 M8 19v-7a4 4 0 0 1 8 0v7 M4 19h4 M16 19h4 M8 12L5 8 M16 12l3-4',
-        ring: 'M12 4a8 4 0 1 0 0 8a8 4 0 1 0 0-8 M12 6.5a3.5 1.5 0 1 0 0 3a3.5 1.5 0 1 0 0-3 M4 8v6a8 4 0 0 0 16 0V8'
+        ring: 'M12 4a8 4 0 1 0 0 8a8 4 0 1 0 0-8 M12 6.5a3.5 1.5 0 1 0 0 3a3.5 1.5 0 1 0 0-3 M4 8v6a8 4 0 0 0 16 0V8',
+        hull: 'M6 5h12l3 3v8l-3 3H6l-3-3V8z M6 5l2 2h8l2-2 M6 19l2-2h8l2 2',
+        spike: 'M12 2l4 17H8z M8 19a4 1.5 0 0 0 8 0',
+        capsule: 'M8 8a4 4 0 0 1 8 0v8a4 4 0 0 1-8 0z M8 9h8 M8 15h8',
+        dish: 'M3 8a9 9 0 0 0 18 0 M3 8h18 M12 14v6 M9 20h6',
+        fin: 'M4 20h16v-9L13 3H4z M4 11h9'
     };
 
     initializeUI(container) {

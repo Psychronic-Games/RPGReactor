@@ -154,9 +154,16 @@ districts of hamlets:
 - `paths`: paved strips `[x0, y0, x1, y1]` (floor slabs of the `path`
   material, or a fifth entry naming one).
 - `shapes`: `[{ kind, at: [x, y], z, size: [w, h, d], angle, tilt, roll,
-  offset: [ox, oy], material }]`, the free pieces on a plan: `box`, `wedge`,
-  `pyramid`, `prism`, `cylinder`, `tube`, `cone`, `dome`, `sphere`, `arch`,
-  `tunnel`, `ring`. `at` is the cell under the shape's middle and `offset` a
+  offset: [ox, oy], sides, taper, material }]`, the free pieces on a plan:
+  `box`, `wedge`, `pyramid`, `prism`, `hull`, `spike`, `cylinder`, `capsule`,
+  `tube`, `cone`, `dome`, `sphere`, `dish`, `fin`, `arch`, `tunnel`, `ring`.
+  A `hull` and a `spike` are sided prisms fitted to their box (`sides` 3..32,
+  four sides is a box) whose top is `taper` as wide as their bottom (0 a
+  point, 1 straight; a hull wears 8 and 0.8, a spike 6 and 0); a `capsule` is
+  a column with domed ends, a `dish` a shallow bowl, a `fin` a swept plate
+  standing on its root with a tip `taper` as wide (0.4). A ship is hull
+  segments end to end, capsules for engines, fins rolled flat for wings, a
+  dish on a spike for a sensor. `at` is the cell under the shape's middle and `offset` a
   nudge of the middle within it (tiles, -0.5..0.5); `z` (quarter tiles) is
   where its bottom sits; `angle` turns it about the vertical, `tilt` and
   `roll` about its own middle, and a turned shape rests on its lowest corner,

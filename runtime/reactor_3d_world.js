@@ -173,7 +173,21 @@ Reactor3D.displaceByTerrain = function(built, mapData) {
  * cover block like a wall of its height; a tube, a ring, an arch and a
  * tunnel are hollow, walked into and through.
  */
-Reactor3D.SHAPE_KINDS = ["box", "wedge", "pyramid", "prism", "cylinder", "tube", "cone", "dome", "sphere", "arch", "tunnel", "ring"];
+Reactor3D.SHAPE_KINDS = ["box", "wedge", "pyramid", "prism", "hull", "spike", "cylinder", "capsule", "tube", "cone", "dome", "sphere", "dish", "fin", "arch", "tunnel", "ring"];
+/**
+ * The settings a kind can carry beyond its size: `sides` (how many flat
+ * faces round a hull, a spike, a capsule or a dish) and `taper` (how wide
+ * the top is against the bottom, 0 a point, 1 straight; a fin's tip
+ * against its root). A shape without them wears its kind's own.
+ */
+Reactor3D.SHAPE_PARAMS = { hull: { sides: 8, taper: 0.8 }, spike: { sides: 6, taper: 0 }, capsule: { sides: 24 }, dish: { sides: 32 }, fin: { taper: 0.4 } };
+Reactor3D.shapeParams = function(piece) {
+    const own = this.SHAPE_PARAMS[piece.kind] || {};
+    const out = {};
+    if ("sides" in own) { const n = Math.round(Number(piece.sides)); out.sides = Number.isFinite(n) ? Math.max(3, Math.min(32, n)) : own.sides; }
+    if ("taper" in own) { const t = Number(piece.taper); out.taper = Number.isFinite(t) ? Math.max(0, Math.min(1, t)) : own.taper; }
+    return out;
+};
 Reactor3D.PIECE_KINDS = ["wall", "block", "floor", "pillar", "stair", "ramp", "roof", "doorway", "window", "fence"].concat(Reactor3D.SHAPE_KINDS);
 Reactor3D.isShapeKind = function(kind) { return this.SHAPE_KINDS.includes(kind); };
 /** The shapes with an open middle: only their walls block. */
@@ -227,7 +241,7 @@ Reactor3D.shapeSolidAt = function(kind, lx, lz, hw, hd, slack) {
     const s = slack || 0;
     const inside = (kw, kd, grow) => { const a = hw * kw + grow, b = hd * kd + grow; return a > 0 && b > 0 && (lx * lx) / (a * a) + (lz * lz) / (b * b) <= 1; };
     switch (kind) {
-        case "cylinder": case "cone": case "dome": case "sphere": return inside(1, 1, s);
+        case "cylinder": case "cone": case "dome": case "sphere": case "hull": case "spike": case "capsule": case "dish": return inside(1, 1, s);
         case "tube": return inside(1, 1, s) && !inside(0.7, 0.7, -s);
         case "ring": return inside(1, 1, s) && !inside(0.6, 0.6, -s);
         case "arch": case "tunnel": return Math.abs(lx) <= hw + s && Math.abs(lz) <= hd + s && Math.abs(lx) >= hw * 0.7 - s;
@@ -346,6 +360,9 @@ Reactor3D.normalizePiece = function(raw, mapData) {
         if (roll) piece.roll = roll;
         const offset = Array.isArray(raw.offset) ? raw.offset.slice(0, 2).map(v => Math.max(-0.5, Math.min(0.5, Math.round((Number(v) || 0) * 100) / 100))) : null;
         if (offset && (offset[0] || offset[1])) piece.offset = [offset[0] || 0, offset[1] || 0];
+        const own = this.SHAPE_PARAMS[kind] || {};
+        if ("sides" in own && Number.isFinite(Number(raw.sides))) piece.sides = Math.max(3, Math.min(32, Math.round(Number(raw.sides))));
+        if ("taper" in own && Number.isFinite(Number(raw.taper))) piece.taper = Math.max(0, Math.min(1, Math.round(Number(raw.taper) * 100) / 100));
     }
     return piece;
 };
@@ -612,9 +629,10 @@ Reactor3D.MapScene.prototype.updateTerrain = function(mapData, region) {
  * across the middle, eaves at v 0 and 1) or a column. Turned by `rot`
  * quarter turns about the cell's middle when it is laid down.
  */
-Reactor3D.pieceShapes = function(kind) {
+Reactor3D.pieceShapes = function(kind, piece) {
     const box = (x0, y0, v0, x1, y1, v1) => ({ box: [x0, y0, v0, x1, y1, v1] });
     const S = this.PIECE_STOREY;
+    const params = this.shapeParams(piece || { kind });
     switch (kind) {
         case "wall": return [box(0, 0, 0, 1, S, 1)];
         case "block": return [box(0, 0, 0, 1, 1, 1)];
@@ -646,6 +664,13 @@ Reactor3D.pieceShapes = function(kind) {
         // An arch is a wall with a round-topped opening through it; a tunnel is the same, deep.
         case "arch": case "tunnel": return [{ arch: [0.15, 0.5, 0.35, 24] }];
         case "ring": return [{ torus: [0.5, 0.5, 0.5, 0.4, 0.1, 0.5, 32, 16] }];
+        // Ship parts: a hull segment and a spike are sided prisms that taper (flats touch
+        // the cell), a capsule a column with domed ends, a dish a shallow bowl, a fin a
+        // swept plate standing on its root.
+        case "hull": case "spike": return [{ frustum: [0.5, 0.5, 0.5, 0, 1, params.sides, params.taper] }];
+        case "capsule": return [{ capsule: [0.5, 0.5, 0.5, 0.25, 0.75, params.sides, 6] }];
+        case "dish": return [{ dish: [0.5, 0.5, 0.5, 0.12, params.sides, 8] }];
+        case "fin": return [{ fin: [params.taper] }];
         default: return [];
     }
 };
@@ -696,7 +721,7 @@ Reactor3D.emitPiece = function(piece, base, out, hidden) {
         }
     };
     const quad = (a, b, c, d) => { tri(a, b, c); tri(a, c, d); };
-    for (const shape of this.pieceShapes(piece.kind)) {
+    for (const shape of this.pieceShapes(piece.kind, piece)) {
         if (shape.box) {
             const [x0, y0, v0, x1, y1, v1] = shape.box;
             const p = (x, y, v) => place(x, y, v);
@@ -806,6 +831,67 @@ Reactor3D.emitPiece = function(piece, base, out, hidden) {
                 return place(ccx + Math.cos(a) * rad, ccy + Math.sin(b) * rv, ccv + Math.sin(a) * rad);
             };
             for (let j = 0; j < around; j++) for (let i = 0; i < segments; i++) quad(at(i, j), at(i, j + 1), at(i + 1, j + 1), at(i + 1, j));
+        } else if (shape.frustum) {
+            // A sided prism fitted to the cell (a flat faces forward; the polygon is stretched so
+            // its box is the cell's, so four sides make a box), its top ring `taper` as wide as its
+            // bottom, a point when 0.
+            const [ccx, ccv, half, y0, y1, sides, taper] = shape.frustum;
+            const n = Math.max(3, sides || 8), rt = taper;
+            const corner = i => { const a = (i / n) * Math.PI * 2 + Math.PI / n; return [Math.cos(a), Math.sin(a)]; };
+            let mx = 0, mz = 0;
+            for (let i = 0; i < n; i++) { const c = corner(i); mx = Math.max(mx, Math.abs(c[0])); mz = Math.max(mz, Math.abs(c[1])); }
+            const ring = (i, k) => { const c = corner(i); return [ccx + c[0] / mx * half * k, ccv + c[1] / mz * half * k]; };
+            for (let i = 0; i < n; i++) {
+                const b0 = ring(i, 1), b1 = ring(i + 1, 1), t0 = ring(i, rt), t1 = ring(i + 1, rt);
+                if (rt > 1e-6) {
+                    quad(place(b0[0], y0, b0[1]), place(t0[0], y1, t0[1]), place(t1[0], y1, t1[1]), place(b1[0], y0, b1[1]));
+                    tri(place(ccx, y1, ccv), place(t1[0], y1, t1[1]), place(t0[0], y1, t0[1]));
+                } else tri(place(b0[0], y0, b0[1]), place(ccx, y1, ccv), place(b1[0], y0, b1[1]));
+                tri(place(ccx, y0, ccv), place(b0[0], y0, b0[1]), place(b1[0], y0, b1[1]));
+            }
+        } else if (shape.capsule) {
+            // A column between `y0` and `y1` with a half dome at each end filling the rest of the cell.
+            const [ccx, ccy, ccv, y0, y1, sides, ringCount] = shape.capsule;
+            const n = Math.max(3, sides || 24), rings = ringCount || 6, r = 0.5;
+            const at = (i, j) => {
+                // j runs from the bottom pole, over the lower cap, up the side, over the top cap to the top pole.
+                const a = (i / n) * Math.PI * 2;
+                let y, rad;
+                if (j <= rings) { const t = -Math.PI / 2 + (j / rings) * (Math.PI / 2); y = y0 + Math.sin(t) * y0; rad = Math.cos(t) * r; }
+                else { const t = ((j - rings - 1) / rings) * (Math.PI / 2); y = y1 + Math.sin(t) * (1 - y1); rad = Math.cos(t) * r; }
+                return place(ccx + Math.cos(a) * rad, y, ccv + Math.sin(a) * rad);
+            };
+            const last = rings * 2 + 1;
+            for (let j = 0; j < last; j++) for (let i = 0; i < n; i++) {
+                if (j === 0) tri(at(i, j), at(i, j + 1), at(i + 1, j + 1));
+                else if (j === last - 1) tri(at(i, j), at(i, j + 1), at(i + 1, j));
+                else quad(at(i, j), at(i, j + 1), at(i + 1, j + 1), at(i + 1, j));
+            }
+        } else if (shape.dish) {
+            // A bowl: a paraboloid shell `thick` deep, its rim flat at the top of the cell.
+            const [ccx, ccv, r, thick, sides, ringCount] = shape.dish;
+            const n = Math.max(3, sides || 32), rings = ringCount || 8;
+            const rimIn = r * Math.sqrt(1 - thick);
+            const outer = (i, j) => { const a = (i / n) * Math.PI * 2, t = j / rings, rad = t * r; return place(ccx + Math.cos(a) * rad, t * t, ccv + Math.sin(a) * rad); };
+            const inner = (i, j) => { const a = (i / n) * Math.PI * 2, t = (j / rings) * Math.sqrt(1 - thick), rad = t * r; return place(ccx + Math.cos(a) * rad, t * t + thick, ccv + Math.sin(a) * rad); };
+            const rim = (i, rad) => { const a = (i / n) * Math.PI * 2; return place(ccx + Math.cos(a) * rad, 1, ccv + Math.sin(a) * rad); };
+            for (let j = 0; j < rings; j++) for (let i = 0; i < n; i++) {
+                // Outside faces down and out; inside faces up and in; the rim closes them.
+                if (j === 0) { tri(outer(i, 0), outer(i, 1), outer(i + 1, 1)); tri(inner(i, 0), inner(i + 1, 1), inner(i, 1)); }
+                else { quad(outer(i, j), outer(i, j + 1), outer(i + 1, j + 1), outer(i + 1, j)); quad(inner(i, j), inner(i + 1, j), inner(i + 1, j + 1), inner(i, j + 1)); }
+            }
+            for (let i = 0; i < n; i++) quad(rim(i, r), rim(i, rimIn), rim(i + 1, rimIn), rim(i + 1, r));
+        } else if (shape.fin) {
+            // A plate in the u-y plane, `d` thick along v, its root the full width at the bottom and
+            // its tip `taper` as wide at the top, swept so the trailing edge (u 1) stands straight.
+            const [taper] = shape.fin;
+            const p = place, u0 = 1 - taper;
+            quad(p(0, 0, 1), p(1, 0, 1), p(1, 1, 1), p(u0, 1, 1)); // south face
+            quad(p(1, 0, 0), p(0, 0, 0), p(u0, 1, 0), p(1, 1, 0)); // north face
+            quad(p(0, 0, 0), p(1, 0, 0), p(1, 0, 1), p(0, 0, 1)); // root
+            quad(p(u0, 1, 0), p(u0, 1, 1), p(1, 1, 1), p(1, 1, 0)); // tip
+            quad(p(1, 0, 1), p(1, 0, 0), p(1, 1, 0), p(1, 1, 1)); // trailing edge
+            quad(p(0, 0, 0), p(0, 0, 1), p(u0, 1, 1), p(u0, 1, 0)); // leading edge
         } else if (shape.arch) {
             // A wall (the unit cell) with an opening through it along v: posts `post` wide, the
             // opening straight up to `spring` and a half circle of `r` above, the band over it solid.

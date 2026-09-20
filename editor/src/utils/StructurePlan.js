@@ -321,6 +321,8 @@
             if (Number(shape.tilt)) extra.tilt = Number(shape.tilt);
             if (Number(shape.roll)) extra.roll = Number(shape.roll);
             if (Array.isArray(shape.offset) && (Number(shape.offset[0]) || Number(shape.offset[1]))) extra.offset = [Number(shape.offset[0]) || 0, Number(shape.offset[1]) || 0];
+            if (Number.isFinite(Number(shape.sides))) extra.sides = Number(shape.sides);
+            if (Number.isFinite(Number(shape.taper))) extra.taper = Number(shape.taper);
             put(shape.kind, shape.at[0], shape.at[1], Number(shape.z) || 0, 0, shape.material || M.wall, extra);
         }
         const floors = Array.isArray(plan.floors) ? plan.floors : [];

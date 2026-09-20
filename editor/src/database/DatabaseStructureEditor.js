@@ -23,9 +23,11 @@ class DatabaseStructureEditor {
     static SIZE_MIN = 4;
     static SIZE_MAX = 200;
     static TOOLS = ['select', 'room', 'door', 'window', 'stairs', 'person', 'shape'];
-    static SHAPE_KINDS = ['box', 'wedge', 'pyramid', 'prism', 'cylinder', 'tube', 'cone', 'dome', 'sphere', 'arch', 'tunnel', 'ring'];
+    static SHAPE_KINDS = ['box', 'wedge', 'pyramid', 'prism', 'hull', 'spike', 'cylinder', 'capsule', 'tube', 'cone', 'dome', 'sphere', 'dish', 'fin', 'arch', 'tunnel', 'ring'];
+    /** The settings a kind carries beyond its size, with what it wears until told otherwise. */
+    static SHAPE_PARAMS = { hull: { sides: 8, taper: 0.8 }, spike: { sides: 6, taper: 0 }, capsule: { sides: 24 }, dish: { sides: 32 }, fin: { taper: 0.4 } };
     /** What a shape is first placed at, in tiles: wide enough to see, tall enough to matter. */
-    static SHAPE_DEFAULTS = { box: [4, 3, 4], wedge: [4, 2, 4], pyramid: [4, 4, 4], prism: [4, 3, 6], cylinder: [4, 6, 4], tube: [6, 5, 6], cone: [4, 4, 4], dome: [4, 2, 4], sphere: [4, 4, 4], arch: [3, 4, 1], tunnel: [4, 4, 8], ring: [6, 1, 6], tower: [4, 6, 4] };
+    static SHAPE_DEFAULTS = { box: [4, 3, 4], wedge: [4, 2, 4], pyramid: [4, 4, 4], prism: [4, 3, 6], cylinder: [4, 6, 4], tube: [6, 5, 6], cone: [4, 4, 4], dome: [4, 2, 4], sphere: [4, 4, 4], arch: [3, 4, 1], tunnel: [4, 4, 8], ring: [6, 1, 6], hull: [4, 6, 4], spike: [1, 4, 1], capsule: [2, 6, 2], dish: [4, 1, 4], fin: [3, 3, 0.25], tower: [4, 6, 4] };
     /** The three things the 3D handles do to a selected shape. */
     static GIZMO_MODES = ['move', 'turn', 'size'];
     /** How close a dragged face comes to another shape's face before it clicks onto it, in tiles. */
@@ -103,6 +105,11 @@ class DatabaseStructureEditor {
             arch: `<path d="M2.5 14V7a5.5 5.5 0 0 1 11 0v7 M5.5 14V8a2.5 2.5 0 0 1 5 0v6" ${stroke}/>`,
             tunnel: `<path d="M2.5 13V7.5a5.5 5.5 0 0 1 11 0V13 M5.5 13V8.5a2.5 2.5 0 0 1 5 0V13 M2.5 13h11 M5.5 8.5L3 5.5 M10.5 8.5L13 5.5" ${stroke}/>`,
             ring: `<path d="M8 3a5.5 2.5 0 1 0 0 5a5.5 2.5 0 1 0 0-5 M8 4.6a2.2 .9 0 1 0 0 1.8a2.2 .9 0 1 0 0-1.8 M2.5 5.5v4a5.5 2.5 0 0 0 11 0v-4" ${stroke}/>`,
+            hull: `<path d="M4 4h8l2 2v4l-2 2H4l-2-2V6z M4 4l1.5 1.5h5L12 4 M4 12l1.5-1.5h5L12 12" ${stroke}/>`,
+            spike: `<path d="M8 1.5l3 11H5z M5 12.5a3 1 0 0 0 6 0" ${stroke}/>`,
+            capsule: `<path d="M5 5.5a3 3 0 0 1 6 0v5a3 3 0 0 1-6 0z M5 6.5h6 M5 9.5h6" ${stroke}/>`,
+            dish: `<path d="M2.5 5a5.5 5.5 0 0 0 11 0 M2.5 5h11 M8 9v4 M6 13h4" ${stroke}/>`,
+            fin: `<path d="M3 13h10V7L9 2H3z M3 7h6" ${stroke}/>`,
             move: `<path d="M8 2v12M2 8h12M8 2l-2 2M8 2l2 2M8 14l-2-2M8 14l2-2M2 8l2-2M2 8l2 2M14 8l-2-2M14 8l-2 2" ${stroke}/>`,
             turn: `<path d="M13 8a5 5 0 1 1-1.5-3.5M11.5 2v2.5H14" ${stroke}/>`,
             size: `<path d="M3 13V8M3 13h5M3 13l4-4M13 3v5M13 3H8M13 3L9 7" ${stroke}/>`,
@@ -216,9 +223,14 @@ class DatabaseStructureEditor {
             const n = (v, fallback) => { const k = Number(v); return Number.isFinite(k) && k > 0 ? Math.min(60, Math.round(k * 100) / 100) : fallback; };
             const turn = v => ((Math.round(Number(v)) || 0) % 360 + 360) % 360;
             const off = v => Math.max(-0.5, Math.min(0.5, Math.round((Number(v) || 0) * 100) / 100));
-            return { kind: shape.kind, at: [int(shape.at?.[0], 0, 0, this.SIZE_MAX), int(shape.at?.[1], 0, 0, this.SIZE_MAX)], z: Math.max(0, Math.min(120, Math.round((Number(shape.z) || 0) * 4) / 4)),
+            const out = { kind: shape.kind, at: [int(shape.at?.[0], 0, 0, this.SIZE_MAX), int(shape.at?.[1], 0, 0, this.SIZE_MAX)], z: Math.max(0, Math.min(120, Math.round((Number(shape.z) || 0) * 4) / 4)),
                 size: [n(size[0], 3), n(size[1], 2), n(size[2], n(size[0], 3))], angle: turn(shape.angle), tilt: turn(shape.tilt), roll: turn(shape.roll),
                 offset: [off(shape.offset?.[0]), off(shape.offset?.[1])], material: String(shape.material || '') };
+            // A kind's own settings, only when the record says them.
+            const own = this.SHAPE_PARAMS[shape.kind] || {};
+            if ('sides' in own && Number.isFinite(Number(shape.sides))) out.sides = Math.max(3, Math.min(32, Math.round(Number(shape.sides))));
+            if ('taper' in own && Number.isFinite(Number(shape.taper))) out.taper = Math.max(0, Math.min(1, Math.round(Number(shape.taper) * 100) / 100));
+            return out;
         });
         plan.paths = (Array.isArray(plan.paths) ? plan.paths : []).filter(Array.isArray).map(strip => {
             const out = [0, 1, 2, 3].map(i => int(strip[i], 0, 0, this.SIZE_MAX));
@@ -265,6 +277,9 @@ class DatabaseStructureEditor {
             if (shape.tilt) out.tilt = shape.tilt;
             if (shape.roll) out.roll = shape.roll;
             if (shape.offset && (shape.offset[0] || shape.offset[1])) out.offset = shape.offset.slice();
+            const own = DatabaseStructureEditor.SHAPE_PARAMS[shape.kind] || {};
+            if ('sides' in own && shape.sides !== undefined && shape.sides !== own.sides) out.sides = shape.sides;
+            if ('taper' in own && shape.taper !== undefined && shape.taper !== own.taper) out.taper = shape.taper;
             if (shape.material) out.material = shape.material;
             return out;
         });
@@ -691,6 +706,9 @@ class DatabaseStructureEditor {
             else if (mode === 'turn') numbers = field('rr-structures-shape-turn', tt('Turn'), shape.angle, 0, 359, 5, 0) + field('rr-structures-shape-turn', tt('Tilt'), shape.tilt || 0, 0, 359, 5, 1) + field('rr-structures-shape-turn', tt('Roll'), shape.roll || 0, 0, 359, 5, 2);
             else numbers = field('rr-structures-shape-size', tt('Width'), shape.size[0], 0.25, 60, 0.25, 0) + field('rr-structures-shape-size', tt('Height'), shape.size[1], 0.25, 60, 0.25, 1) + field('rr-structures-shape-size', tt('Depth'), shape.size[2], 0.25, 60, 0.25, 2)
                 + `<button type="button" class="rr-btn-secondary rr-structures-shape-lock" title="${rrEscapeHtml(tt('Keep the proportions'))}" aria-pressed="${this._sizeLock}" style="width:26px;height:26px;padding:0;display:flex;align-items:center;justify-content:center;${this._sizeLock ? 'border-color:var(--color-accent);' : ''}">${DatabaseStructureEditor.icon(this._sizeLock ? 'lock' : 'unlock')}</button>`;
+            const own = DatabaseStructureEditor.SHAPE_PARAMS[shape.kind] || {};
+            if (mode === 'size' && 'sides' in own) numbers += field('rr-structures-shape-param', tt('Sides'), shape.sides ?? own.sides, 3, 32, 1, 'sides');
+            if (mode === 'size' && 'taper' in own) numbers += field('rr-structures-shape-param', tt('Taper'), shape.taper ?? own.taper, 0, 1, 0.05, 'taper');
             html = `${kindLabel(tt('Shape'))}
                 ${this._shapePickHtml('rr-structures-shape-pick', shape.kind)}
                 ${modes}
@@ -782,6 +800,13 @@ class DatabaseStructureEditor {
             const [cx, cy] = DatabaseStructureEditor.shapeCentre(shape);
             if (i === 2) shape.z = Math.max(0, Math.min(120, Math.round(v * 4) / 4));
             else DatabaseStructureEditor.placeShapeAt(shape, i === 0 ? v : cx, i === 1 ? v : cy);
+            this.markDirty(); this.renderInspector();
+        });
+        for (const input of box.querySelectorAll('.rr-structures-shape-param')) input.addEventListener('change', () => {
+            const shape = plan.shapes[sel.key], key = input.dataset.i, v = Number(input.value);
+            if (!shape || !Number.isFinite(v)) { this.renderInspector(); return; }
+            this.pushHistory();
+            if (key === 'sides') shape.sides = Math.max(3, Math.min(32, Math.round(v))); else shape.taper = Math.max(0, Math.min(1, Math.round(v * 100) / 100));
             this.markDirty(); this.renderInspector();
         });
         for (const input of box.querySelectorAll('.rr-structures-shape-turn')) input.addEventListener('change', () => {
@@ -1404,7 +1429,7 @@ class DatabaseStructureEditor {
             } else {
                 ctx.translate(ox + cx * cell, oy + cy * cell);
                 ctx.rotate(angle);
-                const outline = DatabaseStructureEditor.shapeOutline(shape.kind);
+                const outline = DatabaseStructureEditor.shapeOutline(shape.kind, shape);
                 const trace = poly => { poly.forEach(([u, v], i) => i ? ctx.lineTo(u * w * cell, v * d * cell) : ctx.moveTo(u * w * cell, v * d * cell)); ctx.closePath(); };
                 ctx.globalAlpha = 0.75; ctx.beginPath();
                 for (const poly of outline.solid) trace(poly);
@@ -1801,7 +1826,10 @@ class DatabaseStructureEditor {
 
     /** A plan's shape as the runtime's piece, stood at the plan's origin. */
     static pieceOf(shape) {
-        return { kind: shape.kind, x: shape.at[0], y: shape.at[1], z: shape.z, rot: 0, size: shape.size, angle: shape.angle, tilt: shape.tilt || 0, roll: shape.roll || 0, offset: shape.offset || [0, 0] };
+        const piece = { kind: shape.kind, x: shape.at[0], y: shape.at[1], z: shape.z, rot: 0, size: shape.size, angle: shape.angle, tilt: shape.tilt || 0, roll: shape.roll || 0, offset: shape.offset || [0, 0] };
+        if (shape.sides !== undefined) piece.sides = shape.sides;
+        if (shape.taper !== undefined) piece.taper = shape.taper;
+        return piece;
     }
 
     /** The shape's middle on the ground, in plan cells (its cell's middle plus its offset). */
@@ -1858,11 +1886,18 @@ class DatabaseStructureEditor {
      * hollow one, the two posts of an arch. `open` is the box round a hollow
      * shape, drawn dashed.
      */
-    static shapeOutline(kind) {
-        const circle = r => Array.from({ length: 32 }, (_, i) => [Math.cos(i / 32 * Math.PI * 2) * r, Math.sin(i / 32 * Math.PI * 2) * r]);
+    static shapeOutline(kind, shape) {
+        const circle = (r, n = 32, turn = 0) => Array.from({ length: n }, (_, i) => [Math.cos(i / n * Math.PI * 2 + turn) * r, Math.sin(i / n * Math.PI * 2 + turn) * r]);
         const rect = (u0, v0, u1, v1) => [[u0, v0], [u1, v0], [u1, v1], [u0, v1]];
+        const own = this.SHAPE_PARAMS[kind] || {};
+        const sides = 'sides' in own ? Math.max(3, Math.min(32, Math.round(Number(shape && shape.sides !== undefined ? shape.sides : own.sides)))) : 32;
         switch (kind) {
-            case 'cylinder': case 'cone': case 'dome': case 'sphere': return { solid: [circle(0.5)] };
+            case 'cylinder': case 'cone': case 'dome': case 'sphere': case 'capsule': case 'dish': return { solid: [circle(0.5, sides === 32 ? 32 : sides)] };
+            case 'hull': case 'spike': {
+                const poly = circle(1, sides, Math.PI / sides);
+                const mx = Math.max(...poly.map(q => Math.abs(q[0]))), mz = Math.max(...poly.map(q => Math.abs(q[1])));
+                return { solid: [poly.map(([u, v]) => [u / mx * 0.5, v / mz * 0.5])] };
+            }
             case 'tube': return { solid: [circle(0.5), circle(0.35)], open: rect(-0.5, -0.5, 0.5, 0.5) };
             case 'ring': return { solid: [circle(0.5), circle(0.3)], open: rect(-0.5, -0.5, 0.5, 0.5) };
             case 'arch': case 'tunnel': return { solid: [rect(-0.5, -0.5, -0.35, 0.5), rect(0.35, -0.5, 0.5, 0.5)], open: rect(-0.5, -0.5, 0.5, 0.5) };

@@ -629,7 +629,8 @@
      * and stands characters on their tops. One piece per cell and level: a
      * new one there replaces the old.
      */
-    const SHAPE_KINDS = ['box', 'wedge', 'pyramid', 'prism', 'cylinder', 'tube', 'cone', 'dome', 'sphere', 'arch', 'tunnel', 'ring'];
+    const SHAPE_KINDS = ['box', 'wedge', 'pyramid', 'prism', 'hull', 'spike', 'cylinder', 'capsule', 'tube', 'cone', 'dome', 'sphere', 'dish', 'fin', 'arch', 'tunnel', 'ring'];
+    const SHAPE_PARAMS = { hull: { sides: 8, taper: 0.8 }, spike: { sides: 6, taper: 0 }, capsule: { sides: 24 }, dish: { sides: 32 }, fin: { taper: 0.4 } };
     const PIECE_KINDS = ['wall', 'block', 'floor', 'pillar', 'stair', 'ramp', 'roof', 'doorway', 'window', 'fence'].concat(SHAPE_KINDS);
     const PIECE_MAX_LEVEL = 120;
     const normalizePiece = (raw, mapData) => {
@@ -661,6 +662,9 @@
             if (roll) piece.roll = roll;
             const offset = Array.isArray(raw.offset) ? raw.offset.slice(0, 2).map(v => Math.max(-0.5, Math.min(0.5, Math.round((Number(v) || 0) * 100) / 100))) : null;
             if (offset && (offset[0] || offset[1])) piece.offset = [offset[0] || 0, offset[1] || 0];
+            const own = SHAPE_PARAMS[raw.kind] || {};
+            if ('sides' in own && Number.isFinite(Number(raw.sides))) piece.sides = Math.max(3, Math.min(32, Math.round(Number(raw.sides))));
+            if ('taper' in own && Number.isFinite(Number(raw.taper))) piece.taper = Math.max(0, Math.min(1, Math.round(Number(raw.taper) * 100) / 100));
         }
         return piece;
     };
@@ -901,7 +905,7 @@
 
     const api = {
         WATER_MAX_LEVEL, normalizeWater, water, hasWater, addWater, removeWaterAt, waterSnapshot, restoreWater,
-        PIECE_KINDS, SHAPE_KINDS, PIECE_MAX_LEVEL, normalizePiece, pieces, hasPieces, pieceAt, setPiece, removePiece,
+        PIECE_KINDS, SHAPE_KINDS, SHAPE_PARAMS, PIECE_MAX_LEVEL, normalizePiece, pieces, hasPieces, pieceAt, setPiece, removePiece,
         piecesSnapshot, restorePieces, clearPieces, pieceMaterials,
         nextPieceGroup, pieceGroup, pieceGroupBounds, pieceGroupAt, groupConnectedPieces, movePieceGroup, removePieceGroup, rotatePieceGroup,
         structures, structureOf, setStructure, restoreStructures, removeStructure, relocatePropsOff,

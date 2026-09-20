@@ -427,6 +427,12 @@ test('shapes with handles: the picker defaults, a middle anywhere, sizes that ke
     assert.ok(Math.abs((bounds.x1 - bounds.x0) - 8) < 1e-9 && Math.abs(bounds.z1 - 2) < 1e-9, 'a rolled column lies eight long and two tall');
     assert.equal(E.shapeCovers(leaning, 9, 5.5), true, 'and is picked along its length');
     assert.ok(E.shapeOutline('tube').solid.length === 2 && E.shapeOutline('arch').solid.length === 2 && E.shapeOutline('box').solid.length === 1, 'outlines: a ring for a tube, two posts for an arch, a square for a box');
+    assert.equal(E.shapeOutline('hull', { sides: 6 }).solid[0].length, 6, 'a hull draws its own sides on the plan');
+    // A hull's sides and taper are kept in the file only when they differ from the kind's own.
+    const ship = E.trimPlan(E.normalizePlan({ name: 'H', size: [20, 20], floors: [], shapes: [{ kind: 'hull', at: [3, 3], size: [4, 6, 4], sides: 12, taper: 0.8 }, { kind: 'fin', at: [8, 3], size: [3, 3, 0.25] }] }));
+    assert.equal(JSON.stringify(ship.shapes[0]), JSON.stringify({ kind: 'hull', at: [3, 3], size: [4, 6, 4], sides: 12 }));
+    assert.equal(JSON.stringify(ship.shapes[1]), JSON.stringify({ kind: 'fin', at: [8, 3], size: [3, 3, 0.25] }));
+    assert.equal(E.pieceOf(E.normalizePlan(JSON.parse(JSON.stringify(ship))).shapes[0]).sides, 12, 'and reach the runtime piece');
     // The plan turned a quarter turn carries the offset round with the cell.
     const SP = loadEditor().RRStructurePlan;
     const turned = SP.transform(E.normalizePlan({ name: 'T', size: [10, 10], floors: [], shapes: [{ kind: 'box', at: [2, 3], size: [1, 1, 1], offset: [0.25, 0.5], tilt: 20, roll: 40 }] }), 1, 1);

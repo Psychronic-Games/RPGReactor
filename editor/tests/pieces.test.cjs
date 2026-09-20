@@ -747,7 +747,10 @@ test('the round pieces: a shape has a size and a turn, blocks its round footprin
     // its triangles) is the true solid's, within the rounding of its segments. A dome wound the
     // other way showed its inside from outside, and came out with a negative volume here.
     const arch = 1 - (0.7 * 0.5 + Math.PI * 0.35 * 0.35 / 2);
-    const volumes = { box: 1, wedge: 0.5, pyramid: 1 / 3, prism: 0.5, cylinder: Math.PI / 4, tube: Math.PI / 4 * (1 - 0.49), cone: Math.PI / 12, dome: Math.PI / 6, sphere: Math.PI / 6, arch, tunnel: arch, ring: 2 * Math.PI * Math.PI * 0.4 * 0.1 * 0.5 };
+    // An octagon fitted to the cell has apothem one half; a hexagon fitted to it is three quarters of the cell.
+    const octagon = 8 * 0.25 * Math.tan(Math.PI / 8);
+    const volumes = { box: 1, wedge: 0.5, pyramid: 1 / 3, prism: 0.5, cylinder: Math.PI / 4, tube: Math.PI / 4 * (1 - 0.49), cone: Math.PI / 12, dome: Math.PI / 6, sphere: Math.PI / 6, arch, tunnel: arch, ring: 2 * Math.PI * Math.PI * 0.4 * 0.1 * 0.5,
+        hull: (octagon + octagon * 0.64 + octagon * 0.8) / 3, spike: 0.75 / 3, capsule: Math.PI / 8 + 2 * (2 / 3 * Math.PI * 0.25 * 0.25), dish: 0.0886, fin: 0.7 };
     assert.deepEqual(Object.keys(volumes).sort(), [...R.SHAPE_KINDS].sort(), 'every shape kind has a known volume');
     for (const kind of R.SHAPE_KINDS) {
         const out = { positions: [], uvs: [], colors: [] };
@@ -760,6 +763,15 @@ test('the round pieces: a shape has a size and a turn, blocks its round footprin
         }
         assert.ok(Math.abs(volume - volumes[kind]) / volumes[kind] < 0.05, `${kind}: volume ${volume.toFixed(4)} is the solid's ${volumes[kind].toFixed(4)}`);
     }
+    // A hull's settings: four sides and no taper is a box; a spike with sides is a tapered prism; a plain shape carries none.
+    const square = R.normalizePiece({ kind: 'hull', x: 1, y: 1, size: [1, 1, 1], sides: 4, taper: 1 }, map);
+    assert.deepEqual([square.sides, square.taper], [4, 1]);
+    const boxy = { positions: [], uvs: [], colors: [] };
+    R.emitPiece(square, 0, boxy, null);
+    assert.equal(boxy.positions.length / 9, 8 + 4 + 4, 'four sides: four quads and two caps of four triangles');
+    boxy.positions.forEach((v, i) => { if (i % 3 !== 1) assert.ok(v >= 1 - 1e-9 && v <= 2 + 1e-9, 'a four-sided hull fills its cell exactly, like a box'); });
+    assert.deepEqual({ ...R.shapeParams({ kind: 'hull' }) }, { sides: 8, taper: 0.8 }, 'a hull wears eight sides and a slight taper until told otherwise');
+    assert.equal('sides' in R.normalizePiece({ kind: 'box', x: 1, y: 1, sides: 9 }, map), false, 'a box has no sides setting');
     // Hollow shapes block only their walls: a tube's middle, an arch's opening, are walked into.
     const tube = R.normalizePiece({ kind: 'tube', x: 10, y: 10, size: [6, 5, 6] }, map);
     const tubeCells = R.pieceFootprint(tube).map(c => c.join(','));
@@ -788,5 +800,5 @@ test('the round pieces: a shape has a size and a turn, blocks its round footprin
     // The palette lists the kinds with their own icons and names in every locale.
     const palette = read('editor/src/PieceBuilderManager.js');
     for (const kind of ['dome', 'cylinder', 'cone']) assert.match(palette, new RegExp(`\\b${kind}: '`), kind + ' has an icon');
-    assert.match(read('editor/src/utils/MapElevation.js'), /'box', 'wedge', 'pyramid', 'prism', 'cylinder', 'tube', 'cone', 'dome', 'sphere', 'arch', 'tunnel', 'ring'\]/, 'the editor keeps the same kinds');
+    assert.match(read('editor/src/utils/MapElevation.js'), /'box', 'wedge', 'pyramid', 'prism', 'hull', 'spike', 'cylinder', 'capsule', 'tube', 'cone', 'dome', 'sphere', 'dish', 'fin', 'arch', 'tunnel', 'ring'\]/, 'the editor keeps the same kinds');
 });
