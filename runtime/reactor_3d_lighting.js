@@ -666,7 +666,10 @@ Reactor3D.injectCutaway = function(material, shader) {
             "\t\t}",
             "\t}",
             "}",
-            "#include <map_fragment>"
+            "#include <map_fragment>",
+            // Looking into a sliced piece meets its inside faces (drawn while a
+            // cut is on): shown flat and dark, they read as the cut's own face.
+            material.__reactorPieces ? "if (!gl_FrontFacing) diffuseColor.rgb *= 0.45;" : ""
         ].join("\n\t")
     );
 };
@@ -690,11 +693,16 @@ Reactor3D.pieceCoverAt = function(mapData, wx, wz, near) {
     // A hair past the outer faces: a face on the box's own edge interpolates
     // a whisker outside it and escaped the cut (the whole upper west wall,
     // seen from the west, dithered into a mess).
-    const m = this.CUTAWAY_MARGIN;
-    return box ? { x0: box.x0 - m, y0: box.y0 - m, x1: box.x1 + 1 + m, y1: box.y1 + 1 + m }
-        : { x0: x - this.CUTAWAY_REACH, y0: y - this.CUTAWAY_REACH, x1: x + this.CUTAWAY_REACH + 1, y1: y + this.CUTAWAY_REACH + 1 };
+    // The building's own box and a stretch of map around the player, whichever
+    // reaches further each way: pieces laid by hand beside a building, or the
+    // next building over, stood uncut in the picture otherwise.
+    const m = this.CUTAWAY_MARGIN, r = this.CUTAWAY_REACH;
+    const reach = { x0: x - r, y0: y - r, x1: x + r + 1, y1: y + r + 1 };
+    return box ? { x0: Math.min(box.x0 - m, reach.x0), y0: Math.min(box.y0 - m, reach.y0), x1: Math.max(box.x1 + 1 + m, reach.x1), y1: Math.max(box.y1 + 1 + m, reach.y1) } : reach;
 };
 Reactor3D.CUTAWAY_MARGIN = 0.05;
+/** How far under the storey's top the cut plane sits: under a doorway's header. */
+Reactor3D.CUTAWAY_DROP = 0.65;
 /** How far, in tiles, the top cut reaches around a player under hand-laid pieces. */
 Reactor3D.CUTAWAY_REACH = 24;
 
@@ -719,7 +727,8 @@ Reactor3D.MapScene.prototype.updateCutaway = function(camera, mapData, character
     const ground = Reactor3D.characterGround(mapData, character);
     const covered = Reactor3D.pieceCoverAt(mapData, x, z, ground);
     const eye = camera.getWorldPosition(Reactor3D._cutEye || (Reactor3D._cutEye = new THREE.Vector3()));
-    const cutTop = covered ? Math.floor(ground + 1e-6) + Reactor3D.PIECE_STOREY - 0.5 : 1e9;
+    // Below a doorway's header (the top 0.6 of the storey), which a cut through it left as a floating sliver.
+    const cutTop = covered ? Math.floor(ground + 1e-6) + Reactor3D.PIECE_STOREY - Reactor3D.CUTAWAY_DROP : 1e9;
     shared.rrCutTop.value = eye.y > cutTop ? cutTop : 1e9;
     if (covered) { shared.rrCutBox.value[0] = covered.x0; shared.rrCutBox.value[1] = covered.y0; shared.rrCutBox.value[2] = covered.x1; shared.rrCutBox.value[3] = covered.y1; }
     const cutState = shared.rrCutTop.value === 1e9 ? "none" : shared.rrCutTop.value + ":" + shared.rrCutBox.value.join(",");

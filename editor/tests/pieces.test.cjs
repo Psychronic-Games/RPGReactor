@@ -280,8 +280,9 @@ test('building happens in the world: the hammer in the toolbar opens a bar over 
     assert.match(barSource, /static EXTRA = \['shape', 'screen', 'light', 'hammer', 'blueprint'\]/);
     assert.match(barSource, /if \(\/\^\[0-9\]\$\/\.test\(event\.key\)\)/, 'number keys pick slots');
     const managerSrc = read('editor/src/PieceBuilderManager.js');
-    assert.match(managerSrc, /mode !== 'screen' && mode !== 'light'/, 'screens and lights are modes of the one tool');
-    assert.match(managerSrc, /placeEffectAt\(target\) \{/);
+    assert.doesNotMatch(managerSrc, /placeEffectAt/, 'the builder places no screens or lights of its own');
+    assert.match(barSource, /else if \(slot === 'screen'\) \{ window\.reactor\?\.mediaSurfaceManager\?\.open\?\.\(\); return; \}/, 'the Screen slot opens the Media Surfaces panel');
+    assert.match(barSource, /else if \(slot === 'light'\) \{ window\.reactor\?\.lightingManager\?\.setActive\?\.\(true\); return; \}/, 'the Light slot opens the Lighting panel');
     assert.match(managerSrc, /if \(!stack\.length\) return this\.removeEffectAt\(map, target\);/, 'the hammer takes screens and lights too');
     // Select: a placed piece is picked up, edited in place, moved, turned and removed; a stair run climbs; a ramp is a sized wedge.
     const ctx2 = { console, window: {}, document: { addEventListener() {}, removeEventListener() {}, dispatchEvent() {} }, CustomEvent: class { constructor(t, i) { this.type = t; this.detail = i && i.detail; } } };
@@ -364,7 +365,6 @@ test('building happens in the world: the hammer in the toolbar opens a bar over 
     assert.match(viewSource, /if \(event\?\.detail\?\.pieces && this\.updatePiecesInPlace\(event\.detail\.region \|\| null\)\) return;/, 'a piece edit never rebuilds the scene');
     assert.match(viewSource, /loadMaterial: name => materials\[name\] \|\| null/);
     assert.match(viewSource, /return \{ x, y, z: Math\.min\(max, z\), side: sideName, faceCell, height: Math\.max\(0, rel\), top \};/, 'a target knows the face it points at');
-    assert.match(viewSource, /mode === 'screen' \|\| this\.pieceManager\(\)\.mode === 'light'\)\) \{[\s\S]{0,300}placeEffectAt\(target\)/, 'a click places a screen or a light');
     const i18n = read('editor/src/I18nManager.js');
     for (const key of ['pieces.hint', 'pieces.piece', 'pieces.kind.wall', 'pieces.kind.block', 'pieces.kind.fence', 'pieces.material', 'pieces.plain', 'pieces.materialsHint', 'pieces.turn', 'pieces.level', 'pieces.place', 'pieces.erase', 'pieces.undo', 'pieces.redo', 'pieces.clear', 'pieces.keys', 'pieces.needs3D', 'pieces.count']) {
         assert.equal((i18n.match(new RegExp('"' + key.replace(/\./g, '\\.') + '": "', 'g')) || []).length, 18, key + ' in 18 locales');
@@ -621,7 +621,9 @@ test('inside a building the roof and the wall in the camera\'s way are cut aroun
     assert.match(runtime, /if \(rrOff2 < rrCutRadius \* 0\.6 && rrLineY - rrCutRadius < rrCutFocus\.y \+ 3\.5\) discard;/, 'a wall in the way is cut to knee height along the corridor to the camera');
     assert.match(runtime, /material\.__reactorPieces \? "\\t\\tif \(false\) \{"/, 'pieces never dither');
     { const run = R.pieceShapes('stair', { kind: 'stair', z: 3 }); assert.equal(run.length, 5); assert.deepEqual(run[4].box, [0, -3, 0, 1, 0, 1], 'a stair above the ground stands on a solid down to it'); assert.equal(R.pieceShapes('stair', { kind: 'stair', z: 0 }).length, 4); }
-    { const map = mapWith([{ id: 1, kind: 'wall', x: 4, y: 4, z: 0, rot: 0, material: '', group: 3 }, { id: 2, kind: 'floor', x: 4, y: 4, z: 5, rot: 0, material: '', group: 3 }]); const cover = R.pieceCoverAt(map, 4.5, 4.5, 0); assert.deepEqual(cover, { x0: 4 - R.CUTAWAY_MARGIN, y0: 4 - R.CUTAWAY_MARGIN, x1: 5 + R.CUTAWAY_MARGIN, y1: 5 + R.CUTAWAY_MARGIN }, 'the cut box reaches a hair past the outer faces'); }
+    { const map = mapWith([{ id: 1, kind: 'wall', x: 4, y: 4, z: 0, rot: 0, material: '', group: 3 }, { id: 2, kind: 'floor', x: 4, y: 4, z: 5, rot: 0, material: '', group: 3 }]); const cover = R.pieceCoverAt(map, 4.5, 4.5, 0); assert.ok(cover.x0 <= 4 - R.CUTAWAY_MARGIN && cover.x1 >= 5 + R.CUTAWAY_MARGIN && cover.x0 <= 4 - R.CUTAWAY_REACH, 'the cut box reaches a hair past the outer faces and the stretch around the player'); }
+    assert.match(runtime, /if \(!gl_FrontFacing\) diffuseColor\.rgb \*= 0\.45;/, 'the inside of a sliced piece is a flat dark cross-section');
+    assert.ok(R.CUTAWAY_DROP > 0.6 && R.CUTAWAY_DROP < 1, 'the cut plane sits under a doorway header');
     assert.match(runtime, /this\.setPieceSides\(cutState === "none" \? THREE\.FrontSide : THREE\.DoubleSide\);/, 'piece materials are two-sided while a cut is on, so a sliced wall reads as solid');
     assert.match(runtime, /if \(vRRCutPos\.y > rrCutTop && vRRCutPos\.x >= rrCutBox\.x[^\n]*discard;\\n\\t#include <alphatest_fragment>/, 'the shadow pass takes the storey cut too: a cut roof casts no shadow into the room');
     assert.match(runtime, /if \(cutState !== this\._cutState\) \{\n\s*this\._cutState = cutState;\n\s*if \(Reactor3D\.Shadows && Reactor3D\.Shadows\.invalidate\) Reactor3D\.Shadows\.invalidate\(\);/, 'the static shadows are drawn again when the cut changes');
@@ -657,12 +659,12 @@ test('inside a building the roof and the wall in the camera\'s way are cut aroun
     assert.equal(R.pieceCoverAt(house, 6.5, 6.5, 0), null, 'open ground');
     assert.deepEqual({ ...R.pieceCoverAt(house, 2.5, 2.5, 0.1) }, { x0: 2 - R.CUTAWAY_REACH, y0: 2 - R.CUTAWAY_REACH, x1: 3 + R.CUTAWAY_REACH, y1: 3 + R.CUTAWAY_REACH }, 'hand-laid: a stretch around the cell');
     const grouped = mapWith([{ id: 1, kind: 'floor', x: 4, y: 4, z: 5, rot: 0, material: '', group: 7 }, { id: 2, kind: 'wall', x: 6, y: 7, z: 0, rot: 0, material: '', group: 7 }]);
-    { const m = R.CUTAWAY_MARGIN; assert.deepEqual({ ...R.pieceCoverAt(grouped, 4.5, 4.5, 0) }, { x0: 4 - m, y0: 4 - m, x1: 7 + m, y1: 8 + m }, 'stamped: the building\'s own footprint, a hair past its outer faces'); }
+    { const m = R.CUTAWAY_MARGIN, r = R.CUTAWAY_REACH; assert.deepEqual({ ...R.pieceCoverAt(grouped, 4.5, 4.5, 0) }, { x0: Math.min(4 - m, 4 - r), y0: Math.min(4 - m, 4 - r), x1: Math.max(7 + m, 4 + r + 1), y1: Math.max(8 + m, 4 + r + 1) }, 'stamped: the building\'s own footprint a hair past its outer faces, or the stretch around the player, whichever reaches further'); }
     const scene = Object.create(R.MapScene.prototype);
     const camera = new THREE.PerspectiveCamera(); camera.position.set(10, 8, 12); camera.updateMatrixWorld();
     const shared = R.cutawayUniforms();
     scene.updateCutaway(camera, house, { _realX: 2, _realY: 2 });
-    assert.ok(Math.abs(shared.rrCutTop.value - 4.5) < 1e-9, 'downstairs: cut half a tile under the upper floor');
+    assert.ok(Math.abs(shared.rrCutTop.value - (R.PIECE_STOREY - R.CUTAWAY_DROP)) < 1e-9, 'downstairs: cut under the upper floor and under the door headers');
     // A camera under that ceiling (first person, a low orbit) keeps it:
     // cutting it from there shows the sky through the room.
     camera.position.set(3, 2.5, 4); camera.updateMatrixWorld();
@@ -671,14 +673,14 @@ test('inside a building the roof and the wall in the camera\'s way are cut aroun
     assert.equal(shared.rrCutRadius.value, R.CUTAWAY_RADIUS, 'the wall in its way still thins');
     camera.position.set(10, 8, 12); camera.updateMatrixWorld();
     scene.updateCutaway(camera, house, { _realX: 2, _realY: 2 });
-    assert.ok(Math.abs(shared.rrCutTop.value - 4.5) < 1e-9, 'and from above, the cut returns');
+    assert.ok(Math.abs(shared.rrCutTop.value - (R.PIECE_STOREY - R.CUTAWAY_DROP)) < 1e-9, 'and from above, the cut returns');
     assert.deepEqual(shared.rrCutBox.value, [2 - R.CUTAWAY_REACH, 2 - R.CUTAWAY_REACH, 3 + R.CUTAWAY_REACH, 3 + R.CUTAWAY_REACH]);
     assert.deepEqual(shared.rrCutEye.value, [10, 8, 12]);
     assert.ok(Math.abs(shared.rrCutFocus.value[1] - 1.6) < 1e-9, 'the sight line ends at chest height');
     assert.equal(shared.rrCutRadius.value, R.CUTAWAY_RADIUS);
     camera.position.set(10, 12, 12); camera.updateMatrixWorld();
     scene.updateCutaway(camera, house, { _realX: 2, _realY: 2, _reactorGround: 5.1 });
-    assert.ok(Math.abs(shared.rrCutTop.value - 9.5) < 1e-9, 'upstairs, seen from above the roof: the roof goes, the storey stays');
+    assert.ok(Math.abs(shared.rrCutTop.value - (2 * R.PIECE_STOREY - R.CUTAWAY_DROP)) < 1e-9, 'upstairs, seen from above the roof: the roof goes, the storey stays');
     scene.updateCutaway(camera, house, { _realX: 6, _realY: 6 });
     assert.equal(shared.rrCutTop.value, 1e9, 'outside: nothing overhead is cut');
     assert.equal(shared.rrCutRadius.value, R.CUTAWAY_RADIUS, 'but a wall in the way still opens');

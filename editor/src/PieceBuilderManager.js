@@ -25,11 +25,9 @@ class PieceBuilderManager {
         this._stroke = null;
         this._onKeyDown = event => this.handleKey(event);
         this._materialsCache = null;
-        // What the next shape, screen or light is made of.
+        // The next shape's scale and kind.
         this.shapeScale = 1;
         this.lastShape = 'cylinder';
-        this.screenMedia = '';
-        this.lightColour = '#9fd8ff';
         // Sizes chosen in the specs panel, per kind; a stair run's length; the selected piece and its handle mode.
         this.sizes = {};
         this.stairSteps = 1;
@@ -222,46 +220,11 @@ class PieceBuilderManager {
     /** The way a piece's own +v points for its turn: the direction a stair climbs, a ramp rises. */
     static stepOf(rot) { return [[0, 1], [-1, 0], [0, -1], [1, 0]][((rot % 4) + 4) % 4]; }
 
-    /** The movies and pictures a screen can show. */
-    mediaChoices() {
-        const projectPath = this.projectPath();
-        if (!projectPath || typeof require !== 'function') return [];
-        try {
-            const fs = require('fs'), path = require('path');
-            const list = dir => { try { return fs.readdirSync(path.join(projectPath, ...dir)).filter(f => !f.startsWith('.')); } catch (error) { return []; } };
-            const media = list(['movies']).filter(f => /\.(webm|mp4|ogv|m4v)$/i.test(f)).concat(list(['img', 'pictures']).filter(f => /\.(png|jpe?g|gif|webp)$/i.test(f))).sort();
-            if (!this.screenMedia && media.length) this.screenMedia = media.find(f => /starfield/i.test(f)) || media[0];
-            return media;
-        } catch (error) { return []; }
-    }
-
     /** A shape's size for the next placement: its kind's own, scaled. */
     shapeSizeFor(kind) {
         const E = typeof DatabaseStructureEditor !== 'undefined' ? DatabaseStructureEditor : null;
         const base = (E && E.SHAPE_DEFAULTS && E.SHAPE_DEFAULTS[kind]) || [2, 2, 2];
         return base.map(v => Math.max(0.25, Math.round(v * this.shapeScale * 4) / 4));
-    }
-
-    /**
-     * A screen on the wall face pointed at, or a light over the cell: written
-     * straight onto the map, no plan, undone with the pieces.
-     */
-    placeEffectAt(target) {
-        const map = this.currentMap(), SP = typeof RRStructurePlan !== 'undefined' ? RRStructurePlan : null;
-        if (!map || !SP || !target) return false;
-        let fx = null;
-        if (this.mode === 'screen') {
-            if (!target.side || !target.faceCell) { this._flash('build.screenNeedsWall'); return false; }
-            const size = this.screenSize || [4, 2.25];
-            fx = { type: 'screen', name: 'screen', at: [target.faceCell.x, target.faceCell.y], facing: target.side, width: size[0], height: size[1], z: Math.max(0, Math.round((target.height - size[1] / 2) * 4) / 4), media: this.screenMedia || '' };
-        } else if (this.mode === 'light') {
-            fx = { type: 'light', name: 'light', at: [target.x, target.y], z: Math.round((target.side ? target.height : target.height + 2.5) * 4) / 4, color: this.lightColour, radius: this.lightRadius || 8, intensity: Number.isFinite(this.lightIntensity) ? this.lightIntensity : 1.2 };
-        }
-        if (!fx) return false;
-        this.undoStack.push(this._snapshot(map)); if (this.undoStack.length > 50) this.undoStack.shift(); this.redoStack.length = 0;
-        SP.addEffects(map, [fx], null);
-        this._effectsChanged();
-        return true;
     }
 
     /** The nearest screen or light within a tile of the cell, taken off the map. */
@@ -802,7 +765,7 @@ class PieceBuilderManager {
 
     setKind(kind) { if (this.kinds().includes(kind)) { this.kind = kind; this.mode = 'place'; this._syncPanel(); this._ghostChanged(); } }
     setMode(mode) {
-        if (mode !== 'place' && mode !== 'erase' && mode !== 'stamp' && mode !== 'move' && mode !== 'screen' && mode !== 'light' && mode !== 'select') return;
+        if (mode !== 'place' && mode !== 'erase' && mode !== 'stamp' && mode !== 'move' && mode !== 'select') return;
         if (mode !== 'select') { this.selected = 0; this.selectedIds = []; }
         if (mode === 'stamp' && !this.structurePlan()) mode = 'place';
         if (mode !== 'move') this.selectedGroup = 0;

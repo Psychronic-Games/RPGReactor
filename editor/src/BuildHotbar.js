@@ -28,7 +28,6 @@ class BuildHotbar {
     static PIECES = ['floor', 'wall', 'doorway', 'window', 'glass', 'stair', 'ramp', 'roof', 'pillar', 'fence', 'block'];
     static EXTRA = ['shape', 'screen', 'light', 'hammer', 'blueprint'];
     static SLOTS = ['select'].concat(BuildHotbar.PIECES, BuildHotbar.EXTRA);
-    static LIGHT_COLOURS = ['#ffffff', '#fff3d2', '#9fd8ff', '#ffb787', '#ff6b5a', '#7dff9a', '#c48bff', '#ffe36e'];
     /** The kinds whose facing matters: they climb, slope, open or run one way. */
     static FACING = ['stair', 'ramp', 'doorway', 'window', 'fence', 'roof', 'glass'];
 
@@ -83,8 +82,6 @@ class BuildHotbar {
         if (manager.mode === 'select') return 'select';
         if (manager.mode === 'erase') return 'hammer';
         if (manager.mode === 'stamp' || manager.mode === 'move') return 'blueprint';
-        if (manager.mode === 'screen') return 'screen';
-        if (manager.mode === 'light') return 'light';
         if (manager.kind === 'wedge') return 'ramp';
         return BuildHotbar.PIECES.includes(manager.kind) ? manager.kind : 'shape';
     }
@@ -97,8 +94,9 @@ class BuildHotbar {
         else if (slot === 'ramp') manager.setKind('wedge');
         else if (BuildHotbar.PIECES.includes(slot)) manager.setKind(slot);
         else if (slot === 'hammer') manager.setMode('erase');
-        else if (slot === 'screen') manager.setMode('screen');
-        else if (slot === 'light') manager.setMode('light');
+        // Screens and lights have their own editors: the slot opens the one for the map.
+        else if (slot === 'screen') { window.reactor?.mediaSurfaceManager?.open?.(); return; }
+        else if (slot === 'light') { window.reactor?.lightingManager?.setActive?.(true); return; }
         else if (slot === 'shape') { const kinds = this.shapeKinds(); if (!kinds.includes(manager.kind) || manager.kind === 'wedge') manager.setKind(manager.lastShape || 'cylinder'); else manager.setMode('place'); }
         else if (slot === 'blueprint') { const plans = manager.structures(true); if (plans.length) { if (!manager.structure) manager.structure = plans[0].file; manager.setMode('stamp'); } }
         this.render();
@@ -152,7 +150,7 @@ class BuildHotbar {
         const piece = manager.mode === 'select' ? manager.selectedPiece() : null;
         if (piece) return { piece, kind: piece.kind, shape: manager.isShape(piece.kind), placed: true };
         const active = this.activeSlot();
-        if (active === 'select' || active === 'hammer' || active === 'screen' || active === 'light' || active === 'blueprint') return { kind: active, placed: false };
+        if (active === 'select' || active === 'hammer' || active === 'blueprint') return { kind: active, placed: false };
         return { kind: manager.kind, shape: manager.isShape(manager.kind), placed: false };
     }
 
@@ -177,18 +175,6 @@ class BuildHotbar {
         } else if (s.kind === 'hammer') {
             head = this._t('build.hammer');
             body = `<div class="rr-build-note rr-build-wrap">${this._t('build.hammerHint')}</div>`;
-        } else if (s.kind === 'screen') {
-            const media = manager.mediaChoices();
-            head = this._t('build.screen');
-            body = section(this._t('build.shows'), media.length
-                ? `<select class="database-field-value rr-build-media">${media.map(name => `<option value="${name}" ${manager.screenMedia === name ? 'selected' : ''}>${name}</option>`).join('')}</select>`
-                : `<div class="rr-build-note rr-build-wrap">${this._t('build.noMedia')}</div>`)
-                + section(tt('Size'), num('rr-build-fx', tt('Width'), manager.screenSize?.[0] ?? 4, 0.5, 40, 0.25, 'w') + num('rr-build-fx', tt('Height'), manager.screenSize?.[1] ?? 2.25, 0.5, 40, 0.25, 'h'))
-                + `<div class="rr-build-note rr-build-wrap">${this._t('build.screenNeedsWall')}</div>`;
-        } else if (s.kind === 'light') {
-            head = this._t('build.light');
-            body = section(this._t('build.colour'), `<div class="rr-build-swatches">${BuildHotbar.LIGHT_COLOURS.map(c => `<button type="button" class="rr-build-swatch rr-build-colour" data-colour="${c}" aria-pressed="${manager.lightColour === c}" style="background:${c};" title="${c}"></button>`).join('')}</div>`)
-                + section(tt('Light'), num('rr-build-fx', tt('Radius'), manager.lightRadius ?? 8, 1, 60, 1, 'radius') + num('rr-build-fx', tt('Strength'), manager.lightIntensity ?? 1.2, 0, 4, 0.1, 'intensity'));
         } else if (s.kind === 'blueprint') {
             const plans = manager.structures(true);
             head = this._t('build.blueprint');
@@ -256,15 +242,6 @@ class BuildHotbar {
         panel.querySelector('.rr-build-steps')?.addEventListener('change', event => { manager.stairSteps = Math.max(1, Math.min(60, Math.round(Number(event.target.value)) || 1)); this.renderPanel(); });
         panel.querySelectorAll('.rr-build-mode').forEach(el => el.addEventListener('click', () => { manager.gizmoMode = el.dataset.mode; manager._ghostChanged(); this.renderPanel(); }));
         panel.querySelector('.rr-build-remove')?.addEventListener('click', () => { manager.removeSelection(); this.renderPanel(); });
-        panel.querySelector('.rr-build-media')?.addEventListener('change', event => { manager.screenMedia = event.target.value; });
-        panel.querySelectorAll('.rr-build-fx').forEach(el => el.addEventListener('change', () => {
-            const v = Number(el.value); if (!Number.isFinite(v)) { this.renderPanel(); return; }
-            const key = el.dataset.key;
-            if (key === 'w' || key === 'h') { manager.screenSize = manager.screenSize || [4, 2.25]; manager.screenSize[key === 'w' ? 0 : 1] = Math.max(0.5, Math.round(v * 4) / 4); }
-            else if (key === 'radius') manager.lightRadius = Math.max(1, Math.round(v)); else manager.lightIntensity = Math.max(0, Math.round(v * 10) / 10);
-            manager._ghostChanged();
-        }));
-        panel.querySelectorAll('.rr-build-colour').forEach(el => el.addEventListener('click', () => { manager.lightColour = el.dataset.colour; this.renderPanel(); }));
         panel.querySelector('.rr-build-plan')?.addEventListener('change', event => { manager.structure = event.target.value; manager.setMode('stamp'); });
     }
 

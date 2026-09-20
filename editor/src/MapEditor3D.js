@@ -1891,8 +1891,7 @@ class MapEditor3D {
         const bounds = manager.mode === 'move' ? manager.selectedGroupBounds() : null;
         const stamp = manager.mode === 'stamp' ? manager.structurePlan() : bounds ? { size: [bounds.x1 - bounds.x0 + 1, bounds.y1 - bounds.y0 + 1] } : null;
         if (manager.mode === 'move' && !bounds) { this.hidePieceGhost(); return; }
-        const effect = manager.mode === 'screen' || manager.mode === 'light' ? manager.mode : null;
-        const key = stamp ? (bounds ? 'move:' + manager.selectedGroup : 'stamp:' + manager.structure) : effect ? effect + ':' + (target.side || 'top') + ':' + JSON.stringify(manager.screenSize || null) : (erase ? 'erase' : manager.kind) + ':' + manager.rot + ':' + JSON.stringify([manager.sizeFor ? manager.sizeFor(manager.kind) : null, manager.params && manager.params[manager.kind]]);
+        const key = stamp ? (bounds ? 'move:' + manager.selectedGroup : 'stamp:' + manager.structure) : (erase ? 'erase' : manager.kind) + ':' + manager.rot + ':' + JSON.stringify([manager.sizeFor ? manager.sizeFor(manager.kind) : null, manager.params && manager.params[manager.kind]]);
         if (!this.pieceGhost || this.pieceGhost.userData.key !== key) {
             this.hidePieceGhost(true);
             // A plan's ghost is the building itself, translucent; a selected
@@ -1901,10 +1900,8 @@ class MapEditor3D {
             const geometry = silhouette
                 || (stamp
                     ? new THREE.BoxGeometry(stamp.size[0], 0.3, stamp.size[1]).translate(stamp.size[0] / 2, 0.15, stamp.size[1] / 2)
-                    : effect === 'screen' ? new THREE.PlaneGeometry((manager.screenSize || [4, 2.25])[0], (manager.screenSize || [4, 2.25])[1]).translate(0, (manager.screenSize || [4, 2.25])[1] / 2, 0)
-                    : effect === 'light' ? new THREE.SphereGeometry(0.3, 12, 8)
                     : Reactor3D.pieceGeometry([Object.assign({ id: 0, material: '' }, erase ? { kind: 'block', x: 0, y: 0, z: 0, rot: 0 } : manager.pieceFor({ x: 0, y: 0, z: 0 }))], null));
-            const material = new THREE.MeshBasicMaterial({ color: erase ? 0xff6b6b : bounds ? 0x7dff9a : stamp ? 0xffd166 : effect === 'light' ? 0xffe36e : 0x7fd8ff, transparent: true, opacity: erase ? 0.35 : 0.5, depthWrite: false });
+            const material = new THREE.MeshBasicMaterial({ color: erase ? 0xff6b6b : bounds ? 0x7dff9a : stamp ? 0xffd166 : 0x7fd8ff, transparent: true, opacity: erase ? 0.35 : 0.5, depthWrite: false });
             this.pieceGhost = new THREE.Mesh(geometry, material);
             this.pieceGhost.renderOrder = 998;
             this.pieceGhost.userData.key = key;
@@ -1914,18 +1911,6 @@ class MapEditor3D {
         if (stamp) {
             const x = Math.max(0, Math.min(mapData.width - stamp.size[0], target.x)), y = Math.max(0, Math.min(mapData.height - stamp.size[1], target.y));
             this.pieceGhost.position.set(x, base, y);
-        } else if (effect === 'screen') {
-            // On the face pointed at, looking away from it; off a wall it waits at the cell.
-            const dirs = { north: [0, -1, Math.PI], south: [0, 1, 0], east: [1, 0, Math.PI / 2], west: [-1, 0, -Math.PI / 2] };
-            const [dx, dy, yaw] = dirs[target.side] || [0, 1, 0];
-            const cell = target.faceCell || target;
-            this.pieceGhost.position.set(cell.x + 0.5 + dx * 0.52, base + Math.max(0, (target.height || 0) - (manager.screenSize || [4, 2.25])[1] / 2), cell.y + 0.5 + dy * 0.52);
-            this.pieceGhost.rotation.set(0, yaw, 0);
-            this.pieceGhost.visible = !!target.side;
-            this._lastGhostTarget = target; this._lastActiveAt = performance.now();
-            return;
-        } else if (effect === 'light') {
-            this.pieceGhost.position.set(target.x + 0.5, base + (target.side ? target.height : (target.height || 0) + 2.5), target.y + 0.5);
         } else this.pieceGhost.position.set(target.x, base + target.z, target.y);
         this.pieceGhost.visible = true;
         this._lastGhostTarget = target;
@@ -3435,11 +3420,6 @@ class MapEditor3D {
                             if (ground) this.pointer.band = { start: ground, end: ground, planeY, started: false };
                         }
                     }
-                } else if (target && (this.pieceManager().mode === 'screen' || this.pieceManager().mode === 'light')) {
-                    // A screen on the wall face pointed at, a light over the cell: one per click.
-                    this.pointer.pan = false;
-                    this.pointer.propHold = true;
-                    this.pieceManager().placeEffectAt(target);
                 } else if (target) {
                     this.pointer.pieces = true;
                     this.pointer.pan = false;
