@@ -17,9 +17,9 @@ project; a person can use it to find where anything lives.
 | Tile elevation (terraces, cliffs) | `MapNNN.r3d.json` › `elevation` (one whole number per tile) | Map Properties, height brush | — |
 | Terrain (rolling ground) | `MapNNN.r3d.json` › `terrain` ((w+1)×(h+1) corner heights), `terrainWidth` | **3D-T** tab brushes | `editor/tests/terrain.test.cjs` rules |
 | Room (floor, walls, ceiling, sky) | `MapNNN.r3d.json` › `room` | Map Properties › 3D | — |
-| Pieces (the 3D tileset) | `MapNNN.r3d.json` › `pieces` | **3D-B** tab; drawn as a plan on the flat map too | `validate-map.cjs` |
-| Buildings from a plan | `3d/Structures/*.json` (project-wide), placed as `MapNNN.r3d.json` › `structures` | Database › Structures (the form), 3D-B › Structure › Stamp / Move | `build-structure.cjs --check`, and the page's own walk |
-| Materials | `img/materials/*.png` (tileable) | swatches in 3D-B | — |
+| Pieces (the 3D tileset) | `MapNNN.r3d.json` › `pieces` | **Build** bar over the 3D view (the Build button in the toolbar); drawn as a plan on the flat map too | `validate-map.cjs` |
+| Buildings from a plan | `3d/Structures/*.json` (project-wide), placed as `MapNNN.r3d.json` › `structures` | Database › Structures (a card per plan), Build bar › Blueprint stamps one | `build-structure.cjs --check`, and the page's own walk |
+| Materials | `img/materials/*.png` (tileable) | swatches in the Build bar's specs panel | — |
 | Water | `MapNNN.r3d.json` › `water` (a hollow's box, its `level`, a `mask` of the wet cells) | **3D-T** › Pour | `validate-map.cjs` |
 | Placed models | `MapNNN.r3d.json` › `props` | **3D-M** tab | — |
 | Lights | `MapNNN.r3d.json` › `lights`, `lighting` | Lighting tool | — |
@@ -233,9 +233,10 @@ inside a building, rooms that cannot be walked to, uneven ground under a
 building, and the piece, triangle, model and light counts. A room reported `MISS` means the plan has a door
 into a wall or a stair that lands nowhere; fix the plan, not the pieces.
 
-In the editor the same plan is in the 3D-B tab's Structure list; Stamp
-puts it where you click, Move picks a whole building up (click a wall),
-R turns it, `[` `]` scale it. A building keeps its plan in
+In the editor the same plan is a card on Database › Structures and a
+choice in the Build bar's Blueprint slot, which stamps it where you click;
+Select picks pieces up again, and a box dragged round a building selects
+all of it to move or turn. A building keeps its plan in
 `structures: [{ group, plan, x, y, rot, scale }]`, and turning or scaling
 builds it again from the plan. **Editing a stamped building by hand
 detaches it from its plan**: the hand edit stays, the building still moves
