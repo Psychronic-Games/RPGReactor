@@ -111,6 +111,12 @@ test('the runtime stands on piece tops, climbs stairs, and blocks what is too ta
     assert.equal(R.groundHeightAt(stairs, 3.5, 3.5, 0), 0, 'from the ground, a stair two levels up is out of reach: the space under it is walked');
     assert.ok(Math.abs(R.groundHeightAt(stairs, 3.5, 6.5) - 5.1) < 1e-9);
     assert.equal(R.terrainBlocks(stairs, 2, 6, 3, 6), true, 'the platform is a storey up from the ground beside it');
+    // A stair is climbed along its run only: its sides are solid, and a raised step has no passage beneath it.
+    assert.equal(R.terrainBlocks(stairs, 2, 3, 3, 3, 0.1), true, 'onto a stair from its side: blocked (a camera-relative walk across a hall drifted up the stairs)');
+    assert.equal(R.terrainBlocks(stairs, 3, 3, 4, 3, 2.5), true, 'off a stair to its side: blocked');
+    assert.equal(R.terrainBlocks(stairs, 3, 4, 3, 3, 3.5), false, 'down the run: fine');
+    { const raised = mapWith([{ id: 1, kind: 'stair', x: 3, y: 3, z: 2, rot: 0, material: '' }]); assert.equal(R.terrainBlocks(raised, 3, 2, 3, 3, 0.1), true, 'under a raised step from the ground: its support is solid'); }
+    assert.deepEqual([...R.stairAxis(0)], [0, 1]); assert.deepEqual([...R.stairAxis(2)], [0, -1]); assert.deepEqual([...R.stairAxis(3)], [1, 0]);
     assert.ok(Math.abs(R.groundHeightAt(stairs, 6.5, 2.5) - 0.1) < 1e-9, 'a ramp roof five levels up is not walked on');
     // Two floors: a ground-floor slab, an upper floor a storey up, a roof over that. Where you stand decides.
     const house = mapWith([

@@ -113,16 +113,42 @@ Reactor3D.terrainBlocks = function(mapData, x, y, x2, y2, near) {
     // Water deeper than a wade is not walked into.
     if (this.waterDepthAt(mapData, x2 + 0.5, y2 + 0.5, edge) > this.WATER_WADE) return true;
     if (Math.abs(edge - from) > limit || Math.abs(to - edge) > limit) return true;
-    // A stair rises a whole tile across its cell, so two stairs in a row
-    // stand a tile apart at their middles and each half of the step is a
-    // half tile: built to be climbed, judged by its halves.
-    if (this.stairAt(mapData, x, y) || this.stairAt(mapData, x2, y2)) return false;
+    // A stair is climbed along its run and nothing else: its sides are as
+    // solid as a wall (crossing a hall in a camera-relative walk drifted
+    // onto the run from the side and up to the next floor), and a raised
+    // step stands on a solid down to the ground, not a passage beneath.
+    const stairHere = this.stairPieceAt(mapData, x, y), stairThere = this.stairPieceAt(mapData, x2, y2);
+    if (stairHere || stairThere) {
+        const dx = x2 - x, dy = y2 - y;
+        for (const stair of [stairHere, stairThere]) {
+            if (!stair) continue;
+            const axis = this.stairAxis(stair.rot);
+            if (dx * axis[0] + dy * axis[1] === 0) return true;
+        }
+        if (stairThere && to < this.pieceBaseAt(mapData, x2, y2) + stairThere.z - 1e-6) return true;
+        // A stair rises a whole tile across its cell, so two stairs in a row
+        // stand a tile apart at their middles and each half of the step is a
+        // half tile: built to be climbed, judged by its halves.
+        return false;
+    }
     return Math.abs(to - from) > limit;
 };
 
 Reactor3D.stairAt = function(mapData, x, y) {
+    return !!this.stairPieceAt(mapData, x, y);
+};
+
+/** The stair on a cell, or null. */
+Reactor3D.stairPieceAt = function(mapData, x, y) {
     const stack = this.piecesAt(mapData, x, y);
-    return !!stack && stack.some(piece => piece.kind === "stair");
+    if (!stack) return null;
+    for (const piece of stack) if (piece.kind === "stair" && !piece.standIn) return piece;
+    return null;
+};
+
+/** The way a stair climbs, in cells: rot 0 rises south, each turn is clockwise seen from above. */
+Reactor3D.stairAxis = function(rot) {
+    return [[0, 1], [-1, 0], [0, -1], [1, 0]][((rot % 4) + 4) % 4];
 };
 
 /**
