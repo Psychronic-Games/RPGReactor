@@ -128,14 +128,13 @@
         21,
         16
       ],
-      "z": 0.1,
       "size": [
         32,
         0.7,
         24
       ],
-      "material": "Steel",
-      "sweep": 230
+      "sweep": 230,
+      "material": "Steel"
     },
     {
       "kind": "box",
@@ -143,7 +142,6 @@
         21,
         26
       ],
-      "z": 0.1,
       "size": [
         32,
         0.7,
@@ -167,9 +165,9 @@
         0.12,
         17
       ],
-      "material": "StripGlow",
       "sweep": 230,
-      "thick": 0.04
+      "thick": 0.04,
+      "material": "StripGlow"
     },
     {
       "kind": "tube",
@@ -177,14 +175,13 @@
         21,
         16
       ],
-      "z": 0.1,
       "size": [
         32,
         0.35,
         24
       ],
-      "material": "Grate",
-      "sweep": 250
+      "sweep": 250,
+      "material": "Grate"
     },
     {
       "kind": "tube",
@@ -192,14 +189,13 @@
         21,
         16
       ],
-      "z": 0.1,
       "size": [
         32,
-        0.175,
+        0.18,
         24
       ],
-      "material": "Grate",
-      "sweep": 270
+      "sweep": 270,
+      "material": "Grate"
     },
     {
       "kind": "tube",
@@ -207,14 +203,14 @@
         21,
         16
       ],
-      "z": 0.8,
+      "z": 0.75,
       "size": [
         26,
-        1.0,
+        1,
         19.5
       ],
-      "material": "Panel",
-      "sweep": 60
+      "sweep": 60,
+      "material": "Panel"
     },
     {
       "kind": "tube",
@@ -222,14 +218,14 @@
         21,
         16
       ],
-      "z": 1.8,
+      "z": 1.75,
       "size": [
         26,
         0.35,
         19.5
       ],
-      "material": "ConsoleGlow",
-      "sweep": 60
+      "sweep": 60,
+      "material": "ConsoleGlow"
     },
     {
       "kind": "ring",
@@ -237,15 +233,15 @@
         21,
         16
       ],
-      "z": 1.7,
+      "z": 1.75,
       "size": [
         23.5,
         0.15,
         17.6
       ],
-      "material": "Steel",
       "sweep": 230,
-      "thick": 0.04
+      "thick": 0.04,
+      "material": "Steel"
     },
     {
       "kind": "box",
@@ -253,14 +249,14 @@
         10,
         23
       ],
-      "z": 0.8,
+      "z": 0.75,
       "size": [
         5,
-        1.0,
+        1,
         2.2
       ],
-      "material": "Panel",
-      "angle": 45
+      "angle": 45,
+      "material": "Panel"
     },
     {
       "kind": "wedge",
@@ -268,14 +264,14 @@
         10,
         23
       ],
-      "z": 1.8,
+      "z": 1.75,
       "size": [
         5,
         0.5,
-        2.0
+        2
       ],
-      "material": "ConsoleGlow",
-      "angle": 225
+      "angle": 225,
+      "material": "ConsoleGlow"
     },
     {
       "kind": "box",
@@ -283,14 +279,14 @@
         32,
         23
       ],
-      "z": 0.8,
+      "z": 0.75,
       "size": [
         5,
-        1.0,
+        1,
         2.2
       ],
-      "material": "Panel",
-      "angle": 315
+      "angle": 315,
+      "material": "Panel"
     },
     {
       "kind": "wedge",
@@ -298,14 +294,14 @@
         32,
         23
       ],
-      "z": 1.8,
+      "z": 1.75,
       "size": [
         5,
         0.5,
-        2.0
+        2
       ],
-      "material": "ConsoleGlow",
-      "angle": 495
+      "angle": 135,
+      "material": "ConsoleGlow"
     },
     {
       "kind": "box",
@@ -313,10 +309,10 @@
         7,
         9
       ],
-      "z": 0.8,
+      "z": 0.75,
       "size": [
         2.2,
-        1.0,
+        1,
         4.5
       ],
       "material": "Panel"
@@ -327,14 +323,14 @@
         7,
         9
       ],
-      "z": 1.8,
+      "z": 1.75,
       "size": [
         4.5,
         0.5,
-        2.0
+        2
       ],
-      "material": "ConsoleGlow",
-      "angle": 90
+      "angle": 90,
+      "material": "ConsoleGlow"
     },
     {
       "kind": "box",
@@ -342,10 +338,10 @@
         36,
         9
       ],
-      "z": 0.8,
+      "z": 0.75,
       "size": [
         2.2,
-        1.0,
+        1,
         4.5
       ],
       "material": "Panel"
@@ -356,14 +352,14 @@
         36,
         9
       ],
-      "z": 1.8,
+      "z": 1.75,
       "size": [
         4.5,
         0.5,
-        2.0
+        2
       ],
-      "material": "ConsoleGlow",
-      "angle": 270
+      "angle": 270,
+      "material": "ConsoleGlow"
     },
     {
       "kind": "box",
@@ -371,10 +367,10 @@
         7,
         20
       ],
-      "z": 0.8,
+      "z": 0.75,
       "size": [
         2.2,
-        1.0,
+        1,
         4.5
       ],
       "material": "Panel"
@@ -385,14 +381,14 @@
         7,
         20
       ],
-      "z": 1.8,
+      "z": 1.75,
       "size": [
         4.5,
         0.5,
-        2.0
+        2
       ],
-      "material": "ConsoleGlow",
-      "angle": 90
+      "angle": 90,
+      "material": "ConsoleGlow"
     },
     {
       "kind": "box",
@@ -400,10 +396,10 @@
         36,
         20
       ],
-      "z": 0.8,
+      "z": 0.75,
       "size": [
         2.2,
-        1.0,
+        1,
         4.5
       ],
       "material": "Panel"
@@ -414,14 +410,14 @@
         36,
         20
       ],
-      "z": 1.8,
+      "z": 1.75,
       "size": [
         4.5,
         0.5,
-        2.0
+        2
       ],
-      "material": "ConsoleGlow",
-      "angle": 270
+      "angle": 270,
+      "material": "ConsoleGlow"
     },
     {
       "kind": "box",
@@ -429,11 +425,10 @@
         17,
         7
       ],
-      "z": 0.1,
       "size": [
         5,
-        1.0,
-        2.0
+        1,
+        2
       ],
       "material": "Panel"
     },
@@ -443,14 +438,14 @@
         17,
         7
       ],
-      "z": 1.1,
+      "z": 1,
       "size": [
         5,
         0.5,
         1.8
       ],
-      "material": "ConsoleGlow",
-      "angle": 180
+      "angle": 180,
+      "material": "ConsoleGlow"
     },
     {
       "kind": "box",
@@ -458,11 +453,10 @@
         25,
         7
       ],
-      "z": 0.1,
       "size": [
         5,
-        1.0,
-        2.0
+        1,
+        2
       ],
       "material": "Panel"
     },
@@ -472,14 +466,14 @@
         25,
         7
       ],
-      "z": 1.1,
+      "z": 1,
       "size": [
         5,
         0.5,
         1.8
       ],
-      "material": "ConsoleGlow",
-      "angle": 180
+      "angle": 180,
+      "material": "ConsoleGlow"
     },
     {
       "kind": "box",
@@ -487,7 +481,6 @@
         21,
         15
       ],
-      "z": 0.1,
       "size": [
         1.8,
         0.7,
@@ -501,17 +494,17 @@
         21,
         15
       ],
-      "z": 0.8,
+      "z": 0.75,
       "size": [
         1.8,
         1.6,
         0.4
       ],
-      "material": "Carpet",
       "offset": [
         0,
         0.5
-      ]
+      ],
+      "material": "Carpet"
     },
     {
       "kind": "box",
@@ -519,7 +512,6 @@
         17,
         15
       ],
-      "z": 0.1,
       "size": [
         1.4,
         0.7,
@@ -533,17 +525,17 @@
         17,
         15
       ],
-      "z": 0.8,
+      "z": 0.75,
       "size": [
         1.4,
         1.6,
         0.4
       ],
-      "material": "Carpet",
       "offset": [
         0,
         0.5
-      ]
+      ],
+      "material": "Carpet"
     },
     {
       "kind": "box",
@@ -551,7 +543,6 @@
         25,
         15
       ],
-      "z": 0.1,
       "size": [
         1.4,
         0.7,
@@ -565,17 +556,17 @@
         25,
         15
       ],
-      "z": 0.8,
+      "z": 0.75,
       "size": [
         1.4,
         1.6,
         0.4
       ],
-      "material": "Carpet",
       "offset": [
         0,
         0.5
-      ]
+      ],
+      "material": "Carpet"
     },
     {
       "kind": "box",
@@ -583,7 +574,6 @@
         21,
         12
       ],
-      "z": 0.1,
       "size": [
         11,
         0.9,
@@ -611,15 +601,13 @@
         6,
         5
       ],
-      "z": 0.1,
       "size": [
         1.2,
         8.8,
         1.2
       ],
-      "material": "Steel",
-      "sides": 8,
-      "taper": 1
+      "taper": 1,
+      "material": "Steel"
     },
     {
       "kind": "hull",
@@ -627,15 +615,13 @@
         37,
         5
       ],
-      "z": 0.1,
       "size": [
         1.2,
         8.8,
         1.2
       ],
-      "material": "Steel",
-      "sides": 8,
-      "taper": 1
+      "taper": 1,
+      "material": "Steel"
     },
     {
       "kind": "hull",
@@ -643,15 +629,13 @@
         6,
         25
       ],
-      "z": 0.1,
       "size": [
         1.2,
         8.8,
         1.2
       ],
-      "material": "Steel",
-      "sides": 8,
-      "taper": 1
+      "taper": 1,
+      "material": "Steel"
     },
     {
       "kind": "hull",
@@ -659,15 +643,13 @@
         37,
         25
       ],
-      "z": 0.1,
       "size": [
         1.2,
         8.8,
         1.2
       ],
-      "material": "Steel",
-      "sides": 8,
-      "taper": 1
+      "taper": 1,
+      "material": "Steel"
     },
     {
       "kind": "arch",
@@ -675,7 +657,6 @@
         31,
         27
       ],
-      "z": 0,
       "size": [
         7,
         8,
@@ -709,8 +690,8 @@
         0.4,
         26
       ],
-      "material": "StripGlow",
-      "sweep": 230
+      "sweep": 230,
+      "material": "StripGlow"
     },
     {
       "kind": "box",
@@ -718,17 +699,17 @@
         21,
         3
       ],
-      "z": 1.4,
+      "z": 1.5,
       "size": [
         26,
         0.3,
         0.5
       ],
-      "material": "Steel",
       "offset": [
         0.5,
         0.4
-      ]
+      ],
+      "material": "Steel"
     },
     {
       "kind": "box",
@@ -736,17 +717,17 @@
         21,
         3
       ],
-      "z": 8.4,
+      "z": 8.5,
       "size": [
         26,
         0.3,
         0.5
       ],
-      "material": "Steel",
       "offset": [
         0.5,
         0.4
-      ]
+      ],
+      "material": "Steel"
     },
     {
       "kind": "box",
@@ -754,17 +735,17 @@
         8,
         3
       ],
-      "z": 1.4,
+      "z": 1.5,
       "size": [
         0.4,
         7.2,
         0.5
       ],
-      "material": "Steel",
       "offset": [
         0,
         0.4
-      ]
+      ],
+      "material": "Steel"
     },
     {
       "kind": "box",
@@ -772,17 +753,17 @@
         34,
         3
       ],
-      "z": 1.4,
+      "z": 1.5,
       "size": [
         0.4,
         7.2,
         0.5
       ],
-      "material": "Steel",
       "offset": [
         0,
         0.4
-      ]
+      ],
+      "material": "Steel"
     },
     {
       "kind": "box",
@@ -790,10 +771,9 @@
         2,
         14
       ],
-      "z": 0.1,
       "size": [
         2.4,
-        1.0,
+        1,
         1.4
       ],
       "material": "Panel"
@@ -804,14 +784,12 @@
         40,
         14
       ],
-      "z": 0.1,
       "size": [
         3,
         0.12,
         3
       ],
-      "material": "StripGlow",
-      "sides": 24
+      "material": "StripGlow"
     }
   ],
   "effects": [
@@ -822,10 +800,10 @@
         21,
         2
       ],
+      "z": 1.6,
       "facing": "south",
       "width": 24,
       "height": 7,
-      "z": 1.6,
       "media": "Starfield.webm"
     },
     {
@@ -835,10 +813,10 @@
         0,
         14
       ],
+      "z": 3,
       "facing": "east",
       "width": 3,
       "height": 1.7,
-      "z": 3,
       "media": "RPGReactor-Computer-Console-Interface.mp4"
     },
     {
@@ -848,10 +826,10 @@
         31,
         32
       ],
+      "z": 3,
       "facing": "north",
       "width": 3,
       "height": 1.7,
-      "z": 3,
       "media": "RPGReactor-Computer-Console-Interface.mp4"
     },
     {
@@ -861,10 +839,10 @@
         10,
         27
       ],
+      "z": 3.4,
       "facing": "north",
       "width": 5,
       "height": 2.4,
-      "z": 3.4,
       "media": "RPGReactor-Computer-Console-Interface.mp4"
     },
     {
@@ -874,10 +852,10 @@
         32,
         27
       ],
+      "z": 3.4,
       "facing": "north",
       "width": 5,
       "height": 2.4,
-      "z": 3.4,
       "media": "RPGReactor-Computer-Console-Interface.mp4"
     },
     {
@@ -887,10 +865,8 @@
         5,
         9
       ],
-      "facing": "east",
-      "width": 4,
-      "height": 2.25,
       "z": 3.4,
+      "facing": "east",
       "media": "RPGReactor-Computer-Console-Interface.mp4"
     },
     {
@@ -900,10 +876,8 @@
         38,
         9
       ],
-      "facing": "west",
-      "width": 4,
-      "height": 2.25,
       "z": 3.4,
+      "facing": "west",
       "media": "RPGReactor-Computer-Console-Interface.mp4"
     },
     {
@@ -913,10 +887,8 @@
         5,
         20
       ],
-      "facing": "east",
-      "width": 4,
-      "height": 2.25,
       "z": 3.4,
+      "facing": "east",
       "media": "RPGReactor-Computer-Console-Interface.mp4"
     },
     {
@@ -926,10 +898,8 @@
         38,
         20
       ],
-      "facing": "west",
-      "width": 4,
-      "height": 2.25,
       "z": 3.4,
+      "facing": "west",
       "media": "RPGReactor-Computer-Console-Interface.mp4"
     },
     {
@@ -940,9 +910,7 @@
         6
       ],
       "z": 8.2,
-      "color": "#9fd8ff",
-      "radius": 12,
-      "intensity": 1.2
+      "radius": 12
     },
     {
       "name": "light 25 6",
@@ -952,9 +920,7 @@
         6
       ],
       "z": 8.2,
-      "color": "#9fd8ff",
-      "radius": 12,
-      "intensity": 1.2
+      "radius": 12
     },
     {
       "name": "light 12 14",
@@ -964,9 +930,7 @@
         14
       ],
       "z": 8.2,
-      "color": "#9fd8ff",
-      "radius": 12,
-      "intensity": 1.2
+      "radius": 12
     },
     {
       "name": "light 30 14",
@@ -976,9 +940,7 @@
         14
       ],
       "z": 8.2,
-      "color": "#9fd8ff",
-      "radius": 12,
-      "intensity": 1.2
+      "radius": 12
     },
     {
       "name": "light 21 11",
@@ -988,9 +950,7 @@
         11
       ],
       "z": 8.2,
-      "color": "#9fd8ff",
-      "radius": 12,
-      "intensity": 1.2
+      "radius": 12
     },
     {
       "name": "light 21 18",
@@ -1000,9 +960,7 @@
         18
       ],
       "z": 8.2,
-      "color": "#9fd8ff",
-      "radius": 12,
-      "intensity": 1.2
+      "radius": 12
     },
     {
       "name": "light 10 22",
@@ -1012,9 +970,7 @@
         22
       ],
       "z": 8.2,
-      "color": "#9fd8ff",
-      "radius": 12,
-      "intensity": 1.2
+      "radius": 12
     },
     {
       "name": "light 32 22",
@@ -1024,9 +980,7 @@
         22
       ],
       "z": 8.2,
-      "color": "#9fd8ff",
-      "radius": 12,
-      "intensity": 1.2
+      "radius": 12
     },
     {
       "name": "command light",
@@ -1038,7 +992,7 @@
       "z": 8.2,
       "color": "#ffc79a",
       "radius": 9,
-      "intensity": 1.0
+      "intensity": 1
     },
     {
       "name": "airlock light",
@@ -1049,8 +1003,7 @@
       ],
       "z": 7.8,
       "color": "#ff6b5a",
-      "radius": 6,
-      "intensity": 1.0
+      "intensity": 1
     },
     {
       "name": "ready room light",
@@ -1061,7 +1014,6 @@
       ],
       "z": 7.5,
       "color": "#ffe1b8",
-      "radius": 6,
       "intensity": 0.9
     },
     {
@@ -1072,7 +1024,6 @@
         14
       ],
       "z": 7.5,
-      "color": "#9fd8ff",
       "radius": 5,
       "intensity": 1.1
     }
