@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased - 0.98.7]
+## [0.98.7] - 2026-09-21
 
 Development cycle in progress. Detail lives in [editor/CHANGELOG.md](editor/CHANGELOG.md), the [handoff](docs/HANDOFF.md) and the dated notes under `docs/`.
 
