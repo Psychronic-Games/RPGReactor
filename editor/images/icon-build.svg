@@ -1,18 +1,20 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Build">
   <defs>
-    <linearGradient id="build-head" x1="30" y1="6" x2="56" y2="30" gradientUnits="userSpaceOnUse"><stop stop-color="#effaff"/><stop offset=".45" stop-color="#9aaac5"/><stop offset="1" stop-color="#455778"/></linearGradient>
-    <linearGradient id="build-face" x1="44" y1="8" x2="58" y2="22" gradientUnits="userSpaceOnUse"><stop stop-color="#9fe2ff"/><stop offset="1" stop-color="#24bdf3"/></linearGradient>
-    <linearGradient id="build-grip" x1="8" y1="36" x2="34" y2="60" gradientUnits="userSpaceOnUse"><stop stop-color="#fff59c"/><stop offset=".5" stop-color="#ffd529"/><stop offset="1" stop-color="#b06008"/></linearGradient>
-    <linearGradient id="build-block" x1="4" y1="6" x2="26" y2="28" gradientUnits="userSpaceOnUse"><stop stop-color="#123e68"/><stop offset="1" stop-color="#06111f"/></linearGradient>
+    <linearGradient id="build-steel" x1="10" y1="6" x2="54" y2="58" gradientUnits="userSpaceOnUse"><stop stop-color="#effaff"/><stop offset=".4" stop-color="#9aaac5"/><stop offset="1" stop-color="#3d4f70"/></linearGradient>
+    <linearGradient id="build-gold" x1="8" y1="18" x2="56" y2="60" gradientUnits="userSpaceOnUse"><stop stop-color="#fff3a0"/><stop offset=".3" stop-color="#ffd529"/><stop offset=".72" stop-color="#f08a0c"/><stop offset="1" stop-color="#a94d08"/></linearGradient>
+    <linearGradient id="build-blue" x1="8" y1="8" x2="56" y2="56" gradientUnits="userSpaceOnUse"><stop stop-color="#6fd8ff"/><stop offset=".5" stop-color="#2a8de0"/><stop offset="1" stop-color="#123e8a"/></linearGradient>
+    <radialGradient id="build-spark"><stop stop-color="#fff"/><stop offset=".28" stop-color="#fffbd5"/><stop offset=".62" stop-color="#ffd529"/><stop offset="1" stop-color="#d7318f"/></radialGradient>
   </defs>
-  <!-- A block being set, and the hammer over it; ink under everything. -->
-  <path d="M3 8H25L29 12V30L25 34H3L-1 30V12Z" fill="#01030a"/>
-  <path d="M5 11H23L26 14V28L23 31H5L2 28V14Z" fill="url(#build-block)" stroke="#24bdf3" stroke-width="2"/>
-  <path d="M28 16L44 3L61 20L48 33L41 26L15 52L5 42L31 16Z" fill="#01030a"/>
-  <path d="M31 18L44 7L57 20L47 30L39 22L14 47L9 42L34 18Z" fill="url(#build-grip)"/>
-  <path d="M30 17L43 5L59 21L47 31L39 23Z" fill="#01030a"/>
-  <path d="M33 17L43 8L56 21L46 29L40 23Z" fill="url(#build-head)"/>
-  <path d="M46 10L54 18L50 22L42 14Z" fill="url(#build-face)"/>
-  <path d="M55 40L58 46L64 49L58 52L55 58L52 52L46 49L52 46Z" fill="#01030a"/>
-  <path d="M55 43L57 47L61 49L57 51L55 55L53 51L49 49L53 47Z" fill="#9fe2ff"/>
+  <!-- A wrench and a sledge crossed, with a spark where they meet: chunky and inked like the rest of the bar. -->
+  <g transform="rotate(-45 32 32)">
+    <rect x="27" y="24" width="10" height="38" rx="3" fill="url(#build-blue)" stroke="#010718" stroke-width="4" stroke-linejoin="round"/>
+    <path d="M18 17a14 14 0 1 1 28 0v3h-8v-9h-12v9h-8z" fill="url(#build-blue)" stroke="#010718" stroke-width="4" stroke-linejoin="round"/>
+    <path d="M26 3v9h12V3" fill="none" stroke="#010718" stroke-width="4" stroke-linejoin="round"/>
+  </g>
+  <g transform="rotate(45 32 32)">
+    <rect x="28" y="20" width="8" height="42" rx="3" fill="url(#build-gold)" stroke="#010718" stroke-width="4" stroke-linejoin="round"/>
+    <rect x="17" y="4" width="30" height="16" rx="4" fill="url(#build-steel)" stroke="#010718" stroke-width="4" stroke-linejoin="round"/>
+    <path d="M21 8h22" stroke="#ffffff" stroke-width="2" stroke-linecap="round" opacity=".8"/>
+  </g>
+  <path d="M32 21c1.7 6.1 4.3 9.1 10 10.5-5.7 1.4-8.3 4.4-10 10.5-1.7-6.1-4.3-9.1-10-10.5 5.7-1.4 8.3-4.4 10-10.5z" fill="url(#build-spark)" stroke="#d7318f" stroke-width="2.2" stroke-linejoin="round"/>
 </svg>
