@@ -1,5 +1,11 @@
 # Current project status
 
+## 2026-09-21 — 0.98.7 released
+
+- `v0.98.7` is tagged and published on GitHub from the changelog section. Signed binaries and the itch channels follow from the Actions tab (Release Candidate → Release). The itch devlog is `docs/posts/itch-devlog-0.98.7.md`.
+- The cycle: the in-world builder (build bar, select and box selection, shapes, blueprints, docked Lighting and Media Surfaces), terrain and poured water, the cutaway rebuilt for walking inside (caps, see-through corridor for the whole company, stairs along their run), PR #67, the Demo's Hamlet and lake.
+- Verification: **3,366 Node tests pass** in the tree and in a fresh clone (one expected skip). Runtime **20260920.24**; all 13 bundled runtimes match.
+
 ## 2026-09-16 — PRs #60 and #61 in, CI green again, Discord and translation fixes
 
 - **PR #60** (music sequence library, battle music resolution troop → Change Battle BGM → map → System, sequence preview and starters, Quests tab fixes, Reactor or VisuStella quest log) and **PR #61** (passive states on both sides of an enemy state condition, several states per condition row, forecast `no-target`) are merged locally; notes in [PR-INTEGRATION-2026-09-15.md](PR-INTEGRATION-2026-09-15.md) and [PR-INTEGRATION-2026-09-16.md](PR-INTEGRATION-2026-09-16.md). Runtime revision 20260916.1.
@@ -66,7 +72,7 @@
 
 The [complete session summary](SESSION-2026-09-11.md) covers Chinese corrections, PR #56, rotating splash art, touch/keyboard work, asset sizes and framing, database/theme refinements, model lighting, and expanded action sequences with equipped items and throws. It also identifies earlier pending work included in this snapshot.
 
-Current editor **0.98.6**, runtime **20260911.6**; latest full suite **3,082 passed**, zero failures/skips. Native authoring and held-item/throw checks pass in 2D/3D; all 13 local template runtimes match. Earlier entries retain intermediate versions/test counts and pre-commit status as history. Keyboard audit gaps remain explicit. This is a local development commit, not a release or push.
+Current editor **0.98.7**, runtime **20260920.24**; latest full suite **3,366 passed**, zero failures. Native authoring and held-item/throw checks pass in 2D/3D; all 13 local template runtimes match. Earlier entries retain intermediate versions/test counts and pre-commit status as history. Keyboard audit gaps remain explicit. This is a local development commit, not a release or push.
 
 ## 2026-09-11 — Equipped items and throws
 

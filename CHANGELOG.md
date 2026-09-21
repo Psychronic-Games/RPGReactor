@@ -2,7 +2,7 @@
 
 ## [0.98.7] - 2026-09-21
 
-Development cycle in progress. Detail lives in [editor/CHANGELOG.md](editor/CHANGELOG.md), the [handoff](docs/HANDOFF.md) and the dated notes under `docs/`.
+A 3D world builder in the map view, walking inside what you build, a Sun light, new collapse effects and a run of fixes. Detail lives in [editor/CHANGELOG.md](editor/CHANGELOG.md) and the [0.98.7 release notes](docs/posts/release-notes-0.98.7.md).
 
 ### Added
 

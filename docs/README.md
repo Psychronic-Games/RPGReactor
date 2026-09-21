@@ -28,6 +28,8 @@
 - [September 10 PR integration](PR-INTEGRATION-2026-09-10.md): enemy Behaviour forecast, integration corrections, validation and preserved local work.
 - [Keyboard/UI audit — issue #54](UI-KEYBOARD-AUDIT-2026-09-10.md): list focus, popup navigation, stable tabbed dialogs, readable tileset names and blank inactive event conditions.
 
+- [0.98.7 release notes](posts/release-notes-0.98.7.md): the world builder, poured water, walking inside, a Sun light, collapse effects, fixes.
+- [0.98.7 itch.io devlog](posts/itch-devlog-0.98.7.md): announcement text, with a [plain-text copy](posts/itch-devlog-0.98.7-plain.txt); the longer [build-in-the-world devlog](devlogs/2026-09-20-build-in-the-world.md) covers the same cycle.
 - [0.98.6 release notes](posts/release-notes-0.98.6.md): phased sequences, held and aimed weapons, cinematic focus, Victor import, hands on the rig, the Demo fight.
 - [0.98.6 itch.io devlog](posts/itch-devlog-0.98.6.md): announcement text, with a [plain-text copy](posts/itch-devlog-0.98.6-plain.txt).
 - [0.98.5 release notes](posts/release-notes-0.98.5.md): consolidated features, fixes, compatibility boundaries and validation.
