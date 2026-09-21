@@ -713,6 +713,40 @@
             opacity: 1;
         }
 
+        /* The map and, beside it, a dock for the map's own panels (Lighting, Media Surfaces): a column the map makes room for, not a sheet over it. */
+        #map-stage {
+            flex: 1;
+            display: flex;
+            min-width: 0;
+            min-height: 0;
+        }
+        #map-side-dock {
+            flex: 0 0 320px;
+            width: 320px;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+            background-color: var(--color-bg-panel);
+            border-left: 1px solid var(--color-border);
+            overflow: hidden;
+        }
+        #map-side-dock[hidden] { display: none; }
+        #map-side-dock > .lighting-panel,
+        #map-side-dock > .media-surfaces-panel {
+            flex: 1;
+            min-height: 0;
+            width: auto;
+            max-height: none;
+            border: 0;
+            border-radius: 0;
+            box-shadow: none;
+            background-color: var(--color-bg-panel);
+            color: var(--color-text);
+        }
+        #map-side-dock > .media-surfaces-panel .rr-modal-header {
+            border-radius: 0;
+            background-color: var(--color-bg-deep);
+        }
         #canvas-container {
             flex: 1;
             background-color: var(--color-bg-panel);

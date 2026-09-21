@@ -294,6 +294,12 @@ test('building happens in the world: the hammer in the toolbar opens a bar over 
     assert.match(mainSource, /const building = owner === 'pieces' \|\| \(!!this\.buildHotbar\?\.visible && \(owner === 'lighting' \|\| owner === 'media'\)\);/, 'the Build button stays lit beside theirs');
     assert.match(mainSource, /if \(this\.buildHotbar\?\.visible && \(owner === 'lighting' \|\| owner === 'media'\)\) \{ this\.buildHotbar\.show\(\); return; \}/, 'closing their panel hands the map back to the bar');
     { const html = read('editor/index.html'); assert.ok(html.indexOf('data-action="build-tool"') < html.indexOf('data-action="lighting-tool"') && html.indexOf('data-action="lighting-tool"') < html.indexOf('data-action="media-surfaces"'), 'Build sits left of Lighting and Media Surfaces in the toolbar'); }
+    // Lighting and Media Surfaces dock beside the map, in a column the map makes room for, not a sheet over it.
+    { const html = read('editor/index.html'); assert.match(html, /<div id="map-stage">\s*<div id="canvas-container" class="rr-dark-surface"><\/div>\s*<aside id="map-side-dock" hidden><\/aside>\s*<\/div>/, 'the dock sits beside the canvas');
+      assert.match(mainSource, /dockMapPanel\(panel\) \{[\s\S]{0,400}window\.dispatchEvent\(new Event\('resize'\)\);/, 'showing the dock lets the canvases size themselves again');
+      assert.match(read('editor/src/LightingManager.js'), /if \(!window\.reactor\?\.dockMapPanel\?\.\(panel\)\) \(workspace \|\| document\.body\)\.appendChild\(panel\);/, 'Lighting mounts in the dock');
+      assert.match(read('editor/src/MediaSurfaceManager.js'), /if \(!window\.reactor\?\.dockMapPanel\?\.\(panel\)\) document\.body\.appendChild\(panel\);/, 'Media Surfaces mounts in the dock');
+      const css = read('editor/css/styles.css'); assert.match(css, /#map-side-dock \{[\s\S]{0,200}background-color: var\(--color-bg-panel\);/, 'the dock wears the theme'); assert.match(css, /#map-side-dock > \.lighting-panel,\s*#map-side-dock > \.media-surfaces-panel \{[\s\S]{0,300}box-shadow: none;/, 'no floating look inside it'); }
     assert.match(managerSrc, /if \(!stack\.length\) return this\.removeEffectAt\(map, target\);/, 'the hammer takes screens and lights too');
     // Select: a placed piece is picked up, edited in place, moved, turned and removed; a stair run climbs; a ramp is a sized wedge.
     const ctx2 = { console, window: {}, document: { addEventListener() {}, removeEventListener() {}, dispatchEvent() {} }, CustomEvent: class { constructor(t, i) { this.type = t; this.detail = i && i.detail; } } };

@@ -714,6 +714,26 @@ class RPGReactor {
 
     // One map input owner. Managers release listeners before the next owner
     // becomes active; their local painting-resume flags cannot win a handoff.
+    /**
+     * The dock beside the map for its own panels. Shown while a panel is in
+     * it, hidden when the last leaves; the canvases size themselves from
+     * their container on a resize event, which a dock change does not fire
+     * on its own.
+     */
+    mapSideDock() { return document.getElementById('map-side-dock'); }
+    dockMapPanel(panel) {
+        const dock = this.mapSideDock();
+        if (!dock) return false;
+        dock.appendChild(panel);
+        if (dock.hidden) { dock.hidden = false; window.dispatchEvent(new Event('resize')); }
+        return true;
+    }
+    undockMapPanel(panel) {
+        const dock = this.mapSideDock();
+        if (panel?.parentElement) panel.parentElement.removeChild(panel);
+        if (dock && !dock.hidden && !dock.children.length) { dock.hidden = true; window.dispatchEvent(new Event('resize')); }
+    }
+
     claimMapTool(owner) {
         if (this._changingMapTool) return;
         this._changingMapTool = true;

@@ -21,8 +21,10 @@ class MediaSurfaceManager {
             const panel = document.createElement('section');
             panel.className = 'rr-modal media-surfaces-panel';
             panel.setAttribute('aria-labelledby', 'rr-map-media-surfaces-title');
-            panel.style.cssText = 'position:fixed;right:14px;top:120px;width:min(360px,calc(100vw - 28px));max-height:calc(100vh - 150px);display:flex;flex-direction:column;z-index:20500;box-shadow:0 8px 30px #0009;';
-            this.panel = panel; document.body.appendChild(panel);
+            if (window.reactor?.mapSideDock?.()) panel.style.cssText = 'display:flex;flex-direction:column;';
+            else panel.style.cssText = 'position:fixed;right:14px;top:120px;width:min(360px,calc(100vw - 28px));max-height:calc(100vh - 150px);display:flex;flex-direction:column;z-index:20500;box-shadow:0 8px 30px #0009;';
+            this.panel = panel;
+            if (!window.reactor?.dockMapPanel?.(panel)) document.body.appendChild(panel);
         }
         this.panel.hidden = false;
         document.querySelector('[data-action="media-surfaces"]')?.classList.add('active');
@@ -30,7 +32,8 @@ class MediaSurfaceManager {
     }
     close() {
         this.cancelPlacement?.();
-        this.panel?.remove(); this.panel = null;
+        if (this.panel) { if (window.reactor?.undockMapPanel) window.reactor.undockMapPanel(this.panel); else this.panel.remove(); }
+        this.panel = null;
         document.querySelector('[data-action="media-surfaces"]')?.classList.remove('active');
         this.editor?.close(true);
         this.projectController?.mediaSurfacePreviewManager?.syncToolInteraction?.();

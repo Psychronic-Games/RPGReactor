@@ -1322,11 +1322,14 @@ class LightingManager {
             const workspaceTop = workspace.getBoundingClientRect().top;
             top = Math.max(0, Math.round(infoBar.getBoundingClientRect().bottom - workspaceTop)) + 6;
         }
-        panel.style.cssText = (workspace
-            ? 'position:absolute;top:' + top + 'px;right:8px;bottom:8px;z-index:900;'
-            : 'position:fixed;top:84px;right:12px;bottom:12px;z-index:9000;')
-            + 'width:300px;';
-        if (workspace && !workspace.style.position) workspace.style.position = 'relative';
+        const dock = window.reactor?.mapSideDock?.();
+        if (!dock) {
+            panel.style.cssText = (workspace
+                ? 'position:absolute;top:' + top + 'px;right:8px;bottom:8px;z-index:900;'
+                : 'position:fixed;top:84px;right:12px;bottom:12px;z-index:9000;')
+                + 'width:300px;';
+            if (workspace && !workspace.style.position) workspace.style.position = 'relative';
+        }
 
         const header = this._el('div');
         header.style.cssText = 'display:flex;align-items:center;gap:8px;';
@@ -1367,14 +1370,15 @@ class LightingManager {
             + 'font-size:10px;text-align:right;opacity:0.8;';
         panel.appendChild(stamp);
 
-        (workspace || document.body).appendChild(panel);
+        if (!window.reactor?.dockMapPanel?.(panel)) (workspace || document.body).appendChild(panel);
         this._panel = panel;
         this._syncPanel();
     }
 
     _destroyPanel() {
         if (typeof RRColourPopover !== 'undefined') RRColourPopover.close();
-        if (this._panel?.parentElement) this._panel.parentElement.removeChild(this._panel);
+        if (window.reactor?.undockMapPanel) window.reactor.undockMapPanel(this._panel);
+        else if (this._panel?.parentElement) this._panel.parentElement.removeChild(this._panel);
         this._panel = null;
         this._listHost = null;
         this._listMeta = null;
