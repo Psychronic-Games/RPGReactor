@@ -118,7 +118,20 @@ class WebDriverClient {
         });
     }
 
+    /**
+     * Every NW.js session gets Chromium's software-renderer flag. A CI runner
+     * has no GPU, and this Chromium refuses a WebGL context there unless the
+     * flag is given, so any smoke that draws a map died on the runner while
+     * passing on every desktop. With a GPU the flag changes nothing.
+     * `RR_NW_ARGS` adds more, space separated, for emulating such a runner
+     * (`--disable-gpu`) or trying a flag without editing a smoke.
+     */
     async createSession(alwaysMatch) {
+        const options = alwaysMatch && alwaysMatch['goog:chromeOptions'];
+        if (options && Array.isArray(options.args)) {
+            const extra = ['--enable-unsafe-swiftshader', ...String(process.env.RR_NW_ARGS || '').split(/\s+/).filter(Boolean)];
+            for (const flag of extra) if (!options.args.includes(flag)) options.args.push(flag);
+        }
         const result = await this.request('POST', '/session', {
             capabilities: { alwaysMatch, firstMatch: [{}] },
         });

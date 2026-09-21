@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Development
+
+- **CI's GUI smokes run again.** Every run since September 14 was red at the interaction-order audit, the first smoke that draws a map: a GitHub runner has no GPU, and NW.js 0.107's Chromium refuses a WebGL context there unless `--enable-unsafe-swiftshader` is given (the Web persistence smoke already passed it; the NW.js ones did not), so the editor could not open a map and the smoke died before writing its evidence. `webdriver-client.cjs` adds the flag to every NW.js session, and honours `RR_NW_ARGS` (`--disable-gpu` emulates the runner on a desktop). The interaction audit writes its result file even when the project fails to open, so the artifact is there to read next time. The keyboard-navigation smoke, which had never run on CI, assumed ArrowDown from map 1 lands on map 2; the Demo's tree puts North Haven second, so it reads the next map from the tree. All four GUI smokes pass with the GPU disabled.
+
 ## [0.98.7] - 2026-09-21
 
 ### Added

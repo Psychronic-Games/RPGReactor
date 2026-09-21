@@ -18,9 +18,12 @@ const done = arguments[arguments.length - 1];
         await pc.loadMap(1, { skipDirtyCheck: true });
         if (!reactor.eventManager.eventMode) reactor.toggleEventMode();
         const list = document.getElementById('maps-list'); list.focus();
+        // The next map is whatever the tree shows under map 1: the Demo's tree is ordered by hand, not by id.
+        const rows = [...list.querySelectorAll('[data-map-id]')];
+        const next = Number(rows[rows.findIndex(row => row.dataset.mapId === '1') + 1]?.dataset.mapId);
         check('map tree consumes ArrowDown', key(list, 'ArrowDown'));
-        for (let i = 0; i < 100 && pc.tilemapManager.currentMap.id !== 2; i++) await wait();
-        check('map tree arrows load and highlight the next map', pc.tilemapManager.currentMap.id === 2 && !!list.querySelector('[data-map-id="2"].selected'),
+        for (let i = 0; i < 100 && pc.tilemapManager.currentMap.id !== next; i++) await wait();
+        check('map tree arrows load and highlight the next map', pc.tilemapManager.currentMap.id === next && !!list.querySelector('[data-map-id="' + next + '"].selected'),
             { currentMap: pc.tilemapManager.currentMap?.id, selected: list.querySelector('.selected')?.dataset.mapId ?? null, focused: document.activeElement?.id || document.activeElement?.className });
         check('map loading retains list focus', document.activeElement === list);
         key(list, 'Home');
