@@ -5564,7 +5564,7 @@ Spriteset_Map.prototype.updateReactor3D = function() {
     if (state.scene.updateSky) state.scene.updateSky(state.viewport.camera ? state.viewport.camera() : null, Graphics.frameCount);
     if (state.scene.updateWater) state.scene.updateWater(Graphics.frameCount);
     // Inside a built house the roof and any wall in the way are cut around the player.
-    if (state.scene.updateCutaway) state.scene.updateCutaway(state.viewport.camera ? state.viewport.camera() : null, $dataMap, $gamePlayer);
+    if (state.scene.updateCutaway) state.scene.updateCutaway(state.viewport.camera ? state.viewport.camera() : null, $dataMap, $gamePlayer, this.reactor3DCompany());
     this.updateReactor3DLights(state);
     state.scene.updateDestination($gameTemp, $dataMap, Graphics.frameCount);
     // Warm any template that landed after the scene started (the pass
@@ -5901,6 +5901,26 @@ Spriteset_Map.prototype.keepReactor3DLightsOnTop = function() {
  * being kept in step, and following the player still happens for free because
  * that is what moves the display in the first place.
  */
+/**
+ * Who else a wall must not hide: the visible followers, then the nearest
+ * events that show a character, within reach of the player. The cutaway
+ * takes a bounded few, so the nearest come first.
+ */
+Spriteset_Map.prototype.reactor3DCompany = function() {
+    const list = [];
+    if ($gamePlayer.followers) for (const follower of $gamePlayer.followers().visibleFollowers()) list.push(follower);
+    const px = $gamePlayer.x, py = $gamePlayer.y, reach = Reactor3D.CUTAWAY_COMPANY_REACH;
+    const events = [];
+    for (const event of $gameMap.events()) {
+        if (event.isTransparent() || (!event.characterName() && !event.tileId())) continue;
+        const d = Math.abs(event.x - px) + Math.abs(event.y - py);
+        if (d <= reach) events.push([d, event]);
+    }
+    events.sort((a, b) => a[0] - b[0]);
+    for (const [, event] of events) list.push(event);
+    return list;
+};
+
 Spriteset_Map.prototype.updateReactor3DCamera = function() {
     const state = this._reactor3d;
     if (!state) return;

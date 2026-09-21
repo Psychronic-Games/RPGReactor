@@ -633,7 +633,10 @@ test('inside a building the roof and the wall in the camera\'s way are cut aroun
     stepped.reactor3d.terrain = new Array((stepped.width + 1) * (stepped.height + 1)).fill(0).map((v, i) => (i % (stepped.width + 1)) >= 4 ? 1 : 0); stepped.reactor3d.terrainWidth = stepped.width;
     assert.equal(R.pieceGeometry(R.piecesOf(stepped), stepped).attributes.position.count / 3, 3 * 12 - 2 * 2, 'a step under the third keeps the two faces on either side of that step, and no others');
     assert.match(runtime, /if \(rrBayer < rrThin\) discard;/, 'a model in the way is dithered thin');
-    assert.match(runtime, /rrInWay = rrOff2 < rrGhostWidth \* \(rrAlong2 \/ rrSight2Length\) && rrLineY - 1\.0 < rrCutFocus\.y \+ 3\.5;/, 'a wall in the way is what a corridor narrowing from the party to the camera holds, where the sight line passes through a storey');
+    assert.match(runtime, /if \(rrOff2 < rrGhostWidth \* \(rrAlong2 \/ rrSight2Length\) && rrLineY - 1\.0 < rrF\.y \+ 3\.5\) \{ rrInWay = true; break; \}/, 'a wall in the way is what a corridor narrowing from a character to the camera holds, where the sight line passes through a storey');
+    assert.match(runtime, /for \(int rrI = 0; rrI < " \+ Reactor3D\.CUTAWAY_FOCI \+ "; rrI\+\+\) \{/, 'one corridor per character: the player, the followers, the nearest events');
+    assert.match(read('runtime/reactor_sprites.js'), /state\.scene\.updateCutaway\([^\n]*\$gamePlayer, this\.reactor3DCompany\(\)\);/, 'the game names the company');
+    assert.match(read('runtime/reactor_sprites.js'), /visibleFollowers\(\)\) list\.push\(follower\);/, 'followers first');
     assert.ok(R.GHOST_WIDTH > 0.4 && R.GHOST_WIDTH < 1, 'the corridor is the body\'s width at the party, so a wall beside the party is not in the way');
     assert.match(runtime, /if \(!this\._cutLook\) this\.setCutLook\(true\);/, 'the see-through pass is live inside or out, so nothing the corridor takes is ever simply missing');
     assert.match(runtime, /if \(rrGhost > 0\.5\) \{ if \(!rrInWay\) discard; \} else if \(rrInWay\) discard;/, 'the solid pass leaves it out and the ghost pass draws only it');
@@ -671,7 +674,7 @@ test('inside a building the roof and the wall in the camera\'s way are cut aroun
     assert.match(runtime, /material\.__reactorPieces \? "if \(vRRWorldPos\.y > rrCutTop/, 'but only pieces lose their storey');
     assert.match(runtime, /rrAlong < rrSightLength - 3\.5\) \{"/, 'a model stops thinning well before the party, so the party never dissolves');
     assert.match(runtime, /vRRWorldPos\.y > rrCutFocus\.y - 1\.2/, 'floors under the player are never thinned');
-    assert.match(read('runtime/reactor_sprites.js'), /state\.scene\.updateCutaway\(state\.viewport\.camera \? state\.viewport\.camera\(\) : null, \$dataMap, \$gamePlayer\);/);
+    assert.match(read('runtime/reactor_sprites.js'), /state\.scene\.updateCutaway\(state\.viewport\.camera \? state\.viewport\.camera\(\) : null, \$dataMap, \$gamePlayer, this\.reactor3DCompany\(\)\);/);
     const house = mapWith([
         { id: 1, kind: 'floor', x: 2, y: 2, z: 0, rot: 0, material: 'Wood' },
         { id: 2, kind: 'floor', x: 2, y: 2, z: 5, rot: 0, material: 'Wood' },

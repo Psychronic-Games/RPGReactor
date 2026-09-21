@@ -601,6 +601,9 @@ Reactor3D.cutawayUniforms = function() {
             rrCutTop: { value: 1e9 },
             rrCutEye: { value: [0, 0, 0] },
             rrCutFocus: { value: [0, 0, 0] },
+            // Everyone a wall must not hide: the player, the followers, the nearest events; x, y, z each.
+            rrCutFoci: { value: new Float32Array(3 * Reactor3D.CUTAWAY_FOCI) },
+            rrCutFocusCount: { value: 0 },
             rrCutRadius: { value: 0 },
             // The footprint the top cut reaches: x0, z0, x1, z1 in world tiles.
             rrCutBox: { value: [0, 0, 0, 0] },
@@ -619,6 +622,11 @@ Reactor3D.cutawayUniforms = function() {
  */
 Reactor3D.GHOST_WIDTH = 0.6;
 
+/** How many characters the see-through corridor follows at once. */
+Reactor3D.CUTAWAY_FOCI = 8;
+/** How far from the player, in tiles, an event is still kept in sight through a wall. */
+Reactor3D.CUTAWAY_COMPANY_REACH = 12;
+
 Reactor3D.injectCutaway = function(material, shader) {
     // Pieces take both cuts; a placed model (a tree in front of the door)
     // only thins in the sight line, since it has no storey to cut above.
@@ -627,7 +635,7 @@ Reactor3D.injectCutaway = function(material, shader) {
     for (const name of Object.keys(shared)) shader.uniforms[name] = shared[name];
     if (shader.fragmentShader.indexOf("uniform float rrCutTop;") >= 0) return;
     shader.uniforms.rrGhost = { value: material.__reactorGhost ? 1 : 0 };
-    shader.fragmentShader = "uniform float rrCutTop;\nuniform vec3 rrCutEye;\nuniform vec3 rrCutFocus;\nuniform float rrCutRadius;\nuniform vec4 rrCutBox;\nuniform float rrGhost;\nuniform float rrGhostWidth;\n" + shader.fragmentShader.replace(
+    shader.fragmentShader = "uniform float rrCutTop;\nuniform vec3 rrCutEye;\nuniform vec3 rrCutFocus;\nuniform float rrCutRadius;\nuniform vec4 rrCutBox;\nuniform float rrGhost;\nuniform float rrGhostWidth;\nuniform vec3 rrCutFoci[" + Reactor3D.CUTAWAY_FOCI + "];\nuniform int rrCutFocusCount;\n" + shader.fragmentShader.replace(
         "#include <map_fragment>",
         [
             material.__reactorPieces ? "if (vRRWorldPos.y > rrCutTop && vRRWorldPos.x >= rrCutBox.x && vRRWorldPos.z >= rrCutBox.y && vRRWorldPos.x <= rrCutBox.z && vRRWorldPos.z <= rrCutBox.w) discard;" : "",
@@ -640,20 +648,25 @@ Reactor3D.injectCutaway = function(material, shader) {
             // wall beside the party is not in the way, however near. Never a
             // floor. A placed model fades in the sight line with an ordered
             // dither, which needs no blending.
+            // One corridor per character the wall must not hide: the player,
+            // the followers and the nearest events (rrCutFoci).
             material.__reactorPieces ? [
                 "bool rrInWay = false;",
-                "if (rrCutRadius > 0.0 && vRRWorldPos.y > rrCutFocus.y - 1.4) {",
-                "\tvec2 rrSight2 = rrCutFocus.xz - rrCutEye.xz;",
-                "\tfloat rrSight2Length = length(rrSight2);",
-                "\tif (rrSight2Length > 0.001) {",
+                "if (rrCutRadius > 0.0) {",
+                "\tfor (int rrI = 0; rrI < " + Reactor3D.CUTAWAY_FOCI + "; rrI++) {",
+                "\t\tif (rrI >= rrCutFocusCount) break;",
+                "\t\tvec3 rrF = rrCutFoci[rrI];",
+                "\t\tif (vRRWorldPos.y <= rrF.y - 1.4) continue;",
+                "\t\tvec2 rrSight2 = rrF.xz - rrCutEye.xz;",
+                "\t\tfloat rrSight2Length = length(rrSight2);",
+                "\t\tif (rrSight2Length <= 0.001) continue;",
                 "\t\tvec2 rrSight2Dir = rrSight2 / rrSight2Length;",
                 "\t\tvec2 rrToHere2 = vRRWorldPos.xz - rrCutEye.xz;",
                 "\t\tfloat rrAlong2 = dot(rrToHere2, rrSight2Dir);",
-                "\t\tif (rrAlong2 > 0.0 && rrAlong2 < rrSight2Length - 0.3) {",
-                "\t\t\tfloat rrOff2 = length(rrToHere2 - rrSight2Dir * rrAlong2);",
-                "\t\t\tfloat rrLineY = rrCutEye.y + (rrCutFocus.y - rrCutEye.y) * (rrAlong2 / rrSight2Length);",
-                "\t\t\trrInWay = rrOff2 < rrGhostWidth * (rrAlong2 / rrSight2Length) && rrLineY - 1.0 < rrCutFocus.y + 3.5;",
-                "\t\t}",
+                "\t\tif (rrAlong2 <= 0.0 || rrAlong2 >= rrSight2Length - 0.3) continue;",
+                "\t\tfloat rrOff2 = length(rrToHere2 - rrSight2Dir * rrAlong2);",
+                "\t\tfloat rrLineY = rrCutEye.y + (rrF.y - rrCutEye.y) * (rrAlong2 / rrSight2Length);",
+                "\t\tif (rrOff2 < rrGhostWidth * (rrAlong2 / rrSight2Length) && rrLineY - 1.0 < rrF.y + 3.5) { rrInWay = true; break; }",
                 "\t}",
                 "}",
                 "if (rrGhost > 0.5) { if (!rrInWay) discard; } else if (rrInWay) discard;"
@@ -728,7 +741,11 @@ Reactor3D.CUTAWAY_REACH = 24;
  * show the sky through the room. A wall between the camera and the
  * player is opened whether they are inside or out.
  */
-Reactor3D.MapScene.prototype.updateCutaway = function(camera, mapData, character) {
+/**
+ * `others`: the characters beside the player a wall must not hide either
+ * (followers, the nearest events), up to CUTAWAY_FOCI in all.
+ */
+Reactor3D.MapScene.prototype.updateCutaway = function(camera, mapData, character, others) {
     const shared = Reactor3D.cutawayUniforms();
     if (!camera || !mapData || !character || !Reactor3D.hasPieces(mapData)) {
         shared.rrCutTop.value = 1e9;
@@ -756,6 +773,19 @@ Reactor3D.MapScene.prototype.updateCutaway = function(camera, mapData, character
     }
     shared.rrCutEye.value[0] = eye.x; shared.rrCutEye.value[1] = eye.y; shared.rrCutEye.value[2] = eye.z;
     shared.rrCutFocus.value[0] = x; shared.rrCutFocus.value[1] = ground + 1.5; shared.rrCutFocus.value[2] = z;
+    const foci = shared.rrCutFoci.value;
+    foci[0] = x; foci[1] = ground + 1.5; foci[2] = z;
+    let count = 1;
+    for (const other of others || []) {
+        if (count >= Reactor3D.CUTAWAY_FOCI) break;
+        if (!other) continue;
+        const ox = (Number.isFinite(other._realX) ? other._realX : other.x || 0) + 0.5;
+        const oz = (Number.isFinite(other._realY) ? other._realY : other.y || 0) + 0.5;
+        const og = Reactor3D.characterGround(mapData, other);
+        foci[count * 3] = ox; foci[count * 3 + 1] = og + 1.5; foci[count * 3 + 2] = oz;
+        count++;
+    }
+    shared.rrCutFocusCount.value = count;
     shared.rrCutRadius.value = Reactor3D.CUTAWAY_RADIUS;
 };
 Reactor3D.MapScene.prototype.setCutLook = function(on) {
