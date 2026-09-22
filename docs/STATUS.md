@@ -5,7 +5,7 @@ The verified state of the tree as of **2026-09-21**. This page states what is tr
 ## Version and validation
 
 - Latest release: **0.98.7**, tagged and published on GitHub on 2026-09-21. Signed binaries and the itch channels follow from the Actions tab (Release Candidate → Release). The 0.98.8 cycle is open: package, lockfile, about box, web host, runtime marker, both changelogs, READMEs and the release checklist name 0.98.8.
-- Runtime revision: **20260921.8** (`runtime/reactor_main.js`, stated twice: the header comment drives the project updater, the global identifies a running game). All 13 bundled projects match `runtime/` (`node editor/build-scripts/sync-runtime.cjs --check`).
+- Runtime revision: **20260922.1** (`runtime/reactor_main.js`, stated twice: the header comment drives the project updater, the global identifies a running game). All 14 bundled projects match `runtime/` (`node editor/build-scripts/sync-runtime.cjs --check`).
 - Node suite: **3,416 tests pass** in this tree (`cd editor && npm test`, about 25 s). A fresh clone with `npm ci --ignore-scripts` reproduces CI and reports one expected skip where Star Shift Rebellion is absent.
 - CI (`.github/workflows/ci.yml`): syntax checks, the Node suite, dependency audit, patch hygiene, a clean-tree check, and a GUI job that runs the Web persistence smoke and five NW.js smokes (save, interaction order, keyboard, menus, event double-click) under xvfb with `--enable-unsafe-swiftshader`. Green as of 2026-09-21; it had been red from September 14 because the runner has no GPU.
 - Public editor releases use NW.js **0.107.0** exactly; see the [release checklist](RELEASE-CHECKLIST.md).
@@ -48,7 +48,7 @@ Recorded on 2026-09-20 and 2026-09-21 unless dated otherwise.
 - **Next agreed builder work:** furniture pieces and room contents in plans; a spot/template picker in the panel; gable pieces; a hamlet-of-hamlets stress test; lighting normals on slopes; hip roofs.
 - **Quests:** tracker window, label fields and reward actions.
 - **Custom interfaces:** the adapters listed above.
-- **Demo content:** five actors still reference the stock `Actor1` character sheet and `Actor1_2` / `Actor2_2` side-view battlers that are not shipped, and none of the five enemies has 2D battler art; original art is being authored. Every sound the Demo names exists on disk (`demo-template-completeness.test.cjs`). See [demo-missing-se.md](demo-missing-se.md).
+- **Demo content:** actors 1–5 play as 3D models and never load the stock `Actor1` / `Actor1_2` / `Actor2_2` names they still carry; none of the five enemies has 2D battler art; original art is being authored. Every sound the Demo names exists on disk (`demo-template-completeness.test.cjs`). See [demo-missing-se.md](demo-missing-se.md).
 - **Older threads, last recorded 2026-09-04 and not re-verified since:** sustained-playthrough shadow and caster-budget verification on integrated GPUs; the owner's reported fullscreen softness in the real launch path; Braver's full victory → transfer → autosave flow through the storage bridge; per-object light lists and generated distance levels as performance candidates.
 - **Release gates that are manual:** native Windows/macOS signed-package launch checks and a complete game playthrough; see the [release checklist](RELEASE-CHECKLIST.md).
 

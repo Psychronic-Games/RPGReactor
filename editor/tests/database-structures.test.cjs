@@ -145,7 +145,7 @@ test('the database wires the page in: category, title key, script, detail cleanu
     assert.match(ui, /new DatabaseStructureEditor\(databaseManager/);
     const manager = read('editor/src/DatabaseManager.js');
     assert.match(manager, /loaded\.structures = await this\.loadStructures\(projectPath\);/);
-    assert.match(manager, /if \(!await this\.saveStructures\(projectPath\)\) failed\.push\('3d\/Structures'\);/);
+    assert.match(manager, /&& !await this\.saveStructures\(projectPath\)\) failed\.push\('3d\/Structures'\);/);
     assert.match(manager, /structures: 9999,/);
     assert.match(read('editor/src/I18nManager.js'), /structures: 'menu\.structures'/);
     assert.match(read('editor/index.html'), /<script src="src\/database\/DatabaseStructureEditor\.js"><\/script>/);

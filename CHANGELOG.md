@@ -8,6 +8,8 @@
 
 ### Fixed
 
+- Actors played as 3D models no longer need a walking sheet on disk: the Save and Continue screens and status windows stopped asking for one, which failed with a load error when the sheet was never shipped.
+- Apply, OK and Save write only what changed. A one-field database edit used to rewrite every database file, the open map and its 3D sidecar.
 - Event labels in the map view stay sharp at any zoom on small-tile maps.
 - The top menu reaches everything: Database › Structures, the Build bar, the Lighting tool, Media Surfaces and Forge › Project Tools all open from the menu bar too.
 

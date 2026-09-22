@@ -6789,3 +6789,49 @@ Window_StatusBase.prototype.drawActorFace = function(actor, x, y, width, height)
     }
     _reactorDrawActorFace.call(this, actor, x, y, width, height);
 };
+
+// A character-slot actor binding needs no walking sheet on disk (the map
+// sprite loads none), so windows must not ask for one either: a sheet the
+// project never shipped is a LoadError on every Save and Continue screen.
+// Save files keep the stock [name, index] pairs, so a name is model-only
+// when every actor that starts with it is bound to a model.
+function _reactorIsModelOnlyCharacter(name) {
+    if (!name || typeof Reactor3D === "undefined" || !Reactor3D.databaseModelSpec
+        || !Reactor3D.isDatabaseSidecarReady || !Reactor3D.isDatabaseSidecarReady()
+        || typeof $dataActors === "undefined" || !$dataActors) return false;
+    let bound = false;
+    for (const actor of $dataActors) {
+        if (!actor || actor.characterName !== name) continue;
+        if (!Reactor3D.databaseModelSpec("actors", actor.id)) return false;
+        bound = true;
+    }
+    return bound;
+}
+
+// True when this actor walks the map as a 3D model rather than a sheet.
+Window_StatusBase.rrShowsModelCharacter = function(actor) {
+    return !!(actor && typeof Reactor3D !== "undefined" && Reactor3D.databaseModelSpec
+        && Reactor3D.isDatabaseSidecarReady && Reactor3D.isDatabaseSidecarReady()
+        && Reactor3D.databaseModelSpec("actors", actor.actorId()));
+};
+
+const _reactorDrawActorCharacter = Window_StatusBase.prototype.drawActorCharacter;
+Window_StatusBase.prototype.drawActorCharacter = function(actor, x, y) {
+    if (Window_StatusBase.rrShowsModelCharacter(actor)) return;
+    _reactorDrawActorCharacter.call(this, actor, x, y);
+};
+
+const _reactorDrawPartyCharacters = Window_SavefileList.prototype.drawPartyCharacters;
+Window_SavefileList.prototype.drawPartyCharacters = function(info, x, y) {
+    if (!info || !Array.isArray(info.characters)) return _reactorDrawPartyCharacters.call(this, info, x, y);
+    const characters = info.characters.map(data =>
+        data && _reactorIsModelOnlyCharacter(data[0]) ? ["", 0] : data);
+    _reactorDrawPartyCharacters.call(this, { ...info, characters }, x, y);
+};
+
+const _reactorLoadSavefileImages = DataManager.loadSavefileImages;
+DataManager.loadSavefileImages = function(info) {
+    if (!info || !Array.isArray(info.characters)) return _reactorLoadSavefileImages.call(this, info);
+    const characters = info.characters.filter(data => !(data && _reactorIsModelOnlyCharacter(data[0])));
+    _reactorLoadSavefileImages.call(this, { ...info, characters });
+};

@@ -938,8 +938,24 @@ class DatabaseManager {
         // not persist editor names until every normal database write succeeds.
         if (!this.canSaveEditorNames(projectPath)) return false;
         if (!this.saveBattlePresentation(projectPath)) return false;
+        // Only what changed since the last save (or load) is written. Every
+        // write is an fsync'd temp file renamed into place, and a sync client
+        // or scanner holding the file can stall each rename, so rewriting the
+        // whole database on every Apply made a one-field edit wait on dozens
+        // of untouched files (Tilesets.json alone is megabytes). A file with
+        // no baseline, or missing on disk, is always written.
+        const dirty = new Set(this.getDirtyKeys());
+        const unchanged = (key, filePath) => !dirty.has(key)
+            && this.savedState[key] !== undefined
+            && (!filePath || this.fs.existsSync(filePath));
+        let wroteData = false;
         for (const [key, filename] of this.dataFiles) {
             if (key === 'actionSequences' || key === 'battlePresentation') continue;
+            // System.json carries the versionId the runtime compares against
+            // save files, so it is rewritten whenever any other file was.
+            if (key !== 'system' || !wroteData) {
+                if (unchanged(key, this.path.join(projectPath, 'data', filename))) continue;
+            }
             // A project that never authored an interface gains no file.
             if (key === 'userInterfaces' && !this.hasUserInterfaces()
                 && !this.fs.existsSync(this.path.join(projectPath, 'data', filename))) {
@@ -956,12 +972,13 @@ class DatabaseManager {
             if (!await this.saveJSON(projectPath, filename, this.data[key], { skipVersionBump: true })) {
                 failed.push(filename);
             }
+            wroteData = true;
         }
-        if (!await this.saveTileset3D(projectPath)) {
+        if (!unchanged('tileset3d') && !await this.saveTileset3D(projectPath)) {
             failed.push(this.tileset3DClasses()?.FILENAME || 'Tilesets.r3d.json');
         }
-        if (!await this.saveStructures(projectPath)) failed.push('3d/Structures');
-        if (failed.length === 0 && !await this.saveEditorNames(projectPath)) {
+        if (!unchanged('structures') && !await this.saveStructures(projectPath)) failed.push('3d/Structures');
+        if (failed.length === 0 && !unchanged('editorNames') && !await this.saveEditorNames(projectPath)) {
             failed.push(this.editorNamesModule()?.FILENAME || 'Database.names.json');
         }
         if (failed.length === 0 && !this.syncQuestLog(projectPath)) {

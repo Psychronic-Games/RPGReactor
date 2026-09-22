@@ -66,6 +66,71 @@ test('DatabaseManager saveAllData propagates a file failure after attempting all
     assert.deepEqual(attempted, Array.from(manager.dataFiles, (entry) => entry[1]).filter(name => name !== 'ActionSequences.json'));
 });
 
+test('DatabaseManager saveAllData writes only the files that changed, plus System.json', async () => {
+    const DatabaseManager = loadBrowserClass('DatabaseManager.js', 'DatabaseManager');
+    const manager = new DatabaseManager();
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rr-database-dirty-save-'));
+    const dataPath = path.join(root, 'data');
+    fs.mkdirSync(dataPath);
+    try {
+        for (const [key, fileName] of manager.dataFiles) {
+            if (['userInterfaces', 'quests', 'actionSequences'].includes(key)) continue;
+            fs.writeFileSync(path.join(dataPath, fileName), key === 'system'
+                ? '{"versionId":1}'
+                : `[null,{"id":1,"name":"${key}"}]`);
+        }
+        assert.equal(await manager.loadAllData(root), true);
+        const attempted = [];
+        const saveJSON = manager.saveJSON.bind(manager);
+        manager.saveJSON = async (projectPath, fileName, data, options) => {
+            attempted.push(fileName);
+            return saveJSON(projectPath, fileName, data, options);
+        };
+
+        assert.equal(await manager.saveAllData(root), true);
+        assert.deepEqual(attempted, [], 'a clean database writes nothing');
+
+        manager.data.actors[1].name = 'Renamed';
+        assert.equal(await manager.saveAllData(root), true);
+        assert.deepEqual(attempted, ['Actors.json', 'System.json']);
+        assert.match(fs.readFileSync(path.join(dataPath, 'Actors.json'), 'utf8'), /Renamed/);
+        assert.notEqual(JSON.parse(fs.readFileSync(path.join(dataPath, 'System.json'), 'utf8')).versionId, 1);
+        assert.equal(manager.isDirty(), false);
+
+        attempted.length = 0;
+        fs.rmSync(path.join(dataPath, 'Items.json'));
+        assert.equal(await manager.saveAllData(root), true);
+        assert.deepEqual(attempted, ['Items.json', 'System.json'], 'a file missing on disk is written again');
+    } finally {
+        fs.rmSync(root, { recursive: true, force: true });
+    }
+});
+
+test('saveAll leaves an unchanged map alone and saves a changed one', async () => {
+    const ProjectController = loadBrowserClass('ProjectController.js', 'ProjectController', { window: { addEventListener() {} } });
+    const controller = new ProjectController(
+        { saveProject: async () => true },
+        { data: {}, savedState: {}, saveAllData: async () => true, isDirty: () => false },
+        { updateStatus() {} }
+    );
+    controller.projectLoaded = true;
+    controller.currentProject = { path: '/project', name: 'P', maps: [] };
+    controller.captureProjectSavedState = () => {};
+    controller.updateWindowTitle = () => {};
+    let saves = 0, dirty = false;
+    controller.tilemapManager = {
+        currentMap: { id: 1 },
+        savedMapState: 'map',
+        saveMap() { saves++; dirty = false; return true; },
+        isMapDirty: () => dirty
+    };
+    assert.equal(await controller.saveAll(), true);
+    assert.equal(saves, 0);
+    dirty = true;
+    assert.equal(await controller.saveAll(), true);
+    assert.equal(saves, 1);
+});
+
 test('DatabaseManager rejects malformed JSON without replacing the loaded database', async () => {
     const DatabaseManager = loadBrowserClass('DatabaseManager.js', 'DatabaseManager');
     const manager = new DatabaseManager();

@@ -1001,6 +1001,7 @@
                 });
             });
             semantic(Window_StatusBase.prototype, "drawActorCharacter", function(actor, x, y) {
+                if (Window_StatusBase.rrShowsModelCharacter && Window_StatusBase.rrShowsModelCharacter(actor)) return;
                 const bitmap = ImageManager.loadCharacter(actor.characterName());
                 const big = ImageManager.isBigCharacter(actor.characterName());
                 const pw = bitmap.width > 0 ? bitmap.width / (big ? 3 : 12) : 48;

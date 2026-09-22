@@ -1345,7 +1345,12 @@ class ProjectController {
         // Event drafts commit through Apply/OK. The inspector can outlive its
         // modal (and map), so flushing it here would overwrite later map drags
         // with cached model/elevation values from an earlier editing session.
-        if (this.tilemapManager?.currentMap && this.tilemapManager.saveMap() !== true) {
+        // An unchanged map is not rewritten: a database Apply goes through
+        // here too, and the open map with its 3D sidecar can be megabytes.
+        const tilemap = this.tilemapManager;
+        const mapNeedsSave = !!tilemap?.currentMap
+            && (tilemap.savedMapState == null || typeof tilemap.isMapDirty !== 'function' || tilemap.isMapDirty());
+        if (mapNeedsSave && tilemap.saveMap() !== true) {
             restoreSavedState();
             this.uiManager.updateStatus('Error saving current map');
             await this._alertSaveProblem('The current map could not be saved.');

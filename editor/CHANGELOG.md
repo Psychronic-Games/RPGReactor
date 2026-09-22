@@ -27,6 +27,10 @@
 
 ### Fixed
 
+- **A model-bound actor's stale sheet is never requested.** The map sprite already skipped the walking sheet of an actor with a character-slot model binding, but `Scene_File` still ran `DataManager.loadSavefileImages` over each save's `[characterName, index]` pairs and `Window_StatusBase.drawActorCharacter` loaded the sheet, so the Demo (actors 2–5 still name the unshipped `Actor1`) hit a LoadError on Save and Continue. Wrappers at the end of `reactor_windows.js` skip a sheet that only model-bound actors start with (save files stay stock) and skip the draw for a bound actor; the custom-UI recorder in `reactor_ui.js` uses the same `Window_StatusBase.rrShowsModelCharacter`. Runtime 20260922.1. `model-only-character-windows.test.cjs`.
+
+- **Apply writes only what changed.** Database Apply/OK runs the project save, which rewrote every file in `dataFiles` (Tilesets.json is megabytes), `Tilesets.r3d.json`, every structure plan, the editor names, the open map and its 3D sidecar, each as an fsync'd temp file renamed into place. `saveAllData` now skips a file whose data matches its saved baseline and still exists on disk, and rewrites System.json (for its versionId) whenever another file was written; `saveAll` skips an unchanged map. Measured on the Demo with North Haven open, save work fell from about 265 ms to 24 ms, and a sync client or scanner holding files can no longer stall a one-field edit across dozens of renames. `save-safety.test.cjs`.
+
 - **The top menu reaches everything.** Database › Structures was missing from the Database menu; the Build bar, the Lighting tool and Media Surfaces opened only from the toolbar; Project Tools opened only from the Forge launcher. All are in the menus now (Tools › Build in the World, Lighting Tool, Media Surfaces; Forge › Project Tools), the menu entries dispatch through the same code as the toolbar buttons, the Media Surfaces toolbar button is translated at last, and `menubar-coverage.test.cjs` holds the menus to the sidebar's category list, the toolbar's tools and the Forge registry.
 
 ### Development

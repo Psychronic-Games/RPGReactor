@@ -13,7 +13,7 @@ What the bundled Demo (`template/Demo`) references but does not ship, kept curre
 - `img/enemies` is empty and `img/sv_enemies` does not exist, so none of the five enemies (Psychronic and Tank name `Goblin`, then Crow, Treant, Hi_monster) has 2D battler art.
 - Katie and Elija (actors 6–7) name no art at all. Every face named in `Actors.json` exists.
 
-Actors and enemies with `Database.r3d.json` model bindings draw as 3D models on the map and in battle rooms regardless; the references above only matter where a 2D sprite is drawn.
+Actors 1–5 are bound to 3D models (character and battler slots in `Database.r3d.json`), so the runtime never loads their sheet or battler names: map sprites, side-view battlers, status windows and the save list all skip them (runtime 20260922.1). The names above only matter for an actor without a model, or if a binding is removed.
 
 ## Animation sounds
 
