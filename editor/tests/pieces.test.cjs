@@ -816,7 +816,7 @@ test('a plan of plans: parts, paths and named spots stamp as one and walk as one
     const manager = read('editor/src/PieceBuilderManager.js');
     assert.match(manager, /ghostGeometryFor\(plan, rot = 0, scale = 1\)/);
     assert.match(manager, /record\.spots = SP\.spots\(shaped, X0, Y0, name => this\.resolvePlan\(name\)\);/);
-    assert.match(read('editor/src/MapEditor3D.js'), /const silhouette = stamp && !bounds \? manager\.ghostGeometryFor\(stamp\) : null;/);
+    assert.match(read('editor/src/MapEditor3D.js'), /const silhouette = stamp && !bounds \? manager\.ghostGeometryFor\(stamp, turn\) : null;/);
     const context = {}; context.window = context;
     vm.runInNewContext(read('editor/src/utils/MapElevation.js'), context);
     const E = context.RRMapElevation;
@@ -976,4 +976,60 @@ test('the round pieces: a shape has a size and a turn, blocks its round footprin
     const palette = read('editor/src/PieceBuilderManager.js');
     for (const kind of ['dome', 'cylinder', 'cone']) assert.match(palette, new RegExp(`\\b${kind}: '`), kind + ' has an icon');
     assert.match(read('editor/src/utils/MapElevation.js'), /'window', 'fence', 'glass'\]/, 'the editor keeps the same kinds');
+});
+
+test('Stamp puts a plan down turned by the turn in hand, one undo step', () => {
+    const context = { console, JSON, Math, Object, Array, Number, String, Set, Map };
+    context.window = context;
+    vm.runInNewContext(read('editor/src/utils/MapElevation.js'), context);
+    vm.runInNewContext(read('editor/src/utils/StructurePlan.js'), context);
+    vm.runInNewContext(read('editor/src/PieceBuilderManager.js') + '\nwindow.PieceBuilderManager = PieceBuilderManager;', context);
+    const plan = JSON.parse(read('template/Demo/3d/Structures/Cottage.json'));
+    const stampWith = rot => {
+        const map = { width: 40, height: 40, reactor3d: { version: 1 } };
+        const manager = new context.PieceBuilderManager({ getTilemapManager: () => ({ currentMap: map }) });
+        manager.structures = () => [{ file: 'Cottage.json', name: 'Cottage', plan }];
+        manager.structure = 'Cottage.json';
+        manager.announce = () => {};
+        manager.rot = rot;
+        assert.equal(manager.stampAt(2, 3), true);
+        assert.equal(manager.undoStack.length, 1);
+        const pieces = context.RRMapElevation.pieces(map);
+        const xs = pieces.map(p => p.x), ys = pieces.map(p => p.y);
+        return [Math.max(...xs) - Math.min(...xs) + 1, Math.max(...ys) - Math.min(...ys) + 1];
+    };
+    const [w0, h0] = stampWith(0), [w1, h1] = stampWith(1);
+    assert.notEqual(w0, h0, 'the Cottage is not square, so a turn shows');
+    assert.deepEqual([w1, h1], [h0, w0]);
+});
+
+test('window glass runs along its wall, whichever way the wall runs', () => {
+    const SP = require(path.resolve(__dirname, '..', '..', 'editor/src/utils/StructurePlan.js'));
+    const dir = path.resolve(__dirname, '..', '..', 'template/Demo/3d/Structures');
+    const plans = Object.fromEntries(fs.readdirSync(dir).filter(f => f.endsWith('.json')).map(f => [f, JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'))]));
+    const resolve = name => plans[name] || plans[name + '.json'] || null;
+    let checked = 0;
+    for (const [file, plan] of Object.entries(plans)) {
+        const pieces = SP.build(plan, 0, 0, 1, 0, resolve);
+        const wallish = new Set(pieces.filter(p => ['wall', 'window', 'doorway'].includes(p.kind)).map(p => `${p.x},${p.y},${p.z}`));
+        for (const glass of pieces.filter(p => p.kind === 'glass')) {
+            // Rot 0 spans x, rot 1 spans y: the cells either side along the pane are its wall.
+            const [dx, dy] = glass.rot % 2 ? [0, 1] : [1, 0];
+            const along = [[glass.x - dx, glass.y - dy], [glass.x + dx, glass.y + dy]].filter(([x, y]) => wallish.has(`${x},${y},${glass.z}`));
+            assert.equal(along.length, 2, `${file}: the pane at ${glass.x},${glass.y} stands across its wall`);
+            checked++;
+        }
+    }
+    assert.ok(checked > 0);
+});
+
+test('a plan roof lays its gable-end columns in the wall material', () => {
+    const SP = require(path.resolve(__dirname, '..', '..', 'editor/src/utils/StructurePlan.js'));
+    const plan = JSON.parse(read('template/Demo/3d/Structures/Cottage.json'));
+    const pieces = SP.build(plan, 0, 0, 1, 0, () => null);
+    const ramps = pieces.filter(p => p.kind === 'ramp');
+    const xs = ramps.map(p => p.x), x0 = Math.min(...xs), x1 = Math.max(...xs);
+    const wall = pieces.find(p => p.kind === 'wall').material;
+    assert.ok(ramps.filter(p => p.x === x0 || p.x === x1).every(p => p.material === wall));
+    assert.ok(ramps.filter(p => p.x > x0 && p.x < x1).every(p => p.material !== wall));
 });

@@ -222,6 +222,15 @@ function open(source, destination, options) {
         }
     }
     
+    let assetProgress = null;
+    const stepAsset = (folder, name) => {
+        if (!assetProgress) return;
+        assetProgress.done++;
+        // Every file would flood the channel; a few hundred updates read as smooth.
+        if (assetProgress.done % 10 === 0 || assetProgress.done === assetProgress.total) assetProgress.report(assetProgress.done, assetProgress.total, `${folder}: ${name}`);
+    };
+    const countFiles = (dir) => { let n = 0; for (const entry of fs.readdirSync(dir, { withFileTypes: true })) n += entry.isDirectory() ? countFiles(path.join(dir, entry.name)) : 1; return n; };
+
     /** Every file of a source image folder, decoded, written to a project folder; subfolders kept. */
     function importImages(folder, target, options) {
         const root = resolveInsensitive(source, folder);
@@ -231,11 +240,16 @@ function open(source, destination, options) {
             for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
                 const full = path.join(dir, entry.name);
                 if (entry.isDirectory()) { walk(full, path.join(rel, entry.name)); continue; }
-                if (!/\.png$/i.test(entry.name)) { notes.skipped.push(`${folder}/${path.join(rel, entry.name)}: not PNG`); continue; }
+                if (!/\.png$/i.test(entry.name)) {
+                    // Another image format is art the game meant to show; saves, notes and the like left in an art folder are not.
+                    if (/\.(bmp|xyz|jpe?g|gif)$/i.test(entry.name)) notes.skipped.push(`${folder}/${path.join(rel, entry.name)}: not PNG`);
+                    continue;
+                }
                 const base = entry.name.replace(/\.png$/i, '');
                 const keying = typeof options.key === 'function' ? options.key(base) : options.key;
                 const outDir = path.join(destination, target, rel);
                 const bytes = fs.readFileSync(full);
+                stepAsset(folder, entry.name);
                 for (const [key, suffix] of keying === 'both' ? [[true, ''], [false, ' (opaque)']] : [[!!keying, '']]) {
                     let img;
                     try { img = decodePng(bytes, key); }
@@ -260,6 +274,7 @@ function open(source, destination, options) {
         mkdir(path.join(destination, target));
         for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
             if (!entry.isFile()) continue;
+            stepAsset(folder, entry.name);
             if (/\.(mid|midi)$/i.test(entry.name)) notes.skipped.push(`${folder}/${entry.name}: MIDI is not played by the runtime`);
             // The old engine found "Song.ogg.ogg" when the data asked for "Song.ogg"; the runtime wants one extension.
             let name = entry.name;
@@ -273,7 +288,11 @@ function open(source, destination, options) {
     }
     
     function importProject() {
+        // log(message, level): level is 'stage', 'info', 'warn' or 'done'; a console ignores it.
         const log = typeof options.log === 'function' ? options.log : () => {};
+        // progress(fraction 0..1, status): the import's weight is mostly maps and pictures.
+        const report = typeof options.progress === 'function' ? options.progress : () => {};
+        const span = (from, to) => (done, total, status) => report(from + (to - from) * (total ? Math.min(1, done / total) : 1), status);
         const dest = path.resolve(destination);
         if (fs.existsSync(dest) && fs.readdirSync(dest).length && !options.force) throw new Error(`${dest} exists and is not empty.`);
         mkdir(dest);
@@ -281,7 +300,8 @@ function open(source, destination, options) {
         const title = (project.ini.RPG_RT && project.ini.RPG_RT.GameTitle) || path.basename(source);
         const sys = db.system || {};
     
-        log('Copying the project skeleton and runtime…');
+        log('Copying the project skeleton and runtime…', 'stage');
+        report(0, 'Copying the project skeleton and runtime…');
         // 1. Skeleton: the Barebones template minus its art and music, then the runtime.
         // Everything but the template's art, music and runtime; img/system (icons, balloons, window skin) does come.
         copyTree(skeleton, dest, rel => {
@@ -298,7 +318,8 @@ function open(source, destination, options) {
         if (fs.existsSync(path.join(skeleton, 'js', 'reactor_plugins.js'))) fs.copyFileSync(path.join(skeleton, 'js', 'reactor_plugins.js'), path.join(dest, 'js', 'reactor_plugins.js'));
         for (const folder of ['audio/bgm', 'audio/bgs', 'audio/me', 'audio/se', 'img/animations', 'img/characters', 'img/enemies', 'img/faces', 'img/parallaxes', 'img/pictures', 'img/tilesets', 'img/titles1', 'img/titles2', 'img/battlebacks1', 'img/battlebacks2', 'img/sv_actors', 'img/sv_enemies', 'movies']) mkdir(path.join(dest, folder));
     
-        log('Converting the database…');
+        log('Converting the database…', 'stage');
+        report(0.04, 'Converting the database…');
         // 2. The database, whose item kinds and actors the events need. A chosen language (the game's
         // EasyRPG-style Language/<name>/*.po files) is baked into every text as it converts.
         const dbNotes = {};
@@ -326,12 +347,14 @@ function open(source, destination, options) {
             writeJson(path.join(dest, 'data', `${file}.json`), records.map(r => r || null));
         }
     
-        log(`Re-cutting ${(db.chipsets || []).filter(Boolean).length} chipsets into tilesets…`);
+        log(`Re-cutting ${(db.chipsets || []).filter(Boolean).length} chipsets into tilesets…`, 'stage');
+        const tilesetProgress = span(0.12, 0.3);
         // 2. Tilesets: one MZ tileset per chipset, four sheets each.
         const tilesets = [null];
         const chipsets = (db.chipsets || []).filter(Boolean);
         const sheetCache = new Map();
-        for (const chipset of chipsets) {
+        for (const [index, chipset] of chipsets.entries()) {
+            tilesetProgress(index, chipsets.length, `Tileset ${index + 1} of ${chipsets.length}`);
             const stem = `chip${String(chipset.id).padStart(3, '0')}`;
             const names = { A1: '', A2: '', B: '', C: '' };
             const file = chipset.chipset_name ? resolveInsensitive(source, path.join('ChipSet', chipset.chipset_name + '.png')) : null;
@@ -350,14 +373,18 @@ function open(source, destination, options) {
         }
         writeJson(path.join(dest, 'data', 'Tilesets.json'), tilesets);
     
-        log('Writing the maps and their events…');
+        log('Writing the maps and their events…', 'stage');
+        const mapProgress = span(0.3, 0.55);
         // 3. Maps and the tree.
         const wanted = Array.isArray(options.maps) && options.maps.length ? new Set(options.maps.map(Number)) : null;
         const infos = K.mapInfos(project.tree);
         if (translator) for (const info of infos) if (info) { const v = translator.field('maps.name', info.name); if (v !== undefined) info.name = v; }
         const written = [];
+        const mapCount = infos.filter(Boolean).length;
+        let mapIndex = 0;
         for (const info of infos) {
             if (!info) continue;
+            mapProgress(mapIndex++, mapCount, `Map ${mapIndex} of ${mapCount}: ${info.name || ''}`.trim());
             const map = project.maps[info.id];
             if (!map || (wanted && !wanted.has(info.id))) { if (wanted) infos[info.id] = null; continue; }
             const { json, notes: mapNotes } = K.mapJson(map, project.tree, info.id, map.chipset_id || 1, convertCommands, convertRoute);
@@ -411,9 +438,13 @@ function open(source, destination, options) {
         }
         writeJson(path.join(dest, 'data', 'System.json'), system);
     
-        log('Copying images and audio…');
+        log('Copying images and audio…', 'stage');
         // 5. Images and audio.
         if (!options.skipAssets) {
+        const assetFolders = ['CharSet', 'FaceSet', 'Panorama', 'Picture', 'Picture 2', 'Monster', 'Battle', 'Battle2', 'Backdrop', 'Title', 'GameOver', 'System', 'System2', 'Frame', 'Music', 'Sound'];
+        let assetTotal = 0;
+        for (const folder of assetFolders) { const root = resolveInsensitive(source, folder); if (root) assetTotal += countFiles(root); }
+        assetProgress = { done: 0, total: assetTotal, report: span(0.57, 1) };
         importImages('CharSet', 'img/characters', { key: true, transform: K.reorderCharset, rename: K.charsetName });
         importImages('FaceSet', 'img/faces', { key: true });
         importImages('Panorama', 'img/parallaxes', { key: false });
@@ -452,16 +483,25 @@ function open(source, destination, options) {
         const now = new Date().toISOString();
         writeJson(path.join(dest, 'project.rpgreactor'), { name: title, version: editorPackage.version, engine: 'RPG Reactor', engineVersion: editorPackage.version, imported: true, importedFrom: db.engine, importedAt: now, created: now, modified: now });
     
-        const summary = { source: path.resolve(source), engine: db.engine, encoding: project.encoding, title, writtenAt: now, ms: Date.now() - t0, tilesets: chipsets.length, maps: written.length, approximations: Object.assign({}, notes.maps, dbNotes), files: notes.images, skipped: notes.skipped, stage: 'assets, tilesets, maps, database, events and their commands; DynRPG comment commands kept as comments' };
+        const summary = { source: path.resolve(source), engine: db.engine, encoding: project.encoding, title, writtenAt: now, ms: Date.now() - t0, tilesets: chipsets.length, maps: written.length, approximations: Object.assign({}, notes.maps, dbNotes), files: notes.images, skipped: notes.skipped, stage: 'assets, tilesets, maps, database, events and their commands; DynRPG comment commands converted where Reactor has an equivalent' };
         fs.writeFileSync(path.join(dest, 'import-report.json'), JSON.stringify(summary, null, 2));
         summary.destination = dest;
     
-        log(`Wrote "${title}" to ${dest} in ${summary.ms} ms: ${summary.tilesets} tilesets, ${summary.maps} maps.`);
-        log(`  Files: ${Object.entries(notes.images).map(([k, v]) => `${k} ${v}`).join(', ')}`);
+        report(1, 'Done');
         const approx = Object.assign({}, notes.maps, dbNotes);
-        if (Object.keys(approx).length) console.log(`  Approximated: ${Object.entries(approx).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${v}`).join(', ')}`);
-        if (notes.skipped.length) { console.log(`  Skipped ${notes.skipped.length}:`); for (const s of notes.skipped.slice(0, 10)) console.log(`    ${s}`); if (notes.skipped.length > 10) console.log(`    … and ${notes.skipped.length - 10} more`); }
-        log(`  DynRPG comment commands are kept as comments. Details in import-report.json.`);
+        const sum = (prefix) => Object.entries(approx).filter(([k]) => k.startsWith(prefix)).reduce((n, [, v]) => n + v, 0);
+        const dynConverted = sum('dynrpg:'), dynKept = sum('dynrpgKept:');
+        const plain = Object.entries(approx).filter(([k]) => !k.startsWith('dynrpg')).sort((a, b) => b[1] - a[1]);
+        log(`Wrote "${title}" to ${dest} in ${(summary.ms / 1000).toFixed(1)} s: ${summary.tilesets} tilesets, ${summary.maps} maps.`, 'done');
+        log(`  Files: ${Object.entries(notes.images).map(([k, v]) => `${k} ${v}`).join(', ')}`, 'info');
+        if (dynConverted || dynKept) log(`  DynRPG plugin commands: ${dynConverted} converted to Reactor screen features, ${dynKept} kept as comments.`, dynKept ? 'warn' : 'info');
+        if (plain.length) log(`  Approximated: ${plain.map(([k, v]) => `${k} ${v}`).join(', ')}`, 'warn');
+        if (notes.skipped.length) {
+            log(`  Skipped ${notes.skipped.length}:`, 'warn');
+            for (const skipped of notes.skipped.slice(0, 10)) log(`    ${skipped}`, 'warn');
+            if (notes.skipped.length > 10) log(`    … and ${notes.skipped.length - 10} more (import-report.json)`, 'warn');
+        }
+        log('  Details in import-report.json.', 'info');
         return summary;
     }
     
@@ -501,7 +541,60 @@ function open(source, destination, options) {
 }
 
 function report(source, options) { return open(source, null, options).inventory(); }
-function languages(source) { return open(source, null, {}).languages(); }
+/** The languages a game ships, without reading the game: its Language/<name> folders holding .po files. */
+function languages(source) {
+    const hit = (dir, name) => { try { return fs.readdirSync(dir).find(e => e.toLowerCase() === name.toLowerCase()) || null; } catch (_) { return null; } };
+    const name = hit(source, 'Language');
+    if (!name) return [];
+    const root = path.join(source, name);
+    try {
+        if (!fs.statSync(root).isDirectory()) return [];
+        return fs.readdirSync(root, { withFileTypes: true }).filter(e => e.isDirectory() && fs.readdirSync(path.join(root, e.name)).some(f => /\.po$/i.test(f))).map(e => e.name);
+    } catch (_) { return []; }
+}
+
+/**
+ * What a folder holds, cheaply (the database and map tree, not the maps):
+ * { kind: '2000' | '2003' | 'xp' | 'vx' | 'ace' | 'mv' | 'mz' | 'reactor' | null, engine, title, maps, languages, packed }.
+ * An XP/VX/Ace game is known by its editor project file, its Data files or its
+ * packed archive (Game.rgssad / .rgss2a / .rgss3a) and its Game.ini library.
+ */
+function probe(folder) {
+    const none = { kind: null, engine: '', title: '', maps: 0, languages: [], packed: false };
+    let names;
+    try { names = fs.readdirSync(folder); } catch (_) { return none; }
+    const lower = new Map(names.map(n => [n.toLowerCase(), n]));
+    const has = (name) => lower.has(name.toLowerCase());
+    const ext = (e) => names.some(n => n.toLowerCase().endsWith(e));
+    const iniOf = (file) => { try { return fs.readFileSync(path.join(folder, lower.get(file.toLowerCase())), 'latin1'); } catch (_) { return ''; } };
+    const iniValue = (text, key) => { const m = new RegExp('^\\s*' + key + '\\s*=\\s*(.*?)\\s*$', 'mi').exec(text); return m ? m[1] : ''; };
+    if (has('RPG_RT.ldb')) {
+        const out = Object.assign({}, none, { kind: '2003', engine: 'RPG Maker 2000/2003', languages: languages(folder) });
+        out.title = iniValue(iniOf('RPG_RT.ini'), 'GameTitle') || path.basename(folder);
+        try {
+            const db = L.readDatabase(fs.readFileSync(path.join(folder, lower.get('rpg_rt.ldb'))));
+            out.engine = db.engine || out.engine;
+            out.kind = out.engine === 'RPG Maker 2000' ? '2000' : '2003';
+        } catch (_) { /* unreadable: still a 2000/2003 folder, the import will say why */ }
+        try { if (has('RPG_RT.lmt')) out.maps = L.readMapTree(fs.readFileSync(path.join(folder, lower.get('rpg_rt.lmt')))).maps.filter(m => m && m.type === 1).length; } catch (_) { /* tree unreadable */ }
+        return out;
+    }
+    const data = lower.has('data') ? (() => { try { return fs.readdirSync(path.join(folder, lower.get('data'))).map(n => n.toLowerCase()); } catch (_) { return []; } })() : [];
+    if (has('project.rpgreactor')) return Object.assign({}, none, { kind: 'reactor', engine: 'RPG Reactor', title: path.basename(folder) });
+    if (data.includes('system.json') && (has('js') || has('www'))) {
+        const scripts = (() => { try { return fs.readdirSync(path.join(folder, lower.get('js') || lower.get('www'))).map(n => n.toLowerCase()); } catch (_) { return []; } })();
+        const mz = scripts.some(n => n.startsWith('rmmz_')) || has('game.rmmzproject');
+        return Object.assign({}, none, { kind: mz ? 'mz' : 'mv', engine: mz ? 'RPG Maker MZ' : 'RPG Maker MV', title: path.basename(folder) });
+    }
+    const ini = iniOf('Game.ini');
+    const library = iniValue(ini, 'Library').toLowerCase();
+    const rgss = (kind, engine, project, archive, data2, lib) => (ext(project) || has(archive) || data.some(n => n.endsWith(data2)) || library.startsWith(lib))
+        ? Object.assign({}, none, { kind, engine, title: iniValue(ini, 'Title') || path.basename(folder), packed: has(archive), maps: data.filter(n => /^map\d+\./.test(n) && n.endsWith(data2)).length }) : null;
+    return rgss('ace', 'RPG Maker VX Ace', '.rvproj2', 'Game.rgss3a', '.rvdata2', 'rgss3')
+        || rgss('vx', 'RPG Maker VX', '.rvproj', 'Game.rgss2a', '.rvdata', 'rgss2')
+        || rgss('xp', 'RPG Maker XP', '.rxproj', 'Game.rgssad', '.rxdata', 'rgss1')
+        || none;
+}
 function importProject(source, destination, options) { return open(source, destination, options).importProject(); }
 
-module.exports = { open, report, printReport, importProject, languages };
+module.exports = { open, report, printReport, importProject, languages, probe };

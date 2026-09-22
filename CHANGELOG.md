@@ -8,6 +8,9 @@
 
 ### Fixed
 
+- **File › Import Project…** works from the editor (it failed at once with "TextDecoder is not defined"), names what a picked folder holds (RPG Maker 2000, 2003, XP, VX, VX Ace, MV, MZ or a Reactor project, with its title and map count) and imports with a progress bar and a console of stages, warnings and a summary.
+- Stamped buildings: gable ends are one smooth wall instead of red steps, window glass sits in east and west walls instead of showing as a line through them, and the Build bar's turn (R/Q/E) now turns a plan before it is stamped. Existing buildings pick this up when moved, turned or re-stamped.
+- A 3D map with no tiles and no parallax shows its room floor in the flat view instead of black.
 - Actors played as 3D models no longer need a walking sheet on disk: the Save and Continue screens and status windows stopped asking for one, which failed with a load error when the sheet was never shipped.
 - Apply, OK and Save write only what changed. A one-field database edit used to rewrite every database file, the open map and its 3D sidecar.
 - Event labels in the map view stay sharp at any zoom on small-tile maps.

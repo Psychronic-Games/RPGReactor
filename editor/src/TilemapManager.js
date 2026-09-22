@@ -2341,7 +2341,20 @@ class TilemapManager {
         const generation = this._mapLoadGeneration;
         const map = this.currentMap;
         const parallaxLayer = this.layers.parallax;
-        const { parallaxName, parallaxShow, parallaxLoopX, parallaxLoopY, parallaxSx, parallaxSy } = this.currentMap;
+        let { parallaxName, parallaxShow, parallaxLoopX, parallaxLoopY, parallaxSx, parallaxSy } = this.currentMap;
+        // A 3D map with no parallax stands on its room floor, which only the
+        // 3D view draws; without it the flat view of a tileless map (North
+        // Haven) is black. The floor tiles at the image's own scale, as the
+        // 3D view lays it, and does not scroll.
+        const roomFloor = this.currentMap.reactor3d?.room?.floor;
+        const hasParallax = parallaxShow && parallaxName;
+        if (!hasParallax && typeof roomFloor === 'string' && roomFloor.trim()
+            && /<3d>/i.test(this.currentMap.note || '')) {
+            parallaxName = roomFloor.trim();
+            parallaxShow = true;
+            parallaxSx = parallaxSy = 0;
+            parallaxLoopX = parallaxLoopY = false;
+        }
 
         if (this.layers.parallax) {
             this.layers.parallax.removeChildren().forEach(child => child.destroy?.({ children: true }));

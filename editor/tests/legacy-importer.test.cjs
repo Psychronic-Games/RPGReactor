@@ -14,7 +14,7 @@ const editorRoot = path.resolve(__dirname, '..');
 const deep8 = path.resolve(editorRoot, '..', 'template', 'DEEP 8');
 
 test('the module exposes report, printReport and importProject, and the CLI and worker use it', () => {
-    assert.deepEqual(Object.keys(I).sort(), ['importProject', 'languages', 'open', 'printReport', 'report']);
+    assert.deepEqual(Object.keys(I).sort(), ['importProject', 'languages', 'open', 'printReport', 'probe', 'report']);
     const cli = fs.readFileSync(path.join(editorRoot, 'build-scripts', 'import-legacy-project.cjs'), 'utf8');
     assert.match(cli, /LegacyImporter\.js/);
     assert.match(cli, /I\.importProject\(/);
@@ -23,7 +23,8 @@ test('the module exposes report, printReport and importProject, and the CLI and 
     assert.match(worker, /I\.importProject\(source, destination/);
     assert.match(fs.readFileSync(path.join(editorRoot, 'build-scripts', 'import-legacy-project.cjs'), 'utf8'), /--language/);
     const dialog = fs.readFileSync(path.join(editorRoot, 'src', 'LegacyImportDialog.js'), 'utf8');
-    assert.match(dialog, /\.languages\(source\)/, 'the dialog lists the languages a project ships');
+    assert.match(dialog, /\.probe\(folder\)/, 'the dialog identifies the folder through the importer');
+    assert.match(dialog, /fillLanguages\(probed\.languages\)/, 'the dialog lists the languages a project ships');
     assert.match(dialog, /language: languageSelect\.value \|\| undefined/);
 });
 
@@ -94,4 +95,34 @@ test('a language the game ships is baked into every text: messages, choices, plu
         const german = texts.filter(t => /\b(und|nicht|ist)\b/.test(t));
         assert.ok(texts.length > 1000 && german.length < texts.length / 50, `German lines left: ${german.length} of ${texts.length} (the game's own untranslated placeholders)`);
     } finally { fs.rmSync(dest, { recursive: true, force: true }); }
+});
+
+test('the import worker has a TextDecoder before the importer loads (NW.js workers get none)', () => {
+    const fs = require('node:fs'), path = require('node:path');
+    const source = fs.readFileSync(path.join(__dirname, '..', 'build-scripts', 'legacy-import-worker.js'), 'utf8');
+    const install = source.indexOf("globalThis.TextDecoder = require('node:util').TextDecoder");
+    assert.ok(install > 0 && install < source.indexOf("require(path.join(__dirname, '..', 'src', 'legacy', 'LegacyImporter.js'))"));
+});
+
+test('probe names the engine of a folder without reading its maps', () => {
+    const os = require('node:os');
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rr-probe-'));
+    const make = (name, files) => { const dir = path.join(root, name); for (const [file, text] of Object.entries(files)) { fs.mkdirSync(path.dirname(path.join(dir, file)), { recursive: true }); fs.writeFileSync(path.join(dir, file), text); } return dir; };
+    try {
+        const xp = I.probe(make('xp', { 'Game.rgssad': '', 'Game.ini': '[Game]\r\nLibrary=RGSS104E.dll\r\nTitle=Old Tale\r\n' }));
+        assert.deepEqual([xp.kind, xp.engine, xp.title, xp.packed], ['xp', 'RPG Maker XP', 'Old Tale', true]);
+        const ace = I.probe(make('ace', { 'Data/Map001.rvdata2': '', 'Data/Map002.rvdata2': '', 'Game.ini': '[Game]\nLibrary=System\\RGSS301.dll\n' }));
+        assert.deepEqual([ace.kind, ace.maps, ace.packed], ['ace', 2, false]);
+        assert.equal(I.probe(make('vx', { 'Game.rgss2a': '' })).kind, 'vx');
+        assert.equal(I.probe(make('mz', { 'data/System.json': '{}', 'js/rmmz_core.js': '' })).kind, 'mz');
+        assert.equal(I.probe(make('mv', { 'data/System.json': '{}', 'js/rpg_core.js': '' })).kind, 'mv');
+        assert.equal(I.probe(make('reactor', { 'project.rpgreactor': '{}', 'data/System.json': '{}', 'js/reactor_main.js': '' })).kind, 'reactor');
+        assert.equal(I.probe(make('empty', { 'readme.txt': '' })).kind, null);
+        assert.equal(I.probe(path.join(root, 'missing')).kind, null);
+    } finally { fs.rmSync(root, { recursive: true, force: true }); }
+    const deep8 = path.resolve(editorRoot, '..', 'template', 'DEEP 8');
+    if (fs.existsSync(deep8)) {
+        const found = I.probe(deep8);
+        assert.deepEqual([found.kind, found.engine, found.title, found.maps, found.languages], ['2003', 'RPG Maker 2003', 'Deep 8', 266, ['english']]);
+    }
 });

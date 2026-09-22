@@ -493,7 +493,13 @@
                 put('floor', x, y, z, 0, M.floor);
                 if (doors.has(key)) { put('doorway', x, y, z, 0, wallMaterial); continue; }
                 // A window is its sill and header with a pane of glass between them.
-                if (windowCells.has(key)) { put('window', x, y, z, 0, M.wall); put('glass', x, y, z, 0, M.glass || 'Glass'); continue; }
+                // The pane is thin across v, so a wall running north-south (a room to
+                // its east or west) turns it a quarter, or it stands through the wall
+                // and its edge shows on the face as a line the height of the storey.
+                if (windowCells.has(key)) {
+                    const across = roomAt(rooms, x - 1, y) || roomAt(rooms, x + 1, y) ? 1 : 0;
+                    put('window', x, y, z, 0, M.wall); put('glass', x, y, z, across, M.glass || 'Glass'); continue;
+                }
                 put('wall', x, y, z, 0, wallMaterial);
             }
         });
@@ -507,13 +513,16 @@
         }
         // A roof over each building of the top floor (its rooms and their walls): ramps up
         // from each eave for `pitch` rows, a flat top between, gables of blocks at the ends.
+        // The two end columns are the gable walls' own tops, in the wall's material: a
+        // roof-coloured wedge over each step of blocks read as a row of teeth.
         const roof = Object.assign({ pitch: 6 }, plan.roof || {});
         if (roof.pitch !== null) for (const [bx0, by0, bx1, by1] of buildingBoxes(top ? top.rooms : {}, plan.size)) {
             const bh = by1 - by0 + 1;
             const pitch = Math.max(0, Math.min(Math.floor((bh - 1) / 2), Math.floor(roof.pitch)));
             for (let x = bx0; x <= bx1; x++) {
-                for (let i = 0; i < pitch; i++) { put('ramp', x, by0 + i, roofZ + i, 0, M.roof); put('ramp', x, by1 - i, roofZ + i, 2, M.roof); }
-                for (let y = by0 + pitch; y <= by1 - pitch; y++) put('floor', x, y, roofZ + pitch, 0, M.roof);
+                const material = x === bx0 || x === bx1 ? M.wall : M.roof;
+                for (let i = 0; i < pitch; i++) { put('ramp', x, by0 + i, roofZ + i, 0, material); put('ramp', x, by1 - i, roofZ + i, 2, material); }
+                for (let y = by0 + pitch; y <= by1 - pitch; y++) put('floor', x, y, roofZ + pitch, 0, material);
             }
             for (const gx of [bx0, bx1]) for (let y = by0 + 1; y < by1; y++) {
                 const height = Math.min(y - by0, by1 - y, pitch);

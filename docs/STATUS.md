@@ -44,8 +44,8 @@ Each system has a guide; the guide is the authority on its behaviour and limits.
 
 Recorded on 2026-09-20 and 2026-09-21 unless dated otherwise.
 
-- **World builder rough edges:** stepped block gables and roof-line teeth seen from far above (a gable piece is the fix); the flat view of North Haven is black (no tiles, no map parallax); the Stamp ghost is rebuilt per plan and per turn.
-- **Next agreed builder work:** furniture pieces and room contents in plans; a spot/template picker in the panel; gable pieces; a hamlet-of-hamlets stress test; lighting normals on slopes; hip roofs.
+- **World builder rough edges:** a thin line of floor slab shows between stacked windows; the Demo's stamped Manor and Hamlet predate the clean gables and turned window glass (2026-09-22) until re-stamped.
+- **Next agreed builder work:** furniture pieces and room contents in plans; a spot/template picker in the panel; a hamlet-of-hamlets stress test; lighting normals on slopes; hip roofs.
 - **Quests:** tracker window, label fields and reward actions.
 - **Custom interfaces:** the adapters listed above.
 - **Demo content:** actors 1–5 play as 3D models and never load the stock `Actor1` / `Actor1_2` / `Actor2_2` names they still carry; none of the five enemies has 2D battler art; original art is being authored. Every sound the Demo names exists on disk (`demo-template-completeness.test.cjs`). See [demo-missing-se.md](demo-missing-se.md).

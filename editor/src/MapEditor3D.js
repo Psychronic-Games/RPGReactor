@@ -1891,12 +1891,13 @@ class MapEditor3D {
         const bounds = manager.mode === 'move' ? manager.selectedGroupBounds() : null;
         const stamp = manager.mode === 'stamp' ? manager.structurePlan() : bounds ? { size: [bounds.x1 - bounds.x0 + 1, bounds.y1 - bounds.y0 + 1] } : null;
         if (manager.mode === 'move' && !bounds) { this.hidePieceGhost(); return; }
-        const key = stamp ? (bounds ? 'move:' + manager.selectedGroup : 'stamp:' + manager.structure) : (erase ? 'erase' : manager.kind) + ':' + manager.rot + ':' + JSON.stringify([manager.sizeFor ? manager.sizeFor(manager.kind) : null, manager.params && manager.params[manager.kind]]);
+        const turn = stamp && !bounds ? (manager.rot || 0) : 0;
+        const key = stamp ? (bounds ? 'move:' + manager.selectedGroup : 'stamp:' + manager.structure + ':' + turn) : (erase ? 'erase' : manager.kind) + ':' + manager.rot + ':' + JSON.stringify([manager.sizeFor ? manager.sizeFor(manager.kind) : null, manager.params && manager.params[manager.kind]]);
         if (!this.pieceGhost || this.pieceGhost.userData.key !== key) {
             this.hidePieceGhost(true);
             // A plan's ghost is the building itself, translucent; a selected
             // building being moved shows its footprint as a slab.
-            const silhouette = stamp && !bounds ? manager.ghostGeometryFor(stamp) : null;
+            const silhouette = stamp && !bounds ? manager.ghostGeometryFor(stamp, turn) : null;
             const geometry = silhouette
                 || (stamp
                     ? new THREE.BoxGeometry(stamp.size[0], 0.3, stamp.size[1]).translate(stamp.size[0] / 2, 0.15, stamp.size[1] / 2)
@@ -1909,7 +1910,9 @@ class MapEditor3D {
         }
         const base = Reactor3D.pieceBaseAt(mapData, target.x, target.y);
         if (stamp) {
-            const x = Math.max(0, Math.min(mapData.width - stamp.size[0], target.x)), y = Math.max(0, Math.min(mapData.height - stamp.size[1], target.y));
+            // A quarter turn swaps the footprint's sides.
+            const [W, H] = turn % 2 ? [stamp.size[1], stamp.size[0]] : stamp.size;
+            const x = Math.max(0, Math.min(mapData.width - W, target.x)), y = Math.max(0, Math.min(mapData.height - H, target.y));
             this.pieceGhost.position.set(x, base, y);
         } else this.pieceGhost.position.set(target.x, base + target.z, target.y);
         this.pieceGhost.visible = true;

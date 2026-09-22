@@ -535,21 +535,14 @@ class PieceBuilderManager {
         const map = this.currentMap(), elevation = this.elevation(), plan = this.structurePlan();
         const SP = typeof RRStructurePlan !== 'undefined' ? RRStructurePlan : null;
         if (!map || !elevation || !plan || !SP) return false;
-        const [W, H] = plan.size;
-        const X0 = Math.max(0, Math.min(map.width - W, Math.floor(x))), Y0 = Math.max(0, Math.min(map.height - H, Math.floor(y)));
-        if (W > map.width || H > map.height) return false;
-        this.undoStack.push(this._snapshot(map));
+        // The turn in hand (R/Q/E) turns the building before it goes down;
+        // _lay levels the pad and clamps the footprint to the map.
+        const saved = this._snapshot(map);
+        const group = elevation.nextPieceGroup(map);
+        if (!this._lay(map, plan, { group, plan: this.structure, x: Math.floor(x), y: Math.floor(y), rot: this.rot || 0, scale: 1 })) return false;
+        this.undoStack.push(saved);
         if (this.undoStack.length > 50) this.undoStack.shift();
         this.redoStack.length = 0;
-        if (elevation.hasTerrain(map)) {
-            const grid = elevation.terrain(map), stride = map.width + 1;
-            let sum = 0, n = 0;
-            for (let yy = Y0; yy <= Y0 + H; yy++) for (let xx = X0; xx <= X0 + W; xx++) { sum += Number(grid[yy * stride + xx]) || 0; n++; }
-            const mean = Math.round((sum / n) * 1000) / 1000;
-            for (let yy = Y0; yy <= Y0 + H; yy++) for (let xx = X0; xx <= X0 + W; xx++) grid[yy * stride + xx] = mean;
-        }
-        const group = elevation.nextPieceGroup(map);
-        this._lay(map, plan, { group, plan: this.structure, x: X0, y: Y0, rot: 0, scale: 1 });
         this.announce(true);
         this.refreshStatus();
         return true;

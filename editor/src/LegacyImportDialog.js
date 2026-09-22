@@ -5,12 +5,20 @@
  * and its name, and the text encoding when the ini does not say; runs the
  * importer in a worker so the editor keeps painting while pictures and
  * audio copy; shows the importer's own log; and offers to open the result.
- * RPG Maker XP and VX Ace projects are recognised and declined for now.
+ * The folder is identified as soon as it is picked (2000, 2003, XP, VX, VX
+ * Ace, MV, MZ or a Reactor project, with its title and map count); only
+ * 2000 and 2003 import for now. The import runs with a progress bar and a
+ * console of the importer's stages, warnings and summary.
  */
 (function (root) {
     'use strict';
 
     const ENCODINGS = [['', 'Automatic'], ['1252', 'Windows-1252 (Western European)'], ['932', 'Shift_JIS (Japanese)'], ['949', 'EUC-KR (Korean)'], ['936', 'GBK (Simplified Chinese)'], ['950', 'Big5 (Traditional Chinese)'], ['1251', 'Windows-1251 (Cyrillic)'], ['1250', 'Windows-1250 (Central European)']];
+
+    /** The importer's probe, when the module can be loaded: engine, title, maps, languages. */
+    function probeOf(path, appRoot, folder) {
+        try { return require(path.join(appRoot, 'src', 'legacy', 'LegacyImporter.js')).probe(folder); } catch (_) { return null; }
+    }
 
     /** What kind of RPG Maker project a folder holds, by its marker file. */
     function detect(fs, path, folder) {
@@ -54,7 +62,7 @@
         overlay.className = 'rr-modal-overlay';
         const modal = document.createElement('div');
         modal.className = 'rr-modal';
-        modal.style.width = 'min(640px, 92vw)';
+        modal.style.width = 'min(720px, 94vw)';
         modal.setAttribute('role', 'dialog');
         modal.setAttribute('aria-modal', 'true');
         modal.setAttribute('aria-labelledby', 'rr-legacy-import-title');
@@ -78,6 +86,8 @@
         const label = (text, forId) => { const l = document.createElement('label'); l.setAttribute('for', forId); l.style.cssText = 'color:var(--color-text);font-size:13px;'; l.textContent = text; return l; };
         const input = (id, readOnly) => { const i = document.createElement('input'); i.type = 'text'; i.id = id; i.readOnly = !!readOnly; i.setAttribute('autocomplete', 'off'); i.setAttribute('spellcheck', 'false'); i.style.cssText = 'width:100%;box-sizing:border-box;padding:7px 10px;font-size:13px;color:var(--color-text);background:var(--color-bg-input, var(--color-bg-deep));border:1px solid var(--color-border);border-radius:var(--radius-sm, 4px);'; return i; };
         const button = (id, text, cls) => { const b = document.createElement('button'); b.type = 'button'; b.id = id; b.className = cls || 'rr-btn-secondary'; b.textContent = text; return b; };
+        // A button's text is re-applied by the i18n pass from its English source, so the source moves with it.
+        const setLabel = (el, english) => { el.setAttribute('data-i18n-text-source', english); el.textContent = tt(english); };
         const hint = (text) => { const d = document.createElement('div'); d.style.cssText = 'grid-column:2 / span 2;color:var(--color-text-muted);font-size:12px;margin-top:-4px;'; d.textContent = text; return d; };
 
         const sourceInput = input('rr-legacy-import-source', true);
@@ -92,30 +102,76 @@
         const languageSelect = document.createElement('select');
         languageSelect.id = 'rr-legacy-import-language';
         languageSelect.style.cssText = encodingSelect.style.cssText;
-        const fillLanguages = (source) => {
+        const fillLanguages = (names) => {
             languageSelect.innerHTML = '';
             const original = document.createElement('option'); original.value = ''; original.textContent = tt('Original text'); languageSelect.appendChild(original);
-            let names = [];
-            try { names = require(path.join(appRoot, 'src', 'legacy', 'LegacyImporter.js')).languages(source); } catch (_) { names = []; }
+            names = Array.isArray(names) ? names : [];
             for (const n of names) { const o = document.createElement('option'); o.value = n; o.textContent = n; languageSelect.appendChild(o); }
             languageSelect.disabled = names.length === 0;
         };
         const spacer = () => document.createElement('div');
 
+        const detectedEl = document.createElement('div');
+        detectedEl.id = 'rr-legacy-import-detected';
+        detectedEl.setAttribute('aria-live', 'polite');
+        detectedEl.style.cssText = 'grid-column:2 / span 2;display:flex;align-items:center;gap:8px;min-height:24px;font-size:13px;color:var(--color-text-muted);';
+        detectedEl.textContent = '—';
         body.append(label(tt('Source folder'), sourceInput.id), sourceInput, sourceBrowse, hint(tt('The folder that holds RPG_RT.ldb.')));
+        body.append(label(tt('Detected'), detectedEl.id), detectedEl);
         body.append(label(tt('Create in'), parentInput.id), parentInput, parentBrowse);
         body.append(label(tt('Project name'), nameInput.id), nameInput, spacer());
         body.append(label(tt('Text encoding'), encodingSelect.id), encodingSelect, spacer(), hint(tt('Leave on Automatic unless names and messages come out garbled.')));
         body.append(label(tt('Language'), languageSelect.id), languageSelect, spacer(), hint(tt('A translation the game ships in its Language folder, baked into every text.')));
-        fillLanguages('');
+        fillLanguages([]);
 
         const errorEl = document.createElement('div');
         errorEl.setAttribute('role', 'alert');
         errorEl.style.cssText = 'grid-column:1 / -1;color:var(--color-danger-bright, #e5484d);font-size:12px;min-height:1.2em;';
-        const logEl = document.createElement('pre');
+        // The console: a progress bar over the importer's own lines, coloured by level.
+        const consoleEl = document.createElement('div');
+        consoleEl.style.cssText = 'grid-column:1 / -1;display:flex;flex-direction:column;gap:6px;margin-top:4px;';
+        const consoleHead = document.createElement('div');
+        consoleHead.style.cssText = 'display:flex;justify-content:space-between;align-items:baseline;';
+        const consoleTitle = document.createElement('span');
+        consoleTitle.style.cssText = 'color:var(--color-text);font-size:13px;font-weight:600;';
+        consoleTitle.textContent = tt('Import Log');
+        const elapsedEl = document.createElement('span');
+        elapsedEl.style.cssText = 'color:var(--color-text-muted);font-size:12px;font-variant-numeric:tabular-nums;';
+        consoleHead.append(consoleTitle, elapsedEl);
+        const progressRow = document.createElement('div');
+        progressRow.style.cssText = 'display:none;justify-content:space-between;gap:12px;font-size:12px;';
+        const statusEl = document.createElement('span');
+        statusEl.id = 'rr-legacy-import-status';
+        statusEl.style.cssText = 'color:var(--color-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;';
+        const percentEl = document.createElement('span');
+        percentEl.style.cssText = 'color:var(--color-text-muted);font-variant-numeric:tabular-nums;';
+        progressRow.append(statusEl, percentEl);
+        const track = document.createElement('div');
+        track.setAttribute('role', 'progressbar');
+        track.setAttribute('aria-valuemin', '0');
+        track.setAttribute('aria-valuemax', '100');
+        track.style.cssText = 'display:none;height:10px;background:var(--color-bg-panel);border:1px solid var(--color-border);border-radius:4px;overflow:hidden;';
+        const bar = document.createElement('div');
+        bar.id = 'rr-legacy-import-bar';
+        bar.style.cssText = 'height:100%;width:0%;background:linear-gradient(90deg, var(--color-accent-deep), var(--color-accent-hover));transition:width 0.2s ease;';
+        track.appendChild(bar);
+        const logEl = document.createElement('div');
         logEl.id = 'rr-legacy-import-log';
-        logEl.style.cssText = 'grid-column:1 / -1;margin:0;max-height:200px;overflow:auto;padding:8px 10px;font-size:12px;line-height:1.4;color:var(--color-text);background:var(--color-bg-deep);border:1px solid var(--color-border);border-radius:var(--radius-sm, 4px);white-space:pre-wrap;display:none;';
-        body.append(errorEl, logEl);
+        logEl.className = 'audio-scroll';
+        logEl.style.cssText = 'height:220px;overflow-y:auto;padding:8px 10px;font-family:Consolas, Monaco, monospace;font-size:12px;line-height:1.45;color:var(--color-text);background:var(--color-bg-panel);border:1px solid var(--color-border);border-radius:4px;white-space:pre-wrap;word-wrap:break-word;';
+        const ready = document.createElement('div');
+        ready.style.color = 'var(--color-text-muted)';
+        ready.textContent = tt('Ready to import.');
+        logEl.appendChild(ready);
+        consoleEl.append(consoleHead, progressRow, track, logEl);
+        body.append(errorEl, consoleEl);
+        const LEVEL_COLOURS = {
+            stage: 'var(--color-accent-hover)',
+            info: 'var(--color-text)',
+            warn: 'var(--color-warning-text, var(--color-warning, #d9a441))',
+            done: 'var(--color-success, #1db954)',
+            error: 'var(--color-danger-bright, #e5484d)'
+        };
 
         const footer = document.createElement('div');
         footer.className = 'rr-modal-footer';
@@ -136,6 +192,7 @@
                 settled = true;
                 document.removeEventListener('keydown', handleKeyDown, true);
                 if (worker) { try { worker.terminate(); } catch (_) { /* gone */ } }
+                clearInterval(clock);
                 overlay.remove();
                 if (previouslyFocused && previouslyFocused.isConnected !== false && typeof previouslyFocused.focus === 'function') previouslyFocused.focus();
                 resolve(value);
@@ -148,60 +205,121 @@
                 chooser.addEventListener('change', () => { const picked = chooser.files?.[0]?.path || chooser.value; if (picked) { target.value = picked; errorEl.textContent = ''; if (onPick) onPick(picked); } });
                 chooser.click();
             };
+            let probed = null;
+            const showDetected = (info) => {
+                detectedEl.textContent = '';
+                if (!info || !info.kind) { detectedEl.textContent = '—'; return; }
+                const badge = document.createElement('span');
+                const importable = info.kind === '2000' || info.kind === '2003';
+                badge.textContent = info.engine;
+                badge.style.cssText = `padding:2px 8px;border-radius:10px;font-size:12px;font-weight:600;border:1px solid ${importable ? 'var(--color-success-border, var(--color-accent-border))' : 'var(--color-warning-border, var(--color-border))'};color:${importable ? 'var(--color-success, var(--color-accent))' : LEVEL_COLOURS.warn};`;
+                const text = document.createElement('span');
+                text.style.cssText = 'color:var(--color-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;';
+                const parts = [info.title ? `“${info.title}”` : ''];
+                if (info.maps) parts.push(`${info.maps} ${tt('maps')}`);
+                if (info.packed) parts.push(tt('packed'));
+                text.textContent = parts.filter(Boolean).join(' · ');
+                detectedEl.append(badge, text);
+            };
+            const reason = (info) => {
+                if (!info || !info.kind) return tt('Not an RPG Maker 2000/2003 project: no RPG_RT.ldb here.');
+                if (info.kind === 'xp' || info.kind === 'vx' || info.kind === 'ace') return tt('RPG Maker XP, VX and VX Ace games are recognised but cannot be imported yet.');
+                if (info.kind === 'reactor') return tt('Already an RPG Reactor project: open it with File › Open Project.');
+                if (info.kind === 'mv' || info.kind === 'mz') return tt('RPG Maker MV and MZ projects open directly: use File › Open Project.');
+                return '';
+            };
             sourceBrowse.addEventListener('click', () => browse(sourceInput, picked => {
-                const kind = detect(fs, path, picked);
-                if (!nameInput.value.trim()) nameInput.value = path.basename(picked).replace(/[\\/:*?"<>|]/g, '_') + ' (Reactor)';
-                fillLanguages(picked);
-                if (kind === 'xp' || kind === 'ace' || kind === 'vx') errorEl.textContent = tt('RPG Maker XP and VX Ace projects are not supported yet.');
-                else if (!kind) errorEl.textContent = tt('Not an RPG Maker 2000/2003 project: no RPG_RT.ldb here.');
+                probed = probeOf(path, appRoot, picked) || { kind: detect(fs, path, picked), engine: '', title: '', maps: 0, languages: [] };
+                // The name follows the picked game until the author types their own.
+                if (!nameInput.value.trim() || nameInput.dataset.auto === 'true') {
+                    nameInput.value = (probed.title || path.basename(picked)).replace(/[\\/:*?"<>|]/g, '_').trim() + ' (Reactor)';
+                    nameInput.dataset.auto = 'true';
+                }
+                showDetected(probed);
+                fillLanguages(probed.languages);
+                errorEl.textContent = reason(probed);
             }));
             parentBrowse.addEventListener('click', () => browse(parentInput, picked => { try { localStorage.setItem('rrLegacyImportParent', picked); } catch (_) { /* private mode */ } }));
-            const log = (message) => { logEl.style.display = 'block'; logEl.textContent += message + '\n'; logEl.scrollTop = logEl.scrollHeight; };
+            const log = (message, level = 'info') => {
+                const line = document.createElement('div');
+                line.textContent = message;
+                line.style.color = LEVEL_COLOURS[level] || LEVEL_COLOURS.info;
+                if (level === 'stage' || level === 'done' || level === 'error') line.style.fontWeight = '600';
+                logEl.appendChild(line);
+                logEl.scrollTop = logEl.scrollHeight;
+            };
+            let startedAt = 0, clock = null;
+            const tick = () => { const s = Math.floor((Date.now() - startedAt) / 1000); elapsedEl.textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+            const setProgress = (fraction, status, state) => {
+                const pct = Math.max(0, Math.min(100, fraction * 100));
+                progressRow.style.display = 'flex';
+                track.style.display = 'block';
+                bar.style.width = `${pct}%`;
+                track.setAttribute('aria-valuenow', String(Math.round(pct)));
+                percentEl.textContent = `${Math.round(pct)}%`;
+                if (status) { statusEl.textContent = status; statusEl.title = status; }
+                bar.style.background = state === 'done' ? 'linear-gradient(90deg, #16825d, var(--color-success, #1db954))'
+                    : state === 'error' ? 'var(--color-danger-bright, #e5484d)'
+                    : 'linear-gradient(90deg, var(--color-accent-deep), var(--color-accent-hover))';
+            };
             const start = () => {
                 const source = sourceInput.value.trim(), parent = parentInput.value.trim(), name = nameInput.value.trim();
-                const kind = detect(fs, path, source);
-                if (!source || !kind) { errorEl.textContent = tt('Not an RPG Maker 2000/2003 project: no RPG_RT.ldb here.'); return; }
-                if (kind !== '2003') { errorEl.textContent = tt('RPG Maker XP and VX Ace projects are not supported yet.'); return; }
+                const info = source ? (probed && sourceInput.value === source ? probed : (probeOf(path, appRoot, source) || { kind: detect(fs, path, source) })) : null;
+                if (!info || (info.kind !== '2000' && info.kind !== '2003')) { errorEl.textContent = reason(info); return; }
                 if (!parent || !fs.existsSync(parent)) { errorEl.textContent = tt('Choose a folder to create the project in.'); return; }
                 if (!name || /[\\/:*?"<>|\0-\x1f]/.test(name) || /^\.|[. ]$/.test(name)) { errorEl.textContent = tt('Project name must be a safe single folder name.'); return; }
                 destination = path.join(parent, name);
                 if (fs.existsSync(destination) && fs.readdirSync(destination).length) { errorEl.textContent = tt('That folder already exists and is not empty.'); return; }
                 errorEl.textContent = '';
                 logEl.textContent = '';
-                for (const el of [sourceBrowse, parentBrowse, nameInput, encodingSelect, languageSelect, importButton]) el.disabled = true;
-                importButton.textContent = tt('Importing…');
+                startedAt = Date.now(); tick(); clock = setInterval(tick, 1000);
+                setProgress(0, tt('Importing…'));
+                const setBusy = busy => {
+                    for (const el of [sourceBrowse, parentBrowse, nameInput, encodingSelect, importButton]) el.disabled = busy;
+                    // A source with no translations keeps the language list off.
+                    languageSelect.disabled = busy || languageSelect.options.length <= 1;
+                };
+                const failed = message => {
+                    errorEl.textContent = `${tt('Import failed:')} ${message}`;
+                    log(`${tt('Import failed:')} ${message}`, 'error');
+                    setProgress(Number(bar.style.width.replace('%', '')) / 100 || 0, tt('Import failed:').replace(/:$/, ''), 'error');
+                    clearInterval(clock);
+                    worker = null;
+                    setBusy(false);
+                    importButton.style.display = '';
+                    setLabel(importButton, 'Import');
+                };
+                setBusy(true);
+                setLabel(importButton, 'Importing…');
                 let workerPath = path.join(appRoot, 'build-scripts', 'legacy-import-worker.js');
                 try {
                     const { Worker } = require('worker_threads');
                     worker = new Worker(workerPath, { workerData: { source, destination, options: { encoding: encodingSelect.value || undefined, language: languageSelect.value || undefined } } });
                     worker.on('message', msg => {
-                        if (msg.type === 'log') log(msg.message);
+                        if (msg.type === 'log') log(msg.message, msg.level);
+                        else if (msg.type === 'progress') setProgress(msg.fraction, msg.status);
                         else if (msg.type === 'done') {
                             worker = null;
                             importButton.style.display = 'none';
                             if (msg.success) {
-                                cancelButton.textContent = tt('Close');
+                                clearInterval(clock); tick();
+                                setProgress(1, tt('Import complete.'), 'done');
+                                setLabel(cancelButton, 'Close');
                                 openButton.style.display = '';
                                 openButton.focus();
-                            } else {
-                                errorEl.textContent = `${tt('Import failed:')} ${msg.error}`;
-                                for (const el of [sourceBrowse, parentBrowse, nameInput, encodingSelect, importButton]) el.disabled = false;
-                                importButton.style.display = '';
-                                importButton.textContent = tt('Import');
-                            }
+                            } else failed(msg.error);
                         }
                     });
-                    worker.on('error', err => { errorEl.textContent = `${tt('Import failed:')} ${err.message || err}`; importButton.disabled = false; importButton.textContent = tt('Import'); worker = null; });
+                    worker.on('error', err => failed(err.message || err));
                 } catch (error) {
-                    errorEl.textContent = `${tt('Import failed:')} ${error.message || error}`;
-                    importButton.disabled = false; importButton.textContent = tt('Import');
+                    failed(error.message || error);
                 }
             };
             const handleKeyDown = event => {
                 if (event.key === 'Escape') { event.preventDefault(); finish(null); }
                 else if (event.key === 'Enter' && event.target === nameInput) { event.preventDefault(); start(); }
             };
-            nameInput.addEventListener('input', () => { errorEl.textContent = ''; });
+            nameInput.addEventListener('input', () => { errorEl.textContent = ''; nameInput.dataset.auto = 'false'; });
             closeButton.addEventListener('click', () => finish(null));
             cancelButton.addEventListener('click', () => finish(null));
             importButton.addEventListener('click', start);
