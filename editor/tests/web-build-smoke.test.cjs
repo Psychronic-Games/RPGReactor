@@ -66,6 +66,7 @@ test('web deployment packages a generated project without development saves or b
             'data/Map001.json',
             'js/reactor_main.js',
             'js/reactor_picture_extensions.js',
+            'js/reactor_screen_fx.js',
             'js/reactor_media_surfaces.js',
             'js/reactor_mv_compat.js',
             'js/libs/effekseer.wasm'

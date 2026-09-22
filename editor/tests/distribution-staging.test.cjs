@@ -61,6 +61,7 @@ test('editor distribution staging includes runtime asset dependencies', async ()
             'THIRD_PARTY_NOTICES.md',
             'runtime/reactor_main.js',
             'runtime/reactor_picture_extensions.js',
+            'runtime/reactor_screen_fx.js',
             'runtime/reactor_media_surfaces.js',
             'runtime/reactor_mv_compat.js',
             'runtime/libs/pixi.js',

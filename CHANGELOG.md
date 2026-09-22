@@ -1,5 +1,21 @@
 # Changelog
 
+## [Unreleased - 0.98.8]
+
+### Added
+
+- An RPG Maker 2000/2003 importer, **File › Import Project…** in the editor and `import-legacy-project.cjs <source> <destination>` from a shell: writes a new Reactor project at 320×240 and 16 px with every chipset re-cut into MZ tilesets, every map, the tree, the whole database (actors with the exact 2003 EXP curve, skills and items with formulas that reproduce the 2003 arithmetic, enemies, troops, states, animations, terms), every event command, the window skin, and the art and audio; `--report` says beforehand what a project holds and what the import will do with it. Six 2003 commands MZ lacks (calling a map event's page, waiting on key input, waiting for or halting all movement, flashing a character, reading a terrain number) are engine methods now, and DynRPG's text, sprite and particle-effect plugin commands become calls on three new engine features: screen texts, named sprites with draw layers and map binding, and particle effects. The game's bitmap font comes along as a TrueType file drawn dot for dot, a translation the game ships can be baked into every text, and the window metrics (16 px lines, 8 px borders, 1 px shadow) are System.json settings the runtime reads. See [docs/IMPORTING-LEGACY-PROJECTS.md](docs/IMPORTING-LEGACY-PROJECTS.md).
+
+### Fixed
+
+- Event labels in the map view stay sharp at any zoom on small-tile maps.
+- The top menu reaches everything: Database › Structures, the Build bar, the Lighting tool, Media Surfaces and Forge › Project Tools all open from the menu bar too.
+
+### Development
+
+- CI's GUI smokes run again: the runner has no GPU, so every NW.js session now asks Chromium for a software WebGL context. All four smokes pass with the GPU disabled.
+- `docs/` holds the live guides only; dated audits, reports and evidence moved under `docs/archive/`. `docs/STATUS.md` states the current state, `docs/HANDOFF.md` the current and last cycle.
+
 ## [0.98.7] - 2026-09-21
 
 A 3D world builder in the map view, walking inside what you build, a Sun light, new collapse effects and a run of fixes. Detail lives in [editor/CHANGELOG.md](editor/CHANGELOG.md) and the [0.98.7 release notes](docs/posts/release-notes-0.98.7.md).
@@ -111,7 +127,7 @@ Release notes: [docs/posts/release-notes-0.98.6.md](docs/posts/release-notes-0.9
 
 **Keyboard**
 
-- Every menu and dialog answers to the keyboard: menubar headings are Tab stops (F10), every context-menu family walks with arrows and closes on Escape, database categories walk with arrows, and Options, About, the pickers, Plugin Manager, the Database viewer, Trait/Effect editors and the themed dialogs take focus on open, keep Tab inside and restore their opener. Database Escape asks before discarding edits. See the [keyboard notes](docs/KEYBOARD-MENUS-AND-DIALOGS-2026-09-12.md) for what is not certified.
+- Every menu and dialog answers to the keyboard: menubar headings are Tab stops (F10), every context-menu family walks with arrows and closes on Escape, database categories walk with arrows, and Options, About, the pickers, Plugin Manager, the Database viewer, Trait/Effect editors and the themed dialogs take focus on open, keep Tab inside and restore their opener. Database Escape asks before discarding edits. See the [keyboard notes](docs/archive/sessions/KEYBOARD-MENUS-AND-DIALOGS-2026-09-12.md) for what is not certified.
 
 ### Fixed
 
@@ -176,7 +192,7 @@ Release notes: [docs/posts/release-notes-0.98.6.md](docs/posts/release-notes-0.9
 
 - Music sequences gain fade-in and crossfade, first-pass intros, ordered or shuffled pools, per-track volume and an option to advance after one track. Intro progress survives battle, save and vehicle transitions.
 - Audio fades are separate from volume and ME ducking, and interrupted automation cancels cleanly. Track-end transitions use the unwrapped playback position and the next entry that will actually play.
-- Multi-line comments show Comment instead of Unknown (408). Plugin argument rows fold once under their command in map, troop and common-event lists. Music controls are translated across all 18 locales. [Integration notes](docs/PR-INTEGRATION-2026-09-07.md).
+- Multi-line comments show Comment instead of Unknown (408). Plugin argument rows fold once under their command in map, troop and common-event lists. Music controls are translated across all 18 locales. [Integration notes](docs/archive/pr-integration/PR-INTEGRATION-2026-09-07.md).
 
 ## [0.98.5] - 2026-09-07
 
@@ -1066,7 +1082,7 @@ Every remaining Medium and Low finding from the 2026-07-13 deep audit is fixed i
 - Forge tools: Outfit/Hair Forge desktop saves land in the project's forge library (they wrote into the editor install tree — lost on packaged installs); direct-to-project part and effect saves ask before overwriting an existing file; the Animation Generator's save dialogs recover from cancel (the GIF button no longer sticks on "Saving…", hidden file inputs no longer orphan); and Character Generator sheet saves fall back to a browser download instead of crashing when no project is open.
 - Runtime: the MV-compat battler animation mirror queue stays out of save files and is bounded — saves no longer grow with every battle animation ever played; Window_Command.refresh recreates its contents bitmap only when the window actually changed size (it churned a fresh canvas + texture on every refresh in MZ games); the data-load watchdog can no longer double-fire a live-but-slow download (a generation guard drops superseded arrivals and download progress pushes the stall deadline forward); Ultra Mode 7's v8 renderer reuses scratch uniform buffers instead of allocating ~7 typed arrays per layer per frame; and the texture-compat shim is memoized per texture source instead of building a fresh proxy object on every access. Verified by booting the MZ demo and the 168-plugin MV game to their title scenes on the updated runtime with clean consoles.
 
-The original deferred findings and their resolutions are preserved in [docs/AUDIT-BACKLOG-2026-07-13.md](docs/AUDIT-BACKLOG-2026-07-13.md); all are fixed.
+The original deferred findings and their resolutions are preserved in [docs/archive/audits/AUDIT-BACKLOG-2026-07-13.md](docs/archive/audits/AUDIT-BACKLOG-2026-07-13.md); all are fixed.
 
 Validation at the 0.95.0 release: **350 passing tests and no failures**.
 

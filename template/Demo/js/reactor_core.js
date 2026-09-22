@@ -2668,7 +2668,19 @@ Bitmap.prototype.initialize = function(width, height) {
      *
      * @type number
      */
-    this.outlineWidth = 3;
+    this.outlineWidth = Bitmap.defaultOutlineWidth();
+};
+
+/** System.json advanced.windowMargin (a 2003 window has none); 4 when the data is not loaded. */
+Window.defaultMargin = function() {
+    const advanced = typeof $dataSystem !== "undefined" && $dataSystem && $dataSystem.advanced;
+    return advanced && typeof advanced.windowMargin === "number" ? advanced.windowMargin : 4;
+};
+
+/** System.json advanced.textOutlineWidth (a 16 px game draws a 1 px shadow); 3 when the data is not loaded. */
+Bitmap.defaultOutlineWidth = function() {
+    const advanced = typeof $dataSystem !== "undefined" && $dataSystem && $dataSystem.advanced;
+    return advanced && typeof advanced.textOutlineWidth === "number" ? advanced.textOutlineWidth : 3;
 };
 
 /**
@@ -6589,7 +6601,7 @@ Window.prototype.initialize = function() {
     this._animationCount = 0;
 
     this._padding = 12;
-    this._margin = 4;
+    this._margin = Window.defaultMargin();
     this._colorTone = [0, 0, 0, 0];
     this._innerChildren = [];
 

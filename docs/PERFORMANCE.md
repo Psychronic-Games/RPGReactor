@@ -22,7 +22,7 @@ Baseline disables `Reactor3D.CoveredFloor.enabled` and `Reactor3D.EffekseerScene
 | baseline-c | 26.19 | 38.18 | 55.5 | 83.1 | 125.0 | 12 |
 | optimized-d | 26.27 | 38.07 | 55.5 | 124.9 | 139.0 | 0 |
 
-Aggregate frame time is 39.26 → 38.35 ms, about 2.3% lower. Intervals over 50 ms account for 70/1152 baseline frames and 90/1536 optimized frames. Aggregate p99 is 104.4 → 118.0 ms and maximum is 207.9 → 291.8 ms. All seven samples are retained, including the slower optimized runs. The last pair includes additional image-decode readiness and conservative fallback guards; the first five used the same two rendering optimizations before those guards were finalized. See [machine-readable results and validation](benchmarks/2026-09-07-potato-1440p.json).
+Aggregate frame time is 39.26 → 38.35 ms, about 2.3% lower. Intervals over 50 ms account for 70/1152 baseline frames and 90/1536 optimized frames. Aggregate p99 is 104.4 → 118.0 ms and maximum is 207.9 → 291.8 ms. All seven samples are retained, including the slower optimized runs. The last pair includes additional image-decode readiness and conservative fallback guards; the first five used the same two rendering optimizations before those guards were finalized. See [machine-readable results and validation](archive/evidence/benchmarks/2026-09-07-potato-1440p.json).
 
 ### Changes and evidence
 

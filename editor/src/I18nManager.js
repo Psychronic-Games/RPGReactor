@@ -37,7 +37,7 @@ function normalizeI18nLanguage(language) {
     return RR_LANGUAGES.find(candidate => candidate.id.toLowerCase() === normalized)?.id || 'en';
 }
 
-const RR_APP_VERSION = '0.98.7';
+const RR_APP_VERSION = '0.98.8';
 
 const RR_DB_TYPE_KEYS = {
     actors: 'menu.actors', classes: 'menu.classes', skills: 'menu.skills', items: 'menu.items',
@@ -20681,3 +20681,41 @@ Object.assign(RR_I18N_STRINGS["id"], {"terrain.waterPour": "Tuang","terrain.wate
 Object.assign(RR_I18N_STRINGS["vi"], {"terrain.waterPour": "Đổ","terrain.waterFull": "Chỗ trũng đó đã đầy tới mép rồi."});
 Object.assign(RR_I18N_STRINGS["th"], {"terrain.waterPour": "เท","terrain.waterFull": "แอ่งนั้นเต็มถึงขอบแล้ว"});
 Object.assign(RR_I18N_STRINGS["tr"], {"terrain.waterPour": "Dök","terrain.waterFull": "O çukur zaten kenarına kadar dolu."});
+// Tools menu: the Build bar and the Media Surfaces panel, named the way the toolbar and the event commands already name them.
+Object.assign(RR_I18N_STRINGS["en"], {"menu.buildInWorld": "Build in the World", "menu.mediaSurfaces": "Media Surfaces"});
+Object.assign(RR_I18N_STRINGS["ja"], {"menu.buildInWorld": "世界の中で建てる", "menu.mediaSurfaces": "メディアサーフェス"});
+Object.assign(RR_I18N_STRINGS["es"], {"menu.buildInWorld": "Construir en el mundo", "menu.mediaSurfaces": "Superficies multimedia"});
+Object.assign(RR_I18N_STRINGS["zh-Hant"], {"menu.buildInWorld": "在世界中建造", "menu.mediaSurfaces": "媒體表面"});
+Object.assign(RR_I18N_STRINGS["zh-Hans"], {"menu.buildInWorld": "在世界中建造", "menu.mediaSurfaces": "媒体表面"});
+Object.assign(RR_I18N_STRINGS["ru"], {"menu.buildInWorld": "Строить в мире", "menu.mediaSurfaces": "Медиаповерхности"});
+Object.assign(RR_I18N_STRINGS["pt"], {"menu.buildInWorld": "Construir no mundo", "menu.mediaSurfaces": "Superfícies de mídia"});
+Object.assign(RR_I18N_STRINGS["de"], {"menu.buildInWorld": "In der Welt bauen", "menu.mediaSurfaces": "Medienflächen"});
+Object.assign(RR_I18N_STRINGS["fr"], {"menu.buildInWorld": "Construire dans le monde", "menu.mediaSurfaces": "Surfaces média"});
+Object.assign(RR_I18N_STRINGS["el"], {"menu.buildInWorld": "Χτίσιμο μέσα στον κόσμο", "menu.mediaSurfaces": "Επιφάνειες πολυμέσων"});
+Object.assign(RR_I18N_STRINGS["ko"], {"menu.buildInWorld": "세계 안에서 짓기", "menu.mediaSurfaces": "미디어 서피스"});
+Object.assign(RR_I18N_STRINGS["ar"], {"menu.buildInWorld": "البناء داخل العالم", "menu.mediaSurfaces": "أسطح الوسائط"});
+Object.assign(RR_I18N_STRINGS["it"], {"menu.buildInWorld": "Costruire nel mondo", "menu.mediaSurfaces": "Superfici multimediali"});
+Object.assign(RR_I18N_STRINGS["pl"], {"menu.buildInWorld": "Budowanie w świecie", "menu.mediaSurfaces": "Powierzchnie mediów"});
+Object.assign(RR_I18N_STRINGS["id"], {"menu.buildInWorld": "Membangun di dalam dunia", "menu.mediaSurfaces": "Permukaan media"});
+Object.assign(RR_I18N_STRINGS["vi"], {"menu.buildInWorld": "Xây ngay trong thế giới", "menu.mediaSurfaces": "Bề mặt phương tiện"});
+Object.assign(RR_I18N_STRINGS["th"], {"menu.buildInWorld": "สร้างในโลก", "menu.mediaSurfaces": "พื้นผิวสื่อ"});
+Object.assign(RR_I18N_STRINGS["tr"], {"menu.buildInWorld": "Dünyanın içinde inşa", "menu.mediaSurfaces": "Medya yüzeyleri"});
+// File › Import Project…
+Object.assign(RR_I18N_STRINGS["en"], {"menu.importProject": "Import Project…"});
+Object.assign(RR_I18N_STRINGS["ja"], {"menu.importProject": "プロジェクトをインポート…"});
+Object.assign(RR_I18N_STRINGS["es"], {"menu.importProject": "Importar proyecto…"});
+Object.assign(RR_I18N_STRINGS["zh-Hant"], {"menu.importProject": "匯入專案…"});
+Object.assign(RR_I18N_STRINGS["zh-Hans"], {"menu.importProject": "导入项目…"});
+Object.assign(RR_I18N_STRINGS["ru"], {"menu.importProject": "Импортировать проект…"});
+Object.assign(RR_I18N_STRINGS["pt"], {"menu.importProject": "Importar projeto…"});
+Object.assign(RR_I18N_STRINGS["de"], {"menu.importProject": "Projekt importieren…"});
+Object.assign(RR_I18N_STRINGS["fr"], {"menu.importProject": "Importer un projet…"});
+Object.assign(RR_I18N_STRINGS["el"], {"menu.importProject": "Εισαγωγή έργου…"});
+Object.assign(RR_I18N_STRINGS["ko"], {"menu.importProject": "프로젝트 가져오기…"});
+Object.assign(RR_I18N_STRINGS["ar"], {"menu.importProject": "استيراد مشروع…"});
+Object.assign(RR_I18N_STRINGS["it"], {"menu.importProject": "Importa progetto…"});
+Object.assign(RR_I18N_STRINGS["pl"], {"menu.importProject": "Importuj projekt…"});
+Object.assign(RR_I18N_STRINGS["id"], {"menu.importProject": "Impor Proyek…"});
+Object.assign(RR_I18N_STRINGS["vi"], {"menu.importProject": "Nhập dự án…"});
+Object.assign(RR_I18N_STRINGS["th"], {"menu.importProject": "นำเข้าโปรเจกต์…"});
+Object.assign(RR_I18N_STRINGS["tr"], {"menu.importProject": "Proje içe aktar…"});

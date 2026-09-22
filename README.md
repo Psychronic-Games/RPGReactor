@@ -4,7 +4,7 @@ RPG Reactor is an open-source, cross-platform RPG game editor and runtime for RP
 
 Use RPG Reactor to create, edit, playtest, and package 2D RPGs with familiar RPG Maker-style maps, events, database records, plugins, and deployment workflows, without depending on the original RPG Maker runtime or editor.
 
-Pre-built download binaries are available at <https://psychronic.itch.io/rpg-reactor>. The latest tagged source release is [0.98.7](https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.98.7).
+Pre-built download binaries are available at <https://psychronic.itch.io/rpg-reactor>. The current development version is 0.98.8 and is not published yet; the latest tagged source release is [0.98.7](https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.98.7).
 
 ## What's new in 0.98.7
 
@@ -35,15 +35,17 @@ RPGReactor/
 - [Editor README](editor/README.md): detailed feature list, source launch steps, project structure, shortcuts, and technical notes.
 - [Latest release notes](docs/posts/release-notes-0.98.7.md): features, fixes, and compatibility limits for 0.98.7.
 - [Changelog](CHANGELOG.md): upcoming development and previous releases.
+- [Current status](docs/STATUS.md): the verified state of the tree, runtime defaults, test results, and open work.
+- [Authoring a world](docs/AUTHORING.md): where every part of a 3D map lives, which tool edits it by hand, what a generator writes, and what checks it.
 - [Battle authoring guide](docs/BATTLE-PRESENTATION.md): Battle Rooms, formations, action steps, and supported plugin behavior.
+- [Rigging a 3D model](docs/RIGGING-MODELS.md): templates, hand markers, and what the runtime reads.
 - [Media surface guide](docs/MEDIA-SURFACES.md): image/video placement, transforms, proportions, and legacy command support.
-- [Current status](docs/STATUS.md): verified development state, runtime defaults, test results, and open work.
-- [Handoff notes](docs/HANDOFF.md): dated engineering history, open threads, and manual release gates.
 - [Custom user interfaces design](docs/DESIGN-USER-INTERFACES.md): the User Interfaces database section, its runtime, how it stays invisible to RPG Maker, seven opt-in stock-scene replacements, and the workflows intentionally left stock.
+- [3D worlds design](docs/DESIGN-3D-WORLDS.md): the tileset-class and facing model behind HD-2D maps, with its phasing table marked to what shipped.
 - [3D objects on the map](docs/devlogs/2026-08-02-3d-objects-on-the-map.md): how painted object groupings and tileset 3D classes build the HD-2D world.
-- [Authoring a 3D map](docs/AUTHORING.md): where every part of a 3D map lives, which tool edits it by hand, what a generator writes, and what checks it.
-- [3D worlds design](docs/DESIGN-3D-WORLDS.md): the pieces, plans, terrain, water and lighting behind the world builder.
-- [Maintainer docs](docs/README.md): workflows that are useful for project maintenance but are not required for normal editor use.
+- [Importing an RPG Maker 2000/2003 project](docs/IMPORTING-LEGACY-PROJECTS.md): File › Import Project… makes a new Reactor project from an old one; what converts and what the format cannot hold.
+- [Handoff notes](docs/HANDOFF.md): dated engineering notes for the current and last cycle; older cycles are archived.
+- [Documentation index](docs/README.md): every guide, the release history, and the archive of dated audits and reports.
 - [Release checklist](docs/RELEASE-CHECKLIST.md): exact maintainer commands for source publication, signed release candidates, GitHub attachments, and optional itch.io publication.
 
 ## Feature Overview
@@ -149,7 +151,7 @@ Treat an RPG project like source code. Project plugins and project-local Charact
 
 ## Bundled Demo Limitations
 
-Reactor One is a starter and compatibility showcase, not a content-complete game. Original replacement art is still being authored for several actors and battlers, and 121 sound-effect names referenced by imported animations are intentionally absent. The maintained inventory is in [`docs/demo-missing-se.md`](docs/demo-missing-se.md); these gaps do not indicate missing editor/runtime files.
+Reactor One is a starter and compatibility showcase, not a content-complete game. Original replacement art is still being authored for several actors and every enemy battler, so some records name character and side-view sheets that are not shipped; every sound the Demo names exists on disk. The maintained inventory is in [`docs/demo-missing-se.md`](docs/demo-missing-se.md); these gaps do not indicate missing editor/runtime files.
 
 ## Runtime
 
@@ -165,17 +167,17 @@ for third-party files or user/project content.
 ## Cutting a Source Release
 
 `cut-release.cjs` is the canonical source-release path. Run it from a clean
-`main` worktree after all 0.98.7 changes have been committed:
+`main` worktree after all 0.98.8 changes have been committed:
 
 ```bash
-node editor/build-scripts/cut-release.cjs 0.98.7 --dry-run
-node editor/build-scripts/cut-release.cjs 0.98.7
+node editor/build-scripts/cut-release.cjs 0.98.8 --dry-run
+node editor/build-scripts/cut-release.cjs 0.98.8
 ```
 
 The command runs the complete editor test suite, finalizes both changelog
 headings with the release date, updates `editor/package.json`, the root README
 release link and its recognized validation-count sentence, creates a release
-commit when those surfaces changed, creates an annotated `v0.98.7` tag, and pushes the branch and tag. The tag push starts
+commit when those surfaces changed, creates an annotated `v0.98.8` tag, and pushes the branch and tag. The tag push starts
 `publish-release.yml`, which creates or updates the GitHub source release using
 that version's root changelog section. `--no-push` stops after creating the tag.
 Other version prose, validation dates, the editor README, and the status summary

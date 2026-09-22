@@ -2757,6 +2757,7 @@ class EventManager {
         // Add label text
         const text = new PIXI.Text({
             text: label,
+            resolution: this.labelResolution(),
             style: {
                 fontSize: 9,
                 fill: 0xffffff,
@@ -2771,6 +2772,29 @@ class EventManager {
         container.addChild(text);
 
         this.startingPositionContainer.addChild(container);
+    }
+
+    /**
+     * The raster resolution a label needs to stay sharp at the current zoom:
+     * a label is world-sized (8 px on a 16 px tile), so at 4× zoom it must be
+     * drawn at 4× the pixels, or it is an 8 px raster magnified into a blur.
+     */
+    labelResolution() {
+        const zoom = this.tilemapManager?.container?.scale?.x || 1;
+        const dpr = (typeof window !== 'undefined' && window.devicePixelRatio) || 1;
+        return Math.max(1, Math.min(8, Math.ceil(zoom * dpr)));
+    }
+
+    /** Re-rasterize every label for the zoom in effect; called when the zoom changes. */
+    updateLabelResolution() {
+        const resolution = this.labelResolution();
+        const visit = (node) => {
+            if (!node) return;
+            if (node instanceof PIXI.Text && node.resolution !== resolution) node.resolution = resolution;
+            for (const child of node.children || []) visit(child);
+        };
+        visit(this.eventContainer);
+        visit(this.startingPositionContainer);
     }
 
     // Create sprite for an event
@@ -2836,6 +2860,7 @@ class EventManager {
         // Add event name text at the bottom of the tile
         const text = new PIXI.Text({
             text: event.name,
+            resolution: this.labelResolution(),
             style: {
                 fontSize: 8,
                 fill: 0xffffff,

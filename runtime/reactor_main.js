@@ -1,10 +1,10 @@
 //=============================================================================
 // reactor_main.js — RPG Reactor runtime entry point
-// RPG Reactor runtime version: 0.98.7
-// RPG Reactor runtime revision: 20260920.24
+// RPG Reactor runtime version: 0.98.8
+// RPG Reactor runtime revision: 20260921.8
 // The same stamp, reachable from the F12 console: which engine is this
 // window actually running? Type RPG_REACTOR_RUNTIME_REVISION to see.
-globalThis.RPG_REACTOR_RUNTIME_REVISION = "20260920.24";
+globalThis.RPG_REACTOR_RUNTIME_REVISION = "20260921.8";
 //=============================================================================
 
 const scriptUrls = [
@@ -33,6 +33,7 @@ const scriptUrls = [
     "js/reactor_scenes.js",
     "js/reactor_sprites.js",
     "js/reactor_picture_extensions.js",
+    "js/reactor_screen_fx.js",
     "js/reactor_media_surfaces.js",
     "js/reactor_windows.js",
     "js/reactor_ui.js",

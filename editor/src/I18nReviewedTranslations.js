@@ -5625,7 +5625,7 @@ Object.assign(globalThis.RR_REVIEWED_TRANSLATIONS.text.ja, {Motion:'モーショ
  for(const [locale,row] of Object.entries(rows)){const values=row.split('|');keys.forEach((key,i)=>globalThis.RR_REVIEWED_TRANSLATIONS.text[locale][key]=values[i]);}
 }
 
-// Simplified Chinese corrections supplied in docs/Feedback/editor (September 2026).
+// Simplified Chinese corrections supplied in docs/archive/feedback/zh-hans-patch-2026-09 (September 2026).
 // Keep accepted wording here, above the legacy/generated catalogs in priority.
 Object.assign(globalThis.RR_REVIEWED_TRANSLATIONS.text['zh-Hans'], {
   "Occasion": "使用场合",

@@ -44,7 +44,7 @@ Window_Base.prototype.checkRectObject = function(rect) {
 };
 
 Window_Base.prototype.lineHeight = function() {
-    return 36;
+    return $gameSystem ? $gameSystem.lineHeight() : 36;
 };
 
 Window_Base.prototype.itemWidth = function() {

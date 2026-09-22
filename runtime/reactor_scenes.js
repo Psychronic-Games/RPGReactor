@@ -607,7 +607,7 @@ Scene_Message.prototype.createMessageWindow = function() {
 
 Scene_Message.prototype.messageWindowRect = function() {
     const ww = Graphics.boxWidth;
-    const wh = this.calcWindowHeight(4, false) + 8;
+    const wh = this.calcWindowHeight(4, false) + Window.defaultMargin() * 2;   // room for the frame margin, none in a 2003 import
     const wx = (Graphics.boxWidth - ww) / 2;
     const wy = 0;
     return new Rectangle(wx, wy, ww, wh);
@@ -3742,3 +3742,40 @@ Scene_Boot.prototype.isReady = function() {
     }
     return _reactorSceneBootIsReady.call(this);
 };
+
+// Whether the shop that just closed sold or bought anything: the 2003 shop
+// command branches on it, and the legacy importer conditions those branches
+// on $gameTemp._rrShopTransaction.
+(function() {
+    const _create = Scene_Shop.prototype.create;
+    Scene_Shop.prototype.create = function() {
+        $gameTemp._rrShopTransaction = false;
+        _create.call(this);
+    };
+    const _doBuy = Scene_Shop.prototype.doBuy;
+    Scene_Shop.prototype.doBuy = function(number) {
+        $gameTemp._rrShopTransaction = true;
+        return _doBuy.call(this, number);
+    };
+    const _doSell = Scene_Shop.prototype.doSell;
+    Scene_Shop.prototype.doSell = function(number) {
+        $gameTemp._rrShopTransaction = true;
+        return _doSell.call(this, number);
+    };
+})();
+
+// A game that hides its title screen (System.json rrSkipTitle, as an imported
+// RPG Maker 2003 game with its own event-driven title does) boots straight
+// into a new game on the start map.
+(function() {
+    const _startNormalGame = Scene_Boot.prototype.startNormalGame;
+    Scene_Boot.prototype.startNormalGame = function() {
+        if ($dataSystem && $dataSystem.rrSkipTitle) {
+            this.checkPlayerLocation();
+            DataManager.setupNewGame();
+            SceneManager.goto(Scene_Map);
+            return;
+        }
+        return _startNormalGame.call(this);
+    };
+})();

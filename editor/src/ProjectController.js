@@ -575,48 +575,7 @@ class ProjectController {
             input.setAttribute('nwworkingdir', require('os').homedir());
             input.addEventListener('change', async (e) => {
                 const projectPath = input.files?.[0]?.path || input.value || e.target.value;
-                if (projectPath) {
-                    try {
-                        this.logProjectOpen('manual-open:start', { projectPath });
-                        this.uiManager.updateStatus('Loading project...');
-
-                        // Use ProjectManager to load the project
-                        const loadedProject = await this.projectManager.loadProject(projectPath);
-                        this.logProjectOpen('manual-open:loadProject', {
-                            projectPath,
-                            loaded: !!loadedProject,
-                            name: loadedProject?.name || null,
-                            mapCount: loadedProject?.maps?.filter(Boolean).length || 0
-                        });
-
-                        if (!loadedProject) {
-                            const loadError = this.projectManager.lastLoadError || null;
-                            this.logProjectOpen('manual-open:failed', { projectPath, loadError });
-                            const details = loadError?.message ? `\n\n${loadError.message}` : '';
-                            alert(this._tt("Failed to load project. Make sure it's a valid RPG Reactor or RPG Maker project.") + `\n\n${projectPath}${details}`);
-                            this.uiManager.updateStatus('Error loading project');
-                            return;
-                        }
-
-                        // acquireProjectLock already explains a live lock conflict.
-                        if (!this.acquireProjectLock(loadedProject.path)) {
-                            this.logProjectOpen('manual-open:lock-rejected', { projectPath });
-                            return;
-                        }
-
-                        this.currentProject = loadedProject;
-                        this.lastLoadedProjectPath = null;
-                        await this.uiManager.showEditorUI();
-                        this.uiManager.updateStatus('Opened project: ' + this.currentProject.name);
-                        await this.populateProjectUI();
-                        if (this.currentProject) localStorage.setItem('lastProjectPath', projectPath);
-                    } catch (error) {
-                        console.error(`Error opening project at ${projectPath}:`, error);
-                        this.logProjectOpen('manual-open:error', { projectPath, error: error.message || String(error) });
-                        alert(`${this._tt('Error opening project:')}\n${projectPath}\n\n${error.message || error}`);
-                        this.uiManager.updateStatus('Error loading project');
-                    }
-                }
+                if (projectPath) await this.openProjectAtPath(projectPath);
             });
             input.click();
         } else {
@@ -626,6 +585,58 @@ class ProjectController {
             this.uiManager.updateStatus('Demo project loaded');
             this.initializeNewProject();
         }
+    }
+
+    /** Open the project at `projectPath` (a folder): load, lock, show the editor. */
+    async openProjectAtPath(projectPath) {
+            try {
+                this.logProjectOpen('manual-open:start', { projectPath });
+                this.uiManager.updateStatus('Loading project...');
+
+                // Use ProjectManager to load the project
+                const loadedProject = await this.projectManager.loadProject(projectPath);
+                this.logProjectOpen('manual-open:loadProject', {
+                    projectPath,
+                    loaded: !!loadedProject,
+                    name: loadedProject?.name || null,
+                    mapCount: loadedProject?.maps?.filter(Boolean).length || 0
+                });
+
+                if (!loadedProject) {
+                    const loadError = this.projectManager.lastLoadError || null;
+                    this.logProjectOpen('manual-open:failed', { projectPath, loadError });
+                    const details = loadError?.message ? `\n\n${loadError.message}` : '';
+                    alert(this._tt("Failed to load project. Make sure it's a valid RPG Reactor or RPG Maker project.") + `\n\n${projectPath}${details}`);
+                    this.uiManager.updateStatus('Error loading project');
+                    return;
+                }
+
+                // acquireProjectLock already explains a live lock conflict.
+                if (!this.acquireProjectLock(loadedProject.path)) {
+                    this.logProjectOpen('manual-open:lock-rejected', { projectPath });
+                    return;
+                }
+
+                this.currentProject = loadedProject;
+                this.lastLoadedProjectPath = null;
+                await this.uiManager.showEditorUI();
+                this.uiManager.updateStatus('Opened project: ' + this.currentProject.name);
+                await this.populateProjectUI();
+                if (this.currentProject) localStorage.setItem('lastProjectPath', projectPath);
+            } catch (error) {
+                console.error(`Error opening project at ${projectPath}:`, error);
+                this.logProjectOpen('manual-open:error', { projectPath, error: error.message || String(error) });
+                alert(`${this._tt('Error opening project:')}\n${projectPath}\n\n${error.message || error}`);
+                this.uiManager.updateStatus('Error loading project');
+            }
+    }
+
+    /** File › Import Project…: an RPG Maker 2000/2003 project becomes a new Reactor project, then opens. */
+    async importLegacyProject() {
+        if (!await this.confirmUnsavedChanges()) return;
+        const dialog = (typeof window !== 'undefined' && window.RRLegacyImportDialog) || null;
+        if (!dialog) { alert(this._tt('The import dialog is not available.')); return; }
+        await dialog.show({ openProject: (destination) => this.openProjectAtPath(destination) });
     }
 
     async populateProjectUI() {

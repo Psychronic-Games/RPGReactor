@@ -251,7 +251,8 @@ test('the 3D subsystem is the core and the extensions the core names', () => {
         assert.ok(Reactor3D[extension.namespace], `${extension.file} sets Reactor3D.${extension.namespace} once loaded`);
     }
     // Speech/audio, quests and the shared JSON decoding boundary have their own modules.
-    assert.ok(roots.length <= 24, `runtime js/ root has grown to ${roots.length} files`);
+    // 25 since 2026-09-21: reactor_screen_fx.js (screen texts, named sprites, particle effects) is its own concern.
+    assert.ok(roots.length <= 25, `runtime js/ root has grown to ${roots.length} files`);
 });
 
 test('the game boots every extension straight after the core, before anything reads them', () => {

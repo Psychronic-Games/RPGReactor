@@ -1,10 +1,14 @@
 # Building 3D worlds from 2D tilesets
 
-Written 2026-08-01; implementation status reviewed 2026-09-04.
-**Phases 1–3 and 8 are built**, the height brush was built and removed, and
-Block primitives and reusable structures remain planned. Model/event transform
-gizmos exist; they only partially cover the proposed general manipulation tool.
-See [current status](STATUS.md) for validation and outstanding work.
+Written 2026-08-01; implementation status reviewed 2026-09-21. Everything the
+phasing table lists has shipped, in a different shape from the proposal: the
+Block primitive became the Build bar's **pieces and shapes**, "structures:
+draw once, stamp anywhere" became **blueprints** (`3d/Structures/*.json`,
+stamped from the bar), and direct manipulation is the bar's select, box-select,
+drag, turn and specs panel. The height brush was built and removed; rolling
+ground is the **3D-T** terrain brushes instead. Where each of these lives, and
+what checks it, is in [AUTHORING.md](AUTHORING.md); the verified state is in
+[STATUS.md](STATUS.md).
 
 The proposal sections below preserve the original problem analysis and intended
 authoring model. They are not a list of currently available tools. The phasing
@@ -72,7 +76,7 @@ per tileset.
 | **Billboard** | a camera-facing cut-out | trees, bushes, heaps, rocks, anything amorphous |
 
 At proposal time, Mass, Billboard, and Ground already existed; Block and Panel
-were new work. Panel is now implemented. Block remains planned.
+were new work. Panel is implemented; Block shipped as the Build bar's pieces and shapes in 0.98.7.
 
 A Panel is not a billboard with rotation disabled — that was tried before
 0.96.0 and abandoned because a fixed plane vanishes edge-on. It vanishes
@@ -140,9 +144,9 @@ handoff is this feature's first customer.
 
 ## Authoring proposal and current disposition
 
-Four tools were proposed. The height brush was subsequently removed; reusable
-structure stamping remains unbuilt. Model/event gizmos now provide transforms,
-but do not implement the whole proposed structure workflow.
+Four tools were proposed. The height brush was built and removed; the other
+three shipped in 0.98.7 as the Build bar, blueprints and the bar's selection
+tools, described in [AUTHORING.md](AUTHORING.md).
 
 **1. A height brush, in the map editor (removed).** The proposal was to paint elevation the way tiles are
 painted: a number, a brush size, drag to raise. The 3D view updates live. This
@@ -150,7 +154,7 @@ is the single highest-value tool in the plan — with Mass tiles and derived
 facing, painting height is enough to build a city, and it is the literal answer
 to "build in 3D using the tiles".
 
-**2. Structures: draw once, stamp anywhere (planned).** A structure is a named,
+**2. Structures: draw once, stamp anywhere (shipped as blueprints, 0.98.7).** A structure is a named,
 multi-cell 3D object defined against a tileset — footprint, height per cell,
 shape per cell, art per face. Define "guard tower" once; stamp it forty times.
 
@@ -162,12 +166,13 @@ entry into `Map###.r3d.json` recording that those cells are one structure. The
 says how to read it in three dimensions.
 
 **3. A shape mode in the tileset editor.** Tileset classes, Panels, per-face
-materials, and roof pairing exist; the Block primitive remains planned. This is the once-per-tileset
+materials, and roof pairing exist; the Block primitive shipped as the Build bar's pieces and shapes (0.98.7). This is the once-per-tileset
 setup that everything else rests on.
 
-**4. Direct manipulation in the 3D view (partly implemented).** Models and
-events have transform controls, including height. A generic manipulation tool
-for the planned tileset structures is still unbuilt.
+**4. Direct manipulation in the 3D view (shipped, 0.98.7).** Models, events and
+placed pieces have transform controls; the Build bar selects, box-selects,
+drags, turns and paints pieces in place, and a selected shape wears the same
+arrows, rings and size cubes the models do.
 
 ## Current data and compatibility
 
@@ -219,9 +224,9 @@ Ordered by payoff per unit of work, not by dependency. Each step is shippable.
 | 2 | **Per-face material + A4 roof pairing** | Wall tops stop wearing their own face art. Closes handoff limitation 1. | **Done** |
 | 3 | **Panel shape with thickness and derived facing** | Gates, doors and signs stop chasing the camera. Closes the reported bug. | **Done** |
 | 4 | ~~Height brush in the map editor~~ | Built, then removed: nothing on a real 3D map used it, because the massing comes from the tileset's 3D classes. | Dropped |
-| 5 | **Block shape** | Crates, plinths, furniture — the small stuff. | Open |
-| 6 | **Structures: define, stamp, place** | Building a world becomes fast rather than possible. See *Where one structure ends* below. | Open |
-| 7 | **Direct manipulation in the 3D view** | Model/event gizmos exist; generic tileset-structure manipulation is still planned. | Partial |
+| 5 | **Block shape** | Crates, plinths, furniture — the small stuff. | **Done** as pieces and sixteen shapes in the Build bar (0.98.7); furniture pieces are queued |
+| 6 | **Structures: define, stamp, place** | Building a world becomes fast rather than possible. See *Where one structure ends* below. | **Done** as blueprints (`3d/Structures`, Database › Structures, Blueprint slot), plans of plans included (0.98.7) |
+| 7 | **Direct manipulation in the 3D view** | Select, box-select, drag, turn, paint and a specs panel for placed pieces; gizmos on models and events. | **Done** (0.98.7) |
 | 8 | **Lights as 3D lights** | A lantern becomes a sphere, a torch a cone. | **Done** |
 | — | **Event and database meshes** (sidecar, not a tileset class) | An event, actor, enemy, weapon, armor, or item can carry a GLB/OBJ/… from `3d/<folder>/source`. Pose and facing live in `Map###.r3d.json` / `Database.r3d.json`; parts, pivots, rigs, and animations in the model's own `model.json`. Footprint collision, turn sweeps, and per-pixel character depth are done. Weapon/armor/item bindings are stored but not rendered as equipment. | **Implemented; equipment rendering open** |
 

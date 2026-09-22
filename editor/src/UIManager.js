@@ -170,6 +170,9 @@ class UIManager {
             case 'open-project':
                 this.callbacks.openProject();
                 break;
+            case 'import-project':
+                if (this.callbacks.importProject) this.callbacks.importProject();
+                break;
             case 'save-project':
                 this.callbacks.saveProject();
                 break;
@@ -211,6 +214,17 @@ class UIManager {
                 if (this.callbacks.openForgeTool) {
                     this.callbacks.openForgeTool('effekseer-generator');
                 }
+                break;
+            case 'forge-project-tools':
+                if (this.callbacks.openForgeTool) {
+                    this.callbacks.openForgeTool('project-tools');
+                }
+                break;
+            // The map tools open from the menu exactly as from the toolbar.
+            case 'build-tool':
+            case 'lighting-tool':
+            case 'media-surfaces':
+                this.handleToolbarAction(action);
                 break;
             case 'manage-plugins':
                 if (this.callbacks.showPluginManager) {

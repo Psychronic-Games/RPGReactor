@@ -1,19 +1,19 @@
 # Demo: assets not on disk
 
-Re-verified 2026-09-04 against `template/Demo`: 121 distinct animation SE
-names missing, 75 SE files on disk. The owner is replacing stock assets with originals as they are
-made; keep this list current rather than restoring stock files.
+What the bundled Demo (`template/Demo`) references but does not ship, kept current while the owner replaces stock assets with originals. Do not restore stock files; update this list.
+
+**Sounds: none missing.** Every sound, track and jingle the Demo names exists on disk with that exact spelling, held by `editor/tests/demo-template-completeness.test.cjs` since 2026-09-13. The replacement map is recorded below.
+
+**Art: still missing** (checked 2026-09-21 against `data/Actors.json`, `data/Enemies.json` and `img/`).
 
 ## Character and battler art
 
-- `img/characters/Actor1` — actors 2–8 (Carol Everson, Chase, Karen, Herbert,
-  Katie, Elija, Rosanna)
-- `img/sv_actors/Actor1_2` … `Actor1_8` — actors 2–8; `Actor2_2` — actor 1
-  (Fleagus Gustafario)
-- All five enemies have no battler art in `img/enemies` or `img/sv_enemies`
+- `img/characters/Actor1` — actors 2–5 and 8 (Carol Everson, Jolt Eagle, Max Triton, Vay Drokan, Rosanna). Fleagus (actor 1) has his own `$Actor-01` sheet.
+- `img/sv_actors/Actor1_2` — actors 2–5; `Actor2_2` — actor 1 (Fleagus Gustafario). The folder does not exist.
+- `img/enemies` is empty and `img/sv_enemies` does not exist, so none of the five enemies (Psychronic and Tank name `Goblin`, then Crow, Treant, Hi_monster) has 2D battler art.
+- Katie and Elija (actors 6–7) name no art at all. Every face named in `Actors.json` exists.
 
-Actors 1–2 carry `Database.r3d.json` model bindings, so their map sprites are
-3D regardless; the remaining references only matter where a 2D sprite is drawn.
+Actors and enemies with `Database.r3d.json` model bindings draw as 3D models on the map and in battle rooms regardless; the references above only matter where a 2D sprite is drawn.
 
 ## Animation sounds
 

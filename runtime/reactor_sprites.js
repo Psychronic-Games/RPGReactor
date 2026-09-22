@@ -6455,3 +6455,21 @@ Spriteset_Map.prototype.update = function() {
         return _destroy.apply(this, arguments);
     };
 })();
+
+// A character flash requested by Game_Interpreter.rrFlashCharacter: a blend
+// colour that fades out over the flash's frames.
+(function() {
+    const _update = Sprite_Character.prototype.update;
+    Sprite_Character.prototype.update = function() {
+        _update.call(this);
+        const f = this._character && this._character._rrFlash;
+        if (!f) return;
+        const t = f.duration / f.total;
+        this.setBlendColor([f.color[0] | 0, f.color[1] | 0, f.color[2] | 0, Math.round((f.color[3] | 0) * t)]);
+        f.duration--;
+        if (f.duration <= 0) {
+            this._character._rrFlash = null;
+            this.setBlendColor([0, 0, 0, 0]);
+        }
+    };
+})();

@@ -61,6 +61,7 @@
                 <div class="html-submenu" id="submenu-file" style="display: none; position: absolute; top: 100%; left: 0; background-color: var(--color-bg-toolbar); color: var(--color-text); border: 1px solid var(--color-border); min-width: 240px; z-index: 10000; box-shadow: var(--shadow-popup);">
                     <div class="html-menu-option" data-action="new-project" style="padding: 8px 16px; cursor: pointer; display: flex; justify-content: space-between; gap: 24px;"><span data-i18n="menu.newProject">New Project</span><span style="color: var(--color-text-muted);">Ctrl+N</span></div>
                     <div class="html-menu-option" data-action="open-project" style="padding: 8px 16px; cursor: pointer; display: flex; justify-content: space-between; gap: 24px;"><span data-i18n="menu.openProject">Open Project</span><span style="color: var(--color-text-muted);">Ctrl+O</span></div>
+                    <div class="html-menu-option" data-action="import-project" style="padding: 8px 16px; cursor: pointer; display: flex; justify-content: space-between; gap: 24px;"><span data-i18n="menu.importProject">Import Project…</span></div>
                     <div class="html-menu-option" data-action="save-project" style="padding: 8px 16px; cursor: pointer; display: flex; justify-content: space-between; gap: 24px;"><span data-i18n="toolbar.title.saveProject">Save Project</span><span style="color: var(--color-text-muted);">Ctrl+S</span></div>
                     <div class="html-menu-option" data-action="playtest" style="padding: 8px 16px; cursor: pointer; display: flex; justify-content: space-between; gap: 24px;"><span data-i18n="toolbar.title.playtest">Playtest</span><span style="color: var(--color-text-muted);">Ctrl+R</span></div>
                     <div style="height: 1px; background: var(--color-border); margin: 4px 0;"></div>
@@ -88,6 +89,7 @@
                     <div class="html-menu-option" data-db="animations" data-i18n="menu.animations" style="padding: 8px 16px; cursor: pointer;">Animations</div>
                     <div class="html-menu-option" data-db="tilesets" data-i18n="menu.tilesets" style="padding: 8px 16px; cursor: pointer;">Tilesets</div>
                     <div class="html-menu-option" data-db="reactor3d" data-i18n="menu.models3d" style="padding: 8px 16px; cursor: pointer;">3D Models</div>
+                    <div class="html-menu-option" data-db="structures" data-i18n="menu.structures" style="padding: 8px 16px; cursor: pointer;">Structures</div>
                     <div class="html-menu-option" data-db="commonEvents" data-i18n="menu.commonEvents" style="padding: 8px 16px; cursor: pointer;">Common Events</div>
                     <div class="html-menu-option" data-db="userInterfaces" data-i18n="menu.userInterfaces" style="padding: 8px 16px; cursor: pointer;">User Interfaces</div>
                     <div class="html-menu-option" data-db="actionSequences" data-i18n="menu.actionSequences" style="padding:8px 16px;cursor:pointer;">Action Sequences</div>
@@ -110,6 +112,9 @@
                 <span data-i18n="menu.tools">Tools</span>
                 <div class="html-submenu" id="submenu-tools" style="display: none; position: absolute; top: 100%; left: 0; background-color: var(--color-bg-toolbar); color: var(--color-text); border: 1px solid var(--color-border); min-width: 200px; z-index: 10000; box-shadow: var(--shadow-popup);">
                     <div class="html-menu-option" data-action="toggle-event-mode" data-i18n="menu.eventManager" style="padding: 8px 16px; cursor: pointer;">Event Manager</div>
+                    <div class="html-menu-option" data-action="build-tool" data-i18n="menu.buildInWorld" style="padding: 8px 16px; cursor: pointer;">Build in the World</div>
+                    <div class="html-menu-option" data-action="lighting-tool" data-i18n="toolbar.title.lighting" style="padding: 8px 16px; cursor: pointer;">Lighting Tool</div>
+                    <div class="html-menu-option" data-action="media-surfaces" data-i18n="menu.mediaSurfaces" style="padding: 8px 16px; cursor: pointer;">Media Surfaces</div>
                     <div class="html-menu-option" data-action="resource-manager" data-i18n="menu.resourceManager" style="padding: 8px 16px; cursor: pointer;">Resource Manager</div>
                     <div class="html-menu-option" data-action="audio-player" data-i18n="menu.audioPlayer" style="padding: 8px 16px; cursor: pointer;">♪ Audio Player</div>
                 </div>
@@ -123,6 +128,7 @@
                     <div class="html-menu-option" data-action="forge-animation-generator" data-i18n="menu.animationGenerator" style="padding: 8px 16px; cursor: pointer;">Animation Generator</div>
                     <div class="html-menu-option" data-action="forge-effekseer-generator" data-i18n="menu.effekseerGenerator" style="padding: 8px 16px; cursor: pointer;">Effekseer Animation Generator</div>
                     <div class="html-menu-option" data-action="forge-sound-effect-generator" data-i18n="menu.soundEffectGenerator" style="padding: 8px 16px; cursor: pointer;">Sound Effect Generator</div>
+                    <div class="html-menu-option" data-action="forge-project-tools" data-i18n="menu.projectTools" style="padding: 8px 16px; cursor: pointer;">Project Tools</div>
                 </div>
             </div>
             <div class="html-menu-item" data-menu="build" style="position: relative; padding: 8px 16px; cursor: pointer;">
@@ -201,7 +207,7 @@
             <button class="tool-button" data-action="audio-player" title="Audio Player" data-i18n-title="toolbar.title.audioPlayer"><img src="images/icon-speaker.svg" alt="" onerror="this.style.display='none'; this.parentElement.innerHTML='♪';"></button>
             <button class="tool-button" data-action="build-tool" title="Build in the world: pieces, shapes, screens and lights" data-i18n-title="toolbar.title.build"><img src="images/icon-build.svg" alt="" onerror="this.style.display='none'; this.parentElement.innerHTML='BD';"></button>
             <button class="tool-button" data-action="lighting-tool" title="Lighting Tool" data-i18n-title="toolbar.title.lighting"><img src="images/icon-lighting.svg" alt="" onerror="this.style.display='none'; this.parentElement.innerHTML='LT';"></button>
-            <button class="tool-button" data-action="media-surfaces" title="Media Surfaces" aria-label="Media Surfaces"><img src="images/icon-media-surfaces.svg" alt=""></button>
+            <button class="tool-button" data-action="media-surfaces" title="Media Surfaces" aria-label="Media Surfaces" data-i18n-title="menu.mediaSurfaces" data-i18n-aria="menu.mediaSurfaces"><img src="images/icon-media-surfaces.svg" alt=""></button>
 
             <!-- Forge Section -->
             <div class="toolbar-separator"></div>
@@ -743,7 +749,7 @@
             <div class="modal-body">
                 <img src="images/logo.png" alt="RPG Reactor" style="max-width: 300px; width: 100%; height: auto; margin-bottom: 24px;" onerror="this.style.display='none'">
 
-                <h3 data-i18n="about.version" style="color: #e8b817; margin-bottom: 16px;">RPG Reactor v0.98.7</h3>
+                <h3 data-i18n="about.version" style="color: #e8b817; margin-bottom: 16px;">RPG Reactor v0.98.8</h3>
 
                 <p data-i18n="about.description" style="color: var(--color-text); line-height: 1.6; margin-bottom: 16px;">
                     An open-source, cross-platform RPG game engine built with NW.js, PixiJS v8, and Three.js
@@ -1238,6 +1244,7 @@
     <script src="src/ProjectController.js"></script>
     <script src="src/AudioPlayer.js"></script>
     <script src="src/PlaytestManager.js"></script>
+    <script src="src/LegacyImportDialog.js"></script>
     <!-- Database editor modules (load before main DatabaseEditorUI) -->
     <script src="src/database/AnimationPickerModal.js"></script>
     <script src="src/database/DatabaseCommonUI.js"></script>

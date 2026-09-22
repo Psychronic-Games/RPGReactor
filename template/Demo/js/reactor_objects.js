@@ -411,7 +411,13 @@ Game_System.prototype.mainFontSize = function() {
 };
 
 Game_System.prototype.windowPadding = function() {
-    return 12;
+    const advanced = $dataSystem.advanced || {};
+    return "windowPadding" in advanced ? advanced.windowPadding : 12;
+};
+
+Game_System.prototype.lineHeight = function() {
+    const advanced = $dataSystem.advanced || {};
+    return "lineHeight" in advanced ? advanced.lineHeight : 36;
 };
 
 Game_System.prototype.windowOpacity = function() {
@@ -12213,3 +12219,117 @@ Game_Interpreter.prototype.command357 = function(params) {
 };
 
 //-----------------------------------------------------------------------------
+
+//-----------------------------------------------------------------------------
+// Equivalents of RPG Maker 2000/2003 event commands that MZ has no command
+// for: calling a map event's page, waiting on key input into a variable,
+// waiting for or halting every move route, flashing one character, reading
+// a tileset's terrain number, and resetting the camera after a pan. The
+// legacy importer emits Script calls to these; they are ordinary engine
+// features and work in any project. A class with an `expTable` uses it in
+// place of the four EXP parameters, so an imported EXP curve is exact.
+
+(function() {
+    const _updateWaitMode = Game_Interpreter.prototype.updateWaitMode;
+    Game_Interpreter.prototype.updateWaitMode = function() {
+        if (this._waitMode === "rrKeyInput") {
+            const k = this._rrKeyInput;
+            if (!k) { this._waitMode = ""; return false; }
+            k.frames++;
+            const code = this.rrKeyInputCheck(k.keys);
+            if (code) {
+                $gameVariables.setValue(k.variableId, code);
+                if (k.timeVariableId) $gameVariables.setValue(k.timeVariableId, Math.floor(k.frames / 6));
+                this._waitMode = "";
+                this._rrKeyInput = null;
+                return false;
+            }
+            return true;
+        }
+        if (this._waitMode === "rrAllMoves") {
+            const moving = $gamePlayer.isMoveRouteForcing() || $gameMap.events().some(e => e.isMoveRouteForcing());
+            if (!moving) this._waitMode = "";
+            return moving;
+        }
+        return _updateWaitMode.call(this);
+    };
+
+    // Run another map event's page (1-based) here, the way a common event runs.
+    Game_Interpreter.prototype.rrCallMapEvent = function(eventId, pageIndex) {
+        const event = $gameMap.event(eventId);
+        const page = event && event.event().pages[(pageIndex || 1) - 1];
+        if (page) this.setupChild(page.list, eventId);
+        return true;
+    };
+
+    // Key codes as the 2003 command reports them: 1 down, 2 left, 3 right, 4 up, 5 decision, 6 cancel, 7 shift.
+    const RR_KEYS = [[7, "shift"], [6, "cancel"], [5, "ok"], [1, "down"], [2, "left"], [3, "right"], [4, "up"]];
+    Game_Interpreter.prototype.rrKeyInputCheck = function(keys) {
+        for (const [code, name] of RR_KEYS) if (keys.includes(code) && Input.isTriggered(name)) return code;
+        return 0;
+    };
+    Game_Interpreter.prototype.rrKeyInput = function(variableId, keys, wait, timeVariableId) {
+        if (wait) {
+            if (variableId) $gameVariables.setValue(variableId, 0);
+            this._rrKeyInput = { variableId, keys: keys || [5], timeVariableId: timeVariableId || 0, frames: 0 };
+            this.setWaitMode("rrKeyInput");
+        } else if (variableId) {
+            $gameVariables.setValue(variableId, this.rrKeyInputCheck(keys || []));
+        }
+        return true;
+    };
+
+    Game_Interpreter.prototype.rrWaitForAllMoves = function() {
+        this.setWaitMode("rrAllMoves");
+        return true;
+    };
+    Game_Interpreter.prototype.rrHaltAllMoves = function() {
+        for (const c of [$gamePlayer, ...$gameMap.events()]) if (c.isMoveRouteForcing()) c.restoreMoveRoute();
+        return true;
+    };
+
+    // Flash one character a colour ([r, g, b, strength], 0-255) over `duration` frames.
+    Game_Interpreter.prototype.rrFlashCharacter = function(characterId, color, duration, wait) {
+        const c = this.character(characterId);
+        if (c) c._rrFlash = { color, duration: Math.max(1, duration | 0), total: Math.max(1, duration | 0) };
+        if (wait) this.wait(duration | 0);
+        return true;
+    };
+
+    // The 2003 terrain number of the tile at (x, y), from the tileset note the importer writes:
+    // <rrTerrain:{"<tileId>": <terrain>, ...}>. 0 when the tileset carries none.
+    Game_Interpreter.prototype.rrTerrainId = function(x, y) {
+        const tileset = $gameMap.tileset();
+        if (!tileset) return 0;
+        if (!tileset._rrTerrainMap) {
+            const m = /<rrTerrain:(\{[\s\S]*?\})>/.exec(tileset.note || "");
+            let map = {};
+            if (m) { try { map = JSON.parse(m[1]); } catch (e) { map = {}; } }
+            tileset._rrTerrainMap = map;
+        }
+        for (const tileId of $gameMap.layeredTiles(x, y)) {
+            if (tileId > 0 && tileset._rrTerrainMap[tileId] !== undefined) return tileset._rrTerrainMap[tileId];
+        }
+        return 0;
+    };
+
+    Game_Interpreter.prototype.rrPanReset = function() {
+        $gamePlayer.center($gamePlayer.x, $gamePlayer.y);
+        return true;
+    };
+
+    const _expForLevel = Game_Actor.prototype.expForLevel;
+    Game_Actor.prototype.expForLevel = function(level) {
+        const c = this.currentClass();
+        if (c && Array.isArray(c.expTable) && c.expTable[level] !== undefined) return c.expTable[level];
+        return _expForLevel.call(this, level);
+    };
+
+    if (typeof BattleManager !== "undefined" && BattleManager.processDefeat) {
+        const _processDefeat = BattleManager.processDefeat;
+        BattleManager.processDefeat = function() {
+            $gameSystem._rrDefeatCount = ($gameSystem._rrDefeatCount || 0) + 1;
+            return _processDefeat.apply(this, arguments);
+        };
+    }
+})();

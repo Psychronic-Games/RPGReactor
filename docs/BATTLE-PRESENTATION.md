@@ -1,6 +1,6 @@
 # Battle Rooms and Action Sequences
 
-Current implementation: runtime **20260911.6**, editor **0.98.6**. See the [phase/graphics guide](ACTION-SEQUENCE-EXPANSION-2026-09-11.md) and [held-item/throw guide](HELD-ITEMS-AND-THROWS-2026-09-11.md) for the September 11 expansion. Existing projects continue to use their battlebacks and existing action behavior until a creator assigns the new presentation. Battle rules, damage formulas, skill costs, targeting and repeats remain in the normal battle system.
+Current implementation: runtime **20260920.24**, editor **0.98.7**. The 2026-09-11 reports on [phases and battler graphics](archive/sessions/ACTION-SEQUENCE-EXPANSION-2026-09-11.md) and [held items and throws](archive/sessions/HELD-ITEMS-AND-THROWS-2026-09-11.md) record how those parts arrived; this page is the current guide.
 
 `BattlePresentation.json` top-level switches: `"commandWindow": "battler"` parks the actor command window above the acting battler; `"startMessages": false` skips the "emerged" and preemptive/surprise lines (System › Options › Announce enemies at battle start).
 
@@ -60,7 +60,7 @@ Runtime **20260906.9** skips a known-missing local one-shot sound with one diagn
 6. Choose **Impact Behavior** under Options. **One Impact · Skill Repeats** uses one effect cue and the original repeated target occurrences. **Authored Hits · Each Impact Applies Once** lets each effect cue apply once to chosen unique battlers without multiplying skill repeats. Scrubbing the editor never applies gameplay effects.
 7. Save, then assign a complete action, matching action phase, or state/reaction sequence in the relevant actor, class, enemy, weapon, skill or item controls.
 
-Available commands cover movement, motions, held equipment, textured projectiles, animations, audio/media, action effects, targets, game data and conditional logic. See the [command coverage table](ACTION-SEQUENCE-EXPANSION-2026-09-11.md#command-coverage). Equipment/action icons, pictures and weapon-sheet frames support hand placement; models can use hand bones or a named bone, and sprites have adjustable grip/offset controls. Projectiles support allies, enemies, arcs, spin and return flights.
+Available commands cover movement, motions, held equipment, textured projectiles, animations, audio/media, action effects, targets, game data and conditional logic. See the [command coverage table](archive/sessions/ACTION-SEQUENCE-EXPANSION-2026-09-11.md#command-coverage). Equipment/action icons, pictures and weapon-sheet frames support hand placement; models can use hand bones or a named bone, and sprites have adjustable grip/offset controls. Projectiles support allies, enemies, arcs, spin and return flights.
 
 **Options → projection** selects a 2D or 3D sample view. The preview uses a neutral stage; test final room framing and gameplay commands in Battle Test. Branches use an explicit preview condition result instead of evaluating game scripts. Independently overlapping tracks, automatic notetag conversion and a room selector inside the sequence preview remain outside this workflow. Camera keys move a room camera; battleback camera choreography requires further support.
 
@@ -155,7 +155,7 @@ Weapon steps are **Show**, **Move** or **Hide**: show the equipped weapon (its i
 
 States carry a **Reaction Sequence** (a motion-purpose sequence played instead of idle while the state is on the battler; the highest-priority afflicting state with one wins), so poison, sleep and custom states each animate from the State record rather than from every battler. Character-set battlers pick their sheet row from their facing (Facing: Face the Target, or a fixed direction), which is what a vertical formation needs. Weapons and thrown items bound to 3D models are held and thrown as those models in battle rooms.
 
-Each phase can inherit, use its built-in behavior, or reference a sequence with the matching purpose. Battler state/reaction controls separately cover idle, movement, guard, damage and other states; they yield to active actions. Actors/enemies also have an explicit SV/character/static/model graphic selector. See the [assignment and graphics guide](ACTION-SEQUENCE-EXPANSION-2026-09-11.md).
+Each phase can inherit, use its built-in behavior, or reference a sequence with the matching purpose. Battler state/reaction controls separately cover idle, movement, guard, damage and other states; they yield to active actions. Actors/enemies also have an explicit SV/character/static/model graphic selector. See the [assignment and graphics guide](archive/sessions/ACTION-SEQUENCE-EXPANSION-2026-09-11.md).
 
 The builder lists **Where Used** references. Referenced sequences cannot be deleted or truncated by Change Maximum until their assignments are removed. Assignments, graphic settings and 3D model bindings travel with copied and duplicated records inside the same project; copying into another project does not carry unrelated sequence IDs.
 

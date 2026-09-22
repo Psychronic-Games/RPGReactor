@@ -51,7 +51,7 @@ test('application version matches package metadata in every startup surface', ()
 // Mirrors the required list in build-scripts/build-worker.js validateProjectRuntime.
 const DEPLOYABLE_RUNTIME_FILES = [
     'reactor_main.js', 'reactor_core.js', 'reactor_managers.js',
-    'reactor_objects.js', 'reactor_scenes.js', 'reactor_sprites.js', 'reactor_picture_extensions.js',
+    'reactor_objects.js', 'reactor_scenes.js', 'reactor_sprites.js', 'reactor_picture_extensions.js', 'reactor_screen_fx.js',
     'reactor_media_surfaces.js',
     'reactor_windows.js', 'reactor_mv_compat.js', 'reactor_plugins.js',
     path.join('libs', 'pixi.js'), path.join('libs', 'pixi_compat.js'),
@@ -122,6 +122,7 @@ test('runtime corescript files are present', () => {
         'reactor_managers.js',
         'reactor_objects.js',
         'reactor_picture_extensions.js',
+        'reactor_screen_fx.js',
         'reactor_media_surfaces.js',
         'reactor_plugins.js',
         'reactor_scenes.js',

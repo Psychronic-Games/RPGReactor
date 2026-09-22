@@ -72,6 +72,7 @@ class RPGReactor {
         this.uiManager = new UIManager({
             newProject: () => this.projectController.newProject(),
             openProject: () => this.projectController.openProject(),
+            importProject: () => this.projectController.importLegacyProject(),
             closeProject: () => this.projectController.closeProject(),
             exit: () => this.projectController.requestApplicationClose(),
             saveProject: () => this.projectController.saveProject(),
@@ -293,6 +294,8 @@ class RPGReactor {
                 this.applyAutotileAnimationPreference(this.optionsManager.getAnimateAutotiles());
                 tilemapManager.onZoomChange = () => {
                     this.updateMapZoom();
+                    // Labels are world-sized rasters; redraw them at the new zoom so they stay sharp.
+                    this.eventManager?.updateLabelResolution?.();
                 };
             }
 

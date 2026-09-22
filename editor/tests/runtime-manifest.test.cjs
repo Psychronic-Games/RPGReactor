@@ -34,6 +34,7 @@ test('every reactor_main runtime manifest entry is tracked in the runtime bundle
 
     const required = [
         'js/reactor_picture_extensions.js',
+        'js/reactor_screen_fx.js',
         'js/reactor_media_surfaces.js',
         'js/reactor_mv_compat.js',
         'js/libs/effekseer.wasm',
