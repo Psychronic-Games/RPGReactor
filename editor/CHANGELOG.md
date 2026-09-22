@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Added
+
+- **The action result says whether a state was renewed or blocked, and whether a hit landed.** `result.isStateAdded(id)` is true both for a state the target did not have and for one it already had whose turn count was only reset, and false alike for a failed chance roll and for a state the target was immune to, so a skill that reacts to its own state had to snapshot the target beforehand. `Game_Battler.addState` already knew the difference; the result now keeps it. `result.isStateRenewed(id)` and `result.isStateNewlyAdded(id)` split the added states (decided the first time the action lands the state, matching `stateAdded`'s `renewed`), and `result.isStateBlocked(id)` names a known state that `addState` was asked for and left off the battler -- resisted, restricted, dead, or turned away by a plugin in `addNewState`. A state the battler keeps from before is never blocked, which keeps a fallen battler's refresh (it asks for death every time) out of the list. `result.isLanded()` is `isHit()` less a hit that `dodged` turned aside, whose effects `apply` skips.
+
+  Nothing that reads the result today changes: `addedStates`, `isStateAdded`, `isHit` and the battle log behave as before. A result restored from an older save lacks the two new lists until its next clear, and the new methods create or skip them rather than assume them.
+
 ### Development
 
 - **CI's GUI smokes run again.** Every run since September 14 was red at the interaction-order audit, the first smoke that draws a map: a GitHub runner has no GPU, and NW.js 0.107's Chromium refuses a WebGL context there unless `--enable-unsafe-swiftshader` is given (the Web persistence smoke already passed it; the NW.js ones did not), so the editor could not open a map and the smoke died before writing its evidence. `webdriver-client.cjs` adds the flag to every NW.js session, and honours `RR_NW_ARGS` (`--disable-gpu` emulates the runner on a desktop). The interaction audit writes its result file even when the project fails to open, so the artifact is there to read next time. The keyboard-navigation smoke, which had never run on CI, assumed ArrowDown from map 1 lands on map 2; the Demo's tree puts North Haven second, so it reads the next map from the tree. All four GUI smokes pass with the GPU disabled.
