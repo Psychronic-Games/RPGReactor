@@ -5,6 +5,8 @@
  *   node editor/build-scripts/import-legacy-project.cjs <source> --report [--json <file>] [--encoding <codepage>]
  *   node editor/build-scripts/import-legacy-project.cjs <source> <destination> [--maps 1,2,3] [--skip-assets] [--force] [--encoding <codepage>] [--language <name>]
  *
+ * `--rtp <folder>` names RPG Maker 2000/2003's RTP when a game takes files from it and it is not
+ * where the installer puts it (RPG2K_RTP_PATH / RPG2K3_RTP_PATH work too).
  * `--report` says what the project holds and what an import will do with
  * it, and writes nothing unless `--json` names a file. With a destination
  * a new Reactor project is written there (the editor's File › Import
@@ -16,11 +18,11 @@ const I = require(path.join(__dirname, '..', 'src', 'legacy', 'LegacyImporter.js
 
 const argv = process.argv.slice(2);
 const flag = (name) => { const i = argv.indexOf(name); return i >= 0 ? (argv[i + 1] || true) : null; };
-const flagValues = new Set(['--json', '--encoding', '--maps', '--language'].map(flag).filter(v => v && v !== true));
+const flagValues = new Set(['--json', '--encoding', '--maps', '--language', '--rtp'].map(flag).filter(v => v && v !== true));
 const positional = argv.filter(a => !a.startsWith('--') && !flagValues.has(a));
 const [source, destination] = positional;
 if (!source || (!flag('--report') && !destination)) {
-    console.error('usage: import-legacy-project.cjs <source> --report [--json <file>] [--encoding <codepage>]\n       import-legacy-project.cjs <source> <destination> [--maps 1,2,3] [--skip-assets] [--force] [--encoding <codepage>] [--language <name>]');
+    console.error('usage: import-legacy-project.cjs <source> --report [--json <file>] [--encoding <codepage>]\n       import-legacy-project.cjs <source> <destination> [--maps 1,2,3] [--skip-assets] [--force] [--encoding <codepage>] [--language <name>] [--rtp <folder>]');
     process.exit(2);
 }
 const encoding = flag('--encoding') && flag('--encoding') !== true ? flag('--encoding') : undefined;
@@ -34,7 +36,8 @@ try {
     }
     const maps = flag('--maps') && flag('--maps') !== true ? String(flag('--maps')).split(',').map(Number) : null;
     const language = flag('--language') && flag('--language') !== true ? flag('--language') : undefined;
-    const summary = I.importProject(source, destination, { maps, skipAssets: !!flag('--skip-assets'), force: !!flag('--force'), encoding, language, log: (line) => console.log(line) });
+    const rtpPath = flag('--rtp') && flag('--rtp') !== true ? flag('--rtp') : undefined;
+    const summary = I.importProject(source, destination, { maps, skipAssets: !!flag('--skip-assets'), force: !!flag('--force'), encoding, language, rtpPath, log: (line) => console.log(line) });
     // Movies Chromium cannot play become WebM and MIDI becomes Ogg once the project is written.
     const media = require('../src/legacy/LegacyMedia.js');
     if (summary && summary.destination && media.pendingMedia(summary.destination)) {

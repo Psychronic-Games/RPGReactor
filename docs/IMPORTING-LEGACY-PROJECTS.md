@@ -20,8 +20,15 @@ In the editor: **File › Import Project…**, choose the folder that holds `RPG
 node editor/build-scripts/import-legacy-project.cjs <source> --report [--json report.json]
 
 # Write a new Reactor project
-node editor/build-scripts/import-legacy-project.cjs <source> <destination> [--maps 1,2,3] [--skip-assets] [--force] [--encoding 932] [--language english]
+node editor/build-scripts/import-legacy-project.cjs <source> <destination> [--maps 1,2,3] [--skip-assets] [--force] [--encoding 932] [--language english] [--rtp <folder>]
 ```
+
+**The RTP.** A 2000/2003 game not built as a full package takes standard
+characters, tiles, music and sounds from RPG Maker's RTP, installed with the
+engine rather than the game. The importer copies the ones the game names from
+the RTP it finds: `--rtp <folder>`, else `RPG2K_RTP_PATH` / `RPG2K3_RTP_PATH`
+(the variables EasyRPG reads), else where the Windows installers put it (also
+under Wine). Without one, those files are listed as missing.
 
 `<source>` is the folder holding `RPG_RT.ldb`. Text is read in the code
 page `RPG_RT.ini` names, or guessed (Shift_JIS for Japanese games,
@@ -276,6 +283,13 @@ downloads:
 - **JPEG and BMP** images become PNG.
 - **8-bit and other plain PCM WAV** that Chromium refuses are decoded by the
   runtime itself.
+
+Every import ends with a check of the files the data names: a Windows path
+(`Folder\Picture`) becomes a folder, 2000/2003's "no sound" name (`(OFF)` in
+any language) becomes none, music played as a fanfare is copied to the ME
+folder, System sounds a game never shipped are cleared rather than stopping
+the game at a load error, and whatever is still missing is listed in the
+Import Report.
 
 File names are made to work off Windows: names a zip tool mangled from
 Shift-JIS are read back (`Battle_01_îÄë║é╠…` → `Battle_01_月下の元で`), and

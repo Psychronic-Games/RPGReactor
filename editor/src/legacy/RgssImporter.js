@@ -169,67 +169,8 @@ function copyAliasedAudio(dest, aliases) {
     return copied;
 }
 
-/**
- * Windows found a game's files whatever the case of their names; Linux, macOS
- * and the web do not. Rewrites the project's data so every audio and image
- * reference spells its file as it is on disk. Returns how many changed.
- */
-function matchFileCase(dest) {
-    const index = new Map();
-    const walkDir = (abs, rel, folder) => {
-        let entries = [];
-        try { entries = fs.readdirSync(abs, { withFileTypes: true }); } catch (_) { return; }
-        for (const e of entries) {
-            const r = rel ? rel + '/' + e.name : e.name;
-            if (e.isDirectory()) walkDir(path.join(abs, e.name), r, folder);
-            else index.set(folder + ':' + r.replace(/\.[^./]+$/, '').toLowerCase(), r.replace(/\.[^./]+$/, ''));
-        }
-    };
-    const FOLDERS = ['audio/bgm', 'audio/bgs', 'audio/me', 'audio/se', 'img/characters', 'img/faces', 'img/pictures', 'img/parallaxes', 'img/enemies', 'img/battlebacks1', 'img/battlebacks2', 'img/animations', 'img/titles1', 'img/tilesets'];
-    for (const f of FOLDERS) walkDir(path.join(dest, f), '', f);
-    const fixName = (folder, name) => {
-        if (typeof name !== 'string' || !name) return name;
-        const exact = index.get(folder + ':' + name.toLowerCase());
-        return exact !== undefined ? exact : name;
-    };
-    const AUDIO_CODES = { 241: 'audio/bgm', 132: 'audio/bgm', 245: 'audio/bgs', 249: 'audio/me', 133: 'audio/me', 250: 'audio/se' };
-    const IMAGE_KEYS = { characterName: 'img/characters', faceName: 'img/faces', parallaxName: 'img/parallaxes', battlerName: 'img/enemies', battleback1Name: 'img/battlebacks1', battleback2Name: 'img/battlebacks2', animation1Name: 'img/animations', animation2Name: 'img/animations', title1Name: 'img/titles1' };
-    const AUDIO_KEYS = { bgm: 'audio/bgm', titleBgm: 'audio/bgm', battleBgm: 'audio/bgm', bgs: 'audio/bgs', victoryMe: 'audio/me', gameoverMe: 'audio/me', defeatMe: 'audio/me', se: 'audio/se' };
-    let changed = 0;
-    const set = (obj, key, folder) => { const v = fixName(folder, obj[key]); if (v !== obj[key]) { obj[key] = v; changed++; } };
-    const walk = (v) => {
-        if (Array.isArray(v)) { for (const x of v) walk(x); return; }
-        if (!v || typeof v !== 'object') return;
-        if (typeof v.code === 'number' && Array.isArray(v.parameters)) {
-            const p = v.parameters;
-            if (AUDIO_CODES[v.code] && p[0] && typeof p[0] === 'object') set(p[0], 'name', AUDIO_CODES[v.code]);
-            else if (v.code === 231) set(p, 1, 'img/pictures');
-            else if (v.code === 44 && p[0] && typeof p[0] === 'object') set(p[0], 'name', 'audio/se');     // move route Play SE
-            else if (v.code === 41) set(p, 0, 'img/characters');                                            // move route Change Image
-            else if (v.code === 322) { set(p, 1, 'img/characters'); set(p, 3, 'img/faces'); }
-            else if (v.code === 283) { set(p, 0, 'img/battlebacks1'); set(p, 1, 'img/battlebacks2'); }
-            else if (v.code === 284) set(p, 0, 'img/parallaxes');
-        }
-        for (const [k, x] of Object.entries(v)) {
-            if (typeof x === 'string') { if (IMAGE_KEYS[k]) set(v, k, IMAGE_KEYS[k]); }
-            else if (x && typeof x === 'object') {
-                if (AUDIO_KEYS[k] && typeof x.name === 'string') set(x, 'name', AUDIO_KEYS[k]);
-                else if (k === 'sounds' && Array.isArray(x)) for (const snd of x) if (snd) set(snd, 'name', 'audio/se');
-                walk(x);
-            }
-        }
-    };
-    const dataDir = path.join(dest, 'data');
-    for (const f of fs.readdirSync(dataDir).filter(n => /\.json$/i.test(n))) {
-        const file = path.join(dataDir, f);
-        let json;
-        try { json = JSON.parse(fs.readFileSync(file, 'utf8')); } catch (_) { continue; }
-        const before = changed;
-        walk(json);
-        if (changed !== before) fs.writeFileSync(file, JSON.stringify(json));
-    }
-    return changed;
-}
+/** References spelled as their files are on disk (ProjectFiles.matchFileCase). */
+const matchFileCase = (dest) => require('./ProjectFiles.js').matchFileCase(dest);
 
 /**
  * Quests a game's journal script defined (a family's `quests(scripts, constants)`),
@@ -458,7 +399,9 @@ function open(folder, destination, options) {
         });
 
         copyAliasedAudio(dest, aliases);
+        { const n = require('./ProjectFiles.js').copyAcrossAudio(dest); if (n) add(notes, 'audioCopiedAcross', n); }
         { const n = matchFileCase(dest); if (n) add(notes, 'fileNameCase', n); }
+        { const n = require('./ProjectFiles.js').clearMissingSystemFiles(dest); if (n) add(notes, 'systemFileCleared', n); }
         { const n = writeFamilyQuests(dest, families, custom.map(s => s.text), constants); if (n) add(notes, 'questsImported', n); }
         const installed = installPlugins(dest, families, constants, custom.map(s => s.text), skipped, log);
 
@@ -482,6 +425,9 @@ function open(folder, destination, options) {
         writeJson(path.join(dest, 'project.rpgreactor'), { name: title, version: editorPackage.version, engine: 'RPG Reactor', engineVersion: editorPackage.version, imported: true, importedFrom: 'RPG Maker VX Ace', importedAt: now, created: now, modified: now });
 
         const summary = { source: folder, engine: 'RPG Maker VX Ace', archive: src.archive, title, writtenAt: now, ms: Date.now() - t0, maps: mapIds.length, approximations: notes, files: images, skipped, scripts: inventory().scripts, plugins: installed.map(p => p.name) };
+        // Files the game names that are nowhere: listed for the author (MIDI and movies converting later still count as present).
+        summary.missingFiles = require('./ProjectFiles.js').missingList(dest);
+        if (summary.missingFiles.length) log(`  ${summary.missingFiles.length} files the game names are not in it (listed in the import report).`, 'warn');
         fs.writeFileSync(path.join(dest, 'import-report.json'), JSON.stringify(summary, null, 2));
         summary.destination = dest;
         report(1, 'Done');

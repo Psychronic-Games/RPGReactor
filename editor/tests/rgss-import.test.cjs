@@ -576,3 +576,31 @@ test('a Skip Title script makes the project skip its title; a stock title overri
     const scenes = fs.readFileSync(path.resolve(__dirname, '..', '..', 'runtime', 'reactor_scenes.js'), 'utf8');
     assert.match(scenes, /Scene_Title\.prototype\.start = function\(\) \{\s*if \(\$dataSystem && \$dataSystem\.rrSkipTitle\)/);
 });
+
+test('imported references work off Windows; dead System names clear; ME music crosses folders; RTP found by variable', () => {
+    const PF = require(path.join(legacy, 'ProjectFiles.js'));
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rr-files-'));
+    try {
+        const put = (rel, text = 'x') => { fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true }); fs.writeFileSync(path.join(dir, rel), text); };
+        put('img/pictures/Gegnerpics/Buddler A.png'); put('audio/se/Sword3.wav'); put('audio/bgm/Fanfare.ogg'); put('img/enemies/bat.png');
+        put('data/Map001.json', JSON.stringify({ events: [null, { pages: [{ list: [
+            { code: 231, parameters: [1, 'Gegnerpics\\Buddler A'] }, { code: 250, parameters: [{ name: 'sword3' }] },
+            { code: 250, parameters: [{ name: '(Kein Sound)' }] }, { code: 249, parameters: [{ name: 'Fanfare' }] }] }] }] }));
+        put('data/Enemies.json', JSON.stringify([null, { battlerName: 'Bat' }]));
+        put('data/System.json', JSON.stringify({ sounds: [{ name: 'Equip1' }, { name: 'Sword3' }], victoryMe: { name: 'Fanfare' }, battleback1Name: 'GrassMaze' }));
+        assert.equal(PF.copyAcrossAudio(dir), 1);
+        assert.ok(fs.existsSync(path.join(dir, 'audio/me/Fanfare.ogg')));
+        PF.matchFileCase(dir);
+        assert.equal(PF.clearMissingSystemFiles(dir), 2);
+        const list = JSON.parse(fs.readFileSync(path.join(dir, 'data/Map001.json'), 'utf8')).events[1].pages[0].list.map(c => (typeof c.parameters[1] === 'string' ? c.parameters[1] : c.parameters[0].name));
+        assert.deepEqual(list, ['Gegnerpics/Buddler A', 'Sword3', '', 'Fanfare']);
+        assert.equal(JSON.parse(fs.readFileSync(path.join(dir, 'data/Enemies.json'), 'utf8'))[1].battlerName, 'bat');
+        const sys = JSON.parse(fs.readFileSync(path.join(dir, 'data/System.json'), 'utf8'));
+        assert.deepEqual([sys.sounds[0].name, sys.sounds[1].name, sys.battleback1Name], ['', 'Sword3', '']);
+        assert.deepEqual(PF.missingList(dir), []);
+        fs.mkdirSync(path.join(dir, 'rtp', 'CharSet'), { recursive: true }); fs.mkdirSync(path.join(dir, 'rtp', 'ChipSet'));
+        const saved = process.env.RPG2K_RTP_PATH;
+        process.env.RPG2K_RTP_PATH = path.join(dir, 'rtp');
+        try { assert.equal(I.findRtp('RPG Maker 2000'), path.join(dir, 'rtp')); } finally { if (saved === undefined) delete process.env.RPG2K_RTP_PATH; else process.env.RPG2K_RTP_PATH = saved; }
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});

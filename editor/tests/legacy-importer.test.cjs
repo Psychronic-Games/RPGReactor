@@ -14,7 +14,7 @@ const editorRoot = path.resolve(__dirname, '..');
 const deep8 = path.resolve(editorRoot, '..', 'template', 'DEEP 8');
 
 test('the module exposes report, printReport and importProject, and the CLI and worker use it', () => {
-    assert.deepEqual(Object.keys(I).sort(), ['importProject', 'languages', 'open', 'printReport', 'probe', 'report']);
+    assert.deepEqual(Object.keys(I).sort(), ['findRtp', 'importProject', 'languages', 'open', 'printReport', 'probe', 'report']);
     const cli = fs.readFileSync(path.join(editorRoot, 'build-scripts', 'import-legacy-project.cjs'), 'utf8');
     assert.match(cli, /LegacyImporter\.js/);
     assert.match(cli, /I\.importProject\(/);

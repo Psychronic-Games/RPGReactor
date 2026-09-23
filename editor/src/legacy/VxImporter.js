@@ -241,7 +241,9 @@ function open(folder, destination, options) {
 
         // ---- plugins -----------------------------------------------------------
         R.copyAliasedAudio(dest, aliases);
+        { const n = require('./ProjectFiles.js').copyAcrossAudio(dest); if (n) add(notes, 'audioCopiedAcross', n); }
         { const n = R.matchFileCase(dest); if (n) add(notes, 'fileNameCase', n); }
+        { const n = require('./ProjectFiles.js').clearMissingSystemFiles(dest); if (n) add(notes, 'systemFileCleared', n); }
         families.extraPlugins = ['RR_VxCompat'];
         { const n = R.writeFamilyQuests(dest, families, custom.map(s => s.text), constants); if (n) add(notes, 'questsImported', n); }
         const installed = R.installPlugins(dest, families, constants, scriptTexts, skipped, log);
@@ -266,6 +268,9 @@ function open(folder, destination, options) {
         writeJson(path.join(dest, 'project.rpgreactor'), { name: title, version: editorPackage.version, engine: 'RPG Reactor', engineVersion: editorPackage.version, imported: true, importedFrom: 'RPG Maker VX', importedAt: now, created: now, modified: now });
 
         const summary = { source: folder, engine: 'RPG Maker VX', archive: src.archive, title, writtenAt: now, ms: Date.now() - t0, maps: mapIds.length, approximations: notes, files: images, skipped, scripts: inventory().scripts, plugins: installed.map(p => p.name) };
+        // Files the game names that are nowhere: listed for the author (MIDI and movies converting later still count as present).
+        summary.missingFiles = require('./ProjectFiles.js').missingList(dest);
+        if (summary.missingFiles.length) log(`  ${summary.missingFiles.length} files the game names are not in it (listed in the import report).`, 'warn');
         fs.writeFileSync(path.join(dest, 'import-report.json'), JSON.stringify(summary, null, 2));
         summary.destination = dest;
         report(1, 'Done');

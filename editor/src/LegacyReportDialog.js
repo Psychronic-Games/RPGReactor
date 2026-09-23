@@ -47,12 +47,14 @@
         modal.setAttribute('aria-modal', 'true');
         const rows = summarize(report);
         const skipped = report && Array.isArray(report.skipped) ? report.skipped : [];
+        const missing = report && Array.isArray(report.missingFiles) ? report.missingFiles : [];
         modal.innerHTML = `
             <div class="rr-modal-header"><div class="rr-modal-title">${rrEscapeHtml(tt('Import Report'))}</div><button type="button" class="rr-modal-close" aria-label="${rrEscapeHtml(tt('Close'))}">×</button></div>
             <div class="rr-modal-body" style="display: flex; flex-direction: column; gap: 10px; max-height: 76vh; overflow: auto;">
                 ${report ? `<table class="traits-table" style="width: 100%;"><tbody>${rows.map(([k, v]) => `<tr><td style="white-space: nowrap; color: var(--color-text-muted); font-size: 12px; vertical-align: top;">${rrEscapeHtml(k)}</td><td style="font-size: 12px; color: var(--color-text); word-break: break-word;">${rrEscapeHtml(v)}</td></tr>`).join('')}</tbody></table>`
                     : `<div style="color: var(--color-text-muted); font-size: 13px;">${rrEscapeHtml(tt('This project was not imported from an older engine.'))}</div>`}
                 ${skipped.length ? `<details><summary style="cursor: pointer; font-size: 12px; color: var(--color-text);">${rrEscapeHtml(tt('Skipped'))} (${skipped.length})</summary><pre style="margin: 6px 0 0; max-height: 160px; overflow: auto; font-size: 11px; color: var(--color-text); background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 4px; padding: 8px; white-space: pre-wrap;">${rrEscapeHtml(skipped.join('\n'))}</pre></details>` : ''}
+                ${missing.length ? `<details><summary style="cursor: pointer; font-size: 12px; color: var(--color-text);">${rrEscapeHtml(tt('Files the game names but does not have'))} (${missing.length})</summary><pre style="margin: 6px 0 0; max-height: 160px; overflow: auto; font-size: 11px; color: var(--color-text); background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 4px; padding: 8px; white-space: pre-wrap;">${rrEscapeHtml(missing.join('\n'))}</pre></details>` : ''}
                 ${scripts.length ? `
                 <div style="font-size: 13px; font-weight: 600; color: var(--color-text);">${rrEscapeHtml(tt('Original scripts'))} <span style="font-weight: 400; color: var(--color-text-muted); font-size: 12px;">legacy/Scripts</span></div>
                 <div style="display: grid; grid-template-columns: minmax(180px, 1fr) 3fr; gap: 8px; min-height: 280px;">

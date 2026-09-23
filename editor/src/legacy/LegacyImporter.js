@@ -20,6 +20,7 @@ const K = require('./LegacyConvert.js');
 const C = require('./LegacyCommands.js');
 const D = require('./LegacyDatabase.js');
 const F = require('./LegacyFont.js');
+const PF = require('./ProjectFiles.js');
 
 function printReport(report) {
     const line = (s = '') => console.log(s);
@@ -57,6 +58,30 @@ function printReport(report) {
         for (const m of report.missingFiles.slice(0, 15)) line(`  ${m.file.padEnd(40)} ×${m.uses}  first seen in ${m.where}`);
         if (report.missingFiles.length > 15) line(`  … and ${report.missingFiles.length - 15} more`);
     } else line('Every file the data names is on disk.');
+}
+
+/**
+ * The RPG Maker 2000 or 2003 RTP folder: options.rtpPath, else the variable
+ * EasyRPG reads (RPG2K_RTP_PATH / RPG2K3_RTP_PATH), else where the Windows
+ * installers put it (and the same under Wine's default prefix). Null when
+ * none is found. A folder counts when it holds CharSet and ChipSet.
+ */
+function findRtp(engine, options = {}) {
+    const is2003 = /2003/.test(String(engine || ''));
+    const ok = (dir) => { try { const names = fs.readdirSync(dir).map(n => n.toLowerCase()); return names.includes('charset') && names.includes('chipset'); } catch (_) { return false; } };
+    const env = is2003 ? [process.env.RPG2K3_RTP_PATH, process.env.RPG2K_RTP_PATH] : [process.env.RPG2K_RTP_PATH, process.env.RPG2K3_RTP_PATH];
+    const version = is2003 ? ['RPG2003', 'RPG Maker 2003'] : ['RPG2000', 'RPG Maker 2000'];
+    const roots = [];
+    const programFiles = [process.env['ProgramFiles(x86)'], process.env.ProgramFiles, 'C:\\Program Files (x86)', 'C:\\Program Files'];
+    const home = process.env.HOME || process.env.USERPROFILE || '';
+    if (home) programFiles.push(path.join(home, '.wine', 'drive_c', 'Program Files (x86)'), path.join(home, '.wine', 'drive_c', 'Program Files'));
+    for (const base of programFiles.filter(Boolean)) {
+        for (const vendor of ['ASCII', 'Enterbrain', 'KADOKAWA', 'Common Files/Enterbrain', path.join('Steam', 'steamapps', 'common')]) {
+            for (const v of version) roots.push(path.join(base, vendor, v, 'RTP'));
+        }
+    }
+    for (const dir of [options.rtpPath, ...env, ...roots]) if (dir && ok(dir)) return path.resolve(dir);
+    return null;
 }
 
 function open(source, destination, options) {
@@ -233,7 +258,7 @@ function open(source, destination, options) {
 
     /** Every file of a source image folder, decoded, written to a project folder; subfolders kept. */
     function importImages(folder, target, options) {
-        const root = resolveInsensitive(source, folder);
+        const root = options.root !== undefined ? options.root : resolveInsensitive(source, folder);
         if (!root) return 0;
         let written = 0;
         const walk = (dir, rel) => {
@@ -246,6 +271,8 @@ function open(source, destination, options) {
                     continue;
                 }
                 const base = entry.name.replace(/\.png$/i, '');
+                // From the RTP, only what the game names.
+                if (options.only && !options.only.has(((options.rename ? options.rename(base) : base)).toLowerCase()) && !options.only.has(path.join(rel, base).replace(/\\/g, '/').toLowerCase())) continue;
                 const keying = typeof options.key === 'function' ? options.key(base) : options.key;
                 const outDir = path.join(destination, target, rel);
                 const bytes = fs.readFileSync(full);
@@ -267,15 +294,15 @@ function open(source, destination, options) {
         return written;
     }
     
-    function importAudio(folder, target) {
-        const root = resolveInsensitive(source, folder);
+    function importAudio(folder, target, from = {}) {
+        const root = from.root !== undefined ? from.root : resolveInsensitive(source, folder);
         if (!root) return 0;
         let written = 0;
         mkdir(path.join(destination, target));
         for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
             if (!entry.isFile()) continue;
+            if (from.only && !from.only.has(entry.name.replace(/\.[^.]+$/, '').toLowerCase())) continue;
             stepAsset(folder, entry.name);
-            if (/\.(mid|midi)$/i.test(entry.name)) notes.skipped.push(`${folder}/${entry.name}: MIDI is not played by the runtime`);
             // The old engine found "Song.ogg.ogg" when the data asked for "Song.ogg"; the runtime wants one extension.
             let name = entry.name;
             const doubled = /^(.*\.(ogg|mp3|wav|flac|m4a|mid|midi))\.\2$/i.exec(name);
@@ -299,6 +326,10 @@ function open(source, destination, options) {
         const t0 = Date.now();
         const title = (project.ini.RPG_RT && project.ini.RPG_RT.GameTitle) || path.basename(source);
         const sys = db.system || {};
+        // A game built with FullPackageFlag=1 carries everything; otherwise it may take files from the RTP.
+        const needsRtp = String((project.ini.RPG_RT || {}).FullPackageFlag || '0').trim() !== '1';
+        const rtp = needsRtp ? findRtp(db.engine, options) : null;
+        if (rtp) log(`  RTP: ${rtp}`, 'info');
     
         log('Copying the project skeleton and runtime…', 'stage');
         report(0, 'Copying the project skeleton and runtime…');
@@ -357,7 +388,8 @@ function open(source, destination, options) {
             tilesetProgress(index, chipsets.length, `Tileset ${index + 1} of ${chipsets.length}`);
             const stem = `chip${String(chipset.id).padStart(3, '0')}`;
             const names = { A1: '', A2: '', B: '', C: '' };
-            const file = chipset.chipset_name ? resolveInsensitive(source, path.join('ChipSet', chipset.chipset_name + '.png')) : null;
+            const file = chipset.chipset_name ? (resolveInsensitive(source, path.join('ChipSet', chipset.chipset_name + '.png')) || (rtp && resolveInsensitive(rtp, path.join('ChipSet', chipset.chipset_name + '.png')))) : null;
+            if (file && rtp && file.startsWith(rtp)) addNote(notes.images, 'fromRtp', 1);
             if (file) {
                 let sheets = sheetCache.get(file);
                 if (!sheets) {
@@ -472,6 +504,39 @@ function open(source, destination, options) {
         importAudio('Music', 'audio/bgm');
         importAudio('Sound', 'audio/se');
         }
+        // Files the game named from the RTP (RPG Maker's standard package, installed with the engine, not the game).
+        if (!options.skipAssets && rtp) {
+            const missing = PF.missingReferences(dest);
+            const lower = (folder) => new Set(Array.from(missing.get(folder) || []).map(n => n.toLowerCase()));
+            const before = JSON.stringify(notes.images);
+            const fromRtp = [
+                ['CharSet', 'img/characters', { key: true, transform: K.reorderCharset, rename: K.charsetName }],
+                ['FaceSet', 'img/faces', { key: true }], ['Panorama', 'img/parallaxes', { key: false }], ['Picture', 'img/pictures', { key: pictureKeying }],
+                ['Monster', 'img/enemies', { key: true }], ['Battle', 'img/animations', { key: true, transform: (img) => K.scaleNearest(img, 2) }],
+                ['Battle2', 'img/animations', { key: true, transform: (img) => K.scaleNearest(img, 1.5) }], ['Backdrop', 'img/battlebacks1', { key: false }], ['Title', 'img/titles1', { key: false }]
+            ];
+            let filled = 0;
+            for (const [folder, target, opts] of fromRtp) {
+                const only = lower(target);
+                if (only.size) filled += importImages(folder, target, Object.assign({}, opts, { root: resolveInsensitive(rtp, folder), only }));
+            }
+            for (const [folder, target] of [['Music', 'audio/bgm'], ['Music', 'audio/me'], ['Sound', 'audio/se']]) {
+                const only = lower(target);
+                if (only.size) filled += importAudio(folder, target, { root: resolveInsensitive(rtp, folder), only });
+            }
+            notes.images = JSON.parse(before);
+            if (filled) { addNote(notes.images, 'fromRtp', filled); log(`  ${filled} files the game takes from the RTP were copied from ${rtp}.`, 'info'); }
+        } else if (!options.skipAssets && !rtp && needsRtp) {
+            notes.skipped.push('The game uses RPG Maker\'s RTP, which is not installed or not found: files it takes from there are missing (set the RTP folder with --rtp or the RPG2K_RTP_PATH / RPG2K3_RTP_PATH variable)');
+        }
+        if (!options.skipAssets) {
+            const across = PF.copyAcrossAudio(dest);
+            if (across) addNote(notes.images, 'audioCopiedAcross', across);
+            const cased = PF.matchFileCase(dest);
+            if (cased) addNote(notes.maps, 'fileNameCase', cased);
+            const cleared = PF.clearMissingSystemFiles(dest);
+            if (cleared) addNote(notes.maps, 'systemFileCleared', cleared);
+        }
     
         // 6. Project identity.
         const pkg = JSON.parse(fs.readFileSync(path.join(dest, 'package.json'), 'utf8'));
@@ -484,6 +549,9 @@ function open(source, destination, options) {
         writeJson(path.join(dest, 'project.rpgreactor'), { name: title, version: editorPackage.version, engine: 'RPG Reactor', engineVersion: editorPackage.version, imported: true, importedFrom: db.engine, importedAt: now, created: now, modified: now });
     
         const summary = { source: path.resolve(source), engine: db.engine, encoding: project.encoding, title, writtenAt: now, ms: Date.now() - t0, tilesets: chipsets.length, maps: written.length, approximations: Object.assign({}, notes.maps, dbNotes), files: notes.images, skipped: notes.skipped, stage: 'assets, tilesets, maps, database, events and their commands; DynRPG comment commands converted where Reactor has an equivalent' };
+        // Files the game names that are nowhere: listed for the author (MIDI and movies converting later still count as present).
+        summary.missingFiles = require('./ProjectFiles.js').missingList(dest);
+        if (summary.missingFiles.length) log(`  ${summary.missingFiles.length} files the game names are not in it (listed in the import report).`, 'warn');
         fs.writeFileSync(path.join(dest, 'import-report.json'), JSON.stringify(summary, null, 2));
         summary.destination = dest;
     
@@ -601,4 +669,4 @@ function probe(folder) {
 }
 function importProject(source, destination, options) { return rgssKind(source) ? rgssImporter(source).importProject(source, destination, options) : open(source, destination, options).importProject(); }
 
-module.exports = { open, report, printReport, importProject, languages, probe };
+module.exports = { findRtp, open, report, printReport, importProject, languages, probe };
