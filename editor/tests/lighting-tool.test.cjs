@@ -343,3 +343,25 @@ test('editing or renaming one component preserves fixture identity and leaves si
     assert.equal(MapLights.members(map, 'cone').length, 2);
     assert.equal(MapLights.get(map, 'cone').pulse.period, 90);
 });
+
+test('the 2D aim handle and cone lines point where the glow, the flat game sprite and the 3D cone go', () => {
+    // A Discord report: the spot cone showed on the other side of its guideline. Every
+    // renderer aims at (sin -yaw, cos -yaw); the guide and its drag now do the same.
+    const vm = require('node:vm');
+    const FlatLightField2D = require(path.join(editorRoot, 'src', 'utils', 'FlatLightField2D.js'));
+    const Manager = vm.runInNewContext(read('src/LightingManager.js') + '\nLightingManager;', { document: {}, window: {} });
+    const manager = Object.create(Manager.prototype);
+    for (const yaw of [0, 90, -90, 37, 180]) {
+        const light = { type: 'spot', x: 10, y: 10, height: 3, pitch: -60, yaw, radius: 6, angle: 45 };
+        const aim = FlatLightField2D.aim(light);
+        const handle = manager._aimPoint(light, { x: 10, y: 10 });
+        assert.ok(Math.abs((handle.x - 10) - aim.x / Math.hypot(aim.x, aim.z) * 6) < 1e-9, `yaw ${yaw}: handle x follows the glow`);
+        assert.ok(Math.abs((handle.y - 10) - aim.z / Math.hypot(aim.x, aim.z) * 6) < 1e-9, `yaw ${yaw}: handle y follows the glow`);
+        // The game's flat sprite: anchor at the source, texture up, rotation π − scene yaw, scene yaw = −data yaw.
+        const rotation = Math.PI - ((-yaw) * Math.PI) / 180;
+        assert.ok(Math.abs(Math.sin(rotation) * 6 - (handle.x - 10)) < 1e-9 && Math.abs(-Math.cos(rotation) * 6 - (handle.y - 10)) < 1e-9, `yaw ${yaw}: the game's sprite agrees`);
+    }
+    const source = read('src/LightingManager.js');
+    assert.match(source, /yaw: Math\.round\(-Math\.atan2\(dx, dy\) \* 180 \/ Math\.PI\)/, 'the aim drag is the inverse of the handle');
+    assert.match(source, /const yaw = -\(light\.yaw \* Math\.PI\) \/ 180;\s*\n\s*const dir = side =>/, 'the cone lines turn with the handle');
+});

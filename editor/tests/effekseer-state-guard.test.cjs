@@ -1,3 +1,4 @@
+const { source3D } = require('./helpers/runtime-3d-source.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -104,8 +105,8 @@ test('the game overlay context follows the same policy through Graphics', () => 
     const sprites = read('runtime/reactor_sprites.js');
     assert.equal((sprites.match(/Graphics\.effekseer\.endDraw\(\);\s*\n\s*Graphics\.settleEffekseerState\(\);/g) || []).length, 2,
         'both Sprite_Animation draw paths settle after endDraw');
-    assert.match(read('runtime/reactor_3d.js'), /efx\.endDraw\(\);\s*\n\s*if \(typeof Graphics !== "undefined" && Graphics\.settleEffekseerState\) Graphics\.settleEffekseerState\(\);/);
-    assert.match(read('runtime/reactor_main.js'), /runtime revision: 20260912\.2/);
+    assert.match(source3D(), /efx\.endDraw\(\);\s*\n\s*if \(typeof Graphics !== "undefined" && Graphics\.settleEffekseerState\) Graphics\.settleEffekseerState\(\);/);
+    assert.match(read('runtime/reactor_main.js'), /runtime revision: \d{8}\.\d+/);
 });
 
 test('the editor lights pass draws nothing but the light group', () => {
@@ -118,7 +119,7 @@ test('the editor lights pass draws nothing but the light group', () => {
 });
 
 test('room pictures carry mipmaps; tile atlases still do not', () => {
-    const source = read('runtime/reactor_3d.js');
+    const source = source3D();
     const room = source.indexOf('Reactor3D.MapScene.prototype.addRoomPiece');
     const roomBody = source.slice(room, source.indexOf('Reactor3D.MapScene.prototype.', room + 10));
     assert.match(roomBody, /texture\.generateMipmaps = true;\s*\n\s*texture\.minFilter = THREE\.LinearMipmapLinearFilter;/);

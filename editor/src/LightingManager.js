@@ -518,7 +518,9 @@ class LightingManager {
     render(frame = this._frame) {
         const state = this._overlay;
         const map = this.map();
-        if (!state || !map || typeof Reactor3D === 'undefined') return;
+        // The runtime arrives one file at a time; a frame drawn between the
+        // core and its extensions has no lighting to read yet.
+        if (!state || !map || typeof Reactor3D === 'undefined' || !Reactor3D.extensionsLoaded?.()) return;
         const tw = this.tileSize();
 
         const ambient = this.ambient();
@@ -604,7 +606,7 @@ class LightingManager {
             if (light.type === 'spot' || light.type === 'beam') {
                 const aim = this._aimPoint(light, at);
                 const spread = (light.angle * Math.PI) / 360;
-                const yaw = (light.yaw * Math.PI) / 180;
+                const yaw = -(light.yaw * Math.PI) / 180;
                 const dir = side => ({
                     x: x + Math.sin(yaw + side * spread) * light.radius * tw,
                     y: y + Math.cos(yaw + side * spread) * light.radius * tw
@@ -650,8 +652,14 @@ class LightingManager {
         return { x: at.x + light.radius, y: at.y };
     }
 
+    /**
+     * Where the cone points, in map tiles. The glow, the game's flat sprite
+     * and the 3D cone all aim at (sin -yaw, cos -yaw): yaw turns the light
+     * clockwise on screen from south. The handle used to turn the other way,
+     * so a cone drawn to the left lit the right.
+     */
     _aimPoint(light, at) {
-        const yaw = (light.yaw * Math.PI) / 180;
+        const yaw = -(light.yaw * Math.PI) / 180;
         return { x: at.x + Math.sin(yaw) * light.radius, y: at.y + Math.cos(yaw) * light.radius };
     }
 
@@ -1028,8 +1036,9 @@ class LightingManager {
         } else if (drag.mode === 'aim') {
             const dx = at.x - drag.anchor.x;
             const dy = at.y - drag.anchor.y;
+            // The inverse of _aimPoint: the glow lands where the handle is dropped.
             RRMapLights.update(map, drag.id, {
-                yaw: Math.round(Math.atan2(dx, dy) * 180 / Math.PI),
+                yaw: Math.round(-Math.atan2(dx, dy) * 180 / Math.PI),
                 radius: Math.round(Math.hypot(dx, dy) * 100) / 100
             });
         }
@@ -1181,7 +1190,7 @@ class LightingManager {
     feed3D() {
         const map3d = this.mapEditor3D();
         const scene = map3d?.mapScene;
-        if (!map3d?.isEnabled?.() || !scene || typeof Reactor3D === 'undefined') return;
+        if (!map3d?.isEnabled?.() || !scene || typeof Reactor3D === 'undefined' || !Reactor3D.extensionsLoaded?.()) return;
         const ambient = this.ambient();
         // Lights that placed models carry (a light-type model effect), resolved by the 3D view each frame.
         const modelLights = Array.isArray(Reactor3D._editorEffectLights) ? Reactor3D._editorEffectLights : [];
@@ -1313,11 +1322,14 @@ class LightingManager {
             const workspaceTop = workspace.getBoundingClientRect().top;
             top = Math.max(0, Math.round(infoBar.getBoundingClientRect().bottom - workspaceTop)) + 6;
         }
-        panel.style.cssText = (workspace
-            ? 'position:absolute;top:' + top + 'px;right:8px;bottom:8px;z-index:900;'
-            : 'position:fixed;top:84px;right:12px;bottom:12px;z-index:9000;')
-            + 'width:300px;';
-        if (workspace && !workspace.style.position) workspace.style.position = 'relative';
+        const dock = window.reactor?.mapSideDock?.();
+        if (!dock) {
+            panel.style.cssText = (workspace
+                ? 'position:absolute;top:' + top + 'px;right:8px;bottom:8px;z-index:900;'
+                : 'position:fixed;top:84px;right:12px;bottom:12px;z-index:9000;')
+                + 'width:300px;';
+            if (workspace && !workspace.style.position) workspace.style.position = 'relative';
+        }
 
         const header = this._el('div');
         header.style.cssText = 'display:flex;align-items:center;gap:8px;';
@@ -1358,14 +1370,15 @@ class LightingManager {
             + 'font-size:10px;text-align:right;opacity:0.8;';
         panel.appendChild(stamp);
 
-        (workspace || document.body).appendChild(panel);
+        if (!window.reactor?.dockMapPanel?.(panel)) (workspace || document.body).appendChild(panel);
         this._panel = panel;
         this._syncPanel();
     }
 
     _destroyPanel() {
         if (typeof RRColourPopover !== 'undefined') RRColourPopover.close();
-        if (this._panel?.parentElement) this._panel.parentElement.removeChild(this._panel);
+        if (window.reactor?.undockMapPanel) window.reactor.undockMapPanel(this._panel);
+        else if (this._panel?.parentElement) this._panel.parentElement.removeChild(this._panel);
         this._panel = null;
         this._listHost = null;
         this._listMeta = null;
@@ -1425,6 +1438,42 @@ class LightingManager {
         input.value = value;
         input.addEventListener('change', () => onCommit(input));
         return input;
+    }
+
+    /**
+     * The kind of a placed light. The three shapes come first; under them,
+     * every single-light preset in the tray, so a light placed as a lamp
+     * can be made a candle, a neon tube or the sun without placing it
+     * again — it keeps its place and its name and takes the preset's look.
+     */
+    _typeSelect(light, commit) {
+        const select = this._el('select', 'lit-select');
+        const group = (label, entries) => {
+            const holder = this._el('optgroup');
+            holder.label = label;
+            for (const [value, text] of entries) {
+                const option = this._el('option', '', text);
+                option.value = value;
+                holder.appendChild(option);
+            }
+            select.appendChild(holder);
+        };
+        group(this._k('lit.types'), [['point', this._k('lit.point')], ['spot', this._k('lit.spot')], ['beam', this._k('lit.beam')]]);
+        const shapes = ['point', 'spot', 'beam'];
+        const presets = this._presets().filter(preset => preset.template && !preset.template.compound && !shapes.includes(preset.key));
+        if (presets.length) group(this._k('lit.presets'), presets.map(preset => ['preset:' + preset.key, preset.label]));
+        select.value = light.type;
+        select.addEventListener('change', () => {
+            const value = select.value;
+            if (value.startsWith('preset:')) {
+                const look = typeof RRMapLights !== 'undefined' && RRMapLights.presetLook ? RRMapLights.presetLook(value.slice(7)) : null;
+                if (look) commit(look);
+                else select.value = light.type;
+                return;
+            }
+            commit({ type: value });
+        });
+        return select;
     }
 
     _select(options, value, onChange) {
@@ -1702,6 +1751,10 @@ class LightingManager {
                 + line('M18 46L52 12', '#ffffff', 1.5)
                 + metal('M4 42L13 33L30 50L21 60H11L4 53Z')
                 + glow('M15 36L27 48L31 44L19 32Z') + line('M42 5H59V22M42 13V22H51', '#24bdf3');
+            case 'sun': return line('M32 3V13M32 51V61M3 32H13M51 32H61M12 12L19 19M45 45L52 52M52 12L45 19M19 45L12 52', INK, 7)
+                + line('M32 3V13M32 51V61M3 32H13M51 32H61M12 12L19 19M45 45L52 52M52 12L45 19M19 45L12 52', colour, 3.5)
+                + glow('M32 17A15 15 0 1 1 31.9 17Z')
+                + line('M25 29A9 9 0 0 1 35 24', '#ffffff', 2);
             case 'streetlamp': return base + metal('M21 55V9L27 3H50L56 9V16H28V55Z')
                 + glow('M38 19L29 44H59L50 19Z') + metal('M34 13H54V23H34Z')
                 + line('M25 21V48', '#24bdf3');
@@ -1976,9 +2029,7 @@ class LightingManager {
             event.stopPropagation();
         });
         body.appendChild(this._row(this._k(light.compoundId ? 'lit.componentId' : 'lit.id'), id));
-        body.appendChild(this._row(this._k('lit.type'), this._select(
-            [['point', this._k('lit.point')], ['spot', this._k('lit.spot')], ['beam', this._k('lit.beam')]],
-            light.type, value => commit({ type: value }))));
+        body.appendChild(this._row(this._k('lit.type'), this._typeSelect(light, commit)));
 
         // The light itself.
         const look = this._group(body, this._k('lit.section.light'), 'light');

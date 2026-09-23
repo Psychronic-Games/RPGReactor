@@ -7,6 +7,7 @@
  * texture adoption (PIXI never uploads to or deletes what it did not
  * create), and the sprite side never copying a shared pass.
  */
+const { source3D } = require('./helpers/runtime-3d-source.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -14,7 +15,7 @@ const test = require('node:test');
 
 const repoRoot = path.resolve(__dirname, '..', '..');
 const Reactor3D = require(path.join(repoRoot, 'runtime', 'reactor_3d.js'));
-const r3d = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+const r3d = source3D();
 const sprites = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_sprites.js'), 'utf8');
 
 function withGlobals(values, fn) {

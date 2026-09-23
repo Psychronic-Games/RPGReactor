@@ -1,3 +1,4 @@
+const { source3D } = require('./helpers/runtime-3d-source.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -50,7 +51,7 @@ test('the runtime eases a model from the transform it has to the one it was give
 });
 
 test('the command is wired: runtime, picker, list, script, names', () => {
-    const runtime = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+    const runtime = source3D();
     assert.match(runtime, /PluginManager\.registerCommand\("RPGReactor", "TransformModel3D", function\(args\) \{/);
     assert.match(runtime, /Reactor3D\.applyLiveTransform\(object, character\);/, 'applied after the pose every frame');
     assert.match(fs.readFileSync(path.join(editorRoot, 'src', 'event', 'EventCommandPicker.js'), 'utf8'), /\{ name: 'Transform 3D Model', code: 357, reactor: 'TransformModel3D' \}/);

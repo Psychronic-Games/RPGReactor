@@ -32,7 +32,9 @@
         return true;
     }
 
-    function enhance(input) {
+    // `measuredWidth` is the input's offsetWidth when the caller read it ahead
+    // of time (see enhanceList); read live otherwise.
+    function enhance(input, measuredWidth) {
         if (!wants(input)) return null;
         const doc = input.ownerDocument;
         const wrapper = doc.createElement('div');
@@ -46,7 +48,10 @@
                 style[property] = '';
             }
         }
-        if (!wrapper.style.width && !wrapper.style.flex) wrapper.style.width = `${Math.max(56, input.offsetWidth || 72)}px`;
+        if (!wrapper.style.width && !wrapper.style.flex) {
+            const width = measuredWidth !== undefined && measuredWidth !== null ? measuredWidth : input.offsetWidth;
+            wrapper.style.width = `${Math.max(56, width || 72)}px`;
+        }
         input.classList.add('rr-number-stepper-input');
         style.width = '100%';
         style.minWidth = '0';
@@ -108,14 +113,29 @@
         return wrapper;
     }
 
+    // Every input that needs measuring is measured before the first wrapper
+    // is inserted. Each insertion dirties layout and the next offsetWidth
+    // forces a recalculation of the whole page, so enhancing one input at a
+    // time cost one full recalculation per input: on a database page with a
+    // 250-row list beside it, a quarter of a second per click.
+    function enhanceList(inputs) {
+        const pending = [];
+        for (const input of inputs) {
+            if (!wants(input)) continue;
+            const needsMeasure = !input.style.width && !input.style.flex;
+            pending.push([input, needsMeasure ? input.offsetWidth : null]);
+        }
+        let count = 0;
+        for (const [input, width] of pending) {
+            if (enhance(input, width)) count++;
+        }
+        return count;
+    }
+
     function enhanceAll(scope) {
         const target = scope || root.document;
         if (!target || !target.querySelectorAll) return 0;
-        let count = 0;
-        for (const input of target.querySelectorAll('input[type="number"]')) {
-            if (enhance(input)) count++;
-        }
-        return count;
+        return enhanceList(target.querySelectorAll('input[type="number"]'));
     }
 
     let observer = null;
@@ -124,13 +144,15 @@
         const run = () => {
             enhanceAll(root.document);
             observer = new MutationObserver(records => {
+                const inputs = [];
                 for (const record of records) {
                     for (const node of record.addedNodes) {
                         if (node.nodeType !== 1) continue;
-                        if (node.tagName === 'INPUT') enhance(node);
-                        else enhanceAll(node);
+                        if (node.tagName === 'INPUT') inputs.push(node);
+                        else if (node.querySelectorAll) for (const input of node.querySelectorAll('input[type="number"]')) inputs.push(input);
                     }
                 }
+                if (inputs.length) enhanceList(inputs);
             });
             observer.observe(root.document.body, { childList: true, subtree: true });
         };
@@ -138,7 +160,7 @@
         else root.document.addEventListener('DOMContentLoaded', run, { once: true });
     }
 
-    const api = { CLASS, AUTO, wants, enhance, enhanceAll, install };
+    const api = { CLASS, AUTO, wants, enhance, enhanceList, enhanceAll, install };
     root.RRNumberSteppers = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
     if (root.document && !root.RR_NUMBER_STEPPERS_MANUAL) install();

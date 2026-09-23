@@ -4,7 +4,7 @@ require('../../runtime/libs/three.js');
 const THREE = global.THREE;
 const R = require('../../runtime/reactor_3d.js');
 global.Reactor3D = R;
-const S = require('../../runtime/reactor_speech_3d.js');
+const S = require('../../runtime/reactor_3d_speech.js').Speech;
 const Command = require('../src/event/commands/SpeakModel3DEditor.js');
 function chunk(values, channels = 1) {
     let reads = 0;

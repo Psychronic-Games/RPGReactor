@@ -36,6 +36,8 @@ class DatabaseEditorUI {
         this.stateEditor = new DatabaseStateEditor(databaseManager, { getCurrentProject: () => this.currentProject }, this.commonUI, this);
         this.questEditor = typeof DatabaseQuestEditor !== 'undefined'
             ? new DatabaseQuestEditor(databaseManager, { getCurrentProject: () => this.currentProject }, this.commonUI, this) : null;
+        this.structureEditor = typeof DatabaseStructureEditor !== 'undefined'
+            ? new DatabaseStructureEditor(databaseManager, { getCurrentProject: () => this.currentProject }, this.commonUI, this) : null;
         this.musicSequenceEditor = typeof DatabaseMusicSequenceEditor !== 'undefined'
             ? new DatabaseMusicSequenceEditor(databaseManager, { getCurrentProject: () => this.currentProject }, this) : null;
         this.animationEditor = new DatabaseAnimationEditor(databaseManager, { getCurrentProject: () => this.currentProject }, this.commonUI, this);
@@ -293,6 +295,7 @@ class DatabaseEditorUI {
         this.userInterfaceEditor?.detach?.();
         this.reactor3dEditor?._disposePreview?.();
         if (this.reactor3dEditor) this.reactor3dEditor._detail = null;
+        this.structureEditor?.detach?.();
         if (typeof document !== 'undefined') {
             const detail = document.getElementById?.('database-detail');
             if (detail) detail.innerHTML = '';
@@ -652,6 +655,12 @@ class DatabaseEditorUI {
                 this.reactor3dEditor.show(detailEl);
                 return;
             }
+            case 'structures':
+                // One record per plan file under 3d/Structures, read on load and
+                // written on save, so the list is the database's own.
+                data = this.databaseManager.getStructures();
+                title = this._dbTitle(type, 'Structures');
+                break;
             case 'system':
                 this.openDatabase('system1');
                 return;
@@ -1771,6 +1780,7 @@ class DatabaseEditorUI {
             { name: 'Animations', type: 'animations' },
             { name: 'Tilesets', type: 'tilesets' },
             { name: '3D Models', type: 'reactor3d' },
+            { name: 'Structures', type: 'structures' },
             { name: 'Common Events', type: 'commonEvents' },
             { name: 'User Interfaces', type: 'userInterfaces' },
             { name: 'Action Sequences', type: 'actionSequences' },
@@ -1851,6 +1861,8 @@ class DatabaseEditorUI {
             this.actionSequenceEditor.show(detailEl, entry);
         } else if (type === 'quests' && this.questEditor) {
             this.questEditor.showQuestDetail(detailEl, entry);
+        } else if (type === 'structures' && this.structureEditor) {
+            this.structureEditor.showStructureDetail(detailEl, entry);
         } else if (type === 'musicSequences' && this.musicSequenceEditor) {
             this.musicSequenceEditor.show(detailEl, entry);
         } else {
@@ -2079,6 +2091,8 @@ class DatabaseEditorUI {
             quests: { name: 'New Quest', key: '', category: '', iconIndex: 0, difficulty: '', from: '', location: '', description: '', objectives: [], rewards: [], subtext: '', quotes: '', activation: { type: 'command', switchId: 0, variableId: 0, operator: '>=', value: 0 }, completion: { type: 'command', switchId: 0 }, note: '' },
             // Stored on System.json; reactor_managers.js reads this shape as it is.
             musicSequences: { name: 'New Sequence', sequence: { enabled: true, entries: [] } },
+            // A building plan, one file under 3d/Structures; the file is named on save.
+            structures: { name: 'New Plan', file: '', plan: typeof DatabaseStructureEditor !== 'undefined' ? DatabaseStructureEditor.newPlan('New Plan') : null },
         };
     }
 
@@ -2089,7 +2103,7 @@ class DatabaseEditorUI {
             actors: 9999, classes: 9999, skills: 9999, items: 9999,
             weapons: 9999, armors: 9999, enemies: 9999, troops: 9999,
             states: 9999, animations: 5000, tilesets: 1000, commonEvents: 9999,
-            userInterfaces: 9999, quests: 9999, musicSequences: 9999, actionSequences: 9999, elements: 512, skillTypes: 128, weaponTypes: 256,
+            userInterfaces: 9999, quests: 9999, structures: 9999, musicSequences: 9999, actionSequences: 9999, elements: 512, skillTypes: 128, weaponTypes: 256,
             armorTypes: 256, equipTypes: 128
         }[type] || 0;
     }
@@ -2460,7 +2474,10 @@ class DatabaseEditorUI {
             svBox.className = 'graphic-preview-box';
 
             const svLabel = document.createElement('div');
-            svLabel.textContent = tt('SV Battler');
+            // Titled for what the slot is, not for which kind of graphic it
+            // holds: the Graphic Type dropdown beneath says SV sheet, character
+            // set, static image or 3D model.
+            svLabel.textContent = tt('Battler');
             svLabel.className = 'graphic-preview-label';
             svBox.appendChild(svLabel);
 

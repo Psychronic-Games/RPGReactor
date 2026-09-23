@@ -3,7 +3,13 @@
  * or audio sample scans run in the frame loop. */
 (function(root) {
     "use strict";
-    const R = root.Reactor3D;
+    // An extension of Reactor3D (reactor_3d.js), booted right after the core.
+    // Node alone takes the core from require; the NW.js page and the browser
+    // find it on the global object. The game classes it hooks load later, so
+    // install() runs again from reactor_sprites.js once they exist.
+    const node = typeof process !== "undefined" && process.versions && process.versions.node
+        && !process.versions.nw && typeof require === "function";
+    const R = node ? require("./reactor_3d.js") : root.Reactor3D;
     if (!R) return;
     const active = new Map(), drivers = new WeakMap(), envelopes = new WeakMap();
     const trackedBuffers = new WeakMap();
@@ -392,9 +398,27 @@
             };
             Game_Interpreter.prototype.updateWaitMode.__reactorSpeech3D = true;
         }
-        if (typeof PluginManager !== "undefined" && typeof PluginManager.registerCommand === "function") PluginManager.registerCommand("RPGReactor", "SpeakModel3D", function(args) {
-            startCommand(this, args);
-        });
+        if (typeof PluginManager !== "undefined" && typeof PluginManager.registerCommand === "function" && !install.__command) {
+            install.__command = true;
+            PluginManager.registerCommand("RPGReactor", "SpeakModel3D", function(args) {
+                startCommand(this, args);
+            });
+        }
+        if (typeof Scene_Map !== "undefined" && !Scene_Map.prototype.update.__reactorSpeech3D) {
+            const update = Scene_Map.prototype.update;
+            Scene_Map.prototype.update = function() {
+                for (const [character, state] of active) {
+                    if (state.buffer.isError?.() || !state.buffer.isPlaying()) stop(character);
+                }
+                return update.apply(this, arguments);
+            };
+            Scene_Map.prototype.update.__reactorSpeech3D = true;
+            const terminate = Scene_Map.prototype.terminate;
+            Scene_Map.prototype.terminate = function() {
+                for (const character of Array.from(active.keys())) stop(character);
+                return terminate.apply(this, arguments);
+            };
+        }
     }
 
     const sync = R.MapScene.prototype.syncCharacterModels;
@@ -408,21 +432,7 @@
         for (const holder of this._modelInstances?.values() || []) drivers.get(holder.object)?.dispose();
         return clear.apply(this, arguments);
     };
-    if (typeof Scene_Map !== "undefined") {
-        const update = Scene_Map.prototype.update;
-        Scene_Map.prototype.update = function() {
-            for (const [character, state] of active) {
-                if (state.buffer.isError?.() || !state.buffer.isPlaying()) stop(character);
-            }
-            return update.apply(this, arguments);
-        };
-        const terminate = Scene_Map.prototype.terminate;
-        Scene_Map.prototype.terminate = function() {
-            for (const character of Array.from(active.keys())) stop(character);
-            return terminate.apply(this, arguments);
-        };
-    }
     R.Speech = { RATE, envelope, levelAt, prepare, attach, play, stop, tick, active, install };
     install();
-    if (typeof module !== "undefined" && module.exports) module.exports = R.Speech;
+    if (typeof module !== "undefined" && module.exports) module.exports = R;
 })(typeof globalThis !== "undefined" ? globalThis : this);

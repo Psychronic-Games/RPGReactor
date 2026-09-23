@@ -112,7 +112,8 @@ class DatabaseClassEditor {
     }
 
     /**
-     * The level this class is actually being balanced for: the highest maxLevel
+     * The level this class is actually being balanced for. A class that was
+     * given one keeps it in `targetLevel`; otherwise it is the highest maxLevel
      * among the actors assigned to it. Curves are STORED across the full 1..999
      * engine domain, but authoring against 999 asks the designer for a number no
      * player in their game will ever reach — a party capped at 60 got a Lv999
@@ -122,16 +123,44 @@ class DatabaseClassEditor {
     _targetLevelFor(classEntry) {
         const capLevel = globalThis.RR_LIMITS?.ACTOR_LEVEL || 999;
         const clamp = value => Math.max(2, Math.min(capLevel, Math.floor(Number(value))));
-        const actors = this.databaseManager?.getActors?.() || [];
-        const levelsOf = list => list
-            .filter(actor => actor && Number.isFinite(Number(actor.maxLevel)) && Number(actor.maxLevel) >= 2)
-            .map(actor => Number(actor.maxLevel));
-
-        const own = levelsOf(actors.filter(actor => actor && actor.classId === classEntry?.id));
-        if (own.length) return clamp(Math.max(...own));
-        const any = levelsOf(actors);
-        if (any.length) return clamp(Math.max(...any));
+        const chosen = Number(classEntry?.targetLevel);
+        if (Number.isFinite(chosen) && chosen >= 2) return clamp(chosen);
+        const own = this._actorsCapFor(classEntry);
+        if (own !== null) return clamp(own);
+        const any = this._actorsCapFor(null);
+        if (any !== null) return clamp(any);
         return 99;
+    }
+
+    /**
+     * The highest Max Level among the actors of a class — the level the game
+     * itself stops them at — or null when no actor uses it. Passing null asks
+     * across every actor in the database.
+     */
+    _actorsCapFor(classEntry) {
+        const actors = this.databaseManager?.getActors?.() || [];
+        const levels = actors
+            .filter(actor => actor && (classEntry === null || actor.classId === classEntry?.id))
+            .map(actor => Number(actor.maxLevel))
+            .filter(level => Number.isFinite(level) && level >= 2);
+        return levels.length ? Math.max(...levels) : null;
+    }
+
+    /**
+     * Records the level a class is balanced for, so the curve grid and both
+     * curve dialogs open on it next time. An empty value forgets the choice and
+     * the class follows its actors' Max Level again; the field is absent from a
+     * class that was never given one. Returns the level now in effect.
+     */
+    _setTargetLevel(classEntry, value) {
+        if (!classEntry) return 99;
+        const capLevel = globalThis.RR_LIMITS?.ACTOR_LEVEL || 999;
+        const raw = String(value ?? '').trim();
+        const level = Math.floor(Number(raw));
+        if (raw === '' || !Number.isFinite(level) || level < 2) delete classEntry.targetLevel;
+        else classEntry.targetLevel = Math.min(capLevel, level);
+        this.databaseManager?.updateClass?.(classEntry.id, classEntry);
+        return this._targetLevelFor(classEntry);
     }
 
     createParameterCurvesSection(classEntry) {
@@ -167,8 +196,24 @@ class DatabaseClassEditor {
             `;
         });
 
+        const capLevel = globalThis.RR_LIMITS?.ACTOR_LEVEL || 999;
+        const targetHint = Number.isFinite(Number(classEntry.targetLevel))
+            ? tt('The level these curves are balanced for. Clear it to follow the actors of this class again.')
+            : tt('The highest Max Level among the actors of this class. Type a level to balance the curves for that instead.');
+        // The target is an authoring level, not a cap: the game stops each
+        // actor at its own Max Level. Say so when the curves are balanced past
+        // the point any actor of this class can reach.
+        const actorsCap = this._actorsCapFor(classEntry);
+        const capNote = actorsCap !== null && targetLevel > actorsCap
+            ? `<span class="rr-class-target-note" style="font-size: 11px; font-weight: normal; color: var(--color-text-muted); white-space: nowrap; margin-right: 8px;">${rrEscapeHtml(tt('Actors of this class stop at Lv{level}').replace('{level}', String(actorsCap)))}</span>`
+            : '';
         section.innerHTML = `
-            <div class="database-section-header">${tt('Parameter Curves')}</div>
+            <div class="database-section-header" style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                <span style="flex: 1 1 auto;">${tt('Parameter Curves')}</span>
+                ${capNote}
+                <label class="database-field-label" style="margin: 0; font-weight: normal; white-space: nowrap;">${tt('Target level')}</label>
+                <input type="number" class="rr-class-target-input database-field-value" min="2" max="${capLevel}" value="${targetLevel}" title="${rrEscapeHtml(targetHint)}" style="width: 64px; text-align: center; font-weight: normal;">
+            </div>
             <div class="database-section-content database-class-parameter-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px;">
                 ${paramsHTML}
             </div>
@@ -184,6 +229,14 @@ class DatabaseClassEditor {
                 }
             });
 
+            // The target level is a class setting: it redraws every cell's
+            // graph and readout, so the whole detail is rebuilt around it.
+            section.querySelector('.rr-class-target-input')?.addEventListener('change', e => {
+                const level = this._setTargetLevel(classEntry, e.target.value);
+                this.commonUI?.updateStatus?.(`${tt('Target level')}: ${level}`);
+                this.refreshClassDetail(classEntry);
+            });
+
             // Click-to-edit on each cell
             section.querySelectorAll('.param-curve-cell').forEach(cell => {
                 cell.addEventListener('mouseenter', () => {
@@ -193,13 +246,274 @@ class DatabaseClassEditor {
                     cell.style.background = '';
                 });
                 cell.addEventListener('click', () => {
-                    const idx = parseInt(cell.dataset.paramIdx);
-                    this.showParameterCurveModal(classEntry, idx, paramNames[idx], paramColors[idx]);
+                    this.showParameterCurvesDialog(classEntry, parseInt(cell.dataset.paramIdx));
                 });
             });
         }, 0);
 
         return section;
+    }
+
+    /** Param-specific sane bounds. HP/MP go high; other stats stay smaller. */
+    _paramValueLimit(paramIdx) {
+        return paramIdx <= 1 ? 99999 : 9999;
+    }
+
+    /**
+     * A curve as the dialog edits it: one value per level across the whole
+     * engine domain. Stock MZ arrays hold 100 entries; levels past the array
+     * take the runtime's own extrapolation, so what the dialog shows at Lv120
+     * is what the game already gives there.
+     */
+    _materializeCurve(values, capLevel) {
+        const source = Array.isArray(values) ? values : [];
+        const curve = new Array(capLevel + 1);
+        for (let level = 1; level <= capLevel; level++) {
+            curve[level] = globalThis.rrClassParamAtLevel ? globalThis.rrClassParamAtLevel(source, level) : (Number(source[level]) || 0);
+        }
+        curve[0] = curve[1];
+        return curve;
+    }
+
+    /**
+     * Parameter Curves, as RPG Maker MZ lays it out: a tab per parameter, Quick
+     * Setting A–E, a Level › Value pair for one level at a time, a bar graph
+     * you drag across to paint values, and Generate Curve… as a step within
+     * it. The graph runs to the class's target level rather than stopping at
+     * 99, and OK commits every parameter at once; Cancel discards them all.
+     */
+    showParameterCurvesDialog(classEntry, initialParamIdx = 0) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        const capLevel = globalThis.RR_LIMITS?.ACTOR_LEVEL || 999;
+        const targetLevel = this._targetLevelFor(classEntry);
+        const paramNames = globalThis.rrParamNames(tt);
+        const paramColors = ['#FF3366', '#33CCFF', '#FF9933', '#FFD700', '#9966FF', '#33FF99', '#FF66CC', '#66FFFF'];
+        if (!classEntry.params) classEntry.params = [];
+        const working = paramNames.map((_, idx) => this._materializeCurve(classEntry.params[idx], capLevel));
+        const touched = new Set();
+        let paramIdx = Math.max(0, Math.min(paramNames.length - 1, initialParamIdx | 0));
+        let level = 1;
+
+        const overlay = document.createElement('div');
+        overlay.className = 'rr-modal-overlay';
+        const modal = document.createElement('div');
+        modal.className = 'rr-modal param-curves-modal';
+        modal.style.cssText = 'width: 760px; max-width: 94vw; display: flex; flex-direction: column;';
+        const quick = DatabaseClassEditor.QUICK_SETTINGS;
+        modal.innerHTML = `
+            <div class="rr-modal-header">
+                <div class="rr-modal-title">${tt('Parameter Curves')}</div>
+                <button class="rr-modal-close pcd-close" type="button">&times;</button>
+            </div>
+            <div class="pcd-tabs" role="tablist" style="display: flex; gap: 2px; padding: 8px 12px 0; border-bottom: 1px solid var(--color-border-subtle); background: var(--color-bg-panel);">
+                ${paramNames.map((name, idx) => `<button type="button" class="pcd-tab" role="tab" data-param-idx="${idx}" style="padding: 6px 12px; border: 1px solid var(--color-border-subtle); border-bottom: none; border-radius: 4px 4px 0 0; background: transparent; color: var(--color-text-muted); cursor: pointer; font-size: 12px;">${name}</button>`).join('')}
+            </div>
+            <div class="rr-modal-body" style="display: flex; flex-direction: column; gap: 10px;">
+                <div style="display: flex; align-items: flex-end; gap: 14px; flex-wrap: wrap;">
+                    <fieldset class="pcd-quick" style="margin: 0; padding: 6px 10px 8px; border: 1px solid var(--color-border-subtle); border-radius: 4px; min-width: 0;">
+                        <legend style="font-size: 11px; color: var(--color-text-muted); padding: 0 4px;">${tt('Quick Setting')}</legend>
+                        <div style="display: flex; gap: 4px;">
+                            ${quick.names.map(name => `<button type="button" class="pcd-quick-btn rr-btn-secondary" data-quick="${name}" style="min-width: 30px; padding: 4px 0;">${name}</button>`).join('')}
+                        </div>
+                    </fieldset>
+                    <label style="display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: var(--color-text-muted);">${tt('Level')}
+                        <input type="number" class="pcd-level database-field-value" min="1" max="${capLevel}" value="1" style="width: 84px; text-align: center;">
+                    </label>
+                    <span style="padding-bottom: 6px; color: var(--color-text-muted);">&gt;</span>
+                    <label style="display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: var(--color-text-muted);">${tt('Value')}
+                        <input type="number" class="pcd-value database-field-value" min="1" value="1" style="width: 96px; text-align: center;">
+                    </label>
+                    <div style="flex: 1 1 auto;"></div>
+                    <button type="button" class="pcd-generate rr-btn-secondary" style="padding: 6px 14px;">${tt('Generate Curve...')}</button>
+                </div>
+                <div style="position: relative; background: var(--color-bg-input); border: 1px solid var(--color-border); border-radius: 4px;">
+                    <canvas class="pcd-graph" width="720" height="300" style="width: 100%; height: 300px; display: block; cursor: crosshair; touch-action: none;"></canvas>
+                    <div class="pcd-readout" style="position: absolute; top: 6px; right: 10px; font-size: 11px; color: var(--color-text-muted); pointer-events: none;"></div>
+                </div>
+            </div>
+            <div class="rr-modal-footer">
+                <button type="button" class="pcd-cancel rr-btn-secondary">${tt('Cancel')}</button>
+                <button type="button" class="pcd-ok rr-button-primary">${tt('OK')}</button>
+            </div>
+        `;
+        overlay.appendChild(modal);
+        document.body.appendChild(overlay);
+
+        const tabs = [...modal.querySelectorAll('.pcd-tab')];
+        const levelInput = modal.querySelector('.pcd-level');
+        const valueInput = modal.querySelector('.pcd-value');
+        const readout = modal.querySelector('.pcd-readout');
+        const canvas = modal.querySelector('.pcd-graph');
+        const ctx = canvas.getContext('2d');
+        const lv = tt('Lv');
+        const resolve = (token, fallback) => globalThis.ThemeColors?.resolve ? ThemeColors.resolve(token, fallback) : fallback;
+        const PAD = { left: 44, right: 10, top: 22, bottom: 22 };
+
+        const curve = () => working[paramIdx];
+        const limit = () => this._paramValueLimit(paramIdx);
+        const clampValue = value => Math.max(1, Math.min(limit(), Math.round(Number(value) || 1)));
+        const setValue = (atLevel, value) => {
+            curve()[atLevel] = clampValue(value);
+            if (atLevel === 1) curve()[0] = curve()[1];
+            touched.add(paramIdx);
+        };
+
+        // The graph's ceiling: a round number a little above the tallest bar
+        // over the levels shown, held still while a drag is in progress so the
+        // bars do not slide under the pointer.
+        let yMax = 10;
+        const fitScale = () => {
+            let peak = 1;
+            for (let l = 1; l <= targetLevel; l++) peak = Math.max(peak, curve()[l]);
+            const raw = peak * 1.25;
+            const step = Math.pow(10, Math.floor(Math.log10(raw))) / 2;
+            yMax = Math.max(10, Math.ceil(raw / step) * step);
+        };
+
+        const draw = () => {
+            const width = canvas.width, height = canvas.height;
+            const plotW = width - PAD.left - PAD.right, plotH = height - PAD.top - PAD.bottom;
+            const color = paramColors[paramIdx];
+            ctx.clearRect(0, 0, width, height);
+            ctx.strokeStyle = resolve('--color-border-subtle', '#333333');
+            ctx.fillStyle = resolve('--color-text-muted', '#888888');
+            ctx.font = '10px sans-serif';
+            ctx.textAlign = 'right';
+            ctx.lineWidth = 1;
+            for (let i = 0; i <= 4; i++) {
+                const y = PAD.top + plotH - (plotH * i) / 4;
+                ctx.beginPath(); ctx.moveTo(PAD.left, y + 0.5); ctx.lineTo(width - PAD.right, y + 0.5); ctx.stroke();
+                ctx.fillText(String(Math.round((yMax * i) / 4)), PAD.left - 6, y + 3);
+            }
+            const barW = plotW / targetLevel;
+            for (let l = 1; l <= targetLevel; l++) {
+                const h = Math.max(1, (Math.min(curve()[l], yMax) / yMax) * plotH);
+                ctx.fillStyle = l === level ? '#ffffff' : color;
+                ctx.globalAlpha = l === level ? 1 : 0.85;
+                ctx.fillRect(PAD.left + (l - 1) * barW, PAD.top + plotH - h, Math.max(1, barW - (barW > 3 ? 1 : 0)), h);
+            }
+            ctx.globalAlpha = 1;
+            ctx.fillStyle = resolve('--color-text-muted', '#888888');
+            ctx.textAlign = 'left';
+            ctx.fillText(`${lv}1`, PAD.left, height - 8);
+            ctx.textAlign = 'right';
+            ctx.fillText(`${lv}${targetLevel}`, width - PAD.right, height - 8);
+            readout.textContent = `${lv}${level}: ${curve()[level]}`;
+        };
+
+        const selectLevel = next => {
+            level = Math.max(1, Math.min(capLevel, Math.floor(Number(next)) || 1));
+            levelInput.value = level;
+            valueInput.value = curve()[level];
+            draw();
+        };
+        const selectParam = idx => {
+            paramIdx = idx;
+            tabs.forEach(tab => {
+                const active = Number(tab.dataset.paramIdx) === idx;
+                tab.style.background = active ? 'var(--color-bg-surface)' : 'transparent';
+                tab.style.color = active ? paramColors[idx] : 'var(--color-text-muted)';
+                tab.style.fontWeight = active ? 'bold' : 'normal';
+                tab.setAttribute('aria-selected', active ? 'true' : 'false');
+                tab.tabIndex = active ? 0 : -1;
+            });
+            valueInput.max = limit();
+            fitScale();
+            selectLevel(level);
+        };
+
+        tabs.forEach(tab => tab.addEventListener('click', () => selectParam(Number(tab.dataset.paramIdx))));
+        levelInput.addEventListener('input', () => selectLevel(levelInput.value));
+        valueInput.addEventListener('input', () => {
+            if (valueInput.value === '') return;
+            setValue(level, valueInput.value);
+            fitScale();
+            draw();
+        });
+        valueInput.addEventListener('change', () => { valueInput.value = curve()[level]; });
+
+        // Quick Setting: a preset pair of Lv1 and target values for this
+        // parameter, drawn as a straight line between them.
+        modal.querySelectorAll('.pcd-quick-btn').forEach(button => {
+            const preset = () => quick.presetFor(paramIdx, button.dataset.quick);
+            button.addEventListener('mouseenter', () => { button.title = `${lv}1: ${preset()[0]} → ${lv}${targetLevel}: ${preset()[1]}`; });
+            button.addEventListener('click', () => {
+                const [lv1, lvTarget] = preset();
+                working[paramIdx] = this._generateParamCurve(lv1, lvTarget, 1, capLevel + 1, targetLevel, limit());
+                touched.add(paramIdx);
+                fitScale();
+                selectLevel(level);
+            });
+        });
+
+        modal.querySelector('.pcd-generate').addEventListener('click', () => {
+            this.showParameterCurveModal(classEntry, paramIdx, paramNames[paramIdx], paramColors[paramIdx], {
+                values: curve(),
+                onApply: values => { working[paramIdx] = values; touched.add(paramIdx); fitScale(); selectLevel(level); }
+            });
+        });
+
+        // Painting: the bar under the pointer takes the pointer's height, and a
+        // fast drag fills the levels it skipped with a straight run between
+        // the last bar touched and this one.
+        let painting = false, lastLevel = null, lastValue = null;
+        const pointAt = event => {
+            const rect = canvas.getBoundingClientRect();
+            const x = ((event.clientX - rect.left) / rect.width) * canvas.width;
+            const y = ((event.clientY - rect.top) / rect.height) * canvas.height;
+            const plotW = canvas.width - PAD.left - PAD.right, plotH = canvas.height - PAD.top - PAD.bottom;
+            const l = Math.max(1, Math.min(targetLevel, Math.floor((x - PAD.left) / (plotW / targetLevel)) + 1));
+            const v = clampValue(((PAD.top + plotH - y) / plotH) * yMax);
+            return [l, v];
+        };
+        const paint = event => {
+            const [l, v] = pointAt(event);
+            if (lastLevel !== null && Math.abs(l - lastLevel) > 1) {
+                const steps = l - lastLevel, sign = Math.sign(steps);
+                for (let i = 1; i <= Math.abs(steps); i++) setValue(lastLevel + i * sign, lastValue + ((v - lastValue) * i) / Math.abs(steps));
+            } else {
+                setValue(l, v);
+            }
+            lastLevel = l; lastValue = v;
+            level = l; levelInput.value = l; valueInput.value = curve()[l];
+            draw();
+        };
+        canvas.addEventListener('pointerdown', event => {
+            if (event.button !== 0) return;
+            painting = true; lastLevel = null; lastValue = null;
+            try { canvas.setPointerCapture(event.pointerId); } catch (e) { /* synthetic pointer */ }
+            paint(event);
+        });
+        canvas.addEventListener('pointermove', event => {
+            if (painting) { paint(event); return; }
+            const [l] = pointAt(event);
+            readout.textContent = `${lv}${l}: ${curve()[l]}`;
+        });
+        const endPaint = () => { if (!painting) return; painting = false; fitScale(); draw(); };
+        canvas.addEventListener('pointerup', endPaint);
+        canvas.addEventListener('pointercancel', endPaint);
+        canvas.addEventListener('pointerleave', () => { if (!painting) draw(); });
+
+        const close = () => { overlay.remove(); overlay._rrModalKeys?.leave(); };
+        modal.querySelector('.pcd-close').addEventListener('click', close);
+        modal.querySelector('.pcd-cancel').addEventListener('click', close);
+        modal.querySelector('.pcd-ok').addEventListener('click', () => {
+            touched.forEach(idx => { classEntry.params[idx] = working[idx].slice(); });
+            if (touched.size) {
+                this.databaseManager.updateClass(classEntry.id, classEntry);
+                this.commonUI?.updateStatus?.(`${tt('Parameter Curves')} ${tt('updated')}`);
+            }
+            close();
+            if (touched.size) this.refreshClassDetail(classEntry);
+        });
+        window.RRKeyboardNavigation?.modal(overlay, { onEscape: close, container: () => modal });
+        window.RRKeyboardNavigation?.roving(modal.querySelector('.pcd-tabs'), {
+            items: () => tabs,
+            isSelected: tab => tab.getAttribute('aria-selected') === 'true',
+            select: tab => tab.click()
+        });
+
+        selectParam(paramIdx);
     }
 
     /**
@@ -214,7 +528,7 @@ class DatabaseClassEditor {
      * the runtime's linear extrapolation, so opening and applying without
      * touching anything keeps the curve the game was already playing.
      */
-    showParameterCurveModal(classEntry, paramIdx, paramName, color) {
+    showParameterCurveModal(classEntry, paramIdx, paramName, color, options = {}) {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const capLevel = globalThis.RR_LIMITS?.ACTOR_LEVEL || 999;
         if (!classEntry.params) classEntry.params = [];
@@ -223,11 +537,13 @@ class DatabaseClassEditor {
             const seed = source.find(value => Number.isFinite(Number(value))) ?? 1;
             classEntry.params[paramIdx] = new Array(100).fill(Number(seed));
         }
-        const current = classEntry.params[paramIdx];
+        // Opened from the Parameter Curves dialog, the generator works on that
+        // dialog's working copy and hands the result back through onApply;
+        // nothing reaches the class until that dialog's OK.
+        const current = Array.isArray(options.values) ? options.values : classEntry.params[paramIdx];
 
-        // Param-specific sane bounds. HP/MP go high; other stats stay smaller.
-        const maxAllowed = (paramIdx === 0) ? 99999 : (paramIdx === 1) ? 99999 : 9999;
-        let targetLevel = this._targetLevelFor(classEntry);
+        const maxAllowed = this._paramValueLimit(paramIdx);
+        const targetLevel = this._targetLevelFor(classEntry);
         const initialLv1 = Number.isFinite(Number(current[1])) ? Number(current[1]) : 1;
         const initialLvMax = globalThis.rrClassParamAtLevel?.(current, targetLevel) ?? initialLv1;
         // Best-fit exponent from existing curve so the slider starts where the curve already lives.
@@ -260,19 +576,18 @@ class DatabaseClassEditor {
                 <div style="display: grid; grid-template-columns: 110px 1fr 80px; gap: 12px; align-items: center;">
                     <label style="font-size: 12px; color: var(--color-text-muted);">${tt('Level 1 value')}</label>
                     <input type="range" class="rr-pc-lv1-slider rr-range" min="1" max="${maxAllowed}" value="${lv1}">
-                    <input type="number" class="rr-pc-lv1-input rr-input" min="1" max="${maxAllowed}" value="${lv1}">
+                    <input type="number" class="rr-pc-lv1-input database-field-value" min="1" max="${maxAllowed}" value="${lv1}">
                 </div>
 
                 <div style="display: grid; grid-template-columns: 110px 1fr 80px; gap: 12px; align-items: center;">
                     <label style="font-size: 12px; color: var(--color-text-muted);">${tt('Target level')}</label>
-                    <span class="rr-pc-target-hint" style="font-size: 11px; color: var(--color-text-muted);"></span>
-                    <input type="number" class="rr-pc-target-input rr-input" min="2" max="${capLevel}" value="${targetLevel}">
+                    <span class="rr-pc-target-hint" style="grid-column: 2 / span 2; font-size: 11px; color: var(--color-text-muted);"></span>
                 </div>
 
                 <div style="display: grid; grid-template-columns: 110px 1fr 80px; gap: 12px; align-items: center;">
                     <label style="font-size: 12px; color: var(--color-text-muted);">${tt('Value at target level')}</label>
                     <input type="range" class="rr-pc-lvmax-slider rr-range" min="1" max="${maxAllowed}" value="${lvMax}">
-                    <input type="number" class="rr-pc-lvmax-input rr-input" min="1" max="${maxAllowed}" value="${lvMax}">
+                    <input type="number" class="rr-pc-lvmax-input database-field-value" min="1" max="${maxAllowed}" value="${lvMax}">
                 </div>
 
                 <div style="display: grid; grid-template-columns: 110px 1fr 80px; gap: 12px; align-items: center;">
@@ -329,48 +644,34 @@ class DatabaseClassEditor {
         const lvMaxSlider = modal.querySelector('.rr-pc-lvmax-slider');
         const lvMaxInput  = modal.querySelector('.rr-pc-lvmax-input');
         const shapeSlider = modal.querySelector('.rr-pc-shape-slider');
-        const targetInput = modal.querySelector('.rr-pc-target-input');
 
         const syncLv1 = (v) => { lv1 = Math.max(1, Math.min(maxAllowed, parseInt(v) || 1)); lv1Slider.value = lv1; lv1Input.value = lv1; recompute(); };
         const syncLvMax = (v) => { lvMax = Math.max(1, Math.min(maxAllowed, parseInt(v) || 1)); lvMaxSlider.value = lvMax; lvMaxInput.value = lvMax; recompute(); };
         const syncShape = (v) => { exponent = (parseInt(v) || 100) / 100; recompute(); };
-        // Moving the target re-anchors the view onto the SAME curve: read what
-        // the working curve already gives at the new target and use that as the
-        // anchor value. Because the generator is a pure power curve, that leaves
-        // every level's value unchanged — only the level you author against moves.
-        const syncTarget = (v) => {
-            const next = Math.max(2, Math.min(capLevel, parseInt(v) || targetLevel));
-            if (next === targetLevel) return;
-            const anchored = globalThis.rrClassParamAtLevel?.(workingValues, next) ?? lvMax;
-            targetLevel = next;
-            lvMax = Math.max(1, Math.min(maxAllowed, Math.round(Number(anchored) || lvMax)));
-            lvMaxSlider.value = lvMax;
-            lvMaxInput.value = lvMax;
-            recompute();
-        };
 
         lv1Slider.addEventListener('input', e => syncLv1(e.target.value));
         lv1Input.addEventListener('input', e => syncLv1(e.target.value));
         lvMaxSlider.addEventListener('input', e => syncLvMax(e.target.value));
         lvMaxInput.addEventListener('input', e => syncLvMax(e.target.value));
         shapeSlider.addEventListener('input', e => syncShape(e.target.value));
-        targetInput.addEventListener('change', e => syncTarget(e.target.value));
 
         const close = () => overlay.remove();
         modal.querySelector('.rr-param-curve-close').addEventListener('click', close);
         modal.querySelector('.rr-pc-cancel').addEventListener('click', close);
         modal.querySelector('.rr-pc-apply').addEventListener('click', () => {
+            if (typeof options.onApply === 'function') {
+                options.onApply(workingValues.slice());
+                close();
+                return;
+            }
             classEntry.params[paramIdx] = workingValues.slice();
             this.databaseManager.updateClass(classEntry.id, classEntry);
             this.commonUI.updateStatus(`${paramName} ${tt('curve updated')}`);
             close();
-            // Redraw the mini curve in the section
-            // The grid summarises all eight params side by side, so it stays on
-            // the class's own derived target even if this dialog was pointed at
-            // a different level — otherwise one cell would report Lv40 while its
-            // seven neighbours reported Lv60. The dialog's target is a view, not
-            // something the curve stores.
-            const cellTarget = this._targetLevelFor(classEntry);
+            // Redraw the mini curve in the section. The target is the class's
+            // own, set in the Parameter Curves header, so the cell and its
+            // seven neighbours already agree on the level.
+            const cellTarget = targetLevel;
             const mini = document.getElementById(`param-curve-${classEntry.id}-${paramIdx}`);
             if (mini) this.drawParameterCurve(mini, classEntry.params[paramIdx], color, { maxLevel: cellTarget });
             // Refresh the Lv1/mid/target readout span next to the param name
@@ -1173,10 +1474,9 @@ class DatabaseClassEditor {
             classEntry.expParams = [30, 20, 30, 30]; // [basis, extra, accelA, accelB]
         }
 
-        const capLevel = globalThis.RR_LIMITS?.ACTOR_LEVEL || 999;
         let params = [...classEntry.expParams];
         let activeTab = 'nextLevel';
-        let targetLevel = this._targetLevelFor(classEntry);
+        const targetLevel = this._targetLevelFor(classEntry);
 
         // Create modal overlay
         const overlay = document.createElement('div');
@@ -1231,18 +1531,15 @@ class DatabaseClassEditor {
             tabBar.appendChild(tabBtn);
         });
 
-        // Target level, in the tab bar rather than above the sliders. The table
-        // used to enumerate all 999 levels — roughly 200 rows of EXP figures a
-        // game capped at 60 will never award, rebuilt on every slider tick.
-        // It scopes what the two tabs show, so it belongs beside them; the
-        // control panel below is already 358px of a 634px dialog and a sixth row
-        // there would have taken another third of the table's height.
+        // The class's target level, read out in the tab bar: it scopes what the
+        // two tabs show (the table used to enumerate all 999 levels — roughly
+        // 200 rows of EXP figures a game capped at 60 will never award). It is
+        // set in the Parameter Curves header, not here.
         const targetControl = document.createElement('div');
         targetControl.style.cssText = 'display: flex; align-items: center; gap: 8px; padding: 0 12px; border-left: 1px solid var(--color-border-subtle); flex: 0 0 auto;';
         targetControl.innerHTML = `
             <label class="database-field-label" style="margin: 0; white-space: nowrap;">${tt('Target level')}</label>
-            <input type="number" class="exp-target-input" value="${targetLevel}" min="2" max="${capLevel}"
-                   style="width: 62px; padding: 4px 6px; background: var(--color-bg-button); border: 1px solid var(--color-bg-button-hover); color: var(--color-text-strong); border-radius: 4px; text-align: center;">
+            <span class="exp-target-level" style="color: var(--color-text-strong); font-size: 13px;">${targetLevel}</span>
         `;
         tabBar.appendChild(targetControl);
 
@@ -1500,14 +1797,6 @@ class DatabaseClassEditor {
 
         // Sync slider and number input
         const syncInputs = () => {
-            const targetInput = modal.querySelector('.exp-target-input');
-            targetInput?.addEventListener('change', (e) => {
-                const next = Math.max(2, Math.min(capLevel, parseInt(e.target.value) || targetLevel));
-                targetLevel = next;
-                e.target.value = next;
-                scheduleTabDisplay();
-            });
-
             modal.querySelectorAll('.exp-slider').forEach(slider => {
                 slider.addEventListener('input', (e) => {
                     const index = parseInt(e.target.dataset.paramIndex);
@@ -1562,3 +1851,20 @@ class DatabaseClassEditor {
         syncInputs();
     }
 }
+
+/**
+ * Quick Setting A–E: five preset pairs of Lv1 and target-level values per
+ * parameter family, A the gentlest and E the strongest, joined by a straight
+ * line. They anchor at the class's target level, so a class balanced for
+ * Lv150 gets the E value at Lv150, not at Lv99.
+ */
+DatabaseClassEditor.QUICK_SETTINGS = Object.freeze({
+    names: ['A', 'B', 'C', 'D', 'E'],
+    hp: { A: [300, 2500], B: [400, 4000], C: [500, 5500], D: [600, 7000], E: [700, 8500] },
+    mp: { A: [40, 250], B: [60, 400], C: [80, 550], D: [100, 700], E: [120, 850] },
+    other: { A: [10, 90], B: [14, 130], C: [18, 170], D: [22, 210], E: [26, 250] },
+    presetFor(paramIdx, name) {
+        const family = paramIdx === 0 ? this.hp : paramIdx === 1 ? this.mp : this.other;
+        return family[name] || family.C;
+    }
+});

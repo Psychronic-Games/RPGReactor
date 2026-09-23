@@ -16,6 +16,16 @@
  *
  * `reactor_plugins.js` is skipped: it is a project's own plugin list, and the
  * copy in `runtime/` is the empty one a new project starts with.
+ *
+ * It also stamps `runtime/reactor_main.js`'s header before copying. The header
+ * carries the engine version and the runtime revision as COMMENTS, because
+ * `ProjectManager.ensureProjectRuntime` reads them out of the file's text to
+ * decide whether a project's own `js/` copy is stale — it never runs the file.
+ * Each therefore has an executable twin: the version lives in
+ * `editor/package.json`, the revision in `RPG_REACTOR_RUNTIME_REVISION`. Those
+ * two are the ones to edit; the comments are written from them here, so there
+ * is nothing to keep in step by hand. (They drifted six days once, and every
+ * project stopped taking new runtimes.)
  */
 const fs = require('fs');
 const path = require('path');
@@ -28,6 +38,38 @@ const templateRoot = path.join(repoRoot, 'template');
 const PER_PROJECT = new Set(['reactor_plugins.js']);
 
 const checkOnly = process.argv.includes('--check');
+
+/**
+ * Write the header comments in runtime/reactor_main.js from the two places
+ * that actually define them. Returns the lines it changed.
+ */
+function stampRuntimeHeader() {
+    const mainPath = path.join(runtimeRoot, 'reactor_main.js');
+    const before = fs.readFileSync(mainPath, 'utf8');
+    const version = JSON.parse(fs.readFileSync(path.join(repoRoot, 'editor', 'package.json'), 'utf8')).version;
+    const revision = before.match(/RPG_REACTOR_RUNTIME_REVISION\s*=\s*"([\w.-]+)"/)?.[1];
+    if (!version || !revision) {
+        console.error('reactor_main.js has no RPG_REACTOR_RUNTIME_REVISION, or editor/package.json has no version.');
+        process.exit(1);
+    }
+    const after = before
+        .replace(/(\/\/ RPG Reactor runtime version:\s*)[\d.]+/, `$1${version}`)
+        .replace(/(\/\/ RPG Reactor runtime revision:\s*)[\w.-]+/, `$1${revision}`);
+    if (after === before) return [];
+    if (!checkOnly) fs.writeFileSync(mainPath, after);
+    const changed = [];
+    for (const [label, pattern] of [['version', /RPG Reactor runtime version:\s*([\d.]+)/],
+        ['revision', /RPG Reactor runtime revision:\s*([\w.-]+)/]]) {
+        const was = before.match(pattern)?.[1], now = after.match(pattern)?.[1];
+        if (was !== now) changed.push(`${label} ${was} -> ${now}`);
+    }
+    return changed;
+}
+
+const stamped = stampRuntimeHeader();
+if (stamped.length) {
+    console.log(`reactor_main.js header ${checkOnly ? 'is behind' : 'restamped'}: ${stamped.join(', ')}`);
+}
 
 /** Every file under `dir`, relative to it. */
 function filesUnder(dir, prefix = '') {
@@ -76,6 +118,15 @@ for (const project of projects) {
     for (const rel of stale) console.log(`  ${checkOnly ? 'missing/stale' : 'updated'}  ${rel}`);
 }
 
+if (!drifted && !stamped.length) {
+    console.log(`All ${projects.length} bundled project(s) match runtime/.`);
+    process.exit(0);
+}
+if (checkOnly && stamped.length) {
+    console.error('\nreactor_main.js\'s header does not match editor/package.json and '
+        + 'RPG_REACTOR_RUNTIME_REVISION. Run without --check to restamp it.');
+    process.exit(1);
+}
 if (!drifted) {
     console.log(`All ${projects.length} bundled project(s) match runtime/.`);
     process.exit(0);

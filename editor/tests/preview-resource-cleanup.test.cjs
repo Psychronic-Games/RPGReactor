@@ -1,3 +1,4 @@
+const { source3D } = require('./helpers/runtime-3d-source.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -73,7 +74,7 @@ test('preview surfaces release capped resources and audio sections support Unico
         'preview cleanup includes decoded textures not attached to a scene mesh');
     assert.match(modelPreview, /beforeBuild/,
         'superseded worker results are rejected before main-thread model construction');
-    const reactor3d = fs.readFileSync(path.join(editorRoot, '..', 'runtime', 'reactor_3d.js'), 'utf8');
+    const reactor3d = source3D();
     assert.match(reactor3d, /releaseObjectUrl[\s\S]{0,500}?TextureLoader\(\)\.load[\s\S]{0,300}?releaseObjectUrl/,
         'embedded GLB object URLs are released after decode and on load failure');
     assert.match(reactor3d, /Object\.values\(\(parsed && parsed\.bitmaps\)[\s\S]{0,160}?bitmap\.close\(\)/,

@@ -106,6 +106,11 @@ class RPGReactor {
             this.resetSidebarScroll();
             this.scaleToolbarIcons();
         });
+        // The bar's natural width also moves when its labels change: a language
+        // switch rewrites them, and the web font that sets them arrives after
+        // the first layout, so a measurement taken at show time is too narrow.
+        window.addEventListener('rr-language-changed', () => this.scaleToolbarIcons());
+        document.fonts?.ready?.then?.(() => this.scaleToolbarIcons());
 
         // Initialize Project Controller
         this.projectController = new ProjectController(
@@ -220,12 +225,30 @@ class RPGReactor {
             if (!this.modelPropsManager && typeof ModelPropsManager !== 'undefined') {
                 this.modelPropsManager = new ModelPropsManager(this.projectController);
             }
+            if (!this.terrainManager && typeof TerrainManager !== 'undefined') {
+                this.terrainManager = new TerrainManager(this.projectController);
+                this.projectController.terrainManager = this.terrainManager;
+            }
+            if (!this.pieceBuilderManager && typeof PieceBuilderManager !== 'undefined') {
+                this.pieceBuilderManager = new PieceBuilderManager(this.projectController);
+                this.projectController.pieceBuilderManager = this.pieceBuilderManager;
+                // The bar over the 3D view is the builder's face; the old panel stays unmounted.
+                if (typeof BuildHotbar !== 'undefined') {
+                    this.buildHotbar = new BuildHotbar(this.projectController);
+                    this.projectController.buildHotbar = this.buildHotbar;
+                    this.buildHotbar.mount(document.getElementById('canvas-container'));
+                }
+            }
             if (this.modelPropsManager) {
                 this.projectController.modelPropsManager = this.modelPropsManager;
                 this.modelPropsManager.setMap(
                     this.projectController.getTilemapManager().currentMap,
                     this.projectController.getTilemapManager());
             }
+            // Pieces are map content too: their flat overlay follows every map.
+            this.pieceBuilderManager?.setMap(
+                this.projectController.getTilemapManager().currentMap,
+                this.projectController.getTilemapManager());
 
             // Lighting is map content too: the toolbar tool edits it live.
             if (!this.lightingManager && typeof LightingManager !== 'undefined') {
@@ -691,6 +714,26 @@ class RPGReactor {
 
     // One map input owner. Managers release listeners before the next owner
     // becomes active; their local painting-resume flags cannot win a handoff.
+    /**
+     * The dock beside the map for its own panels. Shown while a panel is in
+     * it, hidden when the last leaves; the canvases size themselves from
+     * their container on a resize event, which a dock change does not fire
+     * on its own.
+     */
+    mapSideDock() { return document.getElementById('map-side-dock'); }
+    dockMapPanel(panel) {
+        const dock = this.mapSideDock();
+        if (!dock) return false;
+        dock.appendChild(panel);
+        if (dock.hidden) { dock.hidden = false; window.dispatchEvent(new Event('resize')); }
+        return true;
+    }
+    undockMapPanel(panel) {
+        const dock = this.mapSideDock();
+        if (panel?.parentElement) panel.parentElement.removeChild(panel);
+        if (dock && !dock.hidden && !dock.children.length) { dock.hidden = true; window.dispatchEvent(new Event('resize')); }
+    }
+
     claimMapTool(owner) {
         if (this._changingMapTool) return;
         this._changingMapTool = true;
@@ -702,6 +745,13 @@ class RPGReactor {
             }
             if (owner !== 'lighting') this.lightingManager?.setActive(false);
             if (owner !== 'models') this.modelPropsManager?.deactivate();
+            if (owner !== 'terrain') this.terrainManager?.deactivate();
+            if (owner !== 'pieces') {
+                this.pieceBuilderManager?.deactivate();
+                // Lighting and Media Surfaces are part of building: opened from the bar (or over it), the bar stays and shows which is in hand.
+                if (this.buildHotbar?.visible && (owner === 'lighting' || owner === 'media')) this.buildHotbar.render();
+                else this.buildHotbar?.hide(false);
+            }
             if (owner !== 'events' && this.eventManager?.eventMode) this.eventManager.setEventMode(false);
             const map = this.mapEditor, palette = this.tilesetPaletteViewer;
             if (owner !== 'paint') {
@@ -712,7 +762,7 @@ class RPGReactor {
             } else {
                 // A drawing button is an explicit return to painting, even
                 // when the model tab was the last visible palette context.
-                if (palette?.currentLayer === 'M') palette.selectLayer(palette.lastPaintLayer || 'A');
+                if (palette?.currentLayer === 'M' || palette?.currentLayer === 'T' || palette?.currentLayer === 'P') palette.selectLayer(palette.lastPaintLayer || 'A');
                 if (map && !map.currentTool && !map.shadowPenMode) map.setTool('pencil');
                 this.projectController?.getRegionManager?.()?.setVisible(palette?.currentLayer === 'R');
                 this.projectController?.getObject3DManager?.()?.setVisible(palette?.currentLayer === 'O');
@@ -726,15 +776,17 @@ class RPGReactor {
 
     syncMapToolButtons() {
         const owner = this.mapTool, map = this.mapEditor;
-        for (const [selector,tool] of [['#toolbar-event-manager-btn','events'],['[data-action="media-surfaces"]','media'],['[data-action="lighting-tool"]','lighting']]) {
-            const button=document.querySelector(selector);button?.classList.toggle('active',owner===tool);button?.setAttribute('aria-pressed',String(owner===tool));
+        const building = owner === 'pieces' || (!!this.buildHotbar?.visible && (owner === 'lighting' || owner === 'media'));
+        for (const [selector,tool] of [['#toolbar-event-manager-btn','events'],['[data-action="media-surfaces"]','media'],['[data-action="lighting-tool"]','lighting'],['[data-action="build-tool"]','pieces']]) {
+            const on = tool === 'pieces' ? building : owner === tool;
+            const button=document.querySelector(selector);button?.classList.toggle('active',on);button?.setAttribute('aria-pressed',String(on));
         }
         document.querySelectorAll('.tool-draw-mode').forEach(button=>{
             const active=owner==='paint'&&!map?.shadowPenMode&&button.dataset.tool===map?.currentTool;
             button.classList.toggle('active',active);button.setAttribute('aria-pressed',String(active));
         });
         document.querySelectorAll('.tileset-layer-tab').forEach(tab=>{
-            const active=tab.dataset.layer===this.tilesetPaletteViewer?.currentLayer && (owner==='paint'||owner==='models'&&tab.dataset.layer==='M');
+            const active=tab.dataset.layer===this.tilesetPaletteViewer?.currentLayer && (owner==='paint'||owner==='models'&&tab.dataset.layer==='M'||owner==='terrain'&&tab.dataset.layer==='T'||owner==='pieces'&&tab.dataset.layer==='P');
             tab.classList.toggle('active',active);tab.setAttribute('aria-selected',String(active));
             tab.style.backgroundColor=active?'var(--color-bg-hover)':'var(--color-bg-menubar)';
             tab.style.borderColor=active?'var(--color-accent)':'var(--color-border-input)';
@@ -744,6 +796,8 @@ class RPGReactor {
 
     releaseMapTool(owner) {
         if (this._changingMapTool || this.mapTool !== owner) return;
+        // Closing the Lighting or Media Surfaces panel with the build bar up hands the map back to the bar.
+        if (this.buildHotbar?.visible && (owner === 'lighting' || owner === 'media')) { this.buildHotbar.show(); return; }
         const palette=this.tilesetPaletteViewer;
         if (palette) palette.selectLayer(palette.currentLayer || 'A');
         else this.claimMapTool('paint');
@@ -876,6 +930,44 @@ class RPGReactor {
             this.tilesetPaletteViewer.onModelPropsTabLeft = () => {
                 this.modelPropsManager?.deactivate();
             };
+            // The terrain tab: brushes for a 3D map's ground, painted in the 3D view.
+            this.tilesetPaletteViewer.onTerrainTabSelected = () => {
+                const container = document.getElementById('terrain-ui-container');
+                const manager = this.terrainManager;
+                if (!container || !manager) return;
+                manager.initializeUI(container);
+                if (this.eventManager && this.eventManager.eventMode) {
+                    this.eventManager.setEventMode(false);
+                    this.mapEditor?.setEnabled(true);
+                    this.mapEditor?.setupMapInteraction();
+                    document.getElementById('toolbar-event-manager-btn')?.classList.remove('active');
+                }
+                manager.activate();
+                this.projectController.getRegionManager()?.setVisible(false);
+                this.projectController.getObject3DManager()?.setVisible(false);
+            };
+            this.tilesetPaletteViewer.onTerrainTabLeft = () => {
+                this.terrainManager?.deactivate();
+            };
+            // The pieces tab: the 3D tileset, laid in the 3D view.
+            this.tilesetPaletteViewer.onPiecesTabSelected = () => {
+                const container = document.getElementById('pieces-ui-container');
+                const manager = this.pieceBuilderManager;
+                if (!container || !manager) return;
+                manager.initializeUI(container);
+                if (this.eventManager && this.eventManager.eventMode) {
+                    this.eventManager.setEventMode(false);
+                    this.mapEditor?.setEnabled(true);
+                    this.mapEditor?.setupMapInteraction();
+                    document.getElementById('toolbar-event-manager-btn')?.classList.remove('active');
+                }
+                manager.activate();
+                this.projectController.getRegionManager()?.setVisible(false);
+                this.projectController.getObject3DManager()?.setVisible(false);
+            };
+            this.tilesetPaletteViewer.onPiecesTabLeft = () => {
+                this.pieceBuilderManager?.deactivate();
+            };
 
             // Set up tileset layer selection callback - disable event mode when switching to tileset mode
             this.tilesetPaletteViewer.onTilesetLayerSelected = () => {
@@ -980,34 +1072,42 @@ class RPGReactor {
     scaleToolbarIcons() {
         const toolbar = document.getElementById('toolbar');
         if (!toolbar || toolbar.style.display === 'none') return;
+        const last = toolbar.lastElementChild;
+        if (!last) return;
 
         const maxSize = 32;
         const minSize = 16;
 
-        // Temporarily set to max size and allow overflow for accurate measurement
+        // Measure on a single row at full size, with overflow allowed: a wrapped
+        // bar reports no overflow at all, and scrollWidth is an integer that
+        // reads a few pixels short of the true width of a row of fractional
+        // labels, so the bounding rects decide.
         toolbar.style.setProperty('--toolbar-icon-size', maxSize + 'px');
         toolbar.style.overflow = 'visible';
+        toolbar.style.flexWrap = 'nowrap';
 
-        // Force reflow to get accurate scrollWidth at full icon size
-        const naturalWidth = toolbar.scrollWidth;
-        const availableWidth = toolbar.clientWidth;
+        const barRect = toolbar.getBoundingClientRect();
+        const paddingRight = parseFloat(getComputedStyle(toolbar).paddingRight) || 0;
+        const availableRight = barRect.right - paddingRight;
+        const overflowAt = () => last.getBoundingClientRect().right - availableRight;
 
-        // Restore overflow
-        toolbar.style.overflow = '';
-
-        if (naturalWidth <= availableWidth) {
-            // Plenty of room, use full size
-            return;
+        const overflow = overflowAt();
+        if (overflow > 0) {
+            // Solve for icon size: iconCount * newSize + fixedWidth <= availableWidth,
+            // then verify on the real layout and step down until the last group
+            // is inside the bar or the icons are as small as they may be.
+            const iconCount = toolbar.querySelectorAll('.tool-button img, .tool-button svg').length || 1;
+            let newSize = Math.max(minSize, Math.min(maxSize, Math.floor(maxSize - overflow / iconCount)));
+            toolbar.style.setProperty('--toolbar-icon-size', newSize + 'px');
+            while (newSize > minSize && overflowAt() > 0) {
+                newSize -= 1;
+                toolbar.style.setProperty('--toolbar-icon-size', newSize + 'px');
+            }
         }
 
-        // Calculate how much space the icons occupy vs fixed elements (labels, separators, gaps, padding)
-        const iconCount = toolbar.querySelectorAll('.tool-button img, .tool-button svg').length;
-        const totalIconWidth = iconCount * maxSize;
-        const fixedWidth = naturalWidth - totalIconWidth;
-
-        // Solve for icon size: iconCount * newSize + fixedWidth <= availableWidth
-        const newSize = Math.max(minSize, Math.min(maxSize, Math.floor((availableWidth - fixedWidth) / iconCount)));
-        toolbar.style.setProperty('--toolbar-icon-size', newSize + 'px');
+        // Restore overflow and wrapping
+        toolbar.style.overflow = '';
+        toolbar.style.flexWrap = '';
     }
 
     // ==========================================

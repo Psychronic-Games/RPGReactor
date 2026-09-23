@@ -16,7 +16,8 @@ const attack=extra=>({kind:'skills',itemId:1,isAttack:true,weaponIds:[],classId:
 test('every bundled project\'s sequences and assignments load, validate and resolve without a missing phase',()=>{
  // The bundled projects plus a snapshot of Star Shift Rebellion's battle files from before the Victor import (2026-09-13): the older generations must keep loading whatever the live projects move on to.
  const fixtures=path.join(__dirname,'fixtures'),corpus=[...fs.readdirSync(templates).filter(name=>fs.existsSync(path.join(templates,name,'data/ActionSequences.json'))).map(name=>[name,path.join(templates,name,'data')]),...fs.readdirSync(fixtures).filter(name=>fs.existsSync(path.join(fixtures,name,'ActionSequences.json'))).map(name=>['fixture '+name,path.join(fixtures,name)])];
- assert.ok(corpus.length>=3,'expected the bundled projects and the fixture to carry ActionSequences.json');
+ // Only the Demo is tracked; Star Shift Rebellion joins the corpus on a machine that has it. The fixture is the older generation on CI.
+ assert.ok(corpus.length>=2,'expected the Demo and the fixture to carry ActionSequences.json');
  const seen={unphased:0,phased:0,phasePurpose:0,phasesBinding:0,sequenceBinding:0,resolved:0};
  for(const [name,data] of corpus){
   const sequences=read(path.join(data,'ActionSequences.json'));

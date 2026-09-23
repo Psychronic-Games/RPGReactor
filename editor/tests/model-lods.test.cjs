@@ -6,6 +6,7 @@
  * coarser weld grids beside the source, the sidecar lists them, and each
  * placed instance swaps its meshes' geometry by distance.
  */
+const { source3D } = require('./helpers/runtime-3d-source.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -196,7 +197,7 @@ test('the import writes the levels beside the source, lists them in model.json, 
 });
 
 test('the runtime and the editor load the listed levels and pick per frame', () => {
-    const three = read('runtime/reactor_3d.js');
+    const three = source3D();
     assert.match(three, /root\.children\.forEach\(\(child, index\) => \{ if \(child\.isMesh\) child\.userData\.lodIndex = index; \}\);/);
     assert.match(three, /Reactor3D\.LOD_DISTANCES = \[4, 10\];/);
     assert.match(three, /Reactor3D\.loadLodLevels = function\(template, key, name, baseUrl\) \{/);
@@ -208,7 +209,7 @@ test('the runtime and the editor load the listed levels and pick per frame', () 
     assert.match(preview, /if \(Array\.isArray\(sidecar\.lods\) && Reactor3D\.attachLodLevels && !loaded\.userData\.animated\) \{/);
     assert.match(preview, /if \(!fs\.existsSync\(lodPath\)\) continue;/);
     const editor = read('editor/src/MapEditor3D.js');
-    assert.match(editor, /this\.animateEventPreviews\(now\);\n\s*this\.pickPropLods\(\);/);
+    assert.match(editor, /this\.animateEventPreviews\(now\);\n(?:\s*\/\/[^\n]*\n|\s*this\.mapScene\.update(?:Sky|Water)\?\.\([^\n]*\n)*\s*this\.pickPropLods\(\);/);
     assert.match(editor, /Reactor3D\.pickLod\(object, Reactor3D\.instanceSpan\(object\), eye, undefined, screen\);/, 'the editor hands pickLod its own screen pair');
 });
 
@@ -299,11 +300,11 @@ test('a window larger than the backing store is enlarged pixel for pixel on a we
     // The frame beneath and the effects over it take the same filter.
     assert.match(core, /this\._canvas\.style\.height = this\._height \* this\._realScale \+ "px";\n\s*this\._applyUpscaleFilter\(this\._canvas\);/);
     assert.match(core, /this\._centerElement\(this\._effekseerCanvas\);\n[\s\S]{0,200}?this\._applyUpscaleFilter\(this\._effekseerCanvas\);/);
-    assert.match(read('runtime/reactor_3d.js'), /Graphics\._centerElement\(this\._canvas\);\n\s*if \(Graphics\._applyUpscaleFilter\) Graphics\._applyUpscaleFilter\(this\._canvas\);/);
+    assert.match(source3D(), /Graphics\._centerElement\(this\._canvas\);\n\s*if \(Graphics\._applyUpscaleFilter\) Graphics\._applyUpscaleFilter\(this\._canvas\);/);
 });
 
 test('the 3D passes draw at game size on every screen and are enlarged into the frame pixel for pixel', () => {
-    const three = read('runtime/reactor_3d.js');
+    const three = source3D();
     assert.match(three, /Reactor3D\.maxPassPixelRatio = 1;/);
     assert.match(three, /scaleMode: "nearest",/, 'the pass texture is sampled nearest');
     // PIXI never applies its style to a GL texture it did not create, so the

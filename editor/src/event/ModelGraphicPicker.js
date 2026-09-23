@@ -355,7 +355,7 @@ class ModelGraphicPicker {
     }
 
     async _ensureThree() {
-        if (typeof window !== 'undefined' && window.THREE && window.Reactor3D) return true;
+        if (typeof window !== 'undefined' && window.THREE && window.Reactor3D?.extensionsLoaded?.()) return true;
         const map3d = this.projectController && this.projectController.mapEditor3D;
         if (map3d && map3d.ensureLibraries) return map3d.ensureLibraries();
         return false;

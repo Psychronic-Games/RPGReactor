@@ -926,6 +926,18 @@
           },
           "list": [
             {
+              "code": 201,
+              "indent": 0,
+              "parameters": [
+                0,
+                5,
+                25,
+                1,
+                2,
+                0
+              ]
+            },
+            {
               "code": 0,
               "indent": 0,
               "parameters": []
@@ -1032,7 +1044,7 @@
           "priorityType": 1,
           "stepAnime": false,
           "through": false,
-          "trigger": 0,
+          "trigger": 1,
           "walkAnime": false
         }
       ],

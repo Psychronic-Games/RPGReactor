@@ -36,7 +36,7 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Pointer": "ポインター",
       "min": "分",
       "sec": "秒",
-      "Reactor": "Reactor",
+      "Reactor": "Reactor 拡張",
       "Select Parallax Background": "遠景を選択",
       "Browse…": "ブラウズ…",
       "Select Picture": "ピクチャを選択",
@@ -172,7 +172,7 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Pointer": "指標",
       "min": "分",
       "sec": "秒",
-      "Reactor": "Reactor",
+      "Reactor": "Reactor 擴充",
       "Select Parallax Background": "選擇遠景",
       "Browse…": "瀏覽…",
       "Select Picture": "選擇圖片",
@@ -312,7 +312,7 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Pointer": "指针",
       "min": "分",
       "sec": "秒",
-      "Reactor": "Reactor",
+      "Reactor": "Reactor 扩展",
       "Select Parallax Background": "选择远景",
       "Browse…": "浏览…",
       "Select Picture": "选择图片",
@@ -453,7 +453,7 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Pointer": "포인터",
       "min": "분",
       "sec": "초",
-      "Reactor": "Reactor",
+      "Reactor": "Reactor 확장",
       "Select Parallax Background": "원경 선택",
       "Browse…": "찾아보기…",
       "Select Picture": "그림 선택",
@@ -1434,7 +1434,7 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Pointer": "Указатель",
       "min": "мин",
       "sec": "сек",
-      "Reactor": "Reactor",
+      "Reactor": "Расширения Reactor",
       "Select Parallax Background": "Выберите параллакс",
       "Browse…": "Обзор…",
       "Select Picture": "Выберите картинку",
@@ -1741,7 +1741,7 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Pointer": "Δείκτης",
       "min": "λεπ",
       "sec": "δευτ",
-      "Reactor": "Reactor",
+      "Reactor": "Επεκτάσεις Reactor",
       "Select Parallax Background": "Επιλέξτε φόντο παράλλαξης",
       "Browse…": "Περιήγηση…",
       "Select Picture": "Επιλέξτε εικόνα",
@@ -1894,7 +1894,7 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Pointer": "المؤشر",
       "min": "د",
       "sec": "ث",
-      "Reactor": "Reactor",
+      "Reactor": "ملحقات Reactor",
       "Select Parallax Background": "اختر خلفية باراللاكس",
       "Browse…": "استعراض…",
       "Select Picture": "اختر الصورة",
@@ -2758,7 +2758,7 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Pointer": "ตัวชี้",
       "min": "นาที",
       "sec": "วินาที",
-      "Reactor": "Reactor",
+      "Reactor": "Reactor ส่วนขยาย",
       "Select Parallax Background": "เลือกพื้นหลังพารัลแลกซ์",
       "Browse…": "เรียกดู…",
       "Select Picture": "เลือกรูปภาพ",
@@ -3462,6 +3462,12 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
   },
   "commands": {
     "ja": {
+      "Quest Objective": "クエスト目標",
+      "Quest Reward": "クエスト報酬",
+      "Open Quest Log": "クエストログを開く",
+      "Show Media Surface": "メディアサーフェスの表示",
+      "Transform Media Surface": "メディアサーフェスの変形",
+      "Stop Media Surface": "メディアサーフェスの停止",
       "Switch Light": "照明の切替",
       "Transform Light": "照明の変形",
       "Change Ambient Light": "環境光の変更",
@@ -3478,6 +3484,12 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Change Transparency": "透明状態の変更"
     },
     "zh-Hant": {
+      "Quest Objective": "任務目標",
+      "Quest Reward": "任務獎勵",
+      "Open Quest Log": "開啟任務日誌",
+      "Show Media Surface": "顯示媒體表面",
+      "Transform Media Surface": "變換媒體表面",
+      "Stop Media Surface": "停止媒體表面",
       "Switch Light": "切換燈光",
       "Transform Light": "變換燈光",
       "Change Ambient Light": "變更環境光",
@@ -3494,6 +3506,12 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Change Transparency": "變更透明度"
     },
     "zh-Hans": {
+      "Quest Objective": "任务目标",
+      "Quest Reward": "任务奖励",
+      "Open Quest Log": "打开任务日志",
+      "Show Media Surface": "显示媒体表面",
+      "Transform Media Surface": "变换媒体表面",
+      "Stop Media Surface": "停止媒体表面",
       "Switch Light": "切换灯光",
       "Transform Light": "变换灯光",
       "Change Ambient Light": "更改环境光",
@@ -3510,6 +3528,12 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Change Transparency": "更改透明度"
     },
     "ko": {
+      "Quest Objective": "퀘스트 목표",
+      "Quest Reward": "퀘스트 보상",
+      "Open Quest Log": "퀘스트 로그 열기",
+      "Show Media Surface": "미디어 서피스 표시",
+      "Transform Media Surface": "미디어 서피스 변형",
+      "Stop Media Surface": "미디어 서피스 정지",
       "Switch Light": "조명 전환",
       "Transform Light": "조명 변형",
       "Change Ambient Light": "주변광 변경",
@@ -3526,6 +3550,12 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Change Transparency": "투명 상태 변경"
     },
     "es": {
+      "Quest Objective": "Objetivo de misión",
+      "Quest Reward": "Recompensa de misión",
+      "Open Quest Log": "Abrir registro de misiones",
+      "Show Media Surface": "Mostrar superficie multimedia",
+      "Transform Media Surface": "Transformar superficie multimedia",
+      "Stop Media Surface": "Detener superficie multimedia",
       "Switch Light": "Encender/apagar luz",
       "Transform Light": "Transformar luz",
       "Change Ambient Light": "Cambiar luz ambiental",
@@ -3544,6 +3574,12 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Change Actor Images": "Cambiar imágenes del personaje"
     },
     "pt": {
+      "Quest Objective": "Objetivo da missão",
+      "Quest Reward": "Recompensa da missão",
+      "Open Quest Log": "Abrir registro de missões",
+      "Show Media Surface": "Mostrar superfície de mídia",
+      "Transform Media Surface": "Transformar superfície de mídia",
+      "Stop Media Surface": "Parar superfície de mídia",
       "Switch Light": "Ligar/desligar luz",
       "Transform Light": "Transformar luz",
       "Change Ambient Light": "Alterar luz ambiente",
@@ -3556,6 +3592,12 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Change Actor Images": "Alterar imagens do personagem"
     },
     "fr": {
+      "Quest Objective": "Objectif de quête",
+      "Quest Reward": "Récompense de quête",
+      "Open Quest Log": "Ouvrir le journal des quêtes",
+      "Show Media Surface": "Afficher une surface média",
+      "Transform Media Surface": "Transformer une surface média",
+      "Stop Media Surface": "Arrêter une surface média",
       "Switch Light": "Allumer/éteindre la lumière",
       "Transform Light": "Transformer la lumière",
       "Change Ambient Light": "Changer la lumière ambiante",
@@ -3587,6 +3629,12 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Game Over": "Fin de partie"
     },
     "it": {
+      "Quest Objective": "Obiettivo della missione",
+      "Quest Reward": "Ricompensa della missione",
+      "Open Quest Log": "Apri registro missioni",
+      "Show Media Surface": "Mostra superficie multimediale",
+      "Transform Media Surface": "Trasforma superficie multimediale",
+      "Stop Media Surface": "Ferma superficie multimediale",
       "Switch Light": "Accendi/spegni luce",
       "Transform Light": "Trasforma luce",
       "Change Ambient Light": "Cambia luce ambientale",
@@ -3606,6 +3654,12 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Script": "Script"
     },
     "de": {
+      "Quest Objective": "Questziel",
+      "Quest Reward": "Questbelohnung",
+      "Open Quest Log": "Questlog öffnen",
+      "Show Media Surface": "Medienfläche anzeigen",
+      "Transform Media Surface": "Medienfläche transformieren",
+      "Stop Media Surface": "Medienfläche stoppen",
       "Switch Light": "Licht schalten",
       "Transform Light": "Licht transformieren",
       "Change Ambient Light": "Umgebungslicht ändern",
@@ -3645,6 +3699,12 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Tint Picture": "Bild einfärben"
     },
     "ru": {
+      "Quest Objective": "Цель Задания",
+      "Quest Reward": "Награда Задания",
+      "Open Quest Log": "Открыть Журнал Заданий",
+      "Show Media Surface": "Показать Медиаповерхность",
+      "Transform Media Surface": "Преобразовать Медиаповерхность",
+      "Stop Media Surface": "Остановить Медиаповерхность",
       "Switch Light": "Переключить свет",
       "Transform Light": "Преобразовать свет",
       "Change Ambient Light": "Изменить окружающий свет",
@@ -3678,6 +3738,12 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Tint Picture": "Тонировать изображение"
     },
     "pl": {
+      "Quest Objective": "Cel zadania",
+      "Quest Reward": "Nagroda za zadanie",
+      "Open Quest Log": "Otwórz dziennik zadań",
+      "Show Media Surface": "Pokaż powierzchnię mediów",
+      "Transform Media Surface": "Przekształć powierzchnię mediów",
+      "Stop Media Surface": "Zatrzymaj powierzchnię mediów",
       "Switch Light": "Przełącz światło",
       "Transform Light": "Przekształć światło",
       "Change Ambient Light": "Zmień światło otoczenia",
@@ -3810,6 +3876,12 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Play 3D Effect": "Odtwórz efekt 3D"
     },
     "el": {
+      "Quest Objective": "Στόχος αποστολής",
+      "Quest Reward": "Ανταμοιβή αποστολής",
+      "Open Quest Log": "Άνοιγμα ημερολογίου αποστολών",
+      "Show Media Surface": "Εμφάνιση επιφάνειας πολυμέσων",
+      "Transform Media Surface": "Μετασχηματισμός επιφάνειας πολυμέσων",
+      "Stop Media Surface": "Διακοπή επιφάνειας πολυμέσων",
       "Switch Light": "Εναλλαγή φωτός",
       "Transform Light": "Μετασχηματισμός φωτός",
       "Change Ambient Light": "Αλλαγή φωτός περιβάλλοντος",
@@ -3838,6 +3910,12 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Tint Picture": "Χρωματισμός εικόνας"
     },
     "ar": {
+      "Quest Objective": "هدف المهمة",
+      "Quest Reward": "مكافأة المهمة",
+      "Open Quest Log": "فتح سجل المهام",
+      "Show Media Surface": "إظهار سطح الوسائط",
+      "Transform Media Surface": "تحويل سطح الوسائط",
+      "Stop Media Surface": "إيقاف سطح الوسائط",
       "Switch Light": "تبديل الضوء",
       "Transform Light": "تحويل الضوء",
       "Change Ambient Light": "تغيير الضوء المحيط",
@@ -3885,6 +3963,12 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Name Input Processing": "فتح إدخال الاسم"
     },
     "tr": {
+      "Quest Objective": "Görev hedefi",
+      "Quest Reward": "Görev ödülü",
+      "Open Quest Log": "Görev günlüğünü aç",
+      "Show Media Surface": "Medya yüzeyini göster",
+      "Transform Media Surface": "Medya yüzeyini dönüştür",
+      "Stop Media Surface": "Medya yüzeyini durdur",
       "Switch Light": "Işığı aç/kapat",
       "Transform Light": "Işığı dönüştür",
       "Change Ambient Light": "Ortam ışığını değiştir",
@@ -3934,6 +4018,12 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Name Input Processing": "Ad girişi işlemleri"
     },
     "id": {
+      "Quest Objective": "Tujuan misi",
+      "Quest Reward": "Hadiah misi",
+      "Open Quest Log": "Buka log misi",
+      "Show Media Surface": "Tampilkan permukaan media",
+      "Transform Media Surface": "Transformasi permukaan media",
+      "Stop Media Surface": "Hentikan permukaan media",
       "Switch Light": "Nyalakan/matikan cahaya",
       "Transform Light": "Transformasi cahaya",
       "Change Ambient Light": "Ubah cahaya sekitar",
@@ -3954,6 +4044,12 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Replay BGM": "Lanjutkan BGM"
     },
     "vi": {
+      "Quest Objective": "Mục tiêu nhiệm vụ",
+      "Quest Reward": "Phần thưởng nhiệm vụ",
+      "Open Quest Log": "Mở nhật ký nhiệm vụ",
+      "Show Media Surface": "Hiện bề mặt phương tiện",
+      "Transform Media Surface": "Biến đổi bề mặt phương tiện",
+      "Stop Media Surface": "Dừng bề mặt phương tiện",
       "Switch Light": "Bật/tắt đèn",
       "Transform Light": "Biến đổi đèn",
       "Change Ambient Light": "Đổi ánh sáng môi trường",
@@ -3974,6 +4070,12 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Replay BGM": "Tiếp tục BGM đã lưu"
     },
     "th": {
+      "Quest Objective": "เป้าหมายเควสต์",
+      "Quest Reward": "รางวัลเควสต์",
+      "Open Quest Log": "เปิดบันทึกเควสต์",
+      "Show Media Surface": "แสดงพื้นผิวสื่อ",
+      "Transform Media Surface": "แปลงพื้นผิวสื่อ",
+      "Stop Media Surface": "หยุดพื้นผิวสื่อ",
       "Switch Light": "เปิด/ปิดแสงไฟ",
       "Transform Light": "แปลงแสงไฟ",
       "Change Ambient Light": "เปลี่ยนแสงโดยรอบ",
@@ -3996,6 +4098,7 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
   },
   "sections": {
     "ja": {
+      "Reactor": "Reactor 拡張",
       "Lighting": "照明",
       "Game Flow": "ゲームフロー",
       "Actor": "アクター",
@@ -4003,6 +4106,7 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Advanced": "上級"
     },
     "zh-Hant": {
+      "Reactor": "Reactor 擴充",
       "Lighting": "照明",
       "Game Flow": "遊戲流程",
       "Actor": "角色",
@@ -4010,6 +4114,7 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Advanced": "進階"
     },
     "zh-Hans": {
+      "Reactor": "Reactor 扩展",
       "Lighting": "照明",
       "Game Flow": "游戏流程",
       "Actor": "角色",
@@ -4017,6 +4122,7 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Advanced": "高级"
     },
     "ko": {
+      "Reactor": "Reactor 확장",
       "Lighting": "조명",
       "Game Flow": "게임 흐름",
       "Actor": "액터",
@@ -4066,6 +4172,7 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Game Flow": "Spielfluss"
     },
     "ru": {
+      "Reactor": "Расширения Reactor",
       "Lighting": "Освещение",
       "Game Flow": "Ход игры"
     },
@@ -4096,6 +4203,7 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "User Interfaces": "Interfejsy użytkownika"
     },
     "el": {
+      "Reactor": "Επεκτάσεις Reactor",
       "Lighting": "Φωτισμός",
       "Game Flow": "Ροή παιχνιδιού",
       "Actor": "Ήρωας"
@@ -4123,7 +4231,7 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Battle": "المعركة",
       "Advanced": "متقدم",
       "3D": "3D",
-      "Reactor": "Reactor",
+      "Reactor": "ملحقات Reactor",
       "User Interfaces": "واجهات المستخدم"
     },
     "tr": {
@@ -4164,6 +4272,7 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Timing": "Thời điểm"
     },
     "th": {
+      "Reactor": "Reactor ส่วนขยาย",
       "Lighting": "แสงไฟ",
       "Game Flow": "โฟลว์เกม",
       "Flow Control": "การควบคุมลำดับ",

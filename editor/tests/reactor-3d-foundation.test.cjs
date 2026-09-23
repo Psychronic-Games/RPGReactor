@@ -1,3 +1,4 @@
+const { source3D } = require('./helpers/runtime-3d-source.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -9,7 +10,7 @@ const runtimeRoot = path.join(repoRoot, 'runtime');
 const Reactor3D = require(path.join(runtimeRoot, 'reactor_3d.js'));
 const mainSource = fs.readFileSync(path.join(runtimeRoot, 'reactor_main.js'), 'utf8');
 const managersSource = fs.readFileSync(path.join(runtimeRoot, 'reactor_managers.js'), 'utf8');
-const moduleSource = fs.readFileSync(path.join(runtimeRoot, 'reactor_3d.js'), 'utf8');
+const moduleSource = source3D();
 
 test('a map is 2D unless it says otherwise', () => {
     // The whole backwards-compatibility story rests on this default.
@@ -230,18 +231,41 @@ test('the geometry section depends on neither THREE nor the DOM', () => {
     assert.match(code, /Float32Array\.from/);
 });
 
-test('the 3D subsystem stays one runtime module', () => {
+test('the 3D subsystem is the core and the extensions the core names', () => {
     // Projects carry their own copy of every runtime file, so a file per feature
-    // turns each project's js/ into a directory nobody can scan. Stock MZ ships
-    // eight; the convention here is a few large modules organised by concern.
+    // turns each project's js/ into a directory nobody can scan. The convention
+    // is a few large modules organised by concern: reactor_3d.js holds the
+    // namespace, viewport, geometry, scene, room and camera, and each concern
+    // that grows past it (the world builder, lighting, models) is one
+    // reactor_3d_<concern>.js that the core lists in EXTENSIONS. A file on disk
+    // the core does not list would boot in nothing.
     const roots = fs.readdirSync(runtimeRoot, { withFileTypes: true })
         .filter(entry => entry.isFile() && entry.name.endsWith('.js'))
         .map(entry => entry.name);
     const threeD = roots.filter(name => name.startsWith('reactor_3d'));
-    assert.deepEqual(threeD, ['reactor_3d.js'],
-        'scene, camera and billboards belong in reactor_3d.js, not new files');
+    const listed = Reactor3D.EXTENSIONS.map(extension => extension.file);
+    assert.deepEqual(threeD, ['reactor_3d.js', ...listed].sort(),
+        'every reactor_3d_*.js file is named in Reactor3D.EXTENSIONS, and nothing else is');
+    for (const extension of Reactor3D.EXTENSIONS) {
+        assert.match(extension.file, /^reactor_3d_[a-z]+\.js$/);
+        assert.ok(Reactor3D[extension.namespace], `${extension.file} sets Reactor3D.${extension.namespace} once loaded`);
+    }
     // Speech/audio, quests and the shared JSON decoding boundary have their own modules.
-    assert.ok(roots.length <= 20, `runtime js/ root has grown to ${roots.length} files`);
+    assert.ok(roots.length <= 24, `runtime js/ root has grown to ${roots.length} files`);
+});
+
+test('the game boots every extension straight after the core, before anything reads them', () => {
+    const scripts = Array.from(mainSource.match(/"js\/[^"]+"/g), quoted => quoted.slice(4, -1));
+    const core = scripts.indexOf('reactor_3d.js');
+    assert.ok(core >= 0);
+    Reactor3D.EXTENSIONS.forEach((extension, index) => {
+        assert.equal(scripts[core + 1 + index], extension.file, `${extension.file} boots right after the core`);
+    });
+    assert.ok(scripts.indexOf('reactor_managers.js') > core + Reactor3D.EXTENSIONS.length);
+    for (const file of ['build.js', 'build-worker.js', 'dist-editor-worker.js']) {
+        const preflight = fs.readFileSync(path.join(repoRoot, 'editor', 'build-scripts', file), 'utf8');
+        for (const extension of Reactor3D.EXTENSIONS) assert.ok(preflight.includes(`'${extension.file}'`), `${file} preflights ${extension.file}`);
+    }
 });
 
 //-----------------------------------------------------------------------------

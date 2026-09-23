@@ -176,6 +176,35 @@ test('Delete and Backspace target the active object tool and repeated keys never
     }
 });
 
+test('Delete removes the event picked in the events column in any mode, and the map only when the map tree has the focus', () => {
+    const selectedMapRow = { getAttribute: () => '3' };
+    const run = ({ eventMode, focusIn }) => {
+        let eventsDeleted = 0, mapsDeleted = 0;
+        const eventManager = { eventMode, selectedEvent: { id: 5 }, deleteEvent(event) { assert.equal(event.id, 5); eventsDeleted++; this.selectedEvent = null; } };
+        const handler = loadShortcutHandler(eventManager, {
+            reactor: { projectController: { deleteMap: () => { mapsDeleted++; } } },
+            activeElement: { tagName: 'DIV', closest: selector => (focusIn && selector.includes(focusIn) ? {} : null) },
+            querySelector: () => selectedMapRow
+        });
+        const event = keyEvent('Delete');
+        handler(event);
+        return { eventsDeleted, mapsDeleted, prevented: event.prevented };
+    };
+    // Picked in the events column while painting tiles: the event goes, not the map.
+    assert.deepEqual(run({ eventMode: false, focusIn: '#events-list' }), { eventsDeleted: 1, mapsDeleted: 0, prevented: true });
+    // Picked and then the focus went to the map canvas: still the event.
+    assert.deepEqual(run({ eventMode: false, focusIn: null }), { eventsDeleted: 1, mapsDeleted: 0, prevented: true });
+    // In event mode as before.
+    assert.deepEqual(run({ eventMode: true, focusIn: null }), { eventsDeleted: 1, mapsDeleted: 0, prevented: true });
+    // The map tree itself focused: the map, as the tree's own Delete has always meant.
+    assert.deepEqual(run({ eventMode: false, focusIn: '#maps-list' }), { eventsDeleted: 0, mapsDeleted: 1, prevented: true });
+    // No event selected: the map.
+    let mapsDeleted = 0;
+    const handler = loadShortcutHandler({ eventMode: false, selectedEvent: null }, { reactor: { projectController: { deleteMap: () => { mapsDeleted++; } } }, activeElement: { tagName: 'DIV', closest: () => null }, querySelector: () => selectedMapRow });
+    handler(keyEvent('Delete'));
+    assert.equal(mapsDeleted, 1);
+});
+
 test('object delete shortcuts leave form fields and modal editors alone', () => {
     for (const tool of ['modelPropsManager', 'lightingManager']) {
         for (const activeElement of [{ tagName: 'INPUT' }, { tagName: 'SELECT' }, { isContentEditable: true }]) {

@@ -2616,6 +2616,8 @@ Game_ActionResult.prototype.clear = function() {
     this.mpDamage = 0;
     this.tpDamage = 0;
     this.addedStates = [];
+    this.renewedStates = [];
+    this.blockedStates = [];
     this.removedStates = [];
     this.addedBuffs = [];
     this.addedDebuffs = [];
@@ -2644,6 +2646,15 @@ Game_ActionResult.prototype.isHit = function() {
     return this.used && !this.missed && !this.evaded;
 };
 
+/**
+ * Whether the item's effects were applied: a hit that `dodged` did not turn
+ * aside. isHit is true for a dodged hit too -- its damage step ran, and that
+ * is where it was turned aside, so its effects were skipped.
+ */
+Game_ActionResult.prototype.isLanded = function() {
+    return this.isHit() && !this.dodged;
+};
+
 Game_ActionResult.prototype.isStateAdded = function(stateId) {
     return this.addedStates.includes(stateId);
 };
@@ -2651,6 +2662,57 @@ Game_ActionResult.prototype.isStateAdded = function(stateId) {
 Game_ActionResult.prototype.pushAddedState = function(stateId) {
     if (!this.isStateAdded(stateId)) {
         this.addedStates.push(stateId);
+    }
+    // A state that lands after an earlier attempt failed has landed.
+    if (this.isStateBlocked(stateId)) {
+        this.blockedStates.splice(this.blockedStates.indexOf(stateId), 1);
+    }
+};
+
+// The renewed and blocked lists came after the others, and a battler's result
+// is written into save files, so one restored from an older save has neither
+// until its next clear. Their methods create or skip them rather than assume.
+
+/**
+ * Whether an added state was one the battler already had, so only its turn
+ * count was reset. isStateAdded is true either way; this tells them apart.
+ * Decided the first time this result records the state landing: one that
+ * arrived fresh stays fresh if the same action lands it again.
+ */
+Game_ActionResult.prototype.isStateRenewed = function(stateId) {
+    return !!this.renewedStates && this.renewedStates.includes(stateId);
+};
+
+/** Whether an added state was not on the battler when it landed. */
+Game_ActionResult.prototype.isStateNewlyAdded = function(stateId) {
+    return this.isStateAdded(stateId) && !this.isStateRenewed(stateId);
+};
+
+Game_ActionResult.prototype.pushRenewedState = function(stateId) {
+    if (!this.renewedStates) {
+        this.renewedStates = [];
+    }
+    if (!this.isStateRenewed(stateId)) {
+        this.renewedStates.push(stateId);
+    }
+};
+
+/**
+ * Whether addState was asked for this state and left the battler without it:
+ * resisted, restricted, dead, or turned away by a plugin in addNewState. A
+ * chance roll that failed never reaches addState, so it is not listed here;
+ * nor is a state the battler still has from before.
+ */
+Game_ActionResult.prototype.isStateBlocked = function(stateId) {
+    return !!this.blockedStates && this.blockedStates.includes(stateId);
+};
+
+Game_ActionResult.prototype.pushBlockedState = function(stateId) {
+    if (!this.blockedStates) {
+        this.blockedStates = [];
+    }
+    if (!this.isStateAdded(stateId) && !this.isStateBlocked(stateId)) {
+        this.blockedStates.push(stateId);
     }
 };
 
@@ -4081,12 +4143,22 @@ Game_Battler.prototype.addState = function(stateId) {
             const landed = this.isStateAffected(stateId);
             this.refresh();
             if (!landed) {
+                this._result.pushBlockedState(stateId);
                 return;
             }
         }
         this.resetStateCounts(stateId);
+        const firstLanding = !this._result.isStateAdded(stateId);
         this._result.pushAddedState(stateId);
+        if (renewed && firstLanding) {
+            this._result.pushRenewedState(stateId);
+        }
         ReactorEvents.emit("stateAdded", { battler: this, stateId, renewed });
+    } else if ($dataStates[stateId] && !this.isStateAffected(stateId)) {
+        // Asked for and not there: resisted, restricted, or the battler is
+        // dead. A state it already has is not blocked -- a fallen battler's
+        // refresh asks for death again every time.
+        this._result.pushBlockedState(stateId);
     }
 };
 
@@ -5593,32 +5665,69 @@ Game_Enemy.prototype.performDamage = function() {
     this.requestEffect("blink");
 };
 
+/**
+ * Play this enemy's collapse sound: the one chosen beside its Collapse Effect
+ * in the editor, or the engine's own.
+ *
+ * The choice lives in BattlePresentation.json under `enemies[id].collapseSe`,
+ * beside the other per-enemy presentation settings, because a trait is three
+ * numbers and has nowhere to keep a filename. A chosen sound is played for
+ * every collapse kind, Instant included, which has none of its own.
+ *
+ * @param {?Function} fallback - The engine's sound for this kind, if any.
+ */
+Game_Enemy.prototype.playCollapseSe = function(fallback) {
+    const chosen = globalThis.ReactorBattlePresentation
+        && globalThis.ReactorBattlePresentation.settings
+        && globalThis.ReactorBattlePresentation.settings.enemies
+        && globalThis.ReactorBattlePresentation.settings.enemies[this.enemyId()];
+    const se = chosen && chosen.collapseSe;
+    if (se && se.name) {
+        AudioManager.playSe({
+            name: se.name,
+            volume: se.volume === undefined ? 90 : se.volume,
+            pitch: se.pitch === undefined ? 100 : se.pitch,
+            pan: se.pan === undefined ? 0 : se.pan
+        });
+        return;
+    }
+    if (fallback) {
+        fallback();
+    }
+};
+
 Game_Enemy.prototype.performCollapse = function() {
     Game_Battler.prototype.performCollapse.call(this);
     switch (this.collapseType()) {
         case 0:
             this.requestEffect("collapse");
-            SoundManager.playEnemyCollapse();
+            this.playCollapseSe(() => SoundManager.playEnemyCollapse());
             break;
         case 1:
             this.requestEffect("bossCollapse");
-            SoundManager.playBossCollapse1();
+            this.playCollapseSe(() => SoundManager.playBossCollapse1());
             break;
         case 2:
             this.requestEffect("instantCollapse");
+            // Instant has no sound of its own; a chosen one still plays.
+            this.playCollapseSe(null);
             break;
         // 3 is "No Disappear": the sprite stays put, so no effect is requested.
         case 4:
             this.requestEffect("ashCollapse");
-            SoundManager.playEnemyCollapse();
+            this.playCollapseSe(() => SoundManager.playEnemyCollapse());
             break;
         case 5:
             this.requestEffect("emberCollapse");
-            SoundManager.playEnemyCollapse();
+            this.playCollapseSe(() => SoundManager.playEnemyCollapse());
             break;
         case 6:
             this.requestEffect("wispCollapse");
-            SoundManager.playEnemyCollapse();
+            this.playCollapseSe(() => SoundManager.playEnemyCollapse());
+            break;
+        case 7:
+            this.requestEffect("shatterCollapse");
+            this.playCollapseSe(() => SoundManager.playEnemyCollapse());
             break;
     }
 };
@@ -7828,7 +7937,12 @@ Game_CharacterBase.prototype.isMapPassable = function(x, y, d) {
     const x2 = $gameMap.roundXWithDirection(x, d);
     const y2 = $gameMap.roundYWithDirection(y, d);
     const d2 = this.reverseDir(d);
-    return $gameMap.isPassable(x, y, d) && $gameMap.isPassable(x2, y2, d2);
+    if (!($gameMap.isPassable(x, y, d) && $gameMap.isPassable(x2, y2, d2))) return false;
+    // A 3D map's terrain can be too steep to climb between two cells the
+    // tiles would otherwise allow.
+    if (typeof Reactor3D !== "undefined" && Reactor3D.terrainBlocks && typeof $dataMap !== "undefined"
+        && Reactor3D.isMap3D && Reactor3D.isMap3D($dataMap) && Reactor3D.terrainBlocks($dataMap, x, y, x2, y2, this._reactorGround)) return false;
+    return true;
 };
 
 Game_CharacterBase.prototype.isCollidedWithCharacters = function(x, y) {
@@ -7857,9 +7971,13 @@ Game_CharacterBase.prototype.copyPosition = function(character) {
     this._realX = character._realX;
     this._realY = character._realY;
     this._direction = character._direction;
+    // The same floor of the house, too.
+    this._reactorGround = character._reactorGround;
 };
 
 Game_CharacterBase.prototype.locate = function(x, y) {
+    // A placed character starts on the ground floor of whatever stands here.
+    this._reactorGround = undefined;
     this.setPosition(x, y);
     this.straighten();
     this.refreshBushDepth();
@@ -7931,8 +8049,7 @@ Game_CharacterBase.prototype.reactor3DScreenPoint = function() {
     // The ground, and the same ground the sprite is drawn on: this feeds
     // `screenX`/`screenY`, which plugins read to place their own overlays, and
     // the two have to agree.
-    const ground = Reactor3D.elevationAt(
-        $dataMap, Math.round(this._realX), Math.round(this._realY));
+    const ground = Reactor3D.characterGround($dataMap, this);
     // The middle of the cell, matching the foot of every standing prop in the
     // 3D scene. The 2D `screenY` below draws a sprite's feet on the cell's
     // bottom edge, which is a screen convention rather than a world position.

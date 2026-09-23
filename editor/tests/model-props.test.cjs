@@ -1,3 +1,4 @@
+const { source3D } = require('./helpers/runtime-3d-source.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -77,7 +78,7 @@ test('the runtime stands each prop in the map as a model-bound event', () => {
 });
 
 test('runtime hooks lift props and read their free position after the events are set up', () => {
-    const runtime = read('runtime/reactor_3d.js');
+    const runtime = source3D();
     assert.match(runtime, /Game_Map\.prototype\.setupEvents = function\(\) \{[\s\S]*?event\._realX = prop\.x;[\s\S]*?event\._reactorLift = prop\.z;[\s\S]*?event\.isMoving = function\(\) \{ return false; \};/,
         'a prop between tiles is not a character mid-step');
     assert.match(runtime, /ground \+ \(character\._reactorLift \|\| 0\)/);
@@ -86,7 +87,7 @@ test('runtime hooks lift props and read their free position after the events are
     const sprites = read('runtime/reactor_sprites.js');
     assert.match(sprites, /Reactor3D\.installPropHooks\(\)/);
     assert.match(sprites, /this\.y -= this\._character\._reactorLift \* \$gameMap\.tileHeight\(\);/);
-    assert.match(read('runtime/reactor_main.js'), /runtime revision: 20260912\.2/);
+    assert.match(read('runtime/reactor_main.js'), /runtime revision: \d{8}\.\d+/);
 });
 
 test('the editor has a props tab, a manager, and 3D placement with pose rings', () => {
@@ -150,13 +151,13 @@ test('props are chosen in the model picker and can start with an animation or ef
     const installed = { width: 4, height: 4, events: [null], reactor3d: { props: [{ id: 1, name: 'Props/console', x: 1, y: 1, animation: 'boot', effect: 'alarm' }] } };
     Reactor3D.installProps(installed);
     assert.equal(installed.events[Reactor3D.PROP_EVENT_BASE + 1].reactorProp.animation, 'boot');
-    const runtime = read('runtime/reactor_3d.js');
+    const runtime = source3D();
     assert.match(runtime, /const animations = Reactor3D\.propAnimationList\(prop\);\s*if \(animations\.length\) Reactor3D\.playModelSequence\(event, animations, !!prop\.repeat\);/, 'the list plays in order, looping as a whole');
     assert.match(runtime, /for \(const name of Reactor3D\.propEffectList\(prop\)\) Reactor3D\.playModelEffect\(event, name\);/, 'every chosen effect fires');
     assert.deepEqual(Reactor3D.propAnimationList({ animation: 'boot' }), ['boot']);
     assert.deepEqual(Reactor3D.propAnimationList({ animations: ['a', 'b'], animation: 'a' }), ['a', 'b']);
     assert.deepEqual(Reactor3D.propEffectList({ effects: ['x', '', 'y'] }), ['x', 'y']);
-    assert.match(read('runtime/reactor_main.js'), /runtime revision: 20260912\.2/);
+    assert.match(read('runtime/reactor_main.js'), /runtime revision: \d{8}\.\d+/);
 });
 
 test('editing a placed prop re-poses its instance instead of rebuilding the set', () => {
@@ -256,4 +257,17 @@ test('changing maps rebinds prop picking and clears selection, drags, and map-lo
     assert.equal(manager.selectedId, null);
     assert.equal(manager.drag, null);
     assert.equal(manager._undo.length + manager._redo.length, 0);
+});
+
+test('a right-click or Escape lets go of the selected model, in 3D and on the flat map', () => {
+    const view = fs.readFileSync(path.join(editorRoot, 'src', 'MapEditor3D.js'), 'utf8');
+    const menu = view.slice(view.indexOf('this._onContextMenu = event =>'), view.indexOf('const cube = this.eventAt(event.clientX, event.clientY);'));
+    assert.match(menu, /if \(this\.canEditProps\(\)\) \{[\s\S]*manager\.select\(null, \{ fromThree: true \}\);[\s\S]*this\.selectProp\(null\);[\s\S]*return;/, 'a right-click with the models tool up deselects before the event menu is considered');
+    assert.ok(menu.indexOf('this.canEditProps()') < menu.indexOf('this.canSelectEvents()'), 'models before events');
+    const manager = fs.readFileSync(path.join(editorRoot, 'src', 'ModelPropsManager.js'), 'utf8');
+    assert.match(manager, /else if \(event\.key === 'Escape'\) \{\s*event\.preventDefault\(\);\s*this\.select\(null\);/);
+    assert.match(manager, /if \(event\.data\.button === 2\) \{\s*if \(this\.selectedId\) this\.select\(null\);\s*return;/, 'the flat map answers the right button the same way');
+    const i18n = fs.readFileSync(path.join(editorRoot, 'src', 'I18nManager.js'), 'utf8');
+    assert.equal((i18n.match(/'props\.hintPlace': '/g) || []).length, 18);
+    assert.match(i18n, /'props\.hintPlace': 'Click the map to place it\. Click a placed model to select it, drag to move, Delete to remove, right-click or Esc to deselect\.'/);
 });

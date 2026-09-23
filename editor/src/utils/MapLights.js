@@ -33,8 +33,7 @@
      * preset only.
      */
     const PRESETS = [
-        { key: 'point', labelKey: 'lit.point',
-          template: { key: 'point', type: 'point', color: '#ffcf7d', radius: 3, intensity: 1, height: 1.5 } },
+        // No plain Point chip: a Lamp is the everyday point light, and Point stays a type in the drop-down.
         { key: 'spot', labelKey: 'lit.spot',
           template: { key: 'spot', type: 'spot', color: '#fff2cc', radius: 6, intensity: 1, height: 3, pitch: -60 } },
         { key: 'candle', labelKey: 'lit.preset.candle',
@@ -63,8 +62,26 @@
               { type: 'spot', color: '#eaf6ff', radius: 6, intensity: 1, height: 2.5, pitch: -60 }
           ] } },
         { key: 'fluorescent', labelKey: 'lit.preset.fluorescent',
-          template: { key: 'fluorescent', type: 'point', color: '#d9f3ff', radius: 7, intensity: 1.15, height: 3, flicker: 0.06 } }
+          template: { key: 'fluorescent', type: 'point', color: '#d9f3ff', radius: 7, intensity: 1.15, height: 3, flicker: 0.06 } },
+        // High and far-reaching: lights the whole map from above and
+        // casts one set of long shadows. A warm ball hangs where it is.
+        { key: 'sun', labelKey: 'lit.preset.sun',
+          template: { key: 'sun', type: 'point', color: '#fff3d2', radius: 150, intensity: 2, height: 40, shadow: true } }
     ];
+    /**
+     * What a preset changes about a light that already exists: its kind and
+     * look, never where it stands or what it is called. Absent motion is
+     * cleared, so a candle turned into a lamp stops flickering. Compound
+     * presets are several lights and have no single look; null.
+     */
+    const LOOK_KEYS = ['type', 'color', 'radius', 'intensity', 'angle', 'width', 'pitch', 'flicker', 'pulse', 'shadow'];
+    const presetLook = key => {
+        const template = presetTemplate(key);
+        if (!template || template.compound) return null;
+        const look = { flicker: 0, pulse: null };
+        for (const field of LOOK_KEYS) if (template[field] !== undefined) look[field] = template[field];
+        return look;
+    };
     /** A preset's template as a fresh copy, so a caller can write into it. */
     const presetTemplate = key => {
         const preset = PRESETS.find(entry => entry.key === key);
@@ -374,6 +391,7 @@
         DEFAULT_BEAM_WIDTH,
         ID_PATTERN,
         PRESETS,
+        presetLook,
         presetTemplate,
         normalize,
         list,

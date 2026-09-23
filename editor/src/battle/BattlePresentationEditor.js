@@ -40,10 +40,12 @@ class BattlePresentationEditor {
         const body=this.element('div','database-section-content');panel.append(body);
         const value=()=>settings[kind]?.[record.id]||{mode:'inherit'};
         const assignedCount=()=>{const v=value();if(v.mode==='sequence'||v.mode==='existing')return 1;return Object.values(v.phases||{}).filter(p=>p?.mode&&p.mode!=='inherit').length+Object.values(v.states||{}).filter(p=>p?.mode&&p.mode!=='inherit').length;};
-        const describe=()=>{const v=value(),count=assignedCount();status.textContent=v.mode==='sequence'?this.text(this.message('Sequence: {name}',{name:this.db.data.actionSequences?.[v.sequenceId]?.name||'#'+v.sequenceId})):v.mode==='existing'?this.text('Engine / plugin action'):count?this.text(this.message('{n} assigned',{n:count})):this.text('Using defaults');};
+        // A sequence is named as the Action Sequences list names it: its name, then its number.
+        const sequenceLabel=id=>{const s=this.db.data.actionSequences?.[id];return s?`${s.name||''} #${id}`.trim():'#'+id;};
+        const describe=()=>{const v=value(),count=assignedCount();status.textContent=v.mode==='sequence'?this.text(this.message('Sequence: {name}',{name:sequenceLabel(v.sequenceId)})):v.mode==='existing'?this.text('Engine / plugin action'):count?this.text(this.message('{n} assigned',{n:count})):this.text('Using defaults');};
         panel.open=assignedCount()>0;panel.ontoggle=()=>{this.assignmentOpen=panel.open;};if(this.assignmentOpen!==undefined)panel.open=this.assignmentOpen;
         const set=binding=>{settings[kind]||={};settings[kind][record.id]=binding;this.changed();};
-        const openSequence=id=>{const sequence=this.db.data.actionSequences?.[id];if(sequence){this.parent.openDatabase('actionSequences');this.parent.showDatabaseDetail(sequence,'actionSequences');}};
+        const openSequence=id=>{const sequence=this.db.data.actionSequences?.[id];if(sequence){this.parent.openDatabase('actionSequences');this.parent.showDatabaseDetail(sequence,'actionSequences');this.parent._activeDatabaseList?.reveal?.(id);}};
         const level=kind==='items'?'skills':kind==='enemies'?'actors':kind;
         const isAttack=['weapons','actors','enemies'].includes(kind);
         // Fold a legacy unarmed override into the actor's own phases.
@@ -73,7 +75,7 @@ class BattlePresentationEditor {
             const sequences=(this.db.data.actionSequences||[]).filter(s=>s&&B.purpose(s)==='action');
             // "None" says where the action comes from instead, level by level down the chain.
             const noneLabel=kind==='skills'||kind==='items'?'None (the weapon, class or battler’s)':kind==='weapons'?'None (the class or battler’s)':kind==='classes'?'None (the battler’s own)':'None (the built-in action)';
-            const options=[['inherit',noneLabel],['existing','Use Engine / Plugin Action'],...(current.mode==='phases'?[['phases','Per-phase assignments (older)']]:[]),...sequences.map(s=>['sequence:'+s.id,s.name||'#'+s.id,true])];
+            const options=[['inherit',noneLabel],['existing','Use Engine / Plugin Action'],...(current.mode==='phases'?[['phases','Per-phase assignments (older)']]:[]),...sequences.map(s=>['sequence:'+s.id,sequenceLabel(s.id),true])];
             if(current.mode==='sequence'&&!this.db.data.actionSequences?.[current.sequenceId])options.push(['sequence:'+current.sequenceId,this.message('Missing Sequence #{id}',{id:current.sequenceId})]);
             const controls=this.element('div','rr-battle-assignment-controls');row.append(controls);
             const pick=this.select(options,current.mode==='sequence'?'sequence:'+current.sequenceId:current.mode==='existing'?'existing':current.mode==='phases'?'phases':'inherit',id=>{
@@ -302,7 +304,7 @@ class BattlePresentationEditor {
             if(kind==='actors'){
                 api.canvasBox.style.display='none';api.pane.style.display='none';explicitPane.style.display='flex';
                 if(api.nameTag2d)api.nameTag2d.style.display='';
-                this.setText(api.label,(B.graphicModes.find(([m])=>m===g.mode)||[])[1]||g.mode);
+                this.setText(api.label,'Battler');
                 this.setText(button,resolved.type==='model'?'Change Model':'Change Image');
                 button.onclick=explicitChange;
             }else{
@@ -414,6 +416,28 @@ class BattlePresentationEditor {
         }
         return cast;
     }
+    /**
+     * How many 60ths of a second to advance a room preview.
+     *
+     * A battle room advances exactly one frame per `view.render()`, and in game
+     * that is called from the engine's fixed 60 fps update. A preview driven
+     * straight off requestAnimationFrame therefore runs at the monitor's rate:
+     * idle clips, autotile animation, effects and dissolves all played 2.4x too
+     * fast on a 144 Hz screen, and at half speed on 30 Hz. The sequence preview
+     * already works in real elapsed frames (`dt/1000*60`); this is the same
+     * conversion for a renderer that counts whole frames instead of taking a
+     * delta. The cap keeps a backgrounded tab or a stalled load from being
+     * repaid all at once.
+     */
+    roomFrameSteps(clock,now) {
+        const step=1000/60;
+        if(clock.last===undefined){clock.last=now;return 1;}
+        clock.owed=Math.min((clock.owed||0)+(now-clock.last),step*4);
+        clock.last=now;
+        const steps=Math.floor(clock.owed/step);
+        clock.owed-=steps*step;
+        return steps;
+    }
     drawRoomCast(view,settings,cast) {
         for(const item of cast){
             const p=ReactorBattleData.position(settings,item.side,item.index);
@@ -469,12 +493,15 @@ class BattlePresentationEditor {
             };
             for(const [type,fn] of [['pointerdown',down],['pointermove',move],['pointerup',up],['pointercancel',up],['lostpointercapture',up]])canvas.addEventListener(type,fn);
             stopPlacement=()=>{for(const [type,fn] of [['pointerdown',down],['pointermove',move],['pointerup',up],['pointercancel',up],['lostpointercapture',up]])canvas.removeEventListener(type,fn);canvas.style.cursor='';};
-            const draw=()=>{if(!current()){cleanup();return;}
+            const clock={};
+            const draw=(now=performance.now())=>{if(!current()){cleanup();return;}
+                const steps=this.roomFrameSteps(clock,now);
                 // The setup dialog owns the visible renderer while open.
-                if(!document.querySelector('.rr-battle-room-modal')){
+                if(steps&&!document.querySelector('.rr-battle-room-modal')){
                     this.drawRoomCast(view,settings,cast);
                     for(const item of cast)if(item.side==='enemies'){const record=view.models.get(item.key)||view.billboards.get(item.key);if(record?.object)record.object.visible=!troopEditor.currentTroop.members[item.index]?.hidden;}
-                    view.render();ctx.clearRect(0,0,canvas.width,canvas.height);ctx.drawImage(view.renderer.domElement,0,0,canvas.width,canvas.height);
+                    for(let step=0;step<steps;step++)view.render();
+                    ctx.clearRect(0,0,canvas.width,canvas.height);ctx.drawImage(view.renderer.domElement,0,0,canvas.width,canvas.height);
                     for(let i=0;i<troopEditor.currentTroop.members.length;i++){
                         const p=view.project(ReactorBattleData.position(settings,'enemies',i));if(!p.visible)continue;
                         const scale=canvas.width/Math.max(1,canvas.clientWidth);ctx.fillStyle=i===troopEditor.selectedMemberIndex?'#ffcc33':'#ff6680';ctx.beginPath();ctx.arc(p.x,p.y,5*scale,0,Math.PI*2);ctx.fill();ctx.font=(12*scale)+'px sans-serif';ctx.fillText('E'+(i+1),p.x+9*scale,p.y+4*scale);
@@ -588,10 +615,15 @@ class BattlePresentationEditor {
             };
             const endDrag=()=>{cameraDrag=null;if(!dragging)return;dragging=false;view.cameraFollowFrozen=false;view.cameraFollowResume=true;drawInspector();};
             overlay.onpointerup=endDrag;overlay.onpointercancel=endDrag;overlay.onlostpointercapture=endDrag;
+            const clock={};
             const draw=(now=performance.now())=>{if(!modal.isConnected){cleanup();return;}
+                const steps=this.roomFrameSteps(clock,now);
+                if(!steps){raf=requestAnimationFrame(draw);return;}
                 const width=Math.max(1,stage.clientWidth),height=Math.max(1,stage.clientHeight);
                 if(view.width!==width||view.height!==height){view.resize(width,height);overlay.width=width;overlay.height=height;}
-                navigation.stepFly(now);this.drawRoomCast(view,draft,cast);view.render();const ctx=overlay.getContext('2d');ctx.clearRect(0,0,width,height);
+                navigation.stepFly(now);this.drawRoomCast(view,draft,cast);
+                for(let step=0;step<steps;step++)view.render();
+                const ctx=overlay.getContext('2d');ctx.clearRect(0,0,width,height);
                 for(const side of ['actors','enemies'])for(let i=0;i<count(side);i++){const p=view.project(ReactorBattleData.position(draft,side,i));ctx.fillStyle=side==='actors'?'#55aaff':'#ff6677';ctx.beginPath();ctx.arc(p.x,p.y,selected.side===side&&selected.index===i?10:7,0,Math.PI*2);ctx.fill();ctx.fillStyle='#fff';ctx.font='12px sans-serif';ctx.fillText((side==='actors'?'A':'E')+(i+1),p.x+12,p.y+4);}raf=requestAnimationFrame(draw);};draw();
         }catch(error){message.textContent=String(error.message||error);stage.replaceChildren(message);}
     }

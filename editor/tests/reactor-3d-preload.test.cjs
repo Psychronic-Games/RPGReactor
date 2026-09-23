@@ -4,6 +4,7 @@
  * first frame, worker-decoded bitmaps reach the materials, and the
  * Scene_Map gate is wired after the class bodies.
  */
+const { source3D } = require('./helpers/runtime-3d-source.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -135,7 +136,7 @@ test('the boot scene waits for the async database sidecar', () => {
     const lastClassAt = scenes.lastIndexOf('Scene_Gameover.prototype');
     assert.ok(bootGateAt > lastClassAt, 'the boot gate lives after every prototype replacement');
     assert.match(scenes, /!Reactor3D\.isDatabaseSidecarReady\(\)/);
-    const r3d = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+    const r3d = source3D();
     assert.match(r3d, /_databaseSidecarState !== "loading"/, 'readiness reads the load state');
     const sprites = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_sprites.js'), 'utf8');
     assert.match(sprites, /isPartySprite && Reactor3D\.isDatabaseSidecarReady/,

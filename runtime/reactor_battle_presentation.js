@@ -223,7 +223,10 @@
             // A model with no room to stand in, and an animation's carrier, fly as a dot (the carrier's is clear).
             else if(step.type==='projectile'&&(!step.iconSource||['color','model','animation'].includes(step.iconSource))){const size=step.iconSource==='animation'?2:step.size||8;bitmap=new Bitmap(size,size);if(step.iconSource!=='animation')bitmap.fillAll(step.color||'#ffcc55');owned=true;}
             else{bitmap=ImageManager.loadSystem('IconSet');const size=ImageManager.iconWidth||32,index=B.visualIcon(step,step.sourceRole==='user'?subject:battler,manager._action?.item?.());rect={x:index%16*size,y:Math.floor(index/16)*size,width:size,height:size};}
-            const graphic=new Sprite(bitmap);if(rect)graphic.setFrame(rect.x,rect.y,rect.width,rect.height);graphic.anchor.set(step.gripX??.5,step.gripY??.5);ss._battleField.addChild(graphic);
+            const graphic=new Sprite(bitmap);if(rect)graphic.setFrame(rect.x,rect.y,rect.width,rect.height);graphic.anchor.set(step.gripX??.5,step.gripY??.5);
+            // A held picture drawn "behind" its holder goes just under that battler's sprite; otherwise it is above every battler, as the field's extras are.
+            const holder=step.type==='weapon'&&step.layer==='behind'?ss.findTargetSprite(battler):null;
+            if(holder&&holder.parent===ss._battleField)ss._battleField.addChildAt(graphic,ss._battleField.getChildIndex(holder));else ss._battleField.addChild(graphic);
             return {key:prefix+(serial++),graphic,rect,owned,step};
         };
         const draw=(entry,p0,rotation,visible=true)=>{let p=p0;
@@ -243,7 +246,7 @@
             }
             if(!p||graphic.bitmap.isReady?.()===false){graphic.visible=false;return;}
             const rect=entry.rect||{x:0,y:0,width:graphic.bitmap.width,height:graphic.bitmap.height};if(!rect.width||!rect.height)return;
-            if(room){room.sequenceBillboard(entry.key,graphic.bitmap.canvas,rect,p,{...step,rotation,visible});graphic.visible=false;}
+            if(room){room.sequenceBillboard(entry.key,graphic.bitmap.canvas,rect,p,{...step,rotation,visible,ownerKey:entry.owner?._reactorRoomKey||null});graphic.visible=false;}
             else{graphic.x=p.x*48;graphic.y=(p.y-(p.z||0))*48;graphic.rotation=rotation*Math.PI/180;graphic.scale.set(step.scale??1);graphic.visible=visible;}
             entry.point={...p};
         };
@@ -617,6 +620,11 @@
             const boss=Sprite_Enemy.prototype.startBossCollapse;
             Sprite_Enemy.prototype.startBossCollapse=function(){boss.call(this);const bounds=this._reactorRoomKey&&this._reactorRoomBounds;if(bounds)this._effectDuration=Math.max(48,Math.round(bounds.height||0));};
         }
+        // Ash and Ember cut the sprite's own bitmap into shards. A room battler's sprite stands in for a model, so the room dissolves the model itself (its surface into shards, eaten from the feet up) and the sprite's collapse runs as long, so the battle waits; a key without a drawn model keeps the standard fade.
+        if(root.Sprite_Enemy?.prototype.startParticleCollapse){
+            const particle=Sprite_Enemy.prototype.startParticleCollapse;
+            Sprite_Enemy.prototype.startParticleCollapse=function(preset){if(!this._reactorRoomKey)return particle.call(this,preset);const room=root.BattleManager?._spriteset?._reactorRoom,frames=room?.startDissolve?.(this._reactorRoomKey,preset)||0;this._effectType='collapse';if(typeof this.startCollapse==='function')this.startCollapse();else{this._effectDuration=32;this._appeared=false;}if(frames>0)this._effectDuration=Math.max(this._effectDuration,frames);};
+        }
         for(const Class of [root.Sprite_Actor,root.Sprite_Enemy])if(Class){
             const position=Class.prototype.updatePosition;
             Class.prototype.updatePosition=function(...args){position?.apply(this,args);const p=P.roomScreenPosition(this);if(p){this.x=p.x;this.y=p.y;}};
@@ -654,6 +662,11 @@
      */
     P.mirrorSpriteLook=function(sprite,battler,record){
         const object=record?.object;if(!object)return;
+        // A dissolving model owns its own look: the room eats it from the feet up and hides it at the end.
+        if(record.dissolve){object.visible=!record.dissolve.done;
+            // The hit blink may have left its white on the materials the frame before; the shards must come off the model's own colours.
+            if(!record.dissolve.lookCleared){record.dissolve.lookCleared=true;const T=root.THREE;object.traverse(node=>{for(const material of Array.isArray(node.material)?node.material:[node.material]){if(!material)continue;const tint=material.userData?.rrBlend;if(tint)tint.value.w=0;if(material.userData?.rrOriginalOpacity!==undefined)material.opacity=material.userData.rrOriginalOpacity;if(T&&material.blending!==T.NormalBlending)material.blending=T.NormalBlending;}});}
+            return;}
         const main=sprite._mainSprite||sprite,blend=main.getBlendColor?.()||[0,0,0,0],strength=Math.max(0,Math.min(1,(blend[3]||0)/255)),additive=sprite.blendMode===1||main.blendMode===1;
         const dead=typeof battler.isDead==='function'&&battler.isDead(),collapsed=dead&&!sprite._effectType&&sprite.opacity<32;
         // The stock damage blink switches a sprite off and on; a model would vanish, so it flashes white on the off frames instead.
@@ -934,7 +947,7 @@
             const actor=battler.isActor(),index=actor?$gameParty.battleMembers().indexOf(battler):battler.index();
             const key=(actor?'actor:':'enemy:')+index;live.add(key);
             sprite._reactorRoomKey=key;
-            if(!sprite._reactorRoomPosition)sprite._reactorRoomPosition=B.position(room.settings,actor?'actors':'enemies',index);
+            if(!sprite._reactorRoomPosition)sprite._reactorRoomPosition={...B.position(room.settings,actor?'actors':'enemies',index),layer:actor?1:0};
             const p=sprite._reactorRoomPosition;
             const spec=actor?Reactor3D.actorSlotSpec(battler.actorId(),'battler'):Reactor3D.databaseModelSpec('enemies',battler.enemyId());
             const main=sprite._mainSprite||sprite;

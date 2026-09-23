@@ -6,6 +6,7 @@
  * ten-thousand-slot sparse array on every call, and three recomposed every
  * world matrix once per render pass. After: 2.1 ms.
  */
+const { source3D } = require('./helpers/runtime-3d-source.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -72,7 +73,7 @@ test('the memo is keyed off the map object, so saves never carry it', () => {
 });
 
 test('the 3D viewport updates world matrices once a frame across its passes', () => {
-    const three = read('runtime/reactor_3d.js');
+    const three = source3D();
     const at = three.indexOf('Reactor3D.Viewport.prototype.renderPass = function');
     const body = three.slice(at, three.indexOf('\n};', at));
     assert.match(body, /if \(scene\.matrixWorldAutoUpdate !== false\) scene\.matrixWorldAutoUpdate = false;/);
@@ -92,7 +93,7 @@ test('a sparse event array is walked by its keys, not its holes', () => {
 });
 
 test('the map mode is remembered per map against the inputs that decide it', () => {
-    const three = read('runtime/reactor_3d.js');
+    const three = source3D();
     const at = three.indexOf('Reactor3D.mapMode = function');
     const body = three.slice(at, three.indexOf('\n};', at));
     assert.match(body, /const memo = this\._mapModeMemo \|\| \(this\._mapModeMemo = new WeakMap\(\)\);/);
@@ -120,7 +121,7 @@ test('the tilemap sorts its children only when they are out of order, without co
 });
 
 test('billboard maths reuses scratch vectors', () => {
-    const three = read('runtime/reactor_3d.js');
+    const three = source3D();
     const up = three.slice(three.indexOf('Reactor3D.billboardUp = function'), three.indexOf('\n};', three.indexOf('Reactor3D.billboardUp = function')));
     assert.doesNotMatch(up, /new THREE\.Vector3\(0, 1, 0\)/, 'no fresh vectors per call');
     assert.match(up, /this\._billboardUpScratch/);
@@ -130,7 +131,7 @@ test('billboard maths reuses scratch vectors', () => {
 });
 
 test('a settled in-scene effect is re-measured every five seconds, not twice a second', () => {
-    const three = read('runtime/reactor_3d.js');
+    const three = source3D();
     const at = three.indexOf('shouldMeasure(frames, track) {');
     const body = three.slice(at, three.indexOf('},', at));
     assert.match(body, /const every = settled\s+\? this\.learnInterval\(\) \* this\.settledInterval\(\)\s+: this\.learnInterval\(\);\s+return frames % every === 0;/);

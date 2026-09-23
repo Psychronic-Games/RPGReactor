@@ -54,6 +54,29 @@ class TilesetPaletteViewer {
             this.fs = require('fs');
             this.path = require('path');
         }
+
+        // The status line under the palette is written by hand rather than
+        // carried on a data-i18n attribute, so nothing redraws it when the
+        // language changes: it sat in English under a Russian editor until
+        // the next tileset or map switch happened to rewrite it.
+        if (typeof window !== 'undefined') {
+            window.addEventListener('rr-language-changed', () => this.renderSelectionInfo());
+        }
+    }
+
+    /**
+     * The one writer for the palette's status line. `_selection` is the last
+     * selection's shape, or null when there is none; both wordings are built
+     * here so either can be redrawn in a new language from what is still true.
+     */
+    renderSelectionInfo() {
+        const info = typeof document !== 'undefined' ? document.getElementById('selection-info') : null;
+        if (!info) return;
+        const tt = text => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
+        const chosen = this._selection;
+        info.innerHTML = chosen
+            ? `<div>${tt('Selected:')} ${chosen.width}x${chosen.height} ${tt('tiles')} (${chosen.count} ${tt('tiles')}) ${tt('on layer')} ${chosen.layer}</div>`
+            : `<div>${tt('No tiles selected')}</div>`;
     }
 
     // Set reference to MapEditor
@@ -103,11 +126,12 @@ class TilesetPaletteViewer {
                     ${this.createLayerTab('R', TilesetPaletteViewer.tabIcon('region'))}
                     ${this.createLayerTab('O', TilesetPaletteViewer.tabIcon('object3d'))}
                     ${this.createLayerTab('M', TilesetPaletteViewer.tabIcon('model3d'), '3D-M')}
+                    ${this.createLayerTab('T', TilesetPaletteViewer.tabIcon('terrain'), '3D-T')}
                 </div>
 
                 <!-- Tileset Preview Canvas -->
-                <div id="tileset-preview-container" class="rr-accent-scrollbar" style="flex: 1; overflow: auto; background-color: transparent; position: relative; min-height: 0;">
-                    <canvas id="tileset-preview-canvas" style="display: block; image-rendering: pixelated; cursor: crosshair; min-width: 100%; min-height: 100%;"></canvas>
+                <div id="tileset-preview-container" class="rr-accent-scrollbar" style="flex: 1; overflow-x: hidden; overflow-y: auto; scrollbar-gutter: stable; background-color: transparent; position: relative; min-height: 0;">
+                    <canvas id="tileset-preview-canvas" style="display: block; image-rendering: pixelated; cursor: crosshair; width: 100%; height: auto;"></canvas>
                     <div id="tileset-empty-message" style="display: none; padding: 20px; text-align: center; color: var(--color-text-dim); font-size: 11px;">
                         ${tt('No tileset image assigned')}<br/>${tt('for this layer')}
                     </div>
@@ -121,6 +145,10 @@ class TilesetPaletteViewer {
 
                 <!-- Model props UI Container (shown when M tab is active) -->
                 <div id="model-props-ui-container" style="flex: 1; display: none; min-height: 0;"></div>
+
+                <!-- Terrain UI Container (shown when T tab is active) -->
+                <div id="terrain-ui-container" style="flex: 1; display: none; min-height: 0;"></div>
+                <div id="pieces-ui-container" style="flex: 1; display: none; min-height: 0;"></div>
 
                 <!-- Selection Info -->
                 <div id="selection-info" style="padding: 8px; background-color: var(--color-bg-list-item); border-top: 1px solid var(--color-border); font-size: 10px; color: var(--color-text-muted); flex-shrink: 0;">
@@ -163,6 +191,20 @@ class TilesetPaletteViewer {
             return open + cells.map(([x, y, fill]) =>
                 `<rect x="${x}" y="${y}" width="5.5" height="5.5" rx="1.2" fill="${fill}"/>`
             ).join('') + '</svg>';
+        }
+        if (kind === 'pieces') {
+            // Two blocks and a gable on them: things built on the ground.
+            return open
+                + '<path d="M1.5 9.5h6v5h-6z" fill="#c9a06b" stroke="#7a5a30" stroke-width=".8"/>'
+                + '<path d="M8.5 9.5h6v5h-6z" fill="#b8b8b8" stroke="#666666" stroke-width=".8"/>'
+                + '<path d="M1 9.5l7-6 7 6z" fill="#c1443c" stroke="#7a2a24" stroke-width=".8"/></svg>';
+        }
+        if (kind === 'terrain') {
+            // Two green hills on a strip of ground: land with a shape.
+            return open
+                + '<path d="M1 14.5h14v1H1z" fill="#6b7a8a"/>'
+                + '<path d="M1 14.5c2-6 4.5-8 7-7.5 1.5.3 2.3 1.6 3.5 1.2 1.5-.5 2.3-2 3.5-1.7v8z" fill="#3fa34d"/>'
+                + '<path d="M1 14.5c1.5-3.2 3.2-5 5-5.3 2.4-.4 3.6 2.4 6.2 2.6 1.1.1 2-.4 2.8-.9v3.6z" fill="#2c7a3a"/></svg>';
         }
         if (kind === 'model3d') {
             // A model on a stand: a teal monitor-shaped block on a plinth,
@@ -343,12 +385,8 @@ class TilesetPaletteViewer {
         // selected — while a click still painted the previous sheet's tiles.
         if (layerName !== this.currentLayer) {
             this.selectedTiles = [];
-            const info = document.getElementById('selection-info');
-            if (info) {
-                const tt = text => (typeof window !== 'undefined' && window.I18n)
-                    ? window.I18n.tText(text) : text;
-                info.innerHTML = `<div>${tt('No tiles selected')}</div>`;
-            }
+            this._selection = null;
+            this.renderSelectionInfo();
             // Drop any hover preview built from the old selection; without a
             // selection nothing rebuilds it until the pointer moves again.
             this.mapEditor?.hideTilePreview?.();
@@ -356,8 +394,13 @@ class TilesetPaletteViewer {
 
         if (this.mapEditor?.shadowPenMode) this.mapEditor.setShadowPenMode(false);
         this.currentLayer = layerName;
-        if (layerName !== 'M') this.lastPaintLayer = layerName;
-        window.reactor?.claimMapTool?.(layerName === 'M' ? 'models' : 'paint');
+        // M, T and P are tools, not paint layers: a return to painting goes
+        // back to the last tile layer, and each claims the map for its own
+        // tool. The pieces tab is P, never B: B is the tileset's own sheet,
+        // and one key for both lit both tabs and showed sheet B while a
+        // building was being laid.
+        if (layerName !== 'M' && layerName !== 'T' && layerName !== 'P') this.lastPaintLayer = layerName;
+        window.reactor?.claimMapTool?.(layerName === 'M' ? 'models' : layerName === 'T' ? 'terrain' : layerName === 'P' ? 'pieces' : 'paint');
 
         // Update tab styles
         document.querySelectorAll('.tileset-layer-tab').forEach(tab => {
@@ -380,8 +423,14 @@ class TilesetPaletteViewer {
 
         const object3dContainer = document.getElementById('object3d-ui-container');
         const modelPropsContainer = document.getElementById('model-props-ui-container');
+        const terrainContainer = document.getElementById('terrain-ui-container');
+        if (terrainContainer) terrainContainer.style.display = layerName === 'T' ? 'flex' : 'none';
+        const piecesContainer = document.getElementById('pieces-ui-container');
+        if (piecesContainer) piecesContainer.style.display = layerName === 'P' ? 'flex' : 'none';
 
         if (layerName !== 'M') this.onModelPropsTabLeft?.();
+        if (layerName !== 'T') this.onTerrainTabLeft?.();
+        if (layerName !== 'P') this.onPiecesTabLeft?.();
         if (layerName === 'R') {
             // Show region UI, hide tileset preview
             if (tilesetContainer) tilesetContainer.style.display = 'none';
@@ -401,6 +450,22 @@ class TilesetPaletteViewer {
             if (modelPropsContainer) modelPropsContainer.style.display = 'none';
             if (selectionInfo) selectionInfo.style.display = 'none';
             this.onObject3DTabSelected?.();
+        } else if (layerName === 'T') {
+            // Terrain: the brushes that shape a 3D map's ground, painted in the 3D view.
+            if (tilesetContainer) tilesetContainer.style.display = 'none';
+            if (regionContainer) regionContainer.style.display = 'none';
+            if (object3dContainer) object3dContainer.style.display = 'none';
+            if (modelPropsContainer) modelPropsContainer.style.display = 'none';
+            if (selectionInfo) selectionInfo.style.display = 'none';
+            this.onTerrainTabSelected?.();
+        } else if (layerName === 'P') {
+            // Pieces: the 3D tileset, laid in the 3D view.
+            if (tilesetContainer) tilesetContainer.style.display = 'none';
+            if (regionContainer) regionContainer.style.display = 'none';
+            if (object3dContainer) object3dContainer.style.display = 'none';
+            if (modelPropsContainer) modelPropsContainer.style.display = 'none';
+            if (selectionInfo) selectionInfo.style.display = 'none';
+            this.onPiecesTabSelected?.();
         } else if (layerName === 'M') {
             // Model props: 3D models placed on the map from a list.
             if (tilesetContainer) tilesetContainer.style.display = 'none';
@@ -471,12 +536,8 @@ class TilesetPaletteViewer {
                 // unrelated tiles.
                 this.selectedTiles = [];
                 this.mapEditor?.hideTilePreview?.();
-                const info = document.getElementById('selection-info');
-                if (info) {
-                    const tt = text => (typeof window !== 'undefined' && window.I18n)
-                        ? window.I18n.tText(text) : text;
-                    info.innerHTML = `<div>${tt('No tiles selected')}</div>`;
-                }
+                this._selection = null;
+                this.renderSelectionInfo();
             }
 
             // Load all tileset images (wait for them to complete). The token
@@ -889,12 +950,9 @@ class TilesetPaletteViewer {
         this.drawSelectionOverlay(minX, minY, width, height, actualLayer);
 
         // Update selection info
-        const tt = (text) => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
-        const info = document.getElementById('selection-info');
-        if (info) {
-            const displayLayer = this.currentLayer === 'A' ? actualLayer : this.currentLayer;
-            info.innerHTML = `<div>${tt('Selected:')} ${width}x${height} ${tt('tiles')} (${this.selectedTiles.length} ${tt('tiles')}) ${tt('on layer')} ${displayLayer}</div>`;
-        }
+        this._selection = { width, height, count: this.selectedTiles.length,
+            layer: this.currentLayer === 'A' ? actualLayer : this.currentLayer };
+        this.renderSelectionInfo();
 
         // Auto-toggle erase mode based on tile transparency
         this.autoToggleEraseMode();
@@ -1055,13 +1113,10 @@ class TilesetPaletteViewer {
 
     // Clear selection
     clearSelection() {
-        const tt = (text) => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
         this.selectedTiles = [];
         this.renderCurrentLayer();
-        const info = document.getElementById('selection-info');
-        if (info) {
-            info.innerHTML = `<div>${tt('No tiles selected')}</div>`;
-        }
+        this._selection = null;
+        this.renderSelectionInfo();
     }
 
     // Helper to determine which sub-layer of merged 'A' was clicked

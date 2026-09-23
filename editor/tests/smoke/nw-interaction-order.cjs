@@ -39,6 +39,7 @@ const driver = new WebDriverClient(path.join(sdkRoot, 'chromedriver'));
             await pc.loadMap(1,{skipDirtyCheck:true});
             reactor.databaseEditorUI.setCurrentProject(loaded);return true;
         })().then(done,e=>done({error:String(e.stack)}));`, [project]);
+        if (opened !== true) fs.writeFileSync('/tmp/rr-interaction-result.json', JSON.stringify({ opened }, null, 2));
         assert.equal(opened, true, JSON.stringify(opened));
         const setup = fs.readFileSync(path.join(__dirname, 'interaction-order-setup.js'), 'utf8');
         const result = await driver.executeAsync(setup, [{ seed: Number(process.env.RR_INTERACTION_SEED || 0x53a11) }]);

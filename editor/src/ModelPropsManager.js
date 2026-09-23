@@ -414,7 +414,13 @@ class ModelPropsManager {
     }
 
     _pointerDown(event, container) {
-        if (!this.active || !this.currentMap || event.data.button !== 0) return;
+        if (!this.active || !this.currentMap) return;
+        // A right-click lets go of the selection, as it does in the 3D view.
+        if (event.data.button === 2) {
+            if (this.selectedId) this.select(null);
+            return;
+        }
+        if (event.data.button !== 0) return;
         const original = event.data.originalEvent;
         if (original?.shiftKey || original?.ctrlKey) return;
         const pos = event.data.getLocalPosition(container);
@@ -478,6 +484,9 @@ class ModelPropsManager {
         if (event.key === 'Delete' || event.key === 'Backspace') {
             event.preventDefault();
             this.remove(this.selectedId);
+        } else if (event.key === 'Escape') {
+            event.preventDefault();
+            this.select(null);
         }
     }
 

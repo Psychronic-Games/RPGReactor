@@ -4,17 +4,17 @@ RPG Reactor is an open-source, cross-platform RPG game editor and runtime for RP
 
 Use RPG Reactor to create, edit, playtest, and package 2D RPGs with familiar RPG Maker-style maps, events, database records, plugins, and deployment workflows, without depending on the original RPG Maker runtime or editor.
 
-Pre-built download binaries are available at <https://psychronic.itch.io/rpg-reactor>. The latest tagged source release is [0.98.6](https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.98.6).
+Pre-built download binaries are available at <https://psychronic.itch.io/rpg-reactor>. The latest tagged source release is [0.98.7](https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.98.7).
 
-## What's new in 0.98.6
+## What's new in 0.98.7
 
-- **Action sequences that fight for real:** one step list with five phases, poses on a rigged model's own parts, weapons held by their handles and aimed at the target, thrown items, projectiles from the muzzle, and cinematic cuts that follow the action.
-- **Victor Engine import:** Battle Motions and Battler Graphic Setup notetags become native sequences, with the concurrent steps, speed moves, arcs and waits that took.
-- **Hands on the rig:** palm and finger markers, a still model while placing them, zoom to the pointer, markers that snap into the mesh and show when they miss.
-- **Models and editor:** FBX and other formats keep materials and textures and convert to GLB, every menu and dialog answers to the keyboard, System 2 sizes and framing, enemy behaviour forecasts, OGG and MP3 from the Sound Effect Generator.
-- **The Demo fights back:** a 3D sword, railgun, pistol, grenades, med-kits, a tank that aims its cannon, and Star Shift effects with their sounds. Web builds correct filename casing.
+- **Build in the world:** a Build bar over the 3D map lays floors, walls, doors, windows, stairs, roofs, sixteen shapes and saved buildings with a snapping ghost; select, box-select, paint, move and turn what you built; materials are any tileable image.
+- **Ground and water:** terrain brushes shape rolling ground, and water is poured into the hollows you dig, with waves, a shore and shallows you can wade.
+- **Walk inside:** the roof and upper floors cut away over the storey you stand in, sliced walls wear a top, a wall between the camera and anyone in the party goes see-through, and stairs lead to a second floor.
+- **Blueprints and lights:** buildings are plain JSON plans on a card in the database, stamped from the bar; Lighting and Media Surfaces dock beside the map; a Sun light throws long shadows across the map.
+- **Battles and fixes:** Ash, Ember, Wisp and Shatter collapses, 3D battlers dissolving in a battle room, class curves to a target level, several states on an enemy action condition, and community fixes for buff stacks, state icons and group collapses.
 
-Read the [0.98.6 release notes](docs/posts/release-notes-0.98.6.md) for details and current limitations. Everything here is opt-in; existing projects keep their battles until they choose the new presentation. Earlier updates remain in the [changelog](CHANGELOG.md) and [devlog archive](docs/README.md).
+Read the [0.98.7 release notes](docs/posts/release-notes-0.98.7.md) for details and current limitations. Everything here is opt-in; a 2D project stays a 2D project until a map is switched to 3D. Earlier updates remain in the [changelog](CHANGELOG.md) and [devlog archive](docs/README.md).
 
 ## Repository Layout
 
@@ -33,7 +33,7 @@ RPGReactor/
 ## Documentation
 
 - [Editor README](editor/README.md): detailed feature list, source launch steps, project structure, shortcuts, and technical notes.
-- [Latest release notes](docs/posts/release-notes-0.98.6.md): features, fixes, and compatibility limits for 0.98.6.
+- [Latest release notes](docs/posts/release-notes-0.98.7.md): features, fixes, and compatibility limits for 0.98.7.
 - [Changelog](CHANGELOG.md): upcoming development and previous releases.
 - [Battle authoring guide](docs/BATTLE-PRESENTATION.md): Battle Rooms, formations, action steps, and supported plugin behavior.
 - [Media surface guide](docs/MEDIA-SURFACES.md): image/video placement, transforms, proportions, and legacy command support.
@@ -41,6 +41,8 @@ RPGReactor/
 - [Handoff notes](docs/HANDOFF.md): dated engineering history, open threads, and manual release gates.
 - [Custom user interfaces design](docs/DESIGN-USER-INTERFACES.md): the User Interfaces database section, its runtime, how it stays invisible to RPG Maker, seven opt-in stock-scene replacements, and the workflows intentionally left stock.
 - [3D objects on the map](docs/devlogs/2026-08-02-3d-objects-on-the-map.md): how painted object groupings and tileset 3D classes build the HD-2D world.
+- [Authoring a 3D map](docs/AUTHORING.md): where every part of a 3D map lives, which tool edits it by hand, what a generator writes, and what checks it.
+- [3D worlds design](docs/DESIGN-3D-WORLDS.md): the pieces, plans, terrain, water and lighting behind the world builder.
 - [Maintainer docs](docs/README.md): workflows that are useful for project maintenance but are not required for normal editor use.
 - [Release checklist](docs/RELEASE-CHECKLIST.md): exact maintainer commands for source publication, signed release candidates, GitHub attachments, and optional itch.io publication.
 
@@ -50,7 +52,7 @@ RPGReactor/
 - **Project-wide Resource Manager**: browse locale-sorted nested MZ/Reactor image, audio, effect, movie, font, icon, and 3D assets; preview media and orbit/zoom models through Reactor3D; batch-import safely on desktop; multi-select nested exports with Ctrl/Cmd or Shift; export decrypted bytes from encrypted projects; and delete only after path, project-lock, and symlink checks. The 3D category does not delete or merge existing models, but desktop users can import one validated GLB/OBJ/FBX/STL/USDZ/3MF/DXF into a new user-named `3d/<folder>/` containing `source/` and an empty `textures/`; `.blend` must first be exported. Publication is staged, destination-reserved, ownership-checked, and rolled back on failure. Web mutation is intentionally disabled.
 - **Native Media Surfaces**: place images and videos through the map toolbar or Show, Transform, and Stop Media Surface event commands. Attach them to the screen, map, player, events, or model parts; edit position, elevation, rotation, scale, corners, opacity, scanlines, and playback settings. Visual arrows, rings, sliders, and source-proportion controls support placement in 2D and 3D. Existing Video Surface commands remain supported. See the [media surface guide](docs/MEDIA-SURFACES.md) for rendering and preview behavior.
 - **Modern PIXI 8 + Three.js runtime**: the game runtime (`runtime/`) is a fully migrated PIXI v8 corescript. Tilemaps, UltraMode7, Effekseer particle effects, video, and shaders all run on current PixiJS instead of the legacy renderer RPG Maker ships, and 3D maps, models, rooms, cameras and in-scene effects are drawn by Three.js (r185) sharing the same canvas.
-- **Authorable HD-2D maps**: maps can opt into a perspective 3D presentation while retaining RPG Maker's grid, passability, events, and data format. Map Properties carries the 3D switch and a room: a parallax floor, walls, and ceiling at an authored height, faces inward, stored beside the map in `Map###.r3d.json`. Model props from the palette's 3D-M tab stand 3D models on any map, colliding where their geometry actually is. Models carry named effects — an animation, video/image surface, or light anchored to a part, sized relative to the model, played on demand, always, or while moving, dashing, or idle — fired by the Play 3D Effect command and animation timelines, and drawn inside the 3D world in both the editor and the game, so a wall, a strut or a character in front of the anchor hides them. A map with models is drawn under one depth buffer everywhere: what stands behind something stays behind it as the view turns. Each 3D map picks a Default Camera from Fixed Angle (HD-2D), Top-Down, Isometric, Third Person, or First Person, and the Change 3D Camera event command switches modes and angles during play; third and first person use mouse look with camera-relative WASD. The player start has a facing (right-click → Player Facing; the Reactor extension `System.json.startDirection`, which MZ ignores) and is drawn in the 3D view. Tileset classes and map-painted object groupings stand walls, roofs, panels, foliage, events, lights, and parallax-backed ground in the editor and runtime. Events, actors, enemies, weapons, armor, and items can carry GLB/OBJ/FBX models with in-editor rigging, carved parts, and authored animations, stored in `.r3d.json` sidecars beside the MZ data. Height is a real coordinate: events and props carry a Z in tiles (editable X/Y/Z in the Event Editor, drag arrows in the 3D view), move routes gain Rise/Descend/Set Height and Face Ceiling/Face Ground/Stand Up/Rotate steps, and collision respects vertical separation — a scaffold overhead blocks nobody, and a long vehicle turns through the arc its body actually sweeps. Model animations queue and never freeze the world: Play Model Animation chains plays with an optional Wait for Completion, and the Scoped Wait command (under the new Game Flow category) holds a script in the background — on a target's last actions, a duration, a switch, or a variable — while the player keeps moving and a second interaction parks the waiting script onto its own runner. Maps carry their own lights, placed with the Lighting tool and stored in the map sidecar: in 3D every surface — tiles, walls, ceilings, models, characters — is lit per pixel by its distance from each point light's sphere or spotlight's cone (yaw and pitch), and each source glows as a body in the world that walls hide, and selected lights cast shadows through cached static and dynamic depth atlases, refreshed when casters or lights move within GPU-specific budgets. Full quality supports eight casting lights and three dynamic rows; weak quality supports four and two, prioritized by light incident on the player; on 2D maps the same lights composite flat. Plugin lights from MV Nova Lighting and RaveLighting feed the same field.
+- **Authorable HD-2D maps and a 3D world builder**: maps can opt into a perspective 3D presentation while retaining RPG Maker's grid, passability, events, and data format. Map Properties carries the 3D switch, a room (parallax floor, walls, ceiling, sky) and the camera. A **Build** bar over the 3D view lays walls, floors, doors, windows, stairs, roofs, shapes and saved buildings with a snapping ghost, terrain brushes shape rolling ground, water is poured into hollows, and the party walks inside: roofs cut away, walls between the camera and the party go see-through, and stairs lead to a second floor. Buildings are plans in `3d/Structures`, readable JSON that an editor page, a validator and a shell command all understand.
 - **Model optimization**: GLB import can cap textures at 2K, pack skin weights, reduce geometry, and reorder triangles for the GPU vertex cache. The 3D database also offers Optimize for existing models and reports geometry, materials, textures, and rig costs. Both presets can change geometry; aggressive reduction targets fewer triangles. Separate distance-level file generation is disabled in both presets, while the runtime still supports existing authored LOD files. World rendering defaults to game resolution with nearest enlargement and no MSAA; adaptive resolution is opt-in.
 - **Quests and BGM sequences**: author quests in the database, import VisuStella/Yanfly/GS definitions, and manage objectives through events. Quest progress saves with the game; rewards are descriptive and the on-map tracker remains planned. Map BGM sequences repeat ordered track, silence, and palette entries; palette layers choose tracks from random pools with timing and fade controls. Native track loop points are ignored inside a sequence.
 - **Custom user interfaces**: a User Interfaces database section lays out menus, dialogs, panels, and HUDs with Box, Image, Text, Button, Gauge, and typed List nodes. The canvas-first editor uses explicit Back -> Front Layers with subtree reorder/reparent, a compact searchable Use As control, responsive Inspector placement, and an optional Game Reference tray whose imports are always explicit. Named List contexts and actor bindings drive actor identity, profile, resources, EXP, parameters, equipment, states, inventory, Options, and save data. Seven stable generated baselines remain Custom/unbound until a project opts into an exact role-safe replacement; invalid records fall back to stock. Item, Skill, Equip, Shop, Formation, Name Input/message inputs, and Battle remain stock until dedicated workflow adapters exist. A standalone RPG Maker MZ plugin is not shipped and is explicitly deferred; custom interfaces currently run through RPG Reactor. See the [design](docs/DESIGN-USER-INTERFACES.md) for behavior and boundaries.
@@ -139,7 +141,7 @@ cd editor
 npm test
 ```
 
-GitHub Actions runs syntax checks, the full Node suite, dependency audit, patch hygiene, and clean-checkout checks. The suite covers editor data round trips, runtime compatibility, rendering contracts, save safety, localization, generators, deployment, and release infrastructure. On 2026-09-04, local working-tree validation completed with **3181 passing tests**, zero failures or skips. This was not a clean release run. Separate CI GUI smokes cover Web persistence and NW.js saves; the UI-layout smoke is an additional local gate. See [current status](docs/STATUS.md) for verification limits and [the release checklist](docs/RELEASE-CHECKLIST.md) for checks still required on release hardware.
+GitHub Actions runs syntax checks, the full Node suite, dependency audit, patch hygiene, and clean-checkout checks. The suite covers editor data round trips, runtime compatibility, rendering contracts, save safety, localization, generators, deployment, and release infrastructure. On 2026-09-04, local working-tree validation completed with **3366 passing tests**, zero failures or skips. This was not a clean release run. Separate CI GUI smokes cover Web persistence and NW.js saves; the UI-layout smoke is an additional local gate. See [current status](docs/STATUS.md) for verification limits and [the release checklist](docs/RELEASE-CHECKLIST.md) for checks still required on release hardware.
 
 ## Trusted Projects
 
@@ -163,17 +165,17 @@ for third-party files or user/project content.
 ## Cutting a Source Release
 
 `cut-release.cjs` is the canonical source-release path. Run it from a clean
-`main` worktree after all 0.98.6 changes have been committed:
+`main` worktree after all 0.98.7 changes have been committed:
 
 ```bash
-node editor/build-scripts/cut-release.cjs 0.98.6 --dry-run
-node editor/build-scripts/cut-release.cjs 0.98.6
+node editor/build-scripts/cut-release.cjs 0.98.7 --dry-run
+node editor/build-scripts/cut-release.cjs 0.98.7
 ```
 
 The command runs the complete editor test suite, finalizes both changelog
 headings with the release date, updates `editor/package.json`, the root README
 release link and its recognized validation-count sentence, creates a release
-commit when those surfaces changed, creates an annotated `v0.98.6` tag, and pushes the branch and tag. The tag push starts
+commit when those surfaces changed, creates an annotated `v0.98.7` tag, and pushes the branch and tag. The tag push starts
 `publish-release.yml`, which creates or updates the GitHub source release using
 that version's root changelog section. `--no-push` stops after creating the tag.
 Other version prose, validation dates, the editor README, and the status summary

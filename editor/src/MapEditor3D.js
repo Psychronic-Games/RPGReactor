@@ -124,7 +124,7 @@ class MapEditor3D {
 
     async ensureLibraries() {
         if (this.librariesLoaded) return true;
-        if (typeof window !== 'undefined' && window.pako && window.THREE && window.Reactor3D?.Speech) {
+        if (typeof window !== 'undefined' && window.pako && window.THREE && window.Reactor3D?.extensionsLoaded?.()) {
             this.librariesLoaded = true;
             this.configureWorkers();
             return true;
@@ -137,47 +137,53 @@ class MapEditor3D {
         return loaded;
     }
 
+    /**
+     * The runtime scripts the 3D view still needs, as paths under the
+     * project's js/. Asked twice: the core names its extension files
+     * (Reactor3D.EXTENSIONS), so the list past the core is known only once
+     * the core is in.
+     */
+    missingRuntimeScripts() {
+        const w = typeof window === 'undefined' ? {} : window;
+        const files = [];
+        if (!w.pako) files.push('libs/pako.min.js');
+        if (!w.THREE) files.push('libs/three.js');
+        if (!w.Reactor3D) {
+            files.push('reactor_3d.js');
+            return files;
+        }
+        for (const extension of w.Reactor3D.EXTENSIONS || []) {
+            if (!w.Reactor3D[extension.namespace]) files.push(extension.file);
+        }
+        return files;
+    }
+
     async loadLibraries() {
         const host = typeof window !== 'undefined' ? window.RPGReactorWebHost : null;
+        let load;
         if (host?.mode === 'web' && host.projectRoot && typeof host.assetUrl === 'function') {
             const root = String(host.projectRoot).replace(/\/+$/, '');
-            const files = [];
-            if (!window.pako) files.push(`${root}/js/libs/pako.min.js`);
-            if (!window.THREE) files.push(`${root}/js/libs/three.js`);
-            if (!window.Reactor3D) files.push(`${root}/js/reactor_3d.js`);
-            if (!window.Reactor3D?.Speech) files.push(`${root}/js/reactor_speech_3d.js`);
-            try {
-                for (const file of files) {
-                    await this.injectScriptUrl(host.assetUrl(file), file);
-                }
-            } catch (error) {
-                this.lastError = error.message;
+            load = async file => {
+                const url = `${root}/js/${file}`;
+                await this.injectScriptUrl(host.assetUrl(url), url);
+            };
+        } else {
+            const runtimePath = this.projectController?.projectManager?.getRuntimePath?.();
+            if (!runtimePath || !this.fs || !this.path) {
+                this.lastError = 'The runtime directory could not be found.';
                 return false;
             }
-            return this.finishLibraryLoad();
-        }
-
-        const runtimePath = this.projectController?.projectManager?.getRuntimePath?.();
-        if (!runtimePath || !this.fs || !this.path) {
-            this.lastError = 'The runtime directory could not be found.';
-            return false;
-        }
-
-        const files = [];
-        if (typeof window === 'undefined' || !window.pako) files.push(this.path.join(runtimePath, 'libs', 'pako.min.js'));
-        if (typeof window === 'undefined' || !window.THREE) files.push(this.path.join(runtimePath, 'libs', 'three.js'));
-        if (typeof window === 'undefined' || !window.Reactor3D) files.push(this.path.join(runtimePath, 'reactor_3d.js'));
-        if (typeof window === 'undefined' || !window.Reactor3D?.Speech) files.push(this.path.join(runtimePath, 'reactor_speech_3d.js'));
-        for (const file of files) {
-            if (!this.fs.existsSync(file)) {
-                this.lastError = `Missing ${file}`;
-                return false;
-            }
+            load = async file => {
+                const full = this.path.join(runtimePath, ...file.split('/'));
+                if (!this.fs.existsSync(full)) throw new Error(`Missing ${full}`);
+                await this.injectScript(this.fs.readFileSync(full, 'utf8'), full);
+            };
         }
 
         try {
-            for (const file of files) {
-                await this.injectScript(this.fs.readFileSync(file, 'utf8'), file);
+            // Two passes: up to the core, then whatever the core names.
+            for (let pass = 0; pass < 2; pass++) {
+                for (const file of this.missingRuntimeScripts()) await load(file);
             }
         } catch (error) {
             this.lastError = error.message;
@@ -188,7 +194,9 @@ class MapEditor3D {
     }
 
     finishLibraryLoad() {
-        this.librariesLoaded = !!(window.pako && window.THREE && window.Reactor3D);
+        const runtime = window.Reactor3D;
+        this.librariesLoaded = !!(window.pako && window.THREE && runtime)
+            && (runtime.EXTENSIONS || []).every(extension => runtime[extension.namespace]);
         if (!this.librariesLoaded) this.lastError = 'A 3D runtime dependency did not load.';
         if (this.librariesLoaded) this.configureWorkers();
         return this.librariesLoaded;
@@ -377,7 +385,14 @@ class MapEditor3D {
             this._rebuildTimer = null;
             this.rebuild().catch(error => this.fail(error));
         };
-        this._onMapEdited = () => {
+        this._onMapEdited = event => {
+            // The terrain brush says what it moved; the vertices are already
+            // there and are lifted in place. A scene built before the map
+            // had a terrain grid has no such vertices and rebuilds once.
+            if (event?.detail?.terrain && this.updateTerrainInPlace(event.detail.region)) return;
+            // Pieces are laid down again on their own; the rest of the scene stays.
+            if (event?.detail?.pieces && this.updatePiecesInPlace(event.detail.region || null)) return;
+            if (event?.detail?.water && this.updateWaterInPlace()) return;
             const since = Date.now() - (this._lastRebuildAt || 0);
             if (since >= REBUILD_INTERVAL) {
                 clearTimeout(this._rebuildTimer);
@@ -753,8 +768,11 @@ class MapEditor3D {
         // Loaded before the scene is built, because building it is synchronous
         // and a parallax that arrives afterwards would arrive to no scene.
         const parallaxes = await this.loadParallaxes(mapData);
+        const materials = await this.loadMaterials(mapData);
         if (!this.rebuildIsCurrent(request, renderer)) return false;
 
+        // A rebuilt sky would start its drift over; carry the old one's on.
+        const skyOffset = this.mapScene?.skyOffset?.() || null;
         this.clearScene();
         this.mapScene = new Reactor3D.MapScene(mapData, bitmaps, {
             flags: tileset.flags,
@@ -764,9 +782,12 @@ class MapEditor3D {
             // running in the editor, so the pictures come off disk instead —
             // without which a parallax-mapped map previews as its bare tile
             // layers, which on a parallax map is very close to nothing.
-            loadParallax: name => parallaxes[name] || null
+            loadParallax: name => parallaxes[name] || null,
+            // The pieces' material images, off disk the same way.
+            loadMaterial: name => materials[name] || null
         });
         this.mapScene.setPass('all');
+        if (skyOffset) this.mapScene.setSkyOffset?.(skyOffset);
         this.applyAtmosphere(mapData);
         this.buildGrid(mapData);
         this.buildHoverCell();
@@ -1309,7 +1330,9 @@ class MapEditor3D {
         const eventZ = Reactor3D.eventZAt ? Reactor3D.eventZAt(mapData, event.id) : 0;
         const elevation = (facade
             ? facade.height + facade.lift
-            : Reactor3D.elevationAt(mapData, event.x, event.y)) + eventZ;
+            : Reactor3D.groundHeightAt
+                ? Reactor3D.groundHeightAt(mapData, event.x + 0.5, event.y + 0.5)
+                : Reactor3D.elevationAt(mapData, event.x, event.y)) + eventZ;
         const z = facade ? facade.z : event.y + 0.5;
 
         // A flat event lies on the ground; everything else stands on it.
@@ -1469,6 +1492,7 @@ class MapEditor3D {
      */
     buildHoverCell() {
         if (!this.mapScene) return;
+        this.terrainRing = null;
         const points = [0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 0];
         const geometry = new THREE.BufferGeometry();
         geometry.setAttribute('position',
@@ -1480,6 +1504,471 @@ class MapEditor3D {
         this.hoverCell.renderOrder = 998;
         this.hoverCell.visible = false;
         this.mapScene.scene().add(this.hoverCell);
+    }
+
+    /**
+     * The terrain brush's ring: a circle of the brush's radius laid on the
+     * ground, each point at the ground's own height so it drapes over a hill.
+     * Shown while the terrain tab is up and the pointer is over the map.
+     */
+    /**
+     * Bend the scene through the changed terrain without rebuilding it:
+     * the runtime re-lifts the vertices, the pick trees follow, and the
+     * things standing on the ground are set back down on it.
+     */
+    updateTerrainInPlace(region) {
+        const mapData = this.currentMap();
+        if (!mapData || !this.mapScene?.updateTerrain) return false;
+        const changed = this.mapScene.updateTerrain(mapData, region || null);
+        if (!changed) return false;
+        if (typeof RRMeshBvh !== 'undefined' && RRMeshBvh.refit) {
+            for (const geometry of changed) RRMeshBvh.refit(geometry);
+        }
+        const manager = this.propsManager?.();
+        for (const object of this.propGroup?.children || []) {
+            const prop = manager?.prop?.(object.userData?.propId);
+            if (prop) this.placeProp(object, prop, mapData);
+        }
+        this.syncPropRings?.();
+        for (const child of this.eventGroup?.children || []) {
+            if (child.userData?.event && child.userData.box) this.placeEvent(child);
+        }
+        this._lastActiveAt = performance.now();
+        return true;
+    }
+
+    pieceManager() {
+        return this.projectController?.pieceBuilderManager || window.reactor?.pieceBuilderManager || null;
+    }
+
+    canEditPieces() {
+        if (this.projectController?.mediaSurfacePreviewManager?.authoring) return false;
+        return !!this.pieceManager()?.active;
+    }
+
+    /**
+     * The material images the map's pieces wear, plus the one chosen in the
+     * panel, off disk once each and kept by name.
+     */
+    async loadMaterials(mapData) {
+        const projectPath = this.projectPath();
+        if (!projectPath || !this.path || typeof RRMapElevation === 'undefined') return {};
+        const names = new Set(RRMapElevation.pieceMaterials ? RRMapElevation.pieceMaterials(mapData) : []);
+        const chosen = this.pieceManager()?.material;
+        if (chosen) names.add(chosen);
+        const waterMaterial = this.terrainManager()?.waterMaterial;
+        if (waterMaterial) names.add(waterMaterial);
+        if (!names.size) return {};
+        if (!this.materialImages) this.materialImages = {};
+        const directory = this.path.join(projectPath, 'img', 'materials');
+        const loaded = {};
+        const pending = [];
+        for (const name of names) {
+            if (!name || loaded[name]) continue;
+            const cached = this.materialImages[name];
+            if (cached) { loaded[name] = cached; continue; }
+            const imageUrl = typeof RRAssetFiles !== 'undefined' ? RRAssetFiles.imageUrlFor(directory, name) : '';
+            if (!imageUrl) continue;
+            pending.push(new Promise(resolve => {
+                const image = new Image();
+                image.onload = () => {
+                    const bitmap = { image, width: image.naturalWidth, height: image.naturalHeight };
+                    this.materialImages[name] = bitmap;
+                    loaded[name] = bitmap;
+                    resolve();
+                };
+                image.onerror = () => resolve();
+                image.src = imageUrl;
+            }));
+        }
+        if (pending.length) await Promise.all(pending);
+        return loaded;
+    }
+
+    /** Lay the pieces down again without a rebuild; true when the scene can. */
+    updatePiecesInPlace(region = null) {
+        const mapData = this.currentMap();
+        const scene = this.mapScene;
+        if (!mapData || !scene?.updatePieces) return false;
+        const request = this._rebuildGeneration;
+        this.loadMaterials(mapData).then(materials => {
+            if (this.mapScene !== scene || this._rebuildGeneration !== request) return;
+            scene.updatePieces(mapData, name => materials[name] || null, region);
+            this._lastActiveAt = performance.now();
+        }).catch(error => console.error('The pieces could not be laid down again.', error));
+        return true;
+    }
+
+    /** Lay the water sheets again without a rebuild. */
+    updateWaterInPlace() {
+        const mapData = this.currentMap();
+        const scene = this.mapScene;
+        if (!mapData || !scene?.updateWaterSheets) return false;
+        const request = this._rebuildGeneration;
+        this.loadMaterials(mapData).then(materials => {
+            if (this.mapScene !== scene || this._rebuildGeneration !== request) return;
+            scene.updateWaterSheets(mapData, name => materials[name] || null);
+            this._lastActiveAt = performance.now();
+        }).catch(error => console.error('The water could not be laid again.', error));
+        return true;
+    }
+
+    /** A translucent slab where a water sheet is being drawn. */
+    /** The sheet under the pointer (its region), or null. */
+    waterMeshAt(clientX, clientY) {
+        const meshes = this.mapScene && this.mapScene._waterMeshes;
+        if (!meshes || !meshes.length || !this.camera || !this.canvas) return null;
+        const rect = this.canvas.getBoundingClientRect();
+        this._raycaster = this._raycaster || new THREE.Raycaster();
+        this._raycaster.setFromCamera(new THREE.Vector2(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1), this.camera);
+        const hit = this._raycaster.intersectObjects(meshes, false)[0];
+        return hit ? hit.object.userData.water || null : null;
+    }
+
+    /** A translucent ghost of a sheet: the hollow's own surface when the region has a mask (or the runtime can shape it), else its box. */
+    showWaterGhost(rect, level = rect.level) {
+        if (!this.mapScene || !rect) return;
+        if (!this.waterGhost) {
+            this.waterGhost = new THREE.Mesh(new THREE.BoxGeometry(1, 0.08, 1), new THREE.MeshBasicMaterial({ color: 0x4fb3ff, transparent: true, opacity: 0.45, depthWrite: false }));
+            this.waterGhost.renderOrder = 998;
+            this.mapScene.scene().add(this.waterGhost);
+        }
+        const w = rect.x1 - rect.x0 + 1, h = rect.y1 - rect.y0 + 1;
+        const mapData = this.currentMap();
+        if (mapData && typeof Reactor3D !== 'undefined' && Reactor3D.waterGeometry) {
+            const old = this.waterGhost.geometry;
+            this.waterGhost.geometry = Reactor3D.waterGeometry({ x0: rect.x0, y0: rect.y0, x1: rect.x1, y1: rect.y1, level: level + 0.04, mask: rect.mask }, mapData);
+            if (old) old.dispose();
+            this.waterGhost.scale.set(1, 1, 1);
+            this.waterGhost.position.set(0, 0, 0);
+        } else {
+            this.waterGhost.scale.set(w, 1, h);
+            this.waterGhost.position.set(rect.x0 + w / 2, level, rect.y0 + h / 2);
+        }
+        this.waterGhost.visible = true;
+        this._lastActiveAt = performance.now();
+    }
+
+    hideWaterGhost() {
+        if (this.waterGhost) this.waterGhost.visible = false;
+        this._lastActiveAt = performance.now();
+    }
+
+    /** The outward normal of one triangle of a mesh whose geometry is in world units. */
+    triangleNormal(mesh, triangle) {
+        const position = mesh?.geometry?.attributes?.position;
+        if (!position || !Number.isInteger(triangle)) return null;
+        const index = mesh.geometry.index ? mesh.geometry.index.array : null;
+        const corner = k => index ? index[triangle * 3 + k] : triangle * 3 + k;
+        const a = new THREE.Vector3().fromBufferAttribute(position, corner(0));
+        const b = new THREE.Vector3().fromBufferAttribute(position, corner(1));
+        const c = new THREE.Vector3().fromBufferAttribute(position, corner(2));
+        return b.sub(a).cross(c.sub(a)).normalize();
+    }
+
+    /**
+     * Where a piece would go for the pointer: the cell and level under it.
+     * The top of a piece means the level above it (a brick on a brick); the
+     * side of a piece means the cell beyond that side at the same level (a
+     * brick beside a brick); the ground means level 0. The panel's level
+     * raises that floor for building in the air. For `erase`, the piece
+     * pointed at itself.
+     */
+    pieceTargetAt(clientX, clientY, options = {}) {
+        const mapData = this.currentMap();
+        if (!mapData || !this.mapScene || !this.camera || !this.canvas || typeof Reactor3D === 'undefined') return null;
+        const rect = this.canvas.getBoundingClientRect();
+        if (!rect.width || !rect.height) return null;
+        this._raycaster = this._raycaster || new THREE.Raycaster();
+        this._raycaster.setFromCamera(new THREE.Vector2(
+            ((clientX - rect.left) / rect.width) * 2 - 1,
+            -((clientY - rect.top) / rect.height) * 2 + 1
+        ), this.camera);
+        const hit = this.raycastMapMeshes();
+        let point = hit ? hit.point : null;
+        if (!point) {
+            const ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+            point = this._raycaster.ray.intersectPlane(ground, new THREE.Vector3());
+        }
+        if (!point) return null;
+        const manager = this.pieceManager();
+        const erase = !!options.erase || manager?.mode === 'erase';
+        const onPiece = !!(hit && hit.object?.userData?.pieces);
+        const normal = onPiece ? this.triangleNormal(hit.object, hit.triangle) : null;
+        const top = !!(normal && normal.y > 0.5);
+        const side = !!(normal && Math.abs(normal.y) <= 0.5);
+        let x = Math.floor(point.x), y = Math.floor(point.z);
+        // A side face is on the cell's edge: placing goes to the cell beyond
+        // it, erasing and selecting to the cell the face belongs to.
+        if (side) { const into = erase ? -0.5 : 0.5; x = Math.floor(point.x + normal.x * into); y = Math.floor(point.z + normal.z * into); }
+        x = Math.max(0, Math.min(mapData.width - 1, x));
+        y = Math.max(0, Math.min(mapData.height - 1, y));
+        const base = Reactor3D.pieceBaseAt(mapData, x, y);
+        const rel = point.y - base;
+        let z;
+        if (erase) z = top ? Math.max(0, Math.round(rel) - 1) : Math.max(0, Math.floor(rel + 0.02));
+        else z = Math.max(manager?.level || 0, top ? Math.round(rel) : Math.max(0, Math.floor(rel + 0.02)));
+        const max = RRMapElevation?.PIECE_MAX_LEVEL ?? 120;
+        // The face pointed at, for a screen on a wall: which way it looks and whose cell it is.
+        const sideName = side ? (Math.abs(normal.x) >= Math.abs(normal.z) ? (normal.x > 0 ? 'east' : 'west') : (normal.z > 0 ? 'south' : 'north')) : null;
+        const faceCell = side ? { x: Math.max(0, Math.min(mapData.width - 1, Math.floor(point.x - normal.x * 0.5))), y: Math.max(0, Math.min(mapData.height - 1, Math.floor(point.z - normal.z * 0.5))) } : null;
+        return { x, y, z: Math.min(max, z), side: sideName, faceCell, height: Math.max(0, rel), top };
+    }
+
+    /**
+     * The plane a placing stroke stays on: the level of its first piece,
+     * at that cell's ground. A drag then lays a run at one level, however
+     * the pieces it has just laid would catch the pointer. Erasing keeps
+     * following the pieces themselves.
+     */
+    pieceStrokePlane(target) {
+        const mapData = this.currentMap();
+        const manager = this.pieceManager();
+        if (!mapData || !target || typeof Reactor3D === 'undefined') return null;
+        if (manager?.mode === 'erase') return { erase: true };
+        return { z: target.z, planeY: Reactor3D.pieceBaseAt(mapData, target.x, target.y) + target.z };
+    }
+
+    /** Where a stroke in progress lands under the pointer: on its plane, at its level. */
+    pieceStrokeTargetAt(clientX, clientY) {
+        const stroke = this.pointer?.pieceStroke;
+        if (!stroke || stroke.erase) return this.pieceTargetAt(clientX, clientY);
+        const mapData = this.currentMap();
+        if (!mapData || !this.camera || !this.canvas) return null;
+        const rect = this.canvas.getBoundingClientRect();
+        if (!rect.width || !rect.height) return null;
+        this._raycaster = this._raycaster || new THREE.Raycaster();
+        this._raycaster.setFromCamera(new THREE.Vector2(
+            ((clientX - rect.left) / rect.width) * 2 - 1,
+            -((clientY - rect.top) / rect.height) * 2 + 1
+        ), this.camera);
+        const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -stroke.planeY);
+        const point = this._raycaster.ray.intersectPlane(plane, new THREE.Vector3());
+        if (!point) return null;
+        return {
+            x: Math.max(0, Math.min(mapData.width - 1, Math.floor(point.x))),
+            y: Math.max(0, Math.min(mapData.height - 1, Math.floor(point.z))),
+            z: stroke.z
+        };
+    }
+
+    /** Where the pointer's ray meets a level plane (world x, y = map cell axes), or null. */
+    planePointAt(clientX, clientY, planeY = 0) {
+        if (!this.camera || !this.canvas) return null;
+        const rect = this.canvas.getBoundingClientRect();
+        this._raycaster = this._raycaster || new THREE.Raycaster();
+        this._raycaster.setFromCamera(new THREE.Vector2(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1), this.camera);
+        const point = this._raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -planeY), new THREE.Vector3());
+        return point ? { x: point.x, y: point.z } : null;
+    }
+
+    /** The box being dragged on the ground in select mode, translucent. */
+    showSelectionBand(a, b, planeY = 0) {
+        if (!this.mapScene) return;
+        if (!this.selectionBand) {
+            this.selectionBand = new THREE.Mesh(new THREE.BoxGeometry(1, 0.06, 1), new THREE.MeshBasicMaterial({ color: 0xffd166, transparent: true, opacity: 0.25, depthWrite: false }));
+            this.selectionBand.renderOrder = 997;
+            this.mapScene.scene().add(this.selectionBand);
+        }
+        const x0 = Math.floor(Math.min(a.x, b.x)), y0 = Math.floor(Math.min(a.y, b.y)), x1 = Math.floor(Math.max(a.x, b.x)), y1 = Math.floor(Math.max(a.y, b.y));
+        const w = x1 - x0 + 1, h = y1 - y0 + 1;
+        this.selectionBand.scale.set(w, 1, h);
+        this.selectionBand.position.set(x0 + w / 2, planeY + 0.05, y0 + h / 2);
+        this.selectionBand.visible = true;
+        this._lastActiveAt = performance.now();
+        return { x0, y0, x1, y1 };
+    }
+
+    hideSelectionBand() { if (this.selectionBand) this.selectionBand.visible = false; }
+
+    /** A press on the selected shape's handle, if any. */
+    grabShapeGizmo(clientX, clientY) {
+        const manager = this.pieceManager(), piece = manager && manager.selectedPiece();
+        if (!piece || !this.shapeGizmo || !manager.isShape(piece.kind) || typeof RRShapeGizmo3D === 'undefined') return null;
+        return RRShapeGizmo3D.grab(this.shapeGizmo, this.camera, this.canvas.getBoundingClientRect(), clientX, clientY, manager.gizmoMode, this.shapeView(piece));
+    }
+
+    /** The selected shape as the handles see it: its corners in the world, its size and turns. */
+    shapeView(piece) {
+        const mapData = this.currentMap();
+        const at = Reactor3D.shapePlacer(piece, Reactor3D.pieceBaseAt(mapData, piece.x, piece.y));
+        const corners = [];
+        for (const u of [0, 1]) for (const y of [0, 1]) for (const v of [0, 1]) corners.push(at(u, y, v));
+        return { corners, size: piece.size || [1, 1, 1], angle: piece.angle || 0, tilt: piece.tilt || 0, roll: piece.roll || 0 };
+    }
+
+    /** A handle drag applied to the selected shape as the pointer moves. */
+    dragShapeGizmo(drag, clientX, clientY) {
+        const manager = this.pieceManager(), piece = manager.selectedPiece();
+        if (!piece) return false;
+        const { held, start } = drag;
+        let patch = null;
+        if (held.mode === 'move') {
+            const t = Math.round(held.travel(clientX, clientY) * 4) / 4;
+            const ox = (start.offset || [0, 0])[0], oy = (start.offset || [0, 0])[1];
+            if (held.axis === 'x') return manager.moveSelectedPieceTo(start.x + 0.5 + ox + t, start.y + 0.5 + oy, undefined, false);
+            if (held.axis === 'z') return manager.moveSelectedPieceTo(start.x + 0.5 + ox, start.y + 0.5 + oy + t, undefined, false);
+            patch = { z: Math.max(0, Math.round((start.z + t) * 4) / 4) };
+        } else if (held.mode === 'turn') {
+            const deg = RRShapeGizmo3D.turn(this.shapeGizmo, held, this.camera, this.canvas.getBoundingClientRect(), clientX, clientY);
+            if (deg === null) return false;
+            patch = held.axis === 'yaw' ? { angle: (360 - deg) % 360 } : held.axis === 'pitch' ? { tilt: deg } : { roll: deg };
+        } else {
+            const t = held.travel(clientX, clientY);
+            const i = held.axis === 'u' ? 0 : held.axis === 'y' ? 1 : 2;
+            const size = (start.size || [1, 1, 1]).slice();
+            size[i] = Math.max(0.25, Math.min(60, Math.round((size[i] + t) * 4) / 4));
+            patch = { size };
+        }
+        return manager.updateSelected(patch, false);
+    }
+
+    /** The selected piece outlined, and a shape's handles on it; nothing when nothing is selected. */
+    refreshSelection() {
+        const manager = this.pieceManager(), mapData = this.currentMap();
+        const pieces = manager && manager.mode === 'select' && mapData ? manager.selectionPieces() : [];
+        const piece = pieces.length === 1 ? pieces[0] : null;
+        if (!this.mapScene || typeof THREE === 'undefined') return;
+        if (pieces.length > 1) {
+            // Many: every one outlined, no handles.
+            const all = [];
+            for (const one of pieces) {
+                let c;
+                if (manager.isShape(one.kind)) c = this.shapeView(one).corners;
+                else { const base = Reactor3D.pieceBaseAt(mapData, one.x, one.y) + one.z, h = Reactor3D.pieceHeight(one.kind); c = []; for (const u of [0, 1]) for (const y of [0, 1]) for (const v of [0, 1]) c.push([one.x + u, base + y * h, one.y + v]); }
+                for (const [a, b] of [[0, 1], [0, 2], [0, 4], [1, 3], [1, 5], [2, 3], [2, 6], [3, 7], [4, 5], [4, 6], [5, 7], [6, 7]]) all.push(...c[a], ...c[b]);
+            }
+            if (!this.selectionOutline) {
+                this.selectionOutline = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xffd166, depthTest: false, transparent: true, opacity: 0.95 }));
+                this.selectionOutline.renderOrder = 999;
+                this.mapScene.scene().add(this.selectionOutline);
+            }
+            this.selectionOutline.geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(all), 3));
+            this.selectionOutline.geometry.computeBoundingSphere();
+            this.selectionOutline.visible = true;
+            if (this.shapeGizmo) RRShapeGizmo3D.sync(this.shapeGizmo, null, null);
+            return;
+        }
+        if (!piece) {
+            if (this.selectionOutline) this.selectionOutline.visible = false;
+            if (this.shapeGizmo) RRShapeGizmo3D.sync(this.shapeGizmo, null, null);
+            return;
+        }
+        const shape = manager.isShape(piece.kind);
+        // The outline: the twelve edges of the piece's box, turned as it is.
+        let corners;
+        if (shape) corners = this.shapeView(piece).corners;
+        else {
+            const base = Reactor3D.pieceBaseAt(mapData, piece.x, piece.y) + piece.z, h = Reactor3D.pieceHeight(piece.kind);
+            corners = [];
+            for (const u of [0, 1]) for (const y of [0, 1]) for (const v of [0, 1]) corners.push([piece.x + u, base + y * h, piece.y + v]);
+        }
+        const edges = [[0, 1], [0, 2], [0, 4], [1, 3], [1, 5], [2, 3], [2, 6], [3, 7], [4, 5], [4, 6], [5, 7], [6, 7]];
+        const positions = new Float32Array(edges.length * 6);
+        edges.forEach(([a, b], i) => { positions.set(corners[a], i * 6); positions.set(corners[b], i * 6 + 3); });
+        if (!this.selectionOutline) {
+            this.selectionOutline = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xffd166, depthTest: false, transparent: true, opacity: 0.95 }));
+            this.selectionOutline.renderOrder = 999;
+            this.mapScene.scene().add(this.selectionOutline);
+        }
+        this.selectionOutline.geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        this.selectionOutline.geometry.computeBoundingSphere();
+        this.selectionOutline.visible = true;
+        if (shape && typeof RRShapeGizmo3D !== 'undefined' && typeof RRAxisArrows3D !== 'undefined' && typeof RRPoseRings3D !== 'undefined') {
+            const reach = Math.max(...(piece.size || [1, 1, 1]));
+            if (!RRShapeGizmo3D.fits(this.shapeGizmo, reach)) { RRShapeGizmo3D.dispose(this.shapeGizmo); this.shapeGizmo = RRShapeGizmo3D.create(THREE, this.mapScene.scene(), reach); }
+            RRShapeGizmo3D.sync(this.shapeGizmo, this.shapeView(piece), manager.gizmoMode);
+        } else if (this.shapeGizmo) RRShapeGizmo3D.sync(this.shapeGizmo, null, null);
+        this._lastActiveAt = performance.now();
+    }
+
+    /** The chosen piece, translucent, where it would land. */
+    updatePieceGhost(target) {
+        const manager = this.pieceManager();
+        const mapData = this.currentMap();
+        if (!this.canEditPieces() || !target || !this.mapScene || !manager || !mapData || manager.mode === 'select') { this.hidePieceGhost(); return; }
+        const erase = manager.mode === 'erase';
+        const bounds = manager.mode === 'move' ? manager.selectedGroupBounds() : null;
+        const stamp = manager.mode === 'stamp' ? manager.structurePlan() : bounds ? { size: [bounds.x1 - bounds.x0 + 1, bounds.y1 - bounds.y0 + 1] } : null;
+        if (manager.mode === 'move' && !bounds) { this.hidePieceGhost(); return; }
+        const key = stamp ? (bounds ? 'move:' + manager.selectedGroup : 'stamp:' + manager.structure) : (erase ? 'erase' : manager.kind) + ':' + manager.rot + ':' + JSON.stringify([manager.sizeFor ? manager.sizeFor(manager.kind) : null, manager.params && manager.params[manager.kind]]);
+        if (!this.pieceGhost || this.pieceGhost.userData.key !== key) {
+            this.hidePieceGhost(true);
+            // A plan's ghost is the building itself, translucent; a selected
+            // building being moved shows its footprint as a slab.
+            const silhouette = stamp && !bounds ? manager.ghostGeometryFor(stamp) : null;
+            const geometry = silhouette
+                || (stamp
+                    ? new THREE.BoxGeometry(stamp.size[0], 0.3, stamp.size[1]).translate(stamp.size[0] / 2, 0.15, stamp.size[1] / 2)
+                    : Reactor3D.pieceGeometry([Object.assign({ id: 0, material: '' }, erase ? { kind: 'block', x: 0, y: 0, z: 0, rot: 0 } : manager.pieceFor({ x: 0, y: 0, z: 0 }))], null));
+            const material = new THREE.MeshBasicMaterial({ color: erase ? 0xff6b6b : bounds ? 0x7dff9a : stamp ? 0xffd166 : 0x7fd8ff, transparent: true, opacity: erase ? 0.35 : 0.5, depthWrite: false });
+            this.pieceGhost = new THREE.Mesh(geometry, material);
+            this.pieceGhost.renderOrder = 998;
+            this.pieceGhost.userData.key = key;
+            this.mapScene.scene().add(this.pieceGhost);
+        }
+        const base = Reactor3D.pieceBaseAt(mapData, target.x, target.y);
+        if (stamp) {
+            const x = Math.max(0, Math.min(mapData.width - stamp.size[0], target.x)), y = Math.max(0, Math.min(mapData.height - stamp.size[1], target.y));
+            this.pieceGhost.position.set(x, base, y);
+        } else this.pieceGhost.position.set(target.x, base + target.z, target.y);
+        this.pieceGhost.visible = true;
+        this._lastGhostTarget = target;
+        this._lastActiveAt = performance.now();
+    }
+
+    /** The panel changed piece, turn or mode: the ghost follows where it stood. */
+    refreshPieceGhost() {
+        if (this._lastGhostTarget) this.updatePieceGhost(this._lastGhostTarget);
+    }
+
+    hidePieceGhost(dispose = false) {
+        if (!this.pieceGhost) return;
+        if (dispose) {
+            this.pieceGhost.parent?.remove(this.pieceGhost);
+            this.pieceGhost.geometry.dispose();
+            this.pieceGhost.material.dispose();
+            this.pieceGhost = null;
+        } else {
+            this.pieceGhost.visible = false;
+        }
+        this._lastActiveAt = performance.now();
+    }
+
+    buildTerrainRing() {
+        if (!this.mapScene || this.terrainRing) return;
+        const segments = 64; // points around the ring
+        const geometry = new THREE.BufferGeometry();
+        geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array((segments + 1) * 3), 3));
+        this.terrainRing = new THREE.Line(geometry, new THREE.LineBasicMaterial({
+            color: 0x7fd8ff, transparent: true, opacity: 0.95, depthTest: false
+        }));
+        this.terrainRing.renderOrder = 999;
+        this.terrainRing.visible = false;
+        this.mapScene.scene().add(this.terrainRing);
+    }
+
+    updateTerrainRing(point) {
+        const mapData = this.currentMap();
+        if (!this.canEditTerrain() || !point || !mapData) {
+            if (this.terrainRing) this.terrainRing.visible = false;
+            return;
+        }
+        if (!this.terrainRing) this.buildTerrainRing();
+        if (!this.terrainRing) return;
+        const radius = this.terrainManager()?.radius || 3;
+        const positions = this.terrainRing.geometry.attributes.position;
+        const segments = positions.count - 1;
+        const cx = point.x + 0.5, cz = point.y + 0.5;
+        for (let i = 0; i <= segments; i++) {
+            const angle = (i / segments) * Math.PI * 2;
+            const x = cx + Math.cos(angle) * radius, z = cz + Math.sin(angle) * radius;
+            positions.setXYZ(i, x, Reactor3D.groundHeightAt(mapData, x, z) + 0.06, z);
+        }
+        positions.needsUpdate = true;
+        this.terrainRing.geometry.computeBoundingSphere();
+        this.terrainRing.visible = true;
+        this._lastActiveAt = performance.now();
     }
 
     /** How many cells the brush in hand covers, for sizing the outline. */
@@ -1624,6 +2113,15 @@ class MapEditor3D {
         return !!this.propsManager()?.active;
     }
 
+    terrainManager() {
+        return this.projectController?.terrainManager || window.reactor?.terrainManager || null;
+    }
+
+    canEditTerrain() {
+        if (this.projectController?.mediaSurfacePreviewManager?.authoring) return false;
+        return !!this.terrainManager()?.active;
+    }
+
     buildProps(mapData, request = this._rebuildGeneration) {
         this.disposeProps();
         if (!this.mapScene || typeof RREventPreviewModels === 'undefined' || !Reactor3D.normalizeModelSpec) return;
@@ -1664,7 +2162,10 @@ class MapEditor3D {
     }
 
     placeProp(object, prop, mapData = this.currentMap()) {
-        const elevation = Reactor3D.elevationAt(mapData, Math.round(prop.x), Math.round(prop.y));
+        // The ground under the prop's foot: the cell's elevation plus the terrain's rise there.
+        const elevation = Reactor3D.groundHeightAt
+            ? Reactor3D.groundHeightAt(mapData, prop.x + 0.5, prop.y + 0.5)
+            : Reactor3D.elevationAt(mapData, Math.round(prop.x), Math.round(prop.y));
         object.position.set(prop.x + 0.5, elevation + prop.z, prop.y + 0.5);
         if (object.userData.pickBox) object.userData.pickBox.setFromObject(object);
     }
@@ -2817,7 +3318,7 @@ class MapEditor3D {
         }
         this.billboards = [];
         this.labels = [];
-        for (const key of ['grid', 'hoverCell']) {
+        for (const key of ['grid', 'hoverCell', 'pieceGhost', 'waterGhost']) {
             const mesh = this[key];
             if (!mesh) continue;
             mesh.geometry.dispose();
@@ -2875,6 +3376,59 @@ class MapEditor3D {
             // the camera moves, and the raycast is not free.
             this.seatPivot();
 
+            // The pieces tool: a left click lays the chosen piece where the
+            // pointer stands, and a drag lays one on every cell it crosses.
+            if (event.button === 0 && !event.shiftKey && !event.altKey && this.canEditPieces()
+                && (!event.ctrlKey || this.pieceManager().mode === 'place' || this.pieceManager().mode === 'erase')) {
+                const target = this.pieceTargetAt(event.clientX, event.clientY);
+                if (target && this.pieceManager().mode === 'move') {
+                    // First click picks the structure under the pointer; the next sets it down.
+                    this.pointer.pan = false;
+                    this.pointer.propHold = true;
+                    const manager = this.pieceManager();
+                    if (manager.selectedGroup) manager.moveSelectedTo(target.x, target.y);
+                    else manager.selectGroupAt(this.pieceTargetAt(event.clientX, event.clientY, { erase: true }) || target);
+                } else if (target && this.pieceManager().mode === 'stamp') {
+                    // A whole plan, once, where the click lands.
+                    this.pointer.pan = false;
+                    this.pointer.propHold = true;
+                    this.pieceManager().stampAt(target.x, target.y);
+                } else if (this.pieceManager().mode === 'select') {
+                    // Select: a handle of the selected shape first; else the piece under the pointer,
+                    // which a drag then moves.
+                    this.pointer.pan = false;
+                    this.pointer.propHold = true;
+                    const manager = this.pieceManager();
+                    const held = this.grabShapeGizmo(event.clientX, event.clientY);
+                    if (held) {
+                        this.pointer.gizmo = { held, snapshot: manager._snapshot(this.currentMap()), changed: false, start: JSON.parse(JSON.stringify(manager.selectedPiece())) };
+                    } else {
+                        const pick = this.pieceTargetAt(event.clientX, event.clientY, { erase: true });
+                        const wasSelected = manager.selectionIds();
+                        const under = pick ? manager.pieceAtTarget(pick) : null;
+                        if (under && wasSelected.includes(under.id)) {
+                            // A press on the selection: dragging slides it (all of it).
+                            manager.selectAt(pick);
+                            this.pointer.pieceMove = { id: under.id, snapshot: manager._snapshot(this.currentMap()), moved: false, planeY: Reactor3D.pieceBaseAt(this.currentMap(), under.x, under.y) + under.z, many: wasSelected.length > 1, cellsMoved: [0, 0] };
+                        } else {
+                            // A click picks what is under the pointer (or nothing); a drag from
+                            // here instead draws a box that selects everything inside it, so a
+                            // building can be boxed even where its floor covers the ground.
+                            manager.selectAt(pick);
+                            const planeY = pick && Number.isFinite(pick.top) ? pick.top : 0;
+                            const ground = this.planePointAt(event.clientX, event.clientY, planeY);
+                            if (ground) this.pointer.band = { start: ground, end: ground, planeY, started: false };
+                        }
+                    }
+                } else if (target) {
+                    this.pointer.pieces = true;
+                    this.pointer.pan = false;
+                    this.pointer.pieceStroke = this.pieceStrokePlane(target);
+                    this.pieceManager().beginStroke(target, undefined, { rectangle: event.ctrlKey });
+                    this.updatePieceGhost(target);
+                }
+            }
+
             // A left drag paints when the palette has tiles selected, exactly
             // as it does on the 2D canvas, and orbits when it does not. Holding
             // Ctrl orbits regardless, for turning the view without clearing the
@@ -2888,11 +3442,27 @@ class MapEditor3D {
                 }
             }
 
+            // With the terrain tab up: a left drag shapes the ground under the
+            // pointer. Ctrl still orbits.
+            if (event.button === 0 && !event.shiftKey && !event.ctrlKey && !event.altKey
+                && !this.pointer.paint && this.canEditTerrain()) {
+                // Remove takes the sheet drawn under the pointer first: a sheet standing
+                // high over the ground is not over the cell the ray meets beyond it.
+                const sheet = this.terrainManager().mode === 'drain' ? this.waterMeshAt(event.clientX, event.clientY) : null;
+                const point = sheet ? null : this.groundPointAt(event.clientX, event.clientY);
+                if (sheet) { this.pointer.terrain = true; this.terrainManager().drainRegion(sheet); }
+                else if (point) {
+                    this.pointer.terrain = true;
+                    this.terrainManager().beginStroke(point);
+                    if (this.canvas) this.canvas.style.cursor = 'crosshair';
+                }
+            }
+
             // With the props tab up: a ring turns the selected prop, a prop
             // is picked up and carried freely, and the bare ground takes a
             // new prop. Ctrl still orbits.
             if (event.button === 0 && !event.shiftKey && !event.ctrlKey && !event.altKey
-                && !this.pointer.paint && this.canEditProps()) {
+                && !this.pointer.paint && !this.pointer.terrain && this.canEditProps()) {
                 const manager = this.propsManager();
                 const arrow = this.selectedPropId && this.propArrows && typeof RRAxisArrows3D !== 'undefined' && this.canvas
                     ? RRAxisArrows3D.pick(THREE, this.propArrows, this.camera, this.canvas.getBoundingClientRect(), event.clientX, event.clientY)
@@ -2971,6 +3541,52 @@ class MapEditor3D {
             const dy = event.clientY - this.pointer.y;
             this.pointer.x = event.clientX;
             this.pointer.y = event.clientY;
+            if (this.pointer.pieces) {
+                const target = this.pieceStrokeTargetAt(event.clientX, event.clientY);
+                if (target) { this.pieceManager()?.paintAt(target, { rectangle: event.ctrlKey }); this.updatePieceGhost(target); }
+                return;
+            }
+            if (this.pointer.gizmo) {
+                if (this.dragShapeGizmo(this.pointer.gizmo, event.clientX, event.clientY)) this.pointer.gizmo.changed = true;
+                return;
+            }
+            if (this.pointer.band) {
+                const band = this.pointer.band, end = this.planePointAt(event.clientX, event.clientY, band.planeY);
+                if (!end) return;
+                band.end = end;
+                if (!band.started && (Math.abs(end.x - band.start.x) > 0.3 || Math.abs(end.y - band.start.y) > 0.3)) { band.started = true; this.pieceManager()?.clearSelection(); }
+                if (band.started) this.showSelectionBand(band.start, end, band.planeY);
+                return;
+            }
+            if (this.pointer.pieceMove && this.pointer.pieceMove.many) {
+                // Many pieces: the whole selection slides by whole cells with the pointer.
+                const move = this.pointer.pieceMove, manager = this.pieceManager();
+                const rect = this.canvas.getBoundingClientRect();
+                this._raycaster = this._raycaster || new THREE.Raycaster();
+                this._raycaster.setFromCamera(new THREE.Vector2(((event.clientX - rect.left) / rect.width) * 2 - 1, -((event.clientY - rect.top) / rect.height) * 2 + 1), this.camera);
+                const point = this._raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -move.planeY), new THREE.Vector3());
+                if (!point) return;
+                if (!move.grabPoint) { move.grabPoint = [point.x, point.z]; return; }
+                const wantX = Math.round(point.x - move.grabPoint[0]), wantY = Math.round(point.z - move.grabPoint[1]);
+                const dx = wantX - move.cellsMoved[0], dy = wantY - move.cellsMoved[1];
+                if ((dx || dy) && manager.moveSelectionBy(dx, dy, false)) { move.cellsMoved = [wantX, wantY]; move.moved = true; }
+                return;
+            }
+            if (this.pointer.pieceMove) {
+                // The piece follows the pointer on the plane of its own base, so it slides rather than climbs.
+                const move = this.pointer.pieceMove, manager = this.pieceManager(), piece = manager && manager.selectedPiece();
+                if (!piece || !this.camera || !this.canvas) return;
+                const rect = this.canvas.getBoundingClientRect();
+                this._raycaster = this._raycaster || new THREE.Raycaster();
+                this._raycaster.setFromCamera(new THREE.Vector2(((event.clientX - rect.left) / rect.width) * 2 - 1, -((event.clientY - rect.top) / rect.height) * 2 + 1), this.camera);
+                const point = this._raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -move.planeY), new THREE.Vector3());
+                if (!point) return;
+                if (!move.grabOffset) { const [cx, cz] = manager.isShape(piece.kind) ? Reactor3D.shapeCentre(piece) : [piece.x + 0.5, piece.y + 0.5]; move.grabOffset = [cx - point.x, cz - point.z]; return; }
+                const cx = point.x + move.grabOffset[0], cz = point.z + move.grabOffset[1];
+                const snapped = manager.isShape(piece.kind) ? [Math.round(cx * 4) / 4, Math.round(cz * 4) / 4] : [Math.floor(cx) + 0.5, Math.floor(cz) + 0.5];
+                if (manager.moveSelectedPieceTo(snapped[0], snapped[1], undefined, false)) move.moved = true;
+                return;
+            }
             if (this.pointer.paint) {
                 const tile = this.tileAt(event.clientX, event.clientY);
                 if (tile) {
@@ -2981,6 +3597,9 @@ class MapEditor3D {
                     // "nothing happened" from "already at that height".
                     window.reactor?.updateMapCoordinates?.(tile.x, tile.y);
                 }
+            } else if (this.pointer.terrain) {
+                const point = this.groundPointAt(event.clientX, event.clientY);
+                if (point) { this.terrainManager()?.paintAt(point); this.updateTerrainRing(point); }
             } else if (this.pointer.propArrow) {
                 this.dragPropAlongAxis(this.pointer.propArrow, event.clientX, event.clientY);
             } else if (this.pointer.propRing) {
@@ -3024,6 +3643,32 @@ class MapEditor3D {
                 this.endPaint();
                 return;
             }
+            if (drag && drag.pieces) {
+                drag.pieceStroke = null;
+                this.pieceManager()?.endStroke();
+                return;
+            }
+            if (drag && drag.band) {
+                if (!drag.band.started) return;
+                const box = this.showSelectionBand(drag.band.start, drag.band.end, drag.band.planeY);
+                this.hideSelectionBand();
+                if (box) this.pieceManager()?.selectInBox(box.x0, box.y0, box.x1, box.y1);
+                return;
+            }
+            if (drag && (drag.gizmo || drag.pieceMove)) {
+                // One undo step for the whole drag, taken when it started.
+                const manager = this.pieceManager();
+                const record = drag.gizmo || drag.pieceMove;
+                if (this.shapeGizmo && typeof RRShapeGizmo3D !== 'undefined') RRShapeGizmo3D.release(this.shapeGizmo);
+                if (record.changed || record.moved) { manager.undoStack.push(record.snapshot); if (manager.undoStack.length > 50) manager.undoStack.shift(); manager.redoStack.length = 0; }
+                manager?.refreshStatus?.();
+                return;
+            }
+            if (drag && drag.terrain) {
+                this.terrainManager()?.endStroke();
+                if (this.canvas) this.canvas.style.cursor = '';
+                return;
+            }
             if (!drag || drag.pan || drag.look) return;
             if (drag.propHold) {
                 this.finishPropDrag();
@@ -3063,6 +3708,27 @@ class MapEditor3D {
             if (event.ctrlKey || event.altKey) return;
             const drag = this.pointer;
             if (drag && Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) > 4) return;
+
+            // With the pieces tool up, a right-click pulls off the piece under
+            // the pointer, the way a brick comes off a model.
+            if (this.canEditPieces()) {
+                const manager = this.pieceManager();
+                const target = this.pieceTargetAt(event.clientX, event.clientY, { erase: true });
+                if (target) manager.removeAt(target);
+                return;
+            }
+            // With the models tool up, a right-click lets go of the selected
+            // model — on the model or on the ground alike. Placing one
+            // selects it, and the panel's Deselect button was the only way
+            // back to placing the next.
+            if (this.canEditProps()) {
+                const manager = this.propsManager();
+                if (manager?.selectedId) {
+                    manager.select(null, { fromThree: true });
+                    this.selectProp(null);
+                }
+                return;
+            }
             if (!this.canSelectEvents()) return;
 
             const cube = this.eventAt(event.clientX, event.clientY);
@@ -3342,7 +4008,15 @@ class MapEditor3D {
      * pointer move costs one cast rather than one per question.
      */
     updateHover(clientX, clientY, tile = this.tileAt(clientX, clientY)) {
-        this.updateHoverCell(tile);
+        this.updateHoverCell(this.canEditTerrain() ? null : tile);
+        if (this.canEditTerrain()) {
+            const manager = this.terrainManager(), point = this.groundPointAt(clientX, clientY);
+            const water = manager.mode === 'fill' || manager.mode === 'drain';
+            this.updateTerrainRing(water ? null : point);
+            manager.hoverAt?.(point);
+        } else if (this.terrainRing) this.terrainRing.visible = false;
+        if (this.canEditPieces()) this.updatePieceGhost(this.pieceTargetAt(clientX, clientY));
+        else this.hidePieceGhost();
         if (!this.canvas) return;
         if (this.canEditProps()) {
             // The prop pick (a box per prop) is throttled to 30 Hz; the
@@ -3677,6 +4351,9 @@ class MapEditor3D {
     previewActive(now) {
         if (this.projectController?.mediaSurfacePreviewManager?.previewActive?.()) return true;
         if (this.flying()) return true;
+        // A drifting sky is a moving picture: drawn at the idle rate it steps.
+        const sky = this.mapScene?._sky?.userData?.sky;
+        if (sky && (sky.driftX || sky.driftY)) return true;
         // A playing effect is a moving picture: the quad takes a new frame
         // of it only when this view renders, so the idle rate would show it
         // at ten frames a second.
@@ -3704,12 +4381,18 @@ class MapEditor3D {
         // a light off the side of *this* viewport is skipped here too.
         if (typeof Reactor3D !== 'undefined') {
             Reactor3D.cullCamera = this.camera;
+            // The cull frustum is rebuilt once per stamped frame; the game
+            // stamps with Graphics, which this view has none of.
+            Reactor3D.cullFrame = (Reactor3D.cullFrame || 0) + 1;
             // Shadows spend their moving-caster rows around the eye: here
             // that is the orbit target, not a camera hung above the map.
             if (Reactor3D.Shadows) Reactor3D.Shadows.focus = () => this.view && this.view.target;
         }
         this.animateAutotiles(now);
         this.animateEventPreviews(now);
+        // The sky stands around the editor's camera and drifts at the game's frame rate.
+        this.mapScene.updateSky?.(this.camera, now / (1000 / 60));
+        this.mapScene.updateWater?.(now / (1000 / 60));
         this.pickPropLods();
         this.projectController?.mediaSurfacePreviewManager?.updateThree?.();
         // Lights are map content: feed the compositor on every drawn frame,

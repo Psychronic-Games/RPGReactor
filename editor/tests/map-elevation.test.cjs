@@ -6,6 +6,7 @@
  * `Map###.r3d.json`, never in `Map###.json`, which is the whole reason a 3D map
  * stays an ordinary RPG Maker map.
  */
+const { source3D } = require('./helpers/runtime-3d-source.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -345,7 +346,7 @@ test('a failed 3D scene falls back to 2D instead of retrying forever', () => {
 test('the viewport is not leaked when it cannot be built', () => {
     // The constructor takes a WebGL context before anything else, so a throw
     // after that left the context alive and unreferenced.
-    const source = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+    const source = source3D();
     const at = source.indexOf('Reactor3D.acquireViewport = function');
     const body = source.slice(at, source.indexOf('\n};', at));
     assert.match(body, /if \(this\._viewportFailed\) return null;/, 'one attempt only');
@@ -379,7 +380,7 @@ test('asking whether 3D is supported does not cost a WebGL context each time', (
     // which every character sprite calls on every frame. A map with a hundred
     // events took a hundred contexts per frame and gave none back, so the
     // browser evicted live ones and took PIXI's renderer down with them.
-    const source = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+    const source = source3D();
     const at = source.indexOf('Reactor3D.isSupported = function');
     const body = source.slice(at, source.indexOf('\n};', at));
 
@@ -545,7 +546,7 @@ test('the 3D canvas follows the game canvas when the window changes', () => {
 
     // And it resizes to the same logical resolution the game canvas uses, so
     // the two stay in step rather than one being scaled independently.
-    const three = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+    const three = source3D();
     const resizeAt = three.indexOf('Reactor3D.Viewport.prototype.resize = function');
     const resize = three.slice(resizeAt, three.indexOf('\n};', resizeAt));
     assert.match(resize, /Graphics\.width/);

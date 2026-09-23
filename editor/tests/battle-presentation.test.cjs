@@ -302,12 +302,16 @@ test('a room model wears its sprite\'s opacity, blend colour and collapse, and g
 test('a boss collapse on a room battler lasts the model\'s screen height in frames, not the placeholder bitmap\'s one pixel',()=>{
  const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
  function Enemy(){this.bitmap={height:1};}Enemy.prototype.startBossCollapse=function(){this._effectDuration=this.bitmap.height;this._appeared=false;};Enemy.prototype.updatePosition=function(){};
+ Enemy.prototype.startParticleCollapse=function(preset){this._particlePreset=preset;this._effectDuration=180;};Enemy.prototype.startCollapse=function(){this._effectDuration=32;this._appeared=false;};
  const context={ReactorBattleData:B,DataManager:{isDatabaseLoaded(){return true;}},Sprite_Enemy:Enemy,Scene_Battle:{prototype:{}},Spriteset_Battle:{prototype:{}}};
  vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../../runtime/reactor_battle_presentation.js'),'utf8'),context);
  try{context.ReactorBattlePresentation.installRoomAnchors();}catch(error){/* the rest of the installer wants a fuller scene; the collapse wrap is first */}
  const flat=new Enemy();flat.startBossCollapse();assert.equal(flat._effectDuration,1,'a flat battle keeps the engine\'s rule');
  const room=new Enemy();room._reactorRoomKey='enemy:0';room._reactorRoomBounds={x:0,y:0,width:120,height:310};room.startBossCollapse();assert.equal(room._effectDuration,310);
  const small=new Enemy();small._reactorRoomKey='enemy:1';small._reactorRoomBounds={x:0,y:0,width:10,height:12};small.startBossCollapse();assert.equal(small._effectDuration,48,'never shorter than the normal collapse and a half');
+ // Ash and Ember shred the sprite's bitmap; a room model takes the standard fade instead.
+ const ashFlat=new Enemy();ashFlat._effectType='ashCollapse';ashFlat.startParticleCollapse('ash');assert.equal(ashFlat._particlePreset,'ash','a flat battle dissolves the sprite');
+ const ashRoom=new Enemy();ashRoom._reactorRoomKey='enemy:2';ashRoom._effectType='emberCollapse';ashRoom.startParticleCollapse('ember');assert.equal(ashRoom._particlePreset,undefined,'a room battler never shreds its stand-in');assert.equal(ashRoom._effectType,'collapse');assert.equal(ashRoom._effectDuration,32);
 });
 
 
@@ -410,4 +414,197 @@ test('a hit recoil goes back, springs forward past home and settles, smaller on 
   view.frame=6;view.applyRecoil(view.models.get('t'));assert.ok(view.models.get('t').object.position.x>10.85,'the object is pushed, the record is not: '+view.models.get('t').object.position.x);assert.equal(view.models.get('t').position.x,10);
   view.startRecoil('t',null);assert.ok(Math.abs(view.models.get('t').recoil.dx+1)<1e-9,'no attacker: straight back from a facing of 90 is west');
  }finally{global.Reactor3D=previousR;global.ReactorBattleData=previousB;}
+});
+
+test('a room model dissolves for Ash and Ember: shards off its surface in its colours, the model eaten from the feet up, gone at the end', async () => {
+    const vm=require('node:vm'),fs=require('node:fs'),path=require('node:path');const THREE=await import('three'),scope={THREE,ReactorBattleData:B};vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../../runtime/reactor_battle_room.js'),'utf8'),scope);
+    const Room=scope.ReactorBattleRoomView,view=Object.create(Room.prototype);view.models=new Map();view.billboards=new Map();view.scene=new THREE.Scene();view.frame=100;view.height=624;view.camera=new THREE.PerspectiveCamera(40,1,.1,100);
+    const material=new THREE.MeshStandardMaterial({color:0x3060c0});material.userData.rrDissolve={value:-1e9};
+    const mesh=new THREE.Mesh(new THREE.BoxGeometry(1,2,1),material);mesh.position.set(5.5,1,3.5);const object=new THREE.Group();object.add(mesh);view.scene.add(object);
+    const record={object,spec:{size:2},position:{x:5,y:3},shadow:{visible:true,material:{opacity:.55}}};view.models.set('enemy:0',record);
+    assert.equal(view.startDissolve('missing','ash'),0,'no model, no dissolve');
+    const frames=view.startDissolve('enemy:0','ember');
+    assert.ok(frames>100&&frames<140,`lasts about two seconds (${frames})`);
+    const d=record.dissolve;assert.ok(d.points&&d.sparks,'ember has shards and sparks');
+    const pos=d.points.geometry.getAttribute('position'),col=d.points.geometry.getAttribute('color'),delay=d.points.geometry.getAttribute('aDelay');
+    assert.ok(pos.count>=1200,`enough shards (${pos.count})`);
+    let inside=0;for(let i=0;i<pos.count;i++){const x=pos.getX(i),y=pos.getY(i),z=pos.getZ(i);if(x>=4.99&&x<=6.01&&y>=-.01&&y<=2.01&&z>=2.99&&z<=4.01)inside++;}
+    assert.equal(inside,pos.count,'every shard lies on the model');
+    assert.ok(Math.abs(col.getX(0)-material.color.r)<1e-6&&Math.abs(col.getZ(0)-material.color.b)<1e-6,'shards take the material colour when no texture can be read');
+    let low=Infinity,high=-Infinity;for(let i=0;i<delay.count;i++){low=Math.min(low,delay.getX(i));high=Math.max(high,delay.getX(i));}
+    assert.ok(low>=0&&high<=51,'release runs from the feet over the wave');
+    assert.equal(view.startDissolve('enemy:0','ash'),frames,'asked twice, one dissolve');
+    // Wisp is a third kind in 2D; without a preset of its own here it would fall back to Ash and dissolve grey.
+    const wisp=Room.DISSOLVE.wisp;assert.ok(wisp,'the room knows Wisp');
+    assert.ok(wisp.tint[1]>wisp.tint[0]&&wisp.tint[1]>wisp.tint[2],'its shards are green, not fire');
+    assert.ok(wisp.spark.peak<1&&wisp.spark.core===0,'its sparks never saturate and have no opaque core, so they accumulate into a glow');
+    assert.ok(wisp.spark.life>Room.DISSOLVE.ember.spark.life&&wisp.spark.size>Room.DISSOLVE.ember.spark.size,'and live longer and larger than embers');
+    assert.equal(Room.DISSOLVE.ash.spark,null,'ash strikes no sparks');
+    // Shatter is a break, not a dissolve: it throws its shards outward from the middle and lets them fall.
+    const shatter=Room.DISSOLVE.shatter;assert.ok(shatter,'the room knows Shatter');
+    assert.ok(shatter.burst>0&&shatter.gravity>0,'it bursts outward and falls');
+    assert.equal(shatter.shrink,0,'its shards keep their size');
+    assert.equal(shatter.hard,1,'and are cut as sharp fragments');
+    assert.ok(shatter.waveSpread<Room.DISSOLVE.ash.waveSpread/3,'it breaks at once rather than climbing');
+    assert.ok(!Room.DISSOLVE.ember.burst&&!Room.DISSOLVE.wisp.burst,'the dissolves do not burst');
+    // A shattering model still runs the same clock and frees itself.
+    const other={object:new THREE.Group(),spec:{size:2},position:{x:1,y:1}};
+    const m2=new THREE.Mesh(new THREE.BoxGeometry(1,2,1),new THREE.MeshStandardMaterial());m2.position.set(1.5,1,1.5);other.object.add(m2);view.scene.add(other.object);view.models.set('enemy:1',other);
+    view.frame=500;const sf=view.startDissolve('enemy:1','shatter');assert.ok(sf>0,'it runs');
+    const sd=other.dissolve,sdelay=sd.points.geometry.getAttribute('aDelay');
+    let maxDelay=0;for(let i=0;i<sdelay.count;i++)maxDelay=Math.max(maxDelay,sdelay.getX(i));
+    assert.ok(maxDelay<=shatter.waveSpread+1,'every shard leaves within the short wave');
+    view.frame=500+sf;view.updateDissolve(other);assert.equal(other.object.visible,false,'and the model is gone at the end');
+    // The front rises with the frames.
+    assert.ok(material.userData.rrDissolve.value<0.2,'the front starts at the feet');
+    view.frame=100+22;view.updateDissolve(record);const half=material.userData.rrDissolve.value;assert.ok(half>.8&&half<1.3,`half way up at half the wave (${half.toFixed(2)})`);
+    assert.equal(d.points.material.uniforms.uTime.value,22);assert.ok(record.dissolveShadow<.6&&record.dissolveShadow>.4,'the floor shadow fades with the wave');
+    view.frame=100+frames;view.updateDissolve(record);
+    assert.equal(d.done,true);assert.equal(object.visible,false,'the model is gone');assert.equal(d.points,null,'the shards are freed');assert.equal(view.scene.children.filter(c=>c.isPoints).length,0);
+});
+
+test('Shatter is wired end to end: the trait, both emitters, and a mesh of triangles in a flat battle', () => {
+    const fs = require('node:fs'), path = require('node:path');
+    const read = file => fs.readFileSync(path.join(__dirname, '../../runtime', file), 'utf8');
+    const objects = read('reactor_objects.js'), sprites = read('reactor_sprites.js');
+    // The trait's eighth value reaches the sprite, which reaches the preset.
+    assert.match(objects, /case 7:\s*\n\s*this\.requestEffect\("shatterCollapse"\)/, 'Collapse Effect 7 asks for the shatter');
+    assert.match(sprites, /case "shatterCollapse":\s*\n\s*this\.startParticleCollapse\("shatter"\)/, 'and the sprite starts that preset');
+    assert.match(sprites, /case "shatterCollapse":\s*\n\s*case "wispCollapse":/, 'and it updates with the other particle collapses');
+    // Glass is polygons, so the flat battle builds a mesh rather than particles.
+    assert.match(sprites, /createFragmentCollapse = function/, 'the mesh path exists');
+    assert.match(sprites, /updateFragmentCollapse = function/, 'and moves its corners itself');
+    assert.match(sprites, /preset\.fragments \? this\.createFragmentCollapse\(preset\) : this\.createParticleCollapse\(preset\)/, 'and a fragment preset takes it');
+    assert.match(sprites, /new PIXI\.MeshGeometry\(/, 'one geometry for the whole break');
+    // The preset itself: a break, not a dissolve.
+    const preset = sprites.slice(sprites.indexOf('    shatter: {'), sprites.indexOf('    wisp: {'));
+    assert.match(preset, /fragments: true/);
+    assert.match(preset, /burst: [0-9.]+/, 'thrown outward');
+    assert.match(preset, /settle: \d+/, 'and settling, so a landed shard stays where it fell');
+    assert.match(preset, /buoyancy: -[0-9.]+/, 'a negative buoyancy is gravity');
+    assert.ok(/shrink: 0\b/.test(preset), 'its shards keep their size');
+});
+
+test("an enemy can carry its own collapse sound, chosen beside the effect and stored with its presentation settings", () => {
+    const fs = require('node:fs'), path = require('node:path'), vm = require('node:vm');
+    const editorRoot = path.resolve(__dirname, '..');
+    const objects = fs.readFileSync(path.join(editorRoot, '../runtime/reactor_objects.js'), 'utf8');
+    // Every collapse kind asks for the enemy's own sound before the engine's.
+    assert.match(objects, /Game_Enemy\.prototype\.playCollapseSe = function/);
+    for (const kind of ['collapse', 'bossCollapse', 'ashCollapse', 'emberCollapse', 'wispCollapse', 'shatterCollapse']) {
+        const at = objects.indexOf(`this.requestEffect("${kind}")`);
+        assert.ok(at > 0, kind);
+        assert.match(objects.slice(at, at + 200), /this\.playCollapseSe\(/, `${kind} plays the chosen sound`);
+    }
+    assert.doesNotMatch(objects.slice(objects.indexOf('Game_Enemy.prototype.performCollapse')), /SoundManager\.playEnemyCollapse\(\);\n/, 'no kind reaches the engine sound directly');
+    // The resolver itself: the enemy's entry wins, and its levels default.
+    const source = objects.slice(objects.indexOf('Game_Enemy.prototype.playCollapseSe'), objects.indexOf('Game_Enemy.prototype.performCollapse'));
+    const context = { globalThis: {}, AudioManager: { played: null, playSe(se) { this.played = se; } } };
+    context.globalThis = context;
+    vm.runInNewContext(`const Game_Enemy = { prototype: {} };\n${source}\nthis.play = Game_Enemy.prototype.playCollapseSe;`, context);
+    const enemy = { enemyId: () => 3, playCollapseSe: context.play };
+    let fellBack = false;
+    enemy.playCollapseSe(() => { fellBack = true; });
+    assert.equal(fellBack, true, 'no chosen sound falls back to the engine');
+    context.ReactorBattlePresentation = { settings: { enemies: { 3: { collapseSe: { name: 'glass-01' } } } } };
+    fellBack = false;
+    enemy.playCollapseSe(() => { fellBack = true; });
+    assert.equal(fellBack, false, 'a chosen sound replaces it');
+    // Spread it out of the vm realm first: a cross-realm object fails strict deepEqual.
+    assert.deepEqual({ ...context.AudioManager.played }, { name: 'glass-01', volume: 90, pitch: 100, pan: 0 }, 'with the usual levels when none were saved');
+
+    // The editor offers it on the Enemies page only, and clears back to the default.
+    const editor = fs.readFileSync(path.join(editorRoot, 'src/database/DatabaseTraitEditor.js'), 'utf8');
+    assert.match(editor, /_collapseSoundHTML\(\) \{\s*\n\s*if \(this\.recordType !== 'enemies'\) return '';/);
+    assert.match(editor, /RRAudioPickerModal\.open\(/, 'through the shared audio picker');
+    assert.match(editor, /this\._saveCollapseSe\(this\.currentEntry\);/, 'saved with the trait');
+    assert.match(editor, /delete section\[entry\.id\]\.collapseSe;/, 'and cleared when no sound is chosen');
+    const enemies = fs.readFileSync(path.join(editorRoot, 'src/database/DatabaseEnemyEditor.js'), 'utf8');
+    assert.equal((enemies.match(/\}, 'enemies'\);/g) || []).length, 2, 'both trait dialogs say which record they edit');
+});
+
+// The control shipped as a bare button in the dropdown's own column: it read as
+// a greyed-out field, said nothing about sound, and its click died on a project
+// path DatabaseCommonUI had copied before any project was open.
+test('the collapse sound names itself, looks like a picker and opens above the trait dialog', () => {
+    const fs = require('node:fs'), path = require('node:path');
+    const editorRoot = path.resolve(__dirname, '..');
+    const source = fs.readFileSync(path.join(editorRoot, 'src/database/DatabaseTraitEditor.js'), 'utf8');
+
+    const prior = { escape: globalThis.rrEscapeHtml, help: globalThis.TraitHelp, window: globalThis.window };
+    globalThis.rrEscapeHtml = require(path.join(editorRoot, 'src/utils/HtmlEscape.js'));
+    globalThis.TraitHelp = require(path.join(editorRoot, 'src/database/TraitHelp.js'));
+    if (!globalThis.window) globalThis.window = {};
+    try {
+        const TraitEditor = new Function(`${source}\nreturn DatabaseTraitEditor;`)();
+        const render = recordType => {
+            const editor = Object.create(TraitEditor.prototype);
+            editor.recordType = recordType;
+            editor._collapseSe = null;
+            const container = { innerHTML: '', querySelectorAll: () => [], querySelector: () => null };
+            editor.createOtherTab(container, { code: 63, dataId: 1, value: 0 });
+            return container.innerHTML;
+        };
+        const html = render('enemies');
+        assert.match(html, /rr-trait-subrow/, 'the sound is its own row, not a second control in the dropdown column');
+        assert.match(html, /class="rr-trait-label">Collapse Sound</, 'and the row says what it is');
+        assert.match(html, /class="collapse-se-button rr-btn-chip"/, 'drawn as a button, not as a filled-in field');
+        assert.match(html, /class="collapse-se-icon"/, 'with a speaker beside the name');
+        assert.match(html, /<span class="collapse-se-name">System default<\/span>/);
+        assert.doesNotMatch(render('states'), /collapse-se-button/, 'only the record the runtime reads the sound from offers it');
+    } finally {
+        globalThis.rrEscapeHtml = prior.escape;
+        globalThis.TraitHelp = prior.help;
+        if (prior.window === undefined) delete globalThis.window; else globalThis.window = prior.window;
+    }
+
+    // Opened at the trait dialog's own z-index or below, the picker appears behind it.
+    const zIndex = Number((source.match(/zIndex: (\d+),/) || [])[1]);
+    const overlay = Number((fs.readFileSync(path.join(editorRoot, 'css/theme.css'), 'utf8')
+        .match(/\.rr-modal-overlay \{[^}]*z-index: (\d+)/) || [])[1]);
+    assert.ok(zIndex > overlay, `the picker (${zIndex}) has to sit above the trait dialog (${overlay})`);
+
+    assert.match(source, /_projectPath\(\) \{/, 'the open project is asked for');
+    assert.doesNotMatch(source, /const projectPath = this\.commonUI\?\.currentProject\?\.path;/,
+        'never the copy taken before a project was open');
+});
+
+// A battle room advances one frame per view.render(), and in game that call
+// comes from the engine's fixed 60 fps update. Both room previews called it
+// once per requestAnimationFrame, so the room ran at the monitor's rate: 2.4x
+// too fast on a 144 Hz screen, half speed on 30 Hz. Reported from the Troops
+// page: "the speed of the stuff in the map seems tied to monitor Hz".
+test('a room preview advances at 60 frames a second whatever the monitor does', () => {
+    const fs = require('node:fs'), path = require('node:path');
+    const editorRoot = path.resolve(__dirname, '..');
+    const source = fs.readFileSync(path.join(editorRoot, 'src/battle/BattlePresentationEditor.js'), 'utf8');
+
+    // The method alone: the file needs a DOM and three.js to load whole.
+    const body = source.slice(source.indexOf('    roomFrameSteps(clock,now) {'));
+    const roomFrameSteps = new Function(`return function ${body.slice(0, body.indexOf('\n    }') + 6).trim()}`)();
+
+    const run = (hz, seconds) => {
+        const clock = {};
+        let stepped = 0;
+        const frames = Math.round(hz * seconds);
+        for (let i = 0; i <= frames; i++) stepped += roomFrameSteps(clock, (i * 1000) / hz);
+        return stepped;
+    };
+    // One second of wall clock is 60 room frames at any refresh rate. The first
+    // call seeds the clock and spends a frame, so a second is 60 either way.
+    for (const hz of [30, 50, 60, 75, 120, 144, 165, 240]) {
+        const stepped = run(hz, 1);
+        assert.ok(Math.abs(stepped - 61) <= 1, `${hz} Hz advanced ${stepped} frames in a second`);
+    }
+    assert.equal(run(144, 5) > 295 && run(144, 5) < 306, true, 'and stays right over five seconds');
+
+    // A stall is not repaid all at once: four frames is the most any one tick owes.
+    const clock = {};
+    roomFrameSteps(clock, 0);
+    assert.equal(roomFrameSteps(clock, 5000), 4, 'a backgrounded tab does not fast-forward the room');
+
+    // And both loops step the renderer rather than calling it once per frame.
+    assert.equal((source.match(/for\(let step=0;step<steps;step\+\+\)view\.render\(\);/g) || []).length, 2,
+        'the troop preview and the setup dialog both pace the room');
+    assert.doesNotMatch(source, /this\.drawRoomCast\(view,draft,cast\);view\.render\(\);/, 'no unpaced render is left');
 });

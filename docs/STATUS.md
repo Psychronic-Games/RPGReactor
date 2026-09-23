@@ -1,5 +1,24 @@
 # Current project status
 
+## 2026-09-21 — 0.98.7 released
+
+- `v0.98.7` is tagged and published on GitHub from the changelog section. Signed binaries and the itch channels follow from the Actions tab (Release Candidate → Release). The itch devlog is `docs/posts/itch-devlog-0.98.7.md`.
+- The cycle: the in-world builder (build bar, select and box selection, shapes, blueprints, docked Lighting and Media Surfaces), terrain and poured water, the cutaway rebuilt for walking inside (caps, see-through corridor for the whole company, stairs along their run), PR #67, the Demo's Hamlet and lake.
+- Verification: **3,366 Node tests pass** in the tree and in a fresh clone (one expected skip). Runtime **20260920.24**; all 13 bundled runtimes match.
+
+## 2026-09-16 — PRs #60 and #61 in, CI green again, Discord and translation fixes
+
+- **PR #60** (music sequence library, battle music resolution troop → Change Battle BGM → map → System, sequence preview and starters, Quests tab fixes, Reactor or VisuStella quest log) and **PR #61** (passive states on both sides of an enemy state condition, several states per condition row, forecast `no-target`) are merged locally; notes in [PR-INTEGRATION-2026-09-15.md](PR-INTEGRATION-2026-09-15.md) and [PR-INTEGRATION-2026-09-16.md](PR-INTEGRATION-2026-09-16.md). Runtime revision 20260916.1.
+- **CI** had failed every run since `v0.98.6`: two suites read the gitignored Star Shift Rebellion. They skip or use the fixture now; a fresh clone reproduces CI.
+- **Spot light guide** in the 2D map view was mirrored against the glow, the game and the 3D cone (Discord report); the guide, cone lines and aim drag follow the renderers.
+- **Reactor event commands** (six quest and media surface names) are translated in all 17 locales from a user's zh-Hans patch, and the Reactor tab is qualified in non-Latin scripts; a test covers every picker entry per locale.
+- Verification: **3,247 Node tests pass**; clean-clone run passes with one skip; live checks of the 2D lighting guide and the Chinese picker. Not pushed.
+
+## 2026-09-14 — 0.98.6 released; 0.98.7 open
+
+- `v0.98.6` is tagged and published on GitHub from the changelog section (Publish Release succeeded); signed binaries and the itch channels follow from the Actions tab (Release Candidate → Release). The itch devlog is `docs/posts/itch-devlog-0.98.6-plain.txt`.
+- Package version is 0.98.7; both changelogs carry an `[Unreleased - 0.98.7]` section for the bug fixes and features planned before next week.
+
 ## 2026-09-13 — Demo fight, held weapons, cinematic focus, hands on the rig
 
 - **Held and aimed weapons.** A bound model is read by its shape (`Reactor3D.heldShape`: widest slice = handle end, grip = narrow run behind it) and sits at the hand's palm; weapon steps carry **Held With** (both hands) and **Aim** (two-bone reach down the line to the target). Projectiles leave the muzzle or a carved part's end. Pose Parts can **Aim at target**; motions can **Keep posed parts**; sequence poses compose from rest.
@@ -7,7 +26,7 @@
 - **Demo battle** authored in `scratchpad/demo-seqs.cjs` / `demo-apply.cjs`: sword skills for Fleagus, Railgun Rifle and gun skills for Carol, Graviton Pistol for Jolt, Frag Grenade and Med-Kit, Tank cannon aim/fire and ram, Reactor Beam; eight Star Shift Freelancers effects with sounds; start messages off (`startMessages:false`, System › Options).
 - **Rig hands.** Humanoid template: palm plus base and tip for five fingers per hand; `attachRigHands` gives every hand joint its palm, knuckle and fingertip points. Rig mode holds the rest pose; the DB 3D viewport zooms toward the pointer, pans, snaps dragged markers into the flesh through a triangle BVH (`MeshSurfacePicker`), draws outside markers faint, keeps labels sized and unstacked. Carol's rig has placed hand markers.
 - **Editor.** Add Step picker (grouped, searchable, strip headers); 3D model folders as strip headers; map toolbar toggles one size.
-- Docs: [release notes](posts/release-notes-0.98.6.md), [itch devlog](posts/itch-devlog-0.98.6.md), [rigging guide](RIGGING-MODELS.md). Verification: **3,181 Node tests pass**; live NW.js checks of the Demo battle, held items, rig zoom/snap/labels. Not pushed.
+- Docs: [release notes](posts/release-notes-0.98.6.md), [itch devlog](posts/itch-devlog-0.98.6.md), [rigging guide](RIGGING-MODELS.md). Verification: **3,181 Node tests pass**; live NW.js checks of the Demo battle, held items, rig zoom/snap/labels.
 
 ## 2026-09-13 — Victor Battle Motions import; Star Shift Rebellion on native sequences
 
@@ -53,7 +72,7 @@
 
 The [complete session summary](SESSION-2026-09-11.md) covers Chinese corrections, PR #56, rotating splash art, touch/keyboard work, asset sizes and framing, database/theme refinements, model lighting, and expanded action sequences with equipped items and throws. It also identifies earlier pending work included in this snapshot.
 
-Current editor **0.98.6**, runtime **20260911.6**; latest full suite **3,082 passed**, zero failures/skips. Native authoring and held-item/throw checks pass in 2D/3D; all 13 local template runtimes match. Earlier entries retain intermediate versions/test counts and pre-commit status as history. Keyboard audit gaps remain explicit. This is a local development commit, not a release or push.
+Current editor **0.98.7**, runtime **20260920.24**; latest full suite **3,366 passed**, zero failures. Native authoring and held-item/throw checks pass in 2D/3D; all 13 local template runtimes match. Earlier entries retain intermediate versions/test counts and pre-commit status as history. Keyboard audit gaps remain explicit. This is a local development commit, not a release or push.
 
 ## 2026-09-11 — Equipped items and throws
 

@@ -45,7 +45,13 @@ function battlerFor({ states = [], refuse = null } = {}) {
     battler._states = states.slice();
     battler.calls = { addNewState: [], refresh: 0, resetStateCounts: [] };
     battler.pushed = [];
-    battler._result = { pushAddedState: id => battler.pushed.push(id) };
+    battler.blocked = [];
+    battler._result = {
+        pushAddedState: id => battler.pushed.push(id),
+        isStateAdded: id => battler.pushed.includes(id),
+        pushRenewedState: () => {},
+        pushBlockedState: id => battler.blocked.push(id),
+    };
     battler.isStateAddable = () => true;
     battler.isStateAffected = id => battler._states.includes(id);
     battler.addNewState = id => {
@@ -90,6 +96,7 @@ test('a state addNewState refuses is neither recorded on the result nor reported
     assert.deepEqual(battler.pushed, [], 'so the result does not list a death that did not happen');
     assert.deepEqual(emitted, [], 'and stateAdded does not report one');
     assert.deepEqual(battler.calls.resetStateCounts, [], 'no turn count is kept for a state that is not there');
+    assert.deepEqual(battler.blocked, [DEATH], 'the result records it as blocked instead');
 });
 
 test('refresh still runs after a refusal, so whatever the plugin changed is settled', () => {

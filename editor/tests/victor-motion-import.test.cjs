@@ -80,8 +80,10 @@ test('actor and enemy graphics follow Victor\'s charset mode and sprite motion s
  const still=B.graphicFrame({type:'character',name:'$Hero',frames:3,motions:a.motions},144,192,'idle',500,180);assert.equal(still.x,48,'a still sheet stands on its middle column');assert.equal(still.y,144,'facing up picks the top row');
 });
 
-test('the whole Star Shift Rebellion database imports into valid, resolvable sequences',()=>{
- const dir=path.join(__dirname,'../../template/Star Shift Rebellion/data'),read=name=>JSON.parse(fs.readFileSync(path.join(dir,name+'.json'),'utf8'));
+// Star Shift Rebellion is not in the repository (only the Demo is tracked), so this runs where the project exists and skips on CI.
+const ssrData=path.join(__dirname,'../../template/Star Shift Rebellion/data');
+test('the whole Star Shift Rebellion database imports into valid, resolvable sequences',{skip:fs.existsSync(path.join(ssrData,'Actors.json'))?false:'Star Shift Rebellion is not checked out'},()=>{
+ const dir=ssrData,read=name=>JSON.parse(fs.readFileSync(path.join(dir,name+'.json'),'utf8'));
  const data={actors:read('Actors'),classes:read('Classes'),enemies:read('Enemies'),weapons:read('Weapons'),armors:read('Armors'),skills:read('Skills'),items:read('Items'),animations:read('Animations'),system:read('System')};
  const {sequences,settings,report}=V.importDatabase(data,{vertical:true,animations:data.animations});
  assert.ok(report.records>900,'records '+report.records);assert.ok(report.sequences>200&&report.sequences<400,'shared sequences '+report.sequences);

@@ -18,6 +18,7 @@ class DatabaseManager {
             commonEvents: 9999,
             userInterfaces: 9999,
             quests: 9999,
+            structures: 9999,
             musicSequences: 9999,
             actionSequences: 9999,
             elements: 512,
@@ -95,6 +96,10 @@ class DatabaseManager {
             // absent in projects that never authored an interface.
             userInterfaces: [],
             quests: [],
+            // Reactor's building plans: one record per file under 3d/Structures,
+            // read on load and written back on save, so the list, search,
+            // clipboard and undo are the database's own.
+            structures: [null],
             actionSequences: [null],
             battlePresentation: null,
             system: null,
@@ -151,6 +156,7 @@ class DatabaseManager {
                 loaded[key] = await this.loadJSON(dataPath, filename);
             }
             loaded.battlePresentation = await this.loadJSON(dataPath, 'BattlePresentation.json');
+            loaded.structures = await this.loadStructures(projectPath);
             loaded.tileset3d = await this.loadTileset3D(projectPath);
             loaded.editorNames = await this.loadEditorNames(projectPath);
             // An absent file reads as []; records start at id 1 behind the
@@ -287,6 +293,96 @@ class DatabaseManager {
         }
     }
 
+    /** The folder a project's building plans live in. */
+    structuresPath(projectPath) {
+        return this.path.join(projectPath, '3d', 'Structures');
+    }
+
+    /**
+     * One record per plan file: { id, name, file, plan }. A file that is not a
+     * plan is left alone on disk and out of the list. The files seen are kept
+     * so a save can remove the ones whose records were deleted.
+     */
+    async loadStructures(projectPath) {
+        const records = [null];
+        this._structureFiles = new Set();
+        if (!this.fs || !this.path) return records;
+        const directory = this.structuresPath(projectPath);
+        if (!this.fs.existsSync(directory)) return records;
+        for (const file of this.fs.readdirSync(directory).filter(name => /\.json$/i.test(name)).sort()) {
+            try {
+                const plan = JSON.parse(this.fs.readFileSync(this.path.join(directory, file), 'utf8'));
+                if (!plan || !Array.isArray(plan.size)) continue;
+                const normalize = typeof DatabaseStructureEditor !== 'undefined' ? (raw => DatabaseStructureEditor.normalizePlan(raw)) : (raw => raw);
+                records.push({ id: records.length, name: String(plan.name || file.replace(/\.json$/i, '')), file, plan: normalize(plan) });
+                this._structureFiles.add(file);
+            } catch (error) {
+                console.warn(`${file} is not a structure plan.`, error);
+            }
+        }
+        return records;
+    }
+
+    getStructures() {
+        return (this.data.structures || []).filter(entry => entry !== null);
+    }
+
+    hasStructures() {
+        return (this.data.structures || []).some(entry => entry && entry.name);
+    }
+
+    /** A file name from a plan's name, unique among the names taken. */
+    static structureFileName(name, taken) {
+        const base = String(name || 'Plan').replace(/[\\/:*?"<>|]+/g, '').trim().replace(/\s+/g, '-') || 'Plan';
+        let file = base + '.json', n = 2;
+        while (taken.has(file)) file = `${base}-${n++}.json`;
+        return file;
+    }
+
+    /**
+     * Every named record to its file, written the way a person writes one;
+     * a record with no name (cleared) or none at all takes its file with it.
+     * A pasted record arrives with the file it was copied from, so a file
+     * claimed twice is renamed after the record's name.
+     */
+    async saveStructures(projectPath) {
+        if (!this.fs || !this.path) return true;
+        const records = this.data.structures || [];
+        const directory = this.structuresPath(projectPath);
+        const seen = this._structureFiles || new Set();
+        if (!records.some(entry => entry && entry.name) && !seen.size) {
+            this.captureSavedState('structures');
+            return true;
+        }
+        const trim = typeof DatabaseStructureEditor !== 'undefined' ? (plan => DatabaseStructureEditor.trimPlan(plan)) : (plan => plan);
+        const normalize = typeof DatabaseStructureEditor !== 'undefined' ? (raw => DatabaseStructureEditor.normalizePlan(raw)) : (raw => raw);
+        const taken = new Set();
+        const keep = new Set();
+        try {
+            this.fs.mkdirSync(directory, { recursive: true });
+            for (const entry of records) {
+                if (!entry || !entry.name || !entry.plan) continue;
+                if (!entry.file || taken.has(entry.file)) entry.file = DatabaseManager.structureFileName(entry.name, taken);
+                taken.add(entry.file);
+                entry.plan.name = entry.name;
+                const plan = normalize(entry.plan);
+                this._writeFileAtomic(this.fs, this.path.join(directory, entry.file), JSON.stringify(trim(plan), null, 2) + '\n');
+                keep.add(entry.file);
+            }
+            for (const file of seen) {
+                if (keep.has(file)) continue;
+                const stale = this.path.join(directory, file);
+                if (this.fs.existsSync(stale)) this.fs.unlinkSync(stale);
+            }
+            this._structureFiles = keep;
+            this.captureSavedState('structures');
+            return true;
+        } catch (error) {
+            console.error('The structure plans could not be saved:', error);
+            return false;
+        }
+    }
+
     async saveTileset3D(projectPath) {
         const classes = this.tileset3DClasses();
         if (!classes || !this.fs || !this.path) return true;
@@ -391,6 +487,9 @@ class DatabaseManager {
         if (!dataKey || dataKey === 'tileset3d') {
             this.savedState.tileset3d = this.serialize(this.data.tileset3d || null);
         }
+        if (!dataKey || dataKey === 'structures') {
+            this.savedState.structures = this.serialize(this.data.structures || null);
+        }
         if (!dataKey || dataKey === 'editorNames') {
             this.savedState.editorNames = this.serialize(this.data.editorNames || null);
         }
@@ -409,6 +508,10 @@ class DatabaseManager {
         if (this.savedState.editorNames !== undefined
             && this.serialize(this.data.editorNames || null) !== this.savedState.editorNames) {
             dirty.push('editorNames');
+        }
+        if (this.savedState.structures !== undefined
+            && this.serialize(this.data.structures || null) !== this.savedState.structures) {
+            dirty.push('structures');
         }
         if (this.savedState.battlePresentation !== undefined && this.serialize(this.data.battlePresentation || null) !== this.savedState.battlePresentation) dirty.push('battlePresentation');
         return dirty;
@@ -857,6 +960,7 @@ class DatabaseManager {
         if (!await this.saveTileset3D(projectPath)) {
             failed.push(this.tileset3DClasses()?.FILENAME || 'Tilesets.r3d.json');
         }
+        if (!await this.saveStructures(projectPath)) failed.push('3d/Structures');
         if (failed.length === 0 && !await this.saveEditorNames(projectPath)) {
             failed.push(this.editorNamesModule()?.FILENAME || 'Database.names.json');
         }

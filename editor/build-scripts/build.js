@@ -126,11 +126,11 @@ function copyDirFiltered(src, dest, relBase) {
 
 function validateProjectRuntime(root) {
     const required = [
-        'reactor_main.js', 'reactor_json.js', 'reactor_core.js', 'reactor_3d.js', 'reactor_managers.js',
+        'reactor_main.js', 'reactor_json.js', 'reactor_core.js', 'reactor_3d.js', 'reactor_3d_lighting.js', 'reactor_3d_models.js', 'reactor_3d_effects.js', 'reactor_3d_world.js', 'reactor_3d_speech.js', 'reactor_managers.js',
         'reactor_objects.js', 'reactor_scenes.js', 'reactor_sprites.js', 'reactor_picture_extensions.js',
         'reactor_media_surfaces.js', 'reactor_quests.js',
             'reactor_battle_data.js', 'reactor_battle_room.js', 'reactor_battle_presentation.js', 'reactor_battle_events.js',
-        'reactor_windows.js', 'reactor_speech_3d.js', 'reactor_ui.js', 'reactor_mv_compat.js', 'reactor_plugins.js',
+        'reactor_windows.js', 'reactor_ui.js', 'reactor_mv_compat.js', 'reactor_plugins.js',
         path.join('libs', 'pixi.js'), path.join('libs', 'pixi_compat.js'),
         path.join('libs', 'pako.min.js'), path.join('libs', 'lz-string.js'), path.join('libs', 'localforage.min.js'),
         path.join('libs', 'effekseer.min.js'), path.join('libs', 'effekseer.wasm'),

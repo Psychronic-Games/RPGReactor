@@ -208,3 +208,42 @@ test('player and vehicle start positions on this map move with it', () => {
 
     assert.equal(controllerInstance.collectSystemStartReferences(null, 7).length, 0);
 });
+
+test('a resize refits and writes the 3D sidecar before the map reloads from disk', () => {
+    const elevationSource = fs.readFileSync(path.join(editorRoot, 'src', 'utils', 'MapElevation.js'), 'utf8');
+    const context = {}; context.window = context;
+    vm.runInNewContext(elevationSource, context);
+    const elevation = context.RRMapElevation;
+    const pc = controller();
+    const map = { id: 7, width: 4, height: 3, data: [], events: [], reactor3d: { version: 1, mode: '3d', width: 4, height: 3,
+        elevation: [0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0], terrain: new Array(20).fill(0), terrainWidth: 4, room: { height: 4, sky: 'Sky-01', skyScrollX: 0.5 } } };
+    map.reactor3d.terrain[1 * 5 + 1] = 2;
+    pc.currentEditingMap = map;
+    pc.isCreatingNewMap = false;
+    pc.mapElevation = () => elevation;
+    pc.readMap3DCameraForm = () => null;
+    let written = 0;
+    pc.tilemapManager = { currentMap: map, saveMapSidecar: () => { written++; return true; } };
+    // Map Properties grew the map to 6x5 and left the room alone.
+    const changed = pc.saveMap3DSettings({ id: 7, width: 6, height: 5 }, map.reactor3d.room, true);
+    assert.equal(changed, true, 'a size change is a sidecar change');
+    assert.equal(written, 1, 'written before the reload can read the old file back');
+    assert.equal(map.reactor3d.width, 6); assert.equal(map.reactor3d.height, 5);
+    assert.equal(map.reactor3d.elevation.length, 30);
+    assert.equal(map.reactor3d.elevation[1 * 6 + 1], 5, 'a height stays on its cell');
+    assert.equal(map.reactor3d.terrain.length, 7 * 6);
+    assert.equal(map.reactor3d.terrain[1 * 7 + 1], 2, 'a hill stays on its corner');
+    assert.equal(map.reactor3d.terrainWidth, 6);
+    assert.equal(map.reactor3d.room.skyScrollX, 0.5, 'the room is untouched');
+    // Same size again: nothing to write.
+    assert.equal(pc.saveMap3DSettings({ id: 7, width: 6, height: 5 }, map.reactor3d.room, true), false);
+    assert.equal(written, 1);
+    // A map with no sidecar gains none from a resize.
+    const flat = { id: 8, width: 4, height: 3, data: [], events: [] };
+    pc.currentEditingMap = flat; pc.tilemapManager.currentMap = flat;
+    assert.equal(pc.saveMap3DSettings({ id: 8, width: 6, height: 5 }, { height: 4 }, false), false);
+    assert.equal(flat.reactor3d, undefined);
+    // A sidecar read at the wrong size is refitted as the map loads.
+    const tilemap = fs.readFileSync(path.join(editorRoot, 'src', 'TilemapManager.js'), 'utf8');
+    assert.match(tilemap, /\(Number\(sidecar\.width\) !== mapData\.width \|\| Number\(sidecar\.height\) !== mapData\.height\)\) \{\s*elevation\.ensure\(mapData\);/);
+});

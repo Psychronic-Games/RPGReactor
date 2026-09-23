@@ -7,6 +7,7 @@
  * was tried before and abandoned because it vanishes edge-on — it vanishes
  * because it has no thickness.
  */
+const { source3D } = require('./helpers/runtime-3d-source.cjs');
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const test = require('node:test');
@@ -338,7 +339,7 @@ test('everything standing shares one idea of where the ground is', () => {
     // What matters is that they all agree, or a character walking up to a
     // column would not meet it.
     const fs = require('node:fs');
-    const three = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+    const three = source3D();
     // The footing of the whole connected region, not this object's own
     // southern row: pieces of one mural whose bottoms are ragged used to stand
     // at different depths, and nothing could line up with anything.

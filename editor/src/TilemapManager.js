@@ -3334,6 +3334,13 @@ class TilemapManager {
             if (sidecar && typeof sidecar === 'object' && !Array.isArray(sidecar)) {
                 mapData.reactor3d = sidecar;
                 this.unreadableMapSidecars.delete(filePath);
+                // A map resized elsewhere (RPG Maker, a hand edit) keeps a
+                // sidecar sized for the old map; its heights and terrain are
+                // refitted here, once, so every reader indexes the map it has.
+                if (elevation && Number.isFinite(Number(sidecar.width)) && Number.isFinite(Number(sidecar.height))
+                    && (Number(sidecar.width) !== mapData.width || Number(sidecar.height) !== mapData.height)) {
+                    elevation.ensure(mapData);
+                }
                 return true;
             }
             throw new Error(`${file} must contain a JSON object`);

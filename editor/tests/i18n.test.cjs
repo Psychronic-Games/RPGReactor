@@ -309,15 +309,15 @@ const ENGLISH_FALLBACK_KEYS = [
 ];
 
 const LOANWORDS_BY_LOCALE = {
-    es: ['lit.id', 'lightcmd.color', 'lit.color', 'cam3d.auto', 'cam3d.fov', 'event.actor', 'event.dir', 'event.normal', 'event.tile', 'event.variable', 'forge.tab.procedural', 'mapProps.threeD', 'mapProps.tileset', 'mapProps.vol', 'menu.tilesets', 'options.editor', 'r3dfx.audio', 'theme.cascadia.name', 'toolbar.tileset', 'toolbar.title.plugins', 'workspace.zoom'],
-    pt: ['lit.id', 'lit.preset.laser', 'audio.volume', 'cam3d.auto', 'cam3d.fov', 'event.item', 'event.normal', 'event.tile', 'forge.tab.procedural', 'mapProps.sizeRange', 'mapProps.threeD', 'mapProps.tileset', 'menu.classes', 'menu.tilesets', 'options.editor', 'toolbar.tileset', 'workspace.zoom'],
-    de: ['lit.compoundName', 'lit.id', 'lit.preset.laser', 'lit.position', 'lit.animation', 'menu.quests', 'audio.me', 'audio.pause', 'cam3d.auto', 'db.system1', 'db.system2', 'efk.frame', 'efk.framesLabel', 'efk.pause', 'event.index', 'event.normal', 'event.parallel', 'event.position', 'event.variable', 'forge.frame', 'mapProps.pause', 'mapProps.threeD', 'mapProps.tileset', 'menu.system', 'menu.tilesets', 'options.editor', 'options.palette', 'props.animation', 'r3dcard.proportional', 'r3dfx.animation', 'r3dfx.effectName', 'r3dfx.sound', 'r3dfx.typeAnimation', 'r3dfx.video', 'toolbar.tileset', 'workspace.zoom'],
-    fr: ['lit.preset.fluorescent', 'lit.id', 'lit.preset.laser', 'lit.position', 'lit.rotation', 'lit.animation', 'lightcmd.yaw', 'lit.type', 'audio.pause', 'audio.volume', 'cam3d.auto', 'workspace.passage', 'cam3d.mode', 'efk.orientation', 'efk.pause', 'event.conditions', 'event.image', 'event.normal', 'event.options', 'event.page', 'eventCtx.previewPage', 'mapProps.note', 'mapProps.pause', 'mapProps.threeD', 'menu.animations', 'menu.classes', 'menu.forge', 'menu.tilesets', 'menu.types', 'options.mode', 'options.palette', 'options.title', 'props.animation', 'r3dfx.animation', 'r3dfx.audio', 'r3dfx.type', 'r3dfx.typeAnimation'],
-    it: ['lit.id', 'lit.preset.laser', 'audio.volume', 'cam3d.auto', 'cam3d.fov', 'event.dir', 'event.pattern', 'event.tile', 'mapProps.loopX', 'mapProps.loopY', 'mapProps.threeD', 'mapProps.tileset', 'mapProps.vol', 'menu.database', 'menu.file', 'options.editor', 'r3dfx.audio', 'r3dfx.video', 'theme.cascadia.name', 'toolbar.tileset', 'toolbar.title.database', 'workspace.zoom'],
+    es: ['pieces.material', 'lit.id', 'lightcmd.color', 'lit.color', 'cam3d.auto', 'cam3d.fov', 'event.actor', 'event.dir', 'event.normal', 'event.tile', 'event.variable', 'forge.tab.procedural', 'mapProps.threeD', 'mapProps.tileset', 'mapProps.vol', 'menu.tilesets', 'options.editor', 'r3dfx.audio', 'theme.cascadia.name', 'toolbar.tileset', 'toolbar.title.plugins', 'workspace.zoom'],
+    pt: ['pieces.material', 'pieces.kind.cone', 'lit.id', 'lit.preset.laser', 'audio.volume', 'cam3d.auto', 'cam3d.fov', 'event.item', 'event.normal', 'event.tile', 'forge.tab.procedural', 'mapProps.sizeRange', 'mapProps.threeD', 'mapProps.tileset', 'menu.classes', 'menu.tilesets', 'options.editor', 'toolbar.tileset', 'workspace.zoom'],
+    de: ['pieces.kind.block', 'pieces.kind.tunnel', 'pieces.kind.ring', 'build.hammer', 'pieces.material', 'terrain.radius', 'lit.compoundName', 'lit.id', 'lit.preset.laser', 'lit.position', 'lit.animation', 'menu.quests', 'audio.me', 'audio.pause', 'cam3d.auto', 'db.system1', 'db.system2', 'efk.frame', 'efk.framesLabel', 'efk.pause', 'event.index', 'event.normal', 'event.parallel', 'event.position', 'event.variable', 'forge.frame', 'mapProps.pause', 'mapProps.threeD', 'mapProps.tileset', 'menu.system', 'menu.tilesets', 'options.editor', 'options.palette', 'props.animation', 'r3dcard.proportional', 'r3dfx.animation', 'r3dfx.effectName', 'r3dfx.sound', 'r3dfx.typeAnimation', 'r3dfx.video', 'workspace.video', 'toolbar.tileset', 'workspace.zoom'],
+    fr: ['pieces.kind.tunnel', 'pieces.kind.tube', 'pieces.kind.capsule', 'build.direction', 'lit.types', 'lit.preset.fluorescent', 'lit.id', 'lit.preset.laser', 'lit.position', 'lit.rotation', 'lit.animation', 'lightcmd.yaw', 'lit.type', 'audio.pause', 'audio.volume', 'cam3d.auto', 'workspace.passage', 'cam3d.mode', 'efk.orientation', 'efk.pause', 'event.conditions', 'event.image', 'event.normal', 'event.options', 'event.page', 'eventCtx.previewPage', 'mapProps.note', 'mapProps.pause', 'mapProps.threeD', 'menu.animations', 'menu.classes', 'menu.forge', 'menu.tilesets', 'menu.types', 'options.mode', 'options.palette', 'options.title', 'props.animation', 'r3dfx.animation', 'r3dfx.audio', 'r3dfx.type', 'r3dfx.typeAnimation'],
+    it: ['lit.id', 'lit.preset.laser', 'audio.volume', 'cam3d.auto', 'cam3d.fov', 'event.dir', 'event.pattern', 'event.tile', 'mapProps.loopX', 'mapProps.loopY', 'mapProps.threeD', 'mapProps.tileset', 'mapProps.vol', 'menu.database', 'menu.file', 'options.editor', 'r3dfx.audio', 'r3dfx.video', 'workspace.video', 'theme.cascadia.name', 'toolbar.tileset', 'toolbar.title.database', 'workspace.zoom'],
     pl: ['lit.id', 'lit.preset.laser', 'cam3d.auto', 'db.system1', 'db.system2', 'mapProps.threeD', 'mapProps.tileset', 'menu.system', 'pma.model', 'r3dcard.groupModel', 'theme.cascadia.name', 'theme.ocean.name', 'toolbar.tileset'],
-    id: ['lit.id', 'lit.preset.laser', 'audio.pan', 'audio.pitch', 'audio.volume', 'cam3d.event', 'cam3d.focus.event', 'cam3d.fov', 'cam3d.mode', 'cam3d.pitch', 'cam3d.yaw', 'efk.frame', 'event.item', 'event.normal', 'event.tile', 'forge.frame', 'mapProps.loopX', 'mapProps.loopY', 'mapProps.pan', 'mapProps.pitch', 'mapProps.threeD', 'mapProps.tileset', 'mapProps.vol', 'menu.database', 'menu.file', 'options.editor', 'options.mode', 'pma.model', 'r3dcard.groupModel', 'r3dfx.audio', 'r3dfx.offset', 'r3dfx.video', 'theme.cascadia.name', 'toolbar.tileset', 'toolbar.title.database', 'workspace.zoom'],
-    vi: ['lit.id', 'lit.preset.laser', 'audio.pan', 'cam3d.mode.isometric', 'mapProps.pan', 'mapProps.threeD', 'mapProps.tileset', 'r3dfx.video', 'theme.cascadia.name', 'toolbar.tileset'],
-    tr: ['lit.spot', 'event.normal', 'pma.model', 'r3dcard.groupModel', 'r3dfx.video', 'theme.cascadia.name'],
+    id: ['pieces.material', 'terrain.radius', 'lit.id', 'lit.preset.laser', 'audio.pan', 'audio.pitch', 'audio.volume', 'cam3d.event', 'cam3d.focus.event', 'cam3d.fov', 'cam3d.mode', 'cam3d.pitch', 'cam3d.yaw', 'efk.frame', 'event.item', 'event.normal', 'event.tile', 'forge.frame', 'mapProps.loopX', 'mapProps.loopY', 'mapProps.pan', 'mapProps.pitch', 'mapProps.threeD', 'mapProps.tileset', 'mapProps.vol', 'menu.database', 'menu.file', 'options.editor', 'options.mode', 'pma.model', 'r3dcard.groupModel', 'r3dfx.audio', 'r3dfx.offset', 'r3dfx.video', 'workspace.video', 'theme.cascadia.name', 'toolbar.tileset', 'toolbar.title.database', 'workspace.zoom'],
+    vi: ['lit.id', 'lit.preset.laser', 'audio.pan', 'cam3d.mode.isometric', 'mapProps.pan', 'mapProps.threeD', 'mapProps.tileset', 'r3dfx.video', 'workspace.video', 'theme.cascadia.name', 'toolbar.tileset'],
+    tr: ['lit.spot', 'event.normal', 'pma.model', 'r3dcard.groupModel', 'r3dfx.video', 'workspace.video', 'theme.cascadia.name'],
     ja: ['lit.id', 'mapProps.threeD'],
     'zh-Hant': ['lit.id', 'mapProps.threeD'],
     'zh-Hans': ['lit.id', 'mapProps.threeD'],
@@ -531,7 +531,7 @@ test('every database navigation category has a localized keyed title', () => {
     assert.ok(start>=0);
     const catalog=source.slice(start,source.indexOf('];',start));
     const types=[...catalog.matchAll(/type: '([^']+)'/g)].map(m=>m[1]);
-    assert.equal(types.length,21);
+    assert.equal(types.length,22);
     for(const type of types) {
         const key=dbTypes[type];assert.ok(key,`${type} needs a database title key`);
         for(const {id} of RR_LANGUAGES)assert.ok(RR_I18N_STRINGS[id][key],`${id}: ${type}`);
@@ -575,4 +575,39 @@ test('shared labels retain their original source and parameters through live lan
     for(const locale of ['ja','de','ar','en']){manager.setLanguage(locale,{persist:false,force:true});assert.equal(label.textContent,manager.formatText('Enemy: {name}',{name:'Attack $& {name}'}));}
     assert.equal(label.textContent,'Enemy: Attack $& {name}');
     attrs.set('data-rr-i18n-skip','');label.textContent='Attack';manager.setLanguage('ja',{persist:false});assert.equal(label.textContent,'Attack');
+});
+
+// The Collapse Sound row is drawn directly beneath Collapse Effect, so each
+// locale has to name the same event twice. Translated on its own, the Japanese
+// row said "折れる音" (a snapping sound) under an effect called 消滅エフェクト,
+// and four other locales chose a different word for the same thing.
+test('the collapse sound row names whatever its own Collapse Effect row names', () => {
+    const { catalogs, RR_LANGUAGES } = loadI18nForTest();
+    const text = catalogs.text;
+    // A shared run of characters is all a comparison across scripts can ask for:
+    // two per label where the script writes without spaces, four elsewhere.
+    const shortest = { ja: 2, 'zh-Hans': 2, 'zh-Hant': 2, ko: 2 };
+    const longestCommon = (a, b) => {
+        let best = 0;
+        for (let i = 0; i < a.length; i++) {
+            for (let j = i + best + 1; j <= a.length; j++) {
+                if (b.includes(a.slice(i, j))) best = j - i; else break;
+            }
+        }
+        return best;
+    };
+    for (const locale of Array.from(RR_LANGUAGES, lang => lang.id).filter(id => id !== 'en')) {
+        const table = text[locale] || {};
+        const effect = table['Collapse Effect'];
+        const sound = table['Collapse Sound'];
+        const tip = table['The sound this enemy makes as it collapses.'];
+        assert.ok(effect && effect !== 'Collapse Effect', `${locale} translates the effect row`);
+        assert.ok(sound && sound !== 'Collapse Sound', `${locale} translates the sound row`);
+        assert.ok(tip && tip !== 'The sound this enemy makes as it collapses.', `${locale} translates the hint`);
+        const shared = longestCommon(effect.toLowerCase(), sound.toLowerCase());
+        assert.ok(shared >= (shortest[locale] || 4),
+            `${locale}: "${sound}" shares only ${shared} characters with "${effect}"`);
+    }
+    assert.equal(text.ja['Collapse Sound'], '消滅音', 'and reads as the effect above it, not as breaking glass');
+    assert.equal(text['zh-Hans']['Collapse Sound'], '消失音效');
 });

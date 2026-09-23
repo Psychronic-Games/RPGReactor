@@ -212,6 +212,11 @@
             flex-shrink: 0;
             align-items: center;
             overflow: hidden;
+            /* The icon scaler keeps the bar on one row down to 16px icons; below
+               that, or whenever it has not run yet, the last groups wrap onto a
+               second row instead of being clipped off the right edge. */
+            flex-wrap: wrap;
+            row-gap: 6px;
         }
 
         .tool-button {
@@ -708,6 +713,40 @@
             opacity: 1;
         }
 
+        /* The map and, beside it, a dock for the map's own panels (Lighting, Media Surfaces): a column the map makes room for, not a sheet over it. */
+        #map-stage {
+            flex: 1;
+            display: flex;
+            min-width: 0;
+            min-height: 0;
+        }
+        #map-side-dock {
+            flex: 0 0 320px;
+            width: 320px;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+            background-color: var(--color-bg-panel);
+            border-left: 1px solid var(--color-border);
+            overflow: hidden;
+        }
+        #map-side-dock[hidden] { display: none; }
+        #map-side-dock > .lighting-panel,
+        #map-side-dock > .media-surfaces-panel {
+            flex: 1;
+            min-height: 0;
+            width: auto;
+            max-height: none;
+            border: 0;
+            border-radius: 0;
+            box-shadow: none;
+            background-color: var(--color-bg-panel);
+            color: var(--color-text);
+        }
+        #map-side-dock > .media-surfaces-panel .rr-modal-header {
+            border-radius: 0;
+            background-color: var(--color-bg-deep);
+        }
         #canvas-container {
             flex: 1;
             background-color: var(--color-bg-panel);
@@ -767,6 +806,10 @@
             position: absolute;
             bottom: 0;
             right: 0;
+            /* With the bars, above the 3D view's canvas (z-index 5) and
+               input surface (6): without it the sky showed through the
+               square where the two bars meet. */
+            z-index: 1000;
             width: 14px;
             height: 14px;
             background-color: var(--color-bg-surface);
@@ -2252,6 +2295,19 @@
             border-color: var(--color-accent-border-strong);
         }
 
+        /* Class curve dialogs: the sliders take the theme's accent, and the
+           number fields beside them are the same themed field as the rest of
+           the database rather than the browser's default control. */
+        .param-curve-modal input[type="range"],
+        .param-curves-modal input[type="range"] {
+            accent-color: var(--color-accent-bright);
+        }
+        .param-curve-modal input[type="number"].database-field-value,
+        .param-curves-modal input[type="number"].database-field-value {
+            text-align: center;
+            padding: 5px 6px;
+        }
+
         .database-field-value:focus {
             outline: none;
             border-color: var(--color-accent-bright);
@@ -3608,6 +3664,129 @@
         .map-3d-hint.is-fading {
             opacity: 0;
         }
+
+        /* Build mode: the bar over the 3D view. */
+        .rr-build-hotbar {
+            position: absolute;
+            left: 50%;
+            bottom: 12px;
+            transform: translateX(-50%);
+            z-index: 7;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+            max-width: calc(100% - 24px);
+            pointer-events: none;
+        }
+        .rr-build-row {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 6px 8px;
+            border-radius: 12px;
+            background-color: rgba(10, 12, 16, 0.78);
+            border: 1px solid var(--color-border);
+            pointer-events: auto;
+            max-width: 100%;
+            overflow-x: auto;
+        }
+        .rr-build-context:empty { display: none; }
+        .rr-build-panel {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            bottom: 96px;
+            width: 232px;
+            z-index: 7;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            padding: 10px 12px;
+            border-radius: 12px;
+            background-color: rgba(10, 12, 16, 0.82);
+            border: 1px solid var(--color-border);
+            overflow-y: auto;
+            font-size: 11px;
+            color: var(--color-text);
+        }
+        .rr-build-panel-head { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--color-text-strong); padding-bottom: 6px; border-bottom: 1px solid var(--color-border); }
+        .rr-build-section { display: flex; flex-direction: column; gap: 5px; }
+        .rr-build-section-title { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--color-text-muted); }
+        .rr-build-field { display: grid; grid-template-columns: 1fr 74px; align-items: center; gap: 6px; color: var(--color-text-muted); }
+        .rr-build-field input { width: 100%; box-sizing: border-box; }
+        .rr-build-swatches { display: flex; flex-wrap: wrap; gap: 4px; }
+        .rr-build-facing { display: flex; align-items: center; gap: 4px; }
+        .rr-build-facing .rr-build-chip { width: 34px; justify-content: center; font-size: 14px; }
+        .rr-build-modes { display: flex; gap: 4px; margin-bottom: 4px; }
+        .rr-build-wrap { white-space: normal; line-height: 1.4; padding: 0; }
+        .rr-build-remove { margin-top: 4px; }
+        .rr-build-slot {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 2px;
+            width: 62px;
+            height: 58px;
+            padding: 4px 2px 3px;
+            border-radius: 8px;
+            border: 1px solid transparent;
+            background: transparent;
+            color: var(--color-text);
+            cursor: pointer;
+            font-size: 10px;
+            line-height: 1;
+        }
+        .rr-build-slot:hover { background: rgba(255, 255, 255, 0.06); }
+        .rr-build-slot[aria-pressed="true"] { border-color: var(--color-accent); background: color-mix(in srgb, var(--color-accent) 18%, transparent); color: var(--color-text-strong); }
+        .rr-build-slot-label { white-space: nowrap; max-width: 58px; overflow: hidden; text-overflow: ellipsis; }
+        .rr-build-slot-key { position: absolute; top: 2px; right: 5px; font-size: 9px; color: var(--color-text-muted); }
+        .rr-build-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 4px 8px;
+            border-radius: 8px;
+            border: 1px solid transparent;
+            background: transparent;
+            color: var(--color-text);
+            cursor: pointer;
+            font-size: 11px;
+            white-space: nowrap;
+        }
+        .rr-build-chip svg { width: 18px; height: 18px; }
+        .rr-build-chip:hover { background: rgba(255, 255, 255, 0.06); }
+        .rr-build-chip[aria-pressed="true"] { border-color: var(--color-accent); background: color-mix(in srgb, var(--color-accent) 18%, transparent); }
+        .rr-build-swatch {
+            width: 28px;
+            height: 28px;
+            padding: 0;
+            border-radius: 6px;
+            border: 2px solid transparent;
+            background-size: cover;
+            background-color: #333;
+            cursor: pointer;
+            flex: 0 0 auto;
+        }
+        .rr-build-swatch[aria-pressed="true"] { border-color: var(--color-accent); }
+        .rr-build-swatch-plain { display: block; width: 100%; height: 100%; border-radius: 4px; border: 1px dashed var(--color-border-input); box-sizing: border-box; }
+        .rr-build-note { font-size: 11px; color: var(--color-text-muted); padding: 0 6px; white-space: nowrap; }
+        .rr-build-hint { font-size: 11px; color: var(--color-text-muted); white-space: nowrap; pointer-events: none; text-shadow: 0 1px 2px rgba(0,0,0,.8); }
+        .rr-build-hint b { color: var(--color-text-strong); font-weight: 600; }
+        .rr-build-flash {
+            font-size: 12px;
+            color: var(--color-text-strong);
+            padding: 4px 12px;
+            border-radius: 10px;
+            background-color: rgba(10, 12, 16, 0.85);
+            border: 1px solid var(--color-accent);
+            opacity: 0;
+            transition: opacity .25s ease;
+            pointer-events: none;
+        }
+        .rr-build-flash.is-shown { opacity: 1; }
 
         /* Database > User Interfaces: layers | primary canvas | inspector. */
         .rr-ui-editor [hidden] {
@@ -4975,6 +5154,11 @@ details.mp-section:not([open]) > .mp-section-body { display:none; }
 .rr-sequence-editor { height:100%;min-height:0;box-sizing:border-box;display:flex;flex-direction:column;gap:10px;padding:12px;overflow:hidden; }
 .rr-sequence-editor > * { flex-shrink:0; }
 .rr-sequence-editor .rr-battle-toolbar { margin:0; }
+.rr-terrain-mode[aria-checked="true"] { background: var(--color-accent); color: var(--color-bg-deep); border-color: var(--color-accent); font-weight: 700; }
+.rr-terrain-panel input[type="range"] { accent-color: var(--color-accent-bright); width: 100%; }
+.rr-pieces-kind[aria-checked="true"], .rr-pieces-mode[aria-checked="true"] { background: var(--color-accent); color: var(--color-bg-deep); border-color: var(--color-accent); font-weight: 700; }
+.rr-pieces-material[aria-checked="true"] { border-color: var(--color-accent) !important; box-shadow: 0 0 0 1px var(--color-accent); }
+.rr-sequence-header > .rr-sequence-id { color:var(--color-text-muted);font-size:12px;font-variant-numeric:tabular-nums;white-space:nowrap;padding:0 2px; }
 .rr-sequence-header > input { flex:1;min-width:100px;width:140px; }
 .rr-sequence-editor .rr-battle-workspace { flex:1;min-height:260px;grid-template-columns:clamp(180px,20%,260px) minmax(0,1fr) 250px; }
 .rr-sequence-center { display:flex;flex-direction:column;gap:8px;min-height:0; }

@@ -65,8 +65,11 @@ globalThis.rrParamTermName = function (slot, fallback, translate, terms) {
     const authored = typeof list[slot] === 'string' ? list[slot].trim() : '';
     if (!authored) return t(fallback);
 
+    // Only the stock spelling, case included, counts as untouched: a project
+    // that wrote MAX HP or attack chose that casing, and the editor shows it
+    // as the Terms page does rather than tidying it back to the default.
     const stock = RR_STOCK_PARAM_TERMS[slot] || [];
-    const isStock = stock.some(name => name.toLowerCase() === authored.toLowerCase());
+    const isStock = stock.includes(authored);
     return isStock ? t(fallback) : authored;
 };
 

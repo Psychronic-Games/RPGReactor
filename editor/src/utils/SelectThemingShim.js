@@ -92,6 +92,11 @@
     // it did - one textContent assignment.
     const paintLabel = (target, text) => {
         if (!target) return;
+        // A panel that sets `select.value` on every frame repaints this label
+        // on every frame; a repaint that changes nothing still replaces the
+        // text node, and every replaced node is a mutation. Paint on change.
+        if (target.dataset.rrShimLabel === text) return;
+        target.dataset.rrShimLabel = text;
         const codes = window.RRIconCodes;
         if (codes && codes.hasCode(text)) {
             codes.paint(target, text);
@@ -366,12 +371,19 @@
         }, 0);
     };
 
-    const wrap = (selectEl) => {
+    const wantsWrap = (selectEl) => {
         // Mutation records can outlive a select removed by an inspector redraw.
         // Leave detached nodes unmarked so reattaching them can still wrap them.
-        if (!selectEl.isConnected || !selectEl.parentNode) return;
-        if (WRAPPED.has(selectEl)) return;
-        if (selectEl.dataset.noShim === '1') return;
+        if (!selectEl.isConnected || !selectEl.parentNode) return false;
+        if (WRAPPED.has(selectEl)) return false;
+        if (selectEl.dataset.noShim === '1') return false;
+        return true;
+    };
+
+    // `flex` is the select's computed flex when the caller measured it ahead
+    // of time (see wrapAll); read live otherwise.
+    const wrap = (selectEl, flex) => {
+        if (!wantsWrap(selectEl)) return;
         WRAPPED.add(selectEl);
 
         // Wrap the <select> in a relative-positioned container so the
@@ -385,8 +397,8 @@
             min-width: 0;
         `;
         // If the select had width/flex set, mirror it to the wrapper.
-        const computed = window.getComputedStyle(selectEl);
-        if (computed.flex && computed.flex !== '0 1 auto') wrapper.style.flex = computed.flex;
+        const computedFlex = flex !== undefined ? flex : window.getComputedStyle(selectEl).flex;
+        if (computedFlex && computedFlex !== '0 1 auto') wrapper.style.flex = computedFlex;
         if (selectEl.style.width) wrapper.style.width = selectEl.style.width;
         if (selectEl.style.maxWidth) wrapper.style.maxWidth = selectEl.style.maxWidth;
         if (selectEl.style.minWidth) wrapper.style.minWidth = selectEl.style.minWidth;
@@ -500,9 +512,22 @@
         obs.observe(selectEl, { childList: true, subtree: true });
     };
 
+    // Every select's computed flex is read before the first wrapper is
+    // inserted. Each insertion dirties layout and the next getComputedStyle
+    // forces a recalculation of the whole page, so wrapping one select at a
+    // time cost one full recalculation per select: on a database page with a
+    // 250-row list beside it, a quarter of a second per click.
+    const wrapAll = (selects) => {
+        const pending = [];
+        for (const selectEl of selects) {
+            if (wantsWrap(selectEl)) pending.push([selectEl, window.getComputedStyle(selectEl).flex]);
+        }
+        for (const [selectEl, flex] of pending) wrap(selectEl, flex);
+    };
+
     const scan = (root) => {
         if (!root || !root.querySelectorAll) return;
-        root.querySelectorAll('select').forEach(wrap);
+        wrapAll(root.querySelectorAll('select'));
     };
 
     // Initial scan after DOM ready.
@@ -514,13 +539,15 @@
 
     // Watch the document for any future <select>s.
     const mutObs = new MutationObserver((mutations) => {
-        mutations.forEach(m => {
-            m.addedNodes.forEach(n => {
-                if (n.nodeType !== 1) return;
-                if (n.tagName === 'SELECT') wrap(n);
-                else scan(n);
-            });
-        });
+        const found = [];
+        for (const m of mutations) {
+            for (const n of m.addedNodes) {
+                if (n.nodeType !== 1) continue;
+                if (n.tagName === 'SELECT') found.push(n);
+                else if (n.querySelectorAll) for (const selectEl of n.querySelectorAll('select')) found.push(selectEl);
+            }
+        }
+        if (found.length) wrapAll(found);
     });
     mutObs.observe(document.documentElement, { childList: true, subtree: true });
 })();

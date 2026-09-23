@@ -63,7 +63,7 @@ const driver = new WebDriverClient(path.join(process.env.NWJS_SDK_ROOT || path.j
                     jaw:m.skeleton?.bones.filter(b=>/jaw|mouth/i.test(b.name)).map(b=>b.name) });
             });
             return { size:o.userData.glbSize, points:rest?.points, kind:driver.kind, meshes };
-        `, [path.join(root, 'runtime/reactor_speech_3d.js')]);
+        `, [path.join(root, 'runtime/reactor_3d_speech.js')]);
         assert.equal(diagnostic.kind, 'lipMorph');
         assert.ok(diagnostic.meshes.some(m => m.changed > 0));
         const markers = await driver.execute(`

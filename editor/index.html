@@ -199,6 +199,7 @@
                 <img src="images/icon-resource-manager.svg" alt="" onerror="this.style.display='none'; this.parentElement.innerHTML='RM';">
             </button>
             <button class="tool-button" data-action="audio-player" title="Audio Player" data-i18n-title="toolbar.title.audioPlayer"><img src="images/icon-speaker.svg" alt="" onerror="this.style.display='none'; this.parentElement.innerHTML='♪';"></button>
+            <button class="tool-button" data-action="build-tool" title="Build in the world: pieces, shapes, screens and lights" data-i18n-title="toolbar.title.build"><img src="images/icon-build.svg" alt="" onerror="this.style.display='none'; this.parentElement.innerHTML='BD';"></button>
             <button class="tool-button" data-action="lighting-tool" title="Lighting Tool" data-i18n-title="toolbar.title.lighting"><img src="images/icon-lighting.svg" alt="" onerror="this.style.display='none'; this.parentElement.innerHTML='LT';"></button>
             <button class="tool-button" data-action="media-surfaces" title="Media Surfaces" aria-label="Media Surfaces"><img src="images/icon-media-surfaces.svg" alt=""></button>
 
@@ -320,14 +321,17 @@
                                 </label>
                                 <label class="map-info-item map-video-previews" title="Show media surface previews" data-i18n-title="toolbar.title.videoPreviews">
                                     <input id="map-video-previews" type="checkbox" checked aria-label="Show media surface previews" data-i18n-aria="toolbar.title.videoPreviews">
-                                    <span>Video</span>
+                                    <span data-i18n="workspace.video">Video</span>
                                 </label>
                                 <span class="map-info-item"><span data-i18n="workspace.zoom">Zoom:</span> <span class="map-info-value" id="map-zoom">100%</span></span>
                                 <span class="map-info-item">(<span class="map-info-value" id="map-coordinates">--,--</span>)</span>
                             </div>
                         </div>
                     </div>
-                    <div id="canvas-container" class="rr-dark-surface"></div>
+                    <div id="map-stage">
+                        <div id="canvas-container" class="rr-dark-surface"></div>
+                        <aside id="map-side-dock" hidden></aside>
+                    </div>
                 </div>
             </div>
         </div>
@@ -622,6 +626,19 @@
                                     </div>
                                 </div>
                                 <div style="margin-bottom: 6px;">
+                                    <label class="map-props-label" style="display: block; margin-bottom: 3px;" data-i18n="mapProps.parallaxSky">Parallax Sky:</label>
+                                    <div style="display: flex; gap: 6px; align-items: stretch;">
+                                        <select id="map-3d-sky-select" style="flex: 1; min-width: 0; padding: 5px 6px; background-color: var(--color-bg-input); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; font-size: 12px;"><option value="" data-i18n="common.none">(None)</option></select>
+                                        <button class="map-props-btn primary" style="flex: 0 0 auto; padding: 5px 12px; font-size: 12px;" id="map-3d-sky-browse-btn" type="button" data-i18n="mapProps.browse">Browse…</button>
+                                    </div>
+                                </div>
+                                <div style="display: grid; grid-template-columns: auto 1fr auto 1fr; gap: 8px; align-items: center; margin-bottom: 8px;">
+                                    <label class="map-props-label" data-i18n="mapProps.skyScrollX">Sky Scroll X:</label>
+                                    <input type="number" id="map-3d-sky-sx-input" min="-32" max="32" step="0.05" value="0" class="database-field-value" style="width: 100%; box-sizing: border-box;">
+                                    <label class="map-props-label" data-i18n="mapProps.skyScrollY">Sky Scroll Y:</label>
+                                    <input type="number" id="map-3d-sky-sy-input" min="-32" max="32" step="0.05" value="0" class="database-field-value" style="width: 100%; box-sizing: border-box;">
+                                </div>
+                                <div style="margin-bottom: 6px;">
                                     <label class="map-props-label" style="display: block; margin-bottom: 3px;" data-i18n="mapProps.defaultCamera">Default Camera:</label>
                                     <select id="map-3d-camera-select" style="width: 100%; padding: 5px 6px; background-color: var(--color-bg-input); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; font-size: 12px;">
                                         <option value="fixed" data-i18n="cam3d.mode.fixed">Fixed Angle (HD-2D)</option>
@@ -726,7 +743,7 @@
             <div class="modal-body">
                 <img src="images/logo.png" alt="RPG Reactor" style="max-width: 300px; width: 100%; height: auto; margin-bottom: 24px;" onerror="this.style.display='none'">
 
-                <h3 data-i18n="about.version" style="color: #e8b817; margin-bottom: 16px;">RPG Reactor v0.98.6</h3>
+                <h3 data-i18n="about.version" style="color: #e8b817; margin-bottom: 16px;">RPG Reactor v0.98.7</h3>
 
                 <p data-i18n="about.description" style="color: var(--color-text); line-height: 1.6; margin-bottom: 16px;">
                     An open-source, cross-platform RPG game engine built with NW.js, PixiJS v8, and Three.js
@@ -1095,11 +1112,16 @@
     <script src="src/utils/PoseRings3D.js"></script>
     <script src="src/Object3DManager.js"></script>
     <script src="src/utils/AxisArrows3D.js"></script>
+    <script src="src/utils/ShapeGizmo3D.js"></script>
     <script src="src/utils/ModelPropEffects2D.js"></script>
     <script src="src/utils/FlatLightField2D.js"></script>
     <script src="src/utils/ModelPropShadows2D.js"></script>
     <script src="src/utils/ModelPropsPreview2D.js"></script>
     <script src="src/ModelPropsManager.js"></script>
+    <script src="src/TerrainManager.js"></script>
+    <script src="src/utils/StructurePlan.js"></script>
+    <script src="src/PieceBuilderManager.js"></script>
+    <script src="src/BuildHotbar.js"></script>
     <script src="src/EventModelPanel.js"></script>
     <script src="src/utils/ColourPopover.js"></script>
     <script src="src/utils/MapLights.js"></script>
@@ -1251,6 +1273,7 @@
     <script src="src/utils/AnimationPreviewLayer.js"></script>
     <script src="src/utils/SearchSelect.js"></script>
     <script src="src/database/Database3DEditor.js"></script>
+    <script src="src/database/DatabaseStructureEditor.js"></script>
     <script src="src/event/commands/PlayModelAnimationEditor.js"></script>
     <script src="src/event/commands/Camera3DEditor.js"></script>
     <script src="src/event/commands/TransformModel3DEditor.js"></script>

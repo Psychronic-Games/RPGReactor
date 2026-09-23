@@ -1,8 +1,78 @@
 # Changelog
 
+## [0.98.7] - 2026-09-21
+
+A 3D world builder in the map view, walking inside what you build, a Sun light, new collapse effects and a run of fixes. Detail lives in [editor/CHANGELOG.md](editor/CHANGELOG.md) and the [0.98.7 release notes](docs/posts/release-notes-0.98.7.md).
+
+### Added
+
+**Build a 3D world in the map**
+
+- **Build mode.** A **Build** button in the toolbar opens a bar over the map's 3D view: Floor, Wall, Doorway, Window, Glass, Stairs, Ramp, Roof, Pillar, Fence and Block, then Shape, Screen, Light, Hammer and Blueprint. A ghost follows the pointer and snaps to what is there; click to place, drag for a row, Ctrl-drag for a box; R turns, Q and E change the level, the Hammer or a right-click removes, Ctrl+Z undoes. Number keys pick slots.
+- **Select and edit what you built.** Select picks a piece up: a specs panel beside the map sets its facing, material, size and settings, a stair run's steps; drag it to a new cell, R turns it, Delete removes it. Drag a box on the ground to select many, then paint, move, turn or remove them together. A selected shape wears the same arrows, rings and size cubes the 3D models have.
+- **Shapes.** Box, wedge, prism, hull, spike, cylinder, capsule, tube, cone, dome, sphere, dish, fin, arch, tunnel and ring, each with a size, turn, tilt and roll and its own settings (sides, taper, sweep, thickness). Arches and tunnels are hollow. A material named *Glass…* is translucent and one ending in *…Glow* lights itself.
+- **Materials** are tileable images in the project's `img/materials` folder, shown as swatches.
+- **Blueprints.** Database › Structures lists saved buildings as cards, one JSON file each under `3d/Structures` (rooms, doors, windows, stairs, roof, parts, paths, spots, people, screens and lights); the bar's Blueprint slot stamps one where you click, and a stamped building moves, turns and scales as one and keeps its people with it. Plans can be made of other plans.
+- **Terrain.** The 3D-T tab shapes rolling ground with Raise, Lower, Smooth and Flatten brushes.
+- **Water is poured.** Point at a hollow and a ghost shows what a click would fill; the water rises to the rim, one pond per hollow. Remove takes the sheet you click. Sheets have real waves, a shore where the ground crosses the level, and shallows you can wade.
+- **Screens and lights on a building** through the map's own Media Surfaces and Lighting panels, which now dock beside the map instead of floating over it; the Build bar's Screen and Light slots open them and stay up.
+- **A 3D map has a sky**: Parallax Sky with scroll speeds in Map Properties › 3D.
+- **Walking inside.** Under a roof, everything above your storey is cut away and the sliced walls wear a top; a wall between the camera and anyone in the party, or the people in the room, goes see-through; floors stay solid. Two walkable floors: stairs climb a storey along their run and nothing else, followers keep the leader's floor, the camera keeps out of the walls.
+- **Buildings show on the flat map** as a plan from above, and pieces are laid in chunks so big maps stay quick.
+- **`validate-map.cjs`** reports a 3D map's health from a shell, and **`docs/AUTHORING.md`** says where every part of a 3D map lives and which tool edits it.
+
+**Lighting**
+
+- **A Sun light**, warm and map-wide with one set of long shadows, and any single-light preset from a placed light's Type dropdown.
+
+**Battles and the database**
+
+- **Collapse effects:** Ash, Ember, Wisp and Shatter, tunable spark layers, an enemy's own collapse sound, and Ash and Ember on 3D battlers in a battle room.
+- **Action sequences:** a held weapon can be drawn behind its holder.
+- **Classes:** parameter curves and the EXP table work to a target level, and the curve dialog is the RPG Maker one again, past level 99.
+- **Enemies:** an action condition can name several states.
+- **Add Buff and Add Debuff** can say how strong a stack is (PR #66).
+- **Music sequences** have a library, and a map, a troop or Change Battle BGM can play one.
+- **The editor shows the parameter names your project chose** in Database › Terms.
+- **Database › Quests** chooses the game's quest log: Reactor's, or VisuStella's when the project has it.
+
+### Fixed
+
+- Delete with an event picked in the events column deleted the map.
+- A building past six storeys lost its top.
+- The 3D Models list is titled like every other section.
+- The pieces tab lit the tileset's B sheet.
+- A band of floorboard round the foot of every building; the ceiling missing when looking up from inside; the roof's shadow falling into a room whose roof was cut; sawtooth seams along cut walls and windows; the sides of window holes and door jambs missing; a wall the party walked past outside going see-through; the party drifting up the stairs while crossing a hall in isometric.
+- Letting go of a placed model needed the Deselect button.
+- The 3D sky ran out when the view was pulled back, stuttered in the editor, and ignored scroll speeds under a pixel a frame.
+- Enlarging a map lost its 3D work.
+- Shaping terrain rebuilt the whole scene on every dab.
+- A big light's glow was a half circle; lights in the editor's 3D view stopped following the camera; a spot light's guideline pointed the wrong way.
+- The 3D view drew over the corner where the scrollbars meet; a parallax change needed a restart.
+- The third-person look pitched the whole model instead of the head.
+- Apply in the database locked the editor for seconds with a sequence open; clicking a record is four times faster on a large project.
+- The flat preview stood a held weapon half a body too high; sequence audio steps use the audio picker; sequences are named with their number; additive animations carried a black square; the preview shows a flat battle the way the game plays it; the actor's battler box is titled Battler.
+- The map toolbar dropped its last group at some window widths.
+- The battle room preview ran at the monitor's speed.
+- Projects stopped taking a new runtime (the revision was stated once instead of twice).
+- A save taken as a battle ends threw and went missing from the list.
+- The Options dialog, the Video toggle, the tileset palette's status line and width, and six Reactor event commands in every language.
+- A passive state answers both sides of an enemy state condition.
+- Several enemies of the same kind collapsing at once stalled the game for seconds (PR #67).
+- A state's icon opened two pickers and could write the state into the Skills table (PR #66).
+- Database › Quests: the icon picker reported IconSet.png missing; every quest field takes a value.
+
+### Development
+
+- The 3D runtime is now a core file plus extension files, one per concern: `reactor_3d_lighting.js` holds lights and shadows, `reactor_3d_models.js` the character, event and prop models, `reactor_3d_effects.js` the effects that ride them, `reactor_3d_world.js` terrain, pieces and water, and `reactor_3d_speech.js` (once `reactor_speech_3d.js`) the spoken models; `reactor_3d.js` names its extensions so the game, the editor and the command-line tools all load the same set. Nothing a project or a plugin reaches changes: every name is still on `Reactor3D`.
+- CI had been red since the 0.98.6 tag: two suites read Star Shift Rebellion, which is not in the repository. They now skip, or use the tracked fixture, where the project is absent. A fresh clone plus `npm ci --ignore-scripts` and `npm test` reproduces CI locally.
+- `event-command-names-i18n.test.cjs` holds every command and section of the event picker against every locale, loading the translation files in the app's order.
+- A translation can be present and still wrong for where it sits: the Collapse Sound row was translated on its own and ended up naming a different event than the Collapse Effect row above it in seven locales. `i18n.test.cjs` now pairs the two labels by their longest shared run of characters, two where the script writes without spaces and four elsewhere.
+- Every script `index.html` loads is now parsed as part of the suite. The suite reads editor sources as text, which is happy with a file that cannot run: a duplicate `const` had made one dialog's whole file a syntax error while every assertion about it still passed (PR #64).
+
 ## [0.98.6] - 2026-09-14
 
-Development cycle in progress. Session detail lives in the [handoff](docs/HANDOFF.md) and the dated notes under `docs/`.
+Release notes: [docs/posts/release-notes-0.98.6.md](docs/posts/release-notes-0.98.6.md).
 
 ### Added
 

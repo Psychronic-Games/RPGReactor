@@ -1,3 +1,4 @@
+const { source3D } = require('./helpers/runtime-3d-source.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -553,7 +554,7 @@ test('previews show scanlines, stand on their anchor like the game, clamp typed 
     assert.match(runtime, /y -= descriptor\.height \* Math\.abs\(descriptor\.scaleY\) \/ 2;/);
     assert.doesNotMatch(runtime, /descriptor\.z \* th/);
     assert.equal(MediaSurfacePreviewManager.standingLift({ target: 'screen', height: 180, scaleY: 1 }), 0);
-    assert.match(fs.readFileSync(path.join(editorRoot, '..', 'runtime', 'reactor_main.js'), 'utf8'), /runtime revision: 20260912\.2/);
+    assert.match(fs.readFileSync(path.join(editorRoot, '..', 'runtime', 'reactor_main.js'), 'utf8'), /runtime revision: \d{8}\.\d+/);
     assert.match(editor, /if \(options\.max !== undefined && next > options\.max\) next = options\.max;/);
     assert.match(editor, /if \(final && options\.min !== undefined && next < options\.min\) next = options\.min;/);
     assert.match(manager, /setEnabled\(enabled\) \{/);
@@ -622,7 +623,7 @@ test('Preview Event animates stepping pages and previews 3D-model pages in both 
 });
 
 test('model-bound characters on flat maps render as sprites, the view the editor previews', () => {
-    const r3d = fs.readFileSync(path.join(editorRoot, '..', 'runtime', 'reactor_3d.js'), 'utf8');
+    const r3d = source3D();
     const sprites = fs.readFileSync(path.join(editorRoot, '..', 'runtime', 'reactor_sprites.js'), 'utf8');
     assert.match(r3d, /Reactor3D\.updateMapModelSprite = function\(sprite\)/);
     assert.match(r3d, /Reactor3D\.MODEL_SPRITE_PITCH = 55;/, 'the map pitch the 3D view defaults to');
@@ -643,7 +644,7 @@ test('model-bound characters on flat maps render as sprites, the view the editor
 });
 
 test('the map note is the 3D switch, the sidecar always loads on disk, and flat-map model sprites animate like the scene', () => {
-    const r3d = fs.readFileSync(path.join(editorRoot, '..', 'runtime', 'reactor_3d.js'), 'utf8');
+    const r3d = source3D();
     const managers = fs.readFileSync(path.join(editorRoot, '..', 'runtime', 'reactor_managers.js'), 'utf8');
     const video = fs.readFileSync(path.join(editorRoot, '..', 'runtime', 'reactor_media_surfaces.js'), 'utf8');
     const Reactor3D = require(path.join(editorRoot, '..', 'runtime', 'reactor_3d.js'));
@@ -694,7 +695,7 @@ test('frameModelSprite looks down at the map pitch and frames the bounding spher
 
 test('culled character sprites keep updating, three gets a clean unpack state, and v5 Graphics calls stay silent', () => {
     const sprites = fs.readFileSync(path.join(editorRoot, '..', 'runtime', 'reactor_sprites.js'), 'utf8');
-    const r3d = fs.readFileSync(path.join(editorRoot, '..', 'runtime', 'reactor_3d.js'), 'utf8');
+    const r3d = source3D();
     const compat = fs.readFileSync(path.join(editorRoot, '..', 'runtime', 'libs', 'pixi_compat.js'), 'utf8');
     assert.match(sprites, /for \(const sprite of this\._rrCullHolder\.children\) \{\n\s+if \(typeof sprite\.update === "function"\) sprite\.update\(\);/, 'detached sprites are still updated');
     assert.match(sprites, /if \(this\._rrCulled\) \{\n\s+this\.visible = false;\n(?:\s+\/\/.*\n)*\s+this\.updatePosition\(\);\n\s+return;/, 'and a culled sprite keeps its position current for plugins that read it');

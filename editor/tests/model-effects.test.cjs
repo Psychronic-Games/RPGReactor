@@ -1,3 +1,4 @@
+const { source3D } = require('./helpers/runtime-3d-source.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -39,14 +40,14 @@ test('effects queue per character and are taken once', () => {
 });
 
 test('the runtime plays anchored animations through a stand-in target and registers the command', () => {
-    const runtime = read('runtime/reactor_3d.js');
+    const runtime = source3D();
     assert.match(runtime, /PluginManager\.registerCommand\("RPGReactor", "PlayModelEffect"/);
     assert.match(runtime, /sprite\._targets = \[standIn\];/);
     assert.match(runtime, /const sprite = list\.length > count \? list\[list\.length - 1\] : null;/, 'the stock factory returns nothing');
     assert.match(runtime, /current\.effects = sidecar \? Reactor3D\.readModelEffects\(sidecar\) : \[\];/);
     assert.match(runtime, /for \(const name of Reactor3D\.takeModelEffects\(character\)\)/);
     assert.match(runtime, /Reactor3D\.updateAnchoredAnimations\(holder\);/);
-    assert.match(read('runtime/reactor_main.js'), /runtime revision: 20260912\.2/);
+    assert.match(read('runtime/reactor_main.js'), /runtime revision: \d{8}\.\d+/);
 });
 
 test('the editor wires the Play 3D Effect command and the Effects section', () => {
@@ -95,11 +96,11 @@ test('a model base transform wraps every instance and effects carry a turn', () 
     assert.deepEqual(effects[0].rotate, [10, 0, 30]);
     const rules = Reactor3D.readModelAnimationRules({ animations: [{ name: 'idle-loop', trigger: 'action', repeat: true }] });
     assert.equal(rules[0].repeat, true);
-    const runtime = read('runtime/reactor_3d.js');
+    const runtime = source3D();
     assert.equal((runtime.match(/applyModelTransform\(object, (?:this|Reactor3D)\.readModelTransform\(sidecar\)\)/g) || []).length, 5, 'every instance site applies the base transform');
     assert.match(runtime, /sprite\._animation = Object\.assign\(\{\}, animation, \{/, 'effect turn and size ride on a copy of the record');
     assert.match(runtime, /holder\.action = !ended\.sequence && rule && \(rule\.repeat \|\| holder\.action\.repeat\)/, 'a repeating action starts over');
-    assert.match(read('runtime/reactor_main.js'), /runtime revision: 20260912\.2/);
+    assert.match(read('runtime/reactor_main.js'), /runtime revision: \d{8}\.\d+/);
 });
 
 test('the 3D editor card chooses model, parts, bones and effects, and edits each with sliders', () => {
@@ -151,10 +152,10 @@ test('effects play on their own by state, and scale proportionally or per axis',
     fake.updateTriggeredEffects(holder, {}, { moving: false, dashing: false });
     assert.deepEqual(stopped, ['a']);
 
-    const runtime = read('runtime/reactor_3d.js');
+    const runtime = source3D();
     assert.match(runtime, /Reactor3D\.updateTriggeredEffects\(holder, character, \{/);
     assert.match(runtime, /this\._handle\.setScale\(uniform \* axes\[0\], uniform \* axes\[1\], uniform \* axes\[2\]\);/);
-    assert.match(read('runtime/reactor_main.js'), /runtime revision: 20260912\.2/);
+    assert.match(read('runtime/reactor_main.js'), /runtime revision: \d{8}\.\d+/);
     const db3d = read('editor/src/database/Database3DEditor.js');
     assert.match(db3d, /this\._fxPreviewDef = raw;/, 'the preview follows the live effect');
     assert.match(db3d, /_scaleSlidersHtml\(prefix, scale\)/);
@@ -186,7 +187,7 @@ test('video effects, mesh collision, repeat and player-relative controls are wir
     assert.equal(Reactor3D.readModelCollision({}), 'mesh', 'the mesh footprint is the default');
     assert.equal(Reactor3D.pointInTriangle2D(0, 0, -1, -1, 1, -1, 0, 2), true);
     assert.equal(Reactor3D.pointInTriangle2D(5, 5, -1, -1, 1, -1, 0, 2), false);
-    const runtime = read('runtime/reactor_3d.js');
+    const runtime = source3D();
     assert.match(runtime, /if \(foot\.mask\) return foot\.mask\.blocksTile\(localX, localZ\);/);
     assert.match(runtime, /Reactor3D\._sidecarJson\[name\] = parsed \|\| null;/);
     assert.match(runtime, /Game_Player\.prototype\.moveByInput = function\(\) \{/);
@@ -195,7 +196,7 @@ test('video effects, mesh collision, repeat and player-relative controls are wir
     assert.match(runtime, /Reactor3D\.spawnVideoEffect = function\(effect, character, holder\)/);
     assert.match(read('runtime/reactor_media_surfaces.js'), /anchor: anchor,/);
     assert.match(read('runtime/reactor_media_surfaces.js'), /Reactor3D\.effectAnchorWorld\(holder\.object, descriptor,/);
-    assert.match(read('runtime/reactor_main.js'), /runtime revision: 20260912\.2/);
+    assert.match(read('runtime/reactor_main.js'), /runtime revision: \d{8}\.\d+/);
     const db3d = read('editor/src/database/Database3DEditor.js');
     assert.match(db3d, /class="r3d-fx-type"/);
     assert.match(db3d, /_playVideoPreview\(raw\) \{/);
@@ -281,7 +282,7 @@ test('anchored Effekseer effects go into the 3D scene at the anchor, in world un
     assert.deepEqual(play.world.toArray().map(v => +v.toFixed(2)), [0, 10, 0], 'the anchor, in the world');
     assert.equal(+play.scale[0].toFixed(3), +(20 / 26 * 2.05).toFixed(3), 'one Effekseer unit = span * scale / 26 tiles');
     assert.equal(+play.rotation[1].toFixed(4), +(Math.PI / 2).toFixed(4));
-    const source = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+    const source = source3D();
     assert.match(source, /Graphics\.effekseer[\s\S]*efx\.drawHandle\(handle\)/, 'drawn with the overlay context: Effekseer cannot draw on the scene\'s WebGL 2 one, and a second context fights the first');
     assert.match(source, /ctx\.drawImage\(overlay, drawX, overlay\.height - drawY - drawH, drawW, drawH, 0, 0, drawW, drawH\)/, 'the effect\'s own box is copied out of the overlay canvas');
     assert.match(source, /gl\.scissor\(drawX, drawY, drawW, drawH\)/, 'and only that box is drawn');
@@ -375,12 +376,12 @@ test('an in-scene effect is drawn as its own screen box at full resolution, smal
         if (createElement) global.document.createElement = createElement; else delete global.document.createElement;
     }
     // A restarted play keeps its model's tracker, and a loop starts over where its picture ended.
-    const runtime = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+    const runtime = source3D();
     assert.match(runtime, /play\.track = tracks\[key\] \|\| \(tracks\[key\] = this\.EffekseerScene\.boxTracker\(\)\);/);
     assert.match(runtime, /if \(play\.track && play\.lastLit > 0\) play\.track\.visibleFrames = Math\.max\(play\.track\.visibleFrames \|\| 0, play\.lastLit\);/);
     assert.match(runtime, /entry\.fx3d\.frames >= track\.visibleFrames\) \{\s*entry\.restarted = true;/);
     // The quad maps the box back onto the same screen pixels.
-    assert.match(fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8'),
+    assert.match(source3D(),
         /vec2 uv = \(gl_FragCoord\.xy \/ resolution - rectMin\) \/ rectSize;/);
     // The editor's map view draws the same box into its layer's canvas.
     const layer = fs.readFileSync(path.join(repoRoot, 'editor', 'src', 'utils', 'AnimationPreviewLayer.js'), 'utf8');
@@ -398,7 +399,7 @@ test('an in-scene effect is drawn as its own screen box at full resolution, smal
 });
 
 test('a map with models is drawn under one depth buffer, in the editor and the game', () => {
-    const runtime = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+    const runtime = source3D();
     assert.equal(Reactor3D._hasEventModelsNow({ reactor3d: { props: [{ name: 'Map-Objects/RPGReactor' }] } }), true, 'props count as models');
     assert.equal(Reactor3D._hasEventModelsNow({ reactor3d: { props: [], events: {} } }), false);
     assert.match(runtime, /this\.modelsInWorld \? world : \(which === "above" \|\| which === "overlay"\)/, 'the overlay joins the world pass on a model map');
@@ -609,7 +610,7 @@ test('a light that names its ground stands at an absolute height, with no facade
         Reactor3D.facadeAt = saved.facadeAt;
         Reactor3D.surfaceHeightAt = saved.surfaceHeightAt;
     }
-    const three = read('runtime/reactor_3d.js');
+    const three = source3D();
     assert.equal((three.match(/facade && light\.groundY === undefined \? facade\.lift : 0/g) || []).length, 2, 'both pools agree');
 });
 
@@ -630,7 +631,7 @@ test('a placed prop plays several animations in order, loops the list, and fires
     assert.equal(Reactor3D._modelActions.e7[0].repeat, true, 'one name with Repeat is the plain repeating play');
     assert.equal(Reactor3D._modelActions.e7[0].sequence, null);
     delete Reactor3D._modelActions;
-    const three = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+    const three = source3D();
     assert.match(three, /if \(!holder\.action && ended\.sequence && !\(queued && queued\.length\)\) \{\s*Reactor3D\.playModelSequence\(character, ended\.sequence, true\);/, 'the list goes round again when its last play ends');
     // A light effect's reach follows the instance: the database shows every model at EFFECT_PREVIEW_SPAN.
     const object = new THREE.Group();

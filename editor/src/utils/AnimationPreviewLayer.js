@@ -43,6 +43,12 @@
             this.mvCanvas.width = SIZE;
             this.mvCanvas.height = SIZE;
             this.mvCanvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;display:none;';
+            // An MV cell's blend mode is applied against the scene, as the
+            // game applies it: an additive cell baked into this transparent
+            // overlay would leave its sheet's black as opaque black. Each
+            // non-normal mode gets its own canvas, made on first use, that the
+            // browser composites onto the view with the matching mix-blend-mode.
+            this.mvBlendCanvases = new Map();
             this.fxCanvas = document.createElement('canvas');
             this.fxCanvas.width = SIZE;
             this.fxCanvas.height = SIZE;
@@ -144,6 +150,7 @@
             if (native !== this.size) {
                 this.size = native;
                 this.mvCanvas.width = this.mvCanvas.height = native;
+                for (const canvas of this.mvBlendCanvases?.values() || []) canvas.width = canvas.height = native;
                 this.fxCanvas.width = this.fxCanvas.height = native;
             }
         }
@@ -166,6 +173,21 @@
             return false;
         }
 
+        /** The canvas an MV cell of `blendMode` draws into, created on first use. */
+        _mvCanvasFor(blendMode) {
+            if (!blendMode || !AnimationPreviewLayer.MV_BLEND_CSS[blendMode]) return this.mvCanvas;
+            let canvas = this.mvBlendCanvases.get(blendMode);
+            if (!canvas) {
+                canvas = document.createElement('canvas');
+                canvas.width = canvas.height = this.size || SIZE;
+                canvas.style.cssText = this.mvCanvas.style.cssText + `mix-blend-mode:${AnimationPreviewLayer.MV_BLEND_CSS[blendMode]};`;
+                canvas.style.display = this.mvCanvas.style.display;
+                this.wrap.insertBefore(canvas, this.fxCanvas);
+                this.mvBlendCanvases.set(blendMode, canvas);
+            }
+            return canvas;
+        }
+
         stop() {
             this.generation++;
             this.active = false;
@@ -181,6 +203,7 @@
             const ctx = this.mvCanvas.getContext('2d');
             ctx.clearRect(0, 0, this.size, this.size);
             this.mvCanvas.style.display = 'none';
+            for (const canvas of this.mvBlendCanvases?.values() || []) { canvas.getContext('2d').clearRect(0, 0, this.size, this.size); canvas.style.display = 'none'; }
             this.fxCanvas.style.display = 'none';
             this.wrap.style.display = 'none';
         }
@@ -215,7 +238,7 @@
 
         _startSprite(animation, projectRoot, generation) {
             this.mvCanvas.style.display = 'block';
-            const ctx = this.mvCanvas.getContext('2d');
+            for (const canvas of this.mvBlendCanvases.values()) canvas.style.display = 'block';
             const sheets = { 1: null, 2: null };
             const path = require('path');
             const load = (name, slot) => new Promise(resolve => {
@@ -227,7 +250,8 @@
             });
             const draw = frameIndex => {
                 const size = this.size;
-                ctx.clearRect(0, 0, size, size);
+                this.mvCanvas.getContext('2d').clearRect(0, 0, size, size);
+                for (const canvas of this.mvBlendCanvases.values()) canvas.getContext('2d').clearRect(0, 0, size, size);
                 const frame = animation.frames[frameIndex % animation.frames.length];
                 if (!frame) return;
                 // Cells are drawn at their own pixel size, as the game does.
@@ -237,13 +261,14 @@
                     const sheet = pattern < 100 ? sheets[1] : sheets[2];
                     if (!sheet) continue;
                     const cellPattern = pattern % 100;
+                    const ctx = this._mvCanvasFor(blendMode).getContext('2d');
                     ctx.save();
                     const extra = this.transform;
                     ctx.translate(size / 2, size / 2);
                     // A cell pixel is a screen pixel, and the screen is the
                     // model's span tall, over a canvas eight tiles wide.
-                    const cell = (size / OVERLAY_TILES) * (this.span / this.screenHeight);
-                    ctx.scale(cell, cell);
+                    const cellScale = (size / OVERLAY_TILES) * (this.span / this.screenHeight);
+                    ctx.scale(cellScale, cellScale);
                     ctx.rotate((extra.rotate[2] * Math.PI) / 180);
                     ctx.scale(extra.scale[0], extra.scale[1]);
                     ctx.translate(x * view, y * view);
@@ -251,6 +276,7 @@
                     ctx.scale((scale / 100) * view, (scale / 100) * view);
                     if (mirror) ctx.scale(-1, 1);
                     ctx.globalAlpha = opacity / 255;
+                    // Within its own canvas an additive cell still adds to the cells before it.
                     ctx.globalCompositeOperation = blendMode === 1 ? 'lighter' : 'source-over';
                     const hue = pattern < 100 ? (animation.animation1Hue || 0) : (animation.animation2Hue || 0);
                     ctx.filter = hue ? `hue-rotate(${hue}deg)` : 'none';
@@ -266,9 +292,11 @@
                 let last = performance.now(), acc = 0, frame = 0;
                 this.mv.ready=true;
                 const sounds=(from,to)=>{for(const timing of animation.timings||[])if(timing.frame>=from&&timing.frame<=to&&timing.se?.name)this.onSound?.(timing.se);};
-                draw(0);sounds(0,0);
                 const loop = () => {
                     if (generation !== this.generation) return;
+                    try { step(); } catch (error) { console.warn('Animation preview:', error); this._finish(generation); }
+                };
+                const step = () => {
                     const now = performance.now();
                     if(!this.paused)acc += (now - last)*(this.speed??1);
                     last = now;
@@ -285,6 +313,7 @@
                     }
                     this.mv.raf = requestAnimationFrame(loop);
                 };
+                try { draw(0); sounds(0, 0); } catch (error) { console.warn('Animation preview:', error); this._finish(generation); return; }
                 this.mv.raf = requestAnimationFrame(loop);
             });
             return true;
@@ -531,6 +560,9 @@
         }
     }
 
+    // MV blend modes 1..3 (additive, multiply, screen) as the CSS blend the
+    // browser composites the mode's canvas with. Normal (0) draws straight in.
+    AnimationPreviewLayer.MV_BLEND_CSS = Object.freeze({ 1: 'plus-lighter', 2: 'multiply', 3: 'screen' });
     AnimationPreviewLayer.projectScreenHeight = projectScreenHeight;
     AnimationPreviewLayer.PICKER_UNITS_PER_HEIGHT = PICKER_UNITS_PER_HEIGHT;
     root.RRAnimationPreviewLayer = AnimationPreviewLayer;
