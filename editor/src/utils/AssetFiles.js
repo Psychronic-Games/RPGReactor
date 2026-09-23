@@ -239,6 +239,17 @@
         find,
         findImage,
         imageReference,
+        /**
+         * Frames per character row: 3, or N for a "Name[fN]" sheet when the project's
+         * System.json turns multi-frame sheets on (rrMultiFrames, set by imports of
+         * games that used them). A stock project is always 3.
+         */
+        characterFrameCount(name, system) {
+            const sys = system || (typeof window !== 'undefined' ? window.reactor?.databaseManager?.data?.system : null);
+            if (!sys || sys.rrMultiFrames !== true) return 3;
+            const m = /\[F(\d+)\]/i.exec(String(name || ''));
+            return m ? Math.max(1, Number(m[1])) : 3;
+        },
         isBigCharacter(name) {
             const basename = normalizeRelative(name).split('/').pop() || '';
             const sign = basename.match(/^[!$]+/);

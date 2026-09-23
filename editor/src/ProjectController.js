@@ -2062,6 +2062,29 @@ class ProjectController {
 
         // Encounters
         this.populateEncountersList(mapData.encounterList || []);
+
+        // Image layers (pictures locked to the map)
+        const layersSection = document.getElementById('map-image-layers-section');
+        if (layersSection && typeof RRMapImageLayersEditor !== 'undefined') {
+            if (!layersSection.dataset.mounted) {
+                RRMapImageLayersEditor.mount(layersSection, { pickImage: (current, done) => this.pickParallaxImage(current, done) });
+                layersSection.dataset.mounted = 'true';
+            }
+            RRMapImageLayersEditor.load(mapData.rrImageLayers);
+        }
+    }
+
+    /** Choose an image from img/parallaxes with the image picker; `done(name)`. */
+    pickParallaxImage(current, done) {
+        const folder = this.parallaxFolder();
+        const assets = window.RRAssetFiles;
+        const picker = typeof window !== 'undefined' ? window.reactor?.databaseEditorUI : null;
+        if (!folder || !assets || !picker || typeof picker.showImagePicker !== 'function') return;
+        let files = [];
+        try { files = assets.listImageReferences(folder); } catch (error) { console.error('Error reading parallaxes folder:', error); }
+        picker.showImagePicker(this._tt('Image Layers'), files, (name) => done(name),
+            (name) => assets.imageUrlFor(folder, name), current || undefined,
+            { selectButtonLabel: this._tt('Use This Image'), allowNone: true });
     }
 
     populateTilesetDropdown() {
@@ -3106,6 +3129,7 @@ class ProjectController {
             const dataToSave = { ...mapData };
             delete dataToSave.id;
             delete dataToSave.name;
+            delete dataToSave.reactor3d;
             const json = typeof RRMapJson !== 'undefined'
                 ? RRMapJson.stringify(dataToSave)
                 : JSON.stringify(dataToSave, null, 2);
@@ -3221,6 +3245,11 @@ class ProjectController {
             data: this.currentEditingMap.data || [],
             events: this.currentEditingMap.events || []
         };
+        // Image layers: stored only when the map has some, so a stock map stays stock.
+        const imageLayers = typeof RRMapImageLayersEditor !== 'undefined' && document.getElementById('map-image-layers-section')?.dataset.mounted
+            ? RRMapImageLayersEditor.read() : (this.currentEditingMap.rrImageLayers || []);
+        if (imageLayers.length) mapData.rrImageLayers = imageLayers;
+        else delete mapData.rrImageLayers;
 
         const libraryId = movedId || (typeof sequenceSource === 'number' ? sequenceSource : 0);
         const sequenceOn = !!(bgmSequence && bgmSequence.enabled);

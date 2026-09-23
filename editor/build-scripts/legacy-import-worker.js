@@ -16,14 +16,18 @@ const { workerData, parentPort } = require('worker_threads');
 // without one and the importer throws, so the menu import failed at once.
 if (typeof TextDecoder === 'undefined') globalThis.TextDecoder = require('node:util').TextDecoder;
 
-(function run() {
+(async function run() {
     try {
         const I = require(path.join(__dirname, '..', 'src', 'legacy', 'LegacyImporter.js'));
+        const media = require(path.join(__dirname, '..', 'src', 'legacy', 'LegacyMedia.js'));
         const { source, destination, options } = workerData;
-        const summary = I.importProject(source, destination, Object.assign({}, options, {
-            log: (message, level) => parentPort.postMessage({ type: 'log', message: String(message), level: level || 'info' }),
-            progress: (fraction, status) => parentPort.postMessage({ type: 'progress', fraction, status: String(status || '') })
-        }));
+        const log = (message, level) => parentPort.postMessage({ type: 'log', message: String(message), level: level || 'info' });
+        const progress = (fraction, status) => parentPort.postMessage({ type: 'progress', fraction, status: String(status || '') });
+        const summary = I.importProject(source, destination, Object.assign({}, options, { log, progress }));
+        // Movies the old engine played that Chromium cannot become WebM, after the project is written.
+        if (summary && summary.destination && media.pendingMovies(summary.destination).length) {
+            summary.movies = await media.convertMovies(summary.destination, { log, progress });
+        }
         parentPort.postMessage({ type: 'done', success: true, summary });
     } catch (error) {
         parentPort.postMessage({ type: 'done', success: false, error: error && error.message ? error.message : String(error) });

@@ -173,6 +173,11 @@ class UIManager {
             case 'import-project':
                 if (this.callbacks.importProject) this.callbacks.importProject();
                 break;
+            case 'import-report': {
+                const project = window.reactor?.projectController?.currentProject;
+                if (project?.path && window.RRLegacyReportDialog) window.RRLegacyReportDialog.show(project.path);
+                break;
+            }
             case 'save-project':
                 this.callbacks.saveProject();
                 break;

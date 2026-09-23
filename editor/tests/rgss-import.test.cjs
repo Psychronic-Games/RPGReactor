@@ -231,3 +231,31 @@ test('the runtime rules for imported games stay off in MV and MZ data', () => {
     assert.match(windows, /if \(typeof step !== "number"\) return _reactorMakeFontBigger\.call\(this\);/);
     assert.match(windows, /if \(code !== "RRFACE"\) return _reactorMessageEscape\.call\(this, code, textState\);/);
 });
+
+test('movies an old engine played are found for conversion; the report reads back what an import did', () => {
+    const media = require(path.join(legacy, 'LegacyMedia.js'));
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rr-movies-'));
+    try {
+        fs.mkdirSync(path.join(dir, 'movies'));
+        for (const f of ['Intro.avi', 'Ending.webm', 'Ending.wmv', 'Credits.MPG', 'notes.txt']) fs.writeFileSync(path.join(dir, 'movies', f), '');
+        assert.deepEqual(media.pendingMovies(dir).sort(), ['Credits.MPG', 'Intro.avi']);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+    global.I18n = undefined;
+    const report = require(path.resolve(__dirname, '..', 'src', 'LegacyReportDialog.js'));
+    const rows = report.summarize({ engine: 'RPG Maker VX Ace', title: 'Game', maps: 3, approximations: { rubyTranslated: 5, rubyScript: 2, nameBox: 4 }, scripts: { custom: 7, customLines: 900 }, movies: { converted: ['Intro.avi'] } });
+    const text = rows.map(r => r.join(': ')).join('\n');
+    assert.match(text, /RPG Maker VX Ace · “Game”/);
+    assert.match(text, /5 translated to JavaScript, 2 kept as comments/);
+    assert.match(text, /nameBox 4/);
+    assert.match(text, /7 sections, 900 lines/);
+    assert.match(text, /Intro\.avi/);
+});
+
+test('map image layers round-trip through the Map Properties list', () => {
+    global.rrEscapeHtml = (v) => String(v);
+    const editor = require(path.resolve(__dirname, '..', 'src', 'MapImageLayersEditor.js'));
+    editor.load([{ name: '43_Ground', layer: 'ground', variable: 19, variantName: '43-%1_Ground' }, { name: '9_light', layer: 'over', switch: 4 }]);
+    assert.deepEqual(editor.read(), [{ name: '43_Ground', layer: 'ground', variable: 19, variantName: '43-%1_Ground' }, { name: '9_light', layer: 'over', switch: 4 }]);
+    editor.load([]);
+    assert.deepEqual(editor.read(), []);
+});

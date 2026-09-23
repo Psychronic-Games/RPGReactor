@@ -20701,6 +20701,24 @@ Object.assign(RR_I18N_STRINGS["vi"], {"menu.buildInWorld": "Xây ngay trong th�
 Object.assign(RR_I18N_STRINGS["th"], {"menu.buildInWorld": "สร้างในโลก", "menu.mediaSurfaces": "พื้นผิวสื่อ"});
 Object.assign(RR_I18N_STRINGS["tr"], {"menu.buildInWorld": "Dünyanın içinde inşa", "menu.mediaSurfaces": "Medya yüzeyleri"});
 // File › Import Project…
+Object.assign(RR_I18N_STRINGS["en"], {"menu.importReport": "Import Report…"});
+Object.assign(RR_I18N_STRINGS["ja"], {"menu.importReport": "インポートレポート…"});
+Object.assign(RR_I18N_STRINGS["es"], {"menu.importReport": "Informe de importación…"});
+Object.assign(RR_I18N_STRINGS["zh-Hant"], {"menu.importReport": "匯入報告…"});
+Object.assign(RR_I18N_STRINGS["zh-Hans"], {"menu.importReport": "导入报告…"});
+Object.assign(RR_I18N_STRINGS["ru"], {"menu.importReport": "Отчёт об импорте…"});
+Object.assign(RR_I18N_STRINGS["pt"], {"menu.importReport": "Relatório de importação…"});
+Object.assign(RR_I18N_STRINGS["de"], {"menu.importReport": "Importbericht…"});
+Object.assign(RR_I18N_STRINGS["fr"], {"menu.importReport": "Rapport d’importation…"});
+Object.assign(RR_I18N_STRINGS["el"], {"menu.importReport": "Αναφορά εισαγωγής…"});
+Object.assign(RR_I18N_STRINGS["ko"], {"menu.importReport": "가져오기 보고서…"});
+Object.assign(RR_I18N_STRINGS["ar"], {"menu.importReport": "تقرير الاستيراد…"});
+Object.assign(RR_I18N_STRINGS["it"], {"menu.importReport": "Rapporto di importazione…"});
+Object.assign(RR_I18N_STRINGS["pl"], {"menu.importReport": "Raport importu…"});
+Object.assign(RR_I18N_STRINGS["id"], {"menu.importReport": "Laporan impor…"});
+Object.assign(RR_I18N_STRINGS["vi"], {"menu.importReport": "Báo cáo nhập…"});
+Object.assign(RR_I18N_STRINGS["th"], {"menu.importReport": "รายงานการนำเข้า…"});
+Object.assign(RR_I18N_STRINGS["tr"], {"menu.importReport": "İçe aktarma raporu…"});
 Object.assign(RR_I18N_STRINGS["en"], {"menu.importProject": "Import Project…"});
 Object.assign(RR_I18N_STRINGS["ja"], {"menu.importProject": "プロジェクトをインポート…"});
 Object.assign(RR_I18N_STRINGS["es"], {"menu.importProject": "Importar proyecto…"});

@@ -272,7 +272,8 @@ class CharacterGraphicPicker {
             // For single chars: frame is spriteWidth/3 x spriteHeight/4
             // For multi chars: frame is spriteWidth/12 x spriteHeight/8
             const maxFrameHeight = isSingleCharacter ? spriteHeight / 4 : spriteHeight / 8;
-            const maxFrameWidth = isSingleCharacter ? spriteWidth / 3 : spriteWidth / 12;
+            this._frames = RRAssetFiles.characterFrameCount ? RRAssetFiles.characterFrameCount(baseName) : 3;
+            const maxFrameWidth = isSingleCharacter ? spriteWidth / this._frames : spriteWidth / (this._frames * 4);
             // Target: frames should be at most ~64px tall, scale up small ones (2x) but shrink large ones
             const targetHeight = 64;
             this._frameScale = this.previewZoom || Math.min(8, targetHeight / maxFrameHeight);
@@ -354,7 +355,7 @@ class CharacterGraphicPicker {
      */
     createSingleCharacterGrid(container, img, spriteWidth, spriteHeight) {
         // Single character: 3 frames x 4 directions
-        const frameWidth = spriteWidth / 3;
+        const frameWidth = spriteWidth / (this._frames || 3);
         const frameHeight = spriteHeight / 4;
 
         const directions = [
@@ -376,7 +377,7 @@ class CharacterGraphicPicker {
             const framesContainer = document.createElement('div');
             framesContainer.style.cssText = 'display: flex; gap: 4px;';
 
-            for (let pattern = 0; pattern < 3; pattern++) {
+            for (let pattern = 0; pattern < (this._frames || 3); pattern++) {
                 const frameCanvas = this.createFrameCanvas(
                     img,
                     pattern * frameWidth,
@@ -402,7 +403,7 @@ class CharacterGraphicPicker {
         // Multi-character: 8 characters (4 per row), 3 frames x 4 directions each
         const charWidth = spriteWidth / 4;
         const charHeight = spriteHeight / 2;
-        const frameWidth = charWidth / 3;
+        const frameWidth = charWidth / (this._frames || 3);
         const frameHeight = charHeight / 4;
 
         // Arrange characters in a 4×2 grid layout
@@ -449,7 +450,7 @@ class CharacterGraphicPicker {
                 const framesContainer = document.createElement('div');
                 framesContainer.style.cssText = 'display: flex; gap: 4px;';
 
-                for (let pattern = 0; pattern < 3; pattern++) {
+                for (let pattern = 0; pattern < (this._frames || 3); pattern++) {
                     const baseX = charCol * charWidth;
                     const baseY = charRow * charHeight;
 

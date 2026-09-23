@@ -117,6 +117,7 @@
                     <div class="html-menu-option" data-action="media-surfaces" data-i18n="menu.mediaSurfaces" style="padding: 8px 16px; cursor: pointer;">Media Surfaces</div>
                     <div class="html-menu-option" data-action="resource-manager" data-i18n="menu.resourceManager" style="padding: 8px 16px; cursor: pointer;">Resource Manager</div>
                     <div class="html-menu-option" data-action="audio-player" data-i18n="menu.audioPlayer" style="padding: 8px 16px; cursor: pointer;">♪ Audio Player</div>
+                    <div class="html-menu-option" data-action="import-report" data-i18n="menu.importReport" style="padding: 8px 16px; cursor: pointer;">Import Report…</div>
                 </div>
             </div>
             <div class="html-menu-item" data-menu="forge" style="position: relative; padding: 8px 16px; cursor: pointer;">
@@ -598,6 +599,8 @@
                                 </label>
                             </div>
                         </div>
+                        <!-- Image layers: pictures locked to the map (MapImageLayersEditor) -->
+                        <div id="map-image-layers-section" style="background-color: var(--color-bg-deep); border: 1px solid var(--color-border); border-radius: 4px; padding: 12px;"></div>
                         <!-- 3D Section: the in-game switch and the room a 3D map is built in -->
                         <div style="background-color: var(--color-bg-deep); border: 1px solid var(--color-border); border-radius: 4px; padding: 12px;">
                             <div style="font-size: 13px; font-weight: 600; color: var(--color-text); margin-bottom: 8px;" data-i18n="mapProps.threeD">3D</div>
@@ -1241,10 +1244,12 @@
     <!-- Refactored modules -->
     <script src="src/UIManager.js"></script>
     <script src="src/SidebarResizer.js"></script>
+    <script src="src/MapImageLayersEditor.js"></script>
     <script src="src/ProjectController.js"></script>
     <script src="src/AudioPlayer.js"></script>
     <script src="src/PlaytestManager.js"></script>
     <script src="src/LegacyImportDialog.js"></script>
+    <script src="src/LegacyReportDialog.js"></script>
     <!-- Database editor modules (load before main DatabaseEditorUI) -->
     <script src="src/database/AnimationPickerModal.js"></script>
     <script src="src/database/DatabaseCommonUI.js"></script>

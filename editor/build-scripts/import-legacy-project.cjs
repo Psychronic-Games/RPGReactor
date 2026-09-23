@@ -28,12 +28,18 @@ try {
     if (flag('--report')) {
         const report = I.report(source, { encoding });
         if (flag('--json') && flag('--json') !== true) fs.writeFileSync(flag('--json'), JSON.stringify(report, null, 2));
-        I.printReport(report);
+        if (report.database && report.scripts) console.log(JSON.stringify(report, null, 2));   // an RGSS game's inventory
+        else I.printReport(report);
         if (!destination) process.exit(0);
     }
     const maps = flag('--maps') && flag('--maps') !== true ? String(flag('--maps')).split(',').map(Number) : null;
     const language = flag('--language') && flag('--language') !== true ? flag('--language') : undefined;
-    I.importProject(source, destination, { maps, skipAssets: !!flag('--skip-assets'), force: !!flag('--force'), encoding, language, log: (line) => console.log(line) });
+    const summary = I.importProject(source, destination, { maps, skipAssets: !!flag('--skip-assets'), force: !!flag('--force'), encoding, language, log: (line) => console.log(line) });
+    // Movies Chromium cannot play become WebM once the project is written.
+    const media = require('../src/legacy/LegacyMedia.js');
+    if (summary && summary.destination && media.pendingMovies(summary.destination).length) {
+        media.convertMovies(summary.destination, { log: (line) => console.log(line) }).catch(error => { console.error(error.message); process.exitCode = 1; });
+    }
 } catch (error) {
     console.error(error.message);
     process.exit(1);

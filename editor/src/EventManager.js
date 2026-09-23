@@ -2503,11 +2503,12 @@ class EventManager {
         const source = PIXI.Texture.from(htmlImg)?.source;
         if (!source) return null;
         const big = RRAssetFiles.isBigCharacter(image.characterName);
+        const frames = RRAssetFiles.characterFrameCount ? RRAssetFiles.characterFrameCount(image.characterName) : 3;
         const dirRow = { 2: 0, 4: 1, 6: 2, 8: 3 }[image.direction || 2] || 0;
-        const width = big ? source.width / 3 : source.width / 12;
+        const width = big ? source.width / frames : source.width / (frames * 4);
         const height = big ? source.height / 4 : source.height / 8;
         const index = image.characterIndex || 0;
-        const baseX = big ? 0 : (index % 4) * 3 * width;
+        const baseX = big ? 0 : (index % 4) * frames * width;
         const baseY = big ? dirRow * height : (Math.floor(index / 4) * 4 + dirRow) * height;
         const pattern = patternOverride !== undefined ? patternOverride : (image.pattern === undefined ? 1 : image.pattern);
         return {

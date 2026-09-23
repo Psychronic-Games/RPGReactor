@@ -72,6 +72,7 @@ class DatabaseSystem2Editor {
         col3.style.cssText = 'display: flex; flex-direction: column; gap: 16px;';
         col3.appendChild(this.createAssetSizesSection(system));
         col3.appendChild(this.createAdvancedSettingsSection(system));
+        col3.appendChild(this.createWindowTextSection(system));
         columnsGrid.appendChild(col3);
 
         wrapper.appendChild(columnsGrid);
@@ -319,6 +320,55 @@ class DatabaseSystem2Editor {
         return this.createSection(tt('Advanced Settings'), advHTML);
     }
 
+    /**
+     * Window & Text: the frame an imported game was drawn in (line height,
+     * padding, margin, outline, \\{ \\} step, balloon size, a message script's
+     * name box, multi-frame sheets, a title the game skips). A blank field is
+     * the stock behaviour and stores nothing, so a stock project stays stock;
+     * an import fills them in, and here they are seen and changed.
+     */
+    createWindowTextSection(system) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        const adv = system.advanced || {};
+        const box = adv.rrNameBox || {};
+        const fields = [
+            { label: 'Line Height', path: 'advanced.lineHeight', value: adv.lineHeight, placeholder: 36 },
+            { label: 'Window Padding', path: 'advanced.windowPadding', value: adv.windowPadding, placeholder: 12 },
+            { label: 'Window Margin', path: 'advanced.windowMargin', value: adv.windowMargin, placeholder: 4 },
+            { label: 'Text Outline Width', path: 'advanced.textOutlineWidth', value: adv.textOutlineWidth, placeholder: 3 },
+            { label: 'Font Size Step', path: 'advanced.fontSizeStep', value: adv.fontSizeStep, placeholder: 12, step: '0.1' },
+            { label: 'Balloon Size', path: 'rrBalloonSize', value: system.rrBalloonSize, placeholder: 48 },
+            { label: 'Name Box Opacity', path: 'advanced.rrNameBox.opacity', value: box.opacity, placeholder: '' },
+            { label: 'Name Box Offset X', path: 'advanced.rrNameBox.offsetX', value: box.offsetX, placeholder: '' },
+            { label: 'Name Box Offset Y', path: 'advanced.rrNameBox.offsetY', value: box.offsetY, placeholder: '' },
+            { label: 'Multi-frame Sheets ([fN])', path: 'rrMultiFrames', value: system.rrMultiFrames === true, type: 'checkbox' },
+            { label: 'Skip Title Screen', path: 'rrSkipTitle', value: system.rrSkipTitle === true, type: 'checkbox' }
+        ];
+        const rows = fields.map(f => {
+            const input = f.type === 'checkbox'
+                ? `<input type="checkbox" class="system-checkbox sys2-window-text-field" data-path="${f.path}" aria-label="${rrEscapeHtml(tt(f.label))}"${f.value ? ' checked' : ''}>`
+                : `<input type="number" class="database-field-value sys2-window-text-field" data-path="${f.path}" aria-label="${rrEscapeHtml(tt(f.label))}" value="${f.value === undefined || f.value === null ? '' : rrEscapeHtml(f.value)}" placeholder="${rrEscapeHtml(f.placeholder)}"${f.step ? ` step="${f.step}"` : ''} style="width: 100%; font-size: 12px; box-sizing: border-box;">`;
+            return `<tr><td style="color: var(--color-text); font-size: 12px; white-space: nowrap;">${tt(f.label)}</td><td>${input}</td></tr>`;
+        }).join('');
+        const html = `
+            <div style="font-size: 11px; color: var(--color-text-muted); margin-bottom: 6px;">${tt('Blank uses the standard value. Imported games fill these in to keep their original look.')}</div>
+            <table class="traits-table" style="width: 100%;">
+                <thead><tr><th>${tt('Setting')}</th><th>${tt('Value')}</th></tr></thead>
+                <tbody>${rows}</tbody>
+            </table>`;
+        return this.createSection(tt('Window & Text'), html);
+    }
+
+    /** Set or clear a Window & Text value by its path; an empty object left behind goes too. */
+    static setWindowTextValue(system, path, value) {
+        const keys = path.split('.');
+        let owner = system;
+        for (const key of keys.slice(0, -1)) owner = owner[key] = owner[key] && typeof owner[key] === 'object' ? owner[key] : {};
+        const last = keys[keys.length - 1];
+        if (value === null || value === false) delete owner[last]; else owner[last] = value;
+        if (keys.length === 3 && Object.keys(owner).length === 0) delete system[keys[0]][keys[1]];
+    }
+
     createSection(title, content) {
         const section = document.createElement('div');
         section.className = 'database-section';
@@ -454,6 +504,15 @@ class DatabaseSystem2Editor {
                     system.editor[editorField] = parseFloat(e.target.value);
                     console.debug(`Updated editor.${editorField} to:`, system.editor[editorField]);
                 }
+            });
+        });
+
+        container.querySelectorAll('.sys2-window-text-field').forEach(field => {
+            field.addEventListener('change', (e) => {
+                const value = e.target.type === 'checkbox' ? e.target.checked : (e.target.value === '' ? null : parseFloat(e.target.value));
+                if (value !== null && value !== true && value !== false && !Number.isFinite(value)) return;
+                DatabaseSystem2Editor.setWindowTextValue(system, e.target.dataset.path, value);
+                this.databaseManager.mutationGeneration = (this.databaseManager.mutationGeneration || 0) + 1;
             });
         });
 

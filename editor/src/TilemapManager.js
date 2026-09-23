@@ -498,6 +498,11 @@ class TilemapManager {
         // Create layers
         this.layers.checkerboard = new PIXI.Container();
         this.layers.parallax = new PIXI.Container();
+        // Map image layers ($dataMap.rrImageLayers): painted ground over the lower
+        // tiles, and light/canopy/sky over everything (dimmed so the map stays editable).
+        this.layers.imageGround = new PIXI.Container();
+        this.layers.imageOver = new PIXI.Container();
+        this.layers.imageOver.alpha = 0.6;
         this.layers.ground = new PIXI.Container();
         this.layers.lower1 = new PIXI.Container();
         this.layers.lower2 = new PIXI.Container();
@@ -583,10 +588,12 @@ class TilemapManager {
         this.container.addChild(this.layers.a1lower2);
         this.container.addChild(this.layers.lower3);
         this.container.addChild(this.layers.a1lower3);
+        this.container.addChild(this.layers.imageGround);
         this.container.addChild(this.layers.upper0);
         this.container.addChild(this.layers.upper1);
         this.container.addChild(this.layers.upper2);
         this.container.addChild(this.layers.upper3);
+        this.container.addChild(this.layers.imageOver);
         this.container.addChild(this.layers.layerHighlight);
         this.drawGrid();
         this.drawPassage();
@@ -2334,9 +2341,38 @@ class TilemapManager {
         }
     }
 
+    /**
+     * Draw the map's image layers (rrImageLayers) as the game draws them at the
+     * start of play: each at its base name (variables at 0), locked to the map.
+     */
+    async renderImageLayers() {
+        const map = this.currentMap, generation = this._mapLoadGeneration;
+        const targets = [this.layers?.imageGround, this.layers?.imageOver];
+        for (const layer of targets) if (layer) layer.removeChildren().forEach(child => child.destroy?.({ children: true }));
+        if (!map || !Array.isArray(map.rrImageLayers) || typeof PIXI === 'undefined' || !this.path) return;
+        const root = this.path.join(this.projectPath, 'img', 'parallaxes');
+        for (const spec of map.rrImageLayers) {
+            if (!spec || !spec.name) continue;
+            const url = typeof RRAssetFiles !== 'undefined' ? RRAssetFiles.imageUrlFor(root, spec.name) : null;
+            if (!url) continue;
+            try {
+                const texture = await PIXI.Assets.load(url);
+                if (this.destroyed || generation !== this._mapLoadGeneration || this.currentMap !== map) return;
+                texture.source.style.scaleMode = 'nearest';
+                const sprite = new PIXI.Sprite(texture);
+                sprite.eventMode = 'none';
+                if (typeof spec.opacity === 'number') sprite.alpha = spec.opacity / 255;
+                (spec.layer === 'over' ? this.layers.imageOver : this.layers.imageGround).addChild(sprite);
+            } catch (error) {
+                console.warn(`Map image layer ${spec.name} could not be loaded.`, error);
+            }
+        }
+    }
+
     // Render parallax background
     async renderParallax() {
         if (!this.currentMap) return;
+        this.renderImageLayers();
 
         const generation = this._mapLoadGeneration;
         const map = this.currentMap;

@@ -185,6 +185,18 @@ project's own data so MV and MZ projects are unaffected:
 | Hime Message Face Control: `\MF[face, n]` | `\RRFACE[face,n]` |
 | Victor Engine Multi Frames: `Name[f8]` sheets | `rrMultiFrames` |
 
+**Nothing is hidden after the import.** Everything converted is ordinary
+project data the editor shows and edits: image layers in Map Properties
+(and drawn in the map view), the window and text frame in Database › System 2
+› Window & Text (blank means the standard value), `[fN]` sheets in the event
+graphic picker, and speaker names in Show Text. Tools › Import Report… shows
+what the import did (converted, approximated, skipped, movies) and the game's
+original scripts in a read-only viewer.
+
+**Movies** that Chromium cannot play (AVI, MPEG, WMV, Ogg Theora, FLV, MOV,
+MKV) are converted to WebM under the same name after the project is written,
+with the system's FFmpeg or the pinned build the asset optimizer downloads.
+
 **Ruby cannot run.** Script commands, script conditions and move-route
 scripts that use only stock calls (variables, switches, self switches,
 items, map events, a character's speed or animation) are translated to

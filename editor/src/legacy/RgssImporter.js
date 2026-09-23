@@ -246,7 +246,6 @@ function open(folder, destination, options) {
             if (index % 10 === 0) assetProgress(index, plan.length, `${bucket}: ${path.basename(from)}`);
             if (/\.(txt|rtf|db|ini)$/i.test(from)) return;
             if (/\.(mid|midi)$/i.test(from)) skipped.push(`${from}: MIDI is not played by the runtime`);
-            if (/\.(avi|mpg|mpeg|wmv)$/i.test(from)) skipped.push(`${from}: Chromium cannot play this movie format; convert it to WebM`);
             const bytes = src.read(from);
             if (!bytes) return;
             const out = path.join(dest, to);
