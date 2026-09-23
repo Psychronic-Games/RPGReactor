@@ -140,6 +140,43 @@
             route: { find_path: 'this.rrFindPath?.(%*)', goto_player: 'this.rrGotoCharacter?.(-1, %*)', goto_event: 'this.rrGotoCharacter?.(%*)' }
         },
         {
+            // Woratana's Multiple Fog (VX): $fog is a staging object; the fogs are RR_ShazMultiFog's.
+            key: 'woraMultipleFog', detect: /class Worale_Multiple_Fog/, plugin: 'RR_WoraFog', requires: ['RR_ShazMultiFog'],
+            parameters: (constants) => ({ keepOnTransfer: constants['Worale_Multiple_Fog::CLEAR_FOG'] === false ? 'true' : 'false', folder: 'img/pictures/' }),
+            globals: { $fog: ['$gameTemp.rrWoraFog?.()', 'woraFog'] },
+            objects: { woraFog: { show: '$?.show()', clear: '$?.clear()', delete: '$?.delete(%0)', opacity: '$?.setOpacity(%*)', blend: '$?.setBlend(%*)', speed: '$?.speed(%*)', speed_plus: '$?.speedPlus(%*)', zoom: '$?.setZoom(%*)', tone: '$?.setTone(%*)' } },
+            setters: { 'woraFog.id': '((f) => f && (f.id = %v))($)', 'woraFog.name': '((f) => f && (f.name = %v))($)', 'woraFog.opacity': '((f) => f && (f.opacity = %v))($)', 'woraFog.blend': '((f) => f && (f.blend = %v))($)',
+                'woraFog.ox': '((f) => f && (f.ox = %v))($)', 'woraFog.oy': '((f) => f && (f.oy = %v))($)', 'woraFog.zoom': '((f) => f && (f.zoom = %v))($)', 'woraFog.tone': '((f) => f && (f.tone = %v))($)' }
+        },
+        {
+            // Nechigawara's Skill Shop / Tech Shop (VX): goods in $skill_shop, then the scene.
+            key: 'skillShop', detect: /module SKILL_SHOP\b[\s\S]*Window_Skill_ShopBuy/, plugin: 'RR_SkillShop',
+            setters: { $skill_shop: '$gameTemp.rrSkillShopGoods = %v' },
+            scenes: { Scene_Skill_Shop: '(typeof Scene_RRSkillShop !== "undefined" && SceneManager.push(Scene_RRSkillShop))' }
+        },
+        {
+            // modern algebra's Editable Actor Options (VX): the options are traits the importer wrote.
+            key: 'maActorOptions', detect: /def change_actor_options\b/, plugin: 'RR_ActorOptions',
+            event: { change_actor_options: 'this.rrActorOption?.(%*)' }
+        },
+        {
+            // Nicke's Simple Journal: its quests become Reactor's own (Database › Quests), its calls drive them.
+            key: 'nickeSimpleJournal', detect: /NICKE-SIMPLE-JOURNAL/, plugin: 'RR_NickeJournal',
+            event: { add_quest: 'this.rrNickeQuest?.("add", %0, %1)', complete_quest: 'this.rrNickeQuest?.("complete", %0, %1)', fail_quest: 'this.rrNickeQuest?.("fail", %0, %1)' },
+            scenes: { Scene_Simple_Journal: 'SceneManager.push(Scene_Quest)' },
+            quests: (scripts) => {
+                const out = [];
+                const text = scripts.join('\n');
+                for (const [kind, category, header] of [['main', 'Main', 'MAIN_Q_HEADER'], ['side', 'Side', 'SIDE_Q_HEADER']]) {
+                    const name = (new RegExp(header + '\\s*=\\s*"([^"]*)"').exec(text) || [, category])[1];
+                    for (const m of text.matchAll(new RegExp(kind.toUpperCase() + '_QUESTS\\[(\\d+)\\]\\s*=\\s*\\[\\s*-?\\d+\\s*,\\s*"((?:[^"\\\\]|\\\\.)*)"\\s*,\\s*"((?:[^"\\\\]|\\\\.)*)"', 'g'))) {
+                        out.push({ key: `${kind}-${m[1]}`, name: m[2], category: name, description: m[3] });
+                    }
+                }
+                return out;
+            }
+        },
+        {
             // A battleback kept on Game_System (DerVVulf's VX script and its kin); the per-map table is read by the importer.
             key: 'systemBattleback', detect: /attr_accessor\s+:battleback\b/, plugin: 'RR_VxCompat',
             setters: { 'system.battleback': '$gameSystem._rrBattleback = %v' }
@@ -189,8 +226,8 @@
             members: { 'maQuest.objectives': ['($?.objectives || [])', 'array'] },
             objects: { maQuest: { reveal_objective: '$?.revealObjective(%*)', conceal_objective: '$?.concealObjective(%*)', complete_objective: '$?.completeObjective(%*)', uncomplete_objective: '$?.uncompleteObjective(%*)',
                 fail_objective: '$?.failObjective(%*)', unfail_objective: '$?.unfailObjective(%*)', name: '$?.name', description: '$?.description', 'complete?': '$?.isComplete()', 'failed?': '$?.isFailed()' } },
-            setters: { 'maQuest.name': '$ && ($.name = %v)', 'maQuest.description': '$ && ($.description = %v)', 'maQuest.client': '$ && ($.client = %v)', 'maQuest.location': '$ && ($.location = %v)',
-                'maQuest.icon_index': '$ && ($.iconIndex = %v)', 'maQuest.level': '$ && ($.level = %v)' }
+            setters: { 'maQuest.name': '((q) => q && (q.name = %v))($)', 'maQuest.description': '((q) => q && (q.description = %v))($)', 'maQuest.client': '((q) => q && (q.client = %v))($)', 'maQuest.location': '((q) => q && (q.location = %v))($)',
+                'maQuest.icon_index': '((q) => q && (q.iconIndex = %v))($)', 'maQuest.level': '((q) => q && (q.level = %v))($)' }
         }
     ];
 
@@ -205,7 +242,7 @@
     /** The calls and instance variables the enabled families add, for one `self`. */
     function familyTables(context) {
         const calls = {}, ivars = {};
-        const extra = { members: {}, objects: {}, globals: {}, setters: {} };
+        const extra = { members: {}, objects: {}, globals: {}, setters: {}, scenes: {} };
         const self = context.self === 'character' ? 'character' : 'interpreter';
         for (const family of FAMILIES) {
             if (!context.families || !context.families.has(family.key)) continue;
@@ -215,6 +252,7 @@
             Object.assign(extra.objects, family.objects || {});
             Object.assign(extra.globals, family.globals || {});
             Object.assign(extra.setters, family.setters || {});
+            Object.assign(extra.scenes, family.scenes || {});
             if (self === 'character') for (const [name, template] of Object.entries(family.assign || {})) ivars[name] = template.replace(/\s*=\s*%v$/, '');
         }
         return { calls, ivars, extra };

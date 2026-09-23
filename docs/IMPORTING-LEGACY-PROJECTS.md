@@ -202,7 +202,11 @@ do nothing). Ported so far: Galv's Move Route Extras and Event Spawn Timer, OZ
 Character/Animation Z, Shaz's Multi Layer Fog, MS Enhanced Camera, Rokan's
 Symbol Encounter, TheoAllen's Footsteps, Pathfinding, Notification Window, VX
 Style Choices and Invisible Regions, MOG Picture Effects and Battleback EX,
-Khas Awesome Light Effects, and the Quest Journal.
+Khas Awesome Light Effects, and the Quest Journal; from VX, Woratana's
+Multiple Fog, the Skill (Tech) Shop and modern algebra's Editable Actor
+Options. A journal whose quests are data (Nicke's Simple Journal) becomes
+Reactor's own quests instead: they are in Database › Quests, the game's calls
+drive them, and its journal scene is Reactor's quest log.
 
 **Ruby cannot run.** Script commands, script conditions and move-route
 scripts that use stock calls or a ported script are translated to JavaScript

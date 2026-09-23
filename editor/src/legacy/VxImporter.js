@@ -241,6 +241,7 @@ function open(folder, destination, options) {
         R.copyAliasedAudio(dest, aliases);
         { const n = R.matchFileCase(dest); if (n) add(notes, 'fileNameCase', n); }
         families.extraPlugins = ['RR_VxCompat'];
+        { const n = R.writeFamilyQuests(dest, families, custom.map(s => s.text), constants); if (n) add(notes, 'questsImported', n); }
         const installed = R.installPlugins(dest, families, constants, scriptTexts, skipped, log);
 
         if (custom.length) {

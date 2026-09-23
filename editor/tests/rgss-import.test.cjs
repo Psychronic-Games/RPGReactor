@@ -516,7 +516,10 @@ test('Legionwood (VX) imports whole', { skip: !fs.existsSync(path.join(vxCorpus,
         assert.equal(summary.engine, 'RPG Maker VX');
         assert.equal(summary.maps, 261);
         assert.ok(summary.plugins.includes('RR_VxCompat'));
-        assert.ok(summary.approximations.rubyTranslated >= 500);
+        assert.ok(summary.approximations.rubyTranslated >= 700);
+        assert.equal(summary.approximations.questsImported, 42);
+        for (const plugin of ['RR_WoraFog', 'RR_ShazMultiFog', 'RR_SkillShop', 'RR_NickeJournal', 'RR_ActorOptions']) assert.ok(summary.plugins.includes(plugin), plugin);
+        assert.ok(summary.plugins.indexOf('RR_ShazMultiFog') < summary.plugins.indexOf('RR_WoraFog'));
         const game = path.join(dir, 'game');
         const read = (f) => JSON.parse(fs.readFileSync(path.join(game, 'data', f), 'utf8'));
         const sys = read('System.json');
@@ -528,4 +531,40 @@ test('Legionwood (VX) imports whole', { skip: !fs.existsSync(path.join(vxCorpus,
         assert.ok(fs.existsSync(path.join(game, 'img', 'battlebacks1', '001-Grassland01.png')));
         assert.equal(read('Weapons.json')[1].wtypeId > 0, true);
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('journal, fog, skill shop and actor option scripts become Reactor quests and plugin calls', () => {
+    const journal = 'module NICKE\n  module JOURNAL_SYSTEM\n    COMPLETE_QUEST_VAR = 99\n    MAIN_Q_HEADER = "Story Quests"\n    MAIN_QUESTS = []\n    MAIN_QUESTS[0] = [1, "Market Day!", "Visit the fruitseller."]\n    SIDE_Q_HEADER = "Optional Quests"\n    SIDE_QUESTS[2] = [1, "Funeral Service", "Find a piece of Wyrmwood."]\n  end\nend\n($imported ||= {})["NICKE-SIMPLE-JOURNAL"] = true';
+    const fam = C.scriptFamilies([journal, 'class Worale_Multiple_Fog\nend', 'module SKILL_SHOP\n  PRICE = {\n  0 => 100,\n  14 => 30,\n  }\n  SKILL_BUY = {\n  1 => [14,15],\n  }\nend\nclass Window_Skill_ShopBuy < Window_Selectable\nend', 'def change_actor_options (actor_id, option_id, value = -1)\nend']);
+    assert.deepEqual([...fam].sort(), ['maActorOptions', 'nickeSimpleJournal', 'skillShop', 'woraMultipleFog']);
+    const quests = C.FAMILIES.find(f => f.key === 'nickeSimpleJournal').quests([journal]);
+    assert.deepEqual(quests, [{ key: 'main-0', name: 'Market Day!', category: 'Story Quests', description: 'Visit the fruitseller.' }, { key: 'side-2', name: 'Funeral Service', category: 'Optional Quests', description: 'Find a piece of Wyrmwood.' }]);
+    const ctx = { constants: {}, families: fam };
+    assert.equal(C.ruby('add_quest(2,:side)', 'statement', ctx), 'this.rrNickeQuest?.("add", 2, "side");');
+    assert.equal(C.ruby('$scene = Scene_Simple_Journal.new', 'statement', ctx), 'SceneManager.push(Scene_Quest);');
+    assert.equal(C.ruby('$fog.name = "mist"', 'statement', ctx), '((f) => f && (f.name = "mist"))($gameTemp.rrWoraFog?.());');
+    assert.equal(C.ruby('$fog.show', 'statement', ctx), '$gameTemp.rrWoraFog?.()?.show();');
+    assert.equal(C.ruby('$skill_shop =\n[14,15]', 'statement', ctx), '$gameTemp.rrSkillShopGoods = [14, 15];');
+    assert.equal(C.ruby('change_actor_options (3, 2, true)', 'statement', ctx), 'this.rrActorOption?.(3, 2, true);');
+    const shop = require(path.join(legacy, 'plugins', 'RR_SkillShop.params.js')).extract({ scripts: ['module SKILL_SHOP\n  PRICE = {\n  0 => 100,\n  14 => 30,\n  }\n  SKILL_BUY = {\n  1 => [14,15,14],\n  }\nend'] });
+    assert.deepEqual([shop.defaultPrice, JSON.parse(shop.prices), JSON.parse(shop.learners)], ['100', { 14: 30 }, { 1: [14, 15] }]);
+    assert.deepEqual(require(path.join(legacy, 'plugins', 'RR_NickeJournal.params.js')).extract({ constants: C.scriptConstants([journal]) }).completeVariable, '99');
+});
+
+test('an actor option switched in play replaces the imported trait', () => {
+    const src = fs.readFileSync(path.join(legacy, 'plugins', 'RR_ActorOptions.js'), 'utf8');
+    const record = { id: 1, traits: [{ code: 62, dataId: 0, value: 1 }, { code: 22, dataId: 0, value: 0.95 }] };
+    function Game_Actor() { this.refresh = () => {}; }
+    Game_Actor.prototype.actor = function() { return record; };
+    Game_Actor.prototype.traitObjects = function() { return [this.actor(), { traits: [] }]; };
+    const actor = new Game_Actor();
+    const ctx = { Game_Actor, Game_Interpreter: function() {}, $gameActors: { actor: () => actor } };
+    new Function(...Object.keys(ctx), src)(...Object.values(ctx));
+    const traits = () => actor.traitObjects()[0].traits.map(t => `${t.code}/${t.dataId}`).sort();
+    assert.equal(actor.rrHasOption(2), true);
+    actor.rrSetOption(2);                               // toggle auto battle off
+    assert.deepEqual(traits(), ['22/0']);
+    actor.rrSetOption(0, true);                         // dual wield on
+    assert.deepEqual(traits(), ['22/0', '55/1']);
+    assert.equal(record.traits.length, 2);              // the database record is untouched
 });

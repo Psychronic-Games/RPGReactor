@@ -280,6 +280,7 @@ function open(folder, destination, options) {
         families.extraPlugins = [{ name: 'RR_ShazMultiFog', parameters: () => ({ keepOnTransfer: 'false', folder: 'img/fogs/' }) }, 'RR_XpCompat'];
         R.copyAliasedAudio(dest, aliases);
         { const n = R.matchFileCase(dest); if (n) add(notes, 'fileNameCase', n); }
+        { const n = R.writeFamilyQuests(dest, families, custom.map(s => s.text), constants); if (n) add(notes, 'questsImported', n); }
         const installed = R.installPlugins(dest, families, constants, custom.map(s => s.text), skipped, log);
 
         if (custom.length) {

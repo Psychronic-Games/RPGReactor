@@ -111,7 +111,12 @@ function source(folder) {
 function installPlugins(dest, families, constants, scriptTexts, skipped, log) {
     const mkdir = (p) => fs.mkdirSync(p, { recursive: true });
     const installed = [];
-    const wanted = C.FAMILIES.filter(f => families.has(f.key) && f.plugin).map(f => ({ name: f.plugin, parameters: f.parameters }));
+    const wanted = [];
+    for (const f of C.FAMILIES.filter(f => families.has(f.key) && f.plugin)) {
+        // A port built on another port installs that one first, with this family's settings for it.
+        for (const base of f.requires || []) wanted.push({ name: base, parameters: f.parameters });
+        wanted.push({ name: f.plugin, parameters: f.requires ? null : f.parameters });
+    }
     for (const extra of families.extraPlugins || []) wanted.push(typeof extra === 'string' ? { name: extra } : extra);
     for (const family of wanted) {
         if (installed.some(p => p.name === family.name)) continue;
@@ -224,6 +229,29 @@ function matchFileCase(dest) {
         if (changed !== before) fs.writeFileSync(file, JSON.stringify(json));
     }
     return changed;
+}
+
+/**
+ * Quests a game's journal script defined (a family's `quests(scripts, constants)`),
+ * written as Reactor's own: data/ReactorQuests.json, edited in Database › Quests.
+ * Returns how many.
+ */
+function writeFamilyQuests(dest, families, scriptTexts, constants) {
+    const records = [];
+    for (const family of C.FAMILIES) {
+        if (!families.has(family.key) || typeof family.quests !== 'function') continue;
+        for (const q of family.quests(scriptTexts, constants) || []) {
+            records.push({
+                id: records.length + 1, name: q.name || q.key, key: q.key || '', category: q.category || '', iconIndex: q.iconIndex || 0, difficulty: '',
+                from: q.from || '', location: q.location || '', description: q.description || '',
+                objectives: (q.objectives || []).map(text => ({ text, hidden: false, switchId: 0 })), rewards: (q.rewards || []).map(text => ({ text, hidden: false })),
+                subtext: '', quotes: '', activation: { type: 'command', switchId: 0, variableId: 0, operator: '>=', value: 0 }, completion: { type: 'command', switchId: 0 },
+                note: `<Imported from: ${family.key}>`
+            });
+        }
+    }
+    if (records.length) fs.writeFileSync(path.join(dest, 'data', 'ReactorQuests.json'), JSON.stringify([null].concat(records), null, 2));
+    return records.length;
 }
 
 function open(folder, destination, options) {
@@ -429,6 +457,7 @@ function open(folder, destination, options) {
 
         copyAliasedAudio(dest, aliases);
         { const n = matchFileCase(dest); if (n) add(notes, 'fileNameCase', n); }
+        { const n = writeFamilyQuests(dest, families, custom.map(s => s.text), constants); if (n) add(notes, 'questsImported', n); }
         const installed = installPlugins(dest, families, constants, custom.map(s => s.text), skipped, log);
 
         // The game's own Ruby, kept beside the project for whoever ports it by hand.
@@ -475,4 +504,4 @@ function open(folder, destination, options) {
 function report(folder, options) { return open(folder, null, options).inventory(); }
 function importProject(folder, destination, options) { return open(folder, destination, options).importProject(); }
 
-module.exports = { open, report, importProject, source, installPlugins, copyAliasedAudio, matchFileCase, repairName, repairPath, STOCK_SCRIPTS, GRAPHICS, AUDIO };
+module.exports = { open, report, importProject, source, installPlugins, writeFamilyQuests, copyAliasedAudio, matchFileCase, repairName, repairPath, STOCK_SCRIPTS, GRAPHICS, AUDIO };

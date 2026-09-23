@@ -157,6 +157,12 @@
             if (isKw('break')) { next(); return { t: 'break' }; }
             if (isKw('next')) { next(); return { t: 'continue' }; }
             if (isKw('return')) { next(); return { t: 'return', e: is('nl') || isOp(';') || is('eof') ? null : expression() }; }
+            // `name (a, b)`: Ruby reads a spaced parenthesised list after a method name as its arguments.
+            if (is('id') && peek(1).type === 'op' && peek(1).value === '(' && peek(1).space && !isAssignmentAhead()) {
+                const name = next().value;
+                next();
+                return { t: 'call', recv: null, name, args: args(')'), block: null };
+            }
             // A bare call with arguments and no parentheses: `rotate 30`, `wait 60`.
             if (is('id') && !peek().space && peek(1).space && canStartArgument(peek(1)) && !isAssignmentAhead()) {
                 const name = next().value;
@@ -189,6 +195,7 @@
             if (is('op') && /^(=|\+=|-=|\*=|\/=|%=|\|\|=|&&=)$/.test(peek().value)) {
                 const op = next().value;
                 if (!['var', 'gvar', 'ivar', 'index', 'call'].includes(left.t)) fail('bad assignment target');
+                while (is('nl')) next();   // Ruby continues a statement that ends with an operator on the next line
                 return { t: 'assign', op, target: left, value: assignment() };
             }
             return left;
@@ -628,6 +635,8 @@
                 if (recv.kind.startsWith('array') || recv.kind === 'any') return js(`${recv.code}[${a[0]}] = ${combine(`${recv.code}[${a[0]}]`)}`);
                 return fail('assignment into ' + recv.kind);
             }
+            // A game script's own global ($skill_shop = [...]), where a family says where it lives now.
+            if (t.t === 'gvar' && options.setters && options.setters[t.name] && op === '=') return js(options.setters[t.name].replace('%v', value));
             if (t.t === 'var') {
                 if (locals.has(t.name)) return js(`${t.name} = ${combine(t.name)}`);
                 if (op !== '=') fail('compound assignment to an undeclared local');
