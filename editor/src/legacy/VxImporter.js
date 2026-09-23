@@ -155,6 +155,8 @@ function open(folder, destination, options) {
         if (screen) Object.assign(sys.advanced, { screenWidth: screen[0], screenHeight: screen[1], uiAreaWidth: screen[0], uiAreaHeight: screen[1] });
         if (!sheetFiles.has('title')) { sys.title1Name = ''; skipped.push('Graphics/System/Title: not shipped'); }
         if (/\$imported\[:ve_multi_frames\]|\[f\d+\]/i.test(scriptText) && custom.some(s => /multi.?frame/i.test(s.name + s.text.slice(0, 400)))) sys.rrMultiFrames = true;
+        // A "Skip Title" script: the game boots into a new game and has no title screen.
+        if (C.skipsTitle(active.map(s => s.text))) { sys.rrSkipTitle = true; add(notes, 'skipTitle'); }
         writeJson(path.join(dest, 'data', 'System.json'), sys);
 
         // A per-map battleback table in the game's scripts (DerVVulf's BATTLEBACK_LIST and its kin): map settings, images from its folder.

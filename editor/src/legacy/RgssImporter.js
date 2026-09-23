@@ -383,6 +383,8 @@ function open(folder, destination, options) {
         const screen = C.screenSize(active.map(s => s.text), constants) || [544, 416];
         Object.assign(sys.advanced, { screenWidth: screen[0], screenHeight: screen[1], uiAreaWidth: screen[0], uiAreaHeight: screen[1] });
         if (fontSettings.outline === false) sys.advanced.textOutlineWidth = 0;
+        // A "Skip Title" script: the game boots into a new game and has no title screen.
+        if (C.skipsTitle(active.map(s => s.text))) { sys.rrSkipTitle = true; add(notes, 'skipTitle'); }
         writeJson(path.join(dest, 'data', 'System.json'), sys);
 
         log(`Writing ${mapIds.length} maps and their events…`, 'stage');

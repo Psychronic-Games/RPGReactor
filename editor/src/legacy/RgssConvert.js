@@ -789,10 +789,23 @@
         return changed;
     }
 
+    /**
+     * Whether the game's scripts replace the title screen with a jump into a new
+     * game ("Skip Title" scripts: Scene_Title#start sets up a new game and goes to
+     * the map), so the project should skip it too (System.json rrSkipTitle).
+     */
+    function skipsTitle(sources) {
+        for (const source of sources || []) {
+            const m = /class\s+Scene_Title\b[\s\S]*?def\s+(?:start|main)\b([\s\S]*?)\n\s*end\b/.exec(String(source));
+            if (m && /setup_new_game|command_new_game/.test(m[1]) && /goto\(\s*Scene_Map\s*\)|Scene_Map\.new/.test(m[1])) return true;
+        }
+        return false;
+    }
+
     /** Script constants (from scriptConstants) that Ruby translation resolves while converting. */
     const setContext = (context) => { activeContext = context || {}; };
 
-    const api = { audioAliases, applyAudioAliases, plain, audio, ruby, rubyProgram, parseCall, scriptFamilies, FAMILIES, scriptConstants, fontDefaults, screenSize, gdsParallaxLayers, rgssFontScale, setContext, windowSkin, commands, database, system, vocabMessages, mapInfos, map, BUTTONS };
+    const api = { skipsTitle, audioAliases, applyAudioAliases, plain, audio, ruby, rubyProgram, parseCall, scriptFamilies, FAMILIES, scriptConstants, fontDefaults, screenSize, gdsParallaxLayers, rgssFontScale, setContext, windowSkin, commands, database, system, vocabMessages, mapInfos, map, BUTTONS };
     root.RRRgssConvert = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

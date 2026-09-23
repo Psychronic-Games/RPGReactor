@@ -14,6 +14,7 @@
 
 ### Fixed
 
+- An imported game that skipped its title screen with a script boots straight into its own opening instead of showing a stock title menu.
 - Plugins that hand sprites their texture again every frame (weather and particle plugins) no longer cost up to 300 ms a frame.
 - **File › Import Project…** works from the editor (it failed at once with "TextDecoder is not defined"), names what a picked folder holds (RPG Maker 2000, 2003, XP, VX, VX Ace, MV, MZ or a Reactor project, with its title and map count) and imports with a progress bar and a console of stages, warnings and a summary.
 - Stamped buildings: gable ends are one smooth wall instead of red steps, window glass sits in east and west walls instead of showing as a line through them, and the Build bar's turn (R/Q/E) now turns a plan before it is stamped. Existing buildings pick this up when moved, turned or re-stamped.

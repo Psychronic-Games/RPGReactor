@@ -202,6 +202,8 @@ function open(folder, destination, options) {
         for (const [key, folderName] of [['title1Name', 'Titles'], ['battleback1Name', 'Battlebacks']]) {
             if (sys[key] && !findGraphic(folderName, sys[key])) { skipped.push(`Graphics/${folderName}/${sys[key]}: named by the system data but not shipped`); sys[key] = ''; }
         }
+        // A "Skip Title" script: the game boots into a new game and has no title screen.
+        if (C.skipsTitle(active.map(s => s.text))) { sys.rrSkipTitle = true; add(notes, 'skipTitle'); }
         writeJson(path.join(dest, 'data', 'System.json'), sys);
 
         // ---- maps --------------------------------------------------------------

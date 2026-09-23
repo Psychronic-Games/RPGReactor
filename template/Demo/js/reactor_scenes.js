@@ -3778,4 +3778,14 @@ Scene_Boot.prototype.isReady = function() {
         }
         return _startNormalGame.call(this);
     };
+    // Returning to the title (Game End, a script) starts over the same way: the game has no title screen.
+    const _titleStart = Scene_Title.prototype.start;
+    Scene_Title.prototype.start = function() {
+        if ($dataSystem && $dataSystem.rrSkipTitle) {
+            DataManager.setupNewGame();
+            SceneManager.goto(Scene_Map);
+            return;
+        }
+        _titleStart.call(this);
+    };
 })();

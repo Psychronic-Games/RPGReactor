@@ -568,3 +568,11 @@ test('an actor option switched in play replaces the imported trait', () => {
     assert.deepEqual(traits(), ['22/0', '55/1']);
     assert.equal(record.traits.length, 2);              // the database record is untouched
 });
+
+test('a Skip Title script makes the project skip its title; a stock title override does not', () => {
+    assert.equal(C.skipsTitle(['class Scene_Title < Scene_Base\n  def start\n    SceneManager.clear\n    DataManager.setup_new_game\n    $game_map.autoplay\n    SceneManager.goto(Scene_Map)\n  end\nend']), true);
+    assert.equal(C.skipsTitle(['class Scene_Title\n  def main\n    $game_temp = Game_Temp.new\n    command_new_game\n    $scene = Scene_Map.new\n  end\nend']), true);
+    assert.equal(C.skipsTitle(['class Scene_Title < Scene_Base\n  def start\n    super\n    create_command_window\n  end\nend']), false);
+    const scenes = fs.readFileSync(path.resolve(__dirname, '..', '..', 'runtime', 'reactor_scenes.js'), 'utf8');
+    assert.match(scenes, /Scene_Title\.prototype\.start = function\(\) \{\s*if \(\$dataSystem && \$dataSystem\.rrSkipTitle\)/);
+});
