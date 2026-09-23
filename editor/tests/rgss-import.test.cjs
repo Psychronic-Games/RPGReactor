@@ -604,3 +604,16 @@ test('imported references work off Windows; dead System names clear; ME music cr
         try { assert.equal(I.findRtp('RPG Maker 2000'), path.join(dir, 'rtp')); } finally { if (saved === undefined) delete process.env.RPG2K_RTP_PATH; else process.env.RPG2K_RTP_PATH = saved; }
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
+
+test('title-screen scripts are recognised and their settings read', () => {
+    const title = 'module V_Custom_Animated_Title_Scene\n  module Specs\n    Layers = {\n    "galaxy" => { :rotation_frame_rate => 1, :rotation_speed => -0.5, :x => 320, :y => 75, :ox => 240, :oy => 240, :z => 2, :opacity => 255, :animation_types => [1], },\n    }\n    BGM = ["Law of the Gun", 100, 100]\n  end\nend';
+    const web = 'MAWLT_TITLE_WEBSITE_COMMANDS = [\n  ["Join Discord", 3, "https://example.com"],\n]';
+    const extra = '=begin\n Extra Start Options (18/1/2015)\n Created By: Shadowmaster\n=end';
+    assert.deepEqual([...C.scriptFamilies([title, web, extra])].sort(), ['extraStartOptions', 'vAnimatedTitle', 'websiteTitleCommand']);
+    const params = require(path.join(legacy, 'plugins', 'RR_VAnimatedTitle.params.js')).extract({ scripts: [title], constants: {} });
+    const layers = JSON.parse(params.layers);
+    const galaxy = Array.isArray(layers) ? layers.find(l => l.name === 'galaxy') : layers.galaxy;
+    assert.equal(galaxy.rotation_speed ?? galaxy.rotationSpeed, -0.5);
+    const site = require(path.join(legacy, 'plugins', 'RR_WebsiteTitleCommand.params.js')).extract({ scripts: [web], constants: {} });
+    assert.match(JSON.stringify(site), /Join Discord/);
+});

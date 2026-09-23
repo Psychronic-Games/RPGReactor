@@ -140,6 +140,12 @@
             route: { find_path: 'this.rrFindPath?.(%*)', goto_player: 'this.rrGotoCharacter?.(-1, %*)', goto_event: 'this.rrGotoCharacter?.(%*)' }
         },
         {
+            // Title-screen scripts (VX Ace): V's animated title, Shadowmaster's extra start options, the website command.
+            key: 'vAnimatedTitle', detect: /module V_Custom_Animated_Title_Scene\b/, plugin: 'RR_VAnimatedTitle'
+        },
+        { key: 'extraStartOptions', detect: /Extra Start Options[\s\S]*Shadowmaster/, plugin: 'RR_ExtraStartOptions' },
+        { key: 'websiteTitleCommand', detect: /MAWLT_TITLE_WEBSITE_COMMANDS\b/, plugin: 'RR_WebsiteTitleCommand' },
+        {
             // Woratana's Multiple Fog (VX): $fog is a staging object; the fogs are RR_ShazMultiFog's.
             key: 'woraMultipleFog', detect: /class Worale_Multiple_Fog/, plugin: 'RR_WoraFog', requires: ['RR_ShazMultiFog'],
             parameters: (constants) => ({ keepOnTransfer: constants['Worale_Multiple_Fog::CLEAR_FOG'] === false ? 'true' : 'false', folder: 'img/pictures/' }),

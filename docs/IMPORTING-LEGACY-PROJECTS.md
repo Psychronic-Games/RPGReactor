@@ -26,7 +26,7 @@ node editor/build-scripts/import-legacy-project.cjs <source> <destination> [--ma
 **The RTP.** A 2000/2003 game not built as a full package takes standard
 characters, tiles, music and sounds from RPG Maker's RTP, installed with the
 engine rather than the game. The importer copies the ones the game names from
-the RTP it finds: `--rtp <folder>`, else `RPG2K_RTP_PATH` / `RPG2K3_RTP_PATH`
+the RTP it finds: the import dialog's RTP folder or `--rtp <folder>`, else `RPG2K_RTP_PATH` / `RPG2K3_RTP_PATH`
 (the variables EasyRPG reads), else where the Windows installers put it (also
 under Wine). Without one, those files are listed as missing.
 
@@ -209,7 +209,8 @@ do nothing). Ported so far: Galv's Move Route Extras and Event Spawn Timer, OZ
 Character/Animation Z, Shaz's Multi Layer Fog, MS Enhanced Camera, Rokan's
 Symbol Encounter, TheoAllen's Footsteps, Pathfinding, Notification Window, VX
 Style Choices and Invisible Regions, MOG Picture Effects and Battleback EX,
-Khas Awesome Light Effects, and the Quest Journal; from VX, Woratana's
+Khas Awesome Light Effects, the Quest Journal, V's animated title, Extra Start
+Options and the website title command; from VX, Woratana's
 Multiple Fog, the Skill (Tech) Shop and modern algebra's Editable Actor
 Options. A journal whose quests are data (Nicke's Simple Journal) becomes
 Reactor's own quests instead: they are in Database › Quests, the game's calls

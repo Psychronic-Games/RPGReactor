@@ -98,6 +98,9 @@
         const parentInput = input('rr-legacy-import-parent', true);
         const parentBrowse = button('rr-legacy-import-parent-browse', tt('Browse…'));
         const nameInput = input('rr-legacy-import-name', false);
+        const rtpInput = input('rr-legacy-import-rtp', true);
+        const rtpBrowse = button('rr-legacy-import-rtp-browse', tt('Browse…'));
+        try { rtpInput.value = localStorage.getItem('rrLegacyImportRtp') || ''; } catch (_) { /* private mode */ }
         const encodingSelect = document.createElement('select');
         encodingSelect.id = 'rr-legacy-import-encoding';
         encodingSelect.style.cssText = 'width:100%;box-sizing:border-box;padding:6px 8px;font-size:13px;color:var(--color-text);background:var(--color-bg-input, var(--color-bg-deep));border:1px solid var(--color-border);border-radius:var(--radius-sm, 4px);';
@@ -119,12 +122,13 @@
         detectedEl.setAttribute('aria-live', 'polite');
         detectedEl.style.cssText = 'grid-column:2 / span 2;display:flex;align-items:center;gap:8px;min-height:24px;font-size:13px;color:var(--color-text-muted);';
         detectedEl.textContent = '—';
-        body.append(label(tt('Source folder'), sourceInput.id), sourceInput, sourceBrowse, hint(tt('The folder that holds RPG_RT.ldb.')));
+        body.append(label(tt('Source folder'), sourceInput.id), sourceInput, sourceBrowse, hint(tt('The game\'s folder: RPG_RT.ldb for 2000/2003, a Data folder or game archive for XP, VX and VX Ace.')));
         body.append(label(tt('Detected'), detectedEl.id), detectedEl);
         body.append(label(tt('Create in'), parentInput.id), parentInput, parentBrowse);
         body.append(label(tt('Project name'), nameInput.id), nameInput, spacer());
         body.append(label(tt('Text encoding'), encodingSelect.id), encodingSelect, spacer(), hint(tt('Leave on Automatic unless names and messages come out garbled.')));
         body.append(label(tt('Language'), languageSelect.id), languageSelect, spacer(), hint(tt('A translation the game ships in its Language folder, baked into every text.')));
+        body.append(label(tt('RTP folder'), rtpInput.id), rtpInput, rtpBrowse, hint(tt('Only for 2000/2003 games that use RPG Maker\'s standard files; an installed RTP is found without it.')));
         fillLanguages([]);
 
         const errorEl = document.createElement('div');
@@ -225,7 +229,7 @@
                 detectedEl.append(badge, text);
             };
             const reason = (info) => {
-                if (!info || !info.kind) return tt('Not an RPG Maker 2000/2003 project: no RPG_RT.ldb here.');
+                if (!info || !info.kind) return tt('Not an RPG Maker game folder: no RPG_RT.ldb, Data folder or game archive here.');
                 if (info.kind === 'reactor') return tt('Already an RPG Reactor project: open it with File › Open Project.');
                 if (info.kind === 'mv' || info.kind === 'mz') return tt('RPG Maker MV and MZ projects open directly: use File › Open Project.');
                 return '';
@@ -242,6 +246,7 @@
                 errorEl.textContent = reason(probed);
             }));
             parentBrowse.addEventListener('click', () => browse(parentInput, picked => { try { localStorage.setItem('rrLegacyImportParent', picked); } catch (_) { /* private mode */ } }));
+            rtpBrowse.addEventListener('click', () => browse(rtpInput, picked => { try { localStorage.setItem('rrLegacyImportRtp', picked); } catch (_) { /* private mode */ } }));
             const log = (message, level = 'info') => {
                 const line = document.createElement('div');
                 line.textContent = message;
@@ -277,7 +282,7 @@
                 startedAt = Date.now(); tick(); clock = setInterval(tick, 1000);
                 setProgress(0, tt('Importing…'));
                 const setBusy = busy => {
-                    for (const el of [sourceBrowse, parentBrowse, nameInput, encodingSelect, importButton]) el.disabled = busy;
+                    for (const el of [sourceBrowse, parentBrowse, rtpBrowse, nameInput, encodingSelect, importButton]) el.disabled = busy;
                     // A source with no translations keeps the language list off.
                     languageSelect.disabled = busy || languageSelect.options.length <= 1;
                 };
@@ -296,7 +301,7 @@
                 let workerPath = path.join(appRoot, 'build-scripts', 'legacy-import-worker.js');
                 try {
                     const { Worker } = require('worker_threads');
-                    worker = new Worker(workerPath, { workerData: { source, destination, options: { encoding: encodingSelect.value || undefined, language: languageSelect.value || undefined } } });
+                    worker = new Worker(workerPath, { workerData: { source, destination, options: { encoding: encodingSelect.value || undefined, language: languageSelect.value || undefined, rtpPath: rtpInput.value || undefined } } });
                     worker.on('message', msg => {
                         if (msg.type === 'log') log(msg.message, msg.level);
                         else if (msg.type === 'progress') setProgress(msg.fraction, msg.status);
