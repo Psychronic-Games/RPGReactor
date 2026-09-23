@@ -2,15 +2,39 @@
 
 Dated engineering notes for whoever picks the project up next, newest first. This file holds the cycle in progress and the one just shipped. Older cycles are in [archive/handoff](archive/handoff/): [2026-09-02 to 09-13](archive/handoff/2026-09-02-to-13.md) (0.98.5 and 0.98.6) and [2026-08 and earlier](archive/handoff/2026-08-and-earlier.md). The verified current state is [STATUS.md](STATUS.md); read that first.
 
-## Where things stand (2026-09-21)
+## Where things stand (2026-09-22)
 
-**0.98.7 shipped on 2026-09-21** (runtime 20260920.24, 3,366 Node tests green, all 13 bundled runtimes in sync, CI's four GUI smokes passing with the GPU disabled). The 0.98.8 cycle is open (every version surface names 0.98.8) and holds the CI fix, the documentation pass and the RPG Maker 2000/2003 importer with its screen features (runtime 20260921.8, 3,416 tests), under `[Unreleased - 0.98.8]` in both changelogs.
+**0.98.7 shipped on 2026-09-21** (runtime 20260920.24). The 0.98.8 cycle is open and now holds importers for every older RPG Maker (2000, 2003, XP, VX, VX Ace), 22 Ruby-script plugin ports, media conversion, the Apply/save speed-up, builder fixes, and PRs #68 and #69 (runtime 20260922.5, 3,466 tests), under `[Unreleased - 0.98.8]` in both changelogs. **Nothing from 2026-09-22 is pushed**: the owner pushes at the end of the weekend. PR #68 is merged locally with its commits intact and must stay open on GitHub until then; pushing marks it merged.
 
 **To try the world builder:** open the Demo, test-play, take the Motorcycle on the Reactor Room map to North Haven, walk south then east to the Manor's front door at the south (outside cell 62,50); the Steward is in the study upstairs-left of the great hall, downstairs east. In the editor: the **Build** button in the toolbar opens the bar over the 3D view (pieces, shapes, materials, Blueprint, Hammer; R/Q/E keys, Ctrl+Z), the `3D-T` tab shapes terrain and pours water, `3D-M` places models. From a shell: `node editor/build-scripts/build-structure.cjs <project> <mapId> <plan.json> <x> <y> [--check]` and `node editor/build-scripts/validate-map.cjs <project> <mapId>`. [AUTHORING.md](AUTHORING.md) is the contract for people and generators.
 
 **Known rough edges the owner has seen (3D):** the gables, the black flat view of North Haven and the Stamp turn were fixed on 2026-09-22 (the Demo's Manor and Hamlet keep their old pieces until re-stamped); a thin line of floor slab shows between stacked windows; harness transfers to map 5 occasionally time out when two NW instances start together (rerun alone).
 
 **Next, agreed:** furniture pieces and room contents in plans; a spot/template picker in the panel; a hamlet-of-hamlets stress test; then lighting normals on slopes and hip roofs.
+
+## 2026-09-22 — Importers for XP, VX and VX Ace; scripts as plugins; every template game imports
+
+The owner's standing direction: "any project we want to import from the older engines lands clean in the new framework", nothing hidden after import ("I don't want the import to be a black box"), Ruby scripts converted to JavaScript plugins in the imported project, and MV/MZ behaviour never changed by it. Import-only runtime rules are therefore switched on only by data the importer writes (see STATUS › Runtime defaults), and everything else is a plugin in the imported project.
+
+**Code map.** `editor/src/legacy/`: `LegacyImporter.js` probes any folder and routes by kind (`RGSS_IMPORTERS`: ace → `RgssImporter.js`, vx → `VxImporter.js`, xp → `XpImporter.js`; 2000/2003 stay in LegacyImporter). `RubyMarshal.js`, `RgssArchive.js` (RGSSAD v1/v3), `RgssConvert.js` (Ace → MZ, script `FAMILIES`, audio aliases, Skip Title detection), `RubyTranspiler.js` (whitelist Ruby → JS; fails whole on anything unknown), `XpConvert.js` / `XpDatabase.js`, `VxConvert.js` (reshapes VX commands into Ace's, then the Ace path converts them), `ProjectFiles.js` (every importer ends with it: case, Windows paths, "(OFF)", ME across folders, dead System names, the missing-files list), `LegacyMedia.js` (after the project is written: JPEG/BMP → PNG, movies → WebM, MIDI → Ogg on up to four workers). Script ports: `plugins/RR_*.js`, each with a `.params.js` that reads the game's own script text; a family in `RgssConvert.FAMILIES` names the plugin, its event calls, setters, globals, scenes and (for journals) `quests()` written into `data/ReactorQuests.json`.
+
+**Corpora** (all gitignored in `template/`; tests skip without them): A Blurred Line 2.1 (2000, needs the RTP; the owner's is at `Dropbox/Psychronic/Game Designs/RPG Maker 2000/RTP`), DEEP 8 (2003, DynRPG), Nocturne English (XP, packed, heavily scripted), Legionwood Definitive (VX, unpacked, Tankentai side view), The Seventh Warrior 0.9.1 (Ace, packed; English is switch 236), DOTP 1.8.1 (Ace, packed). All six import and boot; the remaining missing files (1 / 37 / 0 / 4 / 19 / 45) are absent from the games and the RTP. Boot any of them with `scratchpad/game-boot-shots.cjs <project> <outDir> [seconds] [enterAt] [setupJs]` (repo scratchpad; setup JS runs once `$dataSystem` exists).
+
+**Facts that cost time:**
+- Scripts after the `Main` section never run; only sections above it count.
+- RGSS sizes a font by its cell, a browser by its em: scale by the font's unitsPerEm / (winAscent + winDescent) (`rgssFontScale`; VL Gothic 0.787).
+- XP ran at 40 fps: durations ×1.5 in data, walking pace ×4/3 in RR_XpCompat; character animation needs no change (the thresholds work out equal).
+- XP and VX skills 1 and 2 are real skills, not Attack/Guard: Attack/Guard (and VX's Escape) are appended, named by an Attack Skill trait and `$dataSystem.rrGuardSkillId`.
+- Change Equipment's slot index in every RGSS engine is 0-based; MZ's equipment type is 1-based (was a silent off-by-one in Ace imports too).
+- Setter templates must not assign through optional chaining (`x?.().name = v` is not valid JS; the transpiler's `new Function` check rejected every such call). Use `((q) => q && (q.name = %v))($)`.
+- Chromium in NW.js refuses 8-bit PCM WAV; `WebAudio._decodePcmWav` decodes it when `decodeAudioData` fails.
+- Zip tools turned Nocturne's Shift-JIS names into CP437 mojibake; `repairName` reads them back only when the result is Japanese (Falltür and Höhle must stay).
+- Nocturne's 60 "MIDI" files are zero-byte placeholders; a `bgm_play` override plays MP3s by name. `audioAliases` reads such `case … when` tables.
+- The Seventh Warrior and many games carry a "Skip Title" script: without honouring it the import showed a stock title over black.
+
+**Owner-facing decisions:** the Quest Journal-style scripts whose quests are data become Reactor's own quests (editable in Database › Quests); everything else stays a faithful port. The owner watched the harness and caught the Seventh Warrior's stock title over black (fixed).
+
+**Next:** DOTP's own scripts (548 untranslated calls); Nocturne's message/menu scripts; a side-view battle mapping (Tankentai/SBS) onto Reactor's action sequences; Legionwood's monster book; screenshot the import dialog's RTP row once the owner is out of the editor; then the 2003 screen-feature editor commands.
 
 ## 2026-09-21 — Legacy importer, stage 1: the 2000/2003 reader and report
 

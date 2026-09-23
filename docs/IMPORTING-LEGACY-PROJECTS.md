@@ -13,7 +13,7 @@ The rest of this page covers 2000/2003; [VX Ace](#rpg-maker-vx-ace), [XP](#rpg-m
 
 ## Running it
 
-In the editor: **File › Import Project…**, choose the folder that holds `RPG_RT.ldb`, where to create the new project and its name, and press Import. The dialog shows the importer's log and opens the project when it is done. From a shell:
+In the editor: **File › Import Project…**, choose the game's folder (the one with `RPG_RT.ldb` for 2000/2003, or the `Data` folder or game archive for XP, VX and VX Ace), where to create the new project and its name, and press Import. The dialog shows the importer's log and opens the project when it is done. From a shell:
 
 ```bash
 # What the project holds and what an import will do with it; writes nothing
@@ -30,7 +30,7 @@ the RTP it finds: the import dialog's RTP folder or `--rtp <folder>`, else `RPG2
 (the variables EasyRPG reads), else where the Windows installers put it (also
 under Wine). Without one, those files are listed as missing.
 
-`<source>` is the folder holding `RPG_RT.ldb`. Text is read in the code
+`<source>` is the game's folder. Text is read in the code
 page `RPG_RT.ini` names, or guessed (Shift_JIS for Japanese games,
 Windows-1252 otherwise); `--encoding` overrides it. `--maps` writes only
 those maps and `--skip-assets` skips the image and audio copy, for a quick

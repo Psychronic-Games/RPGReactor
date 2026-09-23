@@ -1,12 +1,12 @@
 # Current status
 
-The verified state of the tree as of **2026-09-21**. This page states what is true now; dated engineering history is in [HANDOFF.md](HANDOFF.md) and [docs/archive](archive/README.md), and released behaviour is described in the [changelog](../CHANGELOG.md) and [release notes](posts/release-notes-0.98.7.md).
+The verified state of the tree as of **2026-09-22**. This page states what is true now; dated engineering history is in [HANDOFF.md](HANDOFF.md) and [docs/archive](archive/README.md), and released behaviour is described in the [changelog](../CHANGELOG.md) and [release notes](posts/release-notes-0.98.7.md).
 
 ## Version and validation
 
 - Latest release: **0.98.7**, tagged and published on GitHub on 2026-09-21. Signed binaries and the itch channels follow from the Actions tab (Release Candidate → Release). The 0.98.8 cycle is open: package, lockfile, about box, web host, runtime marker, both changelogs, READMEs and the release checklist name 0.98.8.
-- Runtime revision: **20260922.1** (`runtime/reactor_main.js`, stated twice: the header comment drives the project updater, the global identifies a running game). All 14 bundled projects match `runtime/` (`node editor/build-scripts/sync-runtime.cjs --check`).
-- Node suite: **3,416 tests pass** in this tree (`cd editor && npm test`, about 25 s). A fresh clone with `npm ci --ignore-scripts` reproduces CI and reports one expected skip where Star Shift Rebellion is absent.
+- Runtime revision: **20260922.5** (`runtime/reactor_main.js`, stated twice: the header comment drives the project updater, the global identifies a running game). All 14 bundled projects match `runtime/` (`node editor/build-scripts/sync-runtime.cjs --check`).
+- Node suite: **3,466 tests pass** in this tree (`cd editor && npm test`, about 25 s). A fresh clone with `npm ci --ignore-scripts` reproduces CI and skips the tests that read gitignored projects (Star Shift Rebellion and the six older-engine games in `template/` the importer is measured on); last run in a fresh clone on 2026-09-21.
 - CI (`.github/workflows/ci.yml`): syntax checks, the Node suite, dependency audit, patch hygiene, a clean-tree check, and a GUI job that runs the Web persistence smoke and five NW.js smokes (save, interaction order, keyboard, menus, event double-click) under xvfb with `--enable-unsafe-swiftshader`. Green as of 2026-09-21; it had been red from September 14 because the runner has no GPU.
 - Public editor releases use NW.js **0.107.0** exactly; see the [release checklist](RELEASE-CHECKLIST.md).
 
@@ -22,7 +22,7 @@ Each system has a guide; the guide is the authority on its behaviour and limits.
 | Rigging a model, hands and held weapons | [RIGGING-MODELS.md](RIGGING-MODELS.md) | the model's `model.json` sidecar |
 | Face points, speech and prop playback | [3D-FACE-AND-SPEECH.md](3D-FACE-AND-SPEECH.md) | model sidecars |
 | Media surfaces | [MEDIA-SURFACES.md](MEDIA-SURFACES.md) | map sidecar, event commands |
-| Importing RPG Maker 2000/2003 projects, DynRPG plugin commands as screen features | [IMPORTING-LEGACY-PROJECTS.md](IMPORTING-LEGACY-PROJECTS.md) | a new project per import; `runtime/reactor_screen_fx.js`; `editor/src/legacy/` |
+| Importing RPG Maker 2000, 2003, XP, VX and VX Ace games; DynRPG commands as screen features; Ruby scripts as plugin ports | [IMPORTING-LEGACY-PROJECTS.md](IMPORTING-LEGACY-PROJECTS.md) | a new project per import with `import-report.json` and `legacy/Scripts`; `editor/src/legacy/` (ports in `plugins/`); `runtime/reactor_screen_fx.js` |
 | Custom user interfaces | [DESIGN-USER-INTERFACES.md](DESIGN-USER-INTERFACES.md) | `data/UserInterfaces.json` |
 | Runtime observation feed for plugins | [RUNTIME-EVENTS.md](RUNTIME-EVENTS.md) | `runtime/reactor_core.js` |
 | Performance method and measurements | [PERFORMANCE.md](PERFORMANCE.md) | `editor/tests/perf/` |
@@ -38,6 +38,7 @@ Each system has a guide; the guide is the authority on its behaviour and limits.
 - **Quests:** Reactor owns `data/ReactorQuests.json` and `$dataReactorQuests`; imports cover VisuStella, Yanfly and GS; Database › Quests chooses Reactor's or VisuStella's quest log. Rewards are descriptive text; the on-map tracker window is not built.
 - **Custom interfaces:** seven opt-in stock-scene replacements exist. Item, Skill, Equip, Shop, Formation, Name Input and Battle replacements still need dedicated adapters; the standalone MZ plugin is deferred.
 - **Compatibility:** MZ and MV plugins run through complementary layers and can be mixed in one project. `Utils.RPGMAKER_NAME` reports "MZ" (plugins branch on it); Reactor's identity is `Utils.REACTOR_NAME`. A working scene or isolated battle does not establish compatibility for a whole game.
+- **Imported games:** runtime rules only an import needs are switched on by data the importer writes, so MV and MZ projects never meet them: `$dataMap.rrImageLayers`, `$dataSystem.rrMultiFrames`, `rrBalloonSize`, `rrSkipTitle`, `rrGuardSkillId`, `advanced.fontSizeStep` / `rrNameBox` / `rrCodeLists` / `lineHeight` / `windowPadding` / `windowMargin` / `textOutlineWidth`, and the `\\RRFACE` message code. Everything else an old engine's scripts did is a plugin in the imported project (`js/plugins/RR_*.js`), visible in the Plugin Manager. The runtime decodes plain PCM WAV (8-bit included) itself when Chromium refuses it.
 - **Web builds** carry a file index so filename casing is corrected in the browser; the desktop build reads the disk directly.
 
 ## Open work
@@ -46,6 +47,7 @@ Recorded on 2026-09-20 and 2026-09-21 unless dated otherwise.
 
 - **World builder rough edges:** a thin line of floor slab shows between stacked windows; the Demo's stamped Manor and Hamlet predate the clean gables and turned window glass (2026-09-22) until re-stamped.
 - **Next agreed builder work:** furniture pieces and room contents in plans; a spot/template picker in the panel; a hamlet-of-hamlets stress test; lighting normals on slopes; hip roofs.
+- **Importer (2026-09-22):** all six older-engine games in `template/` import and boot (A Blurred Line 2000, DEEP 8 2003, Nocturne XP, Legionwood VX, The Seventh Warrior and DOTP VX Ace); every file still missing is absent from the game itself. Open: DOTP's 548 untranslated Ruby calls (its own scripts), Nocturne's custom message and menu scripts (2,558 calls), side-view battle systems (Tankentai SBS in Legionwood) run as front view, Legionwood's monster book, credits and puzzle scenes, a screenshot check of the import dialog's new RTP row, and editor commands for the 2003 screen features.
 - **Quests:** tracker window, label fields and reward actions.
 - **Custom interfaces:** the adapters listed above.
 - **Demo content:** actors 1–5 play as 3D models and never load the stock `Actor1` / `Actor1_2` / `Actor2_2` names they still carry; none of the five enemies has 2D battler art; original art is being authored. Every sound the Demo names exists on disk (`demo-template-completeness.test.cjs`). See [demo-missing-se.md](demo-missing-se.md).
