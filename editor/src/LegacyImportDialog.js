@@ -21,7 +21,7 @@
     }
 
     /** The kinds of game the importer converts. */
-    const IMPORTABLE = new Set(['2000', '2003', 'xp', 'ace']);
+    const IMPORTABLE = new Set(['2000', '2003', 'xp', 'vx', 'ace']);
 
     /** What kind of RPG Maker project a folder holds, by its marker file. */
     function detect(fs, path, folder) {
@@ -226,7 +226,6 @@
             };
             const reason = (info) => {
                 if (!info || !info.kind) return tt('Not an RPG Maker 2000/2003 project: no RPG_RT.ldb here.');
-                if (info.kind === 'vx') return tt('RPG Maker VX games are recognised but cannot be imported yet.');
                 if (info.kind === 'reactor') return tt('Already an RPG Reactor project: open it with File › Open Project.');
                 if (info.kind === 'mv' || info.kind === 'mz') return tt('RPG Maker MV and MZ projects open directly: use File › Open Project.');
                 return '';

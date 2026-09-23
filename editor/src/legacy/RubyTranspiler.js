@@ -603,6 +603,17 @@
         }
 
         function assign(n) {
+            // $scene = Scene_X.new: the stock scenes MZ has under the same or a close name.
+            if (n.target.t === 'gvar' && n.target.name === '$scene' && n.op === '=' && n.value.t === 'call' && n.value.name === 'new' && n.value.recv && n.value.recv.t === 'const') {
+                const scene = n.value.recv.name;
+                const SCENES = { Scene_Map: 'SceneManager.goto(Scene_Map)', Scene_Title: 'SceneManager.goto(Scene_Title)', Scene_Gameover: 'SceneManager.goto(Scene_Gameover)',
+                    Scene_Menu: 'SceneManager.push(Scene_Menu)', Scene_Item: 'SceneManager.push(Scene_Item)', Scene_Skill: 'SceneManager.push(Scene_Skill)', Scene_Equip: 'SceneManager.push(Scene_Equip)',
+                    Scene_Status: 'SceneManager.push(Scene_Status)', Scene_Save: 'SceneManager.push(Scene_Save)', Scene_Load: 'SceneManager.push(Scene_Load)', Scene_End: 'SceneManager.push(Scene_GameEnd)',
+                    Scene_Debug: 'SceneManager.push(Scene_Debug)' };
+                if (!n.value.args.length && SCENES[scene]) return js(SCENES[scene]);
+                if (options.scenes && options.scenes[scene]) return js(options.scenes[scene].replace(/%(\d)/g, (m, i) => (n.value.args[i] ? gen(n.value.args[i]) : 'undefined')));
+                return fail('scene ' + scene);
+            }
             const valueNode = expr(n.value);
             const value = valueNode.code;
             const t = n.target;
@@ -643,6 +654,7 @@
             if (t.t === 'call' && t.recv) {
                 const recv = expr(t.recv);
                 if (recv.kind === 'map' && t.name === 'name_display') return js(`$gameMap._nameDisplay = ${value}`);
+                if (recv.kind === 'map' && t.name === 'need_refresh') return js(`if (${value}) $gameMap.requestRefresh()`);
                 if (recv.kind === 'system' && ['save_disabled', 'menu_disabled', 'encounter_disabled'].includes(t.name)) {
                     const which = { save_disabled: 'Save', menu_disabled: 'Menu', encounter_disabled: 'Encounter' }[t.name];
                     return js(`(${value} ? $gameSystem.disable${which}() : $gameSystem.enable${which}())`);

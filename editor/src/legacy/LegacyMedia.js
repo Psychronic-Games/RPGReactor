@@ -26,6 +26,7 @@
 'use strict';
 const fs = require('node:fs');
 const path = require('node:path');
+const os = require('node:os');
 const https = require('node:https');
 const { execFile, execFileSync } = require('node:child_process');
 
@@ -235,8 +236,10 @@ async function convertMusic(projectDir, options = {}) {
         return result;
     }
     const RATE = 44100;
-    for (const [index, rel] of pending.entries()) {
-        progress(index / pending.length, `MIDI ${index + 1} of ${pending.length}: ${path.basename(rel)}`);
+    // FluidSynth renders one file on one core; several at once use the machine.
+    const workers = Math.max(1, Math.min(4, (typeof os.availableParallelism === 'function' ? os.availableParallelism() : os.cpus().length) - 1));
+    let next = 0, done = 0;
+    const renderOne = async (rel) => {
         const source = path.join(projectDir, rel), target = source.replace(MIDI, '.ogg');
         const wav = target + '.part.wav', temp = target + '.part.ogg';
         try {
@@ -258,7 +261,9 @@ async function convertMusic(projectDir, options = {}) {
             result.failed.push({ name: rel, error: error.message });
             log(`  ${rel}: ${error.message}`, 'warn');
         } finally { fs.rmSync(wav, { force: true }); }
-    }
+        progress(++done / pending.length, `MIDI ${done} of ${pending.length}: ${path.basename(rel)}`);
+    };
+    await Promise.all(Array.from({ length: workers }, async () => { while (next < pending.length) await renderOne(pending[next++]); }));
     progress(1, 'Music done');
     log(`  ${result.converted.length} MIDI file${result.converted.length === 1 ? '' : 's'} rendered with ${path.basename(soundFont)}.`, 'info');
     return result;

@@ -540,8 +540,8 @@ function open(source, destination, options) {
     return { inventory, printReport, importProject, project, languages };
 }
 
-/** A VX Ace folder goes to RgssImporter, an XP one to XpImporter; everything else here is 2000/2003. */
-const RGSS_IMPORTERS = { ace: './RgssImporter.js', xp: './XpImporter.js' };
+/** A VX Ace folder goes to RgssImporter, VX to VxImporter, XP to XpImporter; everything else here is 2000/2003. */
+const RGSS_IMPORTERS = { ace: './RgssImporter.js', vx: './VxImporter.js', xp: './XpImporter.js' };
 const rgssKind = (source) => { const kind = probe(source).kind; return RGSS_IMPORTERS[kind] ? kind : null; };
 const rgssImporter = (source) => require(RGSS_IMPORTERS[rgssKind(source)]);
 function report(source, options) { return rgssKind(source) ? rgssImporter(source).report(source, options) : open(source, null, options).inventory(); }

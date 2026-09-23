@@ -449,3 +449,83 @@ test('Nocturne: Rebirth (XP, packed) imports whole', { skip: !fs.existsSync(path
         assert.ok(summary.approximations.audioAliased > 0);
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
+
+// ---- RPG Maker VX ------------------------------------------------------------
+const V = require(path.join(legacy, 'VxConvert.js'));
+
+test('VX commands reshape into VX Ace\'s before conversion', () => {
+    const ids = { attack: 300, guard: 301, escape: 302 };
+    const out = V.aceCommands([
+        { code: 311, indent: 0, parameters: [0, 1, 0, 50, false] },
+        { code: 317, indent: 0, parameters: [2, 5, 0, 0, 3] },
+        { code: 122, indent: 0, parameters: [4, 4, 0, 4, 1, 9] },
+        { code: 122, indent: 0, parameters: [5, 5, 0, 6, -1, 0] },
+        { code: 111, indent: 0, parameters: [4, 1, 2, 7] },
+        { code: 111, indent: 0, parameters: [11, 13] },
+        { code: 236, indent: 0, parameters: [2, 5, 60, true] },
+        { code: 302, indent: 0, parameters: [1, 4, true] },
+        { code: 605, indent: 0, parameters: [0, 2] },
+        { code: 339, indent: 0, parameters: [0, 1, 0, 1, -1] }
+    ], ids).map(c => c.parameters);
+    assert.deepEqual(out, [
+        [0, 0, 1, 0, 50, false],        // fixed actor 0 (whole party)
+        [0, 2, 6, 0, 0, 3],             // agility is MZ param 6
+        [4, 4, 0, 3, 3, 1, 10],         // actor 1's agility, as game data
+        [5, 5, 0, 3, 5, -1, 0],         // the player's x
+        [4, 1, 3, 7],                   // actor knows skill 7 (MZ inserts the class test before it)
+        [11, 'C'],
+        ['storm', 5, 60, true],
+        [1, 4, 0, 0, true],
+        [0, 2, 0, 0],
+        [0, 1, 301, -1]                 // Force Action: guard
+    ]);
+    // Converted by the Ace pipeline, 319's slot index becomes an equipment type.
+    const mz = C.commands([{ code: 319, indent: 0, parameters: [1, 0, 5] }], {});
+    assert.deepEqual(mz[0].parameters, [1, 1, 5]);
+});
+
+test('VX passages, damage and equipment classes become MZ\'s', () => {
+    const passages = table(8192, 1, 1, Object.assign(new Array(8192).fill(0), { 5: 0x01, 6: 0x10, 7: 0x40 | 0x02 }));
+    const flags = V.tilesetFlags(passages);
+    assert.equal(flags[5], 0x0f);
+    assert.equal(flags[6], 0x10);
+    assert.equal(flags[7], 0x40 | 0x200);
+    assert.equal(V.damageFormula({ base_damage: 50, atk_f: 100, spi_f: 0 }), 'Math.max(0, 50 + a.atk * 4 - (b.def * 2))');
+    assert.equal(V.damageFormula({ base_damage: -300, atk_f: 0, spi_f: 150 }), '300 + a.mat * 3');
+    const classes = [null, { id: 1, name: 'Knight', weapon_set: [1, 2] }, { id: 2, name: 'Mage', weapon_set: [2] }];
+    const types = V.equipTypes(classes, [null, { id: 1 }, { id: 2 }, { id: 3 }], 'weapon_set');
+    assert.deepEqual(types.names, ['', 'Knight', 'Knight, Mage', 'Unequippable']);
+    assert.deepEqual(types.forClass(2), [2]);
+    assert.deepEqual(V.battlebackTable('BATTLEBACK_DIR = "Graphics/Pictures/"\nBATTLEBACK_LIST = {3 => "Grass", 7 => "Cave"}\nBATTLEBACK_TEST = "arena"'), { maps: { 3: 'Grass', 7: 'Cave' }, dir: 'img/pictures', test: 'arena' });
+});
+
+test('stock Ruby a VX game leans on translates', () => {
+    const ctx = { constants: {}, families: new Set(['systemBattleback']) };
+    assert.equal(C.ruby('$game_map.need_refresh = true', 'statement', ctx), 'if (true) $gameMap.requestRefresh();');
+    assert.equal(C.ruby('$scene = Scene_Menu.new', 'statement', ctx), 'SceneManager.push(Scene_Menu);');
+    assert.equal(C.ruby('$scene = Scene_Custom.new', 'statement', ctx), null);
+    assert.equal(C.ruby('$game_system.battleback = "castle"', 'statement', ctx), '$gameSystem._rrBattleback = "castle";');
+});
+
+const vxCorpus = path.resolve(__dirname, '..', '..', 'template', 'Legionwood - Definitive Edition');
+test('Legionwood (VX) imports whole', { skip: !fs.existsSync(path.join(vxCorpus, 'Data', 'System.rvdata')) && 'corpus not present' }, () => {
+    assert.equal(I.probe(vxCorpus).kind, 'vx');
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rr-vx-'));
+    try {
+        const summary = I.importProject(vxCorpus, path.join(dir, 'game'), {});
+        assert.equal(summary.engine, 'RPG Maker VX');
+        assert.equal(summary.maps, 261);
+        assert.ok(summary.plugins.includes('RR_VxCompat'));
+        assert.ok(summary.approximations.rubyTranslated >= 500);
+        const game = path.join(dir, 'game');
+        const read = (f) => JSON.parse(fs.readFileSync(path.join(game, 'data', f), 'utf8'));
+        const sys = read('System.json');
+        assert.equal(sys.advanced.screenWidth, 544);
+        assert.ok(sys.rrGuardSkillId > 2);
+        const ts = read('Tilesets.json')[1];
+        for (const name of ts.tilesetNames.filter(Boolean)) assert.ok(fs.existsSync(path.join(game, 'img', 'tilesets', name + '.png')), name);
+        assert.equal(read('Map003.json').battleback1Name, '001-Grassland01');
+        assert.ok(fs.existsSync(path.join(game, 'img', 'battlebacks1', '001-Grassland01.png')));
+        assert.equal(read('Weapons.json')[1].wtypeId > 0, true);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});

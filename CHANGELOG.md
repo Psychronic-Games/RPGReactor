@@ -4,6 +4,7 @@
 
 ### Added
 
+- **RPG Maker VX games import.** Maps, events, the database (VX's six stats, damage and equipment rules re-expressed in MZ's), encounter areas as regions, the tileset and passages, window skin and battle background. Every RPG Maker generation now imports. See [docs/IMPORTING-LEGACY-PROJECTS.md](docs/IMPORTING-LEGACY-PROJECTS.md#rpg-maker-vx).
 - **RPG Maker XP games import.** A project folder or a released game (`Game.rgssad`): tilesets re-cut into MZ sheets with animated autotiles, the database in MZ's eight stats, classes, maps, events, troops, icons packed into an IconSet, window skins, fog and panoramas. XP's own rules (fog, transitions, event opacity, battle formulas, walking pace) come as the RR_XpCompat plugin. See [docs/IMPORTING-LEGACY-PROJECTS.md](docs/IMPORTING-LEGACY-PROJECTS.md#rpg-maker-xp).
 - **Imported games bring their scripts as plugins.** Fifteen published VX Ace scripts (Galv, OZ, Shaz, MS, Rokan, TheoAllen, MOG, Khas, the Quest Journal) are ported to JavaScript and installed in the imported project with the game's own settings; the events' calls to them are translated. The Seventh Warrior's Ruby left as comments drops from about 8,000 calls to 789.
 - **Every import converts the media.** MIDI becomes looping Ogg (FluidSynth and a GM soundfont), JPEG and BMP become PNG, file names mangled by zip tools are read back, references match on-disk case, and 8-bit WAV plays.

@@ -6,10 +6,10 @@ open them in place: it imports one into a **new Reactor project** whose
 framework matches the old engine, with the data and images converted. The
 old project is never written to. File › Import Project… names what a folder
 holds (2000, 2003, XP, VX, VX Ace, MV, MZ or a Reactor project) as soon as it
-is picked. 2000, 2003, XP and VX Ace import today; VX is recognised.
+is picked. 2000, 2003, XP, VX and VX Ace all import.
 
-The rest of this page covers 2000/2003; [VX Ace](#rpg-maker-vx-ace), [XP](#rpg-maker-xp)
-and [media every import converts](#media) are at the end.
+The rest of this page covers 2000/2003; [VX Ace](#rpg-maker-vx-ace), [XP](#rpg-maker-xp),
+[VX](#rpg-maker-vx) and [media every import converts](#media) are at the end.
 
 ## Running it
 
@@ -236,6 +236,28 @@ differ: fog, event opacity/blend/hue (a first-line comment on the page),
 Prepare/Execute Transition, Button Input, Wait for Move's Completion, Change
 Windowskin, XP damage formulas and the 40 fps walking pace. Its settings are
 in the Plugin Manager.
+
+## RPG Maker VX
+
+A project folder (`Data/*.rvdata`) or a released game (`Game.rgss2a`). The
+corpus is Legionwood: Tale of the Two Swords, Definitive Edition (261 maps,
+49 script sections). VX Ace grew out of VX, so maps, events, tiles and
+animations take the Ace path once VX's commands are reshaped into Ace's.
+
+| VX | Becomes |
+| --- | --- |
+| One tileset (Graphics/System/TileA1–TileE) and System passages | Tileset 1 with MZ flags |
+| Encounter areas (rectangles with their own troops) | regions painted on the map, encounters per region |
+| Six stats (max HP/MP, ATK, DEF, SPI, AGI) | MZ's; spirit is both M.Attack and M.Defense |
+| Skill damage (base, ATK and SPI factors) | an MZ formula with VX's arithmetic |
+| Classes equipping weapons and armour by id | one weapon/armour type per set of classes, named after them |
+| Hit, evasion and critical rates, class position | traits (95%, 5%, 4%; target rate 4:3:2) |
+| Skill 1 and 2 | stay; Attack, Guard and Escape are appended |
+| Battle background (the map blurred, BattleFloor) | RR_VxCompat |
+
+A per-map battleback table in the game's scripts (`BATTLEBACK_LIST`) sets
+each map's battleback, and `$game_system.battleback = "…"` in events keeps
+working through RR_VxCompat.
 
 ## Media
 

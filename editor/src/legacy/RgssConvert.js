@@ -140,6 +140,11 @@
             route: { find_path: 'this.rrFindPath?.(%*)', goto_player: 'this.rrGotoCharacter?.(-1, %*)', goto_event: 'this.rrGotoCharacter?.(%*)' }
         },
         {
+            // A battleback kept on Game_System (DerVVulf's VX script and its kin); the per-map table is read by the importer.
+            key: 'systemBattleback', detect: /attr_accessor\s+:battleback\b/, plugin: 'RR_VxCompat',
+            setters: { 'system.battleback': '$gameSystem._rrBattleback = %v' }
+        },
+        {
             key: 'msEnhancedCamera', detect: /ms_pro_cam_center_at|ms_ecam/, plugin: 'RR_MsEnhancedCamera',
             event: { ms_pro_cam_center_at: 'this.rrCamCenterAt?.(%*)', ms_pro_cam_center_at_char: 'this.rrCamCenterAtChar?.(%*)', ms_pro_cam_wait_for_scrolling: 'this.rrCamWaitForScrolling?.()',
                 ms_pro_cam_focus_on: 'this.rrCamFocusOn?.(%*)', ms_pro_cam_ignore_player: '$gameMap.rrCamIgnorePlayer?.(%0)', ms_pro_cam_lock_camera: '$gameMap.rrCamLock?.(true)', ms_pro_cam_unlock_camera: '$gameMap.rrCamLock?.(false)',
@@ -176,7 +181,7 @@
             }
         },
         {
-            key: 'maQuestJournal', detect: /module QuestData|Quest Journal/i, plugin: 'RR_QuestJournal',
+            key: 'maQuestJournal', detect: /module QuestData\b/, plugin: 'RR_QuestJournal',
             event: { quest: ['$gameParty.rrQuest?.(%0)', 'maQuest'], reveal_objective: '$gameParty.rrQuest?.(%0)?.revealObjective(%r)', conceal_objective: '$gameParty.rrQuest?.(%0)?.concealObjective(%r)',
                 complete_objective: '$gameParty.rrQuest?.(%0)?.completeObjective(%r)', uncomplete_objective: '$gameParty.rrQuest?.(%0)?.uncompleteObjective(%r)', fail_objective: '$gameParty.rrQuest?.(%0)?.failObjective(%r)',
                 unfail_objective: '$gameParty.rrQuest?.(%0)?.unfailObjective(%r)', 'quest_revealed?': ['!!$gameParty.rrQuestRevealed?.(%0)', 'bool'], reveal_quest: '$gameParty.rrQuest?.(%0)?.reveal()', conceal_quest: '$gameParty.rrQuest?.(%0)?.conceal()',
@@ -423,6 +428,7 @@
                     break;
                 case 232: p = p.slice(0, 12); while (p.length < 12) p.push(p.length === 11 ? false : 0); p.push(0); break;   // + easing
                 case 236: p = [String(p[0] || 'none').replace(/^:/, ''), num(p[1]), num(p[2]), !!p[3]]; break;
+                case 319: p = [num(p[0]), num(p[1]) + 1, num(p[2])]; break;   // RGSS slot index 0 (weapon) … is MZ equipment type 1 …
                 case 321: p = [num(p[0]), num(p[1]), false]; break;
                 case 322: p = [num(p[0]), str(p[1]), num(p[2]), str(p[3]), num(p[4]), '']; break;
                 case 355: {
