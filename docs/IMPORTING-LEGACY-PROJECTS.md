@@ -1,9 +1,14 @@
-# Importing an RPG Maker 2000/2003 project
+# Importing older RPG Maker projects
 
-Reactor does not open a 2000/2003 project in place: the formats are
-different engines. It imports one into a **new Reactor project** whose
-framework matches the old engine (320×240, 16 px tiles, 48 px faces), with
-the data and images converted. The old project is never written to.
+MV and MZ projects open in Reactor as they are. Older engines ran on other
+frameworks (2000/2003 on RPG_RT, XP/VX/VX Ace on Ruby), so Reactor does not
+open them in place: it imports one into a **new Reactor project** whose
+framework matches the old engine, with the data and images converted. The
+old project is never written to. File › Import Project… names what a folder
+holds (2000, 2003, XP, VX, VX Ace, MV, MZ or a Reactor project) as soon as it
+is picked. 2000, 2003 and VX Ace import today; XP and VX are recognised.
+
+The rest of this page covers 2000/2003; [VX Ace](#rpg-maker-vx-ace) is at the end.
 
 ## Running it
 
@@ -148,5 +153,43 @@ command. On Deep 8, the playthrough has reached the landing scene and the
 first dialogue; the spaceship scenes, the first walkable map and the
 picture-built battle system are untested, and `Change System Graphics`
 is still a comment. The 2003 text colours are vertical gradients sampled
-per glyph row; the runtime draws the cell's middle colour flat. XP and
-VX Ace projects are recognised by the dialog and declined for now.
+per glyph row; the runtime draws the cell's middle colour flat.
+
+## RPG Maker VX Ace
+
+A project folder (`Data/*.rvdata2`) or a released game (`Game.rgss3a`) imports
+the same way; the archive is read as the engine reads it. The corpus is
+The Seventh Warrior (640×480, 299 script sections, 82 maps).
+
+**Converts one for one:** the database (Ace's records, traits, effects and
+formulas are MZ's under other names), tilesets and tile ids, maps (Ace's
+fourth layer splits into MZ's shadow and region layers), events, troops,
+common events, animations (as MV-style cell animations), system data,
+graphics, audio and fonts. Battle and menu messages come from the game's
+Vocab script, so a German game keeps German battle text.
+
+**Read from the game's scripts** (only sections above `Main`, which are the
+ones that run): the screen size from `Graphics.resize_screen`, the default font
+and size from `Font.default_*`, named constants (`IDLE_ANIM_SWITCH`) wherever
+events use them. RGSS sizes a font by its cell and a browser by its em, so the
+size is converted with the font file's own metrics (Cardo 24 is 17.7 px; at
+that size all 12,802 message lines of the corpus fit their windows).
+
+**Common scripts become Reactor features**, switched on in the imported
+project's own data so MV and MZ projects are unaffected:
+
+| Script | Becomes |
+| --- | --- |
+| GDS Ultimate Parallax (ground, sky, light and shadow images per map) | `rrImageLayers` on the map |
+| Yanfly Ace Message System: `\n<Name>`, `\ii[n]`, `\px[n]`, name window style | MZ speaker name, `\I[icon]Name`, MZ `\PX`, `advanced.rrNameBox` |
+| Hime Message Face Control: `\MF[face, n]` | `\RRFACE[face,n]` |
+| Victor Engine Multi Frames: `Name[f8]` sheets | `rrMultiFrames` |
+
+**Ruby cannot run.** Script commands, script conditions and move-route
+scripts that use only stock calls (variables, switches, self switches,
+items, map events, a character's speed or animation) are translated to
+JavaScript; the rest stay as comments and are counted. The game's script
+sections are copied to `legacy/Scripts` for porting by hand or as plugins.
+
+**Not yet:** XP and VX, a baked translation choice for games that switch
+language from a script, and further script families as the corpus shows them.

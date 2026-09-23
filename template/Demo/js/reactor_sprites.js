@@ -4336,8 +4336,9 @@ Sprite_Balloon.prototype.updatePosition = function() {
 };
 
 Sprite_Balloon.prototype.updateFrame = function() {
-    const w = 48;
-    const h = 48;
+    // 48 px frames, or the size an import names (VX Ace balloons are 32 px).
+    const w = ($dataSystem && Number($dataSystem.rrBalloonSize)) || 48;
+    const h = w;
     const sx = this.frameIndex() * w;
     const sy = (this._balloonId - 1) * h;
     this.setFrame(sx, sy, w, h);
@@ -6473,3 +6474,86 @@ Spriteset_Map.prototype.update = function() {
         }
     };
 })();
+
+//-----------------------------------------------------------------------------
+// Map image layers: pictures painted for a whole map and locked to it, the way
+// parallax-mapped games draw their ground over the tiles and their light or
+// canopy over everything. `$dataMap.rrImageLayers` lists them:
+//   { name, layer: 'ground' | 'over', variable?, switch?, opacity?, blendMode? }
+// 'ground' sits above the lower tiles and under every character; 'over' above
+// characters and the upper tiles. `variable` picks a variant: a non-zero value
+// n turns "43_Ground" into "43-1_Ground" style names via `variantName`.
+// Imports write this (the VX Ace GDS Ultimate Parallax script's layers).
+//-----------------------------------------------------------------------------
+
+Spriteset_Map.RR_IMAGE_LAYER_Z = { ground: 0.5, over: 9 };
+
+Spriteset_Map.rrImageLayerName = function(spec) {
+    const value = spec.variable ? $gameVariables.value(spec.variable) : 0;
+    if (!value) return spec.name;
+    if (spec.variantName) return String(spec.variantName).replace("%1", value);
+    return spec.name;
+};
+
+const _rrImageLayersCreateTilemap = Spriteset_Map.prototype.createTilemap;
+Spriteset_Map.prototype.createTilemap = function() {
+    _rrImageLayersCreateTilemap.call(this);
+    this._rrImageLayers = [];
+    const specs = ($dataMap && Array.isArray($dataMap.rrImageLayers)) ? $dataMap.rrImageLayers : [];
+    for (const spec of specs) {
+        if (!spec || !spec.name) continue;
+        const sprite = new Sprite();
+        sprite.z = Spriteset_Map.RR_IMAGE_LAYER_Z[spec.layer] ?? Spriteset_Map.RR_IMAGE_LAYER_Z.ground;
+        sprite.opacity = spec.opacity ?? 255;
+        sprite.blendMode = spec.blendMode || 0;
+        sprite._rrSpec = spec;
+        sprite._rrName = null;
+        this._tilemap.addChild(sprite);
+        this._rrImageLayers.push(sprite);
+    }
+    this.updateRrImageLayers();
+};
+
+Spriteset_Map.prototype.updateRrImageLayers = function() {
+    if (!this._rrImageLayers || !this._rrImageLayers.length) return;
+    const tw = $gameMap.tileWidth(), th = $gameMap.tileHeight();
+    for (const sprite of this._rrImageLayers) {
+        const spec = sprite._rrSpec;
+        const name = Spriteset_Map.rrImageLayerName(spec);
+        if (name !== sprite._rrName) {
+            sprite._rrName = name;
+            sprite.bitmap = ImageManager.loadParallax(name);
+        }
+        sprite.visible = !spec.switch || $gameSwitches.value(spec.switch);
+        sprite.x = Math.round(-$gameMap.displayX() * tw);
+        sprite.y = Math.round(-$gameMap.displayY() * th);
+    }
+};
+
+const _rrImageLayersUpdate = Spriteset_Map.prototype.update;
+Spriteset_Map.prototype.update = function() {
+    _rrImageLayersUpdate.call(this);
+    this.updateRrImageLayers();
+};
+
+//-----------------------------------------------------------------------------
+// Character sheets with their own frame count, named "Name[f8]" (the VX Ace
+// Victor Engine Multi Frames convention). Only when System.json sets
+// rrMultiFrames, which an import from such a game writes: an MV or MZ project
+// keeps three frames whatever its files are called. A [fN] sheet has N frames
+// per row, cycles 0..N-1 and rests on frame 0.
+//-----------------------------------------------------------------------------
+
+const _rrMultiPatternWidth = Sprite_Character.prototype.patternWidth;
+Sprite_Character.prototype.patternWidth = function() {
+    const n = this._tileId > 0 ? 0 : Game_CharacterBase.rrFramesOf(this._characterName);
+    if (!n || !this.bitmap) return _rrMultiPatternWidth.call(this);
+    return this._isBigCharacter ? this.bitmap.width / n : this.bitmap.width / (n * 4);
+};
+
+const _rrMultiBlockX = Sprite_Character.prototype.characterBlockX;
+Sprite_Character.prototype.characterBlockX = function() {
+    const n = Game_CharacterBase.rrFramesOf(this._characterName);
+    if (!n) return _rrMultiBlockX.call(this);
+    return this._isBigCharacter ? 0 : (this._character.characterIndex() % 4) * n;
+};

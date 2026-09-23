@@ -6835,3 +6835,73 @@ DataManager.loadSavefileImages = function(info) {
     const characters = info.characters.filter(data => !(data && _reactorIsModelOnlyCharacter(data[0])));
     _reactorLoadSavefileImages.call(this, { ...info, characters });
 };
+
+// \RRFACE[faceName,index]: change the message's face mid-message. Imports write
+// it for VX Ace games that used Hime's Message Face Control (\MF); no MV or MZ
+// project carries the code, so stock escape handling is unchanged.
+const _reactorMessageEscape = Window_Message.prototype.processEscapeCharacter;
+Window_Message.prototype.processEscapeCharacter = function(code, textState) {
+    if (code !== "RRFACE") return _reactorMessageEscape.call(this, code, textState);
+    const m = /^\[([^\],]*),\s*(\d+)\]/.exec(textState.text.slice(textState.index));
+    if (!m) return;
+    textState.index += m[0].length;
+    $gameMessage.setFaceImage(m[1].trim(), Number(m[2]));
+    const bitmap = ImageManager.loadFace(m[1].trim());
+    const redraw = () => {
+        const rtl = $gameMessage.isRTL();
+        const width = ImageManager.faceWidth;
+        const x = rtl ? this.innerWidth - width - 4 : 4;
+        this.contents.clearRect(x, 0, width, this.innerHeight);
+        this.drawMessageFace();
+    };
+    if (bitmap.isReady()) redraw(); else bitmap.addLoadListener(redraw);
+};
+
+// Import-only window settings (System.json `advanced`; an MV or MZ project has
+// none, so these methods behave as stock):
+//   fontSizeStep  how much \{ and \} change the font (VX Ace: 8 RGSS units)
+//   rrNameBox     { opacity, offsetX, offsetY }: a name drawn the way the
+//                 game's message script drew it (Yanfly's: no window, laid
+//                 over the message frame)
+Window_Base.rrAdvanced = function(key) {
+    const advanced = typeof $dataSystem !== "undefined" && $dataSystem && $dataSystem.advanced;
+    return advanced ? advanced[key] : undefined;
+};
+
+const _reactorMakeFontBigger = Window_Base.prototype.makeFontBigger;
+Window_Base.prototype.makeFontBigger = function() {
+    const step = Window_Base.rrAdvanced("fontSizeStep");
+    if (typeof step !== "number") return _reactorMakeFontBigger.call(this);
+    if (this.contents.fontSize <= 96) this.contents.fontSize += step;
+};
+
+const _reactorMakeFontSmaller = Window_Base.prototype.makeFontSmaller;
+Window_Base.prototype.makeFontSmaller = function() {
+    const step = Window_Base.rrAdvanced("fontSizeStep");
+    if (typeof step !== "number") return _reactorMakeFontSmaller.call(this);
+    if (this.contents.fontSize >= step * 2) this.contents.fontSize -= step;
+};
+
+const _reactorNameBoxHeight = Window_NameBox.prototype.windowHeight;
+Window_NameBox.prototype.windowHeight = function() {
+    const base = _reactorNameBoxHeight.call(this);
+    if (!Window_Base.rrAdvanced("rrNameBox") || !this._name) return base;
+    // A name set larger with \{ keeps its whole height.
+    return Math.max(base, Math.ceil(this.textSizeEx(this._name).height) + this.padding * 2);
+};
+
+const _reactorNameBoxPlacement = Window_NameBox.prototype.updatePlacement;
+Window_NameBox.prototype.updatePlacement = function() {
+    _reactorNameBoxPlacement.call(this);
+    const style = Window_Base.rrAdvanced("rrNameBox");
+    if (!style) return;
+    this.x += $gameMessage.isRTL() ? -(style.offsetX || 0) : (style.offsetX || 0);
+    this.y += this._messageWindow.y > 0 ? (style.offsetY || 0) : -(style.offsetY || 0);
+};
+
+const _reactorNameBoxBackground = Window_NameBox.prototype.updateBackground;
+Window_NameBox.prototype.updateBackground = function() {
+    _reactorNameBoxBackground.call(this);
+    const style = Window_Base.rrAdvanced("rrNameBox");
+    if (style && typeof style.opacity === "number") this.opacity = style.opacity;
+};

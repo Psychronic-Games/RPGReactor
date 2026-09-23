@@ -32,7 +32,8 @@ function sandbox(bound, ready = true) {
     context.Window_SavefileList.prototype.drawPartyCharacters = info => {
         for (const c of info.characters) drawn.push(c[0]);
     };
-    vm.runInNewContext(source.slice(source.indexOf(marker)), context);
+    const start = source.indexOf(marker);
+    vm.runInNewContext(source.slice(start, source.indexOf('// \\RRFACE[', start)), context);
     return context;
 }
 

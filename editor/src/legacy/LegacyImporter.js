@@ -540,7 +540,9 @@ function open(source, destination, options) {
     return { inventory, printReport, importProject, project, languages };
 }
 
-function report(source, options) { return open(source, null, options).inventory(); }
+/** A VX Ace folder goes to RgssImporter; everything else here is 2000/2003. */
+const rgssKind = (source) => { const kind = probe(source).kind; return kind === 'ace' ? kind : null; };
+function report(source, options) { return rgssKind(source) ? require('./RgssImporter.js').report(source, options) : open(source, null, options).inventory(); }
 /** The languages a game ships, without reading the game: its Language/<name> folders holding .po files. */
 function languages(source) {
     const hit = (dir, name) => { try { return fs.readdirSync(dir).find(e => e.toLowerCase() === name.toLowerCase()) || null; } catch (_) { return null; } };
@@ -595,6 +597,6 @@ function probe(folder) {
         || rgss('xp', 'RPG Maker XP', '.rxproj', 'Game.rgssad', '.rxdata', 'rgss1')
         || none;
 }
-function importProject(source, destination, options) { return open(source, destination, options).importProject(); }
+function importProject(source, destination, options) { return rgssKind(source) ? require('./RgssImporter.js').importProject(source, destination, options) : open(source, destination, options).importProject(); }
 
 module.exports = { open, report, printReport, importProject, languages, probe };

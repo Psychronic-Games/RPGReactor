@@ -12333,3 +12333,42 @@ Game_Interpreter.prototype.command357 = function(params) {
         };
     }
 })();
+
+//-----------------------------------------------------------------------------
+// [fN] character sheets (see reactor_sprites.js): N frames, looping, resting on 0.
+// Off unless System.json sets rrMultiFrames.
+//-----------------------------------------------------------------------------
+
+Game_CharacterBase.rrFramesOf = function(name) {
+    if (!$dataSystem || !$dataSystem.rrMultiFrames) return 0;
+    const m = /\[F(\d+)\]/i.exec(String(name || ""));
+    return m ? Math.max(1, Number(m[1])) : 0;
+};
+
+const _rrMultiMaxPattern = Game_CharacterBase.prototype.maxPattern;
+Game_CharacterBase.prototype.maxPattern = function() {
+    return Game_CharacterBase.rrFramesOf(this._characterName) || _rrMultiMaxPattern.call(this);
+};
+
+const _rrMultiPattern = Game_CharacterBase.prototype.pattern;
+Game_CharacterBase.prototype.pattern = function() {
+    return Game_CharacterBase.rrFramesOf(this._characterName) ? this._pattern : _rrMultiPattern.call(this);
+};
+
+const _rrMultiResetPattern = Game_CharacterBase.prototype.resetPattern;
+Game_CharacterBase.prototype.resetPattern = function() {
+    if (Game_CharacterBase.rrFramesOf(this._characterName)) this.setPattern(0);
+    else _rrMultiResetPattern.call(this);
+};
+
+const _rrMultiIsOriginalPattern = Game_CharacterBase.prototype.isOriginalPattern;
+Game_CharacterBase.prototype.isOriginalPattern = function() {
+    return Game_CharacterBase.rrFramesOf(this._characterName) ? this.pattern() === 0 : _rrMultiIsOriginalPattern.call(this);
+};
+
+const _rrMultiStraighten = Game_CharacterBase.prototype.straighten;
+Game_CharacterBase.prototype.straighten = function() {
+    if (!Game_CharacterBase.rrFramesOf(this._characterName)) return _rrMultiStraighten.call(this);
+    if (this.hasWalkAnime() || this.hasStepAnime()) this._pattern = 0;
+    this._animationCount = 0;
+};
