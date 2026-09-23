@@ -1319,6 +1319,20 @@ class EventManager {
         ];
     }
 
+    // The page keeps Direction Fix on so the closed graphic cannot turn toward the player,
+    // which means the route has to release it (Direction Fix OFF, code 36) before its turns
+    // can show the opening frames. Chests made by MZ's own Treasure quick event start with it too.
+    quickEventOpenRoute(se) {
+        const commands = [{ code: 36 }];
+        if (se?.name) commands.push({ code: 44, parameters: [se] });
+        commands.push(
+            { code: 17 }, { code: 15, parameters: [3] },
+            { code: 18 }, { code: 15, parameters: [3] },
+            { code: 19 }, { code: 15, parameters: [3] }
+        );
+        return commands;
+    }
+
     buildQuickEvent(kind, x, y, config = {}) {
         const destination = config.destination || { mapId: 1, x: 0, y: 0 };
         const image = {
@@ -1344,13 +1358,7 @@ class EventManager {
         }
 
         if (kind === 'door') {
-            const routeCommands = [];
-            if (config.se?.name) routeCommands.push({ code: 44, parameters: [config.se] });
-            routeCommands.push(
-                { code: 17 }, { code: 15, parameters: [3] },
-                { code: 18 }, { code: 15, parameters: [3] },
-                { code: 19 }, { code: 15, parameters: [3] }
-            );
+            const routeCommands = this.quickEventOpenRoute(config.se);
             const page = this.makeDefaultEventPage({
                 image: { ...image, pattern: 1, direction: 2 },
                 directionFix: true,
@@ -1370,13 +1378,7 @@ class EventManager {
                     parameters: rewardKind === 'item'
                         ? [rewardId, 0, 0, amount]
                         : [rewardId, 0, 0, amount, false] };
-            const routeCommands = [];
-            if (config.se?.name) routeCommands.push({ code: 44, parameters: [config.se] });
-            routeCommands.push(
-                { code: 17 }, { code: 15, parameters: [3] },
-                { code: 18 }, { code: 15, parameters: [3] },
-                { code: 19 }, { code: 15, parameters: [3] }
-            );
+            const routeCommands = this.quickEventOpenRoute(config.se);
             const page1 = this.makeDefaultEventPage({
                 image: { ...image, pattern: 1, direction: 2 }, directionFix: true,
                 list: [
