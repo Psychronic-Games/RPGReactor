@@ -2003,7 +2003,7 @@ Follow-up runtime work on the v7→v8 migration: with the bundle and corescript 
 - **Image picker "Open in Folder" button**: When selecting face graphics, character sprites, or SV battlers, a new "Open in Folder" button next to "Select This Image" opens the file in the system file manager (e.g. Dolphin) for quick access to external editing tools
 - **Editor Distribution Builder** (`Build → Package Editor for Distribution...`): New in-editor tool for packaging RPG Reactor itself for release on itch.io / GitHub Releases. Uses the same worker_threads architecture as the game build system.
   - **3 package types**:
-    - *Platform-Specific*: One archive per OS with bundled NW.js runtime (Linux → `.tar.gz`, Windows/macOS → `.zip`)
+   - *Platform-Specific*: One archive per OS with bundled NW.js runtime (Linux → `.tar.gz`, Windows/macOS → `.zip`)
     - *Universal*: Single `.zip` with all 3 platform runtimes included
     - *Minimal*: Editor only, bootstrap launchers auto-download NW.js on first run
   - **NW.js edition selection**: Normal or SDK (includes DevTools)
