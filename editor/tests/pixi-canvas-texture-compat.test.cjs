@@ -272,3 +272,41 @@ test('an image-backed texture is left alone', () => {
     assert.equal(texture.dynamic, false);
     assert.equal(texture.__reactorUploadsSource, undefined);
 });
+
+test('re-assigning the texture a sprite already has touches no listeners', () => {
+    const { PIXI, HTMLCanvasElement } = loadCompat();
+    // Every canvas texture Reactor hands out is dynamic, and the compat
+    // texture setter re-wires an "update" listener for dynamic textures. It
+    // used to do that BEFORE v8's own same-texture early return, so a pool of
+    // sprites sharing one canvas texture, re-dressed every frame, paid an
+    // off() that walks every listener on that texture per assignment --
+    // ~105 us each with ~3000 sprites in a real game, ~300 ms a frame.
+    assert.ok(PIXI.Sprite.prototype.__videoCompatTexturePatched, 'the setter wrapper is installed');
+    const texture = PIXI.Texture.from(new HTMLCanvasElement(16, 16));
+    assert.equal(texture.dynamic, true);
+    const sprites = Array.from({ length: 50 }, () => new PIXI.Sprite(texture));
+    const listenerCount = () => (texture._handlers.update || []).length;
+    const before = listenerCount();
+
+    let rewires = 0;
+    const off = texture.off, on = texture.on;
+    texture.off = function() { rewires++; return off.apply(this, arguments); };
+    texture.on = function() { rewires++; return on.apply(this, arguments); };
+    for (const sprite of sprites) sprite.texture = texture;
+
+    assert.equal(rewires, 0, 'a same-value assignment is free');
+    assert.equal(listenerCount(), before);
+
+    // A real change still wires the sprite to its new texture's resizes
+    texture.off = off;
+    texture.on = on;
+    const canvas = new HTMLCanvasElement(32, 32);
+    const other = PIXI.Texture.from(canvas);
+    sprites[0].texture = other;
+    assert.equal(sprites[0].texture, other);
+    canvas.width = 64;
+    canvas.height = 48;
+    other.update();
+    assert.equal(sprites[0].quadWidth, 64, 'the sprite follows its new canvas');
+    assert.equal(sprites[0].quadHeight, 48);
+});

@@ -2141,6 +2141,17 @@
                 configurable: true,
                 get: origGet,
                 set: function(value) {
+                    // Re-assigning the texture a sprite already has must stay
+                    // free. v8's own setter returns early in that case, but
+                    // only after this wrapper has unhooked and re-hooked its
+                    // "update" listener -- and every canvas texture Reactor
+                    // hands out is dynamic (makeCanvasTextureSelfUpdating), so
+                    // sprites sharing one texture pile listeners onto it and
+                    // each off() walks all of them. Measured with ~3000
+                    // sprites on one canvas texture: ~105 us per same-value
+                    // assignment, ~300 ms a frame for a plugin re-dressing a
+                    // sprite pool.
+                    if (value && value === this._texture) return;
                     if (this._videoCompatTexHandler &&
                         this._texture && this._texture.dynamic) {
                         this._texture.off(
