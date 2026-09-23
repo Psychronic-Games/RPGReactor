@@ -169,7 +169,7 @@ goes through `apply`.
 | `action` | `Game_Action` — the engine's instance |
 | `subject` | `Game_Battler` — `action.subject()` |
 | `target` | `Game_Battler` — the battler this application was for (after substitution) |
-| `result` | `Game_ActionResult` — **`target.result()`, live.** Read `missed`, `evaded`, `critical`, `hpDamage`, `mpDamage`, added and removed states *now*; the next `apply` on this target clears it. |
+| `result` | `Game_ActionResult` — **`target.result()`, live.** Read `missed`, `evaded`, `critical`, `hpDamage`, `mpDamage`, added and removed states *now*; the next `apply` on this target clears it. `isLanded()` is `isHit()` less a hit that `dodged` turned aside, whose effects `apply` skipped. |
 
 A counterattack applies a fresh `Game_Action` whose subject is the
 counter-attacker; a reflected spell applies the original action back onto its
@@ -271,6 +271,16 @@ restricted, unknown id), nor when `addNewState` does not add the state after
 all. That is where plugins turn a state away once it has been found addable --
 an auto-life or a last-gasp skill refusing death -- and the state is then not
 on the battler, so nothing was added.
+
+The result keeps both outcomes, for code that reads it rather than
+subscribing: `result.isStateRenewed(stateId)` is this event's `renewed` the
+first time the action lands the state (one that arrived fresh stays fresh if
+the same action lands it again, where a second event says `renewed: true`),
+`isStateNewlyAdded` is its opposite among added states, and
+`result.isStateBlocked(stateId)` is true where `addState` was asked for a
+known state and left the battler without it. A state the battler still has
+from before is never blocked, and a chance roll that failed never reached
+`addState`, so neither is listed.
 
 ### `stateRemoved`
 
