@@ -11,7 +11,7 @@ const read = (...parts) => fs.readFileSync(path.resolve(__dirname, '..', 'src', 
 
 test('every path titles the battler box "Battler"', () => {
     assert.match(read('DatabaseEditorUI.js'), /svLabel\.textContent = tt\('Battler'\);/);
-    assert.match(read('database', 'DatabaseActorEditor.js'), /\{ slot: 'battler', label: 'Battler' \}/);
+    assert.match(read('database', 'DatabaseActorEditor.js'), /\{ slot: 'battler', label: 'Battler'[,}]/);
     const presentation = read('battle', 'BattlePresentationEditor.js');
     assert.match(presentation, /this\.setText\(api\.label,'Battler'\);/);
     assert.doesNotMatch(presentation, /setText\(api\.label,\(B\.graphicModes/);

@@ -77,10 +77,12 @@ class DatabaseActorEditor {
             const boxes = imagesContent.querySelectorAll('.graphic-preview-box');
             const thumbnail = spec => RRDatabase3DBindings.modelThumbnail(
                 this.parentEditor.reactor3dEditor, spec);
+            // A slot that goes 3D drops the 2D image it replaces: the game
+            // never loads it, and a stale name reads as still in use.
             const slots = [
-                { slot: 'character', label: 'Character Model' },
-                { slot: 'face', label: 'Face Model', framing: true },
-                { slot: 'battler', label: 'Battler' }
+                { slot: 'character', label: 'Character Model', clear2d: { characterName: '', characterIndex: 0 } },
+                { slot: 'face', label: 'Face Model', framing: true, clear2d: { faceName: '', faceIndex: 0 } },
+                { slot: 'battler', label: 'Battler', clear2d: { battlerName: '' } }
             ];
             slots.forEach((entry, index) => {
                 if (!boxes[index]) return;
@@ -90,7 +92,13 @@ class DatabaseActorEditor {
                     slot: entry.slot,
                     label: entry.label,
                     framing: entry.framing,
-                    thumbnail
+                    thumbnail,
+                    onBound: () => {
+                        if (Object.keys(entry.clear2d).every(key => actor[key] === entry.clear2d[key])) return;
+                        Object.assign(actor, entry.clear2d);
+                        this.parentEditor.showDatabaseDetail(actor, 'actors');
+                        if (entry.slot === 'face') this.parentEditor.refreshListIcon(actor, 'actors');
+                    }
                 });
             });
         }

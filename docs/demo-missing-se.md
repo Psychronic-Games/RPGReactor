@@ -4,16 +4,14 @@ What the bundled Demo (`template/Demo`) references but does not ship, kept curre
 
 **Sounds: none missing.** Every sound, track and jingle the Demo names exists on disk with that exact spelling, held by `editor/tests/demo-template-completeness.test.cjs` since 2026-09-13. The replacement map is recorded below.
 
-**Art: still missing** (checked 2026-09-21 against `data/Actors.json`, `data/Enemies.json` and `img/`).
+**Art: still missing** (checked 2026-09-23 against `data/Actors.json`, `data/Enemies.json` and `img/`).
 
 ## Character and battler art
 
-- `img/characters/Actor1` — actors 2–5 and 8 (Carol Everson, Jolt Eagle, Max Triton, Vay Drokan, Rosanna). Fleagus (actor 1) has his own `$Actor-01` sheet.
-- `img/sv_actors/Actor1_2` — actors 2–5; `Actor2_2` — actor 1 (Fleagus Gustafario). The folder does not exist.
 - `img/enemies` is empty and `img/sv_enemies` does not exist, so none of the five enemies (Psychronic and Tank name `Goblin`, then Crow, Treant, Hi_monster) has 2D battler art.
-- Katie and Elija (actors 6–7) name no art at all. Every face named in `Actors.json` exists.
+- Katie, Elija and Rosanna (actors 6–8) name no character or battler art. Every face named in `Actors.json` exists.
 
-Actors 1–5 are bound to 3D models (character and battler slots in `Database.r3d.json`), so the runtime never loads their sheet or battler names: map sprites, side-view battlers, status windows and the save list all skip them (runtime 20260922.1). The names above only matter for an actor without a model, or if a binding is removed.
+Actors 1–5 are bound to 3D models (character and battler slots in `Database.r3d.json`) and name no walking sheet or side-view battler (cleared 2026-09-23). Binding a slot to a model in the editor clears the 2D name it replaces.
 
 ## Animation sounds
 

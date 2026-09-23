@@ -458,7 +458,8 @@
             picker.show(bound(), result => {
                 // The modal-close observer restores the persisted selection on
                 // failure too, without starting a second thumbnail render.
-                trySet(project.path, 'actors', id, result, slot);
+                if (trySet(project.path, 'actors', id, result, slot)
+                    && result && result.name && options.onBound) options.onBound(result);
             }, options.framing ? { framing: true } : undefined);
             resyncWhenClosed();
         };

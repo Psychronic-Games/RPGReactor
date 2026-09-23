@@ -44,3 +44,16 @@ test('actor picker confirmation relies on one modal-close refresh', () => {
     assert.match(source, /render\(\);/);
     assert.doesNotMatch(source, /setTimeout\(render, 2500\)/);
 });
+
+test('an actor slot that goes 3D drops the 2D image it replaces', () => {
+    const source = fs.readFileSync(path.join(editorRoot, 'src', 'database', 'Database3DBindings.js'), 'utf8');
+    const callback = source.slice(source.indexOf('picker.show(bound()'), source.indexOf('resyncWhenClosed();', source.indexOf('picker.show(bound()')));
+    // Only a binding that saved and names a model clears anything.
+    assert.match(callback, /if \(trySet\([^)]*\)\s*&& result && result\.name && options\.onBound\) options\.onBound\(result\)/);
+
+    const actorEditor = fs.readFileSync(path.join(editorRoot, 'src', 'database', 'DatabaseActorEditor.js'), 'utf8');
+    assert.match(actorEditor, /slot: 'character'[^\n]*clear2d: \{ characterName: '', characterIndex: 0 \}/);
+    assert.match(actorEditor, /slot: 'face'[^\n]*clear2d: \{ faceName: '', faceIndex: 0 \}/);
+    assert.match(actorEditor, /slot: 'battler'[^\n]*clear2d: \{ battlerName: '' \}/);
+    assert.match(actorEditor, /onBound: \(\) => \{[\s\S]*?Object\.assign\(actor, entry\.clear2d\)/);
+});

@@ -2,9 +2,9 @@
   null,
   {
     "id": 1,
-    "battlerName": "Actor2_2",
+    "battlerName": "",
     "characterIndex": 0,
-    "characterName": "$Actor-01",
+    "characterName": "",
     "classId": 1,
     "equips": [
       1,
@@ -25,9 +25,9 @@
   },
   {
     "id": 2,
-    "battlerName": "Actor1_2",
-    "characterIndex": 1,
-    "characterName": "Actor1",
+    "battlerName": "",
+    "characterIndex": 0,
+    "characterName": "",
     "classId": 9,
     "equips": [
       50,
@@ -47,9 +47,9 @@
     "profile": ""
   },
   {
-    "battlerName": "Actor1_2",
-    "characterIndex": 1,
-    "characterName": "Actor1",
+    "battlerName": "",
+    "characterIndex": 0,
+    "characterName": "",
     "classId": 10,
     "equips": [
       49,
@@ -70,9 +70,9 @@
     "id": 3
   },
   {
-    "battlerName": "Actor1_2",
-    "characterIndex": 1,
-    "characterName": "Actor1",
+    "battlerName": "",
+    "characterIndex": 0,
+    "characterName": "",
     "classId": 9,
     "equips": [
       49,
@@ -93,9 +93,9 @@
     "id": 4
   },
   {
-    "battlerName": "Actor1_2",
-    "characterIndex": 1,
-    "characterName": "Actor1",
+    "battlerName": "",
+    "characterIndex": 0,
+    "characterName": "",
     "classId": 9,
     "equips": [
       49,
@@ -164,8 +164,8 @@
   {
     "id": 8,
     "battlerName": "",
-    "characterIndex": 7,
-    "characterName": "Actor1",
+    "characterIndex": 0,
+    "characterName": "",
     "classId": 3,
     "equips": [
       7,

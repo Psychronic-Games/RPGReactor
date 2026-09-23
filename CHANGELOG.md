@@ -25,6 +25,7 @@
 
 ### Fixed
 
+- Ticking 3D on an actor's character, face or battler clears the 2D image it replaces, so a model-bound actor no longer keeps naming a sheet it never uses.
 - Plugins that hand sprites their texture again every frame (weather and particle plugins) no longer cost up to 300 ms a frame. (#68)
 - Stamped buildings: gable ends are one smooth wall instead of red steps, window glass sits in east and west walls instead of showing as a line through them, and the Build bar's turn (R/Q/E) now turns a plan before it is stamped. Existing buildings pick this up when moved, turned or re-stamped.
 - A 3D map with no tiles and no parallax shows its room floor in the flat view instead of black.

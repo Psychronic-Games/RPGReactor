@@ -43,6 +43,7 @@
 
 ### Fixed
 
+- **An actor slot that goes 3D drops its 2D name.** `Database3DBindings.decorateSlot` calls `options.onBound(spec)` after a picked model saves; `DatabaseActorEditor` clears `characterName`/`characterIndex`, `faceName`/`faceIndex` or `battlerName` for that slot and redraws the record. Unticking 3D leaves the 2D image empty. The Demo's actors 1–5 had their stale `Actor1` / `$Actor-01` sheets and `Actor1_2` / `Actor2_2` battlers cleared to match. `actor-model-preview-lifecycle.test.cjs`.
 - **Giving a sprite the texture it already has is free again.** Every canvas texture the runtime hands out is `dynamic`, and the `Sprite.texture` wrapper in `pixi_compat.js` unhooked and re-hooked its "update" listener before PIXI's own same-texture return; with many sprites sharing one canvas texture each unhook walked all their listeners. A plugin re-dressing ~3,000 pooled sprites a frame spent ~300 ms a frame there; the wrapper now returns early on an unchanged texture (~0.03 µs). A real change still wires the new listener. `pixi-canvas-texture-compat.test.cjs`. (#68)
 
 - **The editor's import ran nowhere.** NW.js gives a worker thread no `TextDecoder` global (plain Node does, so the CLI never saw it): `LegacyImporter` threw at once and `LcfReader`/`LegacyFont` would have fallen back quietly. `legacy-import-worker.js` installs `util.TextDecoder` before the importer loads. Found by driving File › Import Project… with WebDriver clicks in a fresh profile (`scratchpad/import-clickthrough.cjs`); Deep 8 now imports from the menu in ~45 s and opens.
@@ -2056,7 +2057,7 @@ Follow-up runtime work on the v7→v8 migration: with the bundle and corescript 
 - **Image picker "Open in Folder" button**: When selecting face graphics, character sprites, or SV battlers, a new "Open in Folder" button next to "Select This Image" opens the file in the system file manager (e.g. Dolphin) for quick access to external editing tools
 - **Editor Distribution Builder** (`Build → Package Editor for Distribution...`): New in-editor tool for packaging RPG Reactor itself for release on itch.io / GitHub Releases. Uses the same worker_threads architecture as the game build system.
   - **3 package types**:
-   - *Platform-Specific*: One archive per OS with bundled NW.js runtime (Linux → `.tar.gz`, Windows/macOS → `.zip`)
+    - *Platform-Specific*: One archive per OS with bundled NW.js runtime (Linux → `.tar.gz`, Windows/macOS → `.zip`)
     - *Universal*: Single `.zip` with all 3 platform runtimes included
     - *Minimal*: Editor only, bootstrap launchers auto-download NW.js on first run
   - **NW.js edition selection**: Normal or SDK (includes DevTools)
