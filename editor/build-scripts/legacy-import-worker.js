@@ -24,9 +24,9 @@ if (typeof TextDecoder === 'undefined') globalThis.TextDecoder = require('node:u
         const log = (message, level) => parentPort.postMessage({ type: 'log', message: String(message), level: level || 'info' });
         const progress = (fraction, status) => parentPort.postMessage({ type: 'progress', fraction, status: String(status || '') });
         const summary = I.importProject(source, destination, Object.assign({}, options, { log, progress }));
-        // Movies the old engine played that Chromium cannot become WebM, after the project is written.
-        if (summary && summary.destination && media.pendingMovies(summary.destination).length) {
-            summary.movies = await media.convertMovies(summary.destination, { log, progress });
+        // Movies Chromium cannot play become WebM and MIDI becomes Ogg, after the project is written.
+        if (summary && summary.destination && media.pendingMedia(summary.destination)) {
+            Object.assign(summary, await media.convertMedia(summary.destination, { log, progress }));
         }
         parentPort.postMessage({ type: 'done', success: true, summary });
     } catch (error) {

@@ -6557,3 +6557,5 @@ Sprite_Character.prototype.characterBlockX = function() {
     if (!n) return _rrMultiBlockX.call(this);
     return this._isBigCharacter ? 0 : (this._character.characterIndex() % 4) * n;
 };
+
+

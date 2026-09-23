@@ -10,6 +10,18 @@
  *
  *   await convertMovies(projectDir, { log, progress })
  *     → { converted: [names], failed: [{ name, error }] }
+ *
+ * MIDI music (most 2000/2003 and many XP games) becomes Ogg Vorbis the same
+ * way: FluidSynth renders it through a General MIDI soundfont, FFmpeg encodes
+ * it, and RPG Maker's loop point (controller 111) becomes LOOPSTART and
+ * LOOPLENGTH tags, so the track loops where the game's did and the synth's
+ * release tail is never heard. Needs FluidSynth and a .sf2 soundfont
+ * (`options.fluidsynthPath`, `options.soundFont`, else the system's).
+ *
+ * JPEG and BMP images (RGSS loaded both) become PNG, the only format the
+ * runtime's image loader asks for.
+ *
+ *   await convertMedia(projectDir, { log, progress }) → { images, movies, music }
  */
 'use strict';
 const fs = require('node:fs');
@@ -123,4 +135,207 @@ async function convertMovies(projectDir, options = {}) {
     return result;
 }
 
-module.exports = { convertMovies, pendingMovies, resolveFfmpeg };
+// ---- MIDI --------------------------------------------------------------------
+
+const MIDI = /\.(mid|midi)$/i;
+const AUDIO_FOLDERS = ['bgm', 'bgs', 'me', 'se'];
+
+/** MIDI files in the project's audio folders with no Ogg beside them (paths relative to the project). */
+function pendingMusic(projectDir) {
+    const out = [];
+    for (const folder of AUDIO_FOLDERS) {
+        const dir = path.join(projectDir, 'audio', folder);
+        if (!fs.existsSync(dir)) continue;
+        const walk = (abs, rel) => {
+            for (const e of fs.readdirSync(abs, { withFileTypes: true })) {
+                const r = rel ? rel + '/' + e.name : e.name;
+                if (e.isDirectory()) walk(path.join(abs, e.name), r);
+                else if (MIDI.test(e.name) && !fs.existsSync(path.join(abs, e.name.replace(MIDI, '.ogg')))) out.push(`audio/${folder}/${r}`);
+            }
+        };
+        walk(dir, '');
+    }
+    return out;
+}
+
+/**
+ * Where a Standard MIDI File ends and where RPG Maker loops it from: the
+ * first controller 111 event (0 when there is none), both in seconds, through
+ * the file's tempo map.
+ */
+function midiLoop(bytes) {
+    const b = Buffer.from(bytes);
+    if (b.length < 14 || b.toString('latin1', 0, 4) !== 'MThd') return null;
+    const tracks = b.readUInt16BE(10), division = b.readUInt16BE(12);
+    if (division & 0x8000) return null;   // SMPTE time: no tempo map to follow
+    const tempos = [], loops = [];
+    let endTick = 0, pos = 8 + b.readUInt32BE(4);
+    for (let t = 0; t < tracks && pos + 8 <= b.length; t++) {
+        if (b.toString('latin1', pos, pos + 4) !== 'MTrk') break;
+        const end = Math.min(b.length, pos + 8 + b.readUInt32BE(pos + 4));
+        let p = pos + 8, tick = 0, status = 0;
+        const vlq = () => { let v = 0, c; do { c = b[p++]; v = (v << 7) | (c & 0x7f); } while (c & 0x80 && p < end); return v; };
+        while (p < end) {
+            tick += vlq();
+            let s = b[p];
+            if (s & 0x80) { p++; status = s; } else s = status;
+            if (s === 0xff) {
+                const type = b[p++], len = vlq();
+                if (type === 0x51 && len === 3) tempos.push([tick, (b[p] << 16) | (b[p + 1] << 8) | b[p + 2]]);
+                p += len;
+                if (type === 0x2f) break;
+            } else if (s === 0xf0 || s === 0xf7) { p += vlq(); }
+            else {
+                const kind = s & 0xf0;
+                if (kind === 0xc0 || kind === 0xd0) p += 1;
+                else { if (kind === 0xb0 && b[p] === 111) loops.push(tick); p += 2; }
+            }
+        }
+        endTick = Math.max(endTick, tick);
+        pos = end;
+    }
+    tempos.sort((x, y) => x[0] - y[0]);
+    const seconds = (target) => {
+        let at = 0, tempo = 500000, sec = 0;
+        for (const [tick, value] of tempos) {
+            if (tick >= target) break;
+            sec += (tick - at) * tempo / division / 1e6; at = tick; tempo = value;
+        }
+        return sec + (target - at) * tempo / division / 1e6;
+    };
+    return { loopStart: loops.length ? seconds(Math.min(...loops)) : 0, end: seconds(endTick) };
+}
+
+const SOUNDFONTS = ['/usr/share/soundfonts/FluidR3_GM.sf2', '/usr/share/soundfonts/default.sf2', '/usr/share/sounds/sf2/FluidR3_GM.sf2', '/usr/share/sounds/sf2/default-GM.sf2', '/usr/share/soundfonts/GeneralUser GS.sf2', '/opt/homebrew/share/soundfonts/default.sf2', '/usr/local/share/soundfonts/default.sf2', 'C:\\soundfonts\\default.sf2'];
+
+function findTool(name) {
+    try { execFileSync(process.platform === 'win32' ? 'where' : 'which', [name], { stdio: 'pipe', windowsHide: true }); return name; } catch (_) { return null; }
+}
+
+async function convertMusic(projectDir, options = {}) {
+    const log = typeof options.log === 'function' ? options.log : () => {};
+    const progress = typeof options.progress === 'function' ? options.progress : () => {};
+    const pending = pendingMusic(projectDir);
+    const result = { converted: [], failed: [] };
+    if (!pending.length) return result;
+    log(`Rendering ${pending.length} MIDI file${pending.length === 1 ? '' : 's'} to Ogg…`, 'stage');
+    const fluidsynth = options.fluidsynthPath || findTool('fluidsynth');
+    const soundFont = options.soundFont || SOUNDFONTS.find(f => fs.existsSync(f));
+    if (!fluidsynth || !soundFont) {
+        const why = !fluidsynth ? 'FluidSynth is not installed' : 'no General MIDI soundfont (.sf2) was found';
+        for (const name of pending) result.failed.push({ name, error: why });
+        log(`  ${why}; the MIDI files stay as they are (the runtime does not play MIDI).`, 'warn');
+        return result;
+    }
+    let ffmpeg;
+    try { ffmpeg = await resolveFfmpeg(options); }
+    catch (error) {
+        for (const name of pending) result.failed.push({ name, error: `FFmpeg is not available (${error.message})` });
+        log(`  FFmpeg is not available (${error.message}); the MIDI files stay as they are.`, 'warn');
+        return result;
+    }
+    const RATE = 44100;
+    for (const [index, rel] of pending.entries()) {
+        progress(index / pending.length, `MIDI ${index + 1} of ${pending.length}: ${path.basename(rel)}`);
+        const source = path.join(projectDir, rel), target = source.replace(MIDI, '.ogg');
+        const wav = target + '.part.wav', temp = target + '.part.ogg';
+        try {
+            await run(fluidsynth, ['-ni', '-g', '0.7', '-r', String(RATE), '-F', wav, soundFont, source]);
+            const loop = midiLoop(fs.readFileSync(source));
+            const args = ['-y', '-hide_banner', '-loglevel', 'error', '-i', wav, '-c:a', 'libvorbis', '-q:a', '5'];
+            // Background music loops; a ME or SE plays once and keeps its release tail.
+            if (loop && /^audio\/(bgm|bgs)\//i.test(rel)) {
+                const start = Math.round(loop.loopStart * RATE), end = Math.round(loop.end * RATE);
+                if (end > start) args.push('-metadata', `LOOPSTART=${start}`, '-metadata', `LOOPLENGTH=${end - start}`);
+            }
+            args.push(temp);
+            await run(ffmpeg, args);
+            fs.renameSync(temp, target);
+            fs.rmSync(source, { force: true });
+            result.converted.push(rel);
+        } catch (error) {
+            fs.rmSync(temp, { force: true });
+            result.failed.push({ name: rel, error: error.message });
+            log(`  ${rel}: ${error.message}`, 'warn');
+        } finally { fs.rmSync(wav, { force: true }); }
+    }
+    progress(1, 'Music done');
+    log(`  ${result.converted.length} MIDI file${result.converted.length === 1 ? '' : 's'} rendered with ${path.basename(soundFont)}.`, 'info');
+    return result;
+}
+
+// ---- images ------------------------------------------------------------------
+
+const IMAGE = /\.(jpe?g|bmp)$/i;
+
+/** JPEG and BMP images under img/ (RGSS loaded them; the runtime loads PNG) with no PNG beside them. */
+function pendingImages(projectDir) {
+    const out = [];
+    const walk = (abs, rel) => {
+        let entries = [];
+        try { entries = fs.readdirSync(abs, { withFileTypes: true }); } catch (_) { return; }
+        for (const e of entries) {
+            const r = rel + '/' + e.name;
+            if (e.isDirectory()) walk(path.join(abs, e.name), r);
+            else if (IMAGE.test(e.name) && !fs.existsSync(path.join(abs, e.name.replace(IMAGE, '.png')))) out.push(r.slice(1));
+        }
+    };
+    walk(path.join(projectDir, 'img'), '/img');
+    return out;
+}
+
+async function convertImages(projectDir, options = {}) {
+    const log = typeof options.log === 'function' ? options.log : () => {};
+    const progress = typeof options.progress === 'function' ? options.progress : () => {};
+    const pending = pendingImages(projectDir);
+    const result = { converted: [], failed: [] };
+    if (!pending.length) return result;
+    log(`Converting ${pending.length} JPEG/BMP image${pending.length === 1 ? '' : 's'} to PNG…`, 'stage');
+    let ffmpeg;
+    try { ffmpeg = await resolveFfmpeg(options); }
+    catch (error) {
+        for (const name of pending) result.failed.push({ name, error: `FFmpeg is not available (${error.message})` });
+        log(`  FFmpeg is not available (${error.message}); the images stay as they are.`, 'warn');
+        return result;
+    }
+    for (const [index, rel] of pending.entries()) {
+        if (index % 10 === 0) progress(index / pending.length, `Image ${index + 1} of ${pending.length}: ${path.basename(rel)}`);
+        const source = path.join(projectDir, rel), target = source.replace(IMAGE, '.png'), temp = target + '.part.png';
+        try {
+            await run(ffmpeg, ['-y', '-hide_banner', '-loglevel', 'error', '-i', source, '-frames:v', '1', temp]);
+            fs.renameSync(temp, target);
+            fs.rmSync(source, { force: true });
+            result.converted.push(rel);
+        } catch (error) {
+            fs.rmSync(temp, { force: true });
+            result.failed.push({ name: rel, error: error.message });
+            log(`  ${rel}: ${error.message}`, 'warn');
+        }
+    }
+    progress(1, 'Images done');
+    return result;
+}
+
+/** Everything an imported project holds that the runtime cannot show or play yet: images, movies, then MIDI. */
+async function convertMedia(projectDir, options = {}) {
+    const images = await convertImages(projectDir, options);
+    const movies = await convertMovies(projectDir, options);
+    const music = await convertMusic(projectDir, options);
+    const reportPath = path.join(projectDir, 'import-report.json');
+    try {
+        if (fs.existsSync(reportPath) && (music.converted.length || music.failed.length || images.converted.length || images.failed.length)) {
+            const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+            if (images.converted.length || images.failed.length) report.images = { converted: images.converted.length, failed: images.failed };
+            if (music.converted.length || music.failed.length) report.music = music;
+            // The MIDI files the import listed as unplayable are playable now.
+            const done = new Set(music.converted.map(r => r.replace(/^audio\/[^/]+\//, '').toLowerCase()));
+            if (Array.isArray(report.skipped)) report.skipped = report.skipped.filter(s => !/MIDI is not played/.test(s) || !Array.from(done).some(d => s.toLowerCase().includes(d)));
+            fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
+        }
+    } catch (_) { /* the report is informational */ }
+    return { images, movies, music };
+}
+
+const pendingMedia = (projectDir) => pendingImages(projectDir).length + pendingMovies(projectDir).length + pendingMusic(projectDir).length;
+
+module.exports = { convertImages, convertMovies, convertMusic, convertMedia, pendingImages, pendingMovies, pendingMusic, pendingMedia, midiLoop, resolveFfmpeg };

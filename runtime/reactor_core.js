@@ -9033,9 +9033,56 @@ WebAudio.prototype._decodeAudioData = function(arrayBuffer) {
             })
             .catch(() => {
                 if (generation === this._decodeGeneration && this._isLoaded) {
-                    this._onError();
+                    const pcm = WebAudio._decodePcmWav(arrayBuffer);
+                    if (pcm) this._onDecode(pcm);
+                    else this._onError();
                 }
             });
+    }
+};
+
+// Chromium's decoder rejects some plain PCM WAV files that older games ship
+// (8-bit unsigned in particular). A RIFF/WAVE file whose samples are integer
+// PCM (8, 16, 24 or 32 bit) or 32-bit float is read here instead; anything
+// else (ADPCM and other compressed WAV) returns null.
+WebAudio._decodePcmWav = function(arrayBuffer) {
+    try {
+        const view = new DataView(arrayBuffer);
+        const tag = at => String.fromCharCode(view.getUint8(at), view.getUint8(at + 1), view.getUint8(at + 2), view.getUint8(at + 3));
+        if (view.byteLength < 44 || tag(0) !== "RIFF" || tag(8) !== "WAVE") return null;
+        let format = 0, channels = 0, rate = 0, bits = 0, dataAt = -1, dataSize = 0;
+        for (let index = 12; index + 8 <= view.byteLength; ) {
+            const id = tag(index), size = view.getUint32(index + 4, true), at = index + 8;
+            if (id === "fmt ") {
+                format = view.getUint16(at, true);
+                channels = view.getUint16(at + 2, true);
+                rate = view.getUint32(at + 4, true);
+                bits = view.getUint16(at + 14, true);
+                if (format === 0xfffe && size >= 26) format = view.getUint16(at + 24, true);
+            } else if (id === "data") {
+                dataAt = at;
+                dataSize = Math.min(size, view.byteLength - at);
+                break;
+            }
+            index = at + size + (size % 2);
+        }
+        const float = format === 3 && bits === 32;
+        if (dataAt < 0 || !channels || !rate || !(float || (format === 1 && [8, 16, 24, 32].includes(bits)))) return null;
+        const bytes = bits / 8, frames = Math.floor(dataSize / (bytes * channels));
+        if (!frames) return null;
+        const buffer = WebAudio._context.createBuffer(channels, frames, rate);
+        const read = float ? at => view.getFloat32(at, true)
+            : bits === 8 ? at => (view.getUint8(at) - 128) / 128
+            : bits === 16 ? at => view.getInt16(at, true) / 32768
+            : bits === 24 ? at => (((view.getUint8(at + 2) << 24) | (view.getUint8(at + 1) << 16) | (view.getUint8(at) << 8)) >> 8) / 8388608
+            : at => view.getInt32(at, true) / 2147483648;
+        for (let c = 0; c < channels; c++) {
+            const out = buffer.getChannelData(c);
+            for (let i = 0, at = dataAt + c * bytes; i < frames; i++, at += bytes * channels) out[i] = read(at);
+        }
+        return buffer;
+    } catch (e) {
+        return null;
     }
 };
 

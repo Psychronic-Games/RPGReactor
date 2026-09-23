@@ -3718,7 +3718,8 @@ Game_BattlerBase.prototype.canEquipArmor = function(item) {
 };
 
 Game_BattlerBase.prototype.guardSkillId = function() {
-    return 2;
+    // Imported XP games keep their own skill 2; the importer appends Guard and names it here.
+    return ($dataSystem && $dataSystem.rrGuardSkillId) || 2;
 };
 
 Game_BattlerBase.prototype.canAttack = function() {
@@ -12372,3 +12373,4 @@ Game_CharacterBase.prototype.straighten = function() {
     if (this.hasWalkAnime() || this.hasStepAnime()) this._pattern = 0;
     this._animationCount = 0;
 };
+

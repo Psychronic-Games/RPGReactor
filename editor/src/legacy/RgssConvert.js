@@ -62,72 +62,191 @@
 
     // ---- Ruby one-liners -------------------------------------------------------
 
-    /**
-     * A conservative Ruby → JavaScript rewrite for the stock RGSS calls events
-     * use most. `context.self` is 'character' for a move route (where Ace's
-     * instance variables are the character's) or 'interpreter' for a Script
-     * command; `context.constants` resolves NAME and Module::NAME from the
-     * game's scripts. Returns null for anything it is not sure of; the caller
-     * keeps the Ruby as a comment and counts it.
-     */
-    const ID = '(\\d+|[A-Z][A-Za-z0-9_]*(?:::[A-Z][A-Za-z0-9_]*)*)';
-    const ARG = '([^\\]\\[()]+)';
-    const EXPRESSIONS = [
-        [new RegExp('\\$game_self_switches\\[\\s*\\[\\s*' + ARG + '\\s*,\\s*' + ARG + '\\s*,\\s*(["\'][ABCD]["\'])\\s*\\]\\s*\\]', 'g'), '$gameSelfSwitches.value([$1, $2, $3])'],
-        [new RegExp('\\$game_variables\\[\\s*' + ID + '\\s*\\]', 'g'), '$gameVariables.value($1)'],
-        [new RegExp('\\$game_switches\\[\\s*' + ID + '\\s*\\]', 'g'), '$gameSwitches.value($1)'],
-        [/\$game_party\.item_number\(\s*\$data_(items|weapons|armors)\[\s*(\d+)\s*\]\s*\)/g, (m, k, n) => `$gameParty.numItems($data${k[0].toUpperCase()}${k.slice(1)}[${n}])`],
-        [/\$game_party\.has_item\?\(\s*\$data_(items|weapons|armors)\[\s*(\d+)\s*\]\s*\)/g, (m, k, n) => `$gameParty.hasItem($data${k[0].toUpperCase()}${k.slice(1)}[${n}])`],
-        [/\$game_party\.members\.size\b/g, '$gameParty.members().length'],
-        [/\$game_party\.(gold|steps)\b/g, '$gameParty.$1()'],
-        [/\$game_actors\[\s*(\d+)\s*\]\.(level|hp|mp|tp)\b/g, '$gameActors.actor($1).$2'],
-        [/\$game_actors\[\s*(\d+)\s*\]\.name\b/g, '$gameActors.actor($1).name()'],
-        [/\$game_map\.events\[\s*(\d+)\s*\]/g, '$gameMap.event($1)'],
-        [/\$game_map\.map_id\b/g, '$gameMap.mapId()'],
-        [/\.(erase|refresh|straighten|turn_toward_player|turn_away_from_player)\b(?!\()/g, (m, name) => '.' + name.replace(/_([a-z])/g, (x, c) => c.toUpperCase()) + '()'],
-        [/\.moving\?/g, '.isMoving()'],
-        [/\.direction\b(?!\s*=)/g, '.direction()'],
-        [/\bDataManager\.save_file_exists\?/g, 'DataManager.isAnySavefileExists()'],
-        [/\brand\(\s*(\d+)\s*\)/g, 'Math.randomInt($1)'],
-        [/\bnil\b/g, 'null'], [/\band\b/g, '&&'], [/\bor\b/g, '||'], [/\bnot\b/g, '!']
-    ];
-    /** A move route's instance-variable assignments, as the character's own setters. */
-    const CHARACTER_SETTERS = {
-        move_speed: 'this.setMoveSpeed(%v)', move_frequency: 'this.setMoveFrequency(%v)', through: 'this.setThrough(%v)', direction_fix: 'this.setDirectionFix(%v)',
-        walk_anime: 'this.setWalkAnime(%v)', step_anime: 'this.setStepAnime(%v)', opacity: 'this.setOpacity(%v)', blend_type: 'this.setBlendMode(%v)',
-        transparent: 'this.setTransparent(%v)', priority_type: 'this.setPriorityType(%v)', pattern: 'this.setPattern(%v)', direction: 'this._direction = (%v)',
-        animation_id: '$gameTemp.requestAnimation([this], %v)', balloon_id: '$gameTemp.requestBalloon(this, %v)'
-    };
-    const ALLOWED = /\$gameVariables\.(value|setValue)|\$gameSwitches\.(value|setValue)|\$gameSelfSwitches\.(value|setValue)|\$gameParty\.(gold|steps|numItems|hasItem|members)|\$data(Items|Weapons|Armors)|\$gameActors\.actor|\.(level|hp|mp|tp|name|length|x|y|erase|refresh|straighten|turnTowardPlayer|turnAwayFromPlayer|isMoving|direction)\b|\$gamePlayer|\$gameMap\.(event|mapId)|\$gameTemp\.(requestAnimation|requestBalloon)|DataManager\.isAnySavefileExists|Math\.randomInt|\bthis\.(setMoveSpeed|setMoveFrequency|setThrough|setDirectionFix|setWalkAnime|setStepAnime|setOpacity|setBlendMode|setTransparent|setPriorityType|setPattern|_direction)|\bthis\b|\b(true|false|null)\b/g;
+    // ---- script families ----------------------------------------------------------
 
+    /**
+     * A call with literal arguments: name(1, "a", -2.5, true) or name 1, 2 or a bare
+     * name. Returns { name, args: [JS literal text] } or null. Constants resolve.
+     */
+    function parseCall(s, constants) {
+        const m = /^([a-z_][A-Za-z0-9_]*[?!]?)\s*(?:\((.*)\)|\s+(.+))?$/.exec(s);
+        if (!m) return null;
+        const body = m[2] !== undefined ? m[2] : m[3];
+        if (body === undefined || !body.trim()) return { name: m[1], args: [] };
+        const args = [];
+        for (const part of body.match(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^,]+/g) || []) {
+            const t = part.trim();
+            if (!t) continue;
+            if (/^-?\d+(\.\d+)?$/.test(t)) args.push(t);
+            else if (/^"(?:[^"\\]|\\.)*"$/.test(t)) args.push(JSON.stringify(t.slice(1, -1).replace(/\\"/g, '"')));
+            else if (/^'(?:[^'\\]|\\.)*'$/.test(t)) args.push(JSON.stringify(t.slice(1, -1)));
+            else if (t === 'true' || t === 'false') args.push(t);
+            else if (t === 'nil') args.push('null');
+            else if (constants && Object.prototype.hasOwnProperty.call(constants, t) && typeof constants[t] !== 'object') args.push(JSON.stringify(constants[t]));
+            else return null;
+        }
+        // A trailing comma or an unbalanced quote leaves a part the match above cannot account for.
+        return args.length === body.split(/,(?=(?:[^"']*["'][^"']*["'])*[^"']*$)/).filter(x => x.trim()).length ? { name: m[1], args } : null;
+    }
+
+    /**
+     * Published VX Ace scripts whose calls events make, as Reactor runtime calls.
+     * `detect` is tested against the game's own scripts; a family's rules apply
+     * only when the game carries it, so another game's same-named method is never
+     * guessed at. `route` rules run with `this` the character (Set Move Route's
+     * Script), `event` rules in a Script command. Each maps a call name to a JS
+     * template (%0, %1… are the arguments; %* all of them) or a function.
+     */
+    const FAMILIES = [
+        {
+            key: 'galvMoveRouteExtras', detect: /galv_move_extras|Galv's Move Route Extras/i, plugin: 'RR_GalvMoveRouteExtras',
+            route: {
+                set_char: 'this.rrSetChar?.(%*)', restore_char: 'this.rrRestoreChar?.()', jump_to: 'this.rrJumpTo?.(%*)', jump_to_char: 'this.rrJumpToChar?.(%0)',
+                jump_forward: 'this.rrJumpForward?.(%0)', move_toward_event: 'this.moveTowardCharacter($gameMap.event(%0))', move_toward_xy: 'this.rrMoveTowardXy?.(%0, %1)',
+                turn_toward_event: 'this.turnTowardCharacter($gameMap.event(%0))', move_away_from_event: 'this.moveAwayFromCharacter($gameMap.event(%0))', move_away_from_xy: 'this.rrMoveAwayFromXy?.(%0, %1)',
+                self_switch: 'this.rrSelfSwitch?.(%*)', fadeout: 'this.rrFadeOut?.(%0)', fadein: 'this.rrFadeIn?.(%0)', char_level: 'this.setPriorityType(%0)',
+                anim: '$gameTemp.requestAnimation([this], %0)', balloon: '$gameTemp.requestBalloon(this, %0)', wait: 'this.rrWaitBetween?.(%0, %1)',
+                repeat: 'this.rrRepeat?.(%0)', end_repeat: 'this.rrEndRepeat?.()', repeat_next: 'this.rrRepeatNext?.(%0)'
+            }
+        },
+        {
+            key: 'ozCharacterZ', detect: /ozzevent_screen_z|OZ Character Z/i, plugin: 'RR_OzCharacterZ',
+            assign: { plus_z: 'this._rrPlusZ = %v' },
+            event: { change_zmap: '$gameMap.rrChangeZ?.(%*)' }
+        },
+        { key: 'ozAnimationZ', detect: /OZ Animation Z|animation_z_offset/i, plugin: 'RR_OzCharacterZ', assign: { animation_z: 'this._rrAnimationZ = %v' } },
+        {
+            key: 'shazMultiFog', detect: /shaz_multi_fog|Multi Layer Fog/i, plugin: 'RR_ShazMultiFog',
+            parameters: (constants) => ({ keepOnTransfer: String(constants.CLEAR_ON_TRANSFER === false), folder: 'img/Fogs/' }),
+            event: { show_fog: '$gameScreen.rrShowFog?.(%*)', tint_fog: '$gameScreen.rrTintFog?.(%*)', fade_fog: '$gameScreen.rrFadeFog?.(%*)', erase_fog: '$gameScreen.rrEraseFog?.(%0)' }
+        },
+        {
+            key: 'galvRespawn', detect: /Galv.{0,20}Respawn|do_respawn\?/i, plugin: 'RR_GalvRespawnEvents',
+            event: { set_spawn: 'this.rrSetSpawn?.(%*)', do_all_respawn: 'this.rrDoAllRespawn?.(%*)', do_map_respawn: 'this.rrDoMapRespawn?.(%*)', do_e_respawn: 'this.rrDoEventRespawn?.(%*)',
+                respawn_time: ['(this.rrRespawnTime?.(%*) ?? 0)', 'number'], purge_respawn_timers: '$gameSystem._rrSpawnTimers = {}', purge_timer: 'this.rrPurgeTimer?.(%*)' },
+            route: { 'do_respawn?': 'this.rrDoRespawn?.(%*)' }
+        },
+        {
+            key: 'theoFootsteps', detect: /Theo.{0,20}Footstep|def footstep|fsound/i, plugin: 'RR_TheoFootsteps',
+            event: { footstep: ['($gameSystem.rrFootsteps ? $gameSystem.rrFootsteps?.() : {})', 'any'] }
+        },
+        {
+            key: 'rokanSymbolEncounter', detect: /enable_symbol_encount/, plugin: 'RR_RokanSymbolEncounter',
+            route: { enable_symbol_encount: 'this.rrEnableSymbolEncounter?.(%0)' },
+            event: { reset_stealth: '$gamePlayer._rrStealthCount = 0' }
+        },
+        {
+            key: 'theoPathfinding', detect: /def find_path|Pathfinding/i, plugin: 'RR_TheoPathfinding',
+            route: { find_path: 'this.rrFindPath?.(%*)', goto_player: 'this.rrGotoCharacter?.(-1, %*)', goto_event: 'this.rrGotoCharacter?.(%*)' }
+        },
+        {
+            key: 'msEnhancedCamera', detect: /ms_pro_cam_center_at|ms_ecam/, plugin: 'RR_MsEnhancedCamera',
+            event: { ms_pro_cam_center_at: 'this.rrCamCenterAt?.(%*)', ms_pro_cam_center_at_char: 'this.rrCamCenterAtChar?.(%*)', ms_pro_cam_wait_for_scrolling: 'this.rrCamWaitForScrolling?.()',
+                ms_pro_cam_focus_on: 'this.rrCamFocusOn?.(%*)', ms_pro_cam_ignore_player: '$gameMap.rrCamIgnorePlayer?.(%0)', ms_pro_cam_lock_camera: '$gameMap.rrCamLock?.(true)', ms_pro_cam_unlock_camera: '$gameMap.rrCamLock?.(false)',
+                ms_pro_cam_str: '$gameMap.rrCamStrength?.(%0)', ms_pro_cam_reset_str: '$gameMap.rrCamStrength?.()', 'ms_pro_cam_character_on_screen?': ['(this.rrCamOnScreen?.(%0) ?? true)', 'bool'] },
+            setters: { 'system.cam_disabled': '$gameSystem._rrCamDisabled = %v' }
+        },
+        {
+            key: 'theoNotif', detect: /stack_notif|add_notif/, plugin: 'RR_TheoNotifWindow',
+            event: { add_notif: '$gameTemp.rrAddNotif?.(%0)' }
+        },
+        {
+            key: 'theoChoices', detect: /vx_choice|\$choicelist_options/, plugin: 'RR_TheoChoices',
+            event: { vx_choice: '($gameMessage._rrVxChoice = %0)' },
+            globals: { $choicelist_options: ['($gameTemp.rrChoiceOptions ? $gameTemp.rrChoiceOptions?.() : {})', 'any'] }
+        },
+        {
+            key: 'mogPictureEffects', detect: /MOG.{0,5}Picture.{0,3}Effects|def picture_effect\b/i, plugin: 'RR_MogPictureEffects',
+            event: { picture_effect: '$gameScreen.rrPictureEffectEx?.(%*)', picture_position: '$gameScreen.rrPicturePosition?.(%*)', picture_effects_clear: '$gameScreen.rrPictureEffectsClear?.(%0)', set_picture_z: '$gameSystem._rrPictureScreenZ = %0' }
+        },
+        {
+            key: 'mogBattlebackEx', detect: /MOG.{0,5}Battleback.{0,3}EX|def bb_clear/i, plugin: 'RR_MogBattlebackEx',
+            event: { bb: '$gameSystem.rrBb?.(%*)', bb_name: '$gameSystem.rrBbName?.(%*)', bb_clear: '$gameSystem.rrBbClear?.()', bb_screen_z: '$gameSystem._rrBbScreenZ = %0' }
+        },
+        {
+            key: 'theoInvisibleRegions', detect: /invisreg|visireg/i, plugin: 'RR_TheoInvisibleRegions',
+            setters: { 'system.picture_front': '$gameSystem._rrPictureFront = %v' }
+        },
+        {
+            key: 'khasLights', detect: /Khas.{0,20}Light|effect_surface/i, plugin: 'RR_KhasLights',
+            members: { 'map.effect_surface': ['$gameMap.rrEffectSurface?.()', 'khasSurface'], 'map.lantern': ['$gameMap.rrLantern?.()', 'khasLantern'] },
+            objects: {
+                khasSurface: { set_color: '$?.setColor(%*)', set_alpha: '$?.setAlpha(%*)', change_color: '$?.changeColor(%*)', change_alpha: '$?.changeAlpha(%*)' },
+                khasLantern: { set_opacity: '$?.setOpacity(%*)', set_graphic: '$?.setGraphic(%0)', change_owner: '$?.changeOwner(%0)', hide: '$?.hide()', show: '$?.show()', set_multiple_graphics: '$?.setMultipleGraphics(%0)' }
+            }
+        },
+        {
+            key: 'maQuestJournal', detect: /module QuestData|Quest Journal/i, plugin: 'RR_QuestJournal',
+            event: { quest: ['$gameParty.rrQuest?.(%0)', 'maQuest'], reveal_objective: '$gameParty.rrQuest?.(%0)?.revealObjective(%r)', conceal_objective: '$gameParty.rrQuest?.(%0)?.concealObjective(%r)',
+                complete_objective: '$gameParty.rrQuest?.(%0)?.completeObjective(%r)', uncomplete_objective: '$gameParty.rrQuest?.(%0)?.uncompleteObjective(%r)', fail_objective: '$gameParty.rrQuest?.(%0)?.failObjective(%r)',
+                unfail_objective: '$gameParty.rrQuest?.(%0)?.unfailObjective(%r)', 'quest_revealed?': ['!!$gameParty.rrQuestRevealed?.(%0)', 'bool'], reveal_quest: '$gameParty.rrQuest?.(%0)?.reveal()', conceal_quest: '$gameParty.rrQuest?.(%0)?.conceal()',
+                'quest_complete?': ['!!$gameParty.rrQuestIs?.(%0, "complete")', 'bool'], 'quest_failed?': ['!!$gameParty.rrQuestIs?.(%0, "failed")', 'bool'], 'quest_active?': ['!!$gameParty.rrQuestIs?.(%0, "active")', 'bool'] },
+            members: { 'maQuest.objectives': ['($?.objectives || [])', 'array'] },
+            objects: { maQuest: { reveal_objective: '$?.revealObjective(%*)', conceal_objective: '$?.concealObjective(%*)', complete_objective: '$?.completeObjective(%*)', uncomplete_objective: '$?.uncompleteObjective(%*)',
+                fail_objective: '$?.failObjective(%*)', unfail_objective: '$?.unfailObjective(%*)', name: '$?.name', description: '$?.description', 'complete?': '$?.isComplete()', 'failed?': '$?.isFailed()' } },
+            setters: { 'maQuest.name': '$ && ($.name = %v)', 'maQuest.description': '$ && ($.description = %v)', 'maQuest.client': '$ && ($.client = %v)', 'maQuest.location': '$ && ($.location = %v)',
+                'maQuest.icon_index': '$ && ($.iconIndex = %v)', 'maQuest.level': '$ && ($.level = %v)' }
+        }
+    ];
+
+    /** The families a game's scripts carry. */
+    function scriptFamilies(sources) {
+        const text = sources.join('\n');
+        return new Set(FAMILIES.filter(f => f.detect.test(text)).map(f => f.key));
+    }
+
+    const T = root.RRRubyTranspiler || (typeof require === 'function' ? require('./RubyTranspiler.js') : null);
+
+    /** The calls and instance variables the enabled families add, for one `self`. */
+    function familyTables(context) {
+        const calls = {}, ivars = {};
+        const extra = { members: {}, objects: {}, globals: {}, setters: {} };
+        const self = context.self === 'character' ? 'character' : 'interpreter';
+        for (const family of FAMILIES) {
+            if (!context.families || !context.families.has(family.key)) continue;
+            // Calls into a plugin are written with ?. so turning the plugin off leaves them doing nothing.
+            Object.assign(calls, (self === 'character' ? family.route : family.event) || {});
+            Object.assign(extra.members, family.members || {});
+            Object.assign(extra.objects, family.objects || {});
+            Object.assign(extra.globals, family.globals || {});
+            Object.assign(extra.setters, family.setters || {});
+            if (self === 'character') for (const [name, template] of Object.entries(family.assign || {})) ivars[name] = template.replace(/\s*=\s*%v$/, '');
+        }
+        return { calls, ivars, extra };
+    }
+
+    /**
+     * Ruby from an event as JS (RubyTranspiler, with the enabled families' calls),
+     * or null. `kind` 'statement' for Script commands and move-route scripts,
+     * 'expression' for conditions and operands.
+     */
     function ruby(source, kind, context = {}) {
-        let s = String(source || '').trim();
-        if (!s || /\n/.test(s.replace(/\r?\n\s*$/, ''))) return null;   // multi-line: blocks, ifs, loops
-        if (/\b(do|end|def|class|module|begin|rescue|yield|each|times|lambda|proc|while|until|unless|then|elsif|case|when)\b|\||=>|\.\./.test(s)) return null;
-        const constants = context.constants || {};
-        // Named ids from the game's scripts: IDLE_ANIM_SWITCH, FFS::Stealable::ItemStealId.
-        s = s.replace(/\b[A-Z][A-Za-z0-9_]*(?:::[A-Z][A-Za-z0-9_]*)*\b/g, (name) => (Object.prototype.hasOwnProperty.call(constants, name) ? String(constants[name]) : name));
-        if (/::/.test(s)) return null;
-        const rewrite = (e) => { let out = e; for (const [re, js] of EXPRESSIONS) out = out.replace(re, js); return out; };
-        let js, m;
-        if (kind === 'statement' && (m = /^\$game_variables\[\s*(\d+)\s*\]\s*([+\-*/%]?)=\s*(.+)$/.exec(s))) {
-            const value = rewrite(m[3]);
-            js = m[2] ? `$gameVariables.setValue(${m[1]}, $gameVariables.value(${m[1]}) ${m[2]} (${value}))` : `$gameVariables.setValue(${m[1]}, ${value})`;
-        } else if (kind === 'statement' && (m = /^\$game_switches\[\s*(\d+)\s*\]\s*=\s*(.+)$/.exec(s))) {
-            js = `$gameSwitches.setValue(${m[1]}, ${rewrite(m[2])})`;
-        } else if (kind === 'statement' && (m = /^\$game_self_switches\[\s*\[\s*([^\]]+?)\s*,\s*([^\]]+?)\s*,\s*["']([ABCD])["']\s*\]\s*\]\s*=\s*(.+)$/.exec(s))) {
-            js = `$gameSelfSwitches.setValue([${rewrite(m[1])}, ${rewrite(m[2])}, '${m[3]}'], ${rewrite(m[4])})`;
-        } else if (kind === 'statement' && context.self === 'character' && (m = /^@([a-z_]+)\s*=\s*(.+)$/.exec(s)) && CHARACTER_SETTERS[m[1]]) {
-            js = CHARACTER_SETTERS[m[1]].replace('%v', rewrite(m[2]));
-        } else if (kind === 'statement' || kind === 'expression') {
-            if (/@/.test(s) || (kind === 'statement' && /[^=!<>]=[^=]/.test(s))) return null;
-            js = rewrite(s);
-        } else return null;
-        // Whatever is left must be only what the rewrite produced: numbers, strings, operators and the calls above.
-        const residue = js.replace(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'/g, '0').replace(ALLOWED, '').replace(/[\d.\s+\-*/%()<>=!&|?:,[\]]/g, '');
-        if (residue) return null;
-        try { new Function(js); } catch (_) { return null; }
-        return js;
+        if (!T) return null;
+        const { calls, ivars, extra } = familyTables(context);
+        const options = Object.assign({ self: context.self === 'character' ? 'character' : 'interpreter', constants: context.constants || {}, calls, ivars }, extra);
+        return kind === 'expression' ? T.transpileExpression(source, options) : T.transpile(source, options);
+    }
+
+    /**
+     * A Script command's lines as JS lines, or null. The whole program first;
+     * failing that, line by line when every line is a whole statement on its own
+     * (no block opens across lines), with the lines that cannot run kept as JS
+     * comments in place. `partial` says whether any line was left behind.
+     */
+    function rubyProgram(lines, context) {
+        const whole = ruby(lines.join('\n'), 'statement', context);
+        if (whole !== null) return { code: whole.split('\n'), partial: false };
+        if (!T) return null;
+        const standalone = lines.every(line => { try { T.parse(line); return true; } catch (_) { return false; } });
+        if (!standalone) return null;
+        const out = [];
+        let translated = 0;
+        for (const line of lines) {
+            const js = ruby(line, 'statement', context);
+            if (js !== null) { out.push(...js.split('\n').filter(l => l !== '')); if (js) translated++; }
+            else out.push('// Ruby (did not carry over): ' + line);
+        }
+        return translated ? { code: out, partial: true } : null;
     }
 
     /** A Ruby literal: an integer, true/false, a string or an array of strings. */
@@ -310,11 +429,15 @@
                     // A Script command and its continuation lines are one program.
                     const lines = [str(p[0])];
                     while (i + 1 < src.length && src[i + 1] && src[i + 1].code === 655) lines.push(str(list(src[++i].parameters)[0]));
-                    const translated = lines.map(l => ruby(l, 'statement', activeContext));
-                    if (translated.every(t => t !== null)) {
-                        out.push({ code: 355, indent, parameters: [translated[0]] });
-                        for (const t of translated.slice(1)) out.push({ code: 655, indent, parameters: [t] });
-                        tag(notes, 'rubyTranslated');
+                    const program = rubyProgram(lines, activeContext);
+                    if (program && program.code.some(l => l.trim())) {
+                        out.push({ code: 355, indent, parameters: [program.code[0]] });
+                        for (const line of program.code.slice(1)) out.push({ code: 655, indent, parameters: [line] });
+                        tag(notes, program.partial ? 'rubyPartial' : 'rubyTranslated');
+                    } else if (program) {
+                        // Only comments and blank lines: nothing to run.
+                        out.push({ code: 108, indent, parameters: ['Ruby script (comments only):'] });
+                        for (const l of lines) out.push({ code: 408, indent, parameters: [l] });
                     } else {
                         out.push({ code: 108, indent, parameters: ['Ruby script (did not carry over):'] });
                         for (const l of lines) out.push({ code: 408, indent, parameters: [l] });
@@ -558,10 +681,74 @@
         return out;
     }
 
+    // ---- audio aliases ---------------------------------------------------------
+
+    /**
+     * Games that override Game_System#bgm_play (bgs_play, me_play) with a
+     * `case bgm.name / when "Name" … name = "Folder/file"` table play another
+     * file than the one their events name. Read those tables so the imported
+     * data names the real file: { bgm: Map(lower-case name → { name, volume }) }.
+     * `volume` is a percentage of the event's; a table on RGSS's 0–1000 scale
+     * (anything above 100) is read as tenths. `from` is the folder the file is
+     * in (an ME table may play a BGM file); the importer copies it across.
+     */
+    function audioAliases(scriptTexts) {
+        const out = { bgm: new Map(), bgs: new Map(), me: new Map() };
+        for (const text of scriptTexts || []) {
+            for (const def of String(text).matchAll(/^([ \t]*)def[ \t]+(bgm|bgs|me)_play\b[^\n]*\n([\s\S]*?)^\1end\b/gm)) {
+                const kind = def[2], body = def[3];
+                const whens = Array.from(body.matchAll(/^[ \t]*when[ \t]+((?:"[^"\n]*"[ \t]*,?[ \t]*)+)$/gm));
+                whens.forEach((w, i) => {
+                    const block = body.slice(w.index + w[0].length, i + 1 < whens.length ? whens[i + 1].index : body.length).split(/^[ \t]*(?:else|end)\b/m)[0];
+                    // The file: a `name = "…"` the method plays later, or the first play call's path.
+                    const named = /^[ \t]*name[ \t]*=[ \t]*"([^"\n]+)"/m.exec(block);
+                    const called = /(?:Audio|\$game_audio)\.(bgm|bgs|me|se)_play\(\s*"([^"\n]+)"/.exec(block);
+                    const raw = named ? named[1] : called ? called[2] : null;
+                    if (!raw) return;
+                    const vol = /^[ \t]*vol[ \t]*=[ \t]*(\d+)/m.exec(block);
+                    let volume = vol ? Number(vol[1]) : 100;
+                    if (volume > 100) volume = volume / 10;
+                    // Which folder the file is in: the path's own Audio/<folder>/, else the playing call's kind.
+                    const folder = /^Audio\/(BGM|BGS|ME|SE)\//i.exec(raw);
+                    const from = folder ? folder[1].toLowerCase() : !named && called ? called[1] : kind;
+                    const file = raw.replace(/^Audio\/(BGM|BGS|ME|SE)\//i, '').replace(/\.(ogg|mp3|wav|mid|midi|m4a|flac)$/i, '');
+                    for (const key of w[1].matchAll(/"([^"\n]*)"/g)) out[kind].set(key[1].toLowerCase(), { name: file, volume: Math.min(100, volume), from });
+                });
+            }
+        }
+        return out;
+    }
+
+    /** Rewrite the audio an MZ record names through audioAliases' tables, in place. Returns how many changed. */
+    function applyAudioAliases(value, aliases) {
+        let changed = 0;
+        const fix = (audioObj, kind) => {
+            const hit = audioObj && typeof audioObj.name === 'string' && aliases[kind] && aliases[kind].get(audioObj.name.toLowerCase());
+            if (!hit) return;
+            audioObj.name = hit.name;
+            audioObj.volume = Math.round((Number(audioObj.volume) || 100) * hit.volume / 100);
+            changed++;
+        };
+        const CODES = { 241: 'bgm', 132: 'bgm', 245: 'bgs', 249: 'me', 133: 'me' };
+        const walk = (v) => {
+            if (Array.isArray(v)) { for (const x of v) walk(x); return; }
+            if (!v || typeof v !== 'object') return;
+            if (typeof v.code === 'number' && CODES[v.code] && Array.isArray(v.parameters)) fix(v.parameters[0], CODES[v.code]);
+            for (const [k, x] of Object.entries(v)) {
+                if (k === 'bgm' || k === 'titleBgm' || k === 'battleBgm') fix(x, 'bgm');
+                else if (k === 'bgs') fix(x, 'bgs');
+                else if (k === 'victoryMe' || k === 'gameoverMe' || k === 'defeatMe') fix(x, 'me');
+                if (x && typeof x === 'object') walk(x);
+            }
+        };
+        walk(value);
+        return changed;
+    }
+
     /** Script constants (from scriptConstants) that Ruby translation resolves while converting. */
     const setContext = (context) => { activeContext = context || {}; };
 
-    const api = { plain, audio, ruby, scriptConstants, fontDefaults, screenSize, gdsParallaxLayers, rgssFontScale, setContext, windowSkin, commands, database, system, vocabMessages, mapInfos, map, BUTTONS };
+    const api = { audioAliases, applyAudioAliases, plain, audio, ruby, rubyProgram, parseCall, scriptFamilies, FAMILIES, scriptConstants, fontDefaults, screenSize, gdsParallaxLayers, rgssFontScale, setContext, windowSkin, commands, database, system, vocabMessages, mapInfos, map, BUTTONS };
     root.RRRgssConvert = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

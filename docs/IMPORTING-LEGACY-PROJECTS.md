@@ -6,9 +6,10 @@ open them in place: it imports one into a **new Reactor project** whose
 framework matches the old engine, with the data and images converted. The
 old project is never written to. File › Import Project… names what a folder
 holds (2000, 2003, XP, VX, VX Ace, MV, MZ or a Reactor project) as soon as it
-is picked. 2000, 2003 and VX Ace import today; XP and VX are recognised.
+is picked. 2000, 2003, XP and VX Ace import today; VX is recognised.
 
-The rest of this page covers 2000/2003; [VX Ace](#rpg-maker-vx-ace) is at the end.
+The rest of this page covers 2000/2003; [VX Ace](#rpg-maker-vx-ace), [XP](#rpg-maker-xp)
+and [media every import converts](#media) are at the end.
 
 ## Running it
 
@@ -193,15 +194,65 @@ graphic picker, and speaker names in Show Text. Tools › Import Report… shows
 what the import did (converted, approximated, skipped, movies) and the game's
 original scripts in a read-only viewer.
 
-**Movies** that Chromium cannot play (AVI, MPEG, WMV, Ogg Theora, FLV, MOV,
-MKV) are converted to WebM under the same name after the project is written,
-with the system's FFmpeg or the pinned build the asset optimizer downloads.
+**Published scripts become plugins.** When the game carried a script the
+importer knows, a JavaScript port is installed in the project's `js/plugins`,
+listed and switchable in the Plugin Manager, with its settings read from the
+game's script, and the events' Ruby calls to it become plugin calls (off, they
+do nothing). Ported so far: Galv's Move Route Extras and Event Spawn Timer, OZ
+Character/Animation Z, Shaz's Multi Layer Fog, MS Enhanced Camera, Rokan's
+Symbol Encounter, TheoAllen's Footsteps, Pathfinding, Notification Window, VX
+Style Choices and Invisible Regions, MOG Picture Effects and Battleback EX,
+Khas Awesome Light Effects, and the Quest Journal.
 
 **Ruby cannot run.** Script commands, script conditions and move-route
-scripts that use only stock calls (variables, switches, self switches,
-items, map events, a character's speed or animation) are translated to
-JavaScript; the rest stay as comments and are counted. The game's script
-sections are copied to `legacy/Scripts` for porting by hand or as plugins.
+scripts that use stock calls or a ported script are translated to JavaScript
+(80,261 in the corpus); the rest stay as comments and are counted (789). The
+game's script sections are copied to `legacy/Scripts` for porting by hand.
 
-**Not yet:** XP and VX, a baked translation choice for games that switch
-language from a script, and further script families as the corpus shows them.
+**Not yet:** a baked translation choice for games that switch language from
+a script, and further script families as the corpus shows them.
+
+## RPG Maker XP
+
+A project folder (`Data/*.rxdata`) or a released game (`Game.rgssad`). The
+corpus is Nocturne: Rebirth (English; 204 maps, 153 script sections).
+
+| XP | Becomes |
+| --- | --- |
+| Tileset image (8 tiles wide) | MZ B–E sheets, cut into their two 8-wide columns; tile ids shift by 384 |
+| Autotiles (96×128, or 3 frames when animated) | MZ A2 kinds, animated ones A1 water kinds; the 48 shapes are shared |
+| Passages, priorities, terrain tags | MZ flags; a priority above 0 is ☆ |
+| Panorama, fog, battleback (on the tileset) | map parallax, a `<rrFog: …>` map note, map battleback |
+| Character sheets (one character, 4 frames) | `$Name[f4]` with `rrMultiFrames` |
+| Icons (a file each) | one IconSet sheet |
+| Window skins (192×128) | MZ layout under `img/windowskins`, XP's text colours in the palette |
+| Stats: max HP/SP, STR, DEX, AGI, INT, PDEF, MDEF | mhp, mmp, atk, luk, agi, mat, def, mdf; weapon and enemy attack as `<rrXpAtk: n>` |
+| Classes (on the actor: curves; on the class: skills, ranks) | one class per actor, XP classes after them for Change Class |
+| Skill 1 and 2 | stay skills 1 and 2; Attack and Guard are appended (Attack Skill trait, `rrGuardSkillId`) |
+| Durations (40 frames a second) | ×1.5 |
+
+**RR_XpCompat**, installed with every XP game, keeps XP's rules where MZ's
+differ: fog, event opacity/blend/hue (a first-line comment on the page),
+Prepare/Execute Transition, Button Input, Wait for Move's Completion, Change
+Windowskin, XP damage formulas and the 40 fps walking pace. Its settings are
+in the Plugin Manager.
+
+## Media
+
+Every import (2000/2003, XP, VX Ace) finishes by converting what the runtime
+cannot play, with the system's FFmpeg or the pinned build the asset optimizer
+downloads:
+
+- **Movies** (AVI, MPEG, WMV, Ogg Theora, FLV, MOV, MKV) become WebM.
+- **MIDI** becomes Ogg through FluidSynth and a General MIDI soundfont when
+  both are installed; RPG Maker's loop point (controller 111) becomes the
+  LOOPSTART/LOOPLENGTH tags. Without them the files stay and the report says so.
+- **JPEG and BMP** images become PNG.
+- **8-bit and other plain PCM WAV** that Chromium refuses are decoded by the
+  runtime itself.
+
+File names are made to work off Windows: names a zip tool mangled from
+Shift-JIS are read back (`Battle_01_îÄë║é╠…` → `Battle_01_月下の元で`), and
+references are rewritten to each file's on-disk case. A game script that plays
+other music for its BGM names (`case bgm.name when "…" name = "…"`) has those
+names rewritten in the data, so events name the file that plays.

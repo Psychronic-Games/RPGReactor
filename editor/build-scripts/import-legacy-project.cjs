@@ -35,10 +35,10 @@ try {
     const maps = flag('--maps') && flag('--maps') !== true ? String(flag('--maps')).split(',').map(Number) : null;
     const language = flag('--language') && flag('--language') !== true ? flag('--language') : undefined;
     const summary = I.importProject(source, destination, { maps, skipAssets: !!flag('--skip-assets'), force: !!flag('--force'), encoding, language, log: (line) => console.log(line) });
-    // Movies Chromium cannot play become WebM once the project is written.
+    // Movies Chromium cannot play become WebM and MIDI becomes Ogg once the project is written.
     const media = require('../src/legacy/LegacyMedia.js');
-    if (summary && summary.destination && media.pendingMovies(summary.destination).length) {
-        media.convertMovies(summary.destination, { log: (line) => console.log(line) }).catch(error => { console.error(error.message); process.exitCode = 1; });
+    if (summary && summary.destination && media.pendingMedia(summary.destination)) {
+        media.convertMedia(summary.destination, { log: (line) => console.log(line) }).catch(error => { console.error(error.message); process.exitCode = 1; });
     }
 } catch (error) {
     console.error(error.message);

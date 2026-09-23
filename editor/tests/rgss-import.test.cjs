@@ -122,7 +122,7 @@ test('Ace event commands become MZ commands, Ruby translated only when certain',
     assert.deepEqual(out.filter(c => c.code === 102).map(c => c.parameters[1]), [-2, -1, 1]);
     assert.deepEqual(out.find(c => c.code === 111).parameters, [11, 'ok', 0]);
     assert.deepEqual(out.find(c => c.code === 236).parameters, ['rain', 5, 30, true]);
-    assert.deepEqual(out.filter(c => c.code === 355).map(c => c.parameters[0]), ['$gameSwitches.setValue(12, false)']);
+    assert.deepEqual(out.filter(c => c.code === 355).map(c => c.parameters[0]), ['$gameSwitches.setValue(12, false);']);
     assert.ok(out.some(c => c.code === 408 && c.parameters[0] === 'show_fog(1, "Fog")'), 'custom Ruby stays readable as a comment');
     assert.deepEqual(out.find(c => c.code === 241).parameters[0], { name: 'Town', volume: 80, pitch: 100, pan: 0 });
     assert.equal(out[out.length - 1].code, 0);
@@ -131,16 +131,24 @@ test('Ace event commands become MZ commands, Ruby translated only when certain',
 
 test('the Ruby translator refuses what it cannot be sure of', () => {
     const ok = [
-        ['$game_map.events[3].erase', 'statement', {}, '$gameMap.event(3).erase()'],
-        ['$game_party.item_number($data_items[12]) >= 3', 'expression', {}, '$gameParty.numItems($dataItems[12]) >= 3'],
-        ['$game_self_switches[[5, 7, \'A\']] == false', 'expression', {}, "$gameSelfSwitches.value([5, 7, 'A']) == false"],
-        ['@move_speed = 4', 'statement', { self: 'character' }, 'this.setMoveSpeed(4)'],
-        ['@animation_id = 88', 'statement', { self: 'character' }, '$gameTemp.requestAnimation([this], 88)']
+        ['$game_map.events[3].erase', 'statement', {}, '$gameMap.event(3).erase();'],
+        ['$game_party.item_number($data_items[12]) >= 3', 'expression', {}, '($gameParty.numItems($dataItems[12]) >= 3)'],
+        ['@move_speed = 4', 'statement', { self: 'character' }, 'this.setMoveSpeed(4);'],
+        ['@animation_id = 88', 'statement', { self: 'character' }, '$gameTemp.requestAnimation([this], 88);'],
+        ['x = $game_variables[2]\nif x > 3\n  $game_switches[4] = true\nend', 'statement', {}, 'var x = $gameVariables.value(2);\nif ((x > 3)) { $gameSwitches.setValue(4, true); }'],
+        ['$game_party.members.any? { |a| a.state?(2) }', 'expression', {}, '$gameParty.members().some((a) => a.isStateAffected(2))']
     ];
     for (const [ruby, kind, context, js] of ok) assert.equal(C.ruby(ruby, kind, context), js, ruby);
-    for (const ruby of ['set_char("$Dark",0,2,1)', '@plus_z = 2', 'loop do\nx\nend', '$game_map.events.each { |e| e.erase }', '`rm -rf /`', 'system("x")']) {
+    for (const ruby of ['set_char("$Dark",0,2,1)', '@plus_z = 2', '$game_map.events.each { |e| e.erase }', '`rm -rf /`', 'system("x")', 'eval("x")', 'require "x"', 'File.delete("x")']) {
         assert.equal(C.ruby(ruby, 'statement', { self: 'character' }), null, ruby);
     }
+});
+
+test('a Script command keeps the lines it can run and comments the rest, unless a block spans lines', () => {
+    const lines = ['$game_variables[3] = 1', 'show_fog(1, "x")', '$game_switches[2] = true'];
+    assert.deepEqual(C.rubyProgram(lines, {}), { code: ['$gameVariables.setValue(3, 1);', '// Ruby (did not carry over): show_fog(1, "x")', '$gameSwitches.setValue(2, true);'], partial: true });
+    assert.equal(C.rubyProgram(['if $game_switches[1]', 'show_fog(1, "x")', 'end'], {}), null);
+    assert.deepEqual(C.rubyProgram(['show_fog(1, "x")'], { families: new Set(['shazMultiFog']) }), { code: ['$gameScreen.rrShowFog?.(1, "x");'], partial: false });
 });
 
 test('Ace maps split the fourth layer into shadow and region; message codes follow the game\'s scripts', () => {
@@ -258,4 +266,186 @@ test('map image layers round-trip through the Map Properties list', () => {
     assert.deepEqual(editor.read(), [{ name: '43_Ground', layer: 'ground', variable: 19, variantName: '43-%1_Ground' }, { name: '9_light', layer: 'over', switch: 4 }]);
     editor.load([]);
     assert.deepEqual(editor.read(), []);
+});
+
+// ---- RPG Maker XP ------------------------------------------------------------
+const X = require(path.join(legacy, 'XpConvert.js'));
+const XD = require(path.join(legacy, 'XpDatabase.js'));
+const table = (xsize, ysize, zsize, data) => ({ xsize, ysize, zsize, data: Int16Array.from(data) });
+
+test('XP tilesets re-cut into MZ sheets; tile ids, flags and map layers follow', () => {
+    // An 8×2-tile tileset whose pixels encode their tile index, and one still and one animated autotile.
+    const tileset = X.blank(256, 64);
+    for (let i = 0; i < 16; i++) for (let y = 0; y < 32; y++) for (let x = 0; x < 32; x++) tileset.data[(((i >> 3) * 32 + y) * 256 + (i & 7) * 32 + x) * 4] = i + 1;
+    const still = X.blank(96, 128), animated = X.blank(288, 128);
+    const { sheets, autotiles } = X.tilesetSheets(tileset, [still, animated]);
+    assert.deepEqual(autotiles, [2816, 2048]);   // still → A2 kind 0, animated → A1 kind 0
+    assert.ok(sheets.A1 && sheets.A2 && sheets.B && !sheets.C);
+    // XP tile 384 + 9 is the second row's second tile: MZ B id 9, at column 1 row 1 of the left half.
+    assert.equal(sheets.B.data[((32 + 5) * 512 + 32 + 5) * 4], 10);
+    assert.equal(X.tileId(384 + 9, autotiles), 9);
+    assert.equal(X.tileId(48 + 7, autotiles), 2816 + 7);
+    assert.equal(X.tileId(96 + 47, autotiles), 2048 + 47);
+    const flags = X.tilesetFlags({ passages: table(8192, 1, 1, Object.assign(new Array(8192).fill(0), { 385: 0x0f, 55: 0x40 })), priorities: table(8192, 1, 1, Object.assign(new Array(8192).fill(0), { 386: 1 })), terrain_tags: table(8192, 1, 1, Object.assign(new Array(8192).fill(0), { 387: 3 })) }, autotiles);
+    assert.equal(flags[1], 0x0f);              // impassable
+    assert.equal(flags[2], 0x10);              // priority → star
+    assert.equal(flags[3], 3 << 12);           // terrain tag
+    assert.equal(flags[2816 + 7], 0x40);       // autotile bush
+    const data = X.mapData(table(2, 1, 3, [384, 49, 0, 0, 0, 390]), 2, 1, autotiles);
+    assert.deepEqual(data.slice(0, 6), [0, 2817, 0, 0, 0, 6]);
+});
+
+test('XP event commands become MZ commands at 60 frames a second', () => {
+    const notes = {};
+    const out = X.commands([
+        { code: 104, indent: 0, parameters: [0, 1] },
+        { code: 101, indent: 0, parameters: ['Hello'] },
+        { code: 106, indent: 0, parameters: [20] },
+        { code: 223, indent: 0, parameters: [{ red: -68, green: -68, blue: 0, gray: 0 }, 40] },
+        { code: 208, indent: 0, parameters: [1] },
+        { code: 131, indent: 0, parameters: ['Blue'] },
+        { code: 222, indent: 0, parameters: ['BlindH'] },
+        { code: 355, indent: 0, parameters: ['$game_switches[3] = true'] },
+        { code: 999, indent: 0, parameters: [1] },
+        { code: 0, indent: 0, parameters: [] }
+    ], notes, (src) => C.ruby(src, 'statement', {}));
+    assert.deepEqual(out[0], { code: 101, indent: 0, parameters: ['', 0, 2, 0, ''] });   // top, transparent (from 104)
+    assert.deepEqual(out[1].parameters, ['Hello']);
+    assert.deepEqual(out[2], { code: 230, indent: 0, parameters: [30] });
+    assert.deepEqual(out[3].parameters, [[-68, -68, 0, 0], 60, false]);
+    assert.deepEqual(out[4], { code: 211, indent: 0, parameters: [1] });
+    assert.match(out[5].parameters[0], /rrSetWindowskin\?\.\("Blue"\)/);
+    assert.match(out[6].parameters[0], /^this\.rrExecuteTransition\?\.\("BlindH", 30\)$/);
+    assert.equal(out[7].code, 355);
+    assert.equal(out[8].code, 108);
+    assert.equal(notes.windowskinNames.Blue, 1);
+    assert.ok(!Object.keys(notes).includes('windowskinNames'));   // not a report count
+});
+
+test('XP database: stats, curves, classes per actor, appended Attack and Guard', () => {
+    const params = table(6, 100, 1, Array.from({ length: 600 }, (_, i) => (i % 6 + 1) * 10 + Math.floor(i / 6)));
+    const xp = {
+        actors: [null, { id: 1, name: 'Aluxes', class_id: 1, initial_level: 1, final_level: 99, exp_basis: 30, exp_inflation: 30, character_name: '001-Fighter01', battler_name: '001-Fighter01', parameters: params, weapon_id: 1, armor1_id: 0, armor2_id: 0, armor3_id: 0, armor4_id: 0, weapon_fix: true }],
+        classes: [null, { id: 1, name: 'Fighter', weapon_set: [1], armor_set: [], element_ranks: table(3, 1, 1, [0, 1, 3]), state_ranks: table(3, 1, 1, [0, 6, 3]), learnings: [{ level: 2, skill_id: 1 }] }],
+        skills: [null, { id: 1, name: 'Heal', icon_name: '044-Skill01', description: '', scope: 3, occasion: 0, animation2_id: 5, sp_cost: 10, power: -200, atk_f: 0, int_f: 100, element_set: [], plus_state_set: [], minus_state_set: [], variance: 15, hit: 100 }],
+        items: [], weapons: [null, { id: 1, name: 'Sword', icon_name: '001-Weapon01', atk: 25, pdef: 0, mdef: 0, str_plus: 3, dex_plus: 0, agi_plus: 0, int_plus: 0, element_set: [], plus_state_set: [] }],
+        armors: [], enemies: [null, { id: 1, name: 'Ghost', maxhp: 50, maxsp: 0, str: 30, dex: 30, agi: 30, int: 30, atk: 60, pdef: 60, mdef: 60, eva: 5, exp: 1, gold: 1, element_ranks: table(1, 1, 1, [0]), state_ranks: table(1, 1, 1, [0]), actions: [{ kind: 0, basic: 0, rating: 5, condition_hp: 100, condition_level: 1 }] }],
+        states: [], animations: []
+    };
+    const db = XD.database(xp, {}, (name) => (name === '044-Skill01' ? 7 : 0));
+    const actor = db.actors[1], cls = db.classes[1];
+    assert.equal(actor.characterName, '$001-Fighter01[f4]');
+    assert.equal(actor.classId, 1);
+    assert.deepEqual(actor.traits, [{ code: 53, dataId: 1, value: 1 }]);
+    // mhp ← maxhp, mmp ← maxsp, atk ← STR, def 0, mat ← INT, mdf 0, agi ← AGI, luk ← DEX (level 1 row).
+    assert.deepEqual(cls.params.map(row => row[1]), [11, 21, 31, 0, 61, 0, 51, 41]);
+    assert.ok(cls.traits.some(t => t.code === 11 && t.dataId === 1 && t.value === 2));      // element rank A
+    assert.ok(cls.traits.some(t => t.code === 13 && t.dataId === 1 && t.value === 0));      // state rank F
+    assert.ok(cls.traits.some(t => t.code === 35 && t.dataId === db.attackSkillId));
+    assert.deepEqual(cls.learnings, [{ level: 2, note: '', skillId: 1 }]);
+    assert.equal(db.classes[db.classOffset + 1].name, 'Fighter');
+    const heal = db.skills[1];
+    assert.equal(heal.damage.type, 3);
+    assert.equal(heal.scope, 7);
+    assert.equal(heal.iconIndex, 7);
+    assert.equal(db.skills[db.attackSkillId].name, 'Attack');
+    assert.equal(db.skills[db.guardSkillId].name, 'Guard');
+    assert.equal(db.weapons[1].note, '<rrXpAtk: 25>');
+    assert.deepEqual(db.weapons[1].params, [0, 0, 3, 0, 0, 0, 0, 0]);
+    assert.equal(db.enemies[1].actions[0].skillId, db.attackSkillId);
+    assert.ok(db.enemies[1].traits.some(t => t.code === 35 && t.dataId === db.attackSkillId));
+});
+
+test('a game script that plays other music for its BGM names rewrites the references', () => {
+    const script = [
+        'class Game_System',
+        '  def bgm_play(bgm)',
+        '    vol = 1000',
+        '    case bgm.name',
+        '    when "Battle_02"',
+        '      name = "Audio/BGM/Kasuga/battle1.mp3"',
+        '      vol = 900',
+        '    else',
+        '      case bgm.name',
+        '      when "Town_01", "Town_02"',
+        '        name = "Huwaru/no.57"',
+        '        vol = 80',
+        '      end',
+        '    end',
+        '  end',
+        '  def me_play(me)',
+        '    case me.name',
+        '    when "Lose_01"',
+        '      Audio.me_play("Audio/BGM/Azell/gameover", me.volume, me.pitch)',
+        '    end',
+        '  end',
+        'end'
+    ].join('\n');
+    const aliases = C.audioAliases([script]);
+    assert.deepEqual(aliases.bgm.get('battle_02'), { name: 'Kasuga/battle1', volume: 90, from: 'bgm' });
+    assert.deepEqual(aliases.bgm.get('town_02'), { name: 'Huwaru/no.57', volume: 80, from: 'bgm' });
+    assert.deepEqual(aliases.me.get('lose_01'), { name: 'Azell/gameover', volume: 100, from: 'bgm' });
+    const map = { bgm: { name: 'Town_01', volume: 100, pitch: 100 }, events: [null, { pages: [{ list: [{ code: 241, parameters: [{ name: 'Battle_02', volume: 50, pitch: 100 }] }, { code: 249, parameters: [{ name: 'Lose_01', volume: 100, pitch: 100 }] }] }] }] };
+    assert.equal(C.applyAudioAliases(map, aliases), 3);
+    assert.deepEqual([map.bgm.name, map.bgm.volume], ['Huwaru/no.57', 80]);
+    assert.deepEqual(map.events[1].pages[0].list[0].parameters[0].volume, 45);
+});
+
+test('file names a zip tool mangled read back as the game named them; MIDI loop points are found', () => {
+    const R = require(path.join(legacy, 'RgssImporter.js'));
+    assert.equal(R.repairName('Battle_01_îÄë║é╠î│é┼.mid'), 'Battle_01_月下の元で.mid');
+    assert.equal(R.repairName('Town_01.ogg'), 'Town_01.ogg');
+    assert.equal(R.repairName('Event_24_π⌐.mid'), 'Event_24_罠.mid');
+    // Real European names stay, even where their bytes happen to decode to a kanji.
+    for (const name of ['Café.png', '$Falltür (Avery Amy)[f4].png', 'Goliath Höh3', 'Credit präsentiert']) assert.equal(R.repairName(name), name);
+    // One track at 120 bpm (500000 µs/quarter), 480 ticks a quarter: CC111 at beat 2, end at beat 4.
+    const vlq = (n) => { const b = [n & 0x7f]; while ((n >>= 7)) b.unshift((n & 0x7f) | 0x80); return b; };
+    const events = [...vlq(0), 0xff, 0x51, 3, 0x07, 0xa1, 0x20, ...vlq(960), 0xb0, 111, 0, ...vlq(960), 0xff, 0x2f, 0];
+    const trk = Buffer.concat([Buffer.from('MTrk'), Buffer.from([0, 0, 0, events.length]), Buffer.from(events)]);
+    const mid = Buffer.concat([Buffer.from('MThd'), Buffer.from([0, 0, 0, 6, 0, 0, 0, 1, 0x01, 0xe0]), trk]);
+    const media = require(path.join(legacy, 'LegacyMedia.js'));
+    assert.deepEqual(media.midiLoop(mid), { loopStart: 1, end: 2 });
+});
+
+test('the runtime reads plain PCM WAV the browser refuses, and nothing else', () => {
+    const src = fs.readFileSync(path.resolve(__dirname, '..', '..', 'runtime', 'reactor_core.js'), 'utf8');
+    const start = src.indexOf('WebAudio._decodePcmWav = function');
+    const body = src.slice(start, src.indexOf('\n};\n', start) + 3);
+    const WebAudio = { _context: { createBuffer: (channels, frames, rate) => { const data = Array.from({ length: channels }, () => new Float32Array(frames)); return { channels, frames, rate, getChannelData: (c) => data[c] }; } } };
+    new Function('WebAudio', body)(WebAudio);
+    const wav = (format, bits, samples) => {
+        const data = Buffer.from(samples);
+        const h = Buffer.alloc(44);
+        h.write('RIFF', 0); h.writeUInt32LE(36 + data.length, 4); h.write('WAVE', 8); h.write('fmt ', 12); h.writeUInt32LE(16, 16);
+        h.writeUInt16LE(format, 20); h.writeUInt16LE(1, 22); h.writeUInt32LE(8000, 24); h.writeUInt32LE(8000 * bits / 8, 28); h.writeUInt16LE(bits / 8, 32); h.writeUInt16LE(bits, 34);
+        h.write('data', 36); h.writeUInt32LE(data.length, 40);
+        const b = Buffer.concat([h, data]);
+        return b.buffer.slice(b.byteOffset, b.byteOffset + b.length);
+    };
+    const u8 = WebAudio._decodePcmWav(wav(1, 8, [128, 255, 0]));
+    assert.equal(u8.frames, 3);
+    assert.deepEqual(Array.from(u8.getChannelData(0)).map(v => Math.round(v * 128)), [0, 127, -128]);
+    assert.equal(WebAudio._decodePcmWav(wav(2, 4, [1, 2, 3, 4])), null);   // MS ADPCM
+});
+
+const xpCorpus = path.resolve(__dirname, '..', '..', 'template', 'Nocturne English');
+test('Nocturne: Rebirth (XP, packed) imports whole', { skip: !fs.existsSync(path.join(xpCorpus, 'Game.rgssad')) && 'corpus not present' }, () => {
+    assert.equal(I.probe(xpCorpus).kind, 'xp');
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rr-xp-'));
+    try {
+        const summary = I.importProject(xpCorpus, path.join(dir, 'game'), {});
+        assert.equal(summary.engine, 'RPG Maker XP');
+        assert.equal(summary.maps, 204);
+        assert.ok(summary.plugins.includes('RR_XpCompat'));
+        const game = path.join(dir, 'game');
+        const sys = JSON.parse(fs.readFileSync(path.join(game, 'data', 'System.json'), 'utf8'));
+        assert.equal(sys.gameTitle, 'Nocturne: Rebirth (English)');
+        assert.ok(sys.rrMultiFrames && sys.rrGuardSkillId > 2);
+        const tilesets = JSON.parse(fs.readFileSync(path.join(game, 'data', 'Tilesets.json'), 'utf8'));
+        for (const ts of tilesets.filter(Boolean)) for (const name of ts.tilesetNames.filter(Boolean)) assert.ok(fs.existsSync(path.join(game, 'img', 'tilesets', name + '.png')), name);
+        // Placeholder MIDI names resolve through the game's own BGM table; mangled file names are repaired.
+        assert.ok(fs.existsSync(path.join(game, 'audio', 'bgm', 'Huwaru', 'no.57.mid')));
+        assert.ok(!fs.readdirSync(path.join(game, 'audio', 'bgm')).some(f => /[╠║]/.test(f)));
+        assert.ok(summary.approximations.audioAliased > 0);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });

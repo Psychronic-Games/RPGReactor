@@ -6857,9 +6857,22 @@ Window_Message.prototype.processEscapeCharacter = function(code, textState) {
     if (bitmap.isReady()) redraw(); else bitmap.addLoadListener(redraw);
 };
 
+// Imported games' message scripts had codes of their own, often with
+// parameter lists (\E[240,120,9]). With System.json advanced.rrCodeLists set,
+// a bracket left after any escape code is consumed rather than printed. MV and
+// MZ projects never set it.
+const _reactorBaseEscape = Window_Base.prototype.processEscapeCharacter;
+Window_Base.prototype.processEscapeCharacter = function(code, textState) {
+    _reactorBaseEscape.call(this, code, textState);
+    if (textState.text[textState.index] !== "[" || !Window_Base.rrAdvanced("rrCodeLists")) return;
+    const list = /^\[[^\]\n]*\]/.exec(textState.text.slice(textState.index));
+    if (list) textState.index += list[0].length;
+};
+
 // Import-only window settings (System.json `advanced`; an MV or MZ project has
 // none, so these methods behave as stock):
 //   fontSizeStep  how much \{ and \} change the font (VX Ace: 8 RGSS units)
+//   rrCodeLists   consume the brackets of codes the runtime does not know
 //   rrNameBox     { opacity, offsetX, offsetY }: a name drawn the way the
 //                 game's message script drew it (Yanfly's: no window, laid
 //                 over the message frame)

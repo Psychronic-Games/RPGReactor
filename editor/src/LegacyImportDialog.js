@@ -20,6 +20,9 @@
         try { return require(path.join(appRoot, 'src', 'legacy', 'LegacyImporter.js')).probe(folder); } catch (_) { return null; }
     }
 
+    /** The kinds of game the importer converts. */
+    const IMPORTABLE = new Set(['2000', '2003', 'xp', 'ace']);
+
     /** What kind of RPG Maker project a folder holds, by its marker file. */
     function detect(fs, path, folder) {
         if (!folder || !fs.existsSync(folder)) return null;
@@ -210,7 +213,7 @@
                 detectedEl.textContent = '';
                 if (!info || !info.kind) { detectedEl.textContent = '—'; return; }
                 const badge = document.createElement('span');
-                const importable = info.kind === '2000' || info.kind === '2003' || info.kind === 'ace';
+                const importable = IMPORTABLE.has(info.kind);
                 badge.textContent = info.engine;
                 badge.style.cssText = `padding:2px 8px;border-radius:10px;font-size:12px;font-weight:600;border:1px solid ${importable ? 'var(--color-success-border, var(--color-accent-border))' : 'var(--color-warning-border, var(--color-border))'};color:${importable ? 'var(--color-success, var(--color-accent))' : LEVEL_COLOURS.warn};`;
                 const text = document.createElement('span');
@@ -223,7 +226,7 @@
             };
             const reason = (info) => {
                 if (!info || !info.kind) return tt('Not an RPG Maker 2000/2003 project: no RPG_RT.ldb here.');
-                if (info.kind === 'xp' || info.kind === 'vx') return tt('RPG Maker XP, VX and VX Ace games are recognised but cannot be imported yet.');
+                if (info.kind === 'vx') return tt('RPG Maker VX games are recognised but cannot be imported yet.');
                 if (info.kind === 'reactor') return tt('Already an RPG Reactor project: open it with File › Open Project.');
                 if (info.kind === 'mv' || info.kind === 'mz') return tt('RPG Maker MV and MZ projects open directly: use File › Open Project.');
                 return '';
@@ -265,7 +268,7 @@
             const start = () => {
                 const source = sourceInput.value.trim(), parent = parentInput.value.trim(), name = nameInput.value.trim();
                 const info = source ? (probed && sourceInput.value === source ? probed : (probeOf(path, appRoot, source) || { kind: detect(fs, path, source) })) : null;
-                if (!info || (info.kind !== '2000' && info.kind !== '2003' && info.kind !== 'ace')) { errorEl.textContent = reason(info); return; }
+                if (!info || !IMPORTABLE.has(info.kind)) { errorEl.textContent = reason(info); return; }
                 if (!parent || !fs.existsSync(parent)) { errorEl.textContent = tt('Choose a folder to create the project in.'); return; }
                 if (!name || /[\\/:*?"<>|\0-\x1f]/.test(name) || /^\.|[. ]$/.test(name)) { errorEl.textContent = tt('Project name must be a safe single folder name.'); return; }
                 destination = path.join(parent, name);
