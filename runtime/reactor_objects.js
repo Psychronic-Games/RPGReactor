@@ -6969,6 +6969,11 @@ Game_Map.prototype.airship = function() {
 };
 
 Game_Map.prototype.setupEvents = function() {
+    // An imported 2000/2003 game keeps its parallel common events running through a teleport, as the
+    // old engines do (EasyRPG builds them once per game): Deep 8's victory event teleports home from
+    // inside a parallel event that turns its own switch off afterwards, and a rebuilt one restarted the
+    // whole victory screen on the world map. System.json rrLegacyEventOrder.
+    const keep = $dataSystem && $dataSystem.rrLegacyEventOrder && this._commonEvents ? new Map(this._commonEvents.map(c => [c._commonEventId, c])) : null;
     this._events = [];
     this._commonEvents = [];
     this.refreshCommonEventTriggerCache();
@@ -6976,7 +6981,7 @@ Game_Map.prototype.setupEvents = function() {
         this._events[event.id] = new Game_Event(this._mapId, event.id);
     }
     for (const commonEvent of this.parallelCommonEvents()) {
-        this._commonEvents.push(new Game_CommonEvent(commonEvent.id));
+        this._commonEvents.push((keep && keep.get(commonEvent.id)) || new Game_CommonEvent(commonEvent.id));
     }
     this.refreshTileEvents();
 };
@@ -7572,13 +7577,15 @@ Game_Map.prototype.doScroll = function(direction, distance) {
     }
 };
 
+// RPG Maker 2000/2003 run parallel common events before map events (System.json rrLegacyEventOrder,
+// set by the importer): when both write the same screen text or picture, the map event's lands last.
 Game_Map.prototype.updateEvents = function() {
+    const commonFirst = $dataSystem && $dataSystem.rrLegacyEventOrder;
+    if (commonFirst) for (const commonEvent of this._commonEvents) commonEvent.update();
     for (const event of this.events()) {
         event.update();
     }
-    for (const commonEvent of this._commonEvents) {
-        commonEvent.update();
-    }
+    if (!commonFirst) for (const commonEvent of this._commonEvents) commonEvent.update();
 };
 
 Game_Map.prototype.updateVehicles = function() {
@@ -7685,7 +7692,7 @@ Game_Map.prototype.setupStartingMapEvent = function() {
 
 Game_Map.prototype.setupAutorunCommonEvent = function() {
     for (const commonEvent of this.autorunCommonEvents()) {
-        if ($gameSwitches.value(commonEvent.switchId)) {
+        if (commonEvent.switchId === 0 || $gameSwitches.value(commonEvent.switchId)) {
             this._interpreter.setup(commonEvent.list);
             return true;
         }
@@ -7720,23 +7727,30 @@ Game_CommonEvent.prototype.list = function() {
     return this.event().list;
 };
 
+// An imported 2000/2003 parallel event pauses while its switch is off and carries on from the same
+// command when it is on again (EasyRPG keeps one interpreter per common event); MZ discards it and
+// starts over. Deep 8's menu cursor bobs +4 then -4 in a parallel event its menu switches off during
+// each move: restarted, the +4 stuck and the cursor crept 4 px further off per step.
+// System.json rrLegacyEventOrder.
 Game_CommonEvent.prototype.refresh = function() {
     if (this.isActive()) {
         if (!this._interpreter) {
             this._interpreter = new Game_Interpreter();
         }
-    } else {
+    } else if (!($dataSystem && $dataSystem.rrLegacyEventOrder)) {
         this._interpreter = null;
     }
 };
 
+// Switch 0 is no switch at all: an RPG Maker 2000/2003 common event can run in parallel (or
+// automatically) with no condition, which only an import writes; the MZ editor always names one.
 Game_CommonEvent.prototype.isActive = function() {
     const event = this.event();
-    return event.trigger === 2 && $gameSwitches.value(event.switchId);
+    return event.trigger === 2 && (event.switchId === 0 || $gameSwitches.value(event.switchId));
 };
 
 Game_CommonEvent.prototype.update = function() {
-    if (this._interpreter) {
+    if (this._interpreter && this.isActive()) {
         if (!this._interpreter.isRunning()) {
             this._interpreter.setup(this.list());
         }
@@ -8023,8 +8037,12 @@ Game_CharacterBase.prototype.isObjectCharacter = function() {
     return this._isObjectCharacter;
 };
 
+// How far a character stands above its tile's bottom edge. MZ lifts it 6 px; an imported game keeps
+// its engine's own (System.json rrCharacterShiftY: 0 for 2000/2003 and XP, 4 for VX and VX Ace).
 Game_CharacterBase.prototype.shiftY = function() {
-    return this.isObjectCharacter() ? 0 : 6;
+    if (this.isObjectCharacter()) return 0;
+    const own = $dataSystem && $dataSystem.rrCharacterShiftY;
+    return typeof own === "number" ? own : 6;
 };
 
 Game_CharacterBase.prototype.scrolledX = function() {
@@ -10298,7 +10316,10 @@ Game_Event.prototype.meetsConditions = function(page) {
         }
     }
     if (c.variableValid) {
-        if ($gameVariables.value(c.variableId) < c.variableValue) {
+        // an imported 2003 page may compare another way: rrVariableOp 0 ==, 1 >=, 2 <=, 3 >, 4 <, 5 !=
+        const value = $gameVariables.value(c.variableId), n = c.variableValue;
+        const met = c.rrVariableOp === undefined ? value >= n : [value === n, value >= n, value <= n, value > n, value < n, value !== n][c.rrVariableOp];
+        if (!met) {
             return false;
         }
     }
@@ -10764,6 +10785,10 @@ Game_Interpreter.prototype.command101 = function(params) {
     if ($gameMessage.isBusy()) {
         return false;
     }
+    // An imported 2000/2003 game keeps its message options and face on the system (rrMessageOptions,
+    // rrMessageFace); once it has set them they apply to every message, as in the old engine.
+    const legacy = $gameSystem && $gameSystem._rrMessage;
+    if (legacy) params = [legacy.faceName, legacy.faceIndex, legacy.background, legacy.position, params[4]];
     $gameMessage.setFaceImage(params[0], params[1]);
     $gameMessage.setBackground(params[2]);
     $gameMessage.setPositionType(params[3]);
@@ -12319,6 +12344,11 @@ Game_Interpreter.prototype.command357 = function(params) {
             }
             return true;
         }
+        if (this._waitMode === "rrPan") {
+            if ($gameMap._rrPanReturn) return true;
+            this._waitMode = "";
+            return false;
+        }
         if (this._waitMode === "rrAllMoves") {
             const moving = $gamePlayer.isMoveRouteForcing() || $gameMap.events().some(e => e.isMoveRouteForcing());
             if (!moving) this._waitMode = "";
@@ -12335,11 +12365,205 @@ Game_Interpreter.prototype.command357 = function(params) {
         return true;
     };
 
-    // Key codes as the 2003 command reports them: 1 down, 2 left, 3 right, 4 up, 5 decision, 6 cancel, 7 shift.
-    const RR_KEYS = [[7, "shift"], [6, "cancel"], [5, "ok"], [1, "down"], [2, "left"], [3, "right"], [4, "up"]];
-    Game_Interpreter.prototype.rrKeyInputCheck = function(keys) {
-        for (const [code, name] of RR_KEYS) if (keys.includes(code) && Input.isTriggered(name)) return code;
+    // RPG Maker 2000/2003 decide passage the old engine's way (System.json rrLegacyPassage, which the
+    // importer sets): the upper tile first; when it is marked "above", the lower tile by its own direction
+    // bits, "above" or not. MZ skips every star tile and blocks a cell where all of them are, which walled
+    // off every lower tile a 2003 chipset marks "above". A tile event keeps its say first, as in both.
+    const _checkPassage = Game_Map.prototype.checkPassage;
+    Game_Map.prototype.checkPassage = function(x, y, bit) {
+        if (!$dataSystem || !$dataSystem.rrLegacyPassage || (bit & ~0x0f)) return _checkPassage.call(this, x, y, bit);
+        const flags = this.tilesetFlags();
+        for (const event of this.tileEventsXy(x, y)) {
+            const flag = flags[event.tileId()] || 0;
+            if (!(flag & 0x10)) return (flag & bit) === 0;
+        }
+        const upper = flags[this.tileId(x, y, 2)] || 0;
+        if (upper & bit) return false;
+        if (!(upper & 0x10)) return true;
+        const lower = this.tileId(x, y, 1) || this.tileId(x, y, 0);
+        return ((flags[lower] || 0) & bit) === 0;
+    };
+
+    // RPG Maker 2000/2003 transparency: eight levels, opacity (8 - level) * 32 - 1; move routes step it from
+    // the character's current level, and an event's page change resets it (3 for a translucent page, else 0)
+    // when System.json rrLegacyPageOpacity is set. A page with rrSpin turns a quarter every 24/16/12/8/6/4
+    // frames by move speed. EasyRPG's Game_Character and Game_Event.
+    Game_CharacterBase.prototype.rrTransparency = function(delta) {
+        const current = this._rrTransp ?? Math.max(0, Math.min(7, Math.round(8 - (this.opacity() + 1) / 32)));
+        this._rrTransp = Math.max(0, Math.min(7, current + (Number(delta) || 0)));
+        this.setOpacity(Math.max(0, Math.min(255, (8 - this._rrTransp) * 32 - 1)));
+    };
+
+    const _setupPageSettings = Game_Event.prototype.setupPageSettings;
+    Game_Event.prototype.setupPageSettings = function() {
+        _setupPageSettings.call(this);
+        const page = this.page();
+        if (page && $dataSystem && $dataSystem.rrLegacyPageOpacity) {
+            this._rrTransp = page.rrTranslucent ? 3 : 0;
+            this.setOpacity((8 - this._rrTransp) * 32 - 1);
+        }
+        this._rrSpin = !!(page && page.rrSpin);
+        this._rrSpinCount = 0;
+    };
+
+    const SPIN_ORDER = { 8: 6, 6: 2, 2: 4, 4: 8 };
+    const _Game_Event_updateSpin = Game_Event.prototype.update;
+    Game_Event.prototype.update = function() {
+        _Game_Event_updateSpin.call(this);
+        if (!this._rrSpin) return;
+        const limit = [24, 16, 12, 8, 6, 4][Math.max(1, Math.min(6, this.realMoveSpeed())) - 1];
+        if (++this._rrSpinCount >= limit) { this._rrSpinCount = 0; this._direction = SPIN_ORDER[this._direction] || 2; }
+    };
+
+    Game_Interpreter.prototype.rrMessageOptions = function(background, position) {
+        const m = $gameSystem._rrMessage || ($gameSystem._rrMessage = { faceName: "", faceIndex: 0, background: 0, position: 2 });
+        m.background = Number(background) || 0;
+        m.position = Number.isFinite(Number(position)) ? Math.max(0, Math.min(2, Number(position))) : 2;
+    };
+    Game_Interpreter.prototype.rrMessageFace = function(name, index) {
+        const m = $gameSystem._rrMessage || ($gameSystem._rrMessage = { faceName: "", faceIndex: 0, background: 0, position: 2 });
+        m.faceName = String(name || "");
+        m.faceIndex = Number(index) || 0;
+    };
+
+    // RPG Maker 2000/2003 motion (System.json rrLegacyMotion): a character covers 2^(speed + 1) / 256 of
+    // a tile a frame, twice MZ's 2^speed at the same number, and a jump lasts 256 / (8, 12, 16, 24, 32,
+    // 64) frames by speed whatever its length, rising at most 16 px (EasyRPG's Game_Character::Update
+    // and GetJumpHeight). The stored speeds stay the old engine's 1-6.
+    const legacyMotion = () => !!($dataSystem && $dataSystem.rrLegacyMotion);
+    const _realMoveSpeed = Game_CharacterBase.prototype.realMoveSpeed;
+    Game_CharacterBase.prototype.realMoveSpeed = function() {
+        return _realMoveSpeed.call(this) + (legacyMotion() ? 1 : 0);
+    };
+    const JUMP_SPEED = [8, 12, 16, 24, 32, 64];
+    const _jump = Game_CharacterBase.prototype.jump;
+    Game_CharacterBase.prototype.jump = function(xPlus, yPlus) {
+        _jump.call(this, xPlus, yPlus);
+        if (!legacyMotion()) { this._rrJumpTotal = 0; return; }
+        const total = Math.ceil(256 / JUMP_SPEED[Math.max(1, Math.min(6, this._moveSpeed)) - 1]);
+        this._rrJumpTotal = total;
+        this._jumpPeak = total / 2;
+        this._jumpCount = total;
+    };
+    const _jumpHeight = Game_CharacterBase.prototype.jumpHeight;
+    Game_CharacterBase.prototype.jumpHeight = function() {
+        if (!this._rrJumpTotal || !legacyMotion()) return _jumpHeight.call(this);
+        const remaining = 256 * this._jumpCount / this._rrJumpTotal;
+        const h = Math.floor((remaining > 128 ? 256 - remaining : remaining) / 8);
+        return h < 5 ? h * 2 : h < 13 ? h + 4 : 16;
+    };
+
+    // A move route runs its instant commands (sound, transparency, graphic, speed, switches, scripts) in the
+    // same frame; only a step, jump, wait or turn ends it (EasyRPG's Game_Character::UpdateMoveRoute). MZ takes
+    // a frame each, so Deep 8's troopers, faded in by a route that a later Set Move Route replaces six frames
+    // on, lost their graphic change and came back invisible.
+    const _updateRoutineMove = Game_Character.prototype.updateRoutineMove;
+    Game_Character.prototype.updateRoutineMove = function() {
+        _updateRoutineMove.call(this);
+        if (!legacyMotion()) return;
+        for (let guard = 0; guard < 256; guard++) {
+            if (!this._moveRoute || this.isMoving() || this.isJumping() || this._waitCount > 0) return;
+            const command = this._moveRoute.list[this._moveRouteIndex];
+            if (!command || (command.code > 0 && command.code <= 26)) return;
+            _updateRoutineMove.call(this);
+            if (command.code === 0) return;
+        }
+    };
+
+    // A route's face and turn commands turn the character even when its facing is fixed; the lock only keeps
+    // steps from turning it (EasyRPG's UpdateMoveRoute sets the facing outright). Deep 8's village mother is a
+    // fixed-graphic page turned left by a route onto her left-facing cell.
+    const _processMoveCommand = Game_Character.prototype.processMoveCommand;
+    Game_Character.prototype.processMoveCommand = function(command) {
+        if (!legacyMotion() || !command || command.code < 16 || command.code > 26 || !this._directionFix) return _processMoveCommand.call(this, command);
+        this._directionFix = false;
+        try { return _processMoveCommand.call(this, command); } finally { this._directionFix = true; }
+    };
+
+    // A paused character (a route's Stop Animation) and, with rrLegacyMotion, a jumping one hold the middle
+    // frame; a fixed-graphic page keeps its own (EasyRPG's Game_Character::UpdateAnimation / ResetAnimation).
+    Game_CharacterBase.prototype.rrAnimPause = function(paused) {
+        this._rrAnimPaused = !!paused;
+    };
+    const _updateAnimation = Game_CharacterBase.prototype.updateAnimation;
+    Game_CharacterBase.prototype.updateAnimation = function() {
+        if (this._rrAnimPaused || (this.isJumping() && legacyMotion())) {
+            this._animationCount = 0;
+            const page = this instanceof Game_Event && this.page ? this.page() : null;
+            if (!(page && page.rrFixedGraphic)) this.resetPattern();
+            return;
+        }
+        _updateAnimation.call(this);
+    };
+
+    // RPG Maker 2000/2003 Tile Substitution: the map keeps two 144-entry tables (lower and upper tiles)
+    // and a substitution rewrites every entry that shows `old` to show `new`, over the whole map, until
+    // the next map (EasyRPG's Game_Map::SubstituteDown/Up). An import writes lower tile n as B tile
+    // 1 + n on layer 1 and upper tile n as C tile 256 + n on layer 2, so the tables apply to those
+    // layers of the map as loaded; the tables live on $gameMap and so survive a save.
+    const identity144 = () => Array.from({ length: 144 }, (_, i) => i);
+    const _Game_Map_setup = Game_Map.prototype.setup;
+    Game_Map.prototype.setup = function(mapId) {
+        this._rrTileSub = null;
+        _Game_Map_setup.call(this, mapId);
+    };
+    Game_Map.prototype.rrTileSubstitute = function(upper, oldId, newId) {
+        const subs = this._rrTileSub || (this._rrTileSub = { lower: identity144(), upper: identity144() });
+        const table = upper ? subs.upper : subs.lower;
+        for (let i = 0; i < table.length; i++) if (table[i] === Number(oldId)) table[i] = Number(newId);
+        this.rrApplyTileSub(true);
+    };
+    const rrOriginalLayers = new WeakMap();
+    Game_Map.prototype.rrApplyTileSub = function(force) {
+        const subs = this._rrTileSub, data = $dataMap && $dataMap.data;
+        if (!subs || !data) return;
+        let original = rrOriginalLayers.get($dataMap);
+        if (!original) {
+            const n = $dataMap.width * $dataMap.height;
+            original = { n, lower: data.slice(n, 2 * n), upper: data.slice(2 * n, 3 * n) };
+            rrOriginalLayers.set($dataMap, original);
+        } else if (!force) return;
+        const n = original.n;
+        for (let i = 0; i < n; i++) {
+            const lo = original.lower[i];
+            if (lo >= 1 && lo <= 144) data[n + i] = 1 + subs.lower[lo - 1];
+            const up = original.upper[i];
+            if (up >= 256 && up < 400) data[2 * n + i] = 256 + subs.upper[up - 256];
+            else if (up === 0 && subs.upper[0] !== 0) data[2 * n + i] = 256 + subs.upper[0];
+        }
+        const tilemap = SceneManager._scene && SceneManager._scene._spriteset && SceneManager._scene._spriteset._tilemap;
+        if (tilemap && tilemap.refresh) tilemap.refresh();
+    };
+
+    // Key codes as the 2003 command reports them: 1 down, 2 left, 3 right, 4 up, 5 decision, 6 cancel,
+    // 7 shift, 10-19 the number keys 0-9 (asked for as 10), 20-24 + - * / . (asked for as 20). Checked
+    // in the old engine's order, highest code first. A command that waits takes a fresh press; one that
+    // does not reads a key held down.
+    const RR_KEYS = [[7, "shift"], [6, "cancel"], [5, "ok"], [4, "up"], [3, "right"], [2, "left"], [1, "down"]];
+    const RR_OPERATORS = ["rrPlus", "rrMinus", "rrMultiply", "rrDivide", "rrPeriod"];
+    Game_Interpreter.prototype.rrKeyInputCheck = function(keys, held) {
+        const check = name => (held ? Input.isPressed(name) : Input.isTriggered(name));
+        if (keys.includes(20)) for (let i = 4; i >= 0; i--) if (check(RR_OPERATORS[i])) return 20 + i;
+        if (keys.includes(10)) for (let i = 9; i >= 0; i--) if (check("rrDigit" + i)) return 10 + i;
+        for (const [code, name] of RR_KEYS) if (keys.includes(code) && check(name)) return code;
         return 0;
+    };
+
+    // The number and operator keys, main row and keypad, tracked beside Input's own mapping so a keypad
+    // arrow keeps moving the player. Only rrKeyInput asks for them.
+    const RR_EXTRA_KEYS = { 107: "rrPlus", 187: "rrPlus", 221: "rrPlus", 109: "rrMinus", 189: "rrMinus", 106: "rrMultiply", 111: "rrDivide", 110: "rrPeriod", 190: "rrPeriod" };
+    for (let i = 0; i <= 9; i++) { RR_EXTRA_KEYS[48 + i] = "rrDigit" + i; RR_EXTRA_KEYS[96 + i] = "rrDigit" + i; }
+    const _Input_onKeyDown = Input._onKeyDown;
+    Input._onKeyDown = function(event) {
+        _Input_onKeyDown.call(this, event);
+        const name = RR_EXTRA_KEYS[event.keyCode];
+        if (name) this._currentState[name] = true;
+    };
+    const _Input_onKeyUp = Input._onKeyUp;
+    Input._onKeyUp = function(event) {
+        _Input_onKeyUp.call(this, event);
+        const name = RR_EXTRA_KEYS[event.keyCode];
+        if (name) this._currentState[name] = false;
     };
     Game_Interpreter.prototype.rrKeyInput = function(variableId, keys, wait, timeVariableId) {
         if (wait) {
@@ -12347,7 +12571,7 @@ Game_Interpreter.prototype.command357 = function(params) {
             this._rrKeyInput = { variableId, keys: keys || [5], timeVariableId: timeVariableId || 0, frames: 0 };
             this.setWaitMode("rrKeyInput");
         } else if (variableId) {
-            $gameVariables.setValue(variableId, this.rrKeyInputCheck(keys || []));
+            $gameVariables.setValue(variableId, this.rrKeyInputCheck(keys || [], true));
         }
         return true;
     };
@@ -12386,9 +12610,34 @@ Game_Interpreter.prototype.command357 = function(params) {
         return 0;
     };
 
-    Game_Interpreter.prototype.rrPanReset = function() {
-        $gamePlayer.center($gamePlayer.x, $gamePlayer.y);
+    // 2000/2003 panning: a locked pan ($gameMap._rrPanLocked) keeps the camera where it is while the
+    // player moves; returning the pan scrolls back to the player at the command's speed (1-6), by the
+    // same scrolls a player's walk makes, so pictures fixed to the map ride along.
+    Game_Interpreter.prototype.rrPanReset = function(speed, wait) {
+        if (!speed) { $gamePlayer.center($gamePlayer.x, $gamePlayer.y); return true; }
+        $gameMap._rrPanReturn = Math.pow(2, Number(speed)) / 256;
+        if (wait) this.setWaitMode("rrPan");
         return true;
+    };
+
+    const _Game_Player_updateScroll = Game_Player.prototype.updateScroll;
+    Game_Player.prototype.updateScroll = function(lastScrolledX, lastScrolledY) {
+        if ($gameMap._rrPanLocked || $gameMap._rrPanReturn) return;
+        _Game_Player_updateScroll.call(this, lastScrolledX, lastScrolledY);
+    };
+
+    const _Game_Map_updateScroll = Game_Map.prototype.updateScroll;
+    Game_Map.prototype.updateScroll = function() {
+        _Game_Map_updateScroll.call(this);
+        const step = this._rrPanReturn;
+        if (!step) return;
+        const clampTo = (v, size, screen, loop) => (loop ? v : Math.max(0, Math.min(v, size - screen)));
+        const tx = clampTo($gamePlayer._realX - $gamePlayer.centerX(), this.width(), this.screenTileX(), this.isLoopHorizontal());
+        const ty = clampTo($gamePlayer._realY - $gamePlayer.centerY(), this.height(), this.screenTileY(), this.isLoopVertical());
+        const dx = tx - this._displayX, dy = ty - this._displayY;
+        if (dx > 0) this.scrollRight(Math.min(step, dx)); else if (dx < 0) this.scrollLeft(Math.min(step, -dx));
+        if (dy > 0) this.scrollDown(Math.min(step, dy)); else if (dy < 0) this.scrollUp(Math.min(step, -dy));
+        if (Math.abs(dx) <= step && Math.abs(dy) <= step) this._rrPanReturn = 0;
     };
 
     const _expForLevel = Game_Actor.prototype.expForLevel;

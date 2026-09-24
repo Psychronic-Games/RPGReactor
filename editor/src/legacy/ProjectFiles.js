@@ -3,7 +3,7 @@
  * checked against the files it has. Node only; every importer uses it after
  * its assets are written.
  *
- *   forEachReference(dest, visit)   visit(folder, holder, key) for every name in data/*.json;
+ *   forEachReference(dest, visit)   visit(folder, holder, key) for every name in data/*.json and data/Languages/*.json;
  *                                   holder[key] may be changed, and the file is rewritten
  *   matchFileCase(dest)             references spelled as their files are on disk
  *   missingReferences(dest)         Map folder → Set of names with no file
@@ -46,9 +46,12 @@ function forEachReference(dest, visit) {
         }
     };
     const dataDir = path.join(dest, 'data');
+    // The language packs (data/Languages) carry whole commands too, where a translation changed a message's shape.
+    const languages = path.join(dataDir, 'Languages');
+    const files = fs.readdirSync(dataDir).filter(n => /\.json$/i.test(n)).map(n => path.join(dataDir, n))
+        .concat(fs.existsSync(languages) ? fs.readdirSync(languages).filter(n => /\.json$/i.test(n)).map(n => path.join(languages, n)) : []);
     let changed = 0;
-    for (const f of fs.readdirSync(dataDir).filter(n => /\.json$/i.test(n))) {
-        const file = path.join(dataDir, f);
+    for (const file of files) {
         let json;
         try { json = JSON.parse(fs.readFileSync(file, 'utf8')); } catch (_) { continue; }
         const text = JSON.stringify(json);

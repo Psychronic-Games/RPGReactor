@@ -23,7 +23,7 @@ if (typeof TextDecoder === 'undefined') globalThis.TextDecoder = require('node:u
         const { source, destination, options } = workerData;
         const log = (message, level) => parentPort.postMessage({ type: 'log', message: String(message), level: level || 'info' });
         const progress = (fraction, status) => parentPort.postMessage({ type: 'progress', fraction, status: String(status || '') });
-        const summary = I.importProject(source, destination, Object.assign({}, options, { log, progress }));
+        const summary = await I.importProject(source, destination, Object.assign({}, options, { log, progress }));
         // Movies Chromium cannot play become WebM and MIDI becomes Ogg, after the project is written.
         if (summary && summary.destination && media.pendingMedia(summary.destination)) {
             Object.assign(summary, await media.convertMedia(summary.destination, { log, progress }));

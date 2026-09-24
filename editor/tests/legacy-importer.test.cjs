@@ -55,11 +55,11 @@ test('the editor reaches the importer: File menu entry, dispatch, callback, cont
     assert.match(controller, /if \(projectPath\) await this\.openProjectAtPath\(projectPath\);/, 'Open Project uses the same path-based open');
 });
 
-test('a two-map Deep 8 import through the module writes an openable project', { skip: !fs.existsSync(path.join(deep8, 'RPG_RT.ldb')) }, () => {
+test('a two-map Deep 8 import through the module writes an openable project', { skip: !fs.existsSync(path.join(deep8, 'RPG_RT.ldb')) }, async () => {
     const dest = fs.mkdtempSync(path.join(os.tmpdir(), 'rr-legacy-import-'));
     try {
         const lines = [];
-        const summary = I.importProject(deep8, dest, { maps: [3, 12], skipAssets: true, force: true, log: (l) => lines.push(l) });
+        const summary = await I.importProject(deep8, dest, { maps: [3, 12], skipAssets: true, force: true, log: (l) => lines.push(l) });
         assert.equal(summary.maps, 2);
         assert.equal(summary.tilesets, 100);
         assert.ok(lines.some(l => /Converting the database/.test(l)) && lines.some(l => /^Wrote /.test(l)), 'the log narrates the stages');
@@ -72,15 +72,15 @@ test('a two-map Deep 8 import through the module writes an openable project', { 
         assert.equal(system.rrLanguage, undefined);
         assert.deepEqual(system.terms.commands.slice(2, 4), ['Attack', 'Guard'], 'Japanese default terms give way to the stock words');
         assert.equal(system.terms.commands[0], 'Kämpfen');
-        assert.throws(() => I.importProject(deep8, dest, { maps: [3], skipAssets: true }), /not empty/);
+        await assert.rejects(async () => I.importProject(deep8, dest, { maps: [3], skipAssets: true }), /not empty/);
     } finally { fs.rmSync(dest, { recursive: true, force: true }); }
 });
 
-test('a language the game ships is baked into every text: messages, choices, plugin texts, records and terms', { skip: !fs.existsSync(path.join(deep8, 'RPG_RT.ldb')) }, () => {
+test('a language the game ships is baked into every text: messages, choices, plugin texts, records and terms', { skip: !fs.existsSync(path.join(deep8, 'RPG_RT.ldb')) }, async () => {
     assert.deepEqual(I.languages(deep8), ['english']);
     const dest = fs.mkdtempSync(path.join(os.tmpdir(), 'rr-legacy-lang-'));
     try {
-        I.importProject(deep8, dest, { maps: [3, 97], skipAssets: true, force: true, language: 'english', log: () => {} });
+        await I.importProject(deep8, dest, { maps: [3, 97], skipAssets: true, force: true, language: 'english', log: () => {} });
         const system = JSON.parse(fs.readFileSync(path.join(dest, 'data', 'System.json'), 'utf8'));
         assert.equal(system.rrLanguage, 'english');
         assert.equal(system.terms.commands[25], 'Sell');

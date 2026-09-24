@@ -84,7 +84,7 @@
         header.append(titleEl, closeButton);
 
         const body = document.createElement('div');
-        body.className = 'rr-modal-body';
+        body.className = 'rr-modal-body rr-accent-scrollbar';
         body.style.cssText = 'display:grid;grid-template-columns:max-content 1fr auto;column-gap:10px;row-gap:8px;align-items:center;';
         const label = (text, forId) => { const l = document.createElement('label'); l.setAttribute('for', forId); l.style.cssText = 'color:var(--color-text);font-size:13px;'; l.textContent = text; return l; };
         const input = (id, readOnly) => { const i = document.createElement('input'); i.type = 'text'; i.id = id; i.readOnly = !!readOnly; i.setAttribute('autocomplete', 'off'); i.setAttribute('spellcheck', 'false'); i.style.cssText = 'width:100%;box-sizing:border-box;padding:7px 10px;font-size:13px;color:var(--color-text);background:var(--color-bg-input, var(--color-bg-deep));border:1px solid var(--color-border);border-radius:var(--radius-sm, 4px);'; return i; };

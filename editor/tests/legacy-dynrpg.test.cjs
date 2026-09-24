@@ -25,7 +25,12 @@ test('every family becomes one $gameScreen call with the plugin’s argument ord
     assert.equal(c('@append_line "a", "Die Zereo",,'), '$gameScreen.rrAppendLine("a", "Die Zereo")');
     assert.equal(c('@change_text "12", "2x Zauber", 6'), '$gameScreen.rrChangeText("12", "2x Zauber", 6)');
     assert.equal(c('@remove_text "R", end'), '$gameScreen.rrRemoveText("R")');
-    assert.equal(c('@add_sprite "HG", "Picture/HEDON/Palast Kampf1.png", "mix", 1, 5, 160, 120, 100, 0'), '$gameScreen.rrSpriteAdd("HG", "Picture/HEDON/Palast Kampf1.png", "mix", 5, 160, 120, 100, 0)');
+    assert.equal(c('@add_sprite "HG", "Picture/HEDON/Palast Kampf1.png", "mix", 1, 5, 160, 120, 100, 0'), '$gameScreen.rrSpriteAdd("HG", "Picture/HEDON/Palast Kampf1.png", "mix", 0, 160, 120, 100, 0, 5)');
+    assert.equal(c('@set_sprite_z "HG", 3'), '$gameScreen.rrSpriteZ("HG", 3)');
+    // one axis only: a hop (move y) must not stop the travel across (move x), as Deep 8's rabbit jumps at the hero
+    assert.equal(c('@move_y_sprite_to "PA", V82, 400, "quadratic in"'), '$gameScreen.rrSpriteMoveTo("PA", null, $gameVariables.value(82), 400, "quadratic in")');
+    assert.equal(c('@move_x_sprite_to "PA", V81, 800'), '$gameScreen.rrSpriteMoveTo("PA", $gameVariables.value(81), null, 800, "linear")');
+    assert.equal(c('@rotate_sprite_to "a", "ccw", 100, 2000'), '$gameScreen.rrSpriteRotateTo("a", "ccw", 100, 2000, "linear")');
     assert.equal(c('@bind_sprite_to "HG", "map"'), '$gameScreen.rrSpriteBind("HG", "map")');
     assert.equal(c('@set_sprite_layer "HG", 1'), '$gameScreen.rrSpriteLayer("HG", 1)');
     assert.equal(c('@call shift_sprite_opacity_to, "Balken", 0, 500'), '$gameScreen.rrSpriteOpacityTo("Balken", 0, 500, "linear")');
@@ -40,7 +45,7 @@ test('every family becomes one $gameScreen call with the plugin’s argument ord
     assert.equal(c('@pfx_burst "Block", V1204, V1206'), '$gameScreen.rrPfxBurst("Block", $gameVariables.value(1204), $gameVariables.value(1206))');
     assert.equal(c('@pfx_set_gravity_direction "aqua", 90, 5'), '$gameScreen.rrPfxSet("aqua", "gravity", 90, 5)');
     assert.equal(c('@pfx_set_acceleration_point "a", 10, 20, 3'), '$gameScreen.rrPfxSet("a", "acceleration", 10, 20, 3)');
-    assert.equal(c('@easyrpg_set_language "english"'), null);
+    assert.equal(c('@easyrpg_set_language "english"'), 'if (this.rrSetLanguage) this.rrSetLanguage("english")');
     // with a translator, quoted text arguments are translated; ids, numbers and variables are not
     const tr = (s) => ({ 'Neues Spiel': 'New Game', 'Laden': 'Load' })[s] || s;
     assert.equal(Dyn.convert('write_text', ['"1"', 'V41', 'V42', '"Neues Spiel"', '', '0', '40'], tr), '$gameScreen.rrWriteText("1", $gameVariables.value(41), $gameVariables.value(42), "New Game", false, 0, 40)');
@@ -53,11 +58,11 @@ test('in a command list, an @ comment on any line becomes a Script and others st
     const cmd = (code, string, indent = 0) => ({ code, indent, string, parameters: [] });
     const ctx = { itemKind: () => 'items', actors: {}, notes: {} };
     const { list, notes } = C.convertList([cmd(12410, '@write_text "a", 1, 2, "Line one'), cmd(22410, 'still line one"'), cmd(22410, '@remove_text "a", end'), cmd(12410, 'a note'), cmd(22410, 'continued'), cmd(12410, '@easyrpg_set_language "english"')], ctx);
-    assert.deepEqual(list.map(c => c.code), [355, 355, 108, 408, 108, 0]);
+    assert.deepEqual(list.map(c => c.code), [355, 355, 108, 408, 355, 0]);
     assert.equal(list[0].parameters[0], '$gameScreen.rrWriteText("a", 1, 2, "Line one\\nstill line one", false, 0, 0)', 'continuation lines join with a newline inside the string literal');
     assert.equal(list[1].parameters[0], '$gameScreen.rrRemoveText("a")');
-    assert.equal(list[4].parameters[0], '@easyrpg_set_language "english"');
-    assert.deepEqual(notes, { 'dynrpg:write_text': 1, 'dynrpg:remove_text': 1, 'dynrpgKept:easyrpg_set_language': 1 });
+    assert.equal(list[4].parameters[0], 'if (this.rrSetLanguage) this.rrSetLanguage("english")', 'EasyRPG\'s language switch goes to RR_Language');
+    assert.deepEqual(notes, { 'dynrpg:write_text': 1, 'dynrpg:remove_text': 1, 'dynrpg:easyrpg_set_language': 1 });
 });
 
 test('a write_text and the append_lines after it translate as one message, laid back out line by line', () => {
@@ -79,13 +84,23 @@ test('the screen-features runtime file is loaded after the picture extensions an
     const main = fs.readFileSync(path.join(repo, 'runtime', 'reactor_main.js'), 'utf8');
     assert.ok(main.indexOf('"js/reactor_picture_extensions.js"') < main.indexOf('"js/reactor_screen_fx.js"'));
     const fx = fs.readFileSync(path.join(repo, 'runtime', 'reactor_screen_fx.js'), 'utf8');
-    for (const name of ['rrWriteText', 'rrAppendLine', 'rrChangeText', 'rrRemoveText', 'rrTextAlign', 'rrSpriteAdd', 'rrSpriteBind', 'rrSpriteLayer', 'rrSpriteOpacityTo', 'rrSpriteMoveBy', 'rrSpriteScaleTo', 'rrSpriteRotateBy', 'rrSpriteRotateForever', 'rrSpriteColorTo', 'rrSpritePosition', 'rrPfxCreate', 'rrPfxSet', 'rrPfxBurst', 'rrPfxStart', 'rrPfxDestroy', 'rrPictureEffect']) {
+    for (const name of ['rrWriteText', 'rrAppendLine', 'rrChangeText', 'rrRemoveText', 'rrTextAlign', 'rrSpriteAdd', 'rrSpriteBind', 'rrSpriteLayer', 'rrSpriteZ', 'rrSpriteOpacityTo', 'rrSpriteMoveBy', 'rrSpriteScaleTo', 'rrSpriteRotateBy', 'rrSpriteRotateForever', 'rrSpriteColorTo', 'rrSpritePosition', 'rrPfxCreate', 'rrPfxSet', 'rrPfxBurst', 'rrPfxStart', 'rrPfxDestroy', 'rrPictureEffect']) {
         assert.ok(fx.includes(`Game_Screen.prototype.${name} = function`), name);
     }
     assert.doesNotThrow(() => new Function(fx));
-    // the rules the shipped Deep 8 player settled: plugin layers 0-9 with the rest as 0, a 32 px wave, screen text in the game font centred on x
-    assert.match(fx, /return n < 0 \|\| n >= 10 \? 0 : n;/);
-    assert.match(fx, /if \(n === 3\) return 2;\s*if \(n === 4\) return 3\.5;/);
+    // the rules the shipped Deep 8 player settled: map layers 1-9, no layer = over everything, a 32 px wave, screen text in the game font centred on x
+    const fn = (name) => new RegExp(`function ${name}\\([\\s\\S]*?\\n    }\\n|function ${name}\\(.*\\n`).exec(fx)[0];
+    const [spriteLayer, layerZ] = new Function(fn('spriteLayer') + fn('layerZ') + 'return [spriteLayer, layerZ];')();
+    assert.deepEqual([undefined, 0, 1, 7, 10, 11].map(spriteLayer), [11, 11, 1, 7, 10, 11], 'a sprite never given a layer is over every map layer');
+    assert.deepEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map(layerZ), ['panorama', 0.5, 1.5, 3.5, 4.5, 5.5, null, null, 'top', 'top', 'top']);
+    // a picture is ordered by id x 10, a sprite by its z with a lower z in front (the title's letters, z 5, over the glows, z 13)
+    assert.match(fx, /const order = p\._rrSprite \? -\(Number\(p\._rrSprite\.z\) \|\| 0\) : \(sprite\._pictureId \|\| 0\) \* 10;/);
+    // sprite colours are 2003 picture colours: percent, 100 unchanged
+    const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+    const toneOf = new Function('clamp', /function toneOf[\s\S]*?\n    }\n/.exec(fx)[0] + 'return toneOf;')(clamp);
+    assert.deepEqual(toneOf(100, 100, 100, 100), [0, 0, 0, 0]);
+    assert.deepEqual(toneOf(50, 100, 100, 100), [-127, 0, 0, 0]);
+    assert.deepEqual(toneOf(0, 0, 0, 0), [-255, -255, -255, 255]);
     assert.match(fx, /uWavelength = 32 \* Math\.abs\(this\.scale\.y \|\| 1\)/);
     assert.match(fx, /const shift = t\.align === "center" \? Math\.round\(this\.bitmap\.width \/ 2\)/);
     assert.match(fx, /measure\.fontFace = fontFace/);

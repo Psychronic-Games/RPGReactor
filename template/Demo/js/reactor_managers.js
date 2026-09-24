@@ -1801,13 +1801,27 @@ AudioManager.checkErrors = function() {
     buffers.push(...this._staticBuffers);
     if (this._bgmSequence) buffers.push(...this._bgmSequenceBuffers());
     for (const buffer of buffers) {
-        if (buffer && buffer.isError()) {
+        if (buffer && buffer.isError() && !buffer._rrSkipped) {
             this.throwLoadError(buffer);
         }
     }
 };
 
+/**
+ * System.json rrSkipMissingAudio (2000/2003 imports): a sound or track the game names but never shipped
+ * (often a standard RTP file such as Save2) stays silent, as the old players do, instead of stopping the
+ * game on a load error.
+ */
+AudioManager.skipsMissingAudio = function() {
+    return !!(typeof $dataSystem !== "undefined" && $dataSystem && $dataSystem.rrSkipMissingAudio);
+};
+
 AudioManager.throwLoadError = function(webAudio) {
+    if (this.skipsMissingAudio()) {
+        webAudio._rrSkipped = true;
+        console.warn("Missing audio skipped:", webAudio.url);
+        return;
+    }
     const retry = webAudio.retry.bind(webAudio);
     throw ["LoadError", webAudio.url, retry];
 };

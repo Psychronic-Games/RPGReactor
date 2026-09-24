@@ -20,7 +20,7 @@
 
     const C = root.RRLegacyCommands || (typeof require === 'function' ? require('./LegacyCommands.js') : null);
     const F = root.RRLegacyFont || (typeof require === 'function' ? require('./LegacyFont.js') : null);
-    const stripExt = (name) => String(name || '').replace(/\.[^.\\/]+$/, '');
+    const stripExt = (name) => (C ? C.stripExt(name) : String(name || ''));
     const audio = (m) => (m && m.name && m.name !== '(OFF)' ? { name: stripExt(m.name), pan: Math.max(-100, Math.min(100, ((m.balance ?? 50) - 50) * 2)), pitch: m.tempo ?? 100, volume: m.volume ?? 100 } : { name: '', pan: 0, pitch: 100, volume: 90 });
     const charsetName = (n) => (C ? C.charsetName(n) : n);
     const count = (arr) => (arr || []).filter(Boolean).length;
@@ -297,7 +297,7 @@
         return out;
     }
 
-    /** 2003 battle animations → MV-style sheet animations at MZ's 192 px cells (the sheets are scaled to match). */
+    /** 2003 battle animations → MV-style sheet animations at MZ's 192 px cells (the sheets are scaled to match); a whole-screen scope plays on the screen. */
     function animations(db, notes) {
         const out = [null];
         for (const a of (db.animations || [])) {
@@ -310,7 +310,7 @@
             }));
             if ((a.timings || []).some(t => t && t.screen_shake)) notes.animationShake = (notes.animationShake || 0) + 1;
             if ((a.frames || []).some(f => f && (f.cells || []).some(c => c && (c.tone_red !== undefined && c.tone_red !== 100 || c.tone_gray)))) notes.animationTone = (notes.animationTone || 0) + 1;
-            out[a.id] = { id: a.id, name: a.name || '', animation1Name: stripExt(a.animation_name), animation1Hue: 0, animation2Name: '', animation2Hue: 0, position: Math.max(0, Math.min(2, a.position ?? 1)), frames: frames.length ? frames : [[]], timings };
+            out[a.id] = { id: a.id, name: a.name || '', animation1Name: stripExt(a.animation_name), animation1Hue: 0, animation2Name: '', animation2Hue: 0, position: a.scope === 1 ? 3 : Math.max(0, Math.min(2, a.position ?? 1)), frames: frames.length ? frames : [[]], timings };
         }
         return out;
     }
@@ -321,7 +321,10 @@
         for (const ce of (db.commonevents || [])) {
             if (!ce) continue;
             maxId = Math.max(maxId, ce.id);
-            out[ce.id] = { id: ce.id, name: ce.name || '', trigger: Math.max(0, Math.min(2, ce.trigger ?? 0)), switchId: ce.switch_flag ? (ce.switch_id || 1) : 1, list: C.convertList(ce.event_commands || [], ctx).list };
+            // 2003 triggers are 3 autorun, 4 parallel, 5 call; MZ's are 1, 2 and 0. With no switch condition
+            // an autorun or parallel event always runs: switch 0, which the runtime reads as no switch.
+            const trigger = { 3: 1, 4: 2 }[ce.trigger] || 0;
+            out[ce.id] = { id: ce.id, name: ce.name || '', trigger, switchId: ce.switch_flag ? (ce.switch_id || 1) : trigger ? 0 : 1, list: C.convertList(ce.event_commands || [], ctx).list };
         }
         for (const e of extra.list) { maxId++; out[maxId] = { id: maxId, name: e.name, trigger: 0, switchId: 1, list: e.list }; e.id = maxId; }
         return out;
@@ -390,7 +393,7 @@
         const { items: itemsOut, weapons, armors, kinds } = items(db, notes, extra, skillsOut);
         const ctx = {
             itemKind: (id) => kinds[id] || 'items', itemType: (id) => (db.items && db.items[id] ? db.items[id].type : 0),
-            actors: Object.fromEntries(actors.filter(Boolean).map(a => [a.id, a])), classOffset, terms: db.terms, system: db.system, notes,
+            actors: Object.fromEntries(actors.filter(Boolean).map(a => [a.id, a])), classOffset, terms: db.terms, system: db.system, notes, engine2000,
             translate: translator ? translator.text : null, translateLines: translator ? translator.lines : null
         };
         const out = {

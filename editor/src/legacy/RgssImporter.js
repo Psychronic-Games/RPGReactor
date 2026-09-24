@@ -326,6 +326,8 @@ function open(folder, destination, options) {
         if (fontSettings.outline === false) sys.advanced.textOutlineWidth = 0;
         // A "Skip Title" script: the game boots into a new game and has no title screen.
         if (C.skipsTitle(active.map(s => s.text))) { sys.rrSkipTitle = true; add(notes, 'skipTitle'); }
+        sys.rrCharacterShiftY = 4;   // VX Ace lifts characters 4 px (shift_y); MZ's is 6
+        sys.rrChoicesInMessage = true;   // choices are listed inside the message window, after the text
         writeJson(path.join(dest, 'data', 'System.json'), sys);
 
         log(`Writing ${mapIds.length} maps and their events…`, 'stage');

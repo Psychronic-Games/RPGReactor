@@ -64,8 +64,8 @@ test('a first-time edit of an unset field still yields a number', () => {
 
 test('the runtime comparison is what makes the null case matter', () => {
     assert.match(objectsSource,
-        /if \(\$gameVariables\.value\(c\.variableId\) < c\.variableValue\) \{/,
-        'the variable condition is a bare less-than against the stored value');
+        /const met = c\.rrVariableOp === undefined \? value >= n :/,
+        'without an imported operator the variable condition is a bare >= against the stored value');
     assert.equal(5 < null, false);
     assert.equal(-1 < null, true, 'which is how a cleared field changes behaviour');
 });

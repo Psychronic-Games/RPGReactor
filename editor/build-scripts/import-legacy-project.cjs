@@ -26,7 +26,7 @@ if (!source || (!flag('--report') && !destination)) {
     process.exit(2);
 }
 const encoding = flag('--encoding') && flag('--encoding') !== true ? flag('--encoding') : undefined;
-try {
+(async () => { try {
     if (flag('--report')) {
         const report = I.report(source, { encoding });
         if (flag('--json') && flag('--json') !== true) fs.writeFileSync(flag('--json'), JSON.stringify(report, null, 2));
@@ -37,7 +37,7 @@ try {
     const maps = flag('--maps') && flag('--maps') !== true ? String(flag('--maps')).split(',').map(Number) : null;
     const language = flag('--language') && flag('--language') !== true ? flag('--language') : undefined;
     const rtpPath = flag('--rtp') && flag('--rtp') !== true ? flag('--rtp') : undefined;
-    const summary = I.importProject(source, destination, { maps, skipAssets: !!flag('--skip-assets'), force: !!flag('--force'), encoding, language, rtpPath, log: (line) => console.log(line) });
+    const summary = await I.importProject(source, destination, { maps, skipAssets: !!flag('--skip-assets'), force: !!flag('--force'), encoding, language, rtpPath, log: (line) => console.log(line) });
     // Movies Chromium cannot play become WebM and MIDI becomes Ogg once the project is written.
     const media = require('../src/legacy/LegacyMedia.js');
     if (summary && summary.destination && media.pendingMedia(summary.destination)) {
@@ -46,4 +46,4 @@ try {
 } catch (error) {
     console.error(error.message);
     process.exit(1);
-}
+} })();

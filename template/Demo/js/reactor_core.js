@@ -2611,7 +2611,9 @@ Bitmap.prototype.initialize = function(width, height) {
     this._animation = null;
     this._animationDecodeUrl = "";
     this._paintOpacity = 255;
-    this._smooth = true;
+    // pixel-art projects (System.json advanced.pixelatedRendering) sample every texture nearest, so a scaled or
+    // moving sprite keeps hard pixels instead of blurring between them
+    this._smooth = !(typeof $dataSystem !== "undefined" && $dataSystem?.advanced?.pixelatedRendering === true);
     this._loadListeners = [];
 
     // "none", "loading", "loaded", or "error"
@@ -3237,8 +3239,19 @@ Bitmap.prototype._makeFontNameText = function() {
     return italic + bold + this.fontSize + "px " + this.fontFace;
 };
 
+/** System.json advanced.rrTextShadow: text casts a sharp 1 px drop shadow instead of an outline, as 2000/2003 drew it. */
+Bitmap.textShadow = function() {
+    const advanced = typeof $dataSystem !== "undefined" && $dataSystem && $dataSystem.advanced;
+    return !!(advanced && advanced.rrTextShadow === true);
+};
+
 Bitmap.prototype._drawTextOutline = function(text, tx, ty, maxWidth) {
     const context = this.context;
+    if (this.outlineWidth > 0 && Bitmap.textShadow()) {
+        context.fillStyle = "#000000";
+        context.fillText(text, tx + 1, ty + 1, maxWidth);
+        return;
+    }
     context.strokeStyle = this.outlineColor;
     context.lineWidth = this.outlineWidth;
     context.lineJoin = "round";

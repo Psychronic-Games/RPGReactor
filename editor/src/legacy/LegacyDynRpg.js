@@ -12,9 +12,12 @@
  *
  * The text plugin's arguments are EasyRPG Player's (its native
  * implementation); the particle plugin's are its published reference; the
- * sprite plugin's are read from how they are used (name, image, blend,
- * an unused flag, layer, x, y, scale percent, angle; times in milliseconds;
- * easing names such as "quadratic in/out").
+ * sprite plugin's are read from how they are used and settled against
+ * Deep 8's shipped player: add_sprite takes name, image, blend, a flag
+ * (always 1), z order (lower in front), x, y, scale percent, angle; a
+ * sprite is over everything until set_sprite_layer puts it on one of 2003
+ * 1.12's picture map layers (1-10); set_sprite_z reorders it within its
+ * layer. Times are milliseconds, easing names such as "quadratic in/out".
  */
 (function (root) {
     'use strict';
@@ -66,7 +69,8 @@
             case 'set_text_alignment': return `${S}rrTextAlign(${expr(a[0])}, ${expr(a[1] || '"left"')})`;
 
             // ---- sprite plugin --------------------------------------------------------
-            case 'add_sprite': return `${S}rrSpriteAdd(${expr(a[0])}, ${expr(a[1])}, ${expr(a[2] || '"mix"')}, ${num(a[4], 5)}, ${num(a[5], 0)}, ${num(a[6], 0)}, ${num(a[7], 100)}, ${num(a[8], 0)})`;
+            case 'add_sprite': return `${S}rrSpriteAdd(${expr(a[0])}, ${expr(a[1])}, ${expr(a[2] || '"mix"')}, 0, ${num(a[5], 0)}, ${num(a[6], 0)}, ${num(a[7], 100)}, ${num(a[8], 0)}, ${num(a[4], 0)})`;
+            case 'set_sprite_z': return `${S}rrSpriteZ(${expr(a[0])}, ${num(a[1], 0)})`;
             case 'remove_sprite': return `${S}rrSpriteRemove(${expr(a[0])})`;
             case 'remove_all_sprites': return `${S}rrSpriteRemoveAll()`;
             case 'bind_sprite_to': return `${S}rrSpriteBind(${expr(a[0])}, ${expr(a[1] || '"screen"')})`;
@@ -78,8 +82,8 @@
             case 'move_sprite_by': return `${S}rrSpriteMoveBy(${expr(a[0])}, ${num(a[1], 0)}, ${num(a[2], 0)}, ${num(a[3], 0)}, ${expr(a[4] || '"linear"')})`;
             case 'move_x_sprite_by': return `${S}rrSpriteMoveBy(${expr(a[0])}, ${num(a[1], 0)}, 0, ${num(a[2], 0)}, ${expr(a[3] || '"linear"')})`;
             case 'move_y_sprite_by': return `${S}rrSpriteMoveBy(${expr(a[0])}, 0, ${num(a[1], 0)}, ${num(a[2], 0)}, ${expr(a[3] || '"linear"')})`;
-            case 'move_x_sprite_to': return `${S}rrSpriteMoveTo(${expr(a[0])}, ${num(a[1], 0)}, ${S}rrSpritePicture(${expr(a[0])}) ? ${S}rrSpritePicture(${expr(a[0])}).y() : 0, ${num(a[2], 0)}, ${expr(a[3] || '"linear"')})`;
-            case 'move_y_sprite_to': return `${S}rrSpriteMoveTo(${expr(a[0])}, ${S}rrSpritePicture(${expr(a[0])}) ? ${S}rrSpritePicture(${expr(a[0])}).x() : 0, ${num(a[1], 0)}, ${num(a[2], 0)}, ${expr(a[3] || '"linear"')})`;
+            case 'move_x_sprite_to': return `${S}rrSpriteMoveTo(${expr(a[0])}, ${num(a[1], 0)}, null, ${num(a[2], 0)}, ${expr(a[3] || '"linear"')})`;
+            case 'move_y_sprite_to': return `${S}rrSpriteMoveTo(${expr(a[0])}, null, ${num(a[1], 0)}, ${num(a[2], 0)}, ${expr(a[3] || '"linear"')})`;
             case 'scale_sprite_to': return `${S}rrSpriteScaleTo(${expr(a[0])}, ${num(a[1], 100)}, ${num(a[1], 100)}, ${num(a[2], 0)}, ${expr(a[3] || '"linear"')})`;
             case 'scale_x_sprite_to': return `${S}rrSpriteScaleTo(${expr(a[0])}, ${num(a[1], 100)}, null, ${num(a[2], 0)}, ${expr(a[3] || '"linear"')})`;
             case 'scale_y_sprite_to': return `${S}rrSpriteScaleTo(${expr(a[0])}, null, ${num(a[1], 100)}, ${num(a[2], 0)}, ${expr(a[3] || '"linear"')})`;
@@ -89,7 +93,7 @@
             case 'set_sprite_color': return `${S}rrSpriteColor(${expr(a[0])}, ${num(a[1], 255)}, ${num(a[2], 255)}, ${num(a[3], 255)}, ${num(a[4], 100)})`;
             case 'shift_sprite_color_to': return `${S}rrSpriteColorTo(${expr(a[0])}, ${num(a[1], 255)}, ${num(a[2], 255)}, ${num(a[3], 255)}, ${num(a[4], 100)}, ${num(a[5], 0)})`;
             case 'set_sprite_position': return `${S}rrSpriteMoveTo(${expr(a[0])}, ${num(a[1], 0)}, ${num(a[2], 0)}, 0, "linear")`;
-            case 'rotate_sprite_to': return `${S}rrSpriteRotateTo(${expr(a[0])}, ${num(a[1], 0)}, ${num(a[2], 0)}, ${expr(a[3] || '"linear"')})`;
+            case 'rotate_sprite_to': return `${S}rrSpriteRotateTo(${expr(a[0])}, ${expr(a[1] || '"cw"')}, ${num(a[2], 0)}, ${num(a[3], 0)}, ${expr(a[4] || '"linear"')})`;
             case 'set_sprite_blend_mode': return `${S}rrSpriteBlend(${expr(a[0])}, ${expr(a[1] || '"mix"')})`;
             case 'get_sprite_position': return `${S}rrSpritePosition(${expr(a[0])}, ${num(a[1], 0)}, ${num(a[2], 0)})`;
 
@@ -124,6 +128,8 @@
             case 'pfx_set_acceleration_point': return `${S}rrPfxSet(${expr(a[0])}, "acceleration", ${num(a[1], 0)}, ${num(a[2], 0)}, ${num(a[3], 0)})`;
             case 'pfx_set_z': return `${S}rrPfxSet(${expr(a[0])}, "layer", ${num(a[1], 5)})`;
             case 'pfx_set_interval': return `${S}rrPfxSet(${expr(a[0])}, "interval", ${num(a[1], 1)})`;
+            // ---- EasyRPG's language switch (RR_Language.js, installed with the game's language packs)
+            case 'easyrpg_set_language': return `if (this.rrSetLanguage) this.rrSetLanguage(${expr(a[0])})`;
             default: return null;
         }
     }

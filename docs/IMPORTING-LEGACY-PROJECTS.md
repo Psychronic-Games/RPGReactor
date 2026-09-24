@@ -37,7 +37,14 @@ those maps and `--skip-assets` skips the image and audio copy, for a quick
 look. `--language` (the dialog's Language field) takes one of the
 translations an EasyRPG game ships in its `Language` folder and bakes it
 into every text: messages, choices, plugin texts, names, descriptions and
-terms; the original text stays where the translation has no entry. The new
+terms; the original text stays where the translation has no entry. A game
+that switches language while it plays (EasyRPG's `@easyrpg_set_language`, as
+on Deep 8's language screen) also gets every other language it ships, the
+original included as `default`, in `data/Languages/<name>.json`: the texts that
+differ from the baked data, file by file, found by converting the game again
+in that language. The `RR_Language` plugin (in the Plugin Manager) applies a
+pack when the game calls `this.rrSetLanguage("<name>")`; on Deep 8, base
+data plus the English pack is identical to an English import. The new
 project carries `import-report.json`, which says what was approximated and
 which files were skipped. Both run the same importer,
 `editor/src/legacy/LegacyImporter.js`; the editor runs it in a worker.
@@ -106,8 +113,8 @@ features any project can use:
 
 | Plugin | Commands | Reactor |
 | --- | --- | --- |
-| Text plugin | write_text, append_line, append_text, change_text, change_position, set_text_alignment, remove_text, remove_all | `$gameScreen.rrWriteText(id, x, y, text, fixed, color, layer)` and the rrAppendLine, rrAppendText, rrChangeText, rrMoveText, rrTextAlign, rrRemoveText, rrRemoveAllTexts family: text at a screen or map position in the game font and a skin text colour, with \V, \N, \P, \G and \C codes; lines stack at the glyph height plus 2, "center" puts the text's middle on x, "right" its end |
-| Sprite plugin | add_sprite, remove_sprite, bind_sprite_to, set_sprite_layer, set_sprite_image, set_sprite_position, set_sprite_opacity, shift_sprite_opacity_to, move_sprite_to, move_sprite_by, move_x/y_sprite_by, move_x/y_sprite_to, scale_sprite_to, scale_x/y_sprite_to, rotate_sprite_by, rotate_sprite_to, rotate_sprite_forever, set_sprite_color, shift_sprite_color_to, set_sprite_blend_mode, get_sprite_position | `$gameScreen.rrSpriteAdd(name, image, blend, layer, x, y, scale, angle)` and the rrSprite* family: pictures addressed by name, with the plugin's draw layers 0-9 (0-1 behind the map's parallax, 2 over it and under the tiles, 3 under the characters, 4 over them, 5-9 over the pictures; any other number is 0, which is how Deep 8 uses 10 and up), a map binding that scrolls with the map, and moves, scales, opacity, rotation and colour fades that each run on their own clock, so a fade keeps going under a later move. Times are milliseconds, easing names as the plugin wrote them. When every named slot is taken the oldest invisible, finished sprite gives up its slot |
+| Text plugin | write_text, append_line, append_text, change_text, change_position, set_text_alignment, remove_text, remove_all | `$gameScreen.rrWriteText(id, x, y, text, fixed, color, pictureId)` and the rrAppendLine, rrAppendText, rrChangeText, rrMoveText, rrTextAlign, rrRemoveText, rrRemoveAllTexts family: text at a screen position, or a map position when fixed, in the game font and a skin text colour, shown while its picture is shown and at that picture's opacity, with \V, \N, \P, \G and \C codes; lines stack at the glyph height plus 2, "center" puts the text's middle on x, "right" its end |
+| Sprite plugin | add_sprite, remove_sprite, bind_sprite_to, set_sprite_layer, set_sprite_z, set_sprite_image, set_sprite_position, set_sprite_opacity, shift_sprite_opacity_to, move_sprite_to, move_sprite_by, move_x/y_sprite_by, move_x/y_sprite_to, scale_sprite_to, scale_x/y_sprite_to, rotate_sprite_by, rotate_sprite_to, rotate_sprite_forever, set_sprite_color, shift_sprite_color_to, set_sprite_blend_mode, get_sprite_position | `$gameScreen.rrSpriteAdd(name, image, blend, layer, x, y, scale, angle, z)` and the rrSprite* family: pictures addressed by name. A sprite sits over the windows until set_sprite_layer puts it on one of 2003 1.12's picture map layers (1 over the panorama, 2 over the lower tiles, 3 under the characters, 4 with the player, 5 over the upper tiles, 6 over the flying characters, 7 with the pictures, 8 over them, 9 over the windows); add_sprite's fifth argument and set_sprite_z order it within its layer. An added angle is clockwise, rotate_sprite_by turns counter-clockwise, rotate_sprite_to takes a direction and an angle, and colours are percent with 100 unchanged. Also a map binding that scrolls with the map, and moves, scales, opacity, rotation and colour fades that each run on their own clock, so a fade keeps going under a later move. Times are milliseconds, easing names as the plugin wrote them. When every named slot is taken the oldest invisible, finished sprite gives up its slot |
 | Particle Effects V2 | pfx_create_effect, pfx_set_texture, amount, simul_effects, velocity, angle, secondary_angle, initial_color, final_color, growth, random_position, timeout, layer, gravity_direction, acceleration_point, generating_function, radius, random_radius, interval, use_screen_relative, pfx_burst, pfx_start, pfx_stop, pfx_stopall, pfx_set_position, pfx_destroy_effect, pfx_destroy_all, pfx_does_effect_exist | `$gameScreen.rrPfxCreate(name, "burst" or "stream")`, `rrPfxSet(name, setting, …)`, `rrPfxBurst(name, x, y)`, `rrPfxStart`, `rrPfxStop`, `rrPfxStopAll`, `rrPfxSetPosition`, `rrPfxDestroy`: bursts and streams of textured particles with velocity, spread, colour fade, growth, timeout, gravity and an acceleration point |
 
 An argument written `Vn` reads variable n at run time. A comment that is
@@ -119,6 +126,15 @@ follows EasyRPG Player's native implementation and the particle plugin's
 its published reference. Particle motion is visual, not a physics match:
 velocity is pixels per second, gravity and acceleration are scaled to look
 right rather than measured against the original.
+
+Pictures erase when the party changes map, as in 2000 and 2003
+(`rrPicturesEraseOnMapChange` in System.json, Database › System 2 › Window &
+Text). A 2003 v1.12 Show Picture whose own flag keeps it across maps is
+followed by `$gameScreen.rrKeepPicture(id)`. Named sprites leave with the map
+too.
+
+Every 2000/2003 import installs RR_FastForward, EasyRPG Player's
+fast-forward: hold F for 3× speed, G for 10× (plugin parameters).
 
 ## What the format cannot hold exactly
 
@@ -151,7 +167,7 @@ Player build (`rpg_rt.exe` is the player, the plugins are compiled in). It
 runs under Wine with `--window --language english --start-map-id N`, and
 a desktop capture of it beside the harness's screenshot of the imported
 project settled the picture keying, the wave length, the text alignment,
-the sprite layer order and the independent tweens above.
+the sprite layers and turning directions and the independent tweens above.
 
 ## Still to come
 

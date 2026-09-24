@@ -234,11 +234,17 @@
         const terrainOf = (i) => (terrains && terr[i] ? terrains[terr[i]] : null);
         const lowerFlag = (i) => mzFlag(lower[i] ?? 0x0f, terrainOf(i));
         for (let block = 0; block < 3; block++) for (let s = 0; s < 48; s++) flags[TILE_ID_A1 + WATER_KIND[block] * 48 + s] = lowerFlag(block);
-        for (let k = 0; k < 12; k++) for (let s = 0; s < 48; s++) flags[TILE_ID_A2 + k * 48 + s] = flags[TILE_ID_A2 + (CORNER_KIND_OFFSET + k) * 48 + s] = lowerFlag(6 + k);
+        // A terrain block marked "wall" can still be walked along its top edge: these shapes pass (EasyRPG's IsPassableLowerTile).
+        const WALL_TOPS = new Set([20, 21, 22, 23, 33, 34, 35, 36, 37, 42, 43, 45, 46]);
+        for (let k = 0; k < 12; k++) for (let s = 0; s < 48; s++) {
+            const wallTop = ((lower[6 + k] ?? 0x0f) & 0x20) && WALL_TOPS.has(s);
+            flags[TILE_ID_A2 + k * 48 + s] = flags[TILE_ID_A2 + (CORNER_KIND_OFFSET + k) * 48 + s] = wallTop ? lowerFlag(6 + k) & ~0x0f : lowerFlag(6 + k);
+        }
         for (let n = 0; n < 144; n++) flags[LOWER_B_OFFSET + n] = lowerFlag(18 + n);
         for (let t = 0; t < 3; t++) flags[ANIMATED_B_INDEX + t] = lowerFlag(3 + t);
         for (let n = 0; n < 144; n++) flags[TILE_ID_C + n] = mzFlag(upper[n] ?? 0x0f, null);
         flags[TILE_ID_C] = 0x10; // upper tile 0 is empty: never blocks, never covers
+        flags[0] = 0x10;         // MZ's tile 0 is nothing: an empty layer must defer to the tiles under it
         return flags;
     }
 
@@ -272,7 +278,9 @@
 
     // ---- data files -----------------------------------------------------
 
-    function stripExt(name) { return String(name || '').replace(/\.[^.\\/]+$/, ''); }
+    // Only a media extension comes off: 2000/2003 names carry none, and names like "Buddler 1.1" or
+    // "lazar NEU default o.ô" keep their dots.
+    function stripExt(name) { return String(name || '').replace(/\.(png|bmp|xyz|jpe?g|gif|wav|ogg|opus|mp3|midi?|wma|flac|m4a|avi|mpe?g|mp4|wmv|webm|ogv)$/i, ''); }
 
     function audio(m) {
         if (!m || !m.name || m.name === '(OFF)') return { name: '', pan: 0, pitch: 100, volume: 90 };
@@ -318,27 +326,42 @@
         const moveType = { 0: 0, 1: 1, 4: 2, 6: 3 }[pg.move_type ?? 0] ?? 0;
         if ([2, 3, 5].includes(pg.move_type)) notes.moveType = (notes.moveType || 0) + 1;
         if (flags & 0x60) notes.timerCondition = (notes.timerCondition || 0) + 1;
-        if ((flags & 0x04) && c.compare_operator !== 1) notes.variableOperator = (notes.variableOperator || 0) + 1;
         return {
             conditions: {
                 actorId: c.actor_id || 1, actorValid: !!(flags & 0x10), itemId: c.item_id || 1, itemValid: !!(flags & 0x08),
                 selfSwitchCh: 'A', selfSwitchValid: false, switch1Id: c.switch_a_id || 1, switch1Valid: !!(flags & 0x01),
                 switch2Id: c.switch_b_id || 1, switch2Valid: !!(flags & 0x02), variableId: c.variable_id || 1, variableValid: !!(flags & 0x04),
-                variableValue: c.variable_value || 0
+                variableValue: c.variable_value || 0,
+                // 2003 compares a variable six ways (0 ==, 1 >=, 2 <=, 3 >, 4 <, 5 !=); MZ only >=, so others are kept for the runtime
+                ...((flags & 0x04) && (c.compare_operator ?? 1) !== 1 ? { rrVariableOp: Math.max(0, Math.min(5, c.compare_operator)) } : {})
             },
             directionFix: anim === 2 || anim === 3 || anim === 4,
-            image: { characterIndex: pg.character_index ?? 0, characterName: charsetName(pg.character_name), direction: DIRECTION[pg.character_direction ?? 2] ?? 2, pattern: pg.character_pattern ?? 1, tileId: 0 },
+            // no charset name: the page shows upper-layer tile `character_index` (EasyRPG's HasTileSprite)
+            image: pg.character_name ? { characterIndex: pg.character_index ?? 0, characterName: charsetName(pg.character_name), direction: DIRECTION[pg.character_direction ?? 2] ?? 2, pattern: pg.character_pattern ?? 1, tileId: 0 }
+                : { characterIndex: 0, characterName: '', direction: DIRECTION[pg.character_direction ?? 2] ?? 2, pattern: pg.character_pattern ?? 1, tileId: TILE_ID_C + (pg.character_index ?? 0) },
             list: convertCommands ? convertCommands(pg.event_commands || []) : [{ code: 0, indent: 0, parameters: [] }],
             moveFrequency: Math.max(1, Math.min(5, Math.round(((pg.move_frequency ?? 3) * 5) / 8))),
             moveRoute: Object.assign(convertRoute ? convertRoute(pg.move_route && pg.move_route.move_commands || []) : { list: [{ code: 0, parameters: [] }] }, { repeat: !!(pg.move_route && pg.move_route.repeat), skippable: !!(pg.move_route && pg.move_route.skippable), wait: false }),
             moveSpeed: Math.max(1, Math.min(6, pg.move_speed ?? 3)),
             moveType,
             priorityType: Math.max(0, Math.min(2, pg.layer ?? 0)),
+            // read by the runtime for imports: a translucent page starts at transparency 3, a spinning one turns in place
+            rrTranslucent: !!pg.translucent, rrSpin: anim === 5, rrFixedGraphic: anim === 4,
             stepAnime: anim === 1 || anim === 3,
             through: false,
             trigger: Math.max(0, Math.min(4, pg.trigger ?? 0)),
             walkAnime: anim !== 4
         };
+    }
+
+    /**
+     * A 2003 panorama auto-scroll speed (-8..8) → MZ's parallaxSx/Sy. The old engine moves the image
+     * 2^|speed| / 32 px a frame, a positive speed to the right (down); MZ moves it sx / 4 px a frame the
+     * other way (EasyRPG's Parallax::Update and GetX).
+     */
+    function parallaxSpeed(speed) {
+        speed = Number(speed) || 0;
+        return speed === 0 ? 0 : -Math.sign(speed) * Math.pow(2, Math.abs(speed)) / 8;
     }
 
     /** MapNNN.json for one map. */
@@ -355,10 +378,10 @@
         return {
             json: {
                 autoplayBgm: !!music, autoplayBgs: false, battleback1Name: '', battleback2Name: '', bgm: audio(music),
-                bgs: { name: '', pan: 0, pitch: 100, volume: 90 }, disableDashing: false, displayName: '', encounterList: encounters,
+                bgs: { name: '', pan: 0, pitch: 100, volume: 90 }, disableDashing: true, displayName: '', encounterList: encounters,
                 encounterStep: encounterSteps(tree, id), height: map.height, note: '', parallaxLoopX: !!map.parallax_loop_x, parallaxLoopY: !!map.parallax_loop_y,
                 parallaxName: map.parallax_flag ? stripExt(map.parallax_name) : '', parallaxShow: true,
-                parallaxSx: map.parallax_flag && map.parallax_auto_loop_x ? (map.parallax_sx || 0) : 0, parallaxSy: map.parallax_flag && map.parallax_auto_loop_y ? (map.parallax_sy || 0) : 0,
+                parallaxSx: map.parallax_flag && map.parallax_auto_loop_x ? parallaxSpeed(map.parallax_sx) : 0, parallaxSy: map.parallax_flag && map.parallax_auto_loop_y ? parallaxSpeed(map.parallax_sy) : 0,
                 scrollType: map.scroll_type || 0, specifyBattleback: false, tilesetId, width: map.width, data, events
             },
             notes
@@ -458,13 +481,35 @@
         // 500 picture slots: 1-100 for the game's own pictures, the rest for named sprites (DynRPG's sprite plugin had no limit).
         // 2003 text: 12 px glyphs on 16 px lines, 8 px window padding, a 1 px shadow rather than MZ's 3 px outline.
         // A 320×240 game is pixel art; it scales up with nearest-neighbour sampling, never a blur.
-        out.advanced = Object.assign({}, out.advanced, { screenWidth: 320, screenHeight: 240, uiAreaWidth: 320, uiAreaHeight: 240, fontSize: 12, lineHeight: 16, windowPadding: 8, textOutlineWidth: 1, windowMargin: 0, pixelatedRendering: true, windowOpacity: 255, picturesUpperLimit: 500 });
+        out.advanced = Object.assign({}, out.advanced, { screenWidth: 320, screenHeight: 240, uiAreaWidth: 320, uiAreaHeight: 240, fontSize: 12, lineHeight: 16, windowPadding: 8, textOutlineWidth: 1, rrTextShadow: true, windowMargin: 0, pixelatedRendering: true, windowOpacity: 255, picturesUpperLimit: 500 });
         if (tree && tree.start) { out.startMapId = tree.start.party_map_id || 1; out.startX = tree.start.party_x || 0; out.startY = tree.start.party_y || 0; }
         out.partyMembers = (sys.party || []).filter(id => id > 0);
         out.title1Name = stripExt(sys.title_name); out.title2Name = '';
         // A 2003 game can hide its title screen and run its own from events; the runtime honours rrSkipTitle.
         out.rrSkipTitle = sys.show_title === false;
         if (out.rrSkipTitle) out.title1Name = '';
+        // 2000/2003 erase pictures when the party changes map, unless a Show Picture keeps its own (rrKeepPicture).
+        out.rrPicturesEraseOnMapChange = true;
+        // Pictures draw on a map layer (7 unless a Show Picture names one) and stay out of battles without a battle layer.
+        out.rrPictureLayers = true;
+        // A sound the game names but never shipped (a standard RTP file it relied on) stays silent.
+        out.rrSkipMissingAudio = true;
+        // Erase Screen holds through teleports but not through the save screen or the menu.
+        out.rrLegacyEraseScreen = true;
+        // Passage is decided the old engine's way: upper tile first, then the lower tile by its own bits.
+        out.rrLegacyPassage = true;
+        // and update parallel common events before map events, as the old engine does.
+        out.rrLegacyEventOrder = true;
+        // Characters stand on the tile's bottom edge, not 6 px above it as in MZ.
+        out.rrCharacterShiftY = 0;
+        // An event's page change resets its transparency (a route may have faded it out).
+        out.rrLegacyPageOpacity = true;
+        // A panorama that neither scrolls nor loops moves with the camera in proportion, as in the old engine.
+        out.rrLegacyParallax = true;
+        // Choices are listed inside the message window, after the text.
+        out.rrChoicesInMessage = true;
+        // Characters walk and jump at the old engine's pace (twice MZ's at the same speed number).
+        out.rrLegacyMotion = true;
         out.titleBgm = audio(sys.title_music); out.battleBgm = audio(sys.battle_music);
         out.victoryMe = audio(sys.battle_end_music); out.gameoverMe = audio(sys.gameover_music);
         out.optSideView = false; out.optDrawTitle = true; out.optTransparent = false;
@@ -475,7 +520,7 @@
         return out;
     }
 
-    const api = { T, CORNER_KIND_OFFSET, LOWER_B_OFFSET, blank, blit, tile, quad, keyColour, chipsetToSheets, lowerPos, upperPos, blockPos, bcPos, ANIMATED_B_INDEX, shapeOf, lowerTile, upperTile, mapData, mzFlag, tilesetFlags, reorderCharset, charsetName, DIRECTION, audio, mapInfos, mapMusic, eventPage, mapJson, tilesetJson, systemJson, stripExt, terrainMap, mapBattleback, scaleNearest, windowSkin };
+    const api = { parallaxSpeed, TILE_ID_C, T, CORNER_KIND_OFFSET, LOWER_B_OFFSET, blank, blit, tile, quad, keyColour, chipsetToSheets, lowerPos, upperPos, blockPos, bcPos, ANIMATED_B_INDEX, shapeOf, lowerTile, upperTile, mapData, mzFlag, tilesetFlags, reorderCharset, charsetName, DIRECTION, audio, mapInfos, mapMusic, eventPage, mapJson, tilesetJson, systemJson, stripExt, terrainMap, mapBattleback, scaleNearest, windowSkin };
     root.RRLegacyConvert = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof globalThis !== 'undefined' ? globalThis : window);

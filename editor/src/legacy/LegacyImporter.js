@@ -7,7 +7,7 @@
  * LegacyDatabase (records) and LegacyCommands (event commands).
  *
  *   report(source, { encoding })                      → what the project holds
- *   importProject(source, destination, options)       → the written project's summary
+ *   importProject(source, destination, options)       → the written project's summary (a promise for 2000/2003)
  *
  * options: maps (array of ids), skipAssets, force, encoding, language (a Language/<name>
  * folder of EasyRPG-style .po files, baked into every text), log(message).
@@ -21,6 +21,7 @@ const C = require('./LegacyCommands.js');
 const D = require('./LegacyDatabase.js');
 const F = require('./LegacyFont.js');
 const PF = require('./ProjectFiles.js');
+const LL = require('./LegacyLanguages.js');
 
 function printReport(report) {
     const line = (s = '') => console.log(s);
@@ -257,14 +258,21 @@ function open(source, destination, options) {
     const countFiles = (dir) => { let n = 0; for (const entry of fs.readdirSync(dir, { withFileTypes: true })) n += entry.isDirectory() ? countFiles(path.join(dir, entry.name)) : 1; return n; };
 
     /** Every file of a source image folder, decoded, written to a project folder; subfolders kept. */
-    function importImages(folder, target, options) {
+    // Node's zlib releases each stream's memory on a later turn of the event loop, never inside a
+    // synchronous run: decoding thousands of pictures without a pause held gigabytes, and inside the
+    // editor (where the worker shares the page's process) that crashed it. The image passes breathe.
+    const breathe = () => new Promise(resolve => setImmediate(resolve));
+    let sinceBreath = 0;
+    const maybeBreathe = async () => { if (++sinceBreath >= 16) { sinceBreath = 0; await breathe(); } };
+
+    async function importImages(folder, target, options) {
         const root = options.root !== undefined ? options.root : resolveInsensitive(source, folder);
         if (!root) return 0;
         let written = 0;
-        const walk = (dir, rel) => {
+        const walk = async (dir, rel) => {
             for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
                 const full = path.join(dir, entry.name);
-                if (entry.isDirectory()) { walk(full, path.join(rel, entry.name)); continue; }
+                if (entry.isDirectory()) { await walk(full, path.join(rel, entry.name)); continue; }
                 if (!/\.png$/i.test(entry.name)) {
                     // Another image format is art the game meant to show; saves, notes and the like left in an art folder are not.
                     if (/\.(bmp|xyz|jpe?g|gif)$/i.test(entry.name)) notes.skipped.push(`${folder}/${path.join(rel, entry.name)}: not PNG`);
@@ -275,6 +283,7 @@ function open(source, destination, options) {
                 if (options.only && !options.only.has(((options.rename ? options.rename(base) : base)).toLowerCase()) && !options.only.has(path.join(rel, base).replace(/\\/g, '/').toLowerCase())) continue;
                 const keying = typeof options.key === 'function' ? options.key(base) : options.key;
                 const outDir = path.join(destination, target, rel);
+                await maybeBreathe();
                 const bytes = fs.readFileSync(full);
                 stepAsset(folder, entry.name);
                 for (const [key, suffix] of keying === 'both' ? [[true, ''], [false, ' (opaque)']] : [[!!keying, '']]) {
@@ -289,7 +298,7 @@ function open(source, destination, options) {
                 }
             }
         };
-        walk(root, '');
+        await walk(root, '');
         addNote(notes.images, folder, written);
         return written;
     }
@@ -314,7 +323,7 @@ function open(source, destination, options) {
         return written;
     }
     
-    function importProject() {
+    async function importProject() {
         // log(message, level): level is 'stage', 'info', 'warn' or 'done'; a console ignores it.
         const log = typeof options.log === 'function' ? options.log : () => {};
         // progress(fraction 0..1, status): the import's weight is mostly maps and pictures.
@@ -364,7 +373,7 @@ function open(source, destination, options) {
         const pictureUse = {};
         const effectPictures = new Set();   // picture ids any event gives a rotation or wave, so a later plain move can stop it
         {
-            const scan = (cmds) => { for (const c of cmds || []) { if ((c.code === 11110 || c.code === 11120) && (c.parameters[12] === 1 || c.parameters[12] === 2)) effectPictures.add(c.parameters[0]); if (c.code === 11110 && c.string) { const u = pictureUse[c.string.replace(/\.[^.]+$/, '')] || (pictureUse[c.string.replace(/\.[^.]+$/, '')] = { keyed: 0, opaque: 0 }); if (c.parameters[7] > 0) u.keyed++; else u.opaque++; } } };
+            const scan = (cmds) => { for (const c of cmds || []) { if ((c.code === 11110 || c.code === 11120) && (c.parameters[12] === 1 || c.parameters[12] === 2)) effectPictures.add(c.parameters[0]); if (c.code === 11110 && c.string) { const u = pictureUse[C.stripExt(c.string)] || (pictureUse[C.stripExt(c.string)] = { keyed: 0, opaque: 0 }); if (c.parameters[7] > 0) u.keyed++; else u.opaque++; } } };
             for (const ce of (db.commonevents || [])) if (ce) scan(ce.event_commands);
             for (const t of (db.troops || [])) if (t) for (const pg of (t.pages || [])) if (pg) scan(pg.event_commands);
             for (const id in project.maps) for (const e of (project.maps[id].events || [])) if (e) for (const pg of (e.pages || [])) if (pg) scan(pg.event_commands);
@@ -386,6 +395,7 @@ function open(source, destination, options) {
         const sheetCache = new Map();
         for (const [index, chipset] of chipsets.entries()) {
             tilesetProgress(index, chipsets.length, `Tileset ${index + 1} of ${chipsets.length}`);
+            await breathe();
             const stem = `chip${String(chipset.id).padStart(3, '0')}`;
             const names = { A1: '', A2: '', B: '', C: '' };
             const file = chipset.chipset_name ? (resolveInsensitive(source, path.join('ChipSet', chipset.chipset_name + '.png')) || (rtp && resolveInsensitive(rtp, path.join('ChipSet', chipset.chipset_name + '.png')))) : null;
@@ -412,6 +422,14 @@ function open(source, destination, options) {
         const infos = K.mapInfos(project.tree);
         if (translator) for (const info of infos) if (info) { const v = translator.field('maps.name', info.name); if (v !== undefined) info.name = v; }
         const written = [];
+        const baseMaps = new Map();   // file → the map as written, for the language packs
+        const mapFor = (info, map, commands, route) => {
+            const out = K.mapJson(map, project.tree, info.id, map.chipset_id || 1, commands, route);
+            out.json.displayName = '';
+            const back = K.mapBattleback(map, db.chipsets[map.chipset_id || 1], db.terrains);
+            if (back) { out.json.specifyBattleback = true; out.json.battleback1Name = back; }
+            return out;
+        };
         const mapCount = infos.filter(Boolean).length;
         let mapIndex = 0;
         for (const info of infos) {
@@ -419,11 +437,9 @@ function open(source, destination, options) {
             mapProgress(mapIndex++, mapCount, `Map ${mapIndex} of ${mapCount}: ${info.name || ''}`.trim());
             const map = project.maps[info.id];
             if (!map || (wanted && !wanted.has(info.id))) { if (wanted) infos[info.id] = null; continue; }
-            const { json, notes: mapNotes } = K.mapJson(map, project.tree, info.id, map.chipset_id || 1, convertCommands, convertRoute);
-            json.displayName = '';
-            const back = K.mapBattleback(map, db.chipsets[map.chipset_id || 1], db.terrains);
-            if (back) { json.specifyBattleback = true; json.battleback1Name = back; }
+            const { json, notes: mapNotes } = mapFor(info, map, convertCommands, convertRoute);
             writeJson(path.join(dest, 'data', `Map${String(info.id).padStart(3, '0')}.json`), json);
+            baseMaps.set(`Map${String(info.id).padStart(3, '0')}.json`, json);
             for (const [k, n] of Object.entries(mapNotes)) addNote(notes.maps, k, n);
             written.push(info.id);
         }
@@ -468,6 +484,55 @@ function open(source, destination, options) {
                 } catch (error) { notes.skipped.push(`${path.basename(fontFile)}: ${error.message}; the template font stands in`); }
             } else notes.skipped.push('RM2000.fon: the game font is not in the project; the template font stands in');
         }
+        const plugins = [];   // the importer's own plugins this game gets
+        {   // 4b. Language packs: a game that switches language while it plays (EasyRPG's set_language) gets
+            // every other language it ships as the texts that differ from the data just written (RR_Language.js).
+            const switches = (notes.maps['dynrpg:easyrpg_set_language'] || 0) + (dbNotes['dynrpg:easyrpg_set_language'] || 0) > 0;
+            const baseName = translator ? options.language : 'default';
+            const others = switches ? ['default', ...languages()].filter(n => n !== baseName) : [];
+            const packs = [];
+            if (others.length) log(`Writing ${others.length} language pack${others.length === 1 ? '' : 's'} for the game's language switch…`, 'stage');
+            const base = { 'MapInfos.json': infos.map(i => i || null), 'System.json': { terms: system.terms } };
+            for (const [file, records] of [['Actors', converted.actors], ['Classes', converted.classes], ['Skills', converted.skills], ['Items', converted.items], ['Weapons', converted.weapons], ['Armors', converted.armors], ['Enemies', converted.enemies], ['Troops', converted.troops], ['States', converted.states], ['Animations', converted.animations], ['CommonEvents', converted.commonEvents]]) base[`${file}.json`] = records.map(r => r || null);
+            for (const name of others) {
+                const tr = name === 'default' ? null : makeTranslator(name);
+                if (name !== 'default' && !tr) continue;
+                const other = D.convert(db, project.tree, {}, tr);
+                other.ctx.decode = converted.ctx.decode; other.ctx.effectPictures = effectPictures; other.ctx.pictureFile = converted.ctx.pictureFile;
+                const cmds = (commands) => C.convertList(commands, other.ctx).list, route = (moves) => C.convertRoute(moves, other.ctx);
+                const texts = { 'MapInfos.json': K.mapInfos(project.tree).map(i => i || null) };
+                if (tr) for (const info of texts['MapInfos.json']) if (info) { const v = tr.field('maps.name', info.name); if (v !== undefined) info.name = v; }
+                for (const info of texts['MapInfos.json']) if (info && !baseMaps.has(`Map${String(info.id).padStart(3, '0')}.json`)) texts['MapInfos.json'][info.id] = infos[info.id] || null;
+                {   // terms: the stock conversion, then the pack's translation by value
+                    const terms = JSON.parse(JSON.stringify(D.system(K.systemJson(JSON.parse(fs.readFileSync(path.join(skeleton, 'data', 'System.json'), 'utf8')), db, project.tree, project.ini), db, project.tree, {}).terms));
+                    const walk = (obj) => { for (const k of Object.keys(obj)) { const v = obj[k]; if (typeof v === 'string') { const t = tr ? tr.term(v) : undefined; if (t !== undefined) obj[k] = t; } else if (v && typeof v === 'object') walk(v); } };
+                    walk(terms);
+                    texts['System.json'] = { terms };
+                }
+                for (const [file, records] of [['Actors', other.actors], ['Classes', other.classes], ['Skills', other.skills], ['Items', other.items], ['Weapons', other.weapons], ['Armors', other.armors], ['Enemies', other.enemies], ['Troops', other.troops], ['States', other.states], ['Animations', other.animations], ['CommonEvents', other.commonEvents]]) texts[`${file}.json`] = records.map(r => r || null);
+                for (const [file] of baseMaps) { const id = Number(file.slice(3, 6)); texts[file] = mapFor(infos[id], project.maps[id], cmds, route).json; }
+                const stats = { wholeLists: 0 };
+                const files = {};
+                let count = 0;
+                for (const [file, json] of Object.entries(texts)) {
+                    const ops = LL.diff(file.startsWith('Map') && file !== 'MapInfos.json' ? baseMaps.get(file) : base[file], json, stats);
+                    if (ops.length) { files[file] = ops; count += ops.length; }
+                }
+                mkdir(path.join(dest, 'data', 'Languages'));
+                writeJson(path.join(dest, 'data', 'Languages', `${name}.json`), { language: name, files });
+                packs.push(name);
+                addNote(notes.images, `languagePack:${name}`, count);
+                if (stats.wholeLists) addNote(notes.maps, 'languagePackWholeList', stats.wholeLists);
+                log(`  ${name}: ${count} texts in ${Object.keys(files).length} files.`, 'info');
+            }
+            if (packs.length) {
+                system.rrLanguages = packs;
+                plugins.push('RR_Language');
+            }
+        }
+        // EasyRPG Player's fast-forward keys (hold F or G), which players of these games expect
+        plugins.push({ name: 'RR_FastForward', parameters: () => ({ speedA: '3', speedB: '10' }) });
+        require('./RgssImporter.js').installPlugins(dest, Object.assign(new Set(), { extraPlugins: plugins }), {}, [], notes.skipped, log);
         writeJson(path.join(dest, 'data', 'System.json'), system);
     
         log('Copying images and audio…', 'stage');
@@ -477,18 +542,18 @@ function open(source, destination, options) {
         let assetTotal = 0;
         for (const folder of assetFolders) { const root = resolveInsensitive(source, folder); if (root) assetTotal += countFiles(root); }
         assetProgress = { done: 0, total: assetTotal, report: span(0.57, 1) };
-        importImages('CharSet', 'img/characters', { key: true, transform: K.reorderCharset, rename: K.charsetName });
-        importImages('FaceSet', 'img/faces', { key: true });
-        importImages('Panorama', 'img/parallaxes', { key: false });
-        importImages('Picture', 'img/pictures', { key: pictureKeying });
-        importImages('Picture 2', 'img/pictures/Picture 2', { key: pictureKeying });
-        importImages('Monster', 'img/enemies', { key: true });
-        importImages('Battle', 'img/animations', { key: true, transform: (img) => K.scaleNearest(img, 2) });
-        importImages('Battle2', 'img/animations', { key: true, transform: (img) => K.scaleNearest(img, 1.5) });
-        importImages('Backdrop', 'img/battlebacks1', { key: false });
-        importImages('Title', 'img/titles1', { key: false });
-        importImages('GameOver', 'img/system', { key: false, rename: () => 'GameOver' });
-        importImages('System', 'img/system', { key: true });
+        await importImages('CharSet', 'img/characters', { key: true, transform: K.reorderCharset, rename: K.charsetName });
+        await importImages('FaceSet', 'img/faces', { key: true });
+        await importImages('Panorama', 'img/parallaxes', { key: false });
+        await importImages('Picture', 'img/pictures', { key: pictureKeying });
+        await importImages('Picture 2', 'img/pictures/Picture 2', { key: pictureKeying });
+        await importImages('Monster', 'img/enemies', { key: true });
+        await importImages('Battle', 'img/animations', { key: true, transform: (img) => K.scaleNearest(img, 2) });
+        await importImages('Battle2', 'img/animations', { key: true, transform: (img) => K.scaleNearest(img, 1.5) });
+        await importImages('Backdrop', 'img/battlebacks1', { key: false });
+        await importImages('Title', 'img/titles1', { key: false });
+        await importImages('GameOver', 'img/system', { key: false, rename: () => 'GameOver' });
+        await importImages('System', 'img/system', { key: true });
         {   // the game's window skin, over the stock Window.png for the parts 2003 had no equivalent of
             const skinFile = sys.system_name ? resolveInsensitive(source, path.join('System', sys.system_name + '.png')) : null;
             const baseFile = path.join(skeleton, 'img', 'system', 'Window.png');
@@ -499,8 +564,8 @@ function open(source, destination, options) {
                 } catch (error) { notes.skipped.push(`System/${sys.system_name}: window skin ${error.message}`); }
             }
         }
-        importImages('System2', 'img/system', { key: true });
-        importImages('Frame', 'img/system', { key: true });
+        await importImages('System2', 'img/system', { key: true });
+        await importImages('Frame', 'img/system', { key: true });
         importAudio('Music', 'audio/bgm');
         importAudio('Sound', 'audio/se');
         }
@@ -518,7 +583,7 @@ function open(source, destination, options) {
             let filled = 0;
             for (const [folder, target, opts] of fromRtp) {
                 const only = lower(target);
-                if (only.size) filled += importImages(folder, target, Object.assign({}, opts, { root: resolveInsensitive(rtp, folder), only }));
+                if (only.size) filled += await importImages(folder, target, Object.assign({}, opts, { root: resolveInsensitive(rtp, folder), only }));
             }
             for (const [folder, target] of [['Music', 'audio/bgm'], ['Music', 'audio/me'], ['Sound', 'audio/se']]) {
                 const only = lower(target);

@@ -146,8 +146,12 @@ test('an event page keeps its graphic, movement and conditions', () => {
     assert.deepEqual([page.moveType, page.moveSpeed, page.moveFrequency, page.trigger, page.priorityType], [2, 5, 5, 3, 1]);
     assert.deepEqual([page.directionFix, page.stepAnime, page.walkAnime], [true, true, true]);
     assert.deepEqual(notes, {});
-    K.eventPage({ condition: { flags: 0x24, compare_operator: 0 }, move_type: 5 }, notes);
-    assert.deepEqual(notes, { moveType: 1, timerCondition: 1, variableOperator: 1 });
+    assert.equal(page.conditions.rrVariableOp, undefined, '>= is MZ\'s own');
+    const other = K.eventPage({ condition: { flags: 0x24, variable_id: 156, compare_operator: 3 }, move_type: 5 }, notes);
+    assert.deepEqual(notes, { moveType: 1, timerCondition: 1 });
+    assert.equal(other.conditions.rrVariableOp, 3, 'Deep 8 map 1: variable 156 > 0 keeps its >');
+    const objects = fs.readFileSync(path.join(__dirname, '..', '..', 'runtime', 'reactor_objects.js'), 'utf8');
+    assert.match(objects, /\[value === n, value >= n, value <= n, value > n, value < n, value !== n\]\[c\.rrVariableOp\]/);
 });
 
 // ---- the corpus oracle: Deep 8 drawn both ways -----------------------------

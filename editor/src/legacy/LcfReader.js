@@ -337,7 +337,7 @@
             68: ['sp_change_map_val', 'int']
         },
         AnimationTiming: { 1: ['frame', 'int'], 2: ['se', 'struct:Sound'], 3: ['flash_scope', 'int'], 4: ['flash_red', 'int'], 5: ['flash_green', 'int'], 6: ['flash_blue', 'int'], 7: ['flash_power', 'int'], 8: ['screen_shake', 'int'] },
-        AnimationCellData: { 2: ['valid', 'bool'], 3: ['cell_id', 'int'], 4: ['x', 'int'], 5: ['y', 'int'], 6: ['zoom', 'int'], 7: ['tone_red', 'int'], 8: ['tone_green', 'int'], 9: ['tone_blue', 'int'], 10: ['tone_gray', 'int'], 11: ['transparency', 'int'] },
+        AnimationCellData: { 1: ['valid', 'bool'], 2: ['cell_id', 'int'], 3: ['x', 'int'], 4: ['y', 'int'], 5: ['zoom', 'int'], 6: ['tone_red', 'int'], 7: ['tone_green', 'int'], 8: ['tone_blue', 'int'], 9: ['tone_gray', 'int'], 10: ['transparency', 'int'] },
         AnimationFrame: { 1: ['cells', 'array:AnimationCellData'] },
         Animation: { 1: ['name', 'str'], 2: ['animation_name', 'str'], 3: ['large', 'bool'], 6: ['timings', 'array:AnimationTiming'], 9: ['scope', 'int'], 10: ['position', 'int'], 12: ['frames', 'array:AnimationFrame'] },
         Chipset: { 1: ['name', 'str'], 2: ['chipset_name', 'str'], 3: ['terrain_data', 'i16[]'], 4: ['passable_data_lower', 'u8[]'], 5: ['passable_data_upper', 'u8[]'], 11: ['animation_type', 'int'], 12: ['animation_speed', 'int'] },

@@ -6918,3 +6918,44 @@ Window_NameBox.prototype.updateBackground = function() {
     const style = Window_Base.rrAdvanced("rrNameBox");
     if (style && typeof style.opacity === "number") this.opacity = style.opacity;
 };
+
+// RPG Maker 2000-VX Ace list choices inside the message window, on the lines after the text and
+// indented 12 px (System.json rrChoicesInMessage, set by the importers); with no text the box shows
+// them from its first line. MZ opens a separate choice window. EasyRPG's Window_Message.
+(function() {
+    const _updatePlacement = Window_ChoiceList.prototype.updatePlacement;
+    Window_ChoiceList.prototype.updatePlacement = function() {
+        if (!($dataSystem && $dataSystem.rrChoicesInMessage) || !this._messageWindow) return _updatePlacement.call(this);
+        const mw = this._messageWindow;
+        const lines = $gameMessage.hasText() ? $gameMessage._texts.length : 0;
+        if (!lines) mw.updatePlacement();
+        const rows = Math.max(1, Math.min($gameMessage.choices().length, Math.max(1, Math.floor((mw.height - mw.padding * 2) / mw.lineHeight()) - lines)));
+        this.x = mw.x + (lines ? 12 : 0);
+        this.width = mw.width - (lines ? 12 : 0);
+        this.y = mw.y + mw.padding + lines * mw.lineHeight() - this.padding - Math.max(0, (this.itemHeight() - mw.lineHeight()) / 2);
+        this.height = lines ? this.fittingHeight(rows) : mw.height;
+    };
+    // a choice takes one text line, as the message's own lines do (MZ adds 8 px a row)
+    const inMessage = () => !!($dataSystem && $dataSystem.rrChoicesInMessage);
+    const _itemHeight = Window_ChoiceList.prototype.itemHeight;
+    Window_ChoiceList.prototype.itemHeight = function() {
+        return inMessage() ? this.lineHeight() : _itemHeight.call(this);
+    };
+    const _rowSpacing = Window_ChoiceList.prototype.rowSpacing;
+    Window_ChoiceList.prototype.rowSpacing = function() {
+        return inMessage() ? 0 : _rowSpacing.call(this);
+    };
+    // the old engines draw no bar behind each choice, only the cursor
+    const _drawItemBackground = Window_ChoiceList.prototype.drawItemBackground;
+    Window_ChoiceList.prototype.drawItemBackground = function(index) {
+        if ($dataSystem && $dataSystem.rrChoicesInMessage) return;
+        _drawItemBackground.call(this, index);
+    };
+    const _updateBackground = Window_ChoiceList.prototype.updateBackground;
+    Window_ChoiceList.prototype.updateBackground = function() {
+        if (!($dataSystem && $dataSystem.rrChoicesInMessage)) return _updateBackground.call(this);
+        // after text the message window already draws the box; alone, the choices wear the message's
+        this._background = $gameMessage.hasText() ? 2 : $gameMessage.background();
+        this.setBackgroundType(this._background);
+    };
+})();

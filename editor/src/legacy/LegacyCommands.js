@@ -22,7 +22,7 @@
     'use strict';
 
     const DIR = { 0: 8, 1: 6, 2: 2, 3: 4 }; // 2003 up/right/down/left → MZ
-    const MOVE = { 0: 4, 1: 3, 2: 1, 3: 2, 4: 8, 5: 6, 6: 5, 7: 7, 8: 9, 9: 10, 10: 11, 11: 12, 12: 19, 13: 18, 14: 16, 15: 17, 16: 20, 17: 21, 18: 22, 19: 23, 20: 24, 21: 25, 22: 26, 26: 35, 27: 36, 36: 37, 37: 38, 38: 32, 39: 31 };
+    const MOVE = { 0: 4, 1: 3, 2: 1, 3: 2, 4: 8, 5: 6, 6: 5, 7: 7, 8: 9, 9: 10, 10: 11, 11: 12, 12: 19, 13: 18, 14: 16, 15: 17, 16: 20, 17: 21, 18: 22, 19: 23, 20: 24, 21: 25, 22: 26, 26: 35, 27: 36, 36: 37, 37: 38 };
     const STEP = { 0: [0, -1], 1: [1, 0], 2: [0, 1], 3: [-1, 0], 4: [1, -1], 5: [1, 1], 6: [-1, 1], 7: [-1, -1] };
 
     /** A 2003 character id → MZ: player -1, this event 0, event n; vehicles have no MZ id. */
@@ -35,13 +35,15 @@
     const charExpr = (id) => (charId(id) === null ? `$gameMap.vehicle(${id - 10002})` : id === 10005 ? '$gameMap.event(this._eventId)' : id === 10001 ? '$gamePlayer' : `$gameMap.event(${id})`);
 
     function audio(name, volume, tempo, balance) {
-        return { name: String(name || '').replace(/\.[^.\\/]+$/, ''), volume: volume ?? 100, pitch: tempo ?? 100, pan: Math.max(-100, Math.min(100, ((balance ?? 50) - 50) * 2)) };
+        return { name: stem(name), volume: volume ?? 100, pitch: tempo ?? 100, pan: Math.max(-100, Math.min(100, ((balance ?? 50) - 50) * 2)) };
     }
     function charsetName(name) {
         if (!name) return '';
         let n = name.replace(/^\$/, '');
         return n.startsWith('!') ? n : '!' + n;
     }
+    /** A name from the game's data without a media extension; other dots are part of the name. */
+    function stem(name) { return String(name || '').replace(/\.(png|bmp|xyz|jpe?g|gif|wav|ogg|opus|mp3|midi?|wma|flac|m4a|avi|mpe?g|mp4|wmv|webm|ogv)$/i, ''); }
     /** 2003 message codes → MZ: \_ becomes \., \s[n] (speed) has no MZ code. */
     function text(s) {
         return String(s || '').replace(/\\_/g, '\\.').replace(/\\[sS]\[\d+\]/g, '');
@@ -91,24 +93,42 @@
                     // a message box translates as a whole first (the translation files keep boxes together), then line by line
                     const lines = [s];
                     while (next() && next().code === 20110) { i++; lines.push(commands[i].string); }
-                    push(101, [state.face.name, state.face.index, state.background, state.position, ''], ind);
-                    for (const line of (ctx.translateLines ? ctx.translateLines(lines) : lines)) push(401, [text(line)], ind);
+                    // A translation may split the box (<easyrpg:new_page>) or remove it (<easyrpg:delete_page> as a
+                    // box's first line); the last box keeps at most four lines (EasyRPG's RewriteEventCommandMessage).
+                    const translated = ctx.translateLines ? ctx.translateLines(lines) : lines;
+                    const boxes = [[]];
+                    for (const line of translated) {
+                        if (line === '<easyrpg:new_page>') { boxes.push([]); continue; }
+                        boxes[boxes.length - 1].push(line);
+                        if (line === '<easyrpg:delete_page>') break;
+                    }
+                    if (boxes[boxes.length - 1][0] === '<easyrpg:delete_page>') { note('translationDeletedMessage'); break; }
+                    boxes[boxes.length - 1] = boxes[boxes.length - 1].slice(0, 4);
+                    for (const box of boxes) {
+                        push(101, [state.face.name, state.face.index, state.background, state.position, ''], ind);
+                        for (const line of box.length ? box : ['']) push(401, [text(line)], ind);
+                    }
                     break;
                 }
                 case 20110: push(401, [text(s)], ind); break;
-                case 10120: state.background = p[0] ? 2 : 0; state.position = Math.max(0, Math.min(2, p[1] ?? 2)); break;
-                case 10130: state.face = { name: s ? s.replace(/\.[^.]+$/, '') : '', index: p[0] || 0 }; break;
+                // Message options and the face are the system's, not the event's: they last until changed,
+                // across events and common events (EasyRPG's Game_System), so the runtime holds them.
+                case 10120: state.background = p[0] ? 2 : 0; state.position = Math.max(0, Math.min(2, p[1] ?? 2)); script(`this.rrMessageOptions(${state.background}, ${state.position})`, ind); break;
+                case 10130: state.face = { name: s ? stem(s) : '', index: p[0] || 0 }; script(`this.rrMessageFace(${JSON.stringify(state.face.name)}, ${state.face.index})`, ind); break;
                 case 10140: {
                     // the 2003 choice texts are '/'-separated on the command; a cancel type of 5 adds a branch of its own
-                    const labels = (s ? s.split('/') : []).map(l => text(ctx.translate ? ctx.translate(l) : l));
+                    // a translation keys the choices as one block, one choice per line (EasyRPG's BuildChoiceString)
+                    const raw = s ? s.split('/') : [];
+                    const labels = (ctx.translateLines ? ctx.translateLines(raw).slice(0, raw.length) : raw).map(l => text(l));
                     const cancel = p[0] === 0 ? -1 : p[0] === 5 ? -2 : Math.max(0, Math.min(labels.length - 1, p[0] - 1));
                     push(102, [labels, cancel, 0, 2, 0], ind);
                     (ctx._choiceCounts || (ctx._choiceCounts = {}))[ind] = labels.length;
+                    (ctx._choiceLabels || (ctx._choiceLabels = {}))[ind] = labels;
                     break;
                 }
                 case 20140: {
                     const n = (ctx._choiceCounts && ctx._choiceCounts[ind]) ?? 4;
-                    if (p[0] >= n) push(403, [6, null], ind); else push(402, [p[0], text(ctx.translate ? ctx.translate(s) : s)], ind);
+                    if (p[0] >= n) push(403, [6, null], ind); else push(402, [p[0], text((ctx._choiceLabels && ctx._choiceLabels[ind] && ctx._choiceLabels[ind][p[0]]) ?? s)], ind);
                     break;
                 }
                 case 20141: push(404, [], ind); break;
@@ -132,7 +152,7 @@
                         case 3: mz = [2, Math.min(p5, p6), Math.max(p5, p6)]; break;
                         case 4: {
                             const kind = ctx.itemKind(p5);
-                            if (p6 === 0 && kind) mz = [3, { items: 1, weapons: 2, armors: 3 }[kind], p5];
+                            if (p6 === 0 && kind) mz = [3, { items: 0, weapons: 1, armors: 2 }[kind], p5];   // MZ game data: 0 item, 1 weapon, 2 armor
                             else { expr = `$gameParty.members().reduce((n, a) => n + a.equips().filter(e => e && e.id === ${p5}).length, 0)`; }
                             break;
                         }
@@ -149,7 +169,7 @@
                             const ch = charId(p5);
                             const sub = { 1: 0, 2: 1, 3: 2, 4: 3, 5: 4 }[p6];
                             if (p6 === 0) mz = [3, 7, 0];
-                            else if (sub !== undefined && ch !== null) mz = [3, 6, ch, sub];
+                            else if (sub !== undefined && ch !== null) mz = [3, 5, ch, sub];   // MZ game data 5 is a character (6 is a party member)
                             else if (p6 === 6) mz = [0, p5 === 10005 ? 0 : p5];
                             else expr = `(${charExpr(p5)} || { x: 0, y: 0, direction: () => 2, screenX: () => 0, screenY: () => 0 }).${['x', 'x', 'y', 'direction()', 'screenX()', 'screenY()'][p6] || 'x'}`;
                             break;
@@ -223,7 +243,7 @@
                 case 10610: push(320, [p[0], s], ind); break;
                 case 10620: push(324, [p[0], s], ind); break;
                 case 10630: { const a = ctx.actors[p[0]] || {}; push(322, [p[0], charsetName(s), p[1] || 0, a.faceName || '', a.faceIndex || 0], ind); if (p[2]) note('transparentActor'); break; }
-                case 10640: { const a = ctx.actors[p[0]] || {}; push(322, [p[0], a.characterName || '', a.characterIndex || 0, s ? s.replace(/\.[^.]+$/, '') : '', p[1] || 0], ind); break; }
+                case 10640: { const a = ctx.actors[p[0]] || {}; push(322, [p[0], a.characterName || '', a.characterIndex || 0, s ? stem(s) : '', p[1] || 0], ind); break; }
                 case 10650: push(323, [p[0], charsetName(s), p[1] || 0], ind); break;
                 case 10660: {
                     const bgm = audio(s, p[2], p[3], p[4]);
@@ -275,7 +295,7 @@
 
                 // ---- movement and the map ---------------------------------------------
                 case 10810: push(201, [0, p[0], p[1], p[2], p[3] ? DIR[p[3] - 1] || 0 : 0, 0], ind); break;
-                case 10820: push(122, [p[0], p[0], 0, 3, 7, 0], ind); push(122, [p[1], p[1], 0, 3, 6, -1, 0], ind); push(122, [p[2], p[2], 0, 3, 6, -1, 1], ind); break;
+                case 10820: push(122, [p[0], p[0], 0, 3, 7, 0], ind); push(122, [p[1], p[1], 0, 3, 5, -1, 0], ind); push(122, [p[2], p[2], 0, 3, 5, -1, 1], ind); break;
                 case 10830: push(201, [1, p[0], p[1], p[2], 0, 0], ind); break;
                 case 10840: push(206, [], ind); break;
                 case 10850: push(202, [p[0], p[1], p[2], p[3], p[4]], ind); break;
@@ -291,29 +311,61 @@
                 case 11040: if (p[6] === 2) { note('flashLoop'); break; } push(224, [[p[0] * 8, p[1] * 8, p[2] * 8, p[3] * 8], frames(p[4]), !!p[5]], ind); if (p[6] === 1) note('flashLoop'); break;
                 case 11050: push(225, [p[0], p[1], frames(p[2]), !!p[3]], ind); if (p[4]) note('shakeLoop'); break;
                 case 11060: {
-                    if (p[0] === 2) push(204, [DIR[p[1]] || 2, p[2], Math.max(1, Math.min(6, p[3])), !!p[4]], ind);
-                    else if (p[0] === 3) { script('this.rrPanReset()', ind); }
-                    else { script(`$gameMap._rrPanLocked = ${p[0] === 0}`, ind); note('panLock'); }
+                    // the old engine pans 2 << speed of a tile's 256ths a frame, twice MZ's 2^speed: one speed up
+                    const speed = Math.max(1, Math.min(6, p[3] || 0)) + 1;
+                    if (p[0] === 2) push(204, [DIR[p[1]] || 2, p[2], speed, !!p[4]], ind);
+                    else if (p[0] === 3) { script(`this.rrPanReset(${speed}, ${!!p[4]})`, ind); }
+                    else script(`$gameMap._rrPanLocked = ${p[0] === 0}`, ind);
                     break;
                 }
                 case 11070: { const type = { 0: 0, 1: 1, 2: 3, 3: 0, 4: 2 }[p[0]] ?? 0; if (p[0] === 3) note('fog'); push(236, [['none', 'rain', 'storm', 'snow'][type], [3, 6, 9][Math.min(2, p[1] || 0)], 1, false], ind); break; }
                 case 11110: {
                     const [id, posMode, x, y, fixed, mag, top, transparentColor, r, g, b, sat, effect] = p;
-                    const base = s.replace(/\.[^.]+$/, '');
-                    push(231, [id, ctx.pictureFile ? ctx.pictureFile(base, transparentColor > 0) : base, 1, posMode ? 1 : 0, x, y, mag ?? 100, mag ?? 100, Math.round(255 * (100 - (top || 0)) / 100), 0], ind);
+                    const base = stem(s);
+                    const name = ctx.pictureFile ? ctx.pictureFile(base, transparentColor > 0) : base;
+                    const opacity = Math.round(255 * (100 - (top || 0)) / 100);
+                    // 2003 1.12 can take the picture's number from a variable (parameter 17); MZ's command cannot
+                    const byVar = p.length > 16 && (p[17] & 0xFF) === 1;
+                    const idX = byVar ? `$gameVariables.value(${id})` : String(id);
+                    const at = (v) => (posMode ? `$gameVariables.value(${v})` : String(v));
+                    if (byVar) { script(`$gameScreen.showPicture(${idX}, ${JSON.stringify(name)}, 1, ${at(x)}, ${at(y)}, ${mag ?? 100}, ${mag ?? 100}, ${opacity}, 0)`, ind); note('pictureIdVariable'); }
+                    else push(231, [id, name, 1, posMode ? 1 : 0, x, y, mag ?? 100, mag ?? 100, opacity, 0], ind);
                     const t = tone(r, g, b, sat);
-                    if (t.some(v => v !== 0)) push(234, [id, t, 1, false], ind);
-                    if (fixed) note('pictureFixedToMap');
-                    pictureEffect(id, effect, p[13], posMode ? 1 : 0, ind);
+                    if (t.some(v => v !== 0)) { if (byVar) script(`$gameScreen.tintPicture(${idX}, ${JSON.stringify(t)}, 1)`, ind); else push(234, [id, t, 1, false], ind); }
+                    if (fixed) { script(`$gameScreen.rrPictureFixToMap(${idX})`, ind); note('pictureFixedToMap'); }
+                    pictureEffect(id, effect, p[13], byVar ? 1 : 0, ind);
+                    // 2003 1.12 spritesheet: 22 columns (0 = none), 23 rows, 24 2 = animate at speed 25 (26 once), else frame 25 (by variable when 24 is 1), counted from 1
+                    if (p.length >= 30 && p[22] > 0) {
+                        const frame = p[24] === 2 ? '0' : p[24] === 1 ? `$gameVariables.value(${p[25]}) - 1` : String((p[25] || 0) - 1);
+                        script(`$gameScreen.rrPictureFrames(${idX}, ${p[22]}, ${p[23] || 1}, ${frame}, ${p[24] === 2 ? p[25] || 0 : 0}, ${p[24] === 2 && !!p[26]})`, ind);
+                        note('pictureSpritesheet');
+                    }
+                    // 2003 1.12 map layer 27 and battle layer 28 (0 = not shown there; both 0 = map layer 7). An
+                    // import's default is map 7, battle 0 (System.json rrPictureLayers), so only others are written.
+                    if (p.length >= 30) {
+                        const mapLayer = (p[27] || 0) === 0 && (p[28] || 0) === 0 ? 7 : (p[27] || 0), battleLayer = p[28] || 0;
+                        if (mapLayer !== 7 || battleLayer !== 0) { script(`$gameScreen.rrPictureLayer(${idX}, ${mapLayer}, ${battleLayer})`, ind); note('pictureLayer'); }
+                    }
+                    // 2003 1.12's flags word (bit 0: erase on map change); older commands always erase
+                    if (p.length > 16 && !((p[29] || 0) & 1)) { script(`$gameScreen.rrKeepPicture(${idX})`, ind); note('pictureKept'); }
                     break;
                 }
                 case 11120: {
                     const [id, posMode, x, y, , mag, top, , r, g, b, sat, effect, , tenths, wait] = p;
-                    // MZ's Move Picture: [id, (unused), origin, designation, x, y, scaleX, scaleY, opacity, blend, frames, wait, easing]
-                    push(232, [id, 0, 1, posMode ? 1 : 0, x, y, mag ?? 100, mag ?? 100, Math.round(255 * (100 - (top || 0)) / 100), 0, frames(tenths), !!wait, 0], ind);
-                    // a move always restates the colour, so a tinted picture can come back to neutral
-                    push(234, [id, tone(r, g, b, sat), frames(tenths), false], ind);
-                    pictureEffect(id, effect, p[13], posMode ? 1 : 0, ind);
+                    const opacity = Math.round(255 * (100 - (top || 0)) / 100), duration = frames(tenths);
+                    const byVar = p.length > 17 && (p[17] & 0xFF) === 1;
+                    if (byVar) {
+                        const idX = `$gameVariables.value(${id})`, at = (v) => (posMode ? `$gameVariables.value(${v})` : String(v));
+                        script(`$gameScreen.movePicture(${idX}, 1, ${at(x)}, ${at(y)}, ${mag ?? 100}, ${mag ?? 100}, ${opacity}, 0, ${duration}, 0)`, ind);
+                        script(`$gameScreen.tintPicture(${idX}, ${JSON.stringify(tone(r, g, b, sat))}, ${duration})${wait ? `; this.wait(${duration})` : ''}`, ind);
+                        note('pictureIdVariable');
+                    } else {
+                        // MZ's Move Picture: [id, (unused), origin, designation, x, y, scaleX, scaleY, opacity, blend, frames, wait, easing]
+                        push(232, [id, 0, 1, posMode ? 1 : 0, x, y, mag ?? 100, mag ?? 100, opacity, 0, duration, !!wait, 0], ind);
+                        // a move always restates the colour, so a tinted picture can come back to neutral
+                        push(234, [id, tone(r, g, b, sat), duration, false], ind);
+                    }
+                    pictureEffect(id, effect, p[13], byVar ? 1 : 0, ind);
                     break;
                 }
                 case 11130: {
@@ -343,21 +395,42 @@
                 case 11530: push(243, [], ind); break;
                 case 11540: push(244, [], ind); break;
                 case 11550: push(250, [audio(s, p[0], p[1], p[2])], ind); break;
-                case 11560: push(261, [s.replace(/\.[^.]+$/, '')], ind); break;
+                case 11560: push(261, [stem(s)], ind); break;
                 case 11610: {
+                    // Key Input Processing, by the engine and the length of its parameter list (EasyRPG's
+                    // CommandKeyInputProc). Codes: 1-4 down/left/right/up, 5 decision, 6 cancel, 7 shift,
+                    // 10 the number keys (10-19), 20 the operators + - * / . (20-24).
                     const keys = [];
                     const flag = (idx) => p.length > idx && (p[idx] & 1) !== 0;
-                    if (p.length >= 10) { if (flag(3)) keys.push(5); if (flag(4)) keys.push(6); if (flag(5)) keys.push(7); if (flag(6)) keys.push(1); if (flag(7)) keys.push(2); if (flag(8)) keys.push(3); if (flag(9)) keys.push(4); }
-                    else { if (p[2]) keys.push(1, 2, 3, 4); if (p[3]) keys.push(5); if (p[4]) keys.push(6); if (p[5]) keys.push(7); }
-                    if (p.length > 10 && (p[10] & 1)) keys.push(1); if (p.length > 11 && (p[11] & 1)) keys.push(2); if (p.length > 12 && (p[12] & 1)) keys.push(3); if (p.length > 13 && (p[13] & 1)) keys.push(4);
-                    script(`this.rrKeyInput(${p[0]}, ${JSON.stringify(Array.from(new Set(keys)))}, ${!!p[1]}, ${p.length > 8 && p[8] ? p[7] || 0 : 0})`, ind);
+                    const dirs = (down, left, right, up) => { if (flag(down)) keys.push(1); if (flag(left)) keys.push(2); if (flag(right)) keys.push(3); if (flag(up)) keys.push(4); };
+                    let timeVariable = 0;
+                    if (flag(3)) keys.push(5);
+                    if (flag(4)) keys.push(6);
+                    if (ctx.engine2000) {
+                        if (p.length < 6) { if (p[2]) keys.push(1, 2, 3, 4); }
+                        else { if (flag(5)) keys.push(7); dirs(6, 7, 8, 9); }
+                    } else if (p.length === 10) {   // 2003 1.05 with a 2000 game's key list
+                        if (flag(5)) keys.push(7); dirs(6, 7, 8, 9);
+                    } else {
+                        if (p.length < 10 && p[2]) keys.push(1, 2, 3, 4);
+                        if (flag(5)) keys.push(10);
+                        if (flag(6)) keys.push(20);
+                        if (flag(8)) timeVariable = p[7] || 0;
+                        if (p.length > 10) { if (flag(9)) keys.push(7); dirs(10, 11, 12, 13); }
+                    }
+                    script(`this.rrKeyInput(${p[0]}, ${JSON.stringify(Array.from(new Set(keys)))}, ${!!p[1]}, ${timeVariable})`, ind);
                     note('keyInput');
                     break;
                 }
                 case 11710: push(282, [p[0]], ind); break;
-                case 11720: push(284, [s.replace(/\.[^.]+$/, ''), !!p[0], !!p[1], p[2] ? p[3] : 0, p[4] ? p[5] : 0], ind); break;
+                case 11720: {
+                    // speeds as the old engine runs them: 2^|speed| / 32 px a frame, positive to the right (down)
+                    const sp = (v) => (v ? -Math.sign(v) * Math.pow(2, Math.abs(v)) / 8 : 0);
+                    push(284, [stem(s), !!p[0], !!p[1], p[2] ? sp(p[3]) : 0, p[4] ? sp(p[5]) : 0], ind);
+                    break;
+                }
                 case 11740: push(136, [p[0] ? 1 : 0], ind); if (p[0]) script(`$dataMap.encounterStep = ${p[0]}`, ind); break;
-                case 11750: comment('2003: Tile Substitution', ind); note('tileSubstitution'); break;
+                case 11750: script(`$gameMap.rrTileSubstitute(${p[0] ? 1 : 0}, ${p[1] || 0}, ${p[2] || 0})`, ind); break;
                 case 11810: case 11820: case 11830: case 11840: comment(`2003: ${['Teleport Targets', 'Change Teleport Access', 'Escape Target', 'Change Escape Access'][(c.code - 11810) / 10]}`, ind); note('teleportTargets'); break;
                 case 11910: push(352, [], ind); break;
                 case 11930: push(134, [p[0] ? 1 : 0], ind); break;
@@ -443,7 +516,7 @@
                 case 13120: push(332, [p[0], p[1] ? 1 : 0, p[2], p[3]], ind); break;
                 case 13130: push(333, [p[0], p[1] ? 1 : 0, p[2]], ind); break;
                 case 13150: push(335, [p[0]], ind); break;
-                case 13210: push(283, [s.replace(/\.[^.]+$/, ''), ''], ind); break;
+                case 13210: push(283, [stem(s), ''], ind); break;
                 case 13260: push(337, [p[1] ? 1 : 0, p[2] || 0, p[0]], ind); break;
                 case 13310: push(111, battleBranch(p, note), ind); break;
                 case 23310: push(411, [], ind); break;
@@ -531,7 +604,7 @@
     function convertRoute(codes, ctx) {
         const list = [];
         const note = (k) => { if (ctx.notes) ctx.notes[k] = (ctx.notes[k] || 0) + 1; };
-        let speed = 4, freq = 3, opacity = 255, jump = null;
+        let jump = null;
         for (const m of codes) {
             const code = m.code;
             if (jump) {
@@ -542,16 +615,22 @@
             if (MOVE[code] !== undefined) { list.push({ code: MOVE[code], parameters: [] }); continue; }
             switch (code) {
                 case 23: list.push({ code: 15, parameters: [20] }); break;
-                case 28: speed = Math.min(6, speed + 1); list.push({ code: 29, parameters: [speed] }); break;
-                case 29: speed = Math.max(1, speed - 1); list.push({ code: 29, parameters: [speed] }); break;
-                case 30: freq = Math.min(5, freq + 1); list.push({ code: 30, parameters: [freq] }); break;
-                case 31: freq = Math.max(1, freq - 1); list.push({ code: 30, parameters: [freq] }); break;
+                // speed and frequency step from the character's own, as the old engine does
+                case 28: list.push({ code: 45, parameters: ['this.setMoveSpeed(Math.min(6, this.moveSpeed() + 1))'] }); break;
+                case 29: list.push({ code: 45, parameters: ['this.setMoveSpeed(Math.max(1, this.moveSpeed() - 1))'] }); break;
+                case 30: list.push({ code: 45, parameters: ['this.setMoveFrequency(Math.min(5, this.moveFrequency() + 1))'] }); break;
+                case 31: list.push({ code: 45, parameters: ['this.setMoveFrequency(Math.max(1, this.moveFrequency() - 1))'] }); break;
                 case 32: list.push({ code: 27, parameters: [m.parameter_a] }); break;
                 case 33: list.push({ code: 28, parameters: [m.parameter_a] }); break;
-                case 34: list.push({ code: 41, parameters: [charsetName(m.parameter_string), m.parameter_a || 0] }); break;
+                // an empty name is a tile graphic: upper-layer tile parameter_a (MZ's C sheet starts at 256)
+                case 34: list.push(m.parameter_string ? { code: 41, parameters: [charsetName(m.parameter_string), m.parameter_a || 0] } : { code: 45, parameters: [`this.setTileImage(${256 + (m.parameter_a || 0)})`] }); break;
                 case 35: list.push({ code: 44, parameters: [audio(m.parameter_string, m.parameter_a, m.parameter_b, m.parameter_c)] }); break;
-                case 40: opacity = Math.max(0, opacity - 32); list.push({ code: 42, parameters: [opacity] }); break;
-                case 41: opacity = Math.min(255, opacity + 32); list.push({ code: 42, parameters: [opacity] }); break;
+                // transparency steps from where the character is now, in the old engine's eight levels
+                // Stop/Start Animation freeze every kind of stepping, walking or not (EasyRPG's anim_paused)
+                case 38: list.push({ code: 45, parameters: ['this.rrAnimPause(true)'] }); break;
+                case 39: list.push({ code: 45, parameters: ['this.rrAnimPause(false)'] }); break;
+                case 40: list.push({ code: 45, parameters: ['this.rrTransparency(1)'] }); break;
+                case 41: list.push({ code: 45, parameters: ['this.rrTransparency(-1)'] }); break;
                 default: note('unknownMove'); break;
             }
         }
@@ -559,7 +638,7 @@
         return { list, repeat: false, skippable: false, wait: false };
     }
 
-    const api = { convertList, convertRoute, decodeRoute, branch, charId, text, tone, audio, charsetName, DIR, MOVE };
+    const api = { convertList, convertRoute, decodeRoute, branch, charId, text, tone, audio, charsetName, stripExt: stem, DIR, MOVE };
     root.RRLegacyCommands = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof globalThis !== 'undefined' ? globalThis : window);

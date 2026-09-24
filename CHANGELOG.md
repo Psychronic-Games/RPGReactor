@@ -18,6 +18,8 @@
 - **Names work off Windows.** File names that differed only in case, Windows paths, names a zip tool garbled from Japanese, and 2000/2003's "(OFF)" sound all resolve. Files a game names but never shipped are listed in the Import Report.
 - **Nothing is hidden.** Imported image layers are in Map Properties and drawn in the map view, the game's window and text frame is in Database › System 2 › Window & Text, and every ported script is a plugin you can configure or turn off.
 - A game that skipped its title screen with a script boots straight into its own opening.
+- **EasyRPG's fast-forward comes along.** Every 2000/2003 import gets RR_FastForward: hold F to run the game 3× as fast, G for 10×.
+- **A game's own language switch works.** A 2000/2003 game that changes language while it plays (Deep 8's flag screen) gets every translation it ships as a language pack, and choosing English in the game shows the game in English.
 
 **Plugin authors**
 
@@ -25,6 +27,24 @@
 
 ### Fixed
 
+- Imported 2000/2003 games: a panorama that doesn't scroll moves with the map the old way, so painted rooms like Deep 8's ship bridge sit under the characters; auto-scrolling panoramas run in the right direction at the right speed.
+- Imported 2000/2003 games: characters faded out by a move route come back when their event changes page, fades and speed changes step from where the character is, events drawn as tiles show their tile, and spinning events spin.
+- Imported 2000/2003 games read the player's and events' positions correctly: Deep 8's scenes that walk the hero to a spot stop there instead of walking to the map's edge, and the Droons follow as they should.
+- Imported games stand characters at their old engine's height (on the tile for 2000, 2003 and XP, 4 px up for VX and VX Ace) instead of MZ's 6 px, so they line up with the scenery and with what events measure.
+- Imported 2000/2003 games show one frame of a picture sheet, as RPG Maker 2003 1.12 does: Deep 8's battle bars, numbers and turn gauge look as they do in the original instead of whole strips of frames.
+- Imported 2000/2003 games walk where the original lets you and nowhere else: water, walls and trees drawn over an invisible tile grid block again (every cell of Deep 8's 266 maps now matches the original player).
+- Imported 2000/2003 games no longer run every called common event in the background all the time, which froze Deep 8's village and walked the hero off on his own.
+- Imported 2000/2003 games: a locked camera stays put during cutscenes, and camera pans run at the original speed.
+- Imported 2000/2003 games: plugin sprites leave with the map (Deep 8's landing ship no longer rides along at the bottom of the screen), plugin sprites turn the way the old player turns them (the felled tree falls right), and a picture whose number comes from a variable is that picture.
+- Imported 2000/2003 games: keys the game waits for work (Deep 8's "Shift/Y: push minions away" was listening for Up and Left), the number keys and + - * / . can be asked for, pictures fixed to the map (trees, a landed ship) scroll with it, and plugin texts such as Deep 8's "Planet Procyon" caption stay where the game put them and fade with their picture.
+- Importing an RPG Maker 2000/2003 game from the editor no longer crashes it: a game with thousands of pictures (Deep 8) used almost 4 GB during the import and now stays under 1.5 GB.
+- Imported 2000/2003 games: plugin sprites draw on the layer the original does, over the windows unless the game says otherwise, so Deep 8's window lights no longer cover its character art and the hero's energy ball shows in battle. Tree halves split the right way, and sprite colours and grow-in effects match.
+- Imported 2000/2003 games: battle animations play the right cells in the right places (Deep 8's pointer over the hero was a ring beside him), pictures sit on their 2003 map layers and stay out of battles, particles draw over their sprites and start where the game says (Yavar-5's flames and rocks, the ship's exhaust), pages that test a variable with =, <, > or ≠ work, and pictures with dots in their names load.
+- Imported 2000/2003 games: screen texts draw with the picture they belong to (Deep 8's difficulty and warning pages, its battle menus), saving no longer stops on a sound the game never shipped or comes back to a black screen, and a map's top-layer pictures stay out of the menus.
+- Imported 2000/2003 games: a battle won in Deep 8 returns cleanly to the world map (parallel events keep running through a teleport, as the old engines do), enemies jump at the heroes again, and choices sit a line apart inside the message. Pixel-art pictures stay sharp when centred, and menu cursors stay on what they select.
+- Imported 2000/2003 games: move routes run their instant steps together, so troopers faded back in by a route come back visible, and a route can turn a fixed-graphic character. Text casts the old engines' sharp shadow, and pixel art stays sharp when scaled.
+- Imported 2000/2003 games: walking and jumping keep the original pace, a paused character holds its pose (no more flicker from a thrown Dayigon), tile swaps work, and translated text honours EasyRPG's page markup. Choices sit inside the message and translate with it, and the message box keeps its face and position between events.
+- Imported 2000/2003 games erase their pictures when the party changes map, as the old engines did: Deep 8's opening no longer plays over a black sky left from the title.
 - Ticking 3D on an actor's character, face or battler clears the 2D image it replaces, so a model-bound actor no longer keeps naming a sheet it never uses.
 - Plugins that hand sprites their texture again every frame (weather and particle plugins) no longer cost up to 300 ms a frame. (#68)
 - Stamped buildings: gable ends are one smooth wall instead of red steps, window glass sits in east and west walls instead of showing as a line through them, and the Build bar's turn (R/Q/E) now turns a plan before it is stamped. Existing buildings pick this up when moved, turned or re-stamped.

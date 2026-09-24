@@ -157,6 +157,8 @@ function open(folder, destination, options) {
         if (/\$imported\[:ve_multi_frames\]|\[f\d+\]/i.test(scriptText) && custom.some(s => /multi.?frame/i.test(s.name + s.text.slice(0, 400)))) sys.rrMultiFrames = true;
         // A "Skip Title" script: the game boots into a new game and has no title screen.
         if (C.skipsTitle(active.map(s => s.text))) { sys.rrSkipTitle = true; add(notes, 'skipTitle'); }
+        sys.rrCharacterShiftY = 4;   // VX lifts characters 4 px; MZ's is 6
+        sys.rrChoicesInMessage = true;   // choices are listed inside the message window, after the text
         writeJson(path.join(dest, 'data', 'System.json'), sys);
 
         // A per-map battleback table in the game's scripts (DerVVulf's BATTLEBACK_LIST and its kin): map settings, images from its folder.

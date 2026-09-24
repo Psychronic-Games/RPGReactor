@@ -3,18 +3,20 @@
 //=============================================================================
 // Three script-driven screen features, all kept in $gameScreen so they save:
 //
-//   $gameScreen.rrWriteText(id, x, y, text, fixed, color, layer) and the
+//   $gameScreen.rrWriteText(id, x, y, text, fixed, color, pictureId) and the
 //   rrAppendLine / rrAppendText / rrChangeText / rrMoveText / rrRemoveText /
-//   rrRemoveAllTexts family draw text at a screen or map position in the
-//   window font, in a text colour of the window skin, with \V[n], \N[n],
-//   \P[n], \G and \C[n] codes.
+//   rrRemoveAllTexts family draw text at a screen position (or, fixed, a map
+//   position) in the window font, in a text colour of the window skin, with
+//   \V[n], \N[n], \P[n], \G and \C[n] codes. A text belongs to a picture:
+//   it shows while that picture does, just above it and at its opacity.
 //
-//   $gameScreen.rrSpriteAdd(name, image, blend, layer, x, y, scale, angle)
+//   $gameScreen.rrSpriteAdd(name, image, blend, layer, x, y, scale, angle, z)
 //   and the rrSprite* family are pictures addressed by name instead of
-//   number, with a draw layer (1-2 behind the map tiles, 3-4 under the
-//   characters, 5-7 over the characters and under the upper tiles, 8 and
-//   above over everything), a map binding that scrolls with the map, eased
-//   moves, scales, opacity, rotation and colour fades.
+//   number, on one of 2003 1.12's map layers as pictures are (1 over the
+//   parallax, 2-6 among the tiles and characters, 7-8 with the pictures,
+//   9 over the windows, 10 over those, none over all) with a z order within
+//   it (lower in front), a map binding that scrolls with the map, eased moves,
+//   scales, opacity, rotation and colour fades.
 //
 //   $gameScreen.rrPfxCreate(name, "burst" | "stream") and the rrPfx*
 //   family define particle effects (texture, amount, velocity, angle,
@@ -84,6 +86,11 @@
             s = s.replace(/\\N\[(\d+)\]/gi, (_, n) => { const a = $gameActors.actor(Number(n)); return a ? a.name() : ""; });
             s = s.replace(/\\P\[(\d+)\]/gi, (_, n) => { const a = $gameParty.members()[Number(n) - 1]; return a ? a.name() : ""; });
             s = s.replace(/\\G/g, TextManager.currencyUnit);
+            // the text plugin's own: \i[n] / \I[n] an item's name / description (an imported 2003 item id lives in
+            // one of the three tables), \t[n] / \T[n] a skill's, \x[id] another screen text's first line
+            s = s.replace(/\\([iI])\[(\d+)\]/g, (_, c, n) => { const it = $dataItems[n] || $dataWeapons[n] || $dataArmors[n]; return it ? (c === "i" ? it.name : it.description) : ""; });
+            s = s.replace(/\\([tT])\[(\d+)\]/g, (_, c, n) => { const sk = $dataSkills[n]; return sk ? (c === "t" ? sk.name : sk.description) : ""; });
+            s = s.replace(/\\[xX]\[([^\]]*)\]/g, (_, id) => { const t = $gameScreen.rrText(id); return t ? String(t.lines[0] ?? "") : ""; });
             if (s === before) break;
         }
         return s.replace(/\\\\/g, "\\");
@@ -132,14 +139,20 @@
         Sprite.prototype.update.call(this);
         const t = $gameScreen.rrText(this._textId);
         if (!t) { this.visible = false; return; }
+        // A text belongs to a picture (the plugin's last argument): it shows while that picture is shown,
+        // just above it and at its opacity, so fading the picture fades the text. 0 is no picture.
+        const owner = t.layer > 0 ? $gameScreen.picture(t.layer) : null;
+        if (t.layer > 0 && !owner) { this.visible = false; return; }
         this.visible = true;
+        this.opacity = owner ? owner.opacity() : 255;
         const values = t.lines.map(expandCodes).join("\n") + "|" + t.color;
         if (t.rev !== this._rev || values !== this._values) { this._rev = t.rev; this.redraw(t); }
         // "center" puts the text's middle on x and "right" its end; the plugin's 2 px drop stays
         const shift = t.align === "center" ? Math.round(this.bitmap.width / 2) : t.align === "right" ? this.bitmap.width : 0;
-        if (t.fixed || !$gameMap || typeof $gameMap.displayX !== "function" || !(SceneManager._scene instanceof Scene_Map)) { this.x = t.x - shift; this.y = t.y + 2; }
+        // "fixed" fixes the text to the map, so it scrolls with it; otherwise it stays on the screen.
+        if (!t.fixed || !$gameMap || typeof $gameMap.displayX !== "function" || !(SceneManager._scene instanceof Scene_Map)) { this.x = t.x - shift; this.y = t.y + 2; }
         else { this.x = Math.round(t.x - $gameMap.displayX() * $gameMap.tileWidth()) - shift; this.y = Math.round(t.y - $gameMap.displayY() * $gameMap.tileHeight()) + 2; }
-        this.z = t.layer;
+        this.z = this._rrZ !== undefined ? this._rrZ : t.layer;
     };
 
     // ---- named sprites over pictures --------------------------------------------------
@@ -175,21 +188,22 @@
 
     /** The picture file a sprite names: the plugin's "Picture/…" or "Picture 2/…" root folders are the pictures folder. */
     function pictureName(image) {
-        let n = String(image || "").replace(/\\/g, "/").replace(/\.[^./]+$/, "");
+        let n = String(image || "").replace(/\\/g, "/").replace(/\.(png|bmp|xyz|jpe?g|gif)$/i, "");
         n = n.replace(/^\/?Picture\//i, "");
         return n;
     }
     const BLEND = { mix: 0, normal: 0, add: 1, additive: 1, multiply: 2, screen: 3, sub: 2 };
 
-    Game_Screen.prototype.rrSpriteAdd = function(name, image, blend, layer, x, y, scale, angle) {
+    Game_Screen.prototype.rrSpriteAdd = function(name, image, blend, layer, x, y, scale, angle, z) {
         const id = this.rrSpriteId(name, true);
         if (!id) return;
-        const s = Number(scale) || 100;
+        const s = scale === undefined || scale === null || scale === "" || isNaN(Number(scale)) ? 100 : Number(scale);   // 0 is a real start size: sprites grow in from it
         this.showPicture(id, pictureName(image), 1, Number(x) || 0, Number(y) || 0, s, s, 255, BLEND[String(blend || "mix").toLowerCase()] || 0);
         const picture = this.picture(id);
         picture._angle = Number(angle) || 0;
         const st = spriteState(picture);
         st.layer = Number(layer) || 0;
+        st.z = Number(z) || 0;
         st.mapBound = false;
         st.tone = null;
         st.colorTween = null;
@@ -205,6 +219,7 @@
         const st = spriteState(p);
         st.mapBound = target === "map" || (typeof target === "number" && target > 0);
     };
+    Game_Screen.prototype.rrSpriteZ = function(name, z) { const p = this.rrSpritePicture(name); if (p) spriteState(p).z = Number(z) || 0; };
     Game_Screen.prototype.rrSpriteLayer = function(name, layer) { const p = this.rrSpritePicture(name); if (p) spriteState(p).layer = Number(layer) || 0; };
     Game_Screen.prototype.rrSpriteImage = function(name, image) {
         const p = this.rrSpritePicture(name);
@@ -237,24 +252,35 @@
     Game_Picture.prototype._rrTweening = function() { return !!this._rrTweens && Object.keys(this._rrTweens).length > 0; };
     Game_Screen.prototype.rrSpriteOpacity = function(name, opacity) { const p = this.rrSpritePicture(name); if (p) setTween(p, "opacity", clamp(Number(opacity) || 0, 0, 255), 0); };
     Game_Screen.prototype.rrSpriteOpacityTo = function(name, opacity, ms, easing) { const p = this.rrSpritePicture(name); if (p) setTween(p, "opacity", clamp(Number(opacity) || 0, 0, 255), ms, easing); };
-    Game_Screen.prototype.rrSpriteMoveTo = function(name, x, y, ms, easing) { const p = this.rrSpritePicture(name); if (p) { setTween(p, "x", Number(x) || 0, ms, easing); setTween(p, "y", Number(y) || 0, ms, easing); } };
-    Game_Screen.prototype.rrSpriteMoveBy = function(name, dx, dy, ms, easing) { const p = this.rrSpritePicture(name); if (p) { setTween(p, "x", p._x + (Number(dx) || 0), ms, easing); setTween(p, "y", p._y + (Number(dy) || 0), ms, easing); } };
+    // The x and y moves run on their own clocks: a move on one axis (null, or an offset of 0) leaves the other
+    // travelling, so Deep 8's rabbit hops (move by 0, -60) on its way across to the hero (move x to).
+    const given = (v) => v !== null && v !== undefined;
+    Game_Screen.prototype.rrSpriteMoveTo = function(name, x, y, ms, easing) { const p = this.rrSpritePicture(name); if (p) { if (given(x)) setTween(p, "x", Number(x) || 0, ms, easing); if (given(y)) setTween(p, "y", Number(y) || 0, ms, easing); } };
+    Game_Screen.prototype.rrSpriteMoveBy = function(name, dx, dy, ms, easing) { const p = this.rrSpritePicture(name); if (p) { if (Number(dx)) setTween(p, "x", p._x + Number(dx), ms, easing); if (Number(dy)) setTween(p, "y", p._y + Number(dy), ms, easing); } };
     Game_Screen.prototype.rrSpriteScaleTo = function(name, sx, sy, ms, easing) { const p = this.rrSpritePicture(name); if (p) { if (sx !== null && sx !== undefined) setTween(p, "scaleX", Number(sx) || 0, ms, easing); if (sy !== null && sy !== undefined) setTween(p, "scaleY", Number(sy) || 0, ms, easing); } };
+    // A sprite's angle turns clockwise, as a picture's does, but rotating *by* a positive amount turns it
+    // counter-clockwise (settled against Deep 8's shipped player: its trees fall right at -90, and the
+    // halves of a tree tilted by -50 are added at angle 50).
     Game_Screen.prototype.rrSpriteRotateBy = function(name, degrees, ms, easing) {
         const p = this.rrSpritePicture(name);
         if (!p) return;
         const state = p.reactorPictureState ? p.reactorPictureState() : null;
         const frames = msToFrames(ms);
-        if (state) state.angleTween = { start: p._angle, target: p._angle + (Number(degrees) || 0), duration: frames, whole: frames, easing: easingType(easing) };
-        else p._angle += Number(degrees) || 0;
+        if (state) state.angleTween = { start: p._angle, target: p._angle - (Number(degrees) || 0), duration: frames, whole: frames, easing: easingType(easing) };
+        else p._angle -= Number(degrees) || 0;
     };
-    Game_Screen.prototype.rrSpriteRotateTo = function(name, degrees, ms, easing) {
+    /** Turn to an absolute angle (clockwise, as rrSpriteAdd's), going "cw" or "ccw" the short way round the circle in that direction. */
+    Game_Screen.prototype.rrSpriteRotateTo = function(name, direction, degrees, ms, easing) {
         const p = this.rrSpritePicture(name);
         if (!p) return;
+        const ccw = /^cc/i.test(String(direction));
+        let target = Number(degrees) || 0;
+        const turn = ((target - p._angle) % 360 + 360) % 360;   // clockwise distance, 0-359
+        target = p._angle + (ccw ? (turn === 0 ? 0 : turn - 360) : turn);
         const state = p.reactorPictureState ? p.reactorPictureState() : null;
         const frames = msToFrames(ms);
-        if (state && frames > 1) state.angleTween = { start: p._angle, target: Number(degrees) || 0, duration: frames, whole: frames, easing: easingType(easing) };
-        else p._angle = Number(degrees) || 0;
+        if (state && frames > 1) state.angleTween = { start: p._angle, target, duration: frames, whole: frames, easing: easingType(easing) };
+        else p._angle = target;
     };
     Game_Screen.prototype.rrSpriteBlend = function(name, blend) { const p = this.rrSpritePicture(name); if (p) p._blendMode = BLEND[String(blend || "mix").toLowerCase()] || 0; };
     Game_Screen.prototype.rrSpriteRotateForever = function(name, direction, msPerTurn) {
@@ -265,10 +291,10 @@
         this.rotatePicture(id, sign * (360 / frames) * 2);
     };
     Game_Screen.prototype.rrSpriteRotateStop = function(name) { const id = this.rrSpriteId(name, false); if (id) this.rotatePicture(id, 0); };
-    /** Colour as the plugin gives it: r, g, b multiply 0-255 (255 unchanged), sat 0-100 (100 unchanged) → an MZ tone. */
+    /** Colour as the plugin gives it, a 2003 picture colour: r, g, b and sat in percent, 100 unchanged (most of Deep 8's calls reset with 100, 100, 100, 100) → an MZ tone. */
     function toneOf(r, g, b, sat) {
-        const t = v => clamp((Number(v) || 0) - 255, -255, 255);
-        const gray = sat === undefined || sat === null ? 0 : clamp(Math.round((100 - (Number(sat) || 0)) * 2.55), 0, 255);
+        const t = v => clamp(Math.round(((v === undefined || v === null || isNaN(Number(v)) ? 100 : Number(v)) - 100) * 2.55), -255, 255);
+        const gray = sat === undefined || sat === null || isNaN(Number(sat)) ? 0 : clamp(Math.round((100 - Number(sat)) * 2.55), 0, 255);
         return [t(r), t(g), t(b), gray];
     }
     Game_Screen.prototype.rrSpriteColor = function(name, r, g, b, sat) { const id = this.rrSpriteId(name, false); if (id) this.tintPicture(id, toneOf(r, g, b, sat), 1); };
@@ -289,23 +315,62 @@
             this.x -= Math.round($gameMap.displayX() * $gameMap.tileWidth());
             this.y -= Math.round($gameMap.displayY() * $gameMap.tileHeight());
         }
+        // Pixel art lands on whole pixels, as the old engines place it (EasyRPG centres with width / 2 in
+        // integers): a centred picture of odd size otherwise sits half a pixel off and its rows double or
+        // drop, which reads as blur next to window text (Deep 8's 320x77 "Shift: Info" bar).
+        if (this.rotation === 0 && $dataSystem && $dataSystem.advanced && $dataSystem.advanced.pixelatedRendering === true) {
+            const left = this.x - this.anchor.x * this.width, top = this.y - this.anchor.y * this.height;
+            this.x += Math.round(left) - left;
+            this.y += Math.round(top) - top;
+        }
     };
 
-    /**
-     * The plugin knows layers 0-9: 0-1 behind the map's parallax, 2 over the parallax and
-     * under the tiles, 3 under the player, 4 over the player, 5-9 over the pictures.
-     * Anything else is layer 0. Returns the tilemap z, "under" for the parallax's
-     * underside, or null for the picture container.
-     */
-    function spriteLayer(layer) { const n = Math.floor(Number(layer) || 0); return n < 0 || n >= 10 ? 0 : n; }
-    function layerZ(layer) {
-        const n = spriteLayer(layer);
-        if (n <= 1) return "under";
-        if (n === 2) return -1;
-        if (n === 3) return 2;
-        if (n === 4) return 3.5;
-        return null;
+    // Map layers of 2003 1.12, shared by pictures and named sprites (EasyRPG's GetPriorityForMapLayer, the
+    // sprite plugin's settled against Deep 8's shipped player): 1 with the panorama, 2 over the lower tiles,
+    // 3 under characters, 4 with the player, 5 over the upper tiles, 6 over flying characters, 7 the pictures,
+    // 8 over them (animations), 9 over the windows, 10 over those (timers); 0 is not shown on the map.
+    // A sprite never given a layer is over all of them (11). Within a layer a picture is ordered by id x 10
+    // and a sprite by its z, a lower z in front: the title's letters (z 5) cover the glows behind them (z 13),
+    // and patched to z 1 the glows cover the letters.
+    function spriteLayer(layer) { const n = Math.floor(Number(layer) || 0); return n < 1 || n > 10 ? 11 : n; }
+    const legacyPictureLayers = () => !!(typeof $dataSystem !== "undefined" && $dataSystem && $dataSystem.rrPictureLayers);
+    /** The map layer a picture draws on, or null to leave it where MZ puts it. */
+    function mapLayerOf(p) {
+        if (p._rrSprite) return spriteLayer(p._rrSprite.layer);
+        if (p._rrMapLayer !== undefined) return p._rrMapLayer;
+        return legacyPictureLayers() ? 7 : null;
     }
+    function layerZ(n) {
+        if (n === 1) return "panorama";
+        if (n >= 2 && n <= 6) return { 2: 0.5, 3: 1.5, 4: 3.5, 5: 4.5, 6: 5.5 }[n];
+        if (n >= 9) return "top";
+        return null;   // 7 and 8: the picture container
+    }
+
+    Game_Screen.prototype.rrPictureLayer = function(id, mapLayer, battleLayer) {
+        const p = this.picture(id);
+        if (!p) return;
+        p._rrMapLayer = Math.max(0, Math.min(10, Number(mapLayer) || 0));
+        p._rrBattleLayer = Math.max(0, Math.min(5, Number(battleLayer) || 0));
+    };
+    const _Game_Picture_show = Game_Picture.prototype.show;
+    Game_Picture.prototype.show = function() {
+        _Game_Picture_show.apply(this, arguments);
+        this._rrMapLayer = undefined;
+        this._rrBattleLayer = undefined;
+    };
+    /** Whether a picture is shown where the party is: 2003 1.12 keeps a picture without a battle layer out of battles. */
+    function pictureShownHere(p) {
+        if ($gameParty.inBattle()) return p._rrSprite ? true : p._rrBattleLayer !== undefined ? p._rrBattleLayer > 0 : !legacyPictureLayers();
+        const layer = mapLayerOf(p);
+        return layer === null || layer > 0;
+    }
+    const _Sprite_Picture_updateLayer = Sprite_Picture.prototype.update;
+    Sprite_Picture.prototype.update = function() {
+        _Sprite_Picture_updateLayer.apply(this, arguments);
+        const p = this.picture();
+        if (p && this.visible && !pictureShownHere(p)) this.visible = false;
+    };
 
     const _Spriteset_Map_update = Spriteset_Map.prototype.update;
     Spriteset_Map.prototype.update = function() {
@@ -321,35 +386,49 @@
         this._rrUpdateParticles();
     };
 
-    /** A holder just under the parallax for layers 0 and 1, created on first use. */
+    /** A holder just over the parallax and under the tiles for layer 1, created on first use. */
     Spriteset_Map.prototype._rrUnderParallaxLayer = function() {
         if (!this._rrUnderParallax) {
             this._rrUnderParallax = new Sprite();
-            const at = this._parallax && this._parallax.parent === this._baseSprite ? this._baseSprite.getChildIndex(this._parallax) : 0;
+            const at = this._parallax && this._parallax.parent === this._baseSprite ? this._baseSprite.getChildIndex(this._parallax) + 1 : 0;
             this._baseSprite.addChildAt(this._rrUnderParallax, at);
         }
         return this._rrUnderParallax;
+    };
+    /** A holder over the scene's windows for layer 9 and sprites never given a layer. */
+    Spriteset_Map.prototype._rrTopLayer = function() {
+        // the spriteset's own scene, never SceneManager._scene: while the map hands over to a menu the
+        // current scene is already the menu, and the map's pictures must not follow into it
+        const scene = this.parent;
+        this._rrTop = this._rrTop || new Sprite();
+        if (!scene) return this._rrTop;
+        const windows = scene._windowLayer && scene._windowLayer.parent === scene ? scene.getChildIndex(scene._windowLayer) : scene.children.length - 1;
+        if (this._rrTop.parent !== scene) scene.addChildAt(this._rrTop, Math.min(scene.children.length, windows + 1));
+        else if (scene.getChildIndex(this._rrTop) !== windows + 1 && scene.getChildIndex(this._rrTop) < windows) scene.setChildIndex(this._rrTop, windows);
+        return this._rrTop;
     };
     Spriteset_Map.prototype._rrPlaceLayeredPictures = function() {
         if (!this._pictureContainer || !this._tilemap) return;
         const container = this._pictureContainer, tilemap = this._tilemap;
         const all = (this._rrPictureSprites || (this._rrPictureSprites = container.children.filter(c => c instanceof Sprite_Picture)));
-        const byId = (a, b) => ((a.z || 0) - (b.z || 0)) || ((a._pictureId || 0) - (b._pictureId || 0));
-        let resort = false, resortUnder = false;
+        const byZ = (a, b) => ((a.z || 0) - (b.z || 0)) || ((a._pictureId || 0) - (b._pictureId || 0));
+        const moved = new Set();
         for (const sprite of all) {
             const p = sprite.picture();
-            const named = !!(p && p._rrSprite);   // an ordinary picture stays in the picture container
-            const layer = named ? p._rrSprite.layer : 0;
-            const z = named ? layerZ(layer) : null;
-            const want = z === "under" ? this._rrUnderParallaxLayer() : z !== null ? tilemap : container;
-            if (sprite.parent !== want) { if (sprite.parent) sprite.parent.removeChild(sprite); want.addChild(sprite); resort = true; if (want === this._rrUnderParallax) resortUnder = true; }
-            const wantZ = z === "under" ? spriteLayer(layer) : z !== null ? z : spriteLayer(layer);
-            if (sprite.z !== wantZ) { sprite.z = wantZ; resort = true; if (want === this._rrUnderParallax) resortUnder = true; }
+            if (!p || !p.name()) continue;
+            const layer = mapLayerOf(p);
+            if (layer === null || layer === 0) continue;
+            const slot = layerZ(layer);
+            const want = slot === "panorama" ? this._rrUnderParallaxLayer() : slot === "top" ? this._rrTopLayer() : typeof slot === "number" ? tilemap : container;
+            // a picture is ordered by id x 10, a sprite by its own z (a lower z in front), both within their layer
+            const order = p._rrSprite ? -(Number(p._rrSprite.z) || 0) : (sprite._pictureId || 0) * 10;
+            const wantZ = typeof slot === "number" ? slot + order / 1e6 : layer * 1e6 + order;
+            if (sprite.parent !== want) { if (sprite.parent) sprite.parent.removeChild(sprite); want.addChild(sprite); moved.add(want); }
+            if (sprite.z !== wantZ) { sprite.z = wantZ; moved.add(want); }
         }
-        if (resort) {
-            container.children.sort(byId);
-            if (resortUnder && this._rrUnderParallax) this._rrUnderParallax.children.sort(byId);
-            if (typeof tilemap._sortChildren === "function") tilemap._sortChildren();
+        for (const holder of moved) {
+            if (holder === tilemap) { if (typeof tilemap._sortChildren === "function") tilemap._sortChildren(); }
+            else holder.children.sort(byZ);
         }
     };
 
@@ -367,14 +446,33 @@
             if (!this._rrTextSprites[id]) { const s = new Sprite_RRText(id); this._rrTextSprites[id] = s; this._rrTextContainer.addChild(s); }
         }
         for (const id of Object.keys(this._rrTextSprites)) {
-            if (!texts[id]) { this._rrTextContainer.removeChild(this._rrTextSprites[id]); delete this._rrTextSprites[id]; }
+            if (!texts[id]) { const gone = this._rrTextSprites[id]; if (gone.parent) gone.parent.removeChild(gone); delete this._rrTextSprites[id]; }
+        }
+        // A text draws just over the picture it belongs to, wherever that picture's layer put it (EasyRPG leaves
+        // room at each picture's priority for the text plugin): Deep 8's title pages would otherwise sit under
+        // the layer-10 black they fade in from.
+        const layered = legacyPictureLayers();
+        const pictures = this._rrPictureSprites || (this._pictureContainer ? this._pictureContainer.children : []);
+        const resort = new Set();
+        for (const id of Object.keys(this._rrTextSprites)) {
+            const sprite = this._rrTextSprites[id], t = texts[id];
+            const owner = layered && t && t.layer > 0 ? pictures.find(p => p._pictureId === t.layer) : null;
+            const parent = owner && owner.parent ? owner.parent : this._rrTextContainer;
+            sprite._rrZ = parent === this._rrTextContainer ? undefined : owner.z + (parent === this._tilemap ? 1e-7 : 1);
+            if (sprite.parent !== parent) { if (sprite.parent) sprite.parent.removeChild(sprite); parent.addChild(sprite); resort.add(parent); }
+            if (sprite._rrZ !== undefined && sprite.z !== sprite._rrZ) { sprite.z = sprite._rrZ; resort.add(parent); }
         }
         this._rrTextContainer.children.sort((a, b) => ((a.z || 0) - (b.z || 0)) || (String(a._textId) < String(b._textId) ? -1 : 1));
+        for (const parent of resort) {
+            if (parent === this._rrTextContainer) continue;
+            if (parent === this._tilemap) { if (typeof parent._sortChildren === "function") parent._sortChildren(); }
+            else parent.children.sort((a, b) => ((a.z || 0) - (b.z || 0)) || ((a._pictureId || 0) - (b._pictureId || 0)));
+        }
     };
 
     // ---- particle effects --------------------------------------------------------------------
 
-    const PFX_DEFAULT = () => ({ type: "burst", texture: "", amount: 50, simul: 2, velocity: [30, 30], angle: [0, 360], color0: [255, 255, 255], color1: [255, 255, 255], growth: [1, 1], randomPos: [0, 0], timeout: [30, 0], layer: 5, gravity: null, acceleration: null, interval: 1, screenRelative: false, generating: "standard", radius: 30, randomRadius: 0, streams: {}, tick: 0 });
+    const PFX_DEFAULT = () => ({ type: "burst", texture: "", amount: 50, simul: 2, velocity: [30, 30], angle: [0, 360], color0: [100, 100, 100], color1: [100, 100, 100], growth: [1, 1], randomPos: [0, 0], timeout: [30, 0], layer: 0, gravity: null, acceleration: null, interval: 1, screenRelative: false, generating: "standard", radius: 30, randomRadius: 0, streams: {}, tick: 0 });
     Game_Screen.prototype.rrPfx = function(name) { return (this._rrParticles || (this._rrParticles = {}))[String(name)] || null; };
     Game_Screen.prototype.rrPfxCreate = function(name, type) {
         const e = PFX_DEFAULT();
@@ -398,7 +496,7 @@
             case "angle": e.angle = [nums[0] || 0, nums[1] === undefined || isNaN(nums[1]) ? 360 : nums[1]]; break;
             case "color0": e.color0 = [nums[0] || 0, nums[1] || 0, nums[2] || 0]; break;
             case "color1": e.color1 = [nums[0] || 0, nums[1] || 0, nums[2] || 0]; break;
-            case "growth": e.growth = [nums[0] || 1, nums[1] || 1]; break;
+            case "growth": e.growth = [Number.isFinite(nums[0]) ? nums[0] : 1, Number.isFinite(nums[1]) ? nums[1] : 1]; break;   // 0 is a real size: Yavar-5's rocks and flames grow from nothing
             case "randomPos": e.randomPos = [nums[0] || 0, nums[1] || 0]; break;
             case "timeout": e.timeout = [Math.max(1, nums[0] || 30), nums[1] || 0]; break;
             case "layer": e.layer = nums[0] || 0; break;
@@ -438,28 +536,28 @@
     }
 
     Spriteset_Base.prototype._rrUpdateParticles = function() {
-        if (!this._rrParticleLayers) {
-            this._rrParticleLayers = { low: new Sprite(), high: new Sprite() };
-            this._rrParticleLayers.low.z = 2; this._rrParticleLayers.high.z = 3.5;
+        if (!this._rrParticleSprites) {
+            this._rrParticleHolders = {};
             this._rrParticles = [];
             this._rrParticleSprites = [];
-            if (this._tilemap) { this._tilemap.addChild(this._rrParticleLayers.low); this._tilemap.addChild(this._rrParticleLayers.high); }
-            else { this.addChild(this._rrParticleLayers.low); this.addChild(this._rrParticleLayers.high); }
         }
+        // A burst or stream point is on the screen when it fires; an effect that is not screen-relative then
+        // stays where it was on the map while the view moves (so it is stored in map pixels).
+        const onMap = SceneManager._scene instanceof Scene_Map && $gameMap;
+        const dx = onMap ? Math.round($gameMap.displayX() * $gameMap.tileWidth()) : 0, dy = onMap ? Math.round($gameMap.displayY() * $gameMap.tileHeight()) : 0;
+        const at = (e, x, y) => (e.screenRelative ? [x, y] : [x + dx, y + dy]);
         const bursts = $gameScreen._rrParticleBursts || [];
         while (bursts.length) {
             const b = bursts.shift();
             const e = $gameScreen.rrPfx(b.name);
-            if (e && e.type === "burst") this._rrParticles.push(...spawn(e, b.x, b.y, e.layer));
+            if (e && e.type === "burst") this._rrParticles.push(...spawn(e, ...at(e, b.x, b.y), e.layer));
         }
         for (const e of Object.values($gameScreen._rrParticles || {})) {
             if (e.type !== "stream") continue;
             e.tick = (e.tick || 0) + 1;
             if (e.tick % Math.max(1, e.interval || 1) !== 0) continue;
-            for (const s of Object.values(e.streams)) { const one = Object.assign({}, e, { amount: Math.max(1, Math.round(e.amount)) }); this._rrParticles.push(...spawn(one, s.x, s.y, e.layer)); }
+            for (const s of Object.values(e.streams)) { const one = Object.assign({}, e, { amount: Math.max(1, Math.round(e.amount)) }); this._rrParticles.push(...spawn(one, ...at(e, s.x, s.y), e.layer)); }
         }
-        const onMap = SceneManager._scene instanceof Scene_Map && $gameMap;
-        const dx = onMap ? Math.round($gameMap.displayX() * $gameMap.tileWidth()) : 0, dy = onMap ? Math.round($gameMap.displayY() * $gameMap.tileHeight()) : 0;
         const live = [];
         for (const p of this._rrParticles) {
             p.age++;
@@ -474,7 +572,7 @@
         this._rrParticleSprites.forEach((sprite, i) => {
             const p = this._rrParticles[i];
             if (!p) { if (sprite.parent) sprite.parent.removeChild(sprite); sprite.visible = false; return; }
-            const wantParent = p.layer <= 4 ? this._rrParticleLayers.low : this._rrParticleLayers.high;
+            const wantParent = this._rrParticleHolder(p.layer);
             if (sprite.parent !== wantParent) { if (sprite.parent) sprite.parent.removeChild(sprite); wantParent.addChild(sprite); }
             sprite.visible = true;
             const e = p.effect;
@@ -484,11 +582,33 @@
             const size = e.growth[0] + (e.growth[1] - e.growth[0]) * t;
             sprite.scale.x = sprite.scale.y = size;
             const c = [0, 1, 2].map(k => Math.round(e.color0[k] + (e.color1[k] - e.color0[k]) * t));
-            sprite.tint = (clamp(c[0], 0, 255) << 16) | (clamp(c[1], 0, 255) << 8) | clamp(c[2], 0, 255);
+            // colours are percent, 100 unchanged (490 of Deep 8's effects say 100, 100, 100); a tint only darkens,
+            // so a brighter colour draws unchanged rather than paying for a filter on every particle
+            const tint = (v) => Math.round(clamp(v, 0, 100) * 2.55);
+            sprite.tint = (tint(c[0]) << 16) | (tint(c[1]) << 8) | tint(c[2]);
             sprite.opacity = p.age <= p.delay ? 255 : Math.round(255 * (1 - (p.age - p.delay) / Math.max(1, e.timeout[0])));
             sprite.x = e.screenRelative ? p.x : p.x - dx;
             sprite.y = e.screenRelative ? p.y : p.y - dy;
         });
+    };
+    /**
+     * The holder a particle layer draws in: the same map layers as sprites and pictures (EasyRPG's particle
+     * plugin), with an unset layer (0) over everything, so Deep 8's engine exhaust shows over its ship and
+     * the rocks of Yavar-5 fly over the planet. In battle every layer shares one holder over the pictures.
+     */
+    Spriteset_Base.prototype._rrParticleHolder = function(layer) {
+        const n = this._tilemap ? spriteLayer(layer) : 0;
+        let holder = this._rrParticleHolders[n];
+        if (holder && holder.parent && (n < 9 || holder.parent === SceneManager._scene)) return holder;
+        holder = holder || (this._rrParticleHolders[n] = new Sprite());
+        if (!this._tilemap) { this.addChild(holder); return holder; }
+        const slot = layerZ(n);
+        const parent = slot === "panorama" ? this._rrUnderParallaxLayer() : slot === "top" ? this._rrTopLayer() : typeof slot === "number" ? this._tilemap : this._pictureContainer;
+        holder.z = typeof slot === "number" ? slot + 0.9 : n * 1e6 + 9e5;   // over the sprites and pictures of its layer
+        parent.addChild(holder);
+        if (parent === this._tilemap) { if (typeof parent._sortChildren === "function") parent._sortChildren(); }
+        else parent.children.sort((a, b) => ((a.z || 0) - (b.z || 0)) || ((a._pictureId || 0) - (b._pictureId || 0)));
+        return holder;
     };
     Spriteset_Base.prototype._rrParticleDot = function() {
         if (!this._rrDot) { this._rrDot = new Bitmap(4, 4); this._rrDot.fillAll("#ffffff"); }
@@ -564,5 +684,157 @@ void main() {
         } else if (this._rrWaveFilter && this.filters && this.filters.includes(this._rrWaveFilter)) {
             this.filters = this.filters.filter(f => f !== this._rrWaveFilter);
         }
+    };
+
+    // RPG Maker 2003 1.12 spritesheet pictures: the image is cols × rows frames and the picture shows one,
+    // counted row by row, or steps through them every `speed` frames (erasing itself after one pass when
+    // `once`). A frame outside the sheet with no animation shows nothing. EasyRPG's rules.
+    Game_Screen.prototype.rrPictureFrames = function(id, cols, rows, frame, speed, once) {
+        const p = this.picture(Number(id));
+        if (!p) return;
+        p._rrSheet = { cols: Math.max(1, Number(cols) || 1), rows: Math.max(1, Number(rows) || 1), frame: Number(frame) || 0, speed: Math.max(0, Number(speed) || 0), once: !!once, frames: 0 };
+    };
+
+    const _Game_Picture_updateSheet = Game_Picture.prototype.update;
+    Game_Picture.prototype.update = function() {
+        _Game_Picture_updateSheet.call(this);
+        const s = this._rrSheet;
+        if (!s || s.speed <= 0 || ++s.frames <= s.speed) return;
+        s.frames = 1;
+        if (++s.frame >= s.cols * s.rows) {
+            s.frame = 0;
+            if (s.once) this._rrSheetDone = true;
+        }
+    };
+
+    const _Game_Screen_updatePictures = Game_Screen.prototype.updatePictures;
+    Game_Screen.prototype.updatePictures = function() {
+        _Game_Screen_updatePictures.call(this);
+        for (let i = 0; i < this._pictures.length; i++) if (this._pictures[i] && this._pictures[i]._rrSheetDone) this._pictures[i] = null;
+    };
+
+    const _Sprite_Picture_updateSheet = Sprite_Picture.prototype.update;
+    Sprite_Picture.prototype.update = function() {
+        _Sprite_Picture_updateSheet.call(this);
+        const picture = this.picture(), s = picture && picture._rrSheet, bmp = this.bitmap;
+        if (!bmp || !bmp.isReady()) return;
+        if (s && s.cols * s.rows > 1) {
+            if (s.speed === 0 && (s.frame < 0 || s.frame >= s.cols * s.rows)) { this.visible = false; return; }
+            const sw = Math.floor(bmp.width / s.cols), sh = Math.floor(bmp.height / s.rows);
+            this.setFrame(sw * (s.frame % s.cols), sh * (Math.floor(s.frame / s.cols) % s.rows), sw, sh);
+            this._rrSheetFrame = true;
+        } else if (this._rrSheetFrame) {
+            this.setFrame(0, 0, bmp.width, bmp.height);
+            this._rrSheetFrame = false;
+        }
+    };
+
+    // RPG Maker 2000/2003 erase a picture when the party changes map, unless the Show Picture
+    // said to keep it (2003's own flag). System.json rrPicturesEraseOnMapChange turns that on,
+    // so MV and MZ pictures keep persisting. Named sprites are not pictures there: their slots
+    // (advanced.rrNamedSpriteBase up) are left alone.
+    Game_Screen.prototype.rrKeepPicture = function(id) {
+        const p = this.picture(Number(id));
+        if (p) p._rrKeep = true;
+    };
+
+    // The sprite plugin's named sprites go with the map too: Deep 8 never removes the ship it lands on
+    // map 25, and the old player shows no trace of it on map 27.
+    Game_Screen.prototype.rrEraseOnMapChange = function() {
+        this.rrSpriteRemoveAll();
+        const base = Number($dataSystem.advanced && $dataSystem.advanced.rrNamedSpriteBase) || Infinity;
+        for (let id = 1; id < base && id <= this.maxPictures(); id++) {
+            const p = this.picture(id);
+            if (p && !p._rrKeep) this.erasePicture(id);
+        }
+    };
+
+    // A 2000/2003 picture shown "fixed to the map" is placed on the screen like any other, then moves
+    // with every map scroll after that, so it stays over the same ground (trees drawn as pictures).
+    Game_Screen.prototype.rrPictureFixToMap = function(id) {
+        const p = this.picture(Number(id));
+        if (p) p._rrFixedToMap = true;
+    };
+
+    Game_Screen.prototype.rrScrollFixedPictures = function(dx, dy) {
+        for (const p of this._pictures) {
+            if (!p || !p._rrFixedToMap) continue;
+            p._x -= dx; p._targetX -= dx;
+            p._y -= dy; p._targetY -= dy;
+        }
+    };
+
+    // The distance the view really moved, in pixels: a looping map wraps, an edge stops it.
+    const scrolled = (before, after, size) => {
+        let d = after - before;
+        if (size > 0 && Math.abs(d) > size / 2) d -= Math.sign(d) * size;
+        return d;
+    };
+    for (const name of ["scrollDown", "scrollUp", "scrollLeft", "scrollRight"]) {
+        const base = Game_Map.prototype[name];
+        Game_Map.prototype[name] = function(distance) {
+            const x = this._displayX, y = this._displayY;
+            base.call(this, distance);
+            if (typeof $gameScreen === "undefined" || !$gameScreen) return;
+            const dx = scrolled(x, this._displayX, this.isLoopHorizontal() ? this.width() : 0) * this.tileWidth();
+            const dy = scrolled(y, this._displayY, this.isLoopVertical() ? this.height() : 0) * this.tileHeight();
+            if (dx || dy) $gameScreen.rrScrollFixedPictures(dx, dy);
+        };
+    }
+
+    // RPG Maker 2000/2003 panoramas that neither scroll nor loop move with the camera in proportion
+    // (System.json rrLegacyParallax): across the map's scroll range the image slides from its left edge
+    // to its right, so one as large as the map is fixed to it. MZ pins such a parallax to the screen.
+    // EasyRPG's Parallax::ResetPositionX/Y.
+    const legacyPanorama = (bitmapSize, screen, tiles, tile, display, loops) => {
+        if (loops) return null;
+        const perScreen = Math.ceil(screen / tile);
+        if (tiles <= perScreen || bitmapSize <= screen) return 0;
+        const range = (tiles - perScreen) * tile;
+        return Math.floor(Math.min(range, bitmapSize - screen) * display * tile / range);
+    };
+    const _Spriteset_Map_updateParallax = Spriteset_Map.prototype.updateParallax;
+    Spriteset_Map.prototype.updateParallax = function() {
+        _Spriteset_Map_updateParallax.call(this);
+        const bitmap = this._parallax && this._parallax.bitmap;
+        if (!bitmap || !bitmap.isReady() || !$dataSystem || !$dataSystem.rrLegacyParallax || $gameMap._parallaxZero) return;
+        const tw = $gameMap.tileWidth(), th = $gameMap.tileHeight();
+        const ox = legacyPanorama(bitmap.width, Graphics.width, $gameMap.width(), tw, $gameMap.displayX(), $gameMap._parallaxLoopX || $gameMap.isLoopHorizontal());
+        const oy = legacyPanorama(bitmap.height, Graphics.height, $gameMap.height(), th, $gameMap.displayY(), $gameMap._parallaxLoopY || $gameMap.isLoopVertical());
+        if (ox !== null) this._parallax.origin.x = ox;
+        if (oy !== null) this._parallax.origin.y = oy;
+    };
+
+    // A loaded save or a re-entered map scene brings the map data back as authored: re-apply the
+    // 2000/2003 tile substitutions $gameMap keeps (Game_Map.rrTileSubstitute, reactor_objects.js).
+    // RPG Maker 2000/2003 Erase Screen lasts through teleports but not through another scene: handing the map
+    // to the save screen, the menu or a shop shows it again (EasyRPG's Scene_Map::TransitionOut clears
+    // screen_erased_by_event for all but battle and debug). Deep 8 erases the screen for its menu map and
+    // saves from there, so without this every save came back to black. System.json rrLegacyEraseScreen.
+    const _Scene_Map_terminate = Scene_Map.prototype.terminate;
+    Scene_Map.prototype.terminate = function() {
+        const next = SceneManager._nextScene;
+        const keeps = !next || next instanceof Scene_Map || next instanceof Scene_Battle || (typeof Scene_Debug !== "undefined" && next instanceof Scene_Debug) || next instanceof Scene_Gameover || next instanceof Scene_Title;
+        if (!keeps && $dataSystem && $dataSystem.rrLegacyEraseScreen && $gameScreen.brightness() < 255) {
+            $gameScreen._brightness = 255;
+            $gameScreen._fadeOutDuration = 0;
+            $gameScreen._fadeInDuration = 0;
+        }
+        _Scene_Map_terminate.apply(this, arguments);
+    };
+
+    const _Scene_Map_onMapLoaded = Scene_Map.prototype.onMapLoaded;
+    Scene_Map.prototype.onMapLoaded = function() {
+        _Scene_Map_onMapLoaded.call(this);
+        if ($gameMap._rrTileSub) $gameMap.rrApplyTileSub(false);
+    };
+
+    const _Game_Player_performTransfer = Game_Player.prototype.performTransfer;
+    Game_Player.prototype.performTransfer = function() {
+        if (this.isTransferring() && $dataSystem && $dataSystem.rrPicturesEraseOnMapChange
+            && this._newMapId !== $gameMap.mapId()) {
+            $gameScreen.rrEraseOnMapChange();
+        }
+        _Game_Player_performTransfer.call(this);
     };
 })();

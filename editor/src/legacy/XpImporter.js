@@ -204,6 +204,8 @@ function open(folder, destination, options) {
         }
         // A "Skip Title" script: the game boots into a new game and has no title screen.
         if (C.skipsTitle(active.map(s => s.text))) { sys.rrSkipTitle = true; add(notes, 'skipTitle'); }
+        sys.rrCharacterShiftY = 0;   // XP draws characters on the tile's bottom edge; MZ's is 6
+        sys.rrChoicesInMessage = true;   // choices are listed inside the message window, after the text
         writeJson(path.join(dest, 'data', 'System.json'), sys);
 
         // ---- maps --------------------------------------------------------------

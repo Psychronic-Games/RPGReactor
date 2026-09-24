@@ -36,7 +36,8 @@ function checkStructure(list, where = '') {
 
 test('a message with a face and continuation lines becomes 101 + 401s, codes translated', () => {
     const { list } = C.convertList([cmd(10130, [3, 0, 0], 'Faces.png'), cmd(10120, [1, 0, 0, 0]), cmd(10110, [], 'Hi \\c[2]\\n[1]\\_'), cmd(20110, [], 'line \\s[3]two'), cmd(0)], ctx());
-    assert.deepEqual(list.slice(0, 3), [{ code: 101, indent: 0, parameters: ['Faces', 3, 2, 0, ''] }, { code: 401, indent: 0, parameters: ['Hi \\c[2]\\n[1]\\.'] }, { code: 401, indent: 0, parameters: ['line two'] }]);
+    assert.deepEqual(list.slice(0, 2).map(c => c.parameters[0]), ['this.rrMessageFace("Faces", 3)', 'this.rrMessageOptions(2, 0)'], 'the face and options are set on the system at run time');
+    assert.deepEqual(list.slice(2, 5), [{ code: 101, indent: 0, parameters: ['Faces', 3, 2, 0, ''] }, { code: 401, indent: 0, parameters: ['Hi \\c[2]\\n[1]\\.'] }, { code: 401, indent: 0, parameters: ['line two'] }]);
 });
 
 test('choices keep their texts, cancel choice or cancel branch, and nest', () => {
@@ -65,9 +66,9 @@ test('switches and variables map to 121 and 122, with script operands where MZ h
     assert.match(list[3].parameters[0], /setValue\(\$gameVariables\.value\(3\), true\)/);
     assert.deepEqual(list[4].parameters, [1, 1, 1, 0, 42]);
     assert.deepEqual(list[5].parameters, [1, 3, 0, 2, 1, 6]);
-    assert.deepEqual(list[6].parameters, [2, 2, 0, 3, 2, 7], 'a weapon count reads the weapon table');
+    assert.deepEqual(list[6].parameters, [2, 2, 0, 3, 1, 7], 'a weapon count reads the weapon table (MZ game data 1)');
     assert.deepEqual(list[7].parameters, [2, 2, 0, 3, 3, 1, 10], 'agility is MZ param 6, game data index 10');
-    assert.deepEqual(list[8].parameters, [2, 2, 0, 3, 6, -1, 0], 'the player x');
+    assert.deepEqual(list[8].parameters, [2, 2, 0, 3, 5, -1, 0], 'the player x (MZ game data 5, a character)');
     assert.deepEqual(list[9].parameters, [2, 2, 0, 3, 7, 2], 'gold');
     assert.equal(list[10].parameters[3], 4, 'an equipment id is a script operand');
     assert.match(list[11].parameters[0], /const t = \$gameVariables\.value\(4\)/);
@@ -92,12 +93,14 @@ test('conditional branches carry every 2003 condition MZ can express and script 
     assert.deepEqual(list[15].parameters, [7, 100, 1]);
 });
 
-test('move routes translate every step and sum jumps', () => {
+test('move routes translate every step and sum jumps; speed and transparency step from the character\'s own', () => {
     const route = C.convertRoute([{ code: 24 }, { code: 1 }, { code: 1 }, { code: 2 }, { code: 25 }, { code: 0 }, { code: 21 }, { code: 32, parameter_a: 9 }, { code: 34, parameter_string: '$Guy', parameter_a: 3 }, { code: 35, parameter_string: 'Bang.wav', parameter_a: 80, parameter_b: 100, parameter_c: 50 }, { code: 28 }, { code: 40 }, { code: 23 }], ctx());
     assert.deepEqual(route.list, [
         { code: 14, parameters: [2, 1] }, { code: 4, parameters: [] }, { code: 25, parameters: [] }, { code: 27, parameters: [9] }, { code: 41, parameters: ['!Guy', 3] },
-        { code: 44, parameters: [{ name: 'Bang', volume: 80, pitch: 100, pan: 0 }] }, { code: 29, parameters: [5] }, { code: 42, parameters: [223] }, { code: 15, parameters: [20] }, { code: 0, parameters: [] }
+        { code: 44, parameters: [{ name: 'Bang', volume: 80, pitch: 100, pan: 0 }] }, { code: 45, parameters: ['this.setMoveSpeed(Math.min(6, this.moveSpeed() + 1))'] }, { code: 45, parameters: ['this.rrTransparency(1)'] }, { code: 15, parameters: [20] }, { code: 0, parameters: [] }
     ]);
+    // Stop/Start Animation pause all stepping, not only walking
+    assert.deepEqual(C.convertRoute([{ code: 38 }, { code: 39 }], ctx()).list.slice(0, 2), [{ code: 45, parameters: ['this.rrAnimPause(true)'] }, { code: 45, parameters: ['this.rrAnimPause(false)'] }]);
     // packed in a Move Event command: 7-bit integers and a length-prefixed string
     const { list } = C.convertList([cmd(11330, [10005, 3, 1, 0, 34, 3, 71, 117, 121, 2, 0, 32, 129, 0], '')], ctx());
     assert.equal(list[0].code, 205);
@@ -142,7 +145,7 @@ test('commands MZ lacks call the runtime equivalents', () => {
     assert.equal(list[4].parameters[0], 'this.rrHaltAllMoves()');
     assert.equal(list[5].parameters[0], 'this.rrFlashCharacter(-1, [248, 0, 0, 248], 30, true)');
     assert.equal(list[6].parameters[0], '$gameVariables.setValue(9, this.rrTerrainId(4, 6))');
-    assert.equal(list[7].parameters[0], 'this.rrPanReset()');
+    assert.equal(list[7].parameters[0], 'this.rrPanReset(2, false)', 'a missing speed is 1, as EasyRPG pads and clamps it');
     assert.equal(list[8].code, 353);
     assert.deepEqual(list[9].parameters, [2, 17, true], 'a 2003 class id is offset past the per-actor classes');
     assert.deepEqual(c.notes, { callMapEvent: 1, keyInput: 1 });
@@ -297,4 +300,262 @@ test('every Deep 8 command list converts to well-formed MZ structure', { skip: !
     assert.equal(out.classes.filter(Boolean).length, 14 + 18);
     assert.equal(out.commonEvents.filter(Boolean).length, 820);
     assert.ok(notes.callMapEvent > 100 && notes.keyInput > 100, JSON.stringify(notes));
+});
+
+test('Key Input Processing reads each engine version\'s layout, as EasyRPG does', () => {
+    const key = (params, engine2000) => C.convertList([cmd(11610, params), cmd(0)], Object.assign(ctx(), { engine2000 })).list[0].parameters[0];
+    // 2003 1.05+: 5 numbers, 6 operators, 7/8 time variable, 9 shift, 10-13 down/left/right/up
+    assert.equal(key([1, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0]), 'this.rrKeyInput(1, [5,7], true, 0)', 'Deep 8\'s "Shift/Y" check asks for shift, not up');
+    assert.equal(key([2, 0, 0, 0, 0, 1, 1, 9, 1, 0, 0, 1, 1, 0]), 'this.rrKeyInput(2, [10,20,2,3], false, 9)');
+    // 2003 1.05 with a 2000 game's ten-entry list: 5 shift, 6-9 down/left/right/up
+    assert.equal(key([1, 1, 0, 0, 0, 1, 1, 0, 0, 0]), 'this.rrKeyInput(1, [7,1], true, 0)');
+    // 2003 before 1.05: one flag for the four directions
+    assert.equal(key([1, 1, 1, 1, 0]), 'this.rrKeyInput(1, [5,1,2,3,4], true, 0)');
+    // 2000 1.50+: 5 shift, 6-9 directions
+    assert.equal(key([1, 1, 0, 0, 1, 1, 0, 0, 0, 1], true), 'this.rrKeyInput(1, [6,7,4], true, 0)');
+});
+
+test('a Show Picture fixed to the map keeps its picture over the same ground', () => {
+    const show = (fixed) => cmd(11110, [7, 0, 160, 120, fixed, 100, 0, 0, 100, 100, 100, 100, 0, 0], 'Baeume');
+    const scripts = (list) => list.filter(c => c.code === 355).map(c => c.parameters[0]);
+    assert.ok(scripts(C.convertList([show(1), cmd(0)], ctx()).list).includes('$gameScreen.rrPictureFixToMap(7)'));
+    assert.ok(!scripts(C.convertList([show(0), cmd(0)], ctx()).list).some(s => /rrPictureFixToMap/.test(s)));
+    const fx = fs.readFileSync(path.join(__dirname, '..', '..', 'runtime', 'reactor_screen_fx.js'), 'utf8');
+    assert.match(fx, /p\._x -= dx; p\._targetX -= dx;/, 'a map scroll moves the picture and where it is heading');
+    assert.match(fx, /for \(const name of \["scrollDown", "scrollUp", "scrollLeft", "scrollRight"\]\)/);
+});
+
+test('a screen text stays on the screen unless fixed, and shows while its picture does, at its opacity', () => {
+    const fx = fs.readFileSync(path.join(__dirname, '..', '..', 'runtime', 'reactor_screen_fx.js'), 'utf8');
+    assert.match(fx, /if \(!t\.fixed \|\| !\$gameMap/, '"fixed" fixes the text to the map (EasyRPG\'s text plugin)');
+    assert.match(fx, /if \(t\.layer > 0 && !owner\) \{ this\.visible = false; return; \}/);
+    assert.match(fx, /this\.opacity = owner \? owner\.opacity\(\) : 255;/);
+});
+
+test('a 2003 1.12 Show or Move Picture can take its picture number from a variable', () => {
+    const show = cmd(11110, [9, 0, 160, 120, 1, 100, 0, 0, 100, 100, 100, 100, 0, 0, 0, 0, 100, 1, 0, 0, 100, 0, 0, 0, 0, 0, 0, 0, 0, 1], 'Baum');
+    const move = cmd(11120, [9, 0, 10, 20, 0, 50, 0, 0, 100, 100, 100, 100, 0, 0, 5, 1, 100, 1]);
+    const list = C.convertList([show, move, cmd(0)], ctx()).list;
+    const scripts = list.filter(c => c.code === 355).map(c => c.parameters[0]);
+    assert.ok(!list.some(c => c.code === 231 || c.code === 232), 'no literal picture 9');
+    assert.ok(scripts.includes('$gameScreen.showPicture($gameVariables.value(9), "Baum", 1, 160, 120, 100, 100, 255, 0)'));
+    assert.ok(scripts.includes('$gameScreen.rrPictureFixToMap($gameVariables.value(9))'));
+    assert.ok(scripts.includes('$gameScreen.movePicture($gameVariables.value(9), 1, 10, 20, 50, 50, 255, 0, 30, 0)'));
+    assert.ok(scripts.some(s => /tintPicture\(\$gameVariables\.value\(9\), \[0,0,0,0\], 30\); this\.wait\(30\)/.test(s)), 'a waiting move still waits');
+});
+
+test('sprites go with the map, and plugin angles turn the old engine\'s way', () => {
+    const fx = fs.readFileSync(path.join(__dirname, '..', '..', 'runtime', 'reactor_screen_fx.js'), 'utf8');
+    assert.match(fx, /rrEraseOnMapChange = function\(\) \{\s*this\.rrSpriteRemoveAll\(\);/);
+    // a sprite's own angle is clockwise; rotating by a positive amount turns it counter-clockwise
+    assert.match(fx, /picture\._angle = Number\(angle\) \|\| 0;/, 'the halves of a tree tilted by -50 are added at 50');
+    assert.match(fx, /target: p\._angle - \(Number\(degrees\) \|\| 0\)/, 'Deep 8\'s tree at -90 falls to the right');
+    assert.match(fx, /target = p\._angle \+ \(ccw \? \(turn === 0 \? 0 : turn - 360\) : turn\);/, 'rotate to goes the named way round');
+});
+
+test('2003 common event triggers map to MZ\'s: call stays a call, and a condition-free parallel always runs', () => {
+    const db = withIds({ commonevents: [null, { name: 'call', trigger: 5, event_commands: [cmd(0)] }, { name: 'auto', trigger: 3, switch_flag: true, switch_id: 7, event_commands: [cmd(0)] }, { name: 'par', trigger: 4, event_commands: [cmd(0)] }, { name: 'par sw', trigger: 4, switch_flag: true, switch_id: 9, event_commands: [cmd(0)] }] });
+    const out = D.commonEvents(db, ctx(), { list: [] });
+    assert.deepEqual([1, 2, 3, 4].map(i => [out[i].trigger, out[i].switchId]), [[0, 1], [1, 7], [2, 0], [2, 9]]);
+    const objects = fs.readFileSync(path.join(__dirname, '..', '..', 'runtime', 'reactor_objects.js'), 'utf8');
+    assert.match(objects, /event\.trigger === 2 && \(event\.switchId === 0 \|\| \$gameSwitches\.value\(event\.switchId\)\)/);
+    assert.match(objects, /if \(commonEvent\.switchId === 0 \|\| \$gameSwitches\.value\(commonEvent\.switchId\)\)/);
+});
+
+test('passage is decided the old engine\'s way: tile 0 defers, wall tops pass, a starred lower tile keeps its bits', () => {
+    const K = require('../src/legacy/LegacyConvert.js');
+    const lower = new Array(162).fill(15); lower[6] = 0x30; lower[18] = 0x10 | 15; lower[19] = 0;
+    const flags = K.tilesetFlags({ passable_data_lower: lower, passable_data_upper: [31] }, null);
+    assert.equal(flags[0], 0x10, 'an empty layer defers to the tiles under it');
+    assert.equal(flags[2816 + 20] & 0x0f, 0, 'a wall block\'s top edge (shape 20) passes');
+    assert.equal(flags[2816 + 0] & 0x0f, 0x0f, 'the rest of the wall blocks');
+    assert.equal(flags[1], 0x10, 'a starred lower tile keeps passable bits');
+    const objects = fs.readFileSync(path.join(__dirname, '..', '..', 'runtime', 'reactor_objects.js'), 'utf8');
+    assert.match(objects, /if \(!\$dataSystem \|\| !\$dataSystem\.rrLegacyPassage \|\| \(bit & ~0x0f\)\) return _checkPassage/);
+    assert.match(objects, /const lower = this\.tileId\(x, y, 1\) \|\| this\.tileId\(x, y, 0\);/);
+    assert.match(fs.readFileSync(path.join(__dirname, '..', 'src', 'legacy', 'LegacyConvert.js'), 'utf8'), /out\.rrLegacyPassage = true;/);
+});
+
+test('panning: lock holds the camera, pans run at the old engine\'s speed, a return scrolls back and can wait', () => {
+    const scripts = (params) => C.convertList([cmd(11060, params), cmd(0)], ctx()).list;
+    assert.deepEqual(scripts([2, 1, 5, 3, 1])[0].parameters, [6, 5, 4, true], 'speed 3 pans as MZ speed 4');
+    assert.equal(scripts([3, 0, 0, 4, 1])[0].parameters[0], 'this.rrPanReset(5, true)');
+    assert.equal(scripts([0])[0].parameters[0], '$gameMap._rrPanLocked = true');
+    const objects = fs.readFileSync(path.join(__dirname, '..', '..', 'runtime', 'reactor_objects.js'), 'utf8');
+    assert.match(objects, /if \(\$gameMap\._rrPanLocked \|\| \$gameMap\._rrPanReturn\) return;/);
+    assert.match(objects, /if \(this\._waitMode === "rrPan"\)/);
+});
+
+test('a 2003 1.12 spritesheet picture shows one frame, by number or variable, or animates', () => {
+    const show = (sheet) => cmd(11110, [4, 0, 100, 100, 0, 100, 0, 0, 100, 100, 100, 100, 0, 0, 0, 0, 100, 0, 0, 0, 100, 0, ...sheet, 97], 'HP Balken sheet');
+    const script = (sheet) => C.convertList([show(sheet), cmd(0)], ctx()).list.filter(c => c.code === 355).map(c => c.parameters[0]).find(s => /rrPictureFrames/.test(s));
+    assert.equal(script([1, 29, 1, 1022, 0, 0, 0, 0]), '$gameScreen.rrPictureFrames(4, 1, 29, $gameVariables.value(1022) - 1, 0, false)');
+    assert.equal(script([10, 1, 0, 3, 0, 0, 0, 0]), '$gameScreen.rrPictureFrames(4, 10, 1, 2, 0, false)', 'the command counts frames from 1');
+    assert.equal(script([11, 1, 2, 5, 1, 0, 0, 0]), '$gameScreen.rrPictureFrames(4, 11, 1, 0, 5, true)');
+    assert.equal(script([0, 56, 0, 0, 0, 0, 0, 0]), undefined, 'no columns, no sheet, whatever the other fields hold');
+    const fx = fs.readFileSync(path.join(__dirname, '..', '..', 'runtime', 'reactor_screen_fx.js'), 'utf8');
+    assert.match(fx, /this\.setFrame\(sw \* \(s\.frame % s\.cols\), sh \* \(Math\.floor\(s\.frame \/ s\.cols\) % s\.rows\), sw, sh\)/);
+    assert.match(fx, /if \(s\.speed === 0 && \(s\.frame < 0 \|\| s\.frame >= s\.cols \* s\.rows\)\) \{ this\.visible = false; return; \}/);
+});
+
+test('an import updates parallel common events before map events, as the old engine does', () => {
+    const objects = fs.readFileSync(path.join(__dirname, '..', '..', 'runtime', 'reactor_objects.js'), 'utf8');
+    assert.match(objects, /const commonFirst = \$dataSystem && \$dataSystem\.rrLegacyEventOrder;/);
+    assert.match(fs.readFileSync(path.join(__dirname, '..', 'src', 'legacy', 'LegacyConvert.js'), 'utf8'), /out\.rrLegacyEventOrder = true;/);
+});
+
+test('characters stand at their engine\'s height: 0 for 2000/2003 and XP, 4 for VX and VX Ace', () => {
+    const objects = fs.readFileSync(path.join(__dirname, '..', '..', 'runtime', 'reactor_objects.js'), 'utf8');
+    assert.match(objects, /const own = \$dataSystem && \$dataSystem\.rrCharacterShiftY;\s*return typeof own === "number" \? own : 6;/);
+    const src = (f) => fs.readFileSync(path.join(__dirname, '..', 'src', 'legacy', f), 'utf8');
+    assert.match(src('LegacyConvert.js'), /out\.rrCharacterShiftY = 0;/);
+    assert.match(src('XpImporter.js'), /sys\.rrCharacterShiftY = 0;/);
+    assert.match(src('VxImporter.js'), /sys\.rrCharacterShiftY = 4;/);
+    assert.match(src('RgssImporter.js'), /sys\.rrCharacterShiftY = 4;/);
+});
+
+test('a character position operand reads MZ game data 5 (a character), not 6 (a party member)', () => {
+    const list = C.convertList([cmd(10220, [0, 7, 7, 0, 6, 10001, 1]), cmd(10220, [0, 8, 8, 0, 6, 12, 5]), cmd(10820, [1, 2, 3]), cmd(0)], ctx()).list;
+    assert.deepEqual(list[0].parameters, [7, 7, 0, 3, 5, -1, 0], 'the player\'s map X');
+    assert.deepEqual(list[1].parameters, [8, 8, 0, 3, 5, 12, 4], 'event 12\'s screen Y');
+    assert.deepEqual([list[3].parameters, list[4].parameters], [[2, 2, 0, 3, 5, -1, 0], [3, 3, 0, 3, 5, -1, 1]], 'Memorize Location');
+    const objects = fs.readFileSync(path.join(__dirname, '..', '..', 'runtime', 'reactor_objects.js'), 'utf8');
+    assert.match(objects, /case 5: \/\/ Character/);
+});
+
+test('event pages keep tile graphics, translucency and spin; panoramas scroll the old engine\'s way', () => {
+    const K = require('../src/legacy/LegacyConvert.js');
+    const tilePage = K.eventPage({ character_name: '', character_index: 7, translucent: true, animation_type: 5, event_commands: [] }, {});
+    assert.equal(tilePage.image.tileId, K.TILE_ID_C + 7, 'no charset name: upper tile 7');
+    assert.deepEqual([tilePage.rrTranslucent, tilePage.rrSpin], [true, true]);
+    assert.equal(K.eventPage({ character_name: 'Guy', character_index: 2, event_commands: [] }, {}).image.tileId, 0);
+    assert.deepEqual([K.parallaxSpeed(0), K.parallaxSpeed(3), K.parallaxSpeed(-3), K.parallaxSpeed(8)], [0, -1, 1, -32], 'a positive speed drifts right: negative in MZ, 2^|speed| / 8');
+    assert.deepEqual(C.convertList([cmd(11720, [1, 0, 1, 4, 0, 0], 'Sky'), cmd(0)], ctx()).list[0].parameters, ['Sky', true, false, -2, 0]);
+    assert.deepEqual(C.convertRoute([{ code: 34, parameter_string: '', parameter_a: 5 }], ctx()).list[0], { code: 45, parameters: ['this.setTileImage(261)'] });
+    const objects = fs.readFileSync(path.join(__dirname, '..', '..', 'runtime', 'reactor_objects.js'), 'utf8');
+    assert.match(objects, /this\._rrTransp = page\.rrTranslucent \? 3 : 0;/);
+    assert.match(objects, /const limit = \[24, 16, 12, 8, 6, 4\]/);
+});
+
+test('a panorama that neither scrolls nor loops moves with the camera in proportion, as in the old engine', () => {
+    const fx = fs.readFileSync(path.join(__dirname, '..', '..', 'runtime', 'reactor_screen_fx.js'), 'utf8');
+    const body = /const legacyPanorama = \(([^)]*)\) => \{([\s\S]*?)\n    \};/.exec(fx);
+    const pan = new Function(...body[1].split(',').map(s => s.trim()), body[2]);
+    assert.equal(pan(800, 320, 50, 16, 0, false), 0);
+    assert.equal(pan(800, 320, 50, 16, 30, false), 480, 'at the far edge the image\'s far edge shows (range 480 = 800 - 320)');
+    assert.equal(pan(800, 320, 50, 16, 15, false), 240);
+    assert.equal(pan(2000, 320, 50, 16, 10, false), 160, 'a panorama wider than the map\'s range moves 1:1 with it');
+    assert.equal(pan(320, 320, 50, 16, 10, false), 0, 'one no wider than the screen stays put');
+    assert.equal(pan(800, 320, 50, 16, 10, true), null, 'a looping one keeps MZ\'s rule');
+    assert.match(fs.readFileSync(path.join(__dirname, '..', 'src', 'legacy', 'LegacyConvert.js'), 'utf8'), /out\.rrLegacyParallax = true;/);
+});
+
+test('translated messages honour EasyRPG page markup, and choices translate as one block', () => {
+    const tctx = () => Object.assign(ctx(), { translateLines: (lines) => {
+        const whole = lines.join('\n');
+        if (whole === 'Eins') return ['One', '<easyrpg:new_page>', 'Two'];
+        if (whole === 'Weg') return ['<easyrpg:delete_page>'];
+        if (whole === 'Ja\nNein') return ['Yes', 'No'];
+        if (whole === 'Viel') return ['1', '2', '3', '4', '5'];
+        return lines;
+    } });
+    const run = (cmds) => C.convertList([...cmds, cmd(0)], tctx());
+    assert.deepEqual(run([cmd(10110, [], 'Eins')]).list.filter(c => c.code === 101 || c.code === 401).map(c => c.code === 401 ? c.parameters[0] : 'box'), ['box', 'One', 'box', 'Two']);
+    const gone = run([cmd(10110, [], 'Weg')]);
+    assert.ok(!gone.list.some(c => c.code === 101), 'a deleted page shows nothing');
+    assert.equal(gone.notes.translationDeletedMessage, 1);
+    assert.equal(run([cmd(10110, [], 'Viel')]).list.filter(c => c.code === 401).length, 4, 'the last box keeps four lines');
+    const choices = run([cmd(10140, [0], 'Ja/Nein'), cmd(20140, [0], 'Ja'), cmd(20140, [1], 'Nein'), cmd(20141)]).list;
+    assert.deepEqual(choices[0].parameters[0], ['Yes', 'No']);
+    assert.deepEqual(choices.filter(c => c.code === 402).map(c => c.parameters[1]), ['Yes', 'No']);
+});
+
+test('message options and the face are the system\'s, set at run time', () => {
+    const list = C.convertList([cmd(10120, [1, 0]), cmd(10130, [2], 'Hero.png'), cmd(0)], ctx()).list;
+    assert.equal(list[0].parameters[0], 'this.rrMessageOptions(2, 0)');
+    assert.equal(list[1].parameters[0], 'this.rrMessageFace("Hero", 2)');
+    const objects = fs.readFileSync(path.join(__dirname, '..', '..', 'runtime', 'reactor_objects.js'), 'utf8');
+    assert.match(objects, /if \(legacy\) params = \[legacy\.faceName, legacy\.faceIndex, legacy\.background, legacy\.position, params\[4\]\];/);
+});
+
+test('imports list choices inside the message window, and the text plugin knows item and skill codes', () => {
+    const windows = fs.readFileSync(path.join(__dirname, '..', '..', 'runtime', 'reactor_windows.js'), 'utf8');
+    assert.match(windows, /if \(!\(\$dataSystem && \$dataSystem\.rrChoicesInMessage\) \|\| !this\._messageWindow\) return _updatePlacement\.call\(this\);/);
+    for (const f of ['LegacyConvert.js']) assert.match(fs.readFileSync(path.join(__dirname, '..', 'src', 'legacy', f), 'utf8'), /out\.rrChoicesInMessage = true;/);
+    for (const f of ['XpImporter.js', 'VxImporter.js', 'RgssImporter.js']) assert.match(fs.readFileSync(path.join(__dirname, '..', 'src', 'legacy', f), 'utf8'), /sys\.rrChoicesInMessage = true;/);
+    const fx = fs.readFileSync(path.join(__dirname, '..', '..', 'runtime', 'reactor_screen_fx.js'), 'utf8');
+    assert.match(fx, /\\\\\(\[iI\]\)\\\[\(\\d\+\)\\\]/, '\\i[n] and \\I[n]');
+    assert.match(fx, /\\\\\(\[tT\]\)\\\[\(\\d\+\)\\\]/, '\\t[n] and \\T[n]');
+});
+
+test('Tile Substitution and the old engine\'s walking and jumping pace', () => {
+    assert.equal(C.convertList([cmd(11750, [1, 12, 30]), cmd(0)], ctx()).list[0].parameters[0], '$gameMap.rrTileSubstitute(1, 12, 30)');
+    const objects = fs.readFileSync(path.join(__dirname, '..', '..', 'runtime', 'reactor_objects.js'), 'utf8');
+    assert.match(objects, /for \(let i = 0; i < table\.length; i\+\+\) if \(table\[i\] === Number\(oldId\)\) table\[i\] = Number\(newId\);/);
+    assert.match(objects, /if \(lo >= 1 && lo <= 144\) data\[n \+ i\] = 1 \+ subs\.lower\[lo - 1\];/);
+    assert.match(objects, /return _realMoveSpeed\.call\(this\) \+ \(legacyMotion\(\) \? 1 : 0\);/);
+    assert.match(objects, /const JUMP_SPEED = \[8, 12, 16, 24, 32, 64\];/);
+    const convert = fs.readFileSync(path.join(__dirname, '..', 'src', 'legacy', 'LegacyConvert.js'), 'utf8');
+    assert.match(convert, /out\.rrLegacyMotion = true;/);
+    assert.match(convert, /disableDashing: true,/);
+});
+
+test('2003 1.12 picture layers, dotted names, animation cells and route timing follow the old engine', () => {
+    // Show Picture: map layer 27, battle layer 28; the import default (map 7, battle 0) writes nothing
+    const show = (layers) => C.convertList([cmd(11110, [40, 0, 160, 120, 0, 100, 0, 1, 100, 100, 100, 100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, ...layers, 97], 'Deep 8 Titel neu 4')], ctx()).list;
+    assert.ok(show([9, 0]).some(c => c.code === 355 && c.parameters[0] === '$gameScreen.rrPictureLayer(40, 9, 0)'));
+    assert.ok(!show([7, 0]).some(c => c.code === 355 && /rrPictureLayer/.test(c.parameters[0])));
+    assert.ok(!show([0, 0]).some(c => c.code === 355 && /rrPictureLayer/.test(c.parameters[0])), 'both 0 is map layer 7');
+    // a name keeps its own dots; only a media extension comes off
+    assert.equal(C.stripExt('lazar NEU default o.ô'), 'lazar NEU default o.ô');
+    assert.equal(C.stripExt('Buddler 1.1'), 'Buddler 1.1');
+    assert.equal(C.stripExt('Bang.wav'), 'Bang');
+    // animation cells: chunk 1 valid, 2 cell, 3 x, 4 y, 5 zoom … 10 transparency (Deep 8's pointer: cell 9, 50 px up)
+    const schema = fs.readFileSync(path.join(__dirname, '..', 'src', 'legacy', 'LcfReader.js'), 'utf8');
+    assert.match(schema, /AnimationCellData: \{ 1: \['valid', 'bool'\], 2: \['cell_id', 'int'\], 3: \['x', 'int'\], 4: \['y', 'int'\], 5: \['zoom', 'int'\],/);
+    const objects = fs.readFileSync(path.join(__dirname, '..', '..', 'runtime', 'reactor_objects.js'), 'utf8');
+    // a route's instant commands run in one frame, and its turns ignore a fixed facing
+    assert.match(objects, /if \(!command \|\| \(command\.code > 0 && command\.code <= 26\)\) return;/);
+    assert.match(objects, /command\.code < 16 \|\| command\.code > 26 \|\| !this\._directionFix/);
+    const core = fs.readFileSync(path.join(__dirname, '..', '..', 'runtime', 'reactor_core.js'), 'utf8');
+    assert.match(core, /context\.fillText\(text, tx \+ 1, ty \+ 1, maxWidth\);/, '2000/2003 text casts a 1 px shadow');
+});
+
+test('imported games: texts ride with their picture, the top layer stays in its own scene, missing audio is skipped', () => {
+    const fx = fs.readFileSync(path.join(__dirname, '..', '..', 'runtime', 'reactor_screen_fx.js'), 'utf8');
+    assert.match(fx, /const owner = layered && t && t\.layer > 0 \? pictures\.find\(p => p\._pictureId === t\.layer\) : null;/, 'Deep 8\'s title pages draw over the black they fade in from');
+    assert.match(fx, /Spriteset_Map\.prototype\._rrTopLayer = function\(\) \{[\s\S]*?const scene = this\.parent;/, 'never SceneManager._scene, which is already the menu during a hand-over');
+    const managers = fs.readFileSync(path.join(__dirname, '..', '..', 'runtime', 'reactor_managers.js'), 'utf8');
+    assert.match(managers, /if \(this\.skipsMissingAudio\(\)\) \{\s*webAudio\._rrSkipped = true;/, 'a Save2 the game never shipped does not stop it');
+    const K = require('../src/legacy/LegacyConvert.js');
+    assert.match(fs.readFileSync(path.join(__dirname, '..', 'src', 'legacy', 'LegacyConvert.js'), 'utf8'), /out\.rrSkipMissingAudio = true;/);
+    assert.ok(K.systemJson);
+});
+
+test('an event-erased screen shows again when the map hands over to another scene (the save screen)', () => {
+    const fx = fs.readFileSync(path.join(__dirname, '..', '..', 'runtime', 'reactor_screen_fx.js'), 'utf8');
+    assert.match(fx, /const keeps = !next \|\| next instanceof Scene_Map \|\| next instanceof Scene_Battle/, 'a teleport or a battle keeps it erased');
+    assert.match(fx, /if \(!keeps && \$dataSystem && \$dataSystem\.rrLegacyEraseScreen && \$gameScreen\.brightness\(\) < 255\)/);
+    assert.match(fs.readFileSync(path.join(__dirname, '..', 'src', 'legacy', 'LegacyConvert.js'), 'utf8'), /out\.rrLegacyEraseScreen = true;/);
+});
+
+test('imported games keep parallel common events through a teleport, list choices a line apart, and move sprite axes apart', () => {
+    const objects = fs.readFileSync(path.join(__dirname, '..', '..', 'runtime', 'reactor_objects.js'), 'utf8');
+    assert.match(objects, /this\._commonEvents\.push\(\(keep && keep\.get\(commonEvent\.id\)\) \|\| new Game_CommonEvent\(commonEvent\.id\)\);/, 'Deep 8\'s victory event would otherwise restart on the world map');
+    const windows = fs.readFileSync(path.join(__dirname, '..', '..', 'runtime', 'reactor_windows.js'), 'utf8');
+    assert.match(windows, /Window_ChoiceList\.prototype\.itemHeight = function\(\) \{\s*return inMessage\(\) \? this\.lineHeight\(\)/);
+    const fx = fs.readFileSync(path.join(__dirname, '..', '..', 'runtime', 'reactor_screen_fx.js'), 'utf8');
+    assert.match(fx, /if \(Number\(dx\)\) setTween\(p, "x"/, 'a hop leaves the travel across running');
+    assert.match(fs.readFileSync(path.join(__dirname, '..', 'src', 'LegacyImportDialog.js'), 'utf8'), /body\.className = 'rr-modal-body rr-accent-scrollbar';/);
+});
+
+test('pixel-art pictures land on whole pixels, so an odd-sized centred picture stays sharp', () => {
+    const fx = fs.readFileSync(path.join(__dirname, '..', '..', 'runtime', 'reactor_screen_fx.js'), 'utf8');
+    assert.match(fx, /const left = this\.x - this\.anchor\.x \* this\.width, top = this\.y - this\.anchor\.y \* this\.height;\s*this\.x \+= Math\.round\(left\) - left;/);
+});
+
+test('an imported parallel common event pauses while its switch is off and resumes where it stopped', () => {
+    const objects = fs.readFileSync(path.join(__dirname, '..', '..', 'runtime', 'reactor_objects.js'), 'utf8');
+    assert.match(objects, /\} else if \(!\(\$dataSystem && \$dataSystem\.rrLegacyEventOrder\)\) \{\s*this\._interpreter = null;/, 'Deep 8\'s menu cursor bob (+4 / -4) must not restart halfway');
+    assert.match(objects, /Game_CommonEvent\.prototype\.update = function\(\) \{\s*if \(this\._interpreter && this\.isActive\(\)\) \{/);
 });

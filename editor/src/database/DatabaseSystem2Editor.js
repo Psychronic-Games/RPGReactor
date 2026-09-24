@@ -338,11 +338,19 @@ class DatabaseSystem2Editor {
             { label: 'Text Outline Width', path: 'advanced.textOutlineWidth', value: adv.textOutlineWidth, placeholder: 3 },
             { label: 'Font Size Step', path: 'advanced.fontSizeStep', value: adv.fontSizeStep, placeholder: 12, step: '0.1' },
             { label: 'Balloon Size', path: 'rrBalloonSize', value: system.rrBalloonSize, placeholder: 48 },
+            { label: 'Character Lift', path: 'rrCharacterShiftY', value: system.rrCharacterShiftY, placeholder: 6 },
             { label: 'Name Box Opacity', path: 'advanced.rrNameBox.opacity', value: box.opacity, placeholder: '' },
             { label: 'Name Box Offset X', path: 'advanced.rrNameBox.offsetX', value: box.offsetX, placeholder: '' },
             { label: 'Name Box Offset Y', path: 'advanced.rrNameBox.offsetY', value: box.offsetY, placeholder: '' },
             { label: 'Multi-frame Sheets ([fN])', path: 'rrMultiFrames', value: system.rrMultiFrames === true, type: 'checkbox' },
-            { label: 'Skip Title Screen', path: 'rrSkipTitle', value: system.rrSkipTitle === true, type: 'checkbox' }
+            { label: 'Skip Title Screen', path: 'rrSkipTitle', value: system.rrSkipTitle === true, type: 'checkbox' },
+            { label: 'Erase Pictures on Map Change', path: 'rrPicturesEraseOnMapChange', value: system.rrPicturesEraseOnMapChange === true, type: 'checkbox' },
+            { label: 'RPG Maker 2000/2003 Passability', path: 'rrLegacyPassage', value: system.rrLegacyPassage === true, type: 'checkbox' },
+            { label: 'Common Events Before Map Events', path: 'rrLegacyEventOrder', value: system.rrLegacyEventOrder === true, type: 'checkbox' },
+            { label: 'Page Change Resets Transparency', path: 'rrLegacyPageOpacity', value: system.rrLegacyPageOpacity === true, type: 'checkbox' },
+            { label: 'RPG Maker 2000/2003 Panoramas', path: 'rrLegacyParallax', value: system.rrLegacyParallax === true, type: 'checkbox' },
+            { label: 'Choices Inside the Message', path: 'rrChoicesInMessage', value: system.rrChoicesInMessage === true, type: 'checkbox' },
+            { label: 'RPG Maker 2000/2003 Movement Speed', path: 'rrLegacyMotion', value: system.rrLegacyMotion === true, type: 'checkbox' }
         ];
         const rows = fields.map(f => {
             const input = f.type === 'checkbox'
