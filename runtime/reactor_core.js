@@ -4173,6 +4173,10 @@ Bitmap.prototype._onError = function() {
         return;
     }
     this._loadingState = "error";
+    // An imported 2000/2003 game draws nothing for an image it never shipped (System.json rrSkipMissingImages).
+    if (typeof ImageManager !== "undefined" && ImageManager.skipsMissingImages && ImageManager.skipsMissingImages()) {
+        ImageManager.throwLoadError(this);
+    }
 };
 
 //-----------------------------------------------------------------------------

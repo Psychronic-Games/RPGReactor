@@ -455,6 +455,17 @@ function open(source, destination, options) {
             system.rrLanguage = options.language;
         }
         if (wanted && !wanted.has(system.startMapId)) { system.startMapId = written[0] || 1; system.editMapId = system.startMapId; }
+        {   // Save and Load as 2003 laid them out; the bands between its windows are the system graphic's background colour (pixel 0,32).
+            let background = '#000000';
+            const systemFile = sys.system_name ? resolveInsensitive(source, path.join('System', sys.system_name + '.png')) : null;
+            if (systemFile) {
+                try {
+                    const img = decodePng(fs.readFileSync(systemFile), false), i = (32 * img.width) * 4;
+                    if (img.height > 32) background = '#' + [0, 1, 2].map(k => img.data[i + k].toString(16).padStart(2, '0')).join('');
+                } catch (error) { /* an unreadable graphic keeps black; the skin conversion reports it */ }
+            }
+            system.rrLegacySaveScreen = { background };
+        }
         {   // Picture slots: the game's own ids (2003 allows 1000), then room for named sprites above them.
             let maxPicture = 0;
             const scan = (cmds) => { for (const c of cmds || []) if ((c.code === 11110 || c.code === 11120 || c.code === 11130) && c.parameters[1] !== 1) maxPicture = Math.max(maxPicture, c.parameters[0] || 0, c.code === 11130 && c.parameters[1] === 2 ? (c.parameters[2] || 0) : 0); };

@@ -1204,7 +1204,24 @@ ImageManager._checkStalledBitmap = function(bitmap) {
     bitmap.retry();
 };
 
+/**
+ * System.json rrSkipMissingImages (2000/2003 imports): a picture, charset or other image the game
+ * names but never shipped draws nothing, as the old players do, instead of stopping the game on a
+ * load error. The bitmap becomes blank once its case-corrected retry has failed.
+ */
+ImageManager.skipsMissingImages = function() {
+    return !!(typeof $dataSystem !== "undefined" && $dataSystem && $dataSystem.rrSkipMissingImages);
+};
+
 ImageManager.throwLoadError = function(bitmap) {
+    if (this.skipsMissingImages()) {
+        console.warn("Missing image skipped:", decodeURIComponent(bitmap.url || ""));
+        bitmap._degradedToBlank = true;
+        bitmap._loadingState = "none";
+        bitmap._createCanvas(1, 1);
+        bitmap._callLoadListeners();
+        return;
+    }
     const retry = bitmap.retry.bind(bitmap);
     throw ["LoadError", bitmap.url, retry];
 };

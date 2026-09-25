@@ -582,9 +582,10 @@
             const size = e.growth[0] + (e.growth[1] - e.growth[0]) * t;
             sprite.scale.x = sprite.scale.y = size;
             const c = [0, 1, 2].map(k => Math.round(e.color0[k] + (e.color1[k] - e.color0[k]) * t));
-            // colours are percent, 100 unchanged (490 of Deep 8's effects say 100, 100, 100); a tint only darkens,
-            // so a brighter colour draws unchanged rather than paying for a filter on every particle
-            const tint = (v) => Math.round(clamp(v, 0, 100) * 2.55);
+            // colours are 0-255 multipliers of the texture, so 100 draws it at 39%: measured against the shipped
+            // Deep 8 player, whose "RetardHorns" spore cloud (20 -> 100 over a particle's life) settles at 13% of
+            // the texture's colour where a percent reading gave 37%. A tint only darkens; 255 draws unchanged.
+            const tint = (v) => Math.round(clamp(v, 0, 255));
             sprite.tint = (tint(c[0]) << 16) | (tint(c[1]) << 8) | tint(c[2]);
             sprite.opacity = p.age <= p.delay ? 255 : Math.round(255 * (1 - (p.age - p.delay) / Math.max(1, e.timeout[0])));
             sprite.x = e.screenRelative ? p.x : p.x - dx;

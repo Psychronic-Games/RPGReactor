@@ -521,7 +521,7 @@ test('2003 1.12 picture layers, dotted names, animation cells and route timing f
     assert.match(core, /context\.fillText\(text, tx \+ 1, ty \+ 1, maxWidth\);/, '2000/2003 text casts a 1 px shadow');
 });
 
-test('imported games: texts ride with their picture, the top layer stays in its own scene, missing audio is skipped', () => {
+test('imported games: texts ride with their picture, the top layer stays in its own scene, missing audio and images are skipped', () => {
     const fx = fs.readFileSync(path.join(__dirname, '..', '..', 'runtime', 'reactor_screen_fx.js'), 'utf8');
     assert.match(fx, /const owner = layered && t && t\.layer > 0 \? pictures\.find\(p => p\._pictureId === t\.layer\) : null;/, 'Deep 8\'s title pages draw over the black they fade in from');
     assert.match(fx, /Spriteset_Map\.prototype\._rrTopLayer = function\(\) \{[\s\S]*?const scene = this\.parent;/, 'never SceneManager._scene, which is already the menu during a hand-over');
@@ -529,6 +529,10 @@ test('imported games: texts ride with their picture, the top layer stays in its 
     assert.match(managers, /if \(this\.skipsMissingAudio\(\)\) \{\s*webAudio\._rrSkipped = true;/, 'a Save2 the game never shipped does not stop it');
     const K = require('../src/legacy/LegacyConvert.js');
     assert.match(fs.readFileSync(path.join(__dirname, '..', 'src', 'legacy', 'LegacyConvert.js'), 'utf8'), /out\.rrSkipMissingAudio = true;/);
+    assert.match(managers, /if \(this\.skipsMissingImages\(\)\) \{[\s\S]*?bitmap\._loadingState = "none";\s*bitmap\._createCanvas\(1, 1\);\s*bitmap\._callLoadListeners\(\);\s*return;/, 'Deep 8\'s missing "Aktionsanzeige Eleganter Kick" draws nothing instead of the Retry screen');
+    assert.match(fs.readFileSync(path.join(__dirname, '..', 'src', 'legacy', 'LegacyConvert.js'), 'utf8'), /out\.rrSkipMissingImages = true;/);
+    const core = fs.readFileSync(path.join(__dirname, '..', '..', 'runtime', 'reactor_core.js'), 'utf8');
+    assert.match(core, /this\._loadingState = "error";\s*\/\/ An imported[^\n]*\n\s*if \(typeof ImageManager !== "undefined" && ImageManager\.skipsMissingImages && ImageManager\.skipsMissingImages\(\)\) \{\s*ImageManager\.throwLoadError\(this\);/, 'skipped on the first failure, not after the watchdog\'s retries');
     assert.ok(K.systemJson);
 });
 

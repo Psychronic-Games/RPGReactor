@@ -504,7 +504,7 @@ Window_Base.prototype.drawCurrencyValue = function(value, unit, x, y, width) {
     const unitWidth = Math.min(80, this.textWidth(unit));
     this.resetTextColor();
     this.drawText(value, x, y, width - unitWidth - 6, "right");
-    this.changeTextColor(ColorManager.systemColor());
+    this.changeTextColor(ColorManager.textColor(1));   // the 2003 system colour
     this.drawText(unit, x + width - unitWidth, y, unitWidth, "right");
 };
 
@@ -1786,7 +1786,7 @@ Window_StatusBase.prototype.drawActorNickname = function(actor, x, y, width) {
 };
 
 Window_StatusBase.prototype.drawActorLevel = function(actor, x, y) {
-    this.changeTextColor(ColorManager.systemColor());
+    this.changeTextColor(ColorManager.textColor(1));   // the 2003 system colour
     this.drawText(TextManager.levelA, x, y, 48);
     this.resetTextColor();
     this.drawText(actor.level, x + 72, y, 48, "right");
@@ -2547,7 +2547,7 @@ Window_EquipStatus.prototype.drawItem = function(x, y, paramId) {
 
 Window_EquipStatus.prototype.drawParamName = function(x, y, paramId) {
     const width = this.paramX() - this.itemPadding() * 2;
-    this.changeTextColor(ColorManager.systemColor());
+    this.changeTextColor(ColorManager.textColor(1));   // the 2003 system colour
     this.drawText(TextManager.param(paramId), x, y, width);
 };
 
@@ -2559,7 +2559,7 @@ Window_EquipStatus.prototype.drawCurrentParam = function(x, y, paramId) {
 
 Window_EquipStatus.prototype.drawRightArrow = function(x, y) {
     const rightArrowWidth = this.rightArrowWidth();
-    this.changeTextColor(ColorManager.systemColor());
+    this.changeTextColor(ColorManager.textColor(1));   // the 2003 system colour
     this.drawText("\u2192", x, y, rightArrowWidth, "center");
 };
 
@@ -2668,7 +2668,7 @@ Window_EquipSlot.prototype.drawItem = function(index) {
         const slotNameWidth = this.slotNameWidth();
         const rect = this.itemLineRect(index);
         const itemWidth = rect.width - slotNameWidth;
-        this.changeTextColor(ColorManager.systemColor());
+        this.changeTextColor(ColorManager.textColor(1));   // the 2003 system colour
         this.changePaintOpacity(this.isEnabled(index));
         this.drawText(slotName, rect.x, rect.y, slotNameWidth, rect.height);
         this.drawItemName(item, rect.x + slotNameWidth, rect.y, itemWidth);
@@ -2862,7 +2862,7 @@ Window_Status.prototype.drawExpInfo = function(x, y) {
     const lineHeight = this.lineHeight();
     const expTotal = TextManager.expTotal.format(TextManager.exp);
     const expNext = TextManager.expNext.format(TextManager.level);
-    this.changeTextColor(ColorManager.systemColor());
+    this.changeTextColor(ColorManager.textColor(1));   // the 2003 system colour
     this.drawText(expTotal, x, y + lineHeight * 0, 270);
     this.drawText(expNext, x, y + lineHeight * 2, 270);
     this.resetTextColor();
@@ -2923,7 +2923,7 @@ Window_StatusParams.prototype.drawItem = function(index) {
     const paramId = index + 2;
     const name = TextManager.param(paramId);
     const value = this._actor.param(paramId);
-    this.changeTextColor(ColorManager.systemColor());
+    this.changeTextColor(ColorManager.textColor(1));   // the 2003 system colour
     this.drawText(name, rect.x, rect.y, 160);
     this.resetTextColor();
     this.drawText(value, rect.x + 160, rect.y, 60, "right");
@@ -2971,7 +2971,7 @@ Window_StatusEquip.prototype.drawItem = function(index) {
     const item = equips[index];
     const slotName = this.actorSlotName(this._actor, index);
     const sw = 138;
-    this.changeTextColor(ColorManager.systemColor());
+    this.changeTextColor(ColorManager.textColor(1));   // the 2003 system colour
     this.drawText(slotName, rect.x, rect.y, sw, rect.height);
     this.drawItemName(item, rect.x + sw, rect.y, rect.width - sw);
 };
@@ -3679,7 +3679,7 @@ Window_ShopStatus.prototype.isEquipItem = function() {
 Window_ShopStatus.prototype.drawPossession = function(x, y) {
     const width = this.innerWidth - this.itemPadding() - x;
     const possessionWidth = this.textWidth("0000");
-    this.changeTextColor(ColorManager.systemColor());
+    this.changeTextColor(ColorManager.textColor(1));   // the 2003 system colour
     this.drawText(TextManager.possession, x, y, width - possessionWidth);
     this.resetTextColor();
     this.drawText($gameParty.numItems(this._item), x, y, width, "right");
@@ -6957,5 +6957,159 @@ Window_NameBox.prototype.updateBackground = function() {
         // after text the message window already draws the box; alone, the choices wear the message's
         this._background = $gameMessage.hasText() ? 2 : $gameMessage.background();
         this.setBackgroundType(this._background);
+    };
+})();
+
+// ---- the 2000/2003 save screen ------------------------------------------------
+// System.json rrLegacySaveScreen { background } (2000/2003 imports): Save and Load look as the old engine drew
+// them, a title bar over 64 px slot windows between 8 px bands in the system graphic's background colour. A slot
+// shows its file number, the party leader's name, level and HP, and the faces of the first four party members;
+// a game that sets a location picture as a face (Deep 8's "Speicherort" actor) shows it there. The stock list
+// window stays, invisible, for input, scrolling and touch; the slot windows draw what it selects. EasyRPG's
+// Scene_File and Window_SaveFile.
+(function() {
+    const legacy = () => typeof $dataSystem !== "undefined" && $dataSystem && $dataSystem.rrLegacySaveScreen;
+    const SLOT_HEIGHT = 64, BAND = 8;
+
+    const _makeSavefileInfo = DataManager.makeSavefileInfo;
+    DataManager.makeSavefileInfo = function() {
+        const info = _makeSavefileInfo.call(this);
+        const leader = $gameParty.members()[0];
+        if (legacy() && leader) info.rrLeader = { name: leader.name(), level: leader.level, hp: leader.hp };
+        return info;
+    };
+
+    function Window_RRSaveSlot() { this.initialize(...arguments); }
+    Window_RRSaveSlot.prototype = Object.create(Window_Base.prototype);
+    Window_RRSaveSlot.prototype.constructor = Window_RRSaveSlot;
+    Window_RRSaveSlot.prototype.initialize = function(rect) {
+        Window_Base.prototype.initialize.call(this, rect);
+        this._rrKey = null;
+    };
+    /** Show one slot: its savefile id (null hides the window) and whether the list's cursor is on it. */
+    Window_RRSaveSlot.prototype.setSlot = function(savefileId, selected) {
+        const info = savefileId === null ? null : DataManager.savefileInfo(savefileId);
+        // faces load after the scene is built: draw again once they are in
+        const facesReady = !info || (info.faces || []).slice(0, 4).every(face => !face || !face[0] || ImageManager.loadFace(face[0]).isReady());
+        const key = savefileId === null ? "none" : [savefileId, selected, info ? info.timestamp : 0, facesReady].join(":");
+        if (key === this._rrKey) return;
+        this._rrKey = key;
+        this.visible = savefileId !== null;
+        this.contents.clear();
+        if (savefileId === null) return;
+        const label = savefileId === 0 ? TextManager.autosave : TextManager.file;
+        const number = savefileId === 0 ? "" : String(savefileId).padStart(2, " ");
+        const numberX = this.textWidth(label) + Math.floor(this.textWidth(" ") / 2);
+        this.changeTextColor(ColorManager.textColor(info ? 0 : 3));
+        this.drawText(label, 0, 0, this.innerWidth);
+        if (number) this.drawText(number, numberX, 0, this.innerWidth);
+        this.setCursorRect(selected ? -4 : 0, 0, selected ? numberX + this.textWidth(number) + 8 : 0, selected ? this.lineHeight() : 0);
+        if (!info) return;
+        const leader = info.rrLeader;
+        if (leader) {
+            this.drawText(leader.name, 0, 16, 84);
+            this.changeTextColor(ColorManager.textColor(1));   // the 2003 system colour
+            const lv = TextManager.levelA, hp = TextManager.hpA;
+            this.drawText(lv, 0, 32, 40);
+            this.drawText(hp, 42, 32, 40);
+            this.resetTextColor();
+            this.drawText(String(leader.level).padStart(2, " "), this.textWidth(lv), 32, 40);
+            this.drawText(String(leader.hp).padStart(4, " "), 42 + this.textWidth(hp), 32, 48);
+        }
+        (info.faces || []).slice(0, 4).forEach((face, i) => {
+            if (face && face[0]) this.drawFace(face[0], face[1], 88 + i * 56, 0, ImageManager.faceWidth, ImageManager.faceHeight);
+        });
+    };
+
+    // the old engine laid these windows over the whole screen, not MZ's box inside a 4 px margin
+    const screenRect = (x, y, width, height) => new Rectangle(x - (Graphics.width - Graphics.boxWidth) / 2, y - (Graphics.height - Graphics.boxHeight) / 2, width, height);
+    const _helpWindowRect = Scene_File.prototype.helpWindowRect;
+    Scene_File.prototype.helpWindowRect = function() {
+        if (!legacy()) return _helpWindowRect.call(this);
+        return screenRect(0, 0, Graphics.width, this.calcWindowHeight(1, false));
+    };
+    const _listWindowRect = Scene_File.prototype.listWindowRect;
+    Scene_File.prototype.listWindowRect = function() {
+        if (!legacy()) return _listWindowRect.call(this);
+        const top = this._helpWindow.height + BAND;
+        const rows = Math.max(1, Math.floor((Graphics.height - top - BAND) / SLOT_HEIGHT));
+        return screenRect(0, top, Graphics.width, rows * SLOT_HEIGHT);
+    };
+    const _needsCancelButton = Scene_File.prototype.needsCancelButton;
+    Scene_File.prototype.needsCancelButton = function() {
+        return legacy() ? false : _needsCancelButton.call(this);
+    };
+    const _createBackground = Scene_File.prototype.createBackground;
+    Scene_File.prototype.createBackground = function() {
+        if (!legacy()) return _createBackground.call(this);
+        this._backgroundSprite = new Sprite(new Bitmap(Graphics.width, Graphics.height));
+        this._backgroundSprite.bitmap.fillAll(legacy().background || "#000000");
+        this.addChild(this._backgroundSprite);
+    };
+    const _createListWindow = Scene_File.prototype.createListWindow;
+    Scene_File.prototype.createListWindow = function() {
+        _createListWindow.call(this);
+        if (!legacy()) return;
+        this._helpWindow.itemPadding = () => 0;   // 2003 writes the title at the window's inner edge
+        const list = this._listWindow;
+        list._rrLegacySlots = true;
+        list.opacity = 0;
+        list.cursorVisible = false;
+        list.updatePadding();   // no padding: rows are the 64 px slots (the setter refreshes the arrows too)
+        list.createContents();
+        list.selectSavefile(this.firstSavefileId());
+        list.refresh();
+        this._rrSlots = [];
+        for (let i = 0; i < list.numVisibleRows(); i++) {
+            const slot = new Window_RRSaveSlot(new Rectangle(list.x, list.y + i * SLOT_HEIGHT, list.width, SLOT_HEIGHT));
+            this._rrSlots.push(slot);
+            this.addWindow(slot);
+        }
+        list._rrOnUpdate = () => this.rrSyncSlots();
+        this.rrSyncSlots();
+    };
+    Scene_File.prototype.rrSyncSlots = function() {
+        const list = this._listWindow;
+        if (!this._rrSlots || !list) return;
+        const top = list.topRow();
+        this._rrSlots.forEach((slot, i) => {
+            const index = top + i;
+            slot.setSlot(index < list.maxItems() ? list.indexToSavefileId(index) : null, list.active && index === list.index());
+        });
+    };
+    const _updateList = Window_SavefileList.prototype.update;
+    Window_SavefileList.prototype.update = function() {
+        _updateList.call(this);
+        if (this._rrOnUpdate) this._rrOnUpdate();
+    };
+    // Save lists no autosave row: the old engine had none, and it can't be saved to
+    const _setMode = Window_SavefileList.prototype.setMode;
+    Window_SavefileList.prototype.setMode = function(mode, autosave) {
+        _setMode.call(this, mode, legacy() && mode === "save" ? false : autosave);
+    };
+
+    const _updatePadding = Window_SavefileList.prototype.updatePadding;
+    Window_SavefileList.prototype.updatePadding = function() {
+        if (this._rrLegacySlots) this.padding = 0; else _updatePadding.call(this);
+    };
+    const _numVisibleRows = Window_SavefileList.prototype.numVisibleRows;
+    Window_SavefileList.prototype.numVisibleRows = function() {
+        return legacy() ? Math.max(1, Math.round(this.height / SLOT_HEIGHT)) : _numVisibleRows.call(this);
+    };
+    const _drawItem = Window_SavefileList.prototype.drawItem;
+    Window_SavefileList.prototype.drawItem = function(index) {
+        if (!this._rrLegacySlots) _drawItem.call(this, index);
+    };
+    const _drawItemBackground = Window_SavefileList.prototype.drawItemBackground;
+    Window_SavefileList.prototype.drawItemBackground = function(index) {
+        if (!this._rrLegacySlots) _drawItemBackground.call(this, index);
+    };
+    // the scroll arrows sit in the bands above and below the slots, as the old engine drew them
+    const _refreshArrows = Window_SavefileList.prototype._refreshArrows;
+    Window_SavefileList.prototype._refreshArrows = function() {
+        _refreshArrows.call(this);
+        if (!this._rrLegacySlots) return;
+        this._upArrowSprite.move(this._width / 2, -BAND / 2);
+        this._downArrowSprite.move(this._width / 2, this._height + BAND / 2);
     };
 })();

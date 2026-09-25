@@ -350,7 +350,11 @@ class DatabaseSystem2Editor {
             { label: 'Page Change Resets Transparency', path: 'rrLegacyPageOpacity', value: system.rrLegacyPageOpacity === true, type: 'checkbox' },
             { label: 'RPG Maker 2000/2003 Panoramas', path: 'rrLegacyParallax', value: system.rrLegacyParallax === true, type: 'checkbox' },
             { label: 'Choices Inside the Message', path: 'rrChoicesInMessage', value: system.rrChoicesInMessage === true, type: 'checkbox' },
-            { label: 'RPG Maker 2000/2003 Movement Speed', path: 'rrLegacyMotion', value: system.rrLegacyMotion === true, type: 'checkbox' }
+            { label: 'RPG Maker 2000/2003 Movement Speed', path: 'rrLegacyMotion', value: system.rrLegacyMotion === true, type: 'checkbox' },
+            { label: 'Skip Missing Sounds', path: 'rrSkipMissingAudio', value: system.rrSkipMissingAudio === true, type: 'checkbox' },
+            { label: 'Skip Missing Images', path: 'rrSkipMissingImages', value: system.rrSkipMissingImages === true, type: 'checkbox' },
+            { label: 'RPG Maker 2003 Save Screen', path: 'rrLegacySaveScreen', value: !!system.rrLegacySaveScreen, type: 'checkbox' },
+            { label: 'Variable Limit (2000/2003 Arithmetic)', path: 'rrLegacyVariableLimit', value: system.rrLegacyVariableLimit, placeholder: '' }
         ];
         const rows = fields.map(f => {
             const input = f.type === 'checkbox'
@@ -519,7 +523,12 @@ class DatabaseSystem2Editor {
             field.addEventListener('change', (e) => {
                 const value = e.target.type === 'checkbox' ? e.target.checked : (e.target.value === '' ? null : parseFloat(e.target.value));
                 if (value !== null && value !== true && value !== false && !Number.isFinite(value)) return;
-                DatabaseSystem2Editor.setWindowTextValue(system, e.target.dataset.path, value);
+                if (e.target.dataset.path === 'rrLegacySaveScreen' && value === true) {
+                    system.rrLegacySaveScreen = system.rrLegacySaveScreen || this._rrSaveScreenKept || { background: '#000000' };
+                } else {
+                    if (e.target.dataset.path === 'rrLegacySaveScreen' && system.rrLegacySaveScreen) this._rrSaveScreenKept = system.rrLegacySaveScreen;
+                    DatabaseSystem2Editor.setWindowTextValue(system, e.target.dataset.path, value);
+                }
                 this.databaseManager.mutationGeneration = (this.databaseManager.mutationGeneration || 0) + 1;
             });
         });

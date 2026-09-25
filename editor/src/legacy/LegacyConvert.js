@@ -453,6 +453,9 @@
             stretch(0, 0, 8, 8, 0, 0, 8, 8); stretch(24, 0, 8, 8, 88, 0, 8, 8); stretch(0, 24, 8, 8, 0, 88, 8, 8); stretch(24, 24, 8, 8, 88, 88, 8, 8);
             stretch(8, 0, 16, 8, 8, 0, 80, 8); stretch(8, 24, 16, 8, 8, 88, 80, 8); stretch(0, 8, 8, 16, 0, 8, 8, 80); stretch(24, 8, 8, 16, 88, 8, 8, 80);
             blit(out, cell, 0, 0, 96, 96, 96, 0);
+            // The scroll arrows: 2003's up (40,8) and down (40,16), centred in MZ's 24×12 arrow cells inside the frame cell.
+            blit(out, region(40, 8, 16, 8), 0, 0, 16, 8, 136, 26);
+            blit(out, region(40, 16, 16, 8), 0, 0, 16, 8, 136, 62);
             // The pause sign: the 2003 down arrow (the frame cell's centre, lower half) in each of MZ's four 24 px frames, unscaled and centred.
             const arrow = region(40, 16, 16, 8);
             for (const [fx, fy] of [[144, 96], [168, 96], [144, 120], [168, 120]]) { const f = blank(24, 24); blit(f, arrow, 0, 0, 16, 8, 4, 8); blit(out, f, 0, 0, 24, 24, fx, fy); }
@@ -494,6 +497,10 @@
         out.rrPictureLayers = true;
         // A sound the game names but never shipped (a standard RTP file it relied on) stays silent.
         out.rrSkipMissingAudio = true;
+        // So does an image it names but never shipped: it draws nothing.
+        out.rrSkipMissingImages = true;
+        // Variables are whole numbers within the engine's limit; dividing by zero leaves one as it was.
+        out.rrLegacyVariableLimit = db.engine === 'RPG Maker 2000' ? 999999 : 9999999;
         // Erase Screen holds through teleports but not through the save screen or the menu.
         out.rrLegacyEraseScreen = true;
         // Passage is decided the old engine's way: upper tile first, then the lower tile by its own bits.

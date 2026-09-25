@@ -27,6 +27,11 @@
 
 ### Fixed
 
+- Imported 2000/2003 games save and load on RPG Maker 2003's own screen: three slots with the leader's name, level and HP and the party's faces, so Deep 8's location pictures show on each save again.
+- Imported 2000/2003 windows show scroll arrows when there is more to see.
+- Imported 2000/2003 games do their variable arithmetic the old way (whole numbers, dividing by zero leaves the value alone, the engine's limits), so Deep 8's HP bars fill as they do in the original.
+- Imported 2000/2003 games: an image the game names but never shipped draws nothing instead of stopping the game on "Failed to load" (Deep 8's "Aktionsanzeige Eleganter Kick").
+- Imported 2000/2003 games: particle colours darken as the original's do, so Deep 8's spore clouds are dark brown, not tan.
 - Imported 2000/2003 games: a panorama that doesn't scroll moves with the map the old way, so painted rooms like Deep 8's ship bridge sit under the characters; auto-scrolling panoramas run in the right direction at the right speed.
 - Imported 2000/2003 games: characters faded out by a move route come back when their event changes page, fades and speed changes step from where the character is, events drawn as tiles show their tile, and spinning events spin.
 - Imported 2000/2003 games read the player's and events' positions correctly: Deep 8's scenes that walk the hero to a spot stop there instead of walking to the map's edge, and the Droons follow as they should.

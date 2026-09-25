@@ -12365,6 +12365,19 @@ Game_Interpreter.prototype.command357 = function(params) {
         return true;
     };
 
+    // RPG Maker 2000/2003 variable arithmetic (System.json rrLegacyVariableLimit, 999999 or 9999999, which the
+    // importer sets): whole numbers, division truncated toward zero, a division by zero leaves the variable as it
+    // was and a remainder by zero is 0, every result clamped to the limit. A game that divides by a stat still 0
+    // (Deep 8's HP bar: HP * 29 / max HP) got Infinity from MZ's arithmetic and drew no frame. EasyRPG's Game_Variables.
+    const _operateVariable = Game_Interpreter.prototype.operateVariable;
+    Game_Interpreter.prototype.operateVariable = function(variableId, operationType, value) {
+        const limit = $dataSystem && $dataSystem.rrLegacyVariableLimit;
+        if (!limit || typeof value !== "number" || operationType < 0 || operationType > 5) return _operateVariable.apply(this, arguments);
+        const a = Math.trunc(Number($gameVariables.value(variableId)) || 0), b = Math.trunc(value) || 0;
+        const result = [b, a + b, a - b, a * b, b ? Math.trunc(a / b) : a, b ? a % b : 0][operationType];
+        $gameVariables.setValue(variableId, Math.max(-limit, Math.min(limit, result)) || 0);
+    };
+
     // RPG Maker 2000/2003 decide passage the old engine's way (System.json rrLegacyPassage, which the
     // importer sets): the upper tile first; when it is marked "above", the lower tile by its own direction
     // bits, "above" or not. MZ skips every star tile and blocks a cell where all of them are, which walled
