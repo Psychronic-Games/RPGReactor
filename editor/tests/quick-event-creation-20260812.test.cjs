@@ -47,7 +47,7 @@ test('Door quick event animates itself and transfers the player', () => {
     assert.equal(page.image.characterName, '!Door1');
     assert.deepEqual(codes(event), [
         [205, 0], [505, 0], [505, 0], [505, 0], [505, 0], [505, 0],
-        [505, 0], [505, 0], [201, 0], [0, 0]
+        [505, 0], [505, 0], [505, 0], [201, 0], [0, 0]
     ]);
     assert.deepEqual(plain(page.list.at(-2).parameters), [0, 4, 5, 7, 0, 0]);
     assert.equal(page.list[0].parameters[1].wait, true);
@@ -71,6 +71,32 @@ test('Treasure quick event supports every reward command and an opened page', ()
         assert.equal(event.pages[1].conditions.selfSwitchValid, true);
         assert.equal(event.pages[1].conditions.selfSwitchCh, 'A');
         assert.equal(event.pages[1].image.direction, 8);
+    }
+});
+
+test('Door and Treasure routes release Direction Fix before turning, or nothing animates', () => {
+    // Both pages are directionFix: true, and the runtime's setDirection ignores a turn while
+    // direction is fixed, so the route must start with Direction Fix OFF (code 36).
+    const manager = managerWithMap();
+    const se = { name: 'Open1', volume: 90, pitch: 100, pan: 0 };
+    for (const kind of ['door', 'treasure']) {
+        for (const config of [{ se }, {}]) {
+            const page = manager.buildQuickEvent(kind, 1, 1, config).pages[0];
+            assert.equal(page.directionFix, true, kind);
+            const route = page.list[0].parameters[1];
+            const expected = [
+                { code: 36 },
+                ...(config.se ? [{ code: 44, parameters: [se] }] : []),
+                { code: 17 }, { code: 15, parameters: [3] },
+                { code: 18 }, { code: 15, parameters: [3] },
+                { code: 19 }, { code: 15, parameters: [3] },
+                { code: 0 }
+            ];
+            assert.deepEqual(plain(route.list), expected, `${kind} ${config.se ? 'with' : 'without'} SE`);
+            // The 505 continuation lines mirror the route, one per command before the end.
+            const continuations = page.list.filter(command => command.code === 505);
+            assert.deepEqual(plain(continuations.map(command => command.parameters[0])), expected.slice(0, -1), kind);
+        }
     }
 });
 
