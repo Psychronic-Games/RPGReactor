@@ -253,7 +253,7 @@
         out.terms = terms(out.terms, w);
         out.tileSize = 32; out.iconSize = 24; out.faceSize = 96;
         // XP windows: 32 px lines, 16 px padding, a 22 px font, drawn without an outline.
-        Object.assign(out.advanced, { screenWidth: 640, screenHeight: 480, uiAreaWidth: 640, uiAreaHeight: 480, fontSize: 22, lineHeight: 32, windowPadding: 16, windowMargin: 0, textOutlineWidth: 0, windowOpacity: 160 });
+        Object.assign(out.advanced, { screenWidth: 640, screenHeight: 480, uiAreaWidth: 640, uiAreaHeight: 480, fontSize: 22, lineHeight: 32, windowPadding: 16, windowMargin: 2, textOutlineWidth: 0, windowOpacity: 160 });
         if (s.battle_transition) out.rrBattleTransition = str(s.battle_transition);
         out.rrGuardSkillId = 0;   // set by the importer from database()'s guardSkillId
         out.locale = 'en_US';

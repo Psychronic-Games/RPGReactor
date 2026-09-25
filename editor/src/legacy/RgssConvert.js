@@ -153,6 +153,16 @@
                 mirror_pic: 'this.rrMirrorPic?.(%*)', flip_pic: 'this.rrFlipPic?.(%*)', erase_pic: 'this.rrErasePic?.(%*)', fix_pic: 'this.rrFixPic?.(%*)'
             }
         },
+        { key: 'victorLights', detect: /\$imported\[:ve_light_effects\]/, plugin: 'RR_VictorLights' },
+        { key: 'mapNamePlus', detect: /module MAPNAME\b[\s\S]*class Window_MapName < Window_Base[\s\S]*update_fadein/, plugin: 'RR_MapNamePlus' },
+        {
+            // CSCA Difficulty System: its scene, and $csca (CSCA Core's saved object) as $gameSystem.rrCsca().
+            key: 'cscaDifficulty', detect: /\$imported\["CSCA-Difficulty"\]\s*=\s*true/, plugin: 'RR_CscaDifficulty',
+            globals: { $csca: ['$gameSystem.rrCsca?.()', 'csca'] },
+            objects: { csca: { difficulty: '($?.difficulty ?? 0)', d_enemyexp: '$?.d_enemyexp', d_enemygold: '$?.d_enemygold', d_encrate: '$?.d_encrate', d_enemystats: '$?.d_enemystats' } },
+            setters: { 'csca.difficulty': '$gameSystem.rrCsca?.()?.setDifficulty?.(%v)' },
+            classes: { CSCA_Scene_DifficultySelect: 'Scene_RRCscaDifficulty' }
+        },
         { key: 'yeaCore', detect: /\$imported\["YEA-CoreEngine"\]/, plugin: 'RR_YanflyCore' },
         // KilloZapit's Word Wrapping Message Boxes; Yanfly's message window rows, width and font.
         { key: 'kzWordWrap', detect: /module KZIsAwesome\b[\s\S]*module WordWrap\b/, plugin: 'RR_WordWrap' },
@@ -263,7 +273,7 @@
     /** The calls and instance variables the enabled families add, for one `self`. */
     function familyTables(context) {
         const calls = {}, ivars = {};
-        const extra = { members: {}, objects: {}, globals: {}, setters: {}, scenes: {} };
+        const extra = { members: {}, objects: {}, globals: {}, setters: {}, scenes: {}, classes: {} };
         const self = context.self === 'character' ? 'character' : 'interpreter';
         for (const family of FAMILIES) {
             if (!context.families || !context.families.has(family.key)) continue;
@@ -274,6 +284,7 @@
             Object.assign(extra.globals, family.globals || {});
             Object.assign(extra.setters, family.setters || {});
             Object.assign(extra.scenes, family.scenes || {});
+            Object.assign(extra.classes, family.classes || {});
             if (self === 'character') for (const [name, template] of Object.entries(family.assign || {})) ivars[name] = template.replace(/\s*=\s*%v$/, '');
         }
         return { calls, ivars, extra };
@@ -668,7 +679,7 @@
         // Ace's frame: a 544×416 screen, 32 px tiles, 24 px icons, 96 px faces.
         out.tileSize = 32; out.iconSize = 24; out.faceSize = 96;
         // Its windows: 24 px lines and font, 12 px padding, flush to the screen edge, a 1 px text outline (width 2 here).
-        Object.assign(out.advanced, { screenWidth: 544, screenHeight: 416, uiAreaWidth: 544, uiAreaHeight: 416, fontSize: 24, lineHeight: 24, windowPadding: 12, windowMargin: 0, textOutlineWidth: 2, windowOpacity: 192 });
+        Object.assign(out.advanced, { screenWidth: 544, screenHeight: 416, uiAreaWidth: 544, uiAreaHeight: 416, fontSize: 24, lineHeight: 24, windowPadding: 12, windowMargin: 2, textOutlineWidth: 2, windowOpacity: 192 });
         out.locale = s.japanese ? 'ja_JP' : 'en_US';
         if (s.opt_use_midi) tag(notes, 'midiOption');
         return out;

@@ -231,8 +231,9 @@ Symbol Encounter, TheoAllen's Footsteps, Pathfinding, Notification Window, VX
 Style Choices and Invisible Regions, MOG Picture Effects and Battleback EX,
 Khas Awesome Light Effects, the Quest Journal, V's animated title, Extra Start
 Options, the website title command, Hime's Picture Wrapper, KilloZapit's word
-wrap, Yanfly's Core Engine colours and Message System window, and Vlue's
-version stamp; from VX, Woratana's
+wrap, Yanfly's Core Engine colours and Message System window, Vlue's version
+stamp, Victor Engine Light Effects, CSCA Difficulty System and MapName Plus+;
+from VX, Woratana's
 Multiple Fog, the Skill (Tech) Shop and modern algebra's Editable Actor
 Options. A journal whose quests are data (Nicke's Simple Journal) becomes
 Reactor's own quests instead: they are in Database › Quests, the game's calls

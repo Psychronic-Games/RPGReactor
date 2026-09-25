@@ -94,7 +94,7 @@
 
     Window_Message.prototype.rrAdjustSize = function() {
         const width = messageWidth();
-        const height = this.fittingHeight(messageRows()) + Window.defaultMargin() * 2;
+        const height = this.fittingHeight(messageRows());
         if (width !== this.width || height !== this.height) {
             this.move(this.x, this.y, width, height);
             this.createContents();

@@ -7141,3 +7141,19 @@ Window_NameBox.prototype.updateBackground = function() {
         _drawItemBackground.call(this, index);
     };
 })();
+
+// RPG Maker XP, VX and VX Ace window metrics (System.json rrRgssWindows, as an
+// imported game has it): a list row is one line tall with no gap between rows
+// (a window that sets its own row height keeps it), and the message window is
+// exactly four lines tall (reactor_scenes.js).
+(function() {
+    const compact = () => !!($dataSystem && $dataSystem.rrRgssWindows);
+    const _itemHeight = Window_Selectable.prototype.itemHeight;
+    Window_Selectable.prototype.itemHeight = function() {
+        return compact() ? this.lineHeight() : _itemHeight.call(this);
+    };
+    const _rowSpacing = Window_Selectable.prototype.rowSpacing;
+    Window_Selectable.prototype.rowSpacing = function() {
+        return compact() ? 0 : _rowSpacing.call(this);
+    };
+})();

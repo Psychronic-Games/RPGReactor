@@ -341,6 +341,8 @@ function open(folder, destination, options) {
         if (typeof constants['YEA::SYSTEM::COMMAND_NAME'] === 'string') sys.terms.commands[11] = constants['YEA::SYSTEM::COMMAND_NAME'];
         sys.rrChoicesInMessage = true;   // choices are listed inside the message window, after the text
         sys.rrNoItemBackgrounds = true;   // the old engines draw no bar behind each item of a list, only the cursor
+        Object.assign(sys, { rrRgssWindows: true, rrMapNameStays: true, rrTouchUiOff: true });   // rows one line tall, the map name through messages, no touch buttons
+        sys.rrRgssFades = true;   // Ace's 30-frame fades, and the black held 15 frames on a transfer
         writeJson(path.join(dest, 'data', 'System.json'), sys);
 
         log(`Writing ${mapIds.length} maps and their events…`, 'stage');

@@ -377,7 +377,7 @@
         set(terms.params, 0, t.hp); set(terms.params, 1, t.mp); set(terms.params, 2, t.atk); set(terms.params, 3, t.def); set(terms.params, 4, t.spi); set(terms.params, 5, t.spi); set(terms.params, 6, t.agi);
         for (const [i, k] of [[0, 'fight'], [1, 'escape'], [2, 'attack'], [3, 'guard'], [4, 'item'], [5, 'skill'], [6, 'equip'], [7, 'status'], [9, 'save'], [10, 'game_end'], [12, 'weapon'], [13, 'armor3'], [15, 'equip'], [18, 'new_game'], [19, 'continue'], [21, 'to_title'], [22, 'cancel']]) set(terms.commands, i, t[k]);
         out.tileSize = 32; out.iconSize = 24; out.faceSize = 96;
-        Object.assign(out.advanced, { screenWidth: 544, screenHeight: 416, uiAreaWidth: 544, uiAreaHeight: 416, fontSize: 20, lineHeight: 24, windowPadding: 16, windowMargin: 0, textOutlineWidth: 0, windowOpacity: 200 });
+        Object.assign(out.advanced, { screenWidth: 544, screenHeight: 416, uiAreaWidth: 544, uiAreaHeight: 416, fontSize: 20, lineHeight: 24, windowPadding: 16, windowMargin: 2, textOutlineWidth: 0, windowOpacity: 200 });
         out.rrGuardSkillId = db.guardSkillId;
         out.rrTitleShutdown = (typeof t.shutdown === 'string' && t.shutdown.trim()) || 'Shutdown';   // VX's title ends with it
         out.rrBalloonSize = 32;

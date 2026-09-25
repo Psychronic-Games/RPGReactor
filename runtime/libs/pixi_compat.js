@@ -1288,6 +1288,29 @@
     }
 
     // -------------------------------------------------------------------------
+    // "subtract" blend. v5-v7 drew BLEND_MODES.SUBTRACT with a reverse-subtract
+    // equation; v8 dropped it, and an unknown name draws as normal. RPG Maker
+    // XP, VX and VX Ace blend type 2 is subtraction (screen minus the source,
+    // opacity included), so imported shades and pictures need it back. It goes
+    // into the WebGL state's blend table on every context, as v8's own min/max
+    // do: [src, dst, srcAlpha, dstAlpha, rgbEquation, alphaEquation], leaving
+    // the destination alpha as it was.
+    // -------------------------------------------------------------------------
+    (function installSubtractBlend() {
+        if (!_isV8Pixi || !PIXI.GlStateSystem || !PIXI.GlStateSystem.prototype) return;
+        const proto = PIXI.GlStateSystem.prototype;
+        if (typeof proto.contextChange !== "function" || proto.contextChange.__rrSubtract) return;
+        const _contextChange = proto.contextChange;
+        proto.contextChange = function(gl) {
+            _contextChange.apply(this, arguments);
+            if (this.blendModesMap && gl && !this.blendModesMap.subtract) {
+                this.blendModesMap.subtract = [gl.ONE, gl.ONE, gl.ZERO, gl.ONE, gl.FUNC_REVERSE_SUBTRACT, gl.FUNC_ADD];
+            }
+        };
+        proto.contextChange.__rrSubtract = true;
+    })();
+
+    // -------------------------------------------------------------------------
     // Numeric blend modes. MV/MZ plugins assign numbers (sprite.blendMode = 1,
     // or a custom id they registered on PIXI.BLEND_MODES and described to the
     // v4 renderer as a GL factor pair in renderer.state.blendModes). v8 blend

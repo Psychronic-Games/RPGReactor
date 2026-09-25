@@ -432,6 +432,7 @@
                     if (Object.prototype.hasOwnProperty.call(constants, n.name) && typeof constants[n.name] !== 'object') return js(literal(constants[n.name]));
                     const last = n.name.split('::').pop();
                     if (Object.prototype.hasOwnProperty.call(constants, last) && typeof constants[last] !== 'object') return js(literal(constants[last]));
+                    if (options.classes && options.classes[n.name]) return js(`(typeof ${options.classes[n.name]} === "function" ? ${options.classes[n.name]} : null)`, 'scene');
                     if (/^Scene_[A-Za-z]+$/.test(n.name)) return js(n.name, 'scene');
                     if (['Input', 'Audio', 'SceneManager', 'Graphics', 'Color', 'Tone', 'RPG::SE', 'RPG::BGM', 'RPG::ME', 'RPG::BGS', 'Math', 'DataManager', 'BattleManager'].includes(n.name)) return js(n.name, 'module:' + n.name);
                     return fail('unknown constant ' + n.name);
@@ -571,8 +572,10 @@
                 if (stop) return js(`AudioManager.${stop}`);
             }
             if (mod === 'SceneManager') {
-                if (n.name === 'call') return js(`SceneManager.push(${a[0]})`);
-                if (n.name === 'goto') return js(`SceneManager.goto(${a[0]})`);
+                // A game's own scene that a family ports may be off with its plugin: then the call does nothing.
+                const ported = n.args && n.args[0] && n.args[0].t === 'const' && options.classes && options.classes[n.args[0].name];
+                if (n.name === 'call') return js(ported ? `((s) => s && SceneManager.push(s))(${a[0]})` : `SceneManager.push(${a[0]})`);
+                if (n.name === 'goto') return js(ported ? `((s) => s && SceneManager.goto(s))(${a[0]})` : `SceneManager.goto(${a[0]})`);
                 if (n.name === 'return') return js('SceneManager.pop()');
                 if (n.name === 'exit') return js('SceneManager.exit()');
             }

@@ -180,3 +180,66 @@ test('the picture limit rises to the highest picture an imported event uses', ()
         assert.equal(P.raisePictureLimit(dir), 0, 'never lowered, never rewritten');
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
+
+test('Victor Engine lights: the shade, map lights and lanterns come from the map note', () => {
+    const stub = () => function() {};
+    const ctx = {};
+    for (const name of ['Game_Screen', 'Game_Map', 'Game_CharacterBase', 'Game_Event', 'Game_Player', 'Game_Interpreter', 'Sprite', 'Spriteset_Base', 'Spriteset_Map']) ctx[name] = stub();
+    Object.assign(ctx.Game_Map.prototype, { setup() {} });
+    Object.assign(ctx.Game_CharacterBase.prototype, { update() {} });
+    Object.assign(ctx.Game_Event.prototype, { clearStartingFlag() {} });
+    Object.assign(ctx.Game_Player.prototype, { performTransfer() {} });
+    Object.assign(ctx.Game_Interpreter.prototype, { command108() { return true; } });
+    Object.assign(ctx.Spriteset_Base.prototype, { createPictures() {} });
+    Object.assign(ctx.Spriteset_Map.prototype, { update() {} });
+    ctx.PluginManager = { parameters: () => ({ actorIndexFromZero: 'true' }) };
+    vm.runInNewContext(plugin('RR_VictorLights'), ctx);
+    ctx.$gameScreen = new ctx.Game_Screen();
+    const player = new ctx.Game_CharacterBase();
+    player.direction = () => 2;
+    ctx.$gamePlayer = Object.assign(player, { followers: () => ({ visibleFollowers: () => [] }) });
+    const map = new ctx.Game_Map();
+    map._vehicles = [];
+    map.rrVeSetupAll('<create shade>\nopacity: 200\nred: 30\n</create shade>\n<map light>\nid: 5\nname: "torch"\nmap x: 3\nmap y: 4\nzoom: 150\n</map light>\n<actor lantern 1: 255>');
+    const state = ctx.$gameScreen.rrVeState();
+    assert.deepEqual([state.shade.visible, state.shade.opacity, state.shade.blend, [...state.shade.color]], [true, 200, 2, [225, 255, 255]], 'subtract: 255 minus each tone');
+    assert.deepEqual([state.lights[5].name, state.lights[5].zoom, { ...state.lights[5].info }], ['torch', 150, { x: 3, y: 4 }]);
+    assert.deepEqual([state.lights.AL0.name, state.lights.AL0.y], ['lantern_down', 64], 'the player\'s lantern faces the way they do');
+    const params = require(path.join(legacy, 'plugins', 'RR_VictorLights.params.js')).extract({ scripts: ['class Game_LightBitmap\n  def set_target\n    n = @light.info[:actor] == 0 ? 0 : @light.info[:actor] - 0 # <<<< changed line\n  end\nend'] });
+    assert.equal(params.actorIndexFromZero, 'true');
+});
+
+test('CSCA difficulty: its scene and $csca translate, and the Hide Encounter Rate add-on is read', () => {
+    const base = '$imported["CSCA-Difficulty"] = true\nmodule CSCA\n  module DIFFICULTY\n    DIFFICULTIES = []\n    HEADER = "Pick"\n    ENCRATE = "Encounter Rate: "\n    DIFFICULTIES[0] = {\n    :name => "Easy",\n    :enemyexp => 100,\n    :enemygold => 100,\n    :encrate => 100,\n    :enemystats => 80,\n    :descr => ["One", "Two"]\n    }\n  end\nend\nclass CSCA_Window_DifficultyInfo < Window_Base\n  def draw_info(difficulty)\n    draw_text(0,h,w,h,CSCA::DIFFICULTY::ENCRATE)\n  end\nend';
+    const hide = 'class CSCA_Window_DifficultyInfo < Window_Base\n  def draw_info(difficulty)\n    draw_text(0,h,w,h,CSCA::DIFFICULTY::ENEMYSTATS)\n  end\nend\n';
+    const constants = C.scriptConstants([base]);
+    const plain = params('RR_CscaDifficulty').extract({ scripts: [base], constants });
+    assert.deepEqual([plain.header, plain.showEncounterRate, JSON.parse(plain.difficulties)], ['Pick', 'true', [{ name: 'Easy', enemyexp: 100, enemygold: 100, encrate: 100, enemystats: 80, descr: ['One', 'Two'] }]]);
+    assert.equal(params('RR_CscaDifficulty').extract({ scripts: [base, hide], constants }).showEncounterRate, 'false');
+    const ctx = { constants: {}, families: C.scriptFamilies([base]) };
+    assert.equal(C.ruby('SceneManager.call(CSCA_Scene_DifficultySelect)', 'statement', ctx), '((s) => s && SceneManager.push(s))((typeof Scene_RRCscaDifficulty === "function" ? Scene_RRCscaDifficulty : null));');
+    assert.equal(C.ruby('$csca.difficulty == 1', 'expression', ctx), '(($gameSystem.rrCsca?.()?.difficulty ?? 0) === 1)');
+    assert.equal(C.ruby('SceneManager.call(Scene_Menu)', 'statement', ctx), 'SceneManager.push(Scene_Menu);', 'a stock scene is unchanged');
+});
+
+test('MapName Plus+ settings, and the older engines\' window, touch and fade conventions', () => {
+    const mapName = 'module ACE\n  module MAPNAME\n    NAME_ALIGN = 2\n    FONT_SIZE = 24\n    FONT_TYPE = \'Arial\'\n  end\nend\nclass Window_MapName < Window_Base\n  def update_fadein\n  end\nend';
+    assert.ok(C.scriptFamilies([mapName]).has('mapNamePlus'));
+    assert.deepEqual(params('RR_MapNamePlus').extract({ constants: C.scriptConstants([mapName]) }), { align: 'right', fontFace: 'Arial, "Liberation Sans", Arimo, Helvetica, sans-serif', fontSize: '21.5' });
+
+    const lists = runtimeBlock('reactor_windows.js', '// RPG Maker XP, VX and VX Ace window metrics');
+    for (const [system, height, spacing] of [[{}, 32, 4], [{ rrRgssWindows: true }, 24, 0]]) {
+        function Window_Selectable() {}
+        Object.assign(Window_Selectable.prototype, { itemHeight: () => 32, rowSpacing: () => 4, lineHeight: () => 24 });
+        vm.runInNewContext(lists, { Window_Selectable, $dataSystem: system });
+        const w = new Window_Selectable();
+        assert.deepEqual([w.itemHeight(), w.rowSpacing()], [height, spacing]);
+    }
+    const scenes = fs.readFileSync(path.join(runtime, 'reactor_scenes.js'), 'utf8');
+    assert.match(scenes, /if \(\$dataSystem && \$dataSystem\.rrMapNameStays\) return;/);
+    assert.match(scenes, /\$dataSystem\.rrTouchUiOff && !ConfigManager\._rrTouchUiSaved\) ConfigManager\.touchUI = false/);
+    assert.match(scenes, /return ace\(\) \? 30 : _fadeSpeed\.call\(this\);/);
+    assert.match(scenes, /\$dataSystem && \$dataSystem\.rrRgssWindows \? 0 : Window\.defaultMargin\(\) \* 2/, 'an Ace message window is exactly its lines tall');
+    const compat = fs.readFileSync(path.join(runtime, 'libs', 'pixi_compat.js'), 'utf8');
+    assert.match(compat, /blendModesMap\.subtract = \[gl\.ONE, gl\.ONE, gl\.ZERO, gl\.ONE, gl\.FUNC_REVERSE_SUBTRACT, gl\.FUNC_ADD\]/, 'v8 regains the subtract blend');
+});

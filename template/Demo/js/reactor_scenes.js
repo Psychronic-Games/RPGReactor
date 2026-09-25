@@ -607,7 +607,8 @@ Scene_Message.prototype.createMessageWindow = function() {
 
 Scene_Message.prototype.messageWindowRect = function() {
     const ww = Graphics.boxWidth;
-    const wh = this.calcWindowHeight(4, false) + Window.defaultMargin() * 2;   // room for the frame margin, none in a 2003 import
+    // room for the frame margin (none in a 2003 import); an XP, VX or VX Ace window is its lines and padding
+    const wh = this.calcWindowHeight(4, false) + ($dataSystem && $dataSystem.rrRgssWindows ? 0 : Window.defaultMargin() * 2);
     const wx = (Graphics.boxWidth - ww) / 2;
     const wy = 0;
     return new Rectangle(wx, wy, ww, wh);
@@ -3802,5 +3803,95 @@ Scene_Boot.prototype.isReady = function() {
         this._commandWindow.close();
         this.fadeOutAll();
         SceneManager.exit();
+    };
+})();
+
+// Older-engine conventions an import switches on in System.json:
+//   rrMapNameStays  a message does not close the map name, as in XP, VX and VX Ace
+//   rrTouchUiOff    touch UI starts off (the old engines had none) until the
+//                   player sets it in Options
+(function() {
+    const _updateMapNameWindow = Scene_Map.prototype.updateMapNameWindow;
+    Scene_Map.prototype.updateMapNameWindow = function() {
+        if ($dataSystem && $dataSystem.rrMapNameStays) return;
+        _updateMapNameWindow.call(this);
+    };
+    const _applyData = ConfigManager.applyData;
+    ConfigManager.applyData = function(config) {
+        _applyData.call(this, config);
+        this._rrTouchUiSaved = !!(config && Object.prototype.hasOwnProperty.call(config, "touchUI"));
+    };
+    const _start = Scene_Boot.prototype.start;
+    Scene_Boot.prototype.start = function() {
+        if ($dataSystem && $dataSystem.rrTouchUiOff && !ConfigManager._rrTouchUiSaved) ConfigManager.touchUI = false;
+        _start.call(this);
+    };
+})();
+
+// XP, VX and VX Ace screens (System.json rrRgssWindows): windows are laid out on
+// the whole screen, with no 4 px box margin, and a menu's background is the map
+// lightly blurred and darkened toward (16, 16, 16) by half, at full opacity.
+(function() {
+    const rgss = () => !!($dataSystem && $dataSystem.rrRgssWindows);
+    const _adjustBoxSize = Scene_Boot.prototype.adjustBoxSize;
+    Scene_Boot.prototype.adjustBoxSize = function() {
+        _adjustBoxSize.call(this);
+        if (!rgss()) return;
+        Graphics.boxWidth = $dataSystem.advanced.uiAreaWidth;
+        Graphics.boxHeight = $dataSystem.advanced.uiAreaHeight;
+    };
+    const _createBackground = Scene_MenuBase.prototype.createBackground;
+    Scene_MenuBase.prototype.createBackground = function() {
+        _createBackground.call(this);
+        if (!rgss() || !this._backgroundSprite) return;
+        if (this._backgroundFilter) this._backgroundFilter.blur = 1;
+        this._backgroundSprite.opacity = 255;
+        this._backgroundSprite.setBlendColor([16, 16, 16, 128]);
+    };
+    const _setBackgroundOpacity = Scene_MenuBase.prototype.setBackgroundOpacity;
+    Scene_MenuBase.prototype.setBackgroundOpacity = function(opacity) {
+        _setBackgroundOpacity.call(this, rgss() ? 255 : opacity);
+    };
+})();
+
+// VX Ace fade timing (System.json rrRgssFades): Fadeout Screen and Fadein
+// Screen take 30 frames, and a transfer fades out over 30 frames, holds black
+// for 15, then fades in over 30, with the map's events waiting throughout.
+(function() {
+    const ace = () => !!($dataSystem && $dataSystem.rrRgssFades);
+    const _fadeSpeed = Game_Interpreter.prototype.fadeSpeed;
+    Game_Interpreter.prototype.fadeSpeed = function() {
+        return ace() ? 30 : _fadeSpeed.call(this);
+    };
+    const _fadeInForTransfer = Scene_Map.prototype.fadeInForTransfer;
+    Scene_Map.prototype.fadeInForTransfer = function() {
+        _fadeInForTransfer.call(this);
+        if (ace() && this._fadeDuration > 0) {
+            this._fadeDuration = 30;
+            this._rrFadeHold = 15;
+            this._rrTransferFade = true;
+        }
+    };
+    // Ace's transfer fade is a loop of its own: nothing on the map moves or runs until it ends.
+    const _updateMain = Scene_Map.prototype.updateMain;
+    Scene_Map.prototype.updateMain = function() {
+        if (this._rrTransferFade) {
+            if (this._fadeDuration > 0) return;
+            this._rrTransferFade = false;
+        }
+        _updateMain.call(this);
+    };
+    const _fadeOutForTransfer = Scene_Map.prototype.fadeOutForTransfer;
+    Scene_Map.prototype.fadeOutForTransfer = function() {
+        _fadeOutForTransfer.call(this);
+        if (ace() && this._fadeDuration > 0) this._fadeDuration = 30;
+    };
+    const _updateFade = Scene_Base.prototype.updateFade;
+    Scene_Base.prototype.updateFade = function() {
+        if (this._rrFadeHold > 0 && this._fadeDuration > 0) {
+            this._rrFadeHold--;
+            return;
+        }
+        _updateFade.call(this);
     };
 })();

@@ -160,6 +160,7 @@ function open(folder, destination, options) {
         sys.rrCharacterShiftY = 4;   // VX lifts characters 4 px; MZ's is 6
         sys.rrChoicesInMessage = true;   // choices are listed inside the message window, after the text
         sys.rrNoItemBackgrounds = true;   // the old engines draw no bar behind each item of a list, only the cursor
+        Object.assign(sys, { rrRgssWindows: true, rrMapNameStays: true, rrTouchUiOff: true });   // rows one line tall, the map name through messages, no touch buttons
         writeJson(path.join(dest, 'data', 'System.json'), sys);
 
         // A per-map battleback table in the game's scripts (DerVVulf's BATTLEBACK_LIST and its kin): map settings, images from its folder.
