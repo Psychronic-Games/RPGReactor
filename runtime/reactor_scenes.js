@@ -3789,3 +3789,18 @@ Scene_Boot.prototype.isReady = function() {
         _titleStart.call(this);
     };
 })();
+
+// The title's Shut Down command of RPG Maker XP, VX and VX Ace (System.json
+// rrTitleShutdown; the command itself is added in reactor_windows.js).
+(function() {
+    const _createCommandWindow = Scene_Title.prototype.createCommandWindow;
+    Scene_Title.prototype.createCommandWindow = function() {
+        _createCommandWindow.call(this);
+        this._commandWindow.setHandler("shutdown", this.rrCommandShutdown.bind(this));
+    };
+    Scene_Title.prototype.rrCommandShutdown = function() {
+        this._commandWindow.close();
+        this.fadeOutAll();
+        SceneManager.exit();
+    };
+})();

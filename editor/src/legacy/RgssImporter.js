@@ -106,9 +106,10 @@ function source(folder) {
 /**
  * JavaScript ports of the published scripts a game carried, installed as the
  * project's plugins (visible and switchable in the Plugin Manager), configured
- * from the scripts' own settings. Returns the installed entries.
+ * from the scripts' own settings. `read(relativePath)` hands a settings reader
+ * a file the game shipped (bytes, or null). Returns the installed entries.
  */
-function installPlugins(dest, families, constants, scriptTexts, skipped, log) {
+function installPlugins(dest, families, constants, scriptTexts, skipped, log, read = () => null) {
     const mkdir = (p) => fs.mkdirSync(p, { recursive: true });
     const installed = [];
     const wanted = [];
@@ -129,7 +130,7 @@ function installPlugins(dest, families, constants, scriptTexts, skipped, log) {
         const extractor = path.join(__dirname, 'plugins', family.name + '.params.js');
         let parameters = family.parameters ? family.parameters(constants) : {};
         if (fs.existsSync(extractor)) {
-            try { parameters = Object.assign(parameters, require(extractor).extract({ scripts: scriptTexts, constants })); }
+            try { parameters = Object.assign(parameters, require(extractor).extract({ scripts: scriptTexts, constants, read })); }
             catch (error) { skipped.push(`${family.name}: settings could not be read from the game's script (${error.message}); defaults used`); }
         }
         installed.push({ name: family.name, status: true, description, parameters });
@@ -289,24 +290,31 @@ function open(folder, destination, options) {
         const sys = aliased(C.system(base, system, notes));
         const vocab = scripts.find(s => s.name === 'Vocab');
         if (vocab) Object.assign(sys.terms.messages, C.vocabMessages(vocab.text));
-        // Fonts the game ships. The main font is the one its scripts name (Font.default_name), matched to a
-        // shipped file by name; Ace's own default is VL Gothic.
+        // Fonts the game ships. The main font is the first its scripts name (Font.default_name) that RGSS
+        // would find: a shipped file, or a Windows font every player had (Arial), drawn by that CSS family.
+        // Ace's own default is VL Gothic.
         const fonts = src.files('Fonts').filter(f => /\.(ttf|otf|woff2?)$/i.test(f));
         const fontSettings = C.fontDefaults(active.map(s => s.text), constants);
+        const chosen = C.chooseFont(fontSettings.name, fonts) || C.chooseFont(['VL Gothic'], fonts);
         if (fonts.length) {
             mkdir(path.join(dest, 'fonts'));
             for (const f of fonts) fs.writeFileSync(path.join(dest, 'fonts', path.basename(f)), src.read('Fonts/' + f));
-            const key = (n) => String(n).toLowerCase().replace(/\.[a-z0-9]+$/, '').replace(/[^a-z0-9]/g, '');
-            const wanted = (fontSettings.name || []).concat(['VL Gothic']);
-            let main = null;
-            for (const name of wanted) { main = fonts.find(f => key(path.basename(f)) === key(name)) || fonts.find(f => key(path.basename(f)).startsWith(key(name)) && !/p?gothic/.test(key(path.basename(f)).slice(key(name).length))); if (main) break; }
-            sys.advanced.mainFontFilename = path.basename(main || fonts[0]);
+            sys.advanced.mainFontFilename = path.basename((chosen && chosen.file) || fonts[0]);
             add(images, 'Fonts', fonts.length);
         }
-        // RGSS sizes a font by its cell, a browser by its em (see rgssFontScale); VL Gothic's ratio when the font is not shipped.
+        let scale = 0.787;   // VL Gothic's, when the font is not shipped
+        if (chosen && chosen.family) {
+            sys.advanced.mainFontFilename = '';
+            const quote = (n) => (/^[A-Za-z-]+$/.test(n) ? n : `"${n}"`);
+            sys.advanced.fallbackFonts = [chosen.family, ...chosen.fallbacks].map(quote).concat(['sans-serif']).join(', ');
+            scale = chosen.scale;
+            add(notes, 'systemFont');
+        } else {
+            const mainFont = sys.advanced.mainFontFilename && fonts.find(f => path.basename(f) === sys.advanced.mainFontFilename);
+            scale = (mainFont && C.rgssFontScale(src.read('Fonts/' + mainFont))) || scale;
+        }
+        // RGSS sizes a font by its cell, a browser by its em (see rgssFontScale).
         const rgssSize = typeof fontSettings.size === 'number' ? fontSettings.size : 24;
-        const mainFont = sys.advanced.mainFontFilename && fonts.find(f => path.basename(f) === sys.advanced.mainFontFilename);
-        const scale = (mainFont && C.rgssFontScale(src.read('Fonts/' + mainFont))) || 0.787;
         sys.advanced.fontSize = Math.round(rgssSize * scale * 10) / 10;
         // \{ and \} step 8 RGSS units in Ace (MZ steps 12 px).
         sys.advanced.fontSizeStep = Math.round(8 * scale * 10) / 10;
@@ -324,10 +332,15 @@ function open(folder, destination, options) {
         const screen = C.screenSize(active.map(s => s.text), constants) || [544, 416];
         Object.assign(sys.advanced, { screenWidth: screen[0], screenHeight: screen[1], uiAreaWidth: screen[0], uiAreaHeight: screen[1] });
         if (fontSettings.outline === false) sys.advanced.textOutlineWidth = 0;
+        // Shadowed text without an outline (Font.default_shadow): the runtime's 1 px drop shadow stands in for the outline.
+        if (fontSettings.shadow === true && fontSettings.outline === false) Object.assign(sys.advanced, { textOutlineWidth: 1, rrTextShadow: true });
         // A "Skip Title" script: the game boots into a new game and has no title screen.
         if (C.skipsTitle(active.map(s => s.text))) { sys.rrSkipTitle = true; add(notes, 'skipTitle'); }
         sys.rrCharacterShiftY = 4;   // VX Ace lifts characters 4 px (shift_y); MZ's is 6
+        // Yanfly's System Options names the Options command (on the menu, and on the title with Theo's add-on).
+        if (typeof constants['YEA::SYSTEM::COMMAND_NAME'] === 'string') sys.terms.commands[11] = constants['YEA::SYSTEM::COMMAND_NAME'];
         sys.rrChoicesInMessage = true;   // choices are listed inside the message window, after the text
+        sys.rrNoItemBackgrounds = true;   // the old engines draw no bar behind each item of a list, only the cursor
         writeJson(path.join(dest, 'data', 'System.json'), sys);
 
         log(`Writing ${mapIds.length} maps and their events…`, 'stage');
@@ -403,9 +416,10 @@ function open(folder, destination, options) {
         copyAliasedAudio(dest, aliases);
         { const n = require('./ProjectFiles.js').copyAcrossAudio(dest); if (n) add(notes, 'audioCopiedAcross', n); }
         { const n = matchFileCase(dest); if (n) add(notes, 'fileNameCase', n); }
+        { const n = require('./ProjectFiles.js').raisePictureLimit(dest); if (n) add(notes, 'pictureLimitRaised', n); }
         { const n = require('./ProjectFiles.js').clearMissingSystemFiles(dest); if (n) add(notes, 'systemFileCleared', n); }
         { const n = writeFamilyQuests(dest, families, custom.map(s => s.text), constants); if (n) add(notes, 'questsImported', n); }
-        const installed = installPlugins(dest, families, constants, custom.map(s => s.text), skipped, log);
+        const installed = installPlugins(dest, families, constants, custom.map(s => s.text), skipped, log, (rel) => src.read(rel));
 
         // The game's own Ruby, kept beside the project for whoever ports it by hand.
         if (custom.length) {

@@ -143,6 +143,21 @@
             // Title-screen scripts (VX Ace): V's animated title, Shadowmaster's extra start options, the website command.
             key: 'vAnimatedTitle', detect: /module V_Custom_Animated_Title_Scene\b/, plugin: 'RR_VAnimatedTitle'
         },
+        {
+            // Hime's Picture Wrapper: pictures by call, with origins, map-fixed pictures and one-target changes.
+            key: 'himePictureWrapper', detect: /module Picture_Wrapper\b[\s\S]*def make_pic/, plugin: 'RR_HimePictures',
+            event: {
+                make_pic: 'this.rrMakePic?.(%*)', show_pic: 'this.rrShowPic?.(%*)', move_pic: 'this.rrMovePic?.(%*)', shift_pic: 'this.rrShiftPic?.(%*)',
+                zoom_pic: 'this.rrZoomPic?.(%*)', rotate_pic: 'this.rrRotatePic?.(%*)', spin_pic: 'this.rrSpinPic?.(%*)', fade_pic: 'this.rrFadePic?.(%*)',
+                tone_pic: 'this.rrTonePic?.(%*)', blend_pic: 'this.rrBlendPic?.(%*)', origin_pic: 'this.rrOriginPic?.(%*)', grayscale_pic: 'this.rrGrayscalePic?.(%*)',
+                mirror_pic: 'this.rrMirrorPic?.(%*)', flip_pic: 'this.rrFlipPic?.(%*)', erase_pic: 'this.rrErasePic?.(%*)', fix_pic: 'this.rrFixPic?.(%*)'
+            }
+        },
+        { key: 'yeaCore', detect: /\$imported\["YEA-CoreEngine"\]/, plugin: 'RR_YanflyCore' },
+        // KilloZapit's Word Wrapping Message Boxes; Yanfly's message window rows, width and font.
+        { key: 'kzWordWrap', detect: /module KZIsAwesome\b[\s\S]*module WordWrap\b/, plugin: 'RR_WordWrap' },
+        { key: 'yeaMessageWindow', detect: /\$imported\["YEA-MessageSystem"\]/, plugin: 'RR_YanflyMessage' },
+        { key: 'vlueVersionNumber', detect: /Version\.vmdt[\s\S]*class Window_Version < Window_Base/, plugin: 'RR_VersionNumber' },
         { key: 'extraStartOptions', detect: /Extra Start Options[\s\S]*Shadowmaster/, plugin: 'RR_ExtraStartOptions' },
         { key: 'websiteTitleCommand', detect: /MAWLT_TITLE_WEBSITE_COMMANDS\b/, plugin: 'RR_WebsiteTitleCommand' },
         {
@@ -328,13 +343,18 @@
      * The screen size the game's scripts set with Graphics.resize_screen(w, h)
      * (the last call in script order; literals or constants), or null when they
      * keep Ace's 544×416. A resolution script is how most Ace games reach 640×480.
+     * The stock RGSS player clamps the call to 640×480 (DOTP asks Yanfly's Core
+     * Engine for 854×480 and runs at 640×480); only a script that patches the
+     * player past that ("Unlimited Resolution") or an mkxp build goes larger.
      */
     function screenSize(sources, constants) {
+        const unlimited = sources.some(t => /Unlimited\s*Resolution|mkxp/i.test(String(t || '')));
+        const [maxW, maxH] = unlimited ? [1920, 1080] : [640, 480];
         let size = null;
         const value = (arg) => { const t = arg.trim(); const v = literal(t); if (typeof v === 'number') return v; return constants && typeof constants[t] === 'number' ? constants[t] : null; };
         for (const source of sources) for (const m of String(source || '').matchAll(/^\s*Graphics\.resize_screen\(\s*([^,()]+?)\s*,\s*([^,()]+?)\s*\)/gm)) {
             const w = value(m[1]), h = value(m[2]);
-            if (w > 0 && h > 0) size = [Math.min(w, 1920), Math.min(h, 1080)];
+            if (w > 0 && h > 0) size = [Math.min(w, maxW), Math.min(h, maxH)];
         }
         return size;
     }
@@ -358,6 +378,43 @@
             { key: 'light', maps: ids('Light'), suffix: '_light', layer: 'over', variable: id('VARIABLE_LIGHT'), switch: id('SWITCH_LIGHT') },
             { key: 'sky', maps: ids('Parallax2'), suffix: '_layer2', layer: 'over', variable: id('VARIABLE_SKY'), switch: id('SWITCH_SKY') }
         ];
+    }
+
+    /**
+     * Windows fonts a game may name without shipping, since every player had
+     * them: the CSS family, open fonts drawn to the same metrics, and the size
+     * scale rgssFontScale gives the Windows file (em / (winAscent + winDescent)).
+     */
+    const SYSTEM_FONTS = {
+        arial: ['Arial', ['Liberation Sans', 'Arimo', 'Helvetica'], 0.8951],
+        timesnewroman: ['Times New Roman', ['Liberation Serif', 'Tinos', 'Times'], 0.903],
+        couriernew: ['Courier New', ['Liberation Mono', 'Cousine', 'Courier'], 0.8828],
+        verdana: ['Verdana', ['DejaVu Sans'], 0.8228],
+        tahoma: ['Tahoma', ['DejaVu Sans'], 0.8285],
+        georgia: ['Georgia', ['Gelasio'], 0.8801],
+        trebuchetms: ['Trebuchet MS', [], 0.8612],
+        calibri: ['Calibri', ['Carlito'], 0.8192],
+        segoeui: ['Segoe UI', [], 0.7518],
+        comicsansms: ['Comic Sans MS', ['Comic Neue'], 0.7176]
+    };
+    const fontKey = (n) => String(n).toLowerCase().replace(/\.[a-z0-9]+$/, '').replace(/[^a-z0-9]/g, '');
+
+    /**
+     * The font RGSS would draw with: the first of the game's Font.default_name
+     * list that exists, a shipped file ({ file }) or a Windows font ({ family,
+     * fallbacks, scale }); null when neither, and the caller keeps its default.
+     */
+    function chooseFont(names, files) {
+        for (const name of list(names)) {
+            const key = fontKey(name);
+            if (!key) continue;
+            const file = files.find(f => fontKey(f.split(/[\\/]/).pop()) === key)
+                || files.find(f => { const k = fontKey(f.split(/[\\/]/).pop()); return k.startsWith(key) && !/p?gothic/.test(k.slice(key.length)); });
+            if (file) return { file };
+            const system = SYSTEM_FONTS[key];
+            if (system) return { family: system[0], fallbacks: system[1], scale: system[2] };
+        }
+        return null;
     }
 
     /**
@@ -604,6 +661,8 @@
             params: fill(out.terms.params, list(t.params)),
             messages: Object.assign({}, out.terms.messages)
         };
+        // Ace's title ends with Shut Down (terms.commands[20], a slot MZ leaves unused).
+        out.rrTitleShutdown = str(list(t.commands)[20]) || 'Shut Down';
         // Ace stores equipment slot names in terms; MZ has them as a list of its own.
         if (list(t.etypes).length) out.equipTypes = [''].concat(list(t.etypes).map(str));
         // Ace's frame: a 544×416 screen, 32 px tiles, 24 px icons, 96 px faces.
@@ -811,7 +870,7 @@
     /** Script constants (from scriptConstants) that Ruby translation resolves while converting. */
     const setContext = (context) => { activeContext = context || {}; };
 
-    const api = { skipsTitle, audioAliases, applyAudioAliases, plain, audio, ruby, rubyProgram, parseCall, scriptFamilies, FAMILIES, scriptConstants, fontDefaults, screenSize, gdsParallaxLayers, rgssFontScale, setContext, windowSkin, commands, database, system, vocabMessages, mapInfos, map, BUTTONS };
+    const api = { skipsTitle, audioAliases, applyAudioAliases, plain, audio, ruby, rubyProgram, parseCall, scriptFamilies, FAMILIES, scriptConstants, fontDefaults, chooseFont, SYSTEM_FONTS, screenSize, gdsParallaxLayers, rgssFontScale, setContext, windowSkin, commands, database, system, vocabMessages, mapInfos, map, BUTTONS };
     root.RRRgssConvert = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

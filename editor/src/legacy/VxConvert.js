@@ -379,6 +379,7 @@
         out.tileSize = 32; out.iconSize = 24; out.faceSize = 96;
         Object.assign(out.advanced, { screenWidth: 544, screenHeight: 416, uiAreaWidth: 544, uiAreaHeight: 416, fontSize: 20, lineHeight: 24, windowPadding: 16, windowMargin: 0, textOutlineWidth: 0, windowOpacity: 200 });
         out.rrGuardSkillId = db.guardSkillId;
+        out.rrTitleShutdown = (typeof t.shutdown === 'string' && t.shutdown.trim()) || 'Shutdown';   // VX's title ends with it
         out.rrBalloonSize = 32;
         out.locale = 'en_US';
         tag(notes, 'vxSystem', 0);

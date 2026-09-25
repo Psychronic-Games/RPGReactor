@@ -515,6 +515,7 @@
         out.rrLegacyParallax = true;
         // Choices are listed inside the message window, after the text.
         out.rrChoicesInMessage = true;
+        out.rrNoItemBackgrounds = true;   // the old engines draw no bar behind each item of a list, only the cursor
         // Characters walk and jump at the old engine's pace (twice MZ's at the same speed number).
         out.rrLegacyMotion = true;
         out.titleBgm = audio(sys.title_music); out.battleBgm = audio(sys.battle_music);

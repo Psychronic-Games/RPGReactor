@@ -173,6 +173,9 @@ test('script settings: constants, fonts, screen size and RGSS font scale', () =>
     assert.deepEqual(C.screenSize(scripts, constants), [640, 480]);
     assert.deepEqual(C.fontDefaults(scripts, constants), { name: ['Cardo', 'Arial'], size: 24 });
     assert.equal(C.screenSize(['x = 1'], {}), null);
+    // The stock player clamps a larger request to 640×480; an unlimited-resolution patch lifts that.
+    assert.deepEqual(C.screenSize(['Graphics.resize_screen(854, 480)'], {}), [640, 480]);
+    assert.deepEqual(C.screenSize(['# Unlimited Resolution by Esreveer', 'Graphics.resize_screen(854, 480)'], {}), [854, 480]);
     // A font's cell (winAscent + winDescent) against its em: RGSS sizes by the first, a browser by the second.
     const ttf = Buffer.alloc(200);
     ttf.writeUInt16BE(2, 4);

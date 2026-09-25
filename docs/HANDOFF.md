@@ -2,15 +2,27 @@
 
 Dated engineering notes for whoever picks the project up next, newest first. This file holds the cycle in progress and the one just shipped. Older cycles are in [archive/handoff](archive/handoff/): [2026-09-02 to 09-13](archive/handoff/2026-09-02-to-13.md) (0.98.5 and 0.98.6) and [2026-08 and earlier](archive/handoff/2026-08-and-earlier.md). The verified current state is [STATUS.md](STATUS.md); read that first.
 
-## Where things stand (2026-09-24)
+## Where things stand (2026-09-25)
 
 **0.98.7 shipped on 2026-09-21** (runtime 20260920.24). The 0.98.8 cycle is open and now holds importers for every older RPG Maker (2000, 2003, XP, VX, VX Ace), 22 Ruby-script plugin ports, media conversion, the Apply/save speed-up, builder fixes, and PRs #68 and #69 (runtime 20260922.5, 3,466 tests), under `[Unreleased - 0.98.8]` in both changelogs. **Nothing from 2026-09-22 is pushed**: the owner pushes at the end of the weekend. PR #68 was merged on GitHub on 2026-09-23 and PR #70 (Door and Treasure quick events turn Direction Fix off before their opening turns) on 2026-09-24; both merges are merged into local `main`, so the push fast-forwards.
+
+**Current work:** making Dreamwalker (DOTP, VX Ace) import seamlessly, measured against the shipped game; see 2026-09-25.
 
 **To try the world builder:** open the Demo, test-play, take the Motorcycle on the Reactor Room map to North Haven, walk south then east to the Manor's front door at the south (outside cell 62,50); the Steward is in the study upstairs-left of the great hall, downstairs east. In the editor: the **Build** button in the toolbar opens the bar over the 3D view (pieces, shapes, materials, Blueprint, Hammer; R/Q/E keys, Ctrl+Z), the `3D-T` tab shapes terrain and pours water, `3D-M` places models. From a shell: `node editor/build-scripts/build-structure.cjs <project> <mapId> <plan.json> <x> <y> [--check]` and `node editor/build-scripts/validate-map.cjs <project> <mapId>`. [AUTHORING.md](AUTHORING.md) is the contract for people and generators.
 
 **Known rough edges the owner has seen (3D):** the gables, the black flat view of North Haven and the Stamp turn were fixed on 2026-09-22 (the Demo's Manor and Hamlet keep their old pieces until re-stamped); a thin line of floor slab shows between stacked windows; harness transfers to map 5 occasionally time out when two NW instances start together (rerun alone).
 
 **Next, agreed:** furniture pieces and room contents in plans; a spot/template picker in the panel; a hamlet-of-hamlets stress test; then lighting normals on slopes and hip roofs.
+
+## 2026-09-25 — Dreamwalker (DOTP, VX Ace): title and opening against the shipped game
+
+Runtime 20260925.1. The owner named Dreamwalker (`template/DOTP v1.8.1 PUBLIC`, 177 scripts of its own, 10 maps in this public build) as the next import to make seamless. Changelogs are now one file per release (`changelog/`, `editor/changelog/`; the `CHANGELOG.md` files are indexes, `cut-release.cjs` reads `changelog/<v>.md`).
+
+- **The shipped game runs under Wine** on the headless display (`kwin_wayland --virtual --socket rroracle` + `Xwayland :57`, as for Deep 8): `DISPLAY=:57 WAYLAND_DISPLAY= WINEPREFIX=<prefix> WINEDEBUG=-all wine game.exe` with `Fullscreen=0` in Game.ini (Fullscreen++). The window sits at +320+195 on a 1280×800 display; `scratchpad/dotp/xkey-corner.py` parks the pointer in the window's corner (outside it, focus goes to the root and keys are lost; over a command, the Mouse Script selects it).
+- **An instrumented original answers behaviour questions exactly.** `node scratchpad/dotp/make-probe.cjs <game> <out>` unpacks Game.rgss3a and prepends `probe.rb` to the scripts: drop Ruby into `<out>/probe_cmd.rb` and it is evaluated in the running game (result in `probe.log`); `$rr_watch = "expr"` with `$rr_every = 1` logs it every frame. It settled the intro camera in one run (below). A tiny game of our own built the same way measured RGSS's `text_size` for Arial and VL Gothic at every size (Wine's hinting makes bold Arial ~10% narrower than Windows would; the Windows-cell rule stays).
+- **Our side:** `scratchpad/dotp/run.cjs <project> <steps.js> <out>` boots an import on :57 with focus emulated and runs a steps module (`ev`, `key`, `shot`, `waitFor`). The V title ignores input for its first 60 frames; delete the import's `save/` first or the title selects Continue.
+- **Fixed today** (see the editor changelog): 640×480 clamp, Windows fonts by name, the title's Quit and "System Options", no bars behind list items, Yanfly colours, the version stamp, Hime's pictures (picture 200+ raises the limit), word wrap, Yanfly's 13-row message window. **The camera:** `fade_pic(200, 255, 10, 0)` waits, because `0` is true in Ruby; that pause is what let `ms_pro_cam_center_at(15, 0, 1)` reach the top before the 8888-frame pan began. Any port taking a Ruby flag must use Ruby truth.
+- **Next, in order of what the opening shows:** Victor Engine Light Effects (map 73: `<create shade>` darkness with a red tint, `<lantern>` on NPCs, `<custom light>` comments on most events), the CSCA difficulty scene that New Game opens (`SceneManager.call(CSCA_Scene_DifficultySelect)` and `$csca.difficulty`), MapName Plus+ ("Friedentown NDP" banner), the Document Reader (`doc_reader("controls")` after the intro), Theo's `<interact:…>` hover labels and fog tags, then CSCA quests (→ Reactor quests), Hime reinforcements and choice options, mail and toasts, and finally the Yanfly/Yami battle stack and Yanfly's menus and save screen.
 
 ## 2026-09-24 — Deep 8 battles against the shipped player: HP bars, missing images, spore clouds
 

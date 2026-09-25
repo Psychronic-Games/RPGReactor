@@ -197,7 +197,11 @@ ones that run): the screen size from `Graphics.resize_screen`, the default font
 and size from `Font.default_*`, named constants (`IDLE_ANIM_SWITCH`) wherever
 events use them. RGSS sizes a font by its cell and a browser by its em, so the
 size is converted with the font file's own metrics (Cardo 24 is 17.7 px; at
-that size all 12,802 message lines of the corpus fit their windows).
+that size all 12,802 message lines of the corpus fit their windows). A font
+the game names but does not ship, when it is a standard Windows font (Arial,
+Verdana…), is drawn by that name with metric-compatible open fonts after it.
+The stock player clamps the screen to 640×480, so a larger request becomes
+640×480 unless a script patches the player past it.
 
 **Common scripts become Reactor features**, switched on in the imported
 project's own data so MV and MZ projects are unaffected:
@@ -226,7 +230,9 @@ Character/Animation Z, Shaz's Multi Layer Fog, MS Enhanced Camera, Rokan's
 Symbol Encounter, TheoAllen's Footsteps, Pathfinding, Notification Window, VX
 Style Choices and Invisible Regions, MOG Picture Effects and Battleback EX,
 Khas Awesome Light Effects, the Quest Journal, V's animated title, Extra Start
-Options and the website title command; from VX, Woratana's
+Options, the website title command, Hime's Picture Wrapper, KilloZapit's word
+wrap, Yanfly's Core Engine colours and Message System window, and Vlue's
+version stamp; from VX, Woratana's
 Multiple Fog, the Skill (Tech) Shop and modern algebra's Editable Actor
 Options. A journal whose quests are data (Nicke's Simple Journal) becomes
 Reactor's own quests instead: they are in Database › Quests, the game's calls

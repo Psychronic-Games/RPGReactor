@@ -258,6 +258,7 @@
         out.rrGuardSkillId = 0;   // set by the importer from database()'s guardSkillId
         out.locale = 'en_US';
         tag(notes, 'xpSystem', 0);
+        out.rrTitleShutdown = 'Shutdown';   // XP's title ends with it (a fixed word, not in the database)
         return out;
     }
 

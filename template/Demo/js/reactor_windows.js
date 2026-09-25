@@ -7113,3 +7113,31 @@ Window_NameBox.prototype.updateBackground = function() {
         this._downArrowSprite.move(this._width / 2, this._height + BAND / 2);
     };
 })();
+
+// The title's Shut Down command of RPG Maker XP, VX and VX Ace (System.json
+// rrTitleShutdown holds the game's name for it, as an imported game has it).
+// It sits where the old engines had it, after Continue; the Options command
+// MZ adds stays after it, where a ported title script can move it. Desktop
+// only: a browser tab cannot be closed by the page. Scene_Title handles it
+// (reactor_scenes.js).
+(function() {
+    const _makeCommandList = Window_TitleCommand.prototype.makeCommandList;
+    Window_TitleCommand.prototype.makeCommandList = function() {
+        _makeCommandList.call(this);
+        const name = $dataSystem && typeof $dataSystem.rrTitleShutdown === "string" ? $dataSystem.rrTitleShutdown : "";
+        if (!name || !Utils.isNwjs()) return;
+        this.addCommand(name, "shutdown");
+        const options = this._list.findIndex(command => command.symbol === "options");
+        if (options >= 0) this._list.splice(options, 0, this._list.pop());
+    };
+})();
+
+// The older engines draw no bar behind each item of a list, only the cursor
+// (System.json rrNoItemBackgrounds, as an imported game has it).
+(function() {
+    const _drawItemBackground = Window_Selectable.prototype.drawItemBackground;
+    Window_Selectable.prototype.drawItemBackground = function(index) {
+        if ($dataSystem && $dataSystem.rrNoItemBackgrounds) return;
+        _drawItemBackground.call(this, index);
+    };
+})();

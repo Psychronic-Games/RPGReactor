@@ -11,6 +11,8 @@
  *   clearMissingSystemFiles(dest)   System.json names with no file cleared
  *   copyAcrossAudio(dest)           a name played as ME (or BGM, SE…) found only in
  *                                   another audio folder is copied to the folder that plays it
+ *   raisePictureLimit(dest)         advanced.picturesUpperLimit raised to the highest picture
+ *                                   number the events use (old engines had no limit of 100)
  */
 'use strict';
 const fs = require('node:fs');
@@ -20,6 +22,8 @@ const FOLDERS = ['audio/bgm', 'audio/bgs', 'audio/me', 'audio/se', 'img/characte
 const AUDIO_CODES = { 241: 'audio/bgm', 132: 'audio/bgm', 245: 'audio/bgs', 249: 'audio/me', 133: 'audio/me', 250: 'audio/se' };
 const IMAGE_KEYS = { characterName: 'img/characters', faceName: 'img/faces', parallaxName: 'img/parallaxes', battlerName: 'img/enemies', battleback1Name: 'img/battlebacks1', battleback2Name: 'img/battlebacks2', animation1Name: 'img/animations', animation2Name: 'img/animations', title1Name: 'img/titles1' };
 const AUDIO_KEYS = { bgm: 'audio/bgm', titleBgm: 'audio/bgm', battleBgm: 'audio/bgm', bgs: 'audio/bgs', victoryMe: 'audio/me', gameoverMe: 'audio/me', defeatMe: 'audio/me', se: 'audio/se' };
+
+const SCRIPT_PICTURE = /(this\.rr(?:MakePic|ShowPic)\?\.\(\s*\d+\s*,\s*)("(?:[^"\\]|\\.)*")/;
 
 function forEachReference(dest, visit) {
     const walk = (v) => {
@@ -35,6 +39,14 @@ function forEachReference(dest, visit) {
             else if (v.code === 283) { visit('img/battlebacks1', p, 0); visit('img/battlebacks2', p, 1); }
             else if (v.code === 284) visit('img/parallaxes', p, 0);
             else if (v.code === 101 && typeof p[0] === 'string') visit('img/faces', p, 0);
+            else if ((v.code === 355 || v.code === 655) && typeof p[0] === 'string' && SCRIPT_PICTURE.test(p[0])) {
+                // A picture a ported script call names (this.rrMakePic?.(1, "name", …)).
+                p[0] = p[0].replace(new RegExp(SCRIPT_PICTURE.source, 'g'), (all, head, name) => {
+                    const holder = [JSON.parse(name)];
+                    visit('img/pictures', holder, 0);
+                    return head + JSON.stringify(holder[0]);
+                });
+            }
         }
         for (const [k, x] of Object.entries(v)) {
             if (typeof x === 'string') { if (IMAGE_KEYS[k]) visit(IMAGE_KEYS[k], v, k); }
@@ -162,4 +174,36 @@ function copyAcrossAudio(dest) {
     return copied;
 }
 
-module.exports = { forEachReference, fileIndex, matchFileCase, clearMissingSystemFiles, missingList, missingReferences, copyAcrossAudio, FOLDERS };
+function raisePictureLimit(dest) {
+    const PICTURE_CODES = new Set([231, 232, 233, 234, 235]);
+    let highest = 0;
+    const walk = (v) => {
+        if (Array.isArray(v)) { for (const x of v) walk(x); return; }
+        if (!v || typeof v !== 'object') return;
+        if (typeof v.code === 'number' && Array.isArray(v.parameters)) {
+            const p = v.parameters;
+            if (PICTURE_CODES.has(v.code) && typeof p[0] === 'number') highest = Math.max(highest, p[0]);
+            else if ((v.code === 355 || v.code === 655) && typeof p[0] === 'string') {
+                for (const m of p[0].matchAll(/this\.rr\w*Pic\?\.\(\s*(\d+)/g)) highest = Math.max(highest, Number(m[1]));
+            }
+        }
+        for (const x of Object.values(v)) if (x && typeof x === 'object') walk(x);
+    };
+    const dataDir = path.join(dest, 'data');
+    for (const n of fs.readdirSync(dataDir)) {
+        if (!/^(Map\d+|CommonEvents|Troops)\.json$/i.test(n)) continue;
+        try { walk(JSON.parse(fs.readFileSync(path.join(dataDir, n), 'utf8'))); } catch (_) { /* unreadable: nothing counted */ }
+    }
+    const file = path.join(dataDir, 'System.json');
+    const sys = JSON.parse(fs.readFileSync(file, 'utf8'));
+    sys.advanced = sys.advanced || {};
+    if (highest <= (Number(sys.advanced.picturesUpperLimit) || 100)) return 0;
+    sys.advanced.picturesUpperLimit = highest;
+    // Written beside and renamed into place, so a failed write never leaves half a System.json.
+    const part = file + '.part';
+    fs.writeFileSync(part, JSON.stringify(sys));
+    fs.renameSync(part, file);
+    return highest;
+}
+
+module.exports = { raisePictureLimit, forEachReference, fileIndex, matchFileCase, clearMissingSystemFiles, missingList, missingReferences, copyAcrossAudio, FOLDERS };
