@@ -8,6 +8,10 @@
 
   Nothing that reads the result today changes: `addedStates`, `isStateAdded`, `isHit` and the battle log behave as before. A result restored from an older save lacks the two new lists until its next clear, and the new methods create or skip them rather than assume them.
 
+### Fixed
+
+- **Door and Treasure quick events play their opening animation.** Both pages are made with Direction Fix on, so the closed graphic cannot turn toward the player, and their Set Movement Route then turned left, right and up without releasing it. The runtime ignores a turn while direction is fixed (`Game_CharacterBase.setDirection`), so a chest stayed shut until its Self Switch A page appeared and a door never opened before the transfer. The route now starts with Direction Fix OFF, as chests made by MZ's own Treasure quick event do; `EventManager.quickEventOpenRoute` builds it for both. Events made before this fix keep the old route; add Direction Fix OFF at the top of their movement route by hand.
+
 ### Development
 
 - **CI's GUI smokes run again.** Every run since September 14 was red at the interaction-order audit, the first smoke that draws a map: a GitHub runner has no GPU, and NW.js 0.107's Chromium refuses a WebGL context there unless `--enable-unsafe-swiftshader` is given (the Web persistence smoke already passed it; the NW.js ones did not), so the editor could not open a map and the smoke died before writing its evidence. `webdriver-client.cjs` adds the flag to every NW.js session, and honours `RR_NW_ARGS` (`--disable-gpu` emulates the runner on a desktop). The interaction audit writes its result file even when the project fails to open, so the artifact is there to read next time. The keyboard-navigation smoke, which had never run on CI, assumed ArrowDown from map 1 lands on map 2; the Demo's tree puts North Haven second, so it reads the next map from the tree. All four GUI smokes pass with the GPU disabled.
