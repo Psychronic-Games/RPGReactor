@@ -25,7 +25,7 @@ RPGReactor/
 ├── template/Demo/ # Bundled Reactor One starter project
 ├── docs/     # Maintainer workflows and project notes
 ├── RPGReactor.sh / .bat / .command
-├── CHANGELOG.md
+├── CHANGELOG.md  # Index; one file per release in changelog/
 ├── LICENSE
 └── README.md
 ```

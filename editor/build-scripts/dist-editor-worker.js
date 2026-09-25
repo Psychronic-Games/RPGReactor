@@ -88,7 +88,7 @@ const editorPkg = JSON.parse(fs.readFileSync(path.join(appRoot, 'package.json'),
 const appVersion = editorPkg.version || '0.0.0';
 
 // ── Files/dirs to include (whitelist) ───────────────────────────────
-const INCLUDE_DIRS = ['src', 'css', 'images', 'libs', 'build-scripts'];
+const INCLUDE_DIRS = ['src', 'css', 'images', 'libs', 'build-scripts', 'changelog'];
 const INCLUDE_REPOSITORY_DIRS = [path.join('template', 'Demo')];
 const INCLUDE_FILES = [
     'index.html', 'media-surface-panel.html', 'package.json', 'package-lock.json',

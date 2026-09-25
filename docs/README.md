@@ -24,7 +24,7 @@ Guides for authoring with the engine, the current verified state, and maintainer
 ## Maintainers
 
 - [Release checklist](RELEASE-CHECKLIST.md): clean validation, signed candidates, GitHub and itch publication, rollback.
-- Root [`CHANGELOG.md`](../CHANGELOG.md) is the release body; [`editor/CHANGELOG.md`](../editor/CHANGELOG.md) holds contributor detail.
+- Changelogs are one file per release: [`changelog/`](../changelog/) is the release body (keep it short), [`editor/changelog/`](../editor/changelog/) holds contributor detail. Each folder's `CHANGELOG.md` is the index. A new cycle adds `<version>.md` in both, titled `# RPG Reactor <version> (in development)`, and its line at the top of both indexes.
 
 ## Release history
 

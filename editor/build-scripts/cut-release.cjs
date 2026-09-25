@@ -57,20 +57,20 @@ function parseArguments(argv) {
 const today = () => new Date().toISOString().slice(0, 10);
 
 /**
- * The changelog section for a version, which is also the release body.
+ * The changelog file for a version, which is also the release body.
  *
  * Taken from the file rather than written twice, so the release notes and the
- * changelog cannot disagree about what shipped.
+ * changelog cannot disagree about what shipped. Each release has its own file
+ * under `changelog/`; its title line is dropped (GitHub shows the tag as the
+ * title) and its repository links are pinned to the tag, since a release body
+ * has no folder for `../docs/…` to be relative to.
  */
 function changelogSection(version) {
-    const lines = fs.readFileSync(path.join(repoRoot, 'CHANGELOG.md'), 'utf8').split('\n');
-    const start = lines.findIndex(line => line.startsWith(`## [${version}]`));
-    if (start < 0) throw new Error(`CHANGELOG.md has no section for ${version}`);
-    let end = lines.length;
-    for (let i = start + 1; i < lines.length; i++) {
-        if (lines[i].startsWith('## [')) { end = i; break; }
-    }
-    return lines.slice(start + 1, end).join('\n').trim();
+    const file = path.join(repoRoot, 'changelog', `${version}.md`);
+    if (!fs.existsSync(file)) throw new Error(`changelog/${version}.md does not exist`);
+    const lines = fs.readFileSync(file, 'utf8').split('\n');
+    const body = (lines[0].startsWith('# ') ? lines.slice(1) : lines).join('\n').trim();
+    return body.replace(/\]\(\.\.\//g, `](https://github.com/${REPO}/blob/v${version}/`);
 }
 
 /** Every place the version is written down, rolled together. */
@@ -87,16 +87,21 @@ function rollVersionSurfaces(version, testCount) {
     };
 
     /*
-     * The changelog heading is what marks a version as shipped — in both files.
+     * The changelog title is what marks a version as shipped — in both
+     * changelogs, and in both indexes.
      *
-     * Only the root one was rolled, so the editor changelog kept saying
-     * `[Unreleased - 0.96.0]` for a month after 0.96.0 shipped and had a
+     * Only the root one was rolled once, so the editor changelog kept saying
+     * the version was unreleased for a month after 0.96.0 shipped and had a
      * release's worth of entries filed under it. The detailed changelog is the
      * one people read to find out what changed; it is the worse of the two to
      * leave lying.
      */
+    for (const dir of ['changelog', 'editor/changelog']) {
+        edit(`${dir}/${version}.md`, `# RPG Reactor ${version} (in development)`,
+            `# RPG Reactor ${version} - ${today()}`);
+    }
     for (const file of ['CHANGELOG.md', 'editor/CHANGELOG.md']) {
-        edit(file, `## [Unreleased - ${version}]`, `## [${version}] - ${today()}`);
+        edit(file, `(changelog/${version}.md) (in development)`, `(changelog/${version}.md) - ${today()}`);
     }
 
     // The README names the newest tag and the verified test count.

@@ -222,13 +222,13 @@ node editor/build-scripts/cut-release.cjs 0.98.8 --dry-run
 node editor/build-scripts/cut-release.cjs 0.98.8
 ```
 
-The second command runs the full test suite again, finalizes both changelog
-headings, updates the package version and root README release link/count
+The second command runs the full test suite again, dates both changelog
+files for the version and their index lines, updates the package version and root README release link/count
 sentence, creates a release commit when needed, creates `v0.98.8`, and pushes
 the branch and tag. The editor README, status page, other version prose, and
 validation dates are not automatically refreshed; review those before cutting
 the release. The tag starts **Publish Release**, which publishes
-the source release from the matching root changelog section. Wait for that run
+the source release from `changelog/<version>.md`. Wait for that run
 and verify the tag before starting signed builds:
 
 ```bash
@@ -326,7 +326,7 @@ the build worker.
 
 If recovery creates the release because **Publish Release** did not run, rerun
 **Publish Release** with version `0.98.8` before announcing the release. That
-replaces generated fallback notes with the authoritative changelog section.
+replaces generated fallback notes with the authoritative changelog file.
 
 ```bash
 gh workflow run release.yml \

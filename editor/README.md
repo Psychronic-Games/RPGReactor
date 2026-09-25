@@ -405,7 +405,7 @@ RPG Reactor/
     ├── RPGReactor.sh            # Linux launcher when NW.js is present
     ├── RPGReactor.bat           # Windows launcher when NW.js is present
     ├── RPGReactor.command       # macOS launcher when NW.js is present
-    ├── CHANGELOG.md
+    ├── CHANGELOG.md             # Index; one file per release in changelog/
     └── README.md                # This file
 ```
 
