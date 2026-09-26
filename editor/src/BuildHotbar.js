@@ -190,6 +190,10 @@ class BuildHotbar {
         } else if (s.kind === 'blueprint') {
             const plans = manager.structures(true);
             head = this._t('build.blueprint');
+            // A building picked up in move mode that came from a plan can be laid again from it.
+            const map = this.currentMap(), E = manager.elevation();
+            const record = manager.mode === 'move' && manager.selectedGroup && E && map ? E.structureOf(map, manager.selectedGroup) : null;
+            if (record) foot = `<button type="button" class="rr-btn-secondary rr-build-relay" title="${tt('Lay this building again from its plan as the plan is now.')}">${tt('Rebuild from plan')}</button>`;
             body = plans.length
                 ? section(tt('Name'), `<select class="database-field-value rr-build-plan">${plans.map(plan => `<option value="${plan.file}" ${manager.structure === plan.file ? 'selected' : ''}>${plan.name}</option>`).join('')}</select>`) + `<div class="rr-build-note rr-build-wrap">${this._t('build.blueprintHint')}</div>`
                 : `<div class="rr-build-note rr-build-wrap">${this._t('build.noBlueprints')}</div>`;
@@ -246,6 +250,7 @@ class BuildHotbar {
             } else { manager.lastShape = kind; manager.setKind(kind); }
             this.render();
         }));
+        panel.querySelector('.rr-build-relay')?.addEventListener('click', () => { manager.relayFromPlan(); this.renderPanel(); });
         panel.querySelector('.rr-build-turn-all')?.addEventListener('click', () => { manager.turnSelection(); this.renderPanel(); });
         panel.querySelectorAll('.rr-build-material').forEach(el => el.addEventListener('click', () => edit({ material: el.dataset.material }, () => manager.setMaterial(el.dataset.material))));
         panel.querySelectorAll('.rr-build-rot').forEach(el => el.addEventListener('click', () => { const r = Number(el.dataset.rot); edit(s.shape ? { angle: r * 90 } : { rot: r }, () => { manager.rot = r; manager._syncPanel(); manager._ghostChanged(); }); }));

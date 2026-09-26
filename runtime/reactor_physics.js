@@ -189,7 +189,7 @@
         let height = alt === null ? ground : alt;
         let vz = Number(character._reactorVz) || 0;
         // On a ladder, off its foot: held there, no gravity; the climb moves it.
-        const ladder = Reactor3D.ladderAt && alt !== null ? this.ladderHeld(character) : null;
+        const ladder = Reactor3D.ladderAt && alt !== null && !character._reactorLeap ? this.ladderHeld(character) : null;
         if (ladder && height > ground + 0.02) {
             character._reactorOnLadder = true;
             character._reactorSwim = false;
@@ -279,6 +279,8 @@
      */
     ReactorPhysics.jump = function(character) {
         if (!character || this.isAirborne(character) || !this.jumpAllowed()) return false;
+        // Off a ladder: a push up and away, for a roof's edge or to let go.
+        if (character._reactorOnLadder) character._reactorOnLadder = false;
         if (character._reactorSwim && (character._reactorDive || 0) > 0.05) return false;
         if (character._reactorClimb) return false;
         const settings = this.settings();

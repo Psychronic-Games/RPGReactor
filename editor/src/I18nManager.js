@@ -12359,6 +12359,44 @@ Object.assign(RR_TEXT_TRANSLATIONS.vi, { "Physics (3D maps)": "Vật lý (bản 
 Object.assign(RR_TEXT_TRANSLATIONS.th, { "Physics (3D maps)": "ฟิสิกส์ (แผนที่ 3D)", "Physics": "ฟิสิกส์", "Blank uses the project's physics (Database › Controls).": "เว้นว่างเพื่อใช้ฟิสิกส์ของโปรเจกต์ (ฐานข้อมูล › การควบคุม)" });
 Object.assign(RR_TEXT_TRANSLATIONS.tr, { "Physics (3D maps)": "Fizik (3D haritalar)", "Physics": "Fizik", "Blank uses the project's physics (Database › Controls).": "Boş bırakılırsa projenin fiziği kullanılır (Veritabanı › Kontroller)." });
 
+// Structures: rebuild roof.
+Object.assign(RR_TEXT_TRANSLATIONS.ja, { "Rebuild roof": "屋根を作り直す", "Lay the roof again over the top floor.": "最上階の上に屋根を敷き直します。" });
+Object.assign(RR_TEXT_TRANSLATIONS.es, { "Rebuild roof": "Rehacer tejado", "Lay the roof again over the top floor.": "Vuelve a poner el tejado sobre el último piso." });
+Object.assign(RR_TEXT_TRANSLATIONS['zh-Hant'], { "Rebuild roof": "重建屋頂", "Lay the roof again over the top floor.": "在頂樓上重新鋪設屋頂。" });
+Object.assign(RR_TEXT_TRANSLATIONS['zh-Hans'], { "Rebuild roof": "重建屋顶", "Lay the roof again over the top floor.": "在顶楼上重新铺设屋顶。" });
+Object.assign(RR_TEXT_TRANSLATIONS.ru, { "Rebuild roof": "Перестроить крышу", "Lay the roof again over the top floor.": "Заново положить крышу над верхним этажом." });
+Object.assign(RR_TEXT_TRANSLATIONS.pt, { "Rebuild roof": "Refazer telhado", "Lay the roof again over the top floor.": "Coloca o telhado de novo sobre o último andar." });
+Object.assign(RR_TEXT_TRANSLATIONS.de, { "Rebuild roof": "Dach neu bauen", "Lay the roof again over the top floor.": "Das Dach über dem obersten Stockwerk neu legen." });
+Object.assign(RR_TEXT_TRANSLATIONS.fr, { "Rebuild roof": "Refaire le toit", "Lay the roof again over the top floor.": "Repose le toit sur le dernier étage." });
+Object.assign(RR_TEXT_TRANSLATIONS.el, { "Rebuild roof": "Ξαναφτιάξε τη στέγη", "Lay the roof again over the top floor.": "Στρώνει ξανά τη στέγη πάνω από τον τελευταίο όροφο." });
+Object.assign(RR_TEXT_TRANSLATIONS.ko, { "Rebuild roof": "지붕 다시 만들기", "Lay the roof again over the top floor.": "맨 위층 위에 지붕을 다시 얹습니다." });
+Object.assign(RR_TEXT_TRANSLATIONS.ar, { "Rebuild roof": "إعادة بناء السقف", "Lay the roof again over the top floor.": "يضع السقف من جديد فوق الطابق الأعلى." });
+Object.assign(RR_TEXT_TRANSLATIONS.it, { "Rebuild roof": "Rifai il tetto", "Lay the roof again over the top floor.": "Rimette il tetto sopra l’ultimo piano." });
+Object.assign(RR_TEXT_TRANSLATIONS.pl, { "Rebuild roof": "Odbuduj dach", "Lay the roof again over the top floor.": "Kładzie dach od nowa nad najwyższym piętrem." });
+Object.assign(RR_TEXT_TRANSLATIONS.id, { "Rebuild roof": "Bangun ulang atap", "Lay the roof again over the top floor.": "Memasang atap lagi di atas lantai teratas." });
+Object.assign(RR_TEXT_TRANSLATIONS.vi, { "Rebuild roof": "Làm lại mái", "Lay the roof again over the top floor.": "Lợp lại mái trên tầng trên cùng." });
+Object.assign(RR_TEXT_TRANSLATIONS.th, { "Rebuild roof": "สร้างหลังคาใหม่", "Lay the roof again over the top floor.": "วางหลังคาใหม่บนชั้นบนสุด" });
+Object.assign(RR_TEXT_TRANSLATIONS.tr, { "Rebuild roof": "Çatıyı yeniden kur", "Lay the roof again over the top floor.": "Çatıyı en üst katın üzerine yeniden döşer." });
+
+// Build bar: rebuild from plan.
+Object.assign(RR_TEXT_TRANSLATIONS.ja, { "Rebuild from plan": "プランから作り直す", "Lay this building again from its plan as the plan is now.": "今のプランのとおりにこの建物を置き直します。" });
+Object.assign(RR_TEXT_TRANSLATIONS.es, { "Rebuild from plan": "Rehacer desde el plano", "Lay this building again from its plan as the plan is now.": "Vuelve a colocar este edificio según su plano actual." });
+Object.assign(RR_TEXT_TRANSLATIONS['zh-Hant'], { "Rebuild from plan": "依藍圖重建", "Lay this building again from its plan as the plan is now.": "依目前的藍圖重新鋪設這棟建築。" });
+Object.assign(RR_TEXT_TRANSLATIONS['zh-Hans'], { "Rebuild from plan": "按蓝图重建", "Lay this building again from its plan as the plan is now.": "按当前的蓝图重新铺设这栋建筑。" });
+Object.assign(RR_TEXT_TRANSLATIONS.ru, { "Rebuild from plan": "Перестроить по плану", "Lay this building again from its plan as the plan is now.": "Заново выложить это здание по текущему плану." });
+Object.assign(RR_TEXT_TRANSLATIONS.pt, { "Rebuild from plan": "Refazer pela planta", "Lay this building again from its plan as the plan is now.": "Coloca este edifício de novo conforme a planta atual." });
+Object.assign(RR_TEXT_TRANSLATIONS.de, { "Rebuild from plan": "Nach Plan neu bauen", "Lay this building again from its plan as the plan is now.": "Dieses Gebäude nach seinem jetzigen Plan neu legen." });
+Object.assign(RR_TEXT_TRANSLATIONS.fr, { "Rebuild from plan": "Refaire depuis le plan", "Lay this building again from its plan as the plan is now.": "Repose ce bâtiment d’après son plan actuel." });
+Object.assign(RR_TEXT_TRANSLATIONS.el, { "Rebuild from plan": "Ξαναχτίσε από το σχέδιο", "Lay this building again from its plan as the plan is now.": "Στρώνει ξανά το κτίριο όπως είναι τώρα το σχέδιό του." });
+Object.assign(RR_TEXT_TRANSLATIONS.ko, { "Rebuild from plan": "설계도로 다시 짓기", "Lay this building again from its plan as the plan is now.": "지금의 설계도대로 이 건물을 다시 놓습니다." });
+Object.assign(RR_TEXT_TRANSLATIONS.ar, { "Rebuild from plan": "إعادة البناء من المخطط", "Lay this building again from its plan as the plan is now.": "يضع هذا المبنى من جديد وفق مخططه الحالي." });
+Object.assign(RR_TEXT_TRANSLATIONS.it, { "Rebuild from plan": "Rifai dalla pianta", "Lay this building again from its plan as the plan is now.": "Ricolloca questo edificio secondo la pianta attuale." });
+Object.assign(RR_TEXT_TRANSLATIONS.pl, { "Rebuild from plan": "Odbuduj z planu", "Lay this building again from its plan as the plan is now.": "Układa ten budynek od nowa według obecnego planu." });
+Object.assign(RR_TEXT_TRANSLATIONS.id, { "Rebuild from plan": "Bangun ulang dari denah", "Lay this building again from its plan as the plan is now.": "Memasang lagi bangunan ini sesuai denahnya sekarang." });
+Object.assign(RR_TEXT_TRANSLATIONS.vi, { "Rebuild from plan": "Dựng lại theo bản vẽ", "Lay this building again from its plan as the plan is now.": "Đặt lại công trình này theo bản vẽ hiện tại." });
+Object.assign(RR_TEXT_TRANSLATIONS.th, { "Rebuild from plan": "สร้างใหม่จากแปลน", "Lay this building again from its plan as the plan is now.": "วางอาคารนี้ใหม่ตามแปลนปัจจุบัน" });
+Object.assign(RR_TEXT_TRANSLATIONS.tr, { "Rebuild from plan": "Plandan yeniden kur", "Lay this building again from its plan as the plan is now.": "Bu yapıyı planının şimdiki haline göre yeniden yerleştirir." });
+
 // 3D model import optimizer dialog.
 Object.assign(RR_TEXT_TRANSLATIONS['ja'], {
     'Import 3D Model': '3Dモデルのインポート', 'Optimize (recommended)': '最適化(推奨)', 'Resize textures to 2K, compact skin weights, drop unused data, and cut the mesh to about 60% of its triangles by collapsing the edges that change the shape least. Seams and silhouette are held.': 'テクスチャを2Kに縮小し、スキンウェイトを圧縮、不要データを削除し、形状への影響が最も小さいエッジを折りたたんでメッシュの三角形を約60%まで削減します。継ぎ目とシルエットは維持されます。', 'Optimize aggressively': '積極的に最適化', 'Everything above, cut to about a quarter of the triangles. May soften very fine detail.': '上記すべてに加え、三角形を約4分の1まで削減します。細部がわずかに損なわれる場合があります。', 'Import as-is': 'そのままインポート', 'Keep every byte of the original file.': '元のファイルを一切変更しません。', 'Import': 'インポート', 'largest texture': '最大テクスチャ', 'reducible without visible change': '見た目を変えずに削減可能'

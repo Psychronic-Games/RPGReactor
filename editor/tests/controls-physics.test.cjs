@@ -244,3 +244,20 @@ test('a ladder placed beside a wall leans on it, and its preview shows that', ()
     assert.match(manager, /if \(this\.kind === 'ladder'\) \{ const rot = this\.ladderRotFor\(target\); if \(rot !== null\) piece\.rot = rot; \}/);
     assert.match(view, /manager\.ladderRotFor\(target\) \?\? manager\.rot/);
 });
+
+test('a ladder laid on a slab still reaches the ground, and Jump pushes off a ladder', () => {
+    const R = require(path.join(repoRoot, 'runtime', 'reactor_3d.js'));
+    const pieces = [];
+    for (let z = 1; z < 6; z++) pieces.push({ id: z, kind: 'ladder', x: 5, y: 6, z, rot: 2, material: '' });
+    const map = { width: 10, height: 10, reactor3d: { version: 1, mode: '3d', pieces } };
+    assert.equal(R.ladderAt(map, 5, 6).bottom, 0, 'the foot reaches the ground a level under it');
+    const c = sandbox();
+    c.Reactor3D = { isMap3D: () => true, TERRAIN_SLOPE_LIMIT: 0.75, groundHeightAt: () => 0, ladderAt: () => ({ dir: 8, bottom: 0, top: 6 }) };
+    c.$dataMap = map;
+    const who = { x: 5, y: 6, _realX: 5, _realY: 6, _reactorGround: 0, _reactorAlt: 5, _reactorOnLadder: true };
+    c.ReactorPhysics.update(who);
+    assert.equal(who._reactorOnLadder, true, 'held on the ladder');
+    assert.equal(c.ReactorPhysics.jump(who), true, 'Jump works on a ladder');
+    c.ReactorPhysics.update(who);
+    assert.ok(who._reactorAlt > 5, 'and pushes off it rather than being held');
+});

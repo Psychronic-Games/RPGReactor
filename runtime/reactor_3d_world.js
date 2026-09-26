@@ -206,7 +206,10 @@ Reactor3D.ladderAt = function(mapData, x, y) {
     }
     if (!Number.isFinite(low)) return null;
     const base = this.pieceBaseAt(mapData, x, y);
-    return { dir: [2, 4, 8, 6][((rot % 4) + 4) % 4], bottom: base + low, top: base + high };
+    // A ladder whose foot stands a step over the ground (laid on a slab) is still reached from it.
+    const ground = this.groundHeightAt(mapData, x + 0.5, y + 0.5, base + low);
+    const foot = base + low - ground <= 1 + this.TERRAIN_SLOPE_LIMIT ? Math.min(base + low, ground) : base + low;
+    return { dir: [2, 4, 8, 6][((rot % 4) + 4) % 4], bottom: foot, top: base + high };
 };
 
 /** The way a stair climbs, in cells: rot 0 rises south, each turn is clockwise seen from above. */

@@ -663,6 +663,13 @@ class PieceBuilderManager {
         return true;
     }
 
+    /** The selected building laid again from its plan as the plan is now (a rebuilt roof, more floors). */
+    relayFromPlan() {
+        const map = this.currentMap(), elevation = this.elevation();
+        if (!map || !elevation || !this.selectedGroup || !elevation.structureOf(map, this.selectedGroup)) return false;
+        return this._restamp(map, {});
+    }
+
     rotateSelected() {
         const map = this.currentMap(), elevation = this.elevation();
         if (!map || !elevation || !this.selectedGroup) return false;

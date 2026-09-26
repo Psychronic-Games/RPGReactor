@@ -542,6 +542,7 @@ class DatabaseStructureEditor {
             <div class="rr-structures-side-title">${rrEscapeHtml(tt('Floors'))}</div>
             <div class="rr-structures-floorlist">${floors.join('')}</div>
             <button type="button" class="rr-btn-secondary rr-structures-addfloor">${rrEscapeHtml(tt('+ Add floor'))}</button>
+            <button type="button" class="rr-btn-secondary rr-structures-roof" title="${rrEscapeHtml(tt('Lay the roof again over the top floor.'))}">${rrEscapeHtml(tt('Rebuild roof'))}</button>
             <div class="rr-structures-side-title">${rrEscapeHtml(tt('Tools'))}</div>
             <div class="rr-structures-toolgrid">${tools}</div>
             ${this._sel?.length ? `<div class="rr-structures-selbar"><span>${rrEscapeHtml(this._selLabel())}</span>${this._sel.some(p => p.kind === 'stair') ? `<button type="button" class="rr-btn-secondary rr-structures-selturn">${rrEscapeHtml(tt('Turn'))}</button>` : ''}<button type="button" class="rr-btn-secondary rr-structures-seldelete">${rrEscapeHtml(tt('Delete'))}</button></div>` : ''}
@@ -551,6 +552,7 @@ class DatabaseStructureEditor {
         side.querySelector('.rr-structures-selturn')?.addEventListener('click', () => this.turnSelection());
         side.querySelector('.rr-structures-seldelete')?.addEventListener('click', () => this.deleteSelection());
         side.querySelectorAll('.rr-structures-floor').forEach(button => button.addEventListener('click', () => { this._paint.floor = Number(button.dataset.floor); this._sel = []; this.renderSide(); this.drawPaint(); if (this._peek === true) this.draw3D(this._report); }));
+        side.querySelector('.rr-structures-roof').addEventListener('click', () => this.rebuildRoof());
         side.querySelector('.rr-structures-addfloor').addEventListener('click', () => { this.setFloorCount(count + 1); this._paint.floor = count; this.renderSide(); this.drawPaint(); });
         side.querySelectorAll('.rr-structures-tool').forEach(button => button.addEventListener('click', () => { this._paint.tool = button.dataset.tool; if (this._paint.tool !== 'select') this._sel = []; this.renderSide(); this.drawPaint(); }));
         side.querySelector('.rr-structures-wallmat').addEventListener('change', event => { this._paint.wallMaterial = event.target.value; });
@@ -601,6 +603,19 @@ class DatabaseStructureEditor {
         if (tool === 'wall' || tool === 'door' || tool === 'window') return F.lineCells(a.x, a.y, b.x, b.y);
         if (tool === 'stairs') return [[a.x, a.y]];
         return F.rectCells(a.x, a.y, b.x, b.y);
+    }
+
+    /** The roof laid again over the top floor (a squashed one, or after the floors changed), undoably. */
+    rebuildRoof() {
+        const F = this.floorsApi(), plan = this.current?.plan;
+        if (!F || !plan) return;
+        this.pushHistory();
+        if (F.isDescribed(plan)) F.buildOut(plan, typeof RRStructurePlan !== 'undefined' ? RRStructurePlan : null, name => this.resolve(name));
+        F.rebuildRoof(plan);
+        this._sel = [];
+        this.markDirty();
+        this.renderBar();
+        this.renderSide();
     }
 
     /** What is selected, in a few words. */

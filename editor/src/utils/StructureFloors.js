@@ -348,6 +348,70 @@
         return true;
     }
 
+    // ---- The roof ------------------------------------------------------------
+
+    /** The most used material among pieces, or ''. */
+    function commonMaterial(pieces) {
+        const counts = new Map();
+        for (const p of pieces) if (p.material) counts.set(p.material, (counts.get(p.material) || 0) + 1);
+        let best = '', n = 0;
+        for (const [m, c] of counts) if (c > n) { best = m; n = c; }
+        return best;
+    }
+
+    /**
+     * Lay the roof again over the top floor: whatever stands above it goes,
+     * and over each building of the top floor (cells joined side by side) a
+     * ceiling, ramps up from the long sides' eaves for `pitch` rows, a flat
+     * ridge between them and gables of blocks at the ends, the way a plan's
+     * roof is built. For a roof squashed flat, or one to raise or re-pitch.
+     */
+    function rebuildRoof(plan, options = {}) {
+        const S = storeyOf(plan), floors = floorsOf(plan), roofZ = floors * S;
+        const top = band(plan, floors - 1);
+        const above = (plan.pieces || []).filter(p => (Number(p.z) || 0) >= roofZ);
+        const M = Object.assign({}, plan.materials || {});
+        const wall = options.wall || M.wall || commonMaterial(top.filter(p => WALLISH.includes(p.kind)));
+        const roofMaterial = options.roof || M.roof || commonMaterial(above.filter(p => p.kind === 'ramp')) || wall;
+        const ceiling = options.ceiling || M.inner || commonMaterial(above.filter(p => p.kind === 'floor')) || commonMaterial(top.filter(p => p.kind === 'floor'));
+        // A built plan's roof.pitch is null (its roof is in its pieces): a rebuild lays the standard one.
+        const pitchWanted = Number.isFinite(Number(options.pitch)) ? Math.max(0, Math.floor(Number(options.pitch))) : (plan.roof && plan.roof.pitch !== null && Number.isFinite(Number(plan.roof.pitch)) ? Number(plan.roof.pitch) : 6);
+        plan.pieces = (plan.pieces || []).filter(p => (Number(p.z) || 0) < roofZ);
+        // The top floor's footprint: every cell it has a piece in, grouped where cells touch.
+        const cells = new Set(top.map(p => p.x + ',' + p.y));
+        const seen = new Set(), boxes = [];
+        for (const key of cells) {
+            if (seen.has(key)) continue;
+            const box = [Infinity, Infinity, -Infinity, -Infinity], queue = [key];
+            seen.add(key);
+            while (queue.length) {
+                const [x, y] = queue.pop().split(',').map(Number);
+                box[0] = Math.min(box[0], x); box[1] = Math.min(box[1], y); box[2] = Math.max(box[2], x); box[3] = Math.max(box[3], y);
+                for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+                    const next = (x + dx) + ',' + (y + dy);
+                    if (cells.has(next) && !seen.has(next)) { seen.add(next); queue.push(next); }
+                }
+            }
+            boxes.push(box);
+        }
+        let laid = 0;
+        const put = (kind, x, y, z, rot, material) => { add(plan, Object.assign({ kind, x, y, z, material: material || '' }, rot ? { rot } : {})); laid++; };
+        for (const [bx0, by0, bx1, by1] of boxes) {
+            for (let x = bx0; x <= bx1; x++) for (let y = by0; y <= by1; y++) if (cells.has(x + ',' + y)) put('floor', x, y, roofZ, 0, ceiling);
+            const pitch = Math.max(0, Math.min(Math.floor((by1 - by0) / 2), pitchWanted));
+            for (let x = bx0; x <= bx1; x++) {
+                const material = x === bx0 || x === bx1 ? wall : roofMaterial;
+                for (let i = 0; i < pitch; i++) { put('ramp', x, by0 + i, roofZ + i, 0, material); put('ramp', x, by1 - i, roofZ + i, 2, material); }
+                for (let y = by0 + pitch; y <= by1 - pitch; y++) put('floor', x, y, roofZ + pitch, 0, material);
+            }
+            for (const gx of [bx0, bx1]) for (let y = by0 + 1; y < by1; y++) {
+                const height = Math.min(y - by0, by1 - y, pitch);
+                for (let z = roofZ; z < roofZ + height; z++) put('block', gx, y, z, 0, wall);
+            }
+        }
+        return laid;
+    }
+
     /** Cells of a dragged rectangle, or of a straight line (the longer axis wins). */
     function rectCells(x0, y0, x1, y1) {
         const out = [];
@@ -365,7 +429,7 @@
         return rectCells(x0, y0, x1, y1).filter(([x, y]) => x === Math.min(x0, x1) || x === Math.max(x0, x1) || y === Math.min(y0, y1) || y === Math.max(y0, y1));
     }
 
-    const api = { DIRS, WALLISH, selectAt, selectCells, flightOf, movePieces, removePieces, turnStairs, storeyOf, floorsOf, occupiedFloors, band, isDescribed, buildOut, setFloors, hasPieces, paintFloor, paintWall, placeDoor, placeWindow, placeStairs, erase, cellKind, rectCells, lineCells, outlineCells };
+    const api = { DIRS, WALLISH, rebuildRoof, selectAt, selectCells, flightOf, movePieces, removePieces, turnStairs, storeyOf, floorsOf, occupiedFloors, band, isDescribed, buildOut, setFloors, hasPieces, paintFloor, paintWall, placeDoor, placeWindow, placeStairs, erase, cellKind, rectCells, lineCells, outlineCells };
     root.RRStructureFloors = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);
