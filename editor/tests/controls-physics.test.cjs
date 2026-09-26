@@ -187,3 +187,10 @@ test('a ladder is climbed, not stood on: off its top onto the ledge, onto it fro
     assert.match(physics, /Game_Player\.prototype\.moveStraight = function\(d\)/);
     assert.match(physics, /if \(ladder && height > ground \+ 0\.02\) \{/);
 });
+
+test('the editor and the runtime know the same piece kinds (a ladder is placeable and survives a save)', () => {
+    const E = require(path.join(repoRoot, 'editor', 'src', 'utils', 'MapElevation.js'));
+    const R = require(path.join(repoRoot, 'runtime', 'reactor_3d.js'));
+    assert.deepEqual([...E.PIECE_KINDS].sort(), [...R.PIECE_KINDS].sort());
+    assert.equal(E.normalizePiece({ kind: 'ladder', x: 1, y: 1, z: 0, rot: 2 }, { width: 5, height: 5 }).kind, 'ladder');
+});

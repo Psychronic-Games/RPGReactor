@@ -631,7 +631,7 @@
      */
     const SHAPE_KINDS = ['box', 'wedge', 'pyramid', 'prism', 'hull', 'spike', 'cylinder', 'capsule', 'tube', 'cone', 'dome', 'sphere', 'dish', 'fin', 'arch', 'tunnel', 'ring'];
     const SHAPE_PARAMS = { hull: { sides: 8, taper: 0.8 }, spike: { sides: 6, taper: 0 }, capsule: { sides: 24 }, dish: { sides: 32 }, fin: { taper: 0.4 }, cylinder: { sweep: 360 }, tube: { sweep: 360, thick: 0.3 }, ring: { sweep: 360, thick: 0.2 } };
-    const PIECE_KINDS = ['wall', 'block', 'floor', 'pillar', 'stair', 'ramp', 'roof', 'doorway', 'window', 'fence', 'glass'].concat(SHAPE_KINDS);
+    const PIECE_KINDS = ['wall', 'block', 'floor', 'pillar', 'stair', 'ramp', 'roof', 'doorway', 'window', 'fence', 'glass', 'ladder'].concat(SHAPE_KINDS);
     const PIECE_MAX_LEVEL = 240;
     const normalizePiece = (raw, mapData) => {
         if (!raw || typeof raw !== 'object' || !PIECE_KINDS.includes(raw.kind)) return null;
