@@ -2503,6 +2503,8 @@ class ProjectController {
         if (!checkbox || !options) return;
         checkbox.checked = !!(elevation && elevation.hasNote(mapData));
         options.style.display = checkbox.checked ? 'block' : 'none';
+        const physics = document.getElementById('map-physics-section');
+        if (physics) physics.style.display = checkbox.checked ? '' : 'none';
 
         const room = elevation ? elevation.room(mapData) : { height: 4, floor: '', walls: '', ceiling: '', sky: '', skyScrollX: 0, skyScrollY: 0 };
         const height = document.getElementById('map-3d-height-input');
@@ -3023,6 +3025,8 @@ class ProjectController {
         // 3D: the checkbox reveals the room, and each image picks like a parallax.
         this._bindMapPropertiesListener('map-3d-checkbox', 'change', (e) => {
             document.getElementById('map-3d-options').style.display = e.target.checked ? 'block' : 'none';
+            const physics = document.getElementById('map-physics-section');
+            if (physics) physics.style.display = e.target.checked ? '' : 'none';
         });
         for (const piece of ['floor', 'walls', 'ceiling', 'sky']) {
             this._bindMapPropertiesListener(`map-3d-${piece}-browse-btn`, 'click',

@@ -140,7 +140,7 @@ class DatabaseControlsEditor {
                     </div>
                 </div>
                 <div class="database-section rr-controls-card">
-                    <div class="database-section-header">${rrEscapeHtml(tt('Jumping and gravity (3D maps)'))}</div>
+                    <div class="database-section-header">${rrEscapeHtml(tt('Physics (3D maps)'))}</div>
                     <div class="database-section-content rr-controls-form">
                         <label class="rr-controls-check"><input type="checkbox" class="rr-controls-jumpon"${controls.jump ? ' checked' : ''}> ${rrEscapeHtml(tt('Players can jump'))}</label>
                         <label>${rrEscapeHtml(tt('Jump height'))}</label><div><input type="number" class="database-field-value rr-controls-num" data-field="jumpHeight" min="0" max="20" step="0.05" value="${physics.jumpHeight}"> <span class="rr-controls-unit">${rrEscapeHtml(tt('tiles'))}</span></div>
@@ -150,7 +150,7 @@ class DatabaseControlsEditor {
                         <label>${rrEscapeHtml(tt('Safe fall'))}</label><div><input type="number" class="database-field-value rr-controls-num" data-field="fallFrom" min="0" max="200" step="1" value="${physics.fallFrom}"> <span class="rr-controls-unit">${rrEscapeHtml(tt('tiles'))}</span></div>
                         <label>${rrEscapeHtml(tt('Damage per tile beyond'))}</label><div><input type="number" class="database-field-value rr-controls-num" data-field="fallPercent" min="0" max="100" step="1" value="${physics.fallPercent}"> <span class="rr-controls-unit">${rrEscapeHtml(tt('% of max HP'))}</span></div>
                         <label>${rrEscapeHtml(tt('Or run a common event'))}</label><select class="database-field-value rr-controls-event">${commonEvents.map(([id, name]) => `<option value="${id}"${Number(physics.fallCommonEvent) === Number(id) ? ' selected' : ''}>${rrEscapeHtml(name)}</option>`).join('')}</select>
-                        <div class="rr-controls-note rr-controls-span">${rrEscapeHtml(tt('Gravity 1 is Earth. A map can set its own in Map Properties › 3D (the Moon, a low-gravity station).'))}</div>
+                        <div class="rr-controls-note rr-controls-span">${rrEscapeHtml(tt('Gravity 1 is Earth. A map can set its own in Map Properties › Physics (the Moon, a low-gravity station).'))}</div>
                     </div>
                 </div>
                 <div class="database-section rr-controls-card">

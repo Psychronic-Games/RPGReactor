@@ -676,42 +676,48 @@
                                         <div class="rr-number-stepper"><input class="rr-number-stepper-input" style="flex: 1; min-width: 0; width: 100%; box-sizing: border-box; padding: 5px 6px; border: 0; background: transparent; color: var(--color-text); font-size: 12px;" type="number" id="map-3d-camera-fov" step="any" min="5" max="150" placeholder="auto" data-i18n-placeholder="cam3d.auto"><div class="rr-number-stepper-buttons"><button type="button" tabindex="-1" data-map-props-step="1" data-target="map-3d-camera-fov" aria-label="+">&#9650;</button><button type="button" tabindex="-1" data-map-props-step="-1" data-target="map-3d-camera-fov" aria-label="-">&#9660;</button></div></div>
                                     </div>
                                 </div>
-                                <!-- Physics on this map: blank or "Project default" uses Database › Controls. -->
-                                <div id="map-3d-physics" style="display: grid; grid-template-columns: auto 1fr auto 1fr; gap: 6px 8px; align-items: center; margin-bottom: 8px;">
-                                    <label class="map-props-label">Gravity</label>
-                                    <select id="map-3d-gravity-select" class="database-field-value" style="width: 100%;">
-                                        <option value="" data-i18n-text-source="Project default">Project default</option>
-                                        <option value="1" data-i18n-text-source="Earth">Earth</option>
-                                        <option value="0.38" data-i18n-text-source="Mars">Mars</option>
-                                        <option value="0.166" data-i18n-text-source="Moon">Moon</option>
-                                        <option value="0.5" data-i18n-text-source="Low">Low</option>
-                                        <option value="2" data-i18n-text-source="Heavy">Heavy</option>
-                                        <option value="custom" data-i18n-text-source="Custom">Custom</option>
-                                    </select>
-                                    <label class="map-props-label">× Earth</label>
-                                    <input type="number" id="map-3d-gravity-input" min="0.01" max="10" step="0.01" class="database-field-value" style="width: 100%; box-sizing: border-box;">
-                                    <label class="map-props-label">Jump height</label>
-                                    <input type="number" id="map-3d-jump-input" min="0" max="20" step="0.05" class="database-field-value" style="width: 100%; box-sizing: border-box;" placeholder="">
-                                    <label class="map-props-label">Jumping</label>
-                                    <select id="map-3d-jumping-select" class="database-field-value" style="width: 100%;">
-                                        <option value="" data-i18n-text-source="Project default">Project default</option>
-                                        <option value="on" data-i18n-text-source="On">On</option>
-                                        <option value="off" data-i18n-text-source="Off">Off</option>
-                                    </select>
-                                    <label class="map-props-label">Fall damage</label>
-                                    <select id="map-3d-falldamage-select" class="database-field-value" style="width: 100%;">
-                                        <option value="" data-i18n-text-source="Project default">Project default</option>
-                                        <option value="on" data-i18n-text-source="On">On</option>
-                                        <option value="off" data-i18n-text-source="Off">Off</option>
-                                    </select>
-                                    <label class="map-props-label">Swimming</label>
-                                    <select id="map-3d-swimming-select" class="database-field-value" style="width: 100%;">
-                                        <option value="" data-i18n-text-source="Project default">Project default</option>
-                                        <option value="on" data-i18n-text-source="On">On</option>
-                                        <option value="off" data-i18n-text-source="Off">Off</option>
-                                    </select>
-                                </div>
                                 <div style="font-size: 11px; color: var(--color-text-muted); line-height: 1.4;" data-i18n="mapProps.roomHint">The floor lies under the parallax background. Walls and the ceiling face inward, so the camera looks past them into the room.</div>
+                            </div>
+                        </div>
+                        <!-- Physics: this map's own gravity, jumping, falls and swimming, for a 3D map. Blank or "Project default" uses Database › Controls. -->
+                        <div id="map-physics-section" class="lit-section" style="display: none;">
+                            <div class="lit-section-header" data-i18n-text-source="Physics">Physics</div>
+                            <div class="lit-section-body">
+                                    <div id="map-3d-physics" style="display: grid; grid-template-columns: auto 1fr auto 1fr; gap: 6px 8px; align-items: center;">
+                                        <label class="map-props-label">Gravity</label>
+                                        <select id="map-3d-gravity-select" class="database-field-value" style="width: 100%;">
+                                            <option value="" data-i18n-text-source="Project default">Project default</option>
+                                            <option value="1" data-i18n-text-source="Earth">Earth</option>
+                                            <option value="0.38" data-i18n-text-source="Mars">Mars</option>
+                                            <option value="0.166" data-i18n-text-source="Moon">Moon</option>
+                                            <option value="0.5" data-i18n-text-source="Low">Low</option>
+                                            <option value="2" data-i18n-text-source="Heavy">Heavy</option>
+                                            <option value="custom" data-i18n-text-source="Custom">Custom</option>
+                                        </select>
+                                        <label class="map-props-label">× Earth</label>
+                                        <input type="number" id="map-3d-gravity-input" min="0.01" max="10" step="0.01" class="database-field-value" style="width: 100%; box-sizing: border-box;">
+                                        <label class="map-props-label">Jump height</label>
+                                        <input type="number" id="map-3d-jump-input" min="0" max="20" step="0.05" class="database-field-value" style="width: 100%; box-sizing: border-box;" placeholder="">
+                                        <label class="map-props-label">Jumping</label>
+                                        <select id="map-3d-jumping-select" class="database-field-value" style="width: 100%;">
+                                            <option value="" data-i18n-text-source="Project default">Project default</option>
+                                            <option value="on" data-i18n-text-source="On">On</option>
+                                            <option value="off" data-i18n-text-source="Off">Off</option>
+                                        </select>
+                                        <label class="map-props-label">Fall damage</label>
+                                        <select id="map-3d-falldamage-select" class="database-field-value" style="width: 100%;">
+                                            <option value="" data-i18n-text-source="Project default">Project default</option>
+                                            <option value="on" data-i18n-text-source="On">On</option>
+                                            <option value="off" data-i18n-text-source="Off">Off</option>
+                                        </select>
+                                        <label class="map-props-label">Swimming</label>
+                                        <select id="map-3d-swimming-select" class="database-field-value" style="width: 100%;">
+                                            <option value="" data-i18n-text-source="Project default">Project default</option>
+                                            <option value="on" data-i18n-text-source="On">On</option>
+                                            <option value="off" data-i18n-text-source="Off">Off</option>
+                                        </select>
+                                    </div>
+                                <div class="map-props-physics-note" data-i18n-text-source="Blank uses the project's physics (Database › Controls)." style="font-size: 11px; color: var(--color-text-muted); line-height: 1.4;">Blank uses the project's physics (Database › Controls).</div>
                             </div>
                         </div>
                         <!-- Note Section -->
