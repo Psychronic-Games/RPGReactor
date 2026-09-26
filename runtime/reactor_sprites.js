@@ -5965,8 +5965,9 @@ Spriteset_Map.prototype.updateReactor3DCamera = function() {
     if (cameras && cameras.update(this)) return;
     const focus = this.reactor3DCameraFocus();
     // The floor the player is on, in a house with two.
-    const height = Reactor3D.groundHeightAt($dataMap, focus.x + 0.5, focus.y + 0.5,
-        typeof $gamePlayer !== "undefined" && $gamePlayer ? $gamePlayer._reactorGround : undefined);
+    const near = typeof $gamePlayer !== "undefined" && $gamePlayer ? $gamePlayer._reactorGround : undefined;
+    const height = Reactor3D.viewGroundAt ? Reactor3D.viewGroundAt($dataMap, focus.x + 0.5, focus.y + 0.5, near)
+        : Reactor3D.groundHeightAt($dataMap, focus.x + 0.5, focus.y + 0.5, near);
     // Zoom is a scale on the 2D screen, and a distance in three dimensions:
     // zooming in halves how far away the camera stands rather than making the
     // picture bigger, which is the same thing on a flat map and the right thing

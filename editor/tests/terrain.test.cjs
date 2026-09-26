@@ -91,8 +91,8 @@ test('every ground surface and every stander goes through the terrain', () => {
     assert.match(runtime, /const geometry = this\.groundPlane\(width, height, lift\);/);
     assert.match(runtime, /const geometry = this\.groundPlane\(width, height, y\);/);
     assert.equal((runtime.match(/Reactor3D\.characterGround\(/g) || []).length, 4, 'both model placements and the cutaway, for the player and for each of the company');
-    assert.match(runtime, /return Reactor3D\.groundHeightAt\(\$dataMap, x \+ 0\.5, y \+ 0\.5, near\) \|\| 0;/, 'the camera module');
-    assert.match(read('runtime/reactor_sprites.js'), /Reactor3D\.groundHeightAt\(\$dataMap, focus\.x \+ 0\.5, focus\.y \+ 0\.5,/);
+    assert.match(runtime, /Reactor3D\.viewGroundAt\(\$dataMap, x \+ 0\.5, y \+ 0\.5, near\)/, 'the camera module, which never looks at a wall stack\'s top');
+    assert.match(read('runtime/reactor_sprites.js'), /Reactor3D\.viewGroundAt\(\$dataMap, focus\.x \+ 0\.5, focus\.y \+ 0\.5, near\)/);
     const objects = read('runtime/reactor_objects.js');
     assert.match(objects, /const ground = Reactor3D\.characterGround\(\$dataMap, this\);/);
     assert.match(objects, /Reactor3D\.terrainBlocks\(\$dataMap, x, y, x2, y2, this\._reactorGround\)\) return false;/);

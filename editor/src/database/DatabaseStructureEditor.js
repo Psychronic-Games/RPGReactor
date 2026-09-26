@@ -699,15 +699,25 @@ class DatabaseStructureEditor {
             source = { size: plan.size, storey: S, pieces: this._describedPieces };
         }
         const floor = this._paint.floor;
-        const byCell = floorIndex => {
-            const out = new Map();
-            for (const piece of F.band(source, floorIndex)) {
+        // Pieces by floor and cell, built once per change: a 24-floor manor is tens of thousands of
+        // pieces, and searching them all for every cell of the plan took seconds per draw.
+        const cacheKey = [this._paintVersion || 0, source.pieces, source.pieces.length].join('|');
+        if (!this._paintCells || this._paintCells.key !== cacheKey || this._paintCells.pieces !== source.pieces) {
+            const floors = new Map();
+            for (const piece of source.pieces || []) {
+                const f = Math.floor((Number(piece.z) || 0) / S);
+                let cells = floors.get(f);
+                if (!cells) floors.set(f, cells = new Map());
                 const key = piece.x + ',' + piece.y;
-                const list = out.get(key) || [];
-                list.push(piece);
-                out.set(key, list);
+                const list = cells.get(key);
+                if (list) list.push(piece); else cells.set(key, [piece]);
             }
-            return out;
+            this._paintCells = { key: cacheKey, pieces: source.pieces, floors };
+        }
+        const byCell = floorIndex => this._paintCells.floors.get(floorIndex) || new Map();
+        const shownOf = list => {
+            for (const kind of ['doorway', 'window', 'wall', 'stair', 'pillar', 'block', 'fence', 'ramp', 'roof']) { const piece = list.find(p => p.kind === kind); if (piece) return piece; }
+            return list.find(p => p.kind === 'floor') || list[0] || null;
         };
         if (floor > 0) {
             ctx.fillStyle = 'rgba(255,255,255,0.10)';
@@ -732,7 +742,7 @@ class DatabaseStructureEditor {
             const [x, y] = key.split(',').map(Number);
             const slab = list.find(p => p.kind === 'floor');
             if (slab && (Number(slab.z) || 0) === floor * S) drawMaterial(slab.material, x, y, null);
-            const shown = F.cellKind(source, floor, x, y);
+            const shown = shownOf(list);
             if (!shown || shown.kind === 'floor') continue;
             const px = ox + x * cell, py = oy + y * cell;
             if (shown.kind === 'wall') drawMaterial(shown.material, x, y, 'rgba(0,0,0,0.45)');
@@ -799,6 +809,7 @@ class DatabaseStructureEditor {
 
     /** The plan object stays the record's own; only its contents change. */
     restore(json) {
+        this._paintVersion = (this._paintVersion || 0) + 1;
         const plan = this.current.plan;
         const next = DatabaseStructureEditor.normalizePlan(JSON.parse(json));
         for (const key of Object.keys(plan)) delete plan[key];
@@ -814,6 +825,7 @@ class DatabaseStructureEditor {
     /** An edit: the database owns the dirty state; the previews follow. */
     markDirty() {
         if (!this.current) return;
+        this._paintVersion = (this._paintVersion || 0) + 1;
         this.parentEditor?._markDatabaseMutation?.();
         this._reportStale = true;
         this.renderTools();

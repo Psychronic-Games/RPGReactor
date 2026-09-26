@@ -769,7 +769,7 @@ class PieceBuilderManager {
     setLevel(level) {
         // The Structure workshop's plot is only so many floors tall.
         const plot = this.currentMap()?.rrWorkshop;
-        const max = plot ? plot.maxLevel : this.elevation()?.PIECE_MAX_LEVEL ?? 120;
+        const max = plot ? plot.maxLevel : this.elevation()?.PIECE_MAX_LEVEL ?? 240;
         this.level = Math.max(0, Math.min(max, Math.floor(Number(level)) || 0));
         this._syncPanel();
         this._ghostChanged();

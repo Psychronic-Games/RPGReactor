@@ -82,6 +82,19 @@ Reactor3D.groundHeightAt = function(mapData, wx, wz, near) {
     return base + this.pieceSurfaceAt(mapData, wx, wz, Number.isFinite(near) ? near - base : 0);
 };
 
+/**
+ * The ground a camera looks at, over a point that is not where anyone stands:
+ * the view's middle, which drifts over walls. A stack of walls reads as its
+ * top (a character cannot step into it), so over a wall beside a door the view
+ * jumped to the roof. More than a step above the player's own floor (`near`)
+ * is not ground anyone is on; the player's floor is.
+ */
+Reactor3D.viewGroundAt = function(mapData, wx, wz, near) {
+    const ground = this.groundHeightAt(mapData, wx, wz, near);
+    if (Number.isFinite(near) && ground > near + 1 + this.TERRAIN_SLOPE_LIMIT) return near;
+    return ground;
+};
+
 /** The ground under a character, at the middle of its cell as it moves between cells. */
 Reactor3D.characterGround = function(mapData, character) {
     if (!character) return this.DEFAULT_ELEVATION;
@@ -89,7 +102,17 @@ Reactor3D.characterGround = function(mapData, character) {
     const y = Number.isFinite(character._realY) ? character._realY : character.y || 0;
     // Where the character last stood decides which floor of a house it is
     // on; `locate` forgets it, so a transfer lands on the ground floor.
-    const ground = this.groundHeightAt(mapData, x + 0.5, y + 0.5, character._reactorGround);
+    const near = character._reactorGround;
+    let ground = this.groundHeightAt(mapData, x + 0.5, y + 0.5, near);
+    // A diagonal step passes over the corner cell between its two cells; beside
+    // a doorway that corner is a wall, whose stack reads as its top, and the
+    // character was lifted onto the roof (and stayed, standing there). A surface
+    // out of a step's reach is not ground anyone walked onto: the cell being
+    // entered is.
+    if (Number.isFinite(near) && ground > near + 1 + this.TERRAIN_SLOPE_LIMIT
+        && Number.isFinite(character.x) && Number.isFinite(character.y)) {
+        ground = this.groundHeightAt(mapData, character.x + 0.5, character.y + 0.5, near);
+    }
     character._reactorGround = ground;
     return ground;
 };
@@ -371,7 +394,7 @@ Reactor3D.hullReach = function(point, hull) {
     return inside ? 0 : nearest;
 };
 // Levels a piece may stand at: 24 storeys of five tiles, so a tower plan is never cut short by the store.
-Reactor3D.PIECE_MAX_LEVEL = 120;
+Reactor3D.PIECE_MAX_LEVEL = 240;
 Reactor3D.PIECE_FLOOR_THICKNESS = 0.1;
 /**
  * A storey, in tiles. The bundled characters stand three tiles tall, a

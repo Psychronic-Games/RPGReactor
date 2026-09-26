@@ -153,3 +153,25 @@ test('while building, Ctrl+Z and the toolbar Undo reach the builder; the worksho
     assert.match(workshop, /if \(tilemap\.currentMap && !await this\.projectController\.confirmUnsavedChanges\?\.\('map'\)\) return false;/, 'moving to another structure asks about unsaved work');
     assert.match(read('editor/src/ProjectController.js'), /rrWorkshop \? 'this structure' : 'this map'/);
 });
+
+test('a diagonal step past a wall corner does not lift a character onto the wall stack; a view over a wall stays on the player\'s floor', () => {
+    const fsx = require('node:fs');
+    globalThis.window = globalThis;
+    const R = require(path.join(repoRoot, 'runtime', 'reactor_3d.js'));
+    globalThis.Reactor3D = R;
+    for (const ext of R.EXTENSIONS || []) new Function('Reactor3D', 'window', 'globalThis', fsx.readFileSync(path.join(repoRoot, 'runtime', ext.file), 'utf8'))(R, globalThis, globalThis);
+    // A doorway at (1,1) in a wall running along y=1, two storeys of wall stacked; floor at (2,0).
+    const pieces = [];
+    let id = 1;
+    for (const z of [0, 5]) {
+        pieces.push({ id: id++, kind: 'floor', x: 2, y: 0, z }, { id: id++, kind: 'floor', x: 1, y: 1, z }, { id: id++, kind: 'doorway', x: 1, y: 1, z });
+        pieces.push({ id: id++, kind: 'floor', x: 2, y: 1, z }, { id: id++, kind: 'wall', x: 2, y: 1, z });
+    }
+    const map = { width: 4, height: 4, reactor3d: { version: 1, elevation: new Array(16).fill(0), pieces } };
+    assert.ok(R.groundHeightAt(map, 2.5, 1.5, 0) > 5, 'a wall stack reads as its top');
+    // Mid-step from the doorway (1,1) up-right to (2,0): the middle of the step is over the wall at (2,1).
+    const walker = { x: 2, y: 0, _realX: 1.5, _realY: 0.6, _reactorGround: R.groundHeightAt(map, 1.5, 1.5, 0) };
+    assert.ok(R.characterGround(map, walker) < 1, 'the walker stays on the ground floor');
+    assert.ok(R.viewGroundAt(map, 2.5, 1.5, 0) < 1, 'a view over the wall stays on the floor the player is on');
+    assert.equal(R.PIECE_MAX_LEVEL, 240, 'room for 24 floors and a roof');
+});

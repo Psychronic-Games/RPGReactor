@@ -7984,7 +7984,7 @@ Reactor3D.renderBlocker = function(mapData) {
     function elevationAt(x, y) {
         if (!Reactor3D || !Reactor3D.groundHeightAt || typeof $dataMap === "undefined") return 0;
         const near = typeof $gamePlayer !== "undefined" && $gamePlayer ? $gamePlayer._reactorGround : undefined;
-        return Reactor3D.groundHeightAt($dataMap, x + 0.5, y + 0.5, near) || 0;
+        return (Reactor3D.viewGroundAt ? Reactor3D.viewGroundAt($dataMap, x + 0.5, y + 0.5, near) : Reactor3D.groundHeightAt($dataMap, x + 0.5, y + 0.5, near)) || 0;
     }
 
     function gameContext(spriteset) {

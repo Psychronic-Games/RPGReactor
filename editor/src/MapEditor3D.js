@@ -1732,7 +1732,7 @@ class MapEditor3D {
         let z;
         if (erase) z = top ? Math.max(0, Math.round(rel) - 1) : Math.max(0, Math.floor(rel + 0.02));
         else z = Math.max(manager?.level || 0, top ? Math.round(rel) : Math.max(0, Math.floor(rel + 0.02)));
-        const max = RRMapElevation?.PIECE_MAX_LEVEL ?? 120;
+        const max = RRMapElevation?.PIECE_MAX_LEVEL ?? 240;
         // The face pointed at, for a screen on a wall: which way it looks and whose cell it is.
         const sideName = side ? (Math.abs(normal.x) >= Math.abs(normal.z) ? (normal.x > 0 ? 'east' : 'west') : (normal.z > 0 ? 'south' : 'north')) : null;
         const faceCell = side ? { x: Math.max(0, Math.min(mapData.width - 1, Math.floor(point.x - normal.x * 0.5))), y: Math.max(0, Math.min(mapData.height - 1, Math.floor(point.z - normal.z * 0.5))) } : null;
