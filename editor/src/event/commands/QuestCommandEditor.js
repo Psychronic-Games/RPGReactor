@@ -5,7 +5,7 @@
  *
  *   QuestSet        discover / complete / fail / reset / track / untrack a quest
  *   QuestObjective  show / hide / complete / fail / reset one objective, or all
- *   QuestReward     show / hide one reward, or all
+ *   QuestReward     show / hide / give one reward, or all
  *   OpenQuestLog    open the quest log, on a quest if one is named
  */
 class QuestCommandEditor {
@@ -13,7 +13,7 @@ class QuestCommandEditor {
     static LABELS = { QuestSet: 'Quest', QuestObjective: 'Quest Objective', QuestReward: 'Quest Reward', OpenQuestLog: 'Open Quest Log' };
     static ACTIONS = ['discover', 'complete', 'fail', 'reset', 'track', 'untrack'];
     static OBJECTIVE_STATES = ['complete', 'show', 'hide', 'fail', 'reset'];
-    static REWARD_STATES = ['show', 'hide'];
+    static REWARD_STATES = ['show', 'hide', 'give'];
 
     constructor(databaseManager) {
         this.databaseManager = databaseManager;
@@ -43,7 +43,7 @@ class QuestCommandEditor {
         const table = {
             QuestSet: { discover: 'Discover', complete: 'Complete', fail: 'Fail', reset: 'Reset', track: 'Track', untrack: 'Stop tracking' },
             QuestObjective: { complete: 'Complete', show: 'Show', hide: 'Hide', fail: 'Fail', reset: 'Reset' },
-            QuestReward: { show: 'Show', hide: 'Hide' }
+            QuestReward: { show: 'Show', hide: 'Hide', give: 'Give now' }
         }[name] || {};
         return this._t(table[value] || value);
     }

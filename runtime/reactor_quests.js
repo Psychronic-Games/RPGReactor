@@ -5,14 +5,17 @@
 // Quests (its own file and global: plugins own data/Quests.json and
 // $dataReactorQuests - YEP_QuestJournal, GS_QuestSystem - and must keep them): a
 // name, a category, who gives it and where, a description, objectives and
-// rewards (each can start hidden), and the rule that makes it appear -
-// an event command, a switch, a variable, or the start of the game. The
-// player's progress lives on $gameSystem, so it saves with the game.
+// rewards (each can start hidden, and each can give gold, an item, EXP or
+// a common event), and the rule that makes it appear - an event command, a
+// switch, a variable, or the start of the game. The player's progress lives
+// on $gameSystem, so it saves with the game. The tracked quest shows on the
+// map in Window_QuestTracker.
 //
 //   $gameSystem.quests()            the progress record (Game_Quests)
 //     .discover(id) .complete(id) .fail(id) .reset(id) .status(id)
 //     .setObjective(id, index, "show" | "hide" | "complete" | "fail" | "reset")
-//     .setReward(id, index, visible) .setTracked(id) .tracked()
+//     .setReward(id, index, visible) .giveRewards(id, index)
+//     .setTracked(id) .tracked()
 //     .known() .completed() .failed()
 //   ReactorQuests.find(idOrKey)     the data record by id or key
 //   Scene_Quest                     the quest log; "Quests" in the main menu
@@ -98,7 +101,35 @@
         return {
             menuCommand: stored.menuCommand !== false,
             commandName: stored.commandName || "Quests",
-            allLabel: stored.allLabel || "All"
+            allLabel: stored.allLabel || "All",
+            tracker: this.trackerSettings(stored.tracker)
+        };
+    };
+
+    ReactorQuests.TRACKER_POSITIONS = ["topRight", "topLeft", "bottomRight", "bottomLeft"];
+
+    /** The on-map tracker's settings (System.json reactorQuests.tracker), with defaults. */
+    ReactorQuests.trackerSettings = function(raw) {
+        // The tracker asks every frame; the stored object does not change in a running game.
+        // A project that never set one has none stored; that is cached too.
+        if (this._tracker && raw === this._trackerRaw) return this._tracker;
+        this._trackerRaw = raw;
+        this._tracker = this.normalizeTracker(raw);
+        return this._tracker;
+    };
+
+    ReactorQuests.normalizeTracker = function(raw) {
+        const stored = raw && typeof raw === "object" ? raw : {};
+        const width = Math.round(Number(stored.width));
+        const lines = Math.round(Number(stored.maxObjectives));
+        return {
+            enabled: stored.enabled !== false,
+            autoTrack: stored.autoTrack !== false,
+            position: this.TRACKER_POSITIONS.includes(stored.position) ? stored.position : "topRight",
+            width: width >= 160 ? Math.min(width, 1280) : 330,
+            maxObjectives: lines >= 1 ? Math.min(lines, 12) : 4,
+            background: ["dim", "window", "none"].includes(stored.background) ? stored.background : "dim",
+            hideSwitchId: Math.max(0, Math.floor(Number(stored.hideSwitchId)) || 0)
         };
     };
 
@@ -159,6 +190,71 @@
     };
 
     //-------------------------------------------------------------------------
+    // What a reward gives
+
+    ReactorQuests.REWARD_KINDS = ["none", "gold", "item", "weapon", "armor", "exp", "commonEvent"];
+
+    /** The database record an item, weapon or armor reward names. */
+    ReactorQuests.rewardItem = function(reward) {
+        const table = { item: "$dataItems", weapon: "$dataWeapons", armor: "$dataArmors" }[reward && reward.give];
+        const list = table ? window[table] : null;
+        return list ? list[Number(reward.giveId)] || null : null;
+    };
+
+    /** Whether a reward gives something when it is given, not only text. */
+    ReactorQuests.rewardGives = function(reward) {
+        if (!reward) return false;
+        const amount = Number(reward.amount);
+        switch (reward.give) {
+            case "gold": case "exp": return amount > 0;
+            case "item": case "weapon": case "armor": return !!this.rewardItem(reward) && amount !== 0;
+            case "commonEvent": return Number(reward.giveId) > 0;
+            default: return false;
+        }
+    };
+
+    ReactorQuests.rewardAmount = function(reward) {
+        const amount = Math.floor(Number(reward && reward.amount));
+        return Number.isFinite(amount) && amount !== 0 ? amount : 1;
+    };
+
+    ReactorQuests.applyReward = function(reward) {
+        const amount = this.rewardAmount(reward);
+        switch (reward.give) {
+            case "gold":
+                $gameParty.gainGold(amount);
+                break;
+            case "item": case "weapon": case "armor":
+                $gameParty.gainItem(this.rewardItem(reward), amount);
+                break;
+            case "exp":
+                for (const actor of $gameParty.members()) actor.changeExp(actor.currentExp() + amount, false);
+                break;
+            case "commonEvent":
+                $gameTemp.reserveCommonEvent(Number(reward.giveId));
+                break;
+        }
+    };
+
+    /** A reward's line in the log: its own text, or what it gives when it has none. */
+    ReactorQuests.rewardText = function(reward) {
+        const own = String((reward && reward.text) || "");
+        if (own.trim() || !reward) return own;
+        const amount = this.rewardAmount(reward);
+        const system = typeof $dataSystem !== "undefined" && $dataSystem ? $dataSystem : {};
+        switch (reward.give) {
+            case "gold": return amount + " " + (system.currencyUnit || "G");
+            case "exp": return amount + " " + ((system.terms && system.terms.basic && system.terms.basic[8]) || "EXP");
+            case "item": case "weapon": case "armor": {
+                const item = this.rewardItem(reward);
+                if (!item) return "";
+                return (item.iconIndex > 0 ? "\\I[" + item.iconIndex + "]" : "") + item.name + (amount !== 1 ? " \u00d7" + amount : "");
+            }
+            default: return "";
+        }
+    };
+
+    //-------------------------------------------------------------------------
     // Game_Quests - the player's progress, kept on $gameSystem
 
     function Game_Quests() {
@@ -171,9 +267,20 @@
         this._status = {};
         this._objectives = {};
         this._rewards = {};
+        this._given = {};
         this._order = [];
         this._tracked = 0;
         this._started = false;
+        this._revision = 0;
+    };
+
+    /** Counts every change the player could see, so the tracker redraws only when one happens. */
+    Game_Quests.prototype.touch = function() {
+        this._revision = (this._revision || 0) + 1;
+    };
+
+    Game_Quests.prototype.revision = function() {
+        return this._revision || 0;
     };
 
     Game_Quests.prototype.status = function(id) {
@@ -203,6 +310,7 @@
         id = quest.id;
         if (this.isKnown(id)) return false;
         this._status[id] = ReactorQuests.STATUS.KNOWN;
+        this.touch();
         if (!this._order.includes(id)) this._order.push(id);
         if (!this._objectives[id]) {
             this._objectives[id] = (quest.objectives || []).map(objective =>
@@ -212,16 +320,33 @@
             this._rewards[id] = (quest.rewards || []).map(reward => !(reward && reward.hidden));
         }
         ReactorQuests.mirror(quest, (key, system) => system.setQuestStatus(key, "known"));
+        if (!this.tracked()) this._autoTrack(id);
         return true;
+    };
+
+    /** With auto-track on, the tracker follows a new quest when it follows none. */
+    Game_Quests.prototype._autoTrack = function(id) {
+        if (ReactorQuests.logMode() !== "reactor" || !ReactorQuests.settings().tracker.autoTrack) return;
+        const next = id || (this.active()[0] || {}).id || 0;
+        if (next && this.isActive(next)) {
+            this._tracked = next;
+            this.touch();
+        }
     };
 
     Game_Quests.prototype.complete = function(id) {
         const quest = ReactorQuests.find(id);
         if (!quest) return false;
         this.discover(quest.id);
+        if (this.isCompleted(quest.id)) return false;
         this._status[quest.id] = ReactorQuests.STATUS.COMPLETED;
-        if (this._tracked === quest.id) this._tracked = 0;
+        this.touch();
+        if (this._tracked === quest.id) {
+            this._tracked = 0;
+            this._autoTrack(0);
+        }
         ReactorQuests.mirror(quest, (key, system) => system.setQuestStatus(key, "completed"));
+        if (quest.rewardOnComplete !== false) this.giveRewards(quest.id, "all");
         return true;
     };
 
@@ -230,7 +355,11 @@
         if (!quest) return false;
         this.discover(quest.id);
         this._status[quest.id] = ReactorQuests.STATUS.FAILED;
-        if (this._tracked === quest.id) this._tracked = 0;
+        this.touch();
+        if (this._tracked === quest.id) {
+            this._tracked = 0;
+            this._autoTrack(0);
+        }
         ReactorQuests.mirror(quest, (key, system) => system.setQuestStatus(key, "failed"));
         return true;
     };
@@ -239,9 +368,11 @@
     Game_Quests.prototype.reset = function(id) {
         const quest = ReactorQuests.find(id);
         if (!quest) return false;
+        this.touch();
         delete this._status[quest.id];
         delete this._objectives[quest.id];
         delete this._rewards[quest.id];
+        delete this.givenRecord()[quest.id];
         this._order = this._order.filter(other => other !== quest.id);
         if (this._tracked === quest.id) this._tracked = 0;
         ReactorQuests.mirror(quest, (key, system) => {
@@ -297,6 +428,7 @@
             this._objectives[quest.id] = states;
             changed = [at];
         }
+        this.touch();
         this._mirrorObjectives(quest, changed);
         this._checkCompletion(quest);
         return true;
@@ -352,13 +484,51 @@
             this._rewards[quest.id] = shown;
             ids = [at + 1];
         }
+        this.touch();
         ReactorQuests.mirror(quest, (key, system) => system.setQuestRewards(key, ids, visible ? "show" : "remove"));
         return true;
+    };
+
+    /** Which rewards were given, per quest; a save from before rewards gave anything has none. */
+    Game_Quests.prototype.givenRecord = function() {
+        if (!this._given || typeof this._given !== "object") this._given = {};
+        return this._given;
+    };
+
+    Game_Quests.prototype.isRewardGiven = function(id, index) {
+        const quest = ReactorQuests.find(id);
+        return !!(quest && (this.givenRecord()[quest.id] || [])[index]);
+    };
+
+    /**
+     * Give one reward (0-based index) or every reward ("all") that gives
+     * something and has not been given: gold, an item, a weapon, an armor,
+     * EXP to the party, or a common event. A reward is given once; a reset
+     * quest can give it again. Giving shows the reward in the log.
+     */
+    Game_Quests.prototype.giveRewards = function(id, index) {
+        const quest = ReactorQuests.find(id);
+        if (!quest) return 0;
+        const rewards = quest.rewards || [];
+        const indices = index === "all" ? rewards.map((reward, at) => at) : [Number(index)];
+        const given = this.givenRecord()[quest.id] || [];
+        let count = 0;
+        for (const at of indices) {
+            const reward = rewards[at];
+            if (!reward || given[at] || !ReactorQuests.rewardGives(reward)) continue;
+            given[at] = true;
+            this.givenRecord()[quest.id] = given;
+            if (!this.rewardsShown(quest.id)[at]) this.setReward(quest.id, at, true);
+            ReactorQuests.applyReward(reward);
+            count++;
+        }
+        return count;
     };
 
     Game_Quests.prototype.setTracked = function(id) {
         const quest = id ? ReactorQuests.find(id) : null;
         this._tracked = quest && this.isActive(quest.id) ? quest.id : 0;
+        this.touch();
         if (ReactorQuests.logMode() === "visustella" && typeof $gameSystem !== "undefined" && $gameSystem) {
             $gameSystem.setTrackedQuest(this._tracked ? ReactorQuests.keyOf(quest) : "");
         }
@@ -425,6 +595,7 @@
             });
             if (changed) {
                 this._objectives[id] = states;
+                this.touch();
                 this._mirrorObjectives(quest, states.map((value, at) => at));
             }
             const done = quest.completion || {};
@@ -508,7 +679,9 @@
     PluginManager.registerCommand("RPGReactor", "QuestReward", function(args) {
         const id = questIdOf(args);
         if (!id) return;
-        $gameSystem.quests().setReward(id, indexOf(args.reward), String(args.state || "show") !== "hide");
+        const state = String(args.state || "show");
+        if (state === "give") $gameSystem.quests().giveRewards(id, indexOf(args.reward));
+        else $gameSystem.quests().setReward(id, indexOf(args.reward), state !== "hide");
     });
 
     PluginManager.registerCommand("RPGReactor", "OpenQuestLog", function(args) {
@@ -519,7 +692,7 @@
         }
         if (args && args.questId) {
             const id = questIdOf(args);
-            if (id) Scene_Quest.openOn = id;
+            if (id) ReactorQuests.openOn = id;
         }
         SceneManager.push(Scene_Quest);
     });
@@ -574,8 +747,21 @@
     ReactorQuests.Scene_Quest = Scene_Quest;
     Scene_Quest.prototype = Object.create(Scene_MenuBase.prototype);
     Scene_Quest.prototype.constructor = Scene_Quest;
-    /** A quest id to land on when the scene opens (set by OpenQuestLog). */
-    Scene_Quest.openOn = 0;
+    /**
+     * A quest id to land on when the scene opens (set by OpenQuestLog). It
+     * lives on ReactorQuests: pixi_compat wraps every scene class in a new
+     * function, so a property set on the global Scene_Quest never reached
+     * the class that reads it. Scene_Quest.openOn is still honoured.
+     */
+    ReactorQuests.openOn = 0;
+    ReactorQuests.takeOpenOn = function() {
+        const global = window.Scene_Quest;
+        const id = Number(this.openOn || (global && global.openOn) || Scene_Quest.openOn) || 0;
+        this.openOn = 0;
+        Scene_Quest.openOn = 0;
+        if (global) global.openOn = 0;
+        return id;
+    };
 
     Scene_Quest.prototype.create = function() {
         Scene_MenuBase.prototype.create.call(this);
@@ -586,8 +772,7 @@
         this._listWindow.setDetailWindow(this._detailWindow);
         this._categoryWindow.refresh();
         this._listWindow.refresh();
-        const wanted = Scene_Quest.openOn;
-        Scene_Quest.openOn = 0;
+        const wanted = ReactorQuests.takeOpenOn();
         if (wanted) this._listWindow.selectQuest(wanted);
         this._categoryWindow.activate();
     };
@@ -924,7 +1109,8 @@
         const rewards = [];
         (quest.rewards || []).forEach((reward, index) => {
             if (!reward || !shown[index]) return;
-            rewards.push(...this.wrap(reward.text, width));
+            const line = ReactorQuests.rewardText(reward);
+            if (line.trim()) rewards.push(...this.wrap(line, width));
         });
         if (rewards.length) blocks.push({ lines: ["\\C[16]" + ReactorQuests.text("rewards") + "\\C[0]"].concat(rewards) });
         if (quest.subtext) blocks.push({ lines: this.wrap(quest.subtext, width) });
@@ -932,12 +1118,197 @@
         return blocks;
     };
 
+    ReactorQuests.LABELS = { objectives: "Objectives", rewards: "Rewards", complete: "Complete", failed: "Failed", tracked: "Tracked" };
+
     /** The log's own labels, replaceable per project from System.json. */
     ReactorQuests.text = function(key) {
         const settings = (typeof $dataSystem !== "undefined" && $dataSystem && $dataSystem.reactorQuests) || {};
         const labels = settings.labels || {};
-        const fallback = { objectives: "Objectives", rewards: "Rewards", complete: "Complete", failed: "Failed", tracked: "Tracked" };
+        const fallback = ReactorQuests.LABELS;
         return labels[key] || fallback[key] || key;
+    };
+
+    //-------------------------------------------------------------------------
+    // Window_QuestTracker - the tracked quest and its open objectives, on the map
+    //
+    // It redraws only when what it shows changes (a signature of the quest,
+    // its objective states and the window's size), fades out while a message
+    // is up or the project's hide switch is on, and is absent while
+    // VisuStella's log is the game's (that plugin brings its own tracker).
+
+    function Window_QuestTracker() {
+        this.initialize(...arguments);
+    }
+    window.Window_QuestTracker = Window_QuestTracker;
+    Window_QuestTracker.prototype = Object.create(Window_Base.prototype);
+    Window_QuestTracker.prototype.constructor = Window_QuestTracker;
+
+    Window_QuestTracker.prototype.initialize = function(rect) {
+        Window_Base.prototype.initialize.call(this, rect);
+        this._signature = "";
+        this._shown = false;
+        this._style = "";
+        this.contentsOpacity = 0;
+        this.applyStyle();
+        this.opacity = 0;
+        this.refresh();
+    };
+
+    Window_QuestTracker.prototype.settings = function() {
+        return ReactorQuests.trackerSettings(($dataSystem.reactorQuests || {}).tracker);
+    };
+
+    Window_QuestTracker.prototype.lineHeight = function() {
+        return this.contents.fontSize + 10;
+    };
+
+    Window_QuestTracker.prototype.resetFontSettings = function() {
+        Window_Base.prototype.resetFontSettings.call(this);
+        this.contents.fontSize = Math.max(14, $gameSystem.mainFontSize() - 6);
+        this.contents.fontBold = !!this._heading;
+    };
+
+    Window_QuestTracker.prototype.wrap = function(text, width) {
+        return Window_QuestDetail.prototype.wrap.call(this, text, width);
+    };
+
+    Window_QuestTracker.prototype.applyStyle = function() {
+        const background = this.settings().background;
+        if (background === this._style) return;
+        this._style = background;
+        this.setBackgroundType(background === "window" ? 0 : background === "dim" ? 1 : 2);
+    };
+
+    /** The quest the tracker follows, or null when there is nothing to show. */
+    Window_QuestTracker.prototype.quest = function() {
+        if (ReactorQuests.logMode() !== "reactor" || !this.settings().enabled) return null;
+        const id = $gameSystem.quests().tracked();
+        return id ? ReactorQuests.find(id) : null;
+    };
+
+    Window_QuestTracker.prototype.wantsShown = function() {
+        const settings = this.settings();
+        if (!this.quest()) return false;
+        if (settings.hideSwitchId > 0 && $gameSwitches.value(settings.hideSwitchId)) return false;
+        if ($gameMessage.isBusy()) return false;
+        return true;
+    };
+
+    /** What the drawing depends on; compared every frame, so it stays a few numbers. */
+    Window_QuestTracker.prototype.signature = function() {
+        const quest = this.quest();
+        if (!quest) return "";
+        if (this._settingsSeen !== this.settings()) return "settings";
+        return quest.id + "|" + $gameSystem.quests().revision() + "|" + Graphics.boxWidth + "x" + Graphics.boxHeight;
+    };
+
+    /**
+     * The lines to draw: the quest's name, then its open objectives before
+     * the finished ones, up to the project's limit, each wrapped to the width.
+     */
+    Window_QuestTracker.prototype.lines = function(quest, width) {
+        const record = $gameSystem.quests();
+        const states = record.objectiveStates(quest.id);
+        const icon = quest.iconIndex > 0 ? "\\I[" + quest.iconIndex + "]" : "";
+        const lines = [{ text: icon + String(quest.name || ""), heading: true }];
+        const entries = (quest.objectives || [])
+            .map((objective, index) => ({ objective, state: states[index] }))
+            .filter(entry => entry.objective && entry.state !== ReactorQuests.OBJECTIVE.HIDDEN);
+        const open = entries.filter(entry => entry.state === ReactorQuests.OBJECTIVE.OPEN);
+        const closed = entries.filter(entry => entry.state !== ReactorQuests.OBJECTIVE.OPEN);
+        const indent = this.textWidth(ReactorQuests.MARK_DONE + "  ");
+        for (const entry of open.concat(closed).slice(0, this.settings().maxObjectives)) {
+            const mark = entry.state === ReactorQuests.OBJECTIVE.DONE ? "\\C[24]" + ReactorQuests.MARK_DONE + "\\C[0]"
+                : entry.state === ReactorQuests.OBJECTIVE.FAILED ? "\\C[2]" + ReactorQuests.MARK_FAILED + "\\C[0]"
+                : "\\C[8]" + ReactorQuests.MARK_OPEN + "\\C[0]";
+            const wrapped = this.wrap(entry.objective.text, width - indent);
+            wrapped.forEach((text, at) => lines.push({ mark: at === 0 ? mark : "", text, indent, faded: entry.state !== ReactorQuests.OBJECTIVE.OPEN }));
+        }
+        return lines;
+    };
+
+    /** Where the window sits for a height: its corner of the screen, clear of the edges. */
+    Window_QuestTracker.prototype.placeFor = function(height) {
+        const settings = this.settings();
+        const width = Math.min(settings.width, Graphics.boxWidth);
+        const margin = 8;
+        const right = settings.position.endsWith("Right");
+        const bottom = settings.position.startsWith("bottom");
+        const x = right ? Graphics.boxWidth - width - margin : margin;
+        const y = bottom ? Graphics.boxHeight - height - margin : margin;
+        return new Rectangle(Math.max(0, x), Math.max(0, y), width, height);
+    };
+
+    Window_QuestTracker.prototype.refresh = function() {
+        this._settingsSeen = this.settings();
+        this._signature = this.signature();
+        const quest = this.quest();
+        this.resetFontSettings();
+        if (!quest) {
+            this.contents.clear();
+            return;
+        }
+        const padding = this.padding;
+        const settings = this.settings();
+        const innerWidth = Math.min(settings.width, Graphics.boxWidth) - padding * 2 - this.itemPadding() * 2;
+        const lines = this.lines(quest, innerWidth);
+        const lineHeight = this.lineHeight();
+        const rect = this.placeFor(lines.length * lineHeight + padding * 2);
+        if (rect.width !== this.width || rect.height !== this.height) {
+            this.move(rect.x, rect.y, rect.width, rect.height);
+            this.createContents();
+            if (this._dimmerSprite && this.refreshDimmerBitmap) this.refreshDimmerBitmap();
+            this.resetFontSettings();
+        } else {
+            this.x = rect.x;
+            this.y = rect.y;
+            this.contents.clear();
+        }
+        const x = this.itemPadding();
+        lines.forEach((line, row) => {
+            const y = row * lineHeight;
+            this._heading = !!line.heading;
+            this.resetFontSettings();
+            if (line.heading) {
+                this.drawTextEx("\\C[16]" + line.text + "\\C[0]", x, y, innerWidth);
+                this._heading = false;
+                return;
+            }
+            if (line.mark) this.drawTextEx(line.mark, x, y, line.indent);
+            this.changePaintOpacity(!line.faded);
+            this.drawTextEx(line.text, x + line.indent, y, innerWidth - line.indent);
+            this.changePaintOpacity(true);
+        });
+    };
+
+    Window_QuestTracker.prototype.update = function() {
+        Window_Base.prototype.update.call(this);
+        this.applyStyle();
+        if (this._signature !== this.signature()) this.refresh();
+        const shown = this.wantsShown();
+        const step = 16;
+        this.contentsOpacity = shown ? Math.min(255, this.contentsOpacity + step) : Math.max(0, this.contentsOpacity - step);
+        const alpha = this.contentsOpacity / 255;
+        if (this._style === "window") this.opacity = this.contentsOpacity;
+        if (this._dimmerSprite) this._dimmerSprite.alpha = alpha;
+        this.visible = this.contentsOpacity > 0;
+    };
+
+    /**
+     * The tracker goes in beneath every other window once the map scene has
+     * built its display, so a plugin that replaces createAllWindows keeps it
+     * and a message never draws under it.
+     */
+    const _Scene_Map_createDisplayObjects = Scene_Map.prototype.createDisplayObjects;
+    Scene_Map.prototype.createDisplayObjects = function() {
+        _Scene_Map_createDisplayObjects.apply(this, arguments);
+        this.createQuestTrackerWindow();
+    };
+
+    Scene_Map.prototype.createQuestTrackerWindow = function() {
+        if (!ReactorQuests.quests().length || !this._windowLayer) return;
+        this._questTrackerWindow = new Window_QuestTracker(new Rectangle(0, 0, 330, 80));
+        this._windowLayer.addChildAt(this._questTrackerWindow, 0);
     };
 
     //-------------------------------------------------------------------------

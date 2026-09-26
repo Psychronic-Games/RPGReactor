@@ -50,6 +50,7 @@ class DatabaseQuestEditor {
         quest.quotes = quest.quotes || '';
         quest.activation = Object.assign({ type: 'command', switchId: 0, variableId: 0, operator: '>=', value: 0 }, quest.activation || {});
         quest.completion = Object.assign({ type: 'command', switchId: 0 }, quest.completion || {});
+        if (quest.rewardOnComplete === undefined) quest.rewardOnComplete = true;
         quest.note = quest.note || '';
         return quest;
     }
@@ -145,6 +146,9 @@ class DatabaseQuestEditor {
                         <label>${tt('Menu command name')}</label>
                         <input type="text" class="database-field-value" data-quest-setting="commandName" value="${rrEscapeHtml(settings.commandName)}">
                     </span>
+                    <span class="db-col" style="align-self:end;" ${ownMenu}>
+                        <button type="button" class="rr-btn-secondary quest-log-settings" title="${rrEscapeHtml(tt('The on-map tracker and the words the quest log uses.'))}">${tt('Tracker and Labels…')}</button>
+                    </span>
                     <span class="db-col" style="align-self:end;">
                         <button type="button" class="rr-btn-secondary quest-import" title="${rrEscapeHtml(tt('Read the quests another plugin stores in this project and add them here.'))}">${tt('Import…')}</button>
                     </span>
@@ -227,6 +231,14 @@ class DatabaseQuestEditor {
                         <button type="button" class="rr-btn-secondary quest-pick" data-pick="switch" data-target="completion.switchId">${rrEscapeHtml(this.switchName(quest.completion.switchId))}</button>
                     </span>
                 </div>
+                <div class="db-row-cols">
+                    <span class="db-col">
+                        <label>${tt('Rewards are given')}</label>
+                        <select class="database-field-value" data-field="rewardOnComplete" data-quest-id="${quest.id}">
+                            ${this.options([['true', tt('When the quest completes')], ['false', tt('Only by event command')]], String(quest.rewardOnComplete !== false))}
+                        </select>
+                    </span>
+                </div>
             </div></div>`;
         grid.appendChild(rules);
 
@@ -306,15 +318,16 @@ class DatabaseQuestEditor {
         section.className = 'database-section';
         section.dataset.questList = kind;
         const rows = (quest[kind] || []).map((entry, index) => `
-            <div class="quest-row" data-index="${index}" style="display:grid;grid-template-columns:22px minmax(0,1fr) auto auto auto auto;gap:8px;align-items:center;">
+            <div class="quest-row" data-index="${index}" style="display:grid;grid-template-columns:22px minmax(0,1fr) auto 120px auto auto;gap:8px;align-items:center;">
                 <span style="color:var(--color-text-muted);font-size:11px;text-align:right;">${index + 1}.</span>
                 <div style="display:flex;flex-direction:column;gap:2px;min-width:0;">
-                    <textarea class="database-field-value quest-row-text" rows="${this.rowsFor(entry && entry.text)}" style="width:100%;min-width:0;resize:vertical;" data-list="${kind}" data-index="${index}" data-prop="text" data-rr-textcodes="help" data-rr-textcodes-preview>${rrEscapeHtml(entry && entry.text ? entry.text : '')}</textarea>
+                    <textarea class="database-field-value quest-row-text" rows="${this.rowsFor(entry && entry.text)}" style="width:100%;min-width:0;resize:vertical;" data-list="${kind}" data-index="${index}" data-prop="text" data-rr-textcodes="help" data-rr-textcodes-preview${kind === 'rewards' ? ` placeholder="${rrEscapeHtml(tt('Blank: the log names what it gives'))}"` : ''}>${rrEscapeHtml(entry && entry.text ? entry.text : '')}</textarea>
+                    ${kind === 'rewards' ? this.rewardGiveRow(entry || {}, index) : ''}
                 </div>
                 <label style="display:flex;align-items:center;gap:4px;font-size:11px;white-space:nowrap;color:var(--color-text-muted);" title="${rrEscapeHtml(tt('Not shown until an event command or a switch reveals it.'))}">
                     <input type="checkbox" class="system-checkbox" ${entry && entry.hidden ? 'checked' : ''} data-list="${kind}" data-index="${index}" data-prop="hidden">${tt('Hidden at first')}
                 </label>
-                ${kind === 'objectives' ? `<button type="button" class="rr-btn-secondary quest-pick" data-pick="switch" data-target="objectives.${index}.switchId" style="font-size:11px;" title="${rrEscapeHtml(tt('Completes on its own when this switch turns ON.'))}">${rrEscapeHtml(entry && entry.switchId > 0 ? this.switchName(entry.switchId) : tt('Switch…'))}</button>` : '<span></span>'}
+                ${kind === 'objectives' ? `<button type="button" class="rr-btn-secondary quest-pick" data-pick="switch" data-target="objectives.${index}.switchId" style="font-size:11px;width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${rrEscapeHtml(tt('Completes on its own when this switch turns ON.'))}">${rrEscapeHtml(entry && entry.switchId > 0 ? this.switchName(entry.switchId) : tt('Switch…'))}</button>` : '<span></span>'}
                 <span style="display:flex;gap:2px;">
                     <button type="button" class="rr-btn-secondary quest-move" data-list="${kind}" data-index="${index}" data-dir="-1" title="${rrEscapeHtml(tt('Move up'))}">▲</button>
                     <button type="button" class="rr-btn-secondary quest-move" data-list="${kind}" data-index="${index}" data-dir="1" title="${rrEscapeHtml(tt('Move down'))}">▼</button>
@@ -326,6 +339,130 @@ class DatabaseQuestEditor {
                 <button type="button" class="rr-btn-secondary quest-add" data-list="${kind}">${addLabel}</button></div>
             <div class="database-section-content"><div class="quest-list" style="display:flex;flex-direction:column;gap:6px;padding:4px 0;">${rows || `<div style="color:var(--color-text-muted);font-size:12px;">${kind === 'objectives' ? tt('No objectives yet. A quest with none completes only by event command.') : tt('No rewards listed.')}</div>`}</div></div>`;
         return section;
+    }
+
+    /** Every database record of a reward kind as [id, "0001: name"]. */
+    rewardTargets(kind) {
+        const manager = this.databaseManager;
+        const list = kind === 'item' ? manager.getItems() : kind === 'weapon' ? manager.getWeapons()
+            : kind === 'armor' ? manager.getArmors() : kind === 'commonEvent' ? manager.getCommonEvents() : [];
+        return (list || []).filter(entry => entry && entry.id > 0)
+            .map(entry => [String(entry.id), `${String(entry.id).padStart(4, '0')}: ${entry.name || ''}`]);
+    }
+
+    /**
+     * What a reward gives, under its text: nothing, gold, an item, a weapon,
+     * an armor, EXP to the party, or a common event, and how much.
+     */
+    rewardGiveRow(entry, index) {
+        const tt = text => this._t(text);
+        const give = entry.give || 'none';
+        const needsTarget = ['item', 'weapon', 'armor', 'commonEvent'].includes(give);
+        const needsAmount = ['gold', 'item', 'weapon', 'armor', 'exp'].includes(give);
+        const targets = needsTarget ? this.rewardTargets(give) : [];
+        const current = String(entry.giveId || (targets[0] ? targets[0][0] : ''));
+        return `<div style="display:flex;gap:6px;align-items:center;font-size:11px;color:var(--color-text-muted);">
+            <span>${tt('Gives')}</span>
+            <select class="database-field-value quest-give" data-index="${index}" style="flex:0 0 auto;">
+                ${this.options([['none', tt('Nothing')], ['gold', tt('Gold')], ['item', tt('Item')], ['weapon', tt('Weapon')], ['armor', tt('Armor')], ['exp', tt('EXP to the party')], ['commonEvent', tt('Common event')]], give)}
+            </select>
+            ${needsTarget ? `<select class="database-field-value quest-give-id" data-index="${index}" style="flex:1 1 auto;min-width:0;">${this.options(targets, current)}</select>` : ''}
+            ${needsAmount ? `<input type="number" class="database-field-value quest-give-amount" data-index="${index}" value="${rrEscapeHtml(entry.amount != null ? entry.amount : (give === 'gold' ? 100 : 1))}" style="width:80px;" title="${rrEscapeHtml(tt('Amount'))}">` : ''}
+        </div>`;
+    }
+
+    /**
+     * The project's tracker and log labels in one dialog: they belong to the
+     * quest log, not to any one quest, so they stay off the quest page.
+     */
+    showLogSettings(onDone) {
+        const tt = text => this._t(text);
+        const settings = this.settings();
+        const tracker = Object.assign({ enabled: true, autoTrack: true, position: 'topRight', width: 330, maxObjectives: 4, background: 'dim', hideSwitchId: 0 }, settings.tracker || {});
+        const labels = Object.assign({}, settings.labels || {});
+        document.querySelectorAll('.quest-settings-overlay').forEach(node => node.remove());
+        const overlay = document.createElement('div');
+        overlay.className = 'rr-modal-overlay quest-settings-overlay';
+        overlay.style.cssText = 'position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 10500;';
+        const labelRow = (key, fallback) => `<span class="db-col"><label>${tt(fallback)}</label><input type="text" class="database-field-value" data-label="${key}" value="${rrEscapeHtml(labels[key] || '')}" placeholder="${rrEscapeHtml(fallback)}"></span>`;
+        overlay.innerHTML = `
+            <div class="rr-modal" role="dialog" aria-modal="true" style="width: min(560px, calc(100vw - 24px)); background: var(--color-bg-panel); border: 1px solid var(--color-border-subtle); border-radius: 8px; box-shadow: 0 12px 40px rgba(0,0,0,0.45);">
+                <div class="rr-modal-header" style="padding: 14px 18px; border-bottom: 1px solid var(--color-border-subtle); display: flex; align-items: center; justify-content: space-between;">
+                    <div class="rr-modal-title" style="font-size: 16px; font-weight: 600;">${rrEscapeHtml(tt('Tracker and Labels'))}</div>
+                    <button type="button" class="rr-modal-close" aria-label="${rrEscapeHtml(tt('Cancel'))}" style="background: none; border: none; font-size: 18px; cursor: pointer; color: inherit;">×</button>
+                </div>
+                <div class="rr-modal-body" style="padding: 14px 18px; display: flex; flex-direction: column; gap: 14px;">
+                    <div class="database-section"><div class="database-section-header">${tt('On-map tracker')}</div>
+                        <div class="database-section-content"><div class="db-form">
+                            <div class="db-row-cols">
+                                <span class="db-col"><label>${tt('Show the tracked quest on the map')}</label><input type="checkbox" class="system-checkbox" data-tracker="enabled" ${tracker.enabled !== false ? 'checked' : ''}></span>
+                                <span class="db-col"><label>${tt('Track a new quest when none is')}</label><input type="checkbox" class="system-checkbox" data-tracker="autoTrack" ${tracker.autoTrack !== false ? 'checked' : ''}></span>
+                            </div>
+                            <div class="db-row-cols">
+                                <span class="db-col"><label>${tt('Corner')}</label><select class="database-field-value" data-tracker="position">${this.options([['topRight', tt('Top right')], ['topLeft', tt('Top left')], ['bottomRight', tt('Bottom right')], ['bottomLeft', tt('Bottom left')]], tracker.position)}</select></span>
+                                <span class="db-col"><label>${tt('Background')}</label><select class="database-field-value" data-tracker="background">${this.options([['dim', tt('Dim')], ['window', tt('Window')], ['none', tt('None')]], tracker.background)}</select></span>
+                            </div>
+                            <div class="db-row-cols">
+                                <span class="db-col"><label>${tt('Width')}</label><input type="number" class="database-field-value" data-tracker="width" min="160" max="1280" value="${rrEscapeHtml(tracker.width)}"></span>
+                                <span class="db-col"><label>${tt('Objectives shown')}</label><input type="number" class="database-field-value" data-tracker="maxObjectives" min="1" max="12" value="${rrEscapeHtml(tracker.maxObjectives)}"></span>
+                                <span class="db-col"><label>${tt('Hidden while switch is ON')}</label><button type="button" class="rr-btn-secondary quest-tracker-switch">${rrEscapeHtml(this.switchName(tracker.hideSwitchId))}</button></span>
+                            </div>
+                        </div></div>
+                    </div>
+                    <div class="database-section"><div class="database-section-header">${tt('Quest log labels')}</div>
+                        <div class="database-section-content"><div class="db-form">
+                            <div class="db-row-cols">${labelRow('all', 'All')}${labelRow('objectives', 'Objectives')}${labelRow('rewards', 'Rewards')}</div>
+                            <div class="db-row-cols">${labelRow('complete', 'Complete')}${labelRow('failed', 'Failed')}${labelRow('tracked', 'Tracked')}</div>
+                        </div></div>
+                    </div>
+                </div>
+                <div class="rr-modal-footer" style="padding: 12px 18px; border-top: 1px solid var(--color-border-subtle); display: flex; justify-content: flex-end; gap: 8px;">
+                    <button type="button" class="rr-btn-secondary quest-settings-cancel">${rrEscapeHtml(tt('Cancel'))}</button>
+                    <button type="button" class="rr-btn-chip quest-settings-ok" style="padding: 6px 18px; color: var(--color-accent-bright);">${rrEscapeHtml(tt('OK'))}</button>
+                </div>
+            </div>`;
+        const close = () => { overlay.remove(); document.removeEventListener('keydown', onKey, true); };
+        const apply = () => {
+            overlay.querySelectorAll('[data-tracker]').forEach(field => {
+                const key = field.dataset.tracker;
+                if (field.type === 'checkbox') tracker[key] = field.checked;
+                else if (field.type === 'number') tracker[key] = parseInt(field.value, 10) || 0;
+                else tracker[key] = field.value;
+            });
+            tracker.width = Math.max(160, Math.min(1280, tracker.width || 330));
+            tracker.maxObjectives = Math.max(1, Math.min(12, tracker.maxObjectives || 4));
+            const nextLabels = {};
+            overlay.querySelectorAll('[data-label]').forEach(field => {
+                const value = field.value.trim();
+                if (value) nextLabels[field.dataset.label] = value;
+            });
+            settings.tracker = tracker;
+            settings.labels = nextLabels;
+            // The log's "All" tab has always been stored on its own.
+            if (nextLabels.all) settings.allLabel = nextLabels.all; else delete settings.allLabel;
+            delete settings.labels.all;
+            this.databaseManager.mutationGeneration++;
+            close();
+            if (onDone) onDone();
+        };
+        const onKey = event => {
+            if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); close(); }
+        };
+        overlay.querySelector('[data-label="all"]').value = settings.allLabel || '';
+        overlay.querySelector('.quest-tracker-switch').addEventListener('click', event => {
+            const button = event.currentTarget;
+            this.pickSwitchOrVariable('switch', tracker.hideSwitchId, id => {
+                tracker.hideSwitchId = id;
+                button.textContent = this.switchName(id);
+            });
+        });
+        overlay.querySelector('.rr-modal-close').addEventListener('click', close);
+        overlay.querySelector('.quest-settings-cancel').addEventListener('click', close);
+        overlay.querySelector('.quest-settings-ok').addEventListener('click', apply);
+        document.addEventListener('keydown', onKey, true);
+        document.body.appendChild(overlay);
+        this.commonUI?.databaseEditor?.registerDetailModal(overlay);
+        return overlay;
     }
 
     /**
@@ -437,6 +574,33 @@ class DatabaseQuestEditor {
             // An import on the way has already re-rendered, on the quest it added.
             if (!this.chooseQuestLog(logChoice.value)) rerender();
         });
+        container.querySelectorAll('.quest-give').forEach(select => select.addEventListener('change', () => {
+            const entry = (quest.rewards || [])[Number(select.dataset.index)];
+            if (!entry) return;
+            entry.give = select.value;
+            const targets = this.rewardTargets(entry.give);
+            if (targets.length) entry.giveId = Number(targets[0][0]);
+            else delete entry.giveId;
+            if (['gold', 'item', 'weapon', 'armor', 'exp'].includes(entry.give)) entry.amount = entry.give === 'gold' ? 100 : entry.give === 'exp' ? 100 : 1;
+            else delete entry.amount;
+            if (entry.give === 'none') delete entry.give;
+            this.databaseManager.updateQuest(quest.id, quest);
+            rerender();
+        }));
+        container.querySelectorAll('.quest-give-id').forEach(select => select.addEventListener('change', () => {
+            const entry = (quest.rewards || [])[Number(select.dataset.index)];
+            if (!entry) return;
+            entry.giveId = Number(select.value) || 0;
+            this.databaseManager.updateQuest(quest.id, quest);
+        }));
+        container.querySelectorAll('.quest-give-amount').forEach(input => input.addEventListener('change', () => {
+            const entry = (quest.rewards || [])[Number(input.dataset.index)];
+            if (!entry) return;
+            entry.amount = parseInt(input.value, 10) || 0;
+            this.databaseManager.updateQuest(quest.id, quest);
+        }));
+        const settingsButton = container.querySelector('.quest-log-settings');
+        if (settingsButton) settingsButton.addEventListener('click', () => this.showLogSettings());
         const importButton = container.querySelector('.quest-import');
         if (importButton) importButton.addEventListener('click', () => this.importQuests());
     }
@@ -471,6 +635,7 @@ class DatabaseQuestEditor {
         DatabaseQuestEditor.normalize(quest);
         if (fieldName === 'activation.value') value = parseInt(value, 10) || 0;
         if (fieldName === 'key') value = String(value || '').trim();
+        if (fieldName === 'rewardOnComplete') value = value === true || value === 'true';
         this.writePath(quest, fieldName, value);
         this.databaseManager.updateQuest(questId, quest);
         return this.readPath(quest, fieldName);

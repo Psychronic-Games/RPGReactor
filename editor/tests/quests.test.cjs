@@ -35,6 +35,8 @@ function loadRuntime(dataQuests, world = {}) {
         Scene_Boot: { prototype: { create: stub(), isReady: () => true, start: stub() } },
         Window_HorzCommand: { prototype: { initialize: stub(), update: stub() } },
         Window_Selectable: { prototype: { initialize: stub(), refresh: stub(), select: stub() } },
+        Window_Base: { prototype: { initialize: stub(), update: stub(), resetFontSettings: stub() } },
+        Scene_Map: { prototype: { createDisplayObjects: stub() } },
         Rectangle: stub(),
         SceneManager: { push: scene => { context.__pushed = scene; } },
         Input: { isRepeated: () => false },
@@ -130,6 +132,117 @@ test('tracking follows one active quest and lets go when it ends', () => {
     assert.deepEqual([...quests.failed().map(q => q.id)], [3]);
 });
 
+test('a reward gives gold, items, EXP or a common event once, on completion or by command, and shows itself', () => {
+    const gained = { gold: 0, items: [], exp: [], events: [] };
+    const actor = { exp: 100, currentExp() { return this.exp; }, changeExp(value) { this.exp = value; gained.exp.push(value); } };
+    const data = [null, { id: 1, key: 'r', name: 'Rewarded', objectives: [], activation: { type: 'command' }, completion: { type: 'command' }, rewards: [
+        { text: '', hidden: false, give: 'gold', amount: 250 },
+        { text: '', hidden: true, give: 'item', giveId: 2, amount: 3 },
+        { text: 'A token', hidden: false, give: 'none' },
+        { text: '', hidden: false, give: 'exp', amount: 40 },
+        { text: '', hidden: false, give: 'commonEvent', giveId: 9 }
+    ] }, { id: 2, key: 'later', name: 'By command only', rewardOnComplete: false, objectives: [], activation: { type: 'command' }, completion: { type: 'command' }, rewards: [
+        { text: 'Gold', hidden: false, give: 'gold', amount: 5 }
+    ] }];
+    const { quests, context, run } = loadRuntime(data);
+    context.$dataItems = [null, null, { id: 2, name: 'Potion', iconIndex: 176 }];
+    context.$dataSystem.currencyUnit = 'G';
+    context.$dataSystem.terms = { basic: ['', '', '', '', '', '', '', '', 'EXP'] };
+    context.$gameParty = { gainGold: n => { gained.gold += n; }, gainItem: (item, n) => gained.items.push([item.name, n]), members: () => [actor] };
+    context.$gameTemp = { reserveCommonEvent: id => gained.events.push(id) };
+    const R = context.ReactorQuests;
+    assert.equal(R.rewardText(data[1].rewards[0]), '250 G', 'a reward with no text says what it gives');
+    assert.equal(R.rewardText(data[1].rewards[1]), '\\I[176]Potion ×3');
+    assert.equal(R.rewardText(data[1].rewards[2]), 'A token');
+    assert.equal(R.rewardText(data[1].rewards[3]), '40 EXP');
+    assert.equal(R.rewardGives(data[1].rewards[2]), false, 'text alone gives nothing');
+    quests.complete(1);
+    assert.equal(gained.gold, 250);
+    assert.deepEqual(gained.items.map(entry => [...entry]), [['Potion', 3]]);
+    assert.deepEqual(gained.exp, [140]);
+    assert.deepEqual(gained.events, [9]);
+    assert.equal(quests.rewardsShown(1)[1], true, 'the hidden reward shows once it is given');
+    quests.complete(1);
+    quests.giveRewards(1, 'all');
+    assert.equal(gained.gold, 250, 'given once');
+    quests.reset(1);
+    quests.complete(1);
+    assert.equal(gained.gold, 500, 'a reset quest gives again');
+    quests.complete(2);
+    assert.equal(gained.gold, 500, 'a quest that gives by command does not give on completion');
+    run('QuestReward', { questId: '2', reward: '1', state: 'give' });
+    assert.equal(gained.gold, 505);
+    run('QuestReward', { questId: '2', reward: '1', state: 'give' });
+    assert.equal(gained.gold, 505, 'and still only once');
+    assert.equal(quests.isRewardGiven(2, 0), true);
+});
+
+test('a save from before rewards gave anything carries no given list and still works', () => {
+    const { quests, context } = loadRuntime(DATA);
+    delete quests._given;
+    delete quests._revision;
+    context.$gameParty = { gainGold() {}, gainItem() {}, members: () => [] };
+    assert.equal(quests.isRewardGiven(1, 0), false);
+    assert.equal(quests.giveRewards(1, 'all'), 0, 'text-only rewards give nothing');
+    assert.equal(quests.revision(), 0);
+    quests.discover(1);
+    assert.ok(quests.revision() > 0, 'every visible change counts');
+});
+
+test('auto-track follows a new quest when none is tracked, and the next active one when the tracked quest ends', () => {
+    const { quests, context } = loadRuntime(DATA);
+    quests.discover(1);
+    assert.equal(quests.tracked(), 1, 'the first quest found is tracked');
+    quests.discover(2);
+    assert.equal(quests.tracked(), 1, 'a second one does not take over');
+    quests.complete(1);
+    assert.equal(quests.tracked(), 2, 'the tracker moves on to what is still open');
+    quests.setTracked(0);
+    quests.discover(3);
+    assert.equal(quests.tracked(), 3, 'with nothing tracked, the newest quest is');
+    const { quests: manual, context: off } = loadRuntime(DATA, { system: { reactorQuests: { tracker: { autoTrack: false } } } });
+    manual.discover(1);
+    assert.equal(manual.tracked(), 0, 'auto-track off leaves it to the player');
+    assert.equal(off.ReactorQuests.settings().tracker.autoTrack, false);
+    assert.equal(context.ReactorQuests.settings().tracker.autoTrack, true);
+});
+
+test('the tracker settings default sensibly and refuse nonsense', () => {
+    const { context } = loadRuntime(DATA);
+    const R = context.ReactorQuests;
+    const defaults = R.trackerSettings(undefined);
+    assert.deepEqual({ ...defaults }, { enabled: true, autoTrack: true, position: 'topRight', width: 330, maxObjectives: 4, background: 'dim', hideSwitchId: 0 });
+    const odd = R.trackerSettings({ enabled: false, position: 'middle', width: 20, maxObjectives: 99, background: 'neon', hideSwitchId: '7' });
+    assert.deepEqual({ ...odd }, { enabled: false, autoTrack: true, position: 'topRight', width: 330, maxObjectives: 12, background: 'dim', hideSwitchId: 7 });
+    const stored = { position: 'bottomLeft' };
+    assert.equal(R.trackerSettings(stored), R.trackerSettings(stored), 'read once per stored object, not once a frame');
+    assert.equal(R.trackerSettings(undefined), R.trackerSettings(undefined), 'and once when nothing is stored, or the tracker would think its settings changed every frame and never redraw');
+});
+
+test('the tracker lists open objectives before finished ones, up to the limit, and sits in its corner', () => {
+    const data = [null, { id: 1, name: 'Long road', iconIndex: 5, objectives: [
+        { text: 'First', hidden: false }, { text: 'Secret', hidden: true }, { text: 'Third', hidden: false }, { text: 'Fourth', hidden: false }
+    ], rewards: [], activation: { type: 'command' }, completion: { type: 'command' } }];
+    const { quests, context } = loadRuntime(data, { system: { reactorQuests: { tracker: { maxObjectives: 2, position: 'bottomLeft' } } } });
+    context.Graphics.boxHeight = 624;
+    context.Rectangle = function(x, y, width, height) { Object.assign(this, { x, y, width, height }); };
+    quests.discover(1);
+    quests.setObjective(1, 0, 'complete');
+    const tracker = Object.create(context.Window_QuestTracker.prototype);
+    tracker._settingsSeen = tracker.settings();
+    tracker.textWidth = text => text.length * 10;
+    tracker.textSizeEx = text => ({ width: text.length * 10 });
+    const lines = tracker.lines(data[1], 300);
+    assert.equal(lines[0].text, '\\I[5]Long road');
+    assert.equal(lines[0].heading, true);
+    assert.deepEqual([...lines.slice(1).map(line => line.text)], ['Third', 'Fourth'], 'open first, hidden never, and no more than the limit');
+    const place = tracker.placeFor(100);
+    assert.deepEqual([place.x, place.y, place.width, place.height], [8, 516, 330, 100]);
+    assert.equal(tracker.signature(), '1|' + quests.revision() + '|816x624');
+    quests.setObjective(1, 2, 'complete');
+    assert.notEqual(tracker.signature(), '1|' + (quests.revision() - 1) + '|816x624', 'a change redraws it');
+});
+
 test('the plugin commands drive the record and open the log', () => {
     const { quests, run, context } = loadRuntime(DATA);
     run('QuestSet', { questId: '1', action: 'discover' });
@@ -146,7 +259,10 @@ test('the plugin commands drive the record and open the log', () => {
     assert.equal(quests.tracked(), 0);
     run('OpenQuestLog', { questId: '1' });
     assert.equal(context.__pushed, context.Scene_Quest);
-    assert.equal(context.Scene_Quest.openOn, 1);
+    assert.equal(context.ReactorQuests.openOn, 1, 'kept where the scene reads it, not on a class pixi_compat may have wrapped');
+    context.Scene_Quest.openOn = 2;
+    assert.equal(context.ReactorQuests.takeOpenOn(), 1);
+    assert.equal(context.ReactorQuests.takeOpenOn(), 0, 'taken once, and the class property is cleared with it');
     run('QuestSet', { questId: '99', action: 'discover' });
     assert.equal(quests.known().length, 1, 'an unknown quest is ignored');
 });
