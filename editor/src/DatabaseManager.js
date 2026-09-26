@@ -541,14 +541,14 @@ class DatabaseManager {
                 data.versionId = DatabaseManager.newVersionId();
             }
 
-            this._writeFileAtomic(this.fs, filePath, JSON.stringify(this.fileContent(filename, data), null, 2));
+            this._writeFileAtomic(this.fs, filePath, (typeof RRJson !== 'undefined' && RRJson.stringify ? RRJson.stringify(this.fileContent(filename, data)) : JSON.stringify(this.fileContent(filename, data), null, 2)));
             const entry = this.dataFiles.find(([, file]) => file === filename);
             if (entry) this.captureSavedState(entry[0]);
 
             if (filename !== 'System.json' && !options.skipVersionBump && this.data && this.data.system) {
                 this.data.system.versionId = DatabaseManager.newVersionId();
                 const systemPath = this.path.join(dataPath, 'System.json');
-                this._writeFileAtomic(this.fs, systemPath, JSON.stringify(this.fileContent('System.json', this.data.system), null, 2));
+                this._writeFileAtomic(this.fs, systemPath, (typeof RRJson !== 'undefined' && RRJson.stringify ? RRJson.stringify(this.fileContent('System.json', this.data.system)) : JSON.stringify(this.fileContent('System.json', this.data.system), null, 2)));
                 const systemEntry = this.dataFiles.find(([, file]) => file === 'System.json');
                 if (systemEntry) this.captureSavedState(systemEntry[0]);
             }

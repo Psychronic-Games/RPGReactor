@@ -1109,7 +1109,7 @@ class Database3DEditor {
             const full = path.join(dataDir, file);
             try {
                 const data = JSON.parse(fs.readFileSync(full, 'utf8'));
-                if (walk(data)) this._writeFileAtomic(fs, full, JSON.stringify(data, null, 2) + '\n');
+                if (walk(data)) this._writeFileAtomic(fs, full, (typeof RRJson !== 'undefined' && RRJson.stringify ? RRJson.stringify(data) : JSON.stringify(data, null, 2)) + '\n');
             } catch (error) { /* a sidecar that will not parse is left as it is */ }
         }
     }
@@ -1302,7 +1302,7 @@ class Database3DEditor {
             // One write, after the mesh is safely on disk: a sidecar pointing
             // at geometry that was never written would be worse than either.
             if (sidecarChanged) {
-                this._writeFileAtomic(fs, sidecarPath, JSON.stringify(previous, null, 2) + '\n');
+                this._writeFileAtomic(fs, sidecarPath, (typeof RRJson !== 'undefined' && RRJson.stringify ? RRJson.stringify(previous) : JSON.stringify(previous, null, 2)) + '\n');
             }
 
             // Every cache that holds the old geometry has to let go, or the
@@ -1419,7 +1419,7 @@ class Database3DEditor {
         else delete json.parts;
         if (pivots && Object.keys(pivots).length) json.pivots = pivots;
         else delete json.pivots;
-        return JSON.stringify(json, null, 2) + '\n';
+        return (typeof RRJson !== 'undefined' && RRJson.stringify ? RRJson.stringify(json) : JSON.stringify(json, null, 2)) + '\n';
     }
 
     /** Every edit writes the model's own sidecar; the runtime reads it as-is. */
@@ -6835,7 +6835,7 @@ class Database3DEditor {
             const json = previous ? JSON.parse(previous) : {};
             if (!json || typeof json !== 'object' || Array.isArray(json)) throw new Error('model.json must contain a JSON object');
             json.landmarks = points;
-            this._writeFileAtomic(fs, this.rulesPath(), JSON.stringify(json, null, 2) + '\n');
+            this._writeFileAtomic(fs, this.rulesPath(), (typeof RRJson !== 'undefined' && RRJson.stringify ? RRJson.stringify(json) : JSON.stringify(json, null, 2)) + '\n');
         } catch (error) {
             this._reportModelSaveError(error);
             throw error;

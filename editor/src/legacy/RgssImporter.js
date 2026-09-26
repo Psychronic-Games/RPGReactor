@@ -288,7 +288,7 @@ function writeFamilyQuests(dest, families, scriptTexts, constants) {
             });
         }
     }
-    if (records.length) fs.writeFileSync(path.join(dest, 'data', 'ReactorQuests.json'), JSON.stringify([null].concat(records), null, 2));
+    if (records.length) fs.writeFileSync(path.join(dest, 'data', 'ReactorQuests.json'), (typeof RRJson !== 'undefined' && RRJson.stringify ? RRJson.stringify([null].concat(records)) : JSON.stringify([null].concat(records), null, 2)));
     return records.length;
 }
 

@@ -1,49 +1,6 @@
 {
   "animations": [],
   "effects": [
-    {
-      "name": "effect",
-      "animation": 0,
-      "anchor": {
-        "part": "mesh_node",
-        "offset": [
-          0.012,
-          0.276,
-          -0.006
-        ]
-      },
-      "scale": 1,
-      "loop": false,
-      "rotate": [
-        0,
-        0,
-        0
-      ],
-      "video": {
-        "file": "",
-        "width": 0.3,
-        "height": 0.2,
-        "loop": true,
-        "audio": false,
-        "volume": 100
-      },
-      "type": "light",
-      "light": {
-        "type": "beam",
-        "color": "#ff2a2a",
-        "radius": 8,
-        "intensity": 1.6,
-        "angle": 70,
-        "width": 0.04,
-        "yaw": -90,
-        "pitch": 0,
-        "flicker": 0,
-        "duration": 0,
-        "occlude": true,
-        "shadow": false,
-        "body": true,
-        "pulse": null
-      }
-    }
+    {"name":"effect","animation":0,"anchor":{"part":"mesh_node","offset":[0.012,0.276,-0.006]},"scale":1,"loop":false,"rotate":[0,0,0],"video":{"file":"","width":0.3,"height":0.2,"loop":true,"audio":false,"volume":100},"type":"light","light":{"type":"beam","color":"#ff2a2a","radius":8,"intensity":1.6,"angle":70,"width":0.04,"yaw":-90,"pitch":0,"flicker":0,"duration":0,"occlude":true,"shadow":false,"body":true,"pulse":null}}
   ]
 }

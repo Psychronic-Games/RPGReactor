@@ -94,7 +94,7 @@
             return;
         }
         data.version = 1;
-        writeFile(fs, filePath(projectPath), JSON.stringify(data, null, 2) + '\n');
+        writeFile(fs, filePath(projectPath), (typeof RRJson !== 'undefined' && RRJson.stringify ? RRJson.stringify(data) : JSON.stringify(data, null, 2)) + '\n');
     }
 
     function trySet(projectPath, section, id, spec, slot) {

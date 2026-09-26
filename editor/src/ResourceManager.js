@@ -555,7 +555,7 @@ class ResourceManager {
             }
             if (options.sidecar && typeof options.sidecar === 'object') {
                 stagedSidecar = path.join(stagingDirectory, 'model.json');
-                options.writeAtomic(fs, stagedSidecar, Buffer.from(JSON.stringify(options.sidecar, null, 2) + '\n'));
+                options.writeAtomic(fs, stagedSidecar, Buffer.from((typeof RRJson !== 'undefined' && RRJson.stringify ? RRJson.stringify(options.sidecar) : JSON.stringify(options.sidecar, null, 2)) + '\n'));
             }
 
             options.verifyOwnership?.();

@@ -21,3 +21,14 @@ test('the editor and runtime use identical decoding rules',()=>{
  assert.equal(fs.readFileSync(path.join(__dirname,'../src/utils/JsonFiles.js'),'utf8'),fs.readFileSync(path.join(__dirname,'../../runtime/reactor_json.js'),'utf8'));
 });
 module.exports={encode};
+
+test('data files are written readable and compact: a record a line, the way RPG Maker writes a database', () => {
+    const J = require(path.join(__dirname, '../src/utils/JsonFiles.js'));
+    const actors = [null, { id: 1, name: 'Hero', traits: [{ code: 1 }] }, { id: 2, name: 'Mage' }];
+    assert.equal(J.stringify(actors), '[\nnull,\n{"id":1,"name":"Hero","traits":[{"code":1}]},\n{"id":2,"name":"Mage"}\n]');
+    const system = { gameTitle: 'Demo', sounds: [{ name: 'Cursor1' }, { name: 'Decision1' }], size: [816, 624] };
+    assert.equal(J.stringify(system), '{\n  "gameTitle": "Demo",\n  "sounds": [\n    {"name":"Cursor1"},\n    {"name":"Decision1"}\n  ],\n  "size": [816,624]\n}');
+    for (const value of [actors, system, [], {}, [1, 2], 'x']) assert.deepEqual(JSON.parse(J.stringify(value)), value);
+    const manager = fs.readFileSync(path.join(__dirname, '../src/DatabaseManager.js'), 'utf8');
+    assert.match(manager, /RRJson\.stringify\(this\.fileContent\(filename, data\)\)/);
+});

@@ -550,7 +550,7 @@ class ProjectManager {
     }
 
     writeJson(filePath, data) {
-        this.writeText(filePath, JSON.stringify(data, null, 2));
+        this.writeText(filePath, (typeof RRJson !== 'undefined' && RRJson.stringify ? RRJson.stringify(data) : JSON.stringify(data, null, 2)));
     }
 
     crc32(buffer) {

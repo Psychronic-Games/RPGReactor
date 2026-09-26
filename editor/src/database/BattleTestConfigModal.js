@@ -674,7 +674,7 @@ class BattleTestConfigModal {
         // Also save normal System.json so testTroopId persists
         try {
             const onDisk = typeof dm.fileContent === 'function' ? dm.fileContent('System.json', system) : system;
-            this._writeFileAtomic(fs, path.join(dataDir, 'System.json'), JSON.stringify(onDisk, null, 2));
+            this._writeFileAtomic(fs, path.join(dataDir, 'System.json'), (typeof RRJson !== 'undefined' && RRJson.stringify ? RRJson.stringify(onDisk) : JSON.stringify(onDisk, null, 2)));
         } catch (e) {
             // Non-fatal, test files are what matter
         }

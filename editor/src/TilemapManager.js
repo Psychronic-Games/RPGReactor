@@ -3550,7 +3550,7 @@ class TilemapManager {
             const systemPath = this.path.join(this.projectPath, 'data', 'System.json');
             const system = RRJson.parse(this.fs.readFileSync(systemPath));
             system.versionId = Math.floor(Math.random() * 100000000);
-            this._writeFileAtomic(this.fs, systemPath, JSON.stringify(system, null, 2));
+            this._writeFileAtomic(this.fs, systemPath, (typeof RRJson !== 'undefined' && RRJson.stringify ? RRJson.stringify(system) : JSON.stringify(system, null, 2)));
         } catch (error) {
             console.error('Error bumping versionId:', error);
         }

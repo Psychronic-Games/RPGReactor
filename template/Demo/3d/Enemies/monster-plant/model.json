@@ -1,39 +1,10 @@
 {
   "animations": [
-    {
-      "name": "sway",
-      "part": "",
-      "type": "swing",
-      "axis": "z",
-      "trigger": "always",
-      "degrees": 4,
-      "period": 150
-    },
-    {
-      "name": "peck",
-      "part": "",
-      "type": "spin",
-      "axis": "x",
-      "trigger": "action",
-      "degrees": 2,
-      "period": 80
-    },
-    {
-      "name": "bite",
-      "part": "",
-      "type": "swing",
-      "axis": "x",
-      "trigger": "action",
-      "degrees": 16,
-      "period": 22,
-      "cycles": 3
-    }
+    {"name":"sway","part":"","type":"swing","axis":"z","trigger":"always","degrees":4,"period":150},
+    {"name":"peck","part":"","type":"spin","axis":"x","trigger":"action","degrees":2,"period":80},
+    {"name":"bite","part":"","type":"swing","axis":"x","trigger":"action","degrees":16,"period":22,"cycles":3}
   ],
   "parts": [
-    {
-      "name": "Lower-Jaw",
-      "pivot": null,
-      "meshes": {}
-    }
+    {"name":"Lower-Jaw","pivot":null,"meshes":{}}
   ]
 }

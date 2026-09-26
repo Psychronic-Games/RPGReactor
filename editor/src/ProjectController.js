@@ -3225,7 +3225,7 @@ class ProjectController {
             const systemPath = path.join(this.currentProject.path, 'data', 'System.json');
             const system = RRJson.parse(fs.readFileSync(systemPath));
             system.versionId = Math.floor(Math.random() * 100000000);
-            this._writeFileAtomic(fs, systemPath, JSON.stringify(system, null, 2));
+            this._writeFileAtomic(fs, systemPath, (typeof RRJson !== 'undefined' && RRJson.stringify ? RRJson.stringify(system) : JSON.stringify(system, null, 2)));
         } catch (error) {
             console.error('Error bumping versionId:', error);
         }
