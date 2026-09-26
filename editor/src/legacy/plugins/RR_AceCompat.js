@@ -25,7 +25,9 @@
  *   Items         help at the top, the categories under it, and the list
  *                 to the bottom, each item with its icon, name and ":n".
  *
- * An icon in text (\\I[n]) moves the text on by the icon's width alone.
+ * An icon in text (\\I[n]) moves the text on by the icon's width alone. A
+ * damage formula that sets b.result.critical makes its hit critical, as the
+ * critical was applied after the formula.
  *
  * Command lists are left-aligned, the horizontal ones centred. List rows start
  * at the window's left edge, columns 32 apart (8 in a horizontal list), and
@@ -313,6 +315,21 @@
         }
     };
     Window_BattleStatus.prototype.drawItemBackground = function() {};
+
+    //-------------------------------------------------------------------------
+    // Damage: the critical is applied after the formula runs, so a formula that
+    // sets b.result.critical makes its hit critical
+    //-------------------------------------------------------------------------
+    const _makeDamageValue = Game_Action.prototype.makeDamageValue;
+    Game_Action.prototype.makeDamageValue = function(target, critical) {
+        const base = this.evalDamageFormula(target);
+        this.evalDamageFormula = () => base;
+        try {
+            return _makeDamageValue.call(this, target, critical || !!target.result().critical);
+        } finally {
+            delete this.evalDamageFormula;
+        }
+    };
 
     //-------------------------------------------------------------------------
     // Game End: To Title, Shut Down and Cancel in a window 160 wide, over the

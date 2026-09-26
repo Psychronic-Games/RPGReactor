@@ -52,7 +52,7 @@
             }
             if (/[0-9]/.test(c)) {
                 const m = /^(\d[\d_]*(?:\.\d+)?(?:e[+-]?\d+)?)/i.exec(src.slice(i));
-                push('num', Number(m[1].replace(/_/g, ''))); i += m[1].length; continue;
+                push('num', Number(m[1].replace(/_/g, ''))); out[out.length - 1].float = /[.e]/i.test(m[1]); i += m[1].length; continue;
             }
             if (c === '"' || c === "'") {
                 let j = i + 1, text = '', parts = [];
@@ -226,7 +226,8 @@
 
         function ternary() {
             const cond = range();
-            if (isOp('?')) { next(); const a = ternary(); expect('op', ':'); return { t: 'cond', cond, a, b: ternary() }; }
+            // Either branch may assign, as Ruby reads `c ? x = 1 : y`.
+            if (isOp('?')) { next(); const a = assignment(); expect('op', ':'); return { t: 'cond', cond, a, b: assignment() }; }
             return cond;
         }
         function range() {
@@ -320,7 +321,7 @@
         function primary() {
             const tok = next();
             switch (tok.type) {
-                case 'num': return { t: 'num', v: tok.value };
+                case 'num': return { t: 'num', v: tok.value, float: !!tok.float };
                 case 'str': return typeof tok.value === 'string' ? { t: 'str', v: tok.value } : { t: 'interp', parts: tok.value.map(x => (typeof x === 'string' ? x : parse(x.code))) };
                 case 'sym': return { t: 'sym', v: tok.value };
                 case 'gvar': return { t: 'gvar', name: tok.value };
@@ -397,7 +398,9 @@
         actor: { hp: '$.hp', mp: '$.mp', tp: '$.tp', mhp: '$.mhp', mmp: '$.mmp', level: '$.level', exp: '$.currentExp()', name: '$.name()', nickname: '$.nickname()', id: '$.actorId()', actor_id: '$.actorId()', class_id: '$._classId',
             'state?': '$.isStateAffected(%0)', add_state: '$.addState(%0)', remove_state: '$.removeState(%0)', 'dead?': '$.isDead()', 'alive?': '$.isAlive()', weapons: '$.weapons()', armors: '$.armors()', equips: '$.equips()',
             'skill_learn?': '$.isLearnedSkill(%0.id)', learn_skill: '$.learnSkill(%0)', forget_skill: '$.forgetSkill(%0)', recover_all: '$.recoverAll()', change_level: '$.changeLevel(%0, %1)', gain_exp: '$.gainExp(%0)',
-            atk: '$.atk', def: '$.def', mat: '$.mat', mdf: '$.mdf', agi: '$.agi', luk: '$.luk', character_name: '$.characterName()', face_name: '$.faceName()', set_graphic: '$.setCharacterImage(%0, %1); $.setFaceImage(%2, %3)' },
+            atk: '$.atk', def: '$.def', mat: '$.mat', mdf: '$.mdf', agi: '$.agi', luk: '$.luk', character_name: '$.characterName()', face_name: '$.faceName()', set_graphic: '$.setCharacterImage(%0, %1); $.setFaceImage(%2, %3)',
+            'actor?': '$.isActor()', 'enemy?': '$.isEnemy()', state_turns: '($._stateTurns[%0] || 0)', die: '$.die()', result: '$.result()', mtp: '$.maxTp()', hit: '$.hit', eva: '$.eva', cri: '$.cri' },
+        result: { critical: '$.critical', 'hit?': '$.isHit()', missed: '$.missed', evaded: '$.evaded', hp_damage: '$.hpDamage', mp_damage: '$.mpDamage' },
         character: { x: '$.x', y: '$.y', real_x: '$._realX', real_y: '$._realY', direction: '$.direction()', 'moving?': '$.isMoving()', erase: '$.erase()', moveto: '$.locate(%0, %1)', id: '$.eventId()',
             screen_x: '$.screenX()', screen_y: '$.screenY()', opacity: '$.opacity()', transparent: '$.isTransparent()', turn_toward_player: '$.turnTowardPlayer()', 'dash?': '$.isDashing()', refresh: '$.refresh()',
             animation_id: '$._animationId', character_name: '$.characterName()', 'through': '$.isThrough()', start: '$.start()', followers: '$.followers()', 'normal_walk?': '$.isNormal()' },
@@ -420,6 +423,11 @@
         const calls = options.calls || {};
         const locals = new Set();
         const blockParamsKinds = new Map();
+        // Locals first assigned inside an expression ((w = a.equips[0]) ? …) are declared at the top.
+        const hoisted = new Set();
+        let statementAssign = null;
+        // A damage formula runs with the user (a), the target (b) and the variables' array (v) in scope.
+        if (self === 'formula') for (const [name, kind] of [['a', 'actor'], ['b', 'actor'], ['v', 'rawvars']]) { locals.add(name); blockParamsKinds.set(name, kind); }
 
         const gen = (n) => expr(n).code;
         const js = (code, kind = 'any') => ({ code, kind });
@@ -429,7 +437,7 @@
 
         function expr(n) {
             switch (n.t) {
-                case 'num': return js(String(n.v), 'number');
+                case 'num': return js(String(n.v), Number.isInteger(n.v) && !n.float ? 'number' : 'float');
                 case 'str': return js(literal(n.v), 'string');
                 case 'interp': return js('`' + n.parts.map(p => (typeof p === 'string' ? p.replace(/[`\\$]/g, c => '\\' + c) : '${' + p.map(gen).join('; ') + '}')).join('') + '`', 'string');
                 case 'sym': return js(literal(n.v), 'string');
@@ -449,7 +457,14 @@
                     // Ruby's == compares numbers and strings by value, as JS's == would with mixed types; keep === for like types.
                     const l = expr(n.l), r = expr(n.r);
                     const loose = (n.op === '==' || n.op === '!=') && (l.kind === 'nil' || r.kind === 'nil');
-                    return js(`(${l.code} ${loose ? n.op : op} ${r.code})`, ['==', '!=', '<', '>', '<=', '>=', '&&', '||'].includes(n.op) ? 'bool' : 'number');
+                    const float = l.kind === 'float' || r.kind === 'float';
+                    // Ruby divides whole numbers to a whole number (rounding down); with a Float either side it is a plain division.
+                    if (n.op === '/' && !float) {
+                        if (l.kind === 'number' && r.kind === 'number') return js(`Math.floor(${l.code} / ${r.code})`, 'number');
+                        return js(`((x, y) => (Number.isInteger(x) && Number.isInteger(y) ? Math.floor(x / y) : x / y))(${l.code}, ${r.code})`, 'number');
+                    }
+                    const logical = ['==', '!=', '<', '>', '<=', '>=', '&&', '||'].includes(n.op);
+                    return js(`(${l.code} ${loose ? n.op : op} ${r.code})`, logical ? 'bool' : float ? 'float' : 'number');
                 }
                 case 'const': {
                     if (Object.prototype.hasOwnProperty.call(constants, n.name) && typeof constants[n.name] !== 'object') return js(literal(constants[n.name]));
@@ -498,6 +513,7 @@
             const recv = expr(n.recv);
             const a = n.args.map(gen);
             if (recv.kind === '$game_variables') return js(`$gameVariables.value(${a[0]})`, 'number');
+            if (recv.kind === 'rawvars') return js(`(${recv.code}[${a[0]}] || 0)`, 'any');
             if (recv.kind === '$game_switches') return js(`$gameSwitches.value(${a[0]})`, 'bool');
             if (recv.kind === '$game_self_switches') return js(`$gameSelfSwitches.value(${a[0]})`, 'bool');
             if (recv.kind === '$game_actors') return js(`$gameActors.actor(${a[0]})`, 'actor');
@@ -562,9 +578,11 @@
                 const pics = { x: '$.x()', y: '$.y()', opacity: '$.opacity()', name: '$.name()', erase: '$.erase()', zoom_x: '$.scaleX()', zoom_y: '$.scaleY()', angle: '$.angle()' };
                 if (pics[n.name]) return js(fill(pics[n.name], recv.code, a));
             }
-            if (COMMON[n.name] && (recv.kind.startsWith('array') || ['any', 'number', 'string', 'bool'].includes(recv.kind))) {
+            if (COMMON[n.name] && (recv.kind.startsWith('array') || ['any', 'number', 'float', 'string', 'bool'].includes(recv.kind))) {
                 const element = recv.kind.startsWith('array:') ? recv.kind.slice(6) : 'any';
-                return js(COMMON[n.name](recv.code, a), ['first', 'last', 'sample'].includes(n.name) ? element : 'any');
+                const kind = ['first', 'last', 'sample'].includes(n.name) ? element : n.name === 'to_f' ? 'float'
+                    : ['to_i', 'floor', 'ceil', 'size', 'length', 'count'].includes(n.name) || (n.name === 'round' && !a.length) ? 'number' : 'any';
+                return js(COMMON[n.name](recv.code, a), kind);
             }
             return fail(`unknown method ${n.name} on ${recv.kind}`);
         }
@@ -574,8 +592,9 @@
             if (kind === 'party' && ['items', 'weapons', 'armors'].includes(name)) return 'array:record';
             if (kind === 'actor' && ['weapons', 'armors', 'equips'].includes(name)) return 'array:record';
             if (kind === 'party' && name === 'leader') return 'actor';
+            if (kind === 'actor' && name === 'result') return 'result';
             if (kind === 'character' && name === 'followers') return 'followers';
-            if (['hp', 'mp', 'tp', 'level', 'gold', 'x', 'y', 'map_id', 'direction', 'steps'].includes(name)) return 'number';
+            if (['hp', 'mp', 'level', 'gold', 'x', 'y', 'map_id', 'direction', 'steps', 'mhp', 'mmp', 'atk', 'def', 'mat', 'mdf', 'agi', 'luk'].includes(name)) return 'number';
             return 'any';
         }
 
@@ -631,7 +650,7 @@
                     get_actor: `$gameActors.actor(%0)`, set_self_switch: `$gameSelfSwitches.setValue([$gameMap.mapId(), this._eventId, %0], %1)`
                 };
                 if (interp[name] !== undefined) return js(fill(interp[name], '', a), name === 'get_character' ? 'character' : name === 'screen' ? 'screen' : 'any');
-            } else {
+            } else if (self === 'character') {
                 const own = {
                     x: 'this.x', y: 'this.y', direction: 'this.direction()', move_down: 'this.moveStraight(2)', move_left: 'this.moveStraight(4)', move_right: 'this.moveStraight(6)', move_up: 'this.moveStraight(8)',
                     move_random: 'this.moveRandom()', move_toward_player: 'this.moveTowardPlayer()', move_away_from_player: 'this.moveAwayFromPlayer()', move_forward: 'this.moveForward()', move_backward: 'this.moveBackward()',
@@ -678,6 +697,7 @@
                 if (op !== '=') fail('compound assignment to an undeclared local');
                 locals.add(t.name);
                 if (valueNode.kind !== 'any') blockParamsKinds.set(t.name, valueNode.kind);
+                if (n !== statementAssign) { hoisted.add(t.name); return js(`(${t.name} = ${value})`, valueNode.kind); }
                 return js(`var ${t.name} = ${value}`);
             }
             if (t.t === 'ivar' || (t.t === 'call' && t.recv && t.recv.t === 'self' && !t.args.length)) {
@@ -709,7 +729,8 @@
                     return js(`${recv.code}.${set}(${value})`);
                 }
                 if (recv.kind === 'followers' && t.name === 'visible') return js(`(${value} ? $gamePlayer.showFollowers() : $gamePlayer.hideFollowers()); $gamePlayer.refresh()`);
-                if (recv.kind === 'actor' && ['hp', 'mp', 'tp'].includes(t.name)) return js(`${recv.code}.set${t.name.toUpperCase()[0]}${t.name.slice(1)}(${value})`);
+                if (recv.kind === 'actor' && ['hp', 'mp', 'tp'].includes(t.name)) return js(`${recv.code}.set${t.name.toUpperCase()[0]}${t.name.slice(1)}(${combine(`${recv.code}.${t.name}`)})`);
+                if (recv.kind === 'result' && ['critical', 'missed', 'evaded'].includes(t.name)) return js(`(${recv.code}.${t.name} = ${combine(`${recv.code}.${t.name}`)})`);
                 if (recv.kind === 'actor' && t.name === 'name') return js(`${recv.code}.setName(${value})`);
                 if (recv.kind === 'party' && t.name === 'gold') return js(`$gameParty.gainGold((${value}) - $gameParty.gold())`);
                 if (options.setters && options.setters[recv.kind + '.' + t.name]) return js(options.setters[recv.kind + '.' + t.name].replace(/\$(?![A-Za-z_])/g, recv.code).replace('%v', value));
@@ -737,11 +758,14 @@
                     const parts = n.targets.map((t, i) => assign({ t: 'assign', op: '=', target: t, value: { t: 'raw', code: `(Array.isArray(${tmp}) ? ${tmp}[${i}] : ${i === 0 ? tmp : 'null'})` } }).code + ';');
                     return `const ${tmp} = ${value}; ${parts.join(' ')}`;
                 }
-                default: return gen(n) + ';';
+                default:
+                    if (n.t === 'assign') statementAssign = n;
+                    return gen(n) + ';';
             }
         }
 
-        return program.map(stmt).join('\n');
+        const body = program.map(stmt).join('\n');
+        return hoisted.size ? `var ${[...hoisted].join(', ')};\n${body}` : body;
     }
 
     /** Ruby → JS, or null when any part of it is not in the table. */
@@ -774,7 +798,25 @@
         }
     }
 
-    const api = { tokenize, parse, transpile, transpileExpression, Fail };
+    /**
+     * A damage formula: statements whose last value is the damage, run by MZ's eval with a (the user),
+     * b (the target) and v (the variables' array) in scope. Null when any part is not in the table.
+     */
+    function transpileFormula(source, options = {}) {
+        try {
+            const program = parse(String(source || ''));
+            if (!program.length) return null;
+            const code = generate(program, Object.assign({}, options, { self: 'formula' })).replace(/;$/, '');
+            // eslint-disable-next-line no-new, no-new-func
+            new Function('a', 'b', 'v', code);
+            return code;
+        } catch (error) {
+            if (error instanceof Fail || error instanceof SyntaxError) return null;
+            throw error;
+        }
+    }
+
+    const api = { tokenize, parse, transpile, transpileExpression, transpileFormula, Fail };
     root.RRRubyTranspiler = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

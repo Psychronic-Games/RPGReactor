@@ -412,6 +412,7 @@
         if (!T) return null;
         const { calls, ivars, extra } = familyTables(context);
         const options = Object.assign({ self: context.self === 'character' ? 'character' : 'interpreter', constants: context.constants || {}, calls, ivars }, extra);
+        if (kind === 'formula') return T.transpileFormula(source, options);
         return kind === 'expression' ? T.transpileExpression(source, options) : T.transpile(source, options);
     }
 
@@ -694,8 +695,19 @@
     const byId = (records, convert) => { const out = [null]; for (const r of list(records)) if (r && r.id) out[r.id] = convert(r); for (let i = 1; i < out.length; i++) if (out[i] === undefined) out[i] = null; return out; };
 
     function database(ace, notes) {
+        // A damage formula is Ruby. Plain arithmetic reads the same in JavaScript and stays as written; anything else
+        // (division, method calls, statements) is translated. One that cannot be read stays: MZ gives it 0, as Ace
+        // gave 0 for a formula that raised.
+        const formulaOf = (d) => {
+            const out = damage(d);
+            if (!out.type || /^[\w\s.+\-*()]*$/.test(out.formula) && !/\b(rand|p)\b/.test(out.formula)) return out;
+            const js = ruby(out.formula, 'formula', activeContext);
+            if (js === null) { tag(notes, 'rubyFormula'); return out; }
+            tag(notes, 'formulaTranslated');
+            return Object.assign(out, { formula: js });
+        };
         const usable = (r) => ({
-            animationId: num(r.animation_id), damage: damage(r.damage), description: str(r.description), effects: effects(r.effects),
+            animationId: num(r.animation_id), damage: formulaOf(r.damage), description: str(r.description), effects: effects(r.effects),
             hitType: num(r.hit_type), iconIndex: num(r.icon_index), name: str(r.name), note: str(r.note), occasion: num(r.occasion),
             repeats: num(r.repeats, 1), scope: num(r.scope), speed: num(r.speed), successRate: num(r.success_rate, 100), tpGain: num(r.tp_gain)
         });

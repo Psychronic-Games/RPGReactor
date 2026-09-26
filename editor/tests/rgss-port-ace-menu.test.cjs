@@ -127,7 +127,7 @@ function windows(parameters, ...names) {
         Graphics: { boxWidth: 640, boxHeight: 480 }, $gameSystem: { mainFontSize: () => 18 }
     });
     // Classes the plugins extend but these tests do not draw with.
-    for (const name of ['Spriteset_Battle', 'Sprite_Battleback', 'Window_GameEnd', 'Scene_GameEnd', 'ImageManager', 'Window_ActorCommand', 'Window_PartyCommand', 'Window_BattleEnemy', 'Window_BattleActor', 'Window_Help', 'BattleManager'])
+    for (const name of ['Spriteset_Battle', 'Sprite_Battleback', 'Window_GameEnd', 'Scene_GameEnd', 'ImageManager', 'Game_Action', 'Window_ActorCommand', 'Window_PartyCommand', 'Window_BattleEnemy', 'Window_BattleActor', 'Window_Help', 'BattleManager'])
         if (!(name in ctx)) ctx[name] = function() {};
     for (const name of names) vm.runInContext(plugin(name), ctx);
     return { win: new Window_Base(), calls, ctx };
@@ -280,4 +280,23 @@ test('party equipment utilities translate into the events', () => {
     assert.ok(C.scriptFamilies([script]).has('partyEquipUtilities'));
     const ctx = { families: new Set(['partyEquipUtilities']) };
     assert.match(C.ruby('$game_party.unequip_all', 'statement', ctx), /changeEquip\(t - 1, null\)/);
+});
+
+test('damage formulas: Ruby arithmetic and battler calls translate; plain arithmetic stays as written', () => {
+    const f = (src, families) => C.ruby(src, 'formula', { families: new Set(families || []) });
+    assert.equal(f('(a.agi + a.atk) / 2 - b.def'), '(Math.floor((a.agi + a.atk) / 2) - b.def)');
+    assert.equal(f('a.mat * 1.44 / 2'), '((a.mat * 1.44) / 2)');
+    assert.equal(f('b.state?(7) ? b.state_turns(7) : 0'), '(b.isStateAffected(7) ? (b._stateTurns[7] || 0) : 0)');
+    assert.equal(f('a.hp += b.mp; b.mp = 0; b.mp'), 'a.setHp(a.hp + (b.mp));\nb.setMp(0);\nb.mp');
+    // A local first assigned inside an expression is declared at the top; the last statement is the damage.
+    const code = f('d = a.atk - b.def ; b.state?(10) ? b.result.critical = true && d : d');
+    const r = { critical: false }, a = { atk: 9 }, b = { def: 2, result: () => r, isStateAffected: () => true };
+    assert.equal(new Function('a', 'b', 'v', `return eval(${JSON.stringify(code)})`)(a, b, []), 7);
+    assert.equal(r.critical, 7);
+    assert.match(f('(w=a.equips[0]) ? 1 : 0'), /^var w;\n/);
+    // A call no script defines stays untranslated: MZ gives such a formula 0, as Ace's rescue did.
+    assert.equal(f('if b.result.critical;a.gain_attr(:snipe,1);end; 5'), null);
+    const db = C.database({ skills: [null, { id: 1, damage: { type: 1, formula: 'a.atk * 4 - b.def * 2' }, features: [], effects: [] }, { id: 2, damage: { type: 1, formula: 'a.atk / 2' }, effects: [] }] }, {});
+    assert.equal(db.skills[1].damage.formula, 'a.atk * 4 - b.def * 2');
+    assert.equal(db.skills[2].damage.formula, 'Math.floor(a.atk / 2)');
 });
