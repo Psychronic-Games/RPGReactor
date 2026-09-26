@@ -65,7 +65,7 @@ parents-first.
 | **List** | Typed rows in a real `Window_Selectable`, with scrolling, disabled rows, a named context, row template, selection styling, and an action |
 | **Gauge** | Actor HP/MP/TP/EXP/stat or game-variable progress with configurable label, value format, colors, back color, and bar height |
 | **Text Input** | A field that edits a variable or an actor's name or nickname: typing, optional stock character grid, placeholder, maximum length, password dots, an action after Enter |
-| **Battle Window** | In a Battle HUD: places, sizes and skins one stock battle window, with columns, slide-in, a background picture, following the active actor, or hiding it while it keeps the input |
+| **Battle Window** | In a Battle HUD: places, sizes and skins one stock battle window, with columns, slide-in, a background picture, following the active actor, or hiding it while it keeps the input. The Actor and Party Command windows also take an alignment and their own command list |
 | **Target Cursor** | In a Battle HUD: an animated, floating arrow or picture over the enemy or ally being chosen, with their name |
 
 There is no Container node. Box and Image nodes provide the current grouping
@@ -293,6 +293,26 @@ turn order, so battle plugins keep working. The HUD's nodes sit under those
 windows and never take focus, like a map overlay; its transition plays when the
 battle opens (**Slide up** is new). **Hide the stock battle status** (on by
 default) hides `Window_BattleStatus` unless a Battle Window node places it.
+
+**Commands.** The Actor Command and Party Command windows list the stock
+commands until **Choose Commands** replaces them with an ordered list
+(`commands`): Attack, Skill types (one per type the actor has, as stock), One
+skill type, Guard, Items, Escape and **Use a skill** for the Actor Command
+window; Fight and Escape for the Party Command window. A blank label uses the
+name from Terms, Types or the skill; a skill or skill type can be limited to
+actors who have it. Escape is greyed out where the battle cannot be escaped.
+Chosen by an actor, it first drops the party's choices, so a failure starts the
+turn (turn-based) or leaves the party charging (time progress) as the Party
+Command's Escape does. **Align** (`commandAlign`) sets left, centre (stock) or
+right for both windows; **Columns** shows each window's own default (1 for
+commands, 2 for skills and items). With time progress battles the Party
+Command window only opens as the battle starts, so an Escape the player can
+reach every turn belongs in the Actor Command list.
+
+The canvas draws the Actor Command window with the first battler's commands,
+and any other command, skill or item window with its rows while it is selected,
+laid out as the game lays them: System 2's line height and window padding, the
+chosen columns and alignment, disabled rows translucent.
 
 What MOG's battle HUD does, and where it lives here:
 

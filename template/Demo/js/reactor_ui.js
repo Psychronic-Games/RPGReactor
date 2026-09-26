@@ -36,6 +36,8 @@
     ReactorUI.MAX_NESTING = 16;
     // "Fit text to size" never shrinks a font below this many pixels.
     ReactorUI.MIN_FONT_SIZE = 8;
+    // A disabled control or row left at the default opacity dims as stock windows do (translucentOpacity).
+    ReactorUI.DISABLED_OPACITY = 160;
     ReactorUI.NODE_TYPES = ["box", "image", "text", "button", "list", "gauge", "input", "battleWindow", "battleCursor"];
     /** The stock battle windows a Battle Window node places, by scene property. */
     ReactorUI.BATTLE_WINDOWS = {
@@ -44,6 +46,16 @@
         status: "_statusWindow", log: "_logWindow"
     };
     ReactorUI.BATTLE_FIELD = "reactorBattleInterfaceId";
+    /**
+     * Commands a Battle Window node can list. Actor Command takes attack,
+     * skillTypes (one per skill type the actor has, as stock), skillType (one
+     * type), guard, item, escape and skill (use one skill directly); Party
+     * Command takes fight and escape. An empty list keeps the stock commands.
+     */
+    ReactorUI.BATTLE_COMMANDS = {
+        actorCommand: ["attack", "skillTypes", "skillType", "guard", "item", "escape", "skill"],
+        partyCommand: ["fight", "escape"]
+    };
     ReactorUI.GAUGE_KINDS = ["hp", "mp", "tp", "exp", "mhp", "mmp", "atk", "def", "mat", "mdf", "agi", "luk", "variable"];
     ReactorUI.LIST_SOURCES = ["party", "inventory", "skills", "actorParameters", "actorEquipment", "actorStates", "options", "saveSlots", "variableRange", "literal",
         "itemCategories", "skillTypes", "equipCandidates", "shopGoods", "shopSell"];
@@ -191,6 +203,12 @@
         return options.indexOf(value) >= 0 ? value : fallback;
     }
 
+    function battleCommands(value) {
+        const kinds = ["attack", "skillTypes", "skillType", "guard", "item", "escape", "skill", "fight"];
+        return (Array.isArray(value) ? value : []).filter(entry => entry && typeof entry === "object" && kinds.includes(entry.kind)).slice(0, 32)
+            .map(entry => ({ kind: entry.kind, label: text(entry.label, ""), id: Math.max(0, Math.floor(finite(entry.id, 0))), knownOnly: entry.knownOnly !== false }));
+    }
+
     function isHexColor(value) {
         return typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value);
     }
@@ -219,7 +237,7 @@
             fillColor: disabled ? node.disabledFillColor : focused ? node.focusedFillColor : "",
             textColor: disabled ? node.disabledTextColor : focused ? node.focusedTextColor : "",
             borderColor: focused ? (node.focusedBorderColor || node.highlightColor) : "",
-            opacity: disabled ? node.disabledOpacity : pressed ? node.pressedOpacity : focused ? node.focusedOpacity : "",
+            opacity: disabled ? (node.disabledOpacity === "" ? ReactorUI.DISABLED_OPACITY : node.disabledOpacity) : pressed ? node.pressedOpacity : focused ? node.focusedOpacity : "",
             offsetX: pressed ? node.pressedOffsetX : 0,
             offsetY: pressed ? node.pressedOffsetY : 0
         };
@@ -514,6 +532,8 @@
             slideY: clamp(Math.round(finite(source.slideY, 0)), -2000, 2000),
             slideDuration: clamp(Math.round(finite(source.slideDuration, 12)), 1, 120),
             windowColumns: clamp(Math.round(finite(source.windowColumns, 0)), 0, 12),
+            commandAlign: oneOf(source.commandAlign, ["center", "left", "right"], "center"),
+            commands: battleCommands(source.commands),
             imageX: clamp(Math.round(finite(source.imageX, 0)), -2000, 2000),
             imageY: clamp(Math.round(finite(source.imageY, 0)), -2000, 2000),
             // Target Cursor: animation and placement over the chosen battler.
@@ -2135,6 +2155,25 @@
         return low;
     };
 
+    /** "Fit text to size" for one plain line (an input's value): shrinks the font until it fits the width. */
+    Window_ReactorUINode.prototype.fitLine = function(line, maxWidth) {
+        this._uiFontScale = 1;
+        this.resetFontSettings();
+        const node = this._uiNode;
+        if (!node.fitText || !line || this.textWidth(line) <= maxWidth) return;
+        const base = node.fontSize > 0 ? node.fontSize : $gameSystem.mainFontSize();
+        let low = Math.min(1, ReactorUI.MIN_FONT_SIZE / base), high = 1;
+        for (let step = 0; step < 8; step++) {
+            const middle = (low + high) / 2;
+            this._uiFontScale = middle;
+            this.resetFontSettings();
+            if (this.textWidth(line) <= maxWidth) low = middle;
+            else high = middle;
+        }
+        this._uiFontScale = low;
+        this.resetFontSettings();
+    };
+
     /** The node's text, word-wrapped to the node width when asked to. */
     Window_ReactorUINode.prototype.labelText = function() {
         const node = this._uiNode;
@@ -2244,12 +2283,13 @@
         const editing = this._uiDraft != null;
         const value = this.inputValue();
         const shown = node.mask ? "\u2022".repeat(value.length) : value;
-        this.resetFontSettings();
+        const placeholder = !shown && !editing && node.text ? this.convertEscapeCharacters(node.text).replace(/\x1b\w+\[\d*\]/g, "") : "";
+        this.fitLine(placeholder || shown + (editing ? "|" : ""), this.contentsWidth() - 8);
         const h = this.contentsHeight();
         const y = Math.max(0, Math.floor((h - this.lineHeight()) / 2));
-        if (!shown && !editing && node.text) {
+        if (placeholder) {
             this.changePaintOpacity(false);
-            this.drawText(this.convertEscapeCharacters(node.text).replace(/\x1b\w+\[\d*\]/g, ""), 4, y, this.contentsWidth() - 8, node.align);
+            this.drawText(placeholder, 4, y, this.contentsWidth() - 8, node.align);
             this.changePaintOpacity(true);
             return;
         }
@@ -3073,7 +3113,7 @@
         const override = ReactorUI.controlStyle(node, rowState).textColor;
         this.changeTextColor(override || (isHexColor(node.textColor) ? node.textColor : ColorManager.textColor(node.textColor)));
         this.changePaintOpacity(this._uiEnabled && row.enabled !== false);
-        if (!this._uiEnabled || row.enabled === false) this.contents.paintOpacity = node.disabledOpacity === "" ? 255 : node.disabledOpacity;
+        if (!this._uiEnabled || row.enabled === false) this.contents.paintOpacity = node.disabledOpacity === "" ? ReactorUI.DISABLED_OPACITY : node.disabledOpacity;
         const size = this.textSizeEx(row.text);
         let x = rect.x;
         if (this._uiNode.align === "center") x += Math.max(0, Math.floor((rect.width - size.width) / 2));
@@ -3690,11 +3730,13 @@
         const opening = this._transitionPhase === "opening";
         const type = opening ? this._interface.openTransition : this._interface.closeTransition;
         const alpha = type === "fade" ? (opening ? progress : 1 - progress) : 1;
+        // Slides come in from the right (or from below) and leave the other way.
         const x = type === "slideLeft" ? Math.round(Graphics.width * (opening ? 1 - progress : -progress)) : 0;
+        const y = type === "slideUp" ? Math.round(Graphics.height * (opening ? 1 - progress : -progress)) : 0;
         for (const window of this._nodeWindows) {
             window._uiTransitionAlpha = alpha;
             window._uiTransitionX = x;
-            window._uiTransitionY = 0;
+            window._uiTransitionY = y;
             window.syncVisualState();
         }
     };
@@ -4668,6 +4710,7 @@
             state.ready = true;
             const rect = this.windowRect(entry.rect, scene);
             if (node.windowColumns > 0) win.maxCols = () => node.windowColumns;
+            this.customizeBattleCommands(scene, win, node);
             if (rect.width > 0 && rect.height > 0) {
                 win.move(rect.x, rect.y, rect.width, rect.height);
                 if (win.createContents) win.createContents();
@@ -4703,11 +4746,79 @@
         win.y = y;
         if (node.fill === "none") win.opacity = 0;
         const visible = !node.hideWindow && this.evaluateCondition(node.visible, scene) && hud._visibilityAlpha > 0;
-        win.alpha = visible ? 1 : 0;
+        win.alpha = visible ? node.opacity / 255 : 0;
         if (state.back) {
             state.back.visible = visible && shown;
             state.back.alpha = win.openness / 255;
         }
+    };
+
+    /** Command alignment and an authored command list on the Actor or Party Command window. */
+    ReactorUI.customizeBattleCommands = function(scene, win, node) {
+        const kinds = this.BATTLE_COMMANDS[node.battleWindow];
+        if (!kinds) return;
+        win.itemTextAlign = () => node.commandAlign;
+        const commands = node.commands.filter(command => kinds.includes(command.kind));
+        if (!commands.length) return;
+        const label = (command, fallback) => command.label || fallback;
+        if (node.battleWindow === "partyCommand") {
+            win.makeCommandList = function() {
+                for (const command of commands) {
+                    if (command.kind === "fight") this.addCommand(label(command, TextManager.fight), "fight");
+                    else this.addCommand(label(command, TextManager.escape), "escape", BattleManager.canEscape());
+                }
+            };
+            return;
+        }
+        win.makeCommandList = function() {
+            const actor = this._actor;
+            if (!actor) return;
+            for (const command of commands) {
+                switch (command.kind) {
+                    case "attack": this.addCommand(label(command, TextManager.attack), "attack", actor.canAttack()); break;
+                    case "skillTypes": this.addSkillCommands(); break;
+                    case "skillType":
+                        if (!command.knownOnly || actor.skillTypes().includes(command.id)) {
+                            this.addCommand(label(command, $dataSystem.skillTypes[command.id] || ""), "skill", true, command.id);
+                        }
+                        break;
+                    case "guard": this.addCommand(label(command, TextManager.guard), "guard", actor.canGuard()); break;
+                    case "item": this.addCommand(label(command, TextManager.item), "item"); break;
+                    case "escape": this.addCommand(label(command, TextManager.escape), "rrEscape", BattleManager.canEscape()); break;
+                    case "skill": {
+                        const skill = $dataSkills[command.id];
+                        if (skill && (!command.knownOnly || actor.hasSkill(skill.id))) {
+                            this.addCommand(label(command, skill.name), "rrSkill", actor.canUse(skill), skill.id);
+                        }
+                        break;
+                    }
+                    default: break;
+                }
+            }
+        };
+        win.setHandler("rrEscape", () => ReactorUI.escapeFromActorCommand(scene));
+        win.setHandler("rrSkill", () => {
+            const skill = $dataSkills[win.currentExt()];
+            const action = BattleManager.inputtingAction();
+            const actor = BattleManager.actor();
+            if (!skill || !action || !actor) return;
+            action.setSkill(skill.id);
+            actor.setLastBattleSkill(skill);
+            scene.onSelectAction();
+        });
+    };
+
+    /**
+     * Escape chosen by an actor: the party gives up its choices first, as
+     * when Escape is chosen before anyone acts, so a failed escape starts the
+     * turn (turn-based) or leaves the party charging (time progress) instead
+     * of reopening a command window.
+     */
+    ReactorUI.escapeFromActorCommand = function(scene) {
+        BattleManager.cancelActorInput();
+        BattleManager._currentActor = null;
+        if (BattleManager.isTpb()) BattleManager._inputting = false;
+        scene.commandEscape();
     };
 
     /** A small downward arrow, the cursor when no image is chosen. */
@@ -4793,6 +4904,7 @@
         }
         state.name.y = -(arrow.height || 28) - 2;
         state.root.visible = true;
+        state.root.alpha = node.opacity / 255;
     };
 
     const _Scene_Battle_createDisplayObjects = typeof Scene_Battle !== "undefined" ? Scene_Battle.prototype.createDisplayObjects : null;

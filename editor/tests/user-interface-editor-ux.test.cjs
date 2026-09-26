@@ -272,14 +272,21 @@ test('a Battle HUD previews as the battle shows it: the whole party, no focus, t
     editor.current = { mode: 'battle', nodes: [{ id: 1, type: 'list', focusable: true, enabled: { type: 'always' } }], firstFocus: 0 };
     assert.deepStrictEqual(editor.previewPartyActors().map(actor => actor.name), ['Rogue', 'Hero'], 'a battle HUD shows the battle-test party');
     assert.strictEqual(editor.previewControl(editor.current.nodes[0]).state, 'base', 'a battle HUD takes no focus');
-    assert.deepStrictEqual(editor.previewActorCommands(), ['Attack', 'Special', 'Guard', 'Item'], 'the first actor\'s class adds Special');
+    const commandNames = (commands = []) => editor.previewBattleCommands({ battleWindow: 'actorCommand', commands }).map(row => row.text);
+    assert.deepStrictEqual(commandNames(), ['Attack', 'Special', 'Guard', 'Item'], 'the first actor\'s class adds Special');
     editor.current.previewPartySize = 3;
     assert.deepStrictEqual(editor.previewPartyActors().map(actor => actor.name), ['Rogue', 'Hero', 'Mage'], 'Preview party fills with the other actors in ID order');
     editor.current.previewPartySize = 1;
     assert.deepStrictEqual(editor.previewPartyActors().map(actor => actor.name), ['Rogue']);
     delete editor.current.previewPartySize;
     editor._previewParty = [actors[2]];
-    assert.deepStrictEqual(editor.previewActorCommands(), ['Attack', 'Magic', 'Special', 'Guard', 'Item'], 'a caller\'s party wins; the actor adds Magic');
+    assert.deepStrictEqual(commandNames(), ['Attack', 'Magic', 'Special', 'Guard', 'Item'], 'a caller\'s party wins; the actor adds Magic');
+    data.system.terms.commands[1] = 'Run';
+    data.skills = [null, { id: 1, name: 'Steal' }, { id: 2, name: 'Unknown Art' }];
+    data.classes[1].learnings = [{ level: 1, skillId: 1 }];
+    assert.deepStrictEqual(commandNames([{ kind: 'attack', label: 'Strike' }, { kind: 'skillType', id: 1, knownOnly: true }, { kind: 'skillType', id: 3, knownOnly: true },
+        { kind: 'skill', id: 1, knownOnly: true }, { kind: 'skill', id: 2, knownOnly: true }, { kind: 'skill', id: 2, knownOnly: false, label: 'Try' }, { kind: 'escape' }, { kind: 'fight' }]),
+        ['Strike', 'Magic', 'Steal', 'Try', 'Run'], 'authored commands: labels, known-only filters, and no Party Command kinds in the Actor Command window');
     const troop = fs.readFileSync(path.join(__dirname, '..', 'src', 'database', 'DatabaseTroopEditor.js'), 'utf8');
     assert.match(troop, /drawRecordInto\(ctx, hud, \{ party: setup\.party\.map\(entry => entry\.actor\) \}\)/, 'Show Battle UI draws the bound HUD with the battle-test party');
 });

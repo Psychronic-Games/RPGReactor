@@ -5,8 +5,8 @@ The verified state of the tree as of **2026-09-25**. This page states what is tr
 ## Version and validation
 
 - Latest release: **0.98.7**, tagged and published on GitHub on 2026-09-21. Signed binaries and the itch channels follow from the Actions tab (Release Candidate → Release). The 0.98.8 cycle is open: package, lockfile, about box, web host, runtime marker, both changelogs, READMEs and the release checklist name 0.98.8.
-- Runtime revision: **20260926.4** (`runtime/reactor_main.js`, stated twice: the header comment drives the project updater, the global identifies a running game). All 14 bundled projects match `runtime/` (`node editor/build-scripts/sync-runtime.cjs --check`).
-- Node suite: **3,783 tests pass** in this tree (`cd editor && npm test`, about 25 s). A fresh clone with `npm ci --ignore-scripts` reproduces CI and skips the tests that read gitignored projects (Star Shift Rebellion and the six older-engine games in `template/` the importer is measured on); last run in a fresh clone on 2026-09-21.
+- Runtime revision: **20260926.5** (`runtime/reactor_main.js`, stated twice: the header comment drives the project updater, the global identifies a running game). All 14 bundled projects match `runtime/` (`node editor/build-scripts/sync-runtime.cjs --check`).
+- Node suite: **3,784 tests pass** in this tree (`cd editor && npm test`, about 25 s). A fresh clone with `npm ci --ignore-scripts` reproduces CI and skips the tests that read gitignored projects (Star Shift Rebellion and the six older-engine games in `template/` the importer is measured on); last run in a fresh clone on 2026-09-21.
 - CI (`.github/workflows/ci.yml`): syntax checks, the Node suite, dependency audit, patch hygiene, a clean-tree check, and a GUI job that runs the Web persistence smoke and five NW.js smokes (save, interaction order, keyboard, menus, event double-click) under xvfb with `--enable-unsafe-swiftshader`. Green as of 2026-09-21; it had been red from September 14 because the runner has no GPU.
 - Public editor releases use NW.js **0.107.0** exactly; see the [release checklist](RELEASE-CHECKLIST.md).
 

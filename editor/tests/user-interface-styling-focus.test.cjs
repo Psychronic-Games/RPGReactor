@@ -127,8 +127,8 @@ test('sparse visual states inherit base values and input resolves one pressed st
     const sandbox = runtime();
     const base = sandbox.ReactorUI.normalizeNode({ type: 'button' });
     assert.deepEqual(JSON.parse(JSON.stringify(sandbox.ReactorUI.controlStyle(base, 'disabled'))), {
-        fillColor: '', textColor: '', borderColor: '', opacity: '', offsetX: 0, offsetY: 0
-    });
+        fillColor: '', textColor: '', borderColor: '', opacity: 160, offsetX: 0, offsetY: 0
+    }, 'a disabled control left at the default opacity dims as stock windows do');
     const node = sandbox.ReactorUI.normalizeNode({ type: 'button', focusedFillColor: '#112233', focusedTextColor: '#ffffff',
         focusedBorderColor: '#abcdef', focusedOpacity: 220, pressedOffsetX: 2, pressedOffsetY: 3, pressedOpacity: 180,
         disabledFillColor: '#222222', disabledTextColor: '#777777', disabledOpacity: 90 });

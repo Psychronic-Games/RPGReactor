@@ -12,6 +12,23 @@ class DatabaseUserInterfaceEditor {
         return [['partyCommand', 'Party Command'], ['actorCommand', 'Actor Command'], ['help', 'Help'], ['skill', 'Skills'], ['item', 'Items'],
             ['actor', 'Ally Target'], ['enemy', 'Enemy Target'], ['status', 'Battle Status'], ['log', 'Battle Log']];
     }
+    /** Commands each command window can list, as [kind, label]; mirrors ReactorUI.BATTLE_COMMANDS. */
+    static get BATTLE_COMMANDS() {
+        return {
+            actorCommand: [['attack', 'Attack'], ['skillTypes', 'Skill types (all the actor has)'], ['skillType', 'One skill type'], ['guard', 'Guard'],
+                ['item', 'Items'], ['escape', 'Escape'], ['skill', 'Use a skill']],
+            partyCommand: [['fight', 'Fight'], ['escape', 'Escape']]
+        };
+    }
+    static stockBattleCommands(windowKey) {
+        return windowKey === 'partyCommand' ? ['fight', 'escape'] : ['attack', 'skillTypes', 'guard', 'item'];
+    }
+    static normalizeBattleCommands(value) {
+        const kinds = ['attack', 'skillTypes', 'skillType', 'guard', 'item', 'escape', 'skill', 'fight'];
+        return (Array.isArray(value) ? value : []).filter(entry => entry && typeof entry === 'object' && kinds.includes(entry.kind)).slice(0, 32)
+            .map(entry => ({ kind: entry.kind, label: typeof entry.label === 'string' ? entry.label : '',
+                id: Math.max(0, Math.floor(Number(entry.id) || 0)), knownOnly: entry.knownOnly !== false }));
+    }
     /** Node types that take focus and run an action. */
     static isControl(type) { return type === 'button' || type === 'list' || type === 'input'; }
     static get GAUGE_KINDS() { return ['hp', 'mp', 'tp', 'exp', 'mhp', 'mmp', 'atk', 'def', 'mat', 'mdf', 'agi', 'luk', 'variable']; }
@@ -108,7 +125,7 @@ class DatabaseUserInterfaceEditor {
         if (type === 'battleWindow') return {
             id, type, name: '', parent: 0, anchor: 'topLeft', x: 0, y: 0, width: 240, height: 200, index: 0, opacity: 255,
             visible: { type: 'always', id: 1, on: true, op: '==', value: 0, script: '' },
-            battleWindow: 'actorCommand', fill: 'window', windowColumns: 0, hideWindow: false, followActor: false,
+            battleWindow: 'actorCommand', fill: 'window', windowColumns: 0, commandAlign: 'center', commands: [], hideWindow: false, followActor: false,
             slideX: 0, slideY: 0, slideDuration: 12, file: '', imageX: 0, imageY: 0
         };
         if (type === 'battleCursor') return {
@@ -452,6 +469,10 @@ class DatabaseUserInterfaceEditor {
                 for (const key of ['focusedOpacity', 'pressedOpacity', 'disabledOpacity']) merged[key] = DatabaseUserInterfaceEditor.optionalByte(merged[key]);
                 merged.pressedOffsetX = Math.min(32, Math.max(-32, Math.round(Number(merged.pressedOffsetX) || 0)));
                 merged.pressedOffsetY = Math.min(32, Math.max(-32, Math.round(Number(merged.pressedOffsetY) || 0)));
+            }
+            if (type === 'battleWindow') {
+                if (!['center', 'left', 'right'].includes(merged.commandAlign)) merged.commandAlign = 'center';
+                merged.commands = DatabaseUserInterfaceEditor.normalizeBattleCommands(merged.commands);
             }
             if (type === 'image') {
                 merged.nineSlice = !!merged.nineSlice && (merged.source === 'picture' || merged.source === 'system');
@@ -1899,8 +1920,8 @@ class DatabaseUserInterfaceEditor {
             html += this.row(tt('Compare with'), this.textControl('p-compareContext', node.compareContext || '', tt('(none)')),
                 tt('An equipment candidates list\'s context name: while it has focus, rows show {newValue}.'));
             html += '</div>';
-            html += this.row(tt('Columns'), this.numberControl('p-columns', node.columns || 1, 1, 12));
             html += '</div>';
+            html += this.row(tt('Columns'), this.numberControl('p-columns', node.columns || 1, 1, 12));
             html += `<div class="rr-ui-sub rr-ui-list-options"${source === 'options' ? '' : ' hidden'}>`;
             html += this.hintRow(tt('Options rows and values come from the running game; runtime is authoritative.'));
             html += `</div>`;
@@ -1924,7 +1945,11 @@ class DatabaseUserInterfaceEditor {
             html += this.codeReferenceMarkup(tt('Text Codes'), [[tt('Row template'), '{key}, {kind}, {id}, {value}, {name}, {description}, {icon}, {count}, {paramName}, {paramValue}, {price}, {level}, {playtime}, {symbol}, {valueText}, {title}, {timestamp}, {date}, {partyCharacters}, {partyFaces}, {existing}, {enabled}, {index}, {cost}, {slot}, {newValue}, {change}']]);
             html += '</div>';
             html += this.group(`${tt('Text')} ${tt('Style')}`);
-            html += this.pair(tt('Row height'), this.numberControl('p-rowHeight', node.rowHeight, 24, 9999), tt('Align'), this.selectControl('p-align', node.align, [['left', tt('Left')], ['center', tt('Center')], ['right', tt('Right')]]));
+            // An actor panel's parts each have their own Align, so the row-wide one only applies to text rows.
+            const alignControl = this.selectControl('p-align', node.align, [['left', tt('Left')], ['center', tt('Center')], ['right', tt('Right')]]);
+            html += node.rowLayout === 'actorPanel'
+                ? this.row(tt('Row height'), this.numberControl('p-rowHeight', node.rowHeight, 24, 9999) + `<span hidden>${alignControl}</span>`)
+                : this.pair(tt('Row height'), this.numberControl('p-rowHeight', node.rowHeight, 24, 9999), tt('Align'), alignControl);
             html += this.pair(tt('Font size'), this.numberControl('p-fontSize', node.fontSize, 0, 200), tt('Text color'), this.textColorControl('p-textColor', node.textColor));
             html += this.row(tt('Font face'), this.textControl('p-fontFace', node.fontFace, tt('Game font')), tt('Blank uses the game font.'));
             html += this.pair('', this.checkControl('p-fontBold', node.fontBold, tt('Bold')), '', this.checkControl('p-fontItalic', node.fontItalic, tt('Italic')));
@@ -1941,9 +1966,16 @@ class DatabaseUserInterfaceEditor {
             html += this.group(tt('Battle Window'));
             html += this.row(tt('Window'), this.selectControl('p-battleWindow', node.battleWindow, DatabaseUserInterfaceEditor.BATTLE_WINDOWS.map(([key, label]) => [key, tt(label)])));
             html += this.hintRow(tt('Places the stock battle window here; the battle still runs it, so its commands and plugins stay.'));
+            const stockColumns = ['skill', 'item'].includes(node.battleWindow) ? 2 : 1;
+            const columns = [[0, `${tt('Default')} (${stockColumns})`], ...Array.from({ length: 12 }, (_, i) => [i + 1, String(i + 1)])];
             html += this.pair(tt('Fill'), this.selectControl('p-fill', node.fill === 'none' ? 'none' : 'window', [['window', tt('Window skin')], ['none', tt('None')]]),
-                tt('Columns'), this.numberControl('p-windowColumns', node.windowColumns || 0, 0, 12));
-            html += this.hintRow(tt('Columns 0 keeps the window\'s own.'));
+                tt('Columns'), this.selectControl('p-windowColumns', node.windowColumns || 0, columns));
+            const commandKinds = DatabaseUserInterfaceEditor.BATTLE_COMMANDS[node.battleWindow];
+            if (commandKinds) {
+                html += this.row(tt('Align'), this.selectControl('p-commandAlign', node.commandAlign || 'center',
+                    [['left', tt('Left')], ['center', tt('Center')], ['right', tt('Right')]]));
+                html += this.battleCommandsMarkup(node, commandKinds);
+            }
             html += this.row('', this.checkControl('p-hideWindow', !!node.hideWindow, tt('Hide the window')), tt('It still takes input: pair an ally or enemy target window with a Target Cursor.'));
             html += this.row('', this.checkControl('p-followActor', !!node.followActor, tt('Follow the active actor')), tt('X and Y become offsets from the active actor\'s row in the party panel.'));
             html += this.group(tt('Slide in'));
@@ -1967,6 +1999,7 @@ class DatabaseUserInterfaceEditor {
             html += this.pair(`${tt('Enemy')} X`, this.numberControl('p-enemyOffsetX', node.enemyOffsetX || 0, -2000, 2000), `${tt('Enemy')} Y`, this.numberControl('p-enemyOffsetY', node.enemyOffsetY || 0, -2000, 2000));
             html += this.pair(`${tt('Ally')} X`, this.numberControl('p-actorOffsetX', node.actorOffsetX || 0, -2000, 2000), `${tt('Ally')} Y`, this.numberControl('p-actorOffsetY', node.actorOffsetY || 0, -2000, 2000));
             html += this.hintRow(tt('Shows while an enemy or ally is being chosen: over the enemy, or over the ally\'s row in the party panel.'));
+            html += this.hintRow(tt('Its place on this canvas is only for editing. In battle it follows the target at the image\'s size; move it with the Enemy and Ally offsets.'));
         }
         if (node.type === 'gauge') {
             const variable = node.gauge === 'variable';
@@ -2011,7 +2044,7 @@ class DatabaseUserInterfaceEditor {
             html += this.row(tt('Opacity'), this.optionalNumberControl('p-pressedOpacity', node.pressedOpacity, 0, 255, tt('Default')));
             html += `</div></details><details class="rr-ui-property-section"><summary>${tt('Disabled')}</summary><div class="rr-ui-property-body">`;
             html += this.pair(tt('Fill'), this.optionalColorControl('p-disabledFillColor', node.disabledFillColor, tt('Default')), tt('Text Color'), this.optionalColorControl('p-disabledTextColor', node.disabledTextColor, tt('Default')));
-            html += this.row(tt('Opacity'), this.optionalNumberControl('p-disabledOpacity', node.disabledOpacity, 0, 255, tt('Default')));
+            html += this.row(tt('Opacity'), this.optionalNumberControl('p-disabledOpacity', node.disabledOpacity, 0, 255, `${tt('Default')} (160)`));
             html += `</div></details>`;
             html += this.group(tt('Navigation'));
             html += this.pair(`${tt('Focus')} ${tt('Up')}`, this.selectControl('p-focusUp', node.focusUp, this.focusOptions(node)), `${tt('Focus')} ${tt('Down')}`, this.selectControl('p-focusDown', node.focusDown, this.focusOptions(node)));
@@ -2029,7 +2062,8 @@ class DatabaseUserInterfaceEditor {
     organizeProperties(panel) {
         if (!panel.ownerDocument) return;
         const doc = panel.ownerDocument;
-        const openTitles = ['Label', 'Text', 'Image', 'Rows', 'Actor Panel', 'Gauge', 'Behavior'].map(title => this._t(title));
+        const openTitles = ['Label', 'Text', 'Image', 'Rows', 'Actor Panel', 'Gauge', 'Behavior', 'Battle Window', 'Commands', 'Target Cursor'].map(title => this._t(title));
+        openTitles.push(`${this._t('Text')} ${this._t('Style')}`);
         const headings = [...panel.children].filter(el => el.classList.contains('rr-ui-group'));
         for (const heading of headings) {
             const name = heading.textContent;
@@ -2240,6 +2274,16 @@ class DatabaseUserInterfaceEditor {
             node.battleWindow = q('p-battleWindow').value;
             node.fill = q('p-fill').value === 'none' ? 'none' : 'window';
             node.windowColumns = num('p-windowColumns', 0, 12, 0);
+            if (q('p-commandAlign')) node.commandAlign = q('p-commandAlign').value;
+            const commandRows = [...panel.querySelectorAll('.rr-ui-command-row')];
+            if (commandRows.length || q('rr-ui-commands')) {
+                node.commands = DatabaseUserInterfaceEditor.normalizeBattleCommands(commandRows.map(row => ({
+                    kind: row.querySelector('.p-cmd-kind').value,
+                    label: row.querySelector('.p-cmd-label').value,
+                    id: row.querySelector('.p-cmd-id') ? Number(row.querySelector('.p-cmd-id').value) : 0,
+                    knownOnly: row.querySelector('.p-cmd-known') ? row.querySelector('.p-cmd-known').checked : true
+                })));
+            }
             node.hideWindow = q('p-hideWindow').checked;
             node.followActor = q('p-followActor').checked;
             node.slideX = num('p-slideX', -2000, 2000, 0);
@@ -2556,7 +2600,7 @@ class DatabaseUserInterfaceEditor {
                 this.scheduleRender();
             } else if (this.selected()) this.applyProperties(event.target);
             else this.applyInterfaceProperties();
-            if(event.type==='change' && /p-(actorField-|actorPadding|actorGap|portraitSize|rowHeight)/.test(event.target.className)) this.renderProperties();
+            if(event.type==='change' && /p-(actorField-|actorPadding|actorGap|portraitSize|rowHeight|battleWindow|cmd-kind)/.test(event.target.className)) this.renderProperties();
         };
         props.addEventListener('input', onPropChange);
         props.addEventListener('change', onPropChange);
@@ -2578,6 +2622,8 @@ class DatabaseUserInterfaceEditor {
             if(event.target.classList.contains('rr-ui-expand-script')) this.expandScript(event.target.parentElement.querySelector('textarea'));
             if (event.target.classList.contains('p-browse')) this.browseImage();
             if (event.target.classList.contains('p-se-browse')) this.browseSe();
+            const commandButton = event.target.closest('[data-cmd-action]');
+            if (commandButton && this.selected()) this.editBattleCommands(commandButton.dataset.cmdAction, Number(commandButton.dataset.index));
         });
 
         this.attachCanvasListeners();
@@ -3826,6 +3872,32 @@ class DatabaseUserInterfaceEditor {
         return `rgba(${parseInt(color.slice(1, 3), 16)},${parseInt(color.slice(3, 5), 16)},${parseInt(color.slice(5, 7), 16)},${Math.min(255, Math.max(0, alpha)) / 255})`;
     }
 
+    /** The skin's background column (0,0)-(96,192) with System › Window Color added, as the game tones the window back. */
+    tonedSkinBack(skin, tone) {
+        const t = Array.isArray(tone) ? tone.map(v => Number(v) || 0) : [0, 0, 0, 0];
+        if (!t[0] && !t[1] && !t[2] && !t[3]) return skin;
+        const key = t.join(',');
+        if (this._tonedSkin && this._tonedSkin.skin === skin && this._tonedSkin.key === key) return this._tonedSkin.canvas;
+        const canvas = document.createElement('canvas');
+        canvas.width = 96; canvas.height = 192;
+        const c = canvas.getContext('2d');
+        c.drawImage(skin, 0, 0, 96, 192, 0, 0, 96, 192);
+        let image;
+        try { image = c.getImageData(0, 0, 96, 192); } catch (error) { return skin; }
+        const d = image.data;
+        const gray = Math.max(0, Math.min(255, t[3])) / 255;
+        for (let i = 0; i < d.length; i += 4) {
+            let r = d[i], g = d[i + 1], b = d[i + 2];
+            if (gray) { const l = (r + g + b) / 3; r += (l - r) * gray; g += (l - g) * gray; b += (l - b) * gray; }
+            d[i] = Math.max(0, Math.min(255, r + t[0]));
+            d[i + 1] = Math.max(0, Math.min(255, g + t[1]));
+            d[i + 2] = Math.max(0, Math.min(255, b + t[2]));
+        }
+        c.putImageData(image, 0, 0);
+        this._tonedSkin = { skin, key, canvas };
+        return canvas;
+    }
+
     drawSkinWindow(rect) {
         const ctx = this.ctx;
         const skin = this.skin && this.skin.image;
@@ -3841,16 +3913,17 @@ class DatabaseUserInterfaceEditor {
             return;
         }
         const m = 4;
+        const back = this.tonedSkinBack(skin, system.windowTone);
         ctx.save();
         ctx.globalAlpha *= backOpacity / 255;
-        ctx.drawImage(skin, 0, 0, 96, 96, x + m, y + m, Math.max(0, w - m * 2), Math.max(0, h - m * 2));
+        ctx.drawImage(back, 0, 0, 96, 96, x + m, y + m, Math.max(0, w - m * 2), Math.max(0, h - m * 2));
         ctx.save();
         ctx.beginPath();
         ctx.rect(x + m, y + m, w - m * 2, h - m * 2);
         ctx.clip();
         for (let ty = y + m; ty < y + h - m; ty += 96) {
             for (let tx = x + m; tx < x + w - m; tx += 96) {
-                ctx.drawImage(skin, 0, 96, 96, 96, tx, ty, 96, 96);
+                ctx.drawImage(back, 0, 96, 96, 96, tx, ty, 96, 96);
             }
         }
         ctx.restore();
@@ -3872,7 +3945,7 @@ class DatabaseUserInterfaceEditor {
     drawSelection(node, rect) {
         if (!node._previewFocused || node.focusedFillColor) return;
         const skin = this.skin && this.skin.image;
-        const pad = node.fill === 'window' ? 12 : 0;
+        const pad = node.fill === 'window' ? this.windowPadding() : 0;
         const x = rect.x + pad, y = rect.y + pad;
         const w = Math.max(0, rect.width - pad * 2), h = Math.max(0, rect.height - pad * 2);
         if (!skin) {
@@ -3933,6 +4006,105 @@ class DatabaseUserInterfaceEditor {
      * dashed outline with its name (faint when hidden); a game view (the
      * troop preview) leaves those out.
      */
+    /** The Commands group: the stock list until customized, then one editable row per command. */
+    battleCommandsMarkup(node, kinds) {
+        const tt = text => this._t(text);
+        const data = (this.databaseManager && this.databaseManager.data) || {};
+        let html = this.group(tt('Commands'));
+        if (!node.commands.length) {
+            const stock = DatabaseUserInterfaceEditor.stockBattleCommands(node.battleWindow)
+                .map(kind => tt((kinds.find(entry => entry[0] === kind) || [kind, kind])[1])).join(', ');
+            html += this.hintRow(`${tt('Stock commands')}: ${this.escapeHTML(stock)}.`);
+            html += `<div class="rr-ui-commands"><button type="button" class="rr-btn-chip" data-cmd-action="customize">${tt('Choose Commands')}</button></div>`;
+            return html;
+        }
+        const skillTypes = (data.system && data.system.skillTypes || []).map((name, id) => id > 0 ? [id, `${String(id).padStart(2, '0')}: ${name || ''}`] : null).filter(Boolean);
+        const skills = (data.skills || []).filter(Boolean).map(skill => [skill.id, `${String(skill.id).padStart(4, '0')}: ${skill.name || ''}`]);
+        const rows = node.commands.map((command, index) => {
+            const needsId = command.kind === 'skillType' || command.kind === 'skill';
+            const idControl = command.kind === 'skillType' ? this.selectControl('p-cmd-id', command.id, skillTypes)
+                : command.kind === 'skill' ? this.selectControl('p-cmd-id', command.id, skills) : '';
+            const known = command.kind === 'skillType' ? tt('Only actors with this skill type') : tt('Only actors who know it');
+            return `<div class="rr-ui-command-row" data-index="${index}">
+                <div class="rr-ui-command-line">${this.selectControl('p-cmd-kind', command.kind, kinds.map(([kind, label]) => [kind, tt(label)]))}
+                    <button type="button" class="rr-btn-chip" data-cmd-action="up" data-index="${index}" title="${tt('Move Up')}" aria-label="${tt('Move Up')}"${index === 0 ? ' disabled' : ''}>↑</button>
+                    <button type="button" class="rr-btn-chip" data-cmd-action="down" data-index="${index}" title="${tt('Move Down')}" aria-label="${tt('Move Down')}"${index === node.commands.length - 1 ? ' disabled' : ''}>↓</button>
+                    <button type="button" class="rr-btn-chip" data-cmd-action="remove" data-index="${index}" title="${tt('Delete')}" aria-label="${tt('Delete')}">✕</button></div>
+                ${needsId ? `<div class="rr-ui-command-line">${idControl}</div>` : ''}
+                <div class="rr-ui-command-line">${this.textControl('p-cmd-label', command.label, this.battleCommandDefaultLabel(command).replace(/\\[A-Za-z]+\[[^\]]*\]/g, '').trim() || tt('Label'))}</div>
+                ${command.kind === 'skillTypes' ? `<div class="rr-ui-hint">${tt('One command per skill type the actor has, named as in Types.')}</div>` : ''}
+                ${command.kind === 'escape' ? `<div class="rr-ui-hint">${tt('Greyed out in battles that cannot be escaped.')}</div>` : ''}
+                ${needsId ? `<div class="rr-ui-command-line">${this.checkControl('p-cmd-known', command.knownOnly, known)}</div>` : ''}
+            </div>`;
+        }).join('');
+        html += `<div class="rr-ui-commands rr-ui-commands-list">${rows}
+            <div class="rr-ui-command-line"><button type="button" class="rr-btn-chip" data-cmd-action="add">${tt('+ Add Command')}</button>
+            <button type="button" class="rr-btn-chip" data-cmd-action="stock">${tt('Use Stock Commands')}</button></div></div>`;
+        html += this.hintRow(tt('A blank label uses the name from Terms, Types or the skill.'));
+        return html;
+    }
+
+    battleCommandDefaultLabel(command) {
+        const data = (this.databaseManager && this.databaseManager.data) || {};
+        const terms = (data.system && data.system.terms && data.system.terms.commands) || [];
+        switch (command.kind) {
+            case 'fight': return terms[0] || 'Fight';
+            case 'escape': return terms[1] || 'Escape';
+            case 'attack': return terms[2] || 'Attack';
+            case 'guard': return terms[3] || 'Guard';
+            case 'item': return terms[4] || 'Item';
+            case 'skillType': return (data.system && data.system.skillTypes || [])[command.id] || '';
+            case 'skill': return (data.skills && data.skills[command.id] && data.skills[command.id].name) || '';
+            default: return '';
+        }
+    }
+
+    editBattleCommands(action, index) {
+        const node = this.selected();
+        if (!node || node.type !== 'battleWindow') return;
+        this.pushUndo();
+        const list = node.commands;
+        const fresh = kind => ({ kind, label: '', id: kind === 'skillType' || kind === 'skill' ? 1 : 0, knownOnly: true });
+        if (action === 'customize') node.commands = DatabaseUserInterfaceEditor.stockBattleCommands(node.battleWindow).map(fresh);
+        else if (action === 'stock') node.commands = [];
+        else if (action === 'add') list.push(fresh(node.battleWindow === 'partyCommand' ? 'escape' : 'escape'));
+        else if (action === 'remove') list.splice(index, 1);
+        else if (action === 'up' && index > 0) list.splice(index - 1, 0, list.splice(index, 1)[0]);
+        else if (action === 'down' && index < list.length - 1) list.splice(index + 1, 0, list.splice(index, 1)[0]);
+        this.touch();
+        this.renderProperties();
+        this.scheduleRender();
+    }
+
+    /** Stock window metrics (Window_Selectable), with padding and line height from System 2 › Window & Text. */
+    battleWindowMetrics(node) {
+        const advanced = (this.databaseManager && this.databaseManager.data && this.databaseManager.data.system && this.databaseManager.data.system.advanced) || {};
+        const read = (key, fallback) => Number.isFinite(Number(advanced[key])) && advanced[key] !== '' && advanced[key] != null ? Number(advanced[key]) : fallback;
+        const lineHeight = read('lineHeight', 36);
+        const stockColumns = ['skill', 'item'].includes(node.battleWindow) ? 2 : 1;
+        return { padding: read('windowPadding', 12), lineHeight, itemHeight: lineHeight + 8, columns: node.windowColumns || stockColumns };
+    }
+
+    /** What a battle window lists in the preview, or null for windows drawn as outlines. */
+    battleWindowRows(node) {
+        if (node.battleWindow === 'actorCommand' || node.battleWindow === 'partyCommand') return this.previewBattleCommands(node);
+        const data = (this.databaseManager && this.databaseManager.data) || {};
+        if (node.battleWindow === 'skill') {
+            // The first battler's skills; with none known yet, sample skills so the layout still shows.
+            const known = this.previewKnownSkills(this.startingMember(0));
+            const skills = (data.skills || []).filter(skill => skill && skill.name && skill.stypeId > 0);
+            const shown = skills.filter(skill => known.has(skill.id));
+            return (shown.length ? shown : skills).slice(0, 16).map(skill => ({ text: `\\I[${skill.iconIndex || 0}]${skill.name}`,
+                right: skill.tpCost > 0 ? `\\C[29]${skill.tpCost}\\C[0]` : skill.mpCost > 0 ? `\\C[23]${skill.mpCost}\\C[0]` : '', enabled: true }));
+        }
+        if (node.battleWindow === 'item') {
+            // Items usable in battle (Occasion Always or Battle Screen), as Window_BattleItem lists them.
+            return (data.items || []).filter(item => item && item.name && item.itypeId === 1 && (item.occasion === 0 || item.occasion === 1)).slice(0, 16)
+                .map(item => ({ text: `\\I[${item.iconIndex || 0}]${item.name}`, right: '', enabled: true }));
+        }
+        return null;
+    }
+
     drawBattleWindowNode(node, rect) {
         const ctx = this.ctx;
         let r = rect;
@@ -3940,22 +4112,16 @@ class DatabaseUserInterfaceEditor {
             const slot = this.previewSlotRect();
             if (slot) r = Object.assign({}, rect, { x: slot.x + node.x, y: slot.y + node.y });
         }
-        const shown = node.battleWindow === 'actorCommand' && !node.hideWindow;
+        // The Actor Command window is what shows while the party chooses; any other window shows its contents while selected.
+        const rows = node.hideWindow ? null : this.battleWindowRows(node);
+        const shown = rows && (node.battleWindow === 'actorCommand' || (!this._gameView && this.selectedIds && this.selectedIds.has(node.id)));
         if (shown) {
             if (node.file) {
                 const picture = this.imageRef(node.file);
                 if (picture.image) ctx.drawImage(picture.image, r.x + (node.imageX || 0), r.y + (node.imageY || 0));
             }
             if (node.fill !== 'none') this.drawSurface(Object.assign({}, node, { type: 'box', fill: 'window' }), r);
-            const commands = this.previewActorCommands();
-            const lineHeight = 36, top = r.y + 12;
-            const rows = Math.max(1, Math.floor((r.height - 24) / (lineHeight + 8)));
-            commands.slice(0, rows).forEach((text, index) => {
-                const row = { x: r.x + 12, y: top + index * (lineHeight + 8), width: r.width - 24, height: lineHeight + 8 };
-                if (index === 0) this.drawSelection(Object.assign({}, node, { type: 'button', fill: 'none', _previewFocused: true, focusedFillColor: '' }), row);
-                this.drawText({ type: 'button', text, align: 'center', fontSize: 0, textColor: 0, fill: 'none', wrap: false, fitText: true,
-                    outline: true, outlineWidth: 3, letterSpacing: 0, width: row.width, height: row.height }, row);
-            });
+            this.drawBattleWindowRows(node, r, rows);
             return;
         }
         if (this._gameView) return;
@@ -3976,18 +4142,70 @@ class DatabaseUserInterfaceEditor {
         ctx.restore();
     }
 
-    /** The first actor's battle commands, as Window_ActorCommand lists them, for the preview. */
-    previewActorCommands() {
+    /** Rows laid out as Window_Selectable.itemRect / itemLineRect place them: cursor on the first, disabled ones translucent. */
+    drawBattleWindowRows(node, r, rows) {
+        const ctx = this.ctx;
+        const m = this.battleWindowMetrics(node);
+        const innerWidth = Math.max(0, r.width - m.padding * 2), innerHeight = Math.max(0, r.height - m.padding * 2);
+        const itemWidth = Math.floor(innerWidth / m.columns);
+        const align = DatabaseUserInterfaceEditor.BATTLE_COMMANDS[node.battleWindow] ? (node.commandAlign || 'center') : 'left';
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(r.x + m.padding, r.y + m.padding, innerWidth, innerHeight);
+        ctx.clip();
+        rows.forEach((row, index) => {
+            const col = index % m.columns, line = Math.floor(index / m.columns);
+            const item = { x: r.x + m.padding + col * itemWidth + 4, y: r.y + m.padding + line * m.itemHeight + 2, width: itemWidth - 8, height: m.itemHeight - 4 };
+            if (item.y > r.y + m.padding + innerHeight) return;
+            if (index === 0) this.drawSelection({ fill: 'none', _previewFocused: true, focusedFillColor: '' }, item);
+            const text = { x: item.x + 8, y: item.y + Math.floor((item.height - m.lineHeight) / 2), width: Math.max(0, item.width - 16), height: m.lineHeight };
+            ctx.save();
+            if (row.enabled === false) ctx.globalAlpha *= 160 / 255;
+            // The game never shrinks a command to fit; a long name runs to the column edge.
+            const style = { type: 'text', align, fontSize: 0, textColor: 0, fill: 'none', wrap: false, fitText: false, outline: true, outlineWidth: 3, letterSpacing: 0 };
+            const costWidth = row.right ? 48 : 0;
+            this.drawText(Object.assign({}, style, { text: row.text, width: text.width - costWidth, height: text.height }), Object.assign({}, text, { width: text.width - costWidth }));
+            if (row.right) this.drawText(Object.assign({}, style, { text: row.right, align: 'right', width: text.width, height: text.height }), text);
+            ctx.restore();
+        });
+        ctx.restore();
+    }
+
+    /** Skills an actor knows at their starting level: learned by their class, or added by a trait (43). */
+    previewKnownSkills(actor) {
+        const data = (this.databaseManager && this.databaseManager.data) || {};
+        const klass = actor && data.classes ? data.classes[actor.classId] : null;
+        const level = Number(actor && actor.initialLevel) || 1;
+        const traits = [...(actor && actor.traits || []), ...(klass && klass.traits || [])];
+        return new Set([...(klass && klass.learnings || []).filter(entry => entry.level <= level).map(entry => entry.skillId),
+            ...traits.filter(trait => trait && trait.code === 43).map(trait => trait.dataId)]);
+    }
+
+    /** A command window's commands for the first party member, as the game lists them (Window_ActorCommand / Window_PartyCommand). */
+    previewBattleCommands(node) {
         const data = (this.databaseManager && this.databaseManager.data) || {};
         const system = data.system || {};
-        const commands = (system.terms && system.terms.commands) || [];
-        // The skill types the actor and their class add (trait 41), as Window_ActorCommand lists them.
         const actor = this.startingMember(0);
         const klass = actor && data.classes ? data.classes[actor.classId] : null;
-        const ids = [...new Set([...(actor && actor.traits || []), ...(klass && klass.traits || [])]
-            .filter(trait => trait && trait.code === 41).map(trait => trait.dataId))].sort((a, b) => a - b);
-        const types = ids.map(id => (system.skillTypes || [])[id]).filter(Boolean);
-        return [commands[2] || 'Attack', ...types, commands[3] || 'Guard', commands[4] || 'Item'];
+        const traits = [...(actor && actor.traits || []), ...(klass && klass.traits || [])];
+        // The skill types the actor and their class add (trait 41), and the skills they know: learned by their level, or added (trait 43).
+        const types = [...new Set(traits.filter(trait => trait && trait.code === 41).map(trait => trait.dataId))].sort((a, b) => a - b);
+        const known = this.previewKnownSkills(actor);
+        const commands = node.commands && node.commands.length ? node.commands
+            : DatabaseUserInterfaceEditor.stockBattleCommands(node.battleWindow).map(kind => ({ kind, label: '', id: 0, knownOnly: true }));
+        const allowed = (DatabaseUserInterfaceEditor.BATTLE_COMMANDS[node.battleWindow] || []).map(entry => entry[0]);
+        const out = [];
+        for (const command of commands) {
+            if (!allowed.includes(command.kind)) continue;
+            if (command.kind === 'skillTypes') {
+                for (const id of types) if ((system.skillTypes || [])[id]) out.push({ text: system.skillTypes[id], enabled: true });
+                continue;
+            }
+            if (command.kind === 'skillType' && command.knownOnly && !types.includes(command.id)) continue;
+            if (command.kind === 'skill' && (!data.skills || !data.skills[command.id] || (command.knownOnly && !known.has(command.id)))) continue;
+            out.push({ text: command.label || this.battleCommandDefaultLabel(command), enabled: true });
+        }
+        return out;
     }
 
     /**
@@ -4067,13 +4285,25 @@ class DatabaseUserInterfaceEditor {
 
     /** A text input drawn as a button-like field: its placeholder, or a starting actor's name. */
     inputPreviewNode(node) {
-        let text = node.text || '';
+        let text = node.text || '', placeholder = true;
         if (node.inputTarget !== 'variable') {
             const actor = this.startingActor(node);
             const value = actor ? (node.inputTarget === 'actorNickname' ? actor.nickname : actor.name) : '';
-            if (value) text = value;
+            if (value) { text = node.mask ? '\u2022'.repeat(value.length) : value; placeholder = false; }
         }
-        return Object.assign({}, node, { type: 'button', text, wrap: false });
+        return Object.assign({}, node, { type: 'button', text, wrap: false, _placeholder: placeholder && !!text });
+    }
+
+    /** Window Padding from System 2 › Window & Text, as $gameSystem.windowPadding() reads it. */
+    windowPadding() {
+        const advanced = (this.databaseManager && this.databaseManager.data && this.databaseManager.data.system && this.databaseManager.data.system.advanced) || {};
+        return advanced.windowPadding !== '' && advanced.windowPadding != null && Number.isFinite(Number(advanced.windowPadding)) ? Number(advanced.windowPadding) : 12;
+    }
+
+    /** Where a node's contents draw: inside the window padding when it uses the window skin. */
+    contentRect(node, rect) {
+        const pad = node.fill === 'window' ? this.windowPadding() : 0;
+        return { x: rect.x + pad, y: rect.y + pad, width: Math.max(0, rect.width - pad * 2), height: Math.max(0, rect.height - pad * 2) };
     }
 
     previewControl(node) {
@@ -4098,7 +4328,7 @@ class DatabaseUserInterfaceEditor {
         } else if (state === 'disabled') {
             if (node.disabledFillColor) Object.assign(copy, { fill: 'color', color: node.disabledFillColor, color2: node.disabledFillColor });
             if (node.disabledTextColor) copy.textColor = node.disabledTextColor;
-            opacity = node.disabledOpacity === '' ? 255 : node.disabledOpacity;
+            opacity = node.disabledOpacity === '' ? 160 : node.disabledOpacity;
         }
         copy._previewFocused = state === 'focused';
         return { node: copy, state, opacity, offsetX, offsetY };
@@ -4199,7 +4429,9 @@ class DatabaseUserInterfaceEditor {
             entry.index = index + 1;
             let template = node.rowText || (['inventory', 'equipCandidates', 'shopSell'].includes(node.dataSource) ? (entry.kind === 'none' ? '' : `\\I[${entry.icon || 0}]{name}  x{count}`)
                 : node.dataSource === 'shopGoods' ? `\\I[${entry.icon || 0}]{name}  {price}`
-                : node.dataSource === 'skills' ? `\\I[${entry.icon || 0}]{name}`
+                : node.dataSource === 'skills' || node.dataSource === 'actorStates' ? `\\I[${entry.icon || 0}]{name}`
+                : node.dataSource === 'actorParameters' ? '{paramName}: {paramValue}'
+                : node.dataSource === 'actorEquipment' ? (entry.id ? `\\I[${entry.icon || 0}]{name}` : '{paramName}: -')
                 : node.dataSource === 'options' ? '{name}  {valueText}'
                 : node.dataSource === 'saveSlots' && entry.playtime ? '{name}  {playtime}'
                 : node.dataSource === 'variableRange' ? '{name}: {value}' : '{name}');
@@ -4219,7 +4451,7 @@ class DatabaseUserInterfaceEditor {
 
     drawListNode(node, rect) {
         this.drawSurface(node, rect);
-        const inset = node.fill === 'window' ? 12 : 0;
+        const inset = node.fill === 'window' ? this.windowPadding() : 0;
         const area = { x: rect.x + inset, y: rect.y + inset, width: Math.max(0, rect.width - inset * 2), height: Math.max(0, rect.height - inset * 2) };
         const rows = this.listPreviewRows(node);
         this.ctx.save();
@@ -4239,15 +4471,19 @@ class DatabaseUserInterfaceEditor {
                 this.ctx.strokeStyle = 'rgba(32,32,32,0.5)';
                 this.ctx.strokeRect(rowRect.x, rowRect.y, rowRect.width, rowRect.height);
             }
+            // Focus as the game shows it: a highlight fill on text rows, the window-skin cursor on an actor panel unless it has a Selected fill.
             if (index === 0 && node._previewFocused !== false) {
-                const color = node.focusedFillColor || node.highlightColor;
-                this.ctx.fillStyle = this.cssColor(color, node.focusedFillColor ? 255 : 96);
-                this.ctx.fillRect(rowRect.x, rowRect.y, rowRect.width, rowRect.height);
+                if (node.rowLayout === 'actorPanel' && !node.focusedFillColor) this.drawSelection({ fill: 'none', _previewFocused: true, focusedFillColor: '' }, rowRect);
+                else {
+                    const color = node.focusedFillColor || node.highlightColor;
+                    this.ctx.fillStyle = this.cssColor(color, node.focusedFillColor ? 255 : 96);
+                    this.ctx.fillRect(rowRect.x, rowRect.y, rowRect.width, rowRect.height);
+                }
             }
-            if (node.rowLayout === 'actorPanel') { this.drawActorPanelRow(node, {x:rowRect.x+4,y:rowRect.y+2,width:Math.max(1,rowRect.width-8),height:Math.max(1,rowRect.height-4)}, index); return; }
+            if (node.rowLayout === 'actorPanel') { this.drawActorPanelRow(node, rowRect, index); return; }
             const textRect = { x: rowRect.x + 8, y: rowRect.y, width: Math.max(0, rowRect.width - 16), height: rowRect.height };
             const alpha = this.ctx.globalAlpha;
-            if (entry.enabled === false) this.ctx.globalAlpha *= (node.disabledOpacity === '' ? 255 : node.disabledOpacity) / 255;
+            if (entry.enabled === false) this.ctx.globalAlpha *= (node.disabledOpacity === '' ? 160 : node.disabledOpacity) / 255;
             const rowNode = Object.assign({}, node, { type: 'button', text: entry.text, width: textRect.width, height: textRect.height, wrap: false, fitText: false });
             if (entry.enabled === false && node.disabledTextColor) rowNode.textColor = node.disabledTextColor;
             else if (index === 0 && node.focusedTextColor) rowNode.textColor = node.focusedTextColor;
@@ -4687,8 +4923,19 @@ class DatabaseUserInterfaceEditor {
                 case 'box': this.drawSurface(drawn, drawnRect); break;
                 case 'image': this.drawImageNode(drawn, drawnRect); break;
                 case 'text': this.drawText(drawn, drawnRect); break;
-                case 'button': this.drawSurface(drawn, drawnRect); this.drawSelection(drawn, drawnRect); this.drawText(drawn, drawnRect); break;
-                case 'input': this.drawSurface(drawn, drawnRect); this.drawSelection(drawn, drawnRect); this.drawText(this.inputPreviewNode(drawn), drawnRect); break;
+                case 'button': this.drawSurface(drawn, drawnRect); this.drawSelection(drawn, drawnRect); this.drawText(drawn, this.contentRect(drawn, drawnRect)); break;
+                case 'input': {
+                    this.drawSurface(drawn, drawnRect);
+                    this.drawSelection(drawn, drawnRect);
+                    // As drawInput: 4px inside the contents; a placeholder is translucent.
+                    const inner = this.contentRect(drawn, drawnRect);
+                    const field = this.inputPreviewNode(drawn);
+                    ctx.save();
+                    if (field._placeholder) ctx.globalAlpha *= 160 / 255;
+                    this.drawText(field, { x: inner.x + 4, y: inner.y, width: Math.max(0, inner.width - 8), height: inner.height });
+                    ctx.restore();
+                    break;
+                }
                 case 'battleWindow': this.drawBattleWindowNode(drawn, drawnRect); break;
                 case 'battleCursor': this.drawBattleCursorNode(drawn, drawnRect); break;
                 case 'list': this.drawListNode(drawn, drawnRect); break;

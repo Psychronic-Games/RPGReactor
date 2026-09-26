@@ -1812,3 +1812,43 @@ test('HUD pictures load softly by folder reference, and a two-row meter draws it
     assert.strictEqual(ui.drawImageMeter(target, box, 'system/Missing', 0.5, () => {}, 2, 0.5), false, 'a missing picture leaves the drawn gauge to the caller');
     assert.strictEqual(ui.drawImageNumber(target, box, 'system/Missing', '12', 'left', () => {}), false);
 });
+
+test('Battle Window commands: an authored Actor or Party Command list, alignment, Escape from an actor, and Use a skill', () => {
+    const sandbox = loadRuntimeUI();
+    const UI = sandbox.ReactorUI;
+    const node = UI.normalizeNode({ id: 1, type: 'battleWindow', battleWindow: 'actorCommand', commandAlign: 'left', commands: [
+        { kind: 'attack', label: 'Strike' }, { kind: 'skillTypes' }, { kind: 'skill', id: 5 }, { kind: 'skill', id: 6, knownOnly: false, label: 'Try' },
+        { kind: 'escape' }, { kind: 'fight' }, { kind: 'bogus' }] }, 1);
+    assert.equal(node.commandAlign, 'left');
+    assert.deepEqual(node.commands.map(c => c.kind), ['attack', 'skillTypes', 'skill', 'skill', 'escape', 'fight']);
+    assert.equal(UI.normalizeNode({ id: 2, type: 'battleWindow' }, 2).commands.length, 0, 'no list keeps the stock commands');
+    sandbox.TextManager = { attack: 'Attack', guard: 'Guard', item: 'Item', escape: 'Escape', fight: 'Fight' };
+    sandbox.$dataSkills = [null, null, null, null, null, { id: 5, name: 'Steal' }, { id: 6, name: 'Mug' }];
+    const log = [];
+    sandbox.BattleManager = { canEscape: () => false, isTpb: () => true, _currentActor: 'hero', _inputting: true,
+        cancelActorInput() { log.push('cancel'); }, inputtingAction: () => ({ setSkill: id => log.push('setSkill ' + id) }), actor: () => ({ setLastBattleSkill: skill => log.push('last ' + skill.name) }) };
+    const handlers = {};
+    const win = {
+        _actor: { canAttack: () => true, hasSkill: id => id === 5, canUse: skill => skill.id === 5 },
+        list: [], addCommand(name, symbol, enabled = true, ext = null) { this.list.push([name, symbol, enabled, ext]); },
+        addSkillCommands() { this.list.push(['Magic', 'skill', true, 1]); },
+        setHandler(symbol, fn) { handlers[symbol] = fn; }, currentExt: () => 5
+    };
+    const scene = { commandEscape() { log.push('escape ' + sandbox.BattleManager._currentActor + ' ' + sandbox.BattleManager._inputting); }, onSelectAction() { log.push('select'); } };
+    UI.customizeBattleCommands(scene, win, node);
+    assert.equal(win.itemTextAlign(), 'left');
+    win.makeCommandList();
+    assert.deepEqual(win.list.map(entry => [...entry]), [['Strike', 'attack', true, null], ['Magic', 'skill', true, 1], ['Steal', 'rrSkill', true, 5],
+        ['Try', 'rrSkill', false, 6], ['Escape', 'rrEscape', false, null]], 'Fight is a Party Command, so the actor list drops it');
+    handlers.rrSkill();
+    handlers.rrEscape();
+    assert.deepEqual(log, ['setSkill 5', 'last Steal', 'select', 'cancel', 'escape null false'], 'escape clears the actor first so a failure never reopens a window');
+    const party = { list: [], addCommand(name, symbol, enabled = true) { this.list.push([name, symbol, enabled]); }, setHandler() {} };
+    UI.customizeBattleCommands(scene, party, UI.normalizeNode({ id: 3, type: 'battleWindow', battleWindow: 'partyCommand', commands: [{ kind: 'escape', label: 'Run' }, { kind: 'fight' }] }, 3));
+    party.makeCommandList();
+    assert.deepEqual(party.list.map(entry => [...entry]), [['Run', 'escape', false], ['Fight', 'fight', true]]);
+    assert.equal(party.itemTextAlign(), 'center', 'stock alignment is centred');
+    const skills = { itemTextAlign: () => 'left' };
+    UI.customizeBattleCommands(scene, skills, UI.normalizeNode({ id: 4, type: 'battleWindow', battleWindow: 'skill' }, 4));
+    assert.equal(skills.itemTextAlign(), 'left', 'list windows keep their own layout');
+});
