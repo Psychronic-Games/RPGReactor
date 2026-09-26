@@ -185,3 +185,73 @@ end`;
     assert.equal(p.helpLines, '1');
     assert.equal(p.helpAtTop, 'true');
 });
+
+test('Extra Param Formulas: Ruby arithmetic, whole numbers divide to whole numbers', () => {
+    const script = `$imported["YEA-ExtraParamFormulas"] = true
+module YEA
+  module XPARAM
+    FORMULA ={
+      :hit_n_value => "(atk + luk) / 2",
+      :hit_formula => "(n / (100.0 + n)) * 0.250 + 0.050 + base_hit * 2/3",
+      :cev_n_value => "(agi * luk) / 2",
+      :cev_formula => "n / 200.0",
+      :grd_n_value => "(self.def + mdf) / 2",
+      :grd_formula => "(n / (256.0 + n)) * 0.333 + 0.000 + base_grd",
+    }
+  end
+end`;
+    const p = require(path.join(legacy, 'plugins', 'RR_YanflyExtraParamFormulas.params.js')).extract({ scripts: [script] });
+    assert.deepEqual(JSON.parse(p.formulas).hit, ['(atk + luk) / 2', '(n / (100.0 + n)) * 0.250 + 0.050 + base_hit * 2/3']);
+    function Game_BattlerBase() {}
+    Object.defineProperties(Game_BattlerBase.prototype, {
+        hit: { get() { return 1; }, configurable: true }, cev: { get() { return 0; }, configurable: true }, grd: { get() { return 1; }, configurable: true }
+    });
+    Game_BattlerBase.prototype.param = function(id) { return [10, 10, 6, 3, 2, 3, 1, 3][id]; };
+    const ctx = vm.createContext({ Game_BattlerBase, PluginManager: { parameters: () => p } });
+    vm.runInContext(plugin('RR_YanflyExtraParamFormulas'), ctx);
+    const b = new Game_BattlerBase();
+    // The shipped game's Attributes page: Hit 72.63%, Crit-Eva 0.50%, Guard Rate 100.39%.
+    assert.equal((b.hit * 100).toFixed(2), '72.63');
+    assert.equal((b.cev * 100).toFixed(2), '0.50');
+    assert.equal((b.grd * 100).toFixed(2), '100.39');
+});
+
+test('Status Menu: commands with their handlers and pages, colours, property columns and help placement', () => {
+    const script = `$imported["YEA-StatusMenu"] = true
+module YEA
+  module STATUS
+    COMMANDS =[
+      [ :custom2,        "Equipment"],
+      [ :parameters,        "Traits"],
+      [ :rename,     "Rename"],
+    ]
+    CUSTOM_STATUS_COMMANDS ={
+      :custom2 => [           0,          0, :command_name2, :draw_custom2],
+    }
+    PARAMETERS_VOCAB = "Traits"
+    PARAM_COLOUR ={
+            2 => [ :atk, Color.new(0, 0, 0), Color.new(128, 255, 128)],
+    }
+    PROPERTIES_FONT_SIZE = 18
+    PROPERTIES_COLUMN1 =[
+      [:hit, "Hit"],
+    ]
+  end
+end`;
+    const scripts = [script, '$imported["YEA-AceMenuEngine"] = true\nmodule YEA\n  module MENU\n    HELP_WINDOW_LOCATION = 1\n  end\nend'];
+    assert.ok(C.scriptFamilies(scripts).has('yeaStatusMenu'));
+    const p = require(path.join(legacy, 'plugins', 'RR_YanflyStatusMenu.params.js')).extract({ scripts, constants: C.scriptConstants(scripts) });
+    assert.deepEqual(JSON.parse(p.commands), [
+        { symbol: 'custom2', text: 'Equipment', enable: 0, show: 0, handler: 'command_name2', draw: 'draw_custom2' },
+        { symbol: 'parameters', text: 'Traits' }, { symbol: 'rename', text: 'Rename' }
+    ]);
+    assert.deepEqual(JSON.parse(p.paramColours), { 2: [[0, 0, 0], [128, 255, 128]] });
+    assert.deepEqual(JSON.parse(p.properties), [[['hit', 'Hit']], [], []]);
+    assert.equal(p.helpLocation, 'middle');
+});
+
+test('Item Rarity: the colour table comes from the game', () => {
+    const script = '$imported[:TH_ItemRarity] = true\nmodule TH\n  module Item_Rarity\n    Colour_Map = {\n      1 => [255,255,255], #Common\n      2 => [0,148,255  ], #Rare\n    }\n  end\nend';
+    assert.ok(C.scriptFamilies([script]).has('himeItemRarity'));
+    assert.deepEqual(JSON.parse(require(path.join(legacy, 'plugins', 'RR_HimeItemRarity.params.js')).extract({ scripts: [script] }).colours), { 1: [255, 255, 255], 2: [0, 148, 255] });
+});

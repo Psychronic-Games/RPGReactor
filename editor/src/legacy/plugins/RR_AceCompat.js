@@ -137,6 +137,10 @@
             this.drawText(item.name, x + 24, y, width);
             this.changePaintOpacity(true);
         },
+        // MZ windows' drawItemName (width is the whole row) draws through the Ace method, so the game's overrides reach them.
+        drawItemName(item, x, y, width) {
+            this.rrAceDrawItemName(item, x, y, true, width === undefined ? 172 : Math.max(width - 24, 0));
+        },
         rrAceDrawCurrencyValue(value, unit, x, y, width) {
             const cx = this.textWidth(unit);
             this.resetTextColor();
