@@ -1377,6 +1377,15 @@ class RPGReactor {
 
         try {
             const win = nw.Window.get();
+            // A laptop screen (1366x768 and the like): open maximized, so the
+            // window is exactly the space above the taskbar instead of a
+            // 1280x720 window whose bottom sits under it.
+            const availWidth = window.screen.availWidth || window.screen.width || 0;
+            const availHeight = window.screen.availHeight || window.screen.height || 0;
+            if (availWidth && availHeight && (availHeight < 800 || availWidth < 1400) && typeof win.maximize === 'function') {
+                win.maximize();
+                return;
+            }
             if (typeof win.setPosition === 'function') {
                 win.setPosition('center');
                 return;

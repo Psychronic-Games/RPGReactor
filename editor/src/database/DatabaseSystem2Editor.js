@@ -65,6 +65,7 @@ class DatabaseSystem2Editor {
         col2.style.cssText = 'display: flex; flex-direction: column; gap: 16px;';
         col2.appendChild(this.createAttackMotionsSection(system));
         col2.appendChild(this.createEditorSettingsSection(system));
+        col2.appendChild(this.createCompatibilitySection(system));
         columnsGrid.appendChild(col2);
 
         // Col 3: Asset Sizes (horizontal), Advanced Settings
@@ -344,10 +345,24 @@ class DatabaseSystem2Editor {
             { label: 'Text Outline Width', path: 'advanced.textOutlineWidth', value: adv.textOutlineWidth, placeholder: 3 },
             { label: 'Font Size Step', path: 'advanced.fontSizeStep', value: adv.fontSizeStep, placeholder: 12, step: '0.1' },
             { label: 'Balloon Size', path: 'rrBalloonSize', value: system.rrBalloonSize, placeholder: 48 },
-            { label: 'Character Lift', path: 'rrCharacterShiftY', value: system.rrCharacterShiftY, placeholder: 6 },
             { label: 'Name Box Opacity', path: 'advanced.rrNameBox.opacity', value: box.opacity, placeholder: '' },
             { label: 'Name Box Offset X', path: 'advanced.rrNameBox.offsetX', value: box.offsetX, placeholder: '' },
-            { label: 'Name Box Offset Y', path: 'advanced.rrNameBox.offsetY', value: box.offsetY, placeholder: '' },
+            { label: 'Name Box Offset Y', path: 'advanced.rrNameBox.offsetY', value: box.offsetY, placeholder: '' }
+        ];
+        return this.createSection(tt('Window & Text'), this.windowTextTable(fields,
+            tt('Blank uses the standard value. Imported games fill these in to keep their original look.')));
+    }
+
+    /**
+     * Compatibility: the rules an older engine's game needs (2000/2003
+     * passability, event order, movement and arithmetic, panoramas, the
+     * 2003 save screen, skipped missing files, ...). The importer turns on
+     * the ones a game needs; a new project leaves every one off, so they sit
+     * apart from the settings a project made here would use.
+     */
+    createCompatibilitySection(system) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        const fields = [
             { label: 'Multi-frame Sheets ([fN])', path: 'rrMultiFrames', value: system.rrMultiFrames === true, type: 'checkbox' },
             { label: 'Skip Title Screen', path: 'rrSkipTitle', value: system.rrSkipTitle === true, type: 'checkbox' },
             { label: 'Erase Pictures on Map Change', path: 'rrPicturesEraseOnMapChange', value: system.rrPicturesEraseOnMapChange === true, type: 'checkbox' },
@@ -360,21 +375,28 @@ class DatabaseSystem2Editor {
             { label: 'Skip Missing Sounds', path: 'rrSkipMissingAudio', value: system.rrSkipMissingAudio === true, type: 'checkbox' },
             { label: 'Skip Missing Images', path: 'rrSkipMissingImages', value: system.rrSkipMissingImages === true, type: 'checkbox' },
             { label: 'RPG Maker 2003 Save Screen', path: 'rrLegacySaveScreen', value: !!system.rrLegacySaveScreen, type: 'checkbox' },
-            { label: 'Variable Limit (2000/2003 Arithmetic)', path: 'rrLegacyVariableLimit', value: system.rrLegacyVariableLimit, placeholder: '' }
+            { label: 'Variable Limit (2000/2003 Arithmetic)', path: 'rrLegacyVariableLimit', value: system.rrLegacyVariableLimit, placeholder: '' },
+            { label: 'Character Lift', path: 'rrCharacterShiftY', value: system.rrCharacterShiftY, placeholder: 6 }
         ];
+        return this.createSection(tt('Compatibility'), this.windowTextTable(fields,
+            tt('Rules for games imported from older RPG Maker versions. The importer turns on what a game needs; a new project leaves them off.')));
+    }
+
+    /** A Setting | Value table of Window & Text style fields (blank or unticked stores nothing). */
+    windowTextTable(fields, note) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const rows = fields.map(f => {
             const input = f.type === 'checkbox'
                 ? `<input type="checkbox" class="system-checkbox sys2-window-text-field" data-path="${f.path}" aria-label="${rrEscapeHtml(tt(f.label))}"${f.value ? ' checked' : ''}>`
                 : `<input type="number" class="database-field-value sys2-window-text-field" data-path="${f.path}" aria-label="${rrEscapeHtml(tt(f.label))}" value="${f.value === undefined || f.value === null ? '' : rrEscapeHtml(f.value)}" placeholder="${rrEscapeHtml(f.placeholder)}"${f.step ? ` step="${f.step}"` : ''} style="width: 100%; font-size: 12px; box-sizing: border-box;">`;
             return `<tr><td style="color: var(--color-text); font-size: 12px; white-space: nowrap;">${tt(f.label)}</td><td>${input}</td></tr>`;
         }).join('');
-        const html = `
-            <div style="font-size: 11px; color: var(--color-text-muted); margin-bottom: 6px;">${tt('Blank uses the standard value. Imported games fill these in to keep their original look.')}</div>
+        return `
+            <div style="font-size: 11px; color: var(--color-text-muted); margin-bottom: 6px;">${note}</div>
             <table class="traits-table" style="width: 100%;">
                 <thead><tr><th>${tt('Setting')}</th><th>${tt('Value')}</th></tr></thead>
                 <tbody>${rows}</tbody>
             </table>`;
-        return this.createSection(tt('Window & Text'), html);
     }
 
     /** Set or clear a Window & Text value by its path; an empty object left behind goes too. */

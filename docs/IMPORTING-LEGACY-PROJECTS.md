@@ -216,7 +216,8 @@ project's own data so MV and MZ projects are unaffected:
 **Nothing is hidden after the import.** Everything converted is ordinary
 project data the editor shows and edits: image layers in Map Properties
 (and drawn in the map view), the window and text frame in Database › System 2
-› Window & Text (blank means the standard value), `[fN]` sheets in the event
+› Window & Text (blank means the standard value), the old engines' rules in
+System 2 › Compatibility, `[fN]` sheets in the event
 graphic picker, and speaker names in Show Text. Tools › Import Report… shows
 what the import did (converted, approximated, skipped, movies) and the game's
 original scripts in a read-only viewer.
