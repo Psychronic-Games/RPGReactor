@@ -1751,7 +1751,7 @@ class MapEditor3D {
         // The face pointed at, for a screen on a wall: which way it looks and whose cell it is.
         const sideName = side ? (Math.abs(normal.x) >= Math.abs(normal.z) ? (normal.x > 0 ? 'east' : 'west') : (normal.z > 0 ? 'south' : 'north')) : null;
         const faceCell = side ? { x: Math.max(0, Math.min(mapData.width - 1, Math.floor(point.x - normal.x * 0.5))), y: Math.max(0, Math.min(mapData.height - 1, Math.floor(point.z - normal.z * 0.5))) } : null;
-        return { x, y, z: Math.min(max, z), side: sideName, faceCell, height: Math.max(0, rel), top };
+        return { x, y, z: Math.min(max, z), side: sideName, faceCell, height: Math.max(0, rel), top, point: { x: point.x, z: point.z } };
     }
 
     /**
@@ -1957,7 +1957,11 @@ class MapEditor3D {
             const [W, H] = turn % 2 ? [stamp.size[1], stamp.size[0]] : stamp.size;
             const x = Math.max(0, Math.min(mapData.width - W, target.x)), y = Math.max(0, Math.min(mapData.height - H, target.y));
             this.pieceGhost.position.set(x, base, y);
-        } else this.pieceGhost.position.set(target.x, base + target.z, target.y);
+        } else {
+            // A shape stands where the pointer is, to the quarter tile.
+            const off = manager.shapeOffsetFor ? manager.shapeOffsetFor(target) : null;
+            this.pieceGhost.position.set(target.x + (off ? off[0] : 0), base + target.z, target.y + (off ? off[1] : 0));
+        }
         this.pieceGhost.visible = true;
         this._lastGhostTarget = target;
         this._lastActiveAt = performance.now();

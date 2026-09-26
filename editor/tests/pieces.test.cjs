@@ -381,7 +381,7 @@ test('building happens in the world: the hammer in the toolbar opens a bar over 
     for (const key of ['build.selectedMany', 'build.manyHint', 'build.boxHint']) assert.equal((read('editor/src/I18nManager.js').match(new RegExp('"' + key.replace(/\./g, '\\.') + '":', 'g')) || []).length, 18, key + ' in 18 locales');
     assert.match(viewSource, /if \(event\?\.detail\?\.pieces && this\.updatePiecesInPlace\(event\.detail\.region \|\| null\)\) return;/, 'a piece edit never rebuilds the scene');
     assert.match(viewSource, /loadMaterial: name => materials\[name\] \|\| null/);
-    assert.match(viewSource, /return \{ x, y, z: Math\.min\(max, z\), side: sideName, faceCell, height: Math\.max\(0, rel\), top \};/, 'a target knows the face it points at');
+    assert.match(viewSource, /return \{ x, y, z: Math\.min\(max, z\), side: sideName, faceCell, height: Math\.max\(0, rel\), top, point: \{ x: point\.x, z: point\.z \} \};/, 'a target knows the face it points at');
     const i18n = read('editor/src/I18nManager.js');
     for (const key of ['pieces.hint', 'pieces.piece', 'pieces.kind.wall', 'pieces.kind.block', 'pieces.kind.fence', 'pieces.material', 'pieces.plain', 'pieces.materialsHint', 'pieces.turn', 'pieces.level', 'pieces.place', 'pieces.erase', 'pieces.undo', 'pieces.redo', 'pieces.clear', 'pieces.keys', 'pieces.needs3D', 'pieces.count']) {
         assert.equal((i18n.match(new RegExp('"' + key.replace(/\./g, '\\.') + '": "', 'g')) || []).length, 18, key + ' in 18 locales');

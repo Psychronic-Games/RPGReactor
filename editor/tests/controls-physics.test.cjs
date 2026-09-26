@@ -203,3 +203,11 @@ test('a placed ladder is edited whole: its height from the foot, its turn, its m
     assert.match(bar, /if \(s\.piece\) manager\.setLadderHeight\(s\.piece, height\)/);
     assert.match(css, /\.rr-build-note\.rr-build-wrap \{ white-space: normal;/);
 });
+
+test('the Shape slot offers every shape, a placed shape changes kind in place, and a shape lands under the pointer', () => {
+    const bar = read('editor/src/BuildHotbar.js'), manager = read('editor/src/PieceBuilderManager.js'), view = read('editor/src/MapEditor3D.js');
+    assert.match(bar, /class="rr-build-shapes"/);
+    assert.match(bar, /manager\.updateSelected\(patch\);\n\s+\} else \{ manager\.lastShape = kind; manager\.setKind\(kind\); \}/);
+    assert.match(manager, /shapeOffsetFor\(target\) \{/);
+    assert.match(view, /const off = manager\.shapeOffsetFor \? manager\.shapeOffsetFor\(target\) : null;/);
+});

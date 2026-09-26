@@ -3814,6 +3814,9 @@
         .rr-build-facing { display: flex; align-items: center; gap: 4px; }
         .rr-build-facing .rr-build-chip { width: 34px; justify-content: center; font-size: 14px; }
         .rr-build-modes { display: flex; gap: 4px; margin-bottom: 4px; }
+        .rr-build-shapes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+        .rr-build-shapes .rr-build-chip { flex-direction: column; justify-content: center; gap: 2px; padding: 5px 2px; font-size: 10px; min-width: 0; }
+        .rr-build-shapes .rr-build-chip span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .rr-build-wrap { white-space: normal; line-height: 1.4; padding: 0; }
         .rr-build-slot {
             position: relative;

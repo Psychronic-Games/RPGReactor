@@ -199,6 +199,8 @@ class BuildHotbar {
             const kind = s.kind;
             head = (s.placed ? this._t('build.selected') + ': ' : '') + (kind === 'wedge' ? this._t('pieces.kind.ramp') : this._t('pieces.kind.' + kind));
             const rot = piece ? (s.shape ? Math.round(((piece.angle || 0) / 90) % 4) : piece.rot) : (s.shape ? 0 : manager.rot);
+            // Which shape: every one, in hand or placed (a placed one changes kind and keeps its size and place).
+            if (s.shape && kind !== 'wedge') body += section(tt('Shape'), `<div class="rr-build-shapes">${this.shapeKinds().filter(k => k !== 'wedge').map(k => `<button type="button" class="rr-build-chip rr-build-shape" data-shape="${k}" aria-pressed="${k === kind}" title="${this._t('pieces.kind.' + k)}">${this.icon(k, 20)}<span>${this._t('pieces.kind.' + k)}</span></button>`).join('')}</div>`);
             if (!s.shape && (BuildHotbar.FACING.includes(kind) || s.placed)) body += section(this._t('build.direction'), facing(rot));
             body += section(this._t('pieces.material'), swatches(piece ? piece.material : manager.material));
             if (kind === 'stair' && !s.placed) body += section(tt('Size'), num('rr-build-steps', this._t('build.steps'), manager.stairSteps, 1, BuildHotbar.MAX_RUN, 1, 'steps')
@@ -234,6 +236,16 @@ class BuildHotbar {
         const panel = this.panel, manager = this.manager();
         const placed = !!s.piece || s.kind === 'many';
         const edit = (patch, pending) => { if (s.kind === 'many') manager.updateSelection(patch); else if (placed) manager.updateSelected(patch); else pending(); this.renderPanel(); };
+        panel.querySelectorAll('.rr-build-shape').forEach(el => el.addEventListener('click', () => {
+            const kind = el.dataset.shape;
+            if (s.piece) {
+                // Changing a placed shape keeps its place and size but takes the new shape's own settings.
+                const own = (typeof DatabaseStructureEditor !== 'undefined' && DatabaseStructureEditor.SHAPE_PARAMS[kind]) || {};
+                const patch = Object.assign({ kind }, own);
+                manager.updateSelected(patch);
+            } else { manager.lastShape = kind; manager.setKind(kind); }
+            this.render();
+        }));
         panel.querySelector('.rr-build-turn-all')?.addEventListener('click', () => { manager.turnSelection(); this.renderPanel(); });
         panel.querySelectorAll('.rr-build-material').forEach(el => el.addEventListener('click', () => edit({ material: el.dataset.material }, () => manager.setMaterial(el.dataset.material))));
         panel.querySelectorAll('.rr-build-rot').forEach(el => el.addEventListener('click', () => { const r = Number(el.dataset.rot); edit(s.shape ? { angle: r * 90 } : { rot: r }, () => { manager.rot = r; manager._syncPanel(); manager._ghostChanged(); }); }));

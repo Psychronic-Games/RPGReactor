@@ -875,8 +875,20 @@ class PieceBuilderManager {
     pieceFor(target) {
         const piece = { kind: this.kind, x: target.x, y: target.y, z: target.z, rot: this.rot, material: this.material };
         const E = this.elevation();
-        if (E && E.SHAPE_KINDS && E.SHAPE_KINDS.includes(this.kind)) { piece.size = this.sizeFor(this.kind); Object.assign(piece, (this.params && this.params[this.kind]) || {}); }
+        if (E && E.SHAPE_KINDS && E.SHAPE_KINDS.includes(this.kind)) {
+            piece.size = this.sizeFor(this.kind);
+            Object.assign(piece, (this.params && this.params[this.kind]) || {});
+            const off = this.shapeOffsetFor(target);
+            if (off && (off[0] || off[1])) piece.offset = off;
+        }
         return piece;
+    }
+
+    /** Where in its cell a shape goes: under the pointer, to the quarter tile (a cell piece fills its cell). */
+    shapeOffsetFor(target) {
+        if (!target || !target.point || !this.isShape(this.kind)) return null;
+        const snap = v => Math.max(-0.5, Math.min(0.5, Math.round(v * 4) / 4));
+        return [snap(target.point.x - (target.x + 0.5)), snap(target.point.z - (target.y + 0.5))];
     }
 
     /**
