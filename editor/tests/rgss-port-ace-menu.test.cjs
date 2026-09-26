@@ -127,7 +127,7 @@ function windows(parameters, ...names) {
         Graphics: { boxWidth: 640, boxHeight: 480 }, $gameSystem: { mainFontSize: () => 18 }
     });
     // Classes the plugins extend but these tests do not draw with.
-    for (const name of ['Spriteset_Battle', 'Sprite_Battleback', 'Window_GameEnd', 'Scene_GameEnd', 'ImageManager', 'Game_Action', 'Window_ActorCommand', 'Window_PartyCommand', 'Window_BattleEnemy', 'Window_BattleActor', 'Window_Help', 'BattleManager'])
+    for (const name of ['Spriteset_Battle', 'Sprite_Battleback', 'Sprite_Enemy', 'Sprite_AnimationMV', 'Window_GameEnd', 'Scene_GameEnd', 'ImageManager', 'Game_Action', 'Window_ActorCommand', 'Window_PartyCommand', 'Window_BattleEnemy', 'Window_BattleActor', 'Window_Help', 'BattleManager'])
         if (!(name in ctx)) ctx[name] = function() {};
     for (const name of names) vm.runInContext(plugin(name), ctx);
     return { win: new Window_Base(), calls, ctx };

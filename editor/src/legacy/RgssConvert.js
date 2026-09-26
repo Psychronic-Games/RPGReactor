@@ -591,12 +591,15 @@
      * id, so written out now) and Hime's \\MF[face, index] (a face change inside
      * a message, Reactor's \\RRFACE code). Yanfly's \\px[n] is MZ's own \\PX.
      */
+    /** Text codes the game's message scripts added, in messages and (as those scripts drew every window) descriptions. */
     function messageText(line, notes) {
         const codes = activeContext.messageCodes || {};
         let out = String(line);
         if (codes.yeaIcons && activeContext.names) {
-            out = out.replace(/\\i([iwas])\[(\d+)\]/gi, (m, kind, id) => {
-                const table = activeContext.names[{ i: 'items', w: 'weapons', a: 'armors', s: 'skills' }[kind.toLowerCase()]] || [];
+            // \ic (a class) draws nothing without Yanfly's Class System.
+            out = out.replace(/\\ic\[(\d+)\]/gi, () => { tag(notes, 'textCodeConverted'); return ''; });
+            out = out.replace(/\\i([iwast])\[(\d+)\]/gi, (m, kind, id) => {
+                const table = activeContext.names[{ i: 'items', w: 'weapons', a: 'armors', s: 'skills', t: 'states' }[kind.toLowerCase()]] || [];
                 const r = table[Number(id)];
                 if (!r) return m;
                 tag(notes, 'textCodeConverted');
@@ -707,14 +710,14 @@
             return Object.assign(out, { formula: js });
         };
         const usable = (r) => ({
-            animationId: num(r.animation_id), damage: formulaOf(r.damage), description: str(r.description), effects: effects(r.effects),
+            animationId: num(r.animation_id), damage: formulaOf(r.damage), description: messageText(str(r.description), notes), effects: effects(r.effects),
             hitType: num(r.hit_type), iconIndex: num(r.icon_index), name: str(r.name), note: str(r.note), occasion: num(r.occasion),
             repeats: num(r.repeats, 1), scope: num(r.scope), speed: num(r.speed), successRate: num(r.success_rate, 100), tpGain: num(r.tp_gain)
         });
         const actors = byId(ace.actors, a => ({
             id: a.id, battlerName: '', characterIndex: num(a.character_index), characterName: str(a.character_name), classId: num(a.class_id, 1),
             equips: list(a.equips).map(x => num(x)), faceIndex: num(a.face_index), faceName: str(a.face_name), traits: traits(a.features),
-            initialLevel: num(a.initial_level, 1), maxLevel: num(a.max_level, 99), name: str(a.name), nickname: str(a.nickname), note: str(a.note), profile: str(a.description)
+            initialLevel: num(a.initial_level, 1), maxLevel: num(a.max_level, 99), name: str(a.name), nickname: str(a.nickname), note: str(a.note), profile: messageText(str(a.description), notes)
         }));
         const classes = byId(ace.classes, c => {
             const t = c.params, params = [];
@@ -730,7 +733,7 @@
             stypeId: num(s.stype_id), tpCost: num(s.tp_cost), messageType: 1
         }));
         const items = byId(ace.items, it => Object.assign(usable(it), { id: it.id, consumable: it.consumable !== false, itypeId: num(it.itype_id, 1), price: num(it.price) }));
-        const equip = (e) => ({ description: str(e.description), etypeId: num(e.etype_id) + 1, traits: traits(e.features), iconIndex: num(e.icon_index), name: str(e.name), note: str(e.note), params: list(e.params).map(x => num(x)), price: num(e.price) });
+        const equip = (e) => ({ description: messageText(str(e.description), notes), etypeId: num(e.etype_id) + 1, traits: traits(e.features), iconIndex: num(e.icon_index), name: str(e.name), note: str(e.note), params: list(e.params).map(x => num(x)), price: num(e.price) });
         const weapons = byId(ace.weapons, w => Object.assign(equip(w), { id: w.id, animationId: num(w.animation_id), wtypeId: num(w.wtype_id) }));
         const armors = byId(ace.armors, a => Object.assign(equip(a), { id: a.id, atypeId: num(a.atype_id) }));
         const enemies = byId(ace.enemies, e => ({

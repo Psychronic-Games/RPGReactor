@@ -15,6 +15,7 @@ function extract({ scripts = [], constants = {} } = {}) {
         transparency: String(Number(k('TRANSPARENCY', 160))),
         groupDigits: String(k('GROUP_DIGITS', false) === true),
         gaugeHeight: String(Number(k('GAUGE_HEIGHT', 6))),
+        animationRate: String(Number(k('ANIMATION_RATE', 4)) || 4),
         gaugeOutline: String(k('GAUGE_OUTLINE', true) !== false && k('GAUGE_OUTLINE', true) !== null),
         hpCrisis: String(Number(k('HP_CRISIS', 0.25))),
         mpCrisis: String(Number(k('MP_CRISIS', 0.25)))

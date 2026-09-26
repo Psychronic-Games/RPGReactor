@@ -375,8 +375,11 @@ function open(folder, destination, options) {
         const nameTable = (records) => { const out = []; for (const r of records || []) if (r && r.id) out[r.id] = { name: String(r.name || ''), icon: Number(r.icon_index) || 0 }; return out; };
         const families = C.scriptFamilies(custom.map(s => s.text));
         // VX Ace's own window layouts and drawing, which the script ports build on: installed first.
-        families.basePlugins = ['RR_AceCompat'];
-        C.setContext({ constants, messageCodes, families, names: { items: nameTable(ace.items), weapons: nameTable(ace.weapons), armors: nameTable(ace.armors), skills: nameTable(ace.skills) } });
+        // The buff icons' first numbers, where the game's own Game_BattlerBase moved them.
+        const baseText = (active.find(x => x.name === 'Game_BattlerBase') || {}).text || '';
+        const iconConst = (name, d) => { const m = new RegExp(name + '\\s*=\\s*(\\d+)').exec(baseText); return String(m ? Number(m[1]) : d); };
+        families.basePlugins = [{ name: 'RR_AceCompat', parameters: () => ({ iconBuffStart: iconConst('ICON_BUFF_START', 64), iconDebuffStart: iconConst('ICON_DEBUFF_START', 80) }) }];
+        C.setContext({ constants, messageCodes, families, names: { items: nameTable(ace.items), weapons: nameTable(ace.weapons), armors: nameTable(ace.armors), skills: nameTable(ace.skills), states: nameTable(ace.states) } });
         const db = C.database(ace, notes);
         // Music a script of the game's plays in place of what its events name.
         const aliases = C.audioAliases(custom.map(s => s.text));

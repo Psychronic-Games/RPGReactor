@@ -39,11 +39,28 @@
  * replace one after another in the game's script order, as the scripts
  * replaced the original methods.
  *
+ * Buff and debuff icons start where the game's Game_BattlerBase put them, and
+ * no state icons float over enemies.
+ *
  * Turning it off leaves MZ's layouts.
+ *
+ * @param iconBuffStart
+ * @type number
+ * @default 64
+ *
+ * @param iconDebuffStart
+ * @type number
+ * @default 80
  */
 (() => {
     'use strict';
     const W = Window_Base.prototype;
+    const params = PluginManager.parameters('RR_AceCompat');
+    Game_BattlerBase.ICON_BUFF_START = Number(params.iconBuffStart) || 64;
+    Game_BattlerBase.ICON_DEBUFF_START = Number(params.iconDebuffStart) || 80;
+    Sprite_Enemy.prototype.updateStateSprite = function() {
+        if (this._stateIconSprite) this._stateIconSprite.visible = false;
+    };
 
     //-------------------------------------------------------------------------
     // Drawing, as VX Ace's Window_Base did it

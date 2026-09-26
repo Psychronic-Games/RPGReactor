@@ -9,7 +9,7 @@
  * The parts of Yanfly's Ace Core Engine that change how the game looks and runs:
  * which window-skin colour each kind of text uses, how faint a disabled
  * item is, numbers grouped with commas, gauges, and how far from the screen
- * events keep moving on their own, and troop positions moved onto the
+ * events keep moving on their own, how fast animations play, and troop positions moved onto the
  * larger screen. The screen size and the default
  * font are converted by the import itself.
  *
@@ -41,6 +41,11 @@
  * @type boolean
  * @default true
  *
+ * @param animationRate
+ * @text Frames per animation frame
+ * @type number
+ * @default 4
+ *
  * @param hpCrisis
  * @text HP crisis rate
  * @type number
@@ -61,6 +66,8 @@
     const TRANSPARENCY = params.transparency === undefined || params.transparency === '' ? 160 : Number(params.transparency);
     const GROUP_DIGITS = String(params.groupDigits) === 'true';
     const GAUGE_HEIGHT = Number(params.gaugeHeight) || 6;
+    const ANIMATION_RATE = Number(params.animationRate) || 4;
+    Sprite_AnimationMV.prototype.setupRate = function() { this._rate = ANIMATION_RATE; };
     const GAUGE_OUTLINE = String(params.gaugeOutline) !== 'false';
     const HP_CRISIS = params.hpCrisis === undefined || params.hpCrisis === '' ? 0.25 : Number(params.hpCrisis);
     const MP_CRISIS = params.mpCrisis === undefined || params.mpCrisis === '' ? 0.25 : Number(params.mpCrisis);
