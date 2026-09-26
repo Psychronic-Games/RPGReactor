@@ -1,10 +1,12 @@
 # Custom user interfaces
 
-Written 2026-08-24, implemented through the 0.98.4 cycle, and checked against
-the 0.98.5 source on 2026-09-04. The current system covers scene and map-overlay records, live visual capture, generated
-stock baselines, typed Lists and actor bindings, Gauges, styling and focus
-overrides, transitions, and opt-in replacement of seven supported stock scene
-roles.
+Written 2026-08-24, implemented through the 0.98.4 cycle, checked against
+the 0.98.5 source on 2026-09-04, and extended on 2026-09-26 with the Items,
+Skills, Equipment, Shop and Name Input workflows and the Text Input node. The
+current system covers scene and map-overlay records, live visual capture,
+generated stock baselines, typed Lists that follow one another, actor
+bindings, Gauges, text input, styling and focus overrides, transitions, and
+opt-in replacement of twelve stock scene roles.
 
 The owner's ask was a **User Interfaces** database section where a creator
 lays out boxes, images, text, buttons, gauges, and lists by dragging, wires
@@ -61,6 +63,7 @@ parents-first.
 | **Button** | Focusable surface and label with an action, enabled condition, sound, visual states, and directional focus overrides |
 | **List** | Typed rows in a real `Window_Selectable`, with scrolling, disabled rows, a named context, row template, selection styling, and an action |
 | **Gauge** | Actor HP/MP/TP/EXP/stat or game-variable progress with configurable label, value format, colors, back color, and bar height |
+| **Text Input** | A field that edits a variable or an actor's name or nickname: typing, optional stock character grid, placeholder, maximum length, password dots, an action after Enter |
 
 There is no Container node. Box and Image nodes provide the current grouping
 and parenting mechanism.
@@ -80,13 +83,28 @@ List sources are fixed and typed:
 - `saveSlots`: autosave/manual slot metadata and availability.
 - `variableRange`: a bounded range of game variables.
 - `literal`: authored `id`, `value`, text, and enabled state.
+- `itemCategories`: Items, Weapons, Armors and Key Items as System enables them.
+- `skillTypes`: the bound actor's skill types.
+- `equipCandidates`: what the bound actor can wear in a slot, and an empty row that takes it off.
+- `shopGoods`: Shop Processing's goods at their price, enabled when affordable.
+- `shopSell`: party items at half price, enabled when they have a price.
+
+**Follows list** (`filterContext`) names another list's context: an inventory
+or sell list shows the category chosen there, a skill list the skill type, a
+candidate list the equipment slot. A list that follows nothing chosen shows no
+rows. **Compare with** (`compareContext`) on a parameter list names a candidate
+list: while that list has focus, rows carry `{newValue}` (coloured up or down)
+and `{change}`. **Columns** lays rows side by side, and a list with **Can be
+focused** off only displays.
 
 Every row has a stable source-qualified `key`, a `kind`, `id`, `value`, display
 fields, enabled state, and its backing runtime object where applicable. Row
 templates can use fields including `{kind}`, `{id}`, `{value}`, `{name}`,
 `{description}`, `{icon}`, `{count}`, `{paramName}`, `{paramValue}`, `{price}`,
 `{level}`, `{symbol}`, `{valueText}`, `{title}`, `{playtime}`, `{date}`,
-`{partyCharacters}`, `{partyFaces}`, `{existing}`, `{enabled}`, and `{index}`.
+`{partyCharacters}`, `{partyFaces}`, `{existing}`, `{enabled}`, `{index}`,
+`{cost}` (a skill's TP or MP cost in its colour), `{slot}`, `{newValue}`, and
+`{change}`.
 
 A List publishes its selected typed row immediately under its authored context
 name, such as `selectedActor` or `selectedSave`. Text nodes can bind to that
@@ -133,8 +151,41 @@ Options mutation, and Save/Load slots.
 The generic stock-scene action is limited to Title, Main Menu, Item, Skill,
 Equip, Status, Options, Save, Load, and Game End. It does not accept arbitrary
 named plugin scenes; **Open plugin scene** is a separate action for that purpose.
-Neither scene action provides Shop goods or transaction behavior.
 Opening a stock scene is not the same as replacing that workflow.
+
+The stock screens' workflows are actions on list rows:
+
+- **Use item or skill**: the user is the skill list's actor, or for an item the
+  party member with the best PHA, as Scene_Item picks. An ally-scope item or
+  skill moves focus to a party List (an Actor Panel first) under the action's
+  context: one actor, the whole party (a cursor over every row) or the user
+  alone, by scope. Confirm applies it as Scene_ItemBase does and stays for
+  another use; cancel returns. Other scopes are used at once. A common event it
+  reserves runs on the map. A panel with the visibility condition
+  `scene.isSelectingTarget()` appears only while choosing.
+- **Equip** puts the candidate in its slot (the empty row takes it off) and
+  moves focus to the action's control, else the list's Back target.
+  **Optimize equipment** and **Remove all equipment** act on the action's
+  context actor, else the menu actor.
+- **Buy** and **Sell** ask how many in the stock `Window_ShopNumber` over the
+  list, then trade gold and items with the shop sound.
+- **Focus another control** moves focus to a node and selects a list's first
+  row.
+
+**Back goes to** (`backFocus`) makes Cancel on a control move focus to another
+instead of running the interface's Cancel action, so a list screen steps back
+the way the stock ones do. In the Skills, Equipment and Status roles, Q and W
+(page up/down) change the menu actor.
+
+A **Text Input** starts editing on OK or a click, or at once when it has first
+focus and **Start typing when opened** is on. Typing goes through a hidden
+HTML input, so keyboard layouts, IME and paste work, and the game's input
+never sees those keys. Enter stores the text in the variable, actor name or
+nickname and runs the node's action; Escape leaves the value as it was.
+**Character grid** also shows the stock `Window_NameInput` under the field for
+gamepad and touch; arrows, OK, Cancel and Shift then drive the grid as on the
+stock screen. The Name Input role reads Name Input Processing's actor and
+maximum length; the actor source **Actor being named** binds to that actor.
 
 The generated Main Menu publishes `selectedActor` through an **Actor Panel**.
 This is a party List with `rowLayout: "actorPanel"`: each selectable row contains
@@ -308,9 +359,10 @@ plugin-owned scene trees remains unresolved.
 
 ## Generated baselines and opt-in replacement
 
-A project that has no `data/UserInterfaces.json` is offered seven generated,
+A project that has no `data/UserInterfaces.json` is offered twelve generated,
 editable records with stable IDs. New kinds append rather than renumbering old
-ones:
+ones, and **Stock Layout** in the Layers panel replaces any record's layers
+with one of them (undoable):
 
 | ID | Baseline | Role |
 |---:|---|---|
@@ -321,16 +373,22 @@ ones:
 | 5 | Options | Options |
 | 6 | Save | Save |
 | 7 | Load | Load |
+| 8 | Items | Items |
+| 9 | Skills | Skills |
+| 10 | Equipment | Equipment |
+| 11 | Shop | Shop |
+| 12 | Name Input | Name Input |
 
 Generation uses the project's screen/UI area, terms, title art, menu settings,
 starting party, and stock scene geometry. Existing projects that already have a
-`UserInterfaces.json` file are not regenerated or rewritten. The tracked Demo
-contains the seven generated records, but has no replacement IDs bound in
-`System.json`; it remains stock by default.
+`UserInterfaces.json` file are not regenerated or rewritten; they gain the
+newer screens through Stock Layout.
 
-Replacement is opt-in and role-gated. The exact replaceable roles are **Title,
-Main Menu, Status, Game End, Options, Save, and Load**. System 1 selects Title;
-System 2 selects the other six. A record may advertise one or more matching
+Replacement is opt-in and role-gated. The replaceable roles are **Title, Main
+Menu, Status, Game End, Options, Save, Load, Items, Skills, Equipment, Shop, and
+Name Input**. System 1 selects Title; System 2 selects the others. Shop
+Processing and Name Input Processing prepare the routed scene a second time
+with their goods or actor, which the interface keeps. A record may advertise one or more matching
 roles, but it must be a valid scene record at the selected ID. Zero, missing or
 malformed records, overlays, ID mismatches, and role mismatches all route to the
 stock scene. Routing wraps the latest `SceneManager.goto`/`push` after project
@@ -339,14 +397,14 @@ does not recurse.
 
 ## Explicit boundaries
 
-Item, Skill, Equip, Shop, Name Input and message-input workflows,
-and Battle remain stock and unreplaceable until dedicated workflow adapters
-exist. They may be launched where a stock-scene action exists, and they may be
-captured as visual references, but a custom record cannot assume their selection,
-targeting, transaction, quantity, naming, or battle lifecycles.
+Battle and the message inputs (Input Number, Select Item) remain stock and
+unreplaceable. The quantity window is the stock one, not an authored node. An
+interface opened by script over another open interface does not restore the
+one beneath when it closes; the Call User Interface command and interface
+actions do.
 
-No general flow layout, alignment guides, Container node, arbitrary Shop/named
-plugin-scene replacement, or interactive overlay behavior is claimed. The
+No general flow layout, alignment guides, Container node, named plugin-scene
+replacement, or interactive overlay behavior is claimed. The
 standalone MZ plugin is deferred per owner direction, not queued as the next
 active phase.
 

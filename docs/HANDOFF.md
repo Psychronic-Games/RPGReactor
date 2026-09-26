@@ -6,7 +6,7 @@ Dated engineering notes for whoever picks the project up next, newest first. Thi
 
 **0.98.7 shipped on 2026-09-21** (runtime 20260920.24). The 0.98.8 cycle is open and holds importers for every older RPG Maker (2000, 2003, XP, VX, VX Ace), over 110 Ruby-script plugin ports, media conversion, the Apply/save speed-up, builder fixes, and PRs #68–#70, under the 0.98.8 files in `changelog/` and `editor/changelog/` (runtime 20260925.5, 3,765 tests, all green). **Nothing from 2026-09-22 on is pushed**: the owner pushes at the end of the weekend; PR merges from GitHub are merged into local `main`, so the push fast-forwards.
 
-**Current work:** Dreamwalker (DOTP, VX Ace) imports with nearly all of its 177 scripts ported; see 2026-09-25 for what is checked against the shipped game and how.
+**Current work (2026-09-26):** the quest tracker, reward grants and the stock screens as user interfaces are done (see 2026-09-26); the owner's next focus is the world builder. Dreamwalker (DOTP, VX Ace) imports with nearly all of its 177 scripts ported; see 2026-09-25 for what is checked against the shipped game and how.
 
 **Pick up here (next session):**
 1. **A frame-by-frame fight in both engines** (attack, enemy turn, victory). Our side works (`$S/attack-steps.js` pattern: empty troop 1's first page, give item 14 shotgun shells, wait for the actor command window, Enter Enter, shoot every 250 ms). The original must reach the fight through play, not probe code (see 2026-09-25 › Next).
@@ -21,6 +21,16 @@ Dated engineering notes for whoever picks the project up next, newest first. Thi
 **Known rough edges the owner has seen (3D):** the gables, the black flat view of North Haven and the Stamp turn were fixed on 2026-09-22 (the Demo's Manor and Hamlet keep their old pieces until re-stamped); a thin line of floor slab shows between stacked windows; harness transfers to map 5 occasionally time out when two NW instances start together (rerun alone).
 
 **Next, agreed:** furniture pieces and room contents in plans; a spot/template picker in the panel; a hamlet-of-hamlets stress test; then lighting normals on slopes and hip roofs.
+
+## 2026-09-26 — Quest tracker, reward grants, and the stock screens as user interfaces
+
+Runtime 20260926.1 to .2. The owner set the day's focus on the bigger features (world builder next) and asked for the quest tracker and User Interfaces; autosave on imports stays (settled).
+
+- **Quests:** `Window_QuestTracker` on the map (redraws on `Game_Quests.revision()` or a settings change, hides under messages or `tracker.hideSwitchId`), auto-track, rewards that give gold/items/EXP/a common event once, Database › Quests › Tracker and Labels…. Checked in the game on a Demo copy (`$S/demoq`, quests written into its data): tracker in every corner and style, 250 G and 2 items given on completion, tracking handed to the next quest.
+- **pixi_compat wraps scene classes:** a static set through the global (`Scene_Quest.openOn`) never reached the class inside the module; Open Quest Log on a quest opened on none. State now lives on `ReactorQuests.openOn`. Suspect this whenever a class static "does nothing" in a real game but passes Node tests.
+- **User Interfaces:** Items, Skills, Equipment, Shop and Name Input are replaceable roles with baselines (ids 8–12 for new projects; **Stock Layout** applies one to any record). Lists follow each other through contexts; Use/Equip/Buy/Sell/Focus actions; Back goes to; Text Input node (typing through a hidden `<input>`, optional stock character grid). Each workflow was driven with keys in the game (`$S/ui-steps.js`, `skill-steps.js`, `input-steps.js` on `scratchpad/dotp/run.cjs`, which gained PageUp/PageDown): Med-Kit on one ally, an all-scope kit on the party, First Aid from Carol after paging with PageDown, Long Sword equipped with the ATK comparison, buy and sell through the number window, a name typed and finished on the grid's OK, a masked terminal code stored in a variable.
+- **Found on the way:** a text list's highlight never followed the cursor (fixed); the Demo maps W to up, so Q/W paging must be tested with PageUp/PageDown there; the Demo's Med-Kit is battle-only (the buzzer is right).
+- **Open:** Battle stays stock; an interface opened by script over another open one does not restore the one beneath (Call User Interface and interface actions do); the quantity window is the stock one, not an authored node.
 
 ## 2026-09-25 — Dreamwalker (DOTP, VX Ace) against the shipped game: title to battles
 

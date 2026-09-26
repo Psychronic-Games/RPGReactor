@@ -16,11 +16,12 @@ const fixtureSystem = {
     optDrawTitle: false
 };
 
-test('build preserves stable ids and appends Options, Save, and Load deterministically', () => {
+test('build preserves stable ids and appends later screens deterministically', () => {
     const records = Stock.build({ system: fixtureSystem });
     assert.deepStrictEqual(records.map(r => [r.id, r.name, r.stock]), [
         [1, 'Title Screen', 'title'], [2, 'Main Menu', 'menu'], [3, 'Game End', 'gameEnd'], [4, 'Status', 'status'],
-        [5, 'Options', 'options'], [6, 'Save', 'save'], [7, 'Load', 'load']
+        [5, 'Options', 'options'], [6, 'Save', 'save'], [7, 'Load', 'load'],
+        [8, 'Items', 'item'], [9, 'Skills', 'skill'], [10, 'Equipment', 'equip'], [11, 'Shop', 'shop'], [12, 'Name Input', 'name']
     ]);
     const [title, menu, gameEnd, status] = records;
     const box = record => record.nodes.find(n => n.type === 'box' && n.name === 'Commands');
@@ -148,7 +149,7 @@ test('Options, Save, and Load baselines use typed sources and semantic actions o
 
 test('missing system data falls back to MZ defaults without throwing', () => {
     const records = Stock.build({});
-    assert.strictEqual(records.length, 7);
+    assert.strictEqual(records.length, 12);
     const box = records[0].nodes.find(n => n.type === 'box');
     assert.deepStrictEqual([box.x, box.y], [(816 - 240) / 2, 624 - 132 - 96]);
     assert.strictEqual(records[1].nodes.filter(n => n.type === 'button').map(b => b.text)[0], 'Item');
@@ -224,4 +225,41 @@ test('convertPartyCodes resolves slots and leaves stock codes alone', () => {
     assert.strictEqual(UI.convertPartyCodes('Lv \\PLV[1] \\PCLASS[1] HP \\PHP[1]/\\PMHP[1] MP \\PMP[1]/\\PMMP[1] \\PTP[1]'), 'Lv 7 Hero HP 120/150 MP 10/30 5');
     assert.strictEqual(UI.convertPartyCodes('\\P[2] \\PLV[2]'), '\\P[2] ', 'an empty slot reads as nothing; \\P stays for the stock converter');
     assert.strictEqual(UI.convertPartyCodes('\\\\GOLD'), '\\\\GOLD', 'an escaped backslash is not a code');
+});
+
+
+test('Items, Skills, Equipment and Shop chain their lists through contexts and wire every workflow', () => {
+    const records = Stock.build({ system: fixtureSystem });
+    const byStock = kind => records.find(record => record.stock === kind);
+    const named = (record, name) => record.nodes.find(node => node.name === name);
+    const ids = record => new Set(record.nodes.map(node => node.id));
+    for (const record of records.slice(7)) {
+        for (const node of record.nodes) {
+            if (node.action && ['focusNode', 'equip'].includes(node.action.type)) assert.ok(ids(record).has(node.action.id), `${record.name}: ${node.name} focuses a real node`);
+            if (node.backFocus) assert.ok(ids(record).has(node.backFocus), `${record.name}: ${node.name} goes back to a real node`);
+        }
+        assert.ok(ids(record).has(record.firstFocus), `${record.name} starts on a real node`);
+        assert.deepStrictEqual(record.roles, [record.stock]);
+    }
+    const item = byStock('item');
+    assert.deepStrictEqual([named(item, 'Categories').dataSource, named(item, 'Categories').columns, named(item, 'Categories').action.id],
+        ['itemCategories', 4, named(item, 'Items').id]);
+    assert.deepStrictEqual([named(item, 'Items').filterContext, named(item, 'Items').action.type, named(item, 'Items').action.contextName], ['selectedCategory', 'use', 'target']);
+    assert.deepStrictEqual([named(item, 'Targets').rowLayout, named(item, 'Targets').contextName, named(item, 'Targets').visible.script], ['actorPanel', 'target', 'scene.isSelectingTarget()']);
+    const skill = byStock('skill');
+    assert.deepStrictEqual([named(skill, 'Skills').filterContext, named(skill, 'Skills').rowText], ['selectedSkillType', '\\I[{icon}]{name}  {cost}']);
+    const equip = byStock('equip');
+    assert.deepStrictEqual([named(equip, 'Parameters').compareContext, named(equip, 'Parameters').focusable], ['selectedCandidate', false]);
+    assert.deepStrictEqual([named(equip, 'Candidates').filterContext, named(equip, 'Candidates').action.type, named(equip, 'Candidates').action.id],
+        ['selectedSlot', 'equip', named(equip, 'Slots').id]);
+    assert.deepStrictEqual(['Optimize', 'Clear'].map(name => named(equip, name).action.type), ['equipOptimize', 'equipClear']);
+    const shop = byStock('shop');
+    assert.deepStrictEqual([named(shop, 'Buy').dataSource, named(shop, 'Buy').action.type, named(shop, 'Sell').action.type], ['shopGoods', 'shopBuy', 'shopSell']);
+    assert.strictEqual(named(shop, 'Sell').visible.script, '!scene.isPurchaseOnly()', 'a purchase-only shop hides the sell side');
+    assert.strictEqual(Stock.buildOne('shop', { system: fixtureSystem }).name, 'Shop');
+    assert.strictEqual(Stock.buildOne('battle', {}), null);
+    const name = byStock('name');
+    const field = name.nodes.find(node => node.type === 'input');
+    assert.deepStrictEqual([field.inputTarget, field.actorSource, field.onScreenKeys, field.autoEdit, field.action.type, name.firstFocus],
+        ['actorName', 'sceneActor', true, true, 'close', field.id], 'the name field edits the actor being named, starts in the grid and closes on OK');
 });

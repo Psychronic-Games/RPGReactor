@@ -36,12 +36,13 @@
     ReactorUI.MAX_NESTING = 16;
     // "Fit text to size" never shrinks a font below this many pixels.
     ReactorUI.MIN_FONT_SIZE = 8;
-    ReactorUI.NODE_TYPES = ["box", "image", "text", "button", "list", "gauge"];
+    ReactorUI.NODE_TYPES = ["box", "image", "text", "button", "list", "gauge", "input"];
     ReactorUI.GAUGE_KINDS = ["hp", "mp", "tp", "exp", "mhp", "mmp", "atk", "def", "mat", "mdf", "agi", "luk", "variable"];
-    ReactorUI.LIST_SOURCES = ["party", "inventory", "skills", "actorParameters", "actorEquipment", "actorStates", "options", "saveSlots", "variableRange", "literal"];
+    ReactorUI.LIST_SOURCES = ["party", "inventory", "skills", "actorParameters", "actorEquipment", "actorStates", "options", "saveSlots", "variableRange", "literal",
+        "itemCategories", "skillTypes", "equipCandidates", "shopGoods", "shopSell"];
     ReactorUI.INVENTORY_CATEGORIES = ["all", "item", "weapon", "armor", "keyItem"];
     ReactorUI.IMAGE_SOURCES = ["picture", "system", "face", "character", "icon", "partyFace", "title1", "title2"];
-    ReactorUI.ACTOR_SOURCES = ["partySlot", "actorId", "menuActor", "variable", "context"];
+    ReactorUI.ACTOR_SOURCES = ["partySlot", "actorId", "menuActor", "variable", "context", "sceneActor"];
     ReactorUI.ANCHORS = {
         topLeft: [0, 0], top: [0.5, 0], topRight: [1, 0],
         left: [0, 0.5], center: [0.5, 0.5], right: [1, 0.5],
@@ -380,7 +381,8 @@
             "pluginCommand", "switch", "variable", "script", "setMenuActor",
             "personalSkill", "personalEquip", "personalStatus", "titleNewGame",
             "titleContinue", "titleOptions", "gameEndToTitle", "previousMenuActor", "nextMenuActor",
-            "optionChange", "saveSlot", "loadSlot", "formation", "pluginScene"
+            "optionChange", "saveSlot", "loadSlot", "formation", "pluginScene",
+            "use", "equip", "equipOptimize", "equipClear", "focusNode", "shopBuy", "shopSell"
         ], "none");
         let args = {};
         if (source.args && typeof source.args === "object" && !Array.isArray(source.args)) {
@@ -487,6 +489,12 @@
             actorSource,
             actorVariableId: Math.max(1, Math.floor(finite(source.actorVariableId, 1))),
             actorContextName: text(source.actorContextName, "selection").trim() || "selection",
+            // Text input: what it edits, how long it may be, how it shows.
+            inputTarget: oneOf(source.inputTarget, ["variable", "actorName", "actorNickname"], "variable"),
+            maxLength: clamp(Math.round(finite(source.maxLength, 16)), 1, 99),
+            mask: !!source.mask,
+            onScreenKeys: !!source.onScreenKeys,
+            autoEdit: !!source.autoEdit,
             // Gauge: hp/mp/tp of the party member in slot `index`, or a variable against `max`
             gauge: oneOf(source.gauge, this.GAUGE_KINDS, "hp"),
             variableId: Math.max(1, Math.floor(finite(source.variableId, 1))),
@@ -520,6 +528,18 @@
             rowText: text(source.rowText, ""),
             rowHeight: source.rowLayout==='actorPanel' && !source.actorLayoutVersion && source.rowHeight===192 ? 256 : clamp(Math.round(finite(source.rowHeight, 36)), 24, 9999),
             contextName: text(source.contextName, "selection").trim() || "selection",
+            // A list whose rows follow another list's selection: the category,
+            // skill type or equipment slot chosen there.
+            filterContext: text(source.filterContext, "").trim(),
+            // Parameter rows compare against the equipment chosen in this context.
+            compareContext: text(source.compareContext, "").trim(),
+            // Cancel on this control moves focus to that node instead of
+            // running the interface's cancel.
+            backFocus: Math.max(0, Math.floor(finite(source.backFocus, 0))),
+            // Rows side by side: a category bar, an item grid.
+            columns: clamp(Math.round(finite(source.columns, 1)), 1, 12),
+            // A list that only displays (equipment comparison) can stay out of focus.
+            focusable: source.focusable !== false,
             selectionVariableId: Math.max(0, Math.floor(finite(source.selectionVariableId, 0))),
             selectionValue: oneOf(source.selectionValue, ["id", "value"], "id"),
             // Button / list
@@ -1511,7 +1531,7 @@
 
     Window_ReactorUINode.prototype.usesSkin = function() {
         const node = this._uiNode;
-        return (node.type === "box" || node.type === "button") && node.fill === "window";
+        return (node.type === "box" || node.type === "button" || node.type === "input") && node.fill === "window";
     };
 
     Window_ReactorUINode.prototype.updatePadding = function() {
@@ -1523,7 +1543,7 @@
     };
 
     Window_ReactorUINode.prototype.isFocusable = function() {
-        return this._uiNode.type === "button";
+        return this._uiNode.type === "button" || this._uiNode.type === "input";
     };
 
     Window_ReactorUINode.prototype.isEnabled = function() {
@@ -1644,6 +1664,10 @@
             }
             case "context":
                 return this.actorFromContext(scene, node.actorContextName);
+            case "sceneActor":
+                // The actor a Name Input screen was opened for; the menu actor elsewhere.
+                return scene && scene.sceneActor ? scene.sceneActor()
+                    : typeof $gameParty !== "undefined" && $gameParty && $gameParty.menuActor ? $gameParty.menuActor() : null;
             default:
                 return this.partyMember(node.index);
         }
@@ -1679,7 +1703,7 @@
 
     ReactorUI.CONTEXT_FIELDS = ["key", "kind", "id", "value", "name", "description", "icon", "iconIndex", "count",
         "playtime", "index", "paramName", "paramValue", "price", "level", "symbol", "valueText", "title", "timestamp",
-        "date", "partyCharacters", "partyFaces", "existing", "enabled"];
+        "date", "partyCharacters", "partyFaces", "existing", "enabled", "cost", "slot", "newValue", "change"];
 
     ReactorUI.resolveContextTokens = function(value, node, scene) {
         const row = scene && scene.context ? scene.context(node && node.contextName) : null;
@@ -1722,9 +1746,9 @@
 
     ReactorUI.formatListRow = function(template, row) {
         const source = template || row.defaultText || "{name}";
-        return source.replace(/\{(key|kind|id|value|name|description|icon|iconIndex|count|playtime|index|paramName|paramValue|price|level|symbol|valueText|title|timestamp|date|partyCharacters|partyFaces|existing|enabled)\}/gi, (match, key) => {
+        return source.replace(/\{(key|kind|id|value|name|description|icon|iconIndex|count|playtime|index|paramName|paramValue|price|level|symbol|valueText|title|timestamp|date|partyCharacters|partyFaces|existing|enabled|cost|slot|newValue|change)\}/gi, (match, key) => {
             const field = { iconindex: "iconIndex", paramname: "paramName", paramvalue: "paramValue", valuetext: "valueText",
-                partycharacters: "partyCharacters", partyfaces: "partyFaces" }[key.toLowerCase()] || key.toLowerCase();
+                partycharacters: "partyCharacters", partyfaces: "partyFaces", newvalue: "newValue" }[key.toLowerCase()] || key.toLowerCase();
             const value = row[field];
             return value == null ? "" : String(value);
         });
@@ -1732,6 +1756,66 @@
 
     ReactorUI.listRowsSignature = function(rows) {
         return JSON.stringify(rows.map(row => Object.keys(row).filter(key => key !== "data").sort().map(key => [key, row[key]])));
+    };
+
+    /** The row selected in the list a node follows (its filterContext), or null. */
+    ReactorUI.filterRow = function(node, scene) {
+        return node && node.filterContext && scene && scene.context ? scene.context(node.filterContext) : null;
+    };
+
+    /** The inventory category a node shows: the chosen category row's, else its own. */
+    ReactorUI.filterCategory = function(node, scene) {
+        const row = this.filterRow(node, scene);
+        if (row && row.kind === "category") return String(row.id);
+        return node.filterContext ? "none" : node.category;
+    };
+
+    ReactorUI.inCategory = function(item, category) {
+        if (!item || category === "none") return false;
+        if (category === "all") return true;
+        if (typeof DataManager === "undefined") return false;
+        if (category === "weapon") return DataManager.isWeapon(item);
+        if (category === "armor") return DataManager.isArmor(item);
+        if (!DataManager.isItem(item)) return false;
+        return category === "keyItem" ? item.itypeId === 2 : item.itypeId === 1;
+    };
+
+    ReactorUI.itemKind = function(item) {
+        if (typeof DataManager === "undefined") return "item";
+        return DataManager.isWeapon(item) ? "weapon" : DataManager.isArmor(item) ? "armor" : DataManager.isSkill && DataManager.isSkill(item) ? "skill" : "item";
+    };
+
+    /** A Shop Processing goods entry [type, id, priceType, price] as its database record. */
+    ReactorUI.goodsItem = function(good) {
+        if (!Array.isArray(good)) return null;
+        const table = [window.$dataItems, window.$dataWeapons, window.$dataArmors][good[0]];
+        return table ? table[good[1]] || null : null;
+    };
+
+    /** A skill's cost the way the stock skill list prints it: TP first, then MP. */
+    ReactorUI.skillCostText = function(actor, skill) {
+        if (!actor || !skill) return "";
+        const tp = actor.skillTpCost ? actor.skillTpCost(skill) : 0;
+        const mp = actor.skillMpCost ? actor.skillMpCost(skill) : 0;
+        if (tp > 0) return "\\C[29]" + tp + "\\C[0]";
+        if (mp > 0) return "\\C[23]" + mp + "\\C[0]";
+        return "";
+    };
+
+    /**
+     * The actor as it would be with the equipment chosen in compareContext,
+     * while that list has focus - the stock equip screen's comparison. Null
+     * when there is nothing to compare.
+     */
+    ReactorUI.equipPreviewActor = function(node, scene, actor) {
+        if (!node.compareContext || !scene || !scene.context || typeof JsonEx === "undefined") return null;
+        const focused = scene.focusedWindow ? scene.focusedWindow() : null;
+        if (!focused || !focused.node || focused.node().contextName !== node.compareContext) return null;
+        const row = scene.context(node.compareContext);
+        if (!row || row.slot === "" || row.slot == null || !actor.forceChangeEquip) return null;
+        const preview = JsonEx.makeDeepCopy(actor);
+        preview.forceChangeEquip(Number(row.slot) || 0, row.data || null);
+        return preview;
     };
 
     /** Rows for the fixed declarative List sources. */
@@ -1742,7 +1826,8 @@
                 key: String(row.kind || "row") + ":" + String(row.id), kind: "row", id: 0, value: 0,
                 name: "", description: "", iconIndex: 0, icon: 0, count: "", enabled: true, data: null,
                 playtime: "", paramName: "", paramValue: "", price: "", level: "", actorId: 0,
-                symbol: "", valueText: "", title: "", timestamp: "", date: "", partyCharacters: "", partyFaces: "", existing: false
+                symbol: "", valueText: "", title: "", timestamp: "", date: "", partyCharacters: "", partyFaces: "", existing: false,
+                cost: "", slot: "", newValue: "", change: ""
             };
             row = Object.assign(base, row);
             const baseKey = row.key;
@@ -1766,31 +1851,99 @@
             case "inventory": {
                 const party = typeof $gameParty !== "undefined" && $gameParty;
                 const items = party && party.allItems ? party.allItems() : [];
-                const includes = item => {
-                    if (node.category === "all") return true;
-                    if (typeof DataManager === "undefined") return false;
-                    if (node.category === "weapon") return DataManager.isWeapon(item);
-                    if (node.category === "armor") return DataManager.isArmor(item);
-                    if (!DataManager.isItem(item)) return false;
-                    return node.category === "keyItem" ? item.itypeId === 2 : item.itypeId === 1;
-                };
-                for (const item of items.filter(includes)) {
+                const category = this.filterCategory(node, scene);
+                const using = node.action && node.action.type === "use";
+                for (const item of items.filter(item => this.inCategory(item, category))) {
                     const count = party.numItems ? party.numItems(item) : 0;
-                    const kind = typeof DataManager !== "undefined" && DataManager.isWeapon(item) ? "weapon"
-                        : typeof DataManager !== "undefined" && DataManager.isArmor(item) ? "armor" : "item";
+                    const kind = this.itemKind(item);
                     add({ key: kind + ":" + item.id, kind, id: item.id, value: item.id, name: item.name,
                         description: item.description || "", iconIndex: item.iconIndex || 0, count, price: item.price || 0, data: item,
+                        enabled: using ? !!(party.canUse && party.canUse(item)) : true,
                         defaultText: "\\I[" + (item.iconIndex || 0) + "]{name}  x{count}" });
                 }
+                break;
+            }
+            case "shopSell": {
+                const party = typeof $gameParty !== "undefined" && $gameParty;
+                const items = party && party.allItems ? party.allItems() : [];
+                const category = this.filterCategory(node, scene);
+                for (const item of items.filter(item => this.inCategory(item, category))) {
+                    const kind = this.itemKind(item);
+                    const price = Math.floor((item.price || 0) / 2);
+                    add({ key: kind + ":" + item.id, kind, id: item.id, value: item.id, name: item.name,
+                        description: item.description || "", iconIndex: item.iconIndex || 0, count: party.numItems(item),
+                        price, data: item, enabled: (item.price || 0) > 0,
+                        defaultText: "\\I[" + (item.iconIndex || 0) + "]{name}  x{count}" });
+                }
+                break;
+            }
+            case "shopGoods": {
+                const party = typeof $gameParty !== "undefined" && $gameParty;
+                const goods = scene && scene.shopGoods ? scene.shopGoods() : [];
+                for (const good of goods) {
+                    const item = this.goodsItem(good);
+                    if (!item || !party) continue;
+                    const kind = this.itemKind(item);
+                    const price = good[2] === 0 ? item.price || 0 : Number(good[3]) || 0;
+                    const count = party.numItems(item);
+                    add({ key: kind + ":" + item.id, kind, id: item.id, value: item.id, name: item.name,
+                        description: item.description || "", iconIndex: item.iconIndex || 0, count, price, data: item,
+                        enabled: price <= party.gold() && count < party.maxItems(item),
+                        defaultText: "\\I[" + (item.iconIndex || 0) + "]{name}  {price}" });
+                }
+                break;
+            }
+            case "itemCategories": {
+                const flags = typeof $dataSystem !== "undefined" && $dataSystem && Array.isArray($dataSystem.itemCategories)
+                    ? $dataSystem.itemCategories : [true, true, true, true];
+                const terms = typeof TextManager !== "undefined" ? TextManager : {};
+                const categories = [["item", terms.item || "Items"], ["weapon", terms.weapon || "Weapons"],
+                    ["armor", terms.armor || "Armors"], ["keyItem", terms.keyItem || "Key Items"]];
+                categories.forEach(([id, name], index) => {
+                    if (flags[index] !== false) add({ key: "category:" + id, kind: "category", id, value: id, name, defaultText: "{name}" });
+                });
+                break;
+            }
+            case "skillTypes": {
+                const actor = this.resolveActor(node, scene);
+                const types = actor && actor.skillTypes ? actor.skillTypes() : [];
+                const names = typeof $dataSystem !== "undefined" && $dataSystem && $dataSystem.skillTypes ? $dataSystem.skillTypes : [];
+                for (const id of types) add({ key: "skillType:" + id, kind: "skillType", id, value: id, name: names[id] || "",
+                    actorId: actor.actorId ? actor.actorId() : 0, defaultText: "{name}" });
+                break;
+            }
+            case "equipCandidates": {
+                const actor = this.resolveActor(node, scene);
+                const party = typeof $gameParty !== "undefined" && $gameParty;
+                if (!actor || !party || !actor.equipSlots) break;
+                const slotRow = this.filterRow(node, scene);
+                const slot = slotRow && slotRow.kind === "equipment" ? Number(slotRow.slot) || 0 : 0;
+                const etypeId = actor.equipSlots()[slot];
+                const changeOk = actor.isEquipChangeOk ? actor.isEquipChangeOk(slot) : true;
+                const actorId = actor.actorId ? actor.actorId() : 0;
+                for (const item of party.allItems()) {
+                    if (!item || item.etypeId !== etypeId || !actor.canEquip(item)) continue;
+                    const kind = this.itemKind(item);
+                    add({ key: kind + ":" + item.id, kind, id: item.id, value: item.id, actorId, name: item.name,
+                        description: item.description || "", iconIndex: item.iconIndex || 0, count: party.numItems(item),
+                        price: item.price || 0, slot, data: item, enabled: changeOk,
+                        defaultText: "\\I[" + (item.iconIndex || 0) + "]{name}  x{count}" });
+                }
+                // The empty row takes the slot's equipment off.
+                add({ key: "equip:none", kind: "none", id: 0, value: 0, actorId, slot, data: null, enabled: changeOk, defaultText: "" });
                 break;
             }
             case "skills": {
                 const actor = this.resolveActor(node, scene);
                 const skills = actor && actor.skills ? actor.skills() : [];
+                const typeRow = this.filterRow(node, scene);
+                const skillTypeId = typeRow && typeRow.kind === "skillType" ? Number(typeRow.id) || 0 : node.skillTypeId;
+                if (node.filterContext && !typeRow) break;
                 for (const skill of skills) {
-                    if (node.skillTypeId > 0 && skill.stypeId !== node.skillTypeId) continue;
+                    if (skillTypeId > 0 && skill.stypeId !== skillTypeId) continue;
                     add({ key: "skill:" + skill.id, kind: "skill", id: skill.id, value: skill.id, actorId: actor.actorId ? actor.actorId() : 0,
                         name: skill.name, description: skill.description || "", iconIndex: skill.iconIndex || 0, price: skill.mpCost || 0,
+                        cost: this.skillCostText(actor, skill),
                         enabled: !actor.canUse || actor.canUse(skill), data: skill, defaultText: "\\I[" + (skill.iconIndex || 0) + "]{name}" });
                 }
                 break;
@@ -1798,11 +1951,19 @@
             case "actorParameters": {
                 const actor = this.resolveActor(node, scene);
                 if (!actor) break;
+                const preview = this.equipPreviewActor(node, scene, actor);
                 for (let id = 0; id < this.ACTOR_PARAMS.length; id++) {
                     const name = typeof TextManager !== "undefined" && TextManager.param ? TextManager.param(id) : this.ACTOR_PARAMS[id].toUpperCase();
                     const value = actor.param ? actor.param(id) : actor[this.ACTOR_PARAMS[id]];
+                    let newValue = "", change = "";
+                    if (preview) {
+                        const next = preview.param(id);
+                        change = next - value;
+                        newValue = "\\C[" + (change > 0 ? 24 : change < 0 ? 25 : 0) + "]" + next + "\\C[0]";
+                    }
                     add({ key: "parameter:" + id, kind: "parameter", id, value, actorId: actor.actorId ? actor.actorId() : 0,
-                        name, paramName: name, paramValue: value, data: actor, defaultText: "{paramName}: {paramValue}" });
+                        name, paramName: name, paramValue: value, newValue, change, data: actor,
+                        defaultText: preview ? "{paramName}: {paramValue} \u2192 {newValue}" : "{paramName}: {paramValue}" });
                 }
                 break;
             }
@@ -1815,8 +1976,9 @@
                     const slotName = typeof $dataSystem !== "undefined" && $dataSystem && $dataSystem.equipTypes ? $dataSystem.equipTypes[slots[slot]] || "" : "";
                     add({ key: "equipment:" + slot, kind: "equipment", id: item ? item.id : 0, value: item ? item.id : 0,
                         actorId: actor.actorId ? actor.actorId() : 0, name: item ? item.name : slotName, description: item && item.description || "",
-                        iconIndex: item && item.iconIndex || 0, price: item && item.price || 0, count: item ? 1 : 0,
-                        enabled: !!item, data: item, paramName: slotName, defaultText: item ? "\\I[" + (item.iconIndex || 0) + "]{name}" : "{paramName}: -" });
+                        iconIndex: item && item.iconIndex || 0, price: item && item.price || 0, count: item ? 1 : 0, slot,
+                        enabled: actor.isEquipChangeOk ? actor.isEquipChangeOk(slot) : true, data: item, paramName: slotName,
+                        valueText: item ? "\\I[" + (item.iconIndex || 0) + "]" + item.name : "", defaultText: item ? "\\I[" + (item.iconIndex || 0) + "]{name}" : "{paramName}: -" });
                 }
                 break;
             }
@@ -1992,9 +2154,137 @@
             case "text": this.drawLabel(); break;
             case "button": this.drawSurface(); this.drawLabel(); this.drawFocus(); break;
             case "gauge": this.drawGauge(); break;
+            case "input": this.drawSurface(); this.drawInput(); this.drawFocus(); break;
         }
         this.syncVisualState();
         this._uiLastText = this.currentText();
+    };
+
+    //-------------------------------------------------------------------------
+    // Text input: a field that edits a variable or an actor's name. Typing
+    // goes through a hidden HTML input (keyboard layouts, IME, paste); the
+    // stock character grid is offered too, for gamepad and touch.
+
+    /** The text the field holds now: its draft while editing, else the stored value. */
+    Window_ReactorUINode.prototype.inputValue = function() {
+        if (this._uiDraft != null) return this._uiDraft;
+        return ReactorUI.readInput(this._uiNode, this._uiScene);
+    };
+
+    ReactorUI.readInput = function(node, scene) {
+        if (node.inputTarget === "variable") {
+            const value = typeof $gameVariables !== "undefined" && $gameVariables ? $gameVariables.value(node.variableId) : "";
+            return value === 0 ? "" : String(value == null ? "" : value);
+        }
+        const actor = this.resolveActor(node, scene);
+        if (!actor) return "";
+        return String(node.inputTarget === "actorNickname" ? actor.nickname() : actor.name());
+    };
+
+    ReactorUI.writeInput = function(node, scene, value) {
+        const text = String(value == null ? "" : value).slice(0, node.maxLength);
+        if (node.inputTarget === "variable") {
+            $gameVariables.setValue(node.variableId, text);
+            return true;
+        }
+        const actor = this.resolveActor(node, scene);
+        if (!actor) return false;
+        if (node.inputTarget === "actorNickname") actor.setNickname(text); else actor.setName(text);
+        return true;
+    };
+
+    Window_ReactorUINode.prototype.drawInput = function() {
+        const node = this._uiNode;
+        const editing = this._uiDraft != null;
+        const value = this.inputValue();
+        const shown = node.mask ? "\u2022".repeat(value.length) : value;
+        this.resetFontSettings();
+        const h = this.contentsHeight();
+        const y = Math.max(0, Math.floor((h - this.lineHeight()) / 2));
+        if (!shown && !editing && node.text) {
+            this.changePaintOpacity(false);
+            this.drawText(this.convertEscapeCharacters(node.text).replace(/\x1b\w+\[\d*\]/g, ""), 4, y, this.contentsWidth() - 8, node.align);
+            this.changePaintOpacity(true);
+            return;
+        }
+        // Plain text: what a player types is never read as escape codes.
+        const caret = editing && this._uiCaretOn ? "|" : editing ? " " : "";
+        this.drawText(shown + caret, 4, y, this.contentsWidth() - 8, node.align);
+    };
+
+    Window_ReactorUINode.prototype.isEditing = function() {
+        return this._uiDraft != null;
+    };
+
+    Window_ReactorUINode.prototype.beginEdit = function() {
+        if (this.isEditing()) return;
+        this._uiDraft = ReactorUI.readInput(this._uiNode, this._uiScene).slice(0, this._uiNode.maxLength);
+        this._uiInitial = this._uiDraft;
+        this._uiCaretOn = true;
+        this._uiCaretTimer = 0;
+        this.openDomInput();
+        this.refresh();
+    };
+
+    Window_ReactorUINode.prototype.setDraft = function(text) {
+        this._uiDraft = String(text || "").slice(0, this._uiNode.maxLength);
+        if (this._uiDom && this._uiDom.value !== this._uiDraft) this._uiDom.value = this._uiDraft;
+        this._uiCaretOn = true;
+        this._uiCaretTimer = 0;
+        this.refresh();
+    };
+
+    /** Ends the edit; commit writes the draft and returns true when it was taken. */
+    Window_ReactorUINode.prototype.endEdit = function(commit) {
+        if (!this.isEditing()) return false;
+        const draft = this._uiDraft;
+        this._uiDraft = null;
+        this.closeDomInput();
+        if (typeof Input !== "undefined" && Input.clear) Input.clear();
+        const written = commit ? ReactorUI.writeInput(this._uiNode, this._uiScene, draft) : false;
+        this.refresh();
+        return written;
+    };
+
+    Window_ReactorUINode.prototype.openDomInput = function() {
+        if (typeof document === "undefined" || !document.body) return;
+        const dom = document.createElement("input");
+        dom.type = "text";
+        dom.maxLength = this._uiNode.maxLength;
+        dom.value = this._uiDraft;
+        dom.setAttribute("autocomplete", "off");
+        dom.setAttribute("aria-label", this._uiNode.name || "Text input");
+        dom.style.cssText = "position:fixed;left:-10000px;top:0;width:200px;opacity:0;";
+        // The game's Input listens on the document and cancels Backspace,
+        // arrows and Tab; keys typed here stop at the field.
+        // With the character grid up, the keys that drive it (arrows, OK,
+        // cancel, page) go on to the game's Input as on the stock screen.
+        const gridKeys = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Enter", "Escape", "PageUp", "PageDown", "Shift"];
+        const keydown = event => {
+            if (this._uiScene._characterGrid && gridKeys.includes(event.key)) { event.preventDefault(); return; }
+            event.stopPropagation();
+            if (event.key === "Enter" && !event.isComposing) { event.preventDefault(); this._uiScene.commitInput(this); }
+            else if (event.key === "Escape") { event.preventDefault(); this._uiScene.cancelInput(this); }
+        };
+        dom.addEventListener("keydown", keydown);
+        dom.addEventListener("keyup", event => { if (!(this._uiScene._characterGrid && gridKeys.includes(event.key))) event.stopPropagation(); });
+        dom.addEventListener("input", () => this.setDraft(dom.value));
+        // Clicking the game canvas takes focus away; typing should still land here.
+        dom.addEventListener("blur", () => setTimeout(() => { if (this._uiDom === dom) dom.focus(); }, 0));
+        document.body.appendChild(dom);
+        this._uiDom = dom;
+        dom.focus();
+    };
+
+    Window_ReactorUINode.prototype.closeDomInput = function() {
+        const dom = this._uiDom;
+        this._uiDom = null;
+        if (dom && dom.parentNode) dom.parentNode.removeChild(dom);
+    };
+
+    Window_ReactorUINode.prototype.destroy = function(options) {
+        this.closeDomInput();
+        Window_Base.prototype.destroy.call(this, options);
     };
 
     /** A gauge node hosts the engine's own gauge sprite, sized to the node. */
@@ -2292,6 +2582,11 @@
 
     Window_ReactorUINode.prototype.update = function() {
         Window_Base.prototype.update.call(this);
+        if (this.isEditing && this.isEditing() && ++this._uiCaretTimer >= 30) {
+            this._uiCaretTimer = 0;
+            this._uiCaretOn = !this._uiCaretOn;
+            this.refresh();
+        }
         if (this._uiNode.type === "text" || this._uiNode.type === "button") {
             if (this.currentText() !== this._uiLastText) {
                 if (this._uiNode.type === "text" && (this._uiNode.width === 0 || this._uiNode.height === 0)
@@ -2348,6 +2643,11 @@
         this.frameVisible = this.usesSkin();
         this.setHandler("ok", () => this._uiScene.activateWindow(this));
         this.setHandler("cancel", () => this._uiScene.cancelInterface(true));
+        // In a screen that pages actors, Q/W change the actor instead of scrolling a page.
+        if (scene && scene.pagesActors && scene.pagesActors()) {
+            this.setHandler("pagedown", () => { this._uiScene.nextActor(); this.activate(); });
+            this.setHandler("pageup", () => { this._uiScene.previousActor(); this.activate(); });
+        }
         if (this.maxItems() > 0) {
             const initial = this.initialIndex();
             this.select(initial);
@@ -2362,7 +2662,8 @@
     Window_ReactorUIList.prototype.usesSkin = function() { return this._uiNode.fill === "window"; };
     Window_ReactorUIList.prototype.updatePadding = function() { this.padding = this.usesSkin() ? $gameSystem.windowPadding() : 0; };
     Window_ReactorUIList.prototype.updateBackOpacity = function() { this.backOpacity = this.usesSkin() ? $gameSystem.windowOpacity() : 0; };
-    Window_ReactorUIList.prototype.isFocusable = function() { return true; };
+    Window_ReactorUIList.prototype.isFocusable = function() { return this._uiNode.focusable !== false; };
+    Window_ReactorUIList.prototype.maxCols = function() { return this._uiNode.columns || 1; };
     Window_ReactorUIList.prototype.isEnabled = function() { return this._uiEnabled; };
     Window_ReactorUIList.prototype.setEnabled = function(enabled) {
         if (this._uiEnabled === enabled) return;
@@ -2423,7 +2724,12 @@
         if (this._uiScene && this._uiScene.setContext) this._uiScene.setContext(this._uiNode.contextName, this.selectedRow());
     };
     Window_ReactorUIList.prototype.select = function(index) {
+        const previous = this.index();
         Window_Selectable.prototype.select.call(this, index);
+        // A text row's highlight is painted with the row, not drawn as a
+        // cursor, so moving the selection repaints (the surface under the
+        // rows may be a fill, so the whole list rather than two rows).
+        if (previous !== index && this._uiFocused && this._uiNode.rowLayout !== "actorPanel" && this.contents) this.paint();
         this.publishSelection();
     };
     Window_ReactorUIList.prototype.isCurrentItemEnabled = function() {
@@ -2435,7 +2741,8 @@
     Window_ReactorUIList.prototype.itemPadding = function() { return 8; };
     Window_ReactorUIList.prototype.playOkSound = function() {
         const type = this._uiNode.action && this._uiNode.action.type;
-        if (!this._uiNode.se && !["optionChange", "saveSlot", "loadSlot"].includes(type)) SoundManager.playOk();
+        // Workflows play their own sound once they know whether the row can be used.
+        if (!this._uiNode.se && !["optionChange", "saveSlot", "loadSlot", "use", "equip", "shopBuy", "shopSell"].includes(type)) SoundManager.playOk();
     };
     Window_ReactorUIList.prototype.changeOption = function(forward, wrap) {
         const row = this.selectedRow();
@@ -2577,6 +2884,11 @@
         this.syncVisualState();
     };
     Window_ReactorUIList.prototype.refreshCursor = function() {
+        if (this._uiCursorAll && this._uiFocused && this.maxItems() > 0) {
+            const last = this.itemRect(this.maxItems() - 1);
+            this.setCursorRect(0, 0, this.innerWidth, Math.min(this.innerHeight, last.y + last.height));
+            return;
+        }
         if (this._uiNode.rowLayout === "actorPanel" && this._uiFocused && !this._uiNode.focusedFillColor && this.index() >= 0) {
             const rect = this.itemRect(this.index());
             this.setCursorRect(rect.x, rect.y, rect.width, rect.height);
@@ -2671,8 +2983,57 @@
     };
 
     Scene_ReactorUI.prototype.prepare = function(interfaceId, role) {
+        // Shop Processing prepares the shop scene after the router has
+        // prepared this one: its goods arrive as a second prepare.
+        if (this._role === "shop" && Array.isArray(interfaceId)) {
+            this._shopGoods = interfaceId;
+            this._purchaseOnly = !!role;
+            return;
+        }
+        // Name Input prepares (actorId, maxLength) the same way.
+        if (this._role === "name" && this._interfaceId > 0) {
+            this._nameActorId = Number(interfaceId) || 0;
+            this._nameMaxLength = Number(role) || 0;
+            return;
+        }
         this._interfaceId = Number(interfaceId) || 0;
         this._role = role || "";
+    };
+
+    /** Shop Processing's goods, [type, id, priceType, price] each; empty outside a shop. */
+    Scene_ReactorUI.prototype.shopGoods = function() {
+        return Array.isArray(this._shopGoods) ? this._shopGoods : [];
+    };
+
+    Scene_ReactorUI.prototype.isPurchaseOnly = function() {
+        return !!this._purchaseOnly;
+    };
+
+    /** The actor a Name Input screen was opened for, else the menu actor. */
+    Scene_ReactorUI.prototype.sceneActor = function() {
+        if (this._nameActorId > 0) return $gameActors.actor(this._nameActorId);
+        return typeof $gameParty !== "undefined" && $gameParty && $gameParty.menuActor ? $gameParty.menuActor() : null;
+    };
+
+    /** The longest name Name Input allows here, 0 when none was given. */
+    Scene_ReactorUI.prototype.nameMaxLength = function() {
+        return this._nameMaxLength || 0;
+    };
+
+    /** True while a Use action waits for its target in the party panel. */
+    Scene_ReactorUI.prototype.isSelectingTarget = function() {
+        return !!(this._targetPending || (this._actorSelection && this._actorSelection.action.type === "use"));
+    };
+
+    /** The focused control's node id, for conditions such as help text that follows focus. */
+    Scene_ReactorUI.prototype.focusedNodeId = function() {
+        const focused = this.focusedWindow();
+        return focused ? focused.node().id : 0;
+    };
+
+    /** Roles whose Q/W (page up/down) change the menu actor, as the stock scenes do. */
+    Scene_ReactorUI.prototype.pagesActors = function() {
+        return ["status", "skill", "equip"].includes(this._role);
     };
 
     Scene_ReactorUI.prototype.interfaceId = function() {
@@ -2685,8 +3046,24 @@
 
     Scene_ReactorUI.prototype.setContext = function(name, value) {
         const key = String(name || "selection");
+        const previous = this._contexts.get(key) || null;
         if (value == null) this._contexts.delete(key);
         else this._contexts.set(key, value);
+        // Lists that follow this selection redraw on their next update rather
+        // than at their quarter-second poll.
+        if ((previous && previous.key) !== (value && value.key)) this.refreshDependents(key);
+    };
+
+    Scene_ReactorUI.prototype.refreshDependents = function(name) {
+        for (const window of this._nodeWindows || []) {
+            const node = window.node();
+            if (node.type === "list" && (node.filterContext === name || node.compareContext === name)) window._uiRefreshWait = 15;
+        }
+    };
+
+    /** Every list re-reads its rows on its next update: after an item is used, equipped, bought or sold. */
+    Scene_ReactorUI.prototype.refreshAllLists = function() {
+        for (const window of this._nodeWindows) if (window.node().type === "list") window._uiRefreshWait = 15;
     };
 
     Scene_ReactorUI.prototype.resumeState = function() {
@@ -2699,7 +3076,8 @@
         }
         return {
             interfaceId: this._interfaceId, role: this._role, focusedNodeId: focused ? focused.node().id : 0,
-            contexts: Array.from(this._contexts.entries()), lists
+            contexts: Array.from(this._contexts.entries()), lists,
+            shopGoods: this._shopGoods || null, purchaseOnly: !!this._purchaseOnly
         };
     };
 
@@ -2726,6 +3104,8 @@
             this._interfaceId = this._resumeState.interfaceId;
             this._role = this._resumeState.role || "";
             this._contexts = new Map(this._resumeState.contexts || []);
+            this._shopGoods = this._resumeState.shopGoods || null;
+            this._purchaseOnly = !!this._resumeState.purchaseOnly;
         }
         this._interface = ReactorUI.interface(this._interfaceId);
         if (this._interface && this._interface.openTransition !== "none") this._transitionPhase = "opening";
@@ -2887,6 +3267,7 @@
     };
 
     Scene_ReactorUI.prototype.terminate = function() {
+        if (this._editingWindow) this._editingWindow.endEdit(false);
         Scene_MenuBase.prototype.terminate.call(this);
         if ((this._role === "options" || this._optionsChanged) && typeof ConfigManager !== "undefined" && ConfigManager.save) ConfigManager.save();
         if (this._loadSuccess && typeof $gameSystem !== "undefined" && $gameSystem && $gameSystem.onAfterLoad) $gameSystem.onAfterLoad();
@@ -2898,7 +3279,7 @@
     };
 
     Scene_ReactorUI.prototype.needsPageButtons = function() {
-        return this._role === "status";
+        return this.pagesActors();
     };
 
     Scene_ReactorUI.prototype.onActorChange = function() {
@@ -2922,7 +3303,8 @@
     };
 
     Scene_ReactorUI.prototype.acceptsInput = function() {
-        return !this._closing && !this._inputHandled && !this._filePending && this._transitionPhase === "idle" && this.isActive();
+        return !this._closing && !this._inputHandled && !this._filePending && !this._quantityWindow && !this._editingWindow
+            && this._transitionPhase === "idle" && this.isActive();
     };
 
     Scene_ReactorUI.prototype.focusInitial = function() {
@@ -3018,6 +3400,15 @@
         if (!this._interface) return;
         this.updateInterfaceTransition();
         if (!this.acceptsInput()) return;
+        // A field marked to start typing does so once the interface is up (Name Input, a terminal prompt).
+        if (!this._autoEditDone) {
+            this._autoEditDone = true;
+            const focused = this.focusedWindow();
+            if (focused && focused.node().type === "input" && focused.node().autoEdit && focused.isEnabled()) {
+                this.beginInput(focused, true);
+                return;
+            }
+        }
         this.updateConditions();
         this.updateTouch();
         if (!this.acceptsInput()) return;
@@ -3054,6 +3445,12 @@
         this._inputHandled = true;
         if (!alreadyPlayed) SoundManager.playCancel();
         if (this._actorSelection) { this.endActorSelection(false); return; }
+        const focused = this.focusedWindow();
+        const back = focused && focused.node().backFocus;
+        if (back > 0) {
+            const index = this._nodeWindows.findIndex(window => window !== focused && window.node().id === back && this.canFocus(window));
+            if (index >= 0) { this.setFocus(index); return; }
+        }
         const cancel = this._interface.cancel;
         const stuck = cancel.type === "none" && !this._nodeWindows.some(window => this.canFocus(window) && window.isEnabled());
         this.runAction(stuck ? { type: "close" } : cancel);
@@ -3062,9 +3459,10 @@
     Scene_ReactorUI.prototype.updateInput = function() {
         const focused = this.focusedWindow();
         const listOwnsInput = focused && focused.node().type === "list";
-        if (this._role === "status" && Input.isTriggered("pageup")) {
+        // A focused list pages actors through its own handlers.
+        if (this.pagesActors() && !listOwnsInput && Input.isTriggered("pageup")) {
             this.previousActor();
-        } else if (this._role === "status" && Input.isTriggered("pagedown")) {
+        } else if (this.pagesActors() && !listOwnsInput && Input.isTriggered("pagedown")) {
             this.nextActor();
         } else if (Input.isTriggered("ok") && !listOwnsInput) {
             this.activateFocused();
@@ -3074,7 +3472,7 @@
             for (const direction of ["down", "up", "left", "right"]) {
                 if (Input.isRepeated(direction)) {
                     if (focused && focused.node().type === "list" && ((direction === "down" || direction === "up")
-                        || focused.node().dataSource === "options")) break;
+                        || focused.node().dataSource === "options" || focused.node().columns > 1)) break;
                     this.moveFocus(direction);
                     break;
                 }
@@ -3154,6 +3552,7 @@
             this.endActorSelection(true);
             return;
         }
+        if (node.type === "input") { this.beginInput(window); return; }
         if (node.action.type === "formation") {
             if(node.se) AudioManager.playSe(node.se); else SoundManager.playOk();
             this.beginActorSelection(node.action); return;
@@ -3178,6 +3577,9 @@
                 this.executeFileAction(node.action.type, row, window);
                 return;
             }
+            if (node.action.type === "use") { this.beginUse(node.action, row, window); return; }
+            if (node.action.type === "equip") { this.executeEquip(node.action, row, window); return; }
+            if (node.action.type === "shopBuy" || node.action.type === "shopSell") { this.beginQuantity(node.action, row, window); return; }
         }
         if (node.se) AudioManager.playSe(node.se);
         else if (node.type !== "list") SoundManager.playOk();
@@ -3249,19 +3651,31 @@
         }
     };
 
-    Scene_ReactorUI.prototype.beginActorSelection = function(action) {
+    Scene_ReactorUI.prototype.beginActorSelection = function(action, use) {
         if (this._actorSelection) return;
         if(action.type==='formation' && ($gameParty.size()<2 || !$gameSystem.isFormationEnabled())) {SoundManager.playBuzzer();return;}
         const name = action.contextName || "selection";
+        // A panel shown only while choosing a target (visible: scene.isSelectingTarget())
+        // has to be visible before it can be found.
+        if (use) { this._targetPending = true; this.updateConditions(); this._targetPending = false; }
         const candidates = this._nodeWindows.filter(win => win.node().type === "list" && win.node().dataSource === "party"
             && win.visible && win.isEnabled() && win.maxItems() > 0);
         const picker = candidates.find(win => win.node().rowLayout === "actorPanel" && win.node().contextName === name)
             || candidates.find(win => win.node().rowLayout === "actorPanel")
             || candidates.find(win => win.node().contextName === name);
-        if (!picker) { SoundManager.playBuzzer(); return; }
+        if (!picker) { SoundManager.playBuzzer(); if (use) this.updateConditions(); return; }
         const source = this.focusedWindow(), previous = picker.selectedRow();
-        this._actorSelection = { action, window: picker, source, previous, pending: null };
+        this._actorSelection = { action, window: picker, source, previous, pending: null, use: use || null };
         this.setFocus(this._nodeWindows.indexOf(picker));
+        if (use) {
+            if (use.forUser) {
+                const index = picker._uiRows.findIndex(row => row.data === use.user);
+                if (index >= 0) picker.select(index);
+            }
+            picker.setCursorFixed(!!use.forUser);
+            picker._uiCursorAll = !!use.all;
+            picker.refreshCursor();
+        }
     };
 
     Scene_ReactorUI.prototype.endActorSelection = function(confirm) {
@@ -3271,6 +3685,11 @@
         if (confirm && (!actor || !$gameParty.members().includes(actor))) {
             SoundManager.playBuzzer();
             return;
+        }
+        if (selection.use) {
+            if (confirm) { this.executeUse(selection.use, actor); return; }
+            selection.window.setCursorFixed(false);
+            selection.window._uiCursorAll = false;
         }
         if(selection.action.type==='formation') {
             if(confirm) {
@@ -3288,6 +3707,11 @@
         this._actorSelection = null;
         selection.window.refresh?.();
         this.setFocus(this._nodeWindows.indexOf(selection.source));
+        if (selection.use) {
+            this.setContext(selection.action.contextName, selection.previous);
+            this.updateConditions();
+            return;
+        }
         if (!confirm) {
             this.setContext(selection.action.contextName, selection.previous);
             const index = selection.window._uiRows.findIndex(row => selection.previous && row.key === selection.previous.key);
@@ -3319,6 +3743,23 @@
             case "close":
                 this.close();
                 break;
+            case "focusNode": {
+                const index = this._nodeWindows.findIndex(window => window.node().id === action.id && this.canFocus(window));
+                if (index < 0) { SoundManager.playBuzzer(); break; }
+                const target = this._nodeWindows[index];
+                this.setFocus(index);
+                if (target.node().type === "list" && target.maxItems() > 0) target.select(0);
+                break;
+            }
+            case "equipOptimize":
+            case "equipClear": {
+                const actor = ReactorUI.actorFromContext(this, action.contextName) || $gameParty.menuActor();
+                if (!actor) { SoundManager.playBuzzer(); break; }
+                if (action.type === "equipOptimize") actor.optimizeEquipments(); else actor.clearEquipments();
+                SoundManager.playEquip();
+                this.refreshAllLists();
+                break;
+            }
             case "closeAll":
                 this.closeAll();
                 break;
@@ -3442,6 +3883,205 @@
         }
         const focused = this.focusedWindow();
         if (!this._closing && focused && focused.node().type === "list") focused.activate();
+    };
+
+    //-------------------------------------------------------------------------
+    // Workflows the stock Item, Skill, Equip and Shop scenes run
+
+    /** Who uses a row: the skill list's actor, or for an item the stock Scene_Item's pick (best PHA). */
+    Scene_ReactorUI.prototype.useUser = function(row) {
+        if (row.kind === "skill") return row.actorId > 0 ? $gameActors.actor(row.actorId) : $gameParty.menuActor();
+        const members = $gameParty.movableMembers();
+        if (!members.length) return null;
+        const best = Math.max(...members.map(member => member.pha));
+        return members.find(member => member.pha === best) || null;
+    };
+
+    ReactorUI.canUseOn = function(user, item, targets) {
+        if (!user || !item || !user.canUse(item)) return false;
+        const action = new Game_Action(user);
+        action.setItemObject(item);
+        return !action.isForFriend() || targets.some(target => action.testApply(target));
+    };
+
+    /**
+     * Use on a list row: an item or skill for friends picks its target in
+     * the party panel (one actor, everyone, or the user alone, by scope);
+     * anything else is used at once, as Scene_ItemBase does.
+     */
+    Scene_ReactorUI.prototype.beginUse = function(action, row, window) {
+        const item = row.data;
+        const user = this.useUser(row);
+        if (!item || !user || !user.canUse(item)) { SoundManager.playBuzzer(); window.activate(); return; }
+        SoundManager.playOk();
+        const probe = new Game_Action(user);
+        probe.setItemObject(item);
+        if (!probe.isForFriend()) {
+            this.executeUse({ item, user, all: false, forUser: false }, null, window);
+            return;
+        }
+        this.beginActorSelection(action, { item, user, all: probe.isForAll(), forUser: probe.isForUser(), row, window });
+    };
+
+    Scene_ReactorUI.prototype.executeUse = function(use, actor, window) {
+        const item = use.item;
+        const user = use.user;
+        const action = new Game_Action(user);
+        action.setItemObject(item);
+        const targets = !action.isForFriend() ? [] : use.all ? $gameParty.members() : use.forUser ? [user] : actor ? [actor] : [];
+        if (!ReactorUI.canUseOn(user, item, targets)) {
+            SoundManager.playBuzzer();
+            if (window) window.activate();
+            return;
+        }
+        if (DataManager.isSkill(item)) SoundManager.playUseSkill(); else SoundManager.playUseItem();
+        user.useItem(item);
+        for (const target of targets) {
+            for (let i = 0; i < action.numRepeats(); i++) action.apply(target);
+        }
+        action.applyGlobal();
+        this.refreshAllLists();
+        if ($gameTemp.isCommonEventReserved()) {
+            ReactorUI._resumeStates.length = 0;
+            this._closing = true;
+            SceneManager.goto(Scene_Map);
+            return;
+        }
+        if (window) window.activate();
+    };
+
+    /** Equip the chosen candidate into its slot, then hand focus back (action id, else the Back node). */
+    Scene_ReactorUI.prototype.executeEquip = function(action, row, window) {
+        const actor = ReactorUI.resolveActor(window.node(), this) || $gameParty.menuActor();
+        const slot = Number(row.slot) || 0;
+        if (!actor || !actor.isEquipChangeOk(slot) || (row.data && !actor.canEquip(row.data))) {
+            SoundManager.playBuzzer();
+            window.activate();
+            return;
+        }
+        SoundManager.playEquip();
+        actor.changeEquip(slot, row.data || null);
+        this.refreshAllLists();
+        const back = action.id || window.node().backFocus;
+        const index = this._nodeWindows.findIndex(other => other !== window && other.node().id === back && this.canFocus(other));
+        if (index >= 0) this.setFocus(index);
+        else window.activate();
+    };
+
+    /** A text input starts editing: typing always, the stock character grid when the node asks for it. */
+    Scene_ReactorUI.prototype.beginInput = function(window, quiet) {
+        if (this._editingWindow) return;
+        if (!quiet) SoundManager.playOk();
+        const node = window.node();
+        if (this._role === "name" && this.nameMaxLength() > 0) node.maxLength = Math.min(node.maxLength, this.nameMaxLength());
+        this._editingWindow = window;
+        window.beginEdit();
+        if (node.onScreenKeys && typeof Window_NameInput === "function") this.openCharacterGrid(window);
+    };
+
+    Scene_ReactorUI.prototype.commitInput = function(window, soundPlayed) {
+        if (window !== this._editingWindow) return;
+        const node = window.node();
+        this.closeCharacterGrid();
+        this._editingWindow = null;
+        const written = window.endEdit(true);
+        this._inputHandled = true;
+        if (!written) { SoundManager.playBuzzer(); return; }
+        if (!soundPlayed) SoundManager.playOk();
+        this.runAction(node.action);
+    };
+
+    Scene_ReactorUI.prototype.cancelInput = function(window) {
+        if (window !== this._editingWindow) return;
+        this.closeCharacterGrid();
+        this._editingWindow = null;
+        window.endEdit(false);
+        this._inputHandled = true;
+        SoundManager.playCancel();
+    };
+
+    /**
+     * The stock name-entry grid under the field, bound to the field's draft
+     * through a small stand-in for Window_NameEdit: its OK commits and its
+     * cancel deletes a character, as on the stock screen.
+     */
+    Scene_ReactorUI.prototype.openCharacterGrid = function(field) {
+        const node = field.node();
+        const edit = {
+            name: () => field.inputValue(), index: () => field.inputValue().length, maxLength: () => node.maxLength,
+            add: ch => { const text = field.inputValue(); if (text.length >= node.maxLength) return false; field.setDraft(text + ch); return true; },
+            back: () => { const text = field.inputValue(); if (!text.length) return false; field.setDraft(text.slice(0, -1)); return true; },
+            restoreDefault: () => { if (!field._uiInitial) return false; field.setDraft(field._uiInitial); return true; },
+            refresh() {}
+        };
+        const height = this.calcWindowHeight(9, true);
+        const width = Math.min(Graphics.boxWidth, 624);
+        const y = Math.min(field.y + field.height + 8, Graphics.boxHeight - height);
+        const grid = new Window_NameInput(new Rectangle(Math.floor((Graphics.boxWidth - width) / 2), Math.max(0, y), width, height));
+        grid.setEditWindow(edit);
+        grid.setHandler("ok", () => this.commitInput(field, true));
+        grid.activate();
+        this._characterGrid = grid;
+        this.addWindow(grid);
+    };
+
+    Scene_ReactorUI.prototype.closeCharacterGrid = function() {
+        const grid = this._characterGrid;
+        this._characterGrid = null;
+        if (!grid) return;
+        grid.deactivate();
+        if (grid.parent) grid.parent.removeChild(grid);
+        if (grid.destroy) grid.destroy();
+    };
+
+    /** Buy or sell: the stock number window over the list asks how many. */
+    Scene_ReactorUI.prototype.beginQuantity = function(action, row, window) {
+        const item = row.data;
+        const buying = action.type === "shopBuy";
+        const price = Number(row.price) || 0;
+        let max;
+        if (buying) {
+            const room = $gameParty.maxItems(item) - $gameParty.numItems(item);
+            max = price > 0 ? Math.min(room, Math.floor($gameParty.gold() / price)) : room;
+        } else {
+            max = $gameParty.numItems(item);
+        }
+        if (!item || max < 1 || (!buying && !(item.price > 0))) { SoundManager.playBuzzer(); window.activate(); return; }
+        SoundManager.playOk();
+        const rect = new Rectangle(window.x, window.y, Math.max(window.width, 360), Math.max(window.height, this.calcWindowHeight(4, true)));
+        const quantity = new Window_ShopNumber(rect);
+        quantity.setup(item, max, price);
+        quantity.setCurrencyUnit(TextManager.currencyUnit);
+        quantity.setHandler("ok", () => {
+            const number = quantity.number();
+            if (buying) {
+                $gameParty.loseGold(number * price);
+                $gameParty.gainItem(item, number);
+            } else {
+                $gameParty.gainGold(number * price);
+                $gameParty.loseItem(item, number);
+            }
+            SoundManager.playShop();
+            this.endQuantity(window);
+        });
+        quantity.setHandler("cancel", () => this.endQuantity(window));
+        quantity.show();
+        quantity.activate();
+        this._quantityWindow = quantity;
+        this.addWindow(quantity);
+    };
+
+    Scene_ReactorUI.prototype.endQuantity = function(window) {
+        const quantity = this._quantityWindow;
+        this._quantityWindow = null;
+        if (quantity) {
+            quantity.deactivate();
+            if (quantity.parent) quantity.parent.removeChild(quantity);
+            if (quantity.destroy) quantity.destroy();
+        }
+        this._inputHandled = true;
+        this.refreshAllLists();
+        if (window) window.activate();
     };
 
     ReactorUI.changeOption = function(symbol, forward, wrap) {
@@ -3595,7 +4235,12 @@
         gameEnd: { field: "reactorGameEndInterfaceId", scene: "Scene_GameEnd" },
         options: { field: "reactorOptionsInterfaceId", scene: "Scene_Options" },
         save: { field: "reactorSaveInterfaceId", scene: "Scene_Save" },
-        load: { field: "reactorLoadInterfaceId", scene: "Scene_Load" }
+        load: { field: "reactorLoadInterfaceId", scene: "Scene_Load" },
+        item: { field: "reactorItemInterfaceId", scene: "Scene_Item" },
+        skill: { field: "reactorSkillInterfaceId", scene: "Scene_Skill" },
+        equip: { field: "reactorEquipInterfaceId", scene: "Scene_Equip" },
+        shop: { field: "reactorShopInterfaceId", scene: "Scene_Shop" },
+        name: { field: "reactorNameInterfaceId", scene: "Scene_Name" }
     };
 
     ReactorUI.replacementRole = function(sceneClass) {

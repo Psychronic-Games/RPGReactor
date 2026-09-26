@@ -326,8 +326,8 @@ test('the editor and runtime agree on anchors, node types, and action types', ()
         assert.ok(runtimeSource.includes(`"${action}"`), `runtime action ${action}`);
         assert.ok(editorSource.includes(`'${action}'`), `editor action ${action}`);
     }
-    assert.match(runtimeSource, /NODE_TYPES = \["box", "image", "text", "button", "list", "gauge"\]/);
-    assert.match(editorSource, /NODE_TYPES\(\) \{ return \['box', 'image', 'text', 'button', 'list', 'gauge'\]; \}/);
+    assert.match(runtimeSource, /NODE_TYPES = \["box", "image", "text", "button", "list", "gauge", "input"\]/);
+    assert.match(editorSource, /NODE_TYPES\(\) \{ return \['box', 'image', 'text', 'button', 'list', 'gauge', 'input'\]; \}/);
     assert.match(runtimeSource, /IMAGE_SOURCES = \["picture", "system", "face", "character", "icon", "partyFace", "title1", "title2"\]/);
     assert.match(editorSource, /IMAGE_SOURCES\(\) \{ return \['picture', 'system', 'face', 'character', 'icon', 'partyFace', 'title1', 'title2'\]; \}/);
     assert.match(runtimeSource, /GAUGE_KINDS = \["hp", "mp", "tp", "exp"/);
@@ -1160,8 +1160,8 @@ test('load slot action preserves stock transition, reload, after-load, resume cl
 test('Options, Save, and Load routing requires matching roles and falls back safely', () => {
     const sandbox = loadRuntimeUI();
     assert.equal(JSON.stringify(Object.keys(sandbox.ReactorUI.REPLACEMENTS)),
-        '["title","menu","status","gameEnd","options","save","load"]',
-        'Item, Skill, Equip, Shop, Name, and Battle are outside this replacement phase');
+        '["title","menu","status","gameEnd","options","save","load","item","skill","equip","shop","name"]',
+        'Battle is outside the replacement roles');
     sandbox.$dataUserInterfaces = [null,
         { id: 1, mode: 'scene', roles: ['options'], nodes: [] },
         { id: 2, mode: 'scene', roles: ['save'], nodes: [] },
@@ -1380,4 +1380,317 @@ test('circular gauge draws a bounded progress ring and reserves layout height',(
     assert.deepEqual(arcs[0],[40,40,36,0,Math.PI*2]);assert.deepEqual(arcs[1],[40,40,36,-Math.PI/2,0]);assert.equal(ctx.lineWidth,8);
     const node={actorFields:['hp','mp'],actorElements:{hp:{shape:'circular',width:80,height:80}}};
     const layout=ui.actorPanelLayout(node,500,300,24);assert.ok(layout.mpLabel.y>=layout.hp.y+80,'next gauge label follows the taller circle');
+});
+
+
+// --- Item, Skill, Equip and Shop workflows ------------------------------
+
+/** A small party, inventory and database the workflow tests share. */
+function workflowWorld(sandbox) {
+    const items = [null,
+        { id: 1, name: 'Potion', iconIndex: 176, itypeId: 1, price: 50, scope: 7, occasion: 0, description: 'Heals', etypeId: 0 },
+        { id: 2, name: 'Key', iconIndex: 195, itypeId: 2, price: 0, scope: 0, occasion: 0, description: 'Opens', etypeId: 0 },
+        { id: 3, name: 'Elixir', iconIndex: 177, itypeId: 1, price: 400, scope: 8, occasion: 0, description: 'All', etypeId: 0 },
+        { id: 4, name: 'Scroll', iconIndex: 178, itypeId: 1, price: 30, scope: 0, occasion: 0, description: 'Calls', etypeId: 0 }];
+    const weapons = [null, { id: 1, name: 'Sword', iconIndex: 97, price: 300, etypeId: 1 }, { id: 2, name: 'Axe', iconIndex: 98, price: 200, etypeId: 1 }];
+    const armors = [null, { id: 1, name: 'Shield', iconIndex: 128, price: 100, etypeId: 2 }];
+    const skills = [null, { id: 1, name: 'Heal', iconIndex: 72, stypeId: 1, scope: 7, mpCost: 5, description: 'Heal one' }, { id: 2, name: 'Fire', iconIndex: 64, stypeId: 2, scope: 1, mpCost: 4 }];
+    Object.assign(sandbox, { $dataItems: items, $dataWeapons: weapons, $dataArmors: armors, $dataSkills: skills });
+    sandbox.$dataSystem.itemCategories = [true, true, false, true];
+    sandbox.$dataSystem.skillTypes = ['', 'Magic', 'Special'];
+    sandbox.$dataSystem.equipTypes = ['', 'Weapon', 'Shield'];
+    sandbox.TextManager = { item: 'Items', weapon: 'Weapons', armor: 'Armors', keyItem: 'Key Items', currencyUnit: 'G', param: id => ['MHP', 'MMP', 'ATK', 'DEF', 'MAT', 'MDF', 'AGI', 'LUK'][id] };
+    sandbox.DataManager = Object.assign(sandbox.DataManager, {
+        isItem: item => items.includes(item), isWeapon: item => weapons.includes(item), isArmor: item => armors.includes(item), isSkill: item => skills.includes(item)
+    });
+    const counts = new Map([[items[1], 3], [items[2], 1], [items[3], 1], [items[4], 2], [weapons[2], 1], [armors[1], 1]]);
+    const log = [];
+    const makeActor = (id, name, pha) => ({
+        _id: id, hp: 50, mhp: 100, pha, equipsList: [weapons[1], null], atkBonus: 0,
+        actorId() { return id; }, name() { return name; },
+        skillTypes() { return [1, 2]; }, skills() { return [skills[1], skills[2]]; },
+        canUse(item) { return item === skills[2] ? false : (skills.includes(item) || (counts.get(item) || 0) > 0); },
+        skillMpCost(skill) { return skill.mpCost; }, skillTpCost() { return 0; },
+        equipSlots() { return [1, 2]; }, equips() { return this.equipsList; },
+        isEquipChangeOk(slot) { return slot !== 1 || id !== 2; },
+        canEquip(item) { return item.etypeId === 1 || item.etypeId === 2; },
+        changeEquip(slot, item) { log.push(['equip', id, slot, item && item.name]); this.equipsList[slot] = item; },
+        forceChangeEquip(slot, item) { this.equipsList[slot] = item; },
+        param(id) { return id === 2 ? 10 + (this.equipsList[0] ? this.equipsList[0].id * 5 : 0) : 1; },
+        useItem(item) { log.push(['use', name, item.name]); if (counts.has(item)) counts.set(item, counts.get(item) - 1); },
+        optimizeEquipments() { log.push(['optimize', id]); }, clearEquipments() { log.push(['clear', id]); }
+    });
+    const hero = makeActor(1, 'Hero', 1), mage = makeActor(2, 'Mage', 3);
+    let gold = 500;
+    Object.assign(sandbox.$gameParty, {
+        members: () => [hero, mage], movableMembers: () => [hero, mage], menuActor: () => hero, setMenuActor() {},
+        allItems: () => [...counts.keys()].filter(item => counts.get(item) > 0),
+        numItems: item => counts.get(item) || 0, maxItems: () => 99, canUse: item => item !== items[2] && (counts.get(item) || 0) > 0,
+        gold: () => gold, gainGold: n => { gold += n; }, loseGold: n => { gold -= n; },
+        gainItem: (item, n) => counts.set(item, (counts.get(item) || 0) + n), loseItem: (item, n) => counts.set(item, (counts.get(item) || 0) - n)
+    });
+    sandbox.$gameActors = { actor: id => [null, hero, mage][id] || null };
+    sandbox.$gameTemp = { _ce: 0, isCommonEventReserved() { return this._ce > 0; } };
+    sandbox.JsonEx = { makeDeepCopy: actor => Object.assign(Object.create(Object.getPrototypeOf(actor)), actor, { equipsList: actor.equipsList.slice() }) };
+    sandbox.Game_Action = class {
+        constructor(user) { this.user = user; }
+        setItemObject(item) { this.item = item; }
+        isForFriend() { return [7, 8, 11].includes(this.item.scope); }
+        isForAll() { return this.item.scope === 8; }
+        isForUser() { return this.item.scope === 11; }
+        testApply(target) { return target.hp < target.mhp; }
+        numRepeats() { return 1; }
+        apply(target) { log.push(['apply', this.item.name, target.name()]); target.hp = target.mhp; }
+        applyGlobal() { if (this.item === items[4]) sandbox.$gameTemp._ce = 9; }
+    };
+    const sounds = [];
+    sandbox.SoundManager = new Proxy({}, { get: (target, name) => () => sounds.push(String(name)) });
+    return { items, weapons, armors, skills, hero, mage, counts, log, sounds, gold: () => gold };
+}
+
+/** A stand-in list window around real rows, enough for the scene's workflow code. */
+function fakeList(sandbox, scene, raw) {
+    const node = sandbox.ReactorUI.normalizeNode(Object.assign({ type: 'list' }, raw));
+    const win = {
+        node: () => node, visible: true, _uiRows: [], _uiRefreshWait: 0, _index: 0, active: false, fixed: false,
+        isFocusable: () => true, isEnabled: () => true, setFocused(value) { this.focused = value; },
+        maxItems() { return this._uiRows.length; }, index() { return this._index; },
+        selectedRow() { return this._uiRows[this._index] || null; },
+        select(index) { this._index = index; scene.setContext(node.contextName, this.selectedRow()); },
+        isCurrentItemEnabled() { const row = this.selectedRow(); return !!row && row.enabled !== false; },
+        activate() { this.active = true; }, deactivate() { this.active = false; },
+        setCursorFixed(value) { this.fixed = value; }, refreshCursor() {}, refresh() {},
+        reload() { this._uiRows = sandbox.ReactorUI.listRows(node, scene); return this; }
+    };
+    return win;
+}
+
+test('item categories, skill types, equipment slots and shop lists follow the list they filter on', () => {
+    const sandbox = loadRuntimeUI(), ui = sandbox.ReactorUI;
+    const world = workflowWorld(sandbox);
+    const scene = new sandbox.Scene_ReactorUI();
+    const rows = raw => ui.listRows(ui.normalizeNode(Object.assign({ type: 'list' }, raw)), scene);
+    assert.deepEqual([...rows({ dataSource: 'itemCategories' }).map(row => row.id)], ['item', 'weapon', 'keyItem'], 'Armors is off in System');
+    const items = { dataSource: 'inventory', filterContext: 'category', action: { type: 'use' } };
+    assert.equal(rows(items).length, 0, 'nothing until a category is chosen');
+    scene.setContext('category', rows({ dataSource: 'itemCategories' })[0]);
+    const potions = rows(items);
+    assert.deepEqual([...potions.map(row => row.name)], ['Potion', 'Elixir', 'Scroll']);
+    scene.setContext('category', rows({ dataSource: 'itemCategories' })[2]);
+    const keys = rows(items);
+    assert.deepEqual([...keys.map(row => [row.name, row.enabled])].map(pair => [...pair]), [['Key', false]], 'a key item cannot be used from the menu');
+
+    const types = rows({ dataSource: 'skillTypes', actorSource: 'menuActor' });
+    assert.deepEqual([...types.map(row => row.name)], ['Magic', 'Special']);
+    scene.setContext('type', types[0]);
+    const magic = rows({ dataSource: 'skills', actorSource: 'menuActor', filterContext: 'type' });
+    assert.deepEqual([...magic.map(row => [row.name, row.cost])].map(pair => [...pair]), [['Heal', '\\C[23]5\\C[0]']]);
+
+    const slots = rows({ dataSource: 'actorEquipment', actorSource: 'menuActor' });
+    assert.deepEqual([...slots.map(row => [row.slot, row.name, row.enabled])].map(entry => [...entry]), [[0, 'Sword', true], [1, 'Shield', true]], 'an empty slot is still a slot you can fill');
+    scene.setContext('slot', slots[0]);
+    const candidates = rows({ dataSource: 'equipCandidates', actorSource: 'menuActor', filterContext: 'slot' });
+    assert.deepEqual([...candidates.map(row => [row.kind, row.id])].map(entry => [...entry]), [['weapon', 2], ['none', 0]], 'the slot\'s type only, and a row to take it off');
+
+    scene._shopGoods = [[0, 1, 0, 0], [1, 1, 1, 450], [2, 1, 1, 900]];
+    const goods = rows({ dataSource: 'shopGoods' });
+    assert.deepEqual([...goods.map(row => [row.name, row.price, row.enabled])].map(entry => [...entry]), [['Potion', 50, true], ['Sword', 450, true], ['Shield', 900, false]],
+        'the database price or the shop\'s own, and only what the party can afford');
+    scene.setContext('sellCategory', rows({ dataSource: 'itemCategories' })[0]);
+    const sell = rows({ dataSource: 'shopSell', filterContext: 'sellCategory' });
+    assert.deepEqual([...sell.map(row => [row.name, row.price])].map(entry => [...entry]), [['Potion', 25], ['Elixir', 200], ['Scroll', 15]], 'half price');
+});
+
+test('equipment parameters compare against the candidate while the candidate list has focus', () => {
+    const sandbox = loadRuntimeUI(), ui = sandbox.ReactorUI;
+    const world = workflowWorld(sandbox);
+    const scene = new sandbox.Scene_ReactorUI();
+    const params = fakeList(sandbox, scene, { dataSource: 'actorParameters', actorSource: 'menuActor', compareContext: 'candidate' });
+    const candidates = fakeList(sandbox, scene, { dataSource: 'equipCandidates', actorSource: 'menuActor', contextName: 'candidate' });
+    scene._nodeWindows = [params, candidates];
+    scene.setContext('candidate', { key: 'weapon:2', kind: 'weapon', slot: 0, data: world.weapons[2] });
+    assert.equal(params.reload()._uiRows[2].newValue, '', 'no comparison while another list has focus');
+    scene._focusIndex = 1;
+    const atk = params.reload()._uiRows[2];
+    assert.equal(atk.paramValue, 15);
+    assert.equal(atk.newValue, '\\C[24]20\\C[0]', 'a rise draws in the power-up colour');
+    assert.equal(atk.change, 5);
+    assert.equal(world.hero.equipsList[0], world.weapons[1], 'the comparison never touches the real actor');
+    params._uiRefreshWait = 0;
+    scene.setContext('candidate', { key: 'weapon:2', kind: 'weapon', slot: 0, data: world.weapons[2] });
+    assert.equal(params._uiRefreshWait, 0, 'the same row again changes nothing');
+    scene.setContext('candidate', { key: 'equip:none', kind: 'none', slot: 0, data: null });
+    assert.equal(params._uiRefreshWait, 15, 'a new candidate redraws the comparison at once');
+});
+
+test('Use picks a target in the party panel by scope, applies the item, and stays for another use', () => {
+    const sandbox = loadRuntimeUI(), ui = sandbox.ReactorUI;
+    const world = workflowWorld(sandbox);
+    const scene = new sandbox.Scene_ReactorUI();
+    scene._interface = { nodes: [] };
+    scene.updateConditions = () => {};
+    const list = fakeList(sandbox, scene, { dataSource: 'inventory', category: 'item', action: { type: 'use', contextName: 'target' }, contextName: 'item' }).reload();
+    const panel = fakeList(sandbox, scene, { dataSource: 'party', rowLayout: 'actorPanel', contextName: 'target' }).reload();
+    scene._nodeWindows = [list, panel];
+    scene._focusIndex = 0;
+    world.hero.hp = 10;
+    world.mage.hp = 20;
+    list.select(0);
+    scene.activateWindow(list);
+    assert.equal(scene.focusedWindow(), panel, 'a potion for one ally asks who');
+    assert.equal(scene.isSelectingTarget(), true);
+    panel.select(1);
+    scene.activateWindow(panel);
+    assert.deepEqual(world.log.slice(-2).map(entry => [...entry]), [['use', 'Mage', 'Potion'], ['apply', 'Potion', 'Mage']], 'the best-PHA member uses it on the one chosen');
+    assert.equal(world.counts.get(world.items[1]), 2);
+    assert.equal(scene.focusedWindow(), panel, 'the panel stays up for another use, as the stock screen does');
+    scene.activateWindow(panel);
+    assert.equal(world.sounds.at(-1), 'playBuzzer', 'a full-health target gains nothing');
+    scene.cancelInterface(true);
+    assert.equal(scene.focusedWindow(), list);
+    assert.equal(scene.isSelectingTarget(), false);
+
+    list.select(1);
+    scene.activateWindow(list);
+    assert.equal(panel._uiCursorAll, true, 'an item for everyone selects the whole party');
+    world.hero.hp = 5;
+    scene.activateWindow(panel);
+    assert.deepEqual(world.log.slice(-2).map(entry => [...entry]), [['apply', 'Elixir', 'Hero'], ['apply', 'Elixir', 'Mage']]);
+    scene.cancelInterface(true);
+    assert.equal(panel._uiCursorAll, false);
+
+    list.select(2);
+    scene.activateWindow(list);
+    assert.equal(scene.focusedWindow(), list, 'an item with no ally scope is used at once');
+    assert.deepEqual(world.log.at(-1), ['use', 'Mage', 'Scroll']);
+    assert.deepEqual(sandbox.__sceneCalls.at(-1), ['goto', sandbox.Scene_Map], 'and a common event it reserves runs on the map');
+});
+
+test('Equip puts the candidate in its slot and hands focus back; Back on a list goes where it says', () => {
+    const sandbox = loadRuntimeUI(), ui = sandbox.ReactorUI;
+    const world = workflowWorld(sandbox);
+    const scene = new sandbox.Scene_ReactorUI();
+    scene._interface = { nodes: [], cancel: ui.normalizeAction({ type: 'close' }) };
+    const slots = fakeList(sandbox, scene, { id: 1, dataSource: 'actorEquipment', actorSource: 'menuActor', contextName: 'slot', action: { type: 'focusNode', id: 2 } }).reload();
+    const candidates = fakeList(sandbox, scene, { id: 2, dataSource: 'equipCandidates', actorSource: 'menuActor', filterContext: 'slot', contextName: 'candidate', backFocus: 1, action: { type: 'equip' } });
+    scene._nodeWindows = [slots, candidates];
+    scene._focusIndex = 0;
+    slots.select(0);
+    candidates.reload();
+    scene.activateWindow(slots);
+    assert.equal(scene.focusedWindow(), candidates, 'a slot opens its candidates');
+    scene.cancelInterface(true);
+    assert.equal(scene.focusedWindow(), slots, 'Back returns to the slots instead of closing');
+    assert.equal(scene._closing, false);
+    scene.runAction(ui.normalizeAction({ type: 'focusNode', id: 2 }));
+    candidates.select(0);
+    scene.activateWindow(candidates);
+    assert.deepEqual([...world.log.at(-1)], ['equip', 1, 0, 'Axe']);
+    assert.equal(world.sounds.includes('playEquip'), true);
+    assert.equal(scene.focusedWindow(), slots, 'focus returns to the slots after equipping');
+    candidates.select(1);
+    scene.activateWindow(candidates);
+    assert.deepEqual([...world.log.at(-1)], ['equip', 1, 0, null], 'the empty row takes it off');
+    scene.runAction(ui.normalizeAction({ type: 'equipOptimize', contextName: 'nobody' }));
+    scene.runAction(ui.normalizeAction({ type: 'equipClear', contextName: 'nobody' }));
+    assert.deepEqual(world.log.slice(-2).map(entry => [...entry]), [['optimize', 1], ['clear', 1]], 'Optimize and Clear fall back to the menu actor');
+});
+
+test('the shop takes Shop Processing goods as a second prepare and buys and sells through the number window', () => {
+    const sandbox = loadRuntimeUI(), ui = sandbox.ReactorUI;
+    const world = workflowWorld(sandbox);
+    let numberWindow = null;
+    sandbox.Window_ShopNumber = class {
+        constructor(rect) { this.rect = rect; this.handlers = {}; numberWindow = this; }
+        setup(item, max, price) { Object.assign(this, { item, max, price, value: 1 }); }
+        setCurrencyUnit() {} show() {} activate() {} deactivate() {}
+        setHandler(name, fn) { this.handlers[name] = fn; }
+        number() { return this.value; }
+    };
+    const scene = new sandbox.Scene_ReactorUI();
+    scene.addWindow = () => {};
+    scene.calcWindowHeight = () => 200;
+    scene.prepare(5, 'shop');
+    scene.prepare([[0, 1, 0, 0], [1, 1, 1, 450]], true);
+    assert.equal(scene.interfaceId(), 5, 'the goods do not replace the interface id');
+    assert.equal(scene.isPurchaseOnly(), true);
+    assert.equal(scene.shopGoods().length, 2);
+    scene._interface = { nodes: [] };
+    const goods = fakeList(sandbox, scene, { dataSource: 'shopGoods', action: { type: 'shopBuy' } }).reload();
+    Object.assign(goods, { x: 0, y: 0, width: 400, height: 300 });
+    scene._nodeWindows = [goods];
+    scene._focusIndex = 0;
+    goods.select(1);
+    scene.activateWindow(goods);
+    assert.equal(numberWindow.max, 1, 'no more than the gold covers');
+    assert.equal(scene.acceptsInput(), false, 'the interface waits while the number window is up');
+    numberWindow.handlers.ok();
+    assert.equal(world.gold(), 50);
+    assert.equal(world.counts.get(world.weapons[1]), 1);
+    assert.equal(scene._quantityWindow, null);
+    const sell = fakeList(sandbox, scene, { dataSource: 'shopSell', category: 'item', action: { type: 'shopSell' } }).reload();
+    Object.assign(sell, { x: 0, y: 0, width: 400, height: 300 });
+    sell.select(0);
+    scene.activateWindow(sell);
+    assert.equal(numberWindow.max, 3, 'sell up to what the party holds');
+    numberWindow.value = 2;
+    numberWindow.handlers.ok();
+    assert.equal(world.gold(), 100);
+    assert.equal(world.counts.get(world.items[1]), 1);
+    assert.equal(sandbox.ReactorUI.REPLACEMENTS.shop.scene, 'Scene_Shop');
+});
+
+
+test('a Text Input reads and writes a variable or an actor name, clamps to its length, and Name Input prepares the actor', () => {
+    const sandbox = loadRuntimeUI(), ui = sandbox.ReactorUI;
+    const hero = { _name: 'Hero', _nick: 'Kid', actorId: () => 4, name() { return this._name; }, nickname() { return this._nick; },
+        setName(v) { this._name = v; }, setNickname(v) { this._nick = v; } };
+    sandbox.$gameActors = { actor: id => (id === 4 ? hero : null) };
+    sandbox.$gameParty.menuActor = () => null;
+    const field = ui.normalizeNode({ type: 'input', variableId: 9, maxLength: 5 });
+    assert.deepStrictEqual([field.inputTarget, field.maxLength, field.mask, field.onScreenKeys, field.autoEdit, field.fill], ['variable', 5, false, false, false, 'window']);
+    assert.strictEqual(ui.readInput(field, null), '', 'an unset variable reads as empty, not 0');
+    ui.writeInput(field, null, 'SESAME OPEN');
+    assert.strictEqual(sandbox.$gameVariables.value(9), 'SESAM', 'the stored text is cut to the maximum length');
+    assert.strictEqual(ui.readInput(field, null), 'SESAM');
+
+    const scene = new sandbox.Scene_ReactorUI();
+    scene.prepare(12, 'name');
+    scene.prepare(4, 8);
+    assert.deepStrictEqual([scene.interfaceId(), scene.sceneActor(), scene.nameMaxLength()], [12, hero, 8], 'Name Input\'s (actorId, maxLength) arrive as a second prepare');
+    const name = ui.normalizeNode({ type: 'input', inputTarget: 'actorName', actorSource: 'sceneActor', maxLength: 16 });
+    assert.strictEqual(ui.readInput(name, scene), 'Hero');
+    ui.writeInput(name, scene, 'Ralph');
+    assert.strictEqual(hero.name(), 'Ralph');
+    ui.writeInput(ui.normalizeNode({ type: 'input', inputTarget: 'actorNickname', actorSource: 'sceneActor' }), scene, 'Ace');
+    assert.strictEqual(hero.nickname(), 'Ace');
+    assert.strictEqual(sandbox.ReactorUI.REPLACEMENTS.name.scene, 'Scene_Name');
+});
+
+test('a Text Input edits a draft: Enter commits and runs the action, Escape leaves the value as it was', () => {
+    const sandbox = loadRuntimeUI(), ui = sandbox.ReactorUI;
+    const sounds = [];
+    sandbox.SoundManager = new Proxy({}, { get: (target, name) => () => sounds.push(String(name)) });
+    sandbox.Input = { clear() {} };
+    const scene = new sandbox.Scene_ReactorUI();
+    let ran = null;
+    scene.runAction = action => { ran = action; };
+    const node = ui.normalizeNode({ type: 'input', variableId: 11, maxLength: 8, action: { type: 'commonEvent', id: 5 } });
+    // The editing half of the node window, without a canvas.
+    const field = Object.create(sandbox.Window_ReactorUINode.prototype);
+    Object.assign(field, { _uiNode: node, _uiScene: scene, node: () => node, refresh() {}, isEnabled: () => true, openDomInput() {}, closeDomInput() {} });
+    sandbox.$gameVariables.setValue(11, 'old');
+    scene.beginInput(field);
+    assert.strictEqual(scene.acceptsInput(), false, 'the interface waits while the field has the keys');
+    field.setDraft('opensesame');
+    assert.strictEqual(field.inputValue(), 'opensesa', 'typing is held to the maximum length');
+    scene.cancelInput(field);
+    assert.strictEqual(sandbox.$gameVariables.value(11), 'old', 'Escape keeps what was stored');
+    assert.strictEqual(ran, null);
+    scene.beginInput(field);
+    field.setDraft('0451');
+    scene.commitInput(field);
+    assert.strictEqual(sandbox.$gameVariables.value(11), '0451');
+    assert.strictEqual(ran.type, 'commonEvent', 'the node\'s action runs after the text is stored, so an event can check it');
+    assert.strictEqual(field.isEditing(), false);
 });

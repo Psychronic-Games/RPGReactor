@@ -108,7 +108,12 @@ class DatabaseSystem2Editor {
             ['reactorGameEndInterfaceId', 'Game End', 'gameEnd'],
             ['reactorOptionsInterfaceId', 'Options', 'options'],
             ['reactorSaveInterfaceId', 'Save', 'save'],
-            ['reactorLoadInterfaceId', 'Load', 'load']
+            ['reactorLoadInterfaceId', 'Load', 'load'],
+            ['reactorItemInterfaceId', 'Items', 'item'],
+            ['reactorSkillInterfaceId', 'Skills', 'skill'],
+            ['reactorEquipInterfaceId', 'Equipment', 'equip'],
+            ['reactorShopInterfaceId', 'Shop', 'shop'],
+            ['reactorNameInterfaceId', 'Name Input', 'name']
         ];
         const html = rows.map(([field, label, role]) => `<div style="margin-bottom: 8px;">
             <label class="database-field-label">${tt(label)}</label>
@@ -398,7 +403,9 @@ class DatabaseSystem2Editor {
             select.addEventListener('change', event => {
                 const field = event.target.dataset.systemField;
                 if (!['reactorMenuInterfaceId', 'reactorStatusInterfaceId', 'reactorGameEndInterfaceId',
-                    'reactorOptionsInterfaceId', 'reactorSaveInterfaceId', 'reactorLoadInterfaceId'].includes(field)) return;
+                    'reactorOptionsInterfaceId', 'reactorSaveInterfaceId', 'reactorLoadInterfaceId',
+                    'reactorItemInterfaceId', 'reactorSkillInterfaceId', 'reactorEquipInterfaceId', 'reactorShopInterfaceId',
+                    'reactorNameInterfaceId'].includes(field)) return;
                 system[field] = Math.max(0, Math.floor(Number(event.target.value) || 0));
                 this.databaseManager.mutationGeneration = (this.databaseManager.mutationGeneration || 0) + 1;
             });

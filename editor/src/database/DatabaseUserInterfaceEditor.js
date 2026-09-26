@@ -6,10 +6,17 @@
  * shows is where the game draws.
  */
 class DatabaseUserInterfaceEditor {
-    static get NODE_TYPES() { return ['box', 'image', 'text', 'button', 'list', 'gauge']; }
+    static get NODE_TYPES() { return ['box', 'image', 'text', 'button', 'list', 'gauge', 'input']; }
+    /** Node types that take focus and run an action. */
+    static isControl(type) { return type === 'button' || type === 'list' || type === 'input'; }
     static get GAUGE_KINDS() { return ['hp', 'mp', 'tp', 'exp', 'mhp', 'mmp', 'atk', 'def', 'mat', 'mdf', 'agi', 'luk', 'variable']; }
-    static get LIST_SOURCES() { return ['party', 'inventory', 'skills', 'actorParameters', 'actorEquipment', 'actorStates', 'options', 'saveSlots', 'variableRange', 'literal']; }
-    static get ACTOR_SOURCES() { return ['partySlot', 'actorId', 'menuActor', 'variable', 'context']; }
+    static get LIST_SOURCES() { return ['party', 'inventory', 'skills', 'actorParameters', 'actorEquipment', 'actorStates', 'options', 'saveSlots', 'variableRange', 'literal',
+        'itemCategories', 'skillTypes', 'equipCandidates', 'shopGoods', 'shopSell']; }
+    /** Sources whose rows follow another list's selection (filterContext). */
+    static get FOLLOWING_SOURCES() { return ['inventory', 'skills', 'equipCandidates', 'shopSell']; }
+    /** Sources that read an actor binding. */
+    static get ACTOR_LIST_SOURCES() { return ['skills', 'actorParameters', 'actorEquipment', 'actorStates', 'skillTypes', 'equipCandidates']; }
+    static get ACTOR_SOURCES() { return ['partySlot', 'actorId', 'menuActor', 'variable', 'context', 'sceneActor']; }
     static get IMAGE_SOURCES() { return ['picture', 'system', 'face', 'character', 'icon', 'partyFace', 'title1', 'title2']; }
     /** img/ folder of each image source. */
     static get IMAGE_FOLDERS() { return { picture: 'pictures', system: 'system', face: 'faces', character: 'characters', icon: 'system', partyFace: 'faces', title1: 'titles1', title2: 'titles2' }; }
@@ -25,7 +32,13 @@ class DatabaseUserInterfaceEditor {
     static get ACTION_TYPES() {
         return ['none', 'close', 'closeAll', 'callInterface', 'commonEvent', 'scene', 'pluginCommand', 'switch', 'variable', 'script',
             'setMenuActor', 'personalSkill', 'personalEquip', 'personalStatus', 'titleNewGame', 'titleContinue', 'titleOptions',
-            'gameEndToTitle', 'previousMenuActor', 'nextMenuActor', 'optionChange', 'saveSlot', 'loadSlot', 'formation', 'pluginScene'];
+            'gameEndToTitle', 'previousMenuActor', 'nextMenuActor', 'optionChange', 'saveSlot', 'loadSlot', 'formation', 'pluginScene',
+            'use', 'equip', 'equipOptimize', 'equipClear', 'focusNode', 'shopBuy', 'shopSell'];
+    }
+    /** Actions that read or set an actor context. */
+    static get CONTEXT_ACTIONS() {
+        return ['setMenuActor', 'personalSkill', 'personalEquip', 'personalStatus', 'pluginScene', 'pluginCommand', 'script', 'formation',
+            'use', 'equipOptimize', 'equipClear'];
     }
     static get SCENES() { return ['menu', 'item', 'skill', 'equip', 'status', 'save', 'load', 'options', 'gameEnd', 'title']; }
     static get CONDITION_TYPES() { return ['always', 'never', 'saveExists', 'switch', 'variable', 'script']; }
@@ -37,7 +50,12 @@ class DatabaseUserInterfaceEditor {
             ['gameEnd', 'Game End', 'reactorGameEndInterfaceId'],
             ['options', 'Options', 'reactorOptionsInterfaceId'],
             ['save', 'Save', 'reactorSaveInterfaceId'],
-            ['load', 'Load', 'reactorLoadInterfaceId']
+            ['load', 'Load', 'reactorLoadInterfaceId'],
+            ['item', 'Items', 'reactorItemInterfaceId'],
+            ['skill', 'Skills', 'reactorSkillInterfaceId'],
+            ['equip', 'Equipment', 'reactorEquipInterfaceId'],
+            ['shop', 'Shop', 'reactorShopInterfaceId'],
+            ['name', 'Name Input', 'reactorNameInterfaceId']
         ];
     }
     static get GRID() { return 8; }
@@ -81,6 +99,10 @@ class DatabaseUserInterfaceEditor {
     // ==========================================
 
     static defaultNode(type, id) {
+        if (type === 'input') return Object.assign(this.defaultNode('button', id), {
+            type: 'input', width: 320, height: 48, text: '', align: 'left', action: this.defaultAction('none'),
+            inputTarget: 'variable', variableId: 1, maxLength: 16, mask: false, onScreenKeys: false, autoEdit: false
+        });
         if (type === 'actorPanel') return Object.assign(this.defaultNode('list', id), {
             name: 'Actor Panel', dataSource: 'party', rowLayout: 'actorPanel', rowHeight: 256,
             width: 600, height: 384, contextName: 'selectedActor'
@@ -114,6 +136,7 @@ class DatabaseUserInterfaceEditor {
                     dataSource: 'literal', category: 'all', actorMode: 'party', actorId: 1, index: 0, skillTypeId: 0,
                     includeAutosave: false, rangeStart: 1, rangeEnd: 10,
                     items: [{ id: 1, value: 1, text: 'First item', enabled: true }], rowText: '', rowHeight: 36, contextName: 'selection',
+                    filterContext: '', compareContext: '', backFocus: 0, columns: 1, focusable: true,
                     selectionVariableId: 0, selectionValue: 'id', action: DatabaseUserInterfaceEditor.defaultAction('none'),
                     enabled: { type: 'always', id: 1, on: true, op: '==', value: 0, script: '' },
                     highlightColor: '#ffffff', focusedFillColor: '', focusedTextColor: '', focusedBorderColor: '', focusedOpacity: '',
@@ -126,7 +149,7 @@ class DatabaseUserInterfaceEditor {
                     borderWidth: 0, borderColor: '#ffffff', radius: 0,
                     text: 'Button', align: 'center', fontSize: 0, textColor: 0, fontFace: '', fontBold: false, fontItalic: false,
                     outline: true, fitText: false, outlineColor: '', outlineWidth: 3, letterSpacing: 0,
-                    action: DatabaseUserInterfaceEditor.defaultAction('close'),
+                    action: DatabaseUserInterfaceEditor.defaultAction('close'), backFocus: 0,
                     enabled: { type: 'always', id: 1, on: true, op: '==', value: 0, script: '' },
                     highlightColor: '#ffffff', focusedFillColor: '', focusedTextColor: '', focusedBorderColor: '', focusedOpacity: '',
                     pressedOffsetX: 0, pressedOffsetY: 0, pressedOpacity: '', disabledFillColor: '', disabledTextColor: '', disabledOpacity: '',
@@ -385,8 +408,16 @@ class DatabaseUserInterfaceEditor {
             if (!DatabaseUserInterfaceEditor.ACTOR_SOURCES.includes(node.actorSource)) merged.actorSource = node.actorMode === 'actor' ? 'actorId' : 'partySlot';
             if (!merged.actorContextName) merged.actorContextName = 'selection';
             merged.visible = Object.assign({ type: 'always', id: 1, on: true, op: '==', value: 0, script: '' }, merged.visible || {});
-            if (type === 'button' || type === 'list') {
-                merged.action = Object.assign(DatabaseUserInterfaceEditor.defaultAction(type === 'list' ? 'none' : 'close'), merged.action || {});
+            if (type === 'input') {
+                if (!['variable', 'actorName', 'actorNickname'].includes(merged.inputTarget)) merged.inputTarget = 'variable';
+                merged.maxLength = Math.min(99, Math.max(1, Math.round(Number(merged.maxLength)) || 16));
+                merged.variableId = Math.max(1, Math.floor(Number(merged.variableId)) || 1);
+                merged.mask = !!merged.mask;
+                merged.onScreenKeys = !!merged.onScreenKeys;
+                merged.autoEdit = !!merged.autoEdit;
+            }
+            if (DatabaseUserInterfaceEditor.isControl(type)) {
+                merged.action = Object.assign(DatabaseUserInterfaceEditor.defaultAction(type === 'button' ? 'close' : 'none'), merged.action || {});
                 if (!merged.action.contextName) merged.action.contextName = 'selection';
                 merged.enabled = Object.assign({ type: 'always', id: 1, on: true, op: '==', value: 0, script: '' }, merged.enabled || {});
                 for (const key of ['focusedFillColor', 'focusedTextColor', 'focusedBorderColor', 'disabledFillColor', 'disabledTextColor']) {
@@ -402,6 +433,11 @@ class DatabaseUserInterfaceEditor {
             }
             if (type === 'list') {
                 merged.items = DatabaseUserInterfaceEditor.normalizeLiteralItems(merged.items);
+                if (!DatabaseUserInterfaceEditor.LIST_SOURCES.includes(merged.dataSource)) merged.dataSource = 'literal';
+                merged.filterContext = typeof merged.filterContext === 'string' ? merged.filterContext.trim() : '';
+                merged.compareContext = typeof merged.compareContext === 'string' ? merged.compareContext.trim() : '';
+                merged.columns = Math.min(12, Math.max(1, Math.round(Number(merged.columns)) || 1));
+                merged.focusable = merged.focusable !== false;
                 if (!merged.contextName) merged.contextName = 'selection';
                 merged.rowLayout = node.rowLayout === 'actorPanel' ? 'actorPanel' : 'text';
                 merged.portraitSize = Math.min(144, Math.max(32, Number(merged.portraitSize) || 144));
@@ -422,10 +458,10 @@ class DatabaseUserInterfaceEditor {
             }
             return merged;
         });
-        const controls = new Set(entry.nodes.filter(node => node.type === 'button' || node.type === 'list').map(node => node.id));
+        const controls = new Set(entry.nodes.filter(node => DatabaseUserInterfaceEditor.isControl(node.type)).map(node => node.id));
         for (const node of entry.nodes) {
-            if (node.type !== 'button' && node.type !== 'list') continue;
-            for (const key of ['focusUp', 'focusDown', 'focusLeft', 'focusRight']) {
+            if (!DatabaseUserInterfaceEditor.isControl(node.type)) continue;
+            for (const key of ['focusUp', 'focusDown', 'focusLeft', 'focusRight', 'backFocus']) {
                 const target = Math.max(0, Math.floor(Number(node[key]) || 0));
                 node[key] = target !== node.id && controls.has(target) ? target : 0;
             }
@@ -504,6 +540,12 @@ class DatabaseUserInterfaceEditor {
                             <summary class="rr-btn-chip">${tt('+ Add Node')}</summary>
                             <div class="rr-ui-add-menu-items" role="menu" aria-label="${tt('Add Node')}">
                                 ${[...DatabaseUserInterfaceEditor.NODE_TYPES, 'actorPanel'].map(type => `<button type="button" role="menuitem" data-add="${type}">${this.typeLabel(type)}</button>`).join('')}
+                            </div>
+                        </details>
+                        <details class="rr-ui-add-menu rr-ui-stock-menu">
+                            <summary class="rr-btn-chip" title="${this.escapeHTML(tt('Replace the layers with the layout and workflow of a stock screen.'))}">${tt('Stock Layout')}</summary>
+                            <div class="rr-ui-add-menu-items" role="menu" aria-label="${this.escapeHTML(tt('Stock Layout'))}">
+                                ${this.stockLayoutKinds().map(([kind, label]) => `<button type="button" role="menuitem" data-stock-layout="${kind}">${this.escapeHTML(label)}</button>`).join('')}
                             </div>
                         </details>
                         <div class="rr-ui-layer-endpoint">${tt('Back')}</div>
@@ -755,6 +797,54 @@ class DatabaseUserInterfaceEditor {
         return true;
     }
 
+    /** Every stock screen a record can start from, as [kind, label]. */
+    stockLayoutKinds() {
+        const stock = typeof RRStockInterfaces !== 'undefined' ? RRStockInterfaces : null;
+        if (!stock) return [];
+        const labels = Object.fromEntries(DatabaseUserInterfaceEditor.REPLACEMENT_ROLES.map(([role, label]) => [role, label]));
+        return stock.KINDS.map(kind => [kind, this._t(labels[kind] || kind)]);
+    }
+
+    /**
+     * Replace this record's layers with a stock screen's generated layout and
+     * mark it compatible with that role. Undo restores the layers; the role
+     * stays offered in Use As, and nothing is bound in System until chosen there.
+     */
+    applyStockLayout(kind) {
+        const stock = typeof RRStockInterfaces !== 'undefined' ? RRStockInterfaces : null;
+        const built = stock && stock.buildOne(kind, (this.databaseManager && this.databaseManager.data) || {});
+        if (!built || !this.current) return false;
+        const label = (this.stockLayoutKinds().find(entry => entry[0] === kind) || [kind, kind])[1];
+        if (this.current.nodes.length && typeof window !== 'undefined' && window.confirm
+            && !window.confirm(this._t('Replace every layer with the {name} layout?').replace('{name}', label))) return false;
+        this.pushUndo();
+        const normalized = this.normalizeInterface(Object.assign({}, built, { id: this.current.id }));
+        this.current.nodes = normalized.nodes;
+        this.current.firstFocus = normalized.firstFocus;
+        this.current.cancel = normalized.cancel;
+        this.current.background = normalized.background;
+        this.current.mode = 'scene';
+        this.current.stock = kind;
+        this.current.roles = Array.from(new Set([...(this.current.roles || []), kind]));
+        if (!this.current.name) {
+            this.current.name = label;
+            const field = this.wrapper && this.wrapper.querySelector('[data-field="name"]');
+            if (field) field.value = label;
+        }
+        if (!this.current.note) this.current.note = normalized.note;
+        const mode = this.wrapper && this.wrapper.querySelector('.rr-ui-mode');
+        if (mode) mode.value = 'scene';
+        this.selectedId = 0;
+        this.selectedIds = new Set();
+        this.touch();
+        this.refreshFirstFocus();
+        this.renderTree();
+        this.renderProperties();
+        if (this.refreshReplacementControls) this.refreshReplacementControls();
+        this.scheduleRender();
+        return true;
+    }
+
     // ==========================================
     // UNDO
     // ==========================================
@@ -898,9 +988,10 @@ class DatabaseUserInterfaceEditor {
         }
         this.current.nodes = this.current.nodes.filter(candidate => !doomed.has(candidate.id));
         for (const candidate of this.current.nodes) {
-            for (const key of ['focusUp', 'focusDown', 'focusLeft', 'focusRight']) {
+            for (const key of ['focusUp', 'focusDown', 'focusLeft', 'focusRight', 'backFocus']) {
                 if (doomed.has(candidate[key])) candidate[key] = 0;
             }
+            if (candidate.action && ['focusNode', 'equip'].includes(candidate.action.type) && doomed.has(candidate.action.id)) candidate.action.id = 0;
         }
         if (doomed.has(this.current.firstFocus)) this.current.firstFocus = 0;
         this.selectedId = 0;
@@ -925,9 +1016,10 @@ class DatabaseUserInterfaceEditor {
             copy.id = ids.get(candidate.id);
             if (ids.has(copy.parent)) copy.parent = ids.get(copy.parent);
             else { copy.x += 16; copy.y += 16; }
-            for (const key of ['focusUp', 'focusDown', 'focusLeft', 'focusRight']) {
+            for (const key of ['focusUp', 'focusDown', 'focusLeft', 'focusRight', 'backFocus']) {
                 if (ids.has(copy[key])) copy[key] = ids.get(copy[key]);
             }
+            if (copy.action && ['focusNode', 'equip'].includes(copy.action.type) && ids.has(copy.action.id)) copy.action.id = ids.get(copy.action.id);
             return copy;
         });
         this.current.nodes.push(...copies);
@@ -1120,7 +1212,7 @@ class DatabaseUserInterfaceEditor {
     // ==========================================
 
     typeLabel(type) {
-        return this._t({ box: 'Box', image: 'Image', text: 'Text', button: 'Button', list: 'List', gauge: 'Gauge', actorPanel: 'Actor Panel' }[type] || type);
+        return this._t({ box: 'Box', image: 'Image', text: 'Text', button: 'Button', list: 'List', gauge: 'Gauge', input: 'Text Input', actorPanel: 'Actor Panel' }[type] || type);
     }
 
     nodeLabel(node) {
@@ -1310,7 +1402,8 @@ class DatabaseUserInterfaceEditor {
         const source = node.actorSource || 'partySlot';
         let html = this.row(tt('Actor source'), this.selectControl('p-actorSource', source, [
             ['partySlot', `${tt('Fixed')} ${tt('Party slot')}`], ['actorId', `${tt('Fixed')} ${tt('Actor')}`], ['menuActor', `${tt('Main Menu')}: ${tt('Actor')}`],
-            ['variable', `${tt('Variable')}: ${tt('Actor')} ID`], ['context', `${tt('List context')}: ${tt('Actor')}`]
+            ['variable', `${tt('Variable')}: ${tt('Actor')} ID`], ['context', `${tt('List context')}: ${tt('Actor')}`],
+            ['sceneActor', tt('Actor being named')]
         ]));
         html += `<div class="rr-ui-sub rr-ui-actor-partySlot"${source === 'partySlot' ? '' : ' hidden'}>${this.row(tt('Party slot'), this.numberControl('p-actorPartySlot', node.index + 1, 1, 99))}</div>`;
         html += `<div class="rr-ui-sub rr-ui-actor-actorId"${source === 'actorId' ? '' : ' hidden'}>${this.row(tt('Actor'), actors.length ? this.selectControl('p-actorId', node.actorId, actors) : this.numberControl('p-actorId', node.actorId, 1, 9999))}</div>`;
@@ -1355,7 +1448,7 @@ class DatabaseUserInterfaceEditor {
     focusOptions(node) {
         const options = [['0', this._t('Automatic')]];
         for (const candidate of this.current.nodes) {
-            if (candidate === node || (candidate.type !== 'button' && candidate.type !== 'list')) continue;
+            if (candidate === node || !DatabaseUserInterfaceEditor.isControl(candidate.type)) continue;
             options.push([String(candidate.id), this.nodeLabel(candidate)]);
         }
         return options;
@@ -1417,8 +1510,14 @@ class DatabaseUserInterfaceEditor {
             ['titleNewGame', `${tt('Title Screen')}: ${tt('New Game')}`], ['titleContinue', `${tt('Title Screen')}: ${tt('Continue')}`],
             ['titleOptions', `${tt('Title Screen')}: ${tt('Options')}`], ['gameEndToTitle', `${tt('Game End')}: ${tt('To Title')}`],
             ['optionChange', `${tt('Options')}: ${tt('Value')}`], ['saveSlot', `${tt('Save')}: ${tt('Slot')}`],
-            ['loadSlot', `${tt('Load')}: ${tt('Slot')}`]
+            ['loadSlot', `${tt('Load')}: ${tt('Slot')}`],
+            ['focusNode', tt('Focus another control')], ['use', tt('Use item or skill')], ['equip', tt('Equip')],
+            ['equipOptimize', tt('Optimize equipment')], ['equipClear', tt('Remove all equipment')],
+            ['shopBuy', tt('Buy')], ['shopSell', tt('Sell')]
         ];
+        const controls = [['0', tt('(none)')], ...((this.current && this.current.nodes) || [])
+            .filter(candidate => DatabaseUserInterfaceEditor.isControl(candidate.type))
+            .map(candidate => [String(candidate.id), this.nodeLabel(candidate)])];
         const interfaces = [];
         for (const entry of this.databaseManager.getUserInterfaces() || []) {
             if (entry && entry.id) interfaces.push([String(entry.id), String(entry.id).padStart(4, '0') + (entry.name ? ': ' + entry.name : '')]);
@@ -1444,6 +1543,10 @@ class DatabaseUserInterfaceEditor {
             </div>
             <div class="rr-ui-action-scene"${show('scene')}>
                 ${this.selectControl(prefix + '-scene', action.scene, scenes)}
+            </div>
+            <div class="rr-ui-action-focusTarget"${['focusNode', 'equip'].includes(action.type) ? '' : ' hidden'}>
+                ${this.selectControl(prefix + '-focusTarget', String(action.id || 0), controls)}
+                <div class="rr-ui-hint">${tt(action.type === 'equip' ? 'Focus after equipping; none uses Back goes to.' : 'The control that takes focus.')}</div>
             </div>
             <div class="rr-ui-action-pluginScene"${show('pluginScene')}>
                 ${this.textControl(prefix + '-sceneClass', action.sceneClass || '', 'Scene_SkillTree')}
@@ -1471,7 +1574,7 @@ class DatabaseUserInterfaceEditor {
                 <textarea class="database-field-value ${prefix}-script" rows="2">${this.escapeHTML(action.script)}</textarea>
                 <button type="button" class="rr-btn-chip rr-ui-expand-script">${tt('Expand Script')}</button>
             </div>
-            <div class="rr-ui-action-context"${['setMenuActor', 'personalSkill', 'personalEquip', 'personalStatus', 'pluginScene', 'pluginCommand', 'script', 'formation'].includes(action.type) ? '' : ' hidden'}>
+            <div class="rr-ui-action-context"${DatabaseUserInterfaceEditor.CONTEXT_ACTIONS.includes(action.type) ? '' : ' hidden'}>
                 ${this.textControl(prefix + '-contextName', action.contextName || 'selection', 'selection')}
                 <div class="rr-ui-hint">${tt('List context')}</div>
             </div>
@@ -1513,6 +1616,8 @@ class DatabaseUserInterfaceEditor {
                 target.value = Number(q('value').value) || 0;
                 break;
             case 'script': target.script = q('script').value; break;
+            case 'focusNode':
+            case 'equip': if (q('focusTarget')) target.id = Math.max(0, Number(q('focusTarget').value) || 0); break;
             default: break;
         }
         if (q('actorFirst')) target.actorFirst=q('actorFirst').checked;
@@ -1528,7 +1633,8 @@ class DatabaseUserInterfaceEditor {
             block.querySelector('.rr-ui-action-actorFirst').hidden=!['pluginScene','pluginCommand','script'].includes(target.type);
             block.querySelector('.rr-ui-action-andClose').hidden = !['pluginCommand', 'switch', 'variable', 'script'].includes(target.type);
             block.querySelector('.rr-ui-action-chooseActor').hidden = !(['personalSkill', 'personalEquip', 'personalStatus'].includes(target.type) || (target.type === 'scene' && target.scene === 'item'));
-            block.querySelector('.rr-ui-action-context').hidden = !['setMenuActor', 'personalSkill', 'personalEquip', 'personalStatus'].includes(target.type);
+            block.querySelector('.rr-ui-action-context').hidden = !DatabaseUserInterfaceEditor.CONTEXT_ACTIONS.includes(target.type);
+            block.querySelector('.rr-ui-action-focusTarget').hidden = !['focusNode', 'equip'].includes(target.type);
         }
     }
 
@@ -1586,8 +1692,8 @@ class DatabaseUserInterfaceEditor {
         if (title) title.textContent = node.name && node.name.trim() ? node.name.trim()
             : node.type === 'button' && node.text ? node.text : this.typeLabel(node.rowLayout === 'actorPanel' ? 'actorPanel' : node.type);
         const fills = [['window', tt('Window skin')], ['color', tt('Solid color')], ['gradient', tt('Gradient')], ['none', tt('None')]];
-        const isSurface = node.type === 'box' || node.type === 'button' || node.type === 'list';
-        const isLabel = node.type === 'text' || node.type === 'button';
+        const isSurface = node.type === 'box' || DatabaseUserInterfaceEditor.isControl(node.type);
+        const isLabel = node.type === 'text' || node.type === 'button' || node.type === 'input';
         const colorFill = node.fill === 'color' || node.fill === 'gradient';
         let html = '';
         html += `<div class="rr-ui-prop-title rr-ui-type-${node.type}">${this.typeLabel(node.rowLayout === 'actorPanel' ? 'actorPanel' : node.type)} #${node.id}</div>`;
@@ -1614,7 +1720,7 @@ class DatabaseUserInterfaceEditor {
             html += this.row(tt('Radius'), this.numberControl('p-radius', node.radius, 0, 200));
         }
         if (isLabel) {
-            html += this.group(node.type === 'button' ? tt('Label') : tt('Text'));
+            html += this.group(node.type === 'button' ? tt('Label') : node.type === 'input' ? tt('Placeholder') : tt('Text'));
             if(node.type==='button') {
                 html += this.row(tt('Label expression'), this.textControl('p-labelScript', node.labelScript || '', 'SkillTreesSystem.buttonValue'));
                 html += this.hintRow(tt('Optional expression for a dynamic label. Text below is used in the editor and if the expression fails.'));
@@ -1632,6 +1738,20 @@ class DatabaseUserInterfaceEditor {
                 );
             }
             html += this.codeReferenceMarkup(tt('Text Codes'), references);
+            if (node.type === 'input') {
+                const target = node.inputTarget || 'variable';
+                html += this.hintRow(tt('Shown while the field is empty. What the player types is plain text.'));
+                html += this.group(tt('Text Input'));
+                html += this.row(tt('Stores in'), this.selectControl('p-inputTarget', target, [['variable', tt('Variable')], ['actorName', tt('Actor name')], ['actorNickname', tt('Actor nickname')]]));
+                html += `<div class="rr-ui-sub rr-ui-input-variable"${target === 'variable' ? '' : ' hidden'}>${this.row(tt('Variable ID'), this.numberControl('p-inputVariableId', node.variableId || 1, 1, 9999))}</div>`;
+                html += `<div class="rr-ui-sub rr-ui-input-actor"${target === 'variable' ? ' hidden' : ''}>${this.actorBindingMarkup(node)}</div>`;
+                html += this.row(tt('Max length'), this.numberControl('p-maxLength', node.maxLength || 16, 1, 99));
+                html += this.row('', this.checkControl('p-mask', !!node.mask, tt('Hide characters')), tt('For passwords: the field shows dots.'));
+                html += this.row('', this.checkControl('p-onScreenKeys', !!node.onScreenKeys, tt('Character grid')),
+                    tt('Also shows the stock name-entry grid, for gamepad and touch. Typing always works.'));
+                html += this.row('', this.checkControl('p-autoEdit', !!node.autoEdit, tt('Start typing when opened')), tt('When this field has the first focus.'));
+                html += this.hintRow(tt('OK or a click starts typing; Enter stores the text and runs the action, Escape cancels.'));
+            }
             if (node.type === 'text') {
                 html += this.group(tt('Actor source'));
                 html += this.actorBindingMarkup(node);
@@ -1689,15 +1809,26 @@ class DatabaseUserInterfaceEditor {
             html += this.row(tt('Data source'), this.selectControl('p-dataSource', source, [
                 ['party', tt('Party')], ['inventory', tt('Inventory')], ['skills', tt('Actor skills')],
                 ['actorParameters', `${tt('Actor')} ${tt('Parameters')}`], ['actorEquipment', `${tt('Actor')} ${tt('Equipment')}`], ['actorStates', `${tt('Actor')} ${tt('States')}`],
-                ['options', tt('Options')], ['saveSlots', tt('Save slots')], ['variableRange', tt('Variable range')], ['literal', tt('Literal list')]
+                ['options', tt('Options')], ['saveSlots', tt('Save slots')], ['variableRange', tt('Variable range')], ['literal', tt('Literal list')],
+                ['itemCategories', tt('Item categories')], ['skillTypes', tt('Skill types')], ['equipCandidates', tt('Equipment candidates')],
+                ['shopGoods', tt('Shop goods')], ['shopSell', tt('Items to sell')]
             ]));
+            html += `<div class="rr-ui-sub rr-ui-list-follow"${DatabaseUserInterfaceEditor.FOLLOWING_SOURCES.includes(source) ? '' : ' hidden'}>`;
+            html += this.row(tt('Follows list'), this.textControl('p-filterContext', node.filterContext || '', tt('(none)')),
+                tt('Another list\'s context name: the category, skill type or equipment slot chosen there filters these rows.'));
+            html += '</div>';
+            html += `<div class="rr-ui-sub rr-ui-list-compare"${source === 'actorParameters' ? '' : ' hidden'}>`;
+            html += this.row(tt('Compare with'), this.textControl('p-compareContext', node.compareContext || '', tt('(none)')),
+                tt('An equipment candidates list\'s context name: while it has focus, rows show {newValue}.'));
+            html += '</div>';
+            html += this.row(tt('Columns'), this.numberControl('p-columns', node.columns || 1, 1, 12));
             html += '</div>';
             html += `<div class="rr-ui-sub rr-ui-list-options"${source === 'options' ? '' : ' hidden'}>`;
             html += this.hintRow(tt('Options rows and values come from the running game; runtime is authoritative.'));
             html += `</div>`;
             html += `<div class="rr-ui-sub rr-ui-list-inventory"${source === 'inventory' ? '' : ' hidden'}>`;
             html += this.row(tt('Category'), this.selectControl('p-category', node.category, [['all', tt('All items')], ['item', tt('Regular items')], ['weapon', tt('Weapons')], ['armor', tt('Armors')], ['keyItem', tt('Key items')]]));
-            const actorList = ['skills', 'actorParameters', 'actorEquipment', 'actorStates'].includes(source);
+            const actorList = DatabaseUserInterfaceEditor.ACTOR_LIST_SOURCES.includes(source);
             html += `</div><div class="rr-ui-sub rr-ui-list-actor"${actorList ? '' : ' hidden'}>`;
             html += this.group(tt('Actor source')) + this.actorBindingMarkup(node);
             html += `<div class="rr-ui-sub rr-ui-list-skills"${source === 'skills' ? '' : ' hidden'}>`;
@@ -1712,7 +1843,7 @@ class DatabaseUserInterfaceEditor {
             html += `</div>`;
             html += `<div class="rr-ui-sub"${node.rowLayout === 'actorPanel' ? ' hidden' : ''}>`;
             html += this.row(tt('Row template'), this.textControl('p-rowText', node.rowText, '{name}'));
-            html += this.codeReferenceMarkup(tt('Text Codes'), [[tt('Row template'), '{key}, {kind}, {id}, {value}, {name}, {description}, {icon}, {count}, {paramName}, {paramValue}, {price}, {level}, {playtime}, {symbol}, {valueText}, {title}, {timestamp}, {date}, {partyCharacters}, {partyFaces}, {existing}, {enabled}, {index}']]);
+            html += this.codeReferenceMarkup(tt('Text Codes'), [[tt('Row template'), '{key}, {kind}, {id}, {value}, {name}, {description}, {icon}, {count}, {paramName}, {paramValue}, {price}, {level}, {playtime}, {symbol}, {valueText}, {title}, {timestamp}, {date}, {partyCharacters}, {partyFaces}, {existing}, {enabled}, {index}, {cost}, {slot}, {newValue}, {change}']]);
             html += '</div>';
             html += this.group(`${tt('Text')} ${tt('Style')}`);
             html += this.pair(tt('Row height'), this.numberControl('p-rowHeight', node.rowHeight, 24, 9999), tt('Align'), this.selectControl('p-align', node.align, [['left', tt('Left')], ['center', tt('Center')], ['right', tt('Right')]]));
@@ -1751,7 +1882,7 @@ class DatabaseUserInterfaceEditor {
             html += this.pair(`${tt('Background')} ${tt('Color')}`, this.colorControl('p-gaugeBackColor', node.gaugeBackColor || '#202020'), tt('Height'), this.numberControl('p-gaugeHeight', node.gaugeHeight, 0, 240));
             html += this.row('', this.checkControl('p-customGaugeColors', !!(node.gaugeColor1 || node.gaugeColor2 || node.gaugeBackColor), `${tt('Color')} (${tt('Custom')})`));
         }
-        if (node.type === 'button' || node.type === 'list') {
+        if (DatabaseUserInterfaceEditor.isControl(node.type)) {
             html += this.group(tt('Behavior'));
             html += this.row(tt('Action'), this.actionMarkup('p-action', node.action));
             html += this.row(tt('Enabled'), this.conditionMarkup('p-enabled', node.enabled));
@@ -1775,6 +1906,9 @@ class DatabaseUserInterfaceEditor {
             html += this.group(tt('Navigation'));
             html += this.pair(`${tt('Focus')} ${tt('Up')}`, this.selectControl('p-focusUp', node.focusUp, this.focusOptions(node)), `${tt('Focus')} ${tt('Down')}`, this.selectControl('p-focusDown', node.focusDown, this.focusOptions(node)));
             html += this.pair(`${tt('Focus')} ${tt('Left')}`, this.selectControl('p-focusLeft', node.focusLeft, this.focusOptions(node)), `${tt('Focus')} ${tt('Right')}`, this.selectControl('p-focusRight', node.focusRight, this.focusOptions(node)));
+            html += this.row(tt('Back goes to'), this.selectControl('p-backFocus', node.backFocus || 0,
+                [['0', tt('Cancel action')], ...this.focusOptions(node).slice(1)]), tt('Cancel on this control moves focus here instead of running the interface\'s Cancel action.'));
+            if (node.type === 'list') html += this.row('', this.checkControl('p-focusable', node.focusable !== false, tt('Can be focused')));
         }
         panel.innerHTML = html;
         this.drawGaugeStylePreview();
@@ -1876,7 +2010,7 @@ class DatabaseUserInterfaceEditor {
         node.height = num('p-height', 0, 9999, node.height);
         node.opacity = num('p-opacity', 0, 255, node.opacity);
         this.readCondition(panel, 'p-visible', node.visible);
-        if (node.type === 'box' || node.type === 'button' || node.type === 'list') {
+        if (node.type === 'box' || DatabaseUserInterfaceEditor.isControl(node.type)) {
             node.fill = q('p-fill').value;
             node.color = q('p-color').value;
             node.color2 = q('p-color2').value;
@@ -1892,7 +2026,18 @@ class DatabaseUserInterfaceEditor {
                 el.classList.toggle('rr-ui-hidden', node.fill !== 'gradient');
             });
         }
-        if (node.type === 'text' || node.type === 'button') {
+        if (node.type === 'input') {
+            node.inputTarget = q('p-inputTarget').value;
+            node.variableId = num('p-inputVariableId', 1, 9999, node.variableId || 1);
+            node.maxLength = num('p-maxLength', 1, 99, node.maxLength || 16);
+            node.mask = q('p-mask').checked;
+            node.onScreenKeys = q('p-onScreenKeys').checked;
+            node.autoEdit = q('p-autoEdit').checked;
+            if (node.inputTarget !== 'variable') this.readActorBinding(panel, node, num);
+            panel.querySelector('.rr-ui-input-variable').hidden = node.inputTarget !== 'variable';
+            panel.querySelector('.rr-ui-input-actor').hidden = node.inputTarget === 'variable';
+        }
+        if (node.type === 'text' || node.type === 'button' || node.type === 'input') {
             node.text = q('p-text').value;
             if(q('p-labelScript')) node.labelScript=q('p-labelScript').value;
             node.align = q('p-align').value;
@@ -1958,13 +2103,18 @@ class DatabaseUserInterfaceEditor {
             node.outlineWidth = num('p-outlineWidth', 0, 32, node.outlineWidth);
             node.letterSpacing = num('p-letterSpacing', -20, 100, node.letterSpacing);
             node.contextName = q('p-contextName').value.trim() || 'selection';
+            node.filterContext = q('p-filterContext').value.trim();
+            node.compareContext = q('p-compareContext').value.trim();
+            node.columns = num('p-columns', 1, 12, node.columns || 1);
             node.selectionVariableId = num('p-selectionVariableId', 0, 9999, node.selectionVariableId);
             node.selectionValue = q('p-selectionValue').value;
             for (const source of DatabaseUserInterfaceEditor.LIST_SOURCES) {
                 const section = panel.querySelector('.rr-ui-list-' + source);
                 if (section) section.hidden = node.dataSource !== source;
             }
-            panel.querySelector('.rr-ui-list-actor').hidden = !['skills', 'actorParameters', 'actorEquipment', 'actorStates'].includes(node.dataSource);
+            panel.querySelector('.rr-ui-list-actor').hidden = !DatabaseUserInterfaceEditor.ACTOR_LIST_SOURCES.includes(node.dataSource);
+            panel.querySelector('.rr-ui-list-follow').hidden = !DatabaseUserInterfaceEditor.FOLLOWING_SOURCES.includes(node.dataSource);
+            panel.querySelector('.rr-ui-list-compare').hidden = node.dataSource !== 'actorParameters';
         }
         if (node.type === 'gauge') {
             node.gauge = q('p-gauge').value;
@@ -1985,7 +2135,7 @@ class DatabaseUserInterfaceEditor {
             panel.querySelector('.rr-ui-gauge-variable').hidden = node.gauge !== 'variable';
             panel.querySelector('.rr-ui-gauge-scaled').hidden = !(['variable', 'mhp', 'mmp', 'atk', 'def', 'mat', 'mdf', 'agi', 'luk'].includes(node.gauge));
         }
-        if (node.type === 'button' || node.type === 'list') {
+        if (DatabaseUserInterfaceEditor.isControl(node.type)) {
             this.readAction(panel, 'p-action', node.action);
             this.readCondition(panel, 'p-enabled', node.enabled);
             node.highlightColor = q('p-highlightColor').value;
@@ -2001,6 +2151,8 @@ class DatabaseUserInterfaceEditor {
             node.disabledTextColor = optionalColor('p-disabledTextColor');
             node.disabledOpacity = DatabaseUserInterfaceEditor.optionalByte(q('p-disabledOpacity').value);
             for (const key of ['Up', 'Down', 'Left', 'Right']) node['focus' + key] = Number(q('p-focus' + key).value) || 0;
+            node.backFocus = Number(q('p-backFocus').value) || 0;
+            if (node.type === 'list') node.focusable = q('p-focusable').checked;
             const se = q('p-se').value.trim();
             node.se = se ? Object.assign({ name: se, volume: 90, pitch: 100, pan: 0 }, node.se || {}, { name: se }) : null;
         }
@@ -2130,6 +2282,13 @@ class DatabaseUserInterfaceEditor {
             this.scheduleRender();
         });
 
+        wrapper.querySelectorAll('[data-stock-layout]').forEach(button => {
+            button.addEventListener('click', () => {
+                const menu = button.closest('.rr-ui-add-menu');
+                if (menu) menu.open = false;
+                this.applyStockLayout(button.dataset.stockLayout);
+            });
+        });
         wrapper.querySelectorAll('[data-add]').forEach(button => {
             button.addEventListener('click', () => {
                 this.addNode(button.dataset.add);
@@ -3590,8 +3749,19 @@ class DatabaseUserInterfaceEditor {
         ctx.restore();
     }
 
+    /** A text input drawn as a button-like field: its placeholder, or a starting actor's name. */
+    inputPreviewNode(node) {
+        let text = node.text || '';
+        if (node.inputTarget !== 'variable') {
+            const actor = this.startingActor(node);
+            const value = actor ? (node.inputTarget === 'actorNickname' ? actor.nickname : actor.name) : '';
+            if (value) text = value;
+        }
+        return Object.assign({}, node, { type: 'button', text, wrap: false });
+    }
+
     previewControl(node) {
-        const controls = this.current.nodes.filter(candidate => candidate.type === 'button' || candidate.type === 'list');
+        const controls = this.current.nodes.filter(candidate => DatabaseUserInterfaceEditor.isControl(candidate.type));
         const focusedId = controls.some(candidate => candidate.id === this.current.firstFocus) ? this.current.firstFocus : (controls[0] && controls[0].id);
         const forced = node === this.selected() && this._controlPreviewState && this._controlPreviewState !== 'automatic' ? this._controlPreviewState : '';
         const state = forced || (node.enabled && node.enabled.type === 'never' ? 'disabled' : node.id === focusedId ? 'focused' : 'base');
@@ -3620,16 +3790,34 @@ class DatabaseUserInterfaceEditor {
         const data = (this.databaseManager && this.databaseManager.data) || {};
         const row = (kind, id, value, name, extra = {}) => Object.assign({ key: `${kind}:${id}`, kind, id, value, name,
             description: '', icon: 0, iconIndex: 0, count: '', playtime: '', index: 0, paramName: '', paramValue: '', price: '', level: '',
-            symbol: '', valueText: '', title: '', timestamp: '', date: '', partyCharacters: '', partyFaces: '', existing: false, enabled: true }, extra);
+            symbol: '', valueText: '', title: '', timestamp: '', date: '', partyCharacters: '', partyFaces: '', existing: false, enabled: true,
+            cost: '', slot: '', newValue: '', change: '' }, extra);
+        const itemRow = (item, kind, extra = {}) => row(kind, item.id, item.id, item.name, Object.assign({ count: 1, description: item.description || '',
+            icon: item.iconIndex || 0, iconIndex: item.iconIndex || 0, price: item.price || 0 }, extra));
+        const commands = (data.system && data.system.terms && data.system.terms.commands) || [];
         let rows = [];
         if (node.dataSource === 'party') {
             const ids = (data.system && data.system.partyMembers) || [];
             rows = ids.map(id => data.actors && data.actors[id]).filter(Boolean).map(actor => row('actor', actor.id, actor.id, actor.name,
                 { description: actor.profile || '', level: Number(actor.initialLevel) || 1 }));
+        } else if (node.dataSource === 'itemCategories') {
+            const flags = (data.system && data.system.itemCategories) || [true, true, true, true];
+            rows = [['item', commands[4] || 'Items'], ['weapon', commands[12] || 'Weapons'], ['armor', commands[13] || 'Armors'], ['keyItem', commands[14] || 'Key Items']]
+                .filter((entry, index) => flags[index] !== false).map(([id, name]) => row('category', id, id, name));
+        } else if (node.dataSource === 'skillTypes') {
+            rows = ((data.system && data.system.skillTypes) || []).map((name, id) => id > 0 && name ? row('skillType', id, id, name) : null).filter(Boolean).slice(0, 4);
+        } else if (node.dataSource === 'equipCandidates') {
+            rows = (data.weapons || []).filter(Boolean).slice(0, 6).map(item => itemRow(item, 'weapon', { slot: 0 }));
+            rows.push(row('none', 0, 0, '', { key: 'equip:none', slot: 0 }));
+        } else if (node.dataSource === 'shopGoods' || node.dataSource === 'shopSell') {
+            const selling = node.dataSource === 'shopSell';
+            rows = (data.items || []).filter(item => item && item.itypeId !== 2 && item.price > 0).slice(0, 8)
+                .map(item => itemRow(item, 'item', { price: selling ? Math.floor(item.price / 2) : item.price }));
         } else if (node.dataSource === 'inventory') {
-            const groups = node.category === 'weapon' ? [data.weapons] : node.category === 'armor' ? [data.armors]
-                : node.category === 'all' ? [data.items, data.weapons, data.armors] : [data.items];
-            rows = groups.flatMap(group => (group || []).filter(item => item && (node.category !== 'keyItem' || item.itypeId === 2) && (node.category !== 'item' || item.itypeId !== 2))
+            const category = node.filterContext ? 'item' : node.category;
+            const groups = category === 'weapon' ? [data.weapons] : category === 'armor' ? [data.armors]
+                : category === 'all' ? [data.items, data.weapons, data.armors] : [data.items];
+            rows = groups.flatMap(group => (group || []).filter(item => item && (category !== 'keyItem' || item.itypeId === 2) && (category !== 'item' || item.itypeId !== 2))
                 .slice(0, 12).map(item => {
                     const kind = group === data.weapons ? 'weapon' : group === data.armors ? 'armor' : 'item';
                     return row(kind, item.id, item.id, item.name, { count: 1, description: item.description || '', icon: item.iconIndex || 0,
@@ -3638,9 +3826,10 @@ class DatabaseUserInterfaceEditor {
         } else if (node.dataSource === 'skills') {
             const actor = this.startingActor(node), klass = this.startingClass(actor), level = Number(actor && actor.initialLevel) || 1;
             const ids = new Set((klass && klass.learnings || []).filter(entry => entry.level <= level).map(entry => entry.skillId));
-            rows = (data.skills || []).filter(skill => skill && ids.has(skill.id) && (!node.skillTypeId || skill.stypeId === node.skillTypeId)).slice(0, 12)
+            rows = (data.skills || []).filter(skill => skill && ids.has(skill.id) && (node.filterContext || !node.skillTypeId || skill.stypeId === node.skillTypeId)).slice(0, 12)
                 .map(skill => row('skill', skill.id, skill.id, skill.name, { description: skill.description || '', icon: skill.iconIndex || 0,
-                    iconIndex: skill.iconIndex || 0, price: skill.mpCost || 0, level }));
+                    iconIndex: skill.iconIndex || 0, price: skill.mpCost || 0, level,
+                    cost: skill.tpCost > 0 ? `\\C[29]${skill.tpCost}\\C[0]` : skill.mpCost > 0 ? `\\C[23]${skill.mpCost}\\C[0]` : '' }));
         } else if (node.dataSource === 'actorParameters') {
             const actor = this.startingActor(node);
             const names = (data.system && data.system.terms && data.system.terms.params) || ['Max HP', 'Max MP', 'ATK', 'DEF', 'MAT', 'MDF', 'AGI', 'LUK'];
@@ -3656,7 +3845,7 @@ class DatabaseUserInterfaceEditor {
                 return row('equipment', item ? item.id : 0, item ? item.id : 0, item ? item.name : slotName,
                     { key: `equipment:${slot}`, description: item && item.description || '', icon: item && item.iconIndex || 0,
                         iconIndex: item && item.iconIndex || 0, price: item && item.price || 0, count: item ? 1 : 0,
-                        paramName: slotName, enabled: !!item });
+                        paramName: slotName, slot, enabled: true, valueText: item ? `\\I[${item.iconIndex || 0}]${item.name}` : '' });
             });
         } else if (node.dataSource === 'actorStates') {
             rows = [];
@@ -3691,14 +3880,15 @@ class DatabaseUserInterfaceEditor {
         }
         return rows.map((entry, index) => {
             entry.index = index + 1;
-            let template = node.rowText || (node.dataSource === 'inventory' ? `\\I[${entry.icon || 0}]{name}  x{count}`
+            let template = node.rowText || (['inventory', 'equipCandidates', 'shopSell'].includes(node.dataSource) ? (entry.kind === 'none' ? '' : `\\I[${entry.icon || 0}]{name}  x{count}`)
+                : node.dataSource === 'shopGoods' ? `\\I[${entry.icon || 0}]{name}  {price}`
                 : node.dataSource === 'skills' ? `\\I[${entry.icon || 0}]{name}`
                 : node.dataSource === 'options' ? '{name}  {valueText}'
                 : node.dataSource === 'saveSlots' && entry.playtime ? '{name}  {playtime}'
                 : node.dataSource === 'variableRange' ? '{name}: {value}' : '{name}');
-            entry.text = template.replace(/\{(key|kind|id|value|name|description|icon|iconIndex|count|playtime|index|paramName|paramValue|price|level|symbol|valueText|title|timestamp|date|partyCharacters|partyFaces|existing|enabled)\}/gi, (match, key) => {
+            entry.text = template.replace(/\{(key|kind|id|value|name|description|icon|iconIndex|count|playtime|index|paramName|paramValue|price|level|symbol|valueText|title|timestamp|date|partyCharacters|partyFaces|existing|enabled|cost|slot|newValue|change)\}/gi, (match, key) => {
                 const field = { iconindex: 'iconIndex', paramname: 'paramName', paramvalue: 'paramValue', valuetext: 'valueText',
-                    partycharacters: 'partyCharacters', partyfaces: 'partyFaces' }[key.toLowerCase()] || key.toLowerCase();
+                    partycharacters: 'partyCharacters', partyfaces: 'partyFaces', newvalue: 'newValue' }[key.toLowerCase()] || key.toLowerCase();
                 return String(entry[field] ?? '');
             });
             return entry;
@@ -3719,8 +3909,10 @@ class DatabaseUserInterfaceEditor {
         this.ctx.beginPath();
         this.ctx.rect(area.x, area.y, area.width, area.height);
         this.ctx.clip();
-        rows.slice(0, Math.ceil(area.height / node.rowHeight)).forEach((entry, index) => {
-            const rowRect = { x: area.x, y: area.y + index * node.rowHeight, width: area.width, height: node.rowHeight };
+        const columns = node.rowLayout === 'actorPanel' ? 1 : Math.max(1, node.columns || 1);
+        const columnWidth = area.width / columns;
+        rows.slice(0, Math.ceil(area.height / node.rowHeight) * columns).forEach((entry, index) => {
+            const rowRect = { x: area.x + (index % columns) * columnWidth, y: area.y + Math.floor(index / columns) * node.rowHeight, width: columnWidth, height: node.rowHeight };
             if (node.fill === 'window') {
                 const gradient = this.ctx.createLinearGradient(0, rowRect.y, 0, rowRect.y + rowRect.height);
                 gradient.addColorStop(0, 'rgba(32,32,32,0.5)');
@@ -4137,7 +4329,7 @@ class DatabaseUserInterfaceEditor {
             let drawn = node;
             let stateOpacity = 255;
             let drawnRect = rect;
-            if (node.type === 'button' || node.type === 'list') {
+            if (DatabaseUserInterfaceEditor.isControl(node.type)) {
                 const preview = this.previewControl(node);
                 drawn = preview.node;
                 stateOpacity = preview.opacity;
@@ -4150,6 +4342,7 @@ class DatabaseUserInterfaceEditor {
                 case 'image': this.drawImageNode(drawn, drawnRect); break;
                 case 'text': this.drawText(drawn, drawnRect); break;
                 case 'button': this.drawSurface(drawn, drawnRect); this.drawSelection(drawn, drawnRect); this.drawText(drawn, drawnRect); break;
+                case 'input': this.drawSurface(drawn, drawnRect); this.drawSelection(drawn, drawnRect); this.drawText(this.inputPreviewNode(drawn), drawnRect); break;
                 case 'list': this.drawListNode(drawn, drawnRect); break;
                 case 'gauge': this.drawGaugeNode(drawn, drawnRect); break;
                 default: break;

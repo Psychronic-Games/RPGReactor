@@ -10,8 +10,11 @@
  * records: the game keeps its stock scenes until one is called or set as
  * a System replacement, so seeding them changes nothing at play time.
  *
- * Save and Load use dedicated semantic slot actions. Item, Skill, Equip, Shop,
- * Name, and Battle remain stock until their workflows are implemented end to end.
+ * Save and Load use dedicated semantic slot actions; Items, Skills, Equipment
+ * and Shop chain their lists through contexts (a category list filters the
+ * item list, a slot list the candidates) and use the Use, Equip, Buy and Sell
+ * workflows. Name Input edits the actor's name in a Text Input field with the
+ * stock character grid. Battle remains stock.
  */
 (function(root) {
     'use strict';
@@ -24,12 +27,15 @@
 
     const COMMANDS = {
         item: 4, skill: 5, equip: 6, status: 7, formation: 8, save: 9, gameEnd: 10, options: 11,
-        newGame: 18, continue: 19, toTitle: 21, cancel: 22
+        equip2: 15, optimize: 16, clear: 17, newGame: 18, continue: 19, toTitle: 21, cancel: 22, buy: 24, sell: 25
     };
     const DEFAULT_COMMANDS = {
         item: 'Item', skill: 'Skill', equip: 'Equip', status: 'Status', formation: 'Formation', save: 'Save',
-        gameEnd: 'Game End', options: 'Options', newGame: 'New Game', continue: 'Continue', toTitle: 'To Title', cancel: 'Cancel'
+        gameEnd: 'Game End', options: 'Options', newGame: 'New Game', continue: 'Continue', toTitle: 'To Title', cancel: 'Cancel',
+        equip2: 'Equip', optimize: 'Optimize', clear: 'Clear', buy: 'Buy', sell: 'Sell'
     };
+    const LIST_ROW = 36;
+    const selectableHeight = rows => rows * LIST_ROW + PADDING * 2;
     const DEFAULT_BASIC = ['Level', 'Lv', 'HP', 'HP', 'MP', 'MP', 'TP', 'TP', 'EXP', 'EXP'];
 
     function fittingHeight(lines) {
@@ -115,7 +121,7 @@
 
     const StockInterfaces = {
         // New baselines append in phases so every prior ID remains stable.
-        KINDS: ['title', 'menu', 'gameEnd', 'status', 'options', 'save', 'load'],
+        KINDS: ['title', 'menu', 'gameEnd', 'status', 'options', 'save', 'load', 'item', 'skill', 'equip', 'shop', 'name'],
 
         /** The screen and UI area a project draws in, from System.json. */
         metrics(system) {
@@ -349,6 +355,193 @@
 
         load(data) {
             return this.file(data, 'load');
+        },
+
+        /** The help box every list screen opens with, and the text that reads a context's description. */
+        helpBox(b, m, contextName, width) {
+            const height = fittingHeight(2);
+            const box = b.box('Help', m.boxX, m.boxY + m.mainAreaTop, width || m.boxWidth, height);
+            const text = b.text(box.id, '{context.description}', PADDING, PADDING, (width || m.boxWidth) - PADDING * 2,
+                { name: 'Description', height: height - PADDING * 2, wrap: true, fitText: true, contextName });
+            return { box, text, bottom: m.boxY + m.mainAreaTop + height };
+        },
+
+        cancelButton(b, system, m) {
+            return b.button(0, this.term(system, 'cancel'), m.boxX + m.boxWidth - 132, m.boxY + 8, 120, action('close'), { name: 'Cancel' });
+        },
+
+        /**
+         * The party panel a Use action picks its target in: on the right, as
+         * the stock menu actor window, and shown only while choosing.
+         */
+        targetPanel(b, m) {
+            const top = m.boxY + m.mainAreaTop;
+            const height = m.boxHeight - m.mainAreaTop;
+            const rowHeight = Math.max(96, Math.floor(height / 4));
+            return b.list('Targets', 0, 'party', m.boxX + COMMAND_WIDTH, top, m.boxWidth - COMMAND_WIDTH, height, {
+                rowLayout: 'actorPanel', rowHeight, portraitSize: Math.min(FACE, rowHeight - PADDING * 2),
+                actorFields: ['portrait', 'name', 'level', 'hp', 'mp', 'states'], contextName: 'target',
+                visible: condition('script', { script: 'scene.isSelectingTarget()' })
+            });
+        },
+
+        item(data) {
+            const system = data.system || {};
+            const m = this.metrics(system);
+            const b = new Builder();
+            this.cancelButton(b, system, m);
+            const help = this.helpBox(b, m, 'selectedItem');
+            const bottom = m.boxY + m.boxHeight;
+            const categoryHeight = selectableHeight(1);
+            const categories = b.list('Categories', 0, 'itemCategories', m.boxX, help.bottom, m.boxWidth, categoryHeight, {
+                columns: 4, align: 'center', contextName: 'selectedCategory'
+            });
+            const items = b.list('Items', 0, 'inventory', m.boxX, help.bottom + categoryHeight, m.boxWidth, bottom - help.bottom - categoryHeight, {
+                columns: 2, filterContext: 'selectedCategory', contextName: 'selectedItem', backFocus: categories.id,
+                action: action('use', { contextName: 'target' })
+            });
+            categories.action = action('focusNode', { id: items.id });
+            this.targetPanel(b, m);
+            const record = this.record('item', 'Items', b, { firstFocus: categories.id });
+            record.note = 'Baseline of the stock item screen. A category chooses the items; Use picks a target in the party panel when the item is for allies.';
+            return record;
+        },
+
+        skill(data) {
+            const system = data.system || {};
+            const m = this.metrics(system);
+            const b = new Builder();
+            this.cancelButton(b, system, m);
+            const help = this.helpBox(b, m, 'selectedSkill');
+            const bottom = m.boxY + m.boxHeight;
+            const typeHeight = selectableHeight(3);
+            const actor = { actorSource: 'menuActor' };
+            const types = b.list('Skill Types', 0, 'skillTypes', m.boxX, help.bottom, COMMAND_WIDTH, typeHeight,
+                Object.assign({ contextName: 'selectedSkillType' }, actor));
+            const status = b.box('Actor', m.boxX + COMMAND_WIDTH, help.bottom, m.boxWidth - COMMAND_WIDTH, typeHeight);
+            const face = Math.min(FACE, typeHeight - PADDING * 2);
+            b.partyFace(status.id, 0, PADDING, PADDING, Object.assign({ name: 'Face', width: face, height: face }, actor));
+            // Name, level and class on the left, the three gauges beside them.
+            const textX = PADDING + face + 16;
+            const textWidth = Math.max(160, m.boxWidth - COMMAND_WIDTH - textX - PADDING);
+            const column = Math.floor((textWidth - PADDING) / 2);
+            const gaugeX = textX + column + PADDING;
+            b.text(status.id, '{actor.name}', textX, PADDING, column, Object.assign({ name: 'Name', fitText: true, height: LINE }, actor));
+            b.text(status.id, this.basic(system, 1) + ' {actor.level}', textX, PADDING + LINE, column, Object.assign({ name: 'Level' }, actor));
+            b.text(status.id, '{actor.class}', textX, PADDING + LINE * 2, column, Object.assign({ name: 'Class', fitText: true, height: LINE }, actor));
+            b.gauge(status.id, 'hp', gaugeX, PADDING + 6, column, Object.assign({ name: 'HP' }, actor));
+            b.gauge(status.id, 'mp', gaugeX, PADDING + LINE + 6, column, Object.assign({ name: 'MP' }, actor));
+            b.gauge(status.id, 'tp', gaugeX, PADDING + LINE * 2 + 6, column, Object.assign({ name: 'TP' }, actor));
+            const skills = b.list('Skills', 0, 'skills', m.boxX, help.bottom + typeHeight, m.boxWidth, bottom - help.bottom - typeHeight,
+                Object.assign({ columns: 2, filterContext: 'selectedSkillType', contextName: 'selectedSkill', backFocus: types.id,
+                    rowText: '\\I[{icon}]{name}  {cost}', action: action('use', { contextName: 'target' }) }, actor));
+            types.action = action('focusNode', { id: skills.id });
+            this.targetPanel(b, m);
+            const record = this.record('skill', 'Skills', b, { firstFocus: types.id });
+            record.note = 'Baseline of the stock skill screen for the menu actor. Q and W change actor; Use picks a target in the party panel.';
+            return record;
+        },
+
+        equip(data) {
+            const system = data.system || {};
+            const m = this.metrics(system);
+            const b = new Builder();
+            this.cancelButton(b, system, m);
+            const help = this.helpBox(b, m, 'selectedCandidate');
+            const bottom = m.boxY + m.boxHeight;
+            const statusWidth = Math.min(312, Math.floor(m.boxWidth * 0.4));
+            const actor = { actorSource: 'menuActor' };
+            const status = b.box('Actor', m.boxX, help.bottom, statusWidth, bottom - help.bottom);
+            b.text(status.id, '{actor.name}', PADDING, PADDING, statusWidth - PADDING * 2, Object.assign({ name: 'Name' }, actor));
+            b.list('Parameters', status.id, 'actorParameters', PADDING, PADDING + LINE, statusWidth - PADDING * 2, bottom - help.bottom - LINE - PADDING * 2,
+                Object.assign({ fill: 'none', focusable: false, compareContext: 'selectedCandidate' }, actor));
+            const rightX = m.boxX + statusWidth;
+            const rightWidth = m.boxWidth - statusWidth;
+            const commandHeight = fittingHeight(1);
+            const commands = b.box('Commands', rightX, help.bottom, rightWidth, commandHeight);
+            const third = Math.floor((rightWidth - PADDING * 2) / 3);
+            const equip = b.button(commands.id, this.term(system, 'equip2'), PADDING, PADDING, third, action('none'), { name: 'Equip' });
+            b.button(commands.id, this.term(system, 'optimize'), PADDING + third, PADDING, third, action('equipOptimize'), { name: 'Optimize' });
+            b.button(commands.id, this.term(system, 'clear'), PADDING + third * 2, PADDING, third, action('equipClear'), { name: 'Clear' });
+            const listTop = help.bottom + commandHeight;
+            const slotHeight = Math.floor((bottom - listTop) / 2);
+            const slots = b.list('Slots', 0, 'actorEquipment', rightX, listTop, rightWidth, slotHeight,
+                Object.assign({ contextName: 'selectedSlot', rowText: '{paramName}  {valueText}', backFocus: equip.id }, actor));
+            const candidates = b.list('Candidates', 0, 'equipCandidates', rightX, listTop + slotHeight, rightWidth, bottom - listTop - slotHeight,
+                Object.assign({ columns: 2, filterContext: 'selectedSlot', contextName: 'selectedCandidate', backFocus: slots.id,
+                    action: action('equip', { id: slots.id }) }, actor));
+            equip.action = action('focusNode', { id: slots.id });
+            slots.action = action('focusNode', { id: candidates.id });
+            // The help line reads the slot's equipment while the slots have
+            // focus and the candidate's otherwise, as the stock screen does.
+            help.text.visible = condition('script', { script: `scene.focusedNodeId() !== ${slots.id}` });
+            b.text(help.box.id, '{context.description}', PADDING, PADDING, m.boxWidth - PADDING * 2, {
+                name: 'Slot description', height: help.box.height - PADDING * 2, wrap: true, fitText: true, contextName: 'selectedSlot',
+                visible: condition('script', { script: `scene.focusedNodeId() === ${slots.id}` })
+            });
+            const record = this.record('equip', 'Equipment', b, { firstFocus: equip.id });
+            record.note = 'Baseline of the stock equip screen for the menu actor. The parameters compare against the candidate under the cursor; Q and W change actor.';
+            return record;
+        },
+
+        shop(data) {
+            const system = data.system || {};
+            const m = this.metrics(system);
+            const b = new Builder();
+            this.cancelButton(b, system, m);
+            const goldWidth = COMMAND_WIDTH;
+            const help = this.helpBox(b, m, 'selectedGood', m.boxWidth - goldWidth);
+            const gold = b.box('Gold', m.boxX + m.boxWidth - goldWidth, m.boxY + m.mainAreaTop, goldWidth, help.bottom - m.boxY - m.mainAreaTop);
+            b.text(gold.id, '\\GOLD \\G', PADDING, PADDING, goldWidth - PADDING * 2, { name: 'Gold', align: 'right' });
+            const bottom = m.boxY + m.boxHeight;
+            const half = Math.floor(m.boxWidth / 2);
+            const goods = b.list(this.term(system, 'buy'), 0, 'shopGoods', m.boxX, help.bottom, half, bottom - help.bottom, {
+                contextName: 'selectedGood', rowText: '\\I[{icon}]{name}  {price}', action: action('shopBuy')
+            });
+            const sellable = condition('script', { script: '!scene.isPurchaseOnly()' });
+            const categoryHeight = selectableHeight(2);
+            const categories = b.list('Sell Categories', 0, 'itemCategories', m.boxX + half, help.bottom, m.boxWidth - half, categoryHeight, {
+                columns: 2, align: 'center', contextName: 'sellCategory', backFocus: goods.id, visible: sellable
+            });
+            const sell = b.list(this.term(system, 'sell'), 0, 'shopSell', m.boxX + half, help.bottom + categoryHeight, m.boxWidth - half, bottom - help.bottom - categoryHeight, {
+                filterContext: 'sellCategory', contextName: 'selectedSell', backFocus: categories.id, visible: sellable, action: action('shopSell')
+            });
+            categories.action = action('focusNode', { id: sell.id });
+            // The help line follows whichever side has focus.
+            help.text.visible = condition('script', { script: `scene.focusedNodeId() !== ${sell.id}` });
+            b.text(help.box.id, '{context.description}', PADDING, PADDING, m.boxWidth - goldWidth - PADDING * 2, {
+                name: 'Sell description', height: help.box.height - PADDING * 2, wrap: true, fitText: true, contextName: 'selectedSell',
+                visible: condition('script', { script: `scene.focusedNodeId() === ${sell.id}` })
+            });
+            const record = this.record('shop', 'Shop', b, { firstFocus: goods.id });
+            record.note = 'Baseline of the stock shop. Goods come from Shop Processing; Buy and Sell ask how many in the stock number window. Purchase-only shops hide the sell side.';
+            return record;
+        },
+
+        name(data) {
+            const system = data.system || {};
+            const m = this.metrics(system);
+            const b = new Builder();
+            const width = Math.min(m.boxWidth, 480);
+            const height = FACE + PADDING * 2;
+            const actor = { actorSource: 'sceneActor' };
+            const box = b.box('Name', m.boxX + Math.floor((m.boxWidth - width) / 2), m.boxY + m.mainAreaTop, width, height);
+            b.partyFace(box.id, 0, PADDING, PADDING, Object.assign({ name: 'Face' }, actor));
+            const field = b.add('input', Object.assign({
+                name: 'Name field', parent: box.id, x: PADDING + FACE + 16, y: Math.floor((height - LINE - PADDING) / 2),
+                width: width - FACE - PADDING * 2 - 16, height: LINE + PADDING, fill: 'none', text: '', align: 'left',
+                fontSize: 0, textColor: 0, outline: true, color: '#000000', color2: '#000000', fillOpacity: 160, vertical: true,
+                borderWidth: 0, borderColor: '#ffffff', radius: 0, inputTarget: 'actorName', maxLength: 16,
+                onScreenKeys: true, autoEdit: true, action: action('close'), enabled: condition('always'), highlightColor: '#ffffff', se: null
+            }, actor));
+            const record = this.record('name', 'Name Input', b, { firstFocus: field.id });
+            record.note = 'Baseline of the stock name input: the field edits the actor Name Input was opened for, with the stock character grid, and closes on OK.';
+            return record;
+        },
+
+        /** One baseline by kind (for Stock Layout on an existing record). */
+        buildOne(kind, data) {
+            return this.KINDS.includes(kind) ? this[kind](data && typeof data === 'object' ? data : {}) : null;
         },
 
         /** Every baseline record, in list order, for a project's data. */
