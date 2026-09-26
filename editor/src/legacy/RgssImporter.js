@@ -113,7 +113,18 @@ function installPlugins(dest, families, constants, scriptTexts, skipped, log, re
     const mkdir = (p) => fs.mkdirSync(p, { recursive: true });
     const installed = [];
     const wanted = [];
-    for (const f of C.FAMILIES.filter(f => families.has(f.key) && f.plugin)) {
+    for (const base of families.basePlugins || []) wanted.push(typeof base === 'string' ? { name: base } : base);
+    // Ports install in the game's script order, so a script replacing another's method replaces its port's too.
+    const joined = scriptTexts.join('\n'), starts = [];
+    scriptTexts.reduce((at, text) => (starts.push(at), at + text.length + 1), 0);
+    const position = (f) => {
+        f.detect.lastIndex = 0;
+        const m = f.detect.exec(joined);
+        return m ? starts.filter(s => s <= m.index).length : Infinity;
+    };
+    const ordered = C.FAMILIES.filter(f => families.has(f.key) && f.plugin).map((f, i) => ({ f, i, at: position(f) }))
+        .sort((a, b) => a.at - b.at || a.i - b.i).map(e => e.f);
+    for (const f of ordered) {
         // A port built on another port installs that one first, with this family's settings for it.
         for (const base of f.requires || []) wanted.push({ name: base, parameters: f.parameters });
         wanted.push({ name: f.plugin, parameters: f.requires ? null : f.parameters });
@@ -147,6 +158,41 @@ function installPlugins(dest, families, constants, scriptTexts, skipped, log, re
         log(`  Installed ${installed.length} plugin${installed.length === 1 ? '' : 's'} ported from the game's scripts: ${installed.map(p => p.name).join(', ')}.`, 'info');
     }
     return installed;
+}
+
+/**
+ * Hime's Parameter Tables: a class's (or enemy's) stats per level read from a CSV the game shipped
+ * (Data/Params/class3.csv: level, MHP, MMP, ATK, DEF, MAT, MDF, AGI, LUK), written into the database.
+ * A level the table leaves out is 0; an enemy takes the level 1 row. Per-actor tables have no MZ
+ * home and are reported. Returns the number of tables applied.
+ */
+function applyParamTables(db, scriptText, constants, read, skipped = []) {
+    if (!/\$imported\["TH_ParamTables"\]\s*=\s*true/.test(scriptText)) return 0;
+    const k = (name, d) => String(constants['TH::Param_Tables::' + name] ?? d);
+    const dir = k('Param_Directory', 'Data/Params').replace(/\\/g, '/').replace(/\/$/, '');
+    const table = (prefix, id) => {
+        const bytes = read(`${dir}/${prefix}${id}.csv`);
+        if (!bytes) return null;
+        const rows = bytes.toString('utf8').split(/\s+/).slice(1).filter(Boolean).map(line => line.split(',').map(v => parseInt(v, 10) || 0));
+        if (!rows.length) return null;
+        const top = Math.max(99, ...rows.map(r => r[0]));
+        const params = Array.from({ length: 8 }, () => new Array(top + 1).fill(0));
+        for (const r of rows) for (let i = 0; i < 8; i++) if (r[0] >= 0) params[i][r[0]] = r[i + 1] || 0;
+        return params;
+    };
+    let applied = 0;
+    for (const cls of db.classes) {
+        const params = cls && table(k('Class_Prefix', 'class'), cls.id);
+        if (params) { cls.params = params; applied++; }
+    }
+    for (const enemy of db.enemies) {
+        const params = enemy && table(k('Enemy_Prefix', 'enemy'), enemy.id);
+        if (params) { enemy.params = params.map(row => row[1]); applied++; }
+    }
+    for (const actor of db.actors) {
+        if (actor && table(k('Actor_Prefix', 'actor'), actor.id)) skipped.push(`${dir}/${k('Actor_Prefix', 'actor')}${actor.id}.csv: per-actor stat tables have no place in the database; the class's stats are used`);
+    }
+    return applied;
 }
 
 /**
@@ -296,12 +342,15 @@ function open(folder, destination, options) {
         };
         const nameTable = (records) => { const out = []; for (const r of records || []) if (r && r.id) out[r.id] = { name: String(r.name || ''), icon: Number(r.icon_index) || 0 }; return out; };
         const families = C.scriptFamilies(custom.map(s => s.text));
+        // VX Ace's own window layouts and drawing, which the script ports build on: installed first.
+        families.basePlugins = ['RR_AceCompat'];
         C.setContext({ constants, messageCodes, families, names: { items: nameTable(ace.items), weapons: nameTable(ace.weapons), armors: nameTable(ace.armors), skills: nameTable(ace.skills) } });
         const db = C.database(ace, notes);
         // Music a script of the game's plays in place of what its events name.
         const aliases = C.audioAliases(custom.map(s => s.text));
         const aliased = (value) => { const n = C.applyAudioAliases(value, aliases); if (n) add(notes, 'audioAliased', n); return value; };
         aliased(db.troops); aliased(db.commonEvents);
+        { const n = applyParamTables(db, scriptText, constants, (rel) => src.read(rel), skipped); if (n) add(notes, 'paramTables', n); }
         const files = { Actors: db.actors, Classes: db.classes, Skills: db.skills, Items: db.items, Weapons: db.weapons, Armors: db.armors, Enemies: db.enemies, Troops: db.troops, States: db.states, Animations: db.animations, CommonEvents: db.commonEvents, Tilesets: db.tilesets };
         for (const [file, records] of Object.entries(files)) writeJson(path.join(dest, 'data', `${file}.json`), records);
         const base = JSON.parse(fs.readFileSync(path.join(skeleton, 'data', 'System.json'), 'utf8'));
@@ -489,4 +538,4 @@ function open(folder, destination, options) {
 function report(folder, options) { return open(folder, null, options).inventory(); }
 function importProject(folder, destination, options) { return open(folder, destination, options).importProject(); }
 
-module.exports = { open, report, importProject, source, installPlugins, systemTwin, writeFamilyQuests, copyAliasedAudio, matchFileCase, repairName, repairPath, STOCK_SCRIPTS, GRAPHICS, AUDIO };
+module.exports = { open, report, importProject, source, installPlugins, applyParamTables, systemTwin, writeFamilyQuests, copyAliasedAudio, matchFileCase, repairName, repairPath, STOCK_SCRIPTS, GRAPHICS, AUDIO };

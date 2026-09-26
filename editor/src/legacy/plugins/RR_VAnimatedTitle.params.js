@@ -64,7 +64,11 @@ function readLiteral(text, at) {
             }
             return [s, j + 1];
         }
-        if (c === ':') { const m = /^:(\w+[?!]?)/.exec(text.slice(i)); if (m) return [m[1], i + m[0].length]; }
+        if (c === ':') {
+            // A symbol, :name or :"quoted", reads as its name.
+            if (text[i + 1] === '"') return value(i + 1);
+            const m = /^:(\w+[?!]?)/.exec(text.slice(i)); if (m) return [m[1], i + m[0].length];
+        }
         const m = /^(-?\d+(?:\.\d+)?|true|false|nil)\b/.exec(text.slice(i));
         if (m) return [m[1] === 'true' ? true : m[1] === 'false' ? false : m[1] === 'nil' ? null : Number(m[1]), i + m[0].length];
         throw new Error('unreadable value at ' + i);

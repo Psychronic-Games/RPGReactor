@@ -3810,7 +3810,8 @@ Scene_Boot.prototype.isReady = function() {
 //   rrMapNameStays  a message does not close the map name, as in XP, VX and VX Ace
 //   rrTouchUiOff    touch UI starts off (the old engines had none) until the
 //                   player sets it in Options
-//   rrRgssKeys      the A, S and D keys are buttons of their own
+//   rrRgssKeys      the A, S and D keys are buttons of their own, and a held key
+//                   does not page through messages (reactor_windows.js)
 (function() {
     const _updateMapNameWindow = Scene_Map.prototype.updateMapNameWindow;
     Scene_Map.prototype.updateMapNameWindow = function() {

@@ -62,8 +62,9 @@
             if (style === 5 || style === 6) y -= 2; else x += 1;
             w = Math.floor(w / 8) * 8;
         }
-        const fill = (fx, fy, fw, fh, c) => { if (fw > 0 && fh > 0) this.fillRect(fx, fy, fw, fh, c); };
-        const dot = (px, py, c) => this.fillRect(px, py, 1, 1, c);
+        // RGSS fill_rect replaces the pixels, alpha included: a translucent back leaves the window showing through.
+        const fill = (fx, fy, fw, fh, c) => { if (fw > 0 && fh > 0) { this.clearRect(fx, fy, fw, fh); this.fillRect(fx, fy, fw, fh, c); } };
+        const dot = (px, py, c) => { this.clearRect(px, py, 1, 1); this.fillRect(px, py, 1, 1, c); };
         if (style < 5) {
             for (let i = 0; i < offs + 3; i++) fill(x - i, y + i - 2, w + 3, 1, css(0, 0, 0, 255));
             for (let i = 0; i < offs + 1; i++) fill(x - i, y + i - 1, w + 1, 1, css(255, 255, 255, 255));

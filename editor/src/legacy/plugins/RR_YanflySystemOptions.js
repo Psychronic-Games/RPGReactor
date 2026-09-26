@@ -7,7 +7,7 @@
  * @help RR_YanflySystemOptions.js
  *
  * Yanfly's System Options screen replaces Options (on the title with Theo's
- * add-on, and in the menu): a help line over a list of volumes, toggles, the
+ * add-on, and in the menu) and the menu's Game End: a help line over a list of volumes, toggles, the
  * game's own option switches and variables, and actions. Left and right
  * change a value (Shift for steps of 10).
  *
@@ -306,6 +306,16 @@
         SceneManager.push(Scene_RRSystemOptions);
     };
     Scene_Menu.prototype.commandOptions = function() {
+        SceneManager.push(Scene_RRSystemOptions);
+    };
+    // The menu's Game End command became this screen, under the screen's name (the Options term).
+    const _addGameEndCommand = Window_MenuCommand.prototype.addGameEndCommand;
+    Window_MenuCommand.prototype.addGameEndCommand = function() {
+        _addGameEndCommand.call(this);
+        const entry = this._list[this.findSymbol('gameEnd')];
+        if (entry) entry.name = TextManager.options;
+    };
+    Scene_Menu.prototype.commandGameEnd = function() {
         SceneManager.push(Scene_RRSystemOptions);
     };
 })();

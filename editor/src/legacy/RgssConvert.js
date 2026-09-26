@@ -388,12 +388,16 @@
             // Calls into a plugin are written with ?. so turning the plugin off leaves them doing nothing.
             Object.assign(calls, (self === 'character' ? family.route : family.event) || {});
             Object.assign(extra.members, family.members || {});
-            Object.assign(extra.objects, family.objects || {});
             Object.assign(extra.globals, family.globals || {});
-            Object.assign(extra.setters, family.setters || {});
             Object.assign(extra.scenes, family.scenes || {});
             Object.assign(extra.classes, family.classes || {});
-            Object.assign(extra.modules, family.modules || {});
+            // Tables keyed by kind or module keep every family's methods under the same key.
+            for (const table of ['objects', 'setters', 'modules']) {
+                for (const [key, value] of Object.entries(family[table] || {})) {
+                    const plain = (v) => v && typeof v === 'object' && !Array.isArray(v);
+                    extra[table][key] = plain(value) && plain(extra[table][key]) ? Object.assign({}, extra[table][key], value) : value;
+                }
+            }
             if (self === 'character') for (const [name, template] of Object.entries(family.assign || {})) ivars[name] = template.replace(/\s*=\s*%v$/, '');
         }
         return { calls, ivars, extra };
@@ -683,7 +687,8 @@
 
     // ---- database --------------------------------------------------------------
 
-    const traits = (features) => list(features).map(f => ({ code: num(f.code), dataId: num(f.data_id), value: num(f.value) }));
+    // Ace numbers equipment types from 0 (weapon); MZ from 1, so equip-type data ids (lock and seal equip) shift by one.
+    const traits = (features) => list(features).map(f => ({ code: num(f.code), dataId: num(f.data_id) + (num(f.code) === 54 || num(f.code) === 55 ? 1 : 0), value: num(f.value) }));
     const effects = (effs) => list(effs).map(e => ({ code: num(e.code), dataId: num(e.data_id), value1: num(e.value1), value2: num(e.value2) }));
     const damage = (d) => ({ type: num(d && d.type), elementId: num(d && d.element_id), formula: str(d && d.formula) || '0', variance: num(d && d.variance, 20), critical: !!(d && d.critical) });
     const byId = (records, convert) => { const out = [null]; for (const r of list(records)) if (r && r.id) out[r.id] = convert(r); for (let i = 1; i < out.length; i++) if (out[i] === undefined) out[i] = null; return out; };
@@ -713,7 +718,7 @@
             stypeId: num(s.stype_id), tpCost: num(s.tp_cost), messageType: 1
         }));
         const items = byId(ace.items, it => Object.assign(usable(it), { id: it.id, consumable: it.consumable !== false, itypeId: num(it.itype_id, 1), price: num(it.price) }));
-        const equip = (e) => ({ description: str(e.description), etypeId: num(e.etype_id), traits: traits(e.features), iconIndex: num(e.icon_index), name: str(e.name), note: str(e.note), params: list(e.params).map(x => num(x)), price: num(e.price) });
+        const equip = (e) => ({ description: str(e.description), etypeId: num(e.etype_id) + 1, traits: traits(e.features), iconIndex: num(e.icon_index), name: str(e.name), note: str(e.note), params: list(e.params).map(x => num(x)), price: num(e.price) });
         const weapons = byId(ace.weapons, w => Object.assign(equip(w), { id: w.id, animationId: num(w.animation_id), wtypeId: num(w.wtype_id) }));
         const armors = byId(ace.armors, a => Object.assign(equip(a), { id: a.id, atypeId: num(a.atype_id) }));
         const enemies = byId(ace.enemies, e => ({

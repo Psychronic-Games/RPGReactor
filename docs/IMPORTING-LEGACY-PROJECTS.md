@@ -234,12 +234,26 @@ Options, the website title command, Hime's Picture Wrapper, KilloZapit's word
 wrap, Yanfly's Core Engine colours and Message System window, Vlue's version
 stamp, Victor Engine Light Effects, CSCA Difficulty System, MapName Plus+, the
 Document Reader, WASD Movement, Vlue's Eventing Fine Tuning, Theo's fog and
-hover labels, Yanfly's System Options (global, with Theo's add-on) and Window
-Color Opacity; from VX, Woratana's
+hover labels, Yanfly's System Options (global, with Theo's add-on), Menu
+Engine and Adjust Limits, Window Color Opacity, Blizz bars, Hime's choices and
+follower scripts, HMS choice display mode, the gamepad extender, Shaz's mouse,
+NPC lock and remembered positions, CSCA toasts and region switches, the mail
+system, the Customizable Item Menu, the HP colour controller, EXP gauge and
+stat icons, Neon Black's lockpicking and terrain tags, Galv's keypad and item
+sounds, PMM stealth, Vlue's item popup, death common events, Theo's shadows and
+screen shake, Lemony's sound emitter, Kread's event update, Smart Followers,
+Tactics Ogre crafting and Mr Bubble's dismantling; from VX, Woratana's
 Multiple Fog, the Skill (Tech) Shop and modern algebra's Editable Actor
 Options. A journal whose quests are data (Nicke's Simple Journal, the CSCA Quest
 System) becomes Reactor's own quests instead: they are in Database › Quests, the game's calls
-drive them, and its journal scene is Reactor's quest log.
+drive them, and its journal scene is Reactor's quest log. Hime's Parameter Tables (stats per level in CSV files) become the database's
+class and enemy stats.
+
+**RR_AceCompat**, installed with every VX Ace game, draws VX Ace's main menu,
+item screen and list rows, and gives windows VX Ace's drawing methods
+(`rrAceGauge`, `rrAceDrawActorHp` …) for the script ports to replace. Ports
+install in the order of the game's scripts, so the last script to change a
+method wins, as it did.
 
 **Ruby cannot run.** Script commands, script conditions and move-route
 scripts that use stock calls or a ported script are translated to JavaScript

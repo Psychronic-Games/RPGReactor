@@ -7157,3 +7157,13 @@ Window_NameBox.prototype.updateBackground = function() {
         return compact() ? 0 : _rowSpacing.call(this);
     };
 })();
+
+// XP, VX and VX Ace keys (System.json rrRgssKeys): a message waits for a fresh
+// press of OK or Cancel; holding one does not page through the text.
+(function() {
+    const _isTriggered = Window_Message.prototype.isTriggered;
+    Window_Message.prototype.isTriggered = function() {
+        if (!($dataSystem && $dataSystem.rrRgssKeys)) return _isTriggered.call(this);
+        return Input.isTriggered("ok") || Input.isTriggered("cancel") || TouchInput.isTriggered();
+    };
+})();
