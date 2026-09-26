@@ -4100,7 +4100,8 @@
             gap: 8px;
         }
         .rr-ui-canvas-header > span { flex: 0 0 auto; }
-        .rr-ui-canvas-tools {
+        /* More specific than the rule above, or the tools never shrink and never wrap. */
+        .rr-ui-canvas-header > .rr-ui-canvas-tools {
             flex: 1 1 300px;
             min-width: 0;
             display: flex;

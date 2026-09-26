@@ -273,6 +273,11 @@ test('a Battle HUD previews as the battle shows it: the whole party, no focus, t
     assert.deepStrictEqual(editor.previewPartyActors().map(actor => actor.name), ['Rogue', 'Hero'], 'a battle HUD shows the battle-test party');
     assert.strictEqual(editor.previewControl(editor.current.nodes[0]).state, 'base', 'a battle HUD takes no focus');
     assert.deepStrictEqual(editor.previewActorCommands(), ['Attack', 'Special', 'Guard', 'Item'], 'the first actor\'s class adds Special');
+    editor.current.previewPartySize = 3;
+    assert.deepStrictEqual(editor.previewPartyActors().map(actor => actor.name), ['Rogue', 'Hero', 'Mage'], 'Preview party fills with the other actors in ID order');
+    editor.current.previewPartySize = 1;
+    assert.deepStrictEqual(editor.previewPartyActors().map(actor => actor.name), ['Rogue']);
+    delete editor.current.previewPartySize;
     editor._previewParty = [actors[2]];
     assert.deepStrictEqual(editor.previewActorCommands(), ['Attack', 'Magic', 'Special', 'Guard', 'Item'], 'a caller\'s party wins; the actor adds Magic');
     const troop = fs.readFileSync(path.join(__dirname, '..', 'src', 'database', 'DatabaseTroopEditor.js'), 'utf8');

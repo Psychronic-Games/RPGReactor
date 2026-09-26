@@ -612,7 +612,12 @@ class DatabaseUserInterfaceEditor {
                             <label>${tt('Zoom')} <select class="rr-ui-zoom" aria-label="${tt('Interface zoom')}">
                                 <option value="0">${tt('Fit')}</option>
                                 ${[0.5, 1, 2, 3, 4, 6, 8].map(zoom => `<option value="${zoom}" ${this.previewZoom === zoom ? 'selected' : ''}>${zoom * 100}%</option>`).join('')}
-                            </select></label><span class="rr-ui-size"></span>
+                            </select></label>
+                            <label title="${this.escapeHTML(tt('How many actors the canvas shows in party lists. Editor only: the game shows the real party.'))}">${tt('Preview party')}
+                                <select class="rr-ui-preview-party" aria-label="${tt('Preview party')}">
+                                    <option value="0">${tt('Auto')}</option>
+                                    ${[1, 2, 3, 4, 5, 6, 7, 8].map(count => `<option value="${count}" ${Number(entry.previewPartySize) === count ? 'selected' : ''}>${count}</option>`).join('')}
+                                </select></label><span class="rr-ui-size"></span>
                         </span>
                     </div>
                     <div class="database-section-content rr-ui-canvas-host">
@@ -632,6 +637,12 @@ class DatabaseUserInterfaceEditor {
         wrapper.querySelector('.rr-ui-zoom').addEventListener('change', event => {
             this.previewZoom = Number(event.target.value) || 0;
             this.fitCanvas();
+            this.scheduleRender();
+        });
+        wrapper.querySelector('.rr-ui-preview-party').addEventListener('change', event => {
+            const count = Math.max(0, Math.min(8, Number(event.target.value) || 0));
+            if (count) this.current.previewPartySize = count; else delete this.current.previewPartySize;
+            this.touch();
             this.scheduleRender();
         });
         this.ctx = this.canvas.getContext('2d');
@@ -3481,11 +3492,18 @@ class DatabaseUserInterfaceEditor {
         if (!data) return [];
         const system = data.system || {};
         const actor = id => (id && data.actors && data.actors[id]) || null;
+        let party = null;
         if (this.current && this.current.mode === 'battle') {
             const tested = (system.testBattlers || []).map(slot => actor(Number(slot && slot.actorId) || 0)).filter(Boolean);
-            if (tested.length) return tested;
+            if (tested.length) party = tested;
         }
-        return (Array.isArray(system.partyMembers) ? system.partyMembers : []).map(id => actor(id)).filter(Boolean);
+        if (!party) party = (Array.isArray(system.partyMembers) ? system.partyMembers : []).map(id => actor(id)).filter(Boolean);
+        // Preview party (editor only): that many actors, the party first, then
+        // the database's other actors in ID order.
+        const size = Math.max(0, Math.min(8, Number(this.current && this.current.previewPartySize) || 0));
+        if (!size) return party;
+        const extra = (data.actors || []).filter(entry => entry && entry.name && !party.includes(entry));
+        return party.concat(extra).slice(0, size);
     }
 
     /** The actor in a party slot of the preview party. */
