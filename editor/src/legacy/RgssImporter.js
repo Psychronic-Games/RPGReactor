@@ -441,7 +441,9 @@ function open(folder, destination, options) {
         if (typeof constants['YEA::SYSTEM::COMMAND_NAME'] === 'string') sys.terms.commands[11] = constants['YEA::SYSTEM::COMMAND_NAME'];
         // Ace lists choices in a window of their own (right of the message); a script that embeds them has its own port.
         sys.rrNoItemBackgrounds = true;   // the old engines draw no bar behind each item of a list, only the cursor
-        Object.assign(sys, { rrRgssWindows: true, rrMapNameStays: true, rrTouchUiOff: true, rrRgssKeys: true });   // rows one line tall, the map name through messages, no touch buttons, A/S/D as the X/Y/Z buttons
+        Object.assign(sys, { rrRgssWindows: true, rrMapNameStays: true, rrTouchUiOff: true, rrRgssKeys: true });
+        // Theo's Skip Missing Resources: a file the game names but lacks is skipped instead of stopping the game.
+        if (/\[:Theo_SkipResource\]/.test(scriptText)) Object.assign(sys, { rrSkipMissingAudio: true, rrSkipMissingImages: true });   // rows one line tall, the map name through messages, no touch buttons, A/S/D as the X/Y/Z buttons
         sys.rrRgssFades = true;   // Ace's 30-frame fades, and the black held 15 frames on a transfer
         writeJson(path.join(dest, 'data', 'System.json'), sys);
 

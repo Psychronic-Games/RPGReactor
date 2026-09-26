@@ -25,6 +25,8 @@
  *   Items         help at the top, the categories under it, and the list
  *                 to the bottom, each item with its icon, name and ":n".
  *
+ * An icon in text (\\I[n]) moves the text on by the icon's width alone.
+ *
  * Command lists are left-aligned, the horizontal ones centred. List rows start
  * at the window's left edge, columns 32 apart (8 in a horizontal list), and
  * their text sits 4 in from the row's edges.
@@ -52,6 +54,12 @@
         this.contents.paintOpacity = this.translucentOpacity();
         _drawIcon.call(this, iconIndex, x, y);
         this.contents.paintOpacity = opacity;
+    };
+
+    // An icon in text sits on the line's top-left corner and moves the text on by one icon.
+    W.processDrawIcon = function(iconIndex, textState) {
+        if (textState.drawing) this.drawIcon(iconIndex, textState.x, textState.y);
+        textState.x += ImageManager.iconWidth;
     };
 
     Object.assign(W, {
