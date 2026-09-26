@@ -1492,6 +1492,7 @@ class ProjectController {
             }
 
             this.refreshMap3DView();
+            this.structureWorkshop?.mapChanged?.();
 
             return true;
         } else {
@@ -1499,6 +1500,24 @@ class ProjectController {
             this.uiManager.updateStatus(`Failed to load map ${mapId}`);
             return false;
         }
+    }
+
+    /**
+     * Open the Structure workshop's plot, a map with no file, the way
+     * loadMap opens a real one (the caller has asked about unsaved work).
+     */
+    async openWorkshopMap(mapData) {
+        const request = ++this._mapLoadRequest;
+        const tilemapManager = this.tilemapManager;
+        if (!tilemapManager?.loadMapObject) return false;
+        tilemapManager.cancelPendingMapLoad?.();
+        this.mediaSurfacePreviewManager?.beforeMapChange?.();
+        const success = await tilemapManager.loadMapObject(mapData);
+        if (request !== this._mapLoadRequest || tilemapManager !== this.tilemapManager || !success) return false;
+        this.highlightCurrentMap(-1);
+        if (this.onMapLoaded) this.onMapLoaded();
+        this.refreshMap3DView();
+        return true;
     }
 
     // Highlight the currently selected map in the maps list

@@ -55,23 +55,25 @@ test('normalizing fills defaults and clamps, and trimming drops what is default'
 });
 
 /** The cottage two rooms drawn on a new page make. */
+// A plan in the older, described format: rooms, doors and a style.
 function cottagePlan(E, name) {
-    const plan = E.newPlan(name);
+    const plan = E.normalizePlan({ name, size: [20, 16], storey: 5, materials: E.styleMaterials('Stone and tile'), floors: [{ rooms: {}, doors: [] }], roof: { pitch: 2 }, windows: { every: 6, width: 2 } });
     plan.floors[0].rooms = { hall: [1, 1, 6, 8], kitchen: [8, 1, 12, 8] };
     plan.floors[0].doors = [['hall', 'outside', 3], ['hall', 'kitchen', 3]];
     plan.floors[0].wet = ['kitchen'];
     return plan;
 }
 
-test('a new plan is an empty page; two rooms drawn on it are a cottage the engine can walk through', () => {
+test('a new structure is an empty plot; a described cottage is one the engine can walk through', () => {
     const { DatabaseStructureEditor: E } = loadEditor();
     const Reactor3D = require(path.join(repoRoot, 'runtime', 'reactor_3d.js'));
     const empty = E.newPlan('Test');
-    assert.equal(E.isEmpty(empty), true, 'nothing on the page yet');
-    assert.equal(empty.floors.length, 1, 'one floor to draw on');
-    assert.deepEqual([...empty.size], [20, 16]);
-    assert.equal(empty.materials.wall, 'Stone', 'a style is set so the first room looks like something');
-    assert.equal(E.report(empty, () => null, Reactor3D).pieces, 0, 'an empty page builds nothing');
+    assert.equal(E.isEmpty(empty), true, 'nothing on the plot yet');
+    assert.deepEqual([...empty.size], [16, 16]);
+    assert.equal(empty.height, 2, 'two floors tall');
+    assert.deepEqual([...empty.pieces], [], 'built with Build, not described');
+    assert.deepEqual(Object.keys(E.trimPlan(empty)).sort(), ['height', 'name', 'pieces', 'size', 'storey'], 'the file says only the plot');
+    assert.equal(E.report(empty, () => null, Reactor3D).pieces, 0, 'an empty plot builds nothing');
     const plan = cottagePlan(E, 'Test');
     assert.equal(E.isEmpty(plan), false);
     const report = E.report(plan, () => null, Reactor3D);

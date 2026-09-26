@@ -1217,6 +1217,8 @@ class MapEditor3D {
             { slot: system.airship, name: 'Airship', color: 0xff00ff }
         ];
         const mapId = Number(mapData.id);
+        // Map 0 is no map: a vehicle placed nowhere, and the Structure workshop's plot.
+        if (!mapId || mapData.rrWorkshop) return;
         for (const start of starts) {
             const slot = start.slot;
             if (!slot || Number(slot.startMapId) !== mapId) continue;
@@ -1370,8 +1372,30 @@ class MapEditor3D {
             color: 0xffffff, transparent: true, opacity: 0.14, depthWrite: false
         });
         this.grid = new THREE.LineSegments(geometry, material);
-        this.grid.visible = this.gridVisible === true;
+        this.grid.visible = this.gridVisible === true || !!mapData.rrWorkshop;
         this.mapScene.scene().add(this.grid);
+        if (mapData.rrWorkshop) this.buildPlot(mapData, base);
+    }
+
+    /**
+     * The Structure workshop's plot: a ground slab the size of the plot with
+     * its edge drawn in the accent colour, so an empty plot reads as a place
+     * to build and its edge as where the structure ends.
+     */
+    buildPlot(mapData, base) {
+        const { width, height } = mapData;
+        const accent = typeof ThemeColors !== 'undefined' && ThemeColors.resolve ? ThemeColors.resolve('--color-accent') : '#e0b020';
+        const ground = new THREE.Mesh(new THREE.PlaneGeometry(width, height),
+            new THREE.MeshBasicMaterial({ color: 0x3a4148, transparent: true, opacity: 0.9, depthWrite: false, side: THREE.DoubleSide }));
+        ground.rotation.x = -Math.PI / 2;
+        ground.position.set(width / 2, base - 0.03, height / 2);
+        ground.renderOrder = -1;
+        const edge = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints([
+            new THREE.Vector3(0, base, 0), new THREE.Vector3(width, base, 0), new THREE.Vector3(width, base, height), new THREE.Vector3(0, base, height)]),
+            new THREE.LineBasicMaterial({ color: new THREE.Color(accent) }));
+        this.plot = new THREE.Group();
+        this.plot.add(ground, edge);
+        this.mapScene.scene().add(this.plot);
     }
 
     /** Show or hide the cell grid. */
@@ -3344,6 +3368,8 @@ class MapEditor3D {
         const z = mapData.height / 2;
         this.view.target = { x, y: Reactor3D.elevationAt(mapData, Math.floor(x), Math.floor(z)), z };
         this.view.distance = Math.max(12, Math.max(mapData.width, mapData.height) * 0.9);
+        // A workshop plot is seen whole, walls and floors included: far enough back for its width and its height.
+        if (mapData.rrWorkshop) this.view.distance = Math.max(14, Math.hypot(mapData.width, mapData.height) * 1.3, (mapData.rrWorkshop.maxLevel + 1) * 1.6);
         this.applyCamera();
     }
 

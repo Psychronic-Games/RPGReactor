@@ -18,7 +18,7 @@ project; a person can use it to find where anything lives.
 | Terrain (rolling ground) | `MapNNN.r3d.json` › `terrain` ((w+1)×(h+1) corner heights), `terrainWidth` | **3D-T** tab brushes | `editor/tests/terrain.test.cjs` rules |
 | Room (floor, walls, ceiling, sky) | `MapNNN.r3d.json` › `room` | Map Properties › 3D | — |
 | Pieces (the 3D tileset) | `MapNNN.r3d.json` › `pieces` | **Build** bar over the 3D view (the Build button in the toolbar); drawn as a plan on the flat map too | `validate-map.cjs` |
-| Buildings from a plan | `3d/Structures/*.json` (project-wide), placed as `MapNNN.r3d.json` › `structures` | Database › Structures (a card per plan), Build bar › Blueprint stamps one | `build-structure.cjs --check`, and the page's own walk |
+| Buildings, built or described | `3d/Structures/*.json` (project-wide), placed as `MapNNN.r3d.json` › `structures` | Database › Structures › Build (the plot in the 3D view with the Build bar), Build bar › Blueprint or Use on the map stamps one | `build-structure.cjs --check`, and the page's own walk |
 | Materials | `img/materials/*.png` (tileable) | swatches in the Build bar's specs panel | — |
 | Water | `MapNNN.r3d.json` › `water` (a hollow's box, its `level`, a `mask` of the wet cells) | **3D-T** › Pour | `validate-map.cjs` |
 | Placed models | `MapNNN.r3d.json` › `props` | **3D-M** tab | — |
@@ -82,6 +82,34 @@ so a floor over a room is a ceiling from below and a floor from the stairs;
 a step higher than 0.75 tile is blocked, which is what makes a wall a wall
 and a stair a stair; a doorway is walked through at its own level; a stair
 climbs one tile per cell, so a storey is five stair cells.
+
+## Built structures
+
+What Database › Structures › **Build** saves: the structure's plot and what
+stands on it, built in the workshop with the map's own Build bar (the plot
+opens in the 3D view; Save writes the file). Pieces are in the plot's own
+cells and take the fields of a map piece (see Pieces) without `id` or
+`group`; `lights` and `surfaces` are the map's light and media-surface rows,
+at plot coordinates. A stamp moves all of it to the stamp's corner, turns it
+with the stamp (cells and facings a quarter turn, shapes by `angle`, lights
+and screens about the plot) and marks it as the building's.
+
+```json
+{
+  "name": "Shed", "size": [10, 8], "storey": 5, "height": 2,
+  "pieces": [
+    { "kind": "floor", "x": 4, "y": 5, "material": "Wood" },
+    { "kind": "wall", "x": 3, "y": 2, "z": 1, "rot": 1, "material": "Stone" },
+    { "kind": "cylinder", "x": 6, "y": 2, "z": 0.5, "size": [2, 3, 2], "angle": 30 }
+  ],
+  "lights": [{ "type": "point", "x": 5.5, "y": 4.5, "height": 96, "radius": 4, "color": "#ffcc88" }]
+}
+```
+
+`size` is the plot in tiles and `height` its floors (of `storey` levels
+each); the workshop keeps building inside them. A described plan (below)
+opened in the workshop is built out into pieces, and saving it keeps the
+pieces.
 
 ## Structure plans
 

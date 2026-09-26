@@ -249,6 +249,9 @@
      * Listed in map cells for a stamp at (X0, Y0), parts' effects prefixed.
      */
     function effectsOf(plan, X0 = 0, Y0 = 0, resolve = null, prefix = '', out = []) {
+        // A built structure's lights and screens, as the map had them, moved to the stamp.
+        for (const row of plan.lights || []) if (row) out.push({ type: 'mapLight', row, key: prefix + 'light', at: [X0 + Math.floor(Number(row.x) || 0), Y0 + Math.floor(Number(row.y) || 0)], shift: [X0, Y0] });
+        for (const row of plan.surfaces || []) if (row) out.push({ type: 'mapSurface', row, key: prefix + 'screen', at: [X0 + Math.floor(Number(row.x) || 0), Y0 + Math.floor(Number(row.y) || 0)], shift: [X0, Y0] });
         for (const fx of plan.effects || []) {
             if (!fx || !Array.isArray(fx.at)) continue;
             out.push(Object.assign({}, fx, { key: prefix + (fx.name || 'effect'), at: [X0 + fx.at[0], Y0 + fx.at[1]] }));
@@ -297,6 +300,17 @@
             const [x, y] = fx.at;
             if (x < 0 || y < 0 || x >= mapData.width || y >= mapData.height) continue;
             const z = Number(fx.z) || 0;
+            if (fx.type === 'mapSurface') {
+                const row = Object.assign(JSON.parse(JSON.stringify(fx.row)), { id: nextSurface++, x: Number(fx.row.x) + fx.shift[0], y: Number(fx.row.y) + fx.shift[1] });
+                if (group) row.structure = group; else delete row.structure;
+                surfaces.push(row);
+                continue;
+            }
+            if (fx.type === 'mapLight') {
+                while (lights.some(l => l && l.id === 'light' + nextLight)) nextLight++;
+                lights.push(Object.assign(JSON.parse(JSON.stringify(fx.row)), { id: 'light' + nextLight++, x: Number(fx.row.x) + fx.shift[0], y: Number(fx.row.y) + fx.shift[1], tag }));
+                continue;
+            }
             if (fx.type === 'screen') {
                 const [dx, dy] = DIRS[fx.facing] || DIRS.south;
                 const w = Number(fx.width) > 0 ? Number(fx.width) : 4, h = Number(fx.height) > 0 ? Number(fx.height) : 2.25;
@@ -396,7 +410,6 @@
     /** Build one plan's own rooms, walls, doors, windows, stairs and roof at (X0, Y0). */
     function buildOwn(plan, X0 = 0, Y0 = 0, firstId = 1, group = 0) {
         const [W, H] = plan.size;
-        if (!(plan.floors || []).length) return [];
         const S = Number(plan.storey) > 0 ? Math.floor(plan.storey) : 5;
         const M = Object.assign({ wall: '', inner: '', floor: '', wet: '', roof: '', stair: '', glass: '' }, plan.materials || {});
         const pieces = [];
@@ -407,6 +420,13 @@
             if (extra) Object.assign(piece, extra);
             pieces.push(piece);
         };
+        // Built pieces: `pieces: [{ kind, x, y, z, rot, material, ... }]` in the plan's own cells, exactly as they
+        // were laid in the Structure workshop (a shape keeps its size, angle, tilt, roll, offset and settings).
+        for (const raw of plan.pieces || []) {
+            if (!raw || typeof raw.kind !== 'string' || !Number.isFinite(Number(raw.x)) || !Number.isFinite(Number(raw.y))) continue;
+            const { kind, x, y, z, rot, material, id: _id, group: _group, ...extra } = raw;
+            put(kind, Math.floor(Number(x)), Math.floor(Number(y)), Number(z) || 0, Number(rot) || 0, material || '', Object.keys(extra).length ? extra : null);
+        }
         // Shapes: `shapes: [{ kind, at: [x, y], z, size: [w, h, d], angle, tilt, roll, offset: [ox, oy], material }]`,
         // the free pieces: a dome on a tower, a tent, a fallen column, at their own size and turn.
         for (const shape of plan.shapes || []) {
@@ -566,6 +586,18 @@
                 shape.z = (Number(shape.z) || 0) * k;
                 if (Array.isArray(shape.offset)) shape.offset = shape.offset.map(v => (Number(v) || 0) * k);
             }
+            // Built pieces grow like everything else: a cell piece fills its k×k×k block, a shape moves and grows.
+            if (Array.isArray(out.pieces)) out.pieces = out.pieces.flatMap(piece => {
+                if (Array.isArray(piece.size)) return [Object.assign({}, piece, { x: piece.x * k + Math.floor((k - 1) / 2), y: piece.y * k + Math.floor((k - 1) / 2),
+                    z: (Number(piece.z) || 0) * k, size: piece.size.map(v => v * k), offset: Array.isArray(piece.offset) ? piece.offset.map(v => (Number(v) || 0) * k) : piece.offset })];
+                const copies = [];
+                for (let dz = 0; dz < k; dz++) for (let dy = 0; dy < k; dy++) for (let dx = 0; dx < k; dx++) {
+                    copies.push(Object.assign({}, piece, { x: piece.x * k + dx, y: piece.y * k + dy, z: (Number(piece.z) || 0) * k + dz }));
+                }
+                return copies;
+            });
+            for (const light of out.lights || []) { light.x *= k; light.y *= k; light.height = (Number(light.height) || 0) * k; light.radius = (Number(light.radius) || 0) * k; }
+            for (const row of out.surfaces || []) { row.x *= k; row.y *= k; row.z = (Number(row.z) || 0) * k; row.width *= k; row.height *= k; }
             if (out.windows && out.windows !== false) out.windows = { every: (out.windows.every || 6) * k, width: (out.windows.width || 2) * k };
             if (out.roof) out.roof = Object.assign({}, out.roof, { pitch: (Number(out.roof.pitch) || 6) * k });
         }
@@ -594,6 +626,17 @@
                 // The offset turns with the cell; the tilt and roll are the shape's own and stay.
                 if (Array.isArray(shape.offset)) shape.offset = [-(Number(shape.offset[1]) || 0), Number(shape.offset[0]) || 0];
             }
+            // Built pieces: a cell piece's cell turns and its facing with it; a shape turns by its angle.
+            for (const piece of out.pieces || []) {
+                [piece.x, piece.y] = point(piece.x, piece.y);
+                if (Array.isArray(piece.size)) {
+                    piece.angle = ((Number(piece.angle) || 0) + 90) % 360;
+                    if (Array.isArray(piece.offset)) piece.offset = [-(Number(piece.offset[1]) || 0), Number(piece.offset[0]) || 0];
+                } else piece.rot = ((Number(piece.rot) || 0) + 1) % 4;
+            }
+            // Lights and screens stand anywhere in the plot, not in cells: (x, y) turns about the plot, a screen's facing with it.
+            for (const light of out.lights || []) { [light.x, light.y] = [H - light.y, light.x]; if (Number(light.yaw)) light.yaw = ((Number(light.yaw) || 0) + 270) % 360; }
+            for (const row of out.surfaces || []) { [row.x, row.y] = [H - row.y, row.x]; row.rotationY = ((Number(row.rotationY) || 0) + 270) % 360; }
             for (const name of Object.keys(out.spots || {})) out.spots[name] = point(out.spots[name][0], out.spots[name][1]);
             for (const fx of out.effects || []) { fx.at = point(fx.at[0], fx.at[1]); if (fx.facing) fx.facing = DIR_CW[fx.facing] || fx.facing; }
             out.paths = (out.paths || []).map(strip => rect(strip).concat(strip.slice(4)));

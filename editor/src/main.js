@@ -239,6 +239,10 @@ class RPGReactor {
                     this.projectController.buildHotbar = this.buildHotbar;
                     this.buildHotbar.mount(document.getElementById('canvas-container'));
                 }
+                if (typeof StructureWorkshop !== 'undefined') {
+                    this.structureWorkshop = new StructureWorkshop(this.projectController);
+                    this.projectController.structureWorkshop = this.structureWorkshop;
+                }
             }
             if (this.modelPropsManager) {
                 this.projectController.modelPropsManager = this.modelPropsManager;

@@ -257,63 +257,7 @@ class TilemapManager {
             // the 2D canvas, so the file cannot wait for the 3D view to open.
             this.loadMapSidecar(mapData);
 
-            // Load tileset for this map
-            let tileset = this.databaseManager.getTileset(mapData.tilesetId);
-            if (!tileset) {
-                console.warn(`Tileset ${mapData.tilesetId} not found for map ${mapId}; using first available tileset as fallback.`);
-                tileset = this.databaseManager.getTilesets()[0];
-                if (!tileset) {
-                    throw new Error(`No tileset is available for map ${mapId}`);
-                }
-            }
-            // Load tileset images
-            const tilesetTextures = await this.loadTilesetImages(tileset);
-            if (this.destroyed || generation !== this._mapLoadGeneration) return false;
-
-            // Commit only after every asynchronous dependency belongs to the
-            // latest request. Until here the previously rendered map remains intact.
-            for (const key in this.textureCache) {
-                if (this.textureCache[key] && this.textureCache[key].destroy) {
-                    this.textureCache[key].destroy(false);
-                }
-            }
-            for (const key in this.a1AnimationCache) {
-                if (this.a1AnimationCache[key] && this.a1AnimationCache[key].destroy) {
-                    this.a1AnimationCache[key].destroy(false);
-                }
-            }
-            this.textureCache = {};
-            this.a1AnimationCache = {};
-            this.currentMap = mapData;
-            this.currentTileset = tileset;
-            this.tilesetTextures = tilesetTextures;
-            this._a2DecorKinds = null;
-
-            // Create tilemap container
-            this.createTilemapContainer();
-
-            // Render the map
-            this.renderMap();
-
-            // Start with map at origin
-            this.container.x = 0;
-            this.container.y = 0;
-
-            // Fit-to-viewport on map load: if this map is smaller than the viewport
-            // at scale 1.0, upscale so it fills the viewport instead of leaving
-            // empty space around it. Larger maps stay at scale 1.0.
-            this.applyMinScaleClamp();
-
-            // Shrink the PIXI canvas to the map's scaled dimensions so the
-            // parallax doesn't render outside the actual map area.
-            this.applyViewportCrop();
-
-            // Update canvas size and scrollbars
-            this.updateCanvasWrapperSize();
-            this.updateScrollbars();
-            this.captureSavedMapState();
-
-            return true;
+            return await this.commitLoadedMap(mapData, generation);
         } catch (error) {
             if (generation === this._mapLoadGeneration) {
                 this.currentMap = previousMap;
@@ -321,6 +265,92 @@ class TilemapManager {
                 this.savedMapState = previousSavedMapState;
             }
             console.error(`Error loading map ${mapId}:`, error);
+            return false;
+        }
+    }
+
+    /**
+     * Put a map already in hand on the canvas: its tileset loaded, the old
+     * textures freed, the map drawn and fitted. `loadMap` reads the file and
+     * comes here; the Structure workshop hands in a plot it made itself.
+     */
+    async commitLoadedMap(mapData, generation) {
+        const mapId = mapData.id;
+        // Load tileset for this map
+        let tileset = this.databaseManager.getTileset(mapData.tilesetId);
+        if (!tileset) {
+            console.warn(`Tileset ${mapData.tilesetId} not found for map ${mapId}; using first available tileset as fallback.`);
+            tileset = this.databaseManager.getTilesets()[0];
+            if (!tileset) {
+                throw new Error(`No tileset is available for map ${mapId}`);
+            }
+        }
+        // Load tileset images
+        const tilesetTextures = await this.loadTilesetImages(tileset);
+        if (this.destroyed || generation !== this._mapLoadGeneration) return false;
+
+        // Commit only after every asynchronous dependency belongs to the
+        // latest request. Until here the previously rendered map remains intact.
+        for (const key in this.textureCache) {
+            if (this.textureCache[key] && this.textureCache[key].destroy) {
+                this.textureCache[key].destroy(false);
+            }
+        }
+        for (const key in this.a1AnimationCache) {
+            if (this.a1AnimationCache[key] && this.a1AnimationCache[key].destroy) {
+                this.a1AnimationCache[key].destroy(false);
+            }
+        }
+        this.textureCache = {};
+        this.a1AnimationCache = {};
+        this.currentMap = mapData;
+        this.currentTileset = tileset;
+        this.tilesetTextures = tilesetTextures;
+        this._a2DecorKinds = null;
+
+        // Create tilemap container
+        this.createTilemapContainer();
+
+        // Render the map
+        this.renderMap();
+
+        // Start with map at origin
+        this.container.x = 0;
+        this.container.y = 0;
+
+        // Fit-to-viewport on map load: if this map is smaller than the viewport
+        // at scale 1.0, upscale so it fills the viewport instead of leaving
+        // empty space around it. Larger maps stay at scale 1.0.
+        this.applyMinScaleClamp();
+
+        // Shrink the PIXI canvas to the map's scaled dimensions so the
+        // parallax doesn't render outside the actual map area.
+        this.applyViewportCrop();
+
+        // Update canvas size and scrollbars
+        this.updateCanvasWrapperSize();
+        this.updateScrollbars();
+        this.captureSavedMapState();
+        return true;
+    }
+
+    /**
+     * Open a map that has no file: the Structure workshop's plot. It is drawn
+     * and edited like any map; `saveMap` hands it to `onWorkshopSave` instead
+     * of writing a MapNNN file.
+     */
+    async loadMapObject(mapData) {
+        const generation = ++this._mapLoadGeneration;
+        const previousMap = this.currentMap, previousTileset = this.currentTileset, previousSavedMapState = this.savedMapState;
+        try {
+            return await this.commitLoadedMap(mapData, generation);
+        } catch (error) {
+            if (generation === this._mapLoadGeneration) {
+                this.currentMap = previousMap;
+                this.currentTileset = previousTileset;
+                this.savedMapState = previousSavedMapState;
+            }
+            console.error('Error opening the workshop plot:', error);
             return false;
         }
     }
@@ -1061,6 +1091,10 @@ class TilemapManager {
      */
     applyViewportCrop(transform = {}) {
         if (!this.app?.renderer || !this.currentMap) return;
+        // The 3D view draws on this canvas and fills the whole view; shrinking
+        // it to a small map's pixels cut the 3D picture off at that width.
+        const view3D = typeof window !== 'undefined' ? window.reactor?.mapEditor3D : null;
+        if (view3D?.enabled) { view3D.resize?.(); return; }
         const canvasContainer = document.getElementById('canvas-container');
         if (!canvasContainer) return;
         const rect = canvasContainer.getBoundingClientRect();
@@ -3417,6 +3451,7 @@ class TilemapManager {
     saveMapSidecar() {
         const elevation = this.mapElevation();
         if (!this.currentMap || !this.fs || !this.path) return false;
+        if (this.currentMap.rrWorkshop) return true;
         if (!elevation) return true;
         const filePath = this.path.join(this.projectPath, 'data',
             `Map${String(this.currentMap.id).padStart(3, '0')}${elevation.SUFFIX}`);
@@ -3474,6 +3509,12 @@ class TilemapManager {
 
         if (!this.currentMap) {
             return false;
+        }
+        // The Structure workshop's plot is no map file: saving it saves the structure.
+        if (this.currentMap.rrWorkshop) {
+            const saved = typeof this.onWorkshopSave === 'function' ? this.onWorkshopSave() === true : false;
+            if (saved) this.captureSavedMapState();
+            return saved;
         }
 
         try {

@@ -3701,6 +3701,28 @@
             overflow-x: auto;
         }
         .rr-build-context:empty { display: none; }
+        /* The Structure workshop: what is being built, and the way to save it, over the 3D view. */
+        .rr-workshop-banner {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            right: 256px;
+            z-index: 8;
+            display: none;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 8px 12px;
+            padding: 8px 12px;
+            border-radius: 12px;
+            background-color: rgba(10, 12, 16, 0.82);
+            border: 1px solid var(--color-accent-border, var(--color-border));
+            color: var(--color-text);
+            font-size: 12px;
+        }
+        .rr-workshop-banner .rr-workshop-title strong { color: var(--color-accent-bright); }
+        .rr-workshop-banner .rr-workshop-size { color: var(--color-text-muted); }
+        .rr-workshop-banner .rr-workshop-status { color: var(--color-accent-bright); min-width: 40px; }
+        .rr-workshop-banner .rr-workshop-status + button { margin-left: auto; }
         .rr-build-panel {
             position: absolute;
             top: 12px;

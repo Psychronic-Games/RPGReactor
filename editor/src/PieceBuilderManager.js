@@ -487,7 +487,7 @@ class PieceBuilderManager {
                     for (const file of fs.readdirSync(directory).filter(name => /\.json$/i.test(name)).sort()) {
                         try {
                             const plan = JSON.parse(fs.readFileSync(path.join(directory, file), 'utf8'));
-                            if (plan && Array.isArray(plan.size) && Array.isArray(plan.floors)) list.push({ file, name: plan.name || file.replace(/\.json$/i, ''), plan });
+                            if (plan && Array.isArray(plan.size) && (Array.isArray(plan.floors) || Array.isArray(plan.pieces) || Array.isArray(plan.parts) || Array.isArray(plan.shapes))) list.push({ file, name: plan.name || file.replace(/\.json$/i, ''), plan });
                         } catch (error) { console.warn(`${file} is not a structure plan.`, error); }
                     }
                 }
@@ -767,7 +767,9 @@ class PieceBuilderManager {
     setMaterial(name) { this.material = String(name || ''); this._syncPanel(); }
     turn(steps = 1) { this.rot = ((this.rot + steps) % 4 + 4) % 4; this._syncPanel(); this._ghostChanged(); }
     setLevel(level) {
-        const max = this.elevation()?.PIECE_MAX_LEVEL ?? 120;
+        // The Structure workshop's plot is only so many floors tall.
+        const plot = this.currentMap()?.rrWorkshop;
+        const max = plot ? plot.maxLevel : this.elevation()?.PIECE_MAX_LEVEL ?? 120;
         this.level = Math.max(0, Math.min(max, Math.floor(Number(level)) || 0));
         this._syncPanel();
         this._ghostChanged();

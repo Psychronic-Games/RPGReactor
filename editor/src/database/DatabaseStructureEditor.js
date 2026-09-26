@@ -254,6 +254,17 @@ class DatabaseStructureEditor {
             if ('thick' in own && Number.isFinite(Number(shape.thick))) out.thick = Math.max(0.02, Math.min(1, Math.round(Number(shape.thick) * 100) / 100));
             return out;
         });
+        // What was built in the Structure workshop: the pieces as laid (plot cells), and the lights and screens as the map held them.
+        plan.height = int(plan.height, 3, 1, 24);
+        const E = typeof RRMapElevation !== 'undefined' ? RRMapElevation : null;
+        plan.pieces = (Array.isArray(plan.pieces) ? plan.pieces : []).map(raw => {
+            const piece = E ? E.normalizePiece(raw, null) : (raw && typeof raw === 'object' && typeof raw.kind === 'string' ? Object.assign({}, raw) : null);
+            if (!piece) return null;
+            delete piece.id; delete piece.group;
+            return piece;
+        }).filter(Boolean);
+        plan.lights = (Array.isArray(plan.lights) ? plan.lights : []).filter(row => row && typeof row === 'object').map(row => Object.assign({}, row));
+        plan.surfaces = (Array.isArray(plan.surfaces) ? plan.surfaces : []).filter(row => row && typeof row === 'object').map(row => Object.assign({}, row));
         plan.paths = (Array.isArray(plan.paths) ? plan.paths : []).filter(Array.isArray).map(strip => {
             const out = [0, 1, 2, 3].map(i => int(strip[i], 0, 0, this.SIZE_MAX));
             if (strip[4]) out.push(String(strip[4]));
@@ -268,7 +279,7 @@ class DatabaseStructureEditor {
         const fields = { name: plan.name, size: plan.size.slice(), storey: plan.storey };
         const materials = Object.fromEntries(Object.entries(plan.materials).filter(([, value]) => value));
         if (Object.keys(materials).length || had.has('materials')) fields.materials = materials;
-        fields.floors = plan.floors.map(floor => {
+        if (plan.floors.length || had.has('floors')) fields.floors = plan.floors.map(floor => {
             const f = { rooms: Object.fromEntries(Object.entries(floor.rooms).map(([name, rect]) => [name, rect.slice()])) };
             if (floor.doors.length) f.doors = floor.doors.map(door => door.slice());
             if (floor.windows.length) f.windows = floor.windows.map(cell => cell.slice());
@@ -316,6 +327,9 @@ class DatabaseStructureEditor {
             if (shape.material) out.material = shape.material;
             return out;
         });
+        if (plan.pieces.length || had.has('pieces')) { fields.height = plan.height; fields.pieces = plan.pieces.map(piece => { const out = Object.assign({}, piece); if (!out.material) delete out.material; if (!out.rot) delete out.rot; if (!out.z) delete out.z; return out; }); }
+        if (plan.lights.length || had.has('lights')) fields.lights = plan.lights.map(row => Object.assign({}, row));
+        if (plan.surfaces.length || had.has('surfaces')) fields.surfaces = plan.surfaces.map(row => Object.assign({}, row));
         // The file's own order first, then anything new at the end.
         const out = {};
         for (const key of plan._had || []) if (key in fields) out[key] = fields[key];
@@ -326,17 +340,13 @@ class DatabaseStructureEditor {
     /** A cottage to start from: two rooms, a front door, a door between, a window every six cells. */
     /** An empty page with one floor and a style: the building is whatever gets drawn on it. */
     static newPlan(name) {
-        return this.normalizePlan({
-            name, size: [20, 16], storey: 5,
-            materials: this.styleMaterials('Stone and tile'),
-            floors: [{ rooms: {}, doors: [] }],
-            roof: { pitch: 2 }, windows: { every: 6, width: 2 }
-        });
+        // An empty plot: the structure is whatever gets built on it with Build.
+        return this.normalizePlan({ name, size: [16, 16], storey: 5, height: 2, pieces: [] });
     }
 
     /** Whether any floor has a room, or the plan a shape or a part: something to build. */
     static isEmpty(plan) {
-        return !plan || (!plan.floors.some(floor => Object.keys(floor.rooms || {}).length) && !plan.shapes.length && !plan.parts.length);
+        return !plan || (!plan.floors.some(floor => Object.keys(floor.rooms || {}).length) && !plan.shapes.length && !plan.parts.length && !(plan.pieces || []).length);
     }
 
     /** Every room name on every floor, once, plus "outside". */
@@ -596,10 +606,13 @@ class DatabaseStructureEditor {
         const styleNames = Object.keys(DatabaseStructureEditor.STYLES);
         const style = DatabaseStructureEditor.styleOf(plan.materials, materialNames);
         const card = !bar.closest('.rr-structures').querySelector('.rr-structures-plan');
+        // A structure is a plot you build on with the map's own Build bar; the page names it, sizes the plot and places it.
         bar.innerHTML = card ? `
             ${this._field(tt('Name'), `<input type="text" class="database-field-value rr-structures-name" value="${rrEscapeHtml(plan.name)}" style="width:150px;">`)}
-            <span style="color:var(--color-text-muted);">${tt('A saved building. Build on the map with the Build toggle, then stamp this where you like.')}</span>
-            <button type="button" class="rr-btn-secondary rr-structures-use" style="margin-left:auto;">${tt('Use on the map')}</button>` : `
+            ${this._field(tt('Plot'), `${this._numberHtml('rr-structures-size', plan.size[0], `data-i="0" min="${DatabaseStructureEditor.SIZE_MIN}" max="${DatabaseStructureEditor.SIZE_MAX}" title="${rrEscapeHtml(tt('Width in tiles'))}"`)}<span>×</span>${this._numberHtml('rr-structures-size', plan.size[1], `data-i="1" min="${DatabaseStructureEditor.SIZE_MIN}" max="${DatabaseStructureEditor.SIZE_MAX}" title="${rrEscapeHtml(tt('Depth in tiles'))}"`)}`)}
+            ${this._field(tt('Floors'), this._numberHtml('rr-structures-height', plan.height, 'min="1" max="24"'))}
+            <button type="button" class="rr-button-primary rr-structures-build" style="margin-left:auto;">${tt('Build')}</button>
+            <button type="button" class="rr-btn-secondary rr-structures-use">${tt('Use on the map')}</button>` : `
             ${this._field(tt('Name'), `<input type="text" class="database-field-value rr-structures-name" value="${rrEscapeHtml(plan.name)}" style="width:150px;">`)}
             ${this._field(tt('Style'), this._selectHtml('rr-structures-style', styleNames.map(name => [name, tt(name)]).concat([['', tt('Custom')]]), style || '', 'style="width:140px;"'))}
             ${this._field(tt('Size'), `${this._numberHtml('rr-structures-size', plan.size[0], `data-i="0" min="${DatabaseStructureEditor.SIZE_MIN}" max="${DatabaseStructureEditor.SIZE_MAX}"`)}<span>×</span>${this._numberHtml('rr-structures-size', plan.size[1], `data-i="1" min="${DatabaseStructureEditor.SIZE_MIN}" max="${DatabaseStructureEditor.SIZE_MAX}"`)}`)}
@@ -619,6 +632,15 @@ class DatabaseStructureEditor {
                 this.markDirty();
             });
         }
+        bar.querySelector('.rr-structures-height')?.addEventListener('change', event => {
+            this.pushHistory();
+            plan.height = Math.max(1, Math.min(24, Math.floor(Number(event.target.value)) || 1));
+            this.markDirty();
+        });
+        bar.querySelector('.rr-structures-build')?.addEventListener('click', () => {
+            const workshop = window.reactor?.structureWorkshop;
+            if (workshop && this.current) workshop.open(this.current.entry);
+        });
         bar.querySelector('.rr-structures-use').addEventListener('click', () => this.useOnMap());
     }
 
@@ -1628,7 +1650,9 @@ class DatabaseStructureEditor {
         const lines = [];
         lines.push(this._t('Pieces: {count}', { count: report.pieces }) + (report.triangles === null ? '' : ', ' + this._t('triangles: {count}', { count: report.triangles.toLocaleString() })));
         if (report.error) lines.push(rrEscapeHtml(report.error));
-        else if (DatabaseStructureEditor.isEmpty(this.current.plan)) lines.push(this._t('Draw a room to start the building, or place a shape.'));
+        else if (DatabaseStructureEditor.isEmpty(this.current.plan)) lines.push(this._t('An empty plot. Press Build to build on it with the Build bar.'));
+        // A built structure is its pieces: there are no rooms to walk, so nothing more to report.
+        else if (!this.current.plan.floors.length && (this.current.plan.pieces || []).length) lines.push(this._t('Press Build to change it, or Use on the map to place it.'));
         else if (!this.current.plan.floors.length && this.current.plan.parts.length) lines.push(this._t('A plan of parts is walked from its start spot.'));
         else if (!report.entrance) lines.push(this._t('No front door: add a door to outside on the ground floor.'));
         else if (report.missing.length) lines.push(`<span style="color:var(--color-danger, #e05c4e);">${this._t('Not reachable from the front door: {rooms}', { rooms: rrEscapeHtml(report.missing.join(', ')) })}</span>`);
