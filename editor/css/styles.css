@@ -3737,6 +3737,10 @@
         .rr-structures-floor:hover, .rr-structures-tool:hover { border-color: var(--color-border); }
         .rr-structures-floor.active, .rr-structures-tool.active { background: var(--color-accent-tint-15); border-color: var(--color-accent-border-strong, var(--color-accent)); }
         .rr-structures-toolgrid { display: grid; grid-template-columns: 1fr; gap: 2px; }
+        .r3d-preview-states { position: absolute; right: 10px; bottom: 10px; display: none; gap: 2px; padding: 3px; background: color-mix(in srgb, var(--color-bg-panel) 88%, transparent); border: 1px solid var(--color-border); border-radius: 6px; box-shadow: 0 4px 14px rgba(0,0,0,0.3); z-index: 2; }
+        .r3d-preview-state { border: none; background: none; color: var(--color-text-muted); font-size: 12px; padding: 4px 10px; border-radius: 4px; cursor: pointer; }
+        .r3d-preview-state:hover { color: var(--color-text); background: var(--color-bg-hover); }
+        .r3d-preview-state.active { color: var(--color-text-strong, var(--color-text)); background: var(--color-bg-deep); box-shadow: inset 3px 0 0 var(--color-accent); }
         .rr-structures-selbar { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-top: 6px; }
         .rr-structures-selbar > span { grid-column: 1 / -1; font-size: 11px; color: var(--color-text-muted); }
         .rr-structures-selbar > button:only-of-type { grid-column: 1 / -1; }

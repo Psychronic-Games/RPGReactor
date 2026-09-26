@@ -233,6 +233,7 @@ class Database3DEditor {
                         <div class="r3d-hint" style="position:absolute;top:10px;left:50%;transform:translateX(-50%);padding:3px 10px;background:color-mix(in srgb, var(--color-bg-panel) 80%, transparent);border-radius:10px;font-size:11px;color:var(--color-text-muted);pointer-events:none;display:none;"></div>
                         <div class="r3d-select-bar" style="position:absolute;top:8px;left:50%;transform:translateX(-50%);display:none;align-items:center;gap:8px;padding:4px 10px;background:var(--color-bg-panel);border:1px solid var(--color-accent);border-radius:4px;font-size:12px;color:var(--color-text);"></div>
                         <div class="r3d-rig-bar" style="position:absolute;top:8px;left:50%;transform:translateX(-50%);display:none;align-items:center;gap:8px;padding:4px 10px;background:var(--color-bg-panel);border:1px solid var(--color-accent);border-radius:4px;font-size:12px;color:var(--color-text);"></div>
+                        <div class="r3d-sim-bar r3d-preview-states" role="group"></div>
                         <div class="r3d-marquee" style="position:absolute;display:none;border:1px dashed var(--color-accent);background:color-mix(in srgb, var(--color-accent) 15%, transparent);pointer-events:none;"></div>
                         <div class="r3d-card" style="position:absolute;right:10px;top:10px;width:280px;max-width:calc(100% - 56px);box-sizing:border-box;display:none;background:var(--color-bg-panel);border:1px solid var(--color-border);border-radius:6px;padding:10px 12px;box-shadow:0 4px 18px rgba(0,0,0,0.35);"></div>
                         <div class="r3d-stats-card" style="position:absolute;left:8px;bottom:8px;width:272px;max-width:calc(100% - 16px);max-height:55%;display:flex;flex-direction:column;border:1px solid var(--color-border);border-radius:6px;box-shadow:0 4px 18px rgba(0,0,0,0.35);overflow:hidden;">
@@ -245,7 +246,6 @@ class Database3DEditor {
                             <div class="r3d-stats" style="flex:1 1 auto;min-height:0;overflow-y:auto;padding:6px 10px 8px 10px;font-size:11px;"></div>
                         </div>
                     </div>
-                    <div class="r3d-sim-bar" style="display:flex;gap:6px;align-items:center;padding:6px 8px;border-top:1px solid var(--color-border);flex-wrap:wrap;"></div>
                 </div>
                 <div class="r3d-record-column" style="width:300px;flex:0 0 300px;display:flex;flex-direction:column;border-left:1px solid var(--color-border);min-height:0;">
                     <div class="sidebar-header r3d-sec-header" data-sec="parts" style="display:flex;align-items:center;gap:6px;cursor:pointer;">
@@ -3013,13 +3013,15 @@ class Database3DEditor {
         }
         card.style.display = 'block';
         const headerButton = 'width:22px;height:22px;border:none;background:none;color:var(--color-text-muted);cursor:pointer;font-size:15px;line-height:1;';
-        if (this._cardCollapsed) {
+        // Nothing to pose yet: the card waits folded; a click on the model opens it.
+        if (this._cardCollapsed || (this.selectedPartName === null && this._cardMode !== 'effect' && this._editingRule < 0 && !this._cardOpened)) {
             card.style.width = 'auto';
             card.style.padding = '4px';
             card.innerHTML = `<button type="button" class="r3d-card-expand" title="${this._t('Pose')}"
                 style="width:30px;height:30px;border:1px solid var(--color-accent);border-radius:5px;cursor:pointer;background:var(--color-bg-panel);color:var(--color-text);font-size:15px;line-height:1;">✥</button>`;
             card.querySelector('.r3d-card-expand').addEventListener('click', () => {
                 this._cardCollapsed = false;
+                this._cardOpened = true;
                 this.renderEditCard();
             });
             return;
@@ -3053,6 +3055,7 @@ class Database3DEditor {
             this._mountCardChooser(card);
             card.querySelector('.r3d-card-close').addEventListener('click', () => {
                 this._cardCollapsed = true;
+                this._cardOpened = false;
                 this.renderEditCard();
             });
             card.querySelector('.r3d-card-undo').style.opacity = '0.35';
@@ -7086,87 +7089,70 @@ class Database3DEditor {
     // ------------------------------------------------------------------
     // Simulation bar and the animation list
 
-    renderSimBar() {
-        const bar = this._detail.querySelector('.r3d-sim-bar');
-        if (!bar) return;
-        bar.innerHTML = '';
-        const walk = document.createElement('button');
-        walk.type = 'button';
-        walk.className = this._sim.walking ? 'rr-button-primary' : 'rr-btn-secondary';
-        walk.textContent = this._t('Walk');
-        walk.addEventListener('click', () => {
-            this._sim.walking = !this._sim.walking;
-            if (!this._sim.walking) this._sim.dashing = false;
-            this.renderSimBar();
-        });
-        bar.appendChild(walk);
-        const dash = document.createElement('button');
-        dash.type = 'button';
-        dash.className = this._sim.dashing ? 'rr-button-primary' : 'rr-btn-secondary';
-        dash.textContent = this._t('Dash');
-        dash.addEventListener('click', () => {
-            this._sim.dashing = !this._sim.dashing;
-            if (this._sim.dashing) this._sim.walking = true;
-            this.renderSimBar();
-        });
-        bar.appendChild(dash);
-        const jump = document.createElement('button');
-        jump.type = 'button';
-        jump.className = this._sim.jumping ? 'rr-button-primary' : 'rr-btn-secondary';
-        jump.textContent = this._t('Jump');
-        jump.addEventListener('click', () => {
-            this._sim.jumping = !this._sim.jumping;
-            this.renderSimBar();
-        });
-        bar.appendChild(jump);
-        const swim = document.createElement('button');
-        swim.type = 'button';
-        swim.className = this._sim.swimming ? 'rr-button-primary' : 'rr-btn-secondary';
-        swim.textContent = this._t('Swim');
-        swim.addEventListener('click', () => {
-            this._sim.swimming = !this._sim.swimming;
-            this.renderSimBar();
-        });
-        bar.appendChild(swim);
-        // Multi-bone actions share one name and fire together, so one
-        // Play button per NAME — a preset's six rules are one motion.
-        const seenActions = new Set();
-        this.playRules.forEach((rule, index) => {
-            if (rule.trigger !== 'action') return;
-            if (seenActions.has(rule.name) && index !== this._editingRule) return;
-            seenActions.add(rule.name);
-            const play = document.createElement('button');
-            play.type = 'button';
-            play.className = 'rr-btn-secondary';
-            play.textContent = `${this._t('Play')}: ${rule.name}`;
-            play.addEventListener('click', () => {
-                // The rule on the card steps aside for the working copy,
-                // so its Play button previews the card's current values.
-                if (index === this._editingRule) {
-                    this.previewPose();
-                    return;
-                }
-                this._sim.action = {
-                    name: rule.name,
-                    frame: this._simFrame || 0,
-                    until: Reactor3D.modelRuleDuration(rule, this._binding ? this._binding.clips : null)
-                };
-            });
-            bar.appendChild(play);
-        });
-        // Held poses latch; give the simulation a way to let go.
-        if (this.playRules.some(rule => rule.type === 'pose' && rule.hold)) {
-            const rest = document.createElement('button');
-            rest.type = 'button';
-            rest.className = 'rr-btn-secondary';
-            rest.textContent = this._t('Reset pose');
-            rest.addEventListener('click', () => {
-                if (this._binding) this._binding.latch = {};
-                // The in-flight action would re-latch next frame.
-                this._sim.action = null;
-            });
-            bar.appendChild(rest);
+    /**
+     * The states this model can be previewed in: only those it has a motion
+     * or an effect for (a door has none, a car moves, a person walks, dashes,
+     * jumps and swims), plus Standing to come back to.
+     */
+    previewStates() {
+        const triggers = new Set();
+        for (const raw of (this.rawAnimations || []).concat(this.rawEffects || [], this._work ? [this._work] : [], this._effectWork ? [this._effectWork] : [])) {
+            if (raw && raw.trigger) triggers.add(raw.trigger);
         }
+        const states = [];
+        if (triggers.has('moving') || triggers.has('walking')) states.push('walking');
+        if (triggers.has('dashing')) states.push('dashing');
+        if (triggers.has('jumping')) states.push('jumping');
+        if (triggers.has('swimming')) states.push('swimming');
+        return states.length ? ['standing'].concat(states) : [];
+    }
+
+    previewState() {
+        const sim = this._sim;
+        return sim.swimming ? 'swimming' : sim.jumping ? 'jumping' : sim.dashing ? 'dashing' : sim.walking ? 'walking' : 'standing';
+    }
+
+    setPreviewState(state) {
+        this._sim.walking = state === 'walking' || state === 'dashing';
+        this._sim.dashing = state === 'dashing';
+        this._sim.jumping = state === 'jumping';
+        this._sim.swimming = state === 'swimming';
+        this.renderSimBar();
+    }
+
+    /** One on-demand motion, played once on the preview (the one on the card plays the card's values). */
+    playRuleAction(name) {
+        const index = this.playRules.findIndex(rule => rule.trigger === 'action' && rule.name === name);
+        if (index < 0) return;
+        if (index === this._editingRule) { this.previewPose(); return; }
+        const rule = this.playRules[index];
+        this._sim.action = {
+            name: rule.name,
+            frame: this._simFrame || 0,
+            until: Reactor3D.modelRuleDuration(rule, this._binding ? this._binding.clips : null)
+        };
+    }
+
+    /** The preview's state picker, over the viewport; hidden for a model with nothing that moves by state. */
+    renderSimBar() {
+        const bar = this._detail && this._detail.querySelector('.r3d-sim-bar');
+        if (!bar) return;
+        const states = this.previewStates();
+        if (!states.includes(this.previewState())) { this._sim.walking = this._sim.dashing = this._sim.jumping = this._sim.swimming = false; }
+        const held = this.playRules.some(rule => rule.type === 'pose' && rule.hold);
+        // A model that only "moves" (a car, a drone) is Idle or Moving; one that walks is Standing or Walking.
+        const walker = (this.rawAnimations || []).concat(this.rawEffects || []).some(raw => raw && ['walking', 'dashing', 'jumping', 'swimming'].includes(raw.trigger));
+        const names = { standing: walker ? 'Standing' : 'Idle', walking: walker ? 'Walking' : 'Moving', dashing: 'Dashing', jumping: 'Jumping', swimming: 'Swimming' };
+        const current = this.previewState();
+        bar.innerHTML = states.map(state => `<button type="button" class="r3d-preview-state${state === current ? ' active' : ''}" data-state="${state}" aria-pressed="${state === current}">${this._t(names[state])}</button>`).join('')
+            + (held ? `<button type="button" class="r3d-preview-state r3d-preview-reset" title="${this._t('Reset pose')}">↺</button>` : '');
+        bar.style.display = states.length || held ? 'flex' : 'none';
+        bar.querySelectorAll('.r3d-preview-state[data-state]').forEach(button => button.addEventListener('click', () => this.setPreviewState(button.dataset.state)));
+        bar.querySelector('.r3d-preview-reset')?.addEventListener('click', () => {
+            if (this._binding) this._binding.latch = {};
+            // The in-flight action would re-latch next frame.
+            this._sim.action = null;
+        });
     }
 
     ruleSummary(raw) {
@@ -7191,9 +7177,23 @@ class Database3DEditor {
         this.rawAnimations.forEach((raw, index) => {
             const row = document.createElement('div');
             row.dataset.modelRecordIndex = String(index);
-            row.textContent = this.ruleSummary(raw);
-            row.style.cssText = 'padding:4px 10px;cursor:pointer;font-size:12px;color:var(--color-text);'
+            row.style.cssText = 'display:flex;align-items:center;gap:6px;padding:3px 10px;cursor:pointer;font-size:12px;color:var(--color-text);'
                 + (index === this.selectedRule ? 'background:var(--color-accent-tint-25);' : '');
+            const label = document.createElement('span');
+            label.textContent = this.ruleSummary(raw);
+            label.style.cssText = 'flex:1;min-width:0;';
+            row.appendChild(label);
+            // On-demand motions play from their own row: one button per name (a preset's parts play together).
+            if (raw.trigger === 'action' && this.rawAnimations.findIndex(other => other.trigger === 'action' && other.name === raw.name) === index) {
+                const play = document.createElement('button');
+                play.type = 'button';
+                play.className = 'rr-btn-chip';
+                play.textContent = '▶';
+                play.title = this._t('Play');
+                play.setAttribute('data-rr-i18n-skip', '1');
+                play.addEventListener('click', event => { event.stopPropagation(); this.playRuleAction(raw.name); });
+                row.appendChild(play);
+            }
             row.addEventListener('click', () => {
                 this.selectedRule = index;
                 this.renderRuleList();
@@ -7204,6 +7204,15 @@ class Database3DEditor {
             list.appendChild(row);
         });
         this._renderEmbeddedClipRows(list);
+        if (!this.rawAnimations.length && !(this.embeddedClips || []).length) {
+            const empty = document.createElement('div');
+            empty.textContent = this._t('No animations yet. Add one to spin, swing or pose a part.');
+            empty.style.cssText = 'padding:8px 10px;font-size:11px;color:var(--color-text-muted);';
+            list.appendChild(empty);
+        }
+        const note = this._detail.querySelector('.r3d-rule-note');
+        if (note && note.dataset.rrDisplay === undefined) note.style.display = this._editingRule >= 0 && this._work && this._work.type === 'pose' ? '' : 'none';
+        this.renderSimBar();
         this.renderEffectList();
         this.renderEffectForm();
     }

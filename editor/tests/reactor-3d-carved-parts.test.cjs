@@ -518,7 +518,7 @@ test('the 3D section carries the tool strip, part picking, and the edit card', (
     assert.match(source, /rules = rules\.concat\(\[extra\]\)/);
     assert.match(source, /const off = rule => \(\{ \.\.\.rule, trigger: 'action', hold: false, name: ' ' \}\)/);
     assert.match(source, /if \(index === this\._editingRule\) return off\(rule\);/);
-    assert.match(source, /if \(index === this\._editingRule\) \{\s*\n\s*this\.previewPose\(\);/);
+    assert.match(source, /if \(index === this\._editingRule\) \{ this\.previewPose\(\); return; \}/);
     // Preview always plays from rest: it zeroes its own blend slot and
     // releases held copies of the pose first — while the card held the
     // pose at full strength, a held pose had nowhere to go and Preview

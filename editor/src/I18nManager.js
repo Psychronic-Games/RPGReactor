@@ -12243,6 +12243,44 @@ Object.assign(RR_TEXT_TRANSLATIONS.vi, { "Characters always draw at full detail.
 Object.assign(RR_TEXT_TRANSLATIONS.th, { "Characters always draw at full detail.": "ตัวละครวาดด้วยรายละเอียดเต็มเสมอ", "Heavy at every distance. Optimize converts it to GLB and cuts triangles.": "หนักทุกระยะ การปรับให้เหมาะจะแปลงเป็น GLB และลดสามเหลี่ยม", "Heavy at every distance. Optimize cuts triangles.": "หนักทุกระยะ การปรับให้เหมาะจะลดสามเหลี่ยม", "Has separate distance-level files. Optimize clears them.": "มีไฟล์ระดับระยะแยกไว้ การปรับให้เหมาะจะลบออก", "{count} carved part(s). Optimize rebuilds them.": "ชิ้นส่วนที่แกะไว้ {count} ชิ้น การปรับให้เหมาะจะสร้างใหม่", "Textures over 2K waste memory. Optimize caps them.": "เท็กซ์เจอร์ใหญ่กว่า 2K เปลืองหน่วยความจำ การปรับให้เหมาะจะจำกัดขนาด", "{size} of textures. Optimize recompresses them.": "เท็กซ์เจอร์ {size} การปรับให้เหมาะจะบีบอัดใหม่", "{size} of unused data. Optimize drops it.": "ข้อมูลที่ไม่ได้ใช้ {size} การปรับให้เหมาะจะลบออก", "{count} draw calls, one per piece.": "เรียกวาด {count} ครั้ง ชิ้นละครั้ง", "Already optimized (original kept as .orig).": "ปรับให้เหมาะแล้ว (ต้นฉบับเก็บเป็น .orig)" });
 Object.assign(RR_TEXT_TRANSLATIONS.tr, { "Characters always draw at full detail.": "Karakterler her zaman tam ayrıntıyla çizilir.", "Heavy at every distance. Optimize converts it to GLB and cuts triangles.": "Her mesafede ağır. Optimize etmek GLB'ye çevirir ve üçgenleri azaltır.", "Heavy at every distance. Optimize cuts triangles.": "Her mesafede ağır. Optimize etmek üçgenleri azaltır.", "Has separate distance-level files. Optimize clears them.": "Ayrı mesafe seviyesi dosyaları var. Optimize etmek onları siler.", "{count} carved part(s). Optimize rebuilds them.": "{count} oyulmuş parça. Optimize etmek onları yeniden kurar.", "Textures over 2K waste memory. Optimize caps them.": "2K'dan büyük dokular belleği boşa harcar. Optimize etmek onları sınırlar.", "{size} of textures. Optimize recompresses them.": "{size} doku. Optimize etmek onları yeniden sıkıştırır.", "{size} of unused data. Optimize drops it.": "{size} kullanılmayan veri. Optimize etmek onu siler.", "{count} draw calls, one per piece.": "{count} çizim çağrısı, parça başına bir.", "Already optimized (original kept as .orig).": "Zaten optimize edildi (orijinal .orig olarak saklanır)." });
 
+// 3D models: preview states.
+Object.assign(RR_TEXT_TRANSLATIONS.ja, { "Standing": "立ち", "Walking": "歩き", "Dashing": "ダッシュ" });
+Object.assign(RR_TEXT_TRANSLATIONS.es, { "Standing": "De pie", "Walking": "Caminando", "Dashing": "Corriendo" });
+Object.assign(RR_TEXT_TRANSLATIONS['zh-Hant'], { "Standing": "站立", "Walking": "行走", "Dashing": "衝刺" });
+Object.assign(RR_TEXT_TRANSLATIONS['zh-Hans'], { "Standing": "站立", "Walking": "行走", "Dashing": "冲刺" });
+Object.assign(RR_TEXT_TRANSLATIONS.ru, { "Standing": "Стоит", "Walking": "Идёт", "Dashing": "Бежит" });
+Object.assign(RR_TEXT_TRANSLATIONS.pt, { "Standing": "Parado", "Walking": "Andando", "Dashing": "Correndo" });
+Object.assign(RR_TEXT_TRANSLATIONS.de, { "Standing": "Stehen", "Walking": "Gehen", "Dashing": "Rennen" });
+Object.assign(RR_TEXT_TRANSLATIONS.fr, { "Standing": "Debout", "Walking": "Marche", "Dashing": "Course" });
+Object.assign(RR_TEXT_TRANSLATIONS.el, { "Standing": "Στάση", "Walking": "Περπάτημα", "Dashing": "Τρέξιμο" });
+Object.assign(RR_TEXT_TRANSLATIONS.ko, { "Standing": "서 있기", "Walking": "걷기", "Dashing": "대시" });
+Object.assign(RR_TEXT_TRANSLATIONS.ar, { "Standing": "وقوف", "Walking": "مشي", "Dashing": "ركض" });
+Object.assign(RR_TEXT_TRANSLATIONS.it, { "Standing": "In piedi", "Walking": "Camminata", "Dashing": "Corsa" });
+Object.assign(RR_TEXT_TRANSLATIONS.pl, { "Standing": "Stanie", "Walking": "Chód", "Dashing": "Bieg" });
+Object.assign(RR_TEXT_TRANSLATIONS.id, { "Standing": "Berdiri", "Walking": "Berjalan", "Dashing": "Berlari" });
+Object.assign(RR_TEXT_TRANSLATIONS.vi, { "Standing": "Đứng", "Walking": "Đi bộ", "Dashing": "Chạy" });
+Object.assign(RR_TEXT_TRANSLATIONS.th, { "Standing": "ยืน", "Walking": "เดิน", "Dashing": "วิ่ง" });
+Object.assign(RR_TEXT_TRANSLATIONS.tr, { "Standing": "Ayakta", "Walking": "Yürüme", "Dashing": "Koşma" });
+
+// 3D models: empty animations.
+Object.assign(RR_TEXT_TRANSLATIONS.ja, { "No animations yet. Add one to spin, swing or pose a part.": "アニメーションはまだありません。追加するとパーツを回転・揺らし・ポーズできます。" });
+Object.assign(RR_TEXT_TRANSLATIONS.es, { "No animations yet. Add one to spin, swing or pose a part.": "Aún no hay animaciones. Añade una para girar, balancear o posar una parte." });
+Object.assign(RR_TEXT_TRANSLATIONS['zh-Hant'], { "No animations yet. Add one to spin, swing or pose a part.": "尚無動畫。新增一個即可讓部件旋轉、擺動或擺姿勢。" });
+Object.assign(RR_TEXT_TRANSLATIONS['zh-Hans'], { "No animations yet. Add one to spin, swing or pose a part.": "还没有动画。添加一个即可让部件旋转、摆动或摆姿势。" });
+Object.assign(RR_TEXT_TRANSLATIONS.ru, { "No animations yet. Add one to spin, swing or pose a part.": "Анимаций пока нет. Добавьте, чтобы вращать, качать или ставить в позу часть." });
+Object.assign(RR_TEXT_TRANSLATIONS.pt, { "No animations yet. Add one to spin, swing or pose a part.": "Ainda não há animações. Adicione uma para girar, balançar ou posar uma parte." });
+Object.assign(RR_TEXT_TRANSLATIONS.de, { "No animations yet. Add one to spin, swing or pose a part.": "Noch keine Animationen. Füge eine hinzu, um ein Teil zu drehen, zu schwingen oder zu posieren." });
+Object.assign(RR_TEXT_TRANSLATIONS.fr, { "No animations yet. Add one to spin, swing or pose a part.": "Aucune animation. Ajoutez-en une pour faire tourner, balancer ou poser une partie." });
+Object.assign(RR_TEXT_TRANSLATIONS.el, { "No animations yet. Add one to spin, swing or pose a part.": "Δεν υπάρχουν ακόμη κινήσεις. Προσθέστε μία για να περιστρέψετε, να ταλαντεύσετε ή να στήσετε ένα μέρος." });
+Object.assign(RR_TEXT_TRANSLATIONS.ko, { "No animations yet. Add one to spin, swing or pose a part.": "아직 애니메이션이 없습니다. 추가하면 파트를 회전·흔들기·포즈할 수 있습니다." });
+Object.assign(RR_TEXT_TRANSLATIONS.ar, { "No animations yet. Add one to spin, swing or pose a part.": "لا توجد رسوم متحركة بعد. أضف واحدة لتدوير جزء أو أرجحته أو وضعه في وضعية." });
+Object.assign(RR_TEXT_TRANSLATIONS.it, { "No animations yet. Add one to spin, swing or pose a part.": "Nessuna animazione. Aggiungine una per ruotare, far oscillare o mettere in posa una parte." });
+Object.assign(RR_TEXT_TRANSLATIONS.pl, { "No animations yet. Add one to spin, swing or pose a part.": "Brak animacji. Dodaj jedną, by obracać, kołysać lub ustawić część." });
+Object.assign(RR_TEXT_TRANSLATIONS.id, { "No animations yet. Add one to spin, swing or pose a part.": "Belum ada animasi. Tambahkan untuk memutar, mengayun, atau memose bagian." });
+Object.assign(RR_TEXT_TRANSLATIONS.vi, { "No animations yet. Add one to spin, swing or pose a part.": "Chưa có hoạt ảnh. Thêm một cái để xoay, đung đưa hoặc tạo dáng cho một phần." });
+Object.assign(RR_TEXT_TRANSLATIONS.th, { "No animations yet. Add one to spin, swing or pose a part.": "ยังไม่มีแอนิเมชัน เพิ่มเพื่อหมุน แกว่ง หรือจัดท่าชิ้นส่วน" });
+Object.assign(RR_TEXT_TRANSLATIONS.tr, { "No animations yet. Add one to spin, swing or pose a part.": "Henüz animasyon yok. Bir parçayı döndürmek, sallamak veya poz vermek için ekleyin." });
+
 // 3D model import optimizer dialog.
 Object.assign(RR_TEXT_TRANSLATIONS['ja'], {
     'Import 3D Model': '3Dモデルのインポート', 'Optimize (recommended)': '最適化(推奨)', 'Resize textures to 2K, compact skin weights, drop unused data, and cut the mesh to about 60% of its triangles by collapsing the edges that change the shape least. Seams and silhouette are held.': 'テクスチャを2Kに縮小し、スキンウェイトを圧縮、不要データを削除し、形状への影響が最も小さいエッジを折りたたんでメッシュの三角形を約60%まで削減します。継ぎ目とシルエットは維持されます。', 'Optimize aggressively': '積極的に最適化', 'Everything above, cut to about a quarter of the triangles. May soften very fine detail.': '上記すべてに加え、三角形を約4分の1まで削減します。細部がわずかに損なわれる場合があります。', 'Import as-is': 'そのままインポート', 'Keep every byte of the original file.': '元のファイルを一切変更しません。', 'Import': 'インポート', 'largest texture': '最大テクスチャ', 'reducible without visible change': '見た目を変えずに削減可能'
