@@ -325,3 +325,22 @@ test('a skinned model is never ray-tested by re-posing every vertex on a hover o
     assert.match(src, /RRMeshBvh\.raycastMeshes\(raycaster\.ray, proxies, THREE\)/);
     assert.match(src, /if \(this\._skinned \|\| \(this\._triangleCount \|\| 0\) > Database3DEditor\.WHEEL_RAYCAST_BUDGET\) \{\n\s+const point = this\._pointerBoxPoint\(clientX, clientY\);/);
 });
+
+test('a rigged model plays its template default motions for the states it has none of its own for', () => {
+    const editorPresets = fs.readFileSync(path.join(repoRoot, 'editor', 'src', 'database', 'RigMotionPresets.js'), 'utf8');
+    assert.equal(editorPresets, fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_rig_motions.js'), 'utf8'), 'the editor and the game share one preset file');
+    const P = require(path.join(repoRoot, 'runtime', 'reactor_rig_motions.js'));
+    const byTrigger = id => [...new Set(P.byId(id).rules.map(r => r.trigger))];
+    assert.deepEqual(['walk', 'run', 'breathe', 'jump', 'swim', 'climb', 'tread'].map(byTrigger),
+        [['walking'], ['dashing'], ['idle'], ['jumping'], ['swimming'], ['climbing'], ['swimming']]);
+    const own = [{ name: 'Walking', type: 'clip', clip: 'Walking', trigger: 'walking' }, { name: 'Idle', type: 'clip', clip: 'Idle', trigger: 'idle' }];
+    const rules = Reactor3D.readModelAnimationRules({ animations: own, rig: { template: 'humanoid' } });
+    const defaults = [...new Set(rules.filter(r => r.defaultMotion).map(r => r.name))];
+    assert.deepEqual(defaults.sort(), ['Climb', 'Jump', 'Run', 'Swim']);
+    assert.equal(Reactor3D.readModelAnimationRules({ animations: own, rig: { template: 'humanoid' }, defaultMotions: false }).length, 2, 'switched off');
+    assert.equal(Reactor3D.readModelAnimationRules({ animations: own }).length, 2, 'no rig, no defaults');
+    // A gait is walked on the ground.
+    assert.equal(Reactor3D.moveTriggerActive('walking', { moving: true, airborne: true }), false);
+    assert.equal(Reactor3D.moveTriggerActive('dashing', { moving: true, dashing: true, climbing: true }), false);
+    assert.equal(Reactor3D.moveTriggerActive('walking', { moving: true }), true);
+});

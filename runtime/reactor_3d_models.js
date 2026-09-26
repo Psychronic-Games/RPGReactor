@@ -3323,10 +3323,31 @@ Reactor3D.readModelAnimationRules = function(json) {
             // another is played or an empty name stops it.
             repeat: !!raw.repeat,
             keys,
-            effects: readEffects(raw.effects)
+            effects: readEffects(raw.effects),
+            // One of the rig's own default motions, not the model's (reactor_rig_motions.js).
+            defaultMotion: !!raw.defaultMotion
         });
     }
+    // A rigged model plays its template's default motion for every state it
+    // has none of its own for: it climbs, swims and jumps before anyone
+    // animates it. `defaultMotions: false` in the sidecar turns that off.
+    const rig = json && json.rig && typeof json.rig === "object" ? json.rig : null;
+    const presets = rig && json.defaultMotions !== false ? Reactor3D.rigMotionPresets() : null;
+    if (presets && presets.defaultRules) {
+        const extra = presets.defaultRules(String(rig.template || "humanoid"), list);
+        if (extra.length) return rules.concat(this.readModelAnimationRules({ animations: extra }));
+    }
     return rules;
+};
+
+/** The rig presets (reactor_rig_motions.js), wherever this runs; null when absent. */
+Reactor3D.rigMotionPresets = function() {
+    const root = typeof globalThis !== "undefined" ? globalThis : (typeof window !== "undefined" ? window : null);
+    if (root && root.RigMotionPresets) return root.RigMotionPresets;
+    if (typeof module !== "undefined" && typeof require === "function") {
+        try { return require("./reactor_rig_motions.js"); } catch (error) { return null; }
+    }
+    return null;
 };
 
 /**
@@ -4093,8 +4114,10 @@ Reactor3D.moveTriggerActive = function(trigger, state) {
     if (trigger === "swimming") return !!state.swimming;
     if (trigger === "climbing") return !!state.climbing;
     if (trigger === "moving") return !!state.moving;
-    if (trigger === "walking") return !!state.moving && !state.dashing;
-    if (trigger === "dashing") return !!(state.moving && state.dashing);
+    // A gait is walked on the ground: in the air, in deep water or on a ladder the state's own motion plays.
+    const grounded = !state.airborne && !state.swimming && !state.climbing;
+    if (trigger === "walking") return !!state.moving && !state.dashing && grounded;
+    if (trigger === "dashing") return !!(state.moving && state.dashing) && grounded;
     return null;
 };
 
@@ -4488,7 +4511,12 @@ Reactor3D.applyModelAnimation = function(binding, rules, state) {
                 once = !jump.repeat;
                 rate = jump.rate || 1;
             }
-            const rule = jump || swim ? null : (moving
+            // A state with a motion of its own but no clip (a rig's default Jump, Swim or
+            // Climb) plays it from the rest pose: a gait clip under it would fight it.
+            const procedural = trigger => rules.some(r => r.trigger === trigger && r.type !== "clip");
+            const stateMotion = !jump && !swim && ((state.climbing && procedural("climbing"))
+                || (state.swimming && procedural("swimming")) || (state.airborne && procedural("jumping")));
+            const rule = jump || swim || stateMotion ? null : (moving
                 ? (dashing ? pick("dashing") : pick("walking")) || pick("moving")
                 : pick("idle")) || pick("always");
             if (rule) {

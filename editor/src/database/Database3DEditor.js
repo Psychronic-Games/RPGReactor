@@ -1359,6 +1359,7 @@ class Database3DEditor {
             && !Array.isArray(parsed.pivots) ? parsed.pivots : {};
         this.customRig = parsed.rig && typeof parsed.rig === 'object'
             && !Array.isArray(parsed.rig) ? parsed.rig : null;
+        this.defaultMotions = parsed.defaultMotions !== false;
         this._rigBinary = null;
         if (this.customRig && this.customRig.weightsFile && !this.customRig.weights) {
             const path = require('path');
@@ -1459,7 +1460,8 @@ class Database3DEditor {
 
     rebuildPlayback() {
         this.playRules = typeof Reactor3D !== 'undefined'
-            ? Reactor3D.readModelAnimationRules({ animations: this.rawAnimations })
+            // With the rig, so the preview plays its default motions as the game does.
+            ? Reactor3D.readModelAnimationRules({ animations: this.rawAnimations, rig: this.customRig, defaultMotions: this.defaultMotions })
             : [];
         if (this._binding) {
             this._binding.angles = {};
@@ -7098,6 +7100,23 @@ class Database3DEditor {
         }
     }
 
+    /** Whether the model plays its rig's default motions (the sidecar's `defaultMotions`). */
+    setDefaultMotions(on) {
+        this.defaultMotions = !!on;
+        const fs = require('fs');
+        try {
+            const previous = this._readSidecarForUpdate(fs);
+            const json = previous ? JSON.parse(previous) : {};
+            if (on) delete json.defaultMotions; else json.defaultMotions = false;
+            this._writeFileAtomic(fs, this.rulesPath(), (typeof RRJson !== 'undefined' && RRJson.stringify ? RRJson.stringify(json) : JSON.stringify(json, null, 2)) + '\n');
+        } catch (error) {
+            this._reportModelSaveError(error);
+            return;
+        }
+        this.rebuildPlayback();
+        this.renderRuleList();
+    }
+
     applyMotionPreset(preset) {
         // Reapplying replaces the preset's own rules; hand-authored ones
         // (different names) are untouched.
@@ -7175,7 +7194,7 @@ class Database3DEditor {
      */
     previewStates() {
         const triggers = new Set();
-        for (const raw of (this.rawAnimations || []).concat(this.rawEffects || [], this._work ? [this._work] : [], this._effectWork ? [this._effectWork] : [])) {
+        for (const raw of (this.playRules || []).concat(this.rawAnimations || [], this.rawEffects || [], this._work ? [this._work] : [], this._effectWork ? [this._effectWork] : [])) {
             if (raw && raw.trigger) triggers.add(raw.trigger);
         }
         const states = [];
@@ -7286,6 +7305,18 @@ class Database3DEditor {
             list.appendChild(row);
         });
         this._renderEmbeddedClipRows(list);
+        // The rig's own default motions for the states this model has none for, and the switch.
+        if (this.customRig) {
+            const defaults = [...new Set((this.playRules || []).filter(rule => rule.defaultMotion).map(rule => rule.name))];
+            const box = document.createElement('label');
+            box.style.cssText = 'display:flex;align-items:flex-start;gap:6px;padding:6px 10px;font-size:11px;color:var(--color-text-muted);border-top:1px solid var(--color-border);cursor:pointer;';
+            box.innerHTML = `<input type="checkbox" class="r3d-default-motions"${this.defaultMotions ? ' checked' : ''} style="margin:1px 0 0;"><span></span>`;
+            box.querySelector('span').textContent = this.defaultMotions && defaults.length
+                ? this._t('Rig defaults: {names}', { names: defaults.map(name => this._t(name)).join(', ') })
+                : this._t('Play the rig\'s default motions where this model has none');
+            box.querySelector('input').addEventListener('change', event => this.setDefaultMotions(event.target.checked));
+            list.appendChild(box);
+        }
         if (!this.rawAnimations.length && !(this.embeddedClips || []).length) {
             const empty = document.createElement('div');
             empty.textContent = this._t('No animations yet. Add one to spin, swing or pose a part.');
