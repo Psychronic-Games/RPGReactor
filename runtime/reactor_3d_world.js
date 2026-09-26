@@ -133,8 +133,21 @@ Reactor3D.terrainBlocks = function(mapData, x, y, x2, y2, near) {
     const from = this.groundHeightAt(mapData, x + 0.5, y + 0.5, near);
     const edge = this.groundHeightAt(mapData, (x + x2) / 2 + 0.5, (y + y2) / 2 + 0.5, from);
     const to = this.groundHeightAt(mapData, x2 + 0.5, y2 + 0.5, edge);
-    // Water deeper than a wade is not walked into.
-    if (this.waterDepthAt(mapData, x2 + 0.5, y2 + 0.5, edge) > this.WATER_WADE) return true;
+    const swim = this.hasWater(mapData) ? this.swimRule() : null;
+    if (swim) {
+        // A game that swims (reactor_physics): deep water is entered from
+        // anywhere at or above its surface (a swim, or a fall into it) and
+        // left onto a bank no more than a step over the surface; water a
+        // character stands in is walked on its bottom like any ground.
+        const levelTo = this.waterLevelAt(mapData, x2, y2), levelFrom = this.waterLevelAt(mapData, x, y);
+        const deepTo = levelTo !== null && levelTo - to > swim.swimDepth;
+        const deepFrom = levelFrom !== null && levelFrom - from > swim.swimDepth;
+        if (deepTo) return !(deepFrom || from >= levelTo - limit);
+        if (deepFrom) return to - levelFrom > limit;
+    } else if (this.waterDepthAt(mapData, x2 + 0.5, y2 + 0.5, edge) > this.WATER_WADE) {
+        // Water deeper than a wade is not walked into.
+        return true;
+    }
     if (Math.abs(edge - from) > limit || Math.abs(to - edge) > limit) return true;
     // A stair is climbed along its run and nothing else: its sides are as
     // solid as a wall (crossing a hall in a camera-relative walk drifted
@@ -676,6 +689,17 @@ Reactor3D.waterLevelAt = function(mapData, x, y) {
         if (this.waterCovers(region, x, y) && (level === null || region.level > level)) level = region.level;
     }
     return level;
+};
+
+/**
+ * The physics' settings when the game swims (reactor_physics.js), else null:
+ * the editor and a game without physics keep deep water impassable.
+ */
+Reactor3D.swimRule = function() {
+    const physics = typeof ReactorPhysics !== "undefined" ? ReactorPhysics : null;
+    if (!physics || !physics.settings) return null;
+    const settings = physics.settings();
+    return settings.swim ? settings : null;
 };
 
 /** How deep the water stands over the ground at a world point; 0 on dry land. */
@@ -1591,6 +1615,67 @@ Reactor3D.MapScene.prototype.updateWater = function(frame) {
         if (!texture) continue;
         texture.offset.x = (frame * 0.0015) % 1;
         texture.offset.y = (frame * 0.0009) % 1;
+    }
+};
+
+/**
+ * Rings on the water around swimmers: a wake while one swims, a slow ring
+ * while one treads water, and a burst where one splashes in (the physics'
+ * `_reactorSplash`). A small pool of flat rings, reused; in the game only.
+ */
+Reactor3D.RIPPLE_POOL = 24;
+Reactor3D.MapScene.prototype.updateRipples = function(frame, characters) {
+    if (!this._waterMeshes || !this._waterMeshes.length || !Number.isFinite(frame) || typeof THREE === "undefined") return;
+    const ripples = this._ripples || (this._ripples = { live: [], free: [], geometry: null });
+    const mapData = typeof $dataMap !== "undefined" ? $dataMap : null;
+    const spawn = (x, z, y, size, life, strength) => {
+        let mesh = ripples.free.pop();
+        if (!mesh) {
+            if (ripples.live.length >= Reactor3D.RIPPLE_POOL) return;
+            if (!ripples.geometry) {
+                ripples.geometry = new THREE.RingGeometry(0.42, 0.5, 40);
+                ripples.geometry.rotateX(-Math.PI / 2);
+            }
+            mesh = new THREE.Mesh(ripples.geometry, new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, depthWrite: false }));
+            mesh.renderOrder = 7;
+            this.piecesGroup().add(mesh);
+        }
+        mesh.visible = true;
+        mesh.position.set(x, y, z);
+        ripples.live.push({ mesh, born: frame, life, size, strength });
+    };
+    for (const character of characters || []) {
+        if (!character || !mapData) continue;
+        const x = character._realX + 0.5, z = character._realY + 0.5;
+        const level = Reactor3D.waterLevelAt(mapData, Math.floor(x), Math.floor(z));
+        if (level === null) continue;
+        const splash = character._reactorSplash;
+        if (splash && splash.frame !== character._reactorSplashSeen) {
+            character._reactorSplashSeen = splash.frame;
+            const burst = Math.min(1, 0.4 + splash.speed * 2);
+            spawn(x, z, level + 0.1, 2.6 * burst + 1, 50, 0.85);
+            spawn(x, z, level + 0.1, 1.6 * burst + 0.8, 38, 0.7);
+            character._reactorRippleAt = frame;
+        }
+        if (!character._reactorSwim) continue;
+        const moving = character.isMoving && character.isMoving();
+        const every = moving ? 14 : 48;
+        if (character._reactorRippleAt !== undefined && frame - character._reactorRippleAt < every && frame >= character._reactorRippleAt) continue;
+        character._reactorRippleAt = frame;
+        spawn(x, z, level + 0.1, moving ? 1.5 : 1.2, moving ? 40 : 70, moving ? 0.45 : 0.3);
+    }
+    for (let i = ripples.live.length - 1; i >= 0; i--) {
+        const ripple = ripples.live[i];
+        const t = (frame - ripple.born) / ripple.life;
+        if (t >= 1 || t < 0) {
+            ripple.mesh.visible = false;
+            ripples.free.push(ripple.mesh);
+            ripples.live.splice(i, 1);
+            continue;
+        }
+        const scale = 0.5 + ripple.size * Math.sqrt(t);
+        ripple.mesh.scale.set(scale, 1, scale);
+        ripple.mesh.material.opacity = ripple.strength * (1 - t) * (1 - t);
     }
 };
 

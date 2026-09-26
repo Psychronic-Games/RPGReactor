@@ -2550,6 +2550,7 @@ class ProjectController {
         const tri = (id, value) => { const el = document.getElementById(id); if (el) el.value = value === true ? 'on' : value === false ? 'off' : ''; };
         tri('map-3d-jumping-select', physics.jump);
         tri('map-3d-falldamage-select', physics.fallDamage);
+        tri('map-3d-swimming-select', physics.swim);
     }
 
     /** The map's physics as the form has it: only what differs from the project. */
@@ -2565,6 +2566,7 @@ class ProjectController {
         const tri = id => value(id) === 'on' ? true : value(id) === 'off' ? false : undefined;
         if (tri('map-3d-jumping-select') !== undefined) out.jump = tri('map-3d-jumping-select');
         if (tri('map-3d-falldamage-select') !== undefined) out.fallDamage = tri('map-3d-falldamage-select');
+        if (tri('map-3d-swimming-select') !== undefined) out.swim = tri('map-3d-swimming-select');
         return out;
     }
 

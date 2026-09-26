@@ -5598,6 +5598,7 @@ Spriteset_Map.prototype.updateReactor3D = function() {
     this.updateReactor3DCamera();
     if (state.scene.updateSky) state.scene.updateSky(state.viewport.camera ? state.viewport.camera() : null, Graphics.frameCount);
     if (state.scene.updateWater) state.scene.updateWater(Graphics.frameCount);
+    if (state.scene.updateRipples) state.scene.updateRipples(Graphics.frameCount, [$gamePlayer].concat($gamePlayer.followers().visibleFollowers(), $gameMap.events()));
     // Inside a built house the roof and any wall in the way are cut around the player.
     if (state.scene.updateCutaway) state.scene.updateCutaway(state.viewport.camera ? state.viewport.camera() : null, $dataMap, $gamePlayer, this.reactor3DCompany());
     this.updateReactor3DLights(state);

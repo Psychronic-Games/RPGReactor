@@ -75,7 +75,7 @@ class DatabaseControlsEditor {
     }
 
     physics() {
-        return Object.assign({ gravity: 1, jumpHeight: 1.25, fallDamage: false, fallFrom: 6, fallPercent: 10, fallCommonEvent: 0 }, this.system().reactorPhysics || {});
+        return Object.assign({ gravity: 1, jumpHeight: 1.25, fallDamage: false, fallFrom: 6, fallPercent: 10, fallCommonEvent: 0, swim: true, swimDepth: 2.2, splashSe: null }, this.system().reactorPhysics || {});
     }
 
     savePhysics(physics) {
@@ -153,8 +153,42 @@ class DatabaseControlsEditor {
                         <div class="rr-controls-note rr-controls-span">${rrEscapeHtml(tt('Gravity 1 is Earth. A map can set its own in Map Properties › 3D (the Moon, a low-gravity station).'))}</div>
                     </div>
                 </div>
+                <div class="database-section rr-controls-card">
+                    <div class="database-section-header">${rrEscapeHtml(tt('Swimming (3D maps)'))}</div>
+                    <div class="database-section-content rr-controls-form">
+                        <label class="rr-controls-check"><input type="checkbox" class="rr-controls-swim"${physics.swim !== false ? ' checked' : ''}> ${rrEscapeHtml(tt('Players can swim in deep water'))}</label>
+                        <label>${rrEscapeHtml(tt('Float depth'))}</label><div><input type="number" class="database-field-value rr-controls-num" data-field="swimDepth" min="0.2" max="20" step="0.1" value="${physics.swimDepth}"> <span class="rr-controls-unit">${rrEscapeHtml(tt('tiles under the surface'))}</span></div>
+                        <label>${rrEscapeHtml(tt('Splash sound'))}</label><div class="rr-controls-inline"><button type="button" class="rr-btn-secondary rr-controls-splash">${rrEscapeHtml(physics.splashSe && physics.splashSe.name ? physics.splashSe.name : tt('(none)'))}</button></div>
+                        <div class="rr-controls-note rr-controls-span">${rrEscapeHtml(tt('Shallower water is waded; deeper water is swum, slower and without dashing. Swimmers climb out onto a low bank or jump out.'))}</div>
+                    </div>
+                </div>
             </div>`;
         this.bind();
+    }
+
+    /** The splash sound: any sound effect of the project, or none. */
+    pickSplash() {
+        const pc = this.projectController;
+        const project = pc && (pc.getCurrentProject ? pc.getCurrentProject() : pc.currentProject);
+        if (!project?.path || typeof RRAudioPickerModal === 'undefined' || typeof RRAssetFiles === 'undefined') return;
+        let files = [];
+        try { files = RRAssetFiles.listUnique(require('path').join(project.path, 'audio', 'se'), RRAssetFiles.AUDIO_EXTENSIONS); } catch (error) { console.error('Error reading se folder:', error); return; }
+        const current = this.physics().splashSe || { name: '', volume: 90, pitch: 100, pan: 0 };
+        RRAudioPickerModal.open({
+            title: this._t('Splash sound'),
+            folderLabel: 'SE',
+            files,
+            selected: current.name || '',
+            levels: { volume: current.volume, pitch: current.pitch, pan: current.pan },
+            loopDefault: false,
+            zIndex: 21000,
+            onOk: result => {
+                const p = this.physics();
+                p.splashSe = result && result.name ? { name: result.name, volume: result.volume, pitch: result.pitch, pan: result.pan } : null;
+                this.savePhysics(p);
+                this.render();
+            }
+        });
     }
 
     bind() {
@@ -172,6 +206,8 @@ class DatabaseControlsEditor {
         });
         root.querySelector('.rr-controls-jumpon').addEventListener('change', event => { const c = this.controls(); c.jump = event.target.checked; this.saveControls(c); });
         root.querySelector('.rr-controls-fall').addEventListener('change', event => { const p = this.physics(); p.fallDamage = event.target.checked; this.savePhysics(p); });
+        root.querySelector('.rr-controls-swim').addEventListener('change', event => { const p = this.physics(); p.swim = event.target.checked; this.savePhysics(p); });
+        root.querySelector('.rr-controls-splash').addEventListener('click', () => this.pickSplash());
         root.querySelector('.rr-controls-event').addEventListener('change', event => { const p = this.physics(); p.fallCommonEvent = Math.max(0, Number(event.target.value) || 0); this.savePhysics(p); });
         root.querySelector('.rr-controls-gravity').addEventListener('change', event => {
             if (event.target.value === 'custom') return;

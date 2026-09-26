@@ -7138,6 +7138,14 @@ Reactor3D.MapScene.prototype.clear = function() {
     this._pieceGhosts = [];
     this._cutCaps = [];
     this._waterMeshes = [];
+    // The ripple rings sit in the pieces group, which goes with the scene;
+    // their shared ring and their materials are let go of here.
+    if (this._ripples) {
+        for (const ripple of this._ripples.live) this._ripples.free.push(ripple.mesh);
+        for (const mesh of this._ripples.free) { if (mesh.parent) mesh.parent.remove(mesh); mesh.material.dispose(); }
+        if (this._ripples.geometry) this._ripples.geometry.dispose();
+        this._ripples = null;
+    }
     this._pieceMaterials = null;
     this._pieceGhostMaterials = null;
     this._materialTextures = null;
