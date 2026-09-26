@@ -849,6 +849,35 @@ Reactor3D.clearCameraPath = function(camera, focus, mapData) {
     return true;
 };
 
+/**
+ * Keep a camera out of the ground. The terrain is drawn one-sided, so a
+ * camera below its surface (a third-person camera swung behind a pond's
+ * bank while its swimmer dives) sees through it: the sky, the underside of
+ * the map. It comes in along its line of sight to where the line leaves the
+ * ground, plus a margin. Pieces are `clearCameraPath`'s.
+ */
+Reactor3D.CAMERA_GROUND_MARGIN = 0.35;
+Reactor3D.clearCameraGround = function(camera, focus, mapData) {
+    if (!camera || !focus || !mapData || !this.terrainHeightAt || !this.elevationAt) return false;
+    const ground = (x, z) => this.elevationAt(mapData, Math.floor(x), Math.floor(z)) + this.terrainHeightAt(mapData, x, z);
+    const inside = (x, y, z) => x >= 0 && z >= 0 && x < mapData.width && z < mapData.height && y < ground(x, z) + this.CAMERA_GROUND_MARGIN;
+    const to = camera.position;
+    if (!inside(to.x, to.y, to.z)) return false;
+    const dx = to.x - focus.x, dy = to.y - focus.y, dz = to.z - focus.z;
+    const length = Math.hypot(dx, dy, dz);
+    if (length < 0.5) return false;
+    // The first point out from the focus that is in the ground: the camera stops short of it.
+    let free = length;
+    for (let d = 0.2; d <= length; d += 0.1) {
+        const t = d / length;
+        if (inside(focus.x + dx * t, focus.y + dy * t, focus.z + dz * t)) { free = Math.max(0.3, d - 0.2); break; }
+    }
+    const t = free / length;
+    camera.position.set(focus.x + dx * t, focus.y + dy * t, focus.z + dz * t);
+    camera.updateMatrixWorld();
+    return true;
+};
+
 /** How wide the opening in a wall between the camera and the player is, in tiles. */
 Reactor3D.CUTAWAY_RADIUS = 4.5;
 

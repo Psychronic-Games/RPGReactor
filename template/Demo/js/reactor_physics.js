@@ -111,11 +111,37 @@
     /** Buoyancy and drag in the water, per frame. */
     ReactorPhysics.WATER_SPRING = 0.03;
     ReactorPhysics.WATER_DRAG = 0.86;
+    /** The fastest the water lifts or lets sink a swimmer, tiles per frame. */
+    ReactorPhysics.WATER_RISE_MAX = 0.06;
+    ReactorPhysics.WATER_SINK_MAX = 0.3;
     /** How fast a swimmer climbs out onto a bank, tiles per frame. */
     ReactorPhysics.CLIMB_SPEED = 0.12;
     /** Diving and rising, tiles per frame; a swimmer keeps clear of the bottom by this much. */
     ReactorPhysics.DIVE_SPEED = 0.05;
     ReactorPhysics.DIVE_FLOOR = 0.3;
+    /** Degrees of look either side of the camera's resting pitch that still swim level. */
+    ReactorPhysics.DIVE_DEAD_ZONE = 6;
+
+    /**
+     * How a swimmer's forward stroke follows the camera, from -1 (rising) to
+     * 1 (diving): in third or first person, swimming forward while looking
+     * down past the view's own resting pitch dives, looking up rises, and
+     * backing up does the opposite. 0 in the fixed views and when not moving.
+     */
+    ReactorPhysics.lookDive = function(character) {
+        const camera = typeof Reactor3D !== "undefined" ? Reactor3D.Camera : null;
+        if (!camera || !camera.currentState || !camera.look) return 0;
+        const mode = camera.currentState().mode;
+        if (mode !== "thirdPerson" && mode !== "firstPerson") return 0;
+        const held = camera.held || new Set();
+        const dir = typeof Input !== "undefined" ? Input.dir4 : 0;
+        const stroke = (held.has("forward") || dir === 8 ? 1 : 0) - (held.has("back") || dir === 2 ? 1 : 0);
+        if (!stroke) return 0;
+        const rest = mode === "thirdPerson" ? 25 : 0;
+        const tilt = (camera.look.pitch === null ? rest : camera.look.pitch) - rest;
+        const beyond = Math.max(0, Math.abs(tilt) - this.DIVE_DEAD_ZONE);
+        return stroke * Math.sign(tilt) * Math.min(1, beyond / 30);
+    };
 
     /** Whether a swimmer is under the surface (diving), not treading water at it. */
     ReactorPhysics.isUnderwater = function(character) {
@@ -127,11 +153,13 @@
      * up while `up` is; it holds its depth otherwise, and never goes below
      * the bottom. Returns whether the swimmer is under the surface.
      */
-    ReactorPhysics.steerDive = function(character, down, up) {
+    ReactorPhysics.steerDive = function(character, down, up, pitch = 0) {
         if (!character || !character._reactorSwim) { if (character) character._reactorDive = 0; return false; }
         let dive = character._reactorDive || 0;
         if (down) dive += this.DIVE_SPEED;
         if (up) dive -= this.DIVE_SPEED;
+        // Swimming where the camera looks: -1 (straight up) to 1 (straight down).
+        dive += this.DIVE_SPEED * 1.4 * Math.max(-1, Math.min(1, Number(pitch) || 0));
         const room = Number.isFinite(character._reactorFloat) && Number.isFinite(character._reactorGround)
             ? character._reactorFloat - character._reactorGround - this.DIVE_FLOOR : 0;
         character._reactorDive = Math.max(0, Math.min(Math.max(0, room), dive));
@@ -185,7 +213,11 @@
             // Diving: the depth the swimmer steers to, under the float.
             const target = float - Math.max(0, Math.min(character._reactorDive || 0, float - ground - this.DIVE_FLOOR));
             vz = (vz + (target - height) * this.WATER_SPRING) * this.WATER_DRAG;
+            // Water lifts at a swimmer's pace and never past the surface: from the
+            // bottom of a deep pool the spring alone threw a character into the sky.
+            vz = Math.max(-this.WATER_SINK_MAX, Math.min(this.WATER_RISE_MAX, vz));
             height += vz;
+            if (height > float) { height = float; vz = Math.min(vz, 0); }
             character._reactorPeak = undefined;
             character._reactorSwim = height <= float + 0.3;
             character._reactorAlt = height;
@@ -313,7 +345,7 @@
             const free = sceneActive && typeof Input !== "undefined" && this.canMove() && !this.isInVehicle()
                 && typeof $gameMap !== "undefined" && !$gameMap.isEventRunning();
             // In the water Dash dives and Jump rises; at the surface Jump leaps out.
-            const under = free && this._reactorSwim ? ReactorPhysics.steerDive(this, Input.isPressed("shift"), Input.isPressed("jump") && (this._reactorDive || 0) > 0) : false;
+            const under = free && this._reactorSwim ? ReactorPhysics.steerDive(this, Input.isPressed("shift"), Input.isPressed("jump") && (this._reactorDive || 0) > 0, ReactorPhysics.lookDive(this)) : false;
             if (free && !under && !((this._reactorDive || 0) > 0) && Input.isTriggered("jump")) ReactorPhysics.jump(this);
             _updateP.apply(this, arguments);
         };

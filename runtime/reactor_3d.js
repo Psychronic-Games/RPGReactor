@@ -7986,8 +7986,10 @@ Reactor3D.renderBlocker = function(mapData) {
     // comes in along its own line of sight until it is clear.
     function keepOutOfWalls(camera, resolved) {
         if (!resolved.playerRelative && resolved.focus !== "player") return;
-        if (!Reactor3D.clearCameraPath || typeof $dataMap === "undefined") return;
-        Reactor3D.clearCameraPath(camera, { x: resolved.x + 0.5, y: resolved.y + 1.2, z: resolved.z + 0.5 }, $dataMap);
+        if (typeof $dataMap === "undefined") return;
+        const focus = { x: resolved.x + 0.5, y: resolved.y + 1.2, z: resolved.z + 0.5 };
+        if (Reactor3D.clearCameraPath) Reactor3D.clearCameraPath(camera, focus, $dataMap);
+        if (Reactor3D.clearCameraGround) Reactor3D.clearCameraGround(camera, focus, $dataMap);
     }
 
     //-------------------------------------------------------------------------

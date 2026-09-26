@@ -211,3 +211,29 @@ test('the Shape slot offers every shape, a placed shape changes kind in place, a
     assert.match(manager, /shapeOffsetFor\(target\) \{/);
     assert.match(view, /const off = manager\.shapeOffsetFor \? manager\.shapeOffsetFor\(target\) : null;/);
 });
+
+test('from the bottom of a deep pool the water lifts a swimmer to the surface and no further', () => {
+    const c = sandbox({ reactorPhysics: { gravity: 0.5 } });
+    c.Reactor3D = { isMap3D: () => true, TERRAIN_SLOPE_LIMIT: 0.75, hasWater: () => true, groundHeightAt: () => -20, waterLevelAt: () => -1 };
+    const who = { x: 5, y: 0, _realX: 5, _realY: 0, _reactorGround: -20, _reactorAlt: -20, _reactorSwim: true };
+    let highest = -Infinity;
+    for (let i = 0; i < 1200; i++) { c.ReactorPhysics.update(who); highest = Math.max(highest, who._reactorAlt); }
+    assert.ok(highest <= -3.2 + 1e-6, `never past the float (${highest})`);
+    assert.ok(Math.abs(who._reactorAlt - -3.2) < 0.05, 'floats there');
+    assert.equal(c.ReactorPhysics.isAirborne(who), false);
+});
+
+test('a swimmer steers its depth with the camera in third and first person', () => {
+    const c = sandbox();
+    const held = new Set(['forward']);
+    c.Input.dir4 = 0;
+    c.Reactor3D = { Camera: { currentState: () => ({ mode: 'thirdPerson' }), look: { pitch: 70 }, held } };
+    assert.ok(c.ReactorPhysics.lookDive({}) > 0.9, 'looking down dives');
+    c.Reactor3D.Camera.look.pitch = -10;
+    assert.ok(c.ReactorPhysics.lookDive({}) < -0.5, 'looking up rises');
+    c.Reactor3D.Camera.look.pitch = 27;
+    assert.equal(c.ReactorPhysics.lookDive({}), 0, 'the resting view swims level');
+    c.Reactor3D.Camera.currentState = () => ({ mode: 'fixed' });
+    c.Reactor3D.Camera.look.pitch = 70;
+    assert.equal(c.ReactorPhysics.lookDive({}), 0, 'fixed views keep Dash and Jump');
+});

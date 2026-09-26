@@ -4042,6 +4042,26 @@ Reactor3D.AXIS_VECTORS = {
     z: [0, 0, 1]
 };
 
+/**
+ * Whether the camera is inside the player's own model: pulled in close by a
+ * wall, a bank or a look up, it would show the inside of the body. The model
+ * steps aside until the camera backs off (first person has its own rule).
+ */
+Reactor3D.CAMERA_INSIDE_REACH = 0.9;
+Reactor3D.cameraInsideModel = function(character, object) {
+    if (typeof $gamePlayer === "undefined" || character !== $gamePlayer || !object || !this.activeCamera) return false;
+    const camera = this.activeCamera();
+    if (!camera) return false;
+    const box = object.userData.__reactorHeight || (object.userData.__reactorHeight = (() => {
+        const size = new THREE.Box3().setFromObject(object).getSize(new THREE.Vector3());
+        return Number.isFinite(size.y) && size.y > 0 ? size.y : 3;
+    })());
+    const p = camera.position, o = object.position;
+    // The nearest point of the body's upright line to the camera.
+    const y = Math.max(o.y, Math.min(o.y + box, p.y));
+    return Math.hypot(p.x - o.x, p.y - y, p.z - o.z) < this.CAMERA_INSIDE_REACH;
+};
+
 /** How far toward its ladder a climber hangs from the middle of the cell. */
 Reactor3D.LADDER_REACH = 0.22;
 
@@ -5849,6 +5869,7 @@ Reactor3D.MapScene.prototype.syncCharacterModels = function(characters) {
         if (posePitch) object.rotateX(-posePitch * Math.PI / 2);
         if (poseSpin) object.rotateZ(-poseSpin * Math.PI / 180);
         object.visible = !(character.isTransparent && character.isTransparent())
+            && !Reactor3D.cameraInsideModel(character, object)
             && !Reactor3D.characterHiddenByCamera(character, true);
         Reactor3D.registerPluginCommands();
         if (holder.binding && holder.rules && holder.rules.length) {
