@@ -6,7 +6,12 @@
  * shows is where the game draws.
  */
 class DatabaseUserInterfaceEditor {
-    static get NODE_TYPES() { return ['box', 'image', 'text', 'button', 'list', 'gauge', 'input']; }
+    static get NODE_TYPES() { return ['box', 'image', 'text', 'button', 'list', 'gauge', 'input', 'battleWindow', 'battleCursor']; }
+    /** The stock battle windows a Battle Window node places. */
+    static get BATTLE_WINDOWS() {
+        return [['partyCommand', 'Party Command'], ['actorCommand', 'Actor Command'], ['help', 'Help'], ['skill', 'Skills'], ['item', 'Items'],
+            ['actor', 'Ally Target'], ['enemy', 'Enemy Target'], ['status', 'Battle Status'], ['log', 'Battle Log']];
+    }
     /** Node types that take focus and run an action. */
     static isControl(type) { return type === 'button' || type === 'list' || type === 'input'; }
     static get GAUGE_KINDS() { return ['hp', 'mp', 'tp', 'exp', 'mhp', 'mmp', 'atk', 'def', 'mat', 'mdf', 'agi', 'luk', 'variable']; }
@@ -55,7 +60,8 @@ class DatabaseUserInterfaceEditor {
             ['skill', 'Skills', 'reactorSkillInterfaceId'],
             ['equip', 'Equipment', 'reactorEquipInterfaceId'],
             ['shop', 'Shop', 'reactorShopInterfaceId'],
-            ['name', 'Name Input', 'reactorNameInterfaceId']
+            ['name', 'Name Input', 'reactorNameInterfaceId'],
+            ['battle', 'Battle', 'reactorBattleInterfaceId']
         ];
     }
     static get GRID() { return 8; }
@@ -99,6 +105,18 @@ class DatabaseUserInterfaceEditor {
     // ==========================================
 
     static defaultNode(type, id) {
+        if (type === 'battleWindow') return {
+            id, type, name: '', parent: 0, anchor: 'topLeft', x: 0, y: 0, width: 240, height: 200, index: 0, opacity: 255,
+            visible: { type: 'always', id: 1, on: true, op: '==', value: 0, script: '' },
+            battleWindow: 'actorCommand', fill: 'window', windowColumns: 0, hideWindow: false, followActor: false,
+            slideX: 0, slideY: 0, slideDuration: 12, file: '', imageX: 0, imageY: 0
+        };
+        if (type === 'battleCursor') return {
+            id, type, name: '', parent: 0, anchor: 'topLeft', x: 0, y: 0, width: 32, height: 28, index: 0, opacity: 255,
+            visible: { type: 'always', id: 1, on: true, op: '==', value: 0, script: '' },
+            source: 'picture', file: '', frames: 1, frameSpeed: 8, floatRange: 6, showName: true, fontSize: 0, fontFace: '',
+            enemyOffsetX: 0, enemyOffsetY: 0, actorOffsetX: 0, actorOffsetY: 0
+        };
         if (type === 'input') return Object.assign(this.defaultNode('button', id), {
             type: 'input', width: 320, height: 48, text: '', align: 'left', action: this.defaultAction('none'),
             inputTarget: 'variable', variableId: 1, maxLength: 16, mask: false, onScreenKeys: false, autoEdit: false
@@ -162,16 +180,16 @@ class DatabaseUserInterfaceEditor {
 
     static normalizeActorElements(raw) {
         const result = {};
-        const keys = ['portrait','name','class','level','states', ...['hp','mp','tp','exp'].flatMap(k => [k,k+'Label',k+'Value'])];
+        const keys = ['portrait','name','class','level','states','atb', ...['hp','mp','tp','exp'].flatMap(k => [k,k+'Label',k+'Value'])];
         keys.push(...Object.keys(raw || {}).filter(key => /^custom_[1-9]\d*$/.test(key)).slice(0,100));
         for (const key of keys) {
             const source = raw && raw[key];
             if (!source || typeof source !== 'object') continue;
             const value = {};
             if (key.startsWith('custom_')) {
-                value.kind = ['box','label','value','gauge'].includes(source.kind) ? source.kind : 'label';
+                value.kind = ['box','label','value','gauge','image'].includes(source.kind) ? source.kind : 'label';
                 value.name = typeof source.name === 'string' ? source.name : '';
-                value.gauge = ['hp','mp','tp','exp','mhp','mmp','atk','def','mat','mdf','agi','luk','variable'].includes(source.gauge) ? source.gauge : 'variable';
+                value.gauge = ['hp','mp','tp','exp','atb','mhp','mmp','atk','def','mat','mdf','agi','luk','variable'].includes(source.gauge) ? source.gauge : 'variable';
                 for (const prop of ['variableId','maxVariableId','max']) value[prop] = Math.min(999999999,Math.max(0,Number(source[prop]) || (prop==='max'?100:0)));
             }
             for (const prop of ['x','y','width','height','fontSize','corner','thickness','iconSize','iconGap']) {
@@ -186,6 +204,11 @@ class DatabaseUserInterfaceEditor {
             if (['current','currentMax','percent'].includes(source.valueFormat)) value.valueFormat = source.valueFormat;
             if (typeof source.text === 'string') value.text = source.text;
             if (typeof source.visible === 'boolean') value.visible = source.visible;
+            for (const prop of ['meterImage','numberImage','file']) if (typeof source[prop] === 'string' && source[prop]) value[prop] = source[prop];
+            if (['row','cycle'].includes(source.statesMode)) value.statesMode = source.statesMode;
+            if (typeof source.onlyActive === 'boolean') value.onlyActive = source.onlyActive;
+            if (typeof source.behind === 'boolean') value.behind = source.behind;
+            if (Number.isFinite(Number(source.rotation)) && source.rotation !== '' && source.rotation != null) value.rotation = Math.max(-60, Math.min(60, Number(source.rotation)));
             result[key] = value;
         }
         return result;
@@ -223,6 +246,7 @@ class DatabaseUserInterfaceEditor {
             add(key,'gauge',{x,y:y+textHeight+2,width:w,height:barHeight(key)},{gauge:key,shape:'rectangle',corner:4,thickness:8});
             y+=textHeight+barHeight(key)+2+gap;
         }
+        if(fields.has('atb')) { add('atb','gauge',{x,y,width:w,height:barHeight('atb')},{gauge:'atb',shape:'rectangle',corner:4,thickness:8}); y+=barHeight('atb')+gap; }
         if(fields.has('states')) add('states','states',{
             x:fields.has('portrait')?pad:Math.max(pad,width-pad-160), y:fields.has('portrait')?pad+size+gap:pad,
             width:fields.has('portrait')?size:160,height:32},{iconSize:28,iconGap:4});
@@ -380,13 +404,14 @@ class DatabaseUserInterfaceEditor {
         entry.menuCommandVersion=2;
         const legacyCoordinates = entry.coordinateSpace !== 'screen';
         if (typeof entry.name !== 'string') entry.name = '';
-        if (entry.mode !== 'scene' && entry.mode !== 'overlay') entry.mode = 'scene';
+        if (!['scene', 'overlay', 'battle'].includes(entry.mode)) entry.mode = 'scene';
+        entry.hideStatusWindow = entry.hideStatusWindow !== false;
         if (!['blur', 'dim', 'none'].includes(entry.background)) entry.background = 'blur';
         entry.visible = Object.assign({ type: 'always', id: 1, on: true, op: '==', value: 0, script: '' }, entry.visible || {});
         entry.cancel = Object.assign(DatabaseUserInterfaceEditor.defaultAction('close'), entry.cancel && typeof entry.cancel === 'object' ? entry.cancel : {});
         if (!Number.isInteger(entry.firstFocus)) entry.firstFocus = 0;
-        if (!['none', 'fade', 'slideLeft'].includes(entry.openTransition)) entry.openTransition = 'none';
-        if (!['none', 'fade', 'slideLeft'].includes(entry.closeTransition)) entry.closeTransition = 'none';
+        if (!['none', 'fade', 'slideLeft', 'slideUp'].includes(entry.openTransition)) entry.openTransition = 'none';
+        if (!['none', 'fade', 'slideLeft', 'slideUp'].includes(entry.closeTransition)) entry.closeTransition = 'none';
         entry.transitionDuration = Math.min(120, Math.max(1, Math.round(Number(entry.transitionDuration) || 18)));
         if (!Array.isArray(entry.nodes)) entry.nodes = [];
         if (typeof entry.note !== 'string') entry.note = '';
@@ -446,7 +471,7 @@ class DatabaseUserInterfaceEditor {
                 merged.actorElements = DatabaseUserInterfaceEditor.normalizeActorElements(merged.actorElements);
                 if (merged.rowLayout==='actorPanel' && !node.actorLayoutVersion && node.rowHeight===192) merged.rowHeight=256;
                 merged.actorLayoutVersion=3;
-                merged.actorFields = Array.isArray(merged.actorFields) ? merged.actorFields.filter(key => ['portrait','name','class','level','hp','mp','tp','exp','states'].includes(key)) : ['portrait','name','class','level','hp','mp','exp','states'];
+                merged.actorFields = Array.isArray(merged.actorFields) ? merged.actorFields.filter(key => ['portrait','name','class','level','hp','mp','tp','exp','states','atb'].includes(key)) : ['portrait','name','class','level','hp','mp','exp','states'];
                 if (merged.rowLayout === 'actorPanel') {
                     merged.dataSource = 'party';
                     if ((node.actorLayoutVersion || 0)<3 && !merged.actorFields.includes('states')) merged.actorFields.push('states');
@@ -524,6 +549,7 @@ class DatabaseUserInterfaceEditor {
                     <select class="database-field-value rr-ui-mode">
                         <option value="scene">${tt('Focused scene')}</option>
                         <option value="overlay">${tt('Map overlay / HUD')}</option>
+                        <option value="battle">${tt('Battle HUD')}</option>
                     </select>
                 </label>
                 <div class="rr-ui-toolbar-field rr-ui-replacements"><span>${tt('Use As')}</span>
@@ -651,15 +677,23 @@ class DatabaseUserInterfaceEditor {
 
     updatePresentationFields() {
         if (!this.wrapper) return;
-        const overlay = this.current.mode === 'overlay';
+        // A battle HUD, like a map overlay, never takes focus: the stock battle windows do.
+        const overlay = this.current.mode === 'overlay' || this.current.mode === 'battle';
         this.wrapper.querySelectorAll('.rr-ui-scene-setting').forEach(element => { element.hidden = overlay; });
         this.wrapper.querySelectorAll('.rr-ui-overlay-setting').forEach(element => { element.hidden = !overlay; });
+        this.wrapper.querySelectorAll('.rr-ui-battle-setting').forEach(element => { element.hidden = this.current.mode !== 'battle'; });
         this.refreshReplacementControls();
     }
 
     replacementSystem() {
         return this.databaseManager && this.databaseManager.getSystem ? this.databaseManager.getSystem()
             : this.databaseManager && this.databaseManager.data ? this.databaseManager.data.system : null;
+    }
+
+    /** A role fits a record's presentation: Battle takes a Battle HUD, every other role a focused scene. */
+    roleFitsMode(role) {
+        const mode = this.current ? this.current.mode : 'scene';
+        return role === 'battle' ? mode === 'battle' : mode === 'scene';
     }
 
     replacementRoleMarkup() {
@@ -676,7 +710,7 @@ class DatabaseUserInterfaceEditor {
         const listId = `rr-ui-role-list-${id || 'new'}`;
         const controls = DatabaseUserInterfaceEditor.REPLACEMENT_ROLES.map(([role, label, field], index) => {
             const assigned = id > 0 && Number(system[field]) === id;
-            const disabled = this.current && this.current.mode === 'overlay' && !assigned;
+            const disabled = !this.roleFitsMode(role) && !assigned;
             return `<div id="${listId}-${index + 1}" class="rr-ui-role-option" role="option" aria-selected="${assigned}"${disabled ? ' aria-disabled="true"' : ''}
                 data-replacement-role="${role}" data-role-label="${this.escapeHTML(this._t(label))}" tabindex="-1">
                 <span class="rr-ui-role-check" aria-hidden="true">${assigned ? '✓' : ''}</span><span>${this._t(label)}</span>
@@ -784,7 +818,7 @@ class DatabaseUserInterfaceEditor {
         if (!definition || !system || !(id > 0)) return false;
         const field = definition[2];
         if (assigned) {
-            if (this.current.mode === 'overlay') return false;
+            if (!this.roleFitsMode(role)) return false;
             if (!Array.isArray(this.current.roles)) this.current.roles = [];
             if (!this.current.roles.includes(role)) this.current.roles.push(role);
             system[field] = id;
@@ -823,7 +857,10 @@ class DatabaseUserInterfaceEditor {
         this.current.firstFocus = normalized.firstFocus;
         this.current.cancel = normalized.cancel;
         this.current.background = normalized.background;
-        this.current.mode = 'scene';
+        this.current.mode = normalized.mode;
+        this.current.hideStatusWindow = normalized.hideStatusWindow;
+        this.current.openTransition = normalized.openTransition;
+        this.current.transitionDuration = normalized.transitionDuration;
         this.current.stock = kind;
         this.current.roles = Array.from(new Set([...(this.current.roles || []), kind]));
         if (!this.current.name) {
@@ -833,7 +870,8 @@ class DatabaseUserInterfaceEditor {
         }
         if (!this.current.note) this.current.note = normalized.note;
         const mode = this.wrapper && this.wrapper.querySelector('.rr-ui-mode');
-        if (mode) mode.value = 'scene';
+        if (mode) mode.value = this.current.mode;
+        this.updatePresentationFields();
         this.selectedId = 0;
         this.selectedIds = new Set();
         this.touch();
@@ -1212,7 +1250,8 @@ class DatabaseUserInterfaceEditor {
     // ==========================================
 
     typeLabel(type) {
-        return this._t({ box: 'Box', image: 'Image', text: 'Text', button: 'Button', list: 'List', gauge: 'Gauge', input: 'Text Input', actorPanel: 'Actor Panel' }[type] || type);
+        return this._t({ box: 'Box', image: 'Image', text: 'Text', button: 'Button', list: 'List', gauge: 'Gauge', input: 'Text Input',
+            battleWindow: 'Battle Window', battleCursor: 'Target Cursor', actorPanel: 'Actor Panel' }[type] || type);
     }
 
     nodeLabel(node) {
@@ -1652,11 +1691,15 @@ class DatabaseUserInterfaceEditor {
             <div class="rr-ui-sub rr-ui-overlay-setting">
                 ${this.row(tt('Overlay visibility'), this.conditionMarkup('overlay-visible', this.current.visible), tt('The overlay stays attached to Scene Map and never takes input focus.'))}
             </div>
+            <div class="rr-ui-sub rr-ui-battle-setting">
+                ${this.row('', this.checkControl('rr-ui-hide-status', this.current.hideStatusWindow !== false, tt('Hide the stock battle status')), tt('The HUD replaces it. A Battle Window node for the status places it instead.'))}
+                ${this.hintRow(tt('Bind this interface as Battle in System 2 or Use As. Battle Window nodes place the stock battle windows; the battle itself stays stock, so battle plugins keep working.'))}
+            </div>
             ${this.group(tt('Transitions'))}
             ${this.pair(tt('Transition in'), this.selectControl('rr-ui-open-transition', this.current.openTransition, [
-                ['none', tt('None')], ['fade', tt('Fade')], ['slideLeft', tt('Slide left')]
+                ['none', tt('None')], ['fade', tt('Fade')], ['slideLeft', tt('Slide left')], ['slideUp', tt('Slide up')]
             ]), tt('Transition out'), this.selectControl('rr-ui-close-transition', this.current.closeTransition, [
-                ['none', tt('None')], ['fade', tt('Fade')], ['slideLeft', tt('Slide left')]
+                ['none', tt('None')], ['fade', tt('Fade')], ['slideLeft', tt('Slide left')], ['slideUp', tt('Slide up')]
             ]))}
             ${this.row(`${tt('Duration')} (${tt('Frames')})`, this.numberControl('rr-ui-transition-duration', this.current.transitionDuration, 1, 120), tt('Input stays locked while an interface opens; closing completes before leaving.'))}
             ${this.group(tt('Notes'))}
@@ -1800,9 +1843,17 @@ class DatabaseUserInterfaceEditor {
             if (node.rowLayout === 'actorPanel') {
                 html += this.row(tt('Portrait size'), this.numberControl('p-portraitSize', node.portraitSize, 32, 144));
                 html += this.pair(tt('Padding'), this.numberControl('p-actorPadding', node.actorPadding, 0, 200), tt('Spacing'), this.numberControl('p-actorGap', node.actorGap, 0, 200));
-                for (const [key, label] of [['portrait','Portrait'],['name','Name'],['class','Class'],['level','Level'],['hp','HP'],['mp','MP'],['tp','TP'],['exp','EXP'],['states','States']]) {
+                for (const [key, label] of [['portrait','Portrait'],['name','Name'],['class','Class'],['level','Level'],['hp','HP'],['mp','MP'],['tp','TP'],['exp','EXP'],['atb','ATB'],['states','States']]) {
                     html += this.row('', this.checkControl('p-actorField-' + key, node.actorFields.includes(key), tt(label)));
                 }
+                html += this.group(tt('Portrait'));
+                html += this.row(tt('Source'), this.selectControl('p-portraitSource', node.portraitSource || 'face', [['face', tt('Face')], ['picture', tt('Picture per actor')]]));
+                html += `<div class="rr-ui-sub rr-ui-portrait-picture"${node.portraitSource === 'picture' ? '' : ' hidden'}>`;
+                html += this.row(tt('Picture name'), this.textControl('p-portraitPattern', node.portraitPattern || 'Face_{id}', 'Face_{id}'), tt('In img/pictures; {id} is the actor ID.'));
+                html += this.row(tt('Frames'), this.selectControl('p-portraitFrames', String(node.portraitFrames === 5 ? 5 : 1), [['1', tt('One image')], ['5', tt('Five: normal, healed, acting, hurt, fallen')]]));
+                html += '</div>';
+                html += this.row('', this.checkControl('p-portraitMotion', !!node.portraitMotion, tt('Face reactions')), tt('Shakes when hit, grows when healed or acting.'));
+                html += this.row('', this.checkControl('p-portraitBreath', !!node.portraitBreath, tt('Breathing')));
                 html += this.actorElementMarkup(node);
             }
             html += `<div class="rr-ui-sub"${node.rowLayout === 'actorPanel' ? ' hidden' : ''}>`;
@@ -1857,6 +1908,36 @@ class DatabaseUserInterfaceEditor {
             html += this.row(`${tt('List context')} ${tt('Name')}`, this.textControl('p-contextName', node.contextName, 'selection'));
             html += this.pair(tt('Store in variable'), this.numberControl('p-selectionVariableId', node.selectionVariableId, 0, 9999), tt('Store'), this.selectControl('p-selectionValue', node.selectionValue, [['id', tt('Row ID')], ['value', tt('Row value')]]));
             html += this.hintRow(tt('Variable 0 does not store the selection. The value is stored before the action runs.'));
+        }
+        if (node.type === 'battleWindow') {
+            const file = `<div class="rr-ui-file-row">${this.textControl('p-file', node.file || '', tt('(none)'))}<button type="button" class="rr-btn-chip p-browse">…</button></div>`;
+            html += this.group(tt('Battle Window'));
+            html += this.row(tt('Window'), this.selectControl('p-battleWindow', node.battleWindow, DatabaseUserInterfaceEditor.BATTLE_WINDOWS.map(([key, label]) => [key, tt(label)])));
+            html += this.hintRow(tt('Places the stock battle window here; the battle still runs it, so its commands and plugins stay.'));
+            html += this.pair(tt('Fill'), this.selectControl('p-fill', node.fill === 'none' ? 'none' : 'window', [['window', tt('Window skin')], ['none', tt('None')]]),
+                tt('Columns'), this.numberControl('p-windowColumns', node.windowColumns || 0, 0, 12));
+            html += this.hintRow(tt('Columns 0 keeps the window\'s own.'));
+            html += this.row('', this.checkControl('p-hideWindow', !!node.hideWindow, tt('Hide the window')), tt('It still takes input: pair an ally or enemy target window with a Target Cursor.'));
+            html += this.row('', this.checkControl('p-followActor', !!node.followActor, tt('Follow the active actor')), tt('X and Y become offsets from the active actor\'s row in the party panel.'));
+            html += this.group(tt('Slide in'));
+            html += this.pair(`${tt('Slide')} X`, this.numberControl('p-slideX', node.slideX || 0, -2000, 2000), `${tt('Slide')} Y`, this.numberControl('p-slideY', node.slideY || 0, -2000, 2000));
+            html += this.row(`${tt('Duration')} (${tt('Frames')})`, this.numberControl('p-slideDuration', node.slideDuration || 12, 1, 120), tt('Each time the window appears it moves in from this offset.'));
+            html += this.group(tt('Background picture'));
+            html += this.row(tt('Picture'), file, tt('Drawn behind the window, shown with it.'));
+            html += this.pair('X', this.numberControl('p-imageX', node.imageX || 0, -2000, 2000), 'Y', this.numberControl('p-imageY', node.imageY || 0, -2000, 2000));
+        }
+        if (node.type === 'battleCursor') {
+            html += this.group(tt('Target Cursor'));
+            html += this.row(tt('Source'), this.selectControl('p-source', node.source === 'system' ? 'system' : 'picture', [['picture', tt('Picture')], ['system', tt('System')]]));
+            html += this.row(tt('Image'), `<div class="rr-ui-file-row">${this.textControl('p-file', node.file || '', tt('(none)'))}<button type="button" class="rr-btn-chip p-browse">…</button></div>`,
+                tt('Blank draws a plain arrow. Animation frames sit side by side.'));
+            html += this.pair(tt('Frames'), this.numberControl('p-frames', node.frames || 1, 1, 60), tt('Frame speed'), this.numberControl('p-frameSpeed', node.frameSpeed || 8, 1, 120));
+            html += this.row(tt('Float'), this.numberControl('p-floatRange', node.floatRange ?? 6, 0, 100));
+            html += this.row('', this.checkControl('p-showName', node.showName !== false, tt('Show the target\'s name')));
+            html += this.row(tt('Font size'), this.numberControl('p-fontSize', node.fontSize || 0, 0, 200), tt('0 uses the game default.'));
+            html += this.pair(`${tt('Enemy')} X`, this.numberControl('p-enemyOffsetX', node.enemyOffsetX || 0, -2000, 2000), `${tt('Enemy')} Y`, this.numberControl('p-enemyOffsetY', node.enemyOffsetY || 0, -2000, 2000));
+            html += this.pair(`${tt('Ally')} X`, this.numberControl('p-actorOffsetX', node.actorOffsetX || 0, -2000, 2000), `${tt('Ally')} Y`, this.numberControl('p-actorOffsetY', node.actorOffsetY || 0, -2000, 2000));
+            html += this.hintRow(tt('Shows while an enemy or ally is being chosen: over the enemy, or over the ally\'s row in the party panel.'));
         }
         if (node.type === 'gauge') {
             const variable = node.gauge === 'variable';
@@ -1962,6 +2043,8 @@ class DatabaseUserInterfaceEditor {
         if (closeTransition) this.current.closeTransition = closeTransition.value;
         if (duration) this.current.transitionDuration = Math.min(120, Math.max(1, Math.round(Number(duration.value) || 18)));
         if (note) this.current.note = note.value;
+        const hideStatus = q('.rr-ui-hide-status');
+        if (hideStatus) this.current.hideStatusWindow = hideStatus.checked;
         this.touch();
         this.scheduleRender();
     }
@@ -2080,7 +2163,15 @@ class DatabaseUserInterfaceEditor {
             if (q('p-portraitSize')) node.portraitSize = num('p-portraitSize', 32, 144, 144);
             if (q('p-actorPadding')) node.actorPadding = num('p-actorPadding', 0, 200, 12);
             if (q('p-actorGap')) node.actorGap = num('p-actorGap', 0, 200, 4);
-            if (oldLayout === 'actorPanel') node.actorFields = ['portrait','name','class','level','hp','mp','tp','exp','states'].filter(key => q('p-actorField-' + key)?.checked);
+            if (oldLayout === 'actorPanel') node.actorFields = ['portrait','name','class','level','hp','mp','tp','exp','states','atb'].filter(key => q('p-actorField-' + key)?.checked);
+            if (q('p-portraitSource')) {
+                node.portraitSource = q('p-portraitSource').value;
+                node.portraitPattern = q('p-portraitPattern').value.trim() || 'Face_{id}';
+                node.portraitFrames = Number(q('p-portraitFrames').value) === 5 ? 5 : 1;
+                node.portraitMotion = q('p-portraitMotion').checked;
+                node.portraitBreath = q('p-portraitBreath').checked;
+                panel.querySelector('.rr-ui-portrait-picture').hidden = node.portraitSource !== 'picture';
+            }
             node.dataSource = node.rowLayout === 'actorPanel' ? 'party' : q('p-dataSource').value;
             if (oldLayout !== node.rowLayout) { if (node.rowLayout === 'actorPanel') q('p-rowHeight').value = 256; queueMicrotask(() => this.renderProperties()); }
             node.category = q('p-category').value;
@@ -2115,6 +2206,29 @@ class DatabaseUserInterfaceEditor {
             panel.querySelector('.rr-ui-list-actor').hidden = !DatabaseUserInterfaceEditor.ACTOR_LIST_SOURCES.includes(node.dataSource);
             panel.querySelector('.rr-ui-list-follow').hidden = !DatabaseUserInterfaceEditor.FOLLOWING_SOURCES.includes(node.dataSource);
             panel.querySelector('.rr-ui-list-compare').hidden = node.dataSource !== 'actorParameters';
+        }
+        if (node.type === 'battleWindow') {
+            node.battleWindow = q('p-battleWindow').value;
+            node.fill = q('p-fill').value === 'none' ? 'none' : 'window';
+            node.windowColumns = num('p-windowColumns', 0, 12, 0);
+            node.hideWindow = q('p-hideWindow').checked;
+            node.followActor = q('p-followActor').checked;
+            node.slideX = num('p-slideX', -2000, 2000, 0);
+            node.slideY = num('p-slideY', -2000, 2000, 0);
+            node.slideDuration = num('p-slideDuration', 1, 120, 12);
+            node.file = q('p-file').value.trim();
+            node.imageX = num('p-imageX', -2000, 2000, 0);
+            node.imageY = num('p-imageY', -2000, 2000, 0);
+        }
+        if (node.type === 'battleCursor') {
+            node.source = q('p-source').value === 'system' ? 'system' : 'picture';
+            node.file = q('p-file').value.trim();
+            node.frames = num('p-frames', 1, 60, 1);
+            node.frameSpeed = num('p-frameSpeed', 1, 120, 8);
+            node.floatRange = num('p-floatRange', 0, 100, 6);
+            node.showName = q('p-showName').checked;
+            node.fontSize = num('p-fontSize', 0, 200, 0);
+            for (const key of ['enemyOffsetX', 'enemyOffsetY', 'actorOffsetX', 'actorOffsetY']) node[key] = num('p-' + key, -2000, 2000, 0);
         }
         if (node.type === 'gauge') {
             node.gauge = q('p-gauge').value;
@@ -2187,7 +2301,7 @@ class DatabaseUserInterfaceEditor {
             this.touch();
         });
         q('.rr-ui-mode').addEventListener('change', event => {
-            this.current.mode = event.target.value === 'overlay' ? 'overlay' : 'scene';
+            this.current.mode = ['overlay', 'battle'].includes(event.target.value) ? event.target.value : 'scene';
             this.touch();
             this.updatePresentationFields();
             this.scheduleRender();
@@ -2680,21 +2794,22 @@ class DatabaseUserInterfaceEditor {
     browseImage() {
         const node = this.selected();
         const project = this.project();
-        if (!node || node.type !== 'image' || !project || !project.path) return;
-        const folder = node.source === 'icon' || node.source === 'partyFace' ? null : DatabaseUserInterfaceEditor.IMAGE_FOLDERS[node.source];
+        if (!node || !['image', 'battleWindow', 'battleCursor'].includes(node.type) || !project || !project.path) return;
+        const folder = node.type === 'battleWindow' ? 'pictures' : node.type === 'battleCursor' ? (node.source === 'system' ? 'system' : 'pictures')
+            : node.source === 'icon' || node.source === 'partyFace' ? null : DatabaseUserInterfaceEditor.IMAGE_FOLDERS[node.source];
         if (!folder || !this.parentEditor || typeof this.parentEditor.showImagePicker !== 'function') return;
         const path = require('path');
         const dir = path.join(project.path, 'img', folder);
         let files = [];
         try {
-            files = node.source === 'picture'
+            files = folder === 'pictures'
                 ? RRAssetFiles.listImageReferences(dir)
                 : RRAssetFiles.listNames(dir, ['.png']);
         } catch (error) {
             console.error('Error reading image folder:', error);
             return;
         }
-        const sheetType = node.source === 'face' ? 'face' : node.source === 'character' ? 'character' : undefined;
+        const sheetType = node.type !== 'image' ? undefined : node.source === 'face' ? 'face' : node.source === 'character' ? 'character' : undefined;
         this.parentEditor.showImagePicker(this._t('Select Image'), files, (selectedFile, selectedIndex) => {
             this.pushUndo();
             node.file = selectedFile || '';
@@ -3749,6 +3864,65 @@ class DatabaseUserInterfaceEditor {
         ctx.restore();
     }
 
+    /**
+     * A Battle Window is the stock window's stand-in: its skin (or a dashed
+     * outline without one) and the window's name. One that follows the
+     * active actor is drawn over the first party row it would follow.
+     */
+    drawBattleWindowNode(node, rect) {
+        const ctx = this.ctx;
+        let r = rect;
+        if (node.followActor) {
+            const slot = this.previewSlotRect();
+            if (slot) r = Object.assign({}, rect, { x: slot.x + node.x, y: slot.y + node.y });
+        }
+        if (node.file) {
+            const picture = this.image('picture', node.file);
+            if (picture.image) ctx.drawImage(picture.image, r.x + (node.imageX || 0), r.y + (node.imageY || 0));
+        }
+        if (node.fill !== 'none') this.drawSurface(Object.assign({}, node, { type: 'box', fill: 'window' }), r);
+        ctx.save();
+        ctx.globalAlpha *= node.hideWindow ? 0.45 : 1;
+        ctx.setLineDash([6 / this.scale, 4 / this.scale]);
+        ctx.strokeStyle = '#7fd3ff';
+        ctx.lineWidth = 1 / this.scale;
+        ctx.strokeRect(r.x + 0.5, r.y + 0.5, r.width - 1, r.height - 1);
+        ctx.setLineDash([]);
+        const label = (DatabaseUserInterfaceEditor.BATTLE_WINDOWS.find(([key]) => key === node.battleWindow) || ['', node.battleWindow])[1];
+        this.drawText(Object.assign({}, node, { type: 'button', text: this._t(label) + (node.hideWindow ? ' (' + this._t('hidden') + ')' : ''),
+            align: 'center', fontSize: 0, textColor: 0, fill: 'none', wrap: false, fitText: true, outline: true, outlineWidth: 3, letterSpacing: 0 }), r);
+        ctx.restore();
+    }
+
+    /** The cursor's stand-in: its image (or the plain arrow) with a sample name. */
+    drawBattleCursorNode(node, rect) {
+        const ctx = this.ctx;
+        const image = node.file ? this.image(node.source === 'system' ? 'system' : 'picture', node.file).image : null;
+        ctx.save();
+        if (image) {
+            const fw = image.width / Math.max(1, node.frames || 1);
+            ctx.drawImage(image, 0, 0, fw, image.height, rect.x, rect.y, fw, image.height);
+        } else {
+            ctx.beginPath(); ctx.moveTo(rect.x + 3, rect.y + 3); ctx.lineTo(rect.x + 29, rect.y + 3); ctx.lineTo(rect.x + 16, rect.y + 25); ctx.closePath();
+            ctx.fillStyle = '#ffffff'; ctx.strokeStyle = 'rgba(0,0,0,0.85)'; ctx.lineWidth = 3; ctx.stroke(); ctx.fill();
+        }
+        ctx.restore();
+        if (node.showName !== false) {
+            this.drawText(Object.assign({}, node, { type: 'text', text: this._t('Target'), align: 'center', textColor: 0, outline: true, outlineWidth: 3,
+                letterSpacing: 0, wrap: false, fitText: false, fontSize: node.fontSize || 0 }), { x: rect.x - 60, y: rect.y - 36, width: 152, height: 34 });
+        }
+    }
+
+    /** The first party-panel row on the canvas, where a following Battle Window is previewed. */
+    previewSlotRect() {
+        const panel = (this.current.nodes || []).find(node => node.type === 'list' && node.rowLayout === 'actorPanel' && node.dataSource === 'party');
+        const rect = panel ? this.rects().get(panel.id) : null;
+        if (!rect) return null;
+        const inset = panel.fill === 'window' ? 12 : 0;
+        const columns = Math.max(1, panel.columns || 1);
+        return { x: rect.x + inset, y: rect.y + inset, width: (rect.width - inset * 2) / columns, height: panel.rowHeight };
+    }
+
     /** A text input drawn as a button-like field: its placeholder, or a starting actor's name. */
     inputPreviewNode(node) {
         let text = node.text || '';
@@ -3972,7 +4146,7 @@ class DatabaseUserInterfaceEditor {
     }
 
     customElementAddMarkup() {
-        return '<div class="rr-ui-element-actions">'+this.selectControl('p-customElementKind','label',[['box',this._t('Custom Element')],['label',this._t('Custom Label')],['value',this._t('Custom Value')],['gauge',this._t('Custom Gauge')]])
+        return '<div class="rr-ui-element-actions">'+this.selectControl('p-customElementKind','label',[['box',this._t('Custom Element')],['label',this._t('Custom Label')],['value',this._t('Custom Value')],['gauge',this._t('Custom Gauge')],['image',this._t('Custom Picture')]])
             +'<button type="button" class="rr-btn-chip p-element-add">'+this._t('Add')+'</button></div>';
     }
 
@@ -3987,7 +4161,7 @@ class DatabaseUserInterfaceEditor {
         let id=1;while(node.actorElements['custom_'+id]) id++;
         this.pushUndo();
         const key='custom_'+id;
-        node.actorElements[key]={kind,name:this._t({box:'Custom Element',label:'Custom Label',value:'Custom Value',gauge:'Custom Gauge'}[kind]),
+        node.actorElements[key]={kind,name:this._t({box:'Custom Element',label:'Custom Label',value:'Custom Value',gauge:'Custom Gauge',image:'Custom Picture'}[kind]),
             x:node.actorPadding || 12,y:Math.max(12,node.rowHeight-48),width:160,height:kind==='gauge'?16:32,
             fontSize:24,text:kind==='label'?this._t('Custom Label'):'',gauge:'variable',variableId:1,max:100};
         this._actorElementKey=key;this.touch();this.renderProperties();this.scheduleRender();
@@ -4019,7 +4193,7 @@ class DatabaseUserInterfaceEditor {
         const element=elements[key];
         const label = key => {
             const match=/^(hp|mp|tp|exp)(Label|Value)?$/.exec(key);
-            return key.startsWith('custom_') ? (elements[key].name || tt('Custom Element')) : match ? tt(match[1].toUpperCase())+' '+tt(match[2] || 'Gauge') : tt({portrait:'Portrait',name:'Name',class:'Class',level:'Level',states:'States'}[key]);
+            return key.startsWith('custom_') ? (elements[key].name || tt('Custom Element')) : match ? tt(match[1].toUpperCase())+' '+tt(match[2] || 'Gauge') : tt({portrait:'Portrait',name:'Name',class:'Class',level:'Level',states:'States',atb:'ATB'}[key]);
         };
         const field=(prop,markup)=>'<div data-actor-element-property="'+prop+'">'+markup+'</div>';
         const number=(prop,min=0,max=9999)=>field(prop,this.numberControl('p-element-'+prop,Math.round(element[prop]*100)/100,min,max));
@@ -4039,18 +4213,28 @@ class DatabaseUserInterfaceEditor {
                 html+=this.hintRow(tt('Increase Height to make larger corners visible.'));
             }
             if(element.kind==='gauge') html+='<canvas class="rr-ui-gauge-preview" width="260" height="88" aria-label="'+tt('Style Preview')+'"></canvas>';
+            if(element.kind==='gauge') html+=this.row(tt('Meter image'),field('meterImage',this.textControl('p-element-meterImage',element.meterImage||'',tt('(none)'))),tt('A picture cut to the value instead of the drawn bar.'));
             for(const [prop,name] of [['color','Color 1'],['color2','Color 2'],['backColor','Background']]) html+=this.row(tt(name),field(prop,this.optionalColorControl('p-element-'+prop,element[prop]||'',tt('Default'))));
+        } else if(element.kind==='image') {
+            html+=this.row(tt('Picture'),field('file',this.textControl('p-element-file',element.file||'',tt('(none)'))),tt('In img/pictures.'));
+            html+=this.row(tt('Turn speed'),number('rotation',-60,60),tt('Degrees per frame; 0 stays still.'));
         } else if(element.kind==='states') {
+            html+=this.row(tt('Show'),field('statesMode',this.selectControl('p-element-statesMode',element.statesMode||'row',[['row',tt('All in a row')],['cycle',tt('One at a time')]])));
             html+=this.pair(tt('Icon size'),number('iconSize',8,144),tt('Spacing'),number('iconGap',0,100));
             html+=this.hintRow(tt('Preview icons are examples. In game, this shows active states and buffs.'));
         } else if(element.kind!=='portrait') {
             html+=this.pair(tt('Font size'),number('fontSize',8,200),tt('Align'),field('align',this.selectControl('p-element-align',element.align,[['left',tt('Left')],['center',tt('Center')],['right',tt('Right')]])));
             html+=this.row(tt('Color'),field('color',this.optionalColorControl('p-element-color',element.color||'',tt('Default'))));
-            if(element.kind==='value') html+=this.row(tt('Show value'),field('valueFormat',this.selectControl('p-element-valueFormat',element.valueFormat,[['current',tt('Value')],['currentMax',tt('Value')+' / '+tt('Maximum')],['percent','%']])));
+            if(element.kind==='value') {
+                html+=this.row(tt('Show value'),field('valueFormat',this.selectControl('p-element-valueFormat',element.valueFormat,[['current',tt('Value')],['currentMax',tt('Value')+' / '+tt('Maximum')],['percent','%']])));
+                html+=this.row(tt('Number image'),field('numberImage',this.textControl('p-element-numberImage',element.numberImage||'',tt('(none)'))),tt('A picture of the digits 0 to 9 side by side, scaled to the height.'));
+            }
             else html+=this.row(tt('Text'),field('text',this.textControl('p-element-text',element.text,tt('Game default'))));
         }
+        html+=this.row('',field('onlyActive',this.checkControl('p-element-onlyActive',!!element.onlyActive,tt('Only for the active actor'))),tt('In battle: the actor choosing a command or acting, like a turn marker.'));
+        html+=this.row('',field('behind',this.checkControl('p-element-behind',!!element.behind,tt('Behind other parts'))));
         if(key.startsWith('custom_') && ['value','gauge'].includes(element.kind)) {
-            html+=this.row(tt('Source'),field('gauge',this.selectControl('p-element-gauge',element.gauge,DatabaseUserInterfaceEditor.GAUGE_KINDS.map(k=>[k,tt(k==='variable'?'Variable':k.toUpperCase())]))));
+            html+=this.row(tt('Source'),field('gauge',this.selectControl('p-element-gauge',element.gauge,[...DatabaseUserInterfaceEditor.GAUGE_KINDS.slice(0,4),'atb',...DatabaseUserInterfaceEditor.GAUGE_KINDS.slice(4)].map(k=>[k,tt(k==='variable'?'Variable':k.toUpperCase())]))));
             if(element.gauge==='variable') {
                 html+=this.row(tt('Variable'),field('variableId',this.selectControl('p-element-variableId',element.variableId,this.panelVariableOptions())));
                 html+=this.row(tt('Maximum'),number('max',1,999999999));
@@ -4071,8 +4255,10 @@ class DatabaseUserInterfaceEditor {
         const elements=DatabaseUserInterfaceEditor.actorPanelLayout(node,rect.width,rect.height,this.fontSize(node));
         const basic=this.databaseManager.data.system?.terms?.basic || [];
         ctx.save(); ctx.beginPath(); ctx.rect(rect.x,rect.y,rect.width,rect.height); ctx.clip();
-        for(const [key,element] of Object.entries(elements)) {
-            if(!element.visible) continue;
+        // Behind parts first; parts for the active actor preview on the first row.
+        const ordered=Object.entries(elements).sort((a,b)=>Number(!!b[1].behind)-Number(!!a[1].behind));
+        for(const [key,element] of ordered) {
+            if(!element.visible || (element.onlyActive && index!==0)) continue;
             const r={x:rect.x+element.x,y:rect.y+element.y,width:element.width,height:element.height};
             ctx.save(); ctx.beginPath(); ctx.rect(r.x,r.y,r.width,r.height); ctx.clip();
             if(element.kind==='portrait') {
@@ -4086,6 +4272,11 @@ class DatabaseUserInterfaceEditor {
                 if(sheet.image) icons.slice(0,count).forEach((id,index)=>ctx.drawImage(this.iconTile(sheet.image,id),r.x+index*(size+gap),r.y,size,size));
             } else if(element.kind==='box') {
                 DatabaseUserInterfaceEditor.drawActorGauge(ctx,r,element,1,[element.color||'#30343c',element.color2||element.color||'#30343c','#30343c']);
+            } else if(element.kind==='image') {
+                const picture=element.file?this.image('picture',element.file):null;
+                if(picture?.image) ctx.drawImage(picture.image,r.x+(r.width-picture.image.width)/2,r.y+(r.height-picture.image.height)/2);
+            } else if(element.gauge==='atb') {
+                if(element.kind==='gauge') DatabaseUserInterfaceEditor.drawActorGauge(ctx,r,element,0.6,[this.skinColor(26),this.skinColor(27),this.skinColor(19)]);
             } else {
                 const gauge=element.gauge;
                 const param=['mhp','mmp','atk','def','mat','mdf','agi','luk'].indexOf(gauge);
@@ -4343,6 +4534,8 @@ class DatabaseUserInterfaceEditor {
                 case 'text': this.drawText(drawn, drawnRect); break;
                 case 'button': this.drawSurface(drawn, drawnRect); this.drawSelection(drawn, drawnRect); this.drawText(drawn, drawnRect); break;
                 case 'input': this.drawSurface(drawn, drawnRect); this.drawSelection(drawn, drawnRect); this.drawText(this.inputPreviewNode(drawn), drawnRect); break;
+                case 'battleWindow': this.drawBattleWindowNode(drawn, drawnRect); break;
+                case 'battleCursor': this.drawBattleCursorNode(drawn, drawnRect); break;
                 case 'list': this.drawListNode(drawn, drawnRect); break;
                 case 'gauge': this.drawGaugeNode(drawn, drawnRect); break;
                 default: break;

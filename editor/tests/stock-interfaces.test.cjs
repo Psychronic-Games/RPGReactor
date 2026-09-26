@@ -21,7 +21,7 @@ test('build preserves stable ids and appends later screens deterministically', (
     assert.deepStrictEqual(records.map(r => [r.id, r.name, r.stock]), [
         [1, 'Title Screen', 'title'], [2, 'Main Menu', 'menu'], [3, 'Game End', 'gameEnd'], [4, 'Status', 'status'],
         [5, 'Options', 'options'], [6, 'Save', 'save'], [7, 'Load', 'load'],
-        [8, 'Items', 'item'], [9, 'Skills', 'skill'], [10, 'Equipment', 'equip'], [11, 'Shop', 'shop'], [12, 'Name Input', 'name']
+        [8, 'Items', 'item'], [9, 'Skills', 'skill'], [10, 'Equipment', 'equip'], [11, 'Shop', 'shop'], [12, 'Name Input', 'name'], [13, 'Battle', 'battle']
     ]);
     const [title, menu, gameEnd, status] = records;
     const box = record => record.nodes.find(n => n.type === 'box' && n.name === 'Commands');
@@ -149,7 +149,7 @@ test('Options, Save, and Load baselines use typed sources and semantic actions o
 
 test('missing system data falls back to MZ defaults without throwing', () => {
     const records = Stock.build({});
-    assert.strictEqual(records.length, 12);
+    assert.strictEqual(records.length, 13);
     const box = records[0].nodes.find(n => n.type === 'box');
     assert.deepStrictEqual([box.x, box.y], [(816 - 240) / 2, 624 - 132 - 96]);
     assert.strictEqual(records[1].nodes.filter(n => n.type === 'button').map(b => b.text)[0], 'Item');
@@ -238,7 +238,7 @@ test('Items, Skills, Equipment and Shop chain their lists through contexts and w
             if (node.action && ['focusNode', 'equip'].includes(node.action.type)) assert.ok(ids(record).has(node.action.id), `${record.name}: ${node.name} focuses a real node`);
             if (node.backFocus) assert.ok(ids(record).has(node.backFocus), `${record.name}: ${node.name} goes back to a real node`);
         }
-        assert.ok(ids(record).has(record.firstFocus), `${record.name} starts on a real node`);
+        if (record.mode !== 'battle') assert.ok(ids(record).has(record.firstFocus), `${record.name} starts on a real node`);
         assert.deepStrictEqual(record.roles, [record.stock]);
     }
     const item = byStock('item');
@@ -257,9 +257,24 @@ test('Items, Skills, Equipment and Shop chain their lists through contexts and w
     assert.deepStrictEqual([named(shop, 'Buy').dataSource, named(shop, 'Buy').action.type, named(shop, 'Sell').action.type], ['shopGoods', 'shopBuy', 'shopSell']);
     assert.strictEqual(named(shop, 'Sell').visible.script, '!scene.isPurchaseOnly()', 'a purchase-only shop hides the sell side');
     assert.strictEqual(Stock.buildOne('shop', { system: fixtureSystem }).name, 'Shop');
-    assert.strictEqual(Stock.buildOne('battle', {}), null);
+    assert.strictEqual(Stock.buildOne('gameOver', {}), null);
     const name = byStock('name');
     const field = name.nodes.find(node => node.type === 'input');
     assert.deepStrictEqual([field.inputTarget, field.actorSource, field.onScreenKeys, field.autoEdit, field.action.type, name.firstFocus],
         ['actorName', 'sceneActor', true, true, 'close', field.id], 'the name field edits the actor being named, starts in the grid and closes on OK');
+});
+
+
+test('the Battle baseline is a Battle HUD after MOG: a reacting party panel, placed stock windows and a target cursor', () => {
+    const battle = Stock.buildOne('battle', { system: fixtureSystem });
+    assert.deepStrictEqual([battle.mode, battle.hideStatusWindow, battle.roles.join(), battle.openTransition], ['battle', true, 'battle', 'slideUp']);
+    const panel = battle.nodes.find(node => node.rowLayout === 'actorPanel');
+    assert.deepStrictEqual([panel.columns, panel.portraitMotion, panel.focusable, panel.actorFields.includes('atb')], [4, true, false, true]);
+    assert.deepStrictEqual([panel.actorElements.custom_1.onlyActive, panel.actorElements.custom_1.behind, panel.actorElements.states.statesMode], [true, true, 'cycle'],
+        'a turn marker behind the active actor, and states one at a time');
+    const windows = Object.fromEntries(battle.nodes.filter(node => node.type === 'battleWindow').map(node => [node.battleWindow, node]));
+    assert.deepStrictEqual(Object.keys(windows).sort(), ['actor', 'actorCommand', 'enemy', 'help', 'item', 'partyCommand', 'skill']);
+    assert.strictEqual(windows.actorCommand.followActor, true, 'the command window rides over the acting actor');
+    assert.deepStrictEqual([windows.enemy.hideWindow, windows.actor.hideWindow], [true, true], 'targets are chosen with the cursor');
+    assert.strictEqual(battle.nodes.filter(node => node.type === 'battleCursor').length, 1);
 });

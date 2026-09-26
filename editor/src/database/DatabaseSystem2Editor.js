@@ -113,7 +113,8 @@ class DatabaseSystem2Editor {
             ['reactorSkillInterfaceId', 'Skills', 'skill'],
             ['reactorEquipInterfaceId', 'Equipment', 'equip'],
             ['reactorShopInterfaceId', 'Shop', 'shop'],
-            ['reactorNameInterfaceId', 'Name Input', 'name']
+            ['reactorNameInterfaceId', 'Name Input', 'name'],
+            ['reactorBattleInterfaceId', 'Battle', 'battle']
         ];
         const html = rows.map(([field, label, role]) => `<div style="margin-bottom: 8px;">
             <label class="database-field-label">${tt(label)}</label>
@@ -405,7 +406,7 @@ class DatabaseSystem2Editor {
                 if (!['reactorMenuInterfaceId', 'reactorStatusInterfaceId', 'reactorGameEndInterfaceId',
                     'reactorOptionsInterfaceId', 'reactorSaveInterfaceId', 'reactorLoadInterfaceId',
                     'reactorItemInterfaceId', 'reactorSkillInterfaceId', 'reactorEquipInterfaceId', 'reactorShopInterfaceId',
-                    'reactorNameInterfaceId'].includes(field)) return;
+                    'reactorNameInterfaceId', 'reactorBattleInterfaceId'].includes(field)) return;
                 system[field] = Math.max(0, Math.floor(Number(event.target.value) || 0));
                 this.databaseManager.mutationGeneration = (this.databaseManager.mutationGeneration || 0) + 1;
             });

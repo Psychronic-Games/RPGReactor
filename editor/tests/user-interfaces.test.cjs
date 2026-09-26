@@ -326,8 +326,8 @@ test('the editor and runtime agree on anchors, node types, and action types', ()
         assert.ok(runtimeSource.includes(`"${action}"`), `runtime action ${action}`);
         assert.ok(editorSource.includes(`'${action}'`), `editor action ${action}`);
     }
-    assert.match(runtimeSource, /NODE_TYPES = \["box", "image", "text", "button", "list", "gauge", "input"\]/);
-    assert.match(editorSource, /NODE_TYPES\(\) \{ return \['box', 'image', 'text', 'button', 'list', 'gauge', 'input'\]; \}/);
+    assert.match(runtimeSource, /NODE_TYPES = \["box", "image", "text", "button", "list", "gauge", "input", "battleWindow", "battleCursor"\]/);
+    assert.match(editorSource, /NODE_TYPES\(\) \{ return \['box', 'image', 'text', 'button', 'list', 'gauge', 'input', 'battleWindow', 'battleCursor'\]; \}/);
     assert.match(runtimeSource, /IMAGE_SOURCES = \["picture", "system", "face", "character", "icon", "partyFace", "title1", "title2"\]/);
     assert.match(editorSource, /IMAGE_SOURCES\(\) \{ return \['picture', 'system', 'face', 'character', 'icon', 'partyFace', 'title1', 'title2'\]; \}/);
     assert.match(runtimeSource, /GAUGE_KINDS = \["hp", "mp", "tp", "exp"/);
@@ -1161,7 +1161,7 @@ test('Options, Save, and Load routing requires matching roles and falls back saf
     const sandbox = loadRuntimeUI();
     assert.equal(JSON.stringify(Object.keys(sandbox.ReactorUI.REPLACEMENTS)),
         '["title","menu","status","gameEnd","options","save","load","item","skill","equip","shop","name"]',
-        'Battle is outside the replacement roles');
+        'Battle is a HUD over the stock battle scene, never a routed replacement');
     sandbox.$dataUserInterfaces = [null,
         { id: 1, mode: 'scene', roles: ['options'], nodes: [] },
         { id: 2, mode: 'scene', roles: ['save'], nodes: [] },
@@ -1693,4 +1693,84 @@ test('a Text Input edits a draft: Enter commits and runs the action, Escape leav
     assert.strictEqual(sandbox.$gameVariables.value(11), '0451');
     assert.strictEqual(ran.type, 'commonEvent', 'the node\'s action runs after the text is stored, so an event can check it');
     assert.strictEqual(field.isEditing(), false);
+});
+
+
+// --- Battle HUD ------------------------------------------------------------
+
+test('a Battle HUD binds from System, places stock battle windows, follows the acting actor and points the cursor at the target', () => {
+    const sandbox = loadRuntimeUI(), ui = sandbox.ReactorUI;
+    sandbox.$dataUserInterfaces = [null, { id: 1, mode: 'battle', nodes: [] }, { id: 2, mode: 'scene', nodes: [] }];
+    sandbox.$dataSystem.reactorBattleInterfaceId = 2;
+    assert.strictEqual(ui.battleInterface(), null, 'a scene record is not a battle HUD');
+    sandbox.$dataSystem.reactorBattleInterfaceId = 1;
+    assert.strictEqual(ui.battleInterface().id, 1);
+    assert.strictEqual(Object.keys(ui.REPLACEMENTS).includes('battle'), false, 'Scene_Battle is never routed away');
+
+    const hero = { name: () => 'Hero' }, mage = { name: () => 'Mage' };
+    const moved = [];
+    const commandWindow = { x: 0, y: 0, width: 10, height: 10, visible: true, openness: 255, alpha: 1, opacity: 255,
+        move(x, y, w, h) { moved.push([x, y, w, h]); Object.assign(this, { x, y, width: w, height: h }); }, createContents() {}, refresh() {} };
+    const enemyWindow = Object.assign({}, commandWindow, { active: false, move() {}, enemy: () => ({ name: () => 'Slime', screenX: () => 300, screenY: () => 200 }) });
+    const panel = { visible: true, x: 100, y: 500, padding: 12, _uiRows: [{ data: hero }, { data: mage }],
+        node: () => ({ type: 'list', dataSource: 'party' }), itemRect: index => ({ x: index * 200, y: 0, width: 200, height: 120 }) };
+    const scene = { _windowLayer: { x: 0, y: 0 }, _actorCommandWindow: commandWindow, _enemyWindow: enemyWindow, _spriteset: { _enemySprites: [] } };
+    const hud = { _nodeWindows: [panel], _visibilityAlpha: 1, _interface: { hideStatusWindow: true } };
+    hud.slotRect = actor => ui.battleSlotRect(hud, actor);
+    assert.deepStrictEqual({ ...hud.slotRect(mage) }, { x: 312, y: 512, width: 200, height: 120 }, 'a row of the party panel in window-layer space');
+
+    const node = ui.normalizeNode({ type: 'battleWindow', battleWindow: 'actorCommand', followActor: true, x: 10, y: -150, width: 180, height: 140,
+        windowColumns: 2, fill: 'none', slideY: 30, slideDuration: 10 });
+    const entry = { node, rect: new sandbox.Rectangle(0, 0, 180, 140) };
+    let acting = mage;
+    sandbox.BattleManager = { actor: () => acting };
+    ui.placeBattleWindow(scene, hud, entry);
+    assert.deepStrictEqual(moved[0], [0, 0, 180, 140], 'sized once to the node');
+    assert.strictEqual(commandWindow.maxCols(), 2);
+    assert.strictEqual(commandWindow.opacity, 0, 'no skin for Fill None');
+    assert.deepStrictEqual([commandWindow.x, commandWindow.y], [322, 362 + 30], 'over the acting actor, sliding in');
+    for (let i = 0; i < 10; i++) ui.placeBattleWindow(scene, hud, entry);
+    assert.deepStrictEqual([commandWindow.x, commandWindow.y], [322, 362]);
+    acting = null;
+    ui.placeBattleWindow(scene, hud, entry);
+    assert.deepStrictEqual([commandWindow.x, commandWindow.y], [322, 362], 'between actors it stays where it last followed');
+    acting = hero;
+    ui.placeBattleWindow(scene, hud, entry);
+    assert.strictEqual(commandWindow.x, 122);
+    const hidden = { node: ui.normalizeNode({ type: 'battleWindow', battleWindow: 'enemy', hideWindow: true }), rect: new sandbox.Rectangle(0, 0, 0, 0) };
+    ui.placeBattleWindow(scene, hud, hidden);
+    assert.strictEqual(enemyWindow.alpha, 0, 'hidden, but still the window that takes the input');
+
+    const cursor = ui.normalizeNode({ type: 'battleCursor', enemyOffsetY: -10 });
+    assert.strictEqual(ui.battleTarget(scene, hud, cursor), null, 'nothing to point at outside target selection');
+    enemyWindow.active = true;
+    assert.deepStrictEqual({ ...ui.battleTarget(scene, hud, cursor), battler: 'x' }, { battler: 'x', x: 300, y: 126 }, 'over the enemy, less its height and the offset');
+    enemyWindow.active = false;
+    scene._actorWindow = { active: true, index: () => 1, actor: () => mage };
+    const ally = ui.battleTarget(scene, hud, cursor);
+    assert.deepStrictEqual([ally.battler, ally.x, ally.y], [mage, 412, 512], 'over the ally\'s HUD row');
+});
+
+test('portrait reactions follow MOG: hurt shakes on frame 3, healing and acting zoom on frames 1 and 2, then low HP and fallen', () => {
+    const sandbox = loadRuntimeUI(), ui = sandbox.ReactorUI;
+    sandbox.Graphics = { frameCount: 0 };
+    const actor = { hp: 100, mhp: 100, isDead() { return this.hp <= 0; } };
+    assert.deepStrictEqual({ ...ui.faceState(actor) }, { frame: 0, shake: 0, zoom: 1 });
+    ui.faceEvent(actor, 'hurt');
+    sandbox.Graphics.frameCount = 1;
+    const hurt = ui.faceState(actor);
+    assert.deepStrictEqual([hurt.frame, hurt.zoom, Math.abs(hurt.shake) <= 6], [3, 1, true]);
+    ui.faceEvent(actor, 'act');
+    sandbox.Graphics.frameCount = 36;
+    for (let f = 2; f <= 36; f++) { sandbox.Graphics.frameCount = f; ui.faceState(actor); }
+    const acting = ui.faceState(actor);
+    assert.strictEqual(acting.frame, 2);
+    assert.ok(acting.zoom > 1.2, 'at its largest halfway through');
+    for (let f = 37; f <= 80; f++) { sandbox.Graphics.frameCount = f; ui.faceState(actor); }
+    actor.hp = 20;
+    assert.strictEqual(ui.faceState(actor).frame, 3, 'below 30% HP the hurt face stays');
+    actor.hp = 0;
+    assert.strictEqual(ui.faceState(actor).frame, 4);
+    assert.strictEqual(ui.spritePortrait(ui.normalizeNode({ type: 'list', portraitMotion: true })), true);
+    assert.strictEqual(ui.isSpriteElement({}, { kind: 'gauge', gauge: 'atb' }), true, 'the ATB bar redraws on its own, not with the row');
 });

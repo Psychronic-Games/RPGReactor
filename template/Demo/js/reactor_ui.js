@@ -36,7 +36,14 @@
     ReactorUI.MAX_NESTING = 16;
     // "Fit text to size" never shrinks a font below this many pixels.
     ReactorUI.MIN_FONT_SIZE = 8;
-    ReactorUI.NODE_TYPES = ["box", "image", "text", "button", "list", "gauge", "input"];
+    ReactorUI.NODE_TYPES = ["box", "image", "text", "button", "list", "gauge", "input", "battleWindow", "battleCursor"];
+    /** The stock battle windows a Battle Window node places, by scene property. */
+    ReactorUI.BATTLE_WINDOWS = {
+        partyCommand: "_partyCommandWindow", actorCommand: "_actorCommandWindow", help: "_helpWindow",
+        skill: "_skillWindow", item: "_itemWindow", actor: "_actorWindow", enemy: "_enemyWindow",
+        status: "_statusWindow", log: "_logWindow"
+    };
+    ReactorUI.BATTLE_FIELD = "reactorBattleInterfaceId";
     ReactorUI.GAUGE_KINDS = ["hp", "mp", "tp", "exp", "mhp", "mmp", "atk", "def", "mat", "mdf", "agi", "luk", "variable"];
     ReactorUI.LIST_SOURCES = ["party", "inventory", "skills", "actorParameters", "actorEquipment", "actorStates", "options", "saveSlots", "variableRange", "literal",
         "itemCategories", "skillTypes", "equipCandidates", "shopGoods", "shopSell"];
@@ -266,16 +273,16 @@
 
     ReactorUI.normalizeActorElements = function(raw) {
         const result = {};
-        const keys = ['portrait','name','class','level','states', ...['hp','mp','tp','exp'].flatMap(k => [k,k+'Label',k+'Value'])];
+        const keys = ['portrait','name','class','level','states','atb', ...['hp','mp','tp','exp'].flatMap(k => [k,k+'Label',k+'Value'])];
         keys.push(...Object.keys(raw || {}).filter(key => /^custom_[1-9]\d*$/.test(key)).slice(0,100));
         for (const key of keys) {
             const source = raw && raw[key];
             if (!source || typeof source !== 'object') continue;
             const value = {};
             if (key.startsWith('custom_')) {
-                value.kind = ['box','label','value','gauge'].includes(source.kind) ? source.kind : 'label';
+                value.kind = ['box','label','value','gauge','image'].includes(source.kind) ? source.kind : 'label';
                 value.name = typeof source.name === 'string' ? source.name : '';
-                value.gauge = ['hp','mp','tp','exp','mhp','mmp','atk','def','mat','mdf','agi','luk','variable'].includes(source.gauge) ? source.gauge : 'variable';
+                value.gauge = ['hp','mp','tp','exp','atb','mhp','mmp','atk','def','mat','mdf','agi','luk','variable'].includes(source.gauge) ? source.gauge : 'variable';
                 for (const prop of ['variableId','maxVariableId','max']) value[prop] = Math.min(999999999,Math.max(0,Number(source[prop]) || (prop==='max'?100:0)));
             }
             for (const prop of ['x','y','width','height','fontSize','corner','thickness','iconSize','iconGap']) {
@@ -290,6 +297,14 @@
             if (['current','currentMax','percent'].includes(source.valueFormat)) value.valueFormat = source.valueFormat;
             if (typeof source.text === 'string') value.text = source.text;
             if (typeof source.visible === 'boolean') value.visible = source.visible;
+            // Battle HUD styling: image meters and digit sheets from img/pictures,
+            // states one at a time, parts for the acting actor only, parts
+            // drawn behind the rest, a picture that turns.
+            for (const prop of ['meterImage','numberImage','file']) if (typeof source[prop] === 'string' && source[prop]) value[prop] = source[prop];
+            if (['row','cycle'].includes(source.statesMode)) value.statesMode = source.statesMode;
+            if (typeof source.onlyActive === 'boolean') value.onlyActive = source.onlyActive;
+            if (typeof source.behind === 'boolean') value.behind = source.behind;
+            if (Number.isFinite(Number(source.rotation)) && source.rotation !== '' && source.rotation != null) value.rotation = Math.max(-60, Math.min(60, Number(source.rotation)));
             result[key] = value;
         }
         return result;
@@ -327,6 +342,7 @@
             add(key,'gauge',{x,y:y+textHeight+2,width:w,height:barHeight(key)},{gauge:key,shape:'rectangle',corner:4,thickness:8});
             y+=textHeight+barHeight(key)+2+gap;
         }
+        if(fields.has('atb')) { add('atb','gauge',{x,y,width:w,height:barHeight('atb')},{gauge:'atb',shape:'rectangle',corner:4,thickness:8}); y+=barHeight('atb')+gap; }
         if(fields.has('states')) add('states','states',{
             x:fields.has('portrait')?pad:Math.max(pad,width-pad-160), y:fields.has('portrait')?pad+size+gap:pad,
             width:fields.has('portrait')?size:160,height:32},{iconSize:28,iconGap:4});
@@ -489,6 +505,32 @@
             actorSource,
             actorVariableId: Math.max(1, Math.floor(finite(source.actorVariableId, 1))),
             actorContextName: text(source.actorContextName, "selection").trim() || "selection",
+            // Battle Window: which stock window, and how it behaves.
+            battleWindow: oneOf(source.battleWindow, Object.keys(this.BATTLE_WINDOWS), "actorCommand"),
+            hideWindow: !!source.hideWindow,
+            followActor: !!source.followActor,
+            slideX: clamp(Math.round(finite(source.slideX, 0)), -2000, 2000),
+            slideY: clamp(Math.round(finite(source.slideY, 0)), -2000, 2000),
+            slideDuration: clamp(Math.round(finite(source.slideDuration, 12)), 1, 120),
+            windowColumns: clamp(Math.round(finite(source.windowColumns, 0)), 0, 12),
+            imageX: clamp(Math.round(finite(source.imageX, 0)), -2000, 2000),
+            imageY: clamp(Math.round(finite(source.imageY, 0)), -2000, 2000),
+            // Target Cursor: animation and placement over the chosen battler.
+            frames: clamp(Math.round(finite(source.frames, 1)), 1, 60),
+            frameSpeed: clamp(Math.round(finite(source.frameSpeed, 8)), 1, 120),
+            floatRange: clamp(Math.round(finite(source.floatRange, 6)), 0, 100),
+            showName: source.showName !== false,
+            enemyOffsetX: clamp(Math.round(finite(source.enemyOffsetX, 0)), -2000, 2000),
+            enemyOffsetY: clamp(Math.round(finite(source.enemyOffsetY, 0)), -2000, 2000),
+            actorOffsetX: clamp(Math.round(finite(source.actorOffsetX, 0)), -2000, 2000),
+            actorOffsetY: clamp(Math.round(finite(source.actorOffsetY, 0)), -2000, 2000),
+            // Actor Panel portraits: a face or a picture per actor, with MOG-style
+            // expression frames and reactions.
+            portraitSource: oneOf(source.portraitSource, ["face", "picture"], "face"),
+            portraitPattern: text(source.portraitPattern, "Face_{id}"),
+            portraitFrames: source.portraitFrames === 5 || source.portraitFrames === "5" ? 5 : 1,
+            portraitMotion: !!source.portraitMotion,
+            portraitBreath: !!source.portraitBreath,
             // Text input: what it edits, how long it may be, how it shows.
             inputTarget: oneOf(source.inputTarget, ["variable", "actorName", "actorNickname"], "variable"),
             maxLength: clamp(Math.round(finite(source.maxLength, 16)), 1, 99),
@@ -515,7 +557,7 @@
             actorGap: clamp(finite(source.actorGap, 4), 0, 200),
             actorElements: this.normalizeActorElements(source.actorElements),
             actorLayoutVersion: 3,
-            actorFields: Array.isArray(source.actorFields) ? source.actorFields.filter(key => ["portrait","name","class","level","hp","mp","tp","exp","states"].includes(key)) : ["portrait","name","class","level","hp","mp","exp","states"],
+            actorFields: Array.isArray(source.actorFields) ? source.actorFields.filter(key => ["portrait","name","class","level","hp","mp","tp","exp","states","atb"].includes(key)) : ["portrait","name","class","level","hp","mp","exp","states"],
             dataSource: source.rowLayout === "actorPanel" ? "party" : oneOf(source.dataSource, this.LIST_SOURCES, "literal"),
             category: oneOf(source.category, this.INVENTORY_CATEGORIES, "all"),
             actorMode: oneOf(source.actorMode, ["party", "actor"], "party"),
@@ -609,13 +651,14 @@
         return {
             id: Math.max(0, Math.floor(finite(source.id, 0))),
             name: text(source.name, ""),
-            mode: oneOf(source.mode, ["scene", "overlay"], "scene"),
+            mode: oneOf(source.mode, ["scene", "overlay", "battle"], "scene"),
+            hideStatusWindow: source.hideStatusWindow !== false,
             background: oneOf(source.background, ["blur", "dim", "none"], "blur"),
             visible: this.normalizeCondition(source.visible),
             cancel: this.normalizeAction(source.cancel || { type: "close" }),
             firstFocus: Math.max(0, Math.floor(finite(source.firstFocus, 0))),
-            openTransition: oneOf(source.openTransition, ["none", "fade", "slideLeft"], "none"),
-            closeTransition: oneOf(source.closeTransition, ["none", "fade", "slideLeft"], "none"),
+            openTransition: oneOf(source.openTransition, ["none", "fade", "slideLeft", "slideUp"], "none"),
+            closeTransition: oneOf(source.closeTransition, ["none", "fade", "slideLeft", "slideUp"], "none"),
             transitionDuration: clamp(Math.round(finite(source.transitionDuration, 18)), 1, 120),
             coordinateSpace: "screen",
             nodes: this.orderNodes(unique),
@@ -2778,7 +2821,114 @@
             this.contentsBack.fillRect(rect.x, rect.y, rect.width, rect.height, ReactorUI.cssColor(color, alpha));
         }
     };
+    /** The actor choosing commands now, or acting now: the one a turn marker points at. */
+    ReactorUI.isActiveActor = function(actor) {
+        if (!actor || typeof BattleManager === "undefined" || typeof $gameParty === "undefined" || !$gameParty.inBattle()) return false;
+        return (BattleManager.actor && BattleManager.actor() === actor) || BattleManager._subject === actor;
+    };
+
+    /** Whether a panel draws its portrait as an animated sprite rather than into the row. */
+    ReactorUI.spritePortrait = function(node) {
+        return !!(node.portraitMotion || node.portraitBreath || node.portraitSource === "picture" || node.portraitFrames === 5);
+    };
+
+    /** Parts that change every frame live in sprites over the row, so the row itself is not repainted. */
+    ReactorUI.isSpriteElement = function(node, element) {
+        if (element.kind === "portrait") return this.spritePortrait(node);
+        if (element.kind === "gauge" && element.gauge === "atb") return true;
+        return element.kind === "image";
+    };
+
+    ReactorUI.whenReady = function(bitmap, redraw) {
+        if (bitmap.isReady()) return true;
+        if (!bitmap._rrRedraws) { bitmap._rrRedraws = []; bitmap.addLoadListener(() => { for (const fn of bitmap._rrRedraws) fn(); bitmap._rrRedraws = null; }); }
+        if (bitmap._rrRedraws && !bitmap._rrRedraws.includes(redraw)) bitmap._rrRedraws.push(redraw);
+        return false;
+    };
+
+    /** A meter picture cut to the rate, stretched to the part's box. */
+    ReactorUI.drawImageMeter = function(bitmap, r, file, rate, redraw) {
+        const image = ImageManager.loadPicture(file);
+        if (!this.whenReady(image, redraw)) return;
+        rate = Math.max(0, Math.min(1, Number(rate) || 0));
+        const sw = Math.floor(image.width * rate);
+        if (sw > 0) bitmap.blt(image, 0, 0, sw, image.height, r.x, r.y, Math.round(r.width * rate), r.height);
+    };
+
+    /** Digits from a sheet of ten (0-9) side by side, scaled to the part's height; other characters leave a gap. */
+    ReactorUI.drawImageNumber = function(bitmap, r, file, text, align, redraw) {
+        const sheet = ImageManager.loadPicture(file);
+        if (!this.whenReady(sheet, redraw)) return;
+        const cw = Math.floor(sheet.width / 10), ch = sheet.height;
+        if (!(cw > 0)) return;
+        const scale = r.height / ch, dw = Math.round(cw * scale);
+        const chars = String(text).split("");
+        const width = chars.length * dw;
+        let x = r.x + (align === "right" ? r.width - width : align === "center" ? (r.width - width) / 2 : 0);
+        for (const c of chars) {
+            const digit = c.charCodeAt(0) - 48;
+            if (digit >= 0 && digit <= 9) bitmap.blt(sheet, digit * cw, 0, cw, ch, Math.round(x), r.y, dw, r.height);
+            x += dw;
+        }
+    };
+
+    //-------------------------------------------------------------------------
+    // Portrait reactions: a hit shakes the face, healing and acting zoom it,
+    // and a sheet of five frames shows normal, healed, acting, hurt (also
+    // below 30% HP) and dead, as MOG's battle HUD does.
+
+    ReactorUI._faceEvents = new WeakMap();
+    ReactorUI.FACE_EVENTS = { hurt: { frame: 3, time: 60 }, heal: { frame: 1, time: 70 }, act: { frame: 2, time: 70 } };
+
+    ReactorUI.faceEvent = function(actor, kind) {
+        if (actor && this.FACE_EVENTS[kind]) this._faceEvents.set(actor, { kind, timer: this.FACE_EVENTS[kind].time, frame: Graphics.frameCount });
+    };
+
+    /** The portrait's frame and motion for an actor now; timers run down once a frame. */
+    ReactorUI.faceState = function(actor) {
+        const event = this._faceEvents.get(actor);
+        if (event && event.frame !== Graphics.frameCount) { event.frame = Graphics.frameCount; event.timer--; }
+        if (event && event.timer > 0) {
+            const time = this.FACE_EVENTS[event.kind].time;
+            const t = 1 - event.timer / time;
+            return { frame: this.FACE_EVENTS[event.kind].frame, shake: event.kind === "hurt" ? Math.random() * 12 - 6 : 0,
+                zoom: event.kind === "hurt" ? 1 : 1 + 0.25 * Math.sin(Math.PI * t) };
+        }
+        if (event) this._faceEvents.delete(actor);
+        const frame = actor.isDead() ? 4 : actor.hp <= actor.mhp * 0.3 ? 3 : 0;
+        return { frame, shake: 0, zoom: 1 };
+    };
+
+    if (typeof Game_Actor !== "undefined") {
+        const inBattle = () => typeof $gameParty !== "undefined" && $gameParty && $gameParty.inBattle();
+        const _performDamage = Game_Actor.prototype.performDamage;
+        Game_Actor.prototype.performDamage = function() {
+            _performDamage.apply(this, arguments);
+            if (inBattle()) ReactorUI.faceEvent(this, "hurt");
+        };
+        const _performRecovery = Game_Battler.prototype.performRecovery;
+        Game_Battler.prototype.performRecovery = function() {
+            _performRecovery.apply(this, arguments);
+            if (inBattle() && this.isActor && this.isActor()) ReactorUI.faceEvent(this, "heal");
+        };
+        const _performActionStart = Game_Actor.prototype.performActionStart;
+        Game_Actor.prototype.performActionStart = function() {
+            _performActionStart.apply(this, arguments);
+            if (inBattle()) ReactorUI.faceEvent(this, "act");
+        };
+    }
+
+    /** An actor's time gauge in a time-progress battle (0 to 1), else 0. */
+    ReactorUI.atbRate = function(actor) {
+        if (!actor || typeof BattleManager === "undefined" || !BattleManager.isTpb || !BattleManager.isTpb() || !actor.tpbChargeTime) return 0;
+        return Math.max(0, Math.min(1, actor.tpbChargeTime()));
+    };
+
     ReactorUI.actorGaugeData = function(actor, key, element = {}) {
+        if(key==='atb') {
+            const rate=this.atbRate(actor);
+            return {value:Math.round(rate*100),max:100,rate,label:'',color:ColorManager.ctGaugeColor1?ColorManager.ctGaugeColor1():'#a0a0ff',color2:ColorManager.ctGaugeColor2?ColorManager.ctGaugeColor2():'#c0c0ff'};
+        }
         if(key==='variable') {
             const value=Number($gameVariables.value(element.variableId)) || 0;
             const max=element.maxVariableId?Number($gameVariables.value(element.maxVariableId)) || 0:element.max || 100;
@@ -2798,11 +2948,22 @@
     Window_ReactorUIList.prototype.drawActorPanelRow = function(actor, rect) {
         if (!actor) return;
         this.resetFontSettings();
-        const node=this._uiNode, bitmap=this.contents, ctx=bitmap.context;
+        // Behind parts go on the back layer, under the portrait sprites; the rest on the front.
+        this.drawActorPanelParts(actor, rect, this.contentsBack, true);
+        this.drawActorPanelParts(actor, rect, this.contents, false);
+    };
+
+    Window_ReactorUIList.prototype.drawActorPanelParts = function(actor, rect, bitmap, behind) {
+        const node=this._uiNode, ctx=bitmap.context;
+        bitmap.fontSize=this.contents.fontSize;
         const elements=ReactorUI.actorPanelLayout(node,rect.width,rect.height,bitmap.fontSize);
+        const active=ReactorUI.isActiveActor(actor);
+        // Parts marked Behind draw first; animated parts (sprite portraits,
+        // the ATB bar, turning pictures) live in the sprite layer instead.
+        const ordered=Object.values(elements).filter(element=>!!element.behind===behind);
         ctx.save(); ctx.beginPath(); ctx.rect(rect.x,rect.y,rect.width,rect.height); ctx.clip();
-        for(const element of Object.values(elements)) {
-            if(!element.visible) continue;
+        for(const element of ordered) {
+            if(!element.visible || (element.onlyActive && !active) || ReactorUI.isSpriteElement(node,element)) continue;
             const r={x:rect.x+element.x,y:rect.y+element.y,width:element.width,height:element.height};
             ctx.save(); ctx.beginPath(); ctx.rect(r.x,r.y,r.width,r.height); ctx.clip();
             if(element.kind==='portrait') {
@@ -2821,7 +2982,9 @@
                     if(!this._uiWaitingForIcons) {this._uiWaitingForIcons=true;sheet.addLoadListener(()=>{if(!this.destroyed&&this.contents)this.refresh();});}
                 } else {
                     const size=Math.min(element.iconSize,r.height), gap=element.iconGap;
-                    const icons=actor.allIcons();
+                    let icons=actor.allIcons();
+                    // Cycle: one icon at a time, a second each.
+                    if(element.statesMode==='cycle' && icons.length>1) icons=[icons[Math.floor(Graphics.frameCount/60)%icons.length]];
                     const count=Math.max(0,Math.floor((r.width+gap)/(size+gap)));
                     icons.slice(0,count).forEach((id,index)=>{const tile=ReactorUI.iconBitmap(sheet,id);bitmap.blt(tile,0,0,tile.width,tile.height,r.x+index*(size+gap),r.y,size,size);});
                 }
@@ -2829,8 +2992,13 @@
                 ReactorUI.drawActorGauge(ctx,r,element,1,[element.color||'#30343c',element.color2||element.color||'#30343c','#30343c']);
             } else {
                 const data=element.gauge?ReactorUI.actorGaugeData(actor,element.gauge,element):null;
-                if(element.kind==='gauge') {
+                if(element.kind==='gauge' && element.meterImage) {
+                    ReactorUI.drawImageMeter(bitmap,r,element.meterImage,data.rate,()=>this.refresh());
+                } else if(element.kind==='gauge') {
                     ReactorUI.drawActorGauge(ctx,r,element,data.rate,[data.color,data.color2,ColorManager.gaugeBackColor()]);
+                } else if(element.kind==='value' && element.numberImage) {
+                    const text=element.valueFormat==='percent'?String(Math.round(data.rate*100)):element.valueFormat==='current'?String(data.value):data.value+'/'+data.max;
+                    ReactorUI.drawImageNumber(bitmap,r,element.numberImage,text,element.align,()=>this.refresh());
                 } else {
                     let label=element.kind==='value'?(element.valueFormat==='percent'?Math.round(data.rate*100)+'%':element.valueFormat==='current'?String(data.value):data.value+' / '+data.max)
                         :element.kind==='label'?(element.text||data.label):element.text;
@@ -2900,16 +3068,156 @@
             if(element.gauge==='variable') {variables.add(element.variableId);variables.add(element.maxVariableId);}
             for(const match of String(element.text || '').matchAll(/\\V\[(\d+)\]/gi)) variables.add(Number(match[1]));
         }
+        const cycling=Object.values(node.actorElements || {}).some(element=>element.statesMode==='cycle');
         return JSON.stringify([rows.map(row=>{
             const a=row.data;
             return [a.hp,a.mp,a.tp,a.mhp,a.mmp,a.currentExp?.(),a.currentClass?.()?.name,a.allIcons?.(),
-                ...['mhp','mmp','atk','def','mat','mdf','agi','luk'].map(key=>a[key])];
-        }),[...variables].filter(Boolean).map(id=>$gameVariables.value(id))]);
+                ...['mhp','mmp','atk','def','mat','mdf','agi','luk'].map(key=>a[key]),ReactorUI.isActiveActor(a)];
+        }),[...variables].filter(Boolean).map(id=>$gameVariables.value(id)),cycling?Math.floor(Graphics.frameCount/60):0]);
     };
+    //-------------------------------------------------------------------------
+    // Actor Panel sprite layer: portraits with reactions, ATB bars and turning
+    // pictures, over the row backgrounds and under the row text, moved and
+    // redrawn per frame without repainting the rows.
+
+    Window_ReactorUIList.prototype.panelSpriteElements = function() {
+        const node = this._uiNode;
+        if (node.rowLayout !== "actorPanel" || !this._uiRows.length) return [];
+        const rect = this.itemRect(0);
+        const key = rect.width + "x" + rect.height + ":" + this.contents.fontSize + ":" + JSON.stringify(node.actorElements || {});
+        if (key !== this._uiPanelLayoutKey) {
+            this._uiPanelLayoutKey = key;
+            const elements = ReactorUI.actorPanelLayout(node, rect.width, rect.height, this.contents.fontSize);
+            this._uiPanelSpriteElements = Object.entries(elements).filter(([, element]) => element.visible && ReactorUI.isSpriteElement(node, element));
+        }
+        return this._uiPanelSpriteElements;
+    };
+
+    Window_ReactorUIList.prototype.panelLayer = function() {
+        if (!this._uiPanelLayer) {
+            this._uiPanelLayer = new Sprite();
+            this._uiPanelSprites = new Map();
+            const area = this._clientArea;
+            const back = area ? area.children.indexOf(this._contentsBackSprite) : -1;
+            if (area) area.addChildAt(this._uiPanelLayer, back + 1);
+            else this.addChild(this._uiPanelLayer);
+        }
+        return this._uiPanelLayer;
+    };
+
+    Window_ReactorUIList.prototype.updatePanelSprites = function() {
+        const elements = this.panelSpriteElements();
+        if (!elements.length && !this._uiPanelLayer) return;
+        const layer = this.panelLayer();
+        const node = this._uiNode;
+        const seen = new Set();
+        this._uiRows.forEach((row, index) => {
+            const actor = row.data;
+            if (!actor) return;
+            const rect = this.itemRect(index);
+            const active = ReactorUI.isActiveActor(actor);
+            for (const [key, element] of elements) {
+                const id = (actor.actorId ? actor.actorId() : index) + ":" + key;
+                seen.add(id);
+                let sprite = this._uiPanelSprites.get(id);
+                if (!sprite) {
+                    sprite = new Sprite();
+                    sprite._rrKind = element.kind === "portrait" ? "portrait" : element.kind === "image" ? "image" : "gauge";
+                    this._uiPanelSprites.set(id, sprite);
+                    layer.addChild(sprite);
+                }
+                const cx = rect.x + element.x + element.width / 2;
+                const cy = rect.y + element.y + element.height / 2;
+                sprite.visible = !element.onlyActive || active;
+                if (sprite._rrKind === "portrait") this.updatePortraitSprite(sprite, actor, element, cx, cy);
+                else if (sprite._rrKind === "image") {
+                    if (sprite._rrFile !== element.file) { sprite._rrFile = element.file; sprite.bitmap = element.file ? ImageManager.loadPicture(element.file) : null; }
+                    sprite.anchor.set(0.5, 0.5);
+                    sprite.move(cx, cy);
+                    if (element.rotation) sprite.rotation += element.rotation * Math.PI / 180;
+                } else this.updateGaugeSprite(sprite, actor, element, rect.x + element.x, rect.y + element.y);
+            }
+        });
+        for (const [id, sprite] of this._uiPanelSprites) {
+            if (seen.has(id)) continue;
+            layer.removeChild(sprite);
+            if (sprite._rrOwnBitmap && sprite.bitmap) sprite.bitmap.destroy();
+            this._uiPanelSprites.delete(id);
+        }
+    };
+
+    Window_ReactorUIList.prototype.updatePortraitSprite = function(sprite, actor, element, cx, cy) {
+        const node = this._uiNode;
+        const picture = node.portraitSource === "picture";
+        const file = picture ? node.portraitPattern.replace(/\{id\}/g, String(actor.actorId())) : actor.faceName();
+        if (sprite._rrFile !== file) {
+            sprite._rrFile = file;
+            sprite.bitmap = picture ? ImageManager.loadPicture(file) : ImageManager.loadFace(file);
+        }
+        const bitmap = sprite.bitmap;
+        if (!bitmap || !bitmap.isReady()) return;
+        const state = node.portraitMotion || node.portraitFrames === 5 ? ReactorUI.faceState(actor) : { frame: 0, shake: 0, zoom: 1 };
+        let fw, fh, fx = 0, fy = 0;
+        if (picture) {
+            const frames = node.portraitFrames;
+            fw = Math.floor(bitmap.width / frames);
+            fh = bitmap.height;
+            fx = fw * Math.min(frames - 1, frames === 5 ? state.frame : 0);
+        } else {
+            fw = ImageManager.faceWidth;
+            fh = ImageManager.faceHeight;
+            const index = actor.faceIndex();
+            fx = (index % 4) * fw;
+            fy = Math.floor(index / 4) * fh;
+        }
+        sprite.setFrame(fx, fy, fw, fh);
+        const fit = Math.min(element.width / fw, element.height / fh);
+        const zoom = node.portraitMotion ? state.zoom : 1;
+        let breath = 1;
+        if (node.portraitBreath && (state.frame === 0 || state.frame === 3)) breath = 1 + 0.015 * Math.sin(Graphics.frameCount / 24 + actor.actorId());
+        // Breathing grows from the feet up; the other motions from the centre.
+        sprite.anchor.set(0.5, breath !== 1 ? 1 : 0.5);
+        sprite.scale.set(fit * zoom, fit * zoom * breath);
+        sprite.move(cx + (node.portraitMotion ? state.shake : 0), breath !== 1 ? cy + fh * fit / 2 : cy);
+        // A fallen actor's face goes grey.
+        const dead = actor.isDead();
+        if (sprite._rrDead !== dead) {
+            sprite._rrDead = dead;
+            sprite.setColorTone(dead ? [0, 0, 0, 255] : [0, 0, 0, 0]);
+        }
+    };
+
+    Window_ReactorUIList.prototype.updateGaugeSprite = function(sprite, actor, element, x, y) {
+        const w = Math.max(1, Math.round(element.width)), h = Math.max(1, Math.round(element.height));
+        if (!sprite.bitmap || sprite.bitmap.width !== w || sprite.bitmap.height !== h) {
+            if (sprite._rrOwnBitmap && sprite.bitmap) sprite.bitmap.destroy();
+            sprite.bitmap = new Bitmap(w, h);
+            sprite._rrOwnBitmap = true;
+            sprite._rrRate = -1;
+        }
+        sprite.move(x, y);
+        const data = ReactorUI.actorGaugeData(actor, element.gauge || "atb", element);
+        const rate = Math.round(data.rate * w) / w;
+        if (rate === sprite._rrRate) return;
+        sprite._rrRate = rate;
+        const bitmap = sprite.bitmap;
+        bitmap.clear();
+        const box = { x: 0, y: 0, width: w, height: h };
+        if (element.meterImage) ReactorUI.drawImageMeter(bitmap, box, element.meterImage, rate, () => { sprite._rrRate = -1; });
+        else ReactorUI.drawActorGauge(bitmap.context, box, element, rate, [data.color, data.color2, ColorManager.gaugeBackColor()]);
+        touch(bitmap);
+    };
+
+    Window_ReactorUIList.prototype.destroy = function(options) {
+        if (this._uiPanelSprites) for (const sprite of this._uiPanelSprites.values()) if (sprite._rrOwnBitmap && sprite.bitmap) sprite.bitmap.destroy();
+        Window_Selectable.prototype.destroy.call(this, options);
+    };
+
     Window_ReactorUIList.prototype.update = function() {
         if (this._uiFocused && this._uiScene.acceptsInput()) this.activate();
         else this.deactivate();
         Window_Selectable.prototype.update.call(this);
+        if (this._uiNode.rowLayout === "actorPanel") this.updatePanelSprites();
         if (++this._uiRefreshWait < 15) return;
         this._uiRefreshWait = 0;
         const rows = ReactorUI.listRows(this._uiNode, this._uiScene);
@@ -3187,6 +3495,11 @@
         };
         for (const node of ReactorUI.orderNodes(this._interface.nodes)) {
             const rect = resolve(node, new Set());
+            // Battle Window and Target Cursor nodes steer stock objects; they have no window of their own.
+            if (node.type === "battleWindow" || node.type === "battleCursor") {
+                (this._battleNodes || (this._battleNodes = [])).push({ node, rect });
+                continue;
+            }
             if (rect.width <= 0 || rect.height <= 0) continue;
             const WindowClass = node.type === "list" ? Window_ReactorUIList : Window_ReactorUINode;
             const window = new WindowClass(ReactorUI.windowRect(rect, this), this, node);
@@ -4153,7 +4466,7 @@
     //-------------------------------------------------------------------------
     // Map overlays and stock-scene bindings
 
-    ReactorUI.createOverlay = function(scene, record) {
+    ReactorUI.createOverlay = function(scene, record, options = {}) {
         const overlay = {
             _mapScene: scene,
             _interfaceId: record.id,
@@ -4162,12 +4475,13 @@
             _focusIndex: -1,
             _contexts: new Map(),
             _visibilityAlpha: ReactorUI.evaluateCondition(record.visible, scene) ? 1 : 0,
-            addWindow(window) { scene.addWindow(window); },
+            addWindow(window) { if (options.addWindow) options.addWindow(window); else scene.addWindow(window); },
             measureText: Scene_ReactorUI.prototype.measureText,
             refreshNodeLayouts: Scene_ReactorUI.prototype.refreshNodeLayouts,
             updateConditions: Scene_ReactorUI.prototype.updateConditions,
             context: Scene_ReactorUI.prototype.context,
             setContext: Scene_ReactorUI.prototype.setContext,
+            refreshDependents: Scene_ReactorUI.prototype.refreshDependents,
             focusedWindow() { return null; },
             canFocus() { return false; },
             setFocus() {},
@@ -4179,13 +4493,16 @@
         overlay.update = function() {
             const shown = ReactorUI.evaluateCondition(this._interface.visible, scene);
             const transition = shown ? this._interface.openTransition : this._interface.closeTransition;
-            const step = transition === "fade" ? 1 / this._interface.transitionDuration : 1;
+            const step = transition === "none" ? 1 : 1 / this._interface.transitionDuration;
             this._visibilityAlpha = shown ? Math.min(1, this._visibilityAlpha + step) : Math.max(0, this._visibilityAlpha - step);
             this.updateConditions();
+            // Slides move the whole overlay in over its fade.
+            const slide = 1 - this._visibilityAlpha;
+            const moving = transition === "slideLeft" || transition === "slideUp";
             for (const window of this._nodeWindows) {
-                window._uiTransitionAlpha = this._visibilityAlpha;
-                window._uiTransitionX = 0;
-                window._uiTransitionY = 0;
+                window._uiTransitionAlpha = moving ? 1 : this._visibilityAlpha;
+                window._uiTransitionX = transition === "slideLeft" ? Math.round(96 * slide) : 0;
+                window._uiTransitionY = transition === "slideUp" ? Math.round(96 * slide) : 0;
                 window.syncVisualState();
                 if (this._visibilityAlpha <= 0) window.visible = false;
             }
@@ -4225,6 +4542,211 @@
         Scene_Map.prototype.update = function() {
             _Scene_Map_update.apply(this, arguments);
             if (this._reactorUIOverlays) for (const overlay of this._reactorUIOverlays.values()) overlay.update();
+        };
+    }
+
+    //-------------------------------------------------------------------------
+    // Battle HUD: a Battle HUD record over Scene_Battle. Its nodes draw
+    // under the stock battle windows; Battle Window nodes place, size and
+    // skin those windows (the battle's own flow stays stock, so battle
+    // plugins keep working), and a Target Cursor points at the target.
+
+    /** The project's battle HUD record (System 2), or null. */
+    ReactorUI.battleInterface = function() {
+        if (typeof $dataSystem === "undefined" || !$dataSystem) return null;
+        const id = Math.max(0, Math.floor(Number($dataSystem[this.BATTLE_FIELD]) || 0));
+        const list = window.$dataUserInterfaces;
+        const raw = id > 0 && Array.isArray(list) ? list[id] : null;
+        if (!raw || typeof raw !== "object") return null;
+        const record = this.normalizeInterface(raw);
+        return record.id === id && record.mode === "battle" ? record : null;
+    };
+
+    ReactorUI.createBattleHud = function(scene, record) {
+        let insert = 0;
+        const layer = scene._windowLayer;
+        const hud = this.createOverlay(scene, record, { addWindow: window => layer.addChildAt(window, Math.min(insert++, layer.children.length)) });
+        hud._battleNodes = hud._battleNodes || [];
+        hud._statusPlaced = hud._battleNodes.some(entry => entry.node.type === "battleWindow" && entry.node.battleWindow === "status");
+        if (window.Imported && (window.Imported.MOG_BattleHud || window.Imported.VisuMZ_1_BattleCore)) {
+            console.warn("ReactorUI: a battle HUD interface is bound while another battle HUD plugin is on; both will draw.");
+        }
+        hud.slotRect = actor => ReactorUI.battleSlotRect(hud, actor);
+        hud.updateBattle = () => ReactorUI.updateBattleHud(scene, hud);
+        return hud;
+    };
+
+    /** An actor's row in the HUD's party panel, in window-layer coordinates. */
+    ReactorUI.battleSlotRect = function(hud, actor) {
+        if (!actor) return null;
+        for (const window of hud._nodeWindows) {
+            const node = window.node();
+            if (node.type !== "list" || node.dataSource !== "party" || !window.visible) continue;
+            const index = window._uiRows.findIndex(row => row.data === actor);
+            if (index < 0) continue;
+            const rect = window.itemRect(index);
+            return { x: window.x + window.padding + rect.x, y: window.y + window.padding + rect.y, width: rect.width, height: rect.height };
+        }
+        return null;
+    };
+
+    ReactorUI.updateBattleHud = function(scene, hud) {
+        if (hud._interface.hideStatusWindow && !hud._statusPlaced && scene._statusWindow) scene._statusWindow.visible = false;
+        for (const entry of hud._battleNodes) {
+            if (entry.node.type === "battleWindow") this.placeBattleWindow(scene, hud, entry);
+            else this.updateBattleCursor(scene, hud, entry);
+        }
+        // Choosing an ally: a click on their HUD row picks them.
+        const actorWindow = scene._actorWindow;
+        if (actorWindow && actorWindow.active && TouchInput.isTriggered() && typeof $gameTemp !== "undefined") {
+            const x = TouchInput.x - scene._windowLayer.x, y = TouchInput.y - scene._windowLayer.y;
+            for (const actor of $gameParty.battleMembers()) {
+                const slot = hud.slotRect(actor);
+                if (slot && x >= slot.x && y >= slot.y && x < slot.x + slot.width && y < slot.y + slot.height) {
+                    $gameTemp.setTouchState(actor, "click");
+                    break;
+                }
+            }
+        }
+    };
+
+    ReactorUI.placeBattleWindow = function(scene, hud, entry) {
+        const node = entry.node;
+        const win = scene[this.BATTLE_WINDOWS[node.battleWindow]];
+        if (!win) return;
+        const state = entry.state || (entry.state = {});
+        if (!state.ready) {
+            state.ready = true;
+            const rect = this.windowRect(entry.rect, scene);
+            if (node.windowColumns > 0) win.maxCols = () => node.windowColumns;
+            if (rect.width > 0 && rect.height > 0) {
+                win.move(rect.x, rect.y, rect.width, rect.height);
+                if (win.createContents) win.createContents();
+                try { if (win.refresh) win.refresh(); } catch (error) { console.warn("ReactorUI: " + node.battleWindow + " window refresh", error); }
+            }
+            state.x = win.x;
+            state.y = win.y;
+            if (node.file) {
+                state.back = new Sprite(ImageManager.loadPicture(node.file));
+                state.back.move(node.imageX, node.imageY);
+                win.addChildAt(state.back, 0);
+            }
+            state.shown = false;
+            state.slide = 0;
+        }
+        let x = state.x, y = state.y;
+        if (node.followActor) {
+            // Between actors (target selection, a turn resolving) it stays where it last followed.
+            const slot = hud.slotRect(typeof BattleManager !== "undefined" ? BattleManager.actor() : null);
+            if (slot) state.follow = { x: slot.x + node.x, y: slot.y + node.y };
+            if (state.follow) { x = state.follow.x; y = state.follow.y; }
+        }
+        const shown = win.visible && win.openness > 0;
+        if (shown && !state.shown) state.slide = node.slideDuration;
+        state.shown = shown;
+        if (state.slide > 0) {
+            const t = state.slide / node.slideDuration;
+            x += Math.round(node.slideX * t);
+            y += Math.round(node.slideY * t);
+            state.slide--;
+        }
+        win.x = x;
+        win.y = y;
+        if (node.fill === "none") win.opacity = 0;
+        const visible = !node.hideWindow && this.evaluateCondition(node.visible, scene) && hud._visibilityAlpha > 0;
+        win.alpha = visible ? 1 : 0;
+        if (state.back) {
+            state.back.visible = visible && shown;
+            state.back.alpha = win.openness / 255;
+        }
+    };
+
+    /** A small downward arrow, the cursor when no image is chosen. */
+    ReactorUI.defaultCursorBitmap = function() {
+        if (this._defaultCursor) return this._defaultCursor;
+        const bitmap = new Bitmap(32, 28);
+        const ctx = bitmap.context;
+        ctx.beginPath(); ctx.moveTo(3, 3); ctx.lineTo(29, 3); ctx.lineTo(16, 25); ctx.closePath();
+        ctx.fillStyle = "#ffffff"; ctx.strokeStyle = "rgba(0,0,0,0.85)"; ctx.lineWidth = 3;
+        ctx.stroke(); ctx.fill();
+        touch(bitmap);
+        this._defaultCursor = bitmap;
+        return bitmap;
+    };
+
+    /** Where the cursor points: over the chosen enemy, or the chosen ally's HUD row (else their sprite). */
+    ReactorUI.battleTarget = function(scene, hud, node) {
+        const spriteset = scene._spriteset;
+        const enemyWindow = scene._enemyWindow, actorWindow = scene._actorWindow;
+        if (enemyWindow && enemyWindow.active && enemyWindow.enemy()) {
+            const enemy = enemyWindow.enemy();
+            const sprite = spriteset && spriteset._enemySprites ? spriteset._enemySprites.find(s => s._battler === enemy) : null;
+            const height = sprite && sprite.bitmap ? sprite.bitmap.height * Math.abs(sprite.scale.y) : 64;
+            const x = sprite ? sprite.x : enemy.screenX(), y = (sprite ? sprite.y : enemy.screenY()) - height;
+            return { battler: enemy, x: x + node.enemyOffsetX, y: y + node.enemyOffsetY };
+        }
+        if (actorWindow && actorWindow.active) {
+            const actor = actorWindow.actor(actorWindow.index());
+            if (!actor) return null;
+            const slot = hud.slotRect(actor);
+            if (slot) return { battler: actor, x: slot.x + slot.width / 2 + scene._windowLayer.x + node.actorOffsetX, y: slot.y + scene._windowLayer.y + node.actorOffsetY };
+            const sprite = spriteset && spriteset._actorSprites ? spriteset._actorSprites.find(s => s._battler === actor) : null;
+            if (sprite) return { battler: actor, x: sprite.x + node.actorOffsetX, y: sprite.y - 64 + node.actorOffsetY };
+        }
+        return null;
+    };
+
+    ReactorUI.updateBattleCursor = function(scene, hud, entry) {
+        const node = entry.node;
+        const state = entry.state || (entry.state = {});
+        if (!state.root) {
+            state.root = new Sprite();
+            state.arrow = new Sprite(node.file ? (node.source === "system" ? ImageManager.loadSystem(node.file) : ImageManager.loadPicture(node.file)) : this.defaultCursorBitmap());
+            state.arrow.anchor.set(0.5, 1);
+            state.name = new Sprite(new Bitmap(240, 40));
+            state.name.anchor.set(0.5, 1);
+            state.root.addChild(state.arrow);
+            state.root.addChild(state.name);
+            scene.addChild(state.root);
+        }
+        const target = this.battleTarget(scene, hud, node);
+        const visible = !!target && hud._visibilityAlpha > 0 && this.evaluateCondition(node.visible, scene);
+        state.root.visible = visible;
+        if (!visible) return;
+        const arrow = state.arrow, bitmap = arrow.bitmap;
+        if (bitmap && bitmap.isReady()) {
+            const fw = Math.floor(bitmap.width / node.frames);
+            const frame = Math.floor(Graphics.frameCount / node.frameSpeed) % node.frames;
+            arrow.setFrame(fw * frame, 0, fw, bitmap.height);
+        }
+        const float = node.floatRange ? Math.round(Math.sin(Graphics.frameCount / 10) * node.floatRange) : 0;
+        state.root.move(Math.round(target.x), Math.round(target.y) + float - node.floatRange);
+        state.name.visible = node.showName;
+        if (node.showName && state.battler !== target.battler) {
+            state.battler = target.battler;
+            const name = state.name.bitmap;
+            name.clear();
+            name.fontSize = node.fontSize > 0 ? node.fontSize : Math.max(16, $gameSystem.mainFontSize() - 4);
+            if (node.fontFace) name.fontFace = node.fontFace;
+            name.drawText(target.battler.name(), 0, 0, name.width, name.height, "center");
+        }
+        state.name.y = -(arrow.height || 28) - 2;
+    };
+
+    const _Scene_Battle_createDisplayObjects = typeof Scene_Battle !== "undefined" ? Scene_Battle.prototype.createDisplayObjects : null;
+    if (_Scene_Battle_createDisplayObjects) {
+        Scene_Battle.prototype.createDisplayObjects = function() {
+            _Scene_Battle_createDisplayObjects.apply(this, arguments);
+            const record = ReactorUI.battleInterface();
+            if (record) this._reactorBattleHud = ReactorUI.createBattleHud(this, record);
+        };
+        const _Scene_Battle_update = Scene_Battle.prototype.update;
+        Scene_Battle.prototype.update = function() {
+            _Scene_Battle_update.apply(this, arguments);
+            if (this._reactorBattleHud) {
+                this._reactorBattleHud.update();
+                this._reactorBattleHud.updateBattle();
+            }
         };
     }
 

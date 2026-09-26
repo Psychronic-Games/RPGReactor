@@ -2,8 +2,9 @@
 
 Written 2026-08-24, implemented through the 0.98.4 cycle, checked against
 the 0.98.5 source on 2026-09-04, and extended on 2026-09-26 with the Items,
-Skills, Equipment, Shop and Name Input workflows and the Text Input node. The
-current system covers scene and map-overlay records, live visual capture,
+Skills, Equipment, Shop and Name Input workflows, the Text Input node and
+the Battle HUD. The current system covers scene, map-overlay and battle
+records, live visual capture,
 generated stock baselines, typed Lists that follow one another, actor
 bindings, Gauges, text input, styling and focus overrides, transitions, and
 opt-in replacement of twelve stock scene roles.
@@ -64,6 +65,8 @@ parents-first.
 | **List** | Typed rows in a real `Window_Selectable`, with scrolling, disabled rows, a named context, row template, selection styling, and an action |
 | **Gauge** | Actor HP/MP/TP/EXP/stat or game-variable progress with configurable label, value format, colors, back color, and bar height |
 | **Text Input** | A field that edits a variable or an actor's name or nickname: typing, optional stock character grid, placeholder, maximum length, password dots, an action after Enter |
+| **Battle Window** | In a Battle HUD: places, sizes and skins one stock battle window, with columns, slide-in, a background picture, following the active actor, or hiding it while it keeps the input |
+| **Target Cursor** | In a Battle HUD: an animated, floating arrow or picture over the enemy or ally being chosen, with their name |
 
 There is no Container node. Box and Image nodes provide the current grouping
 and parenting mechanism.
@@ -281,6 +284,37 @@ lifecycle and returns after persistence. A successful load clears interface
 resume state, applies map-reload handling when required, enters `Scene_Map`, and
 runs the stock after-load lifecycle.
 
+## Battle HUD
+
+A record with the **Battle HUD** presentation, bound as Battle in System 2 or
+Use As (`reactorBattleInterfaceId`), is drawn over every battle. The battle
+itself stays `Scene_Battle`: its windows still run the commands, targeting and
+turn order, so battle plugins keep working. The HUD's nodes sit under those
+windows and never take focus, like a map overlay; its transition plays when the
+battle opens (**Slide up** is new). **Hide the stock battle status** (on by
+default) hides `Window_BattleStatus` unless a Battle Window node places it.
+
+What MOG's battle HUD does, and where it lives here:
+
+| MOG_BattleHud / MOG_BattleCursor | Here |
+|---|---|
+| HUD per actor, position, spacing, vertical mode | An Actor Panel list over the party, with **Columns** (1 for a vertical HUD) |
+| Custom position per slot | Nodes bound to a fixed party slot |
+| Face image, frame animation, shake, zoom, breath | Panel **Portrait**: a face or a picture per actor (`Face_{id}`), one image or five frames (normal, healed, acting, hurt or below 30% HP, fallen), **Face reactions** (shake 60 frames when hit, zoom 70 frames when healed or acting) and **Breathing**; drawn as sprites under the row text; a fallen actor's face goes grey |
+| HP/MP/TP meters and numbers, max numbers | Panel gauges and values, with **Meter image** (a picture cut to the value) and **Number image** (a 0–9 digit sheet) |
+| ATB meter | Panel **ATB** part, or a custom gauge with source ATB; empty outside time-progress battles |
+| States, cycle mode | Panel States with **Show: One at a time** |
+| Turn indicator | A part with **Only for the active actor** (the actor choosing or acting), **Behind other parts**, or a Custom Picture with a **Turn speed** |
+| Layout images, screen layout | Image nodes, and a Battle Window's **Background picture** |
+| Command, party, help, skill, item, actor and enemy windows: position, size, columns, slide | **Battle Window** nodes |
+| Command window follows the HUD | **Follow the active actor**: X and Y are offsets from that actor's panel row; between actors it stays where it last was |
+| Target window hidden, cursor over the target | **Hide the window** on the ally/enemy target windows plus a **Target Cursor** (frames, speed, float, name, offsets); an ally is pointed at on their HUD row, and a click on the row picks them |
+| `$gameSystem._bhud_visible` | The record's visibility condition |
+
+Not carried over: MOG's meter flow animation and its face-priority switch.
+The **Battle** stock layout is a working example of all of it. A project that
+still runs MOG_BattleHud draws both HUDs; the runtime warns in the console.
+
 ## Styling, focus, and transitions
 
 Text, Button labels, and List rows can set a font face (blank means the game
@@ -378,6 +412,7 @@ with one of them (undoable):
 | 10 | Equipment | Equipment |
 | 11 | Shop | Shop |
 | 12 | Name Input | Name Input |
+| 13 | Battle | Battle (a Battle HUD) |
 
 Generation uses the project's screen/UI area, terms, title art, menu settings,
 starting party, and stock scene geometry. Existing projects that already have a
@@ -386,7 +421,7 @@ newer screens through Stock Layout.
 
 Replacement is opt-in and role-gated. The replaceable roles are **Title, Main
 Menu, Status, Game End, Options, Save, Load, Items, Skills, Equipment, Shop, and
-Name Input**. System 1 selects Title; System 2 selects the others. Shop
+Name Input**; **Battle** binds a Battle HUD without replacing the scene. System 1 selects Title; System 2 selects the others. Shop
 Processing and Name Input Processing prepare the routed scene a second time
 with their goods or actor, which the interface keeps. A record may advertise one or more matching
 roles, but it must be a valid scene record at the selected ID. Zero, missing or
@@ -397,8 +432,8 @@ does not recurse.
 
 ## Explicit boundaries
 
-Battle and the message inputs (Input Number, Select Item) remain stock and
-unreplaceable. The quantity window is the stock one, not an authored node. An
+The battle's flow and the message inputs (Input Number, Select Item) remain
+stock; a Battle HUD dresses the battle rather than replacing it. The quantity window is the stock one, not an authored node. An
 interface opened by script over another open interface does not restore the
 one beneath when it closes; the Call User Interface command and interface
 actions do.
