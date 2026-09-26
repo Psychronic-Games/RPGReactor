@@ -408,7 +408,7 @@ class ProjectController {
     async confirmUnsavedChanges(scope = 'project') {
         if (!this.hasUnsavedChanges(scope)) return true;
 
-        const subject = scope === 'map' ? this._tt('this map') : this._tt('the project');
+        const subject = scope === 'map' ? this._tt(this.tilemapManager?.currentMap?.rrWorkshop ? 'this structure' : 'this map') : this._tt('the project');
         let decision;
         if (this.uiManager?.promptUnsavedChanges) {
             decision = await this.uiManager.promptUnsavedChanges(subject);

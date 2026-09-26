@@ -97,18 +97,32 @@ class StructureWorkshop {
             if (!viewer || viewer.style.display === 'none' || viewer.offsetParent === null) break;
             await new Promise(resolve => setTimeout(resolve, 80));
         }
+        return this.enter(structureId);
+    }
+
+    /**
+     * Put a structure's plot in the view. From a map, the map is remembered to
+     * come back to; from another structure's plot, that one's unsaved work is
+     * asked about first and the map to come back to stays the same.
+     */
+    async enter(structureId) {
+        const reactor = this.reactor(), tilemap = this.tilemap();
         const record = this.record(structureId);
-        if (!record) return false;
+        if (!record || !reactor || !tilemap) return false;
+        if (tilemap.currentMap && !await this.projectController.confirmUnsavedChanges?.('map')) return false;
         const returnTo = tilemap.currentMap && !tilemap.currentMap.rrWorkshop ? tilemap.currentMap.id : (this.session?.returnTo ?? null);
-        const was3D = !!reactor.mapEditor3D?.enabled;
-        if (tilemap.currentMap && !tilemap.currentMap.rrWorkshop && !await this.projectController.confirmUnsavedChanges?.('map')) return false;
+        const was3D = this.session ? this.session.was3D : !!reactor.mapEditor3D?.enabled;
+        const barWasUp = this.session ? this.session.barWasUp : !!reactor.buildHotbar?.visible;
         const mapData = this.plotMap(record);
-        this.session = { structureId, returnTo, was3D, barWasUp: !!reactor.buildHotbar?.visible };
+        this.session = { structureId, returnTo, was3D, barWasUp };
         tilemap.onWorkshopSave = () => this.save();
-        if (!await this.projectController.openWorkshopMap(mapData)) { this.session = null; return false; }
+        if (!await this.projectController.openWorkshopMap(mapData)) { this.end(); return false; }
         if (!reactor.mapEditor3D?.enabled) await reactor.applyMap3DViewPreference?.(true);
+        reactor.pieceBuilderManager && (reactor.pieceBuilderManager.undoStack = [], reactor.pieceBuilderManager.redoStack = []);
         reactor.buildHotbar?.show();
+        reactor.pieceBuilderManager?.syncHistoryButtons?.();
         this.showBanner();
+        this.showStructureList();
         return true;
     }
 
@@ -170,12 +184,57 @@ class StructureWorkshop {
         }
     }
 
-    /** The plot is gone (another map opened, or closed): forget the session. */
+    /** The plot is gone (another map opened, or closed): forget the session, and give the maps back. */
     end() {
         this.session = null;
         const tilemap = this.tilemap();
         if (tilemap) tilemap.onWorkshopSave = null;
         this.hideBanner();
+        this.hideStructureList();
+    }
+
+    // ---- The sidebar: structures instead of maps --------------------------
+
+    /**
+     * While a structure is being built the sidebar's Maps list becomes the
+     * project's structures: the one in the view is marked, a click moves to
+     * another (asking about unsaved work), and the maps come back when the
+     * workshop closes. A map can only be opened by leaving the workshop.
+     */
+    showStructureList() {
+        const section = document.getElementById('maps-section');
+        if (!section || !this.session) return;
+        // The tile palette and the map's events have nothing to do on a plot, and a click on a tile would hand the map to tile painting.
+        document.body.classList.add('rr-workshop-open');
+        if (!this.listPanel) {
+            this._hiddenMapParts = [...section.children].map(child => [child, child.style.display]);
+            for (const [child] of this._hiddenMapParts) child.style.display = 'none';
+            this.listPanel = document.createElement('div');
+            this.listPanel.className = 'rr-workshop-list';
+            section.appendChild(this.listPanel);
+        }
+        const tt = text => this._t(text);
+        const records = (this.database()?.data?.structures || []).filter(entry => entry && entry.name);
+        this.listPanel.innerHTML = `
+            <div class="sidebar-header">${rrEscapeHtml(tt('Structures'))}</div>
+            <div class="sidebar-content rr-accent-scrollbar rr-workshop-items" role="listbox" aria-label="${rrEscapeHtml(tt('Structures'))}">
+                ${records.map(entry => `<div class="tree-item${entry.id === this.session.structureId ? ' selected' : ''}" role="option" aria-selected="${entry.id === this.session.structureId}" tabindex="-1" data-structure-id="${entry.id}">${rrEscapeHtml(entry.name)}</div>`).join('')}
+            </div>
+            <button type="button" class="rr-btn-secondary rr-workshop-leave">${rrEscapeHtml(tt('Close the workshop and show the maps'))}</button>`;
+        this.listPanel.onclick = event => {
+            const item = event.target.closest('[data-structure-id]');
+            if (item) { const id = Number(item.dataset.structureId); if (this.session && id !== this.session.structureId) this.enter(id); return; }
+            if (event.target.closest('.rr-workshop-leave')) this.close();
+        };
+    }
+
+    hideStructureList() {
+        document.body.classList.remove('rr-workshop-open');
+        if (!this.listPanel) return;
+        this.listPanel.remove();
+        this.listPanel = null;
+        for (const [child, display] of this._hiddenMapParts || []) child.style.display = display;
+        this._hiddenMapParts = null;
     }
 
     /** Called after any map load: a real map means the workshop is over. */

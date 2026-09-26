@@ -12111,6 +12111,25 @@ Object.assign(RR_TEXT_TRANSLATIONS["id"], {"Cut away the floors above the one in
 Object.assign(RR_TEXT_TRANSLATIONS["vi"], {"Cut away the floors above the one in the plan": "Cắt bỏ các tầng phía trên tầng trong mặt bằng"});
 Object.assign(RR_TEXT_TRANSLATIONS["th"], {"Cut away the floors above the one in the plan": "ตัดชั้นที่อยู่เหนือชั้นในผังออก"});
 
+// Structure workshop sidebar.
+Object.assign(RR_TEXT_TRANSLATIONS["ja"], {"this structure": "この建造物", "Close the workshop and show the maps": "作業場を閉じてマップを表示"});
+Object.assign(RR_TEXT_TRANSLATIONS["zh-Hant"], {"this structure": "這個建築物", "Close the workshop and show the maps": "關閉工作坊並顯示地圖"});
+Object.assign(RR_TEXT_TRANSLATIONS["zh-Hans"], {"this structure": "这个建筑物", "Close the workshop and show the maps": "关闭工作坊并显示地图"});
+Object.assign(RR_TEXT_TRANSLATIONS["ko"], {"this structure": "이 구조물", "Close the workshop and show the maps": "작업장을 닫고 맵 보기"});
+Object.assign(RR_TEXT_TRANSLATIONS["es"], {"this structure": "esta estructura", "Close the workshop and show the maps": "Cerrar el taller y mostrar los mapas"});
+Object.assign(RR_TEXT_TRANSLATIONS["pt"], {"this structure": "esta estrutura", "Close the workshop and show the maps": "Fechar a oficina e mostrar os mapas"});
+Object.assign(RR_TEXT_TRANSLATIONS["fr"], {"this structure": "cette structure", "Close the workshop and show the maps": "Fermer l’atelier et afficher les cartes"});
+Object.assign(RR_TEXT_TRANSLATIONS["it"], {"this structure": "questa struttura", "Close the workshop and show the maps": "Chiudi il laboratorio e mostra le mappe"});
+Object.assign(RR_TEXT_TRANSLATIONS["de"], {"this structure": "dieses Bauwerk", "Close the workshop and show the maps": "Werkstatt schließen und Karten zeigen"});
+Object.assign(RR_TEXT_TRANSLATIONS["ru"], {"this structure": "это сооружение", "Close the workshop and show the maps": "Закрыть мастерскую и показать карты"});
+Object.assign(RR_TEXT_TRANSLATIONS["pl"], {"this structure": "ta budowla", "Close the workshop and show the maps": "Zamknij warsztat i pokaż mapy"});
+Object.assign(RR_TEXT_TRANSLATIONS["el"], {"this structure": "αυτή η κατασκευή", "Close the workshop and show the maps": "Κλείσιμο εργαστηρίου και εμφάνιση χαρτών"});
+Object.assign(RR_TEXT_TRANSLATIONS["ar"], {"this structure": "هذا المبنى", "Close the workshop and show the maps": "إغلاق الورشة وعرض الخرائط"});
+Object.assign(RR_TEXT_TRANSLATIONS["tr"], {"this structure": "bu yapı", "Close the workshop and show the maps": "Atölyeyi kapat ve haritaları göster"});
+Object.assign(RR_TEXT_TRANSLATIONS["id"], {"this structure": "bangunan ini", "Close the workshop and show the maps": "Tutup bengkel dan tampilkan peta"});
+Object.assign(RR_TEXT_TRANSLATIONS["vi"], {"this structure": "công trình này", "Close the workshop and show the maps": "Đóng xưởng và hiện các bản đồ"});
+Object.assign(RR_TEXT_TRANSLATIONS["th"], {"this structure": "สิ่งก่อสร้างนี้", "Close the workshop and show the maps": "ปิดเวิร์กชอปและแสดงแผนที่"});
+
 // 3D model import optimizer dialog.
 Object.assign(RR_TEXT_TRANSLATIONS['ja'], {
     'Import 3D Model': '3Dモデルのインポート', 'Optimize (recommended)': '最適化(推奨)', 'Resize textures to 2K, compact skin weights, drop unused data, and cut the mesh to about 60% of its triangles by collapsing the edges that change the shape least. Seams and silhouette are held.': 'テクスチャを2Kに縮小し、スキンウェイトを圧縮、不要データを削除し、形状への影響が最も小さいエッジを折りたたんでメッシュの三角形を約60%まで削減します。継ぎ目とシルエットは維持されます。', 'Optimize aggressively': '積極的に最適化', 'Everything above, cut to about a quarter of the triangles. May soften very fine detail.': '上記すべてに加え、三角形を約4分の1まで削減します。細部がわずかに損なわれる場合があります。', 'Import as-is': 'そのままインポート', 'Keep every byte of the original file.': '元のファイルを一切変更しません。', 'Import': 'インポート', 'largest texture': '最大テクスチャ', 'reducible without visible change': '見た目を変えずに削減可能'

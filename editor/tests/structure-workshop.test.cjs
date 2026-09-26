@@ -140,3 +140,16 @@ test('painting a floor lays the pieces the Build bar lays: rooms, walls, doors, 
     assert.equal(F.band(plan, 1).length, 0);
     assert.equal(plan.pieces.filter(p => p.kind === 'stair').length, 10, 'erasing floor 2 leaves the ground floor');
 });
+
+test('while building, Ctrl+Z and the toolbar Undo reach the builder; the workshop swaps the maps for its structures', () => {
+    const ui = read('editor/src/UIManager.js'), main = read('editor/src/main.js'), pieces = read('editor/src/PieceBuilderManager.js'), workshop = read('editor/src/StructureWorkshop.js');
+    assert.match(main, /getBuildHistory: \(\) => \(this\.pieceBuilderManager\?\.active \? this\.pieceBuilderManager : null\)/);
+    assert.match(ui, /const build = this\.callbacks\.getBuildHistory\?\.\(\);\s*if \(build\) \{ build\.undo\(\); return; \}/, 'Ctrl+Z');
+    assert.match(ui, /const build = this\.callbacks\.getBuildHistory\?\.\(\);\s*if \(build\) \{ build\.redo\(\); return; \}/, 'Ctrl+Y');
+    assert.match(ui, /case 'undo':\s*if \(this\.callbacks\.getBuildHistory\?\.\(\)\) \{ this\.callbacks\.getBuildHistory\(\)\.undo\(\); break; \}/, 'the Undo button');
+    assert.doesNotMatch(pieces, /key === 'z' && !event\.shiftKey\) \{ event\.preventDefault\(\); this\.undo\(\); \}/, 'one undo per key press, not two');
+    assert.match(pieces, /announce\(terrainToo = false, region = null\) \{\s*this\.render2D\(\);\s*this\.syncHistoryButtons\(\);/, 'the buttons follow every edit');
+    assert.match(workshop, /document\.body\.classList\.add\('rr-workshop-open'\)/);
+    assert.match(workshop, /if \(tilemap\.currentMap && !await this\.projectController\.confirmUnsavedChanges\?\.\('map'\)\) return false;/, 'moving to another structure asks about unsaved work');
+    assert.match(read('editor/src/ProjectController.js'), /rrWorkshop \? 'this structure' : 'this map'/);
+});

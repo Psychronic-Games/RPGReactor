@@ -3739,6 +3739,19 @@
         .rr-workshop-banner .rr-workshop-size { color: var(--color-text-muted); }
         .rr-workshop-banner .rr-workshop-status { color: var(--color-accent-bright); min-width: 40px; }
         .rr-workshop-banner .rr-workshop-status + button { margin-left: auto; }
+        body.rr-workshop-open #tileset-palette-section,
+        body.rr-workshop-open #events-section,
+        body.rr-workshop-open .resize-handle[data-target="tileset-palette-section"],
+        body.rr-workshop-open .resize-handle[data-target="events-section"] { display: none !important; }
+        /* Tile painting, layers and events do nothing on a plot: dimmed and out of reach while the workshop is open. */
+        body.rr-workshop-open #toolbar .tool-draw-mode,
+        body.rr-workshop-open #toolbar .layer-mode,
+        body.rr-workshop-open #toolbar [data-action="shadow-pen"],
+        body.rr-workshop-open #toolbar [data-action="eraser"],
+        body.rr-workshop-open #toolbar #toolbar-event-manager-btn { opacity: 0.3; pointer-events: none; }
+        .rr-workshop-list { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+        .rr-workshop-list .rr-workshop-items { flex: 1; overflow-y: auto; }
+        .rr-workshop-list .rr-workshop-leave { margin: 6px; }
         .rr-build-panel {
             position: absolute;
             top: 12px;

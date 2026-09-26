@@ -88,6 +88,7 @@ class RPGReactor {
             showAbout: () => this.showAbout(),
             getMapEditor: () => this.mapEditor,
             getEventManager: () => this.eventManager,
+            getBuildHistory: () => (this.pieceBuilderManager?.active ? this.pieceBuilderManager : null),
             toggleEventMode: () => this.toggleEventMode(),
             disableEventModeIfActive: () => this.disableEventModeIfActive(),
             installRuntime: () => this.projectController.installReactorRuntime(),

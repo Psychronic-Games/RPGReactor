@@ -649,6 +649,10 @@ class UIManager {
                 if (!isTextInput) {
                     e.preventDefault();
 
+                    // Building (the Build bar up): its own history, pieces, lights and screens.
+                    const build = this.callbacks.getBuildHistory?.();
+                    if (build) { build.undo(); return; }
+
                     // Check if event mode is active
                     if (this.callbacks.getEventManager) {
                         const eventManager = this.callbacks.getEventManager();
@@ -680,6 +684,9 @@ class UIManager {
 
                 if (!isTextInput) {
                     e.preventDefault();
+
+                    const build = this.callbacks.getBuildHistory?.();
+                    if (build) { build.redo(); return; }
 
                     // Check if event mode is active
                     if (this.callbacks.getEventManager) {
@@ -1470,6 +1477,7 @@ class UIManager {
                 this.callbacks.saveProject();
                 break;
             case 'undo':
+                if (this.callbacks.getBuildHistory?.()) { this.callbacks.getBuildHistory().undo(); break; }
                 // Check if event mode is active
                 if (this.callbacks.getEventManager) {
                     const eventManager = this.callbacks.getEventManager();
@@ -1487,6 +1495,7 @@ class UIManager {
                 }
                 break;
             case 'redo':
+                if (this.callbacks.getBuildHistory?.()) { this.callbacks.getBuildHistory().redo(); break; }
                 // Check if event mode is active
                 if (this.callbacks.getEventManager) {
                     const eventManager = this.callbacks.getEventManager();

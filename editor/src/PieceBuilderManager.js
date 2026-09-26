@@ -803,6 +803,7 @@ class PieceBuilderManager {
         }
         this.renderMaterials(true);
         this.refreshStatus();
+        this.syncHistoryButtons();
     }
 
     deactivate() {
@@ -816,6 +817,7 @@ class PieceBuilderManager {
             mapEditor.setEnabled(true);
             mapEditor.setupMapInteraction?.();
         }
+        this.syncHistoryButtons();
     }
 
     /** The piece as it would be laid at a target `{x, y, z}`. */
@@ -983,11 +985,8 @@ class PieceBuilderManager {
         if (target?.isContentEditable) return;
         if (window.reactor?.uiManager?.isEditorModalOpenForGlobalShortcuts?.()) return;
         const key = String(event.key || '').toLowerCase();
-        if (event.ctrlKey || event.metaKey) {
-            if (key === 'z' && !event.shiftKey) { event.preventDefault(); this.undo(); }
-            else if (key === 'y' || (key === 'z' && event.shiftKey)) { event.preventDefault(); this.redo(); }
-            return;
-        }
+        // Ctrl+Z / Ctrl+Y come through the editor's one undo shortcut (UIManager), which hands them here while building.
+        if (event.ctrlKey || event.metaKey) return;
         if (event.altKey) return;
         if (this.mode === 'select' && this.selected && key === 'r') { event.preventDefault(); this.turnSelection(event.shiftKey ? -1 : 1); }
         else if (this.mode === 'select' && this.selected && (key === 'delete' || key === 'backspace')) { event.preventDefault(); this.removeSelection(); }
@@ -1010,8 +1009,17 @@ class PieceBuilderManager {
         else if (key === 'escape' && this.mode !== 'place') { event.preventDefault(); this.setMode('place'); }
     }
 
-    undo() { this._swap(this.undoStack, this.redoStack); }
-    redo() { this._swap(this.redoStack, this.undoStack); }
+    undo() { this._swap(this.undoStack, this.redoStack); this.syncHistoryButtons(); }
+    redo() { this._swap(this.redoStack, this.undoStack); this.syncHistoryButtons(); }
+    canUndo() { return this.undoStack.length > 0; }
+    canRedo() { return this.redoStack.length > 0; }
+    /** The toolbar's Undo and Redo follow the builder's history while it is up, the map editor's otherwise. */
+    syncHistoryButtons() {
+        const ui = window.reactor?.uiManager;
+        if (!ui?.updateUndoRedoButtons) return;
+        if (this.active) ui.updateUndoRedoButtons(this.canUndo(), this.canRedo());
+        else { const map = window.reactor?.mapEditor; ui.updateUndoRedoButtons(!!map?.canUndo?.(), !!map?.canRedo?.()); }
+    }
     _swap(from, to) {
         const map = this.currentMap(), elevation = this.elevation();
         if (!map || !elevation || !from.length) return;
@@ -1044,6 +1052,7 @@ class PieceBuilderManager {
     /** The pieces changed: the 3D view lays them down again in place, and the map is dirty. */
     announce(terrainToo = false, region = null) {
         this.render2D();
+        this.syncHistoryButtons();
         const mapEditor = window.reactor?.mapEditor;
         if (typeof mapEditor?.onElevationChanged === 'function') mapEditor.onElevationChanged(this.currentMap());
         if (typeof document === 'undefined' || typeof CustomEvent !== 'function') return;
