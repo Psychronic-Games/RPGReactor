@@ -259,3 +259,24 @@ test('Item Rarity: the colour table comes from the game', () => {
     assert.ok(C.scriptFamilies([script]).has('himeItemRarity'));
     assert.deepEqual(JSON.parse(require(path.join(legacy, 'plugins', 'RR_HimeItemRarity.params.js')).extract({ scripts: [script] }).colours), { 1: [255, 255, 255], 2: [0, 148, 255] });
 });
+
+test('Large Troops: a child troop joins its parent with its pages renumbered', () => {
+    const page = (list) => ({ conditions: {}, list, span: 0 });
+    const db = { troops: [null,
+        { id: 1, members: [{ enemyId: 1 }, { enemyId: 2 }], pages: [page([{ code: 0, parameters: [] }])] },
+        { id: 2, members: [{ enemyId: 3 }], pages: [page([{ code: 108, parameters: ['<parent troop: 1>'] }, { code: 331, parameters: [0, 0, 0, 10] }, { code: 339, parameters: [0, 0, 1, -1] }, { code: 0, parameters: [] }])] }
+    ] };
+    assert.equal(R.applyLargeTroops(db, '$imported["TH_LargeTroops"] = true'), 1);
+    assert.deepEqual(db.troops[1].members.map(m => m.enemyId), [1, 2, 3]);
+    assert.equal(db.troops[1].pages.length, 2);
+    assert.deepEqual(db.troops[1].pages[1].list[1].parameters, [2, 0, 0, 10]);
+    assert.deepEqual(db.troops[1].pages[1].list[2].parameters, [0, 2, 1, -1]);
+    assert.equal(R.applyLargeTroops(db, ''), 0);
+});
+
+test('party equipment utilities translate into the events', () => {
+    const script = 'class Game_Party < Game_Unit\n  def unequip_all\n  end\n  def unequip_actor(actor_id)\n  end\nend';
+    assert.ok(C.scriptFamilies([script]).has('partyEquipUtilities'));
+    const ctx = { families: new Set(['partyEquipUtilities']) };
+    assert.match(C.ruby('$game_party.unequip_all', 'statement', ctx), /changeEquip\(t - 1, null\)/);
+});

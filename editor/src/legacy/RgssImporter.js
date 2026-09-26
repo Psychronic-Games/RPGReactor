@@ -196,6 +196,38 @@ function applyParamTables(db, scriptText, constants, read, skipped = []) {
 }
 
 /**
+ * Hime's Large Troops: a troop whose first page has a `<parent troop: n>` comment adds its members and
+ * pages to troop n, its pages' enemy numbers shifted past the members troop n already had, in troop order.
+ * Returns the number of troops merged.
+ */
+function applyLargeTroops(db, scriptText) {
+    if (!/\$imported\["TH_LargeTroops"\]\s*=\s*true/.test(scriptText)) return 0;
+    let merged = 0;
+    for (const troop of db.troops) {
+        if (!troop || !troop.pages || !troop.pages[0]) continue;
+        for (const cmd of troop.pages[0].list || []) {
+            const m = cmd.code === 108 && /<parent troop: (\d+)/i.exec(String(cmd.parameters[0]));
+            const parent = m && db.troops[Number(m[1])];
+            if (!parent) continue;
+            const offset = parent.members.length;
+            for (const page of troop.pages) {
+                const copy = JSON.parse(JSON.stringify(page));
+                for (const c of copy.list) {
+                    const p = c.parameters;
+                    if ([331, 332, 333, 336, 337].includes(c.code) && p[0] !== -1) p[0] += offset;
+                    else if (c.code === 335 && p[0] !== -1) c.parameters = p.map(v => v + offset);
+                    else if (c.code === 339 && p[0] === 0) p[1] += offset;
+                }
+                parent.pages.push(copy);
+            }
+            parent.members.push(...troop.members.map(x => Object.assign({}, x)));
+            merged++;
+        }
+    }
+    return merged;
+}
+
+/**
  * The skeleton's system picture a game file stands for when only the case differs (the game's
  * iconset.png, MZ's IconSet.png): the game's picture takes the name the runtime loads, or on a
  * case-sensitive disk MZ's own would be drawn. Other paths come back unchanged.
@@ -351,6 +383,7 @@ function open(folder, destination, options) {
         const aliased = (value) => { const n = C.applyAudioAliases(value, aliases); if (n) add(notes, 'audioAliased', n); return value; };
         aliased(db.troops); aliased(db.commonEvents);
         { const n = applyParamTables(db, scriptText, constants, (rel) => src.read(rel), skipped); if (n) add(notes, 'paramTables', n); }
+        { const n = applyLargeTroops(db, scriptText); if (n) add(notes, 'largeTroops', n); }
         const files = { Actors: db.actors, Classes: db.classes, Skills: db.skills, Items: db.items, Weapons: db.weapons, Armors: db.armors, Enemies: db.enemies, Troops: db.troops, States: db.states, Animations: db.animations, CommonEvents: db.commonEvents, Tilesets: db.tilesets };
         for (const [file, records] of Object.entries(files)) writeJson(path.join(dest, 'data', `${file}.json`), records);
         const base = JSON.parse(fs.readFileSync(path.join(skeleton, 'data', 'System.json'), 'utf8'));
@@ -538,4 +571,4 @@ function open(folder, destination, options) {
 function report(folder, options) { return open(folder, null, options).inventory(); }
 function importProject(folder, destination, options) { return open(folder, destination, options).importProject(); }
 
-module.exports = { open, report, importProject, source, installPlugins, applyParamTables, systemTwin, writeFamilyQuests, copyAliasedAudio, matchFileCase, repairName, repairPath, STOCK_SCRIPTS, GRAPHICS, AUDIO };
+module.exports = { open, report, importProject, source, installPlugins, applyParamTables, applyLargeTroops, systemTwin, writeFamilyQuests, copyAliasedAudio, matchFileCase, repairName, repairPath, STOCK_SCRIPTS, GRAPHICS, AUDIO };
