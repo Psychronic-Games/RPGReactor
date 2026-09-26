@@ -831,7 +831,9 @@
             if (!key) continue;
             // Ruby's %s placeholders are MZ's %1, %2, … in order.
             let n = 0;
-            out[key] = m[2].replace(/\\"/g, '"').replace(/%s/g, () => `%${++n}`);
+            // A double-quoted Ruby string: \\ is one backslash (so "\\G" is the \G code), \" a quote.
+            const text = m[2].replace(/\\(["\\])/g, '$1');
+            out[key] = text.replace(/%s/g, () => `%${++n}`);
         }
         return out;
     }

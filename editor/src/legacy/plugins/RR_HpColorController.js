@@ -8,7 +8,7 @@
  *
  * HP numbers and bars change colour in three steps: normal, low and
  * critical, at the rates the game set, with their own colour for a knocked
- * out actor. HP exactly at the critical rate counts as normal, as it did in
+ * out actor, in the battle status too. HP exactly at the critical rate counts as normal, as it did in
  * the original.
  *
  * Installed by File › Import Project… when the imported game carried the
@@ -46,7 +46,7 @@
     const crit = (a) => a.hp < a.mhp * CRIT;
     const low = (a) => a.hp > a.mhp * CRIT && a.hp < a.mhp * LOW;
 
-    Object.assign(Window_Base.prototype, {
+    const methods = {
         rrAceHpBarColor1(actor) {
             if (crit(actor)) return colour('hp_gaugecri1');
             if (low(actor)) return colour('hp_gaugelow1');
@@ -70,5 +70,8 @@
             this.drawText(TextManager.hpA, x + 2, y + cy, 30);
             this.rrAceDrawCurrentAndMaxValues(x, y + cy, width, actor.hp, actor.mhp, this.rrAceHpColor(actor), ColorManager.normalColor());
         }
-    });
+    };
+    Object.assign(Window_Base.prototype, methods);
+    // The script reopened the battle status too, whose own HP drawing would otherwise win there.
+    Window_BattleStatus.prototype.rrAceDrawActorHp = methods.rrAceDrawActorHp;
 })();

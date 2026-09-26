@@ -311,6 +311,15 @@
         this._enemyWindow.activate();
     };
     Window_BattleLog.prototype.maxLines = function() { return 6; };
+    Window_BattleLog.prototype.messageSpeed = function() { return 20; };
+    // Enemies stand where the troop puts them, not 24 pixels higher.
+    Spriteset_Battle.prototype.battleFieldOffsetY = function() { return 0; };
+    const _statusInit = Window_BattleStatus.prototype.initialize;
+    Window_BattleStatus.prototype.initialize = function(rect) {
+        _statusInit.call(this, rect);
+        this.frameVisible = true;
+    };
+    Window_BattleStatus.prototype.updatePadding = function() { this.padding = $gameSystem.windowPadding(); };
 
     // One row per member: name and states on the left, HP, MP (and TP) gauges on the right.
     Window_BattleStatus.prototype.maxCols = function() { return 1; };
