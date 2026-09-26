@@ -105,11 +105,19 @@
         return target;
     }
 
-    /** How many floors are built: up to the highest storey with walls, doors, windows or stairs (a roof above does not count). */
+    /**
+     * How many floors are built: up to the highest storey with walls, doors
+     * or windows, or the one a flight of stairs climbs to (a roof above does
+     * not count).
+     */
     function occupiedFloors(plan) {
         const S = storeyOf(plan);
         let top = -1;
-        for (const piece of plan.pieces || []) if (WALLISH.includes(piece.kind) || piece.kind === 'stair') top = Math.max(top, Math.floor((Number(piece.z) || 0) / S));
+        for (const piece of plan.pieces || []) {
+            const floor = Math.floor((Number(piece.z) || 0) / S);
+            if (WALLISH.includes(piece.kind)) top = Math.max(top, floor);
+            else if (piece.kind === 'stair') top = Math.max(top, floor + 1);
+        }
         return top >= 0 ? Math.min(24, top + 1) : 0;
     }
 
@@ -213,6 +221,133 @@
         return here.find(p => p.kind === 'floor') || here[0] || null;
     }
 
+    // ---- Selecting and moving what is on a floor ----------------------------
+
+    /** Which pieces share a cell's slot: two of a group never stand in one cell at one level. */
+    const groupOf = kind => (WALLISH.includes(kind) ? 'wall' : kind);
+
+    /** The stairs connected to one (same turn, side by side or in a run): a flight. */
+    function flightOf(plan, floor, stair) {
+        const stairs = band(plan, floor).filter(p => p.kind === 'stair' && (Number(p.rot) || 0) === (Number(stair.rot) || 0));
+        const byCell = new Map(stairs.map(p => [p.x + ',' + p.y, p]));
+        const out = new Set([stair]), queue = [stair];
+        while (queue.length) {
+            const p = queue.pop();
+            for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+                const next = byCell.get((p.x + dx) + ',' + (p.y + dy));
+                if (next && !out.has(next)) { out.add(next); queue.push(next); }
+            }
+        }
+        return [...out];
+    }
+
+    /**
+     * What a click on a cell picks up: a flight of stairs whole, a door or a
+     * window with its pane, a wall, or else the floor slab there.
+     */
+    function selectAt(plan, floor, x, y) {
+        const here = band(plan, floor).filter(p => p.x === x && p.y === y);
+        const stair = here.find(p => p.kind === 'stair');
+        if (stair) return flightOf(plan, floor, stair);
+        const wallish = here.filter(p => WALLISH.includes(p.kind));
+        if (wallish.length) return wallish;
+        const other = here.filter(p => p.kind !== 'floor');
+        if (other.length) return other;
+        return here.filter(p => p.kind === 'floor');
+    }
+
+    /** Everything on a floor within cells (a dragged box), stairs taken whole. */
+    function selectCells(plan, floor, cells) {
+        const keys = new Set(cells.map(([x, y]) => x + ',' + y));
+        const out = new Set();
+        for (const piece of band(plan, floor)) {
+            if (!keys.has(piece.x + ',' + piece.y)) continue;
+            if (piece.kind === 'stair') for (const p of flightOf(plan, floor, piece)) out.add(p);
+            else out.add(piece);
+        }
+        return [...out];
+    }
+
+    /** The slab material nearest a cell at a level (to close a stairwell with). */
+    function slabNear(plan, x, y, z) {
+        let best = null, dist = Infinity;
+        for (const p of plan.pieces || []) {
+            if (p.kind !== 'floor' || (Number(p.z) || 0) !== z) continue;
+            const d = Math.abs(p.x - x) + Math.abs(p.y - y);
+            if (d < dist) { dist = d; best = p; }
+            if (d <= 1) break;
+        }
+        return best && dist <= 2 ? best.material || '' : null;
+    }
+
+    /**
+     * Take stairs off a floor: their cells get the floor back, and the
+     * stairwell above closes where the floor above has floor around it.
+     */
+    function closeStairwell(plan, floor, stairs, keep = new Set()) {
+        const S = storeyOf(plan), z0 = floor * S;
+        const cells = new Map();
+        for (const p of stairs) cells.set(p.x + ',' + p.y, p);
+        for (const [key, stair] of cells) {
+            if (keep.has(key)) continue;
+            const [x, y] = key.split(',').map(Number);
+            if (!at(plan, x, y, z0, ['floor', 'stair']).length) add(plan, { kind: 'floor', x, y, z: z0, material: stair.material || '' });
+            if (!at(plan, x, y, z0 + S, ['floor', 'stair']).length) {
+                const above = slabNear(plan, x, y, z0 + S);
+                if (above !== null) add(plan, { kind: 'floor', x, y, z: z0 + S, material: above });
+            }
+        }
+    }
+
+    /** Take pieces away (stairs give their cells the floor back). */
+    function removePieces(plan, floor, pieces) {
+        const gone = new Set(pieces);
+        remove(plan, p => gone.has(p));
+        const stairs = pieces.filter(p => p.kind === 'stair');
+        if (stairs.length) closeStairwell(plan, floor, stairs);
+    }
+
+    /**
+     * Move pieces on their floor by whole cells. What stood in the same slot
+     * where they land (a wall on a wall, a slab on a slab) gives way; stairs
+     * open their stairwell where they land and close it where they were.
+     * Returns false, changing nothing, when any would leave the plot.
+     */
+    function movePieces(plan, floor, pieces, dx, dy) {
+        if (!pieces.length || (!dx && !dy)) return false;
+        if (pieces.some(p => !inPlot(plan, p.x + dx, p.y + dy))) return false;
+        const S = storeyOf(plan), z0 = floor * S;
+        const moving = new Set(pieces);
+        const landing = new Set(pieces.map(p => (p.x + dx) + ',' + (p.y + dy) + ',' + (Number(p.z) || 0) + ',' + groupOf(p.kind)));
+        const stairs = pieces.filter(p => p.kind === 'stair');
+        const stairLanding = new Set(stairs.map(p => (p.x + dx) + ',' + (p.y + dy)));
+        remove(plan, p => !moving.has(p) && (landing.has(p.x + ',' + p.y + ',' + (Number(p.z) || 0) + ',' + groupOf(p.kind))
+            || (stairLanding.has(p.x + ',' + p.y) && p.kind === 'floor' && ((Number(p.z) || 0) === z0 || (Number(p.z) || 0) === z0 + S))));
+        const vacated = stairs.map(p => ({ x: p.x, y: p.y, material: p.material }));
+        for (const p of pieces) { p.x += dx; p.y += dy; }
+        if (vacated.length) closeStairwell(plan, floor, vacated, stairLanding);
+        return true;
+    }
+
+    /** Turn a flight of stairs a quarter clockwise about its first step. */
+    function turnStairs(plan, floor, stairs) {
+        if (!stairs.length) return false;
+        const rot = Number(stairs[0].rot) || 0;
+        const d = Object.values(DIRS).find(v => v[2] === rot) || DIRS.north;
+        // The first step is the lowest; the flight's width runs across it.
+        const first = stairs.reduce((a, b) => ((Number(b.z) || 0) < (Number(a.z) || 0) ? b : a));
+        const width = new Set(stairs.map(p => (d[0] !== 0 ? p.y : p.x))).size;
+        const bottom = stairs.filter(p => (Number(p.z) || 0) === (Number(first.z) || 0));
+        const x0 = Math.min(...bottom.map(p => p.x)), y0 = Math.min(...bottom.map(p => p.y));
+        const order = ['north', 'east', 'south', 'west'];
+        const current = Object.keys(DIRS).find(k => DIRS[k][2] === rot) || 'north';
+        const next = order[(order.indexOf(current) + 1) % 4];
+        const material = first.material || '';
+        removePieces(plan, floor, stairs);
+        placeStairs(plan, floor, x0, y0, next, width, material);
+        return true;
+    }
+
     /** Cells of a dragged rectangle, or of a straight line (the longer axis wins). */
     function rectCells(x0, y0, x1, y1) {
         const out = [];
@@ -230,7 +365,7 @@
         return rectCells(x0, y0, x1, y1).filter(([x, y]) => x === Math.min(x0, x1) || x === Math.max(x0, x1) || y === Math.min(y0, y1) || y === Math.max(y0, y1));
     }
 
-    const api = { DIRS, WALLISH, storeyOf, floorsOf, occupiedFloors, band, isDescribed, buildOut, setFloors, hasPieces, paintFloor, paintWall, placeDoor, placeWindow, placeStairs, erase, cellKind, rectCells, lineCells, outlineCells };
+    const api = { DIRS, WALLISH, selectAt, selectCells, flightOf, movePieces, removePieces, turnStairs, storeyOf, floorsOf, occupiedFloors, band, isDescribed, buildOut, setFloors, hasPieces, paintFloor, paintWall, placeDoor, placeWindow, placeStairs, erase, cellKind, rectCells, lineCells, outlineCells };
     root.RRStructureFloors = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

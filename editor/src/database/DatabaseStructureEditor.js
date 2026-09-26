@@ -438,6 +438,7 @@ class DatabaseStructureEditor {
         this.current = { entry, plan: entry.plan };
         this.floor = 0;
         this.selection = null;
+        this._sel = [];
         this._history = [];
         this._future = [];
         const tt = text => this._t(text);
@@ -486,7 +487,7 @@ class DatabaseStructureEditor {
 
     // ---- The floor plan: one floor of pieces, painted ------------------------
 
-    static PAINT_TOOLS = ['room', 'floor', 'wall', 'door', 'window', 'stairs', 'erase'];
+    static PAINT_TOOLS = ['select', 'room', 'floor', 'wall', 'door', 'window', 'stairs', 'erase'];
 
     floorsApi() { return typeof RRStructureFloors !== 'undefined' ? RRStructureFloors : null; }
 
@@ -532,8 +533,8 @@ class DatabaseStructureEditor {
             const label = f === 0 ? tt('Ground floor') : this._t('Floor {n}', { n: f + 1 });
             floors.push(`<button type="button" class="rr-structures-floor${f === this._paint.floor ? ' active' : ''}" data-floor="${f}" aria-pressed="${f === this._paint.floor}">${rrEscapeHtml(label)}</button>`);
         }
-        const toolNames = { room: 'Room', floor: 'Floor', wall: 'Wall', door: 'Door', window: 'Window', stairs: 'Stairs', erase: 'Eraser' };
-        const toolIcons = { room: 'room', floor: 'room', wall: 'remove', door: 'door', window: 'window', stairs: 'stairs', erase: 'remove' };
+        const toolNames = { select: 'Select', room: 'Room', floor: 'Floor', wall: 'Wall', door: 'Door', window: 'Window', stairs: 'Stairs', erase: 'Eraser' };
+        const toolIcons = { select: 'select', room: 'room', floor: 'room', wall: 'remove', door: 'door', window: 'window', stairs: 'stairs', erase: 'remove' };
         const tools = DatabaseStructureEditor.PAINT_TOOLS.map(tool => `<button type="button" class="rr-structures-tool${tool === this._paint.tool ? ' active' : ''}" data-tool="${tool}" aria-pressed="${tool === this._paint.tool}" title="${rrEscapeHtml(tt(toolNames[tool]))}">${DatabaseStructureEditor.icon(toolIcons[tool])}<span>${rrEscapeHtml(tt(toolNames[tool]))}</span></button>`).join('');
         const option = (value, current) => `<option value="${rrEscapeHtml(value)}"${value === current ? ' selected' : ''}>${rrEscapeHtml(value || tt('(none)'))}</option>`;
         const dirNames = { north: 'North', east: 'East', south: 'South', west: 'West' };
@@ -543,18 +544,21 @@ class DatabaseStructureEditor {
             <button type="button" class="rr-btn-secondary rr-structures-addfloor">${rrEscapeHtml(tt('+ Add floor'))}</button>
             <div class="rr-structures-side-title">${rrEscapeHtml(tt('Tools'))}</div>
             <div class="rr-structures-toolgrid">${tools}</div>
+            ${this._sel?.length ? `<div class="rr-structures-selbar"><span>${rrEscapeHtml(this._selLabel())}</span>${this._sel.some(p => p.kind === 'stair') ? `<button type="button" class="rr-btn-secondary rr-structures-selturn">${rrEscapeHtml(tt('Turn'))}</button>` : ''}<button type="button" class="rr-btn-secondary rr-structures-seldelete">${rrEscapeHtml(tt('Delete'))}</button></div>` : ''}
             <label class="rr-structures-side-field"><span>${rrEscapeHtml(tt('Walls'))}</span><select class="database-field-value rr-structures-wallmat">${[''].concat(names).map(n => option(n, this._paint.wallMaterial)).join('')}</select></label>
             <label class="rr-structures-side-field"><span>${rrEscapeHtml(tt('Floors'))}</span><select class="database-field-value rr-structures-floormat">${[''].concat(names).map(n => option(n, this._paint.floorMaterial)).join('')}</select></label>
             <label class="rr-structures-side-field"${this._paint.tool === 'stairs' ? '' : ' hidden'}><span>${rrEscapeHtml(tt('Stairs climb'))}</span><select class="database-field-value rr-structures-dir">${Object.keys(dirNames).map(d => `<option value="${d}"${d === this._paint.dir ? ' selected' : ''}>${rrEscapeHtml(tt(dirNames[d]))}</option>`).join('')}</select></label>`;
-        side.querySelectorAll('.rr-structures-floor').forEach(button => button.addEventListener('click', () => { this._paint.floor = Number(button.dataset.floor); this.renderSide(); this.drawPaint(); if (this._peek === true) this.draw3D(this._report); }));
+        side.querySelector('.rr-structures-selturn')?.addEventListener('click', () => this.turnSelection());
+        side.querySelector('.rr-structures-seldelete')?.addEventListener('click', () => this.deleteSelection());
+        side.querySelectorAll('.rr-structures-floor').forEach(button => button.addEventListener('click', () => { this._paint.floor = Number(button.dataset.floor); this._sel = []; this.renderSide(); this.drawPaint(); if (this._peek === true) this.draw3D(this._report); }));
         side.querySelector('.rr-structures-addfloor').addEventListener('click', () => { this.setFloorCount(count + 1); this._paint.floor = count; this.renderSide(); this.drawPaint(); });
-        side.querySelectorAll('.rr-structures-tool').forEach(button => button.addEventListener('click', () => { this._paint.tool = button.dataset.tool; this.renderSide(); this.drawPaint(); }));
+        side.querySelectorAll('.rr-structures-tool').forEach(button => button.addEventListener('click', () => { this._paint.tool = button.dataset.tool; if (this._paint.tool !== 'select') this._sel = []; this.renderSide(); this.drawPaint(); }));
         side.querySelector('.rr-structures-wallmat').addEventListener('change', event => { this._paint.wallMaterial = event.target.value; });
         side.querySelector('.rr-structures-floormat').addEventListener('change', event => { this._paint.floorMaterial = event.target.value; });
         side.querySelector('.rr-structures-dir')?.addEventListener('change', event => { this._paint.dir = event.target.value; this.drawPaint(); });
         const hint = this._detail?.querySelector('.rr-structures-paint-hint');
         if (hint) {
-            const tips = { room: 'Drag a rectangle: walls around it, floor inside.', floor: 'Drag a rectangle of floor.', wall: 'Drag a straight line of wall.', door: 'Drag along a wall to open a doorway in it.', window: 'Drag along a wall to put windows in it.', stairs: 'Click where the stairs start; they climb to the next floor. R turns them.', erase: 'Drag over anything on this floor to take it away.' };
+            const tips = { select: 'Click a piece to pick it up, or drag a box. Drag to move; arrows nudge, R turns stairs, Delete removes.', room: 'Drag a rectangle: walls around it, floor inside.', floor: 'Drag a rectangle of floor.', wall: 'Drag a straight line of wall.', door: 'Drag along a wall to open a doorway in it.', window: 'Drag along a wall to put windows in it.', stairs: 'Click where the stairs start; they climb to the next floor. R turns them.', erase: 'Drag over anything on this floor to take it away.' };
             hint.textContent = (F.isDescribed(plan) ? tt('Painting turns this described building into pieces.') + ' ' : '') + tt(tips[this._paint.tool]) + ' ' + tt('Right-drag erases. Ctrl+Z undoes.');
         }
     }
@@ -599,6 +603,68 @@ class DatabaseStructureEditor {
         return F.rectCells(a.x, a.y, b.x, b.y);
     }
 
+    /** What is selected, in a few words. */
+    _selLabel() {
+        const sel = this._sel || [];
+        const kinds = new Set(sel.map(p => p.kind === 'glass' ? 'window' : p.kind));
+        const names = { stair: 'Stairs', wall: 'Wall', doorway: 'Door', window: 'Window', floor: 'Floor' };
+        if (kinds.size === 1) {
+            const kind = [...kinds][0];
+            // A flight is one thing however many cells it covers.
+            const cells = kind === 'stair' ? 1 : new Set(sel.map(p => p.x + ',' + p.y)).size;
+            return this._t(names[kind] || 'Pieces') + (cells > 1 ? ` × ${cells}` : '');
+        }
+        return this._t('{n} pieces', { n: sel.length });
+    }
+
+    /** The plan as pieces, ready to pick up: a described plan is built out first (undoable). */
+    _ensureBuilt() {
+        const F = this.floorsApi(), plan = this.current?.plan;
+        if (!F || !plan || !F.isDescribed(plan)) return false;
+        const SP = typeof RRStructurePlan !== 'undefined' ? RRStructurePlan : null;
+        this.pushHistory();
+        F.buildOut(plan, SP, name => this.resolve(name));
+        this.markDirty();
+        return true;
+    }
+
+    /** Move the selection by whole cells, undoably; false when it would leave the plot. */
+    moveSelection(dx, dy) {
+        const F = this.floorsApi(), plan = this.current?.plan;
+        if (!F || !plan || !this._sel?.length || (!dx && !dy)) return false;
+        const before = JSON.stringify(plan);
+        if (!F.movePieces(plan, this._paint.floor, this._sel, dx, dy)) return false;
+        this._history.push(before);
+        if (this._history.length > DatabaseStructureEditor.HISTORY) this._history.shift();
+        this._future.length = 0;
+        this.markDirty();
+        this.renderSide();
+        return true;
+    }
+
+    deleteSelection() {
+        const F = this.floorsApi(), plan = this.current?.plan;
+        if (!F || !plan || !this._sel?.length) return;
+        this.pushHistory();
+        F.removePieces(plan, this._paint.floor, this._sel);
+        this._sel = [];
+        this.markDirty();
+        this.renderSide();
+    }
+
+    /** Turn the selected stairs a quarter; the new flight stays selected. */
+    turnSelection() {
+        const F = this.floorsApi(), plan = this.current?.plan;
+        const stairs = (this._sel || []).filter(p => p.kind === 'stair');
+        if (!F || !plan || !stairs.length) return;
+        this.pushHistory();
+        const before = new Set(plan.pieces);
+        F.turnStairs(plan, this._paint.floor, stairs);
+        this._sel = plan.pieces.filter(p => p.kind === 'stair' && !before.has(p));
+        this.markDirty();
+        this.renderSide();
+    }
+
     /** One drag, done: the pieces it makes on the floor in view, undoable. */
     applyPaint(tool, a, b) {
         const F = this.floorsApi(), plan = this.current?.plan;
@@ -633,6 +699,20 @@ class DatabaseStructureEditor {
             if (!cell || !cell.inside) return;
             canvas.setPointerCapture?.(event.pointerId);
             canvas.focus({ preventScroll: true });
+            if (event.button === 0 && this._paint.tool === 'select') {
+                const F = this.floorsApi(), plan = this.current.plan;
+                if (this._ensureBuilt()) this._sel = [];
+                const sel = this._sel || [];
+                const inSel = sel.some(p => p.x === cell.x && p.y === cell.y);
+                const picked = inSel ? [] : F.selectAt(plan, this._paint.floor, cell.x, cell.y);
+                if (!inSel && picked.length) this._sel = event.shiftKey ? [...new Set(sel.concat(picked))] : picked;
+                else if (!inSel && !event.shiftKey) this._sel = [];
+                drag = { tool: inSel || picked.length ? 'move' : 'marquee', a: cell, b: cell, add: event.shiftKey };
+                this._paintDrag = drag;
+                this.renderSide();
+                this.drawPaint();
+                return;
+            }
             drag = { tool: event.button === 2 ? 'erase' : this._paint.tool, a: cell, b: cell };
             this._paintDrag = drag;
             this.drawPaint();
@@ -649,6 +729,14 @@ class DatabaseStructureEditor {
             drag = null;
             this._paintDrag = null;
             canvas.releasePointerCapture?.(event.pointerId);
+            if (done.tool === 'move') { if (!this.moveSelection(done.b.x - done.a.x, done.b.y - done.a.y)) this.drawPaint(); return; }
+            if (done.tool === 'marquee') {
+                const F = this.floorsApi();
+                const picked = F.selectCells(this.current.plan, this._paint.floor, F.rectCells(done.a.x, done.a.y, done.b.x, done.b.y));
+                this._sel = done.add ? [...new Set((this._sel || []).concat(picked))] : picked;
+                this.renderSide(); this.drawPaint();
+                return;
+            }
             this.applyPaint(done.tool, done.a, done.b);
         };
         canvas.addEventListener('pointerup', finish);
@@ -658,6 +746,13 @@ class DatabaseStructureEditor {
             const key = event.key.toLowerCase();
             if ((event.ctrlKey || event.metaKey) && key === 'z') { event.preventDefault(); if (event.shiftKey ? this.redo() : this.undo()) this.renderSide(); return; }
             if ((event.ctrlKey || event.metaKey) && key === 'y') { event.preventDefault(); if (this.redo()) this.renderSide(); return; }
+            if (this._paint.tool === 'select' && this._sel?.length) {
+                const step = { arrowleft: [-1, 0], arrowright: [1, 0], arrowup: [0, -1], arrowdown: [0, 1] }[key];
+                if (step) { event.preventDefault(); this.moveSelection(step[0], step[1]); return; }
+                if (key === 'delete' || key === 'backspace') { event.preventDefault(); this.deleteSelection(); return; }
+                if (key === 'r') { this.turnSelection(); return; }
+                if (key === 'escape') { this._sel = []; this.renderSide(); this.drawPaint(); return; }
+            }
             if (key === 'r' && this._paint.tool === 'stairs') {
                 const order = ['north', 'east', 'south', 'west'];
                 this._paint.dir = order[(order.indexOf(this._paint.dir) + 1) % 4];
@@ -702,7 +797,7 @@ class DatabaseStructureEditor {
         // Pieces by floor and cell, built once per change: a 24-floor manor is tens of thousands of
         // pieces, and searching them all for every cell of the plan took seconds per draw.
         const cacheKey = [this._paintVersion || 0, source.pieces, source.pieces.length].join('|');
-        if (!this._paintCells || this._paintCells.key !== cacheKey || this._paintCells.pieces !== source.pieces) {
+        if (!this._paintIndex || this._paintIndex.key !== cacheKey || this._paintIndex.pieces !== source.pieces) {
             const floors = new Map();
             for (const piece of source.pieces || []) {
                 const f = Math.floor((Number(piece.z) || 0) / S);
@@ -712,9 +807,9 @@ class DatabaseStructureEditor {
                 const list = cells.get(key);
                 if (list) list.push(piece); else cells.set(key, [piece]);
             }
-            this._paintCells = { key: cacheKey, pieces: source.pieces, floors };
+            this._paintIndex = { key: cacheKey, pieces: source.pieces, floors };
         }
-        const byCell = floorIndex => this._paintCells.floors.get(floorIndex) || new Map();
+        const byCell = floorIndex => this._paintIndex.floors.get(floorIndex) || new Map();
         const shownOf = list => {
             for (const kind of ['doorway', 'window', 'wall', 'stair', 'pillar', 'block', 'fence', 'ramp', 'roof']) { const piece = list.find(p => p.kind === kind); if (piece) return piece; }
             return list.find(p => p.kind === 'floor') || list[0] || null;
@@ -765,8 +860,35 @@ class DatabaseStructureEditor {
         ctx.strokeStyle = accent;
         ctx.lineWidth = 2;
         ctx.strokeRect(ox - 1, oy - 1, W * cell + 2, D * cell + 2);
-        // What a drag would do, or the cell under the pointer.
+        // The selection, and where a drag would put it.
         const drag = this._paintDrag;
+        if (this._sel?.length) {
+            const moving = drag && drag.tool === 'move' ? [drag.b.x - drag.a.x, drag.b.y - drag.a.y] : [0, 0];
+            const selCells = new Set(this._sel.map(p => p.x + ',' + p.y));
+            ctx.lineWidth = 2;
+            for (const key of selCells) {
+                const [x, y] = key.split(',').map(Number);
+                if (moving[0] || moving[1]) {
+                    ctx.fillStyle = 'rgba(255,255,255,0.12)';
+                    ctx.fillRect(ox + x * cell, oy + y * cell, cell, cell);
+                }
+                const gx = x + moving[0], gy = y + moving[1];
+                if (gx < 0 || gy < 0 || gx >= W || gy >= D) continue;
+                ctx.fillStyle = 'rgba(255,214,64,0.30)';
+                ctx.fillRect(ox + gx * cell, oy + gy * cell, cell, cell);
+                ctx.strokeStyle = accent;
+                const edge = (nx, ny) => !selCells.has((nx - moving[0]) + ',' + (ny - moving[1]));
+                const px = ox + gx * cell, py = oy + gy * cell;
+                ctx.beginPath();
+                if (edge(gx, gy - 1)) { ctx.moveTo(px, py + 1); ctx.lineTo(px + cell, py + 1); }
+                if (edge(gx, gy + 1)) { ctx.moveTo(px, py + cell - 1); ctx.lineTo(px + cell, py + cell - 1); }
+                if (edge(gx - 1, gy)) { ctx.moveTo(px + 1, py); ctx.lineTo(px + 1, py + cell); }
+                if (edge(gx + 1, gy)) { ctx.moveTo(px + cell - 1, py); ctx.lineTo(px + cell - 1, py + cell); }
+                ctx.stroke();
+            }
+        }
+        if (this._paint.tool === 'select' && !(drag && drag.tool === 'marquee')) return;
+        // What a drag would do, or the cell under the pointer.
         const cells = drag ? this._paintCells(drag.tool, drag.a, drag.b) : (this._paintHover ? this._paintCells(this._paint.tool, this._paintHover, this._paintHover) : []);
         if (this._paint.tool === 'stairs' && !drag?.tool?.startsWith?.('erase') && (drag || this._paintHover)) {
             const start = drag ? drag.a : this._paintHover, d = F.DIRS[this._paint.dir];
@@ -818,6 +940,7 @@ class DatabaseStructureEditor {
         this.parentEditor?.refreshDatabaseListLabel?.(this.current.entry, 'structures');
         if (this.floor !== 'roof') this.floor = Math.max(0, Math.min(plan.floors.length - 1, this.floor));
         this.selection = null;
+        this._sel = [];
         this.parentEditor?._markDatabaseMutation?.();
         this.render();
     }

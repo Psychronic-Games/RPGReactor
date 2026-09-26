@@ -141,6 +141,47 @@ test('painting a floor lays the pieces the Build bar lays: rooms, walls, doors, 
     assert.equal(plan.pieces.filter(p => p.kind === 'stair').length, 10, 'erasing floor 2 leaves the ground floor');
 });
 
+test('the floor plan picks things up: stairs whole, moved with their stairwell, turned, deleted; walls give way where others land', () => {
+    const F = require(path.join(repoRoot, 'editor', 'src', 'utils', 'StructureFloors.js'));
+    const plan = { size: [20, 20], storey: 5, height: 2, pieces: [] };
+    F.paintFloor(plan, 0, F.rectCells(0, 0, 19, 19), 'Wood');
+    F.paintFloor(plan, 1, F.rectCells(0, 0, 19, 19), 'Wood');
+    F.placeStairs(plan, 0, 4, 10, 'north', 2, 'Wood');
+    const slabs = (x, y, z) => plan.pieces.filter(p => p.kind === 'floor' && p.x === x && p.y === y && p.z === z).length;
+    assert.equal(slabs(4, 10, 0), 0); assert.equal(slabs(4, 6, 5), 0, 'a stairwell above');
+    const flight = F.selectAt(plan, 0, 5, 8);
+    assert.equal(flight.length, 10, 'one click takes the whole flight (2 wide, 5 steps)');
+    assert.equal(F.movePieces(plan, 0, flight, 3, 0), true);
+    assert.deepEqual([slabs(4, 10, 0), slabs(4, 6, 5)], [1, 1], 'the old stairwell is floored over again, below and above');
+    assert.deepEqual([slabs(7, 10, 0), slabs(7, 6, 5)], [0, 0], 'the new one is open');
+    assert.equal(F.movePieces(plan, 0, flight, 20, 0), false, 'nothing leaves the plot');
+    assert.equal(F.occupiedFloors({ storey: 5, pieces: flight }), 2, 'stairs count the floor they climb to');
+    assert.equal(flight[0].x >= 7, true);
+    F.turnStairs(plan, 0, flight);
+    const stairs = plan.pieces.filter(p => p.kind === 'stair');
+    assert.equal(stairs.length, 10);
+    assert.ok(stairs.every(p => p.rot === 3), 'now climbing east');
+    F.removePieces(plan, 0, stairs);
+    assert.equal(plan.pieces.filter(p => p.kind === 'stair').length, 0);
+    assert.equal(slabs(8, 10, 0), 1, 'deleted stairs leave floor');
+    // A wall moved onto another wall replaces it; a box picks walls and floor.
+    F.paintWall(plan, 0, F.lineCells(0, 0, 5, 0), 'Stone');
+    F.paintWall(plan, 0, [[0, 2]], 'Brick');
+    const brick = F.selectAt(plan, 0, 0, 2);
+    assert.deepEqual(brick.map(p => p.kind), ['wall']);
+    F.movePieces(plan, 0, brick, 0, -2);
+    const at00 = plan.pieces.filter(p => p.x === 0 && p.y === 0 && p.z === 0 && p.kind === 'wall');
+    assert.deepEqual(at00.map(p => p.material), ['Brick']);
+    assert.ok(F.selectCells(plan, 0, F.rectCells(0, 0, 2, 0)).some(p => p.kind === 'floor'));
+});
+
+test('the Structures floor plan has a Select tool, and its piece index no longer hides the drag preview', () => {
+    const src = fs.readFileSync(path.join(repoRoot, 'editor', 'src', 'database', 'DatabaseStructureEditor.js'), 'utf8');
+    assert.match(src, /static PAINT_TOOLS = \['select',/);
+    assert.doesNotMatch(src, /this\._paintCells = \{/, 'a cache named after the method shadowed it: every hover threw');
+    assert.match(src, /F\.movePieces\(plan, this\._paint\.floor, this\._sel, dx, dy\)/);
+});
+
 test('while building, Ctrl+Z and the toolbar Undo reach the builder; the workshop swaps the maps for its structures', () => {
     const ui = read('editor/src/UIManager.js'), main = read('editor/src/main.js'), pieces = read('editor/src/PieceBuilderManager.js'), workshop = read('editor/src/StructureWorkshop.js');
     assert.match(main, /getBuildHistory: \(\) => \(this\.pieceBuilderManager\?\.active \? this\.pieceBuilderManager : null\)/);

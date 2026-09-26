@@ -3737,6 +3737,9 @@
         .rr-structures-floor:hover, .rr-structures-tool:hover { border-color: var(--color-border); }
         .rr-structures-floor.active, .rr-structures-tool.active { background: var(--color-accent-tint-15); border-color: var(--color-accent-border-strong, var(--color-accent)); }
         .rr-structures-toolgrid { display: grid; grid-template-columns: 1fr; gap: 2px; }
+        .rr-structures-selbar { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-top: 6px; }
+        .rr-structures-selbar > span { grid-column: 1 / -1; font-size: 11px; color: var(--color-text-muted); }
+        .rr-structures-selbar > button:only-of-type { grid-column: 1 / -1; }
         .rr-structures-side-field { display: flex; flex-direction: column; gap: 2px; font-size: 11px; color: var(--color-text-muted); }
         .rr-structures-side-field[hidden] { display: none; }
         .rr-structures-side-field select { width: 100%; }
