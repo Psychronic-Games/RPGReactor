@@ -15,6 +15,11 @@
  *                 screen, each with the face and name, level, states, class
  *                 and HP and MP bars with their numbers.
  *
+ *   Battle        with no battleback, the map radially blurred behind it;
+ *                 the party commands, the status (one row per member with
+ *                 name, states and gauges) and the actor commands in one
+ *                 strip along the bottom that slides between them; help,
+ *                 skills and items above it; a six-line battle log.
  *   Items         help at the top, the categories under it, and the list
  *                 to the bottom, each item with its icon, name and ":n".
  *
@@ -197,6 +202,107 @@
         const y = this._categoryWindow.y + this._categoryWindow.height;
         return new Rectangle(0, y, Graphics.boxWidth, Graphics.boxHeight - y);
     };
+
+    //-------------------------------------------------------------------------
+    // Battle: the info area along the bottom holds the party commands, the
+    // status and the actor commands side by side and slides between them
+    // (party commands 0, during a turn 64, actor commands 128)
+    //-------------------------------------------------------------------------
+    const INFO_WIDTH = 128;
+    Scene_Battle.prototype.rrAceInfoHeight = function() { return this.calcWindowHeight(4, true); };
+    Scene_Battle.prototype.rrAceInfoTop = function() { return Graphics.boxHeight - this.rrAceInfoHeight(); };
+    Scene_Battle.prototype.logWindowRect = function() { return new Rectangle(0, 0, Graphics.boxWidth, this.calcWindowHeight(6, false)); };
+    Scene_Battle.prototype.statusWindowRect = function() { return new Rectangle(INFO_WIDTH, this.rrAceInfoTop(), Graphics.boxWidth - INFO_WIDTH, this.rrAceInfoHeight()); };
+    Scene_Battle.prototype.partyCommandWindowRect = function() { return new Rectangle(0, this.rrAceInfoTop(), INFO_WIDTH, this.rrAceInfoHeight()); };
+    Scene_Battle.prototype.actorCommandWindowRect = function() { return new Rectangle(Graphics.boxWidth, this.rrAceInfoTop(), INFO_WIDTH, this.rrAceInfoHeight()); };
+    Scene_Battle.prototype.helpWindowRect = function() { return new Rectangle(0, 0, Graphics.boxWidth, this.calcWindowHeight(2, false)); };
+    Scene_Battle.prototype.skillWindowRect = function() {
+        const y = this.calcWindowHeight(2, false);
+        return new Rectangle(0, y, Graphics.boxWidth, this.rrAceInfoTop() - y);
+    };
+    Scene_Battle.prototype.itemWindowRect = function() { return this.skillWindowRect(); };
+    // Target lists sit right of the party command column.
+    Scene_Battle.prototype.actorWindowRect = function() { return new Rectangle(INFO_WIDTH, this.rrAceInfoTop(), Graphics.boxWidth - INFO_WIDTH, this.rrAceInfoHeight()); };
+    Scene_Battle.prototype.enemyWindowRect = function() { return this.actorWindowRect(); };
+
+    // With no battleback the map shows behind the battle, turned about the screen's centre: sixteen copies
+    // spread over 120 degrees, averaged (RGSS radial_blur(120, 16)).
+    Spriteset_Battle.prototype.createBackground = function() {
+        this._backgroundSprite = new Sprite();
+        const source = SceneManager.backgroundBitmap();
+        const probe = new Sprite_Battleback(0);
+        if (!probe.battleback1Name() && source) {
+            const w = Graphics.width, h = Graphics.height, bitmap = new Bitmap(w, h);
+            const ctx = bitmap.context, image = source.canvas;
+            if (ctx && image) {
+                ctx.save();
+                ctx.globalCompositeOperation = 'lighter';
+                ctx.globalAlpha = 1 / 16;
+                for (let i = 0; i < 16; i++) {
+                    ctx.setTransform(1, 0, 0, 1, w / 2, h / 2);
+                    ctx.rotate((-60 + i * 8) * Math.PI / 180);
+                    ctx.drawImage(image, -w / 2, -h / 2, w, h);
+                }
+                ctx.restore();
+                bitmap._baseTexture.update();
+            }
+            this._backgroundSprite.bitmap = bitmap;
+        } else {
+            this._backgroundSprite.bitmap = source;
+            this._backgroundFilter = new PIXI.BlurFilter();
+            this._backgroundSprite.filters = [this._backgroundFilter];
+        }
+        this._baseSprite.addChild(this._backgroundSprite);
+    };
+
+    const _createAllWindows = Scene_Battle.prototype.createAllWindows;
+    Scene_Battle.prototype.createAllWindows = function() {
+        _createAllWindows.call(this);
+        this._rrInfoOx = 64;
+        for (const w of [this._statusWindow, this._partyCommandWindow, this._actorCommandWindow]) w._rrInfoBaseX = w.x;
+        this.updateStatusWindowPosition();
+    };
+    Scene_Battle.prototype.updateStatusWindowPosition = function() {
+        if (this._rrInfoOx === undefined) return;
+        let target = null;
+        if (this._partyCommandWindow.active) target = 0;
+        if (this._actorCommandWindow.active) target = INFO_WIDTH;
+        if (BattleManager.isInTurn()) target = INFO_WIDTH / 2;
+        if (target !== null) {
+            if (this._rrInfoOx < target) this._rrInfoOx = Math.min(target, this._rrInfoOx + 16);
+            if (this._rrInfoOx > target) this._rrInfoOx = Math.max(target, this._rrInfoOx - 16);
+        }
+        for (const w of [this._statusWindow, this._partyCommandWindow, this._actorCommandWindow]) w.x = w._rrInfoBaseX - this._rrInfoOx;
+    };
+    // The status stays up while an enemy is chosen.
+    Scene_Battle.prototype.startEnemySelection = function() {
+        this._enemyWindow.refresh();
+        this._enemyWindow.show();
+        this._enemyWindow.select(0);
+        this._enemyWindow.activate();
+    };
+    Window_BattleLog.prototype.maxLines = function() { return 6; };
+
+    // One row per member: name and states on the left, HP, MP (and TP) gauges on the right.
+    Window_BattleStatus.prototype.maxCols = function() { return 1; };
+    Window_BattleStatus.prototype.itemHeight = function() { return this.lineHeight(); };
+    Window_BattleStatus.prototype.drawItem = function(index) {
+        const actor = this.actor(index);
+        if (!actor) return;
+        const rect = this.itemLineRect(index), gauges = 220;
+        this.rrAceDrawActorName(actor, rect.x, rect.y, 100);
+        this.rrAceDrawActorIcons(actor, rect.x + 104, rect.y, rect.width - gauges - 10 - 104);
+        const gx = rect.x + rect.width - gauges;
+        if ($dataSystem.optDisplayTp) {
+            this.rrAceDrawActorHp(actor, gx, rect.y, 72);
+            this.rrAceDrawActorMp(actor, gx + 82, rect.y, 64);
+            this.rrAceDrawActorTp(actor, gx + 156, rect.y, 64);
+        } else {
+            this.rrAceDrawActorHp(actor, gx, rect.y, 134);
+            this.rrAceDrawActorMp(actor, gx + 144, rect.y, 76);
+        }
+    };
+    Window_BattleStatus.prototype.drawItemBackground = function() {};
 
     //-------------------------------------------------------------------------
     // Main menu

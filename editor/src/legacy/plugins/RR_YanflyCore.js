@@ -9,7 +9,8 @@
  * The parts of Yanfly's Ace Core Engine that change how the game looks and runs:
  * which window-skin colour each kind of text uses, how faint a disabled
  * item is, numbers grouped with commas, gauges, and how far from the screen
- * events keep moving on their own. The screen size and the default
+ * events keep moving on their own, and troop positions moved onto the
+ * larger screen. The screen size and the default
  * font are converted by the import itself.
  *
  * Installed by File › Import Project… when the imported game carried the
@@ -167,6 +168,15 @@
         const ax = $gameMap.adjustX(this._realX) - Math.floor(Graphics.width / 2 / tw);
         const ay = $gameMap.adjustY(this._realY) - Math.floor(Graphics.height / 2 / th);
         return ax >= -dx && ax <= dx && ay >= -dy && ay <= dy;
+    };
+
+    // Troop positions were laid out on VX Ace's 544×416 screen: across they are centred on the wider
+    // screen, down they move by the whole extra height.
+    const _troopSetup = Game_Troop.prototype.setup;
+    Game_Troop.prototype.setup = function(troopId) {
+        _troopSetup.call(this, troopId);
+        const dx = Math.floor((Graphics.width - 544) / 2), dy = Graphics.height - 416;
+        for (const enemy of this._enemies) { enemy._screenX += dx; enemy._screenY += dy; }
     };
 
     if (GROUP_DIGITS) {

@@ -116,14 +116,18 @@ function windows(parameters, ...names) {
     const ctx = vm.createContext({
         Window_Base, Window_Selectable, Window_Command, Window_HorzCommand, Window_MenuCommand,
         Window_Gold: function() {}, Window_MenuStatus: function() {}, Window_ItemList: function() {},
-        Scene_Menu: function() {}, Scene_Item: function() {}, Scene_Load: function() {}, Rectangle: function(x, y, width, height) { Object.assign(this, { x, y, width, height }); },
-        Game_Actor: function() {}, Game_BattlerBase: function() {}, Game_Party: function() {}, Game_Event: function() {},
+        Scene_Menu: function() {}, Scene_Item: function() {}, Scene_Battle: function() {}, Scene_Load: function() {},
+        Window_BattleLog: function() {}, Window_BattleStatus: function() {}, Rectangle: function(x, y, width, height) { Object.assign(this, { x, y, width, height }); },
+        Game_Actor: function() {}, Game_BattlerBase: function() {}, Game_Party: function() {}, Game_Event: function() {}, Game_Troop: function() {},
         DataManager: { isDatabaseLoaded: () => true },
         PluginManager: { parameters: (name) => parameters[name] || {} },
         ColorManager: new Proxy({ textColor: colour }, { get: (t, k) => t[k] || (() => k) }),
         TextManager: { hp: 'Health Points', hpA: 'HP', mpA: 'MP', tpA: 'TP', levelA: 'LV', currencyUnit: 'G', param: (i) => 'P' + i },
         Graphics: { boxWidth: 640, boxHeight: 480 }, $gameSystem: { mainFontSize: () => 18 }
     });
+    // Classes the plugins extend but these tests do not draw with.
+    for (const name of ['Spriteset_Battle', 'Sprite_Battleback', 'Window_ActorCommand', 'Window_PartyCommand', 'Window_BattleEnemy', 'Window_BattleActor', 'Window_Help', 'BattleManager'])
+        if (!(name in ctx)) ctx[name] = function() {};
     for (const name of names) vm.runInContext(plugin(name), ctx);
     return { win: new Window_Base(), calls, ctx };
 }
