@@ -713,7 +713,8 @@ Reactor3D.pieceCoverAt = function(mapData, wx, wz, near) {
     if (!stack) return null;
     const base = this.elevationAt(mapData, x, y) + this.terrainHeightAt(mapData, wx, wz);
     const head = (Number.isFinite(near) ? near : 0) - base + this.PIECE_STOREY - 0.5;
-    const cover = stack.find(piece => piece.z >= head - 1e-6 && piece.kind !== "doorway");
+    // A ladder going up past a climber is not a roof over it.
+    const cover = stack.find(piece => piece.z >= head - 1e-6 && piece.kind !== "doorway" && piece.kind !== "ladder");
     if (!cover) return null;
     const box = cover.group ? index.groups.get(cover.group) : null;
     // A hair past the outer faces: a face on the box's own edge interpolates

@@ -285,3 +285,20 @@ test('a follower on a ladder climbs to its leader and waits to step on until it 
     for (let i = 0; i < 200; i++) c.ReactorPhysics.update(follower);
     assert.ok(follower._reactorAlt < 0.05, 'and down after it');
 });
+
+test('a ladder above a climber is not a roof over it, and the party climbs one ladder a body length apart', () => {
+    const lighting = read('runtime/reactor_3d_lighting.js'), physics = read('runtime/reactor_physics.js');
+    assert.match(lighting, /piece\.kind !== "doorway" && piece\.kind !== "ladder"/);
+    assert.match(physics, /ReactorPhysics\.LADDER_GAP = 3;/);
+    const c = sandbox();
+    class Game_Follower {}
+    c.Game_Follower = Game_Follower;
+    const follower = Object.assign(new Game_Follower(), { x: 5, y: 6, _reactorAlt: 0 });
+    const player = { x: 5, y: 6, _reactorAlt: 20, _reactorOnLadder: true, followers: () => ({ _data: [follower] }) };
+    c.$gamePlayer = player;
+    c.$dataMap = {};
+    c.Reactor3D = { ladderAt: () => ({ dir: 8, bottom: 0, top: 60 }) };
+    assert.equal(c.ReactorPhysics.followerLadderTarget(follower).target, 17, 'below the leader going up');
+    follower._reactorAlt = 30;
+    assert.equal(c.ReactorPhysics.followerLadderTarget(follower).target, 23, 'above it going down');
+});

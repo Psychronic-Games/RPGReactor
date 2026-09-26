@@ -96,6 +96,8 @@
         return level - settings.swimDepth;
     };
 
+    /** How far apart the party climbs one ladder: about a body length. */
+    ReactorPhysics.LADDER_GAP = 3;
     /** Climbing a ladder, tiles per frame. */
     ReactorPhysics.LADDER_SPEED = 0.07;
 
@@ -128,7 +130,11 @@
         const ladder = Reactor3D.ladderAt($dataMap, character.x, character.y);
         if (!ladder) return null;
         const leadAlt = Number.isFinite(lead._reactorAlt) ? lead._reactorAlt : ladder.bottom;
-        return { ladder, target: Math.max(ladder.bottom, Math.min(ladder.top, leadAlt)) };
+        const alt = Number.isFinite(character._reactorAlt) ? character._reactorAlt : ladder.bottom;
+        // On the same ladder as its leader: a body length below it going up, above it going down.
+        const sameLadder = lead._reactorOnLadder && lead.x === character.x && lead.y === character.y;
+        const want = sameLadder ? (alt <= leadAlt ? leadAlt - this.LADDER_GAP : leadAlt + this.LADDER_GAP) : leadAlt;
+        return { ladder, target: Math.max(ladder.bottom, Math.min(ladder.top, want)) };
     };
 
     /** Whether a follower is still on its way up or down a ladder. */
@@ -434,6 +440,17 @@
             const _followerUpdate = Game_Follower.prototype.update;
             Game_Follower.prototype.update = function() {
                 _followerUpdate.apply(this, arguments);
+                // The leader has taken to a ladder beside this follower: it takes to the ladder too, behind.
+                const leader = ReactorPhysics.leaderOf(this);
+                if (leader && leader._reactorOnLadder && !this.isMoving() && this.isVisible && this.isVisible()
+                    && (leader.x !== this.x || leader.y !== this.y) && !ReactorPhysics.followerClimbing(this)
+                    && typeof Reactor3D !== "undefined" && Reactor3D.ladderAt && typeof $dataMap !== "undefined" && Reactor3D.ladderAt($dataMap, leader.x, leader.y)) {
+                    // A climbing leader stays on its cell, so the line would never close up: walk to it, then onto the ladder.
+                    const sx = this.deltaXFrom(leader.x), sy = this.deltaYFrom(leader.y);
+                    if (Math.abs(sx) + Math.abs(sy) === 1) this.moveStraight(sx > 0 ? 4 : sx < 0 ? 6 : sy > 0 ? 8 : 2);
+                    else this.chaseCharacter(leader);
+                    this._reactorChaseLater = null;
+                }
                 const lead = this._reactorChaseLater;
                 if (lead && !this.isMoving() && !ReactorPhysics.followerClimbing(this)) {
                     if (Math.abs(this.deltaXFrom(lead.x)) + Math.abs(this.deltaYFrom(lead.y)) > 1) this.chaseCharacter(lead);
