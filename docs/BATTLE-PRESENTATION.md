@@ -2,7 +2,7 @@
 
 Current implementation: runtime **20260920.24**, editor **0.98.7**. The 2026-09-11 reports on [phases and battler graphics](archive/sessions/ACTION-SEQUENCE-EXPANSION-2026-09-11.md) and [held items and throws](archive/sessions/HELD-ITEMS-AND-THROWS-2026-09-11.md) record how those parts arrived; this page is the current guide.
 
-`BattlePresentation.json` top-level switches: `"commandWindow": "battler"` parks the actor command window above the acting battler; `"startMessages": false` skips the "emerged" and preemptive/surprise lines (System › Options › Announce enemies at battle start).
+`BattlePresentation.json` top-level switches: `"commandWindow": "battler"` parks the actor command window above the acting battler; `"startMessages": false` skips the "emerged" and preemptive/surprise lines (System › Options › Announce enemies at battle start); `"escapeMessages": false` escapes, or fails to, without the Terms escape messages (System › Options › Show escape messages).
 
 ## Battle party size
 

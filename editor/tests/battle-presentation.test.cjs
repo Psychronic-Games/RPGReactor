@@ -608,3 +608,14 @@ test('a room preview advances at 60 frames a second whatever the monitor does', 
         'the troop preview and the setup dialog both pace the room');
     assert.doesNotMatch(source, /this\.drawRoomCast\(view,draft,cast\);view\.render\(\);/, 'no unpaced render is left');
 });
+
+test('BattlePresentation.json "escapeMessages": false escapes and fails to escape without a message box',()=>{
+ const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');const shown=[];
+ const context={ReactorBattleData:B,DataManager:{isDatabaseLoaded:()=>true},BattleManager:{displayStartMessages(){},displayEscapeSuccessMessage(){shown.push('success');},displayEscapeFailureMessage(){shown.push('failure');}},Window_BattleLog:function(){},Scene_Battle:function(){},Spriteset_Battle:function(){},PluginManager:{_scripts:[],registerCommand(){}},$dataAnimations:[null],console:{warn(){}},SceneManager:{}};
+ for(const k of ['Window_BattleLog','Scene_Battle','Spriteset_Battle'])context[k].prototype={};
+ vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../../runtime/reactor_battle_presentation.js'),'utf8'),context);const P=context.ReactorBattlePresentation;P.install();
+ P.settings=B.empty();context.BattleManager.displayEscapeSuccessMessage();context.BattleManager.displayEscapeFailureMessage();
+ assert.deepEqual([...shown],['success','failure'],'on by default');
+ P.settings.escapeMessages=false;context.BattleManager.displayEscapeSuccessMessage();context.BattleManager.displayEscapeFailureMessage();
+ assert.deepEqual([...shown],['success','failure'],'off when the project says so');
+});

@@ -610,6 +610,10 @@ class DatabaseSystem1Editor {
                     ${tt('Announce enemies at battle start')}
                 </label>
                 <label style="display: flex; align-items: center; gap: 8px; color: var(--color-text); font-size: 12px; cursor: pointer;">
+                    <input type="checkbox" class="system-checkbox" ${this.databaseManager.data.battlePresentation?.escapeMessages !== false ? 'checked' : ''} data-presentation="escapeMessages">
+                    ${tt('Show escape messages')}
+                </label>
+                <label style="display: flex; align-items: center; gap: 8px; color: var(--color-text); font-size: 12px; cursor: pointer;">
                     <input type="checkbox" class="system-checkbox" ${system.optTransparent ? 'checked' : ''} data-field="optTransparent">
                     ${tt('Start Transparent')}
                 </label>

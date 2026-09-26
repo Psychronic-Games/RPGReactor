@@ -11997,6 +11997,25 @@ Object.assign(RR_TEXT_TRANSLATIONS["id"], {"Runs at once while the battle waits,
 Object.assign(RR_TEXT_TRANSLATIONS["vi"], {"Runs at once while the battle waits, then the same window chooses again. For a command that takes the actor's turn, use a skill with a Common Event effect.": "Chạy ngay khi trận đấu tạm dừng, rồi cùng cửa sổ đó chọn lại. Để lệnh tiêu tốn lượt của nhân vật, hãy dùng kỹ năng có hiệu ứng Sự kiện chung."});
 Object.assign(RR_TEXT_TRANSLATIONS["th"], {"Runs at once while the battle waits, then the same window chooses again. For a command that takes the actor's turn, use a skill with a Common Event effect.": "ทำงานทันทีขณะการต่อสู้หยุดรอ แล้วหน้าต่างเดิมจะให้เลือกใหม่ ถ้าต้องการให้ใช้เทิร์นของตัวละคร ให้ใช้สกิลที่มีเอฟเฟกต์คอมมอนอีเวนต์"});
 
+// System 1: escape messages switch.
+Object.assign(RR_TEXT_TRANSLATIONS["ja"], {"Show escape messages": "逃走メッセージを表示"});
+Object.assign(RR_TEXT_TRANSLATIONS["zh-Hant"], {"Show escape messages": "顯示逃跑訊息"});
+Object.assign(RR_TEXT_TRANSLATIONS["zh-Hans"], {"Show escape messages": "显示逃跑消息"});
+Object.assign(RR_TEXT_TRANSLATIONS["ko"], {"Show escape messages": "도망 메시지 표시"});
+Object.assign(RR_TEXT_TRANSLATIONS["es"], {"Show escape messages": "Mostrar mensajes de huida"});
+Object.assign(RR_TEXT_TRANSLATIONS["pt"], {"Show escape messages": "Mostrar mensagens de fuga"});
+Object.assign(RR_TEXT_TRANSLATIONS["fr"], {"Show escape messages": "Afficher les messages de fuite"});
+Object.assign(RR_TEXT_TRANSLATIONS["it"], {"Show escape messages": "Mostra i messaggi di fuga"});
+Object.assign(RR_TEXT_TRANSLATIONS["de"], {"Show escape messages": "Fluchtmeldungen anzeigen"});
+Object.assign(RR_TEXT_TRANSLATIONS["ru"], {"Show escape messages": "Показывать сообщения о побеге"});
+Object.assign(RR_TEXT_TRANSLATIONS["pl"], {"Show escape messages": "Pokazuj komunikaty ucieczki"});
+Object.assign(RR_TEXT_TRANSLATIONS["el"], {"Show escape messages": "Εμφάνιση μηνυμάτων διαφυγής"});
+Object.assign(RR_TEXT_TRANSLATIONS["ar"], {"Show escape messages": "إظهار رسائل الهروب"});
+Object.assign(RR_TEXT_TRANSLATIONS["tr"], {"Show escape messages": "Kaçış mesajlarını göster"});
+Object.assign(RR_TEXT_TRANSLATIONS["id"], {"Show escape messages": "Tampilkan pesan kabur"});
+Object.assign(RR_TEXT_TRANSLATIONS["vi"], {"Show escape messages": "Hiện thông báo bỏ chạy"});
+Object.assign(RR_TEXT_TRANSLATIONS["th"], {"Show escape messages": "แสดงข้อความหลบหนี"});
+
 // 3D model import optimizer dialog.
 Object.assign(RR_TEXT_TRANSLATIONS['ja'], {
     'Import 3D Model': '3Dモデルのインポート', 'Optimize (recommended)': '最適化(推奨)', 'Resize textures to 2K, compact skin weights, drop unused data, and cut the mesh to about 60% of its triangles by collapsing the edges that change the shape least. Seams and silhouette are held.': 'テクスチャを2Kに縮小し、スキンウェイトを圧縮、不要データを削除し、形状への影響が最も小さいエッジを折りたたんでメッシュの三角形を約60%まで削減します。継ぎ目とシルエットは維持されます。', 'Optimize aggressively': '積極的に最適化', 'Everything above, cut to about a quarter of the triangles. May soften very fine detail.': '上記すべてに加え、三角形を約4分の1まで削減します。細部がわずかに損なわれる場合があります。', 'Import as-is': 'そのままインポート', 'Keep every byte of the original file.': '元のファイルを一切変更しません。', 'Import': 'インポート', 'largest texture': '最大テクスチャ', 'reducible without visible change': '見た目を変えずに削減可能'

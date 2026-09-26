@@ -856,6 +856,8 @@
         // "%1 emerged!" and the preemptive/surprise lines are optional: BattlePresentation.json "startMessages": false skips them.
         const startMessages=BattleManager.displayStartMessages;
         if(startMessages)BattleManager.displayStartMessages=function(...args){if(P.settings?.startMessages===false)return;return startMessages.apply(this,args);};
+        // "%1 has started to escape!" and the failure line are optional too: "escapeMessages": false escapes (or fails) without a message box.
+        for(const name of ['displayEscapeSuccessMessage','displayEscapeFailureMessage']){const base=BattleManager[name];if(base)BattleManager[name]=function(...args){if(P.settings?.escapeMessages===false)return;return base.apply(this,args);};}
         const invoke=BattleManager.invokeAction,endAction=BattleManager.endAction;
         BattleManager.invokeAction=function(...args){this._spriteset?._reactorRoom?.cinematicImpact?.();return invoke.apply(this,args);};
         BattleManager.endAction=function(...args){try{return endAction.apply(this,args);}finally{this._spriteset?._reactorRoom?.endCinematicAction?.();}};
