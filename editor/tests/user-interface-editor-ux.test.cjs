@@ -287,6 +287,9 @@ test('a Battle HUD previews as the battle shows it: the whole party, no focus, t
     assert.deepStrictEqual(commandNames([{ kind: 'attack', label: 'Strike' }, { kind: 'skillType', id: 1, knownOnly: true }, { kind: 'skillType', id: 3, knownOnly: true },
         { kind: 'skill', id: 1, knownOnly: true }, { kind: 'skill', id: 2, knownOnly: true }, { kind: 'skill', id: 2, knownOnly: false, label: 'Try' }, { kind: 'escape' }, { kind: 'fight' }]),
         ['Strike', 'Magic', 'Steal', 'Try', 'Run'], 'authored commands: labels, known-only filters, and no Party Command kinds in the Actor Command window');
+    data.commonEvents = [null, { id: 1, name: 'Scan' }];
+    assert.deepStrictEqual(commandNames([{ kind: 'commonEvent', id: 1 }, { kind: 'commonEvent', id: 4 }, { kind: 'commonEvent', id: 1, label: 'Analyze' }]), ['Scan', 'Analyze'],
+        'a common event command is named after the event unless labelled; a missing one is not listed');
     const troop = fs.readFileSync(path.join(__dirname, '..', 'src', 'database', 'DatabaseTroopEditor.js'), 'utf8');
     assert.match(troop, /drawRecordInto\(ctx, hud, \{ party: setup\.party\.map\(entry => entry\.actor\) \}\)/, 'Show Battle UI draws the bound HUD with the battle-test party');
 });

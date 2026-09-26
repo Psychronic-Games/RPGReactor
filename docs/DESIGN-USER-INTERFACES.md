@@ -298,7 +298,10 @@ default) hides `Window_BattleStatus` unless a Battle Window node places it.
 commands until **Choose Commands** replaces them with an ordered list
 (`commands`): Attack, Skill types (one per type the actor has, as stock), One
 skill type, Guard, Items, Escape and **Use a skill** for the Actor Command
-window; Fight and Escape for the Party Command window. A blank label uses the
+window; Fight and Escape for the Party Command window; **Common Event** for
+both. A Common Event command runs the event at once while the battle waits
+(time progress stops, messages show) and then the same window chooses again;
+it is not the actor's action, which a skill with a Common Event effect is. A blank label uses the
 name from Terms, Types or the skill; a skill or skill type can be limited to
 actors who have it. Escape is greyed out where the battle cannot be escaped.
 Chosen by an actor, it first drops the party's choices, so a failure starts the

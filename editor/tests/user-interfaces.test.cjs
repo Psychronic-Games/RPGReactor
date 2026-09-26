@@ -1852,3 +1852,34 @@ test('Battle Window commands: an authored Actor or Party Command list, alignment
     UI.customizeBattleCommands(scene, skills, UI.normalizeNode({ id: 4, type: 'battleWindow', battleWindow: 'skill' }, 4));
     assert.equal(skills.itemTextAlign(), 'left', 'list windows keep their own layout');
 });
+
+test('a Common Event battle command runs at once while time stands still, then the same window chooses again', () => {
+    const sandbox = loadRuntimeUI();
+    const UI = sandbox.ReactorUI;
+    sandbox.$dataCommonEvents = [null, { id: 1, name: 'Scan', list: [{ code: 0 }] }];
+    sandbox.TextManager = { fight: 'Fight', escape: 'Escape', attack: 'Attack' };
+    const node = UI.normalizeNode({ id: 1, type: 'battleWindow', battleWindow: 'actorCommand', commands: [{ kind: 'attack' }, { kind: 'commonEvent', id: 1 }, { kind: 'commonEvent', id: 9 }] }, 1);
+    assert.deepEqual(node.commands.map(c => c.kind), ['attack', 'commonEvent', 'commonEvent']);
+    const handlers = {};
+    let runs = 2;
+    sandbox.Game_Interpreter = class { setup(list, id) { this.list = list; this.id = id; } update() { runs--; } isRunning() { return runs > 0; } };
+    const actor = { canAttack: () => true, canInput: () => true };
+    sandbox.BattleManager = { canEscape: () => true, actor: () => actor, isInputting: () => true };
+    const win = { _actor: actor, active: true, list: [], addCommand(name, symbol, enabled = true, ext = null) { this.list.push([name, symbol, enabled, ext]); },
+        setHandler(symbol, fn) { handlers[symbol] = fn; }, currentExt: () => 1, deactivate() { this.active = false; }, activate() { this.active = true; } };
+    const opened = [];
+    const scene = { _actorCommandWindow: win, _partyCommandWindow: {}, startActorCommandSelection() { opened.push('actor'); }, startPartyCommandSelection() { opened.push('party'); }, changeInputWindow() { opened.push('change'); } };
+    UI.customizeBattleCommands(scene, win, node);
+    win.makeCommandList();
+    assert.deepEqual(win.list.map(entry => [...entry]), [['Attack', 'attack', true, null], ['Scan', 'rrCommonEvent', true, 1]], 'a missing common event lists nothing');
+    handlers.rrCommonEvent();
+    assert.equal(win.active, false);
+    assert.ok(scene._rrCommandEvent, 'the event is running');
+    assert.equal(UI.updateCommandEvent(scene), true);
+    assert.equal(UI.updateCommandEvent(scene), false);
+    assert.deepEqual(opened, ['actor'], 'the same actor chooses again');
+    assert.equal(scene._rrCommandEvent, null);
+    const source = read('runtime/reactor_ui.js');
+    assert.match(source, /isTimeActive = function\(\) \{\s*return this\._rrCommandEvent \? false/, 'battle time stands still while it runs');
+    assert.match(source, /needsInputWindowChange = function\(\) \{\s*return this\._rrCommandEvent \? false/, 'and the command windows stay closed');
+});

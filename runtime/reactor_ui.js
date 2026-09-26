@@ -50,11 +50,13 @@
      * Commands a Battle Window node can list. Actor Command takes attack,
      * skillTypes (one per skill type the actor has, as stock), skillType (one
      * type), guard, item, escape and skill (use one skill directly); Party
-     * Command takes fight and escape. An empty list keeps the stock commands.
+     * Command takes fight and escape. Both take commonEvent, which runs a
+     * common event on the spot and then lets the same window choose again.
+     * An empty list keeps the stock commands.
      */
     ReactorUI.BATTLE_COMMANDS = {
-        actorCommand: ["attack", "skillTypes", "skillType", "guard", "item", "escape", "skill"],
-        partyCommand: ["fight", "escape"]
+        actorCommand: ["attack", "skillTypes", "skillType", "guard", "item", "escape", "skill", "commonEvent"],
+        partyCommand: ["fight", "escape", "commonEvent"]
     };
     ReactorUI.GAUGE_KINDS = ["hp", "mp", "tp", "exp", "mhp", "mmp", "atk", "def", "mat", "mdf", "agi", "luk", "variable"];
     ReactorUI.LIST_SOURCES = ["party", "inventory", "skills", "actorParameters", "actorEquipment", "actorStates", "options", "saveSlots", "variableRange", "literal",
@@ -204,7 +206,7 @@
     }
 
     function battleCommands(value) {
-        const kinds = ["attack", "skillTypes", "skillType", "guard", "item", "escape", "skill", "fight"];
+        const kinds = ["attack", "skillTypes", "skillType", "guard", "item", "escape", "skill", "fight", "commonEvent"];
         return (Array.isArray(value) ? value : []).filter(entry => entry && typeof entry === "object" && kinds.includes(entry.kind)).slice(0, 32)
             .map(entry => ({ kind: entry.kind, label: text(entry.label, ""), id: Math.max(0, Math.floor(finite(entry.id, 0))), knownOnly: entry.knownOnly !== false }));
     }
@@ -4761,11 +4763,17 @@
         const commands = node.commands.filter(command => kinds.includes(command.kind));
         if (!commands.length) return;
         const label = (command, fallback) => command.label || fallback;
+        const addCommonEvent = (target, command) => {
+            const event = typeof $dataCommonEvents !== "undefined" ? $dataCommonEvents[command.id] : null;
+            if (event) target.addCommand(label(command, event.name || "#" + event.id), "rrCommonEvent", true, event.id);
+        };
+        win.setHandler("rrCommonEvent", () => ReactorUI.runCommandEvent(scene, win, win.currentExt()));
         if (node.battleWindow === "partyCommand") {
             win.makeCommandList = function() {
                 for (const command of commands) {
                     if (command.kind === "fight") this.addCommand(label(command, TextManager.fight), "fight");
-                    else this.addCommand(label(command, TextManager.escape), "escape", BattleManager.canEscape());
+                    else if (command.kind === "escape") this.addCommand(label(command, TextManager.escape), "escape", BattleManager.canEscape());
+                    else addCommonEvent(this, command);
                 }
             };
             return;
@@ -4792,6 +4800,7 @@
                         }
                         break;
                     }
+                    case "commonEvent": addCommonEvent(this, command); break;
                     default: break;
                 }
             }
@@ -4806,6 +4815,35 @@
             actor.setLastBattleSkill(skill);
             scene.onSelectAction();
         });
+    };
+
+    /**
+     * A Common Event command: the event runs now while the battle waits (time
+     * progress stops, its messages show), then the window that chose it opens
+     * again for the same actor, or the party. It is not the actor's action;
+     * a skill with a Common Event effect is.
+     */
+    ReactorUI.runCommandEvent = function(scene, win, commonEventId) {
+        const event = $dataCommonEvents[commonEventId];
+        if (!event) { win.activate(); return; }
+        const interpreter = new Game_Interpreter();
+        interpreter.setup(event.list, 0);
+        scene._rrCommandEvent = { interpreter, party: win === scene._partyCommandWindow };
+        win.deactivate();
+    };
+
+    /** Runs a Common Event command each frame; returns true while one runs. */
+    ReactorUI.updateCommandEvent = function(scene) {
+        const running = scene._rrCommandEvent;
+        if (!running) return false;
+        running.interpreter.update();
+        if (running.interpreter.isRunning()) return true;
+        scene._rrCommandEvent = null;
+        const actor = BattleManager.actor();
+        if (running.party && BattleManager.isInputting() && !actor) scene.startPartyCommandSelection();
+        else if (actor && actor.canInput()) scene.startActorCommandSelection();
+        else scene.changeInputWindow();
+        return false;
     };
 
     /**
@@ -4917,10 +4955,23 @@
         const _Scene_Battle_update = Scene_Battle.prototype.update;
         Scene_Battle.prototype.update = function() {
             _Scene_Battle_update.apply(this, arguments);
+            ReactorUI.updateCommandEvent(this);
             if (this._reactorBattleHud) {
                 this._reactorBattleHud.update();
                 this._reactorBattleHud.updateBattle();
             }
+        };
+    }
+
+    // While a Common Event command runs, battle time stands still and the command windows stay closed.
+    if (typeof Scene_Battle !== "undefined") {
+        const _isTimeActive = Scene_Battle.prototype.isTimeActive;
+        Scene_Battle.prototype.isTimeActive = function() {
+            return this._rrCommandEvent ? false : _isTimeActive.apply(this, arguments);
+        };
+        const _needsInputWindowChange = Scene_Battle.prototype.needsInputWindowChange;
+        Scene_Battle.prototype.needsInputWindowChange = function() {
+            return this._rrCommandEvent ? false : _needsInputWindowChange.apply(this, arguments);
         };
     }
 

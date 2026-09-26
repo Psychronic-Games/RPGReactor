@@ -16,15 +16,15 @@ class DatabaseUserInterfaceEditor {
     static get BATTLE_COMMANDS() {
         return {
             actorCommand: [['attack', 'Attack'], ['skillTypes', 'Skill types (all the actor has)'], ['skillType', 'One skill type'], ['guard', 'Guard'],
-                ['item', 'Items'], ['escape', 'Escape'], ['skill', 'Use a skill']],
-            partyCommand: [['fight', 'Fight'], ['escape', 'Escape']]
+                ['item', 'Items'], ['escape', 'Escape'], ['skill', 'Use a skill'], ['commonEvent', 'Common Event']],
+            partyCommand: [['fight', 'Fight'], ['escape', 'Escape'], ['commonEvent', 'Common Event']]
         };
     }
     static stockBattleCommands(windowKey) {
         return windowKey === 'partyCommand' ? ['fight', 'escape'] : ['attack', 'skillTypes', 'guard', 'item'];
     }
     static normalizeBattleCommands(value) {
-        const kinds = ['attack', 'skillTypes', 'skillType', 'guard', 'item', 'escape', 'skill', 'fight'];
+        const kinds = ['attack', 'skillTypes', 'skillType', 'guard', 'item', 'escape', 'skill', 'fight', 'commonEvent'];
         return (Array.isArray(value) ? value : []).filter(entry => entry && typeof entry === 'object' && kinds.includes(entry.kind)).slice(0, 32)
             .map(entry => ({ kind: entry.kind, label: typeof entry.label === 'string' ? entry.label : '',
                 id: Math.max(0, Math.floor(Number(entry.id) || 0)), knownOnly: entry.knownOnly !== false }));
@@ -1974,10 +1974,10 @@ class DatabaseUserInterfaceEditor {
             if (commandKinds) {
                 html += this.row(tt('Align'), this.selectControl('p-commandAlign', node.commandAlign || 'center',
                     [['left', tt('Left')], ['center', tt('Center')], ['right', tt('Right')]]));
-                html += this.battleCommandsMarkup(node, commandKinds);
             }
             html += this.row('', this.checkControl('p-hideWindow', !!node.hideWindow, tt('Hide the window')), tt('It still takes input: pair an ally or enemy target window with a Target Cursor.'));
             html += this.row('', this.checkControl('p-followActor', !!node.followActor, tt('Follow the active actor')), tt('X and Y become offsets from the active actor\'s row in the party panel.'));
+            if (commandKinds) html += this.battleCommandsMarkup(node, commandKinds);
             html += this.group(tt('Slide in'));
             html += this.pair(`${tt('Slide')} X`, this.numberControl('p-slideX', node.slideX || 0, -2000, 2000), `${tt('Slide')} Y`, this.numberControl('p-slideY', node.slideY || 0, -2000, 2000));
             html += this.row(`${tt('Duration')} (${tt('Frames')})`, this.numberControl('p-slideDuration', node.slideDuration || 12, 1, 120), tt('Each time the window appears it moves in from this offset.'));
@@ -2277,12 +2277,15 @@ class DatabaseUserInterfaceEditor {
             if (q('p-commandAlign')) node.commandAlign = q('p-commandAlign').value;
             const commandRows = [...panel.querySelectorAll('.rr-ui-command-row')];
             if (commandRows.length || q('rr-ui-commands')) {
-                node.commands = DatabaseUserInterfaceEditor.normalizeBattleCommands(commandRows.map(row => ({
-                    kind: row.querySelector('.p-cmd-kind').value,
-                    label: row.querySelector('.p-cmd-label').value,
-                    id: row.querySelector('.p-cmd-id') ? Number(row.querySelector('.p-cmd-id').value) : 0,
-                    knownOnly: row.querySelector('.p-cmd-known') ? row.querySelector('.p-cmd-known').checked : true
-                })));
+                // A row whose kind just changed starts at the first entry of its new picker (skill type, skill or common event 1).
+                node.commands = DatabaseUserInterfaceEditor.normalizeBattleCommands(commandRows.map((row, index) => {
+                    const kind = row.querySelector('.p-cmd-kind').value;
+                    const changed = !node.commands[index] || node.commands[index].kind !== kind;
+                    const picker = row.querySelector('.p-cmd-id');
+                    return { kind, label: row.querySelector('.p-cmd-label').value,
+                        id: changed ? (['skillType', 'skill', 'commonEvent'].includes(kind) ? 1 : 0) : picker ? Number(picker.value) : 0,
+                        knownOnly: row.querySelector('.p-cmd-known') ? row.querySelector('.p-cmd-known').checked : true };
+                }));
             }
             node.hideWindow = q('p-hideWindow').checked;
             node.followActor = q('p-followActor').checked;
@@ -4020,10 +4023,12 @@ class DatabaseUserInterfaceEditor {
         }
         const skillTypes = (data.system && data.system.skillTypes || []).map((name, id) => id > 0 ? [id, `${String(id).padStart(2, '0')}: ${name || ''}`] : null).filter(Boolean);
         const skills = (data.skills || []).filter(Boolean).map(skill => [skill.id, `${String(skill.id).padStart(4, '0')}: ${skill.name || ''}`]);
+        const commonEvents = (data.commonEvents || []).filter(Boolean).map(event => [event.id, `${String(event.id).padStart(4, '0')}: ${event.name || ''}`]);
         const rows = node.commands.map((command, index) => {
-            const needsId = command.kind === 'skillType' || command.kind === 'skill';
+            const needsId = command.kind === 'skillType' || command.kind === 'skill' || command.kind === 'commonEvent';
             const idControl = command.kind === 'skillType' ? this.selectControl('p-cmd-id', command.id, skillTypes)
-                : command.kind === 'skill' ? this.selectControl('p-cmd-id', command.id, skills) : '';
+                : command.kind === 'skill' ? this.selectControl('p-cmd-id', command.id, skills)
+                : command.kind === 'commonEvent' ? this.selectControl('p-cmd-id', command.id, commonEvents) : '';
             const known = command.kind === 'skillType' ? tt('Only actors with this skill type') : tt('Only actors who know it');
             return `<div class="rr-ui-command-row" data-index="${index}">
                 <div class="rr-ui-command-line">${this.selectControl('p-cmd-kind', command.kind, kinds.map(([kind, label]) => [kind, tt(label)]))}
@@ -4034,7 +4039,8 @@ class DatabaseUserInterfaceEditor {
                 <div class="rr-ui-command-line">${this.textControl('p-cmd-label', command.label, this.battleCommandDefaultLabel(command).replace(/\\[A-Za-z]+\[[^\]]*\]/g, '').trim() || tt('Label'))}</div>
                 ${command.kind === 'skillTypes' ? `<div class="rr-ui-hint">${tt('One command per skill type the actor has, named as in Types.')}</div>` : ''}
                 ${command.kind === 'escape' ? `<div class="rr-ui-hint">${tt('Greyed out in battles that cannot be escaped.')}</div>` : ''}
-                ${needsId ? `<div class="rr-ui-command-line">${this.checkControl('p-cmd-known', command.knownOnly, known)}</div>` : ''}
+                ${command.kind === 'commonEvent' ? `<div class="rr-ui-hint">${tt('Runs at once while the battle waits, then the same window chooses again. For a command that takes the actor\'s turn, use a skill with a Common Event effect.')}</div>` : ''}
+                ${command.kind === 'skillType' || command.kind === 'skill' ? `<div class="rr-ui-command-line">${this.checkControl('p-cmd-known', command.knownOnly, known)}</div>` : ''}
             </div>`;
         }).join('');
         html += `<div class="rr-ui-commands rr-ui-commands-list">${rows}
@@ -4055,6 +4061,7 @@ class DatabaseUserInterfaceEditor {
             case 'item': return terms[4] || 'Item';
             case 'skillType': return (data.system && data.system.skillTypes || [])[command.id] || '';
             case 'skill': return (data.skills && data.skills[command.id] && data.skills[command.id].name) || '';
+            case 'commonEvent': return data.commonEvents && data.commonEvents[command.id] ? data.commonEvents[command.id].name || '#' + command.id : '';
             default: return '';
         }
     }
@@ -4064,7 +4071,7 @@ class DatabaseUserInterfaceEditor {
         if (!node || node.type !== 'battleWindow') return;
         this.pushUndo();
         const list = node.commands;
-        const fresh = kind => ({ kind, label: '', id: kind === 'skillType' || kind === 'skill' ? 1 : 0, knownOnly: true });
+        const fresh = kind => ({ kind, label: '', id: kind === 'skillType' || kind === 'skill' || kind === 'commonEvent' ? 1 : 0, knownOnly: true });
         if (action === 'customize') node.commands = DatabaseUserInterfaceEditor.stockBattleCommands(node.battleWindow).map(fresh);
         else if (action === 'stock') node.commands = [];
         else if (action === 'add') list.push(fresh(node.battleWindow === 'partyCommand' ? 'escape' : 'escape'));
@@ -4203,6 +4210,7 @@ class DatabaseUserInterfaceEditor {
             }
             if (command.kind === 'skillType' && command.knownOnly && !types.includes(command.id)) continue;
             if (command.kind === 'skill' && (!data.skills || !data.skills[command.id] || (command.knownOnly && !known.has(command.id)))) continue;
+            if (command.kind === 'commonEvent' && (!data.commonEvents || !data.commonEvents[command.id])) continue;
             out.push({ text: command.label || this.battleCommandDefaultLabel(command), enabled: true });
         }
         return out;
