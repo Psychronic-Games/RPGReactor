@@ -15,7 +15,9 @@
  *                 screen, each with the face and name, level, states, class
  *                 and HP and MP bars with their numbers.
  *
- *   Battle        with no battleback, the map radially blurred behind it;
+ *   Battle        animations start at once and are never mirrored on
+ *                 actors; a fallen enemy fades over 48 frames;
+ *                 with no battleback, the map radially blurred behind it;
  *                 the party commands, the status (one row per member with
  *                 name, states and gauges) and the actor commands in one
  *                 strip along the bottom that slides between them; help,
@@ -309,6 +311,23 @@
         this._enemyWindow.show();
         this._enemyWindow.select(0);
         this._enemyWindow.activate();
+    };
+    // Battle animations start at once on every target and are never mirrored on actors.
+    Spriteset_Base.prototype.animationBaseDelay = function() { return 0; };
+    Spriteset_Base.prototype.animationNextDelay = function() { return 0; };
+    Spriteset_Base.prototype.animationShouldMirror = function() { return false; };
+    // An enemy fades over 48 frames when it falls, and flashes white a little faster.
+    Sprite_Enemy.prototype.startCollapse = function() {
+        this._effectDuration = 48;
+        this._appeared = false;
+    };
+    Sprite_Enemy.prototype.updateCollapse = function() {
+        this.blendMode = 1;
+        this.setBlendColor([255, 128, 128, 128]);
+        this.opacity = 256 - (48 - this._effectDuration) * 6;
+    };
+    Sprite_Enemy.prototype.updateWhiten = function() {
+        this.setBlendColor([255, 255, 255, Math.max(128 - (16 - this._effectDuration) * 10, 0)]);
     };
     Window_BattleLog.prototype.maxLines = function() { return 6; };
     Window_BattleLog.prototype.messageSpeed = function() { return 20; };
