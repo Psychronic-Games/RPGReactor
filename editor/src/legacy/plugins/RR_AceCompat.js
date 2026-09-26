@@ -20,6 +20,8 @@
  *                 name, states and gauges) and the actor commands in one
  *                 strip along the bottom that slides between them; help,
  *                 skills and items above it; a six-line battle log.
+ *   Game End      To Title, Shut Down (the game's word for it) and Cancel,
+ *                 160 wide, over the menu background turned half grey.
  *   Items         help at the top, the categories under it, and the list
  *                 to the bottom, each item with its icon, name and ":n".
  *
@@ -303,6 +305,31 @@
         }
     };
     Window_BattleStatus.prototype.drawItemBackground = function() {};
+
+    //-------------------------------------------------------------------------
+    // Game End: To Title, Shut Down and Cancel in a window 160 wide, over the
+    // menu background turned half grey
+    //-------------------------------------------------------------------------
+    Window_GameEnd.prototype.makeCommandList = function() {
+        this.addCommand(TextManager.toTitle, 'toTitle');
+        const shutdown = $dataSystem && typeof $dataSystem.rrTitleShutdown === 'string' ? $dataSystem.rrTitleShutdown : '';
+        if (shutdown) this.addCommand(shutdown, 'shutdown');
+        this.addCommand(TextManager.cancel, 'cancel');
+    };
+    Scene_GameEnd.prototype.commandWindowRect = function() {
+        const rows = $dataSystem && $dataSystem.rrTitleShutdown ? 3 : 2;
+        const w = 160, h = this.calcWindowHeight(rows, true);
+        return new Rectangle(Math.floor((Graphics.boxWidth - w) / 2), Math.floor((Graphics.boxHeight - h) / 2), w, h);
+    };
+    const _gameEndWindow = Scene_GameEnd.prototype.createCommandWindow;
+    Scene_GameEnd.prototype.createCommandWindow = function() {
+        _gameEndWindow.call(this);
+        this._commandWindow.setHandler('shutdown', () => { this.fadeOutAll(); SceneManager.exit(); });
+    };
+    Scene_GameEnd.prototype.createBackground = function() {
+        Scene_MenuBase.prototype.createBackground.call(this);
+        this._backgroundSprite.setColorTone([0, 0, 0, 128]);
+    };
 
     //-------------------------------------------------------------------------
     // Main menu
