@@ -377,8 +377,8 @@
                      balance instead, and the count follows the window width. -->
                 <div class="map-props-columns">
                         <!-- General Settings Section -->
-                        <div style="background-color: var(--color-bg-deep); border: 1px solid var(--color-border); border-radius: 4px; padding: 12px;">
-                            <div style="font-size: 13px; font-weight: 600; color: var(--color-text); margin-bottom: 10px;" data-i18n="mapProps.general">General Settings</div>
+                        <div class="map-props-card">
+                            <div class="lit-section-header map-props-card-header" data-i18n="mapProps.general">General Settings</div>
 
                             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
                                 <div>
@@ -496,9 +496,9 @@
                         </div>
 
                         <!-- Encounters Section -->
-                        <div style="background-color: var(--color-bg-deep); border: 1px solid var(--color-border); border-radius: 4px; padding: 12px;">
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                                <div style="font-size: 13px; font-weight: 600; color: var(--color-text);" data-i18n="mapProps.encounters">Encounters</div>
+                        <div class="map-props-card">
+                            <div class="lit-section-header map-props-card-header">
+                                <span data-i18n="mapProps.encounters">Encounters</span>
                                 <button id="map-add-encounter-btn" class="map-props-btn primary" style="padding: 3px 12px; font-size: 11px;" data-i18n="mapProps.add">Add</button>
                             </div>
 
@@ -517,7 +517,8 @@
                         </div>
 
                         <!-- Battleback Section -->
-                        <div style="background-color: var(--color-bg-deep); border: 1px solid var(--color-border); border-radius: 4px; padding: 12px;">
+                        <div class="map-props-card">
+                            <div class="lit-section-header map-props-card-header" data-i18n-text-source="Battle">Battle</div>
                             <div style="margin-bottom: 8px;">
                                 <label class="map-props-label" style="display: flex; align-items: center; cursor: pointer;">
                                     <input type="checkbox" id="map-specify-battleback-checkbox" style="margin-right: 6px;">
@@ -555,8 +556,8 @@
                         </div>
 
                         <!-- Parallax Background Section -->
-                        <div style="background-color: var(--color-bg-deep); border: 1px solid var(--color-border); border-radius: 4px; padding: 12px;">
-                            <div style="font-size: 13px; font-weight: 600; color: var(--color-text); margin-bottom: 8px;" data-i18n="mapProps.parallax">Parallax Background</div>
+                        <div class="map-props-card">
+                            <div class="lit-section-header map-props-card-header" data-i18n="mapProps.parallax">Parallax Background</div>
 
                             <div style="margin-bottom: 8px;">
                                 <label class="map-props-label" style="display: block; margin-bottom: 3px;" data-i18n="mapProps.image">Image:</label>
@@ -601,10 +602,10 @@
                             </div>
                         </div>
                         <!-- Image layers: pictures locked to the map (MapImageLayersEditor) -->
-                        <div id="map-image-layers-section" style="background-color: var(--color-bg-deep); border: 1px solid var(--color-border); border-radius: 4px; padding: 12px;"></div>
+                        <div id="map-image-layers-section" class="map-props-card"></div>
                         <!-- 3D Section: the in-game switch and the room a 3D map is built in -->
-                        <div style="background-color: var(--color-bg-deep); border: 1px solid var(--color-border); border-radius: 4px; padding: 12px;">
-                            <div style="font-size: 13px; font-weight: 600; color: var(--color-text); margin-bottom: 8px;" data-i18n="mapProps.threeD">3D</div>
+                        <div class="map-props-card">
+                            <div class="lit-section-header map-props-card-header" data-i18n="mapProps.threeD">3D</div>
                             <label class="map-props-label" style="display: flex; align-items: center; cursor: pointer;">
                                 <input type="checkbox" id="map-3d-checkbox" style="margin-right: 6px;">
                                 <span data-i18n="mapProps.map3D">3D Map</span>
@@ -680,9 +681,9 @@
                             </div>
                         </div>
                         <!-- Physics: this map's own gravity, jumping, falls and swimming, for a 3D map. Blank or "Project default" uses Database › Controls. -->
-                        <div id="map-physics-section" class="lit-section" style="display: none;">
-                            <div class="lit-section-header" data-i18n-text-source="Physics">Physics</div>
-                            <div class="lit-section-body">
+                        <div id="map-physics-section" class="map-props-card" style="display: none;">
+                            <div class="lit-section-header map-props-card-header" data-i18n-text-source="Physics">Physics</div>
+                            <div>
                                     <div id="map-3d-physics" style="display: grid; grid-template-columns: auto 1fr auto 1fr; gap: 6px 8px; align-items: center;">
                                         <label class="map-props-label">Gravity</label>
                                         <select id="map-3d-gravity-select" class="database-field-value" style="width: 100%;">
@@ -721,8 +722,8 @@
                             </div>
                         </div>
                         <!-- Note Section -->
-                        <div style="background-color: var(--color-bg-deep); border: 1px solid var(--color-border); border-radius: 4px; padding: 12px; flex: 1;">
-                            <div style="font-size: 13px; font-weight: 600; color: var(--color-text); margin-bottom: 8px;" data-i18n="mapProps.note">Note</div>
+                        <div class="map-props-card" style="flex: 1;">
+                            <div class="lit-section-header map-props-card-header" data-i18n="mapProps.note">Note</div>
                             <textarea id="map-note-textarea" style="width: 100%; height: 150px; min-height: 90px; padding: 6px; background-color: var(--color-bg-input); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; font-size: 11px; font-family: 'Consolas', 'Monaco', monospace; resize: vertical;"></textarea>
                         </div>
                     </div>

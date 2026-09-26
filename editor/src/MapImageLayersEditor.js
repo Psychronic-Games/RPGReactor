@@ -21,8 +21,8 @@
     function mount(container, opts = {}) {
         options = opts;
         container.innerHTML = `
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                <div style="font-size: 13px; font-weight: 600; color: var(--color-text);">${rrEscapeHtml(tt('Image Layers'))}</div>
+            <div class="lit-section-header map-props-card-header">
+                <span>${rrEscapeHtml(tt('Image Layers'))}</span>
                 <button type="button" class="map-props-btn primary rr-image-layer-add" style="padding: 3px 12px; font-size: 11px;">${rrEscapeHtml(tt('Add'))}</button>
             </div>
             <div style="font-size: 11px; color: var(--color-text-muted); margin-bottom: 6px;">${rrEscapeHtml(tt('Pictures locked to the map: painted ground under the characters, or light and canopy over everything.'))}</div>

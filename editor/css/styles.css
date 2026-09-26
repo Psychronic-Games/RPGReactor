@@ -5674,3 +5674,19 @@ details.mp-section:not([open]) > .mp-section-body { display:none; }
     background-color: var(--color-bg-toolbar);
     color: var(--color-text);
 }
+
+/* Map Properties: each section a card, its header on an accent strip (the dock's convention), its body a shade apart from the dialog. */
+.map-props-card {
+    background-color: var(--color-bg-deep);
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    padding: 0 12px 12px;
+    overflow: hidden;
+}
+.map-props-card > .map-props-card-header {
+    margin: 0 -12px 10px;
+    justify-content: space-between;
+    min-height: 28px;
+    box-sizing: border-box;
+}
+.map-props-card > .map-props-card-header .map-props-btn { text-transform: none; letter-spacing: 0; }
