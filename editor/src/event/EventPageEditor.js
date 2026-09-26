@@ -1057,7 +1057,8 @@ class EventPageEditor {
                 const rect = canvas.getBoundingClientRect();
                 const width = Math.max(1, Math.round(rect.width));
                 const height = Math.max(1, Math.round(rect.height));
-                if (canvas.width !== width || canvas.height !== height) {
+                const ratio = renderer.getPixelRatio();
+                if (canvas.width !== Math.floor(width * ratio) || canvas.height !== Math.floor(height * ratio)) {
                     renderer.setSize(width, height, false);
                     camera.aspect = width / height;
                     camera.updateProjectionMatrix();

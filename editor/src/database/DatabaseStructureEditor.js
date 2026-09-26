@@ -265,6 +265,10 @@ class DatabaseStructureEditor {
         }).filter(Boolean);
         plan.lights = (Array.isArray(plan.lights) ? plan.lights : []).filter(row => row && typeof row === 'object').map(row => Object.assign({}, row));
         plan.surfaces = (Array.isArray(plan.surfaces) ? plan.surfaces : []).filter(row => row && typeof row === 'object').map(row => Object.assign({}, row));
+        // A described building is as tall as its floors; a built one as its highest storey with walls,
+        // doors, windows or stairs (what stands above that, a roof, sits on top).
+        if (plan.floors.length && !plan.pieces.length) plan.height = Math.min(24, plan.floors.length);
+        else if (plan.pieces.length && typeof RRStructureFloors !== 'undefined') plan.height = RRStructureFloors.occupiedFloors(plan) || plan.height;
         plan.paths = (Array.isArray(plan.paths) ? plan.paths : []).filter(Array.isArray).map(strip => {
             const out = [0, 1, 2, 3].map(i => int(strip[i], 0, 0, this.SIZE_MAX));
             if (strip[4]) out.push(String(strip[4]));
@@ -439,22 +443,30 @@ class DatabaseStructureEditor {
         const tt = text => this._t(text);
         // A saved building: its name, a look at it, and the way onto the map. Building
         // happens in the world (the Build toggle over the 3D map), not in a form here.
+        // The structure one floor at a time (paint walls, floors, doors, windows and stairs) beside it whole in 3D.
+        // Both edit the same pieces as the 3D Build bar, so the plan, the preview and Build never disagree.
+        this._paint = Object.assign({ floor: 0, tool: 'room', dir: 'north', wallMaterial: null, floorMaterial: null }, this._paint || {}, { floor: 0 });
         detailEl.innerHTML = `
             <div class="rr-structures" style="display:flex;flex-direction:column;height:100%;min-height:0;font-size:12px;">
                 <div class="rr-structures-bar" style="display:flex;align-items:center;gap:14px;padding:6px 10px;border-bottom:1px solid var(--color-border);flex-wrap:wrap;"></div>
-                <div style="display:flex;flex:1;min-height:220px;">
-                    <div style="flex:1;min-width:0;position:relative;background:var(--color-bg-deep);">
+                <div class="rr-structures-body">
+                    <div class="rr-structures-side rr-accent-scrollbar"></div>
+                    <div class="rr-structures-planpane">
+                        <canvas class="rr-structures-paint" tabindex="0" aria-label="${rrEscapeHtml(tt('Floor plan'))}"></canvas>
+                        <div class="rr-structures-paint-hint"></div>
+                    </div>
+                    <div class="rr-structures-3dpane">
                         <canvas class="rr-structures-3d" style="position:absolute;inset:0;width:100%;height:100%;cursor:grab;"></canvas>
-                        <button type="button" class="rr-btn-secondary rr-structures-peek" title="${rrEscapeHtml(this._t('Look inside: the ceiling and roof left off'))}" aria-pressed="false" style="position:absolute;top:8px;right:8px;width:28px;height:28px;padding:0;display:flex;align-items:center;justify-content:center;">${DatabaseStructureEditor.icon('peek')}</button>
+                        <button type="button" class="rr-btn-secondary rr-structures-peek" title="${rrEscapeHtml(this._t('Cut away the floors above the one in the plan'))}" aria-pressed="false" style="position:absolute;top:8px;right:8px;width:28px;height:28px;padding:0;display:flex;align-items:center;justify-content:center;">${DatabaseStructureEditor.icon('peek')}</button>
                         <div class="rr-structures-report" style="position:absolute;left:8px;bottom:8px;right:8px;padding:6px 8px;font-size:11px;line-height:1.4;color:var(--color-text-muted);background:color-mix(in srgb, var(--color-bg-panel) 85%, transparent);border-radius:3px;pointer-events:none;"></div>
                     </div>
                 </div>
             </div>`;
+        this._bindPaint(detailEl.querySelector('.rr-structures-paint'));
         this._bindOrbit(detailEl.querySelector('.rr-structures-3d'));
         detailEl.querySelector('.rr-structures-peek')?.addEventListener('click', () => {
             const plan = this.current?.plan;
-            const now = this._peek === null ? (plan ? plan.roof.pitch === null : true) : this._peek;
-            this._peek = !now;
+            this._peek = !(this._peek === true);
             this.draw3D(this._report);
         });
         this._bindPlanGestures(detailEl.querySelector('.rr-structures-plan'));
@@ -463,11 +475,302 @@ class DatabaseStructureEditor {
 
     render() {
         this.renderBar();
+        this.renderSide();
+        this.drawPaint();
         this.renderTools();
         this.renderFloorTabs();
         this.renderInspector();
         this.renderMore();
         this.schedulePreview();
+    }
+
+    // ---- The floor plan: one floor of pieces, painted ------------------------
+
+    static PAINT_TOOLS = ['room', 'floor', 'wall', 'door', 'window', 'stairs', 'erase'];
+
+    floorsApi() { return typeof RRStructureFloors !== 'undefined' ? RRStructureFloors : null; }
+
+    /** Floors: more copies the top floor up, fewer takes floors off the top (asking first when they hold something). */
+    setFloorCount(value) {
+        const F = this.floorsApi(), plan = this.current?.plan;
+        if (!F || !plan) return;
+        const target = Math.max(1, Math.min(24, Math.floor(Number(value)) || 1));
+        const now = F.isDescribed(plan) ? plan.floors.length : F.floorsOf(plan);
+        if (target === now) return;
+        if (target < now && !F.isDescribed(plan)) {
+            let lost = false;
+            for (let f = target; f < now; f++) if (F.hasPieces(plan, f)) lost = true;
+            if (lost && !window.confirm(this._t('Take away floors {from} to {to} and everything on them?', { from: target + 1, to: now }))) { this.renderBar(); return; }
+        }
+        this.pushHistory();
+        F.setFloors(plan, target);
+        this._paint.floor = Math.min(this._paint.floor, target - 1);
+        this.markDirty();
+        this.renderBar();
+        this.renderSide();
+    }
+
+    /** The floor list, the tools and the materials they paint with. */
+    renderSide() {
+        const side = this._detail?.querySelector('.rr-structures-side');
+        const F = this.floorsApi(), plan = this.current?.plan;
+        if (!side || !F || !plan) return;
+        const tt = text => this._t(text);
+        const count = F.isDescribed(plan) ? plan.floors.length : F.floorsOf(plan);
+        this._paint.floor = Math.max(0, Math.min(count - 1, this._paint.floor));
+        const names = this.materials();
+        const pick = (role, fallback) => {
+            const chosen = this._paint[role];
+            if (chosen !== null && chosen !== undefined) return chosen;
+            const own = plan.materials?.[role === 'wallMaterial' ? 'wall' : 'floor'];
+            return own || (names.includes(fallback) ? fallback : (names[0] || ''));
+        };
+        this._paint.wallMaterial = pick('wallMaterial', 'Stone');
+        this._paint.floorMaterial = pick('floorMaterial', 'Wood');
+        const floors = [];
+        for (let f = count - 1; f >= 0; f--) {
+            const label = f === 0 ? tt('Ground floor') : this._t('Floor {n}', { n: f + 1 });
+            floors.push(`<button type="button" class="rr-structures-floor${f === this._paint.floor ? ' active' : ''}" data-floor="${f}" aria-pressed="${f === this._paint.floor}">${rrEscapeHtml(label)}</button>`);
+        }
+        const toolNames = { room: 'Room', floor: 'Floor', wall: 'Wall', door: 'Door', window: 'Window', stairs: 'Stairs', erase: 'Eraser' };
+        const toolIcons = { room: 'room', floor: 'room', wall: 'remove', door: 'door', window: 'window', stairs: 'stairs', erase: 'remove' };
+        const tools = DatabaseStructureEditor.PAINT_TOOLS.map(tool => `<button type="button" class="rr-structures-tool${tool === this._paint.tool ? ' active' : ''}" data-tool="${tool}" aria-pressed="${tool === this._paint.tool}" title="${rrEscapeHtml(tt(toolNames[tool]))}">${DatabaseStructureEditor.icon(toolIcons[tool])}<span>${rrEscapeHtml(tt(toolNames[tool]))}</span></button>`).join('');
+        const option = (value, current) => `<option value="${rrEscapeHtml(value)}"${value === current ? ' selected' : ''}>${rrEscapeHtml(value || tt('(none)'))}</option>`;
+        const dirNames = { north: 'North', east: 'East', south: 'South', west: 'West' };
+        side.innerHTML = `
+            <div class="rr-structures-side-title">${rrEscapeHtml(tt('Floors'))}</div>
+            <div class="rr-structures-floorlist">${floors.join('')}</div>
+            <button type="button" class="rr-btn-secondary rr-structures-addfloor">${rrEscapeHtml(tt('+ Add floor'))}</button>
+            <div class="rr-structures-side-title">${rrEscapeHtml(tt('Tools'))}</div>
+            <div class="rr-structures-toolgrid">${tools}</div>
+            <label class="rr-structures-side-field"><span>${rrEscapeHtml(tt('Walls'))}</span><select class="database-field-value rr-structures-wallmat">${[''].concat(names).map(n => option(n, this._paint.wallMaterial)).join('')}</select></label>
+            <label class="rr-structures-side-field"><span>${rrEscapeHtml(tt('Floors'))}</span><select class="database-field-value rr-structures-floormat">${[''].concat(names).map(n => option(n, this._paint.floorMaterial)).join('')}</select></label>
+            <label class="rr-structures-side-field"${this._paint.tool === 'stairs' ? '' : ' hidden'}><span>${rrEscapeHtml(tt('Stairs climb'))}</span><select class="database-field-value rr-structures-dir">${Object.keys(dirNames).map(d => `<option value="${d}"${d === this._paint.dir ? ' selected' : ''}>${rrEscapeHtml(tt(dirNames[d]))}</option>`).join('')}</select></label>`;
+        side.querySelectorAll('.rr-structures-floor').forEach(button => button.addEventListener('click', () => { this._paint.floor = Number(button.dataset.floor); this.renderSide(); this.drawPaint(); if (this._peek === true) this.draw3D(this._report); }));
+        side.querySelector('.rr-structures-addfloor').addEventListener('click', () => { this.setFloorCount(count + 1); this._paint.floor = count; this.renderSide(); this.drawPaint(); });
+        side.querySelectorAll('.rr-structures-tool').forEach(button => button.addEventListener('click', () => { this._paint.tool = button.dataset.tool; this.renderSide(); this.drawPaint(); }));
+        side.querySelector('.rr-structures-wallmat').addEventListener('change', event => { this._paint.wallMaterial = event.target.value; });
+        side.querySelector('.rr-structures-floormat').addEventListener('change', event => { this._paint.floorMaterial = event.target.value; });
+        side.querySelector('.rr-structures-dir')?.addEventListener('change', event => { this._paint.dir = event.target.value; this.drawPaint(); });
+        const hint = this._detail?.querySelector('.rr-structures-paint-hint');
+        if (hint) {
+            const tips = { room: 'Drag a rectangle: walls around it, floor inside.', floor: 'Drag a rectangle of floor.', wall: 'Drag a straight line of wall.', door: 'Drag along a wall to open a doorway in it.', window: 'Drag along a wall to put windows in it.', stairs: 'Click where the stairs start; they climb to the next floor. R turns them.', erase: 'Drag over anything on this floor to take it away.' };
+            hint.textContent = (F.isDescribed(plan) ? tt('Painting turns this described building into pieces.') + ' ' : '') + tt(tips[this._paint.tool]) + ' ' + tt('Right-drag erases. Ctrl+Z undoes.');
+        }
+    }
+
+    /** A material's picture, loaded once, for painting cells in it. */
+    _materialImage(name) {
+        this._materialImages = this._materialImages || new Map();
+        if (!name) return null;
+        if (this._materialImages.has(name)) return this._materialImages.get(name);
+        const entry = { image: null };
+        this._materialImages.set(name, entry);
+        const url = this.materialUrl(name);
+        if (url) { const image = new Image(); image.onload = () => { entry.image = image; this.drawPaint(); }; image.src = url; }
+        return entry;
+    }
+
+    /** Where the plan's cells sit in the canvas. */
+    _paintGeometry(canvas) {
+        const plan = this.current?.plan;
+        if (!canvas || !plan) return null;
+        const rect = canvas.getBoundingClientRect();
+        const width = Math.max(1, Math.floor(rect.width)), height = Math.max(1, Math.floor(rect.height));
+        const [W, D] = plan.size;
+        const cell = Math.max(4, Math.floor(Math.min((width - 24) / W, (height - 24) / D)));
+        return { width, height, cell, ox: Math.floor((width - cell * W) / 2), oy: Math.floor((height - cell * D) / 2), W, D };
+    }
+
+    _paintCellAt(canvas, clientX, clientY) {
+        const g = this._paintGeometry(canvas);
+        if (!g) return null;
+        const rect = canvas.getBoundingClientRect();
+        const x = Math.floor((clientX - rect.left - g.ox) / g.cell), y = Math.floor((clientY - rect.top - g.oy) / g.cell);
+        return { x: Math.max(0, Math.min(g.W - 1, x)), y: Math.max(0, Math.min(g.D - 1, y)), inside: x >= 0 && y >= 0 && x < g.W && y < g.D };
+    }
+
+    /** The cells a drag covers for the tool in hand. */
+    _paintCells(tool, a, b) {
+        const F = this.floorsApi();
+        if (tool === 'room') return F.outlineCells(a.x, a.y, b.x, b.y);
+        if (tool === 'wall' || tool === 'door' || tool === 'window') return F.lineCells(a.x, a.y, b.x, b.y);
+        if (tool === 'stairs') return [[a.x, a.y]];
+        return F.rectCells(a.x, a.y, b.x, b.y);
+    }
+
+    /** One drag, done: the pieces it makes on the floor in view, undoable. */
+    applyPaint(tool, a, b) {
+        const F = this.floorsApi(), plan = this.current?.plan;
+        if (!F || !plan) return;
+        const SP = typeof RRStructurePlan !== 'undefined' ? RRStructurePlan : null;
+        this.pushHistory();
+        if (F.isDescribed(plan)) F.buildOut(plan, SP, name => this.resolve(name));
+        const floor = this._paint.floor, wall = this._paint.wallMaterial, slab = this._paint.floorMaterial;
+        if (tool === 'room') {
+            F.paintFloor(plan, floor, F.rectCells(a.x, a.y, b.x, b.y), slab);
+            F.paintWall(plan, floor, F.outlineCells(a.x, a.y, b.x, b.y), wall, slab);
+        } else if (tool === 'floor') F.paintFloor(plan, floor, F.rectCells(a.x, a.y, b.x, b.y), slab);
+        else if (tool === 'wall') F.paintWall(plan, floor, F.lineCells(a.x, a.y, b.x, b.y), wall, slab);
+        else if (tool === 'door') F.placeDoor(plan, floor, F.lineCells(a.x, a.y, b.x, b.y));
+        else if (tool === 'window') F.placeWindow(plan, floor, F.lineCells(a.x, a.y, b.x, b.y));
+        else if (tool === 'stairs') {
+            if (floor + 1 >= F.floorsOf(plan)) F.setFloors(plan, floor + 2);
+            F.placeStairs(plan, floor, a.x, a.y, this._paint.dir, 2, slab);
+        } else if (tool === 'erase') F.erase(plan, floor, F.rectCells(a.x, a.y, b.x, b.y));
+        this.markDirty();
+        this.renderBar();
+        this.renderSide();
+    }
+
+    _bindPaint(canvas) {
+        if (!canvas) return;
+        let drag = null;
+        canvas.addEventListener('contextmenu', event => event.preventDefault());
+        canvas.addEventListener('pointerdown', event => {
+            if (event.button !== 0 && event.button !== 2) return;
+            const cell = this._paintCellAt(canvas, event.clientX, event.clientY);
+            if (!cell || !cell.inside) return;
+            canvas.setPointerCapture?.(event.pointerId);
+            canvas.focus({ preventScroll: true });
+            drag = { tool: event.button === 2 ? 'erase' : this._paint.tool, a: cell, b: cell };
+            this._paintDrag = drag;
+            this.drawPaint();
+        });
+        canvas.addEventListener('pointermove', event => {
+            const cell = this._paintCellAt(canvas, event.clientX, event.clientY);
+            this._paintHover = cell && cell.inside ? cell : null;
+            if (drag && cell) drag.b = cell;
+            this.drawPaint();
+        });
+        const finish = event => {
+            if (!drag) return;
+            const done = drag;
+            drag = null;
+            this._paintDrag = null;
+            canvas.releasePointerCapture?.(event.pointerId);
+            this.applyPaint(done.tool, done.a, done.b);
+        };
+        canvas.addEventListener('pointerup', finish);
+        canvas.addEventListener('pointercancel', () => { drag = null; this._paintDrag = null; this.drawPaint(); });
+        canvas.addEventListener('pointerleave', () => { this._paintHover = null; if (!drag) this.drawPaint(); });
+        canvas.addEventListener('keydown', event => {
+            const key = event.key.toLowerCase();
+            if ((event.ctrlKey || event.metaKey) && key === 'z') { event.preventDefault(); if (event.shiftKey ? this.redo() : this.undo()) this.renderSide(); return; }
+            if ((event.ctrlKey || event.metaKey) && key === 'y') { event.preventDefault(); if (this.redo()) this.renderSide(); return; }
+            if (key === 'r' && this._paint.tool === 'stairs') {
+                const order = ['north', 'east', 'south', 'west'];
+                this._paint.dir = order[(order.indexOf(this._paint.dir) + 1) % 4];
+                this.renderSide(); this.drawPaint();
+            }
+        });
+        if (typeof ResizeObserver === 'function') {
+            this._paintObserver?.disconnect?.();
+            this._paintObserver = new ResizeObserver(() => this.drawPaint());
+            this._paintObserver.observe(canvas);
+        }
+    }
+
+    /** The floor in view from above: floors in their material, walls dark, doors, windows and stairs marked, the floor below faint. */
+    drawPaint() {
+        const canvas = this._detail?.querySelector('.rr-structures-paint');
+        const F = this.floorsApi(), plan = this.current?.plan;
+        if (!canvas || !F || !plan) return;
+        const g = this._paintGeometry(canvas);
+        const dpr = window.devicePixelRatio || 1;
+        if (canvas.width !== Math.round(g.width * dpr) || canvas.height !== Math.round(g.height * dpr)) { canvas.width = Math.round(g.width * dpr); canvas.height = Math.round(g.height * dpr); }
+        const ctx = canvas.getContext('2d');
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.imageSmoothingEnabled = false;
+        const css = name => (typeof ThemeColors !== 'undefined' && ThemeColors.resolve ? ThemeColors.resolve(name) : null);
+        ctx.fillStyle = css('--color-bg-deep') || '#101216';
+        ctx.fillRect(0, 0, g.width, g.height);
+        const { cell, ox, oy, W, D } = g;
+        // The plot, and the floor below as a faint outline to build on.
+        ctx.fillStyle = '#262b31';
+        ctx.fillRect(ox, oy, W * cell, D * cell);
+        const S = F.storeyOf(plan);
+        let source = plan;
+        // A described building is drawn from what it builds, without changing it until painted.
+        if (F.isDescribed(plan)) {
+            const SP = typeof RRStructurePlan !== 'undefined' ? RRStructurePlan : null;
+            const key = JSON.stringify(plan.floors) + plan.size.join('x');
+            if (this._describedKey !== key) { this._describedKey = key; this._describedPieces = SP ? SP.build(plan, 0, 0, 1, 0, name => this.resolve(name)) : []; }
+            source = { size: plan.size, storey: S, pieces: this._describedPieces };
+        }
+        const floor = this._paint.floor;
+        const byCell = floorIndex => {
+            const out = new Map();
+            for (const piece of F.band(source, floorIndex)) {
+                const key = piece.x + ',' + piece.y;
+                const list = out.get(key) || [];
+                list.push(piece);
+                out.set(key, list);
+            }
+            return out;
+        };
+        if (floor > 0) {
+            ctx.fillStyle = 'rgba(255,255,255,0.10)';
+            for (const [key, list] of byCell(floor - 1)) if (list.some(p => F.WALLISH.includes(p.kind))) { const [x, y] = key.split(',').map(Number); ctx.fillRect(ox + x * cell, oy + y * cell, cell, cell); }
+        }
+        const drawMaterial = (name, x, y, shade) => {
+            const entry = this._materialImage(name);
+            if (entry && entry.image) ctx.drawImage(entry.image, ox + x * cell, oy + y * cell, cell, cell);
+            else { ctx.fillStyle = '#6b6f76'; ctx.fillRect(ox + x * cell, oy + y * cell, cell, cell); }
+            if (shade) { ctx.fillStyle = shade; ctx.fillRect(ox + x * cell, oy + y * cell, cell, cell); }
+        };
+        const arrow = (x, y, rot) => {
+            const cx = ox + (x + 0.5) * cell, cy = oy + (y + 0.5) * cell, r = cell * 0.32;
+            // rot 0 rises south, 1 west, 2 north, 3 east: the arrow points up the stairs.
+            const angle = [Math.PI / 2, Math.PI, -Math.PI / 2, 0][rot % 4];
+            ctx.save(); ctx.translate(cx, cy); ctx.rotate(angle);
+            ctx.strokeStyle = '#ffffff'; ctx.lineWidth = Math.max(1, cell / 10);
+            ctx.beginPath(); ctx.moveTo(-r, -r * 0.8); ctx.lineTo(r * 0.6, 0); ctx.lineTo(-r, r * 0.8); ctx.stroke();
+            ctx.restore();
+        };
+        for (const [key, list] of byCell(floor)) {
+            const [x, y] = key.split(',').map(Number);
+            const slab = list.find(p => p.kind === 'floor');
+            if (slab && (Number(slab.z) || 0) === floor * S) drawMaterial(slab.material, x, y, null);
+            const shown = F.cellKind(source, floor, x, y);
+            if (!shown || shown.kind === 'floor') continue;
+            const px = ox + x * cell, py = oy + y * cell;
+            if (shown.kind === 'wall') drawMaterial(shown.material, x, y, 'rgba(0,0,0,0.45)');
+            else if (shown.kind === 'doorway') { drawMaterial(slab ? slab.material : '', x, y, null); ctx.fillStyle = '#c8873a'; ctx.fillRect(px + cell * 0.15, py + cell * 0.4, cell * 0.7, cell * 0.2); }
+            else if (shown.kind === 'window') { drawMaterial(shown.material, x, y, 'rgba(0,0,0,0.45)'); ctx.fillStyle = '#8fd3ff'; ctx.fillRect(px + cell * 0.2, py + cell * 0.2, cell * 0.6, cell * 0.6); }
+            else if (shown.kind === 'stair') { drawMaterial(shown.material, x, y, 'rgba(0,0,0,0.25)'); arrow(x, y, Number(shown.rot) || 0); }
+            else { ctx.fillStyle = 'rgba(150,160,175,0.85)'; ctx.fillRect(px + 1, py + 1, cell - 2, cell - 2); }
+            if (shown.kind === 'wall' || shown.kind === 'window') { ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth = 1; ctx.strokeRect(px + 0.5, py + 0.5, cell - 1, cell - 1); }
+        }
+        // The grid, then the plot's edge.
+        if (cell >= 8) {
+            ctx.strokeStyle = 'rgba(255,255,255,0.07)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            for (let x = 0; x <= W; x++) { ctx.moveTo(ox + x * cell + 0.5, oy); ctx.lineTo(ox + x * cell + 0.5, oy + D * cell); }
+            for (let y = 0; y <= D; y++) { ctx.moveTo(ox, oy + y * cell + 0.5); ctx.lineTo(ox + W * cell, oy + y * cell + 0.5); }
+            ctx.stroke();
+        }
+        const accent = css('--color-accent') || '#e0b020';
+        ctx.strokeStyle = accent;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(ox - 1, oy - 1, W * cell + 2, D * cell + 2);
+        // What a drag would do, or the cell under the pointer.
+        const drag = this._paintDrag;
+        const cells = drag ? this._paintCells(drag.tool, drag.a, drag.b) : (this._paintHover ? this._paintCells(this._paint.tool, this._paintHover, this._paintHover) : []);
+        if (this._paint.tool === 'stairs' && !drag?.tool?.startsWith?.('erase') && (drag || this._paintHover)) {
+            const start = drag ? drag.a : this._paintHover, d = F.DIRS[this._paint.dir];
+            cells.length = 0;
+            for (let i = 0; i < S; i++) for (let k = 0; k < 2; k++) cells.push([start.x + d[0] * i + (d[1] !== 0 ? k : 0), start.y + d[1] * i + (d[0] !== 0 ? k : 0)]);
+        }
+        const erasing = drag ? drag.tool === 'erase' : this._paint.tool === 'erase';
+        ctx.fillStyle = erasing ? 'rgba(224,92,78,0.35)' : 'rgba(255,214,64,0.28)';
+        ctx.strokeStyle = erasing ? '#e05c4e' : accent;
+        for (const [x, y] of cells) {
+            if (x < 0 || y < 0 || x >= W || y >= D) continue;
+            ctx.fillRect(ox + x * cell, oy + y * cell, cell, cell);
+            ctx.strokeRect(ox + x * cell + 0.5, oy + y * cell + 0.5, cell - 1, cell - 1);
+        }
     }
 
     // ---- History ---------------------------------------------------------
@@ -515,6 +818,7 @@ class DatabaseStructureEditor {
         this._reportStale = true;
         this.renderTools();
         this.requestPlanRedraw();
+        this.drawPaint();
         this.schedulePreview();
     }
 
@@ -632,11 +936,7 @@ class DatabaseStructureEditor {
                 this.markDirty();
             });
         }
-        bar.querySelector('.rr-structures-height')?.addEventListener('change', event => {
-            this.pushHistory();
-            plan.height = Math.max(1, Math.min(24, Math.floor(Number(event.target.value)) || 1));
-            this.markDirty();
-        });
+        bar.querySelector('.rr-structures-height')?.addEventListener('change', event => this.setFloorCount(event.target.value));
         bar.querySelector('.rr-structures-build')?.addEventListener('click', () => {
             const workshop = window.reactor?.structureWorkshop;
             if (workshop && this.current) workshop.open(this.current.entry);
@@ -1676,10 +1976,10 @@ class DatabaseStructureEditor {
         const plan = this.current?.plan;
         if (!plan) return;
         const [W, H] = plan.size;
-        // Looking inside: the top floor's ceiling and the roof are left off. On unless the plan
-        // has a roof to look at, until the button says otherwise.
-        const peek = this._peek === null ? plan.roof.pitch === null : this._peek;
-        const lid = plan.storey * Math.max(1, plan.floors.length);
+        // Looking inside: everything above the floor being painted is left off, so the plan's floor
+        // is seen from above in 3D. Off by default: the whole building shows.
+        const peek = this._peek === true;
+        const lid = plan.storey * ((this._paint ? this._paint.floor : 0) + 1);
         const shown = peek ? report.built.filter(piece => !(piece.z >= lid - 1e-6 && !DatabaseStructureEditor.SHAPE_KINDS.includes(piece.kind))) : report.built;
         const mapData = { width: W, height: H, reactor3d: { version: 1, elevation: new Array(W * H).fill(0), pieces: shown } };
         const byMaterial = new Map();
@@ -1795,7 +2095,7 @@ class DatabaseStructureEditor {
             if (!canvas.isConnected) { this._disposePreview(); return; }
             const rect = canvas.getBoundingClientRect();
             const width = Math.max(1, Math.round(rect.width)), height = Math.max(1, Math.round(rect.height));
-            if (canvas.width !== width * renderer.getPixelRatio() || canvas.height !== height * renderer.getPixelRatio()) {
+            if (canvas.width !== Math.floor(width * renderer.getPixelRatio()) || canvas.height !== Math.floor(height * renderer.getPixelRatio())) {
                 renderer.setSize(width, height, false);
                 camera.aspect = width / height;
                 camera.updateProjectionMatrix();

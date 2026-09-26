@@ -96,3 +96,47 @@ test('the workshop plot is a 3D map of the plot holding the structure; a describ
     const described = workshop.plotMap(cottage);
     assert.ok(context.RRMapElevation.pieces(described).length > 50, 'the described cottage is its walls, floors and roof');
 });
+
+test('floors: more copies the top floor up and lifts the roof; fewer takes floors off the top and lowers it', () => {
+    const F = require(path.join(repoRoot, 'editor', 'src', 'utils', 'StructureFloors.js'));
+    const plan = { size: [6, 6], storey: 5, height: 1, pieces: [
+        { kind: 'floor', x: 1, y: 1, z: 0 }, { kind: 'wall', x: 0, y: 1, z: 0, material: 'Stone' }, { kind: 'roof', x: 1, y: 1, z: 5 }],
+        lights: [{ id: 'light1', x: 1.5, y: 1.5, height: 144 }] };
+    F.setFloors(plan, 3);
+    assert.equal(plan.height, 3);
+    assert.deepEqual(plan.pieces.filter(p => p.kind === 'wall').map(p => p.z).sort((a, b) => a - b), [0, 5, 10], 'the wall is on every floor');
+    assert.deepEqual(plan.pieces.filter(p => p.kind === 'roof').map(p => p.z), [15], 'the roof rides on top');
+    assert.deepEqual(plan.lights.map(l => l.height).sort((a, b) => a - b), [144, 384, 624], 'and a lamp on each floor');
+    assert.equal(new Set(plan.lights.map(l => l.id)).size, 3, 'each with its own id');
+    F.setFloors(plan, 2);
+    assert.deepEqual(plan.pieces.filter(p => p.kind === 'wall').map(p => p.z).sort((a, b) => a - b), [0, 5]);
+    assert.deepEqual(plan.pieces.filter(p => p.kind === 'roof').map(p => p.z), [10], 'the roof comes down with it');
+    const described = { size: [8, 8], storey: 5, height: 1, pieces: [], floors: [{ rooms: { hall: [1, 1, 6, 6] }, doors: [] }] };
+    F.setFloors(described, 3);
+    assert.equal(described.floors.length, 3, 'a described building copies its top floor description');
+});
+
+test('painting a floor lays the pieces the Build bar lays: rooms, walls, doors, windows, stairs, erasing', () => {
+    const F = require(path.join(repoRoot, 'editor', 'src', 'utils', 'StructureFloors.js'));
+    const plan = { size: [10, 10], storey: 5, height: 2, pieces: [] };
+    F.paintFloor(plan, 1, F.rectCells(1, 1, 4, 3), 'Wood');
+    F.paintWall(plan, 1, F.outlineCells(1, 1, 4, 3), 'Stone', 'Wood');
+    const band = F.band(plan, 1);
+    assert.ok(band.every(p => p.z === 5), 'all on floor 2\'s base level');
+    assert.equal(band.filter(p => p.kind === 'wall').length, 10, 'walls around the outside');
+    assert.equal(band.filter(p => p.kind === 'floor').length, 12, 'a slab under every cell, walls included, never twice');
+    F.placeDoor(plan, 1, F.lineCells(2, 1, 3, 1));
+    assert.deepEqual(F.band(plan, 1).filter(p => p.kind === 'doorway').map(p => [p.x, p.material]), [[2, 'Stone'], [3, 'Stone']], 'a doorway where the wall was, in its material');
+    F.placeWindow(plan, 1, [[1, 2]]);
+    const glass = F.band(plan, 1).find(p => p.kind === 'glass');
+    assert.equal(glass.rot, 1, 'the pane lies along a north-south wall');
+    F.placeDoor(plan, 1, [[2, 2]]);
+    assert.equal(F.band(plan, 1).filter(p => p.kind === 'doorway').length, 2, 'no door where there is no wall');
+    F.placeStairs(plan, 0, 6, 6, 'north', 2, 'Wood');
+    const steps = plan.pieces.filter(p => p.kind === 'stair');
+    assert.equal(steps.length, 10, 'five steps, two wide');
+    assert.deepEqual([...new Set(steps.map(p => p.z))].sort(), [0, 1, 2, 3, 4], 'one level each');
+    F.erase(plan, 1, F.rectCells(0, 0, 9, 9));
+    assert.equal(F.band(plan, 1).length, 0);
+    assert.equal(plan.pieces.filter(p => p.kind === 'stair').length, 10, 'erasing floor 2 leaves the ground floor');
+});

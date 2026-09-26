@@ -181,7 +181,7 @@ test('a click on a rigged model binds the anchor to a bone, and a beam body surv
     // The mascot's skinned mesh carried a collapsed cached box, so every
     // ray missed it and Place fell back to the model origin: the light
     // stood still while the character walked through it.
-    const at = editor.indexOf('_raycastPointer(clientX, clientY) {');
+    const at = editor.indexOf('_raycastPointer(clientX, clientY, { refreshSkin = true } = {}) {');
     const raycast = editor.slice(at, editor.indexOf('_partUnderPointer', at));
     assert.match(raycast, /if \(!node\.isSkinnedMesh[^\n]*\) return;\s*node\.computeBoundingBox\(\);\s*node\.computeBoundingSphere\(\);/);
     // The sphere/cone body fades to nothing at its silhouette; a beam seen along its length is all silhouette.

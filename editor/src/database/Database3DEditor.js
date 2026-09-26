@@ -1676,7 +1676,10 @@ class Database3DEditor {
                 const rect = canvas.getBoundingClientRect();
                 const width = Math.max(1, Math.round(rect.width));
                 const height = Math.max(1, Math.round(rect.height));
-                if (canvas.width !== width || canvas.height !== height) {
+                // The drawing buffer is the CSS size times the pixel ratio; comparing CSS pixels to it
+                // resized (and cleared) the buffer on every frame at any display scale but 100%.
+                const ratio = this._renderer.getPixelRatio();
+                if (canvas.width !== Math.floor(width * ratio) || canvas.height !== Math.floor(height * ratio)) {
                     this._renderer.setSize(width, height, false);
                     this._camera.aspect = width / height;
                     this._camera.updateProjectionMatrix();
@@ -5742,7 +5745,7 @@ class Database3DEditor {
         }, { passive: false });
     }
 
-    _raycastPointer(clientX, clientY) {
+    _raycastPointer(clientX, clientY, { refreshSkin = true } = {}) {
         if (!this._object || !this._camera || typeof THREE === 'undefined') return null;
         const canvas = this._detail.querySelector('.r3d-db-canvas');
         const rect = canvas.getBoundingClientRect();
@@ -5756,11 +5759,14 @@ class Database3DEditor {
         // character that box can be a few centimetres at the origin, and
         // every click on the mascot missed it. Refresh the bounds from the
         // posed skeleton first; a click is rare enough to afford it.
-        this._object.traverse(node => {
-            if (!node.isSkinnedMesh || typeof node.computeBoundingBox !== 'function') return;
-            node.computeBoundingBox();
-            node.computeBoundingSphere();
-        });
+        if (refreshSkin) {
+            this._skinBoundsAt = performance.now();
+            this._object.traverse(node => {
+                if (!node.isSkinnedMesh || typeof node.computeBoundingBox !== 'function') return;
+                node.computeBoundingBox();
+                node.computeBoundingSphere();
+            });
+        }
         return raycaster.intersectObject(this._object, true);
     }
 
@@ -6074,9 +6080,14 @@ class Database3DEditor {
             const hit = this._rigSurface.raycast(o.x, o.y, o.z, d.x, d.y, d.z)[0];
             return hit ? new THREE.Vector3(hit.x, hit.y, hit.z) : this._cameraPlanePoint(clientX, clientY, centre);
         }
+        // One zoom point per scroll: a notch within 300 ms of the last, near the same spot, keeps it
+        // (every notch renews the wait, so a long scroll never ray-tests again), and a model too heavy
+        // to test on every scroll zooms toward the view's plane like empty space does.
         const now = performance.now(), last = this._wheelHit;
-        if (last && now - last.at < 300 && Math.hypot(last.x - clientX, last.y - clientY) < 6) return last.point || this._cameraPlanePoint(clientX, clientY, centre);
-        const hits = this._raycastPointer(clientX, clientY) || [];
+        if (last && now - last.at < 300 && Math.hypot(last.x - clientX, last.y - clientY) < 6) { last.at = now; return last.point || this._cameraPlanePoint(clientX, clientY, centre); }
+        if ((this._triangleCount || 0) > Database3DEditor.HOVER_TRIANGLE_BUDGET) { this._wheelHit = { at: now, x: clientX, y: clientY, point: null }; return this._cameraPlanePoint(clientX, clientY, centre); }
+        // A skinned model's bounds follow its pose; refreshing them walks every vertex, so a scroll does it at most every two seconds.
+        const hits = this._raycastPointer(clientX, clientY, { refreshSkin: !this._skinBoundsAt || now - this._skinBoundsAt > 2000 }) || [];
         const hit = hits.find(entry => !(entry.object.userData && entry.object.userData.__reactorOverlay));
         this._wheelHit = { at: now, x: clientX, y: clientY, point: hit ? hit.point.clone() : null };
         return this._wheelHit.point || this._cameraPlanePoint(clientX, clientY, centre);
