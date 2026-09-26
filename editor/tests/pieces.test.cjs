@@ -975,7 +975,7 @@ test('the round pieces: a shape has a size and a turn, blocks its round footprin
     // The palette lists the kinds with their own icons and names in every locale.
     const palette = read('editor/src/PieceBuilderManager.js');
     for (const kind of ['dome', 'cylinder', 'cone']) assert.match(palette, new RegExp(`\\b${kind}: '`), kind + ' has an icon');
-    assert.match(read('editor/src/utils/MapElevation.js'), /'window', 'fence', 'glass'\]/, 'the editor keeps the same kinds');
+    assert.match(read('editor/src/utils/MapElevation.js'), /'window', 'fence', 'glass', 'ladder'\]/, 'the editor keeps the same kinds');
 });
 
 test('Stamp puts a plan down turned by the turn in hand, one undo step', () => {

@@ -29,6 +29,8 @@ class BuildHotbar {
     static EXTRA = ['shape', 'screen', 'light', 'hammer', 'blueprint'];
     static SLOTS = ['select'].concat(BuildHotbar.PIECES, BuildHotbar.EXTRA);
     /** The kinds whose facing matters: they climb, slope, open or run one way. */
+    /** The longest stair run or ladder: as high as a piece may stand. */
+    static get MAX_RUN() { return (typeof Reactor3D !== 'undefined' && Reactor3D.PIECE_MAX_LEVEL) || 240; }
     static FACING = ['stair', 'ladder', 'ramp', 'doorway', 'window', 'fence', 'roof', 'glass'];
 
     _t(key, params) { return window.I18n ? window.I18n.t(key, params) : key; }
@@ -166,7 +168,9 @@ class BuildHotbar {
         if (!panel || !manager) return;
         const s = this.subject();
         const tt = text => this._tt(text);
-        const section = (title, body) => body ? `<div class="rr-build-section"><div class="rr-build-section-title">${title}</div>${body}</div>` : '';
+        // The dock's convention (Lighting, Media Surfaces): a card per group, its header on an accent strip.
+        const section = (title, body) => body ? `<div class="lit-section rr-build-section"><div class="lit-section-header">${title}</div><div class="lit-section-body">${body}</div></div>` : '';
+        let foot = '';
         const num = (cls, label, value, min, max, step, key) => `<label class="rr-build-field"><span>${label}</span><input type="number" class="database-field-value ${cls}" data-key="${key}" value="${value}" min="${min}" max="${max}" step="${step}"></label>`;
         const swatches = current => `<div class="rr-build-swatches"><button type="button" class="rr-build-swatch rr-build-material" data-material="" aria-pressed="${!current}" title="${this._t('pieces.plain')}"><span class="rr-build-swatch-plain"></span></button>`
             + manager.materials().map(entry => `<button type="button" class="rr-build-swatch rr-build-material" data-material="${entry.name}" aria-pressed="${current === entry.name}" title="${entry.name}" style="background-image:url('${entry.url}');"></button>`).join('') + '</div>';
@@ -174,8 +178,9 @@ class BuildHotbar {
         let head, body = '';
         if (s.kind === 'many') {
             head = this._t('build.selectedMany', { count: s.count });
-            body = section(this._t('pieces.material'), swatches(null)) + section(this._t('build.direction'), `<div class="rr-build-facing"><button type="button" class="rr-build-chip rr-build-turn-all">${this.icon('turn', 18)}<span>${tt('Turn')}</span></button><span class="rr-build-note">R</span></div>`)
-                + `<div class="rr-build-note rr-build-wrap">${this._t('build.manyHint')}</div><button type="button" class="rr-btn-secondary rr-build-remove">${this._t('build.remove')}</button>`;
+            body = section(this._t('pieces.material'), swatches(null))
+                + `<div class="rr-build-note rr-build-wrap">${this._t('build.manyHint')}</div>`;
+            foot = `<button type="button" class="rr-btn-secondary rr-build-turn-all">${this.icon('turn', 16)}<span>${tt('Turn')}</span></button><button type="button" class="rr-btn-secondary rr-build-remove">${this._t('build.remove')}</button>`;
         } else if (s.kind === 'select') {
             head = this._t('build.select');
             body = `<div class="rr-build-note rr-build-wrap">${this._t('build.nothingSelected')}</div><div class="rr-build-note rr-build-wrap">${this._t('build.boxHint')}</div>`;
@@ -196,11 +201,9 @@ class BuildHotbar {
             const rot = piece ? (s.shape ? Math.round(((piece.angle || 0) / 90) % 4) : piece.rot) : (s.shape ? 0 : manager.rot);
             if (!s.shape && (BuildHotbar.FACING.includes(kind) || s.placed)) body += section(this._t('build.direction'), facing(rot));
             body += section(this._t('pieces.material'), swatches(piece ? piece.material : manager.material));
-            if (kind === 'stair' && !s.placed) {
-                body += section(this._t('build.steps'), num('rr-build-steps', this._t('build.steps'), manager.stairSteps, 1, 60, 1, 'steps'));
-                body += section(this._t('build.stairWidth'), num('rr-build-stairwidth', this._t('build.stairWidth'), manager.stairWidth, 1, 20, 1, 'width'));
-            }
-            if (kind === 'ladder' && !s.placed) body += section(tt('Height'), num('rr-build-ladderheight', tt('Height'), manager.ladderHeight, 1, 60, 1, 'height'));
+            if (kind === 'stair' && !s.placed) body += section(tt('Size'), num('rr-build-steps', this._t('build.steps'), manager.stairSteps, 1, BuildHotbar.MAX_RUN, 1, 'steps')
+                + num('rr-build-stairwidth', this._t('build.stairWidth'), manager.stairWidth, 1, 20, 1, 'width'));
+            if (kind === 'ladder' && !s.placed) body += section(tt('Size'), num('rr-build-ladderheight', tt('Height'), manager.ladderHeight, 1, BuildHotbar.MAX_RUN, 1, 'height'));
             if (s.shape) {
                 const size = piece ? piece.size : manager.sizeFor(kind);
                 const labels = kind === 'wedge' ? [tt('Width'), tt('Height'), tt('Length')] : [tt('Width'), tt('Height'), tt('Depth')];
@@ -219,9 +222,10 @@ class BuildHotbar {
                 if ('thick' in own) settings += num('rr-build-param', tt('Wall') + ' %', Math.round((piece?.thick ?? manager.params?.[kind]?.thick ?? own.thick) * 100), 2, 100, 2, 'thick');
                 if (settings) body += section(this._t('build.settings'), settings);
             }
-            if (s.placed) body += `<button type="button" class="rr-btn-secondary rr-build-remove">${this._t('build.remove')}</button>`;
+            if (s.placed) foot = `<button type="button" class="rr-btn-secondary rr-build-remove">${this._t('build.remove')}</button>`;
         }
-        panel.innerHTML = `<div class="rr-build-panel-head">${this.icon(s.kind === 'wedge' ? 'ramp' : s.kind === 'many' ? 'select' : s.kind, 20)}<span>${head}</span></div>${body}`;
+        panel.innerHTML = `<div class="rr-build-panel-head">${this.icon(s.kind === 'wedge' ? 'ramp' : s.kind === 'many' ? 'select' : s.kind, 20)}<span>${head}</span></div>`
+            + `<div class="rr-build-panel-body">${body}</div>` + (foot ? `<div class="lit-section-footer rr-build-panel-foot">${foot}</div>` : '');
         this.bindPanel(s);
     }
 
@@ -250,8 +254,8 @@ class BuildHotbar {
             if (key === 'taper' || key === 'thick') v = Math.max(0, Math.min(1, Math.round(v) / 100)); else if (key === 'sides') v = Math.max(3, Math.min(32, Math.round(v))); else v = Math.max(15, Math.min(360, Math.round(v)));
             edit({ [key]: v }, () => { manager.params = manager.params || {}; manager.params[s.kind] = Object.assign({}, manager.params[s.kind], { [key]: v }); manager._ghostChanged(); });
         }));
-        panel.querySelector('.rr-build-steps')?.addEventListener('change', event => { manager.stairSteps = Math.max(1, Math.min(60, Math.round(Number(event.target.value)) || 1)); this.renderPanel(); });
-        panel.querySelector('.rr-build-ladderheight')?.addEventListener('change', event => { manager.ladderHeight = Math.max(1, Math.min(60, Math.round(Number(event.target.value)) || 1)); this.renderPanel(); });
+        panel.querySelector('.rr-build-steps')?.addEventListener('change', event => { manager.stairSteps = Math.max(1, Math.min(BuildHotbar.MAX_RUN, Math.round(Number(event.target.value)) || 1)); this.renderPanel(); });
+        panel.querySelector('.rr-build-ladderheight')?.addEventListener('change', event => { manager.ladderHeight = Math.max(1, Math.min(BuildHotbar.MAX_RUN, Math.round(Number(event.target.value)) || 1)); this.renderPanel(); });
         panel.querySelector('.rr-build-stairwidth')?.addEventListener('change', event => { manager.stairWidth = Math.max(1, Math.min(20, Math.round(Number(event.target.value)) || 1)); this.renderPanel(); });
         panel.querySelectorAll('.rr-build-mode').forEach(el => el.addEventListener('click', () => { manager.gizmoMode = el.dataset.mode; manager._ghostChanged(); this.renderPanel(); }));
         panel.querySelector('.rr-build-remove')?.addEventListener('click', () => { manager.removeSelection(); this.renderPanel(); });

@@ -3791,22 +3791,23 @@
             top: 12px;
             right: 12px;
             bottom: 96px;
-            width: 232px;
+            width: 248px;
             z-index: 7;
             display: flex;
             flex-direction: column;
-            gap: 10px;
-            padding: 10px 12px;
-            border-radius: 12px;
-            background-color: rgba(10, 12, 16, 0.82);
+            border-radius: 6px;
+            background-color: var(--color-bg-panel);
             border: 1px solid var(--color-border);
-            overflow-y: auto;
+            box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+            overflow: hidden;
             font-size: 11px;
             color: var(--color-text);
         }
-        .rr-build-panel-head { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--color-text-strong); padding-bottom: 6px; border-bottom: 1px solid var(--color-border); }
-        .rr-build-section { display: flex; flex-direction: column; gap: 5px; }
-        .rr-build-section-title { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--color-text-muted); }
+        .rr-build-panel-head { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; padding: 8px 10px; background-color: var(--color-bg-deep); border-bottom: 1px solid var(--color-border); font-size: 13px; font-weight: 600; color: var(--color-text-strong); }
+        .rr-build-panel-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: 10px; }
+        .rr-build-panel-foot { flex: 0 0 auto; }
+        .rr-build-panel-foot > button { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 4px; }
+        .rr-build-section { flex: 0 0 auto; }
         .rr-build-field { display: grid; grid-template-columns: 1fr 74px; align-items: center; gap: 6px; color: var(--color-text-muted); }
         .rr-build-field input { width: 100%; box-sizing: border-box; }
         .rr-build-swatches { display: flex; flex-wrap: wrap; gap: 4px; }
@@ -3814,7 +3815,6 @@
         .rr-build-facing .rr-build-chip { width: 34px; justify-content: center; font-size: 14px; }
         .rr-build-modes { display: flex; gap: 4px; margin-bottom: 4px; }
         .rr-build-wrap { white-space: normal; line-height: 1.4; padding: 0; }
-        .rr-build-remove { margin-top: 4px; }
         .rr-build-slot {
             position: relative;
             display: flex;
@@ -5662,3 +5662,10 @@ details.mp-section:not([open]) > .mp-section-body { display:none; }
 .r3d-model-list > .r3d-folder-head:not(.open) .r3d-folder-chevron { transform:rotate(-90deg); }
 .r3d-model-list > .r3d-folder-head .r3d-folder-name { flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
 .r3d-model-list > .r3d-folder-head .r3d-folder-count { flex:0 0 auto;font-weight:500;letter-spacing:0;color:var(--color-text-muted); }
+
+/* Inside a dark-surface island (the map view: the Build panel), a card header keeps the dark look
+   whatever the theme: the light themes' header fill is for panels on light ground. */
+:root[data-theme] .rr-dark-surface .lit-section-header {
+    background-color: var(--color-bg-toolbar);
+    color: var(--color-text);
+}

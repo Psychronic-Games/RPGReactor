@@ -696,9 +696,24 @@ class MapEditor3D {
         }));
     }
 
+    /**
+     * The shared canvas fills the view. PIXI writes a pixel size onto the
+     * same canvas whenever the 2D map resizes it (the sidebar divider does),
+     * and the picture then sat in a stale box while the pointer was read
+     * through the new one: the cursor off from what it picked until a zoom
+     * redrew. Put back whenever it has been overwritten.
+     */
+    keepCanvasFilling() {
+        const style = this.canvas && this.canvas.style;
+        if (!style || (style.width === '100%' && style.height === '100%' && style.left !== undefined && (style.inset === '0px' || style.inset === '0'))) return false;
+        Object.assign(style, { position: 'absolute', inset: '0', left: '0', top: '0', width: '100%', height: '100%' });
+        return true;
+    }
+
     resize() {
         const container = this.container();
         if (!container || !this.renderer || !this.camera) return;
+        this.keepCanvasFilling();
         const rect = container.getBoundingClientRect();
         const width = Math.max(1, Math.floor(rect.width));
         const height = Math.max(1, Math.floor(rect.height));
@@ -4356,6 +4371,7 @@ class MapEditor3D {
             if (this.suspended || MapEditor3D.coveredByDatabase()) { this.frame = requestAnimationFrame(tick); return; }
             this.frame = null;
             try {
+                if (this.keepCanvasFilling()) this.resize();
                 this.stepFly(now);
                 const lightsLive = !!window.reactor?.lightingManager?.wants3DFrames?.();
                 if (MapEditor3D.shouldRender({ now, active: this.previewActive(now) || lightsLive, lastRenderAt: this._lastRenderAt })) {
