@@ -2886,7 +2886,42 @@ class DatabaseTroopEditor {
         return started;
     }
 
+    /**
+     * The project's Battle HUD (System 2 › Battle), normalized, or null. When
+     * one is bound the battle draws it instead of the stock status and
+     * windows, so the preview does too.
+     */
+    battleHudRecord() {
+        const system = this.databaseManager.getSystem ? this.databaseManager.getSystem() : null;
+        const id = Math.max(0, Math.floor(Number(system && system.reactorBattleInterfaceId) || 0));
+        const list = this.databaseManager.getUserInterfaces ? this.databaseManager.getUserInterfaces() : [];
+        const raw = id > 0 ? (list || []).find(entry => entry && entry.id === id) : null;
+        if (!raw || raw.mode !== 'battle' || typeof DatabaseUserInterfaceEditor === 'undefined') return null;
+        const renderer = this.battleHudRenderer();
+        return renderer.normalizeInterface(JSON.parse(JSON.stringify(raw)));
+    }
+
+    /** A User Interfaces renderer that draws into this canvas; its images redraw the preview as they arrive. */
+    battleHudRenderer() {
+        if (!this._hudRenderer) {
+            this._hudRenderer = new DatabaseUserInterfaceEditor(this.databaseManager, this.projectManager, this.commonUI, this.parentEditor);
+            this._hudRenderer.scheduleRender = () => { if (this.showBattleUI) this.renderCanvas(); };
+            this._hudRenderer.loadSkin();
+            this._hudRenderer.loadGameFont();
+        }
+        return this._hudRenderer;
+    }
+
     drawBattleUIOverlay(ctx, setup) {
+        const hud = this.battleHudRecord();
+        if (hud) {
+            ctx.save();
+            if (setup.sideView) this.drawSideviewParty(ctx, setup);
+            this.battleHudRenderer().drawRecordInto(ctx, hud, { party: setup.party.map(entry => entry.actor) });
+            this.drawBattleSetupTag(ctx, setup, hud);
+            ctx.restore();
+            return;
+        }
         ctx.save();
         if (setup.sideView) this.drawSideviewParty(ctx, setup);
         if (setup.turnSystem === 'otb') this.drawOtbTurnOrder(ctx, setup);
@@ -3347,8 +3382,9 @@ class DatabaseTroopEditor {
         return `${systemLabel} • ${view} • ${layout} (${setup.screenWidth}×${setup.screenHeight})`;
     }
 
-    drawBattleSetupTag(ctx, setup) {
-        const text = this.battleSetupLabel(setup);
+    drawBattleSetupTag(ctx, setup, hud) {
+        const text = hud ? `${window.I18n ? window.I18n.tText('Battle HUD') : 'Battle HUD'}: ${hud.name || '#' + hud.id} (${setup.screenWidth}×${setup.screenHeight})`
+            : this.battleSetupLabel(setup);
         ctx.font = 'bold 12px sans-serif';
         const w = ctx.measureText(text).width + 16;
         const h = 20;

@@ -260,3 +260,21 @@ test('text preview accepts lowercase and uppercase icon and color escape codes',
     assert.deepEqual(runs.filter(run=>run.icon!==undefined).map(run=>run.icon),[305,4]);
     assert.equal(runs.at(-1).text,'Color');
 });
+
+test('a Battle HUD previews as the battle shows it: the whole party, no focus, the first actor\'s commands; the troop preview draws the bound HUD', () => {
+    const actors = [null,
+        { id: 1, name: 'Hero', classId: 1, traits: [] }, { id: 2, name: 'Mage', classId: 1, traits: [{ code: 41, dataId: 1 }] }, { id: 3, name: 'Rogue', classId: 1, traits: [] }];
+    const data = { actors, classes: [null, { id: 1, traits: [{ code: 41, dataId: 2 }] }],
+        system: { partyMembers: [1, 2, 3], testBattlers: [{ actorId: 3 }, { actorId: 1 }], skillTypes: ['', 'Magic', 'Special'], terms: { commands: ['', '', 'Attack', 'Guard', 'Item'] } } };
+    const editor = new Editor({ data, getUserInterfaces: () => [] }, null, null, null);
+    editor.current = { mode: 'scene', nodes: [], firstFocus: 0 };
+    assert.deepStrictEqual(editor.previewPartyActors().map(actor => actor.name), ['Hero', 'Mage', 'Rogue'], 'a scene shows the starting party');
+    editor.current = { mode: 'battle', nodes: [{ id: 1, type: 'list', focusable: true, enabled: { type: 'always' } }], firstFocus: 0 };
+    assert.deepStrictEqual(editor.previewPartyActors().map(actor => actor.name), ['Rogue', 'Hero'], 'a battle HUD shows the battle-test party');
+    assert.strictEqual(editor.previewControl(editor.current.nodes[0]).state, 'base', 'a battle HUD takes no focus');
+    assert.deepStrictEqual(editor.previewActorCommands(), ['Attack', 'Special', 'Guard', 'Item'], 'the first actor\'s class adds Special');
+    editor._previewParty = [actors[2]];
+    assert.deepStrictEqual(editor.previewActorCommands(), ['Attack', 'Magic', 'Special', 'Guard', 'Item'], 'a caller\'s party wins; the actor adds Magic');
+    const troop = fs.readFileSync(path.join(__dirname, '..', 'src', 'database', 'DatabaseTroopEditor.js'), 'utf8');
+    assert.match(troop, /drawRecordInto\(ctx, hud, \{ party: setup\.party\.map\(entry => entry\.actor\) \}\)/, 'Show Battle UI draws the bound HUD with the battle-test party');
+});

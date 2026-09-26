@@ -3422,6 +3422,10 @@ class DatabaseUserInterfaceEditor {
         const loads = DatabaseUserInterfaceEditor._fontLoads;
         if (loads.has(key)) {
             this._gameFontFamily = loads.get(key);
+            // Still loading for another view: pick it up when it lands.
+            if (!this._gameFontFamily && document.fonts && document.fonts.ready) {
+                document.fonts.ready.then(() => { const family = loads.get(key); if (family && !this._gameFontFamily) { this._gameFontFamily = family; this.scheduleRender(); } });
+            }
             return;
         }
         const family = 'rr-ui-gamefont-' + loads.size;
@@ -3466,13 +3470,27 @@ class DatabaseUserInterfaceEditor {
         return (system && system.advanced && Number(system.advanced.fontSize)) || 26;
     }
 
-    /** The actor in a starting-party slot (System > Starting Party), the editor's stand-in for the play-time party. */
-    startingMember(slot) {
+    /**
+     * The editor's stand-in for the play-time party: a caller's party (the
+     * troop preview's), a Battle HUD's battle-test party (System > Test
+     * Battlers, as a battle test fields it), else the starting party.
+     */
+    previewPartyActors() {
+        if (Array.isArray(this._previewParty)) return this._previewParty;
         const data = this.databaseManager && this.databaseManager.data;
-        if (!data) return null;
-        const ids = Array.isArray(data.system && data.system.partyMembers) ? data.system.partyMembers : [];
-        const id = ids[Math.max(0, Math.floor(slot))];
-        return (id && data.actors && data.actors[id]) || null;
+        if (!data) return [];
+        const system = data.system || {};
+        const actor = id => (id && data.actors && data.actors[id]) || null;
+        if (this.current && this.current.mode === 'battle') {
+            const tested = (system.testBattlers || []).map(slot => actor(Number(slot && slot.actorId) || 0)).filter(Boolean);
+            if (tested.length) return tested;
+        }
+        return (Array.isArray(system.partyMembers) ? system.partyMembers : []).map(id => actor(id)).filter(Boolean);
+    }
+
+    /** The actor in a party slot of the preview party. */
+    startingMember(slot) {
+        return this.previewPartyActors()[Math.max(0, Math.floor(slot))] || null;
     }
 
     /** Project-data stand-in for a runtime actor binding. Dynamic bindings use the first starting member. */
@@ -3874,6 +3892,13 @@ class DatabaseUserInterfaceEditor {
      * outline without one) and the window's name. One that follows the
      * active actor is drawn over the first party row it would follow.
      */
+    /**
+     * A Battle Window as a battle shows it while the party chooses: the
+     * actor command window, skinned and listing the commands, over the first
+     * actor's row. Every other window only appears once opened, so it is a
+     * dashed outline with its name (faint when hidden); a game view (the
+     * troop preview) leaves those out.
+     */
     drawBattleWindowNode(node, rect) {
         const ctx = this.ctx;
         let r = rect;
@@ -3881,22 +3906,91 @@ class DatabaseUserInterfaceEditor {
             const slot = this.previewSlotRect();
             if (slot) r = Object.assign({}, rect, { x: slot.x + node.x, y: slot.y + node.y });
         }
-        if (node.file) {
-            const picture = this.imageRef(node.file);
-            if (picture.image) ctx.drawImage(picture.image, r.x + (node.imageX || 0), r.y + (node.imageY || 0));
+        const shown = node.battleWindow === 'actorCommand' && !node.hideWindow;
+        if (shown) {
+            if (node.file) {
+                const picture = this.imageRef(node.file);
+                if (picture.image) ctx.drawImage(picture.image, r.x + (node.imageX || 0), r.y + (node.imageY || 0));
+            }
+            if (node.fill !== 'none') this.drawSurface(Object.assign({}, node, { type: 'box', fill: 'window' }), r);
+            const commands = this.previewActorCommands();
+            const lineHeight = 36, top = r.y + 12;
+            const rows = Math.max(1, Math.floor((r.height - 24) / (lineHeight + 8)));
+            commands.slice(0, rows).forEach((text, index) => {
+                const row = { x: r.x + 12, y: top + index * (lineHeight + 8), width: r.width - 24, height: lineHeight + 8 };
+                if (index === 0) this.drawSelection(Object.assign({}, node, { type: 'button', fill: 'none', _previewFocused: true, focusedFillColor: '' }), row);
+                this.drawText({ type: 'button', text, align: 'center', fontSize: 0, textColor: 0, fill: 'none', wrap: false, fitText: true,
+                    outline: true, outlineWidth: 3, letterSpacing: 0, width: row.width, height: row.height }, row);
+            });
+            return;
         }
-        if (node.fill !== 'none') this.drawSurface(Object.assign({}, node, { type: 'box', fill: 'window' }), r);
+        if (this._gameView) return;
         ctx.save();
-        ctx.globalAlpha *= node.hideWindow ? 0.45 : 1;
+        ctx.globalAlpha *= node.hideWindow ? 0.35 : 0.8;
         ctx.setLineDash([6 / this.scale, 4 / this.scale]);
         ctx.strokeStyle = '#7fd3ff';
         ctx.lineWidth = 1 / this.scale;
         ctx.strokeRect(r.x + 0.5, r.y + 0.5, r.width - 1, r.height - 1);
         ctx.setLineDash([]);
         const label = (DatabaseUserInterfaceEditor.BATTLE_WINDOWS.find(([key]) => key === node.battleWindow) || ['', node.battleWindow])[1];
-        this.drawText(Object.assign({}, node, { type: 'button', text: this._t(label) + (node.hideWindow ? ' (' + this._t('hidden') + ')' : ''),
-            align: 'center', fontSize: 0, textColor: 0, fill: 'none', wrap: false, fitText: true, outline: true, outlineWidth: 3, letterSpacing: 0 }), r);
+        // Windows that share a spot (skills and items, say) list their names one under another.
+        const shared = this.current.nodes.filter(other => other.type === 'battleWindow' && !other.followActor && other.x === node.x && other.y === node.y);
+        const line = Math.max(0, shared.indexOf(node));
+        this.drawText({ type: 'text', text: this._t(label) + (node.hideWindow ? ' (' + this._t('hidden') + ')' : ''), align: 'left', fontSize: 20,
+            textColor: 0, fill: 'none', wrap: false, fitText: false, outline: true, outlineWidth: 3, letterSpacing: 0 },
+            { x: r.x + 8, y: node.hideWindow ? r.y + r.height - 32 : r.y + 4 + line * 26, width: Math.max(0, r.width - 16), height: 28 });
         ctx.restore();
+    }
+
+    /** The first actor's battle commands, as Window_ActorCommand lists them, for the preview. */
+    previewActorCommands() {
+        const data = (this.databaseManager && this.databaseManager.data) || {};
+        const system = data.system || {};
+        const commands = (system.terms && system.terms.commands) || [];
+        // The skill types the actor and their class add (trait 41), as Window_ActorCommand lists them.
+        const actor = this.startingMember(0);
+        const klass = actor && data.classes ? data.classes[actor.classId] : null;
+        const ids = [...new Set([...(actor && actor.traits || []), ...(klass && klass.traits || [])]
+            .filter(trait => trait && trait.code === 41).map(trait => trait.dataId))].sort((a, b) => a - b);
+        const types = ids.map(id => (system.skillTypes || [])[id]).filter(Boolean);
+        return [commands[2] || 'Attack', ...types, commands[3] || 'Guard', commands[4] || 'Item'];
+    }
+
+    /**
+     * Draw a record's nodes into another canvas (the troop preview) as the
+     * game would show them: `options.party` stands in for the battle party.
+     * The User Interfaces canvas itself is untouched.
+     */
+    drawRecordInto(ctx, record, options = {}) {
+        const saved = { ctx: this.ctx, current: this.current, scale: this.scale, party: this._previewParty, gameView: this._gameView };
+        this.ctx = ctx;
+        this.current = record;
+        this.scale = options.scale || 1;
+        this._previewParty = options.party || null;
+        this._gameView = true;
+        try {
+            const rects = this.rects();
+            for (const node of DatabaseUserInterfaceEditor.orderNodes(record.nodes)) {
+                const rect = rects.get(node.id);
+                if (!rect || rect.width <= 0 || rect.height <= 0 || node.type === 'battleCursor') continue;
+                if (node.visible && node.visible.type === 'never') continue;
+                ctx.save();
+                ctx.globalAlpha *= (node.opacity ?? 255) / 255;
+                const drawn = DatabaseUserInterfaceEditor.isControl(node.type) ? this.previewControl(node).node : node;
+                switch (drawn.type) {
+                    case 'box': this.drawSurface(drawn, rect); break;
+                    case 'image': this.drawImageNode(drawn, rect); break;
+                    case 'text': this.drawText(drawn, rect); break;
+                    case 'gauge': this.drawGaugeNode(drawn, rect); break;
+                    case 'list': this.drawListNode(drawn, rect); break;
+                    case 'battleWindow': this.drawBattleWindowNode(drawn, rect); break;
+                    default: break;
+                }
+                ctx.restore();
+            }
+        } finally {
+            Object.assign(this, { ctx: saved.ctx, current: saved.current, scale: saved.scale, _previewParty: saved.party, _gameView: saved.gameView });
+        }
     }
 
     /** The cursor's stand-in: its image (or the plain arrow) with a sample name. */
@@ -3952,7 +4046,9 @@ class DatabaseUserInterfaceEditor {
         const controls = this.current.nodes.filter(candidate => DatabaseUserInterfaceEditor.isControl(candidate.type));
         const focusedId = controls.some(candidate => candidate.id === this.current.firstFocus) ? this.current.firstFocus : (controls[0] && controls[0].id);
         const forced = node === this.selected() && this._controlPreviewState && this._controlPreviewState !== 'automatic' ? this._controlPreviewState : '';
-        const state = forced || (node.enabled && node.enabled.type === 'never' ? 'disabled' : node.id === focusedId ? 'focused' : 'base');
+        // A Battle HUD never takes focus, nor does a list that only displays.
+        const focusable = this.current.mode !== 'battle' && node.focusable !== false;
+        const state = forced || (node.enabled && node.enabled.type === 'never' ? 'disabled' : focusable && node.id === focusedId ? 'focused' : 'base');
         const copy = Object.assign({}, node);
         let opacity = 255;
         let offsetX = 0, offsetY = 0;
@@ -3985,8 +4081,7 @@ class DatabaseUserInterfaceEditor {
         const commands = (data.system && data.system.terms && data.system.terms.commands) || [];
         let rows = [];
         if (node.dataSource === 'party') {
-            const ids = (data.system && data.system.partyMembers) || [];
-            rows = ids.map(id => data.actors && data.actors[id]).filter(Boolean).map(actor => row('actor', actor.id, actor.id, actor.name,
+            rows = this.previewPartyActors().map(actor => row('actor', actor.id, actor.id, actor.name,
                 { description: actor.profile || '', level: Number(actor.initialLevel) || 1 }));
         } else if (node.dataSource === 'itemCategories') {
             const flags = (data.system && data.system.itemCategories) || [true, true, true, true];
@@ -4097,7 +4192,7 @@ class DatabaseUserInterfaceEditor {
         this.ctx.beginPath();
         this.ctx.rect(area.x, area.y, area.width, area.height);
         this.ctx.clip();
-        const columns = node.rowLayout === 'actorPanel' ? 1 : Math.max(1, node.columns || 1);
+        const columns = Math.max(1, node.columns || 1);
         const columnWidth = area.width / columns;
         rows.slice(0, Math.ceil(area.height / node.rowHeight) * columns).forEach((entry, index) => {
             const rowRect = { x: area.x + (index % columns) * columnWidth, y: area.y + Math.floor(index / columns) * node.rowHeight, width: columnWidth, height: node.rowHeight };
