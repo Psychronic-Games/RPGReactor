@@ -323,7 +323,7 @@
         }
         const sidecar = ensure(mapData);
         if (!sidecar) return false;
-        const json = JSON.stringify(sidecar, null, 2);
+        const json = api.stringifySidecar(sidecar);
         if (writeAtomic) writeAtomic(fs, filePath, json, 'utf8');
         else fs.writeFileSync(filePath, json, 'utf8');
         return true;
@@ -1016,6 +1016,35 @@
         TERRAIN_MAX, TERRAIN_MODES, terrain, hasTerrain, ensureTerrain, terrainAt, terrainHeightAt,
         paintTerrain, terrainSnapshot, restoreTerrain, clearTerrain
     };
+    /**
+     * A sidecar as text: readable, and not four times its data. Each top-level
+     * field on its own line; a grid of numbers one map row a line; a list of
+     * records (pieces, props, lights) one record a line; anything else
+     * compact. Pretty-printing put every number and every piece field on a
+     * line of its own, which roughly doubled a built map's file.
+     */
+    api.stringifySidecar = function(sidecar) {
+        if (!sidecar || typeof sidecar !== 'object' || Array.isArray(sidecar)) return JSON.stringify(sidecar);
+        const rowOf = key => {
+            if (key === 'elevation') return Math.floor(Number(sidecar.width)) || 0;
+            if (key === 'terrain') return Math.floor(Number(sidecar.terrainWidth)) || 0;
+            return 0;
+        };
+        const value = (key, v) => {
+            if (!Array.isArray(v) || !v.length) return JSON.stringify(v);
+            const row = rowOf(key);
+            if (row > 0 && v.every(n => typeof n === 'number' || n === null)) {
+                const lines = [];
+                for (let i = 0; i < v.length; i += row) lines.push('    ' + v.slice(i, i + row).map(n => JSON.stringify(n)).join(','));
+                return '[\n' + lines.join(',\n') + '\n  ]';
+            }
+            if (v.every(item => item && typeof item === 'object')) return '[\n' + v.map(item => '    ' + JSON.stringify(item)).join(',\n') + '\n  ]';
+            return JSON.stringify(v);
+        };
+        const keys = Object.keys(sidecar).filter(key => sidecar[key] !== undefined);
+        return '{\n' + keys.map(key => '  ' + JSON.stringify(key) + ': ' + value(key, sidecar[key])).join(',\n') + '\n}';
+    };
+
     root.RRMapElevation = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof globalThis !== 'undefined' ? globalThis : window);

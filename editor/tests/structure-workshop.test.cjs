@@ -216,3 +216,18 @@ test('a diagonal step past a wall corner does not lift a character onto the wall
     assert.ok(R.viewGroundAt(map, 2.5, 1.5, 0) < 1, 'a view over the wall stays on the floor the player is on');
     assert.equal(R.PIECE_MAX_LEVEL, 240, 'room for 24 floors and a roof');
 });
+
+test('a map sidecar is written readable and compact: a grid row a line, a piece a line, and it reads back the same', () => {
+    const E = require(path.join(repoRoot, 'editor', 'src', 'utils', 'MapElevation.js'));
+    const sidecar = { version: 1, width: 3, height: 2, elevation: [0, 1, 2, 3, 4, 5], terrainWidth: 4, terrain: [0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2],
+        pieces: [{ id: 1, kind: 'floor', x: 0, y: 0, z: 0, rot: 0, material: 'Wood' }, { id: 2, kind: 'wall', x: 1, y: 0, z: 0, rot: 0, material: '' }], camera: { mode: 'fixed' } };
+    const text = E.stringifySidecar(sidecar);
+    assert.deepEqual(JSON.parse(text), sidecar);
+    const lines = text.split('\n');
+    assert.ok(lines.includes('    0,1,2,') && lines.includes('    3,4,5'), 'elevation one map row a line');
+    assert.ok(lines.includes('    1,1,1,1,'), 'terrain one corner row a line');
+    assert.ok(lines.some(line => line.trim().startsWith('{"id":2,"kind":"wall"')), 'a piece a line');
+    assert.ok(lines.includes('  "camera": {"mode":"fixed"}'));
+    const source = fs.readFileSync(path.join(repoRoot, 'editor', 'src', 'utils', 'MapElevation.js'), 'utf8');
+    assert.match(source, /const json = api\.stringifySidecar\(sidecar\);/);
+});

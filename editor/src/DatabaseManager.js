@@ -366,7 +366,7 @@ class DatabaseManager {
                 taken.add(entry.file);
                 entry.plan.name = entry.name;
                 const plan = normalize(entry.plan);
-                this._writeFileAtomic(this.fs, this.path.join(directory, entry.file), JSON.stringify(trim(plan), null, 2) + '\n');
+                this._writeFileAtomic(this.fs, this.path.join(directory, entry.file), (typeof RRMapElevation !== 'undefined' && RRMapElevation.stringifySidecar ? RRMapElevation.stringifySidecar(trim(plan)) : JSON.stringify(trim(plan), null, 2)) + '\n');
                 keep.add(entry.file);
             }
             for (const file of seen) {

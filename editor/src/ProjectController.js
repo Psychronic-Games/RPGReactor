@@ -4132,7 +4132,7 @@ class ProjectController {
             this._writeFileAtomic(fs, stem + '.json', typeof RRMapJson !== 'undefined' ? RRMapJson.stringify(newMapData) : JSON.stringify(newMapData, null, 2));
             if (sidecar) {
                 written.push(stem + '.r3d.json');
-                this._writeFileAtomic(fs, stem + '.r3d.json', JSON.stringify(sidecar, null, 2));
+                this._writeFileAtomic(fs, stem + '.r3d.json', typeof RRMapElevation !== 'undefined' && RRMapElevation.stringifySidecar ? RRMapElevation.stringifySidecar(sidecar) : JSON.stringify(sidecar, null, 2));
             }
 
             previousMaps = JSON.parse(JSON.stringify(targetProject.maps || []));

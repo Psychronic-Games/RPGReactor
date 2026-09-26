@@ -155,7 +155,7 @@ class StructureWorkshop {
             fs.mkdirSync(directory, { recursive: true });
             const trimmed = typeof DatabaseStructureEditor !== 'undefined' ? DatabaseStructureEditor.trimPlan(entry.plan) : entry.plan;
             const target = path.join(directory, entry.file), temp = target + '.tmp';
-            fs.writeFileSync(temp, JSON.stringify(trimmed, null, 2) + '\n', 'utf8');
+            fs.writeFileSync(temp, (typeof RRMapElevation !== 'undefined' && RRMapElevation.stringifySidecar ? RRMapElevation.stringifySidecar(trimmed) : JSON.stringify(trimmed, null, 2)) + '\n', 'utf8');
             fs.renameSync(temp, target);
             db.captureSavedState?.('structures');
             return true;
