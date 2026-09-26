@@ -52,7 +52,7 @@ test('switching models stops manually played media and animation before the next
     assert.equal(e._bgFlash, null);
     assert.equal(e._flashHolder, null);
     assert.deepEqual(e.playRules, []);
-    assert.deepEqual(e._sim, { action: null, walking: false, dashing: false });
+    assert.deepEqual(e._sim, { action: null, walking: false, dashing: false, jumping: false });
     load.resolve(); await request;
     assert.deepEqual(e.embeddedClips, ['new']);
 });

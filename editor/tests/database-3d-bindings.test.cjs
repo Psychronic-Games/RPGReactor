@@ -188,6 +188,37 @@ test('movement triggers grade by gait: moving, walking, dashing', () => {
     assert.equal(rules[1].trigger, 'dashing');
 });
 
+test('a jumping motion plays in the air, ahead of every gait, once and held unless it repeats', () => {
+    const air = { moving: true, dashing: true, airborne: true };
+    assert.equal(Reactor3D.moveTriggerActive('jumping', air), true);
+    assert.equal(Reactor3D.moveTriggerActive('jumping', { moving: true, dashing: false }), false);
+    global.self = global; global.window = global;
+    require(path.join(repoRoot, 'runtime', 'libs', 'three.js'));
+    const THREE = global.THREE;
+    const clips = ['Idle', 'Run', 'Jump'].map(name => new THREE.AnimationClip(name, 1, []));
+    const binding = Reactor3D.prepareModelInstance(new THREE.Group(), clips);
+    const rules = Reactor3D.readModelAnimationRules({ animations: [
+        { name: 'i', type: 'clip', clip: 'Idle', trigger: 'idle' },
+        { name: 'r', type: 'clip', clip: 'Run', trigger: 'dashing' },
+        { name: 'j', type: 'clip', clip: 'Jump', trigger: 'jumping' }
+    ] });
+    assert.equal(rules[2].trigger, 'jumping');
+    const playing = state => {
+        Reactor3D.applyModelAnimation(binding, rules, Object.assign({ distance: 0, scale: 1, action: null }, state));
+        return binding.clipAction && binding.clipAction.getClip().name;
+    };
+    assert.equal(playing({ frame: 1, moving: true, dashing: true }), 'Run');
+    assert.equal(playing({ frame: 2, moving: true, dashing: true, airborne: true }), 'Jump');
+    assert.equal(binding.clipAction.loop, THREE.LoopOnce);
+    assert.equal(playing({ frame: 3, moving: false, dashing: false, airborne: true }), 'Jump', 'a jump in place is not idle');
+    assert.equal(playing({ frame: 60, moving: false, dashing: false }), 'Idle');
+    const looped = Reactor3D.readModelAnimationRules({ animations: [{ name: 'f', type: 'clip', clip: 'Jump', trigger: 'jumping', repeat: true }] });
+    Reactor3D.applyModelAnimation(binding, looped, { frame: 61, moving: false, airborne: true, distance: 0, scale: 1, action: null });
+    assert.equal(binding.clipAction.loop, THREE.LoopRepeat);
+    const effect = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d_effects.js'), 'utf8');
+    assert.match(effect, /effect\.trigger === "jumping" && state\.airborne/);
+});
+
 test('models organize into folders: nested names list, resolve, and stay jailed', () => {
     // splitModelRef accepts folder segments and refuses escapes.
     assert.deepEqual(Reactor3D.splitModelRef('Weapons/long-sword'),

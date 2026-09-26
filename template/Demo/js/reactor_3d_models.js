@@ -3298,7 +3298,7 @@ Reactor3D.readModelAnimationRules = function(json) {
             rate: Number(raw.rate) > 0 ? Number(raw.rate) : 1,
             type,
             axis: raw.axis === "x" || raw.axis === "z" ? raw.axis : "y",
-            trigger: ["idle", "moving", "walking", "dashing", "action"].indexOf(raw.trigger) >= 0
+            trigger: ["idle", "moving", "walking", "dashing", "jumping", "action"].indexOf(raw.trigger) >= 0
                 ? raw.trigger : "always",
             speed: Number(raw.speed) > 0 ? Number(raw.speed) : 90,
             perTile: Number(raw.perTile) > 0 ? Number(raw.perTile) : 0,
@@ -4044,10 +4044,18 @@ Reactor3D.AXIS_VECTORS = {
 
 /**
  * Movement triggers by specificity: "moving" is any travel, "walking" is
- * travel without dashing, "dashing" is travel while dashing. Returns
- * true/false for those triggers and null for every other trigger.
+ * travel without dashing, "dashing" is travel while dashing, "jumping" is
+ * any time in the air (the rise and the fall). Returns true/false for those
+ * triggers and null for every other trigger.
  */
+/** Whether a character is in the air by the physics (a jump, a fall). */
+Reactor3D.isAirborne = function(character) {
+    const physics = typeof ReactorPhysics !== "undefined" ? ReactorPhysics : null;
+    return !!(physics && physics.isAirborne && physics.isAirborne(character));
+};
+
 Reactor3D.moveTriggerActive = function(trigger, state) {
+    if (trigger === "jumping") return !!state.airborne;
     if (trigger === "moving") return !!state.moving;
     if (trigger === "walking") return !!state.moving && !state.dashing;
     if (trigger === "dashing") return !!(state.moving && state.dashing);
@@ -4185,8 +4193,8 @@ Reactor3D.applyModelAnimation = function(binding, rules, state) {
                 }
             } else {
                 const active = rule.trigger === "always"
-                    || (rule.trigger === "idle" && !state.moving)
-                    || (rule.trigger === "moving" && state.moving);
+                    || (rule.trigger === "idle" && !state.moving && !state.airborne)
+                    || Reactor3D.moveTriggerActive(rule.trigger, state) === true;
                 if (active) progress = (state.frame % duration) / duration;
             }
             binding.angles[i] = 0;
@@ -4241,7 +4249,7 @@ Reactor3D.applyModelAnimation = function(binding, rules, state) {
             } else {
                 const gate = Reactor3D.moveTriggerActive(rule.trigger, state);
                 const active = rule.trigger === "always"
-                    || (rule.trigger === "idle" && !state.moving)
+                    || (rule.trigger === "idle" && !state.moving && !state.airborne)
                     || gate === true;
                 const step = 1 / Math.max(1, rule.period);
                 blend = Math.min(1, Math.max(0,
@@ -4268,7 +4276,7 @@ Reactor3D.applyModelAnimation = function(binding, rules, state) {
         } else {
             let t = state.frame;
             const gate = Reactor3D.moveTriggerActive(rule.trigger, state);
-            if (rule.trigger === "idle" && state.moving) continue;
+            if (rule.trigger === "idle" && (state.moving || state.airborne)) continue;
             // A movement-driven spin holds its angle when travel stops — a
             // wheel does not snap back to rest — it simply stops gaining.
             if (gate === false && rule.type !== "spin") continue;
@@ -4427,7 +4435,17 @@ Reactor3D.applyModelAnimation = function(binding, rules, state) {
             // prefers "dashing" over plain "moving"; two clips on the same
             // trigger never fight — the first in the list plays.
             const pick = trigger => clipRules.find(r => r.trigger === trigger);
-            const rule = (moving
+            // In the air the jump clip outranks every gait. It plays once and
+            // holds its last frame through a long fall unless it repeats;
+            // its own key restarts it on every new jump.
+            const jump = state.airborne ? pick("jumping") : null;
+            if (jump) {
+                desired = jump.clip;
+                key = jump.clip + ":air";
+                once = !jump.repeat;
+                rate = jump.rate || 1;
+            }
+            const rule = jump ? null : (moving
                 ? (dashing ? pick("dashing") : pick("walking")) || pick("moving")
                 : pick("idle")) || pick("always");
             if (rule) {
@@ -5226,6 +5244,7 @@ Reactor3D.updateMapModelSprite = function(sprite) {
             dashing: typeof Game_Follower !== "undefined" && character instanceof Game_Follower
                 ? $gamePlayer.isDashing()
                 : !!(character.isDashing && character.isDashing()),
+            airborne: Reactor3D.isAirborne(character),
             distance,
             scale: state.scale,
             playbackRate: state.playbackRate,
@@ -5238,7 +5257,7 @@ Reactor3D.updateMapModelSprite = function(sprite) {
         if (effect && effect.trigger === "action") this.fireNamedEffect(effect, character, state);
     }
     this.updateTriggeredEffects(state, character, {
-        moving: !!character.isMoving?.(), dashing: !!character.isDashing?.()
+        moving: !!character.isMoving?.(), dashing: !!character.isDashing?.(), airborne: Reactor3D.isAirborne(character)
     });
     this.updateAnchoredAnimations(state);
     if (this.updateModelFlash(state)) state.dirty = true;
@@ -5820,6 +5839,7 @@ Reactor3D.MapScene.prototype.syncCharacterModels = function(characters) {
                 dashing: typeof Game_Follower !== "undefined" && character instanceof Game_Follower
                     ? $gamePlayer.isDashing()
                     : !!(character.isDashing && character.isDashing()),
+                airborne: Reactor3D.isAirborne(character),
                 distance,
                 scale,
                 playbackRate: holder.playbackRate,
@@ -5847,7 +5867,8 @@ Reactor3D.MapScene.prototype.syncCharacterModels = function(characters) {
                 moving,
                 dashing: typeof Game_Follower !== "undefined" && character instanceof Game_Follower
                     ? $gamePlayer.isDashing()
-                    : !!(character.isDashing && character.isDashing())
+                    : !!(character.isDashing && character.isDashing()),
+                airborne: Reactor3D.isAirborne(character)
             });
             Reactor3D.updateAnchoredAnimations(holder);
             if (!(holder.binding && holder.rules && holder.rules.length)) {
