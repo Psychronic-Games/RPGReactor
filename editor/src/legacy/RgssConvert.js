@@ -355,6 +355,21 @@
         }
     ];
 
+    // A port may bring its family in a file of its own beside it (plugins/RR_Name.family.js), exporting the
+    // family, a list of them, or a function of the helpers that returns them. Read in Node, where imports run.
+    if (typeof require === 'function' && typeof __dirname === 'string') {
+        try {
+            const fs = require('fs'), path = require('path');
+            const dir = path.join(__dirname, 'plugins');
+            for (const name of fs.readdirSync(dir).filter(n => n.endsWith('.family.js')).sort()) {
+                const def = require(path.join(dir, name));
+                for (const family of [].concat(typeof def === 'function' ? def({ rubyCondition }) : def)) if (family && family.key) FAMILIES.push(family);
+            }
+        } catch (error) {
+            if (error && error.code !== 'ENOENT') throw error;
+        }
+    }
+
     /** The families a game's scripts carry. */
     function scriptFamilies(sources) {
         const text = sources.join('\n');
