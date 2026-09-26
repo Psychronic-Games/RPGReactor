@@ -90,7 +90,7 @@ test('every ground surface and every stander goes through the terrain', () => {
     assert.match(runtime, /this\._terrainMap = Reactor3D\.terrainOf\(mapData\) \? mapData : null;/);
     assert.match(runtime, /const geometry = this\.groundPlane\(width, height, lift\);/);
     assert.match(runtime, /const geometry = this\.groundPlane\(width, height, y\);/);
-    assert.equal((runtime.match(/Reactor3D\.characterGround\(/g) || []).length, 4, 'both model placements and the cutaway, for the player and for each of the company');
+    assert.equal((runtime.match(/Reactor3D\.characterGround\(/g) || []).length, 3, 'both model placements, and the cutaway (one helper for the player and each of the company)');
     assert.match(runtime, /Reactor3D\.viewGroundAt\(\$dataMap, x \+ 0\.5, y \+ 0\.5, near\)/, 'the camera module, which never looks at a wall stack\'s top');
     assert.match(read('runtime/reactor_sprites.js'), /Reactor3D\.viewGroundAt\(\$dataMap, focus\.x \+ 0\.5, focus\.y \+ 0\.5, near\)/);
     const objects = read('runtime/reactor_objects.js');

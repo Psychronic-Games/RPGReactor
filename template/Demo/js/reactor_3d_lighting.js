@@ -755,7 +755,12 @@ Reactor3D.MapScene.prototype.updateCutaway = function(camera, mapData, character
     }
     const x = (Number.isFinite(character._realX) ? character._realX : character.x || 0) + 0.5;
     const z = (Number.isFinite(character._realY) ? character._realY : character.y || 0) + 0.5;
-    const ground = Reactor3D.characterGround(mapData, character);
+    // Where the character is, not the ground under it: in a jump, a fall, on a
+    // ladder or diving, the ground is far below, and a corridor aimed there ran
+    // through the character itself (its model dithered away) and down through
+    // whatever stood below (a whole building's face seen through).
+    const standing = c => Reactor3D.characterGround(mapData, c) + (Number(c._reactorAir) || 0);
+    const ground = standing(character);
     const covered = Reactor3D.pieceCoverAt(mapData, x, z, ground);
     const eye = camera.getWorldPosition(Reactor3D._cutEye || (Reactor3D._cutEye = new THREE.Vector3()));
     // Below a doorway's header (the top 0.6 of the storey), which a cut through it left as a floating sliver.
@@ -781,7 +786,7 @@ Reactor3D.MapScene.prototype.updateCutaway = function(camera, mapData, character
         if (!other) continue;
         const ox = (Number.isFinite(other._realX) ? other._realX : other.x || 0) + 0.5;
         const oz = (Number.isFinite(other._realY) ? other._realY : other.y || 0) + 0.5;
-        const og = Reactor3D.characterGround(mapData, other);
+        const og = standing(other);
         foci[count * 3] = ox; foci[count * 3 + 1] = og + 1.5; foci[count * 3 + 2] = oz;
         count++;
     }

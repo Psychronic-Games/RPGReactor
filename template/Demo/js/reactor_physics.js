@@ -108,6 +108,37 @@
         return ladder;
     };
 
+    /** The character a follower walks behind: the one before it in the line, or the player. */
+    ReactorPhysics.leaderOf = function(character) {
+        if (typeof Game_Follower === "undefined" || !(character instanceof Game_Follower) || typeof $gamePlayer === "undefined") return null;
+        const line = $gamePlayer.followers && $gamePlayer.followers()._data || [];
+        const index = line.indexOf(character);
+        return index <= 0 ? $gamePlayer : line[index - 1];
+    };
+
+    /**
+     * A follower on a ladder climbs to where its leader is (the roof it went
+     * up to, the ground it went down to), and its next step waits until it
+     * is there: the party goes up a ladder one after another, never through
+     * the wall. Returns the height it is making for, or null off a ladder.
+     */
+    ReactorPhysics.followerLadderTarget = function(character) {
+        const lead = this.leaderOf(character);
+        if (!lead || typeof Reactor3D === "undefined" || !Reactor3D.ladderAt || typeof $dataMap === "undefined" || !$dataMap) return null;
+        const ladder = Reactor3D.ladderAt($dataMap, character.x, character.y);
+        if (!ladder) return null;
+        const leadAlt = Number.isFinite(lead._reactorAlt) ? lead._reactorAlt : ladder.bottom;
+        return { ladder, target: Math.max(ladder.bottom, Math.min(ladder.top, leadAlt)) };
+    };
+
+    /** Whether a follower is still on its way up or down a ladder. */
+    ReactorPhysics.followerClimbing = function(character) {
+        const climb = this.followerLadderTarget(character);
+        if (!climb) return false;
+        const alt = Number.isFinite(character._reactorAlt) ? character._reactorAlt : climb.ladder.bottom;
+        return Math.abs(alt - climb.target) > 0.05;
+    };
+
     /** Buoyancy and drag in the water, per frame. */
     ReactorPhysics.WATER_SPRING = 0.03;
     ReactorPhysics.WATER_DRAG = 0.86;
@@ -188,6 +219,22 @@
         character._reactorGround = ground;
         let height = alt === null ? ground : alt;
         let vz = Number(character._reactorVz) || 0;
+        // A follower on a ladder climbs after its leader.
+        const followerClimb = alt !== null && !character._reactorLeap ? this.followerLadderTarget(character) : null;
+        if (followerClimb) {
+            const to = followerClimb.target;
+            height = to > height ? Math.min(to, height + this.LADDER_SPEED * 1.2) : Math.max(to, height - this.LADDER_SPEED * 1.2);
+            if (height > ground + 0.02) {
+                character._reactorOnLadder = true;
+                character._reactorSwim = false;
+                character._reactorPeak = undefined;
+                character._reactorAlt = height;
+                character._reactorVz = 0;
+                character._reactorAir = height - ground;
+                if (character.setDirection && character.direction() !== followerClimb.ladder.dir && !character.isMoving()) character.setDirection(followerClimb.ladder.dir);
+                return;
+            }
+        }
         // On a ladder, off its foot: held there, no gravity; the climb moves it.
         const ladder = Reactor3D.ladderAt && alt !== null && !character._reactorLeap ? this.ladderHeld(character) : null;
         if (ladder && height > ground + 0.02) {
@@ -376,6 +423,24 @@
             }
             return _moveStraight.apply(this, arguments);
         };
+        // A follower still climbing does not step on yet; it catches up once there.
+        if (typeof Game_Follower !== "undefined") {
+            const _chase = Game_Follower.prototype.chaseCharacter;
+            Game_Follower.prototype.chaseCharacter = function(character) {
+                if (ReactorPhysics.followerClimbing(this)) { this._reactorChaseLater = character; return; }
+                this._reactorChaseLater = null;
+                return _chase.apply(this, arguments);
+            };
+            const _followerUpdate = Game_Follower.prototype.update;
+            Game_Follower.prototype.update = function() {
+                _followerUpdate.apply(this, arguments);
+                const lead = this._reactorChaseLater;
+                if (lead && !this.isMoving() && !ReactorPhysics.followerClimbing(this)) {
+                    if (Math.abs(this.deltaXFrom(lead.x)) + Math.abs(this.deltaYFrom(lead.y)) > 1) this.chaseCharacter(lead);
+                    else this._reactorChaseLater = null;
+                }
+            };
+        }
         // A swimmer is slower and never dashes.
         const _realMoveSpeed = Game_CharacterBase.prototype.realMoveSpeed;
         Game_CharacterBase.prototype.realMoveSpeed = function() {

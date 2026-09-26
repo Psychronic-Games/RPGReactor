@@ -261,3 +261,27 @@ test('a ladder laid on a slab still reaches the ground, and Jump pushes off a la
     c.ReactorPhysics.update(who);
     assert.ok(who._reactorAlt > 5, 'and pushes off it rather than being held');
 });
+
+test('the see-through corridor aims at where a character is, not the ground under it', () => {
+    const lighting = read('runtime/reactor_3d_lighting.js');
+    assert.match(lighting, /const standing = c => Reactor3D\.characterGround\(mapData, c\) \+ \(Number\(c\._reactorAir\) \|\| 0\);/);
+    assert.match(lighting, /const og = standing\(other\);/);
+});
+
+test('a follower on a ladder climbs to its leader and waits to step on until it is there', () => {
+    const c = sandbox();
+    class Game_Follower {}
+    c.Game_Follower = Game_Follower;
+    const follower = Object.assign(new Game_Follower(), { x: 5, y: 6, _realX: 5, _realY: 6, _reactorGround: 0, _reactorAlt: 0, direction: () => 8, isMoving: () => false, setDirection() {} });
+    const player = { x: 5, y: 5, _reactorAlt: 6 };
+    c.$gamePlayer = Object.assign(player, { followers: () => ({ _data: [follower] }) });
+    c.$dataMap = { reactor3d: {} };
+    c.Reactor3D = { isMap3D: () => true, TERRAIN_SLOPE_LIMIT: 0.75, groundHeightAt: () => 0, ladderAt: (m, x, y) => (x === 5 && y === 6 ? { dir: 8, bottom: 0, top: 6 } : null) };
+    assert.equal(c.ReactorPhysics.followerClimbing(follower), true);
+    for (let i = 0; i < 200; i++) c.ReactorPhysics.update(follower);
+    assert.ok(Math.abs(follower._reactorAlt - 6) < 1e-6, 'up to the leader on the roof');
+    assert.equal(c.ReactorPhysics.followerClimbing(follower), false);
+    player._reactorAlt = 0;
+    for (let i = 0; i < 200; i++) c.ReactorPhysics.update(follower);
+    assert.ok(follower._reactorAlt < 0.05, 'and down after it');
+});
