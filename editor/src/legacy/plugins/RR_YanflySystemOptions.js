@@ -163,6 +163,8 @@
         this._helpWindow.setText(c ? String(c.help || '') : '');
     };
     Window_RRSystemOptions.prototype.gauge = function(x, y, width, rate, c1, c2) {
+        // A game with a gauge script of its own (RR_BlizzBars) draws its bars here too.
+        if (this.rrAceGauge) return this.rrAceGauge(x, y, width, Math.min(Math.max(rate, 0), 1), c1, c2);
         const h = 16, gy = y + this.lineHeight() - 2 - h;
         const fill = Math.min(Math.floor(width * Math.min(Math.max(rate, 0), 1)), width);
         this.contents.fillRect(x, gy, width, h, ColorManager.gaugeBackColor());
@@ -284,7 +286,8 @@
         if (c.type === 'to_title') { this.fadeOutAll(); SceneManager.goto(Scene_Title); return; }
         if (c.type === 'shutdown') { this.fadeOutAll(); SceneManager.exit(); return; }
         if (c.type === 'mouse') {
-            $gameSwitches.setValue(2, !$gameSwitches.value(2));
+            if (window.rrMouse && window.rrMouse.toggleFromOptions) window.rrMouse.toggleFromOptions();
+            else $gameSwitches.setValue(2, !$gameSwitches.value(2));
             this._optionsWindow.activate();
             return;
         }

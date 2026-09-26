@@ -22,6 +22,9 @@
     'use strict';
 
     class Fail extends Error {}
+    // Parallel assignments name their temporary from one counter, so lines translated one by one and run as
+    // one program never declare the same name twice.
+    let massigns = 0;
     const fail = (why) => { throw new Fail(why); };
 
     // ---- tokens -----------------------------------------------------------------
@@ -39,6 +42,14 @@
             if (c === '\\' && src[i + 1] === '\n') { i += 2; spaceBefore = true; continue; }
             if (c === '\n') { push('nl', '\n'); i++; continue; }
             if (c === '#') { while (i < src.length && src[i] !== '\n') i++; continue; }
+            // =begin … =end at the start of lines is a block comment.
+            if (c === '=' && (i === 0 || src[i - 1] === '\n') && src.startsWith('=begin', i)) {
+                const end = src.slice(i).search(/\n=end\b/);
+                if (end < 0) { i = src.length; continue; }
+                i += end + 1;
+                while (i < src.length && src[i] !== '\n') i++;
+                continue;
+            }
             if (/[0-9]/.test(c)) {
                 const m = /^(\d[\d_]*(?:\.\d+)?(?:e[+-]?\d+)?)/i.exec(src.slice(i));
                 push('num', Number(m[1].replace(/_/g, ''))); i += m[1].length; continue;
@@ -170,7 +181,19 @@
                 while (isOp(',')) { next(); args.push(expression()); }
                 return { t: 'call', recv: null, name, args, block: null };
             }
-            return expression();
+            const first = expression();
+            // Parallel assignment: `a, b = list` or `a, b = 1, 2`.
+            if (isOp(',') && ['var', 'gvar', 'ivar', 'index'].includes(first.t)) {
+                const targets = [first];
+                while (isOp(',')) { next(); targets.push(ternary()); }
+                if (!(is('op') && peek().value === '=')) fail('parallel assignment');
+                next();
+                while (is('nl')) next();
+                const values = [expression()];
+                while (isOp(',')) { next(); values.push(expression()); }
+                return { t: 'massign', targets, values };
+            }
+            return first;
         }
 
         function isAssignmentAhead() { return peek(1).type === 'op' && /^(=|\+=|-=|\*=|\/=|%=|\|\|=|&&=)$/.test(peek(1).value); }
@@ -348,7 +371,7 @@
     // ---- generation ---------------------------------------------------------------
 
     const ITEM_TABLES = { $data_items: '$dataItems', $data_weapons: '$dataWeapons', $data_armors: '$dataArmors', $data_skills: '$dataSkills', $data_states: '$dataStates', $data_actors: '$dataActors', $data_classes: '$dataClasses', $data_enemies: '$dataEnemies', $data_troops: '$dataTroops', $data_animations: '$dataAnimations', $data_system: '$dataSystem', $data_tilesets: '$dataTilesets', $data_common_events: '$dataCommonEvents' };
-    const INPUT = { A: 'shift', B: 'cancel', C: 'ok', X: 'rgssX', Y: 'rgssY', Z: 'rgssZ', L: 'pageup', R: 'pagedown', DOWN: 'down', LEFT: 'left', RIGHT: 'right', UP: 'up', CTRL: 'control', SHIFT: 'shift', ALT: 'shift' };
+    const INPUT = { A: 'shift', B: 'cancel', C: 'ok', X: 'rgssX', Y: 'rgssY', Z: 'rgssZ', L2: 'rgssL2', R2: 'rgssR2', L: 'pageup', R: 'pagedown', DOWN: 'down', LEFT: 'left', RIGHT: 'right', UP: 'up', CTRL: 'control', SHIFT: 'shift', ALT: 'shift' };
     const camel = (s) => s.replace(/[?!]$/, '').replace(/_([a-z])/g, (m, c) => c.toUpperCase());
 
     // Methods every kind of value has in both languages.
@@ -432,6 +455,7 @@
                     if (Object.prototype.hasOwnProperty.call(constants, n.name) && typeof constants[n.name] !== 'object') return js(literal(constants[n.name]));
                     const last = n.name.split('::').pop();
                     if (Object.prototype.hasOwnProperty.call(constants, last) && typeof constants[last] !== 'object') return js(literal(constants[last]));
+                    if (options.modules && options.modules[n.name]) return js(n.name, 'module:' + n.name);
                     if (options.classes && options.classes[n.name]) return js(`(typeof ${options.classes[n.name]} === "function" ? ${options.classes[n.name]} : null)`, 'scene');
                     if (/^Scene_[A-Za-z]+$/.test(n.name)) return js(n.name, 'scene');
                     if (['Input', 'Audio', 'SceneManager', 'Graphics', 'Color', 'Tone', 'RPG::SE', 'RPG::BGM', 'RPG::ME', 'RPG::BGS', 'Math', 'DataManager', 'BattleManager'].includes(n.name)) return js(n.name, 'module:' + n.name);
@@ -465,6 +489,7 @@
                 case 'index': return index(n);
                 case 'call': return callNode(n);
                 case 'assign': return assign(n);
+                case 'raw': return js(n.code, n.kind || 'any');
                 default: return fail('statement in expression: ' + n.t);
             }
         }
@@ -500,7 +525,7 @@
                 const entry = calls[n.name];
                 const t = Array.isArray(entry) ? entry[0] : entry;
                 const kind = Array.isArray(entry) ? entry[1] : 'any';
-                return js(typeof t === 'function' ? t(a) : t.replace('%*', a.join(', ')).replace('%r', a.slice(1).join(', ')).replace(/%(\d)/g, (m, i) => (a[Number(i)] !== undefined ? a[Number(i)] : 'undefined')).replace(/, undefined\)/g, ')').replace(/\(undefined\)/g, '()'), kind);
+                return js(typeof t === 'function' ? t(a, options) : t.replace('%*', a.join(', ')).replace('%r', a.slice(1).join(', ')).replace(/%(\d)/g, (m, i) => (a[Number(i)] !== undefined ? a[Number(i)] : 'undefined')).replace(/, undefined\)/g, ')').replace(/\(undefined\)/g, '()'), kind);
             }
             if (!n.recv) return bareCall(n, a);
             const recv = expr(n.recv);
@@ -555,6 +580,14 @@
         }
 
         function moduleCall(mod, n, a) {
+            // A module a game's script defines, whose calls a family ports (WolfPad.plugged_in?).
+            const own = options.modules && options.modules[mod];
+            if (own) {
+                const entry = own[n.name];
+                if (entry === undefined) return fail(`unknown call ${mod}.${n.name}`);
+                const t = Array.isArray(entry) ? entry[0] : entry;
+                return js(fill(t, '', a), Array.isArray(entry) ? entry[1] : 'any');
+            }
             const key = a.map(x => x);
             if (mod === 'Input') {
                 const button = (x) => { const m = /^"([A-Z0-9_]+)"$/.exec(x); if (!m) return fail('input symbol'); if (!INPUT[m[1]]) return fail('input ' + m[1]); return literal(INPUT[m[1]]); };
@@ -697,6 +730,13 @@
                 case 'break': return 'break;';
                 case 'continue': return 'continue;';
                 case 'return': return n.e ? `return ${gen(n.e)};` : 'return;';
+                case 'massign': {
+                    // One value spreads over the targets as Ruby spreads an array; several are listed.
+                    const tmp = '_m' + (massigns++);
+                    const value = n.values.length > 1 ? '[' + n.values.map(gen).join(', ') + ']' : gen(n.values[0]);
+                    const parts = n.targets.map((t, i) => assign({ t: 'assign', op: '=', target: t, value: { t: 'raw', code: `(Array.isArray(${tmp}) ? ${tmp}[${i}] : ${i === 0 ? tmp : 'null'})` } }).code + ';');
+                    return `const ${tmp} = ${value}; ${parts.join(' ')}`;
+                }
                 default: return gen(n) + ';';
             }
         }
@@ -734,7 +774,7 @@
         }
     }
 
-    const api = { tokenize, parse, transpile, transpileExpression };
+    const api = { tokenize, parse, transpile, transpileExpression, Fail };
     root.RRRubyTranspiler = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

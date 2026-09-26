@@ -279,7 +279,8 @@ test('an imported system picture spelled otherwise replaces the skeleton\'s, and
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
     assert.deepEqual(C.commands([{ code: 111, indent: 0, parameters: [11, 'X'] }], {})[0].parameters, [11, 'rgssX', 0]);
     const scenes = fs.readFileSync(path.join(runtime, 'reactor_scenes.js'), 'utf8');
-    assert.match(scenes, /\$dataSystem\.rrRgssKeys\) Object\.assign\(Input\.keyMapper, \{ 65: "rgssX", 83: "rgssY", 68: "rgssZ" \}\)/);
+    assert.match(scenes, /Object\.assign\(Input\.keyMapper, \{ 65: "rgssX", 83: "rgssY", 68: "rgssZ" \}\)/);
+    assert.match(scenes, /Object\.assign\(Input\.gamepadMapper, \{ 6: "rgssL2", 7: "rgssR2" \}\)/);
 });
 
 test('CSCA quests become Reactor quests: tables resolved as Ruby leaves them, steps hidden until reached', () => {
@@ -293,4 +294,58 @@ test('CSCA quests become Reactor quests: tables resolved as Ruby leaves them, st
     const ctx = { constants, families: C.scriptFamilies([script]) };
     assert.equal(C.ruby('set_quest_progress(:atlas01, 1)', 'statement', ctx), 'this.rrCscaQuestProgress?.("atlas01", 1);');
     assert.equal(C.ruby('quest_progress(:atlas01) == 0', 'expression', ctx), '((this.rrCscaQuestState?.("atlas01", "progress") ?? 0) === 0)');
+});
+
+test('the Ruby translator: parallel assignment, block comments, a game\'s own modules and scene classes', () => {
+    const T = require(path.join(legacy, 'RubyTranspiler.js'));
+    const o = { self: 'interpreter', constants: {}, calls: {}, ivars: {} };
+    const first = T.transpile('$game_variables[52],$game_variables[53] = [3, 4]', o);
+    assert.match(first, /^const (_m\d+) = \[3, 4\]; \$gameVariables\.setValue\(52, \(Array\.isArray\(\1\) \? \1\[0\] : \1\)\); \$gameVariables\.setValue\(53, \(Array\.isArray\(\1\) \? \1\[1\] : null\)\);$/);
+    assert.notEqual(/_m\d+/.exec(T.transpile('a, b = 1, 2', o))[0], /_m\d+/.exec(first)[0], 'each parallel assignment names its own temporary');
+    assert.equal(T.transpile('=begin\nnot ruby at all (\n=end\n$game_variables[1] = 2', o), '$gameVariables.setValue(1, 2);');
+    const mods = Object.assign({}, o, { modules: { WolfPad: { 'plugged_in?': ['pad()', 'bool'] } }, classes: { CSCA_Scene_X: 'Scene_RRX' } });
+    assert.equal(T.transpileExpression('WolfPad.plugged_in? == false', mods), '(pad() === false)');
+    assert.equal(T.transpile('WolfPad.rumble', mods), null, 'a module call no family ports stays untranslated');
+    assert.equal(T.transpile('SceneManager.call(CSCA_Scene_X)', mods), '((s) => s && SceneManager.push(s))((typeof Scene_RRX === "function" ? Scene_RRX : null));');
+});
+
+test('Hime choices: following Show Choices merge and choice options map the picked row back to its branch', () => {
+    function Game_Interpreter() {}
+    Game_Interpreter.prototype.setupChoices = function(params) { ctx.$gameMessage.setChoices(params[0].slice(), 0, params[1] < params[0].length ? params[1] : -2); };
+    function Game_Message() { this._choices = []; }
+    Object.assign(Game_Message.prototype, { clear() {}, setChoices(c, d, x) { this._choices = c; this._choiceDefaultType = d; this._choiceCancelType = x; }, setChoiceCallback(f) { this.cb = f; }, choices() { return this._choices; } });
+    function Window_ChoiceList() {}
+    Object.assign(Window_ChoiceList.prototype, { makeCommandList() {}, drawItem() {}, resetTextColor() {} });
+    const ctx = { Game_Interpreter, Game_Message, Window_ChoiceList, PluginManager: { parameters: () => ({}) } };
+    vm.runInNewContext(plugin('RR_HimeChoices'), ctx);
+    ctx.$gameMessage = new Game_Message();
+    const it = new Game_Interpreter();
+    it._indent = 0; it._index = 0; it._branch = {};
+    it._list = [
+        { code: 102, indent: 0, parameters: [['A', 'B'], -1] }, { code: 402, indent: 0, parameters: [0, 'A'] }, { code: 0, indent: 1, parameters: [] },
+        { code: 402, indent: 0, parameters: [1, 'B'] }, { code: 0, indent: 1, parameters: [] }, { code: 404, indent: 0, parameters: [] },
+        { code: 102, indent: 0, parameters: [['C'], -2] }, { code: 402, indent: 0, parameters: [0, 'C'] }, { code: 0, indent: 1, parameters: [] },
+        { code: 403, indent: 0, parameters: [] }, { code: 0, indent: 1, parameters: [] }, { code: 404, indent: 0, parameters: [] }, { code: 0, indent: 0, parameters: [] }];
+    it.rrChoiceOption('hidden', 2, true);
+    it.rrChoiceOption('condition', 3, true);
+    it.setupChoices(it._list[0].parameters);
+    assert.deepEqual([...ctx.$gameMessage._choices], ['A', 'C'], 'B hidden; the second command\'s C joined');
+    assert.deepEqual([...ctx.$gameMessage._rrChoiceEnabled], [true, false]);
+    assert.equal(it._list[6].parameters[0], 0 + 2, 'the joined When branch counts on from the first command\'s choices');
+    assert.equal(it._list.filter(c => c.code === 102).length, 1);
+    ctx.$gameMessage.cb(1);
+    assert.equal(it._branch[0], 2, 'the second visible row is choice C, branch 2');
+    assert.equal(ctx.$gameMessage._choiceCancelType, -2, 'the joined command\'s cancel branch carries over');
+});
+
+test('toasts, mail and the choice display mode read their settings from the game', () => {
+    const constants = { 'CSCA::QUESTS::SHOW_COMPLETE_TOAST': true, 'CSCA::QUESTS::QUEST_COMPLETE_SOUND': 'victory', 'CSCA::QUESTS::COLOR_COMPLETED': 24, 'CSCA::QUESTS::QUEST_START_SOUND': 'started', 'CSCA::QUESTS::COLOR_STARTED': 27 };
+    const scripts = ['class CSCA_Quest\n  def complete_quest\n    $csca.reserve_toast([:quest_complete, self])\n  end\nend', 'alias :csca_qsys_extended_refresh :refresh'];
+    const q = JSON.parse(params('RR_CscaToasts').extract({ scripts, constants }).quests);
+    assert.deepEqual([q.started, q.complete, q.completeTwice], [{ show: true, me: 'started', color: 27 }, { show: true, se: 'victory', color: 24 }, true], 'both quest scripts reserve a completion');
+    const mail = params('RR_MailSystem').extract({ scripts: ['alias mail_toast_add_mail_original add_mail\n    Audio.me_play("Audio/SE/radio", 100, 100)'], constants: { 'MAIL_SYSTEM::MENU_NAME': 'Comms' } });
+    assert.deepEqual(mail, { menuName: 'Comms', toast: 'true', toastSound: 'radio' });
+    const mode = params('RR_ChoiceDisplayMode').extract({ scripts: ['$imported[:TH_HMSChoiceDisplayMode] = true\n    @choice_display_mode = :embed', 'alias final_fix_update_placement update_placement\n    self.height = fitting_height(3)'], constants: { 'TH::Choice_Display_Mode::Indent': 36 } });
+    assert.deepEqual(mode, { mode: 'embed', indent: '36', rows: '3' });
+    assert.ok(C.scriptFamilies(['$imported["CSCA-ToastManager"] = true', 'module MAIL_SYSTEM\nend\ndef add_mail(sender, title, body, attachments = [])\nend']).has('mailSystem'));
 });

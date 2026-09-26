@@ -3826,7 +3826,11 @@ Scene_Boot.prototype.isReady = function() {
     const _start = Scene_Boot.prototype.start;
     Scene_Boot.prototype.start = function() {
         if ($dataSystem && $dataSystem.rrTouchUiOff && !ConfigManager._rrTouchUiSaved) ConfigManager.touchUI = false;
-        if ($dataSystem && $dataSystem.rrRgssKeys) Object.assign(Input.keyMapper, { 65: "rgssX", 83: "rgssY", 68: "rgssZ" });
+        if ($dataSystem && $dataSystem.rrRgssKeys) {
+            Object.assign(Input.keyMapper, { 65: "rgssX", 83: "rgssY", 68: "rgssZ" });
+            // A pad's triggers (LT, RT), which gamepad scripts for the old engines added as L2 and R2.
+            Object.assign(Input.gamepadMapper, { 6: "rgssL2", 7: "rgssR2" });
+        }
         _start.call(this);
     };
 })();

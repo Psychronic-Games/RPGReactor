@@ -90,6 +90,21 @@
     }
 
     /**
+     * A Ruby condition a script call carries as a string ("$game_switches[9] == true"), as JavaScript to
+     * evaluate where the call runs. An empty string is true, as the scripts read it. Throws when the
+     * condition cannot be translated, so the call is kept as a comment rather than guessed.
+     */
+    function rubyCondition(literalJs, options) {
+        let text;
+        const fail = (why) => { throw (T && T.Fail ? new T.Fail(why) : new SyntaxError(why)); };
+        try { text = JSON.parse(literalJs); } catch (_) { fail('condition is not a string'); }
+        if (!String(text).trim()) return 'true';
+        const js = T ? T.transpileExpression(String(text), options) : null;
+        if (js === null || js === undefined) fail('condition ' + text);
+        return '(' + String(js).replace(/;\s*$/, '') + ')';
+    }
+
+    /**
      * Published VX Ace scripts whose calls events make, as Reactor runtime calls.
      * `detect` is tested against the game's own scripts; a family's rules apply
      * only when the game carries it, so another game's same-named method is never
@@ -194,6 +209,48 @@
             },
             quests: (scripts, constants, db = {}) => require('./plugins/RR_CscaQuests.params.js').records(scripts, constants, db)
         },
+        { key: 'blizzBars', detect: /def blizz_gradient_bar\b/, plugin: 'RR_BlizzBars' },
+        {
+            // Hime's Large Choices and Choice Options. A choice condition is Ruby in a string, evaluated when the call
+            // runs; it is translated here, and a condition that cannot be leaves the whole line as a comment.
+            key: 'himeChoices', detect: /TH_LargeChoices|TH_ChoiceOptions/, plugin: 'RR_HimeChoices',
+            parameters: () => ({}),
+            event: {
+                hide_choice: (a, o) => `this.rrChoiceOption?.("hidden", ${a[0]}, ${rubyCondition(a[1], o)})`,
+                disable_choice: (a, o) => `this.rrChoiceOption?.("condition", ${a[0]}, ${rubyCondition(a[1], o)})`,
+                color_choice: 'this.rrChoiceOption?.("color", %0, %1)', disable_color_choice: 'this.rrChoiceOption?.("disable_color", %0, %1)',
+                text_choice: (a, o) => `this.rrChoiceOption?.("text", ${a[0]}, ${a[1]}${a[2] !== undefined ? ', ' + rubyCondition(a[2], o) : ''})`,
+                choice_option: 'this.rrChoiceOption?.(%*)', combine_choices: '0'
+            }
+        },
+        {
+            key: 'choiceDisplayMode', detect: /TH_HMSChoiceDisplayMode/, plugin: 'RR_ChoiceDisplayMode',
+            setters: { 'gameMessage.choice_display_mode': '$gameMessage.rrChoiceDisplayMode = %v' }
+        },
+        {
+            // Gamepad Extender: an XInput driver for Ace. MZ reads gamepads itself; the game's questions to it are answered here.
+            key: 'wolfPad', detect: /module WolfPad\b/, plugin: 'RR_GamepadExtender',
+            modules: {
+                WolfPad: {
+                    'plugged_in?': ['(window.rrGamepadConnected?.() ?? false)', 'bool'], vibrate: 'window.rrGamepadVibrate?.(%*)'
+                }
+            }
+        },
+        {
+            // Shaz's Super Simple Mouse Script: the icon cursor and its event hovers; $mouse and Mouse are the game's.
+            key: 'shazMouse', detect: /SUPER SIMPLE MOUSE SCRIPT[\s\S]*class Sprite_Mouse/, plugin: 'RR_ShazMouse',
+            globals: { $mouse: ['window.rrMouse', 'mouse'] },
+            objects: { mouse: { 'enabled?': '($?.isEnabled?.() ?? true)', enabled: '($?.isEnabled?.() ?? true)' } },
+            setters: { 'mouse.enabled': 'window.rrMouse?.setEnabled(%v)' },
+            modules: {
+                Mouse: {
+                    position: ['(window.rrMouse?.position() ?? [0, 0])', 'array'], 'trigger?': ['(window.rrMouse?.trigger(%0) ?? false)', 'bool'],
+                    'repeat?': ['(window.rrMouse?.repeat(%0) ?? false)', 'bool'], 'shaz?': 'window.rrMouse?.showSystemCursor(%0)'
+                }
+            }
+        },
+        { key: 'cscaToasts', detect: /\$imported\["CSCA-ToastManager"\]\s*=\s*true/, plugin: 'RR_CscaToasts', event: { bt_reserve_toast: 'window.rrCscaToast?.("text", %0, %1)' } },
+        { key: 'mailSystem', detect: /module MAIL_SYSTEM\b[\s\S]*def add_mail/, plugin: 'RR_MailSystem', event: { add_mail: 'this.rrAddMail?.(%*)' } },
         { key: 'wasdMovement', detect: /helladen_dir4/, plugin: 'RR_WasdMovement' },
         {
             key: 'documentReader', detect: /module DocumentReader\b[\s\S]*class Scene_DocumentReader/, plugin: 'RR_DocumentReader',
@@ -309,7 +366,7 @@
     /** The calls and instance variables the enabled families add, for one `self`. */
     function familyTables(context) {
         const calls = {}, ivars = {};
-        const extra = { members: {}, objects: {}, globals: {}, setters: {}, scenes: {}, classes: {} };
+        const extra = { members: {}, objects: {}, globals: {}, setters: {}, scenes: {}, classes: {}, modules: {} };
         const self = context.self === 'character' ? 'character' : 'interpreter';
         for (const family of FAMILIES) {
             if (!context.families || !context.families.has(family.key)) continue;
@@ -321,6 +378,7 @@
             Object.assign(extra.setters, family.setters || {});
             Object.assign(extra.scenes, family.scenes || {});
             Object.assign(extra.classes, family.classes || {});
+            Object.assign(extra.modules, family.modules || {});
             if (self === 'character') for (const [name, template] of Object.entries(family.assign || {})) ivars[name] = template.replace(/\s*=\s*%v$/, '');
         }
         return { calls, ivars, extra };
@@ -504,7 +562,7 @@
 
     // ---- event commands --------------------------------------------------------
 
-    const BUTTONS = { A: 'shift', B: 'cancel', C: 'ok', X: 'rgssX', Y: 'rgssY', Z: 'rgssZ', L: 'pageup', R: 'pagedown', DOWN: 'down', LEFT: 'left', RIGHT: 'right', UP: 'up', CTRL: 'control', SHIFT: 'shift', ALT: 'shift' };
+    const BUTTONS = { A: 'shift', B: 'cancel', C: 'ok', X: 'rgssX', Y: 'rgssY', Z: 'rgssZ', L2: 'rgssL2', R2: 'rgssR2', L: 'pageup', R: 'pagedown', DOWN: 'down', LEFT: 'left', RIGHT: 'right', UP: 'up', CTRL: 'control', SHIFT: 'shift', ALT: 'shift' };
 
     /**
      * Message text codes from the game's message scripts, as MZ codes. Only the

@@ -80,12 +80,13 @@
     };
 
     const actions = {
-        start(key) { progressOf(key).started = true; },
+        start(key) { progressOf(key).started = true; toast('started', key); },
         advance(key) {
             const p = progressOf(key), q = quest(key);
             p.progress++;
             p.started = true;
             if (q && p.progress >= q.steps && !p.completed && !p.failed) actions.complete(key);
+            if (!p.completed && !p.failed) toast('advanced', key);
         },
         complete(key) {
             const p = progressOf(key), q = quest(key);
@@ -95,6 +96,7 @@
             info.completed++;
             info.list[key] = true;
             if (q && q.autoEarn) pay(q, 1);
+            toast('complete', key);
         },
         fail(key) {
             const p = progressOf(key), q = quest(key);
@@ -105,6 +107,7 @@
             info.failed++;
             info.list[key] = false;
             if (q && q.autoEarn) pay(q, -1);
+            toast('failed', key);
         }
     };
 
@@ -114,6 +117,8 @@
         actions[action](key);
         syncReactor(key);
     };
+    // Notices, when the game carried the toast scripts (RR_CscaToasts).
+    const toast = (kind, key) => { if (window.rrCscaQuestToast) window.rrCscaQuestToast(kind, key); };
     Game_Interpreter.prototype.rrCscaQuestProgress = function(key, n) {
         key = String(key);
         const p = progressOf(key), q = quest(key);

@@ -482,7 +482,9 @@ test('imports list choices inside the message window, and the text plugin knows 
     const windows = fs.readFileSync(path.join(__dirname, '..', '..', 'runtime', 'reactor_windows.js'), 'utf8');
     assert.match(windows, /if \(!\(\$dataSystem && \$dataSystem\.rrChoicesInMessage\) \|\| !this\._messageWindow\) return _updatePlacement\.call\(this\);/);
     for (const f of ['LegacyConvert.js']) assert.match(fs.readFileSync(path.join(__dirname, '..', 'src', 'legacy', f), 'utf8'), /out\.rrChoicesInMessage = true;/);
-    for (const f of ['XpImporter.js', 'VxImporter.js', 'RgssImporter.js']) assert.match(fs.readFileSync(path.join(__dirname, '..', 'src', 'legacy', f), 'utf8'), /sys\.rrChoicesInMessage = true;/);
+    for (const f of ['XpImporter.js', 'VxImporter.js']) assert.match(fs.readFileSync(path.join(__dirname, '..', 'src', 'legacy', f), 'utf8'), /sys\.rrChoicesInMessage = true;/);
+    // VX Ace lists choices in a window of their own; a game's embedding script brings its own port.
+    assert.doesNotMatch(fs.readFileSync(path.join(__dirname, '..', 'src', 'legacy', 'RgssImporter.js'), 'utf8'), /sys\.rrChoicesInMessage = true;/);
     const fx = fs.readFileSync(path.join(__dirname, '..', '..', 'runtime', 'reactor_screen_fx.js'), 'utf8');
     assert.match(fx, /\\\\\(\[iI\]\)\\\[\(\\d\+\)\\\]/, '\\i[n] and \\I[n]');
     assert.match(fx, /\\\\\(\[tT\]\)\\\[\(\\d\+\)\\\]/, '\\t[n] and \\T[n]');

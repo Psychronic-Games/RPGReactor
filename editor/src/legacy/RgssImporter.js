@@ -357,7 +357,7 @@ function open(folder, destination, options) {
         sys.rrCharacterShiftY = 4;   // VX Ace lifts characters 4 px (shift_y); MZ's is 6
         // Yanfly's System Options names the Options command (on the menu, and on the title with Theo's add-on).
         if (typeof constants['YEA::SYSTEM::COMMAND_NAME'] === 'string') sys.terms.commands[11] = constants['YEA::SYSTEM::COMMAND_NAME'];
-        sys.rrChoicesInMessage = true;   // choices are listed inside the message window, after the text
+        // Ace lists choices in a window of their own (right of the message); a script that embeds them has its own port.
         sys.rrNoItemBackgrounds = true;   // the old engines draw no bar behind each item of a list, only the cursor
         Object.assign(sys, { rrRgssWindows: true, rrMapNameStays: true, rrTouchUiOff: true, rrRgssKeys: true });   // rows one line tall, the map name through messages, no touch buttons, A/S/D as the X/Y/Z buttons
         sys.rrRgssFades = true;   // Ace's 30-frame fades, and the black held 15 frames on a transfer
