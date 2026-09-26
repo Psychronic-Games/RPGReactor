@@ -68,10 +68,11 @@ test('ports install in the order of the game\'s scripts, after the Ace base', ()
 
 test('equipment types count from 1: weapons are type 1, and lock and seal equip shift with them', () => {
     const db = C.database({ weapons: [null, { id: 1, etype_id: 0, features: [] }], armors: [null, { id: 1, etype_id: 2, features: [] }],
-        classes: [null, { id: 1, features: [{ code: 54, data_id: 0, value: 0 }, { code: 55, data_id: 1, value: 0 }, { code: 51, data_id: 3, value: 0 }] }] }, {});
+        classes: [null, { id: 1, features: [{ code: 53, data_id: 0, value: 0 }, { code: 54, data_id: 1, value: 0 }, { code: 55, data_id: 1, value: 0 }, { code: 51, data_id: 3, value: 0 }] }] }, {});
     assert.equal(db.weapons[1].etypeId, 1);
     assert.equal(db.armors[1].etypeId, 3);
-    assert.deepEqual(db.classes[1].traits.map(t => t.dataId), [1, 2, 3]);
+    // Lock (53) and seal (54) name an equipment type; slot type (55) stays 1 for dual wield.
+    assert.deepEqual(db.classes[1].traits.map(t => t.dataId), [1, 2, 1, 3]);
 });
 
 test('Parameter Tables: class and enemy CSVs become database stats', () => {

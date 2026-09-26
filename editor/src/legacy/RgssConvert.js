@@ -688,7 +688,7 @@
     // ---- database --------------------------------------------------------------
 
     // Ace numbers equipment types from 0 (weapon); MZ from 1, so equip-type data ids (lock and seal equip) shift by one.
-    const traits = (features) => list(features).map(f => ({ code: num(f.code), dataId: num(f.data_id) + (num(f.code) === 54 || num(f.code) === 55 ? 1 : 0), value: num(f.value) }));
+    const traits = (features) => list(features).map(f => ({ code: num(f.code), dataId: num(f.data_id) + (num(f.code) === 53 || num(f.code) === 54 ? 1 : 0), value: num(f.value) }));
     const effects = (effs) => list(effs).map(e => ({ code: num(e.code), dataId: num(e.data_id), value1: num(e.value1), value2: num(e.value2) }));
     const damage = (d) => ({ type: num(d && d.type), elementId: num(d && d.element_id), formula: str(d && d.formula) || '0', variance: num(d && d.variance, 20), critical: !!(d && d.critical) });
     const byId = (records, convert) => { const out = [null]; for (const r of list(records)) if (r && r.id) out[r.id] = convert(r); for (let i = 1; i < out.length; i++) if (out[i] === undefined) out[i] = null; return out; };
