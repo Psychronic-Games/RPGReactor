@@ -281,3 +281,16 @@ test('an imported system picture spelled otherwise replaces the skeleton\'s, and
     const scenes = fs.readFileSync(path.join(runtime, 'reactor_scenes.js'), 'utf8');
     assert.match(scenes, /\$dataSystem\.rrRgssKeys\) Object\.assign\(Input\.keyMapper, \{ 65: "rgssX", 83: "rgssY", 68: "rgssZ" \}\)/);
 });
+
+test('CSCA quests become Reactor quests: tables resolved as Ruby leaves them, steps hidden until reached', () => {
+    const script = 'module CSCA\n  module QUESTS\n    DESCRIPTION, STEP, QUEST, REWARD = [], [], [], []\n    CURRENCY_NAME = "Zenar"\n    DESCRIPTION[0] = ["Line one",\n                      "line two."]\n    REWARD[4] =   [2000, 0, :gold]\n    REWARD[100] = [1,"ENA Reputation",:string]\n    STEP[0] = ["Find a way in.",\n               "Win."]\n    REWARD[4] = [35, 0,    :exp]\n    QUEST[0] = {\n    :symbol => :atlas01,\n    :name => "Operation Midnight",\n    :description => DESCRIPTION[0],\n    :location => "ATLAS",\n    :questgiver => "Nikriontra",\n    :difficulty => "Main Mission",\n    :steps => STEP[0],\n    :rewards => [REWARD[4], REWARD[100], REWARD[7]],\n    :auto_earn_reward => true\n    }\n  end\nend\nclass CSCA_Quest\nend';
+    const constants = C.scriptConstants([script]);
+    const P = params('RR_CscaQuests');
+    const [record] = P.records([script], constants, {});
+    assert.deepEqual([record.key, record.name, record.category, record.description, record.objectives, record.rewards],
+        ['atlas01', 'Operation Midnight', 'Main Mission', 'Line one\nline two.', [{ text: 'Find a way in.', hidden: true }, { text: 'Win.', hidden: true }], ['35 EXP', 'ENA Reputation 1']]);
+    assert.deepEqual(JSON.parse(P.extract({ scripts: [script], constants }).quests), [{ key: 'atlas01', steps: 2, autoEarn: true, rewards: [{ amount: 35, id: 0, type: 'exp' }] }], 'text rewards are never paid');
+    const ctx = { constants, families: C.scriptFamilies([script]) };
+    assert.equal(C.ruby('set_quest_progress(:atlas01, 1)', 'statement', ctx), 'this.rrCscaQuestProgress?.("atlas01", 1);');
+    assert.equal(C.ruby('quest_progress(:atlas01) == 0', 'expression', ctx), '((this.rrCscaQuestState?.("atlas01", "progress") ?? 0) === 0)');
+});

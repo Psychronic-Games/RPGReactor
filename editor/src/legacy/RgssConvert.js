@@ -182,6 +182,18 @@
         },
         { key: 'yeaSystemOptions', detect: /\$imported\["YEA-SystemOptions"\]\s*=\s*true/, plugin: 'RR_YanflySystemOptions' },
         { key: 'mkWindowOpacity', detect: /\$imported\["MK-WindowOpacity"\]/, plugin: 'RR_WindowOpacity' },
+        {
+            // CSCA Quest System: its quests become Reactor quests (key = the CSCA symbol, objectives = the steps,
+            // shown as the quest reaches them); RR_CscaQuests keeps the step and reward rules.
+            key: 'cscaQuests', detect: /module QUESTS\b[\s\S]*class CSCA_Quest\b/, plugin: 'RR_CscaQuests',
+            event: {
+                start_quest: 'this.rrCscaQuest?.("start", %0)', advance_quest: 'this.rrCscaQuest?.("advance", %0)', complete_quest: 'this.rrCscaQuest?.("complete", %0)',
+                fail_quest: 'this.rrCscaQuest?.("fail", %0)', set_quest_progress: 'this.rrCscaQuestProgress?.(%0, %1)',
+                'quest_complete?': ['this.rrCscaQuestState?.(%0, "complete")', 'bool'], 'quest_failed?': ['this.rrCscaQuestState?.(%0, "failed")', 'bool'],
+                'quest_started?': ['this.rrCscaQuestState?.(%0, "started")', 'bool'], quest_progress: ['(this.rrCscaQuestState?.(%0, "progress") ?? 0)', 'number']
+            },
+            quests: (scripts, constants, db = {}) => require('./plugins/RR_CscaQuests.params.js').records(scripts, constants, db)
+        },
         { key: 'wasdMovement', detect: /helladen_dir4/, plugin: 'RR_WasdMovement' },
         {
             key: 'documentReader', detect: /module DocumentReader\b[\s\S]*class Scene_DocumentReader/, plugin: 'RR_DocumentReader',

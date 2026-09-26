@@ -194,13 +194,17 @@ const matchFileCase = (dest) => require('./ProjectFiles.js').matchFileCase(dest)
  */
 function writeFamilyQuests(dest, families, scriptTexts, constants) {
     const records = [];
+    // Item names for reward texts, from the database the import already wrote.
+    const table = (name) => { try { return JSON.parse(fs.readFileSync(path.join(dest, 'data', name + '.json'), 'utf8')) || []; } catch (_) { return []; } };
+    const db = { items: table('Items'), weapons: table('Weapons'), armors: table('Armors') };
     for (const family of C.FAMILIES) {
         if (!families.has(family.key) || typeof family.quests !== 'function') continue;
-        for (const q of family.quests(scriptTexts, constants) || []) {
+        for (const q of family.quests(scriptTexts, constants, db) || []) {
             records.push({
                 id: records.length + 1, name: q.name || q.key, key: q.key || '', category: q.category || '', iconIndex: q.iconIndex || 0, difficulty: '',
                 from: q.from || '', location: q.location || '', description: q.description || '',
-                objectives: (q.objectives || []).map(text => ({ text, hidden: false, switchId: 0 })), rewards: (q.rewards || []).map(text => ({ text, hidden: false })),
+                objectives: (q.objectives || []).map(o => (typeof o === 'string' ? { text: o, hidden: false, switchId: 0 } : { text: String(o.text || ''), hidden: !!o.hidden, switchId: 0 })),
+                rewards: (q.rewards || []).map(text => ({ text, hidden: false })),
                 subtext: '', quotes: '', activation: { type: 'command', switchId: 0, variableId: 0, operator: '>=', value: 0 }, completion: { type: 'command', switchId: 0 },
                 note: `<Imported from: ${family.key}>`
             });

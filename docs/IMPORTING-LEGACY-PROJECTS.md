@@ -237,8 +237,8 @@ Document Reader, WASD Movement, Vlue's Eventing Fine Tuning, Theo's fog and
 hover labels, Yanfly's System Options (global, with Theo's add-on) and Window
 Color Opacity; from VX, Woratana's
 Multiple Fog, the Skill (Tech) Shop and modern algebra's Editable Actor
-Options. A journal whose quests are data (Nicke's Simple Journal) becomes
-Reactor's own quests instead: they are in Database › Quests, the game's calls
+Options. A journal whose quests are data (Nicke's Simple Journal, the CSCA Quest
+System) becomes Reactor's own quests instead: they are in Database › Quests, the game's calls
 drive them, and its journal scene is Reactor's quest log.
 
 **Ruby cannot run.** Script commands, script conditions and move-route
