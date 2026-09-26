@@ -4341,7 +4341,7 @@ class MapEditor3D {
             // Suspended (the browser playtest runs in an overlay iframe):
             // keep the loop alive but do no GPU work — the playtest owns
             // the machine until the overlay closes.
-            if (this.suspended) { this.frame = requestAnimationFrame(tick); return; }
+            if (this.suspended || MapEditor3D.coveredByDatabase()) { this.frame = requestAnimationFrame(tick); return; }
             this.frame = null;
             try {
                 this.stepFly(now);
@@ -4370,6 +4370,12 @@ class MapEditor3D {
      * also carries the water animation (a frame every 500 ms) and any change
      * the activity checks do not know about, within a tenth of a second.
      */
+    /** The Database window covers the map: its own previews get the GPU. */
+    static coveredByDatabase() {
+        return typeof document !== 'undefined' && typeof document.getElementById === 'function'
+            && !!document.getElementById('database-viewer')?.classList?.contains('active');
+    }
+
     static shouldRender({ now, active, lastRenderAt, idleInterval = 100 }) {
         if (active) return true;
         if (!(lastRenderAt > 0)) return true;

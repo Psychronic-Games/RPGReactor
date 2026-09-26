@@ -473,6 +473,12 @@ test('repeated 3D toggles dispose every Three renderer without losing WebGL', as
     assert.equal(lost, 0);
 });
 
+test('the map view draws nothing while the Database window covers it', () => {
+    const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'MapEditor3D.js'), 'utf8');
+    assert.match(src, /if \(this\.suspended \|\| MapEditor3D\.coveredByDatabase\(\)\) \{ this\.frame = requestAnimationFrame\(tick\); return; \}/);
+    assert.match(src, /getElementById\('database-viewer'\)\?\.classList\?\.contains\('active'\)/);
+});
+
 test('a render exception stops the frame loop and fails back to 2D', () => {
     const frames = [];
     const view = viewport({}, {

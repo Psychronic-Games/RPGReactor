@@ -5738,7 +5738,10 @@ class Database3DEditor {
             const before = this._viewGoal.distance;
             const centre = this._orbitCenterWorld(this._viewGoal.pan);
             const under = centre && this._pointUnderPointer(event.clientX, event.clientY, centre);
-            let ratio = event.deltaY > 0 ? 1.15 : 1 / 1.15;
+            // In proportion to the scroll: a notch (about 100) is 15%, and a
+            // smooth-scrolling wheel's many small events add up to the same.
+            const lines = event.deltaMode === 1 ? event.deltaY * 33 : event.deltaMode === 2 ? event.deltaY * 400 : event.deltaY;
+            let ratio = Math.pow(1.15, Math.max(-3, Math.min(3, lines / 100)));
             if (under && ratio < 1) {
                 const gap = this._camera.position.distanceTo(under);
                 if (gap * ratio < 0.06) ratio = Math.min(1, 0.06 / Math.max(gap, 1e-6));
@@ -6116,34 +6119,40 @@ class Database3DEditor {
     }
 
     /**
-     * Rig markers keep one size on screen: they are scene objects, and
-     * zooming onto a hand used to fill the view with one dot. Labels grow
-     * as the camera comes in (with the square root of the zoom, up to a
-     * readable cap), so finger names read up close and stay small over the
-     * whole body. Labels that would land on one another are then thinned.
+     * Rig markers and their labels keep one size on screen whatever the
+     * zoom, each sized from its own distance to the camera: a dot big
+     * enough to see and grab on a fingertip, and text that stays readable.
      */
+    // Label heights are the sprite's: its text is a bit under half of it (13px and 11px type).
+    static get RIG_MARKER_PX() { return { joint: 14, fine: 10, label: 28, fineLabel: 24, hover: 1.5 }; }
+
     _updateRigOverlay() {
-        if (!this._rigMode || this._rigFaceMode || !this._rigMarkerMeshes) return;
-        const zoom = Math.min(1, Math.max(0.01, this._view.distance / 4));
-        const k = zoom;
-        let kLabel = Math.sqrt(zoom);
-        // No taller than about 22px of text: at that size a hand's worth of names still fits.
+        if (!this._rigMode || this._rigFaceMode || !this._rigMarkerMeshes || !this._camera) return;
         const canvas = this._detail.querySelector('.r3d-db-canvas');
         const rect = canvas && canvas.getBoundingClientRect();
-        if (rect && rect.height && this._rigLabelBase && this._camera) {
-            const worldPerPixel = (2 * this._view.distance * Math.tan((this._camera.fov * Math.PI) / 360)) / rect.height;
-            const cap = (46 * worldPerPixel) / (this._rigLabelBase * (this._object ? this._object.scale.y : 1));
-            kLabel = Math.min(kLabel, cap);
-        }
-        if (Math.abs(k - (this._rigOverlayScale || 0)) > 1e-4 || Math.abs(kLabel - (this._rigLabelScale || 0)) > 1e-4) {
-            this._rigOverlayScale = k;
-            this._rigLabelScale = kLabel;
-            for (const marker of this._rigMarkerDefinitions()) {
-                const sphere = this._rigMarkerMeshes[marker.key];
-                if (sphere) sphere.scale.setScalar(k * (marker.key === this._rigHoverKey ? 1.7 : 1));
-                this._placeRigLabel(marker.key);
+        if (!rect || !rect.height) return;
+        const px = Database3DEditor.RIG_MARKER_PX;
+        const tanHalf = Math.tan((this._camera.fov * Math.PI) / 360);
+        const groupScale = (this._object ? this._object.scale.y : 1) || 1;
+        const world = this._rigWorldScratch || (this._rigWorldScratch = new THREE.Vector3());
+        for (const marker of this._rigMarkerDefinitions()) {
+            const sphere = this._rigMarkerMeshes[marker.key];
+            if (!sphere) continue;
+            sphere.getWorldPosition(world);
+            // Model units per screen pixel at this marker's depth.
+            const perPixel = (2 * Math.max(1e-4, world.distanceTo(this._camera.position)) * tanHalf) / rect.height / groupScale;
+            const hover = marker.key === this._rigHoverKey || marker.key === this._rigDragKey ? px.hover : 1;
+            const radius = sphere.geometry.parameters.radius || 1;
+            sphere.scale.setScalar(((marker.fine ? px.fine : px.joint) * hover / 2) * perPixel / radius);
+            const label = this._rigMarkerLabels && this._rigMarkerLabels[marker.key];
+            if (label) {
+                const height = (marker.fine ? px.fineLabel : px.label) * perPixel;
+                label.scale.set(height * label.userData.__aspect, height, 1);
+                // Just above the dot: past its radius, then half the label's own height.
+                label.position.set(sphere.position.x, sphere.position.y + radius * sphere.scale.x + height * 0.6, sphere.position.z);
             }
         }
+        this._rigOverlayScale = 1;
         this._declutterRigLabels(rect);
     }
 
@@ -6244,15 +6253,12 @@ class Database3DEditor {
         }
     }
 
-    /** A marker's label floats just above it, at the overlay's current screen scale. */
+    /** A marker's label floats just above it; the overlay pass sizes both each frame. */
     _placeRigLabel(key) {
         const sphere = this._rigMarkerMeshes && this._rigMarkerMeshes[key], label = this._rigMarkerLabels && this._rigMarkerLabels[key];
         if (!sphere || !label) return;
-        const k = this._rigOverlayScale || 1, kLabel = this._rigLabelScale || 1;
-        label.scale.set(label.userData.__width * kLabel, label.userData.__height * kLabel, 1);
-        // Just above the dot: past its radius, then half the label's own height.
-        const lift = label.userData.__lift * k + label.userData.__height * kLabel * 0.55;
-        label.position.set(sphere.position.x, sphere.position.y + lift, sphere.position.z);
+        const radius = (sphere.geometry.parameters.radius || 0) * sphere.scale.x;
+        label.position.set(sphere.position.x, sphere.position.y + radius + label.scale.y * 0.6, sphere.position.z);
     }
 
     _cameraPlanePoint(clientX, clientY, anchorWorld) {
@@ -6373,6 +6379,15 @@ class Database3DEditor {
                 new THREE.MeshBasicMaterial({ color, depthTest: false, transparent: true, opacity: 0.9 }));
             sphere.renderOrder = 30;
             sphere.userData.__reactorOverlay = true;
+            // A dark rim, so a dot reads on a pale surface as well as a dark one.
+            if (!this._rigFaceMode) {
+                const rim = new THREE.Mesh(sphere.geometry, new THREE.MeshBasicMaterial({ color: 0x000000, depthTest: false, transparent: true, opacity: 0.8 }));
+                rim.scale.setScalar(1.35);
+                rim.renderOrder = 29.5;
+                rim.userData.__reactorOverlay = true;
+                rim.raycast = () => {};
+                sphere.add(rim);
+            }
             sphere.position.fromArray(this._rigMarkers[marker.key]);
             sphere.visible = !this._rigFaceMode || marker.key === this._facePoint;
             group.add(sphere);
