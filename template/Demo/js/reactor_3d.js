@@ -936,6 +936,7 @@ Reactor3D.EmptyPass = {
 /** The game, editor map and model previews use the same colour-draw path. */
 Reactor3D.renderScene = function(renderer, scene, camera) {
     this.SkeletonUpdates.prepare(scene);
+    if (this.useSceneWater) this.useSceneWater(scene);
     const detail = this.GeometryDetail;
     if (!detail.enabled || detail._failed || this.tier() !== 'weak') {
         const auto = scene.matrixWorldAutoUpdate;
@@ -5379,6 +5380,8 @@ Reactor3D.MapScene.prototype.addSkyImage = function(sky, bitmap, tileSize) {
     const material = new THREE.MeshBasicMaterial({
         map: texture, side: THREE.BackSide, depthWrite: false, depthTest: false, fog: false
     });
+    // Seen from under the water, the sky hazes like everything else above the surface.
+    if (Reactor3D.waterVolumeMaterial) Reactor3D.waterVolumeMaterial(material);
     this._materials.push(material);
     const geometry = new THREE.SphereGeometry(radius, 48, 24);
     const mesh = new THREE.Mesh(geometry, material);

@@ -159,7 +159,7 @@ class DatabaseControlsEditor {
                         <label class="rr-controls-check"><input type="checkbox" class="rr-controls-swim"${physics.swim !== false ? ' checked' : ''}> ${rrEscapeHtml(tt('Players can swim in deep water'))}</label>
                         <label>${rrEscapeHtml(tt('Float depth'))}</label><div><input type="number" class="database-field-value rr-controls-num" data-field="swimDepth" min="0.2" max="20" step="0.1" value="${physics.swimDepth}"> <span class="rr-controls-unit">${rrEscapeHtml(tt('tiles under the surface'))}</span></div>
                         <label>${rrEscapeHtml(tt('Splash sound'))}</label><div class="rr-controls-inline"><button type="button" class="rr-btn-secondary rr-controls-splash">${rrEscapeHtml(physics.splashSe && physics.splashSe.name ? physics.splashSe.name : tt('(none)'))}</button></div>
-                        <div class="rr-controls-note rr-controls-span">${rrEscapeHtml(tt('Shallower water is waded; deeper water is swum, slower and without dashing. Swimmers climb out onto a low bank or jump out.'))}</div>
+                        <div class="rr-controls-note rr-controls-span">${rrEscapeHtml(tt('Shallower water is waded; deeper water is swum. Dash dives, Jump rises; at the surface Jump leaps out.'))}</div>
                     </div>
                 </div>
             </div>`;

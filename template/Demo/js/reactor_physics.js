@@ -101,6 +101,30 @@
     ReactorPhysics.WATER_DRAG = 0.86;
     /** How fast a swimmer climbs out onto a bank, tiles per frame. */
     ReactorPhysics.CLIMB_SPEED = 0.12;
+    /** Diving and rising, tiles per frame; a swimmer keeps clear of the bottom by this much. */
+    ReactorPhysics.DIVE_SPEED = 0.05;
+    ReactorPhysics.DIVE_FLOOR = 0.3;
+
+    /** Whether a swimmer is under the surface (diving), not treading water at it. */
+    ReactorPhysics.isUnderwater = function(character) {
+        return !!character && !!character._reactorSwim && (character._reactorDive || 0) > 0.3;
+    };
+
+    /**
+     * A swimmer's depth control, once a frame: down while `down` is held,
+     * up while `up` is; it holds its depth otherwise, and never goes below
+     * the bottom. Returns whether the swimmer is under the surface.
+     */
+    ReactorPhysics.steerDive = function(character, down, up) {
+        if (!character || !character._reactorSwim) { if (character) character._reactorDive = 0; return false; }
+        let dive = character._reactorDive || 0;
+        if (down) dive += this.DIVE_SPEED;
+        if (up) dive -= this.DIVE_SPEED;
+        const room = Number.isFinite(character._reactorFloat) && Number.isFinite(character._reactorGround)
+            ? character._reactorFloat - character._reactorGround - this.DIVE_FLOOR : 0;
+        character._reactorDive = Math.max(0, Math.min(Math.max(0, room), dive));
+        return character._reactorDive > 0.3;
+    };
 
     /**
      * One frame for a character on a 3D map: the ground under it (at its
@@ -127,12 +151,16 @@
         const wet = Reactor3D.hasWater && Reactor3D.hasWater($dataMap);
         const float = wet ? this.floatHeight($dataMap, x + 0.5, y + 0.5, ground) : null;
         const swam = !!character._reactorSwim;
+        character._reactorFloat = float === null ? undefined : float;
+        if (float === null) character._reactorDive = 0;
         // A jump out of the water rises through it (`_reactorLeap`, until its top).
         if (float !== null && height <= float + 0.02 && !character._reactorLeap) {
             // In the water: it pushes up toward the float and drags every
             // movement, so a dive in dips under and bobs back up.
             if (!swam && alt !== null && height < float - 0.05) this.onSplash(character, -vz);
-            vz = (vz + (float - height) * this.WATER_SPRING) * this.WATER_DRAG;
+            // Diving: the depth the swimmer steers to, under the float.
+            const target = float - Math.max(0, Math.min(character._reactorDive || 0, float - ground - this.DIVE_FLOOR));
+            vz = (vz + (target - height) * this.WATER_SPRING) * this.WATER_DRAG;
             height += vz;
             character._reactorPeak = undefined;
             character._reactorSwim = height <= float + 0.3;
@@ -195,6 +223,7 @@
      */
     ReactorPhysics.jump = function(character) {
         if (!character || this.isAirborne(character) || !this.jumpAllowed()) return false;
+        if (character._reactorSwim && (character._reactorDive || 0) > 0.05) return false;
         if (character._reactorClimb) return false;
         const settings = this.settings();
         const g = this.gravityPerFrame(settings);
@@ -257,8 +286,11 @@
     if (typeof Game_Player !== "undefined") {
         const _updateP = Game_Player.prototype.update;
         Game_Player.prototype.update = function(sceneActive) {
-            if (sceneActive && typeof Input !== "undefined" && Input.isTriggered("jump") && this.canMove() && !this.isInVehicle()
-                && typeof $gameMap !== "undefined" && !$gameMap.isEventRunning()) ReactorPhysics.jump(this);
+            const free = sceneActive && typeof Input !== "undefined" && this.canMove() && !this.isInVehicle()
+                && typeof $gameMap !== "undefined" && !$gameMap.isEventRunning();
+            // In the water Dash dives and Jump rises; at the surface Jump leaps out.
+            const under = free && this._reactorSwim ? ReactorPhysics.steerDive(this, Input.isPressed("shift"), Input.isPressed("jump") && (this._reactorDive || 0) > 0) : false;
+            if (free && !under && !((this._reactorDive || 0) > 0) && Input.isTriggered("jump")) ReactorPhysics.jump(this);
             _updateP.apply(this, arguments);
         };
         // A swimmer is slower and never dashes.
@@ -276,6 +308,15 @@
         // A character in the air is not stopped by what it is over; the start of a fall off a ledge is only by jumping.
         const _isMapPassable = Game_CharacterBase.prototype.isMapPassable;
         Game_CharacterBase.prototype.isMapPassable = function(x, y, d) {
+            // Under the water, a swimmer is stopped by rock it would swim into, and nothing else in the water.
+            if (ReactorPhysics.isUnderwater(this) && typeof Reactor3D !== "undefined" && typeof $dataMap !== "undefined" && $dataMap && Reactor3D.isMap3D && Reactor3D.isMap3D($dataMap)) {
+                const x2 = $gameMap.roundXWithDirection(x, d), y2 = $gameMap.roundYWithDirection(y, d);
+                if (!$gameMap.isValid(x2, y2)) return false;
+                const height = Number.isFinite(this._reactorAlt) ? this._reactorAlt : 0;
+                const ahead = Reactor3D.groundHeightAt($dataMap, x2 + 0.5, y2 + 0.5, height);
+                if (ahead > height + Reactor3D.TERRAIN_SLOPE_LIMIT) return false;
+                return _isMapPassable.apply(this, arguments);
+            }
             if (ReactorPhysics.isAirborne(this) && typeof Reactor3D !== "undefined" && typeof $dataMap !== "undefined" && $dataMap && Reactor3D.isMap3D && Reactor3D.isMap3D($dataMap)) {
                 const x2 = $gameMap.roundXWithDirection(x, d), y2 = $gameMap.roundYWithDirection(y, d);
                 if (!$gameMap.isValid(x2, y2)) return false;

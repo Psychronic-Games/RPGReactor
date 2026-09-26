@@ -898,6 +898,106 @@ Reactor3D.TransparentPixels = {
     }
 };
 
+/**
+ * Water as a volume, not a sheet: whatever is seen through water fades to
+ * the water's colour by how much water lies between it and the eye. From
+ * above, a pond's floor dims with depth; with the eye under the surface,
+ * everything hazes blue with distance, the world above included. Up to
+ * four sheets (their box and level), per scene: `renderScene` loads the
+ * values a MapScene left in `scene.userData.rrWater`, and a scene without
+ * any (a model preview) clears them.
+ */
+Reactor3D.WATER_VOLUME_MAX = 4;
+Reactor3D.WATER_VOLUME_DENSITY = 0.22;
+Reactor3D.waterVolumeUniforms = function() {
+    if (!this._waterVolumeUniforms) {
+        const max = this.WATER_VOLUME_MAX;
+        this._waterVolumeUniforms = {
+            rrWaterCount: { value: 0 },
+            rrWaterBox: { value: Array.from({ length: max }, () => new THREE.Vector4()) },
+            rrWaterLevel: { value: new Array(max).fill(-1e9) },
+            rrWaterColor: { value: new THREE.Color(0.02, 0.13, 0.2) },
+            rrWaterDensity: { value: this.WATER_VOLUME_DENSITY }
+        };
+    }
+    return this._waterVolumeUniforms;
+};
+
+/** Load a scene's water into the shared uniforms before it draws. */
+Reactor3D.useSceneWater = function(scene) {
+    if (typeof THREE === "undefined") return;
+    const uniforms = this.waterVolumeUniforms();
+    const water = scene && scene.userData && scene.userData.rrWater;
+    const count = water ? Math.min(this.WATER_VOLUME_MAX, water.length) : 0;
+    uniforms.rrWaterCount.value = count;
+    for (let i = 0; i < count; i++) {
+        uniforms.rrWaterBox.value[i].set(water[i].x0, water[i].z0, water[i].x1, water[i].z1);
+        uniforms.rrWaterLevel.value[i] = water[i].level;
+    }
+};
+
+/** Whether a world point is under one of the scene's water sheets (the eye, for the underwater wash). */
+Reactor3D.underWaterAt = function(scene, x, y, z) {
+    const water = scene && scene.userData && scene.userData.rrWater;
+    if (!water) return null;
+    for (const sheet of water) if (y < sheet.level && x >= sheet.x0 && x <= sheet.x1 && z >= sheet.z0 && z <= sheet.z1) return sheet;
+    return null;
+};
+
+Reactor3D.WATER_VOLUME_GLSL = [
+    "uniform int rrWaterCount;",
+    "uniform vec4 rrWaterBox[" + 4 + "];",
+    "uniform float rrWaterLevel[" + 4 + "];",
+    "uniform vec3 rrWaterColor;",
+    "uniform float rrWaterDensity;",
+    "varying vec3 vRRWaterPos;",
+    "vec3 rrWaterTint(vec3 color) {",
+    "	if (rrWaterCount == 0) return color;",
+    "	vec3 P = vRRWaterPos, C = cameraPosition;",
+    "	float path = 0.0;",
+    "	for (int i = 0; i < 4; i++) {",
+    "		if (i >= rrWaterCount) break;",
+    "		float yc = C.y - rrWaterLevel[i], yp = P.y - rrWaterLevel[i];",
+    "		if (yc >= 0.0 && yp >= 0.0) continue;",
+    "		vec3 A = C, B = P;",
+    "		if (yc >= 0.0) A = mix(C, P, yc / (yc - yp));",
+    "		else if (yp >= 0.0) B = mix(C, P, yc / (yc - yp));",
+    "		vec2 m = (A.xz + B.xz) * 0.5;",
+    "		vec4 b = rrWaterBox[i];",
+    "		if (m.x < b.x - 1.0 || m.y < b.y - 1.0 || m.x > b.z + 1.0 || m.y > b.w + 1.0) continue;",
+    "		path += length(B - A);",
+    "	}",
+    "	return mix(color, rrWaterColor, 1.0 - exp(-path * rrWaterDensity));",
+    "}"
+].join("\n");
+
+/** The water volume on a material: its fragments dim through the water in front of them. The water sheet itself is exempt. */
+Reactor3D.injectWaterVolume = function(material, shader) {
+    if (!shader || (material && material.__reactorWater) || shader.fragmentShader.indexOf("#include <opaque_fragment>") < 0) return;
+    const uniforms = this.waterVolumeUniforms();
+    for (const key of Object.keys(uniforms)) shader.uniforms[key] = uniforms[key];
+    shader.vertexShader = "varying vec3 vRRWaterPos;\n" + shader.vertexShader.replace(
+        "#include <project_vertex>",
+        "#include <project_vertex>\n\tvRRWaterPos = (modelMatrix * vec4(transformed, 1.0)).xyz;");
+    shader.fragmentShader = this.WATER_VOLUME_GLSL + "\n" + shader.fragmentShader.replace(
+        "#include <opaque_fragment>",
+        "outgoingLight = rrWaterTint(outgoingLight);\n#include <opaque_fragment>");
+};
+
+/** The water volume on a material that is not lit (the sky). */
+Reactor3D.waterVolumeMaterial = function(material) {
+    if (!material || material.__reactorWaterVolume) return material;
+    material.__reactorWaterVolume = true;
+    const earlier = material.onBeforeCompile;
+    material.onBeforeCompile = function(shader, renderer) {
+        if (typeof earlier === "function") earlier.call(this, shader, renderer);
+        Reactor3D.injectWaterVolume(this, shader);
+    };
+    const earlierKey = material.customProgramCacheKey;
+    material.customProgramCacheKey = function() { return (typeof earlierKey === "function" ? earlierKey.call(this) : "") + "|water-volume"; };
+    return material;
+};
+
 Reactor3D.litMaterial = function(material) {
     if (!material || material.__reactorLit) return material;
     material.__reactorLit = true;
@@ -910,6 +1010,7 @@ Reactor3D.litMaterial = function(material) {
         Reactor3D.injectBlendColor(this, shader);
         Reactor3D.injectDissolve(this, shader);
         Reactor3D.injectCutaway(this, shader);
+        Reactor3D.injectWaterVolume(this, shader);
     };
     const earlierKey = material.customProgramCacheKey;
     material.customProgramCacheKey = function() {

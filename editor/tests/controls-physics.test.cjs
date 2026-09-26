@@ -113,6 +113,32 @@ test('deep water is swum: a fall in splashes and bobs up unhurt, a swimmer jumps
     assert.equal(dry.ReactorPhysics.floatHeight({}, 6, 0, -6), null);
 });
 
+test('a swimmer dives while Dash is held, holds its depth, rises with Jump, and never goes through the bottom', () => {
+    const c = sandbox();
+    c.Reactor3D = { isMap3D: () => true, TERRAIN_SLOPE_LIMIT: 0.75, hasWater: () => true, groundHeightAt: () => -6, waterLevelAt: () => -1 };
+    const who = { x: 5, y: 0, _realX: 5, _realY: 0, _reactorGround: -6, _reactorAlt: -3.2, _reactorSwim: true };
+    for (let i = 0; i < 60; i++) c.ReactorPhysics.update(who);
+    for (let i = 0; i < 40; i++) { c.ReactorPhysics.steerDive(who, true, false); c.ReactorPhysics.update(who); }
+    for (let i = 0; i < 200; i++) c.ReactorPhysics.update(who);
+    assert.ok(Math.abs(who._reactorAlt - (-3.2 - 2)) < 0.05, `held at two tiles down (${who._reactorAlt})`);
+    assert.equal(c.ReactorPhysics.isUnderwater(who), true);
+    assert.equal(c.ReactorPhysics.jump(who), false, 'no leap from under the surface');
+    for (let i = 0; i < 400; i++) { c.ReactorPhysics.steerDive(who, true, false); c.ReactorPhysics.update(who); }
+    assert.ok(who._reactorAlt >= -6 + 0.3 - 0.05, `stops above the bottom (${who._reactorAlt})`);
+    for (let i = 0; i < 400; i++) { c.ReactorPhysics.steerDive(who, false, true); c.ReactorPhysics.update(who); }
+    assert.ok(Math.abs(who._reactorAlt - -3.2) < 0.05 && who._reactorDive === 0, 'back at the surface');
+    assert.equal(c.ReactorPhysics.jump(who), true, 'and leaps out from there');
+});
+
+test('water is a volume: lit materials and the sky dim through it, per scene, and the sheet itself is exempt', () => {
+    const lighting = read('runtime/reactor_3d_lighting.js'), core = read('runtime/reactor_3d.js'), world = read('runtime/reactor_3d_world.js');
+    assert.match(lighting, /Reactor3D\.injectWaterVolume\(this, shader\);\n    \};/);
+    assert.match(lighting, /material && material\.__reactorWater\) \|\|/);
+    assert.match(core, /if \(this\.useSceneWater\) this\.useSceneWater\(scene\);/);
+    assert.match(core, /Reactor3D\.waterVolumeMaterial\(material\)/);
+    assert.match(world, /this\.noteWaterVolume\(\);/);
+});
+
 test('the terrain lets a swimmer into deep water and out onto a low bank only', () => {
     const R = require(path.join(repoRoot, 'runtime', 'reactor_3d.js'));
     const saved = {};

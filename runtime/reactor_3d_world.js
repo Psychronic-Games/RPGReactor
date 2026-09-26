@@ -1606,8 +1606,32 @@ Reactor3D.MapScene.prototype.addWater = function(mapData, load) {
     }
 };
 
+/**
+ * The scene's water sheets as volumes (world boxes and levels) for the
+ * lit shader; the nearest four to the camera when there are more.
+ */
+Reactor3D.MapScene.prototype.noteWaterVolume = function() {
+    const scene = this.scene && this.scene();
+    if (!scene) return;
+    const meshes = this._waterMeshes || [];
+    if (!meshes.length) { scene.userData.rrWater = null; return; }
+    if (this._waterVolumeFor !== meshes || this._waterVolumeCount !== meshes.length) {
+        this._waterVolumeFor = meshes;
+        this._waterVolumeCount = meshes.length;
+        const a = new THREE.Vector3(), b = new THREE.Vector3();
+        scene.userData.rrWater = meshes.map(mesh => {
+            const region = mesh.userData.water;
+            mesh.updateMatrixWorld();
+            a.set(region.x0, region.level, region.y0).applyMatrix4(mesh.matrixWorld);
+            b.set(region.x1 + 1, region.level, region.y1 + 1).applyMatrix4(mesh.matrixWorld);
+            return { x0: Math.min(a.x, b.x), z0: Math.min(a.z, b.z), x1: Math.max(a.x, b.x), z1: Math.max(a.z, b.z), level: a.y };
+        });
+    }
+};
+
 /** Each frame: the waves run and the image drifts. */
 Reactor3D.MapScene.prototype.updateWater = function(frame) {
+    this.noteWaterVolume();
     if (!this._waterMeshes || !this._waterMeshes.length || !Number.isFinite(frame)) return;
     Reactor3D.waterUniforms().rrWaveTime.value = frame / 60;
     for (const mesh of this._waterMeshes) {
@@ -1657,7 +1681,8 @@ Reactor3D.MapScene.prototype.updateRipples = function(frame, characters) {
             spawn(x, z, level + 0.1, 1.6 * burst + 0.8, 38, 0.7);
             character._reactorRippleAt = frame;
         }
-        if (!character._reactorSwim) continue;
+        // Rings are the surface's: a diver under it leaves none.
+        if (!character._reactorSwim || (character._reactorDive || 0) > 0.3) continue;
         const moving = character.isMoving && character.isMoving();
         const every = moving ? 14 : 48;
         if (character._reactorRippleAt !== undefined && frame - character._reactorRippleAt < every && frame >= character._reactorRippleAt) continue;
