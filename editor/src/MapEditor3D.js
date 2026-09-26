@@ -2025,11 +2025,19 @@ class MapEditor3D {
         }
         const { width, height } = this.brushSize();
         this.hoverCell.scale.set(width, 1, height);
-        this.hoverCell.position.set(
-            tile.x,
-            Reactor3D.elevationAt(mapData, tile.x, tile.y) + 0.03,
-            tile.y
-        );
+        this.hoverCell.position.set(tile.x, 0.03, tile.y);
+        // Each corner on the ground under it: at the tile's own elevation
+        // the outline floated over a hollow (a pond, a pit) and read as a
+        // cell on the far side of it.
+        const base = Reactor3D.elevationAt(mapData, tile.x, tile.y);
+        const terrain = Reactor3D.terrainHeightAt ? (wx, wz) => Reactor3D.terrainHeightAt(mapData, wx, wz) || 0 : () => 0;
+        const position = this.hoverCell.geometry.attributes.position;
+        for (let i = 0; i < position.count; i++) {
+            const cx = tile.x + position.getX(i) * width, cz = tile.y + position.getZ(i) * height;
+            position.setY(i, base + terrain(Math.min(mapData.width, cx), Math.min(mapData.height, cz)));
+        }
+        position.needsUpdate = true;
+        this.hoverCell.geometry.computeBoundingSphere();
         this.hoverCell.visible = true;
     }
 
