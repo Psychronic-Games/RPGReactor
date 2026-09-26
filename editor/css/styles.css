@@ -3804,7 +3804,7 @@
             color: var(--color-text);
         }
         .rr-build-panel-head { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; padding: 8px 10px; background-color: var(--color-bg-deep); border-bottom: 1px solid var(--color-border); font-size: 13px; font-weight: 600; color: var(--color-text-strong); }
-        .rr-build-panel-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: 10px; }
+        .rr-build-panel-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column; gap: 8px; padding: 10px; }
         .rr-build-panel-foot { flex: 0 0 auto; }
         .rr-build-panel-foot > button { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 4px; }
         .rr-build-section { flex: 0 0 auto; }
@@ -3867,6 +3867,8 @@
         .rr-build-swatch[aria-pressed="true"] { border-color: var(--color-accent); }
         .rr-build-swatch-plain { display: block; width: 100%; height: 100%; border-radius: 4px; border: 1px dashed var(--color-border-input); box-sizing: border-box; }
         .rr-build-note { font-size: 11px; color: var(--color-text-muted); padding: 0 6px; white-space: nowrap; }
+        /* A note meant to wrap does, whatever order the two rules come in. */
+        .rr-build-note.rr-build-wrap { white-space: normal; overflow-wrap: anywhere; padding: 0; }
         .rr-build-hint { font-size: 11px; color: var(--color-text-muted); white-space: nowrap; pointer-events: none; text-shadow: 0 1px 2px rgba(0,0,0,.8); }
         .rr-build-hint b { color: var(--color-text-strong); font-weight: 600; }
         .rr-build-flash {

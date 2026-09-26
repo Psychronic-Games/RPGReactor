@@ -203,7 +203,8 @@ class BuildHotbar {
             body += section(this._t('pieces.material'), swatches(piece ? piece.material : manager.material));
             if (kind === 'stair' && !s.placed) body += section(tt('Size'), num('rr-build-steps', this._t('build.steps'), manager.stairSteps, 1, BuildHotbar.MAX_RUN, 1, 'steps')
                 + num('rr-build-stairwidth', this._t('build.stairWidth'), manager.stairWidth, 1, 20, 1, 'width'));
-            if (kind === 'ladder' && !s.placed) body += section(tt('Size'), num('rr-build-ladderheight', tt('Height'), manager.ladderHeight, 1, BuildHotbar.MAX_RUN, 1, 'height'));
+            // A ladder's height, in hand or placed: a placed one grows or shrinks from its foot.
+            if (kind === 'ladder') body += section(tt('Size'), num('rr-build-ladderheight', tt('Height'), piece ? manager.ladderStack(piece).length : manager.ladderHeight, 1, BuildHotbar.MAX_RUN, 1, 'height'));
             if (s.shape) {
                 const size = piece ? piece.size : manager.sizeFor(kind);
                 const labels = kind === 'wedge' ? [tt('Width'), tt('Height'), tt('Length')] : [tt('Width'), tt('Height'), tt('Depth')];
@@ -255,7 +256,11 @@ class BuildHotbar {
             edit({ [key]: v }, () => { manager.params = manager.params || {}; manager.params[s.kind] = Object.assign({}, manager.params[s.kind], { [key]: v }); manager._ghostChanged(); });
         }));
         panel.querySelector('.rr-build-steps')?.addEventListener('change', event => { manager.stairSteps = Math.max(1, Math.min(BuildHotbar.MAX_RUN, Math.round(Number(event.target.value)) || 1)); this.renderPanel(); });
-        panel.querySelector('.rr-build-ladderheight')?.addEventListener('change', event => { manager.ladderHeight = Math.max(1, Math.min(BuildHotbar.MAX_RUN, Math.round(Number(event.target.value)) || 1)); this.renderPanel(); });
+        panel.querySelector('.rr-build-ladderheight')?.addEventListener('change', event => {
+            const height = Math.max(1, Math.min(BuildHotbar.MAX_RUN, Math.round(Number(event.target.value)) || 1));
+            if (s.piece) manager.setLadderHeight(s.piece, height); else manager.ladderHeight = height;
+            this.renderPanel();
+        });
         panel.querySelector('.rr-build-stairwidth')?.addEventListener('change', event => { manager.stairWidth = Math.max(1, Math.min(20, Math.round(Number(event.target.value)) || 1)); this.renderPanel(); });
         panel.querySelectorAll('.rr-build-mode').forEach(el => el.addEventListener('click', () => { manager.gizmoMode = el.dataset.mode; manager._ghostChanged(); this.renderPanel(); }));
         panel.querySelector('.rr-build-remove')?.addEventListener('click', () => { manager.removeSelection(); this.renderPanel(); });

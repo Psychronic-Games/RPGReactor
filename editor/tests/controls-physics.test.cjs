@@ -194,3 +194,12 @@ test('the editor and the runtime know the same piece kinds (a ladder is placeabl
     assert.deepEqual([...E.PIECE_KINDS].sort(), [...R.PIECE_KINDS].sort());
     assert.equal(E.normalizePiece({ kind: 'ladder', x: 1, y: 1, z: 0, rot: 2 }, { width: 5, height: 5 }).kind, 'ladder');
 });
+
+test('a placed ladder is edited whole: its height from the foot, its turn, its move and its removal', () => {
+    const src = read('editor/src/PieceBuilderManager.js'), bar = read('editor/src/BuildHotbar.js'), css = read('editor/css/styles.css');
+    assert.match(src, /setLadderHeight\(piece, height, record = true\)/);
+    assert.match(src, /if \(piece\.kind === 'ladder'\) \{\n\s+const ids = new Set\(this\.ladderStack\(piece\)/);
+    assert.match(src, /const gone = new Set\(piece\.kind === 'ladder' \? this\.ladderStack\(piece\)/);
+    assert.match(bar, /if \(s\.piece\) manager\.setLadderHeight\(s\.piece, height\)/);
+    assert.match(css, /\.rr-build-note\.rr-build-wrap \{ white-space: normal;/);
+});

@@ -160,10 +160,55 @@ class PieceBuilderManager {
     clearSelection() { if (!this.selected && !this.selectedIds.length) return; this.selected = 0; this.selectedIds = []; this._syncPanel(); this._ghostChanged(); }
 
     /** Change the selected piece in place (a material, a turn, a size, a move); the list keeps its ids. */
+    /** A placed ladder is a stack of one-level pieces: every ladder level joined to this one on its cell. */
+    ladderStack(piece) {
+        const map = this.currentMap(), elevation = this.elevation();
+        if (!map || !elevation || !piece || piece.kind !== 'ladder') return [];
+        const byZ = new Map(elevation.pieces(map).filter(p => p.kind === 'ladder' && p.x === piece.x && p.y === piece.y).map(p => [p.z, p]));
+        let low = piece.z, high = piece.z;
+        while (byZ.has(low - 1)) low--;
+        while (byZ.has(high + 1)) high++;
+        const out = [];
+        for (let z = low; z <= high; z++) out.push(byZ.get(z));
+        return out;
+    }
+
+    /** Make a placed ladder this many levels tall, from its foot: levels come off the top or are added over it. */
+    setLadderHeight(piece, height, record = true) {
+        const map = this.currentMap(), elevation = this.elevation();
+        const stack = this.ladderStack(piece);
+        if (!map || !elevation || !stack.length) return false;
+        const foot = stack[0];
+        const target = Math.max(1, Math.min((elevation.PIECE_MAX_LEVEL || 240) - foot.z + 1, Math.floor(height) || 1));
+        if (target === stack.length) return false;
+        if (record) { this.undoStack.push(this._snapshot(map)); if (this.undoStack.length > 50) this.undoStack.shift(); this.redoStack.length = 0; }
+        const gone = new Set(stack.slice(target).map(p => p.id));
+        const list = elevation.pieces(map).filter(p => !gone.has(p.id));
+        let id = list.reduce((max, p) => Math.max(max, p.id || 0), 0);
+        for (let z = foot.z + stack.length; z < foot.z + target; z++) list.push(Object.assign({}, foot, { id: ++id, z }));
+        elevation.restorePieces(map, list);
+        // The selection stays on the ladder: its foot, which every height keeps.
+        this.selected = foot.id;
+        this.announce(false, { x0: foot.x - 1, y0: foot.y - 1, x1: foot.x + 1, y1: foot.y + 1 });
+        this._syncPanel(); this._ghostChanged();
+        return true;
+    }
+
     updateSelected(patch, record = true) {
         const map = this.currentMap(), elevation = this.elevation();
         const piece = this.selectedPiece();
         if (!map || !elevation || !piece) return false;
+        // A ladder turns, changes material and moves whole, not one level of it.
+        if (piece.kind === 'ladder') {
+            const ids = new Set(this.ladderStack(piece).map(p => p.id));
+            const dx = 'x' in patch ? patch.x - piece.x : 0, dy = 'y' in patch ? patch.y - piece.y : 0, dz = 'z' in patch ? patch.z - piece.z : 0;
+            const rest = Object.assign({}, patch); delete rest.x; delete rest.y; delete rest.z;
+            if (record) { this.undoStack.push(this._snapshot(map)); if (this.undoStack.length > 50) this.undoStack.shift(); this.redoStack.length = 0; }
+            elevation.restorePieces(map, elevation.pieces(map).map(p => ids.has(p.id) ? Object.assign({}, p, rest, { x: p.x + dx, y: p.y + dy, z: p.z + dz }) : p));
+            this.announce(false, { x0: Math.min(piece.x, piece.x + dx) - 1, y0: Math.min(piece.y, piece.y + dy) - 1, x1: Math.max(piece.x, piece.x + dx) + 1, y1: Math.max(piece.y, piece.y + dy) + 1 });
+            this._syncPanel(); this._ghostChanged();
+            return true;
+        }
         const list = elevation.pieces(map);
         const index = list.findIndex(entry => entry.id === piece.id);
         if (index < 0) return false;
@@ -205,7 +250,9 @@ class PieceBuilderManager {
         const map = this.currentMap(), elevation = this.elevation(), piece = this.selectedPiece();
         if (!map || !elevation || !piece) return false;
         this.undoStack.push(this._snapshot(map)); if (this.undoStack.length > 50) this.undoStack.shift(); this.redoStack.length = 0;
-        elevation.restorePieces(map, elevation.pieces(map).filter(entry => entry.id !== piece.id));
+        // A ladder goes whole.
+        const gone = new Set(piece.kind === 'ladder' ? this.ladderStack(piece).map(p => p.id) : [piece.id]);
+        elevation.restorePieces(map, elevation.pieces(map).filter(entry => !gone.has(entry.id)));
         this.selected = 0;
         const reach = this.isShape(piece.kind) ? Math.ceil(Math.max(...(piece.size || [1, 1, 1])) / 2) + 1 : 1;
         this.announce(false, { x0: piece.x - reach, y0: piece.y - reach, x1: piece.x + reach, y1: piece.y + reach });
