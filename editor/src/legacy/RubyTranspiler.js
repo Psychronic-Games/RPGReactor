@@ -348,7 +348,7 @@
     // ---- generation ---------------------------------------------------------------
 
     const ITEM_TABLES = { $data_items: '$dataItems', $data_weapons: '$dataWeapons', $data_armors: '$dataArmors', $data_skills: '$dataSkills', $data_states: '$dataStates', $data_actors: '$dataActors', $data_classes: '$dataClasses', $data_enemies: '$dataEnemies', $data_troops: '$dataTroops', $data_animations: '$dataAnimations', $data_system: '$dataSystem', $data_tilesets: '$dataTilesets', $data_common_events: '$dataCommonEvents' };
-    const INPUT = { A: 'shift', B: 'cancel', C: 'ok', X: 'shift', Y: 'shift', Z: 'ok', L: 'pageup', R: 'pagedown', DOWN: 'down', LEFT: 'left', RIGHT: 'right', UP: 'up', CTRL: 'control', SHIFT: 'shift', ALT: 'shift' };
+    const INPUT = { A: 'shift', B: 'cancel', C: 'ok', X: 'rgssX', Y: 'rgssY', Z: 'rgssZ', L: 'pageup', R: 'pagedown', DOWN: 'down', LEFT: 'left', RIGHT: 'right', UP: 'up', CTRL: 'control', SHIFT: 'shift', ALT: 'shift' };
     const camel = (s) => s.replace(/[?!]$/, '').replace(/_([a-z])/g, (m, c) => c.toUpperCase());
 
     // Methods every kind of value has in both languages.

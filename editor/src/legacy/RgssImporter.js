@@ -149,6 +149,20 @@ function installPlugins(dest, families, constants, scriptTexts, skipped, log, re
     return installed;
 }
 
+/**
+ * The skeleton's system picture a game file stands for when only the case differs (the game's
+ * iconset.png, MZ's IconSet.png): the game's picture takes the name the runtime loads, or on a
+ * case-sensitive disk MZ's own would be drawn. Other paths come back unchanged.
+ */
+function systemTwin(out, found = () => {}) {
+    if (!/[\\/]img[\\/]system$/i.test(path.dirname(out))) return out;
+    const base = path.basename(out);
+    const twin = fs.readdirSync(path.dirname(out)).find(n => n !== base && n.toLowerCase() === base.toLowerCase());
+    if (!twin) return out;
+    found();
+    return path.join(path.dirname(out), twin);
+}
+
 /** Aliased audio whose file sits in another folder (an ME table playing a BGM file) is copied to the folder that plays it. */
 function copyAliasedAudio(dest, aliases) {
     let copied = 0;
@@ -341,7 +355,7 @@ function open(folder, destination, options) {
         if (typeof constants['YEA::SYSTEM::COMMAND_NAME'] === 'string') sys.terms.commands[11] = constants['YEA::SYSTEM::COMMAND_NAME'];
         sys.rrChoicesInMessage = true;   // choices are listed inside the message window, after the text
         sys.rrNoItemBackgrounds = true;   // the old engines draw no bar behind each item of a list, only the cursor
-        Object.assign(sys, { rrRgssWindows: true, rrMapNameStays: true, rrTouchUiOff: true });   // rows one line tall, the map name through messages, no touch buttons
+        Object.assign(sys, { rrRgssWindows: true, rrMapNameStays: true, rrTouchUiOff: true, rrRgssKeys: true });   // rows one line tall, the map name through messages, no touch buttons, A/S/D as the X/Y/Z buttons
         sys.rrRgssFades = true;   // Ace's 30-frame fades, and the black held 15 frames on a transfer
         writeJson(path.join(dest, 'data', 'System.json'), sys);
 
@@ -396,8 +410,9 @@ function open(folder, destination, options) {
             if (!bytes) return;
             // Zero-byte files are placeholders a script plays something else for (see audioAliases).
             if (!bytes.length) { add(notes, 'emptyPlaceholder'); return; }
-            const out = path.join(dest, repairPath(to.replace(/\\/g, '/')));
+            let out = path.join(dest, repairPath(to.replace(/\\/g, '/')));
             mkdir(path.dirname(out));
+            out = systemTwin(out, () => add(notes, 'systemFileCase'));
             if (/^Graphics\/System\/Window\.png$/i.test(from)) {
                 try {
                     const skin = PNG.sync.read(bytes), baseFile = path.join(skeleton, 'img', 'system', 'Window.png');
@@ -470,4 +485,4 @@ function open(folder, destination, options) {
 function report(folder, options) { return open(folder, null, options).inventory(); }
 function importProject(folder, destination, options) { return open(folder, destination, options).importProject(); }
 
-module.exports = { open, report, importProject, source, installPlugins, writeFamilyQuests, copyAliasedAudio, matchFileCase, repairName, repairPath, STOCK_SCRIPTS, GRAPHICS, AUDIO };
+module.exports = { open, report, importProject, source, installPlugins, systemTwin, writeFamilyQuests, copyAliasedAudio, matchFileCase, repairName, repairPath, STOCK_SCRIPTS, GRAPHICS, AUDIO };

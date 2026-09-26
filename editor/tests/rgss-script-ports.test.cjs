@@ -243,3 +243,41 @@ test('MapName Plus+ settings, and the older engines\' window, touch and fade con
     const compat = fs.readFileSync(path.join(runtime, 'libs', 'pixi_compat.js'), 'utf8');
     assert.match(compat, /blendModesMap\.subtract = \[gl\.ONE, gl\.ONE, gl\.ZERO, gl\.ONE, gl\.FUNC_REVERSE_SUBTRACT, gl\.FUNC_ADD\]/, 'v8 regains the subtract blend');
 });
+
+test('DOTP\'s document reader, eventing tuning, fog, hover labels and system options are read and translated', () => {
+    const doc = 'module DocumentReader\n  MOVE_SPEED  = 8\n  ICON_Q      = 2972\n  ICON_X      = 2991\n  HUD_LINES = [\n    [\n      [ICON_Q,      "Prev"],\n      [ICON_X,      "Exit"]\n    ]\n  ]\nend\ndef doc_reader(filename)\nend\nclass Scene_DocumentReader < Scene_Base\nend';
+    const vlue = 'EVENTING_USE_DIR8 = false\nclass Game_CharacterBase\nend';
+    const fog = '($imported ||={})[:Theo_FogScreen] = true\nmodule THEO\n  module Fog\n    BattleFog = true\n    List = {\n      "fog4"   => ["fog4",   128,    20,     1,      0.5,    0.5],\n    }\n    def self.custom_fogs\n      fog = fog_data["fog4"]\n      fog.blend_type = 2\n    end\n  end\nend';
+    const fam = C.scriptFamilies([doc, vlue, fog, '($imported ||= {})[:Theo_InteractNotif] = true']);
+    for (const key of ['documentReader', 'vlueEventing', 'theoFog', 'theoInteract']) assert.ok(fam.has(key), key);
+    const settings = JSON.parse(params('RR_DocumentReader').extract({ scripts: [doc], constants: C.scriptConstants([doc]) }).settings);
+    assert.deepEqual(settings.hudLines, [[[2972, 'Prev'], [2991, 'Exit']]]);
+    const ctx = { constants: {}, families: fam };
+    assert.equal(C.ruby('doc_reader("controls")', 'statement', ctx), 'this.rrDocReader?.("controls");');
+    assert.equal(C.ruby('add_fog("fog2", 5)', 'statement', ctx), 'this.rrTheoAddFog?.("fog2", 5);');
+    const route = Object.assign({}, ctx, { self: 'character' });
+    assert.equal(C.ruby('if $game_switches[45] == true;flash(Color.new(0,255,255255),30);end', 'statement', route), 'if (($gameSwitches.value(45) === true)) { this.rrVlueFlash?.([0, 255, 255255, 255], 30); }');
+    assert.deepEqual(JSON.parse(params('RR_TheoFog').extract({ scripts: [fog], constants: C.scriptConstants([fog]) }).fogs).fog4, { name: 'fog4', opacity: 128, speedX: 20, speedY: 1, zoomX: 0.5, zoomY: 0.5, blend: 2 });
+
+    const options = '$imported["YEA-SystemOptions"] = true\nmodule YEA\n  module SYSTEM\n    COMMANDS =[\n      :switch_3,\n      :variable_5,\n      :volume_bgm,\n      :mouse,\n    ]\n    CUSTOM_SWITCHES ={\n      :switch_3  => [ 45, "Help Options", "OFF", "ON",\n                     "Highlights."\n                    ],\n    }\n    CUSTOM_VARIABLES ={\n      :variable_5 => [ 8, "Window Opacity", 0, 0, 0, 255,\n                      "How visible."\n                     ],\n    }\n    COMMAND_VOCAB ={\n      :volume_bgm => ["Music Volume", 0, 0,\n                      "Change the volume.\\n" +\n                      "Hold SHIFT."\n                     ],\n      :mouse  => ["Toggle Mouse", "None", "None", "Mouse."],\n    }\n  end\nend';
+    const read = params('RR_YanflySystemOptions').extract({ scripts: [options, '($imported ||= {})[:Theo_GlobalOption] = true'], constants: {} });
+    assert.equal(read.global, 'true');
+    assert.deepEqual(JSON.parse(read.commands).map(c => [c.kind, c.id || c.type, c.name]), [['switch', 45, 'Help Options'], ['variable', 8, 'Window Opacity'], ['volume', 'bgm', 'Music Volume'], ['action', 'mouse', 'Toggle Mouse']]);
+    assert.equal(JSON.parse(read.commands)[2].help, 'Change the volume.\nHold SHIFT.', 'Ruby strings joined with + and \\n read as Ruby does');
+    assert.deepEqual(params('RR_WindowOpacity').extract({ scripts: [options], constants: { 'MK_WIN_OPA::OPACITY_OPTION_VAR_ID': 8 } }), { variable: '8', opacity: '200' });
+});
+
+test('an imported system picture spelled otherwise replaces the skeleton\'s, and A, S and D are buttons', () => {
+    const R = require(path.join(legacy, 'RgssImporter.js'));
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rr-twin-'));
+    try {
+        fs.mkdirSync(path.join(dir, 'img', 'system'), { recursive: true });
+        fs.writeFileSync(path.join(dir, 'img', 'system', 'IconSet.png'), 'mz');
+        assert.equal(R.systemTwin(path.join(dir, 'img', 'system', 'iconset.png')), path.join(dir, 'img', 'system', 'IconSet.png'));
+        assert.equal(R.systemTwin(path.join(dir, 'img', 'system', 'Balloon.png')), path.join(dir, 'img', 'system', 'Balloon.png'));
+        assert.equal(R.systemTwin(path.join(dir, 'img', 'pictures', 'iconset.png')), path.join(dir, 'img', 'pictures', 'iconset.png'), 'only system pictures');
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+    assert.deepEqual(C.commands([{ code: 111, indent: 0, parameters: [11, 'X'] }], {})[0].parameters, [11, 'rgssX', 0]);
+    const scenes = fs.readFileSync(path.join(runtime, 'reactor_scenes.js'), 'utf8');
+    assert.match(scenes, /\$dataSystem\.rrRgssKeys\) Object\.assign\(Input\.keyMapper, \{ 65: "rgssX", 83: "rgssY", 68: "rgssZ" \}\)/);
+});

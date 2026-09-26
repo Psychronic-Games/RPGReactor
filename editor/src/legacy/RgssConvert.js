@@ -163,6 +163,30 @@
             setters: { 'csca.difficulty': '$gameSystem.rrCsca?.()?.setDifficulty?.(%v)' },
             classes: { CSCA_Scene_DifficultySelect: 'Scene_RRCscaDifficulty' }
         },
+        {
+            // Vlue's Eventing: Fine Tuning: sprite offsets, zoom, rotation, colour, flashes and extra moves in move routes.
+            key: 'vlueEventing', detect: /EVENTING_USE_DIR8|Eventing: Fine Tuning/, plugin: 'RR_VlueEventing',
+            route: {
+                offset: 'this.rrVlueOffset?.(%*)', set_zoom: 'this.rrVlueZoom?.(%*)', rotate: 'this.rrVlueRotate?.(%*)', blend: 'this.rrVlueBlend?.(%*)', mirrored: 'this.rrVlueMirror?.()',
+                flash: 'this.rrVlueFlash?.(%*)', slide: 'this.rrVlueSlide?.(%*)', waypoint: 'this.rrVlueWaypoint?.(%*)', fadein: 'this.rrVlueFadeIn?.(%*)', fadeout: 'this.rrVlueFadeOut?.(%*)',
+                shake: 'this.rrVlueShake?.(%*)', random: 'this.rrVlueRandom?.(%*)', random_region: 'this.rrVlueRandomRegion?.(%*)', random_wait: 'this.rrVlueRandomWait?.(%*)',
+                jump_forward: 'this.rrVlueJumpForward?.(%*)', jump_side: 'this.rrVlueJumpSide?.(%*)', jumpto: 'this.rrVlueJumpTo?.(%*)', memorize: 'this.rrVlueMemorize?.()',
+                recall: 'this.rrVlueRecall?.()', recall_walk: 'this.rrVlueRecallWalk?.()', moveto_player: 'this.rrVlueMoveToPlayer?.(%*)', moveto_event: 'this.rrVlueMoveToEvent?.(%*)',
+                self_switch: 'this.rrVlueSelfSwitch?.(%*)', balloon: 'this.rrVlueBalloon?.(%*)', play_animation: 'this.rrVluePlayAnimation?.(%*)', reset: 'this.rrVlueReset?.()'
+            }
+        },
+        { key: 'theoInteract', detect: /Theo_InteractNotif/, plugin: 'RR_TheoInteract' },
+        {
+            key: 'theoFog', detect: /Theo_FogScreen/, plugin: 'RR_TheoFog',
+            event: { add_fog: 'this.rrTheoAddFog?.(%*)', delete_fog: 'this.rrTheoDeleteFog?.(%*)', clear_fogs: 'this.rrTheoClearFogs?.()' }
+        },
+        { key: 'yeaSystemOptions', detect: /\$imported\["YEA-SystemOptions"\]\s*=\s*true/, plugin: 'RR_YanflySystemOptions' },
+        { key: 'mkWindowOpacity', detect: /\$imported\["MK-WindowOpacity"\]/, plugin: 'RR_WindowOpacity' },
+        { key: 'wasdMovement', detect: /helladen_dir4/, plugin: 'RR_WasdMovement' },
+        {
+            key: 'documentReader', detect: /module DocumentReader\b[\s\S]*class Scene_DocumentReader/, plugin: 'RR_DocumentReader',
+            event: { doc_reader: 'this.rrDocReader?.(%*)', doc_reader_pages: 'this.rrDocReaderPages?.(%*)' }
+        },
         { key: 'yeaCore', detect: /\$imported\["YEA-CoreEngine"\]/, plugin: 'RR_YanflyCore' },
         // KilloZapit's Word Wrapping Message Boxes; Yanfly's message window rows, width and font.
         { key: 'kzWordWrap', detect: /module KZIsAwesome\b[\s\S]*module WordWrap\b/, plugin: 'RR_WordWrap' },
@@ -468,7 +492,7 @@
 
     // ---- event commands --------------------------------------------------------
 
-    const BUTTONS = { A: 'shift', B: 'cancel', C: 'ok', X: 'shift', Y: 'shift', Z: 'ok', L: 'pageup', R: 'pagedown', DOWN: 'down', LEFT: 'left', RIGHT: 'right', UP: 'up', CTRL: 'control', SHIFT: 'shift', ALT: 'shift' };
+    const BUTTONS = { A: 'shift', B: 'cancel', C: 'ok', X: 'rgssX', Y: 'rgssY', Z: 'rgssZ', L: 'pageup', R: 'pagedown', DOWN: 'down', LEFT: 'left', RIGHT: 'right', UP: 'up', CTRL: 'control', SHIFT: 'shift', ALT: 'shift' };
 
     /**
      * Message text codes from the game's message scripts, as MZ codes. Only the

@@ -3810,6 +3810,7 @@ Scene_Boot.prototype.isReady = function() {
 //   rrMapNameStays  a message does not close the map name, as in XP, VX and VX Ace
 //   rrTouchUiOff    touch UI starts off (the old engines had none) until the
 //                   player sets it in Options
+//   rrRgssKeys      the A, S and D keys are buttons of their own
 (function() {
     const _updateMapNameWindow = Scene_Map.prototype.updateMapNameWindow;
     Scene_Map.prototype.updateMapNameWindow = function() {
@@ -3821,9 +3822,11 @@ Scene_Boot.prototype.isReady = function() {
         _applyData.call(this, config);
         this._rrTouchUiSaved = !!(config && Object.prototype.hasOwnProperty.call(config, "touchUI"));
     };
+    // rrRgssKeys: A, S and D are the old engines' X, Y and Z buttons (rgssX, rgssY, rgssZ); MZ leaves them unmapped.
     const _start = Scene_Boot.prototype.start;
     Scene_Boot.prototype.start = function() {
         if ($dataSystem && $dataSystem.rrTouchUiOff && !ConfigManager._rrTouchUiSaved) ConfigManager.touchUI = false;
+        if ($dataSystem && $dataSystem.rrRgssKeys) Object.assign(Input.keyMapper, { 65: "rgssX", 83: "rgssY", 68: "rgssZ" });
         _start.call(this);
     };
 })();

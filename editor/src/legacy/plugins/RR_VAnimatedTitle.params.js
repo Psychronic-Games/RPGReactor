@@ -42,8 +42,26 @@ function readLiteral(text, at) {
             return [out, i + 1];
         }
         if (c === '"' || c === "'") {
+            // Double quotes read \n and \t as Ruby does; single quotes keep them. "a" + "b" is one string.
+            const ESCAPES = { n: '\n', t: '\t', r: '\r', e: '\x1b', s: ' ', 0: '\0' };
             let j = i + 1, s = '';
-            while (j < text.length && text[j] !== c) { if (text[j] === '\\') { s += text[j + 1]; j += 2; } else s += text[j++]; }
+            while (j < text.length && text[j] !== c) {
+                if (text[j] === '\\') {
+                    const e = text[j + 1];
+                    // Single quotes escape only \\ and \'; any other backslash stays.
+                    s += c === '"' ? (ESCAPES[e] !== undefined ? ESCAPES[e] : e) : (e === '\\' || e === "'" ? e : '\\' + e);
+                    j += 2;
+                } else s += text[j++];
+            }
+            let k = skip(j + 1);
+            while (text[k] === '+') {
+                k = skip(k + 1);
+                if (text[k] !== '"' && text[k] !== "'") break;
+                const [more, after] = value(k);
+                s += more;
+                j = after - 1;
+                k = skip(after);
+            }
             return [s, j + 1];
         }
         if (c === ':') { const m = /^:(\w+[?!]?)/.exec(text.slice(i)); if (m) return [m[1], i + m[0].length]; }

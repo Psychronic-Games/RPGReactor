@@ -207,7 +207,7 @@ function open(folder, destination, options) {
         sys.rrCharacterShiftY = 0;   // XP draws characters on the tile's bottom edge; MZ's is 6
         sys.rrChoicesInMessage = true;   // choices are listed inside the message window, after the text
         sys.rrNoItemBackgrounds = true;   // the old engines draw no bar behind each item of a list, only the cursor
-        Object.assign(sys, { rrRgssWindows: true, rrMapNameStays: true, rrTouchUiOff: true });   // rows one line tall, the map name through messages, no touch buttons
+        Object.assign(sys, { rrRgssWindows: true, rrMapNameStays: true, rrTouchUiOff: true, rrRgssKeys: true });   // rows one line tall, the map name through messages, no touch buttons, A/S/D as the X/Y/Z buttons
         writeJson(path.join(dest, 'data', 'System.json'), sys);
 
         // ---- maps --------------------------------------------------------------
@@ -247,7 +247,7 @@ function open(folder, destination, options) {
             if (!bytes) return;
             // Zero-byte files are placeholders a script plays something else for (see audioAliases).
             if (!bytes.length) { add(notes, 'emptyPlaceholder'); return; }
-            const out = path.join(dest, R.repairPath(to.replace(/\\/g, '/')));
+            const out = R.systemTwin(path.join(dest, R.repairPath(to.replace(/\\/g, '/'))));
             mkdir(path.dirname(out));
             fs.writeFileSync(out, bytes);
             add(images, bucket);
