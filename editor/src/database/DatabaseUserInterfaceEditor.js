@@ -774,6 +774,21 @@ class DatabaseUserInterfaceEditor {
         return changed;
     }
 
+    /** A binding the presentation cannot fill would silently play stock in game; System keeps only the ones it can. */
+    dropUnfitReplacementRoles() {
+        const system = this.replacementSystem();
+        const id = Number(this.current && this.current.id) || 0;
+        if (!system || !(id > 0)) return false;
+        let changed = false;
+        for (const [role, , field] of DatabaseUserInterfaceEditor.REPLACEMENT_ROLES) {
+            if (Number(system[field]) === id && !this.roleFitsMode(role)) {
+                system[field] = 0;
+                changed = true;
+            }
+        }
+        return changed;
+    }
+
     openReplacementRoles(open = true) {
         const trigger = this.wrapper && this.wrapper.querySelector('.rr-ui-role-trigger');
         const popup = this.wrapper && this.wrapper.querySelector('.rr-ui-role-popup');
@@ -2318,6 +2333,7 @@ class DatabaseUserInterfaceEditor {
         });
         q('.rr-ui-mode').addEventListener('change', event => {
             this.current.mode = ['overlay', 'battle'].includes(event.target.value) ? event.target.value : 'scene';
+            this.dropUnfitReplacementRoles();
             this.touch();
             this.updatePresentationFields();
             this.scheduleRender();

@@ -11940,6 +11940,25 @@ Object.assign(RR_TEXT_TRANSLATIONS["id"], {"Compatibility": "Kompatibilitas", "R
 Object.assign(RR_TEXT_TRANSLATIONS["vi"], {"Compatibility": "Tương thích", "Rules for games imported from older RPG Maker versions. The importer turns on what a game needs; a new project leaves them off.": "Quy tắc cho các game nhập từ phiên bản RPG Maker cũ. Trình nhập bật những gì game cần; dự án mới để chúng tắt."});
 Object.assign(RR_TEXT_TRANSLATIONS["th"], {"Compatibility": "ความเข้ากันได้", "Rules for games imported from older RPG Maker versions. The importer turns on what a game needs; a new project leaves them off.": "กฎสำหรับเกมที่นำเข้าจาก RPG Maker รุ่นเก่า ตัวนำเข้าจะเปิดสิ่งที่เกมต้องใช้ ส่วนโปรเจกต์ใหม่จะปิดไว้ทั้งหมด"});
 
+// System 2 Custom Interfaces hint.
+Object.assign(RR_TEXT_TRANSLATIONS["ja"], {"The same setting as Use As in Database › User Interfaces.": "データベース › ユーザーインターフェースの「用途」と同じ設定です。"});
+Object.assign(RR_TEXT_TRANSLATIONS["zh-Hant"], {"The same setting as Use As in Database › User Interfaces.": "與「資料庫 › 使用者介面」中的「用途」為同一設定。"});
+Object.assign(RR_TEXT_TRANSLATIONS["zh-Hans"], {"The same setting as Use As in Database › User Interfaces.": "与“数据库 › 用户界面”中的“用作”是同一设置。"});
+Object.assign(RR_TEXT_TRANSLATIONS["ko"], {"The same setting as Use As in Database › User Interfaces.": "데이터베이스 › 사용자 인터페이스의 \"용도\"와 같은 설정입니다."});
+Object.assign(RR_TEXT_TRANSLATIONS["es"], {"The same setting as Use As in Database › User Interfaces.": "Es el mismo ajuste que «Usar como» en Base de datos › Interfaces de usuario."});
+Object.assign(RR_TEXT_TRANSLATIONS["pt"], {"The same setting as Use As in Database › User Interfaces.": "É a mesma configuração de \"Usar como\" em Banco de dados › Interfaces de usuário."});
+Object.assign(RR_TEXT_TRANSLATIONS["fr"], {"The same setting as Use As in Database › User Interfaces.": "Même réglage que « Utiliser comme » dans Base de données › Interfaces utilisateur."});
+Object.assign(RR_TEXT_TRANSLATIONS["it"], {"The same setting as Use As in Database › User Interfaces.": "È la stessa impostazione di «Usa come» in Database › Interfacce utente."});
+Object.assign(RR_TEXT_TRANSLATIONS["de"], {"The same setting as Use As in Database › User Interfaces.": "Dieselbe Einstellung wie „Verwenden als“ unter Datenbank › Benutzeroberflächen."});
+Object.assign(RR_TEXT_TRANSLATIONS["ru"], {"The same setting as Use As in Database › User Interfaces.": "Та же настройка, что «Использовать как» в разделе База данных › Интерфейсы."});
+Object.assign(RR_TEXT_TRANSLATIONS["pl"], {"The same setting as Use As in Database › User Interfaces.": "To samo ustawienie co „Użyj jako” w Baza danych › Interfejsy użytkownika."});
+Object.assign(RR_TEXT_TRANSLATIONS["el"], {"The same setting as Use As in Database › User Interfaces.": "Η ίδια ρύθμιση με το «Χρήση ως» στο Βάση δεδομένων › Διεπαφές χρήστη."});
+Object.assign(RR_TEXT_TRANSLATIONS["ar"], {"The same setting as Use As in Database › User Interfaces.": "هو الإعداد نفسه «استخدام كـ» في قاعدة البيانات › واجهات المستخدم."});
+Object.assign(RR_TEXT_TRANSLATIONS["tr"], {"The same setting as Use As in Database › User Interfaces.": "Veritabanı › Kullanıcı arayüzleri içindeki \"Farklı kullan\" ile aynı ayardır."});
+Object.assign(RR_TEXT_TRANSLATIONS["id"], {"The same setting as Use As in Database › User Interfaces.": "Pengaturan yang sama dengan \"Gunakan sebagai\" di Database › Antarmuka pengguna."});
+Object.assign(RR_TEXT_TRANSLATIONS["vi"], {"The same setting as Use As in Database › User Interfaces.": "Cùng thiết lập với \"Dùng làm\" trong Cơ sở dữ liệu › Giao diện người dùng."});
+Object.assign(RR_TEXT_TRANSLATIONS["th"], {"The same setting as Use As in Database › User Interfaces.": "เป็นการตั้งค่าเดียวกับ \"ใช้เป็น\" ใน ฐานข้อมูล › ส่วนติดต่อผู้ใช้"});
+
 // 3D model import optimizer dialog.
 Object.assign(RR_TEXT_TRANSLATIONS['ja'], {
     'Import 3D Model': '3Dモデルのインポート', 'Optimize (recommended)': '最適化(推奨)', 'Resize textures to 2K, compact skin weights, drop unused data, and cut the mesh to about 60% of its triangles by collapsing the edges that change the shape least. Seams and silhouette are held.': 'テクスチャを2Kに縮小し、スキンウェイトを圧縮、不要データを削除し、形状への影響が最も小さいエッジを折りたたんでメッシュの三角形を約60%まで削減します。継ぎ目とシルエットは維持されます。', 'Optimize aggressively': '積極的に最適化', 'Everything above, cut to about a quarter of the triangles. May soften very fine detail.': '上記すべてに加え、三角形を約4分の1まで削減します。細部がわずかに損なわれる場合があります。', 'Import as-is': 'そのままインポート', 'Keep every byte of the original file.': '元のファイルを一切変更しません。', 'Import': 'インポート', 'largest texture': '最大テクスチャ', 'reducible without visible change': '見た目を変えずに削減可能'

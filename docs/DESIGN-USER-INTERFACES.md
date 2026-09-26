@@ -378,8 +378,9 @@ interface closes. It is the authoritative runtime preview.
 which means no System replacement field points to the record. Checking a role
 adds compatibility and assigns that System field; unchecking clears the field
 without deleting compatibility. Custom clears only System fields that point to
-the current record and is not serialized in `roles`. Overlays cannot gain new
-replacement assignments, but a stale assignment remains visible and clearable.
+the current record and is not serialized in `roles`. Changing the presentation
+clears every assignment the new presentation cannot fill (a scene role on an
+overlay or Battle HUD, Battle on a scene), since the game would ignore it.
 
 The collapsible **Game Reference** tray can capture title, menu, item, skill,
 equip, status, options, save, load, shop, game end, and battle with the project's plugins loaded. It
@@ -430,7 +431,7 @@ newer screens through Stock Layout.
 
 Replacement is opt-in and role-gated. The replaceable roles are **Title, Main
 Menu, Status, Game End, Options, Save, Load, Items, Skills, Equipment, Shop, and
-Name Input**; **Battle** binds a Battle HUD without replacing the scene. System 1 selects Title; System 2 selects the others. Shop
+Name Input**; **Battle** binds a Battle HUD without replacing the scene. System 1 selects Title and System 2 the others; they and Use As edit the same System fields, so the last change wins. The System lists offer every record whose presentation fits (a focused scene, or a Battle HUD for Battle), and choosing one there adds the role to its `roles` as Use As does. Shop
 Processing and Name Input Processing prepare the routed scene a second time
 with their goods or actor, which the interface keeps. A record may advertise one or more matching
 roles, but it must be a valid scene record at the selected ID. Zero, missing or

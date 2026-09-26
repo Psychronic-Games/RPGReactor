@@ -234,7 +234,14 @@ class DatabaseSystem1Editor {
             const titleInterface = container.querySelector('.system-title-interface');
             if (titleInterface) {
                 titleInterface.addEventListener('change', event => {
-                    system.reactorTitleInterfaceId = Math.max(0, Math.floor(Number(event.target.value) || 0));
+                    const id = Math.max(0, Math.floor(Number(event.target.value) || 0));
+                    system.reactorTitleInterfaceId = id;
+                    // The game routes a record only when its roles name the title.
+                    const record = id > 0 && this.databaseManager.getUserInterface ? this.databaseManager.getUserInterface(id) : null;
+                    if (record) {
+                        if (!Array.isArray(record.roles)) record.roles = record.stock ? [record.stock] : [];
+                        if (!record.roles.includes('title')) record.roles.push('title');
+                    }
                     this.databaseManager.mutationGeneration = (this.databaseManager.mutationGeneration || 0) + 1;
                 });
             }
@@ -650,6 +657,7 @@ class DatabaseSystem1Editor {
         return column;
     }
 
+    /** Every focused-scene interface can be the title; choosing one here or in Use As is the same binding. */
     userInterfaceOptions(selectedId) {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const selected = Math.max(0, Math.floor(Number(selectedId) || 0));
@@ -657,14 +665,10 @@ class DatabaseSystem1Editor {
         const records = this.databaseManager.getUserInterfaces ? this.databaseManager.getUserInterfaces() : [];
         for (const entry of records || []) {
             const id = Math.floor(Number(entry && entry.id) || 0);
-            const roles = Array.isArray(entry && entry.roles) ? entry.roles : entry && entry.stock ? [entry.stock] : [];
-            if (!entry || !(id > 0) || entry.mode === 'overlay' || !roles.includes('title')) continue;
+            if (!(id > 0) || (entry.mode || 'scene') !== 'scene') continue;
             html += `<option value="${id}"${id === selected ? ' selected' : ''}>${String(id).padStart(4, '0')}: ${rrEscapeHtml(entry.name || tt('(Unnamed)'))}</option>`;
         }
-        if (selected > 0 && !(records || []).some(entry => {
-            const roles = Array.isArray(entry && entry.roles) ? entry.roles : entry && entry.stock ? [entry.stock] : [];
-            return entry && Number(entry.id) === selected && entry.mode !== 'overlay' && roles.includes('title');
-        })) {
+        if (selected > 0 && !(records || []).some(entry => entry && Number(entry.id) === selected && (entry.mode || 'scene') === 'scene')) {
             html += `<option value="${selected}" selected>${tt('(Missing)')} / ${tt('(incompatible)')} #${selected}</option>`;
         }
         return html;

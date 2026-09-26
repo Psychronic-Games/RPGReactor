@@ -119,29 +119,42 @@ class DatabaseSystem2Editor {
         ];
         const html = rows.map(([field, label, role]) => `<div style="margin-bottom: 8px;">
             <label class="database-field-label">${tt(label)}</label>
-            <select class="database-field-value sys2-interface" data-system-field="${field}" style="width: 100%;">${this.userInterfaceOptions(system[field], role)}</select>
-        </div>`).join('') + `<div class="sys2-magic-skills-hint">${tt('Only matching scene roles are routed; stock remains the safe fallback.')}</div>`;
+            <select class="database-field-value sys2-interface" data-system-field="${field}" data-role="${role}" style="width: 100%;">${this.userInterfaceOptions(system[field], role)}</select>
+        </div>`).join('') + `<div class="sys2-magic-skills-hint">${tt('The same setting as Use As in Database › User Interfaces.')}</div>`;
         return this.createSection(tt('Custom Interfaces'), html);
     }
 
+    /**
+     * Every interface whose presentation can fill the role: a Battle HUD for
+     * Battle, a focused scene for the rest. Choosing one here or in Use As is
+     * the same binding.
+     */
     userInterfaceOptions(selectedId, role) {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const selected = Math.max(0, Math.floor(Number(selectedId) || 0));
+        const fits = entry => entry && (entry.mode || 'scene') === (role === 'battle' ? 'battle' : 'scene');
         let html = `<option value="0"${selected === 0 ? ' selected' : ''}>${tt('Stock (default)')}</option>`;
         const records = this.databaseManager.getUserInterfaces ? this.databaseManager.getUserInterfaces() : [];
         for (const entry of records || []) {
             const id = Math.floor(Number(entry && entry.id) || 0);
-            const roles = Array.isArray(entry && entry.roles) ? entry.roles : entry && entry.stock ? [entry.stock] : [];
-            if (!entry || !(id > 0) || entry.mode === 'overlay' || (role && !roles.includes(role))) continue;
+            if (!(id > 0) || !fits(entry)) continue;
             html += `<option value="${id}"${id === selected ? ' selected' : ''}>${String(id).padStart(4, '0')}: ${rrEscapeHtml(entry.name || tt('(Unnamed)'))}</option>`;
         }
-        if (selected > 0 && !(records || []).some(entry => {
-            const roles = Array.isArray(entry && entry.roles) ? entry.roles : entry && entry.stock ? [entry.stock] : [];
-            return entry && Number(entry.id) === selected && entry.mode !== 'overlay' && (!role || roles.includes(role));
-        })) {
+        if (selected > 0 && !(records || []).some(entry => entry && Number(entry.id) === selected && fits(entry))) {
             html += `<option value="${selected}" selected>${tt('(Missing)')} / ${tt('(incompatible)')} #${selected}</option>`;
         }
         return html;
+    }
+
+    /** Bind an interface to a role; the game routes a record only when its roles name that role. */
+    bindUserInterface(system, field, role, id) {
+        system[field] = id;
+        const record = id > 0 && this.databaseManager.getUserInterface ? this.databaseManager.getUserInterface(id) : null;
+        if (record && role) {
+            if (!Array.isArray(record.roles)) record.roles = record.stock ? [record.stock] : [];
+            if (!record.roles.includes(role)) record.roles.push(role);
+        }
+        this.databaseManager.mutationGeneration = (this.databaseManager.mutationGeneration || 0) + 1;
     }
 
     createItemCategoriesSection(system) {
@@ -429,8 +442,7 @@ class DatabaseSystem2Editor {
                     'reactorOptionsInterfaceId', 'reactorSaveInterfaceId', 'reactorLoadInterfaceId',
                     'reactorItemInterfaceId', 'reactorSkillInterfaceId', 'reactorEquipInterfaceId', 'reactorShopInterfaceId',
                     'reactorNameInterfaceId', 'reactorBattleInterfaceId'].includes(field)) return;
-                system[field] = Math.max(0, Math.floor(Number(event.target.value) || 0));
-                this.databaseManager.mutationGeneration = (this.databaseManager.mutationGeneration || 0) + 1;
+                this.bindUserInterface(system, field, event.target.dataset.role, Math.max(0, Math.floor(Number(event.target.value) || 0)));
             });
         });
 

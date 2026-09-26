@@ -634,7 +634,8 @@ test('System editors expose stock-default selectors for every bounded replacemen
     assert.match(system2, /reactorOptionsInterfaceId/);
     assert.match(system2, /reactorSaveInterfaceId/);
     assert.match(system2, /reactorLoadInterfaceId/);
-    assert.match(system2, /entry\.mode === 'overlay'/);
+    assert.match(system2, /\(entry\.mode \|\| 'scene'\) === \(role === 'battle' \? 'battle' : 'scene'\)/);
+    assert.match(system1, /if \(!record\.roles\.includes\('title'\)\) record\.roles\.push\('title'\)/);
     assert.match(read('runtime/reactor_ui.js'), /record\.roles \|\| \[\]\)\.includes\(role\)/);
 });
 
@@ -926,12 +927,15 @@ test('User Interfaces replacement controls assign and unassign System roles but 
     assert.deepEqual(editor.current.roles, ['status', 'gameEnd']);
     editor.current.mode = 'overlay';
     assert.equal(editor.setReplacementRole('menu', true), false);
+    assert.equal(editor.dropUnfitReplacementRoles(), true, 'a presentation change drops bindings the game would ignore');
+    assert.deepEqual([system.reactorStatusInterfaceId, system.reactorGameEndInterfaceId], [0, 0]);
+    system.reactorStatusInterfaceId = 7;
     assert.equal('reactorMenuInterfaceId' in system, false);
     assert.equal(editor.setReplacementRole('status', false), true, 'an existing invalid overlay reference can still be removed');
     assert.equal(system.reactorStatusInterfaceId, 0);
 });
 
-test('System 2 selector options include matching scene roles and expose invalid selected ids safely', () => {
+test('System 2 lists every interface whose presentation fits the role, binds like Use As, and exposes invalid ids safely', () => {
     const previousWindow = global.window;
     const previousEscape = global.rrEscapeHtml;
     const previousDocument = global.document;
@@ -940,18 +944,33 @@ test('System 2 selector options include matching scene roles and expose invalid 
     global.document = { createElement: () => ({ className: '', innerHTML: '' }) };
     try {
         const System2 = require(path.join(repoRoot, 'editor', 'src', 'database', 'DatabaseSystem2Editor.js'));
-        const manager = { getUserInterfaces: () => [
+        const records = [
             { id: 1, name: 'Menu', mode: 'scene', roles: ['menu'] },
             { id: 2, name: 'HUD', mode: 'overlay' },
-            { id: '3', name: 'Status', mode: 'scene', roles: ['status'] }
-        ] };
+            { id: '3', name: 'Status', mode: 'scene', roles: ['status'] },
+            { id: 4, name: 'Battle HUD', mode: 'battle', roles: [] },
+            { id: 5, name: 'Fresh', mode: 'scene' }
+        ];
+        const manager = { getUserInterfaces: () => records, getUserInterface: id => records.find(r => Number(r.id) === id) };
         const editor = new System2(manager);
         const valid = editor.userInterfaceOptions(3, 'status');
         assert.match(valid, /value="0"/);
-        assert.doesNotMatch(valid, /value="1"/);
+        assert.match(valid, /value="1"/, 'a scene record is offered for any scene role, not only the ones it was tagged with');
         assert.match(valid, /value="3" selected/);
+        assert.match(valid, /value="5"/);
         assert.doesNotMatch(valid, /value="2"/);
+        assert.doesNotMatch(valid, /value="4"/, 'a battle HUD cannot be a scene');
+        const battle = editor.userInterfaceOptions(0, 'battle');
+        assert.match(battle, /value="4"/);
+        assert.doesNotMatch(battle, /value="1"|value="5"/);
+        assert.match(editor.userInterfaceOptions(4, 'menu'), /value="4" selected>\(Missing\) \/ \(incompatible\) #4/);
         assert.match(editor.userInterfaceOptions(9, 'status'), /value="9" selected>\(Missing\) \/ \(incompatible\) #9/);
+        const system = {};
+        editor.bindUserInterface(system, 'reactorShopInterfaceId', 'shop', 5);
+        assert.equal(system.reactorShopInterfaceId, 5);
+        assert.deepEqual([...records[4].roles], ['shop'], 'binding from System 2 tags the record so the game routes it');
+        editor.bindUserInterface(system, 'reactorShopInterfaceId', 'shop', 0);
+        assert.equal(system.reactorShopInterfaceId, 0);
         const section = editor.createCustomInterfacesSection({});
         assert.match(section.innerHTML, /reactorMenuInterfaceId/);
         assert.match(section.innerHTML, /reactorStatusInterfaceId/);
