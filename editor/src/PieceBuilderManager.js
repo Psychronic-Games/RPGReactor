@@ -872,8 +872,29 @@ class PieceBuilderManager {
     }
 
     /** The piece as it would be laid at a target `{x, y, z}`. */
+    /**
+     * A ladder leans on what it is placed against: the turn that climbs toward
+     * a wall, a block or a bank beside the cell (the one the chosen turn names
+     * when there are several), or null in the open, where the chosen turn stands.
+     */
+    ladderRotFor(target) {
+        const map = this.currentMap();
+        if (!map || !target || typeof Reactor3D === 'undefined' || !Reactor3D.pieceBaseAt) return null;
+        const base = Reactor3D.pieceBaseAt(map, target.x, target.y) + (target.z || 0);
+        const solid = (x, y) => {
+            if (x < 0 || y < 0 || x >= map.width || y >= map.height) return false;
+            if (Reactor3D.pieceSolidAt && Reactor3D.pieceSolidAt(map, x + 0.5, base + 0.5, y + 0.5)) return true;
+            // A bank or cliff that stands over the ladder's foot.
+            return Reactor3D.groundHeightAt && Reactor3D.groundHeightAt(map, x + 0.5, y + 0.5, base) > base + 1;
+        };
+        const leaning = [0, 1, 2, 3].filter(rot => { const [dx, dy] = PieceBuilderManager.stepOf(rot); return solid(target.x + dx, target.y + dy); });
+        if (!leaning.length) return null;
+        return leaning.includes(this.rot) ? this.rot : leaning[0];
+    }
+
     pieceFor(target) {
         const piece = { kind: this.kind, x: target.x, y: target.y, z: target.z, rot: this.rot, material: this.material };
+        if (this.kind === 'ladder') { const rot = this.ladderRotFor(target); if (rot !== null) piece.rot = rot; }
         const E = this.elevation();
         if (E && E.SHAPE_KINDS && E.SHAPE_KINDS.includes(this.kind)) {
             piece.size = this.sizeFor(this.kind);

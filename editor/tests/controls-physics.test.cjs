@@ -237,3 +237,10 @@ test('a swimmer steers its depth with the camera in third and first person', () 
     c.Reactor3D.Camera.look.pitch = 70;
     assert.equal(c.ReactorPhysics.lookDive({}), 0, 'fixed views keep Dash and Jump');
 });
+
+test('a ladder placed beside a wall leans on it, and its preview shows that', () => {
+    const manager = read('editor/src/PieceBuilderManager.js'), view = read('editor/src/MapEditor3D.js');
+    assert.match(manager, /ladderRotFor\(target\) \{/);
+    assert.match(manager, /if \(this\.kind === 'ladder'\) \{ const rot = this\.ladderRotFor\(target\); if \(rot !== null\) piece\.rot = rot; \}/);
+    assert.match(view, /manager\.ladderRotFor\(target\) \?\? manager\.rot/);
+});
