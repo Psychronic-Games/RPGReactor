@@ -318,3 +318,10 @@ test('a failed binding removal restores its checkbox and reports the error witho
         assert.equal(ui.changes(),0);assert.deepEqual(alerts,['Could not save the 3D model binding.']);
     } finally {fs.rmSync=remove;}
 });
+
+test('a skinned model is never ray-tested by re-posing every vertex on a hover or a scroll', () => {
+    const src = fs.readFileSync(path.join(repoRoot, 'editor', 'src', 'database', 'Database3DEditor.js'), 'utf8');
+    assert.match(src, /_skinnedSnapshot\(fresh = false\) \{/);
+    assert.match(src, /RRMeshBvh\.raycastMeshes\(raycaster\.ray, proxies, THREE\)/);
+    assert.match(src, /if \(this\._skinned \|\| \(this\._triangleCount \|\| 0\) > Database3DEditor\.WHEEL_RAYCAST_BUDGET\) \{\n\s+const point = this\._pointerBoxPoint\(clientX, clientY\);/);
+});

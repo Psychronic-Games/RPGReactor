@@ -45,6 +45,8 @@ class Database3DEditor {
      * rested and the camera has settled, so it never lands mid-orbit.
      */
     static get HOVER_TRIANGLE_BUDGET() { return 150000; }
+    /** Above this a scroll zooms toward the model's box rather than ray-testing its triangles. */
+    static get WHEEL_RAYCAST_BUDGET() { return 30000; }
 
     static shouldRaycastHover({ now, movedAt, inputAt, dragging, triangles, restMs = 150, settleMs = 250 }) {
         if (dragging) return false;
@@ -1874,7 +1876,9 @@ class Database3DEditor {
         this._previewLighting = ModelPreview3D.isolateLighting(object);
         this._lastInputAt = performance.now();
         let triangles = 0;
+        this._skinned = false;
         object.traverse(child => {
+            if (child.isSkinnedMesh) this._skinned = true;
             if (!child.isMesh && !child.isSkinnedMesh) return;
             const index = child.geometry.getIndex();
             const position = child.geometry.getAttribute('position');
@@ -1882,6 +1886,9 @@ class Database3DEditor {
         });
         this._triangleCount = triangles;
         this._scene.add(object);
+        // A skinned model's ray-test surface is skinned once, in a quiet moment after it appears.
+        this._snapshot = null;
+        if (this._skinned) setTimeout(() => { if (this._object === object && !this._snapshot) this._skinnedSnapshot(); }, 400);
         this._applyBaseTransform();
         this._syncEffectAnchorMarker();
         // Shader compilation and texture upload land here, in the load
@@ -5565,6 +5572,8 @@ class Database3DEditor {
         let removing = false;
         canvas.addEventListener('contextmenu', event => event.preventDefault());
         canvas.addEventListener('pointerdown', event => {
+            // A click picks from the pose as it stands now; a hover uses the kept one.
+            this._clickRefresh = true;
             // An open dropdown dismisses on this click and nothing else
             // happens — preventDefault would pin its popup open forever.
             const active = document.activeElement;
@@ -5772,6 +5781,22 @@ class Database3DEditor {
             -((clientY - rect.top) / rect.height) * 2 + 1);
         const raycaster = new THREE.Raycaster();
         raycaster.setFromCamera(pointer, this._camera);
+        // A skinned model is tested against its rest pose through a tree over
+        // its triangles: three re-poses every vertex of a skinned mesh per ray
+        // (190-300 ms on a 150k character), which froze every hover and every
+        // scroll. The rest pose is where the idle stands, give or take.
+        if (this._skinned && typeof RRMeshBvh !== 'undefined') {
+            this._object.updateMatrixWorld(true);
+            const proxies = this._skinnedSnapshot(refreshSkin && this._clickRefresh);
+            this._clickRefresh = false;
+            const hit = RRMeshBvh.raycastMeshes(raycaster.ray, proxies, THREE);
+            if (!hit) return [];
+            const mesh = hit.object.mesh;
+            const index = mesh.geometry.getIndex();
+            const t = hit.triangle * 3;
+            const face = index ? { a: index.getX(t), b: index.getX(t + 1), c: index.getX(t + 2) } : { a: t, b: t + 1, c: t + 2 };
+            return [{ point: hit.point, distance: hit.distance, object: mesh, face, faceIndex: hit.triangle }];
+        }
         // A skinned mesh is ray-tested against its own cached bounds, which
         // three computes once from the geometry as loaded — for a rigged
         // character that box can be a few centimetres at the origin, and
@@ -6103,12 +6128,62 @@ class Database3DEditor {
         // to test on every scroll zooms toward the view's plane like empty space does.
         const now = performance.now(), last = this._wheelHit;
         if (last && now - last.at < 300 && Math.hypot(last.x - clientX, last.y - clientY) < 6) { last.at = now; return last.point || this._cameraPlanePoint(clientX, clientY, centre); }
-        if ((this._triangleCount || 0) > Database3DEditor.HOVER_TRIANGLE_BUDGET) { this._wheelHit = { at: now, x: clientX, y: clientY, point: null }; return this._cameraPlanePoint(clientX, clientY, centre); }
-        // A skinned model's bounds follow its pose; refreshing them walks every vertex, so a scroll does it at most every two seconds.
-        const hits = this._raycastPointer(clientX, clientY, { refreshSkin: !this._skinBoundsAt || now - this._skinBoundsAt > 2000 }) || [];
+        // A skinned or heavy model is not ray-tested on a scroll: three poses every
+        // vertex of a skinned mesh to test it (190-300 ms on a 150k character, a
+        // freeze at the start of every scroll). The zoom only needs a point to
+        // close on: where the pointer's ray enters the model's box.
+        if (this._skinned || (this._triangleCount || 0) > Database3DEditor.WHEEL_RAYCAST_BUDGET) {
+            const point = this._pointerBoxPoint(clientX, clientY);
+            this._wheelHit = { at: now, x: clientX, y: clientY, point };
+            return point || this._cameraPlanePoint(clientX, clientY, centre);
+        }
+        const hits = this._raycastPointer(clientX, clientY, { refreshSkin: false }) || [];
         const hit = hits.find(entry => !(entry.object.userData && entry.object.userData.__reactorOverlay));
         this._wheelHit = { at: now, x: clientX, y: clientY, point: hit ? hit.point.clone() : null };
         return this._wheelHit.point || this._cameraPlanePoint(clientX, clientY, centre);
+    }
+
+    /**
+     * A skinned model's surface as it stands, for ray tests: every vertex
+     * skinned once (as three draws it) into a plain geometry with a tree
+     * over it. Kept per instance and taken again on a click (`fresh`), so a
+     * hover or a scroll never pays for skinning.
+     */
+    _skinnedSnapshot(fresh = false) {
+        if (!fresh && this._snapshot && this._snapshot.object === this._object) return this._snapshot.proxies;
+        const proxies = [];
+        const v = new THREE.Vector3();
+        this._object.traverse(node => {
+            if (!(node.isMesh || node.isSkinnedMesh) || !node.visible || (node.userData && node.userData.__reactorOverlay)) return;
+            let geometry = node.geometry;
+            if (node.isSkinnedMesh && typeof node.getVertexPosition === 'function') {
+                const position = node.geometry.getAttribute('position');
+                const out = new Float32Array(position.count * 3);
+                for (let i = 0; i < position.count; i++) { node.getVertexPosition(i, v); out[i * 3] = v.x; out[i * 3 + 1] = v.y; out[i * 3 + 2] = v.z; }
+                geometry = new THREE.BufferGeometry();
+                geometry.setAttribute('position', new THREE.BufferAttribute(out, 3));
+                if (node.geometry.getIndex()) geometry.setIndex(node.geometry.getIndex());
+            }
+            proxies.push({ mesh: node, geometry, matrixWorld: node.matrixWorld, visible: true, material: node.material });
+        });
+        this._snapshot = { object: this._object, proxies };
+        return proxies;
+    }
+
+    /** Where the pointer's ray enters the model's box (its bind-pose box, kept per instance), or null. */
+    _pointerBoxPoint(clientX, clientY) {
+        if (!this._object || !this._camera) return null;
+        if (!this._boxFor || this._boxFor !== this._object) {
+            this._boxFor = this._object;
+            this._object.updateMatrixWorld(true);
+            this._pointerBox = new THREE.Box3().setFromObject(this._object);
+        }
+        if (!this._pointerBox || this._pointerBox.isEmpty()) return null;
+        const canvas = this._detail.querySelector('.r3d-db-canvas');
+        const rect = canvas.getBoundingClientRect();
+        const raycaster = this._boxRaycaster || (this._boxRaycaster = new THREE.Raycaster());
+        raycaster.setFromCamera(new THREE.Vector2(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1), this._camera);
+        return raycaster.ray.intersectBox(this._pointerBox, new THREE.Vector3());
     }
 
     /** Slide the orbit centre across the view by a pointer delta, so the picture follows the pointer. */
