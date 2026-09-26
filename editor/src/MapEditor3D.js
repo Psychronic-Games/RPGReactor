@@ -1916,7 +1916,7 @@ class MapEditor3D {
         const stamp = manager.mode === 'stamp' ? manager.structurePlan() : bounds ? { size: [bounds.x1 - bounds.x0 + 1, bounds.y1 - bounds.y0 + 1] } : null;
         if (manager.mode === 'move' && !bounds) { this.hidePieceGhost(); return; }
         const turn = stamp && !bounds ? (manager.rot || 0) : 0;
-        const key = stamp ? (bounds ? 'move:' + manager.selectedGroup : 'stamp:' + manager.structure + ':' + turn) : (erase ? 'erase' : manager.kind) + ':' + manager.rot + ':' + JSON.stringify([manager.sizeFor ? manager.sizeFor(manager.kind) : null, manager.params && manager.params[manager.kind]]);
+        const key = stamp ? (bounds ? 'move:' + manager.selectedGroup : 'stamp:' + manager.structure + ':' + turn) : (erase ? 'erase' : manager.kind) + ':' + manager.rot + ':' + JSON.stringify([manager.sizeFor ? manager.sizeFor(manager.kind) : null, manager.params && manager.params[manager.kind], manager.kind === 'stair' ? [manager.stairSteps, manager.stairWidth] : manager.kind === 'ladder' ? manager.ladderHeight : null]);
         if (!this.pieceGhost || this.pieceGhost.userData.key !== key) {
             this.hidePieceGhost(true);
             // A plan's ghost is the building itself, translucent; a selected
@@ -1925,7 +1925,11 @@ class MapEditor3D {
             const geometry = silhouette
                 || (stamp
                     ? new THREE.BoxGeometry(stamp.size[0], 0.3, stamp.size[1]).translate(stamp.size[0] / 2, 0.15, stamp.size[1] / 2)
-                    : Reactor3D.pieceGeometry([Object.assign({ id: 0, material: '' }, erase ? { kind: 'block', x: 0, y: 0, z: 0, rot: 0 } : manager.pieceFor({ x: 0, y: 0, z: 0 }))], null));
+                    : Reactor3D.pieceGeometry(erase ? [{ id: 0, material: '', kind: 'block', x: 0, y: 0, z: 0, rot: 0 }]
+                        // A stair run shows whole: every step, as wide as it will be laid.
+                        : (manager.kind === 'stair' && manager.stairRun ? manager.stairRun(Object.assign({ id: 0, material: '' }, manager.pieceFor({ x: 0, y: 0, z: 0 })))
+                            : manager.kind === 'ladder' && manager.ladderRun ? manager.ladderRun(Object.assign({ id: 0, material: '' }, manager.pieceFor({ x: 0, y: 0, z: 0 })))
+                            : [Object.assign({ id: 0, material: '' }, manager.pieceFor({ x: 0, y: 0, z: 0 }))]), null));
             const material = new THREE.MeshBasicMaterial({ color: erase ? 0xff6b6b : bounds ? 0x7dff9a : stamp ? 0xffd166 : 0x7fd8ff, transparent: true, opacity: erase ? 0.35 : 0.5, depthWrite: false });
             this.pieceGhost = new THREE.Mesh(geometry, material);
             this.pieceGhost.renderOrder = 998;

@@ -657,7 +657,7 @@ test('the map note is the 3D switch, the sidecar always loads on disk, and flat-
         /else if \(!\(mapData\.meta/,
         'no note designation gates the sidecar fetch — every map asks');
     assert.match(r3d, /this\.applyEventModelPose\(state\.object, spec, this\.characterModelDir8\(character\)\);/, 'sprite-mode pose matches the scene');
-    assert.match(r3d, /dashing: typeof Game_Follower !== "undefined" && character instanceof Game_Follower\n\s+\? \$gamePlayer\.isDashing\(\)\n\s+: !!\(character\.isDashing && character\.isDashing\(\)\),\n\s+airborne: Reactor3D\.isAirborne\(character\),\n\s+swimming: Reactor3D\.isSwimming\(character\),\n\s+distance,\n\s+scale: state\.scale,/, 'and so does the animation driver');
+    assert.match(r3d, /dashing: typeof Game_Follower !== "undefined" && character instanceof Game_Follower\n\s+\? \$gamePlayer\.isDashing\(\)\n\s+: !!\(character\.isDashing && character\.isDashing\(\)\),\n\s+airborne: Reactor3D\.isAirborne\(character\),\n\s+swimming: Reactor3D\.isSwimming\(character\),\n\s+climbing: Reactor3D\.isClimbing\(character\),\n\s+distance,\n\s+scale: state\.scale,/, 'and so does the animation driver');
     assert.match(video, /if \(this\.video\.readyState >= 1 && this\.video\.videoWidth > 0\) loadSource\(\);/, 'PIXI never restarts a load the element already started');
     assert.match(read('src/event/commands/MediaSurfaceEditor.js'), /return noted && map\?\.reactor3d\?\.mode !== '2d';/);
 });

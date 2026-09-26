@@ -31,6 +31,9 @@ class PieceBuilderManager {
         // Sizes chosen in the specs panel, per kind; a stair run's length; the selected piece and its handle mode.
         this.sizes = {};
         this.stairSteps = 1;
+        this.stairWidth = 1;
+        // A ladder reaches a storey unless told otherwise.
+        this.ladderHeight = 5;
         this.selected = 0;
         this.selectedIds = [];
         this.gizmoMode = 'move';
@@ -362,6 +365,7 @@ class PieceBuilderManager {
         floor: 'M3 13l9-4 9 4-9 4z M3 13v2l9 4 9-4v-2',
         pillar: 'M8 4h8 M9 4v16 M15 4v16 M7 20h10 M9 6h6',
         stair: 'M3 20h5v-4h4v-4h4v-4h5 M3 20v-4h5 M8 16v-4h4 M12 12V8h4',
+        ladder: 'M7 3v18 M17 3v18 M7 7h10 M7 12h10 M7 17h10',
         ramp: 'M3 19h18V7z M3 19v2h18v-2',
         roof: 'M3 14l9-9 9 9 M5 14v6h14v-6 M9 20v-4h6v4',
         doorway: 'M5 20V5h14v15 M9 20v-9h6v9',
@@ -916,13 +920,10 @@ class PieceBuilderManager {
         if (group) piece.group = group;
         let changed;
         if (this._stroke.mode === 'erase') changed = this.eraseAt(map, target);
-        else if (piece.kind === 'stair' && this.stairSteps > 1) {
-            // A run of stairs: each one a cell on and a level up along the way it climbs.
-            const [dx, dy] = PieceBuilderManager.stepOf(piece.rot);
+        else if ((piece.kind === 'stair' && (this.stairSteps > 1 || this.stairWidth > 1)) || (piece.kind === 'ladder' && this.ladderHeight > 1)) {
             changed = false;
-            for (let i = 0; i < this.stairSteps; i++) {
-                const step = Object.assign({}, piece, { x: piece.x + dx * i, y: piece.y + dy * i, z: piece.z + i });
-                if (step.x < 0 || step.y < 0 || step.x >= map.width || step.y >= map.height) break;
+            for (const step of (piece.kind === 'ladder' ? this.ladderRun(piece) : this.stairRun(piece))) {
+                if (step.x < 0 || step.y < 0 || step.x >= map.width || step.y >= map.height) continue;
                 if (elevation.setPiece(map, step) && this._changedSince(map)) changed = true;
             }
         } else changed = !!elevation.setPiece(map, piece) && this._changedSince(map);
@@ -935,10 +936,31 @@ class PieceBuilderManager {
         // (a hidden face between touching walls belongs to both).
         if (changed) {
             this._stroke.moved = true;
-            const reach = this.isShape(piece.kind) ? Math.ceil(Math.max(...(piece.size || [1, 1, 1])) / 2) + 1 : Math.max(1, this.stairSteps);
+            const reach = this.isShape(piece.kind) ? Math.ceil(Math.max(...(piece.size || [1, 1, 1])) / 2) + 1 : Math.max(1, this.stairSteps, this.stairWidth);
             this.announce(false, { x0: target.x - reach, y0: target.y - reach, x1: target.x + reach, y1: target.y + reach });
         }
         return changed;
+    }
+
+    /**
+     * A run of stairs from one piece: `stairSteps` cells on and a level up
+     * along the way it climbs, each `stairWidth` cells across (to the right
+     * of the climb).
+     */
+    stairRun(piece) {
+        const [dx, dy] = PieceBuilderManager.stepOf(piece.rot);
+        const steps = Math.max(1, Math.floor(this.stairSteps) || 1), width = Math.max(1, Math.floor(this.stairWidth) || 1);
+        const out = [];
+        for (let i = 0; i < steps; i++) for (let k = 0; k < width; k++) {
+            out.push(Object.assign({}, piece, { x: piece.x + dx * i - dy * k, y: piece.y + dy * i + dx * k, z: piece.z + i }));
+        }
+        return out;
+    }
+
+    /** A ladder from one piece: `ladderHeight` levels of it, one over another. */
+    ladderRun(piece) {
+        const height = Math.max(1, Math.floor(this.ladderHeight) || 1);
+        return Array.from({ length: height }, (_, i) => Object.assign({}, piece, { z: piece.z + i }));
     }
 
     /** setPiece returns the id even when nothing changed; the list identity says whether it did. */

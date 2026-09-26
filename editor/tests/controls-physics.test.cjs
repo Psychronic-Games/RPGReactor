@@ -170,3 +170,20 @@ test('the runtime loads controls before physics, and every build ships both', ()
         assert.match(read(file), /'reactor_controls\.js', 'reactor_physics\.js'/, file);
     }
 });
+
+test('a ladder is climbed, not stood on: off its top onto the ledge, onto it from the ledge, never walked up', () => {
+    const R = require(path.join(repoRoot, 'runtime', 'reactor_3d.js'));
+    const pieces = [{ id: 1, kind: 'wall', x: 5, y: 5, z: 0, rot: 0, material: '' }];
+    for (let z = 0; z < 5; z++) pieces.push({ id: 2 + z, kind: 'ladder', x: 5, y: 6, z, rot: 2, material: '' });
+    const map = { width: 10, height: 10, reactor3d: { version: 1, mode: '3d', pieces } };
+    const ladder = R.ladderAt(map, 5, 6);
+    assert.deepEqual([ladder.dir, ladder.bottom, ladder.top], [8, 0, 5], 'climbs north, toward the wall, a storey');
+    assert.ok(R.groundHeightAt(map, 5.5, 6.5, 5) < 0.5, 'nobody stands on a ladder');
+    assert.equal(R.terrainBlocks(map, 5, 6, 5, 5, 0), true, 'the wall is not walked up from the foot');
+    assert.equal(R.terrainBlocks(map, 5, 6, 5, 5, 5), false, 'from the top of the ladder onto the wall top');
+    assert.equal(R.terrainBlocks(map, 5, 5, 5, 6, 5), false, 'from the wall top onto the ladder');
+    assert.equal(R.terrainBlocks(map, 5, 6, 5, 7, 0), false, 'walks away at the foot');
+    const physics = read('runtime/reactor_physics.js');
+    assert.match(physics, /Game_Player\.prototype\.moveStraight = function\(d\)/);
+    assert.match(physics, /if \(ladder && height > ground \+ 0\.02\) \{/);
+});

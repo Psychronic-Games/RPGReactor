@@ -76,7 +76,7 @@
 
     /** Whether a character is in the air (a jump, a fall); a swimmer is not. */
     ReactorPhysics.isAirborne = function(character) {
-        return !!character && !character._reactorSwim && (character._reactorAir > 0.02 || character._reactorVz > 0);
+        return !!character && !character._reactorSwim && !character._reactorOnLadder && (character._reactorAir > 0.02 || character._reactorVz > 0);
     };
 
     /** Whether a character is swimming. */
@@ -94,6 +94,18 @@
         const level = Reactor3D.waterLevelAt(mapData, Math.floor(x), Math.floor(y));
         if (level === null || level - ground <= settings.swimDepth) return null;
         return level - settings.swimDepth;
+    };
+
+    /** Climbing a ladder, tiles per frame. */
+    ReactorPhysics.LADDER_SPEED = 0.07;
+
+    /** The ladder a character holds: on a ladder's cell, between its foot and its top, off the ground. */
+    ReactorPhysics.ladderHeld = function(character) {
+        if (!character || typeof Reactor3D === "undefined" || !Reactor3D.ladderAt || typeof $dataMap === "undefined" || !$dataMap) return null;
+        const ladder = Reactor3D.ladderAt($dataMap, character.x, character.y);
+        const alt = character._reactorAlt;
+        if (!ladder || !Number.isFinite(alt) || alt < ladder.bottom - 0.01 || alt > ladder.top + 0.05) return null;
+        return ladder;
     };
 
     /** Buoyancy and drag in the water, per frame. */
@@ -143,11 +155,23 @@
         const x = Number.isFinite(character._realX) ? character._realX : character.x;
         const y = Number.isFinite(character._realY) ? character._realY : character.y;
         const alt = Number.isFinite(character._reactorAlt) ? character._reactorAlt : null;
-        const near = alt !== null && (this.isAirborne(character) || character._reactorSwim) ? alt : character._reactorGround;
+        const near = alt !== null && (this.isAirborne(character) || character._reactorSwim || character._reactorOnLadder) ? alt : character._reactorGround;
         const ground = Reactor3D.groundHeightAt($dataMap, x + 0.5, y + 0.5, near);
         character._reactorGround = ground;
         let height = alt === null ? ground : alt;
         let vz = Number(character._reactorVz) || 0;
+        // On a ladder, off its foot: held there, no gravity; the climb moves it.
+        const ladder = Reactor3D.ladderAt && alt !== null ? this.ladderHeld(character) : null;
+        if (ladder && height > ground + 0.02) {
+            character._reactorOnLadder = true;
+            character._reactorSwim = false;
+            character._reactorPeak = undefined;
+            character._reactorAlt = Math.min(ladder.top, height);
+            character._reactorVz = 0;
+            character._reactorAir = character._reactorAlt - ground;
+            return;
+        }
+        character._reactorOnLadder = false;
         const wet = Reactor3D.hasWater && Reactor3D.hasWater($dataMap);
         const float = wet ? this.floatHeight($dataMap, x + 0.5, y + 0.5, ground) : null;
         const swam = !!character._reactorSwim;
@@ -293,6 +317,31 @@
             if (free && !under && !((this._reactorDive || 0) > 0) && Input.isTriggered("jump")) ReactorPhysics.jump(this);
             _updateP.apply(this, arguments);
         };
+        // On a ladder the way toward the wall climbs and the way back climbs
+        // down; at the top the way on steps onto the ledge, at the foot the way
+        // back walks off, and sideways lets go of nothing: it is not taken.
+        const _moveStraight = Game_Player.prototype.moveStraight;
+        Game_Player.prototype.moveStraight = function(d) {
+            const ladder = typeof Reactor3D !== "undefined" && Reactor3D.ladderAt && typeof $dataMap !== "undefined" && $dataMap
+                && Reactor3D.isMap3D && Reactor3D.isMap3D($dataMap) ? Reactor3D.ladderAt($dataMap, this.x, this.y) : null;
+            if (ladder && !this.isMoving()) {
+                const alt = Number.isFinite(this._reactorAlt) ? this._reactorAlt : ladder.bottom;
+                const up = d === ladder.dir, down = d === 10 - ladder.dir;
+                if (up && alt < ladder.top - 0.01) {
+                    this.setDirection(ladder.dir);
+                    this._reactorAlt = Math.min(ladder.top, alt + ReactorPhysics.LADDER_SPEED);
+                    this._reactorOnLadder = true;
+                    return;
+                }
+                if (down && this._reactorOnLadder && alt > ladder.bottom + 0.01) {
+                    this.setDirection(ladder.dir);
+                    this._reactorAlt = Math.max(ladder.bottom, alt - ReactorPhysics.LADDER_SPEED);
+                    return;
+                }
+                if (!up && !down && this._reactorOnLadder) return;
+            }
+            return _moveStraight.apply(this, arguments);
+        };
         // A swimmer is slower and never dashes.
         const _realMoveSpeed = Game_CharacterBase.prototype.realMoveSpeed;
         Game_CharacterBase.prototype.realMoveSpeed = function() {
@@ -308,6 +357,13 @@
         // A character in the air is not stopped by what it is over; the start of a fall off a ledge is only by jumping.
         const _isMapPassable = Game_CharacterBase.prototype.isMapPassable;
         Game_CharacterBase.prototype.isMapPassable = function(x, y, d) {
+            // Stepping off the top of a ladder: judged from the height the climber holds.
+            if (this._reactorOnLadder && typeof Reactor3D !== "undefined" && typeof $dataMap !== "undefined" && $dataMap && Reactor3D.terrainBlocks) {
+                const x2 = $gameMap.roundXWithDirection(x, d), y2 = $gameMap.roundYWithDirection(y, d);
+                if (!$gameMap.isValid(x2, y2)) return false;
+                if (!($gameMap.isPassable(x, y, d) && $gameMap.isPassable(x2, y2, this.reverseDir(d)))) return false;
+                return !Reactor3D.terrainBlocks($dataMap, x, y, x2, y2, this._reactorAlt);
+            }
             // Under the water, a swimmer is stopped by rock it would swim into, and nothing else in the water.
             if (ReactorPhysics.isUnderwater(this) && typeof Reactor3D !== "undefined" && typeof $dataMap !== "undefined" && $dataMap && Reactor3D.isMap3D && Reactor3D.isMap3D($dataMap)) {
                 const x2 = $gameMap.roundXWithDirection(x, d), y2 = $gameMap.roundYWithDirection(y, d);

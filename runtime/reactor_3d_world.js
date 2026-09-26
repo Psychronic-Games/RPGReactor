@@ -130,8 +130,17 @@ Reactor3D.terrainBlocks = function(mapData, x, y, x2, y2, near) {
     // the height the character stands at now, which picks its floor.
     if (!mapData || (!this.terrainOf(mapData) && !this.hasPieces(mapData) && !this.hasWater(mapData))) return false;
     const limit = this.TERRAIN_SLOPE_LIMIT;
-    const from = this.groundHeightAt(mapData, x + 0.5, y + 0.5, near);
-    const edge = this.groundHeightAt(mapData, (x + x2) / 2 + 0.5, (y + y2) / 2 + 0.5, from);
+    // Off a ledge onto the top of a ladder: the climber takes hold there.
+    const ladderTo = this.hasPieces(mapData) ? this.ladderAt(mapData, x2, y2) : null;
+    if (ladderTo && Number.isFinite(near) && Math.abs(near - ladderTo.top) <= limit && this.groundHeightAt(mapData, x2 + 0.5, y2 + 0.5, near) < ladderTo.top - limit) return false;
+    // Up a ladder, a climber is as high as it holds, whatever is under it.
+    const ladderFrom = this.hasPieces(mapData) ? this.ladderAt(mapData, x, y) : null;
+    const from = ladderFrom && Number.isFinite(near) && near > ladderFrom.bottom + 0.02 && near <= ladderFrom.top + 0.05
+        ? near : this.groundHeightAt(mapData, x + 0.5, y + 0.5, near);
+    const onLadder = !!ladderFrom && from === near;
+    const ex = (x + x2) / 2 + 0.5, ey = (y + y2) / 2 + 0.5;
+    // The edge sample can fall on the ladder's own cell, where the climber's height stands.
+    const edge = onLadder && Math.floor(ex) === x && Math.floor(ey) === y ? from : this.groundHeightAt(mapData, ex, ey, from);
     const to = this.groundHeightAt(mapData, x2 + 0.5, y2 + 0.5, edge);
     const swim = this.hasWater(mapData) ? this.swimRule() : null;
     if (swim) {
@@ -180,6 +189,24 @@ Reactor3D.stairPieceAt = function(mapData, x, y) {
     if (!stack) return null;
     for (const piece of stack) if (piece.kind === "stair" && !piece.standIn) return piece;
     return null;
+};
+
+/**
+ * The ladder on a cell: the way it climbs (a map direction, 2/4/6/8, toward
+ * the wall it leans on) and the world heights of its foot and its top.
+ */
+Reactor3D.ladderAt = function(mapData, x, y) {
+    const stack = this.piecesAt(mapData, x, y);
+    if (!stack) return null;
+    let low = Infinity, high = -Infinity, rot = 0;
+    for (const piece of stack) {
+        if (piece.kind !== "ladder") continue;
+        if (piece.z < low) { low = piece.z; rot = piece.rot || 0; }
+        high = Math.max(high, piece.z + 1);
+    }
+    if (!Number.isFinite(low)) return null;
+    const base = this.pieceBaseAt(mapData, x, y);
+    return { dir: [2, 4, 8, 6][((rot % 4) + 4) % 4], bottom: base + low, top: base + high };
 };
 
 /** The way a stair climbs, in cells: rot 0 rises south, each turn is clockwise seen from above. */
@@ -263,7 +290,7 @@ Reactor3D.withinSweep = function(sweep, lx, lz, slack) {
     if (away > Math.PI) away = Math.PI * 2 - away;
     return away <= (sweep / 2) * Math.PI / 180 + (slack || 0);
 };
-Reactor3D.PIECE_KINDS = ["wall", "block", "floor", "pillar", "stair", "ramp", "roof", "doorway", "window", "fence", "glass"].concat(Reactor3D.SHAPE_KINDS);
+Reactor3D.PIECE_KINDS = ["wall", "block", "floor", "pillar", "stair", "ramp", "roof", "doorway", "window", "fence", "glass", "ladder"].concat(Reactor3D.SHAPE_KINDS);
 /**
  * What a material's name says about how it is drawn: a name beginning
  * "Glass" is see-through (tinted, a third opaque, both faces), a name
@@ -599,6 +626,8 @@ Reactor3D.pieceSurfaceAt = function(mapData, wx, wz, near) {
     let surface = 0;
     const u = wx - x, v = wz - y;
     for (const piece of stack) {
+        // A ladder is climbed, never stood on.
+        if (piece.kind === "ladder") continue;
         if (piece.z > surface + reach) {
             if (standing + reach < piece.z) break;
             surface = Math.max(0, this.pieceTop(piece, u, v));
@@ -789,6 +818,9 @@ Reactor3D.pieceShapes = function(kind, piece) {
         }
         case "ramp": return [{ wedge: true }];
         case "roof": return [{ gable: true }];
+        // A level of ladder against the side it climbs toward (+v): two rails, two rungs.
+        case "ladder": return [box(0.14, 0, 0.84, 0.22, 1, 0.94), box(0.78, 0, 0.84, 0.86, 1, 0.94),
+            box(0.22, 0.22, 0.86, 0.78, 0.29, 0.92), box(0.22, 0.72, 0.86, 0.78, 0.79, 0.92)];
         // A doorway is a wall with its bottom gone: a lintel band across the
         // top and nothing under it, the whole cell wide. The walls either
         // side are the posts, so two doorways side by side are one opening

@@ -12281,6 +12281,65 @@ Object.assign(RR_TEXT_TRANSLATIONS.vi, { "No animations yet. Add one to spin, sw
 Object.assign(RR_TEXT_TRANSLATIONS.th, { "No animations yet. Add one to spin, swing or pose a part.": "ยังไม่มีแอนิเมชัน เพิ่มเพื่อหมุน แกว่ง หรือจัดท่าชิ้นส่วน" });
 Object.assign(RR_TEXT_TRANSLATIONS.tr, { "No animations yet. Add one to spin, swing or pose a part.": "Henüz animasyon yok. Bir parçayı döndürmek, sallamak veya poz vermek için ekleyin." });
 
+// Build bar: stair width.
+Object.assign(RR_I18N_STRINGS["en"], {"build.stairWidth":"Width"});
+Object.assign(RR_I18N_STRINGS["ja"], {"build.stairWidth":"幅"});
+Object.assign(RR_I18N_STRINGS["es"], {"build.stairWidth":"Ancho"});
+Object.assign(RR_I18N_STRINGS["zh-Hant"], {"build.stairWidth":"寬度"});
+Object.assign(RR_I18N_STRINGS["zh-Hans"], {"build.stairWidth":"宽度"});
+Object.assign(RR_I18N_STRINGS["ru"], {"build.stairWidth":"Ширина"});
+Object.assign(RR_I18N_STRINGS["pt"], {"build.stairWidth":"Largura"});
+Object.assign(RR_I18N_STRINGS["de"], {"build.stairWidth":"Breite"});
+Object.assign(RR_I18N_STRINGS["fr"], {"build.stairWidth":"Largeur"});
+Object.assign(RR_I18N_STRINGS["el"], {"build.stairWidth":"Πλάτος"});
+Object.assign(RR_I18N_STRINGS["ko"], {"build.stairWidth":"너비"});
+Object.assign(RR_I18N_STRINGS["ar"], {"build.stairWidth":"العرض"});
+Object.assign(RR_I18N_STRINGS["it"], {"build.stairWidth":"Larghezza"});
+Object.assign(RR_I18N_STRINGS["pl"], {"build.stairWidth":"Szerokość"});
+Object.assign(RR_I18N_STRINGS["id"], {"build.stairWidth":"Lebar"});
+Object.assign(RR_I18N_STRINGS["vi"], {"build.stairWidth":"Chiều rộng"});
+Object.assign(RR_I18N_STRINGS["th"], {"build.stairWidth":"ความกว้าง"});
+Object.assign(RR_I18N_STRINGS["tr"], {"build.stairWidth":"Genişlik"});
+
+// Build bar: the ladder.
+Object.assign(RR_I18N_STRINGS["en"], {"pieces.kind.ladder":"Ladder"});
+Object.assign(RR_I18N_STRINGS["ja"], {"pieces.kind.ladder":"はしご"});
+Object.assign(RR_I18N_STRINGS["es"], {"pieces.kind.ladder":"Escalera de mano"});
+Object.assign(RR_I18N_STRINGS["zh-Hant"], {"pieces.kind.ladder":"梯子"});
+Object.assign(RR_I18N_STRINGS["zh-Hans"], {"pieces.kind.ladder":"梯子"});
+Object.assign(RR_I18N_STRINGS["ru"], {"pieces.kind.ladder":"Приставная лестница"});
+Object.assign(RR_I18N_STRINGS["pt"], {"pieces.kind.ladder":"Escada de mão"});
+Object.assign(RR_I18N_STRINGS["de"], {"pieces.kind.ladder":"Leiter"});
+Object.assign(RR_I18N_STRINGS["fr"], {"pieces.kind.ladder":"Échelle"});
+Object.assign(RR_I18N_STRINGS["el"], {"pieces.kind.ladder":"Ανεμόσκαλα"});
+Object.assign(RR_I18N_STRINGS["ko"], {"pieces.kind.ladder":"사다리"});
+Object.assign(RR_I18N_STRINGS["ar"], {"pieces.kind.ladder":"سلّم نقّال"});
+Object.assign(RR_I18N_STRINGS["it"], {"pieces.kind.ladder":"Scala a pioli"});
+Object.assign(RR_I18N_STRINGS["pl"], {"pieces.kind.ladder":"Drabina"});
+Object.assign(RR_I18N_STRINGS["id"], {"pieces.kind.ladder":"Tangga panjat"});
+Object.assign(RR_I18N_STRINGS["vi"], {"pieces.kind.ladder":"Thang"});
+Object.assign(RR_I18N_STRINGS["th"], {"pieces.kind.ladder":"บันไดพาด"});
+Object.assign(RR_I18N_STRINGS["tr"], {"pieces.kind.ladder":"Seyyar merdiven"});
+
+// 3D models: climbing.
+Object.assign(RR_TEXT_TRANSLATIONS.ja, { "While climbing": "登り中", "Climbing": "登り" });
+Object.assign(RR_TEXT_TRANSLATIONS.es, { "While climbing": "Al trepar", "Climbing": "Trepando" });
+Object.assign(RR_TEXT_TRANSLATIONS['zh-Hant'], { "While climbing": "攀爬時", "Climbing": "攀爬" });
+Object.assign(RR_TEXT_TRANSLATIONS['zh-Hans'], { "While climbing": "攀爬时", "Climbing": "攀爬" });
+Object.assign(RR_TEXT_TRANSLATIONS.ru, { "While climbing": "При лазании", "Climbing": "Лазание" });
+Object.assign(RR_TEXT_TRANSLATIONS.pt, { "While climbing": "Ao escalar", "Climbing": "Escalando" });
+Object.assign(RR_TEXT_TRANSLATIONS.de, { "While climbing": "Beim Klettern", "Climbing": "Klettern" });
+Object.assign(RR_TEXT_TRANSLATIONS.fr, { "While climbing": "En grimpant", "Climbing": "Escalade" });
+Object.assign(RR_TEXT_TRANSLATIONS.el, { "While climbing": "Στο σκαρφάλωμα", "Climbing": "Σκαρφάλωμα" });
+Object.assign(RR_TEXT_TRANSLATIONS.ko, { "While climbing": "오르는 중", "Climbing": "오르기" });
+Object.assign(RR_TEXT_TRANSLATIONS.ar, { "While climbing": "أثناء التسلق", "Climbing": "تسلق" });
+Object.assign(RR_TEXT_TRANSLATIONS.it, { "While climbing": "Arrampicandosi", "Climbing": "Arrampicata" });
+Object.assign(RR_TEXT_TRANSLATIONS.pl, { "While climbing": "Podczas wspinania", "Climbing": "Wspinanie" });
+Object.assign(RR_TEXT_TRANSLATIONS.id, { "While climbing": "Saat memanjat", "Climbing": "Memanjat" });
+Object.assign(RR_TEXT_TRANSLATIONS.vi, { "While climbing": "Khi leo", "Climbing": "Leo" });
+Object.assign(RR_TEXT_TRANSLATIONS.th, { "While climbing": "ขณะปีน", "Climbing": "ปีน" });
+Object.assign(RR_TEXT_TRANSLATIONS.tr, { "While climbing": "Tırmanırken", "Climbing": "Tırmanma" });
+
 // 3D model import optimizer dialog.
 Object.assign(RR_TEXT_TRANSLATIONS['ja'], {
     'Import 3D Model': '3Dモデルのインポート', 'Optimize (recommended)': '最適化(推奨)', 'Resize textures to 2K, compact skin weights, drop unused data, and cut the mesh to about 60% of its triangles by collapsing the edges that change the shape least. Seams and silhouette are held.': 'テクスチャを2Kに縮小し、スキンウェイトを圧縮、不要データを削除し、形状への影響が最も小さいエッジを折りたたんでメッシュの三角形を約60%まで削減します。継ぎ目とシルエットは維持されます。', 'Optimize aggressively': '積極的に最適化', 'Everything above, cut to about a quarter of the triangles. May soften very fine detail.': '上記すべてに加え、三角形を約4分の1まで削減します。細部がわずかに損なわれる場合があります。', 'Import as-is': 'そのままインポート', 'Keep every byte of the original file.': '元のファイルを一切変更しません。', 'Import': 'インポート', 'largest texture': '最大テクスチャ', 'reducible without visible change': '見た目を変えずに削減可能'

@@ -281,7 +281,7 @@ test('building happens in the world: the hammer in the toolbar opens a bar over 
     assert.match(mainSource, /else this\.buildHotbar\?\.hide\(false\);/, 'another owner puts the tool down and the bar away');
     assert.match(mainSource, /new PieceBuilderManager\(this\.projectController\)/);
     const barSource = read('editor/src/BuildHotbar.js');
-    assert.match(barSource, /static PIECES = \['floor', 'wall', 'doorway', 'window', 'glass', 'stair', 'ramp', 'roof', 'pillar', 'fence', 'block'\]/, 'the slots a child reaches for first, by the kinds\' own names');
+    assert.match(barSource, /static PIECES = \['floor', 'wall', 'doorway', 'window', 'glass', 'stair', 'ladder', 'ramp', 'roof', 'pillar', 'fence', 'block'\]/, 'the slots a child reaches for first, by the kinds\' own names');
     assert.match(barSource, /static SLOTS = \['select'\]\.concat/, 'Select comes first');
     assert.match(barSource, /static EXTRA = \['shape', 'screen', 'light', 'hammer', 'blueprint'\]/);
     assert.match(barSource, /if \(\/\^\[0-9\]\$\/\.test\(event\.key\)\)/, 'number keys pick slots');

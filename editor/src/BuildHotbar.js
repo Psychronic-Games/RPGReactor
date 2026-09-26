@@ -25,11 +25,11 @@ class BuildHotbar {
         this._onKeyDown = event => this.handleKey(event);
     }
 
-    static PIECES = ['floor', 'wall', 'doorway', 'window', 'glass', 'stair', 'ramp', 'roof', 'pillar', 'fence', 'block'];
+    static PIECES = ['floor', 'wall', 'doorway', 'window', 'glass', 'stair', 'ladder', 'ramp', 'roof', 'pillar', 'fence', 'block'];
     static EXTRA = ['shape', 'screen', 'light', 'hammer', 'blueprint'];
     static SLOTS = ['select'].concat(BuildHotbar.PIECES, BuildHotbar.EXTRA);
     /** The kinds whose facing matters: they climb, slope, open or run one way. */
-    static FACING = ['stair', 'ramp', 'doorway', 'window', 'fence', 'roof', 'glass'];
+    static FACING = ['stair', 'ladder', 'ramp', 'doorway', 'window', 'fence', 'roof', 'glass'];
 
     _t(key, params) { return window.I18n ? window.I18n.t(key, params) : key; }
     _tt(text) { return window.I18n ? window.I18n.tText(text) : text; }
@@ -196,7 +196,11 @@ class BuildHotbar {
             const rot = piece ? (s.shape ? Math.round(((piece.angle || 0) / 90) % 4) : piece.rot) : (s.shape ? 0 : manager.rot);
             if (!s.shape && (BuildHotbar.FACING.includes(kind) || s.placed)) body += section(this._t('build.direction'), facing(rot));
             body += section(this._t('pieces.material'), swatches(piece ? piece.material : manager.material));
-            if (kind === 'stair' && !s.placed) body += section(this._t('build.steps'), num('rr-build-steps', this._t('build.steps'), manager.stairSteps, 1, 60, 1, 'steps'));
+            if (kind === 'stair' && !s.placed) {
+                body += section(this._t('build.steps'), num('rr-build-steps', this._t('build.steps'), manager.stairSteps, 1, 60, 1, 'steps'));
+                body += section(this._t('build.stairWidth'), num('rr-build-stairwidth', this._t('build.stairWidth'), manager.stairWidth, 1, 20, 1, 'width'));
+            }
+            if (kind === 'ladder' && !s.placed) body += section(tt('Height'), num('rr-build-ladderheight', tt('Height'), manager.ladderHeight, 1, 60, 1, 'height'));
             if (s.shape) {
                 const size = piece ? piece.size : manager.sizeFor(kind);
                 const labels = kind === 'wedge' ? [tt('Width'), tt('Height'), tt('Length')] : [tt('Width'), tt('Height'), tt('Depth')];
@@ -247,6 +251,8 @@ class BuildHotbar {
             edit({ [key]: v }, () => { manager.params = manager.params || {}; manager.params[s.kind] = Object.assign({}, manager.params[s.kind], { [key]: v }); manager._ghostChanged(); });
         }));
         panel.querySelector('.rr-build-steps')?.addEventListener('change', event => { manager.stairSteps = Math.max(1, Math.min(60, Math.round(Number(event.target.value)) || 1)); this.renderPanel(); });
+        panel.querySelector('.rr-build-ladderheight')?.addEventListener('change', event => { manager.ladderHeight = Math.max(1, Math.min(60, Math.round(Number(event.target.value)) || 1)); this.renderPanel(); });
+        panel.querySelector('.rr-build-stairwidth')?.addEventListener('change', event => { manager.stairWidth = Math.max(1, Math.min(20, Math.round(Number(event.target.value)) || 1)); this.renderPanel(); });
         panel.querySelectorAll('.rr-build-mode').forEach(el => el.addEventListener('click', () => { manager.gizmoMode = el.dataset.mode; manager._ghostChanged(); this.renderPanel(); }));
         panel.querySelector('.rr-build-remove')?.addEventListener('click', () => { manager.removeSelection(); this.renderPanel(); });
         panel.querySelector('.rr-build-plan')?.addEventListener('change', event => { manager.structure = event.target.value; manager.setMode('stamp'); });

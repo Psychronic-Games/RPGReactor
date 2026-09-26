@@ -3298,7 +3298,7 @@ Reactor3D.readModelAnimationRules = function(json) {
             rate: Number(raw.rate) > 0 ? Number(raw.rate) : 1,
             type,
             axis: raw.axis === "x" || raw.axis === "z" ? raw.axis : "y",
-            trigger: ["idle", "moving", "walking", "dashing", "jumping", "swimming", "action"].indexOf(raw.trigger) >= 0
+            trigger: ["idle", "moving", "walking", "dashing", "jumping", "swimming", "climbing", "action"].indexOf(raw.trigger) >= 0
                 ? raw.trigger : "always",
             speed: Number(raw.speed) > 0 ? Number(raw.speed) : 90,
             perTile: Number(raw.perTile) > 0 ? Number(raw.perTile) : 0,
@@ -4042,6 +4042,14 @@ Reactor3D.AXIS_VECTORS = {
     z: [0, 0, 1]
 };
 
+/** How far toward its ladder a climber hangs from the middle of the cell. */
+Reactor3D.LADDER_REACH = 0.22;
+
+/** Whether a character is on a ladder by the physics. */
+Reactor3D.isClimbing = function(character) {
+    return !!(character && character._reactorOnLadder);
+};
+
 /** Whether a character is swimming by the physics. */
 Reactor3D.isSwimming = function(character) {
     return !!(character && character._reactorSwim);
@@ -4063,6 +4071,7 @@ Reactor3D.isAirborne = function(character) {
 Reactor3D.moveTriggerActive = function(trigger, state) {
     if (trigger === "jumping") return !!state.airborne;
     if (trigger === "swimming") return !!state.swimming;
+    if (trigger === "climbing") return !!state.climbing;
     if (trigger === "moving") return !!state.moving;
     if (trigger === "walking") return !!state.moving && !state.dashing;
     if (trigger === "dashing") return !!(state.moving && state.dashing);
@@ -4442,8 +4451,8 @@ Reactor3D.applyModelAnimation = function(binding, rules, state) {
             // prefers "dashing" over plain "moving"; two clips on the same
             // trigger never fight — the first in the list plays.
             const pick = trigger => clipRules.find(r => r.trigger === trigger);
-            // In the water the swim clip outranks every gait, and loops.
-            const swim = state.swimming ? pick("swimming") : null;
+            // On a ladder the climb clip, and in the water the swim clip, outrank every gait, and loop.
+            const swim = (state.climbing ? pick("climbing") : null) || (state.swimming ? pick("swimming") : null);
             if (swim) {
                 desired = swim.clip;
                 key = swim.clip;
@@ -5260,6 +5269,7 @@ Reactor3D.updateMapModelSprite = function(sprite) {
                 : !!(character.isDashing && character.isDashing()),
             airborne: Reactor3D.isAirborne(character),
             swimming: Reactor3D.isSwimming(character),
+            climbing: Reactor3D.isClimbing(character),
             distance,
             scale: state.scale,
             playbackRate: state.playbackRate,
@@ -5822,7 +5832,11 @@ Reactor3D.MapScene.prototype.syncCharacterModels = function(characters) {
         const offset = spec.offset || [0, 0, 0];
         // A jump or a fall (reactor_physics) lifts the model by its air.
         const air = character._reactorAir || 0;
-        object.position.set(character._realX + 0.5 + offset[0], ground + (character._reactorLift || 0) + air + offset[2], character._realY + 0.5 + offset[1]);
+        // A climber hangs against its ladder, not in the middle of the cell.
+        const hold = character._reactorOnLadder ? Reactor3D.LADDER_REACH : 0;
+        const holdX = hold * ((character.direction && character.direction() === 6) ? 1 : (character.direction && character.direction() === 4) ? -1 : 0);
+        const holdZ = hold * ((character.direction && character.direction() === 2) ? 1 : (character.direction && character.direction() === 8) ? -1 : 0);
+        object.position.set(character._realX + 0.5 + offset[0] + holdX, ground + (character._reactorLift || 0) + air + offset[2], character._realY + 0.5 + offset[1] + holdZ);
         holder.cameraBaseX = character._realX;
         holder.cameraBaseY = ground + (character._reactorLift || 0) + air;
         holder.cameraBaseZ = character._realY;
@@ -5856,6 +5870,7 @@ Reactor3D.MapScene.prototype.syncCharacterModels = function(characters) {
                     : !!(character.isDashing && character.isDashing()),
                 airborne: Reactor3D.isAirborne(character),
                 swimming: Reactor3D.isSwimming(character),
+                climbing: Reactor3D.isClimbing(character),
                 distance,
                 scale,
                 playbackRate: holder.playbackRate,
