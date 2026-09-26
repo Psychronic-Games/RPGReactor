@@ -40,7 +40,7 @@
         if (item.damage.elementId < 0) {
             const elements = user.attackElements();
             if (!elements.length) return 'HP_DMG';
-            const rate = this.elementsMaxRate(elements);
+            const rate = Math.max(...elements.map(id => this.elementRate(id)));
             const hit = elements.find(id => this.elementRate(id) === rate);
             if (hit !== undefined) text += hit;
         } else {
