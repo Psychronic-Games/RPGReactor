@@ -294,6 +294,8 @@ windows and never take focus, like a map overlay; its transition plays when the
 battle opens (**Slide up** is new). **Hide the stock battle status** (on by
 default) hides `Window_BattleStatus` unless a Battle Window node places it.
 
+**Target Cursor.** In battle it points at the top centre of the chosen target as drawn (a room model's projected box, else the sprite's frame) and moves from there by the Enemy and Ally offsets; its canvas position only places it for editing.
+
 **Commands.** The Actor Command and Party Command windows list the stock
 commands until **Choose Commands** replaces them with an ordered list
 (`commands`): Attack, Skill types (one per type the actor has, as stock), One

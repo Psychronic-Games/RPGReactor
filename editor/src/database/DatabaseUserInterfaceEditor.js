@@ -1789,11 +1789,18 @@ class DatabaseUserInterfaceEditor {
         let html = '';
         html += `<div class="rr-ui-prop-title rr-ui-type-${node.type}">${this.typeLabel(node.rowLayout === 'actorPanel' ? 'actorPanel' : node.type)} #${node.id}</div>`;
         html += this.row(tt('Name'), this.textControl('p-name', node.name));
+        // A Target Cursor is placed by its target in battle, so it keeps only a spot on the canvas to grab it by.
+        const cursor = node.type === 'battleCursor';
         html += this.group(`${tt('Position')} / ${tt('Size')}`);
+        if (cursor) html += this.hintRow(tt('Only where it sits on this canvas. In battle it points at the top of the target; move it from there with the Enemy and Ally offsets under Target Cursor.'));
+        html += `<div class="rr-ui-sub"${cursor ? ' hidden' : ''}>`;
         html += this.row(tt('Parent'), this.selectControl('p-parent', node.parent, this.parentOptions(node)));
         html += this.row(tt('Anchor'), this.selectControl('p-anchor', node.anchor, this.anchorOptions()));
+        html += '</div>';
         html += this.pair('X', this.numberControl('p-x', node.x, -9999, 9999), 'Y', this.numberControl('p-y', node.y, -9999, 9999));
+        html += `<div class="rr-ui-sub"${cursor ? ' hidden' : ''}>`;
         html += this.pair(tt('Width'), this.numberControl('p-width', node.width, 0, 9999), tt('Height'), this.numberControl('p-height', node.height, 0, 9999));
+        html += '</div>';
         if (node.type === 'text') html += this.hintRow(tt('Width or height 0 fits the text.'));
         html += this.row(tt('Opacity'), this.numberControl('p-opacity', node.opacity, 0, 255));
         html += this.row(tt('Visible'), this.conditionMarkup('p-visible', node.visible));
@@ -1996,10 +2003,11 @@ class DatabaseUserInterfaceEditor {
             html += this.row(tt('Float'), this.numberControl('p-floatRange', node.floatRange ?? 6, 0, 100));
             html += this.row('', this.checkControl('p-showName', node.showName !== false, tt('Show the target\'s name')));
             html += this.row(tt('Font size'), this.numberControl('p-fontSize', node.fontSize || 0, 0, 200), tt('0 uses the game default.'));
+            html += this.group(tt('Placement'));
+            html += this.hintRow(tt('Offsets from the top centre of the target. A positive Y moves it down.'));
             html += this.pair(`${tt('Enemy')} X`, this.numberControl('p-enemyOffsetX', node.enemyOffsetX || 0, -2000, 2000), `${tt('Enemy')} Y`, this.numberControl('p-enemyOffsetY', node.enemyOffsetY || 0, -2000, 2000));
             html += this.pair(`${tt('Ally')} X`, this.numberControl('p-actorOffsetX', node.actorOffsetX || 0, -2000, 2000), `${tt('Ally')} Y`, this.numberControl('p-actorOffsetY', node.actorOffsetY || 0, -2000, 2000));
             html += this.hintRow(tt('Shows while an enemy or ally is being chosen: over the enemy, or over the ally\'s row in the party panel.'));
-            html += this.hintRow(tt('Its place on this canvas is only for editing. In battle it follows the target at the image\'s size; move it with the Enemy and Ally offsets.'));
         }
         if (node.type === 'gauge') {
             const variable = node.gauge === 'variable';
@@ -2062,7 +2070,7 @@ class DatabaseUserInterfaceEditor {
     organizeProperties(panel) {
         if (!panel.ownerDocument) return;
         const doc = panel.ownerDocument;
-        const openTitles = ['Label', 'Text', 'Image', 'Rows', 'Actor Panel', 'Gauge', 'Behavior', 'Battle Window', 'Commands', 'Target Cursor'].map(title => this._t(title));
+        const openTitles = ['Label', 'Text', 'Image', 'Rows', 'Actor Panel', 'Gauge', 'Behavior', 'Battle Window', 'Commands', 'Target Cursor', 'Placement'].map(title => this._t(title));
         openTitles.push(`${this._t('Text')} ${this._t('Style')}`);
         const headings = [...panel.children].filter(el => el.classList.contains('rr-ui-group'));
         for (const heading of headings) {

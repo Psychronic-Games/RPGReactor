@@ -4872,6 +4872,23 @@
         return bitmap;
     };
 
+    /**
+     * The top centre of a battler as it is drawn, in the scene's coordinates:
+     * the projected box of a 3D model in a battle room, else the sprite's own
+     * picture (its feet are at x, y) wherever the battlefield sits on screen.
+     */
+    ReactorUI.battlerTop = function(scene, sprite) {
+        const spriteset = scene._spriteset;
+        const bounds = sprite._reactorRoomBounds, room = spriteset && spriteset._reactorRoomSprite;
+        let point;
+        if (bounds && room && room.toGlobal) point = room.toGlobal(new Point(bounds.x + bounds.width / 2, bounds.y));
+        else {
+            const height = sprite.bitmap && sprite.bitmap.isReady && sprite.bitmap.isReady() ? (sprite._frame ? sprite._frame.height : sprite.bitmap.height) * Math.abs(sprite.scale.y) : 64;
+            point = sprite.parent && sprite.parent.toGlobal ? sprite.parent.toGlobal(new Point(sprite.x, sprite.y - height)) : new Point(sprite.x, sprite.y - height);
+        }
+        return scene.toLocal ? scene.toLocal(point) : point;
+    };
+
     /** Where the cursor points: over the chosen enemy, or the chosen ally's HUD row (else their sprite). */
     ReactorUI.battleTarget = function(scene, hud, node) {
         const spriteset = scene._spriteset;
@@ -4879,9 +4896,8 @@
         if (enemyWindow && enemyWindow.active && enemyWindow.enemy()) {
             const enemy = enemyWindow.enemy();
             const sprite = spriteset && spriteset._enemySprites ? spriteset._enemySprites.find(s => s._battler === enemy) : null;
-            const height = sprite && sprite.bitmap ? sprite.bitmap.height * Math.abs(sprite.scale.y) : 64;
-            const x = sprite ? sprite.x : enemy.screenX(), y = (sprite ? sprite.y : enemy.screenY()) - height;
-            return { battler: enemy, x: x + node.enemyOffsetX, y: y + node.enemyOffsetY };
+            const top = sprite ? this.battlerTop(scene, sprite) : { x: enemy.screenX(), y: enemy.screenY() - 64 };
+            return { battler: enemy, x: top.x + node.enemyOffsetX, y: top.y + node.enemyOffsetY };
         }
         if (actorWindow && actorWindow.active) {
             const actor = actorWindow.actor(actorWindow.index());
@@ -4889,7 +4905,7 @@
             const slot = hud.slotRect(actor);
             if (slot) return { battler: actor, x: slot.x + slot.width / 2 + scene._windowLayer.x + node.actorOffsetX, y: slot.y + scene._windowLayer.y + node.actorOffsetY };
             const sprite = spriteset && spriteset._actorSprites ? spriteset._actorSprites.find(s => s._battler === actor) : null;
-            if (sprite) return { battler: actor, x: sprite.x + node.actorOffsetX, y: sprite.y - 64 + node.actorOffsetY };
+            if (sprite) { const top = this.battlerTop(scene, sprite); return { battler: actor, x: top.x + node.actorOffsetX, y: top.y + node.actorOffsetY }; }
         }
         return null;
     };

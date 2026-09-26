@@ -1883,3 +1883,14 @@ test('a Common Event battle command runs at once while time stands still, then t
     assert.match(source, /isTimeActive = function\(\) \{\s*return this\._rrCommandEvent \? false/, 'battle time stands still while it runs');
     assert.match(source, /needsInputWindowChange = function\(\) \{\s*return this\._rrCommandEvent \? false/, 'and the command windows stay closed');
 });
+
+test('the Target Cursor points at the top of the battler as drawn: a 3D model\'s projected box, else the sprite\'s frame on screen', () => {
+    const sandbox = loadRuntimeUI();
+    const UI = sandbox.ReactorUI;
+    const shift = (dx, dy) => ({ toGlobal: p => new sandbox.Point(p.x + dx, p.y + dy) });
+    const scene = { toLocal: p => p, _spriteset: { _reactorRoomSprite: shift(10, 20) } };
+    const model = { _reactorRoomBounds: { x: 700, y: 300, width: 100, height: 140 }, x: 0, y: 0, scale: { y: 1 }, bitmap: { isReady: () => true, height: 900 } };
+    assert.deepEqual({ ...UI.battlerTop(scene, model) }, { x: 760, y: 320 }, 'a model: the top centre of its box, not its 900px picture');
+    const sheet = { x: 400, y: 500, scale: { y: 2 }, _frame: { height: 64 }, bitmap: { isReady: () => true, height: 384 }, parent: shift(50, 30) };
+    assert.deepEqual({ ...UI.battlerTop({ toLocal: p => p, _spriteset: {} }, sheet) }, { x: 450, y: 402 }, 'a sprite: one frame tall at its scale, where its parent sits');
+});
