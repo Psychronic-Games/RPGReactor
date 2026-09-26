@@ -12224,6 +12224,25 @@ Object.assign(RR_TEXT_TRANSLATIONS.vi, { "{n} pieces": "{n} khối", "Pieces": "
 Object.assign(RR_TEXT_TRANSLATIONS.th, { "{n} pieces": "{n} ชิ้น", "Pieces": "ชิ้นส่วน", "Click a piece to pick it up, or drag a box. Drag to move; arrows nudge, R turns stairs, Delete removes.": "คลิกชิ้นส่วนเพื่อหยิบ หรือลากกรอบ ลากเพื่อย้าย ปุ่มลูกศรขยับทีละช่อง R หมุนบันได Delete ลบ" });
 Object.assign(RR_TEXT_TRANSLATIONS.tr, { "{n} pieces": "{n} parça", "Pieces": "Parçalar", "Click a piece to pick it up, or drag a box. Drag to move; arrows nudge, R turns stairs, Delete removes.": "Bir parçayı almak için tıklayın ya da kutu çizin. Taşımak için sürükleyin; oklar kaydırır, R merdiveni döndürür, Delete siler." });
 
+// 3D models: the cost notes, short.
+Object.assign(RR_TEXT_TRANSLATIONS.ja, { "Characters always draw at full detail.": "キャラクターは常にフル精度で描画されます。", "Heavy at every distance. Optimize converts it to GLB and cuts triangles.": "どの距離でも重いモデルです。最適化で GLB に変換し、三角形を削減します。", "Heavy at every distance. Optimize cuts triangles.": "どの距離でも重いモデルです。最適化で三角形を削減します。", "Has separate distance-level files. Optimize clears them.": "距離レベル用の別ファイルがあります。最適化で削除されます。", "{count} carved part(s). Optimize rebuilds them.": "彫り分けたパーツ {count} 個。最適化で作り直されます。", "Textures over 2K waste memory. Optimize caps them.": "2K を超えるテクスチャはメモリの無駄です。最適化で縮小します。", "{size} of textures. Optimize recompresses them.": "テクスチャ {size}。最適化で再圧縮します。", "{size} of unused data. Optimize drops it.": "未使用データ {size}。最適化で削除します。", "{count} draw calls, one per piece.": "描画呼び出し {count} 回（パーツごとに 1 回）。", "Already optimized (original kept as .orig).": "最適化済み（元ファイルは .orig として保存）。" });
+Object.assign(RR_TEXT_TRANSLATIONS.es, { "Characters always draw at full detail.": "Los personajes siempre se dibujan con todo detalle.", "Heavy at every distance. Optimize converts it to GLB and cuts triangles.": "Pesado a cualquier distancia. Optimizar lo convierte a GLB y recorta triángulos.", "Heavy at every distance. Optimize cuts triangles.": "Pesado a cualquier distancia. Optimizar recorta triángulos.", "Has separate distance-level files. Optimize clears them.": "Tiene archivos aparte de niveles por distancia. Optimizar los elimina.", "{count} carved part(s). Optimize rebuilds them.": "{count} parte(s) talladas. Optimizar las reconstruye.", "Textures over 2K waste memory. Optimize caps them.": "Las texturas de más de 2K desperdician memoria. Optimizar las limita.", "{size} of textures. Optimize recompresses them.": "{size} de texturas. Optimizar las recomprime.", "{size} of unused data. Optimize drops it.": "{size} de datos sin usar. Optimizar los elimina.", "{count} draw calls, one per piece.": "{count} llamadas de dibujo, una por pieza.", "Already optimized (original kept as .orig).": "Ya optimizado (original guardado como .orig)." });
+Object.assign(RR_TEXT_TRANSLATIONS['zh-Hant'], { "Characters always draw at full detail.": "角色一律以完整細節繪製。", "Heavy at every distance. Optimize converts it to GLB and cuts triangles.": "在任何距離都很吃效能。最佳化會轉為 GLB 並減少三角形。", "Heavy at every distance. Optimize cuts triangles.": "在任何距離都很吃效能。最佳化會減少三角形。", "Has separate distance-level files. Optimize clears them.": "有獨立的距離層級檔案。最佳化會清除它們。", "{count} carved part(s). Optimize rebuilds them.": "{count} 個雕刻部件。最佳化會重建它們。", "Textures over 2K waste memory. Optimize caps them.": "超過 2K 的紋理浪費記憶體。最佳化會加以限制。", "{size} of textures. Optimize recompresses them.": "紋理 {size}。最佳化會重新壓縮。", "{size} of unused data. Optimize drops it.": "未使用資料 {size}。最佳化會移除。", "{count} draw calls, one per piece.": "{count} 次繪製呼叫，每個部件一次。", "Already optimized (original kept as .orig).": "已最佳化（原檔保留為 .orig）。" });
+Object.assign(RR_TEXT_TRANSLATIONS['zh-Hans'], { "Characters always draw at full detail.": "角色始终以完整细节绘制。", "Heavy at every distance. Optimize converts it to GLB and cuts triangles.": "在任何距离都很耗性能。优化会转为 GLB 并减少三角形。", "Heavy at every distance. Optimize cuts triangles.": "在任何距离都很耗性能。优化会减少三角形。", "Has separate distance-level files. Optimize clears them.": "有单独的距离级别文件。优化会清除它们。", "{count} carved part(s). Optimize rebuilds them.": "{count} 个雕刻部件。优化会重建它们。", "Textures over 2K waste memory. Optimize caps them.": "超过 2K 的纹理浪费内存。优化会加以限制。", "{size} of textures. Optimize recompresses them.": "纹理 {size}。优化会重新压缩。", "{size} of unused data. Optimize drops it.": "未使用数据 {size}。优化会移除。", "{count} draw calls, one per piece.": "{count} 次绘制调用，每个部件一次。", "Already optimized (original kept as .orig).": "已优化（原文件保留为 .orig）。" });
+Object.assign(RR_TEXT_TRANSLATIONS.ru, { "Characters always draw at full detail.": "Персонажи всегда рисуются с полной детализацией.", "Heavy at every distance. Optimize converts it to GLB and cuts triangles.": "Тяжёлая на любом расстоянии. Оптимизация переведёт в GLB и сократит треугольники.", "Heavy at every distance. Optimize cuts triangles.": "Тяжёлая на любом расстоянии. Оптимизация сократит треугольники.", "Has separate distance-level files. Optimize clears them.": "Есть отдельные файлы уровней детализации. Оптимизация их удалит.", "{count} carved part(s). Optimize rebuilds them.": "Вырезанных частей: {count}. Оптимизация их пересоберёт.", "Textures over 2K waste memory. Optimize caps them.": "Текстуры больше 2K зря тратят память. Оптимизация их ограничит.", "{size} of textures. Optimize recompresses them.": "Текстуры: {size}. Оптимизация пережмёт их.", "{size} of unused data. Optimize drops it.": "Неиспользуемые данные: {size}. Оптимизация их удалит.", "{count} draw calls, one per piece.": "Вызовов отрисовки: {count}, по одному на деталь.", "Already optimized (original kept as .orig).": "Уже оптимизирована (оригинал сохранён как .orig)." });
+Object.assign(RR_TEXT_TRANSLATIONS.pt, { "Characters always draw at full detail.": "Personagens sempre são desenhados com todo o detalhe.", "Heavy at every distance. Optimize converts it to GLB and cuts triangles.": "Pesado a qualquer distância. Otimizar converte para GLB e corta triângulos.", "Heavy at every distance. Optimize cuts triangles.": "Pesado a qualquer distância. Otimizar corta triângulos.", "Has separate distance-level files. Optimize clears them.": "Tem arquivos separados de níveis por distância. Otimizar os remove.", "{count} carved part(s). Optimize rebuilds them.": "{count} parte(s) esculpida(s). Otimizar as reconstrói.", "Textures over 2K waste memory. Optimize caps them.": "Texturas acima de 2K desperdiçam memória. Otimizar as limita.", "{size} of textures. Optimize recompresses them.": "{size} de texturas. Otimizar as recomprime.", "{size} of unused data. Optimize drops it.": "{size} de dados sem uso. Otimizar os remove.", "{count} draw calls, one per piece.": "{count} chamadas de desenho, uma por peça.", "Already optimized (original kept as .orig).": "Já otimizado (original mantido como .orig)." });
+Object.assign(RR_TEXT_TRANSLATIONS.de, { "Characters always draw at full detail.": "Charaktere werden immer in voller Detailstufe gezeichnet.", "Heavy at every distance. Optimize converts it to GLB and cuts triangles.": "In jeder Entfernung schwer. Optimieren wandelt in GLB um und reduziert Dreiecke.", "Heavy at every distance. Optimize cuts triangles.": "In jeder Entfernung schwer. Optimieren reduziert Dreiecke.", "Has separate distance-level files. Optimize clears them.": "Hat eigene Dateien für Entfernungsstufen. Optimieren entfernt sie.", "{count} carved part(s). Optimize rebuilds them.": "{count} geschnitzte(s) Teil(e). Optimieren baut sie neu auf.", "Textures over 2K waste memory. Optimize caps them.": "Texturen über 2K verschwenden Speicher. Optimieren begrenzt sie.", "{size} of textures. Optimize recompresses them.": "{size} Texturen. Optimieren komprimiert sie neu.", "{size} of unused data. Optimize drops it.": "{size} ungenutzte Daten. Optimieren entfernt sie.", "{count} draw calls, one per piece.": "{count} Draw Calls, einer pro Teil.", "Already optimized (original kept as .orig).": "Bereits optimiert (Original als .orig behalten)." });
+Object.assign(RR_TEXT_TRANSLATIONS.fr, { "Characters always draw at full detail.": "Les personnages sont toujours dessinés en plein détail.", "Heavy at every distance. Optimize converts it to GLB and cuts triangles.": "Lourd à toute distance. Optimiser le convertit en GLB et réduit les triangles.", "Heavy at every distance. Optimize cuts triangles.": "Lourd à toute distance. Optimiser réduit les triangles.", "Has separate distance-level files. Optimize clears them.": "A des fichiers de niveaux de distance séparés. Optimiser les supprime.", "{count} carved part(s). Optimize rebuilds them.": "{count} partie(s) sculptée(s). Optimiser les reconstruit.", "Textures over 2K waste memory. Optimize caps them.": "Les textures au-delà de 2K gaspillent la mémoire. Optimiser les limite.", "{size} of textures. Optimize recompresses them.": "{size} de textures. Optimiser les recompresse.", "{size} of unused data. Optimize drops it.": "{size} de données inutilisées. Optimiser les supprime.", "{count} draw calls, one per piece.": "{count} appels de dessin, un par pièce.", "Already optimized (original kept as .orig).": "Déjà optimisé (original conservé en .orig)." });
+Object.assign(RR_TEXT_TRANSLATIONS.el, { "Characters always draw at full detail.": "Οι χαρακτήρες σχεδιάζονται πάντα σε πλήρη λεπτομέρεια.", "Heavy at every distance. Optimize converts it to GLB and cuts triangles.": "Βαρύ σε κάθε απόσταση. Η βελτιστοποίηση το μετατρέπει σε GLB και μειώνει τα τρίγωνα.", "Heavy at every distance. Optimize cuts triangles.": "Βαρύ σε κάθε απόσταση. Η βελτιστοποίηση μειώνει τα τρίγωνα.", "Has separate distance-level files. Optimize clears them.": "Έχει ξεχωριστά αρχεία επιπέδων απόστασης. Η βελτιστοποίηση τα αφαιρεί.", "{count} carved part(s). Optimize rebuilds them.": "{count} σκαλισμένα μέρη. Η βελτιστοποίηση τα ξαναφτιάχνει.", "Textures over 2K waste memory. Optimize caps them.": "Υφές πάνω από 2K σπαταλούν μνήμη. Η βελτιστοποίηση τις περιορίζει.", "{size} of textures. Optimize recompresses them.": "{size} υφών. Η βελτιστοποίηση τις συμπιέζει ξανά.", "{size} of unused data. Optimize drops it.": "{size} αχρησιμοποίητων δεδομένων. Η βελτιστοποίηση τα αφαιρεί.", "{count} draw calls, one per piece.": "{count} κλήσεις σχεδίασης, μία ανά κομμάτι.", "Already optimized (original kept as .orig).": "Ήδη βελτιστοποιημένο (το πρωτότυπο κρατιέται ως .orig)." });
+Object.assign(RR_TEXT_TRANSLATIONS.ko, { "Characters always draw at full detail.": "캐릭터는 항상 최고 디테일로 그려집니다.", "Heavy at every distance. Optimize converts it to GLB and cuts triangles.": "어느 거리에서도 무겁습니다. 최적화하면 GLB로 변환하고 삼각형을 줄입니다.", "Heavy at every distance. Optimize cuts triangles.": "어느 거리에서도 무겁습니다. 최적화하면 삼각형을 줄입니다.", "Has separate distance-level files. Optimize clears them.": "별도의 거리 레벨 파일이 있습니다. 최적화하면 제거됩니다.", "{count} carved part(s). Optimize rebuilds them.": "조각한 파트 {count}개. 최적화하면 다시 만듭니다.", "Textures over 2K waste memory. Optimize caps them.": "2K를 넘는 텍스처는 메모리 낭비입니다. 최적화하면 제한합니다.", "{size} of textures. Optimize recompresses them.": "텍스처 {size}. 최적화하면 다시 압축합니다.", "{size} of unused data. Optimize drops it.": "사용하지 않는 데이터 {size}. 최적화하면 제거합니다.", "{count} draw calls, one per piece.": "드로우 콜 {count}회, 조각마다 한 번.", "Already optimized (original kept as .orig).": "이미 최적화됨 (원본은 .orig로 보관)." });
+Object.assign(RR_TEXT_TRANSLATIONS.ar, { "Characters always draw at full detail.": "تُرسم الشخصيات دائمًا بكامل التفاصيل.", "Heavy at every distance. Optimize converts it to GLB and cuts triangles.": "ثقيل عند كل مسافة. التحسين يحوّله إلى GLB ويقلّل المثلثات.", "Heavy at every distance. Optimize cuts triangles.": "ثقيل عند كل مسافة. التحسين يقلّل المثلثات.", "Has separate distance-level files. Optimize clears them.": "له ملفات مستويات مسافة منفصلة. التحسين يحذفها.", "{count} carved part(s). Optimize rebuilds them.": "{count} جزء منحوت. التحسين يعيد بناءها.", "Textures over 2K waste memory. Optimize caps them.": "الخامات الأكبر من 2K تهدر الذاكرة. التحسين يحدّها.", "{size} of textures. Optimize recompresses them.": "{size} من الخامات. التحسين يعيد ضغطها.", "{size} of unused data. Optimize drops it.": "{size} من بيانات غير مستخدمة. التحسين يحذفها.", "{count} draw calls, one per piece.": "{count} استدعاء رسم، واحد لكل قطعة.", "Already optimized (original kept as .orig).": "محسَّن بالفعل (الأصل محفوظ باسم .orig)." });
+Object.assign(RR_TEXT_TRANSLATIONS.it, { "Characters always draw at full detail.": "I personaggi sono sempre disegnati al massimo dettaglio.", "Heavy at every distance. Optimize converts it to GLB and cuts triangles.": "Pesante a ogni distanza. Ottimizza lo converte in GLB e riduce i triangoli.", "Heavy at every distance. Optimize cuts triangles.": "Pesante a ogni distanza. Ottimizza riduce i triangoli.", "Has separate distance-level files. Optimize clears them.": "Ha file separati per i livelli di distanza. Ottimizza li rimuove.", "{count} carved part(s). Optimize rebuilds them.": "{count} parte/i scolpita/e. Ottimizza le ricostruisce.", "Textures over 2K waste memory. Optimize caps them.": "Le texture oltre 2K sprecano memoria. Ottimizza le limita.", "{size} of textures. Optimize recompresses them.": "{size} di texture. Ottimizza le ricomprime.", "{size} of unused data. Optimize drops it.": "{size} di dati inutilizzati. Ottimizza li rimuove.", "{count} draw calls, one per piece.": "{count} chiamate di disegno, una per pezzo.", "Already optimized (original kept as .orig).": "Già ottimizzato (originale conservato come .orig)." });
+Object.assign(RR_TEXT_TRANSLATIONS.pl, { "Characters always draw at full detail.": "Postacie zawsze są rysowane w pełnych detalach.", "Heavy at every distance. Optimize converts it to GLB and cuts triangles.": "Ciężki z każdej odległości. Optymalizacja zamieni go na GLB i zmniejszy liczbę trójkątów.", "Heavy at every distance. Optimize cuts triangles.": "Ciężki z każdej odległości. Optymalizacja zmniejszy liczbę trójkątów.", "Has separate distance-level files. Optimize clears them.": "Ma osobne pliki poziomów odległości. Optymalizacja je usunie.", "{count} carved part(s). Optimize rebuilds them.": "Rzeźbione części: {count}. Optymalizacja je odbuduje.", "Textures over 2K waste memory. Optimize caps them.": "Tekstury powyżej 2K marnują pamięć. Optymalizacja je ograniczy.", "{size} of textures. Optimize recompresses them.": "Tekstury: {size}. Optymalizacja je przekompresuje.", "{size} of unused data. Optimize drops it.": "Nieużywane dane: {size}. Optymalizacja je usunie.", "{count} draw calls, one per piece.": "Wywołania rysowania: {count}, jedno na element.", "Already optimized (original kept as .orig).": "Już zoptymalizowany (oryginał zachowany jako .orig)." });
+Object.assign(RR_TEXT_TRANSLATIONS.id, { "Characters always draw at full detail.": "Karakter selalu digambar dengan detail penuh.", "Heavy at every distance. Optimize converts it to GLB and cuts triangles.": "Berat di segala jarak. Optimalkan mengubahnya ke GLB dan mengurangi segitiga.", "Heavy at every distance. Optimize cuts triangles.": "Berat di segala jarak. Optimalkan mengurangi segitiga.", "Has separate distance-level files. Optimize clears them.": "Memiliki berkas level jarak terpisah. Optimalkan menghapusnya.", "{count} carved part(s). Optimize rebuilds them.": "{count} bagian pahatan. Optimalkan membangunnya ulang.", "Textures over 2K waste memory. Optimize caps them.": "Tekstur di atas 2K memboroskan memori. Optimalkan membatasinya.", "{size} of textures. Optimize recompresses them.": "{size} tekstur. Optimalkan mengompresnya ulang.", "{size} of unused data. Optimize drops it.": "{size} data tak terpakai. Optimalkan menghapusnya.", "{count} draw calls, one per piece.": "{count} panggilan gambar, satu per bagian.", "Already optimized (original kept as .orig).": "Sudah dioptimalkan (asli disimpan sebagai .orig)." });
+Object.assign(RR_TEXT_TRANSLATIONS.vi, { "Characters always draw at full detail.": "Nhân vật luôn được vẽ đủ chi tiết.", "Heavy at every distance. Optimize converts it to GLB and cuts triangles.": "Nặng ở mọi khoảng cách. Tối ưu sẽ chuyển sang GLB và giảm tam giác.", "Heavy at every distance. Optimize cuts triangles.": "Nặng ở mọi khoảng cách. Tối ưu sẽ giảm tam giác.", "Has separate distance-level files. Optimize clears them.": "Có tệp mức khoảng cách riêng. Tối ưu sẽ xóa chúng.", "{count} carved part(s). Optimize rebuilds them.": "{count} phần đã khắc. Tối ưu sẽ dựng lại chúng.", "Textures over 2K waste memory. Optimize caps them.": "Texture trên 2K tốn bộ nhớ. Tối ưu sẽ giới hạn chúng.", "{size} of textures. Optimize recompresses them.": "{size} texture. Tối ưu sẽ nén lại.", "{size} of unused data. Optimize drops it.": "{size} dữ liệu không dùng. Tối ưu sẽ xóa.", "{count} draw calls, one per piece.": "{count} lệnh vẽ, mỗi phần một lệnh.", "Already optimized (original kept as .orig).": "Đã tối ưu (bản gốc giữ dạng .orig)." });
+Object.assign(RR_TEXT_TRANSLATIONS.th, { "Characters always draw at full detail.": "ตัวละครวาดด้วยรายละเอียดเต็มเสมอ", "Heavy at every distance. Optimize converts it to GLB and cuts triangles.": "หนักทุกระยะ การปรับให้เหมาะจะแปลงเป็น GLB และลดสามเหลี่ยม", "Heavy at every distance. Optimize cuts triangles.": "หนักทุกระยะ การปรับให้เหมาะจะลดสามเหลี่ยม", "Has separate distance-level files. Optimize clears them.": "มีไฟล์ระดับระยะแยกไว้ การปรับให้เหมาะจะลบออก", "{count} carved part(s). Optimize rebuilds them.": "ชิ้นส่วนที่แกะไว้ {count} ชิ้น การปรับให้เหมาะจะสร้างใหม่", "Textures over 2K waste memory. Optimize caps them.": "เท็กซ์เจอร์ใหญ่กว่า 2K เปลืองหน่วยความจำ การปรับให้เหมาะจะจำกัดขนาด", "{size} of textures. Optimize recompresses them.": "เท็กซ์เจอร์ {size} การปรับให้เหมาะจะบีบอัดใหม่", "{size} of unused data. Optimize drops it.": "ข้อมูลที่ไม่ได้ใช้ {size} การปรับให้เหมาะจะลบออก", "{count} draw calls, one per piece.": "เรียกวาด {count} ครั้ง ชิ้นละครั้ง", "Already optimized (original kept as .orig).": "ปรับให้เหมาะแล้ว (ต้นฉบับเก็บเป็น .orig)" });
+Object.assign(RR_TEXT_TRANSLATIONS.tr, { "Characters always draw at full detail.": "Karakterler her zaman tam ayrıntıyla çizilir.", "Heavy at every distance. Optimize converts it to GLB and cuts triangles.": "Her mesafede ağır. Optimize etmek GLB'ye çevirir ve üçgenleri azaltır.", "Heavy at every distance. Optimize cuts triangles.": "Her mesafede ağır. Optimize etmek üçgenleri azaltır.", "Has separate distance-level files. Optimize clears them.": "Ayrı mesafe seviyesi dosyaları var. Optimize etmek onları siler.", "{count} carved part(s). Optimize rebuilds them.": "{count} oyulmuş parça. Optimize etmek onları yeniden kurar.", "Textures over 2K waste memory. Optimize caps them.": "2K'dan büyük dokular belleği boşa harcar. Optimize etmek onları sınırlar.", "{size} of textures. Optimize recompresses them.": "{size} doku. Optimize etmek onları yeniden sıkıştırır.", "{size} of unused data. Optimize drops it.": "{size} kullanılmayan veri. Optimize etmek onu siler.", "{count} draw calls, one per piece.": "{count} çizim çağrısı, parça başına bir.", "Already optimized (original kept as .orig).": "Zaten optimize edildi (orijinal .orig olarak saklanır)." });
+
 // 3D model import optimizer dialog.
 Object.assign(RR_TEXT_TRANSLATIONS['ja'], {
     'Import 3D Model': '3Dモデルのインポート', 'Optimize (recommended)': '最適化(推奨)', 'Resize textures to 2K, compact skin weights, drop unused data, and cut the mesh to about 60% of its triangles by collapsing the edges that change the shape least. Seams and silhouette are held.': 'テクスチャを2Kに縮小し、スキンウェイトを圧縮、不要データを削除し、形状への影響が最も小さいエッジを折りたたんでメッシュの三角形を約60%まで削減します。継ぎ目とシルエットは維持されます。', 'Optimize aggressively': '積極的に最適化', 'Everything above, cut to about a quarter of the triangles. May soften very fine detail.': '上記すべてに加え、三角形を約4分の1まで削減します。細部がわずかに損なわれる場合があります。', 'Import as-is': 'そのままインポート', 'Keep every byte of the original file.': '元のファイルを一切変更しません。', 'Import': 'インポート', 'largest texture': '最大テクスチャ', 'reducible without visible change': '見た目を変えずに削減可能'
@@ -16961,12 +16980,9 @@ Object.assign(RR_TEXT_TRANSLATIONS["tr"], {"Animation speed (%)": "Animasyon hı
 
 // September 2026 audit: face rigging, spoken dialogue, model cost, and web/save diagnostics.
 Object.assign(RR_TEXT_TRANSLATIONS["ar"], {
-    "A texture larger than 2K costs memory and load time with almost nothing to show for it on screen. Optimize caps it.": "تستهلك الخامات الأكبر من 2K الذاكرة ووقت التحميل دون تحسن مرئي يُذكر. يحد التحسين من حجمها.",
-    "Already optimized. The original is kept beside it as a .orig file.": "تم التحسين بالفعل. يُحفظ الأصل بجواره كملف .orig.",
     "An export directory changed before rollback could remove it.": "تغير مجلد تصدير قبل حذفه أثناء التراجع.",
     "An export target changed before it could be written.": "تغير هدف تصدير قبل الكتابة إليه.",
     "An export target changed before rollback could restore it.": "تغير هدف تصدير قبل استعادته أثناء التراجع.",
-    "Characters are posed every frame and are drawn at full detail at every distance — distance levels are not built for them. Their triangle count is paid in full, always.": "تُحسب وضعيات الشخصيات في كل إطار وتُرسم بكامل التفاصيل عند كل مسافة. لا تُنشأ لها مستويات تفاصيل حسب المسافة، لذا تُعالج جميع مثلثاتها دائمًا.",
     "Close Playtest": "إغلاق اختبار اللعبة",
     "Could not load Reactor One manifest ({status})": "تعذر تحميل ملف بيان Reactor One ‏({status})",
     "Could not optimize this model": "تعذر تحسين هذا النموذج",
@@ -17024,8 +17040,6 @@ Object.assign(RR_TEXT_TRANSLATIONS["ar"], {
     "The voice waveform drives the jaw or lips. Set face points in 3D Models for a model without a mouth rig. Dialogue uses the normal message window.": "يحرك شكل موجة الصوت الفك أو الشفتين. حدد نقاط الوجه في النماذج ثلاثية الأبعاد إذا لم يكن للنموذج هيكل تحريك للفم. يستخدم الحوار نافذة الرسائل العادية.",
     "This export contains multiple files. Use a browser with directory picker support or open a project first.": "يحتوي هذا التصدير على ملفات متعددة. استخدم متصفحًا يدعم اختيار المجلدات أو افتح مشروعًا أولًا.",
     "This file could not be read as a GLB.": "تعذرت قراءة هذا الملف بصيغة GLB.",
-    "This model carries separate distance-level files. They are extra copies of the geometry on disk; optimizing the model clears them.": "لهذا النموذج ملفات منفصلة لمستويات التفاصيل حسب المسافة. إنها نسخ إضافية من الهندسة على القرص؛ يحذفها تحسين النموذج.",
-    "This model costs every one of its triangles at every distance. Optimize cuts them — a background prop rarely needs more than a fraction of what a generator gives it.": "يعالج هذا النموذج جميع مثلثاته عند كل مسافة. يقللها التحسين؛ فعادةً ما يحتاج عنصر الخلفية إلى جزء صغير فقط مما ينتجه المولد.",
     "This model’s cost could not be read.": "تعذرت قراءة تكلفة معالجة هذا النموذج.",
     "This model’s source file could not be found.": "تعذر العثور على الملف الأصلي لهذا النموذج.",
     "Upper lip": "الشفة العليا",
@@ -17042,21 +17056,14 @@ Object.assign(RR_TEXT_TRANSLATIONS["ar"], {
     "materials": "مواد",
     "stale distance level files removed": "تم حذف ملفات مستويات التفاصيل القديمة",
     "{count} carved part(s) re-derived.": "تمت إعادة حساب الأجزاء المقتطعة: {count}.",
-    "{count} carved part(s): stored as triangle ranges, so Optimize re-derives them from the reduced surface.": "الأجزاء المقتطعة: {count}. تُحفظ كنطاقات مثلثات، ويعيد التحسين حسابها من السطح المخفّض.",
     "{count} destination file(s) already exist. Replace them?": "توجد بالفعل ملفات هدف بعدد {count}. هل تريد استبدالها؟",
-    "{count} draw calls: a model split into many pieces costs the frame once per piece, whatever its triangle count.": "استدعاءات الرسم: {count}. يضيف كل جزء من النموذج عملًا في كل إطار بغض النظر عن عدد مثلثاته.",
     "{feature} is available in the desktop edition of RPG Reactor. Browser edits are saved in this browser.": "تتوفر {feature} في إصدار سطح المكتب من RPG Reactor. تُحفظ تعديلات المتصفح في هذا المتصفح.",
-    "{size} of textures — most of this model’s weight is its pictures, not its shape. Optimize recompresses them.": "خامات بحجم {size}: معظم حجم النموذج صور وليس شكله الهندسي. يعيد التحسين ضغطها.",
-    "{size} of this file is data the renderer never reads. Optimize drops it with no visible change.": "يحتوي هذا الملف على {size} من البيانات التي لا يقرأها العارض أبدًا. يحذفها التحسين دون تغيير مرئي.",
     "Could not save the 3D model binding.": "تعذر حفظ ربط النموذج ثلاثي الأبعاد."
 });
 Object.assign(RR_TEXT_TRANSLATIONS["de"], {
-    "A texture larger than 2K costs memory and load time with almost nothing to show for it on screen. Optimize caps it.": "Texturen über 2K kosten Speicher und Ladezeit bei kaum sichtbarem Gewinn. Die Optimierung begrenzt ihre Größe.",
-    "Already optimized. The original is kept beside it as a .orig file.": "Bereits optimiert. Das Original bleibt daneben als .orig-Datei erhalten.",
     "An export directory changed before rollback could remove it.": "Ein Exportverzeichnis wurde vor dem Entfernen beim Rückgängigmachen verändert.",
     "An export target changed before it could be written.": "Ein Exportziel wurde vor dem Schreiben verändert.",
     "An export target changed before rollback could restore it.": "Ein Exportziel wurde vor der Wiederherstellung beim Rückgängigmachen verändert.",
-    "Characters are posed every frame and are drawn at full detail at every distance — distance levels are not built for them. Their triangle count is paid in full, always.": "Charakterposen werden jedes Bild berechnet und in jeder Entfernung mit voller Detailstufe gezeichnet. Es gibt keine Entfernungsstufen: Alle Dreiecke werden immer verarbeitet.",
     "Close Playtest": "Spieltest schließen",
     "Could not load Reactor One manifest ({status})": "Reactor-One-Manifest konnte nicht geladen werden ({status})",
     "Could not optimize this model": "Dieses Modell konnte nicht optimiert werden",
@@ -17114,8 +17121,6 @@ Object.assign(RR_TEXT_TRANSLATIONS["de"], {
     "The voice waveform drives the jaw or lips. Set face points in 3D Models for a model without a mouth rig. Dialogue uses the normal message window.": "Die Sprachwellenform bewegt Kiefer oder Lippen. Lege unter 3D-Modelle Gesichtspunkte fest, wenn das Modell kein Mund-Rig hat. Der Dialog nutzt das normale Nachrichtenfenster.",
     "This export contains multiple files. Use a browser with directory picker support or open a project first.": "Dieser Export enthält mehrere Dateien. Verwende einen Browser mit Verzeichnisauswahl oder öffne zuerst ein Projekt.",
     "This file could not be read as a GLB.": "Diese Datei konnte nicht als GLB gelesen werden.",
-    "This model carries separate distance-level files. They are extra copies of the geometry on disk; optimizing the model clears them.": "Dieses Modell enthält separate Dateien für Entfernungsstufen. Sie sind zusätzliche Geometriekopien auf dem Datenträger; die Optimierung entfernt sie.",
-    "This model costs every one of its triangles at every distance. Optimize cuts them — a background prop rarely needs more than a fraction of what a generator gives it.": "Alle Dreiecke dieses Modells werden in jeder Entfernung verarbeitet. Die Optimierung reduziert sie: Ein Hintergrundobjekt braucht meist nur einen Bruchteil der vom Generator erzeugten Dreiecke.",
     "This model’s cost could not be read.": "Der Aufwand dieses Modells konnte nicht ermittelt werden.",
     "This model’s source file could not be found.": "Die Quelldatei dieses Modells wurde nicht gefunden.",
     "Upper lip": "Oberlippe",
@@ -17132,21 +17137,14 @@ Object.assign(RR_TEXT_TRANSLATIONS["de"], {
     "materials": "Materialien",
     "stale distance level files removed": "veraltete Dateien für Entfernungsstufen entfernt",
     "{count} carved part(s) re-derived.": "{count} ausgeschnittene Teile neu berechnet.",
-    "{count} carved part(s): stored as triangle ranges, so Optimize re-derives them from the reduced surface.": "{count} ausgeschnittene Teile: Als Dreiecksbereiche gespeichert, werden sie bei der Optimierung aus der reduzierten Oberfläche neu berechnet.",
     "{count} destination file(s) already exist. Replace them?": "{count} Zieldateien existieren bereits. Ersetzen?",
-    "{count} draw calls: a model split into many pieces costs the frame once per piece, whatever its triangle count.": "{count} Zeichenaufrufe: Jedes Teil eines Modells kostet Arbeit pro Bild, unabhängig von seiner Dreiecksanzahl.",
     "{feature} is available in the desktop edition of RPG Reactor. Browser edits are saved in this browser.": "{feature} ist in der Desktop-Ausgabe von RPG Reactor verfügbar. Browseränderungen werden in diesem Browser gespeichert.",
-    "{size} of textures — most of this model’s weight is its pictures, not its shape. Optimize recompresses them.": "{size} Texturen: Den Großteil der Modellgröße machen Bilder aus, nicht die Form. Die Optimierung komprimiert sie neu.",
-    "{size} of this file is data the renderer never reads. Optimize drops it with no visible change.": "{size} dieser Datei sind Daten, die der Renderer nie liest. Die Optimierung entfernt sie ohne sichtbare Änderung.",
     "Could not save the 3D model binding.": "Die 3D-Modellzuordnung konnte nicht gespeichert werden."
 });
 Object.assign(RR_TEXT_TRANSLATIONS["el"], {
-    "A texture larger than 2K costs memory and load time with almost nothing to show for it on screen. Optimize caps it.": "Οι υφές άνω των 2K καταναλώνουν μνήμη και χρόνο φόρτωσης με ελάχιστο οπτικό όφελος. Η βελτιστοποίηση περιορίζει το μέγεθός τους.",
-    "Already optimized. The original is kept beside it as a .orig file.": "Ήδη βελτιστοποιημένο. Το πρωτότυπο διατηρείται δίπλα ως αρχείο .orig.",
     "An export directory changed before rollback could remove it.": "Ένας κατάλογος εξαγωγής άλλαξε πριν διαγραφεί κατά την αναίρεση.",
     "An export target changed before it could be written.": "Ένας προορισμός εξαγωγής άλλαξε πριν την εγγραφή.",
     "An export target changed before rollback could restore it.": "Ένας προορισμός εξαγωγής άλλαξε πριν αποκατασταθεί κατά την αναίρεση.",
-    "Characters are posed every frame and are drawn at full detail at every distance — distance levels are not built for them. Their triangle count is paid in full, always.": "Η στάση των χαρακτήρων υπολογίζεται σε κάθε καρέ και σχεδιάζονται με πλήρη λεπτομέρεια σε κάθε απόσταση. Δεν δημιουργούνται επίπεδα λεπτομέρειας απόστασης: όλα τα τρίγωνα υπολογίζονται πάντα.",
     "Close Playtest": "Κλείσιμο δοκιμής παιχνιδιού",
     "Could not load Reactor One manifest ({status})": "Αδυναμία φόρτωσης του δηλωτικού Reactor One ({status})",
     "Could not optimize this model": "Αδυναμία βελτιστοποίησης αυτού του μοντέλου",
@@ -17204,8 +17202,6 @@ Object.assign(RR_TEXT_TRANSLATIONS["el"], {
     "The voice waveform drives the jaw or lips. Set face points in 3D Models for a model without a mouth rig. Dialogue uses the normal message window.": "Η κυματομορφή της φωνής κινεί τη γνάθο ή τα χείλη. Ορίστε σημεία προσώπου στα Μοντέλα 3D για μοντέλο χωρίς σκελετό στόματος. Ο διάλογος χρησιμοποιεί το κανονικό παράθυρο μηνυμάτων.",
     "This export contains multiple files. Use a browser with directory picker support or open a project first.": "Η εξαγωγή περιέχει πολλά αρχεία. Χρησιμοποιήστε περιηγητή με επιλογή καταλόγων ή ανοίξτε πρώτα ένα έργο.",
     "This file could not be read as a GLB.": "Αδυναμία ανάγνωσης αυτού του αρχείου ως GLB.",
-    "This model carries separate distance-level files. They are extra copies of the geometry on disk; optimizing the model clears them.": "Αυτό το μοντέλο έχει ξεχωριστά αρχεία επιπέδων λεπτομέρειας απόστασης. Είναι πρόσθετα αντίγραφα γεωμετρίας στον δίσκο· η βελτιστοποίηση τα διαγράφει.",
-    "This model costs every one of its triangles at every distance. Optimize cuts them — a background prop rarely needs more than a fraction of what a generator gives it.": "Όλα τα τρίγωνα του μοντέλου υπολογίζονται σε κάθε απόσταση. Η βελτιστοποίηση τα μειώνει: ένα αντικείμενο φόντου συνήθως χρειάζεται μόνο μικρό μέρος των τριγώνων που παράγει μια γεννήτρια.",
     "This model’s cost could not be read.": "Αδυναμία ανάγνωσης του κόστους αυτού του μοντέλου.",
     "This model’s source file could not be found.": "Το πηγαίο αρχείο αυτού του μοντέλου δεν βρέθηκε.",
     "Upper lip": "Άνω χείλος",
@@ -17222,21 +17218,14 @@ Object.assign(RR_TEXT_TRANSLATIONS["el"], {
     "materials": "υλικά",
     "stale distance level files removed": "διαγράφηκαν παλιά αρχεία επιπέδων λεπτομέρειας",
     "{count} carved part(s) re-derived.": "Επανυπολογίστηκαν {count} αποκομμένα μέρη.",
-    "{count} carved part(s): stored as triangle ranges, so Optimize re-derives them from the reduced surface.": "{count} αποκομμένα μέρη: αποθηκεύονται ως εύρη τριγώνων και επανυπολογίζονται από τη μειωμένη επιφάνεια κατά τη βελτιστοποίηση.",
     "{count} destination file(s) already exist. Replace them?": "Υπάρχουν ήδη {count} αρχεία προορισμού. Αντικατάσταση;",
-    "{count} draw calls: a model split into many pieces costs the frame once per piece, whatever its triangle count.": "{count} κλήσεις σχεδίασης: κάθε κομμάτι του μοντέλου απαιτεί εργασία ανά καρέ ανεξάρτητα από τον αριθμό τριγώνων.",
     "{feature} is available in the desktop edition of RPG Reactor. Browser edits are saved in this browser.": "Το {feature} είναι διαθέσιμο στην έκδοση υπολογιστή του RPG Reactor. Οι αλλαγές στον περιηγητή αποθηκεύονται σε αυτόν τον περιηγητή.",
-    "{size} of textures — most of this model’s weight is its pictures, not its shape. Optimize recompresses them.": "{size} υφών: το μεγαλύτερο μέρος του μοντέλου είναι εικόνες, όχι το σχήμα του. Η βελτιστοποίηση τις επανασυμπιέζει.",
-    "{size} of this file is data the renderer never reads. Optimize drops it with no visible change.": "{size} αυτού του αρχείου είναι δεδομένα που η μηχανή απόδοσης δεν διαβάζει ποτέ. Η βελτιστοποίηση τα αφαιρεί χωρίς ορατή αλλαγή.",
     "Could not save the 3D model binding.": "Αδυναμία αποθήκευσης της σύνδεσης μοντέλου 3D."
 });
 Object.assign(RR_TEXT_TRANSLATIONS["es"], {
-    "A texture larger than 2K costs memory and load time with almost nothing to show for it on screen. Optimize caps it.": "Las texturas de más de 2K consumen memoria y tardan en cargar sin apenas mejorar la imagen. Optimizar limita su tamaño.",
-    "Already optimized. The original is kept beside it as a .orig file.": "Ya está optimizado. El original se conserva al lado como archivo .orig.",
     "An export directory changed before rollback could remove it.": "Un directorio de exportación cambió antes de poder eliminarlo al revertir.",
     "An export target changed before it could be written.": "Un destino de exportación cambió antes de poder escribirlo.",
     "An export target changed before rollback could restore it.": "Un destino de exportación cambió antes de poder restaurarlo al revertir.",
-    "Characters are posed every frame and are drawn at full detail at every distance — distance levels are not built for them. Their triangle count is paid in full, always.": "Los personajes se posan en cada fotograma y se dibujan con todo detalle a cualquier distancia. No tienen niveles de detalle por distancia: siempre se procesan todos sus triángulos.",
     "Close Playtest": "Cerrar prueba de juego",
     "Could not load Reactor One manifest ({status})": "No se pudo cargar el manifiesto de Reactor One ({status})",
     "Could not optimize this model": "No se pudo optimizar este modelo",
@@ -17294,8 +17283,6 @@ Object.assign(RR_TEXT_TRANSLATIONS["es"], {
     "The voice waveform drives the jaw or lips. Set face points in 3D Models for a model without a mouth rig. Dialogue uses the normal message window.": "La onda de voz mueve la mandíbula o los labios. Define puntos faciales en Modelos 3D si el modelo no tiene un rig de boca. El diálogo usa la ventana de mensajes normal.",
     "This export contains multiple files. Use a browser with directory picker support or open a project first.": "Esta exportación contiene varios archivos. Usa un navegador con selector de directorios o abre primero un proyecto.",
     "This file could not be read as a GLB.": "No se pudo leer este archivo como GLB.",
-    "This model carries separate distance-level files. They are extra copies of the geometry on disk; optimizing the model clears them.": "Este modelo tiene archivos separados para niveles de detalle por distancia. Son copias adicionales de la geometría en disco; optimizar el modelo los elimina.",
-    "This model costs every one of its triangles at every distance. Optimize cuts them — a background prop rarely needs more than a fraction of what a generator gives it.": "Este modelo procesa todos sus triángulos a cualquier distancia. Optimizar los reduce: un objeto de fondo suele necesitar solo una fracción de los que produce un generador.",
     "This model’s cost could not be read.": "No se pudo leer el coste de este modelo.",
     "This model’s source file could not be found.": "No se encontró el archivo de origen de este modelo.",
     "Upper lip": "Labio superior",
@@ -17312,21 +17299,14 @@ Object.assign(RR_TEXT_TRANSLATIONS["es"], {
     "materials": "materiales",
     "stale distance level files removed": "archivos obsoletos de niveles de detalle eliminados",
     "{count} carved part(s) re-derived.": "Se recalcularon {count} partes recortadas.",
-    "{count} carved part(s): stored as triangle ranges, so Optimize re-derives them from the reduced surface.": "{count} partes recortadas: se guardan como rangos de triángulos y se recalculan a partir de la superficie reducida al optimizar.",
     "{count} destination file(s) already exist. Replace them?": "Ya existen {count} archivos de destino. ¿Reemplazarlos?",
-    "{count} draw calls: a model split into many pieces costs the frame once per piece, whatever its triangle count.": "{count} llamadas de dibujo: cada pieza de un modelo añade trabajo por fotograma, independientemente del número de triángulos.",
     "{feature} is available in the desktop edition of RPG Reactor. Browser edits are saved in this browser.": "{feature} está disponible en la edición de escritorio de RPG Reactor. Las modificaciones del navegador se guardan en este navegador.",
-    "{size} of textures — most of this model’s weight is its pictures, not its shape. Optimize recompresses them.": "{size} de texturas: la mayor parte del peso del modelo está en sus imágenes, no en su forma. Optimizar las recomprime.",
-    "{size} of this file is data the renderer never reads. Optimize drops it with no visible change.": "{size} de este archivo son datos que el renderizador nunca lee. Optimizar los elimina sin cambios visibles.",
     "Could not save the 3D model binding.": "No se pudo guardar la vinculación del modelo 3D."
 });
 Object.assign(RR_TEXT_TRANSLATIONS["fr"], {
-    "A texture larger than 2K costs memory and load time with almost nothing to show for it on screen. Optimize caps it.": "Les textures de plus de 2K consomment de la mémoire et ralentissent le chargement sans gain visuel notable. L’optimisation limite leur taille.",
-    "Already optimized. The original is kept beside it as a .orig file.": "Déjà optimisé. L’original est conservé à côté dans un fichier .orig.",
     "An export directory changed before rollback could remove it.": "Un dossier d’export a changé avant sa suppression lors de l’annulation.",
     "An export target changed before it could be written.": "Une destination d’export a changé avant l’écriture.",
     "An export target changed before rollback could restore it.": "Une destination d’export a changé avant sa restauration lors de l’annulation.",
-    "Characters are posed every frame and are drawn at full detail at every distance — distance levels are not built for them. Their triangle count is paid in full, always.": "La pose des personnages est calculée à chaque image et ils sont dessinés en détail à toute distance, sans niveaux de détail. Tous leurs triangles sont toujours traités.",
     "Close Playtest": "Fermer le test de jeu",
     "Could not load Reactor One manifest ({status})": "Impossible de charger le manifeste de Reactor One ({status})",
     "Could not optimize this model": "Impossible d’optimiser ce modèle",
@@ -17384,8 +17364,6 @@ Object.assign(RR_TEXT_TRANSLATIONS["fr"], {
     "The voice waveform drives the jaw or lips. Set face points in 3D Models for a model without a mouth rig. Dialogue uses the normal message window.": "L’onde vocale anime la mâchoire ou les lèvres. Définissez des points du visage dans Modèles 3D si la bouche n’est pas articulée. Le dialogue utilise la fenêtre de messages normale.",
     "This export contains multiple files. Use a browser with directory picker support or open a project first.": "Cet export contient plusieurs fichiers. Utilisez un navigateur avec sélection de dossiers ou ouvrez d’abord un projet.",
     "This file could not be read as a GLB.": "Impossible de lire ce fichier au format GLB.",
-    "This model carries separate distance-level files. They are extra copies of the geometry on disk; optimizing the model clears them.": "Ce modèle possède des fichiers de niveaux de détail séparés. Ces copies supplémentaires de la géométrie sur disque sont supprimées par l’optimisation.",
-    "This model costs every one of its triangles at every distance. Optimize cuts them — a background prop rarely needs more than a fraction of what a generator gives it.": "Tous les triangles de ce modèle sont traités à toute distance. L’optimisation les réduit : un accessoire de fond nécessite rarement autant de détails que ceux fournis par un générateur.",
     "This model’s cost could not be read.": "Impossible de lire le coût de ce modèle.",
     "This model’s source file could not be found.": "Le fichier source de ce modèle est introuvable.",
     "Upper lip": "Lèvre supérieure",
@@ -17402,21 +17380,14 @@ Object.assign(RR_TEXT_TRANSLATIONS["fr"], {
     "materials": "matériaux",
     "stale distance level files removed": "anciens fichiers de niveaux de détail supprimés",
     "{count} carved part(s) re-derived.": "{count} partie(s) découpée(s) recalculée(s).",
-    "{count} carved part(s): stored as triangle ranges, so Optimize re-derives them from the reduced surface.": "{count} partie(s) découpée(s) : stockées sous forme de plages de triangles, elles sont recalculées depuis la surface réduite lors de l’optimisation.",
     "{count} destination file(s) already exist. Replace them?": "{count} fichier(s) de destination existent déjà. Les remplacer ?",
-    "{count} draw calls: a model split into many pieces costs the frame once per piece, whatever its triangle count.": "{count} appels de dessin : chaque pièce du modèle ajoute du travail par image, quel que soit son nombre de triangles.",
     "{feature} is available in the desktop edition of RPG Reactor. Browser edits are saved in this browser.": "{feature} est disponible dans l’édition de bureau de RPG Reactor. Les modifications du navigateur sont enregistrées dans ce navigateur.",
-    "{size} of textures — most of this model’s weight is its pictures, not its shape. Optimize recompresses them.": "{size} de textures : le poids de ce modèle vient surtout de ses images, pas de sa forme. L’optimisation les recompresse.",
-    "{size} of this file is data the renderer never reads. Optimize drops it with no visible change.": "{size} de ce fichier sont des données jamais lues par le moteur de rendu. L’optimisation les supprime sans changement visible.",
     "Could not save the 3D model binding.": "Impossible d’enregistrer l’association du modèle 3D."
 });
 Object.assign(RR_TEXT_TRANSLATIONS["id"], {
-    "A texture larger than 2K costs memory and load time with almost nothing to show for it on screen. Optimize caps it.": "Tekstur di atas 2K memakan memori dan waktu muat dengan sedikit manfaat visual. Optimasi membatasi ukurannya.",
-    "Already optimized. The original is kept beside it as a .orig file.": "Sudah dioptimalkan. Berkas asli disimpan di sebelahnya sebagai berkas .orig.",
     "An export directory changed before rollback could remove it.": "Direktori ekspor berubah sebelum dapat dihapus saat pembatalan.",
     "An export target changed before it could be written.": "Tujuan ekspor berubah sebelum dapat ditulis.",
     "An export target changed before rollback could restore it.": "Tujuan ekspor berubah sebelum dapat dipulihkan saat pembatalan.",
-    "Characters are posed every frame and are drawn at full detail at every distance — distance levels are not built for them. Their triangle count is paid in full, always.": "Pose karakter dihitung setiap bingkai dan digambar dengan detail penuh pada semua jarak. Tingkat detail berdasarkan jarak tidak dibuat untuk karakter, jadi semua segitiganya selalu diproses.",
     "Close Playtest": "Tutup Uji Main",
     "Could not load Reactor One manifest ({status})": "Tidak dapat memuat manifes Reactor One ({status})",
     "Could not optimize this model": "Tidak dapat mengoptimalkan model ini",
@@ -17474,8 +17445,6 @@ Object.assign(RR_TEXT_TRANSLATIONS["id"], {
     "The voice waveform drives the jaw or lips. Set face points in 3D Models for a model without a mouth rig. Dialogue uses the normal message window.": "Bentuk gelombang suara menggerakkan rahang atau bibir. Atur titik wajah di Model 3D jika model tidak memiliki rig mulut. Dialog memakai jendela pesan biasa.",
     "This export contains multiple files. Use a browser with directory picker support or open a project first.": "Ekspor ini berisi beberapa berkas. Gunakan peramban dengan pemilih direktori atau buka proyek terlebih dahulu.",
     "This file could not be read as a GLB.": "Berkas ini tidak dapat dibaca sebagai GLB.",
-    "This model carries separate distance-level files. They are extra copies of the geometry on disk; optimizing the model clears them.": "Model ini memiliki berkas tingkat detail jarak terpisah. Berkas tersebut adalah salinan geometri tambahan di disk; optimasi menghapusnya.",
-    "This model costs every one of its triangles at every distance. Optimize cuts them — a background prop rarely needs more than a fraction of what a generator gives it.": "Model ini memproses semua segitiganya pada semua jarak. Optimasi menguranginya: properti latar biasanya hanya memerlukan sebagian kecil dari segitiga yang dihasilkan generator.",
     "This model’s cost could not be read.": "Beban pemrosesan model ini tidak dapat dibaca.",
     "This model’s source file could not be found.": "Berkas sumber model ini tidak ditemukan.",
     "Upper lip": "Bibir atas",
@@ -17492,21 +17461,14 @@ Object.assign(RR_TEXT_TRANSLATIONS["id"], {
     "materials": "material",
     "stale distance level files removed": "berkas tingkat detail jarak usang dihapus",
     "{count} carved part(s) re-derived.": "{count} bagian potongan dihitung ulang.",
-    "{count} carved part(s): stored as triangle ranges, so Optimize re-derives them from the reduced surface.": "{count} bagian potongan: disimpan sebagai rentang segitiga dan dihitung ulang dari permukaan yang dikurangi saat optimasi.",
     "{count} destination file(s) already exist. Replace them?": "{count} berkas tujuan sudah ada. Ganti?",
-    "{count} draw calls: a model split into many pieces costs the frame once per piece, whatever its triangle count.": "{count} panggilan gambar: setiap bagian model menambah pekerjaan per bingkai, berapa pun jumlah segitiganya.",
     "{feature} is available in the desktop edition of RPG Reactor. Browser edits are saved in this browser.": "{feature} tersedia di edisi desktop RPG Reactor. Suntingan peramban disimpan di peramban ini.",
-    "{size} of textures — most of this model’s weight is its pictures, not its shape. Optimize recompresses them.": "Tekstur sebesar {size}: sebagian besar ukuran model adalah gambar, bukan bentuknya. Optimasi mengompresnya ulang.",
-    "{size} of this file is data the renderer never reads. Optimize drops it with no visible change.": "{size} dari berkas ini adalah data yang tidak pernah dibaca perender. Optimasi menghapusnya tanpa perubahan visual.",
     "Could not save the 3D model binding.": "Tidak dapat menyimpan ikatan model 3D."
 });
 Object.assign(RR_TEXT_TRANSLATIONS["it"], {
-    "A texture larger than 2K costs memory and load time with almost nothing to show for it on screen. Optimize caps it.": "Le texture oltre 2K consumano memoria e tempo di caricamento con scarso beneficio visivo. L’ottimizzazione ne limita le dimensioni.",
-    "Already optimized. The original is kept beside it as a .orig file.": "Già ottimizzato. L’originale è conservato accanto come file .orig.",
     "An export directory changed before rollback could remove it.": "Una cartella di esportazione è cambiata prima della rimozione durante il ripristino.",
     "An export target changed before it could be written.": "Una destinazione di esportazione è cambiata prima della scrittura.",
     "An export target changed before rollback could restore it.": "Una destinazione di esportazione è cambiata prima del ripristino.",
-    "Characters are posed every frame and are drawn at full detail at every distance — distance levels are not built for them. Their triangle count is paid in full, always.": "La posa dei personaggi viene calcolata a ogni fotogramma, con tutti i dettagli a qualsiasi distanza. Non hanno livelli di dettaglio per distanza: tutti i triangoli vengono sempre elaborati.",
     "Close Playtest": "Chiudi test di gioco",
     "Could not load Reactor One manifest ({status})": "Impossibile caricare il manifesto di Reactor One ({status})",
     "Could not optimize this model": "Impossibile ottimizzare questo modello",
@@ -17564,8 +17526,6 @@ Object.assign(RR_TEXT_TRANSLATIONS["it"], {
     "The voice waveform drives the jaw or lips. Set face points in 3D Models for a model without a mouth rig. Dialogue uses the normal message window.": "La forma d’onda della voce muove mascella o labbra. Imposta i punti del viso in Modelli 3D se il modello non ha un rig della bocca. Il dialogo usa la normale finestra dei messaggi.",
     "This export contains multiple files. Use a browser with directory picker support or open a project first.": "Questa esportazione contiene più file. Usa un browser con selettore di cartelle oppure apri prima un progetto.",
     "This file could not be read as a GLB.": "Impossibile leggere questo file come GLB.",
-    "This model carries separate distance-level files. They are extra copies of the geometry on disk; optimizing the model clears them.": "Questo modello ha file separati per i livelli di dettaglio. Sono copie aggiuntive della geometria su disco; l’ottimizzazione le elimina.",
-    "This model costs every one of its triangles at every distance. Optimize cuts them — a background prop rarely needs more than a fraction of what a generator gives it.": "Questo modello elabora tutti i triangoli a ogni distanza. L’ottimizzazione li riduce: un oggetto di sfondo richiede raramente più di una frazione dei triangoli generati.",
     "This model’s cost could not be read.": "Impossibile leggere il costo di questo modello.",
     "This model’s source file could not be found.": "File sorgente del modello non trovato.",
     "Upper lip": "Labbro superiore",
@@ -17582,21 +17542,14 @@ Object.assign(RR_TEXT_TRANSLATIONS["it"], {
     "materials": "materiali",
     "stale distance level files removed": "file obsoleti dei livelli di dettaglio rimossi",
     "{count} carved part(s) re-derived.": "{count} parti ritagliate ricalcolate.",
-    "{count} carved part(s): stored as triangle ranges, so Optimize re-derives them from the reduced surface.": "{count} parti ritagliate: memorizzate come intervalli di triangoli, vengono ricalcolate dalla superficie ridotta durante l’ottimizzazione.",
     "{count} destination file(s) already exist. Replace them?": "Esistono già {count} file di destinazione. Sostituirli?",
-    "{count} draw calls: a model split into many pieces costs the frame once per piece, whatever its triangle count.": "{count} chiamate di disegno: ogni pezzo del modello richiede lavoro per fotogramma, indipendentemente dal numero di triangoli.",
     "{feature} is available in the desktop edition of RPG Reactor. Browser edits are saved in this browser.": "{feature} è disponibile nell’edizione desktop di RPG Reactor. Le modifiche nel browser vengono salvate in questo browser.",
-    "{size} of textures — most of this model’s weight is its pictures, not its shape. Optimize recompresses them.": "{size} di texture: gran parte del peso del modello deriva dalle immagini, non dalla forma. L’ottimizzazione le ricomprime.",
-    "{size} of this file is data the renderer never reads. Optimize drops it with no visible change.": "{size} di questo file sono dati che il renderer non legge mai. L’ottimizzazione li elimina senza cambiamenti visibili.",
     "Could not save the 3D model binding.": "Impossibile salvare l’associazione del modello 3D."
 });
 Object.assign(RR_TEXT_TRANSLATIONS["ja"], {
-    "A texture larger than 2K costs memory and load time with almost nothing to show for it on screen. Optimize caps it.": "2Kを超えるテクスチャは、見た目の改善がほぼないままメモリと読み込み時間を消費します。最適化でサイズを制限します。",
-    "Already optimized. The original is kept beside it as a .orig file.": "最適化済みです。元データは隣に .orig ファイルとして保存されています。",
     "An export directory changed before rollback could remove it.": "書き出し先のディレクトリが変更されたため、取り消し時に削除できませんでした。",
     "An export target changed before it could be written.": "書き出し先が書き込み前に変更されました。",
     "An export target changed before rollback could restore it.": "書き出し先が変更されたため、取り消し時に復元できませんでした。",
-    "Characters are posed every frame and are drawn at full detail at every distance — distance levels are not built for them. Their triangle count is paid in full, always.": "キャラクターは毎フレーム姿勢を計算し、距離に関係なく最大の詳細度で描画します。距離別の詳細度は作成されないため、常に全三角形の処理負荷がかかります。",
     "Close Playtest": "テストプレイを閉じる",
     "Could not load Reactor One manifest ({status})": "Reactor One のマニフェストを読み込めませんでした（{status}）",
     "Could not optimize this model": "このモデルを最適化できませんでした",
@@ -17654,8 +17607,6 @@ Object.assign(RR_TEXT_TRANSLATIONS["ja"], {
     "The voice waveform drives the jaw or lips. Set face points in 3D Models for a model without a mouth rig. Dialogue uses the normal message window.": "音声の波形で顎や唇を動かします。口のリグがないモデルは、3Dモデルで顔のポイントを設定してください。セリフには通常のメッセージウィンドウを使います。",
     "This export contains multiple files. Use a browser with directory picker support or open a project first.": "この書き出しには複数のファイルが含まれます。ディレクトリ選択対応のブラウザーを使うか、先にプロジェクトを開いてください。",
     "This file could not be read as a GLB.": "このファイルを GLB として読み込めませんでした。",
-    "This model carries separate distance-level files. They are extra copies of the geometry on disk; optimizing the model clears them.": "このモデルには距離別の詳細度ファイルがあります。ディスク上の追加の形状コピーであり、最適化すると削除されます。",
-    "This model costs every one of its triangles at every distance. Optimize cuts them — a background prop rarely needs more than a fraction of what a generator gives it.": "このモデルは距離に関係なく全三角形を処理します。最適化で削減できます。背景の小物に必要な三角形は、生成モデルのごく一部で十分なことがほとんどです。",
     "This model’s cost could not be read.": "このモデルの負荷を読み取れませんでした。",
     "This model’s source file could not be found.": "このモデルの元ファイルが見つかりませんでした。",
     "Upper lip": "上唇",
@@ -17672,21 +17623,14 @@ Object.assign(RR_TEXT_TRANSLATIONS["ja"], {
     "materials": "マテリアル",
     "stale distance level files removed": "古い距離別詳細度ファイルを削除",
     "{count} carved part(s) re-derived.": "切り出したパーツ {count} 個を再計算しました。",
-    "{count} carved part(s): stored as triangle ranges, so Optimize re-derives them from the reduced surface.": "切り出したパーツ {count} 個：三角形の範囲として保存されているため、最適化時に削減後の表面から再計算します。",
     "{count} destination file(s) already exist. Replace them?": "書き出し先に {count} 個のファイルが存在します。置き換えますか？",
-    "{count} draw calls: a model split into many pieces costs the frame once per piece, whatever its triangle count.": "描画呼び出し {count} 回：モデルのパーツごとに、三角形数に関係なく毎フレーム処理負荷がかかります。",
     "{feature} is available in the desktop edition of RPG Reactor. Browser edits are saved in this browser.": "{feature} は RPG Reactor のデスクトップ版で利用できます。ブラウザーでの編集内容はこのブラウザーに保存されます。",
-    "{size} of textures — most of this model’s weight is its pictures, not its shape. Optimize recompresses them.": "テクスチャ {size}：このモデルの容量の大半は形状ではなく画像です。最適化で再圧縮します。",
-    "{size} of this file is data the renderer never reads. Optimize drops it with no visible change.": "このファイルの {size} はレンダラーが読み込まないデータです。最適化で見た目を変えずに削除します。",
     "Could not save the 3D model binding.": "3Dモデルの関連付けを保存できませんでした。"
 });
 Object.assign(RR_TEXT_TRANSLATIONS["ko"], {
-    "A texture larger than 2K costs memory and load time with almost nothing to show for it on screen. Optimize caps it.": "2K보다 큰 텍스처는 눈에 띄는 화질 개선 없이 메모리와 로딩 시간을 소모합니다. 최적화하면 크기를 제한합니다.",
-    "Already optimized. The original is kept beside it as a .orig file.": "이미 최적화되었습니다. 원본은 옆에 .orig 파일로 보관됩니다.",
     "An export directory changed before rollback could remove it.": "내보내기 디렉터리가 롤백 중 삭제되기 전에 변경되었습니다.",
     "An export target changed before it could be written.": "내보내기 대상이 쓰기 전에 변경되었습니다.",
     "An export target changed before rollback could restore it.": "내보내기 대상이 롤백 중 복원되기 전에 변경되었습니다.",
-    "Characters are posed every frame and are drawn at full detail at every distance — distance levels are not built for them. Their triangle count is paid in full, always.": "캐릭터는 매 프레임 자세를 계산하고 모든 거리에서 최대 세부 수준으로 그려집니다. 거리별 세부 수준을 만들지 않으므로 항상 모든 삼각형을 처리합니다.",
     "Close Playtest": "플레이 테스트 닫기",
     "Could not load Reactor One manifest ({status})": "Reactor One 매니페스트를 불러올 수 없습니다 ({status})",
     "Could not optimize this model": "이 모델을 최적화할 수 없습니다",
@@ -17744,8 +17688,6 @@ Object.assign(RR_TEXT_TRANSLATIONS["ko"], {
     "The voice waveform drives the jaw or lips. Set face points in 3D Models for a model without a mouth rig. Dialogue uses the normal message window.": "음성 파형이 턱이나 입술을 움직입니다. 입 리그가 없는 모델은 3D 모델에서 얼굴 지점을 설정하세요. 대사는 일반 메시지 창을 사용합니다.",
     "This export contains multiple files. Use a browser with directory picker support or open a project first.": "여러 파일을 내보냅니다. 디렉터리 선택을 지원하는 브라우저를 사용하거나 먼저 프로젝트를 여세요.",
     "This file could not be read as a GLB.": "이 파일을 GLB로 읽을 수 없습니다.",
-    "This model carries separate distance-level files. They are extra copies of the geometry on disk; optimizing the model clears them.": "이 모델에는 별도의 거리별 세부 수준 파일이 있습니다. 디스크에 저장된 추가 지오메트리 사본이며 최적화하면 삭제됩니다.",
-    "This model costs every one of its triangles at every distance. Optimize cuts them — a background prop rarely needs more than a fraction of what a generator gives it.": "이 모델은 모든 거리에서 모든 삼각형을 처리합니다. 최적화하면 삼각형을 줄입니다. 배경 소품은 보통 생성기가 만든 삼각형 중 일부만으로 충분합니다.",
     "This model’s cost could not be read.": "이 모델의 처리 비용을 읽을 수 없습니다.",
     "This model’s source file could not be found.": "이 모델의 원본 파일을 찾을 수 없습니다.",
     "Upper lip": "윗입술",
@@ -17762,21 +17704,14 @@ Object.assign(RR_TEXT_TRANSLATIONS["ko"], {
     "materials": "재질",
     "stale distance level files removed": "오래된 거리별 세부 수준 파일 삭제됨",
     "{count} carved part(s) re-derived.": "잘라낸 부위 {count}개를 다시 계산했습니다.",
-    "{count} carved part(s): stored as triangle ranges, so Optimize re-derives them from the reduced surface.": "잘라낸 부위 {count}개: 삼각형 범위로 저장되며 최적화 시 축소된 표면에서 다시 계산합니다.",
     "{count} destination file(s) already exist. Replace them?": "대상 파일 {count}개가 이미 있습니다. 바꿀까요?",
-    "{count} draw calls: a model split into many pieces costs the frame once per piece, whatever its triangle count.": "그리기 호출 {count}회: 모델의 각 조각은 삼각형 수와 관계없이 매 프레임 처리 비용을 추가합니다.",
     "{feature} is available in the desktop edition of RPG Reactor. Browser edits are saved in this browser.": "{feature} 기능은 RPG Reactor 데스크톱 버전에서 사용할 수 있습니다. 브라우저 편집 내용은 이 브라우저에 저장됩니다.",
-    "{size} of textures — most of this model’s weight is its pictures, not its shape. Optimize recompresses them.": "텍스처 {size}: 이 모델 용량의 대부분은 형태가 아닌 이미지입니다. 최적화하면 다시 압축합니다.",
-    "{size} of this file is data the renderer never reads. Optimize drops it with no visible change.": "이 파일 중 {size}는 렌더러가 읽지 않는 데이터입니다. 최적화하면 외형 변화 없이 삭제됩니다.",
     "Could not save the 3D model binding.": "3D 모델 연결을 저장할 수 없습니다."
 });
 Object.assign(RR_TEXT_TRANSLATIONS["pl"], {
-    "A texture larger than 2K costs memory and load time with almost nothing to show for it on screen. Optimize caps it.": "Tekstury większe niż 2K zużywają pamięć i wydłużają wczytywanie bez zauważalnej poprawy obrazu. Optymalizacja ogranicza ich rozmiar.",
-    "Already optimized. The original is kept beside it as a .orig file.": "Już zoptymalizowano. Oryginał zachowano obok jako plik .orig.",
     "An export directory changed before rollback could remove it.": "Katalog eksportu zmienił się przed usunięciem podczas wycofywania.",
     "An export target changed before it could be written.": "Cel eksportu zmienił się przed zapisem.",
     "An export target changed before rollback could restore it.": "Cel eksportu zmienił się przed przywróceniem podczas wycofywania.",
-    "Characters are posed every frame and are drawn at full detail at every distance — distance levels are not built for them. Their triangle count is paid in full, always.": "Pozy postaci są obliczane w każdej klatce, a pełne szczegóły rysowane w każdej odległości. Postacie nie mają poziomów szczegółowości zależnych od odległości: zawsze przetwarzane są wszystkie trójkąty.",
     "Close Playtest": "Zamknij test gry",
     "Could not load Reactor One manifest ({status})": "Nie można wczytać manifestu Reactor One ({status})",
     "Could not optimize this model": "Nie można zoptymalizować tego modelu",
@@ -17834,8 +17769,6 @@ Object.assign(RR_TEXT_TRANSLATIONS["pl"], {
     "The voice waveform drives the jaw or lips. Set face points in 3D Models for a model without a mouth rig. Dialogue uses the normal message window.": "Przebieg fali głosu porusza szczęką lub wargami. Ustaw punkty twarzy w Modelach 3D, jeśli model nie ma szkieletu ust. Dialog używa zwykłego okna wiadomości.",
     "This export contains multiple files. Use a browser with directory picker support or open a project first.": "Eksport zawiera wiele plików. Użyj przeglądarki z wyborem katalogów lub najpierw otwórz projekt.",
     "This file could not be read as a GLB.": "Nie można odczytać tego pliku jako GLB.",
-    "This model carries separate distance-level files. They are extra copies of the geometry on disk; optimizing the model clears them.": "Ten model ma oddzielne pliki poziomów szczegółowości. To dodatkowe kopie geometrii na dysku; optymalizacja je usuwa.",
-    "This model costs every one of its triangles at every distance. Optimize cuts them — a background prop rarely needs more than a fraction of what a generator gives it.": "Wszystkie trójkąty tego modelu są przetwarzane w każdej odległości. Optymalizacja je redukuje: obiekt w tle zwykle potrzebuje tylko ułamka trójkątów wytworzonych przez generator.",
     "This model’s cost could not be read.": "Nie można odczytać obciążenia tego modelu.",
     "This model’s source file could not be found.": "Nie znaleziono pliku źródłowego tego modelu.",
     "Upper lip": "Górna warga",
@@ -17852,21 +17785,14 @@ Object.assign(RR_TEXT_TRANSLATIONS["pl"], {
     "materials": "materiały",
     "stale distance level files removed": "usunięto nieaktualne pliki poziomów szczegółowości",
     "{count} carved part(s) re-derived.": "Przeliczono wycięte części: {count}.",
-    "{count} carved part(s): stored as triangle ranges, so Optimize re-derives them from the reduced surface.": "Wycięte części: {count}. Są zapisane jako zakresy trójkątów; optymalizacja przelicza je ze zredukowanej powierzchni.",
     "{count} destination file(s) already exist. Replace them?": "Pliki docelowe już istnieją ({count}). Zastąpić je?",
-    "{count} draw calls: a model split into many pieces costs the frame once per piece, whatever its triangle count.": "Wywołania rysowania: {count}. Każda część modelu wymaga pracy w każdej klatce, niezależnie od liczby trójkątów.",
     "{feature} is available in the desktop edition of RPG Reactor. Browser edits are saved in this browser.": "{feature} jest dostępne w komputerowej wersji RPG Reactor. Zmiany w przeglądarce są zapisywane w tej przeglądarce.",
-    "{size} of textures — most of this model’s weight is its pictures, not its shape. Optimize recompresses them.": "Tekstury: {size}. Większość rozmiaru modelu to obrazy, a nie kształt. Optymalizacja kompresuje je ponownie.",
-    "{size} of this file is data the renderer never reads. Optimize drops it with no visible change.": "{size} tego pliku to dane, których renderer nigdy nie czyta. Optymalizacja usuwa je bez widocznych zmian.",
     "Could not save the 3D model binding.": "Nie można zapisać powiązania modelu 3D."
 });
 Object.assign(RR_TEXT_TRANSLATIONS["pt"], {
-    "A texture larger than 2K costs memory and load time with almost nothing to show for it on screen. Optimize caps it.": "Texturas acima de 2K consomem memória e tempo de carregamento sem ganho visual significativo. A otimização limita seu tamanho.",
-    "Already optimized. The original is kept beside it as a .orig file.": "Já otimizado. O original é mantido ao lado como arquivo .orig.",
     "An export directory changed before rollback could remove it.": "Um diretório de exportação mudou antes de ser removido na reversão.",
     "An export target changed before it could be written.": "Um destino de exportação mudou antes da gravação.",
     "An export target changed before rollback could restore it.": "Um destino de exportação mudou antes da restauração na reversão.",
-    "Characters are posed every frame and are drawn at full detail at every distance — distance levels are not built for them. Their triangle count is paid in full, always.": "As poses dos personagens são calculadas a cada quadro, com detalhes completos em qualquer distância. Eles não têm níveis de detalhe por distância: todos os triângulos são sempre processados.",
     "Close Playtest": "Fechar teste do jogo",
     "Could not load Reactor One manifest ({status})": "Não foi possível carregar o manifesto do Reactor One ({status})",
     "Could not optimize this model": "Não foi possível otimizar este modelo",
@@ -17924,8 +17850,6 @@ Object.assign(RR_TEXT_TRANSLATIONS["pt"], {
     "The voice waveform drives the jaw or lips. Set face points in 3D Models for a model without a mouth rig. Dialogue uses the normal message window.": "A forma de onda da voz move a mandíbula ou os lábios. Defina pontos faciais em Modelos 3D se o modelo não tiver rig de boca. O diálogo usa a janela de mensagens normal.",
     "This export contains multiple files. Use a browser with directory picker support or open a project first.": "Esta exportação contém vários arquivos. Use um navegador com seletor de diretórios ou abra um projeto primeiro.",
     "This file could not be read as a GLB.": "Não foi possível ler este arquivo como GLB.",
-    "This model carries separate distance-level files. They are extra copies of the geometry on disk; optimizing the model clears them.": "Este modelo possui arquivos separados para níveis de detalhe por distância. São cópias extras da geometria no disco; a otimização as remove.",
-    "This model costs every one of its triangles at every distance. Optimize cuts them — a background prop rarely needs more than a fraction of what a generator gives it.": "Este modelo processa todos os triângulos em qualquer distância. A otimização os reduz: um objeto de fundo raramente precisa de mais que uma fração dos triângulos gerados.",
     "This model’s cost could not be read.": "Não foi possível ler o custo deste modelo.",
     "This model’s source file could not be found.": "O arquivo de origem deste modelo não foi encontrado.",
     "Upper lip": "Lábio superior",
@@ -17942,21 +17866,14 @@ Object.assign(RR_TEXT_TRANSLATIONS["pt"], {
     "materials": "materiais",
     "stale distance level files removed": "arquivos obsoletos de níveis de detalhe removidos",
     "{count} carved part(s) re-derived.": "{count} parte(s) recortada(s) recalculada(s).",
-    "{count} carved part(s): stored as triangle ranges, so Optimize re-derives them from the reduced surface.": "{count} parte(s) recortada(s): salvas como intervalos de triângulos, são recalculadas a partir da superfície reduzida na otimização.",
     "{count} destination file(s) already exist. Replace them?": "Já existem {count} arquivo(s) de destino. Substituir?",
-    "{count} draw calls: a model split into many pieces costs the frame once per piece, whatever its triangle count.": "{count} chamadas de desenho: cada peça do modelo exige trabalho por quadro, independentemente da quantidade de triângulos.",
     "{feature} is available in the desktop edition of RPG Reactor. Browser edits are saved in this browser.": "{feature} está disponível na edição desktop do RPG Reactor. As edições no navegador são salvas neste navegador.",
-    "{size} of textures — most of this model’s weight is its pictures, not its shape. Optimize recompresses them.": "{size} de texturas: a maior parte do peso deste modelo vem das imagens, não da forma. A otimização as recomprime.",
-    "{size} of this file is data the renderer never reads. Optimize drops it with no visible change.": "{size} deste arquivo são dados que o renderizador nunca lê. A otimização os remove sem mudança visível.",
     "Could not save the 3D model binding.": "Não foi possível salvar a associação do modelo 3D."
 });
 Object.assign(RR_TEXT_TRANSLATIONS["ru"], {
-    "A texture larger than 2K costs memory and load time with almost nothing to show for it on screen. Optimize caps it.": "Текстуры больше 2K расходуют память и увеличивают время загрузки почти без видимого улучшения. Оптимизация ограничивает их размер.",
-    "Already optimized. The original is kept beside it as a .orig file.": "Уже оптимизировано. Оригинал сохранён рядом в файле .orig.",
     "An export directory changed before rollback could remove it.": "Каталог экспорта изменился до удаления при откате.",
     "An export target changed before it could be written.": "Цель экспорта изменилась до записи.",
     "An export target changed before rollback could restore it.": "Цель экспорта изменилась до восстановления при откате.",
-    "Characters are posed every frame and are drawn at full detail at every distance — distance levels are not built for them. Their triangle count is paid in full, always.": "Поза персонажей вычисляется каждый кадр, а полная детализация сохраняется на любом расстоянии. Уровни детализации для них не создаются: всегда обрабатываются все треугольники.",
     "Close Playtest": "Закрыть тест игры",
     "Could not load Reactor One manifest ({status})": "Не удалось загрузить манифест Reactor One ({status})",
     "Could not optimize this model": "Не удалось оптимизировать эту модель",
@@ -18014,8 +17931,6 @@ Object.assign(RR_TEXT_TRANSLATIONS["ru"], {
     "The voice waveform drives the jaw or lips. Set face points in 3D Models for a model without a mouth rig. Dialogue uses the normal message window.": "Звуковая волна голоса двигает челюсть или губы. Если у модели нет рига рта, задайте точки лица в разделе 3D-моделей. Диалог использует обычное окно сообщений.",
     "This export contains multiple files. Use a browser with directory picker support or open a project first.": "Экспорт содержит несколько файлов. Используйте браузер с выбором каталогов или сначала откройте проект.",
     "This file could not be read as a GLB.": "Не удалось прочитать этот файл как GLB.",
-    "This model carries separate distance-level files. They are extra copies of the geometry on disk; optimizing the model clears them.": "У модели есть отдельные файлы уровней детализации. Это дополнительные копии геометрии на диске; оптимизация удаляет их.",
-    "This model costs every one of its triangles at every distance. Optimize cuts them — a background prop rarely needs more than a fraction of what a generator gives it.": "Все треугольники модели обрабатываются на любом расстоянии. Оптимизация сокращает их: фоновому объекту обычно нужна лишь малая часть треугольников, созданных генератором.",
     "This model’s cost could not be read.": "Не удалось определить нагрузку этой модели.",
     "This model’s source file could not be found.": "Исходный файл этой модели не найден.",
     "Upper lip": "Верхняя губа",
@@ -18032,21 +17947,14 @@ Object.assign(RR_TEXT_TRANSLATIONS["ru"], {
     "materials": "материалы",
     "stale distance level files removed": "устаревшие файлы уровней детализации удалены",
     "{count} carved part(s) re-derived.": "Пересчитано вырезанных частей: {count}.",
-    "{count} carved part(s): stored as triangle ranges, so Optimize re-derives them from the reduced surface.": "Вырезанных частей: {count}. Они хранятся как диапазоны треугольников и при оптимизации пересчитываются по сокращённой поверхности.",
     "{count} destination file(s) already exist. Replace them?": "Целевые файлы уже существуют ({count}). Заменить их?",
-    "{count} draw calls: a model split into many pieces costs the frame once per piece, whatever its triangle count.": "Вызовов отрисовки: {count}. Каждая часть модели требует работы каждый кадр независимо от числа треугольников.",
     "{feature} is available in the desktop edition of RPG Reactor. Browser edits are saved in this browser.": "{feature} доступно в настольной версии RPG Reactor. Изменения в браузере сохраняются в этом браузере.",
-    "{size} of textures — most of this model’s weight is its pictures, not its shape. Optimize recompresses them.": "Текстуры: {size}. Основной объём модели занимают изображения, а не форма. Оптимизация сжимает их заново.",
-    "{size} of this file is data the renderer never reads. Optimize drops it with no visible change.": "{size} этого файла — данные, которые рендерер никогда не читает. Оптимизация удаляет их без видимых изменений.",
     "Could not save the 3D model binding.": "Не удалось сохранить привязку 3D-модели."
 });
 Object.assign(RR_TEXT_TRANSLATIONS["th"], {
-    "A texture larger than 2K costs memory and load time with almost nothing to show for it on screen. Optimize caps it.": "พื้นผิวที่ใหญ่กว่า 2K ใช้หน่วยความจำและเวลาโหลดมากขึ้น แต่แทบไม่ช่วยให้ภาพดีขึ้น การปรับให้เหมาะสมจะจำกัดขนาด",
-    "Already optimized. The original is kept beside it as a .orig file.": "ปรับให้เหมาะสมแล้ว เก็บต้นฉบับไว้ข้างกันเป็นไฟล์ .orig",
     "An export directory changed before rollback could remove it.": "ไดเรกทอรีส่งออกเปลี่ยนไปก่อนที่จะลบได้ระหว่างย้อนกลับ",
     "An export target changed before it could be written.": "ปลายทางส่งออกเปลี่ยนไปก่อนที่จะเขียนได้",
     "An export target changed before rollback could restore it.": "ปลายทางส่งออกเปลี่ยนไปก่อนที่จะกู้คืนได้ระหว่างย้อนกลับ",
-    "Characters are posed every frame and are drawn at full detail at every distance — distance levels are not built for them. Their triangle count is paid in full, always.": "ตัวละครคำนวณท่าทางทุกเฟรมและวาดรายละเอียดเต็มในทุกระยะ ไม่มีการสร้างระดับรายละเอียดตามระยะให้ตัวละคร จึงต้องประมวลผลทุกสามเหลี่ยมเสมอ",
     "Close Playtest": "ปิดการทดสอบเกม",
     "Could not load Reactor One manifest ({status})": "โหลดรายการข้อมูล Reactor One ไม่ได้ ({status})",
     "Could not optimize this model": "ปรับโมเดลนี้ให้เหมาะสมไม่ได้",
@@ -18104,8 +18012,6 @@ Object.assign(RR_TEXT_TRANSLATIONS["th"], {
     "The voice waveform drives the jaw or lips. Set face points in 3D Models for a model without a mouth rig. Dialogue uses the normal message window.": "รูปคลื่นเสียงขยับขากรรไกรหรือริมฝีปาก หากโมเดลไม่มีโครงควบคุมปาก ให้ตั้งจุดบนใบหน้าในโมเดล 3D บทสนทนาใช้หน้าต่างข้อความปกติ",
     "This export contains multiple files. Use a browser with directory picker support or open a project first.": "การส่งออกนี้มีหลายไฟล์ ใช้เบราว์เซอร์ที่รองรับการเลือกไดเรกทอรีหรือเปิดโปรเจกต์ก่อน",
     "This file could not be read as a GLB.": "อ่านไฟล์นี้เป็น GLB ไม่ได้",
-    "This model carries separate distance-level files. They are extra copies of the geometry on disk; optimizing the model clears them.": "โมเดลนี้มีไฟล์ระดับรายละเอียดตามระยะแยกต่างหาก ซึ่งเป็นสำเนารูปทรงเพิ่มเติมบนดิสก์ การปรับให้เหมาะสมจะลบไฟล์เหล่านี้",
-    "This model costs every one of its triangles at every distance. Optimize cuts them — a background prop rarely needs more than a fraction of what a generator gives it.": "โมเดลนี้ประมวลผลทุกสามเหลี่ยมในทุกระยะ การปรับให้เหมาะสมจะลดจำนวนลง พร็อพฉากหลังมักต้องการเพียงส่วนน้อยของสามเหลี่ยมที่ตัวสร้างผลิตขึ้น",
     "This model’s cost could not be read.": "อ่านภาระการประมวลผลของโมเดลนี้ไม่ได้",
     "This model’s source file could not be found.": "ไม่พบไฟล์ต้นฉบับของโมเดลนี้",
     "Upper lip": "ริมฝีปากบน",
@@ -18122,21 +18028,14 @@ Object.assign(RR_TEXT_TRANSLATIONS["th"], {
     "materials": "วัสดุ",
     "stale distance level files removed": "ลบไฟล์ระดับรายละเอียดตามระยะที่ล้าสมัยแล้ว",
     "{count} carved part(s) re-derived.": "คำนวณส่วนที่ตัดออก {count} ส่วนใหม่แล้ว",
-    "{count} carved part(s): stored as triangle ranges, so Optimize re-derives them from the reduced surface.": "ส่วนที่ตัดออก {count} ส่วน: บันทึกเป็นช่วงสามเหลี่ยม การปรับให้เหมาะสมจะคำนวณใหม่จากพื้นผิวที่ลดแล้ว",
     "{count} destination file(s) already exist. Replace them?": "มีไฟล์ปลายทางอยู่แล้ว {count} ไฟล์ ต้องการแทนที่หรือไม่?",
-    "{count} draw calls: a model split into many pieces costs the frame once per piece, whatever its triangle count.": "การเรียกวาด {count} ครั้ง: แต่ละส่วนของโมเดลเพิ่มงานในทุกเฟรม ไม่ว่าจะมีสามเหลี่ยมกี่รูป",
     "{feature} is available in the desktop edition of RPG Reactor. Browser edits are saved in this browser.": "{feature} มีใน RPG Reactor รุ่นเดสก์ท็อป การแก้ไขในเบราว์เซอร์จะบันทึกในเบราว์เซอร์นี้",
-    "{size} of textures — most of this model’s weight is its pictures, not its shape. Optimize recompresses them.": "พื้นผิว {size}: ขนาดส่วนใหญ่ของโมเดลมาจากภาพ ไม่ใช่รูปทรง การปรับให้เหมาะสมจะบีบอัดภาพใหม่",
-    "{size} of this file is data the renderer never reads. Optimize drops it with no visible change.": "ข้อมูล {size} ในไฟล์นี้ไม่เคยถูกอ่านโดยตัวเรนเดอร์ การปรับให้เหมาะสมจะลบออกโดยภาพไม่เปลี่ยน",
     "Could not save the 3D model binding.": "บันทึกการผูกโมเดล 3D ไม่ได้"
 });
 Object.assign(RR_TEXT_TRANSLATIONS["tr"], {
-    "A texture larger than 2K costs memory and load time with almost nothing to show for it on screen. Optimize caps it.": "2K üzerindeki dokular belirgin görsel kazanç olmadan bellek ve yükleme süresi harcar. Optimizasyon boyutlarını sınırlar.",
-    "Already optimized. The original is kept beside it as a .orig file.": "Zaten optimize edildi. Özgün dosya yanında .orig dosyası olarak saklanır.",
     "An export directory changed before rollback could remove it.": "Bir dışa aktarma dizini geri alma sırasında silinemeden değişti.",
     "An export target changed before it could be written.": "Bir dışa aktarma hedefi yazılamadan değişti.",
     "An export target changed before rollback could restore it.": "Bir dışa aktarma hedefi geri alma sırasında geri yüklenemeden değişti.",
-    "Characters are posed every frame and are drawn at full detail at every distance — distance levels are not built for them. Their triangle count is paid in full, always.": "Karakterlerin pozu her karede hesaplanır ve her uzaklıkta tam ayrıntıyla çizilir. Karakterler için uzaklık ayrıntı düzeyleri oluşturulmaz; tüm üçgenler her zaman işlenir.",
     "Close Playtest": "Oyun Testini Kapat",
     "Could not load Reactor One manifest ({status})": "Reactor One bildirimi yüklenemedi ({status})",
     "Could not optimize this model": "Bu model optimize edilemedi",
@@ -18194,8 +18093,6 @@ Object.assign(RR_TEXT_TRANSLATIONS["tr"], {
     "The voice waveform drives the jaw or lips. Set face points in 3D Models for a model without a mouth rig. Dialogue uses the normal message window.": "Ses dalga biçimi çeneyi veya dudakları hareket ettirir. Ağız donanımı olmayan modeller için 3D Modellerde yüz noktalarını ayarlayın. Diyalog normal mesaj penceresini kullanır.",
     "This export contains multiple files. Use a browser with directory picker support or open a project first.": "Bu dışa aktarma birden fazla dosya içeriyor. Dizin seçiciyi destekleyen bir tarayıcı kullanın veya önce bir proje açın.",
     "This file could not be read as a GLB.": "Bu dosya GLB olarak okunamadı.",
-    "This model carries separate distance-level files. They are extra copies of the geometry on disk; optimizing the model clears them.": "Bu modelde ayrı uzaklık ayrıntı düzeyi dosyaları var. Bunlar diskteki ek geometri kopyalarıdır; optimizasyon bunları siler.",
-    "This model costs every one of its triangles at every distance. Optimize cuts them — a background prop rarely needs more than a fraction of what a generator gives it.": "Bu model tüm üçgenlerini her uzaklıkta işler. Optimizasyon bunları azaltır: bir arka plan nesnesi genellikle üreticinin oluşturduğu üçgenlerin yalnızca küçük bir kısmına ihtiyaç duyar.",
     "This model’s cost could not be read.": "Bu modelin işlem yükü okunamadı.",
     "This model’s source file could not be found.": "Bu modelin kaynak dosyası bulunamadı.",
     "Upper lip": "Üst dudak",
@@ -18212,21 +18109,14 @@ Object.assign(RR_TEXT_TRANSLATIONS["tr"], {
     "materials": "malzemeler",
     "stale distance level files removed": "eski uzaklık ayrıntı düzeyi dosyaları silindi",
     "{count} carved part(s) re-derived.": "{count} kesilmiş parça yeniden hesaplandı.",
-    "{count} carved part(s): stored as triangle ranges, so Optimize re-derives them from the reduced surface.": "{count} kesilmiş parça: üçgen aralıkları olarak saklanır; optimizasyon bunları azaltılmış yüzeyden yeniden hesaplar.",
     "{count} destination file(s) already exist. Replace them?": "{count} hedef dosya zaten var. Değiştirilsin mi?",
-    "{count} draw calls: a model split into many pieces costs the frame once per piece, whatever its triangle count.": "{count} çizim çağrısı: modelin her parçası üçgen sayısından bağımsız olarak her karede ek iş gerektirir.",
     "{feature} is available in the desktop edition of RPG Reactor. Browser edits are saved in this browser.": "{feature}, RPG Reactor masaüstü sürümünde kullanılabilir. Tarayıcı düzenlemeleri bu tarayıcıda saklanır.",
-    "{size} of textures — most of this model’s weight is its pictures, not its shape. Optimize recompresses them.": "{size} doku: model boyutunun çoğu şekilden değil resimlerden gelir. Optimizasyon bunları yeniden sıkıştırır.",
-    "{size} of this file is data the renderer never reads. Optimize drops it with no visible change.": "Bu dosyanın {size} kadarı işleyicinin hiç okumadığı veridir. Optimizasyon bunları görünür değişiklik olmadan siler.",
     "Could not save the 3D model binding.": "3D model bağlantısı kaydedilemedi."
 });
 Object.assign(RR_TEXT_TRANSLATIONS["vi"], {
-    "A texture larger than 2K costs memory and load time with almost nothing to show for it on screen. Optimize caps it.": "Kết cấu lớn hơn 2K tốn bộ nhớ và thời gian tải nhưng hầu như không cải thiện hình ảnh. Tối ưu hóa sẽ giới hạn kích thước.",
-    "Already optimized. The original is kept beside it as a .orig file.": "Đã tối ưu hóa. Bản gốc được giữ bên cạnh dưới dạng tệp .orig.",
     "An export directory changed before rollback could remove it.": "Thư mục xuất đã thay đổi trước khi có thể xóa trong lúc hoàn tác.",
     "An export target changed before it could be written.": "Đích xuất đã thay đổi trước khi có thể ghi.",
     "An export target changed before rollback could restore it.": "Đích xuất đã thay đổi trước khi có thể khôi phục trong lúc hoàn tác.",
-    "Characters are posed every frame and are drawn at full detail at every distance — distance levels are not built for them. Their triangle count is paid in full, always.": "Tư thế nhân vật được tính mỗi khung hình và được vẽ đầy đủ chi tiết ở mọi khoảng cách. Không tạo mức chi tiết theo khoảng cách cho nhân vật, nên luôn phải xử lý tất cả tam giác.",
     "Close Playtest": "Đóng chạy thử",
     "Could not load Reactor One manifest ({status})": "Không thể tải bản kê Reactor One ({status})",
     "Could not optimize this model": "Không thể tối ưu hóa mô hình này",
@@ -18284,8 +18174,6 @@ Object.assign(RR_TEXT_TRANSLATIONS["vi"], {
     "The voice waveform drives the jaw or lips. Set face points in 3D Models for a model without a mouth rig. Dialogue uses the normal message window.": "Dạng sóng giọng nói điều khiển hàm hoặc môi. Đặt điểm khuôn mặt trong Mô hình 3D nếu mô hình chưa có khung xương miệng. Lời thoại dùng cửa sổ thông báo thông thường.",
     "This export contains multiple files. Use a browser with directory picker support or open a project first.": "Bản xuất này gồm nhiều tệp. Dùng trình duyệt hỗ trợ chọn thư mục hoặc mở dự án trước.",
     "This file could not be read as a GLB.": "Không thể đọc tệp này dưới dạng GLB.",
-    "This model carries separate distance-level files. They are extra copies of the geometry on disk; optimizing the model clears them.": "Mô hình có các tệp mức chi tiết theo khoảng cách riêng. Đây là bản sao hình học bổ sung trên đĩa; tối ưu hóa sẽ xóa chúng.",
-    "This model costs every one of its triangles at every distance. Optimize cuts them — a background prop rarely needs more than a fraction of what a generator gives it.": "Mô hình này xử lý mọi tam giác ở mọi khoảng cách. Tối ưu hóa sẽ giảm chúng: đạo cụ nền thường chỉ cần một phần nhỏ số tam giác do công cụ tạo ra.",
     "This model’s cost could not be read.": "Không thể đọc mức tải xử lý của mô hình này.",
     "This model’s source file could not be found.": "Không tìm thấy tệp nguồn của mô hình này.",
     "Upper lip": "Môi trên",
@@ -18302,21 +18190,14 @@ Object.assign(RR_TEXT_TRANSLATIONS["vi"], {
     "materials": "vật liệu",
     "stale distance level files removed": "đã xóa tệp mức chi tiết theo khoảng cách lỗi thời",
     "{count} carved part(s) re-derived.": "Đã tính lại {count} bộ phận đã cắt.",
-    "{count} carved part(s): stored as triangle ranges, so Optimize re-derives them from the reduced surface.": "{count} bộ phận đã cắt: được lưu dưới dạng phạm vi tam giác, nên tối ưu hóa sẽ tính lại từ bề mặt đã giảm.",
     "{count} destination file(s) already exist. Replace them?": "Đã có {count} tệp đích. Thay thế?",
-    "{count} draw calls: a model split into many pieces costs the frame once per piece, whatever its triangle count.": "{count} lệnh gọi vẽ: mỗi phần của mô hình làm tăng công việc mỗi khung hình, bất kể số tam giác.",
     "{feature} is available in the desktop edition of RPG Reactor. Browser edits are saved in this browser.": "{feature} có trong phiên bản máy tính của RPG Reactor. Chỉnh sửa trên trình duyệt được lưu trong trình duyệt này.",
-    "{size} of textures — most of this model’s weight is its pictures, not its shape. Optimize recompresses them.": "{size} kết cấu: phần lớn dung lượng mô hình là hình ảnh, không phải hình dạng. Tối ưu hóa sẽ nén lại chúng.",
-    "{size} of this file is data the renderer never reads. Optimize drops it with no visible change.": "{size} của tệp này là dữ liệu mà trình kết xuất không bao giờ đọc. Tối ưu hóa sẽ xóa mà không thay đổi hình ảnh.",
     "Could not save the 3D model binding.": "Không thể lưu liên kết mô hình 3D."
 });
 Object.assign(RR_TEXT_TRANSLATIONS["zh-Hans"], {
-    "A texture larger than 2K costs memory and load time with almost nothing to show for it on screen. Optimize caps it.": "超过 2K 的纹理会占用内存、延长加载时间，却几乎没有视觉提升。优化会限制其尺寸。",
-    "Already optimized. The original is kept beside it as a .orig file.": "已优化。原文件以 .orig 文件保存在旁边。",
     "An export directory changed before rollback could remove it.": "导出目录在回滚删除之前发生了变化。",
     "An export target changed before it could be written.": "导出目标在写入之前发生了变化。",
     "An export target changed before rollback could restore it.": "导出目标在回滚恢复之前发生了变化。",
-    "Characters are posed every frame and are drawn at full detail at every distance — distance levels are not built for them. Their triangle count is paid in full, always.": "角色每帧计算姿势，并在任何距离以完整细节绘制，不会生成距离细节级别。因此始终需要处理全部三角形。",
     "Close Playtest": "关闭游戏测试",
     "Could not load Reactor One manifest ({status})": "无法加载 Reactor One 清单（{status}）",
     "Could not optimize this model": "无法优化此模型",
@@ -18374,8 +18255,6 @@ Object.assign(RR_TEXT_TRANSLATIONS["zh-Hans"], {
     "The voice waveform drives the jaw or lips. Set face points in 3D Models for a model without a mouth rig. Dialogue uses the normal message window.": "语音波形驱动下颌或嘴唇。没有口部骨架的模型可在“3D 模型”中设置面部标记点。对话使用普通消息窗口。",
     "This export contains multiple files. Use a browser with directory picker support or open a project first.": "此导出包含多个文件。请使用支持目录选择器的浏览器，或先打开项目。",
     "This file could not be read as a GLB.": "无法将此文件读取为 GLB。",
-    "This model carries separate distance-level files. They are extra copies of the geometry on disk; optimizing the model clears them.": "此模型有单独的距离细节级别文件。它们是磁盘上的额外几何副本；优化模型会清除它们。",
-    "This model costs every one of its triangles at every distance. Optimize cuts them — a background prop rarely needs more than a fraction of what a generator gives it.": "此模型在任何距离都要处理全部三角形。优化会减少它们：背景道具通常只需生成器所生成三角形的一小部分。",
     "This model’s cost could not be read.": "无法读取此模型的开销。",
     "This model’s source file could not be found.": "找不到此模型的源文件。",
     "Upper lip": "上唇",
@@ -18392,21 +18271,14 @@ Object.assign(RR_TEXT_TRANSLATIONS["zh-Hans"], {
     "materials": "材质",
     "stale distance level files removed": "已删除过期的距离细节级别文件",
     "{count} carved part(s) re-derived.": "已重新计算 {count} 个切出的部件。",
-    "{count} carved part(s): stored as triangle ranges, so Optimize re-derives them from the reduced surface.": "{count} 个切出的部件：以三角形范围存储，优化时会根据缩减后的表面重新计算。",
     "{count} destination file(s) already exist. Replace them?": "已有 {count} 个目标文件。是否替换？",
-    "{count} draw calls: a model split into many pieces costs the frame once per piece, whatever its triangle count.": "{count} 次绘制调用：模型的每个部件都会增加每帧的处理开销，与三角形数量无关。",
     "{feature} is available in the desktop edition of RPG Reactor. Browser edits are saved in this browser.": "{feature} 可在 RPG Reactor 桌面版中使用。浏览器编辑内容保存在此浏览器中。",
-    "{size} of textures — most of this model’s weight is its pictures, not its shape. Optimize recompresses them.": "纹理占 {size}：此模型的大部分体积来自图片而非形状。优化会重新压缩图片。",
-    "{size} of this file is data the renderer never reads. Optimize drops it with no visible change.": "此文件中有 {size} 是渲染器从不读取的数据。优化会删除它们，不影响外观。",
     "Could not save the 3D model binding.": "无法保存 3D 模型绑定。"
 });
 Object.assign(RR_TEXT_TRANSLATIONS["zh-Hant"], {
-    "A texture larger than 2K costs memory and load time with almost nothing to show for it on screen. Optimize caps it.": "超過 2K 的紋理會佔用記憶體、延長載入時間，卻幾乎沒有視覺提升。最佳化會限制其尺寸。",
-    "Already optimized. The original is kept beside it as a .orig file.": "已最佳化。原始檔案以 .orig 檔案保存在旁邊。",
     "An export directory changed before rollback could remove it.": "匯出目錄在復原刪除之前發生了變更。",
     "An export target changed before it could be written.": "匯出目標在寫入之前發生了變更。",
     "An export target changed before rollback could restore it.": "匯出目標在復原還原之前發生了變更。",
-    "Characters are posed every frame and are drawn at full detail at every distance — distance levels are not built for them. Their triangle count is paid in full, always.": "角色每影格計算姿勢，並在任何距離以完整細節繪製，不會產生距離細節層級。因此始終需要處理全部三角形。",
     "Close Playtest": "關閉遊戲測試",
     "Could not load Reactor One manifest ({status})": "無法載入 Reactor One 資訊清單（{status}）",
     "Could not optimize this model": "無法最佳化此模型",
@@ -18464,8 +18336,6 @@ Object.assign(RR_TEXT_TRANSLATIONS["zh-Hant"], {
     "The voice waveform drives the jaw or lips. Set face points in 3D Models for a model without a mouth rig. Dialogue uses the normal message window.": "語音波形驅動下顎或嘴唇。沒有口部骨架的模型可在「3D 模型」中設定臉部標記點。對話使用一般訊息視窗。",
     "This export contains multiple files. Use a browser with directory picker support or open a project first.": "此匯出包含多個檔案。請使用支援目錄選擇器的瀏覽器，或先開啟專案。",
     "This file could not be read as a GLB.": "無法將此檔案讀取為 GLB。",
-    "This model carries separate distance-level files. They are extra copies of the geometry on disk; optimizing the model clears them.": "此模型有獨立的距離細節層級檔案。它們是磁碟上的額外幾何副本；最佳化模型會清除它們。",
-    "This model costs every one of its triangles at every distance. Optimize cuts them — a background prop rarely needs more than a fraction of what a generator gives it.": "此模型在任何距離都要處理全部三角形。最佳化會減少它們：背景道具通常只需產生器所產生三角形的一小部分。",
     "This model’s cost could not be read.": "無法讀取此模型的負擔。",
     "This model’s source file could not be found.": "找不到此模型的來源檔案。",
     "Upper lip": "上唇",
@@ -18482,12 +18352,8 @@ Object.assign(RR_TEXT_TRANSLATIONS["zh-Hant"], {
     "materials": "材質",
     "stale distance level files removed": "已刪除過期的距離細節層級檔案",
     "{count} carved part(s) re-derived.": "已重新計算 {count} 個切出的部件。",
-    "{count} carved part(s): stored as triangle ranges, so Optimize re-derives them from the reduced surface.": "{count} 個切出的部件：以三角形範圍儲存，最佳化時會根據縮減後的表面重新計算。",
     "{count} destination file(s) already exist. Replace them?": "已有 {count} 個目標檔案。是否取代？",
-    "{count} draw calls: a model split into many pieces costs the frame once per piece, whatever its triangle count.": "{count} 次繪製呼叫：模型的每個部件都會增加每影格的處理負擔，與三角形數量無關。",
     "{feature} is available in the desktop edition of RPG Reactor. Browser edits are saved in this browser.": "{feature} 可在 RPG Reactor 桌面版中使用。瀏覽器編輯內容儲存在此瀏覽器中。",
-    "{size} of textures — most of this model’s weight is its pictures, not its shape. Optimize recompresses them.": "紋理佔 {size}：此模型的大部分體積來自圖片而非形狀。最佳化會重新壓縮圖片。",
-    "{size} of this file is data the renderer never reads. Optimize drops it with no visible change.": "此檔案中有 {size} 是算繪器從不讀取的資料。最佳化會刪除它們，不影響外觀。",
     "Could not save the 3D model binding.": "無法儲存 3D 模型繫結。"
 });
 
@@ -19330,23 +19196,23 @@ Object.assign(RR_TEXT_TRANSLATIONS["zh-Hant"], {"Equipped Weapon (icon or 3D mod
 Object.assign(RR_TEXT_TRANSLATIONS["zh-Hans"], {"Equipped Weapon (icon or 3D model)": "装备中的武器（图标或 3D 模型）", "Preview Weapon": "预览武器", "Moves the shown weapon from where it is to this offset, rotation and scale over the step’s frames.": "在本步骤的帧内，将显示中的武器从当前位置移到此偏移、旋转与缩放。", "Show once, then add Move steps to swing or raise it; a bound 3D model is held in place of the icon.": "先显示一次，再添加移动步骤来挥动或举起；已绑定的 3D 模型会取代图标被握住。"});
 
 // 3D Models: Optimize on a non-GLB converts it, its textures inside.
-Object.assign(RR_TEXT_TRANSLATIONS["ja"], {"This model costs every one of its triangles at every distance. Optimize converts it to GLB, bundles its textures inside and cuts them.":"このモデルはどの距離でも全ポリゴン分の負荷がかかります。最適化すると GLB に変換し、テクスチャを内包して削減します。","Converting {name} to GLB…":"{name} を GLB に変換中…","Converted from {ext} with {count} texture(s) embedded.":"{ext} から変換し、テクスチャ {count} 枚を内包しました。"});
-Object.assign(RR_TEXT_TRANSLATIONS["zh-Hant"], {"This model costs every one of its triangles at every distance. Optimize converts it to GLB, bundles its textures inside and cuts them.":"此模型在任何距離都要付出全部三角形的代價。最佳化會將它轉為 GLB、把貼圖打包在內並削減。","Converting {name} to GLB…":"正在將 {name} 轉換為 GLB…","Converted from {ext} with {count} texture(s) embedded.":"已從 {ext} 轉換並內嵌 {count} 張貼圖。"});
-Object.assign(RR_TEXT_TRANSLATIONS["zh-Hans"], {"This model costs every one of its triangles at every distance. Optimize converts it to GLB, bundles its textures inside and cuts them.":"此模型在任何距离都要付出全部三角形的代价。优化会将它转为 GLB、把贴图打包在内并削减。","Converting {name} to GLB…":"正在将 {name} 转换为 GLB…","Converted from {ext} with {count} texture(s) embedded.":"已从 {ext} 转换并内嵌 {count} 张贴图。"});
-Object.assign(RR_TEXT_TRANSLATIONS["ko"], {"This model costs every one of its triangles at every distance. Optimize converts it to GLB, bundles its textures inside and cuts them.":"이 모델은 어느 거리에서나 모든 삼각형의 비용을 치릅니다. 최적화하면 GLB로 변환하고 텍스처를 안에 담아 줄입니다.","Converting {name} to GLB…":"{name}을(를) GLB로 변환하는 중…","Converted from {ext} with {count} texture(s) embedded.":"{ext}에서 변환했고 텍스처 {count}개를 내장했습니다."});
-Object.assign(RR_TEXT_TRANSLATIONS["es"], {"This model costs every one of its triangles at every distance. Optimize converts it to GLB, bundles its textures inside and cuts them.":"Este modelo paga todos sus triángulos a cualquier distancia. Optimizar lo convierte a GLB, incluye sus texturas dentro y los reduce.","Converting {name} to GLB…":"Convirtiendo {name} a GLB…","Converted from {ext} with {count} texture(s) embedded.":"Convertido desde {ext} con {count} textura(s) incrustadas."});
-Object.assign(RR_TEXT_TRANSLATIONS["pt"], {"This model costs every one of its triangles at every distance. Optimize converts it to GLB, bundles its textures inside and cuts them.":"Este modelo paga todos os seus triângulos a qualquer distância. Otimizar converte-o em GLB, embute as texturas e reduz os triângulos.","Converting {name} to GLB…":"Convertendo {name} para GLB…","Converted from {ext} with {count} texture(s) embedded.":"Convertido de {ext} com {count} textura(s) embutidas."});
-Object.assign(RR_TEXT_TRANSLATIONS["fr"], {"This model costs every one of its triangles at every distance. Optimize converts it to GLB, bundles its textures inside and cuts them.":"Ce modèle paie tous ses triangles à toute distance. Optimiser le convertit en GLB, y intègre ses textures et les réduit.","Converting {name} to GLB…":"Conversion de {name} en GLB…","Converted from {ext} with {count} texture(s) embedded.":"Converti depuis {ext} avec {count} texture(s) intégrées."});
-Object.assign(RR_TEXT_TRANSLATIONS["de"], {"This model costs every one of its triangles at every distance. Optimize converts it to GLB, bundles its textures inside and cuts them.":"Dieses Modell zahlt in jeder Entfernung für alle seine Dreiecke. Optimieren wandelt es in GLB um, bettet seine Texturen ein und reduziert sie.","Converting {name} to GLB…":"{name} wird in GLB umgewandelt…","Converted from {ext} with {count} texture(s) embedded.":"Aus {ext} umgewandelt, {count} Textur(en) eingebettet."});
-Object.assign(RR_TEXT_TRANSLATIONS["it"], {"This model costs every one of its triangles at every distance. Optimize converts it to GLB, bundles its textures inside and cuts them.":"Questo modello paga tutti i suoi triangoli a qualsiasi distanza. Ottimizza lo converte in GLB, include le texture al suo interno e li riduce.","Converting {name} to GLB…":"Conversione di {name} in GLB…","Converted from {ext} with {count} texture(s) embedded.":"Convertito da {ext} con {count} texture incorporate."});
-Object.assign(RR_TEXT_TRANSLATIONS["ru"], {"This model costs every one of its triangles at every distance. Optimize converts it to GLB, bundles its textures inside and cuts them.":"Эта модель платит за все свои треугольники на любом расстоянии. Оптимизация преобразует её в GLB, встраивает текстуры и сокращает их.","Converting {name} to GLB…":"Преобразование {name} в GLB…","Converted from {ext} with {count} texture(s) embedded.":"Преобразовано из {ext}, встроено текстур: {count}."});
-Object.assign(RR_TEXT_TRANSLATIONS["pl"], {"This model costs every one of its triangles at every distance. Optimize converts it to GLB, bundles its textures inside and cuts them.":"Ten model płaci za wszystkie swoje trójkąty w każdej odległości. Optymalizacja przekształca go w GLB, osadza tekstury w środku i zmniejsza ich liczbę.","Converting {name} to GLB…":"Konwersja {name} do GLB…","Converted from {ext} with {count} texture(s) embedded.":"Przekonwertowano z {ext}, osadzono tekstur: {count}."});
-Object.assign(RR_TEXT_TRANSLATIONS["el"], {"This model costs every one of its triangles at every distance. Optimize converts it to GLB, bundles its textures inside and cuts them.":"Αυτό το μοντέλο πληρώνει όλα τα τρίγωνά του σε κάθε απόσταση. Η βελτιστοποίηση το μετατρέπει σε GLB, ενσωματώνει τις υφές του και τα μειώνει.","Converting {name} to GLB…":"Μετατροπή του {name} σε GLB…","Converted from {ext} with {count} texture(s) embedded.":"Μετατράπηκε από {ext} με {count} ενσωματωμένες υφές."});
-Object.assign(RR_TEXT_TRANSLATIONS["tr"], {"This model costs every one of its triangles at every distance. Optimize converts it to GLB, bundles its textures inside and cuts them.":"Bu model her mesafede tüm üçgenlerinin bedelini öder. İyileştirme onu GLB’ye çevirir, dokularını içine gömer ve üçgenleri azaltır.","Converting {name} to GLB…":"{name} GLB’ye dönüştürülüyor…","Converted from {ext} with {count} texture(s) embedded.":"{ext} biçiminden dönüştürüldü, {count} doku gömüldü."});
-Object.assign(RR_TEXT_TRANSLATIONS["ar"], {"This model costs every one of its triangles at every distance. Optimize converts it to GLB, bundles its textures inside and cuts them.":"يدفع هذا النموذج ثمن كل مثلثاته على أي مسافة. التحسين يحوّله إلى GLB ويضمّ خاماته بداخله ويقلّل المثلثات.","Converting {name} to GLB…":"جارٍ تحويل {name} إلى GLB…","Converted from {ext} with {count} texture(s) embedded.":"حُوِّل من {ext} مع تضمين {count} خامة."});
-Object.assign(RR_TEXT_TRANSLATIONS["id"], {"This model costs every one of its triangles at every distance. Optimize converts it to GLB, bundles its textures inside and cuts them.":"Model ini membayar semua segitiganya pada jarak berapa pun. Optimalkan mengubahnya menjadi GLB, menyertakan teksturnya di dalam, dan memangkasnya.","Converting {name} to GLB…":"Mengonversi {name} ke GLB…","Converted from {ext} with {count} texture(s) embedded.":"Dikonversi dari {ext} dengan {count} tekstur tertanam."});
-Object.assign(RR_TEXT_TRANSLATIONS["vi"], {"This model costs every one of its triangles at every distance. Optimize converts it to GLB, bundles its textures inside and cuts them.":"Mô hình này trả giá cho toàn bộ tam giác ở mọi khoảng cách. Tối ưu sẽ chuyển nó sang GLB, gói kết cấu vào bên trong và cắt giảm tam giác.","Converting {name} to GLB…":"Đang chuyển {name} sang GLB…","Converted from {ext} with {count} texture(s) embedded.":"Đã chuyển từ {ext} với {count} kết cấu được nhúng."});
-Object.assign(RR_TEXT_TRANSLATIONS["th"], {"This model costs every one of its triangles at every distance. Optimize converts it to GLB, bundles its textures inside and cuts them.":"โมเดลนี้จ่ายค่าสามเหลี่ยมทั้งหมดในทุกระยะ การปรับแต่งจะแปลงเป็น GLB รวมพื้นผิวไว้ข้างในและลดจำนวนสามเหลี่ยม","Converting {name} to GLB…":"กำลังแปลง {name} เป็น GLB…","Converted from {ext} with {count} texture(s) embedded.":"แปลงจาก {ext} พร้อมฝังพื้นผิว {count} รายการ"});
+Object.assign(RR_TEXT_TRANSLATIONS["ja"], {"Converting {name} to GLB…":"{name} を GLB に変換中…","Converted from {ext} with {count} texture(s) embedded.":"{ext} から変換し、テクスチャ {count} 枚を内包しました。"});
+Object.assign(RR_TEXT_TRANSLATIONS["zh-Hant"], {"Converting {name} to GLB…":"正在將 {name} 轉換為 GLB…","Converted from {ext} with {count} texture(s) embedded.":"已從 {ext} 轉換並內嵌 {count} 張貼圖。"});
+Object.assign(RR_TEXT_TRANSLATIONS["zh-Hans"], {"Converting {name} to GLB…":"正在将 {name} 转换为 GLB…","Converted from {ext} with {count} texture(s) embedded.":"已从 {ext} 转换并内嵌 {count} 张贴图。"});
+Object.assign(RR_TEXT_TRANSLATIONS["ko"], {"Converting {name} to GLB…":"{name}을(를) GLB로 변환하는 중…","Converted from {ext} with {count} texture(s) embedded.":"{ext}에서 변환했고 텍스처 {count}개를 내장했습니다."});
+Object.assign(RR_TEXT_TRANSLATIONS["es"], {"Converting {name} to GLB…":"Convirtiendo {name} a GLB…","Converted from {ext} with {count} texture(s) embedded.":"Convertido desde {ext} con {count} textura(s) incrustadas."});
+Object.assign(RR_TEXT_TRANSLATIONS["pt"], {"Converting {name} to GLB…":"Convertendo {name} para GLB…","Converted from {ext} with {count} texture(s) embedded.":"Convertido de {ext} com {count} textura(s) embutidas."});
+Object.assign(RR_TEXT_TRANSLATIONS["fr"], {"Converting {name} to GLB…":"Conversion de {name} en GLB…","Converted from {ext} with {count} texture(s) embedded.":"Converti depuis {ext} avec {count} texture(s) intégrées."});
+Object.assign(RR_TEXT_TRANSLATIONS["de"], {"Converting {name} to GLB…":"{name} wird in GLB umgewandelt…","Converted from {ext} with {count} texture(s) embedded.":"Aus {ext} umgewandelt, {count} Textur(en) eingebettet."});
+Object.assign(RR_TEXT_TRANSLATIONS["it"], {"Converting {name} to GLB…":"Conversione di {name} in GLB…","Converted from {ext} with {count} texture(s) embedded.":"Convertito da {ext} con {count} texture incorporate."});
+Object.assign(RR_TEXT_TRANSLATIONS["ru"], {"Converting {name} to GLB…":"Преобразование {name} в GLB…","Converted from {ext} with {count} texture(s) embedded.":"Преобразовано из {ext}, встроено текстур: {count}."});
+Object.assign(RR_TEXT_TRANSLATIONS["pl"], {"Converting {name} to GLB…":"Konwersja {name} do GLB…","Converted from {ext} with {count} texture(s) embedded.":"Przekonwertowano z {ext}, osadzono tekstur: {count}."});
+Object.assign(RR_TEXT_TRANSLATIONS["el"], {"Converting {name} to GLB…":"Μετατροπή του {name} σε GLB…","Converted from {ext} with {count} texture(s) embedded.":"Μετατράπηκε από {ext} με {count} ενσωματωμένες υφές."});
+Object.assign(RR_TEXT_TRANSLATIONS["tr"], {"Converting {name} to GLB…":"{name} GLB’ye dönüştürülüyor…","Converted from {ext} with {count} texture(s) embedded.":"{ext} biçiminden dönüştürüldü, {count} doku gömüldü."});
+Object.assign(RR_TEXT_TRANSLATIONS["ar"], {"Converting {name} to GLB…":"جارٍ تحويل {name} إلى GLB…","Converted from {ext} with {count} texture(s) embedded.":"حُوِّل من {ext} مع تضمين {count} خامة."});
+Object.assign(RR_TEXT_TRANSLATIONS["id"], {"Converting {name} to GLB…":"Mengonversi {name} ke GLB…","Converted from {ext} with {count} texture(s) embedded.":"Dikonversi dari {ext} dengan {count} tekstur tertanam."});
+Object.assign(RR_TEXT_TRANSLATIONS["vi"], {"Converting {name} to GLB…":"Đang chuyển {name} sang GLB…","Converted from {ext} with {count} texture(s) embedded.":"Đã chuyển từ {ext} với {count} kết cấu được nhúng."});
+Object.assign(RR_TEXT_TRANSLATIONS["th"], {"Converting {name} to GLB…":"กำลังแปลง {name} เป็น GLB…","Converted from {ext} with {count} texture(s) embedded.":"แปลงจาก {ext} พร้อมฝังพื้นผิว {count} รายการ"});
 // Sequence validation after Effect folded into Execute.
 Object.assign(RR_TEXT_TRANSLATIONS["ja"], {"Apply Action Effect belongs in a Complete Action or Execute phase.":"アクション効果の適用は、完全なアクションまたは実行フェーズに置きます。"});
 Object.assign(RR_TEXT_TRANSLATIONS["zh-Hant"], {"Apply Action Effect belongs in a Complete Action or Execute phase.":"「應用行動效果」步驟只能放在完整行動或執行階段中。"});

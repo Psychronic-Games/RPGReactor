@@ -1017,39 +1017,36 @@ class Database3DEditor {
         // The actionable half: why this model costs what it does.
         const notes = [];
         if (a.skinned) {
-            notes.push(this._t('Characters are posed every frame and are drawn at full detail at every distance — distance levels are not built for them. Their triangle count is paid in full, always.'));
+            notes.push(this._t('Characters always draw at full detail.'));
         } else if (triangles >= 150000 && String(entry.ext || '.glb').toLowerCase() !== '.glb') {
-            notes.push(this._t('This model costs every one of its triangles at every distance. Optimize converts it to GLB, bundles its textures inside and cuts them.'));
+            notes.push(this._t('Heavy at every distance. Optimize converts it to GLB and cuts triangles.'));
         } else if (triangles >= 150000) {
-            notes.push(this._t('This model costs every one of its triangles at every distance. Optimize cuts them — a background prop rarely needs more than a fraction of what a generator gives it.'));
+            notes.push(this._t('Heavy at every distance. Optimize cuts triangles.'));
         }
         if (stats.levels.length) {
-            notes.push(this._t('This model carries separate distance-level files. They are extra copies of the geometry on disk; optimizing the model clears them.'));
+            notes.push(this._t('Has separate distance-level files. Optimize clears them.'));
         }
         if (stats.carvedParts) {
-            // Parts are triangle ranges into this exact triangle list, so a
-            // reduction invalidates them and they have to be re-derived from
-            // the new surface. Worth saying, because it is the one thing here
-            // that is rebuilt rather than merely preserved.
-            notes.push(this._t('{count} carved part(s): stored as triangle ranges, so Optimize re-derives them from the reduced surface.', { count: stats.carvedParts }));
+            // Parts are triangle ranges into this exact list: a reduction rebuilds them.
+            notes.push(this._t('{count} carved part(s). Optimize rebuilds them.', { count: stats.carvedParts }));
         }
         if (stats.largestTexture && stats.largestTexture.width > 2048) {
-            notes.push(this._t('A texture larger than 2K costs memory and load time with almost nothing to show for it on screen. Optimize caps it.'));
+            notes.push(this._t('Textures over 2K waste memory. Optimize caps them.'));
         } else if (stats.textureBytes > 8 * 1048576) {
             // A light mesh can still be an expensive model: textures are the
             // larger half of most files, and they cost the same however few
             // triangles they are wrapped around.
-            notes.push(this._t('{size} of textures — most of this model’s weight is its pictures, not its shape. Optimize recompresses them.', { size: mb(stats.textureBytes) }));
+            notes.push(this._t('{size} of textures. Optimize recompresses them.', { size: mb(stats.textureBytes) }));
         }
         const dead = (a.tangentBytes || 0) + (a.floatWeightBytes || 0);
         if (dead > 65536) {
-            notes.push(this._t('{size} of this file is data the renderer never reads. Optimize drops it with no visible change.', { size: mb(dead) }));
+            notes.push(this._t('{size} of unused data. Optimize drops it.', { size: mb(dead) }));
         }
         if (a.primitives > 24) {
-            notes.push(this._t('{count} draw calls: a model split into many pieces costs the frame once per piece, whatever its triangle count.', { count: num(a.primitives) }));
+            notes.push(this._t('{count} draw calls, one per piece.', { count: num(a.primitives) }));
         }
         if (stats.optimized) {
-            notes.push(this._t('Already optimized. The original is kept beside it as a .orig file.'));
+            notes.push(this._t('Already optimized (original kept as .orig).'));
         }
         for (const note of notes) {
             const line = document.createElement('div');
