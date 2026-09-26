@@ -4,9 +4,17 @@ Dated engineering notes for whoever picks the project up next, newest first. Thi
 
 ## Where things stand (2026-09-25)
 
-**0.98.7 shipped on 2026-09-21** (runtime 20260920.24). The 0.98.8 cycle is open and now holds importers for every older RPG Maker (2000, 2003, XP, VX, VX Ace), 22 Ruby-script plugin ports, media conversion, the Apply/save speed-up, builder fixes, and PRs #68 and #69 (runtime 20260922.5, 3,466 tests), under `[Unreleased - 0.98.8]` in both changelogs. **Nothing from 2026-09-22 is pushed**: the owner pushes at the end of the weekend. PR #68 was merged on GitHub on 2026-09-23 and PR #70 (Door and Treasure quick events turn Direction Fix off before their opening turns) on 2026-09-24; both merges are merged into local `main`, so the push fast-forwards.
+**0.98.7 shipped on 2026-09-21** (runtime 20260920.24). The 0.98.8 cycle is open and holds importers for every older RPG Maker (2000, 2003, XP, VX, VX Ace), over 110 Ruby-script plugin ports, media conversion, the Apply/save speed-up, builder fixes, and PRs #68–#70, under the 0.98.8 files in `changelog/` and `editor/changelog/` (runtime 20260925.5, 3,765 tests, all green). **Nothing from 2026-09-22 on is pushed**: the owner pushes at the end of the weekend; PR merges from GitHub are merged into local `main`, so the push fast-forwards.
 
-**Current work:** making Dreamwalker (DOTP, VX Ace) import seamlessly, measured against the shipped game; see 2026-09-25.
+**Current work:** Dreamwalker (DOTP, VX Ace) imports with nearly all of its 177 scripts ported; see 2026-09-25 for what is checked against the shipped game and how.
+
+**Pick up here (next session):**
+1. **A frame-by-frame fight in both engines** (attack, enemy turn, victory). Our side works (`$S/attack-steps.js` pattern: empty troop 1's first page, give item 14 shotgun shells, wait for the actor command window, Enter Enter, shoot every 250 ms). The original must reach the fight through play, not probe code (see 2026-09-25 › Next).
+2. **The Random Dungeon script** (`067 Neon Black - Random Dungeon`, `create_dungeon`), unreachable in this public build; port it or record why not.
+3. **Owner decision pending:** RGSS imports (XP, VX, VX Ace) keep MZ's autosave slot, which those engines never had (same open question as 2000/2003). Dreamwalker is unaffected (Vlue's autosave port decides).
+4. **Then other games in other engines** to harden the importer: Nocturne (XP), Legionwood (VX), The Seventh Warrior (Ace), A Blurred Line (2000), Deep 8 (2003), all in `template/`. Run `node -e` over `RgssConvert.FAMILIES` against a game's scripts to list the ones no family detects, and `scratchpad/dotp/reach.cjs <project>` for Ruby left in reachable events.
+
+**How the Dreamwalker work was done, to reuse on the next game:** script ports were written by parallel agents from `scratchpad/dotp/PORTING-BRIEF.md` (repo scratchpad, gitignored: new files only, `RR_X.js` + `.params.js` + `.family.js` + a test; `.family.js` files load automatically, ports install in the game's script order after `RR_AceCompat`), then reviewed, reimported, checked against the original and committed here. Oracle tooling lives in the repo's `scratchpad/dotp/` (`make-probe.cjs`, `probe.rb`, `run.cjs`, `reach.cjs`); the Wine prefix, probe copy and oracle screenshots were in the session scratchpad under `/tmp` and may need rebuilding (`make-probe.cjs`, then the Wine command in 2026-09-25).
 
 **To try the world builder:** open the Demo, test-play, take the Motorcycle on the Reactor Room map to North Haven, walk south then east to the Manor's front door at the south (outside cell 62,50); the Steward is in the study upstairs-left of the great hall, downstairs east. In the editor: the **Build** button in the toolbar opens the bar over the 3D view (pieces, shapes, materials, Blueprint, Hammer; R/Q/E keys, Ctrl+Z), the `3D-T` tab shapes terrain and pours water, `3D-M` places models. From a shell: `node editor/build-scripts/build-structure.cjs <project> <mapId> <plan.json> <x> <y> [--check]` and `node editor/build-scripts/validate-map.cjs <project> <mapId>`. [AUTHORING.md](AUTHORING.md) is the contract for people and generators.
 
@@ -14,7 +22,7 @@ Dated engineering notes for whoever picks the project up next, newest first. Thi
 
 **Next, agreed:** furniture pieces and room contents in plans; a spot/template picker in the panel; a hamlet-of-hamlets stress test; then lighting normals on slopes and hip roofs.
 
-## 2026-09-25 — Dreamwalker (DOTP, VX Ace): title and opening against the shipped game
+## 2026-09-25 — Dreamwalker (DOTP, VX Ace) against the shipped game: title to battles
 
 Runtime 20260925.1 to .5. The owner named Dreamwalker (`template/DOTP v1.8.1 PUBLIC`, 177 scripts of its own, 10 maps in this public build) as the next import to make seamless. Changelogs are now one file per release (`changelog/`, `editor/changelog/`; the `CHANGELOG.md` files are indexes, `cut-release.cjs` reads `changelog/<v>.md`).
 
