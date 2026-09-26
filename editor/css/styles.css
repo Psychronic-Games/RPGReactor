@@ -3701,6 +3701,33 @@
             overflow-x: auto;
         }
         .rr-build-context:empty { display: none; }
+        /* Database › Controls: keys, buttons, and jumping and gravity. */
+        .rr-controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; padding: 16px; align-items: start; }
+        .rr-controls-card { margin: 0; }
+        .rr-controls-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        .rr-controls-table td { padding: 5px 6px; border-bottom: 1px solid var(--color-border); vertical-align: middle; }
+        .rr-controls-table td:first-child { width: 38%; color: var(--color-text-muted); white-space: nowrap; }
+        .rr-controls-jump td { border-top: 1px solid var(--color-accent-border, var(--color-border)); }
+        /* A key or button: a keycap in the theme's accent, readable against the card in every palette and mode. */
+        .rr-controls-chip { display: inline-flex; align-items: center; gap: 2px; margin: 2px 6px 2px 0; padding: 2px 3px 2px 9px; min-height: 20px;
+            border: 1px solid var(--color-accent-border-strong, var(--color-accent)); border-bottom-width: 2px; border-radius: 5px;
+            background: linear-gradient(180deg, var(--color-accent-tint-25, var(--color-accent-tint-15)), var(--color-accent-tint-15));
+            color: var(--color-text-strong, var(--color-text)); font-size: 11px; font-weight: 600; letter-spacing: 0.02em; box-shadow: 0 1px 2px rgba(0,0,0,0.25); }
+        .rr-controls-jump .rr-controls-chip { border-color: var(--color-accent-bright); }
+        .rr-controls-remove { border: 0; border-radius: 3px; background: transparent; color: var(--color-text-muted); cursor: pointer; padding: 0 4px; font-size: 12px; line-height: 16px; }
+        .rr-controls-remove:hover { color: var(--color-bg-deep); background: var(--color-accent); }
+        .rr-controls-add { min-width: 22px; height: 22px; padding: 0 6px; border-radius: 5px; border: 1px dashed var(--color-accent-border-strong, var(--color-accent)); background: transparent; color: var(--color-accent-bright); }
+        .rr-controls-add:hover { background: var(--color-accent-tint-15); }
+        .rr-controls-listen { display: inline-block; padding: 2px 9px; border: 1px solid var(--color-accent-bright); border-radius: 5px; background: var(--color-accent-tint-25, var(--color-accent-tint-15)); color: var(--color-accent-bright); font-size: 11px; font-weight: 600; animation: rr-controls-pulse 1.2s ease-in-out infinite; }
+        @keyframes rr-controls-pulse { 50% { opacity: 0.55; } }
+        .rr-controls-note { margin-top: 8px; font-size: 11px; line-height: 1.4; color: var(--color-text-muted); }
+        .rr-controls-reset { margin-top: 10px; }
+        .rr-controls-form { display: grid; grid-template-columns: auto 1fr; gap: 8px 10px; align-items: center; font-size: 12px; }
+        .rr-controls-form > label { color: var(--color-text-muted); }
+        .rr-controls-form .rr-controls-check, .rr-controls-span { grid-column: 1 / -1; color: var(--color-text); }
+        .rr-controls-form input[type="number"] { width: 80px; }
+        .rr-controls-inline { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+        .rr-controls-unit { color: var(--color-text-muted); font-size: 11px; }
         /* Database › Structures: floors and tools, the floor plan, the building in 3D. */
         .rr-structures-body { display: flex; flex: 1; min-height: 0; }
         .rr-structures-side { flex: 0 0 150px; display: flex; flex-direction: column; gap: 6px; padding: 8px; border-right: 1px solid var(--color-border); overflow-y: auto; background: var(--color-bg-surface); }

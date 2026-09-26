@@ -252,7 +252,8 @@ test('the 3D subsystem is the core and the extensions the core names', () => {
     }
     // Speech/audio, quests and the shared JSON decoding boundary have their own modules.
     // 25 since 2026-09-21: reactor_screen_fx.js (screen texts, named sprites, particle effects) is its own concern.
-    assert.ok(roots.length <= 25, `runtime js/ root has grown to ${roots.length} files`);
+    // 27 since 2026-09-26: reactor_controls.js (keys and buttons) and reactor_physics.js (jumping, gravity) are their own concerns.
+    assert.ok(roots.length <= 27, `runtime js/ root has grown to ${roots.length} files`);
 });
 
 test('the game boots every extension straight after the core, before anything reads them', () => {

@@ -63,6 +63,7 @@ class DatabaseEditorUI {
         };
         this.system1Editor = new DatabaseSystem1Editor(databaseManager, system1ProjectManager, this.commonUI, this);
         this.system2Editor = new DatabaseSystem2Editor(databaseManager, { getCurrentProject: () => this.currentProject }, this.commonUI, this);
+        this.controlsEditor = typeof DatabaseControlsEditor !== 'undefined' ? new DatabaseControlsEditor(databaseManager, { getCurrentProject: () => this.currentProject }, this.commonUI, this) : null;
         this.commonEventEditor = new DatabaseCommonEventEditor(databaseManager, eventProjectManager, this.commonUI, this);
         this.userInterfaceEditor = new DatabaseUserInterfaceEditor(databaseManager, { getCurrentProject: () => this.currentProject }, this.commonUI, this);
 
@@ -276,6 +277,7 @@ class DatabaseEditorUI {
         this._renderedDetail = null;
         this.tilesetEditor?.resetFlagEditing?.({ refresh: false });
         this.troopEditor?.disposePreviewLayout?.();
+        this.controlsEditor?.detach?.();
         this.actionSequenceEditor?.dispose();
         this.battlePresentationEditor?.dispose();
         this._detailGeneration = (this._detailGeneration || 0) + 1;
@@ -676,6 +678,11 @@ class DatabaseEditorUI {
                 const { detailEl } = this.prepareDatabaseSection('system2', this._dbTitle('system2', 'System 2'), { showListPanel: false });
 
                 this.system2Editor.showSystem2Detail(detailEl);
+                return;
+            }
+            case 'controls': {
+                const { detailEl } = this.prepareDatabaseSection('controls', this._dbTitle('controls', 'Controls'), { showListPanel: false });
+                this.controlsEditor?.showControlsDetail(detailEl);
                 return;
             }
             case 'types': {
@@ -1789,7 +1796,8 @@ class DatabaseEditorUI {
             { name: 'System 1', type: 'system1' },
             { name: 'System 2', type: 'system2' },
             { name: 'Types', type: 'types' },
-            { name: 'Terms', type: 'terms' }
+            { name: 'Terms', type: 'terms' },
+            { name: 'Controls', type: 'controls' }
         ];
 
         categories.forEach(category => {

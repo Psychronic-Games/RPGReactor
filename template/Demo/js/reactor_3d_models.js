@@ -5786,9 +5786,11 @@ Reactor3D.MapScene.prototype.syncCharacterModels = function(characters) {
         // looks, so it comes back off.
         Reactor3D.noteModelFacing(character, holder.smoothYaw - (spec.yaw || 0));
         const offset = spec.offset || [0, 0, 0];
-        object.position.set(character._realX + 0.5 + offset[0], ground + (character._reactorLift || 0) + offset[2], character._realY + 0.5 + offset[1]);
+        // A jump or a fall (reactor_physics) lifts the model by its air.
+        const air = character._reactorAir || 0;
+        object.position.set(character._realX + 0.5 + offset[0], ground + (character._reactorLift || 0) + air + offset[2], character._realY + 0.5 + offset[1]);
         holder.cameraBaseX = character._realX;
-        holder.cameraBaseY = ground + (character._reactorLift || 0);
+        holder.cameraBaseY = ground + (character._reactorLift || 0) + air;
         holder.cameraBaseZ = character._realY;
         Reactor3D.applyLiveTransform(object, character);
         // Face Ceiling / Face Ground and Rotate route steps. Local axes,

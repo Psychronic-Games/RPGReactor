@@ -4403,7 +4403,8 @@ Reactor3D.standingPlaceFor = function(character) {
     // a world position; taking it literally put every character half a tile
     // south of the square it occupies, which is invisible head-on and swings
     // into view as the camera comes round.
-    const ground = { height: this.elevationAt(map, x, y) + (character._reactorLift || 0), z: character._realY + 0.5, lift: 0 };
+    // A jump or a fall (reactor_physics) lifts the character by its air.
+    const ground = { height: this.elevationAt(map, x, y) + (character._reactorLift || 0) + (character._reactorAir || 0), z: character._realY + 0.5, lift: 0 };
     if (typeof character.eventId !== "function") return ground;
     if (character.isMoving && character.isMoving()) return ground;
 
@@ -4442,7 +4443,7 @@ Reactor3D.standingPlaceFor = function(character) {
     // picture has moved onto a cut-out, and it has to be placed the way a
     // cut-out is placed.
     return facade
-        ? { height: facade.height + (character._reactorLift || 0), z: facade.z, lift: facade.lift, onArt: true }
+        ? { height: facade.height + (character._reactorLift || 0) + (character._reactorAir || 0), z: facade.z, lift: facade.lift, onArt: true }
         : ground;
 };
 
@@ -7997,7 +7998,7 @@ Reactor3D.renderBlocker = function(mapData) {
             playerPosition: () => {
                 if (typeof $gamePlayer === "undefined" || !$gamePlayer) return null;
                 const x = $gamePlayer._realX, y = $gamePlayer._realY;
-                const elevation = elevationAt(x, y) + ($gamePlayer._reactorLift || 0);
+                const elevation = elevationAt(x, y) + ($gamePlayer._reactorLift || 0) + ($gamePlayer._reactorAir || 0);
                 return { x: x, y: y, elevation: elevation, direction: $gamePlayer.direction(),
                     eyes: currentState().mode === "firstPerson" ? playerEyes($gamePlayer, elevation) : null };
             },

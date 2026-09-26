@@ -2525,6 +2525,47 @@ class ProjectController {
             const input = document.getElementById(`map-3d-camera-${key}`);
             if (input) input.value = camera[key] === null || camera[key] === undefined ? '' : camera[key];
         }
+        this.populateMapPhysicsForm(mapData);
+    }
+
+    /** This map's own gravity, jump and fall damage; blank means the project's (Database › Controls). */
+    populateMapPhysicsForm(mapData) {
+        const physics = (mapData && mapData.reactor3d && mapData.reactor3d.physics) || {};
+        const gravity = document.getElementById('map-3d-gravity-select'), custom = document.getElementById('map-3d-gravity-input');
+        if (gravity && custom) {
+            const has = Number.isFinite(Number(physics.gravity)) && physics.gravity !== '' && physics.gravity !== undefined;
+            const preset = has && [...gravity.options].some(o => o.value !== 'custom' && o.value !== '' && Number(o.value) === Number(physics.gravity));
+            gravity.value = !has ? '' : preset ? String([...gravity.options].find(o => Number(o.value) === Number(physics.gravity)).value) : 'custom';
+            custom.value = has ? physics.gravity : '';
+            const project = window.reactor?.databaseManager?.getSystem?.()?.reactorPhysics || {};
+            custom.placeholder = String(project.gravity ?? 1);
+            custom.disabled = gravity.value !== 'custom';
+            gravity.onchange = () => { custom.disabled = gravity.value !== 'custom'; if (gravity.value && gravity.value !== 'custom') custom.value = gravity.value; if (!gravity.value) custom.value = ''; };
+        }
+        const jump = document.getElementById('map-3d-jump-input');
+        if (jump) {
+            jump.value = Number.isFinite(Number(physics.jumpHeight)) && physics.jumpHeight !== undefined && physics.jumpHeight !== '' ? physics.jumpHeight : '';
+            jump.placeholder = String((window.reactor?.databaseManager?.getSystem?.()?.reactorPhysics || {}).jumpHeight ?? 1.25);
+        }
+        const tri = (id, value) => { const el = document.getElementById(id); if (el) el.value = value === true ? 'on' : value === false ? 'off' : ''; };
+        tri('map-3d-jumping-select', physics.jump);
+        tri('map-3d-falldamage-select', physics.fallDamage);
+    }
+
+    /** The map's physics as the form has it: only what differs from the project. */
+    readMapPhysicsForm() {
+        if (typeof document === 'undefined') return {};
+        const value = id => document.getElementById(id)?.value ?? '';
+        const out = {};
+        const gravity = value('map-3d-gravity-select');
+        if (gravity === 'custom') { const g = parseFloat(value('map-3d-gravity-input')); if (Number.isFinite(g) && g > 0) out.gravity = Math.min(10, g); }
+        else if (gravity) out.gravity = Number(gravity);
+        const jump = parseFloat(value('map-3d-jump-input'));
+        if (Number.isFinite(jump)) out.jumpHeight = Math.max(0, Math.min(20, jump));
+        const tri = id => value(id) === 'on' ? true : value(id) === 'off' ? false : undefined;
+        if (tri('map-3d-jumping-select') !== undefined) out.jump = tri('map-3d-jumping-select');
+        if (tri('map-3d-falldamage-select') !== undefined) out.fallDamage = tri('map-3d-falldamage-select');
+        return out;
     }
 
     /** The default camera as the form has it now. */
@@ -2636,6 +2677,14 @@ class ProjectController {
         changed = elevation.setRoom(target, room) || changed;
         if (typeof elevation.setCamera === 'function') {
             changed = elevation.setCamera(target, this.readMap3DCameraForm()) || changed;
+        }
+        // This map's gravity, jump and fall damage: kept only when it says something.
+        const physics = this.readMapPhysicsForm();
+        const physicsBefore = JSON.stringify(target.reactor3d?.physics || {});
+        if (JSON.stringify(physics) !== physicsBefore) {
+            target.reactor3d = target.reactor3d || { version: 1 };
+            if (Object.keys(physics).length) target.reactor3d.physics = physics; else delete target.reactor3d.physics;
+            changed = true;
         }
         const sidecar = target.reactor3d;
         if (wants3D && sidecar && typeof sidecar === 'object' && sidecar.mode !== elevation.MODE_3D) {
