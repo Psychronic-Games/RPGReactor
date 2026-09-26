@@ -265,16 +265,25 @@ test('Items, Skills, Equipment and Shop chain their lists through contexts and w
 });
 
 
-test('the Battle baseline is a Battle HUD after MOG: a reacting party panel, placed stock windows and a target cursor', () => {
+test('the Battle baseline is the Demo\'s MOG battle HUD: picture panels in a centred row, placed windows and two cursors', () => {
     const battle = Stock.buildOne('battle', { system: fixtureSystem });
     assert.deepStrictEqual([battle.mode, battle.hideStatusWindow, battle.roles.join(), battle.openTransition], ['battle', true, 'battle', 'slideUp']);
     const panel = battle.nodes.find(node => node.rowLayout === 'actorPanel');
-    assert.deepStrictEqual([panel.columns, panel.portraitMotion, panel.focusable, panel.actorFields.includes('atb')], [4, true, false, true]);
-    assert.deepStrictEqual([panel.actorElements.custom_1.onlyActive, panel.actorElements.custom_1.behind, panel.actorElements.states.statesMode], [true, true, 'cycle'],
-        'a turn marker behind the active actor, and states one at a time');
+    assert.deepStrictEqual([panel.columns, panel.rowHeight, panel.width, panel.x, panel.y, panel.fill, panel.focusable], [7, 170, 1190, 45, 540, 'none', false],
+        '160x170 panels 170 apart, centred, 180 above the bottom');
+    const parts = panel.actorElements;
+    assert.deepStrictEqual([parts.custom_1.file, parts.custom_1.behind], ['system/BattleHud_Layout', true], 'the panel art behind everything');
+    assert.deepStrictEqual([parts.hp.meterImage, parts.hp.meterRows, parts.hp.x, parts.hp.y], ['system/BattleHud_HP_Meter', 2, 74, 49]);
+    assert.deepStrictEqual([parts.tpValue.numberImage, parts.tpValue.y], ['system/BattleHud_TP_Number', 99]);
+    assert.deepStrictEqual([parts.hpLabel.visible, parts.states.statesMode], [false, 'cycle'], 'the labels are in the panel art; states one at a time');
     const windows = Object.fromEntries(battle.nodes.filter(node => node.type === 'battleWindow').map(node => [node.battleWindow, node]));
     assert.deepStrictEqual(Object.keys(windows).sort(), ['actor', 'actorCommand', 'enemy', 'help', 'item', 'partyCommand', 'skill']);
-    assert.strictEqual(windows.actorCommand.followActor, true, 'the command window rides over the acting actor');
-    assert.deepStrictEqual([windows.enemy.hideWindow, windows.actor.hideWindow], [true, true], 'targets are chosen with the cursor');
-    assert.strictEqual(battle.nodes.filter(node => node.type === 'battleCursor').length, 1);
+    assert.deepStrictEqual([windows.actorCommand.followActor, windows.actorCommand.x, windows.actorCommand.y], [true, -19, -383]);
+    assert.deepStrictEqual([windows.skill.windowColumns, windows.item.windowColumns, windows.skill.y], [2, 3, 181]);
+    assert.strictEqual(windows.partyCommand.file, 'system/BattleHud_Layout_Party');
+    const cursor = battle.nodes.find(node => node.type === 'battleCursor');
+    assert.deepStrictEqual([cursor.file, cursor.actorFile, cursor.cursorSlide], ['system/BattleCursor_B', 'system/BattleCursor_A', true]);
+    const small = Stock.buildOne('battle', { system: { advanced: { screenWidth: 816, screenHeight: 624 } } }).nodes[0];
+    assert.deepStrictEqual([small.columns, small.width, small.x, small.y], [4, 680, 68, 444], 'four panels fit an 816x624 screen');
 });
+

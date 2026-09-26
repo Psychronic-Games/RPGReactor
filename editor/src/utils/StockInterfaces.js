@@ -541,41 +541,55 @@
             return record;
         },
 
+        /**
+         * The engine's battle HUD, after the Demo's MOG battle HUD: a 160x170
+         * panel per actor in a centred row (the panel art carries the Health,
+         * Power and Charge labels), two-row picture meters with a falling
+         * damage trail, digit-sheet numbers, the name under it and states one
+         * at a time; the command window over the acting actor, wide skill and
+         * item windows above the HUD, and cursors for enemies and allies. The
+         * art lives in img/system as BattleHud_*; without it the meters and
+         * numbers fall back to drawn ones.
+         */
         battle(data) {
             const system = data.system || {};
             const m = this.metrics(system);
             const b = new Builder();
-            const hudHeight = Math.max(144, Math.min(200, Math.floor(m.boxHeight * 0.26)));
-            const hudTop = m.boxY + m.boxHeight - hudHeight;
-            const members = 4;
-            const rowHeight = hudHeight - PADDING * 2;
-            b.list('Party HUD', 0, 'party', m.boxX, hudTop, m.boxWidth, hudHeight, {
-                rowLayout: 'actorPanel', columns: members, rowHeight, portraitSize: Math.min(FACE, rowHeight - PADDING * 2),
-                actorFields: ['portrait', 'name', 'hp', 'mp', 'tp', 'atb', 'states'], contextName: 'hudActor', focusable: false,
-                portraitMotion: true, actorPadding: 8, actorGap: 2,
+            const slot = 170, panel = 160, rowHeight = 170;
+            const columns = Math.max(1, Math.min(7, Math.floor(m.boxWidth / slot)));
+            const hudWidth = columns * slot;
+            const hudX = m.boxX + Math.round((m.boxWidth - hudWidth) / 2);
+            // 180 above the screen's bottom, as MOG placed it, kept inside the UI area.
+            const hudY = Math.min(m.height - 180, m.boxY + m.boxHeight - rowHeight);
+            const meter = (key, y) => ({ x: 74, y, width: 65, height: 5, meterImage: 'system/BattleHud_' + key + '_Meter', meterRows: 2 });
+            const number = (key, y) => ({ x: 70, y, width: 80, height: 17, numberImage: 'system/BattleHud_' + key + '_Number', align: 'left', valueFormat: 'current' });
+            b.list('Party HUD', 0, 'party', hudX, hudY, hudWidth, rowHeight, {
+                fill: 'none', rowLayout: 'actorPanel', columns, rowHeight, focusable: false, contextName: 'hudActor',
+                actorFields: ['name', 'hp', 'mp', 'tp', 'states'], actorPadding: 0, actorGap: 0, portraitSize: 90,
                 actorElements: {
-                    states: { statesMode: 'cycle', iconSize: 28, width: 28, height: 28 },
-                    custom_1: { kind: 'box', name: 'Turn marker', onlyActive: true, behind: true, x: 0, y: 0, width: 9999, height: rowHeight, color: '#2f4f8f', color2: '#1d2f57' }
+                    custom_1: { kind: 'image', name: 'Panel', file: 'system/BattleHud_Layout', behind: true, x: 0, y: 0, width: panel, height: rowHeight },
+                    hp: meter('HP', 49), mp: meter('MP', 84), tp: meter('TP', 119),
+                    hpValue: number('HP', 28), mpValue: number('MP', 64), tpValue: number('TP', 99),
+                    hpLabel: { visible: false }, mpLabel: { visible: false }, tpLabel: { visible: false },
+                    name: { x: 0, y: 132, width: panel, height: 24, fontSize: 18, align: 'center' },
+                    states: { x: 10, y: 1, width: 32, height: 32, iconSize: 32, statesMode: 'cycle' }
                 }
             });
-            const helpHeight = fittingHeight(2);
-            b.add('battleWindow', { name: 'Help', x: m.boxX, y: m.boxY, width: m.boxWidth, height: helpHeight, battleWindow: 'help', fill: 'window' });
-            const listTop = m.boxY + helpHeight;
-            const listHeight = Math.max(LIST_ROW * 3 + PADDING * 2, hudTop - listTop - 8);
-            b.add('battleWindow', { name: 'Skills', x: m.boxX, y: listTop, width: m.boxWidth, height: listHeight, battleWindow: 'skill', windowColumns: 2, slideY: 24 });
-            b.add('battleWindow', { name: 'Items', x: m.boxX, y: listTop, width: m.boxWidth, height: listHeight, battleWindow: 'item', windowColumns: 2, slideY: 24 });
-            const commandHeight = selectableHeight(4) + 32;
-            b.add('battleWindow', { name: 'Actor Command', x: 0, y: -commandHeight - 8, width: COMMAND_WIDTH - 48, height: commandHeight,
-                battleWindow: 'actorCommand', followActor: true, slideY: 32 });
-            b.add('battleWindow', { name: 'Party Command', x: m.boxX, y: hudTop - selectableHeight(2) - 40, width: COMMAND_WIDTH - 48,
-                height: selectableHeight(2) + 16, battleWindow: 'partyCommand', slideX: -64 });
-            b.add('battleWindow', { name: 'Enemy Target', x: m.boxX, y: listTop, width: m.boxWidth, height: selectableHeight(2), battleWindow: 'enemy', hideWindow: true });
-            b.add('battleWindow', { name: 'Ally Target', x: m.boxX, y: hudTop, width: m.boxWidth, height: hudHeight, battleWindow: 'actor', hideWindow: true });
-            b.add('battleCursor', { name: 'Target Cursor', x: Math.floor(m.width / 2) - 16, y: Math.floor(m.height / 3), width: 32, height: 28,
-                source: 'picture', file: '', frames: 1, frameSpeed: 8, floatRange: 6, showName: true, fontSize: 0 });
+            b.add('battleWindow', { name: 'Help', x: m.boxX + 10, y: m.boxY + 64, width: m.boxWidth - 15, height: 102, battleWindow: 'help', fill: 'window', slideY: -50 });
+            const listY = hudY - 359;
+            b.add('battleWindow', { name: 'Skills', x: m.boxX + 10, y: listY, width: m.boxWidth - 15, height: 250, battleWindow: 'skill', windowColumns: 2, slideY: 50 });
+            b.add('battleWindow', { name: 'Items', x: m.boxX + 10, y: listY, width: m.boxWidth - 15, height: 250, battleWindow: 'item', windowColumns: 3, slideY: 50 });
+            b.add('battleWindow', { name: 'Actor Command', x: -19, y: -383, width: 192, height: 243, battleWindow: 'actorCommand', followActor: true, slideY: 64 });
+            b.add('battleWindow', { name: 'Party Command', x: m.boxX + Math.round(m.boxWidth / 2) + 56, y: m.boxY + 134, width: 384, height: 310,
+                battleWindow: 'partyCommand', fill: 'none', slideY: -100, file: 'system/BattleHud_Layout_Party', imageX: -450, imageY: -42 });
+            b.add('battleWindow', { name: 'Enemy Target', x: m.boxX, y: listY, width: m.boxWidth, height: 180, battleWindow: 'enemy', hideWindow: true });
+            b.add('battleWindow', { name: 'Ally Target', x: m.boxX, y: hudY, width: m.boxWidth, height: 180, battleWindow: 'actor', hideWindow: true });
+            b.add('battleCursor', { name: 'Target Cursor', x: Math.floor(m.width / 2) - 15, y: Math.floor(m.height / 3), width: 30, height: 19,
+                source: 'system', file: 'system/BattleCursor_B', actorFile: 'system/BattleCursor_A', frames: 1, frameSpeed: 8, floatRange: 6,
+                showName: true, fontSize: 18, cursorSlide: true });
             const record = this.record('battle', 'Battle', b, { mode: 'battle', background: 'none', cancel: action('none'),
-                openTransition: 'slideUp', closeTransition: 'none', transitionDuration: 20, hideStatusWindow: true, firstFocus: 0 });
-            record.note = 'Baseline battle HUD after MOG\'s battle layout: a party panel with face reactions, ATB and a turn marker, the command window over the active actor, and a target cursor. Bind it as Battle in System 2.';
+                openTransition: 'slideUp', closeTransition: 'none', transitionDuration: 30, hideStatusWindow: true, firstFocus: 0 });
+            record.note = 'Baseline battle HUD after the Demo\'s MOG battle HUD: picture panels, meters and numbers from img/system (BattleHud_*), the command window over the acting actor, and red/blue target cursors. Bind it as Battle in System 2.';
             return record;
         },
 

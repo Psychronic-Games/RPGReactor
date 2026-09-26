@@ -114,7 +114,7 @@ class DatabaseUserInterfaceEditor {
         if (type === 'battleCursor') return {
             id, type, name: '', parent: 0, anchor: 'topLeft', x: 0, y: 0, width: 32, height: 28, index: 0, opacity: 255,
             visible: { type: 'always', id: 1, on: true, op: '==', value: 0, script: '' },
-            source: 'picture', file: '', frames: 1, frameSpeed: 8, floatRange: 6, showName: true, fontSize: 0, fontFace: '',
+            source: 'picture', file: '', actorFile: '', cursorSlide: true, frames: 1, frameSpeed: 8, floatRange: 6, showName: true, fontSize: 0, fontFace: '',
             enemyOffsetX: 0, enemyOffsetY: 0, actorOffsetX: 0, actorOffsetY: 0
         };
         if (type === 'input') return Object.assign(this.defaultNode('button', id), {
@@ -206,6 +206,7 @@ class DatabaseUserInterfaceEditor {
             if (typeof source.visible === 'boolean') value.visible = source.visible;
             for (const prop of ['meterImage','numberImage','file']) if (typeof source[prop] === 'string' && source[prop]) value[prop] = source[prop];
             if (['row','cycle'].includes(source.statesMode)) value.statesMode = source.statesMode;
+            if (Number(source.meterRows) === 2) value.meterRows = 2;
             if (typeof source.onlyActive === 'boolean') value.onlyActive = source.onlyActive;
             if (typeof source.behind === 'boolean') value.behind = source.behind;
             if (Number.isFinite(Number(source.rotation)) && source.rotation !== '' && source.rotation != null) value.rotation = Math.max(-60, Math.min(60, Number(source.rotation)));
@@ -1931,6 +1932,8 @@ class DatabaseUserInterfaceEditor {
             html += this.row(tt('Source'), this.selectControl('p-source', node.source === 'system' ? 'system' : 'picture', [['picture', tt('Picture')], ['system', tt('System')]]));
             html += this.row(tt('Image'), `<div class="rr-ui-file-row">${this.textControl('p-file', node.file || '', tt('(none)'))}<button type="button" class="rr-btn-chip p-browse">…</button></div>`,
                 tt('Blank draws a plain arrow. Animation frames sit side by side.'));
+            html += this.row(tt('Ally image'), this.textControl('p-actorFile', node.actorFile || '', tt('Same as enemies')));
+            html += this.row('', this.checkControl('p-cursorSlide', node.cursorSlide !== false, tt('Slide between targets')));
             html += this.pair(tt('Frames'), this.numberControl('p-frames', node.frames || 1, 1, 60), tt('Frame speed'), this.numberControl('p-frameSpeed', node.frameSpeed || 8, 1, 120));
             html += this.row(tt('Float'), this.numberControl('p-floatRange', node.floatRange ?? 6, 0, 100));
             html += this.row('', this.checkControl('p-showName', node.showName !== false, tt('Show the target\'s name')));
@@ -2227,6 +2230,8 @@ class DatabaseUserInterfaceEditor {
             node.frameSpeed = num('p-frameSpeed', 1, 120, 8);
             node.floatRange = num('p-floatRange', 0, 100, 6);
             node.showName = q('p-showName').checked;
+            node.actorFile = q('p-actorFile').value.trim();
+            node.cursorSlide = q('p-cursorSlide').checked;
             node.fontSize = num('p-fontSize', 0, 200, 0);
             for (const key of ['enemyOffsetX', 'enemyOffsetY', 'actorOffsetX', 'actorOffsetY']) node[key] = num('p-' + key, -2000, 2000, 0);
         }
@@ -3877,7 +3882,7 @@ class DatabaseUserInterfaceEditor {
             if (slot) r = Object.assign({}, rect, { x: slot.x + node.x, y: slot.y + node.y });
         }
         if (node.file) {
-            const picture = this.image('picture', node.file);
+            const picture = this.imageRef(node.file);
             if (picture.image) ctx.drawImage(picture.image, r.x + (node.imageX || 0), r.y + (node.imageY || 0));
         }
         if (node.fill !== 'none') this.drawSurface(Object.assign({}, node, { type: 'box', fill: 'window' }), r);
@@ -3897,7 +3902,8 @@ class DatabaseUserInterfaceEditor {
     /** The cursor's stand-in: its image (or the plain arrow) with a sample name. */
     drawBattleCursorNode(node, rect) {
         const ctx = this.ctx;
-        const image = node.file ? this.image(node.source === 'system' ? 'system' : 'picture', node.file).image : null;
+        const ref = node.file && !node.file.includes('/') ? (node.source === 'system' ? 'system/' : 'pictures/') + node.file : node.file;
+        const image = ref ? this.imageRef(ref).image : null;
         ctx.save();
         if (image) {
             const fw = image.width / Math.max(1, node.frames || 1);
@@ -3921,6 +3927,14 @@ class DatabaseUserInterfaceEditor {
         const inset = panel.fill === 'window' ? 12 : 0;
         const columns = Math.max(1, panel.columns || 1);
         return { x: rect.x + inset, y: rect.y + inset, width: (rect.width - inset * 2) / columns, height: panel.rowHeight };
+    }
+
+    /** A HUD image reference as the runtime reads it: "system/Name" (an img/ folder), else a picture. */
+    imageRef(ref) {
+        const text = String(ref || '').trim();
+        if (!text) return { image: null };
+        const slash = text.indexOf('/');
+        return slash > 0 ? this.image(text.slice(0, slash), text.slice(slash + 1)) : this.image('pictures', text);
     }
 
     /** A text input drawn as a button-like field: its placeholder, or a starting actor's name. */
@@ -4213,7 +4227,10 @@ class DatabaseUserInterfaceEditor {
                 html+=this.hintRow(tt('Increase Height to make larger corners visible.'));
             }
             if(element.kind==='gauge') html+='<canvas class="rr-ui-gauge-preview" width="260" height="88" aria-label="'+tt('Style Preview')+'"></canvas>';
-            if(element.kind==='gauge') html+=this.row(tt('Meter image'),field('meterImage',this.textControl('p-element-meterImage',element.meterImage||'',tt('(none)'))),tt('A picture cut to the value instead of the drawn bar.'));
+            if(element.kind==='gauge') {
+                html+=this.row(tt('Meter image'),field('meterImage',this.textControl('p-element-meterImage',element.meterImage||'',tt('(none)'))),tt('A picture cut to the value instead of the drawn bar. system/Name reads img/system.'));
+                html+=this.row(tt('Meter rows'),field('meterRows',this.selectControl('p-element-meterRows',String(element.meterRows===2?2:1),[['1',tt('One: the meter')],['2',tt('Two: meter over a falling damage trail')]])));
+            }
             for(const [prop,name] of [['color','Color 1'],['color2','Color 2'],['backColor','Background']]) html+=this.row(tt(name),field(prop,this.optionalColorControl('p-element-'+prop,element[prop]||'',tt('Default'))));
         } else if(element.kind==='image') {
             html+=this.row(tt('Picture'),field('file',this.textControl('p-element-file',element.file||'',tt('(none)'))),tt('In img/pictures.'));
@@ -4273,7 +4290,7 @@ class DatabaseUserInterfaceEditor {
             } else if(element.kind==='box') {
                 DatabaseUserInterfaceEditor.drawActorGauge(ctx,r,element,1,[element.color||'#30343c',element.color2||element.color||'#30343c','#30343c']);
             } else if(element.kind==='image') {
-                const picture=element.file?this.image('picture',element.file):null;
+                const picture=element.file?this.imageRef(element.file):null;
                 if(picture?.image) ctx.drawImage(picture.image,r.x+(r.width-picture.image.width)/2,r.y+(r.height-picture.image.height)/2);
             } else if(element.gauge==='atb') {
                 if(element.kind==='gauge') DatabaseUserInterfaceEditor.drawActorGauge(ctx,r,element,0.6,[this.skinColor(26),this.skinColor(27),this.skinColor(19)]);
@@ -4283,7 +4300,16 @@ class DatabaseUserInterfaceEditor {
                 const maximum=gauge==='variable'?(element.maxVariableId?100:element.max||100):gauge==='tp'?100:gauge==='exp'?1:param>=0?(element.max||100):Math.max(1,this.startingParam(actor,gauge==='hp'?0:1));
                 const current=gauge==='variable'?maximum*0.65:gauge==='hp'?this.startingParam(actor,0):gauge==='mp'?this.startingParam(actor,1):param>=0?this.startingParam(actor,param):0;
                 const rate=maximum>0?Math.max(0,Math.min(1,current/maximum)):0;
-                if(element.kind==='gauge') {
+                const meter=element.kind==='gauge'&&element.meterImage?this.imageRef(element.meterImage).image:null;
+                const digits=element.kind==='value'&&element.numberImage?this.imageRef(element.numberImage).image:null;
+                if(meter) {
+                    const rows=element.meterRows===2?2:1, ch=meter.height/rows, sw=meter.width*rate;
+                    if(sw>0) ctx.drawImage(meter,0,0,sw,ch,r.x,r.y,r.width*rate,r.height);
+                } else if(digits) {
+                    const value=String(element.valueFormat==='percent'?Math.round(rate*100):Math.round(current)), cw=digits.width/10, dw=cw*r.height/digits.height;
+                    let x=r.x+(element.align==='right'?r.width-value.length*dw:element.align==='center'?(r.width-value.length*dw)/2:0);
+                    for(const c of value){const d=c.charCodeAt(0)-48; if(d>=0&&d<=9) ctx.drawImage(digits,d*cw,0,cw,digits.height,x,r.y,dw,r.height); x+=dw;}
+                } else if(element.kind==='gauge') {
                     const colors={hp:[20,21],mp:[22,23],tp:[28,29],exp:[14,6]}[gauge] || [14,6];
                     DatabaseUserInterfaceEditor.drawActorGauge(ctx,r,element,rate,[this.skinColor(colors[0]),this.skinColor(colors[1]),this.skinColor(19)]);
                 } else {

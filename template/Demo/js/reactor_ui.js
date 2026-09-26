@@ -302,6 +302,7 @@
             // drawn behind the rest, a picture that turns.
             for (const prop of ['meterImage','numberImage','file']) if (typeof source[prop] === 'string' && source[prop]) value[prop] = source[prop];
             if (['row','cycle'].includes(source.statesMode)) value.statesMode = source.statesMode;
+            if (Number(source.meterRows) === 2) value.meterRows = 2;
             if (typeof source.onlyActive === 'boolean') value.onlyActive = source.onlyActive;
             if (typeof source.behind === 'boolean') value.behind = source.behind;
             if (Number.isFinite(Number(source.rotation)) && source.rotation !== '' && source.rotation != null) value.rotation = Math.max(-60, Math.min(60, Number(source.rotation)));
@@ -520,6 +521,8 @@
             frameSpeed: clamp(Math.round(finite(source.frameSpeed, 8)), 1, 120),
             floatRange: clamp(Math.round(finite(source.floatRange, 6)), 0, 100),
             showName: source.showName !== false,
+            actorFile: text(source.actorFile, ""),
+            cursorSlide: source.cursorSlide !== false,
             enemyOffsetX: clamp(Math.round(finite(source.enemyOffsetX, 0)), -2000, 2000),
             enemyOffsetY: clamp(Math.round(finite(source.enemyOffsetY, 0)), -2000, 2000),
             actorOffsetX: clamp(Math.round(finite(source.actorOffsetX, 0)), -2000, 2000),
@@ -2835,11 +2838,36 @@
     /** Parts that change every frame live in sprites over the row, so the row itself is not repainted. */
     ReactorUI.isSpriteElement = function(node, element) {
         if (element.kind === "portrait") return this.spritePortrait(node);
-        if (element.kind === "gauge" && element.gauge === "atb") return true;
+        if (element.kind === "gauge" && (element.gauge === "atb" || (element.meterImage && element.meterRows === 2))) return true;
         return element.kind === "image";
     };
 
+    /**
+     * A HUD picture by reference: "system/Name" (or any img/ folder before
+     * the slash), else img/pictures. Loaded outside ImageManager's cache, so
+     * a missing file leaves the drawn fallback instead of stopping the game
+     * with a load error; a project without the HUD's art still plays.
+     */
+    ReactorUI._softImages = new Map();
+    ReactorUI.softImage = function(ref) {
+        const text = String(ref || "").trim();
+        if (!text) return null;
+        if (this._softImages.has(text)) return this._softImages.get(text);
+        const slash = text.indexOf("/");
+        const folder = slash > 0 ? text.slice(0, slash) : "pictures";
+        const name = slash > 0 ? text.slice(slash + 1) : text;
+        const bitmap = Bitmap.load("img/" + folder + "/" + Utils.encodeURI(name) + ".png");
+        this._softImages.set(text, bitmap);
+        return bitmap;
+    };
+
+    /** Whether a soft image failed to load (the caller draws its fallback). */
+    ReactorUI.softFailed = function(bitmap) {
+        return !bitmap || !!(bitmap.isError && bitmap.isError());
+    };
+
     ReactorUI.whenReady = function(bitmap, redraw) {
+        if (this.softFailed(bitmap)) return false;
         if (bitmap.isReady()) return true;
         if (!bitmap._rrRedraws) { bitmap._rrRedraws = []; bitmap.addLoadListener(() => { for (const fn of bitmap._rrRedraws) fn(); bitmap._rrRedraws = null; }); }
         if (bitmap._rrRedraws && !bitmap._rrRedraws.includes(redraw)) bitmap._rrRedraws.push(redraw);
@@ -2847,18 +2875,32 @@
     };
 
     /** A meter picture cut to the rate, stretched to the part's box. */
-    ReactorUI.drawImageMeter = function(bitmap, r, file, rate, redraw) {
-        const image = ImageManager.loadPicture(file);
-        if (!this.whenReady(image, redraw)) return;
-        rate = Math.max(0, Math.min(1, Number(rate) || 0));
-        const sw = Math.floor(image.width * rate);
-        if (sw > 0) bitmap.blt(image, 0, 0, sw, image.height, r.x, r.y, Math.round(r.width * rate), r.height);
+    /**
+     * A meter picture cut to the rate and stretched to the part's box. A
+     * two-row picture (MOG's) holds the meter on top and the damage trail
+     * underneath; the trail is drawn at `trail` first. Returns false when the
+     * picture is missing, so the caller can draw the plain gauge instead.
+     */
+    ReactorUI.drawImageMeter = function(bitmap, r, file, rate, redraw, rows, trail) {
+        const image = this.softImage(file);
+        if (this.softFailed(image)) return false;
+        if (!this.whenReady(image, redraw)) return true;
+        const bands = rows === 2 ? 2 : 1, ch = Math.floor(image.height / bands);
+        const cut = (value, row) => {
+            value = Math.max(0, Math.min(1, Number(value) || 0));
+            const sw = Math.floor(image.width * value);
+            if (sw > 0) bitmap.blt(image, 0, row * ch, sw, ch, r.x, r.y, Math.round(r.width * value), r.height);
+        };
+        if (bands === 2 && trail > rate) cut(trail, 1);
+        cut(rate, 0);
+        return true;
     };
 
     /** Digits from a sheet of ten (0-9) side by side, scaled to the part's height; other characters leave a gap. */
     ReactorUI.drawImageNumber = function(bitmap, r, file, text, align, redraw) {
-        const sheet = ImageManager.loadPicture(file);
-        if (!this.whenReady(sheet, redraw)) return;
+        const sheet = this.softImage(file);
+        if (this.softFailed(sheet)) return false;
+        if (!this.whenReady(sheet, redraw)) return true;
         const cw = Math.floor(sheet.width / 10), ch = sheet.height;
         if (!(cw > 0)) return;
         const scale = r.height / ch, dw = Math.round(cw * scale);
@@ -2870,6 +2912,7 @@
             if (digit >= 0 && digit <= 9) bitmap.blt(sheet, digit * cw, 0, cw, ch, Math.round(x), r.y, dw, r.height);
             x += dw;
         }
+        return true;
     };
 
     //-------------------------------------------------------------------------
@@ -2992,13 +3035,13 @@
                 ReactorUI.drawActorGauge(ctx,r,element,1,[element.color||'#30343c',element.color2||element.color||'#30343c','#30343c']);
             } else {
                 const data=element.gauge?ReactorUI.actorGaugeData(actor,element.gauge,element):null;
-                if(element.kind==='gauge' && element.meterImage) {
-                    ReactorUI.drawImageMeter(bitmap,r,element.meterImage,data.rate,()=>this.refresh());
+                const numberText=!data?'':element.valueFormat==='percent'?String(Math.round(data.rate*100)):element.valueFormat==='current'?String(data.value):data.value+'/'+data.max;
+                if(element.kind==='gauge' && element.meterImage && ReactorUI.drawImageMeter(bitmap,r,element.meterImage,data.rate,()=>this.refresh(),element.meterRows,data.rate)) {
+                    // drawn from the picture
                 } else if(element.kind==='gauge') {
                     ReactorUI.drawActorGauge(ctx,r,element,data.rate,[data.color,data.color2,ColorManager.gaugeBackColor()]);
-                } else if(element.kind==='value' && element.numberImage) {
-                    const text=element.valueFormat==='percent'?String(Math.round(data.rate*100)):element.valueFormat==='current'?String(data.value):data.value+'/'+data.max;
-                    ReactorUI.drawImageNumber(bitmap,r,element.numberImage,text,element.align,()=>this.refresh());
+                } else if(element.kind==='value' && element.numberImage && ReactorUI.drawImageNumber(bitmap,r,element.numberImage,numberText,element.align,()=>this.refresh())) {
+                    // drawn from the digit sheet
                 } else {
                     let label=element.kind==='value'?(element.valueFormat==='percent'?Math.round(data.rate*100)+'%':element.valueFormat==='current'?String(data.value):data.value+' / '+data.max)
                         :element.kind==='label'?(element.text||data.label):element.text;
@@ -3088,7 +3131,8 @@
         if (key !== this._uiPanelLayoutKey) {
             this._uiPanelLayoutKey = key;
             const elements = ReactorUI.actorPanelLayout(node, rect.width, rect.height, this.contents.fontSize);
-            this._uiPanelSpriteElements = Object.entries(elements).filter(([, element]) => element.visible && ReactorUI.isSpriteElement(node, element));
+            this._uiPanelSpriteElements = Object.entries(elements).filter(([, element]) => element.visible && ReactorUI.isSpriteElement(node, element))
+                .sort((a, b) => Number(!!b[1].behind) - Number(!!a[1].behind));
         }
         return this._uiPanelSpriteElements;
     };
@@ -3131,7 +3175,8 @@
                 sprite.visible = !element.onlyActive || active;
                 if (sprite._rrKind === "portrait") this.updatePortraitSprite(sprite, actor, element, cx, cy);
                 else if (sprite._rrKind === "image") {
-                    if (sprite._rrFile !== element.file) { sprite._rrFile = element.file; sprite.bitmap = element.file ? ImageManager.loadPicture(element.file) : null; }
+                    if (sprite._rrFile !== element.file) { sprite._rrFile = element.file; sprite.bitmap = element.file ? ReactorUI.softImage(element.file) : null; }
+                    if (ReactorUI.softFailed(sprite.bitmap)) sprite.visible = false;
                     sprite.anchor.set(0.5, 0.5);
                     sprite.move(cx, cy);
                     if (element.rotation) sprite.rotation += element.rotation * Math.PI / 180;
@@ -3152,7 +3197,7 @@
         const file = picture ? node.portraitPattern.replace(/\{id\}/g, String(actor.actorId())) : actor.faceName();
         if (sprite._rrFile !== file) {
             sprite._rrFile = file;
-            sprite.bitmap = picture ? ImageManager.loadPicture(file) : ImageManager.loadFace(file);
+            sprite.bitmap = picture ? ReactorUI.softImage(file.includes("/") ? file : "pictures/" + file) : ImageManager.loadFace(file);
         }
         const bitmap = sprite.bitmap;
         if (!bitmap || !bitmap.isReady()) return;
@@ -3197,14 +3242,18 @@
         }
         sprite.move(x, y);
         const data = ReactorUI.actorGaugeData(actor, element.gauge || "atb", element);
+        if (element.gauge === "atb") sprite.visible = sprite.visible && typeof BattleManager !== "undefined" && !!BattleManager.isTpb && BattleManager.isTpb();
         const rate = Math.round(data.rate * w) / w;
-        if (rate === sprite._rrRate) return;
+        // The damage trail falls after the meter, 1% a frame; a rise is instant.
+        const trail = sprite._rrTrail == null || rate >= sprite._rrTrail ? rate : Math.max(rate, sprite._rrTrail - 0.01);
+        if (rate === sprite._rrRate && trail === sprite._rrTrail) return;
         sprite._rrRate = rate;
+        sprite._rrTrail = trail;
         const bitmap = sprite.bitmap;
         bitmap.clear();
         const box = { x: 0, y: 0, width: w, height: h };
-        if (element.meterImage) ReactorUI.drawImageMeter(bitmap, box, element.meterImage, rate, () => { sprite._rrRate = -1; });
-        else ReactorUI.drawActorGauge(bitmap.context, box, element, rate, [data.color, data.color2, ColorManager.gaugeBackColor()]);
+        const drawn = element.meterImage && ReactorUI.drawImageMeter(bitmap, box, element.meterImage, rate, () => { sprite._rrRate = -1; }, element.meterRows, trail);
+        if (!drawn) ReactorUI.drawActorGauge(bitmap.context, box, element, rate, [data.color, data.color2, ColorManager.gaugeBackColor()]);
         touch(bitmap);
     };
 
@@ -4627,7 +4676,7 @@
             state.x = win.x;
             state.y = win.y;
             if (node.file) {
-                state.back = new Sprite(ImageManager.loadPicture(node.file));
+                state.back = new Sprite(ReactorUI.softImage(node.file));
                 state.back.move(node.imageX, node.imageY);
                 win.addChildAt(state.back, 0);
             }
@@ -4701,7 +4750,10 @@
         const state = entry.state || (entry.state = {});
         if (!state.root) {
             state.root = new Sprite();
-            state.arrow = new Sprite(node.file ? (node.source === "system" ? ImageManager.loadSystem(node.file) : ImageManager.loadPicture(node.file)) : this.defaultCursorBitmap());
+            const image = ref => ref ? this.softImage(ref.includes("/") ? ref : (node.source === "system" ? "system/" : "pictures/") + ref) : null;
+            state.enemyBitmap = image(node.file);
+            state.actorBitmap = image(node.actorFile) || state.enemyBitmap;
+            state.arrow = new Sprite(this.defaultCursorBitmap());
             state.arrow.anchor.set(0.5, 1);
             state.name = new Sprite(new Bitmap(240, 40));
             state.name.anchor.set(0.5, 1);
@@ -4711,16 +4763,25 @@
         }
         const target = this.battleTarget(scene, hud, node);
         const visible = !!target && hud._visibilityAlpha > 0 && this.evaluateCondition(node.visible, scene);
-        state.root.visible = visible;
-        if (!visible) return;
-        const arrow = state.arrow, bitmap = arrow.bitmap;
+        if (!visible) { state.root.visible = false; state.at = null; return; }
+        const arrow = state.arrow;
+        // Allies and enemies can have their own cursor; a missing picture keeps the plain arrow.
+        const wanted = target.battler.isActor && target.battler.isActor() ? state.actorBitmap : state.enemyBitmap;
+        const chosen = wanted && !this.softFailed(wanted) ? wanted : this.defaultCursorBitmap();
+        if (arrow.bitmap !== chosen) arrow.bitmap = chosen;
+        const bitmap = arrow.bitmap;
         if (bitmap && bitmap.isReady()) {
             const fw = Math.floor(bitmap.width / node.frames);
             const frame = Math.floor(Graphics.frameCount / node.frameSpeed) % node.frames;
             arrow.setFrame(fw * frame, 0, fw, bitmap.height);
         }
         const float = node.floatRange ? Math.round(Math.sin(Graphics.frameCount / 10) * node.floatRange) : 0;
-        state.root.move(Math.round(target.x), Math.round(target.y) + float - node.floatRange);
+        // Sliding eases the cursor from one target to the next.
+        if (node.cursorSlide && state.at) {
+            state.at.x += (target.x - state.at.x) * 0.35;
+            state.at.y += (target.y - state.at.y) * 0.35;
+        } else state.at = { x: target.x, y: target.y };
+        state.root.move(Math.round(state.at.x), Math.round(state.at.y) + float - node.floatRange);
         state.name.visible = node.showName;
         if (node.showName && state.battler !== target.battler) {
             state.battler = target.battler;
@@ -4731,6 +4792,7 @@
             name.drawText(target.battler.name(), 0, 0, name.width, name.height, "center");
         }
         state.name.y = -(arrow.height || 28) - 2;
+        state.root.visible = true;
     };
 
     const _Scene_Battle_createDisplayObjects = typeof Scene_Battle !== "undefined" ? Scene_Battle.prototype.createDisplayObjects : null;

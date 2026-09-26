@@ -673,5 +673,6 @@
   "optMessageSkip": true,
   "startDirection": 8,
   "reactorTitleInterfaceId": 1,
-  "reactorMenuInterfaceId": 2
+  "reactorMenuInterfaceId": 2,
+  "reactorBattleInterfaceId": 8
 }

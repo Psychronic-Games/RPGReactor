@@ -1774,3 +1774,22 @@ test('portrait reactions follow MOG: hurt shakes on frame 3, healing and acting 
     assert.strictEqual(ui.spritePortrait(ui.normalizeNode({ type: 'list', portraitMotion: true })), true);
     assert.strictEqual(ui.isSpriteElement({}, { kind: 'gauge', gauge: 'atb' }), true, 'the ATB bar redraws on its own, not with the row');
 });
+
+test('HUD pictures load softly by folder reference, and a two-row meter draws its damage trail under the value', () => {
+    const sandbox = loadRuntimeUI(), ui = sandbox.ReactorUI;
+    const loads = [];
+    sandbox.Utils.encodeURI = value => encodeURIComponent(value);
+    sandbox.Bitmap = { load: url => { const bitmap = { url, width: 65, height: 10, ready: !url.includes('Missing'), isReady() { return this.ready; }, isError() { return url.includes('Missing'); } }; loads.push(url); return bitmap; } };
+    assert.strictEqual(ui.softImage('system/BattleHud_HP_Meter').url, 'img/system/BattleHud_HP_Meter.png');
+    assert.strictEqual(ui.softImage('Hero Face').url, 'img/pictures/Hero%20Face.png', 'a bare name is a picture');
+    ui.softImage('system/BattleHud_HP_Meter');
+    assert.strictEqual(loads.length, 2, 'loaded once');
+    const blits = [];
+    const target = { blt: (...args) => blits.push(args.slice(1, 9)) };
+    const box = { x: 10, y: 20, width: 130, height: 5 };
+    assert.strictEqual(ui.drawImageMeter(target, box, 'system/BattleHud_HP_Meter', 0.5, () => {}, 2, 0.8), true);
+    assert.deepStrictEqual(blits.map(args => [...args]), [[0, 5, 52, 5, 10, 20, 104, 5], [0, 0, 32, 5, 10, 20, 65, 5]],
+        'the trail row at 80% first, then the meter row at 50%');
+    assert.strictEqual(ui.drawImageMeter(target, box, 'system/Missing', 0.5, () => {}, 2, 0.5), false, 'a missing picture leaves the drawn gauge to the caller');
+    assert.strictEqual(ui.drawImageNumber(target, box, 'system/Missing', '12', 'left', () => {}), false);
+});

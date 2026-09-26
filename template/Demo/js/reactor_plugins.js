@@ -51,7 +51,7 @@ var $plugins =
     },
     {
         "name": "MOG_BattleHud",
-        "status": true,
+        "status": false,
         "description": "(v1.1) Allows customization of the battle layout.",
         "parameters": {
             "-> MAIN <<<<<<<<<<<<<<<<<<<<<<<": "",
@@ -234,7 +234,7 @@ var $plugins =
     },
     {
         "name": "MOG_BattleCursor",
-        "status": true,
+        "status": false,
         "description": "(v1.0) Adds the target cursor.",
         "parameters": {
             "-> GENERAL": "",

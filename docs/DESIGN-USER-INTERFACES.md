@@ -312,7 +312,16 @@ What MOG's battle HUD does, and where it lives here:
 | `$gameSystem._bhud_visible` | The record's visibility condition |
 
 Not carried over: MOG's meter flow animation and its face-priority switch.
-The **Battle** stock layout is a working example of all of it. A project that
+Pictures are named by reference: `system/BattleHud_HP_Meter` reads
+`img/system`, a bare name reads `img/pictures`. They load outside the image
+cache, so a missing one falls back to the drawn meter or number rather than
+stopping the game. A two-row meter picture (**Meter rows: Two**) is MOG's: the
+meter over a damage trail that falls behind it.
+
+The **Battle** stock layout is the Demo's own HUD, rebuilt from its MOG
+settings: `BattleHud_*` panels, meters and numbers from `img/system`, the
+command window over the acting actor, and `BattleCursor_B`/`_A` for enemies
+and allies. It is what new projects made from the Demo start with. A project that
 still runs MOG_BattleHud draws both HUDs; the runtime warns in the console.
 
 ## Styling, focus, and transitions
