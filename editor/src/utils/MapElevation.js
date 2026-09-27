@@ -651,6 +651,12 @@
         const group = Number(raw.group);
         if (Number.isFinite(group) && group > 0) piece.group = Math.floor(group);
         if (typeof raw.finish === 'string' && PIECE_FINISHES.includes(raw.finish)) piece.finish = raw.finish;
+        // A surface of its own (the Build panel's sliders), kept while it reflects.
+        if (raw.surface && typeof raw.surface === 'object' && Number(raw.surface.reflect) > 0) {
+            const u = (v, d) => { const n = Number(v); return Number.isFinite(n) ? Math.max(0, Math.min(1, Math.round(n * 100) / 100)) : d; };
+            piece.surface = { reflect: u(raw.surface.reflect, 0), gloss: u(raw.surface.gloss, 0.8), metal: u(raw.surface.metal, 0),
+                tint: typeof raw.surface.tint === 'string' && /^#[0-9a-f]{6}$/i.test(raw.surface.tint) ? raw.surface.tint : '#ffffff', texture: u(raw.surface.texture, 0) };
+        }
         // A shape has a size in tiles and a free turn in degrees.
         if (SHAPE_KINDS.includes(raw.kind)) {
             const size = Array.isArray(raw.size) ? raw.size : [];

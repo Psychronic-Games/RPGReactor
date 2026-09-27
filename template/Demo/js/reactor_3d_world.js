@@ -482,6 +482,9 @@ Reactor3D.normalizePiece = function(raw, mapData) {
     const group = Number(raw.group);
     if (Number.isFinite(group) && group > 0) piece.group = Math.floor(group);
     if (typeof raw.finish === "string" && Object.prototype.hasOwnProperty.call(this.PIECE_FINISHES, raw.finish)) piece.finish = raw.finish;
+    // A surface of its own (the sliders): it wins over the finish's.
+    const surface = raw.surface && typeof raw.surface === "object" && this.readModelSurface ? this.readModelSurface({ surface: raw.surface }) : null;
+    if (surface) piece.surface = surface;
     if (this.isShapeKind(kind)) {
         const size = Array.isArray(raw.size) ? raw.size : [];
         const n = (v, fallback) => { const k = Number(v); return Number.isFinite(k) && k > 0 ? Math.min(60, Math.round(k * 100) / 100) : fallback; };
@@ -1347,10 +1350,22 @@ Reactor3D.pieceChunkKey = function(x, y) {
     return Math.floor(x / this.PIECE_CHUNK) * 65536 + Math.floor(y / this.PIECE_CHUNK);
 };
 
-/** One material's material object (in a finish, when it has one), shared by every chunk that wears it. */
-Reactor3D.MapScene.prototype.pieceMaterial = function(name, load, finish) {
+/** A piece's surface: its own, else its finish's, else none. */
+Reactor3D.pieceSurface = function(piece) {
+    return (piece && (piece.surface || (piece.finish && this.PIECE_FINISHES[piece.finish]))) || null;
+};
+
+/** A surface as a key: pieces shining alike share a draw. */
+Reactor3D.surfaceKey = function(surface) {
+    return surface ? [surface.reflect, surface.gloss, surface.metal, surface.texture || 0, surface.tint || "#ffffff"].join(",") : "";
+};
+
+/** One material's material object (in a surface, when it has one), shared by every chunk that wears it. */
+Reactor3D.MapScene.prototype.pieceMaterial = function(name, load, surface) {
     if (!this._pieceMaterials) this._pieceMaterials = new Map();
-    const key = finish ? name + "\u0001" + finish : name;
+    if (typeof surface === "string") surface = Reactor3D.PIECE_FINISHES[surface] || null;
+    const shine = Reactor3D.surfaceKey(surface);
+    const key = shine ? name + "\u0001" + shine : name;
     let material = this._pieceMaterials.get(key);
     if (material) return material;
     const look = Reactor3D.materialLook(name);
@@ -1369,7 +1384,6 @@ Reactor3D.MapScene.prototype.pieceMaterial = function(name, load, finish) {
     material.__reactorSelfLit = look.glow;
     material.userData.rrPieceMaterial = name;
     Reactor3D.litMaterial(material);
-    const surface = finish && Reactor3D.PIECE_FINISHES[finish];
     if (surface && Reactor3D.setMaterialShine) Reactor3D.setMaterialShine(material, surface);
     this._materials.push(material);
     this._pieceMaterials.set(key, material);
@@ -1463,8 +1477,9 @@ Reactor3D.MapScene.prototype.layPieceChunks = function(mapData, load, keys) {
         if (wanted && !wanted.has(key)) continue;
         let byMaterial = byChunk.get(key);
         if (!byMaterial) byChunk.set(key, byMaterial = new Map());
-        // Material and finish: a mirror wall is its own draw.
-        const look = piece.finish ? piece.material + "\u0001" + piece.finish : piece.material;
+        // Material and surface: a mirror wall is its own draw.
+        const shine = Reactor3D.surfaceKey(Reactor3D.pieceSurface(piece));
+        const look = shine ? piece.material + "\u0001" + shine : piece.material;
         let list = byMaterial.get(look);
         if (!list) byMaterial.set(look, list = []);
         list.push(piece);
@@ -1472,12 +1487,12 @@ Reactor3D.MapScene.prototype.layPieceChunks = function(mapData, load, keys) {
     const group = this.piecesGroup();
     for (const [key, byMaterial] of byChunk) {
         for (const [look, list] of byMaterial) {
-            const name = list[0].material, finish = list[0].finish || "";
+            const name = list[0].material, surface = Reactor3D.pieceSurface(list[0]);
             const geometry = Reactor3D.pieceGeometry(list, mapData);
-            const mesh = new THREE.Mesh(geometry, this.pieceMaterial(name, load, finish));
+            const mesh = new THREE.Mesh(geometry, this.pieceMaterial(name, load, surface));
             mesh.userData.pieces = true;
             mesh.userData.pieceMaterial = name;
-            if (finish) mesh.userData.pieceFinish = finish;
+            if (surface) mesh.userData.pieceFinish = Reactor3D.surfaceKey(surface);
             mesh.userData.pieceChunk = key;
             // Glass draws after everything solid, so what is behind it shows through.
             mesh.renderOrder = Reactor3D.materialLook(name).glass ? 5 : -5;

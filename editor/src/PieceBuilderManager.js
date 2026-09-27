@@ -17,6 +17,7 @@ class PieceBuilderManager {
         this.level = 0;
         this.material = '';
         this.finish = '';               // mirror, chrome, polished, glossy, gold, or plain
+        this.surface = null;            // the sliders' surface for new pieces (wins over the finish)
         this.mode = 'place';
         this.structure = '';
         this.selectedGroup = 0;
@@ -905,6 +906,7 @@ class PieceBuilderManager {
     pieceFor(target) {
         const piece = { kind: this.kind, x: target.x, y: target.y, z: target.z, rot: this.rot, material: this.material };
         if (this.finish) piece.finish = this.finish;
+        if (this.surface) piece.surface = Object.assign({}, this.surface);
         if (this.kind === 'ladder') { const rot = this.ladderRotFor(target); if (rot !== null) piece.rot = rot; }
         const E = this.elevation();
         if (E && E.SHAPE_KINDS && E.SHAPE_KINDS.includes(this.kind)) {

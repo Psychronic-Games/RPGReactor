@@ -338,7 +338,18 @@ class BuildHotbar {
         const swatches = current => `<div class="rr-build-swatches"><button type="button" class="rr-build-swatch rr-build-material" data-material="" aria-pressed="${!current}" title="${this._t('pieces.plain')}"><span class="rr-build-swatch-plain"></span></button>`
             + manager.materials().map(entry => `<button type="button" class="rr-build-swatch rr-build-material" data-material="${entry.name}" aria-pressed="${current === entry.name}" title="${entry.name}" style="background-image:url('${entry.url}');"></button>`).join('') + '</div>';
         const FINISHES = ['', 'mirror', 'chrome', 'polished', 'glossy', 'gold'];
-        const finishes = current => `<div class="rr-build-finishes">${FINISHES.map(f => `<button type="button" class="rr-build-chip rr-build-finish" data-finish="${f}" aria-pressed="${(current || '') === f}">${f === 'mirror' ? this._t('build.finish.mirror') : tt(f ? f[0].toUpperCase() + f.slice(1) : 'Plain')}</button>`).join('')}</div>`;
+        const PRESETS = (typeof Reactor3D !== 'undefined' && Reactor3D.PIECE_FINISHES) || {};
+        const surfaceOf = p => p ? (p.surface || (p.finish && PRESETS[p.finish]) || null) : null;
+        const sameSurface = (a, b) => (!a && !b) || (!!a && !!b && ['reflect', 'gloss', 'metal', 'texture'].every(k => Math.abs((a[k] || 0) - (b[k] || 0)) < 1e-6) && String(a.tint || '#ffffff').toLowerCase() === String(b.tint || '#ffffff').toLowerCase());
+        // The finishes as presets, then the surface's own sliders (as a 3D model's Surface has).
+        const finishes = holder => {
+            const current = surfaceOf(holder);
+            const chips = `<div class="rr-build-finishes">${FINISHES.map(f => `<button type="button" class="rr-build-chip rr-build-finish" data-finish="${f}" aria-pressed="${sameSurface(current, f ? PRESETS[f] : null)}">${f === 'mirror' ? this._t('build.finish.mirror') : tt(f ? f[0].toUpperCase() + f.slice(1) : 'Plain')}</button>`).join('')}</div>`;
+            const v = current || { reflect: 0, gloss: 0.8, metal: 0, texture: 0, tint: '#ffffff' };
+            const row = (key, label) => `<div class="mp-transform-row rr-build-slide"><span class="mp-axis-label">${label}</span><input type="range" class="rr-build-slider" data-for="rr-build-surface" data-key="${key}" min="0" max="1" step="0.01" value="${v[key] || 0}" data-no-stepper><input type="number" class="database-field-value rr-build-surface" data-key="${key}" value="${Math.round((v[key] || 0) * 100)}" min="0" max="100" step="1" data-no-stepper></div>`;
+            return chips + row('reflect', tt('Reflection')) + row('gloss', tt('Gloss')) + row('metal', tt('Metal')) + row('texture', tt('Texture'))
+                + `<div class="mp-transform-row"><span class="mp-axis-label">${tt('Tint')}</span>${typeof RRColorPopup !== 'undefined' ? RRColorPopup.swatch('rr-build-surface-tint', v.tint || '#ffffff') : ''}</div>`;
+        };
         const facing = rot => `<div class="rr-build-facing">${[[2, '↑'], [3, '→'], [0, '↓'], [1, '←']].map(([r, arrow]) => `<button type="button" class="rr-build-chip rr-build-rot" data-rot="${r}" aria-pressed="${r === rot}">${arrow}</button>`).join('')}<span class="rr-build-note">R</span></div>`;
         let head, body = '';
         if (s.kind === 'many') {
@@ -372,7 +383,7 @@ class BuildHotbar {
             if (s.shape && kind !== 'wedge') body += section(tt('Shape'), `<div class="rr-build-shapes">${this.shapeKinds().filter(k => k !== 'wedge').map(k => `<button type="button" class="rr-build-chip rr-build-shape" data-shape="${k}" aria-pressed="${k === kind}" title="${this._t('pieces.kind.' + k)}">${this.icon(k, 20)}<span>${this._t('pieces.kind.' + k)}</span></button>`).join('')}</div>`);
             if (!s.shape && (BuildHotbar.FACING.includes(kind) || s.placed)) body += section(this._t('build.direction'), facing(rot));
             body += section(this._t('pieces.material'), swatches(piece ? piece.material : manager.material));
-            body += section(this._t('build.finish'), finishes(piece ? piece.finish : manager.finish));
+            body += section(this._t('build.finish'), finishes(piece || { finish: manager.finish, surface: manager.surface }));
             if (kind === 'stair' && !s.placed) body += section(tt('Size'), num('rr-build-steps', this._t('build.steps'), manager.stairSteps, 1, BuildHotbar.MAX_RUN, 1, 'steps')
                 + num('rr-build-stairwidth', this._t('build.stairWidth'), manager.stairWidth, 1, 20, 1, 'width'));
             // A ladder's height, in hand or placed: a placed one grows or shrinks from its foot.
@@ -418,7 +429,31 @@ class BuildHotbar {
         }));
         panel.querySelector('.rr-build-relay')?.addEventListener('click', () => { manager.relayFromPlan(); this.renderPanel(); });
         panel.querySelector('.rr-build-turn-all')?.addEventListener('click', () => { manager.turnSelection(); this.renderPanel(); });
-        panel.querySelectorAll('.rr-build-finish').forEach(el => el.addEventListener('click', () => edit({ finish: el.dataset.finish }, () => { manager.finish = el.dataset.finish; })));
+        // A preset chip sets the surface to the preset's (the sliders then start from it).
+        const presets = (typeof Reactor3D !== 'undefined' && Reactor3D.PIECE_FINISHES) || {};
+        panel.querySelectorAll('.rr-build-finish').forEach(el => el.addEventListener('click', () => {
+            const f = el.dataset.finish, surface = f && presets[f] ? Object.assign({}, presets[f]) : null;
+            edit({ finish: f, surface }, () => { manager.finish = f; manager.surface = surface; });
+        }));
+        // The surface's own values: sliders live (one undo step a drag), numbers in percent, the tint by the colour popup.
+        const currentSurface = () => {
+            const holder = s.kind === 'many' ? null : (placed ? manager.selectedPiece() : { finish: manager.finish, surface: manager.surface });
+            const base = holder ? (holder.surface || (holder.finish && presets[holder.finish])) : null;
+            return Object.assign({ reflect: 0, gloss: 0.8, metal: 0, texture: 0, tint: '#ffffff' }, base || {});
+        };
+        const setSurface = (patch, record) => {
+            const surface = Object.assign(currentSurface(), patch);
+            const value = { finish: '', surface: surface.reflect > 0 ? surface : null };
+            if (s.kind === 'many') manager.updateSelection(value, record);
+            else if (placed) manager.updateSelected(value, record);
+            else { manager.finish = ''; manager.surface = value.surface; }
+        };
+        panel.querySelectorAll('input.rr-build-surface').forEach(el => el.addEventListener('change', () => {
+            const n = Number(el.value); if (!Number.isFinite(n)) { this.renderPanel(); return; }
+            setSurface({ [el.dataset.key]: Math.max(0, Math.min(100, n)) / 100 }, true); this.renderPanel();
+        }));
+        const surfaceTint = panel.querySelector('.rr-build-surface-tint');
+        if (surfaceTint && typeof RRColorPopup !== 'undefined') RRColorPopup.bind(surfaceTint, hex => setSurface({ tint: hex }, false));
         panel.querySelectorAll('.rr-build-material').forEach(el => el.addEventListener('click', () => edit({ material: el.dataset.material }, () => manager.setMaterial(el.dataset.material))));
         panel.querySelectorAll('.rr-build-rot').forEach(el => el.addEventListener('click', () => { const r = Number(el.dataset.rot); edit(s.shape ? { angle: r * 90 } : { rot: r }, () => { manager.rot = r; manager._syncPanel(); manager._ghostChanged(); }); }));
         panel.querySelectorAll('.rr-build-size').forEach(el => el.addEventListener('change', () => {
@@ -438,10 +473,11 @@ class BuildHotbar {
         panel.querySelectorAll('.rr-build-slider').forEach(el => {
             const number = el.parentElement.querySelector('input[type=number]');
             let snapshot = null;
-            el.addEventListener('pointerdown', () => { snapshot = placed ? manager._snapshot(manager.currentMap()) : null; });
+            el.addEventListener('pointerdown', () => { snapshot = placed || s.kind === 'many' ? manager._snapshot(manager.currentMap()) : null; });
             el.addEventListener('input', () => {
                 const v = Number(el.value), key = el.dataset.key, kind = el.dataset.for;
-                number.value = el.value;
+                number.value = kind === 'rr-build-surface' ? Math.round(v * 100) : el.value;
+                if (kind === 'rr-build-surface') { if (placed || !s.piece) setSurface({ [key]: v }, false); return; }
                 if (kind === 'rr-build-size') {
                     const size = (placed ? manager.selectedPiece().size : manager.sizeFor(s.kind)).slice(); size[Number(key)] = v;
                     if (placed) manager.updateSelected({ size }, false); else manager.setSize(s.kind, size);

@@ -183,6 +183,10 @@ test('a built piece keeps its finish and wears it in its own shiny draw; water c
     const E = require(path.join(repoRoot, 'editor', 'src', 'utils', 'MapElevation.js'));
     assert.equal(E.normalizePiece({ kind: 'block', x: 1, y: 1, finish: 'gold' }, null).finish, 'gold', 'the editor keeps it too');
     const world = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d_world.js'), 'utf8');
-    assert.match(world, /const look = piece\.finish \? piece\.material \+ "\\u0001" \+ piece\.finish : piece\.material;/, 'a finish is its own chunk draw');
+    assert.match(world, /const look = shine \? piece\.material \+ "\\u0001" \+ shine : piece\.material;/, 'a surface is its own chunk draw');
+    const own = Reactor3D.normalizePiece({ kind: 'block', x: 1, y: 1, finish: 'mirror', surface: { reflect: 0.7, gloss: 0.5, metal: 0.2, tint: '#FFCC55', texture: 0.4 } });
+    assert.deepEqual({ ...own.surface }, { reflect: 0.7, gloss: 0.5, metal: 0.2, tint: '#FFCC55', texture: 0.4 }, 'the sliders\' surface is kept');
+    assert.equal(Reactor3D.pieceSurface(own), own.surface, 'and wins over the finish');
+    assert.equal(Reactor3D.pieceSurface({ finish: 'gold' }).tint, '#ffcc55');
     assert.match(world, /rrMirrorPlane0\.y > 0\.9 && abs\(vRRWorldPos\.y - rrMirrorPlane0\.w\) < 0\.4/, 'water reads the mirror picture on its level');
 });
