@@ -620,3 +620,28 @@ test('a jump motion plays once from the takeoff and holds its end through a fall
     air(1121, 1131, true);
     assert.ok(Math.abs(xAt() - (-60)) < 1, `the next jump starts over (${xAt()})`);
 });
+
+test('a climb follows the height climbed: still on a held ladder, one cycle a tile', () => {
+    require(path.join(repoRoot, 'runtime', 'libs', 'three.js'));
+    const THREE = global.THREE;
+    const root = new THREE.Group();
+    const bone = new THREE.Bone();
+    bone.name = 'Arm';
+    bone.userData.parts = [{ name: 'Arm', pivot: [0, 0, 0] }];
+    root.add(bone);
+    const binding = Reactor3D.prepareModelInstance(root, null);
+    const rules = Reactor3D.readModelAnimationRules({ animations: [
+        { name: 'Climb', part: 'Arm', type: 'pose', trigger: 'climbing', period: 20, keys: [
+            { at: 0, rotate: [0, 0, 0] }, { at: 0.5, rotate: [-80, 0, 0] }, { at: 1, rotate: [0, 0, 0] }
+        ] }
+    ] });
+    const xAt = () => new THREE.Euler().setFromQuaternion(bone.quaternion, 'XYZ').x * 180 / Math.PI;
+    const climb = (frame, climbHeight) => Reactor3D.applyModelAnimation(binding, rules, { frame, climbing: true, climbHeight, scale: 1 });
+    for (let f = 0; f < 12; f++) climb(f, 3.25);
+    const held = xAt();
+    for (let f = 12; f < 60; f++) climb(f, 3.25);
+    assert.ok(Math.abs(xAt() - held) < 1e-6, 'holding the ladder, the pose does not move');
+    for (let f = 60; f < 64; f++) climb(f, 7.5);
+    assert.ok(Math.abs(xAt() - (-80)) < 1, `half a tile into a cycle is half the motion (${xAt()})`);
+    assert.ok(Reactor3D.LADDER_RUNGS - Reactor3D.LADDER_CHEST_GAP < 0.1, 'a climber hangs back from the rungs by its chest');
+});

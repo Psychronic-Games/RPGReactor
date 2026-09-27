@@ -99,7 +99,7 @@
     /** How far apart the party climbs one ladder: about a body length. */
     ReactorPhysics.LADDER_GAP = 3;
     /** Climbing a ladder, tiles per frame. */
-    ReactorPhysics.LADDER_SPEED = 0.07;
+    ReactorPhysics.LADDER_SPEED = 0.045;
 
     /** The ladder a character holds: on a ladder's cell, between its foot and its top, off the ground. */
     ReactorPhysics.ladderHeld = function(character) {

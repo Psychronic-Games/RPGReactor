@@ -4083,8 +4083,30 @@ Reactor3D.cameraInsideModel = function(character, object) {
     return Math.hypot(p.x - o.x, p.y - y, p.z - o.z) < this.CAMERA_INSIDE_REACH;
 };
 
-/** How far toward its ladder a climber hangs from the middle of the cell. */
-Reactor3D.LADDER_REACH = 0.22;
+/**
+ * Where a climber hangs on its ladder. The rungs stand LADDER_RUNGS tiles ahead
+ * of the cell's middle (the ladder piece's rung plane); the climber is placed
+ * so its chest is LADDER_CHEST_GAP behind them, measured on its own model
+ * (models stand with their chests ahead of their feet by differing amounts),
+ * which leaves reaching hands on the rungs and the body clear of the wall.
+ */
+Reactor3D.LADDER_RUNGS = 0.39;
+Reactor3D.LADDER_CHEST_GAP = 0.45;
+/** Tiles climbed for one whole climbing cycle: two rungs, one reach of each hand. */
+Reactor3D.CLIMB_CYCLE = 1;
+
+/** How far ahead of its feet a model's chest stands, in world tiles (0 when it has none). */
+Reactor3D.chestForward = function(holder) {
+    if (typeof THREE === "undefined" || !holder || !holder.binding || !holder.object) return 0;
+    for (const entry of holder.binding.meshes) {
+        if (!entry.parts.some(part => part.name === "Chest" || part.name === "Spine")) continue;
+        holder.object.updateMatrixWorld(true);
+        const at = entry.mesh.getWorldPosition(new THREE.Vector3());
+        holder.object.worldToLocal(at);
+        return at.z * (holder.object.scale.z || 1);
+    }
+    return 0;
+};
 
 /** Whether a character is on a ladder by the physics. */
 Reactor3D.isClimbing = function(character) {
@@ -4315,10 +4337,15 @@ Reactor3D.applyModelAnimation = function(binding, rules, state) {
                     if (active && !live[i]) starts[i] = state.frame;
                     live[i] = active;
                 }
+                // A climb moves with the climbing, not the clock: it stands still on a
+                // held ladder and runs backward on the way down.
+                const byHeight = rule.trigger === "climbing" && Number.isFinite(state.climbHeight);
                 if (fade > 0) {
                     progress = once
                         ? Math.min(1, Math.max(0, state.frame - (binding.stateStarts[i] ?? state.frame)) / duration)
-                        : (state.frame % duration) / duration;
+                        : byHeight
+                            ? ((state.climbHeight / Reactor3D.CLIMB_CYCLE) % 1 + 1) % 1
+                            : (state.frame % duration) / duration;
                     weight = this.poseEase(fade);
                 }
             }
@@ -5392,6 +5419,7 @@ Reactor3D.updateMapModelSprite = function(sprite) {
             airborne: Reactor3D.isAirborne(character),
             swimming: Reactor3D.isSwimming(character),
             climbing: Reactor3D.isClimbing(character),
+            climbHeight: Reactor3D.isClimbing(character) ? character._reactorAlt : undefined,
             distance,
             scale: state.scale,
             playbackRate: state.playbackRate,
@@ -5955,7 +5983,8 @@ Reactor3D.MapScene.prototype.syncCharacterModels = function(characters) {
         // A jump or a fall (reactor_physics) lifts the model by its air.
         const air = character._reactorAir || 0;
         // A climber hangs against its ladder, not in the middle of the cell.
-        const hold = character._reactorOnLadder ? Reactor3D.LADDER_REACH : 0;
+        if (character._reactorOnLadder && holder.chestForward === undefined) holder.chestForward = Reactor3D.chestForward(holder);
+        const hold = character._reactorOnLadder ? Reactor3D.LADDER_RUNGS - Reactor3D.LADDER_CHEST_GAP - (holder.chestForward || 0) : 0;
         const holdX = hold * ((character.direction && character.direction() === 6) ? 1 : (character.direction && character.direction() === 4) ? -1 : 0);
         const holdZ = hold * ((character.direction && character.direction() === 2) ? 1 : (character.direction && character.direction() === 8) ? -1 : 0);
         object.position.set(character._realX + 0.5 + offset[0] + holdX, ground + (character._reactorLift || 0) + air + offset[2], character._realY + 0.5 + offset[1] + holdZ);
@@ -5994,6 +6023,7 @@ Reactor3D.MapScene.prototype.syncCharacterModels = function(characters) {
                 airborne: Reactor3D.isAirborne(character),
                 swimming: Reactor3D.isSwimming(character),
                 climbing: Reactor3D.isClimbing(character),
+                climbHeight: Reactor3D.isClimbing(character) ? character._reactorAlt : undefined,
                 distance,
                 scale,
                 playbackRate: holder.playbackRate,

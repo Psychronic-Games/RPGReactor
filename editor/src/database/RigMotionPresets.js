@@ -168,17 +168,22 @@
             RightLowerLeg: osc('x', 14, 0.75, [28, 0, 0]),
             Body: bob(0.04, 2)
         }),
-        // Up or down a ladder: hand over hand overhead, the opposite foot stepping up with each.
+        // Up or down a ladder. In the game the cycle follows the height climbed (one cycle
+        // a tile: two rungs), so it stands still on a held ladder. Poses fitted to the
+        // ladder on a 3-tile character: hands on the rails, feet on the rung plane. A
+        // gripped hand stays on its rung while the body rises past it (64% of the cycle),
+        // then reaches up to the next; the hands half a cycle apart, each foot standing
+        // half the cycle and stepping up the other half, opposite its hand.
         motion('climb', 'Climb', 'humanoid', 'climbing', 40, {
-            LeftUpperArm: osc('x', 24, 0, [-150, 0, 8]),
-            RightUpperArm: osc('x', 24, 0.5, [-150, 0, -8]),
-            LeftLowerArm: osc('x', 20, 0.5, [-24, 0, 0]),
-            RightLowerArm: osc('x', 20, 0, [-24, 0, 0]),
-            LeftUpperLeg: osc('x', 28, 0.5, [-34, 0, 0]),
-            RightUpperLeg: osc('x', 28, 0, [-34, 0, 0]),
-            LeftLowerLeg: osc('x', 26, 0, [50, 0, 0]),
-            RightLowerLeg: osc('x', 26, 0.5, [50, 0, 0]),
-            Chest: hold([6, 0, 0])
+            RightUpperArm: [key(0, [-153.9, 15.4, 28.4]), key(0.64, [-63.6, -18.1, 8.7]), key(1, [-153.9, 15.4, 28.4])],
+            RightLowerArm: [key(0, [0, 0, 0]), key(0.64, [-90, 40, 0]), key(1, [0, 0, 0])],
+            LeftUpperArm: [key(0, [-83.5, 10.7, -13]), key(0.14, [-63.6, 18.1, -8.7]), key(0.5, [-153.9, -15.4, -28.4]), key(1, [-83.5, 10.7, -13])],
+            LeftLowerArm: [key(0, [-70.2, -31.2, 0]), key(0.14, [-90, -40, 0]), key(0.5, [0, 0, 0]), key(1, [-70.2, -31.2, 0])],
+            LeftUpperLeg: [key(0, [-85, 0, 0]), key(0.5, [-25, 0, 0]), key(1, [-85, 0, 0])],
+            LeftLowerLeg: [key(0, [90, 0, 0]), key(0.5, [0, 0, 0]), key(1, [90, 0, 0])],
+            RightUpperLeg: [key(0, [-25, 0, 0]), key(0.5, [-85, 0, 0]), key(1, [-25, 0, 0])],
+            RightLowerLeg: [key(0, [0, 0, 0]), key(0.5, [90, 0, 0]), key(1, [0, 0, 0])],
+            Head: hold([-12, 0, 0])
         }),
         // ── Humanoid: gestures, on demand ────────────────────────────
         motion('wave', 'Wave', 'humanoid', 'action', 90, {
