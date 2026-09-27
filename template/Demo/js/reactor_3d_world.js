@@ -1692,7 +1692,18 @@ Reactor3D.waterMaterial = function(texture, look) {
                 // A reflective sheet mirrors the world through its waves, more at a
                 // glancing angle, and turns opaque as it does: mercury is a mirror.
                 env ? [
-                    "\tif (rrWaterLook.x > 0.0) {",
+                    // From under the water (the eye below the sheet) the surface is a window to the sky, as
+                    // Snell's window is, opened wider than nature's 49 degrees so a third-person camera
+                    // (which looks up only so far) sees the sky; only toward the horizon does the surface
+                    // mirror the underwater world back, faintly. It had mirrored the lakebed overhead.
+                    "\tif (rrViewDir.y < 0.0) {",
+                    "\t\tfloat rrWindow = smoothstep(0.18, 0.4, -rrViewDir.y);",
+                    "\t\tvec3 rrRb = reflect(-rrViewDir, -vRRWaveNormal);",
+                    "\t\trrRb.x *= rrEnvFlip;",
+                    "\t\tvec3 rrUnder = textureLod(rrEnvMap, rrRb, 0.35 * rrEnvMaxLod).rgb * rrTint;",
+                    "\t\tdiffuseColor.rgb = mix(diffuseColor.rgb, rrUnder, 0.6 * (1.0 - rrWindow));",
+                    "\t\tdiffuseColor.a = mix(max(diffuseColor.a, 0.9), 0.12, rrWindow);",
+                    "\t} else if (rrWaterLook.x > 0.0) {",
                     "\t\tvec3 rrR = reflect(-rrViewDir, vRRWaveNormal);",
                     "\t\trrR.x *= rrEnvFlip;",
                     "\t\tvec3 rrEnvC = textureLod(rrEnvMap, rrR, rrWaterLook.y * rrEnvMaxLod).rgb * rrWaterTint;",
