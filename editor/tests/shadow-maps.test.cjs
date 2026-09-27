@@ -377,7 +377,7 @@ test('both atlases are real depth textures in compare mode from the moment they 
 test('a light with nothing in reach takes no row; rows wait their turn and keep their last rendering; a moved light casts nothing until redrawn', () => {
     const shadows = Reactor3D.Shadows;
     const three = source3D();
-    const render = three.slice(three.indexOf('    render(renderer, scene, mapData) {'), three.indexOf('\n    _publish(uniforms) {'));
+    const render = three.slice(three.indexOf('    render(renderer, scene, mapData, options) {'), three.indexOf('\n    _publish(uniforms) {'));
     assert.match(render, /if \(this\._castersWithin\(candidate, candidate\.far\)\) wanted\.push\(candidate\);/, 'only lights with a caster in reach compete for a row');
     assert.match(render, /const assigned = this\.assign\(wanted, tiles\.length,/);
     assert.match(render, /\.slice\(0, quality\.staticPerFrame \|\| 1\);/, 'a few static rows a frame');
@@ -473,7 +473,8 @@ test('the dynamic budget is measured from the player, and a party of two reduced
 
 test('both viewports render the maps once a frame before the first pass, and the game marks its casters', () => {
     const three = source3D();
-    assert.match(three, /scene\.updateMatrixWorld\(\);\n\s*\/\/ The shadow maps, while every group is still visible\.\n\s*if \(mapScene\.renderShadows\) mapScene\.renderShadows\(this\._renderer, null\);/);
+    assert.match(three, /scene\.updateMatrixWorld\(\);\n\s*\/\/ The shadow maps, while every group is still visible, then the reflections\.\n\s*Reactor3D\.prepareWorldFrame\(this\._renderer, mapScene, scene, this\._camera\);/);
+    assert.match(three, /if \(shadows !== false && mapScene\.renderShadows\) mapScene\.renderShadows\(renderer, \(shadows && shadows\.mapData\) \|\| null, shadows \|\| undefined\);/);
     assert.match(three, /group\.add\(object\);\n\s*\/\/ A prop never moves; its map is cached\. An event walks\.\n\s*Reactor3D\.Shadows\.markCaster\(object, !\(typeof character\.eventId === "function"\n\s*&& character\.eventId\(\) >= Reactor3D\.PROP_EVENT_BASE\)\);/);
     // The depth passes run from the sentinel's hook, inside the pass.
     assert.match(three, /mesh\.onBeforeRender = \(\) => this\._flush\(\);/);

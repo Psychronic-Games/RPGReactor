@@ -95,7 +95,8 @@ test('a water sheet\'s look survives both the runtime\'s and the editor\'s readi
 
 test('the capture is taken after the shadow maps, in the game and in the editor', () => {
     const core = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
-    assert.match(core, /renderShadows\(this\._renderer, null\);\s*Reactor3D\.prepareReflections\(this\._renderer, mapScene, scene, this\._camera\);/, 'the capture and the mirrors after the shadow maps');
+    assert.match(core, /Reactor3D\.prepareWorldFrame\(this\._renderer, mapScene, scene, this\._camera\);/, 'the map\'s frame step');
+    assert.match(core, /if \(shadows !== false && mapScene\.renderShadows\) mapScene\.renderShadows\([^\n]+\n\s*Reactor3D\.prepareReflections\(renderer, mapScene, scene, camera\);/, 'the capture and the mirrors after the shadow maps');
     assert.match(core, /Reactor3D\.prepareReflections = function[\s\S]{0,900}renderer\.resetState\(\);/, 'three forgets the texture units PIXI unbound before the capture and the mirrors draw');
     assert.match(core, /const probe = mapScene\.reflectionProbe \? mapScene\.reflectionProbe\(camera\) : null;\n\s*if \(probe\) Reactor3D\.Reflections\.update\(renderer, scene, probe\.position, probe\.hidden, probe\.toward, probe\.radius, probe\.reach\);/);
     const editor = fs.readFileSync(path.join(repoRoot, 'editor', 'src', 'MapEditor3D.js'), 'utf8');
@@ -207,11 +208,11 @@ test('a capture sees no underwater wash, the ground at the feet is never cut, an
     assert.match(lighting, /if \(abs\(rrFaceN\.y\) >= 0\.55 && vRRWorldPos\.y <= rrF\.y \+ 0\.5\) continue;/, 'ground about the character is never in the way');
 });
 
-test('the battle room reflects through the map\'s own frame step, its props and lead actor included', () => {
+test('the battle room reflects and casts through the map\'s own frame step, its props and lead actor included', () => {
     const main = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
     const battle = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_battle_room.js'), 'utf8');
-    assert.match(main, /Reactor3D\.prepareReflections\(this\._renderer, mapScene, scene, this\._camera\);/, 'the map viewport');
-    assert.match(battle, /R\.prepareReflections\?\.\(this\.renderer,this\.world,this\.scene,this\.camera\);\s*this\.renderer\.render\(this\.scene,this\.camera\);/, 'the battle room, right before its draw');
+    assert.match(main, /Reactor3D\.prepareWorldFrame\(this\._renderer, mapScene, scene, this\._camera\);/, 'the map viewport');
+    assert.match(battle, /R\.prepareWorldFrame\(this\.renderer,this\.world,this\.scene,this\.camera,shadowed\?\{mapData:this\.map,lights:this\.uniforms,focus\}:false\);\s*this\.renderer\.render\(this\.scene,this\.camera\);/, 'the battle room, right before its draw');
     assert.match(battle, /this\.world\.guestModels = \(\) => this\.models\.values\(\);/);
     const scene = Object.create(Reactor3D.MapScene.prototype);
     const tank = { object: { position: { distanceTo: () => 3 } } }, lead = { object: { position: {} } };
@@ -222,4 +223,41 @@ test('the battle room reflects through the map\'s own frame step, its props and 
     assert.equal(scene.reflectionSubject(), lead);
     const lighting = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d_lighting.js'), 'utf8');
     assert.match(lighting, /if \(this\._renderer && this\._renderer !== renderer\) \{ this\._ready = false;/, 'a new renderer starts its capture over');
+});
+
+test('battle shadows: the room\'s lights become shadow candidates with their own ids, published into its light set', () => {
+    const own = Reactor3D.lightUniforms();
+    const set = { rrLightCount: { value: 0 }, rrAmbient: { value: new Float32Array(3) }, rrLightPos: { value: new Float32Array(Reactor3D.SHADER_LIGHTS * 4) },
+        rrLightColor: { value: new Float32Array(Reactor3D.SHADER_LIGHTS * 4) }, rrLightAim: { value: new Float32Array(Reactor3D.SHADER_LIGHTS * 4) },
+        rrLightShadow: { value: new Float32Array(Reactor3D.SHADER_LIGHTS).fill(-1) } };
+    const cast = { candidates: [], focus: { x: 5.5, z: 6 } };
+    Reactor3D.packLightUniforms([{ id: 'room:0', x: 5, y: 5, radius: 4, height: 2 }, { id: 'room:1', x: 9, y: 5, radius: 3, shadow: false }, { x: 1, y: 1, radius: 2 }], {}, set, cast);
+    assert.deepEqual(cast.candidates.map(c => c.id), ['room:0', '#2'], 'a light that casts nothing is left out');
+    assert.equal(cast.candidates[0].index, 0);
+    assert.ok(cast.candidates[0].gap < 0, 'the lead stands inside its reach');
+    const S = Reactor3D.Shadows;
+    S._lightSet = set;
+    S._tiles = [{ id: 'room:0', candidate: { index: 0 }, origin: { x: 0, y: 0, z: 0 }, far: 4, valid: true }];
+    S._dynTiles = [];
+    S._publish(own);
+    assert.equal(set.rrLightShadow.value[0], 0, 'the room\'s own light reads its row');
+    S._lightSet = null; S._tiles = null; S._dynTiles = null;
+    const battle = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_battle_room.js'), 'utf8');
+    assert.match(battle, /id:'room:'\+index/, 'room lights: names repeat, so rows would swap between them');
+    assert.match(battle, /R\.Shadows\.markCaster\(object, !key\.startsWith\('prop:'\)\)/, 'props hold still, battlers move');
+    assert.match(battle, /key\.call\(this\) \+ '\|battle-room' \+ \(view\._shadowed \? '\|room-shadows' : ''\)/, 'programs follow whether the room holds the rows');
+    assert.match(battle, /if\(m\.__battleRoomLight\)\{m\.dispose\(\);m\.needsUpdate=true;\}/, 'and are compiled again, never reused, when that changes');
+});
+
+test('a second owner takes the shadow rows only once the map has left them', () => {
+    const S = Reactor3D.Shadows, map = {}, room = {};
+    const saved = { renderer: S._renderer, at: S.lastRenderAt };
+    S._renderer = null;
+    assert.equal(Reactor3D.claimShadows(room), true, 'nobody holds them');
+    S._renderer = map; S.lastRenderAt = performance.now();
+    assert.equal(Reactor3D.claimShadows(room), false, 'the map drew them just now');
+    assert.equal(Reactor3D.claimShadows(map), true);
+    S.lastRenderAt = performance.now() - Reactor3D.SHADOW_CLAIM_IDLE_MS - 1;
+    assert.equal(Reactor3D.claimShadows(room), true, 'the map has stopped drawing');
+    S._renderer = saved.renderer; S.lastRenderAt = saved.at;
 });

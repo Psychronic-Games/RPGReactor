@@ -501,8 +501,10 @@ Reactor3D.LIGHT_GLSL = Reactor3D.lightGlsl(false);
  * with `groundY` absolute. An optional private uniform set lets retained
  * previews pack lights without changing another viewport. Returns how many
  * were packed; shared-uniform callers restore their previous state as needed.
+ * `shadows`, when given, is `{ candidates: [], focus }` (focus a world point):
+ * each light that may cast is added to `candidates` for `Shadows`.
  */
-Reactor3D.packLightUniforms = function(lights, ambient, uniforms = this.lightUniforms()) {
+Reactor3D.packLightUniforms = function(lights, ambient, uniforms = this.lightUniforms(), shadows = null) {
     if (uniforms.rrLightGridEnabled) uniforms.rrLightGridEnabled.value = 0;
     const pos = uniforms.rrLightPos.value;
     const col = uniforms.rrLightColor.value;
@@ -542,6 +544,23 @@ Reactor3D.packLightUniforms = function(lights, ambient, uniforms = this.lightUni
         col[at + 2] = ((rgb & 255) / 255) * gain;
         col[at + 3] = light.type === this.LIGHT_SUN ? 3 : beam ? 2 : spot ? 1 : 0;
         aim[at] = ax; aim[at + 1] = ay; aim[at + 2] = az; aim[at + 3] = shape;
+        if (shadows && light.shadow !== false) {
+            const sun = light.type === this.LIGHT_SUN;
+            const height = light.height || 0;
+            const castReach = sun ? Math.hypot(light.radius, height) : light.radius;
+            const focus = shadows.focus;
+            shadows.candidates.push({
+                index: count,
+                id: light.id !== undefined && light.id !== null ? String(light.id) : "#" + count,
+                x, y: y + Math.max(0, this.SHADOW_LIFT - height), z, radius: castReach,
+                gap: focus ? Math.hypot(x - focus.x, z - focus.z) - light.radius : 0,
+                lightY: y, spot: spot || beam, beam, ax, ay, az, cosHalf: spot ? shape : -1,
+                width: beam ? shape * 2 : 0,
+                priorityRadius: sun ? castReach : light.radius,
+                strength: (light.intensity === undefined ? 1 : light.intensity) * (((rgb >> 16) & 255) + ((rgb >> 8) & 255) + (rgb & 255)) / 765,
+                carrier: light.carrier || null
+            });
+        }
         count++;
     }
     uniforms.rrLightCount.value = count;
@@ -2011,6 +2030,21 @@ Reactor3D.shadowsWanted = function(mapData) {
     return true;
 };
 
+/**
+ * Whether `renderer` may draw the shared shadow rows this frame: they hold
+ * one renderer's depth at a time. The map takes them whenever it draws; a
+ * second owner (a battle room, or its preview in the editor) only once no
+ * other renderer has drawn them for a moment.
+ */
+Reactor3D.SHADOW_CLAIM_IDLE_MS = 400;
+Reactor3D.claimShadows = function(renderer) {
+    const shadows = this.Shadows;
+    if (!shadows || !renderer) return false;
+    if (!shadows._renderer || shadows._renderer === renderer) return true;
+    const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+    return now - (shadows.lastRenderAt || 0) > this.SHADOW_CLAIM_IDLE_MS;
+};
+
 Reactor3D.Shadows = {
     _active: false,
     _renderer: null,
@@ -2035,6 +2069,10 @@ Reactor3D.Shadows = {
     _casting: null,
     _castChanges: [],
     _frame: 0,
+    /** The light set an owner with its own lights passed to `render`, else null (the shared one). */
+    _lightSet: null,
+    /** When `render` last ran, for owners taking turns (`Reactor3D.claimShadows`). */
+    lastRenderAt: 0,
     backlog: 0,
 
     quality() {
@@ -2798,14 +2836,21 @@ Reactor3D.Shadows = {
      * takes which row, which rows need rendering, and the uniforms that
      * say so. The rendering itself waits for the sentinel, inside the pass.
      */
-    render(renderer, scene, mapData) {
+    /**
+     * `options` is for an owner with its own light set (the battle room):
+     * `lights`, the uniforms whose `rrLightShadow` says which light reads
+     * which row, and `focus`, the world point the rows go to first.
+     */
+    render(renderer, scene, mapData, options) {
         if (typeof THREE === "undefined" || !renderer || !scene || typeof renderer.setRenderTarget !== "function") return;
         const uniforms = Reactor3D.lightUniforms();
+        this._lightSet = options && options.lights || null;
+        this.lastRenderAt = typeof performance !== "undefined" ? performance.now() : Date.now();
         const want = Reactor3D.shadowsWanted(mapData);
         if (!want) {
             if (this._active) {
                 this._active = false;
-                uniforms.rrLightShadow.value.fill(-1);
+                (this._lightSet || uniforms).rrLightShadow.value.fill(-1);
                 this.refreshMaterials(scene);
             }
             if (this._sentinel && this._sentinel.parent) this._sentinel.parent.remove(this._sentinel);
@@ -2823,7 +2868,7 @@ Reactor3D.Shadows = {
         // Which characters can afford to cast, and whether any of them has
         // moved or animated since the rows were drawn. Both must run before
         // the row loop: the budget decides what the change list even holds.
-        const focus = this._focusPoint(scene);
+        const focus = (options && options.focus) || this._focusPoint(scene);
         this.lastBudget = this._budgetDynamic(focus);
         const dynamicChange = this._changedDynamics();
 
@@ -2960,7 +3005,7 @@ Reactor3D.Shadows = {
      * its static row is.
      */
     _publish(uniforms) {
-        const shadowOf = uniforms.rrLightShadow.value;
+        const shadowOf = (this._lightSet || uniforms).rrLightShadow.value;
         const info = uniforms.rrShadowInfo.value;
         const pos = uniforms.rrShadowPos.value;
         shadowOf.fill(-1);

@@ -150,7 +150,7 @@ test('a light effect previews the way the game lights: presets shared, a soft co
     assert.match(editor, /colour: 0xffffff }, this\._previewLighting\);/);
     assert.doesNotMatch(editor, /Reactor3D\.lightUniforms\(\)/, 'database preview never mutates the map lighting singleton');
     const three = source3D();
-    assert.match(three, /Reactor3D\.packLightUniforms = function\(lights, ambient, uniforms = this\.lightUniforms\(\)\) \{/);
+    assert.match(three, /Reactor3D\.packLightUniforms = function\(lights, ambient, uniforms = this\.lightUniforms\(\), shadows = null\) \{/);
     // Always / Moving / Idle keep a light on in the preview, like a movie.
     assert.match(editor, /: isLight \? true : Number\(raw\.animation\) > 0\);/);
     assert.match(editor, /if \(isLight\) \{\s*if \(!wantedLight \|\| index === this\.selectedEffect\)/, 'a light previews beside another Always effect');

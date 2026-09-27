@@ -43,14 +43,14 @@
             this.render(); return true;
         }
         light(object) {
-            const R = root.Reactor3D, uniforms = this.uniforms;
+            const R = root.Reactor3D, uniforms = this.uniforms, view = this;
             object.traverse(node => {
                 for (const material of [node.material].flat().filter(Boolean)) {
                     if (material.__battleRoomLight) continue;
                     R.litMaterial(material);
                     const compile = material.onBeforeCompile, key = material.customProgramCacheKey;
                     material.onBeforeCompile = function(shader, renderer) { compile.call(this, shader, renderer); Object.assign(shader.uniforms, uniforms); };
-                    material.customProgramCacheKey = function() { return key.call(this) + '|battle-room'; };
+                    material.customProgramCacheKey = function() { return key.call(this) + '|battle-room' + (view._shadowed ? '|room-shadows' : ''); };
                     material.__battleRoomLight = true; material.needsUpdate = true;
                 }
             });
@@ -121,6 +121,8 @@
                 if (!key.startsWith('prop:') && !key.startsWith('event:')) BattleRoomView.prepareMotions(record);
                 record.shadowSize = Math.max(e.x, e.z, .001) * record.scale * .85;
                 this.light(object); this.scene.add(object); this.ensureShadow(key, record); this.place(key, position);
+                // Models cast in the shared shadow rows: props hold still, battlers move.
+                if (R.Shadows && this.settings.projection !== '2d') R.Shadows.markCaster(object, !key.startsWith('prop:'));
             } catch (error) { record.error = String(error); this.assets.warn?.(error); }
         }
         place(key, position) {
@@ -393,6 +395,8 @@
             BattleRoomView._shadowTexture = texture;
             return texture;
         }
+        /** Ids for the models' effect lights, one per effect for the room's life: a shadow row follows its light by id. */
+        static lightIds = 0;
         static wantsShadow(key, settings) {
             return !/^(prop|event|extra):/.test(String(key)) && settings?.projection !== '2d';
         }
@@ -409,7 +413,7 @@
             let opacity = 1;
             if (object) object.traverse(node => { const m = node.material; if (opacity === 1 && m && !Array.isArray(m) && m.transparent) opacity = m.opacity; });
             if (record.dissolve) opacity = Math.min(opacity, record.dissolveShadow ?? 1);
-            shadow.visible = !!object && object.visible !== false && opacity > .02;
+            shadow.visible = !!object && object.visible !== false && opacity > .02 && !(this._shadowed && !record.billboard);
             shadow.material.opacity = .55 * Math.min(1, opacity) / (1 + (record.shadowLift || 0) * .6);
         }
         /**
@@ -1085,16 +1089,21 @@
                 this.fireRuleEffects(r,action);this.applyRecoil(r);
                 r.object.updateMatrixWorld(true);
                 for(const e of r.effects||[])if(e.type==='light' && this.effectActive(r,e)){
-                    const light=R.effectLight(r.object,e);if(light){Object.assign(light,R.animateLight(e.light,this.frame,++lightSeed,light.radius,light.intensity));lights.push(light);}
+                    const light=R.effectLight(r.object,e);if(light){Object.assign(light,R.animateLight(e.light,this.frame,++lightSeed,light.radius,light.intensity),{id:e.__roomLightId||(e.__roomLightId='fx:'+(++BattleRoomView.lightIds))});lights.push(light);}
                 }
                 this.updateMedia(r);
             }
             if(this.mapMedia)this.updateMedia(this.mapMedia);
             const a=this.map.reactor3d?.lighting||{};
-            R.packLightUniforms(lights,{intensity:a.ambient??1,colour:R.parseColour(a.ambientColour??'#ffffff')},this.uniforms);
+            const shadowed=this.claimShadows(),T=root.THREE;
+            const lead=this.models.get('actor:0')||this.billboards.get('actor:0');
+            const focus=lead?.object?lead.object.getWorldPosition(new T.Vector3()):null;
+            const cast=shadowed?{candidates:[],focus}:null;
+            R.packLightUniforms(lights,{intensity:a.ambient??1,colour:R.parseColour(a.ambientColour??'#ffffff')},this.uniforms,cast);
+            if(cast)R.Shadows.setCandidates(cast.candidates);
             this.updateEffects();
             for(const update of this.sequenceVisualUpdates||[])update();
-            R.prepareReflections?.(this.renderer,this.world,this.scene,this.camera);
+            R.prepareWorldFrame(this.renderer,this.world,this.scene,this.camera,shadowed?{mapData:this.map,lights:this.uniforms,focus}:false);
             this.renderer.render(this.scene,this.camera);
         }
         /** A rule's timed effects (a muzzle flash at the cannon, a sound) fire once each as the action clock passes them. */
@@ -1130,12 +1139,26 @@
             }
             return name?{name,frame:record.animationStart}:null;
         }
+        /**
+         * Whether this room draws the shared shadow rows this frame (the map's
+         * own, see `Reactor3D.prepareWorldFrame`). Its lit programs follow: on a
+         * change they are compiled again, the others' uniforms never reused.
+         */
+        claimShadows() {
+            const R=root.Reactor3D;
+            const shadowed=!!(this.settings.projection!=='2d'&&R.Shadows&&R.claimShadows(this.renderer)&&R.shadowsWanted(this.map));
+            if(shadowed!==!!this._shadowed){
+                this._shadowed=shadowed;
+                this.scene.traverse(node=>{for(const m of [node.material].flat().filter(Boolean))if(m.__battleRoomLight){m.dispose();m.needsUpdate=true;}});
+            }
+            return shadowed;
+        }
         roomLights() {
             const R=root.Reactor3D;
             return R.readMapLights(this.map).flatMap((light,index)=>{
                 if(light.on===false||this.assets.lightIsOn&&!this.assets.lightIsOn(light))return [];
                 const animated=R.animateLight(light,this.frame,index,light.radius,light.intensity);
-                const result={...light,...animated,colour:light.color,yaw:-light.yaw};
+                const result={...light,...animated,colour:light.color,yaw:-light.yaw,id:'room:'+index};// its own id: a shadow row follows it by id, and names repeat
                 if(light.attach){
                     const record=light.attach.player?(this.models.get('actor:0')||this.billboards.get('actor:0')):(this.models.get('event:'+light.attach.event)||this.billboards.get('event:'+light.attach.event));
                     if(!record)return [];result.x+=record.position.x+.5;result.y+=record.position.y+.5;result.height+=(record.position.z||0);

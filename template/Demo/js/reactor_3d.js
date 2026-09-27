@@ -1367,6 +1367,17 @@ Reactor3D.prepareReflections = function(renderer, mapScene, scene, camera) {
 };
 
 /**
+ * A frame's shared work before its draw: the shadow rows, then the
+ * reflections. The map's viewport and the battle room both call this.
+ * `shadows` is false to skip the rows (a battle room that does not hold
+ * them), or the options `Shadows.render` takes, plus `mapData`.
+ */
+Reactor3D.prepareWorldFrame = function(renderer, mapScene, scene, camera, shadows) {
+    if (shadows !== false && mapScene.renderShadows) mapScene.renderShadows(renderer, (shadows && shadows.mapData) || null, shadows || undefined);
+    Reactor3D.prepareReflections(renderer, mapScene, scene, camera);
+};
+
+/**
  * Draw one pass on its own, over a cleared canvas.
  *
  * The two passes sandwich the character sprites: the ground goes down, PIXI
@@ -1388,9 +1399,8 @@ Reactor3D.Viewport.prototype.renderPass = function(mapScene, which, slot) {
         if (this._matrixFrame !== frame) {
             this._matrixFrame = frame;
             scene.updateMatrixWorld();
-            // The shadow maps, while every group is still visible.
-            if (mapScene.renderShadows) mapScene.renderShadows(this._renderer, null);
-            Reactor3D.prepareReflections(this._renderer, mapScene, scene, this._camera);
+            // The shadow maps, while every group is still visible, then the reflections.
+            Reactor3D.prepareWorldFrame(this._renderer, mapScene, scene, this._camera);
         }
     }
     mapScene.setPass(which);
@@ -7040,9 +7050,9 @@ Reactor3D.MapScene.prototype.reflectionHidden = function() {
 /**
  * The frame's shadow maps, before the first pass draws: see `Reactor3D.Shadows`.
  */
-Reactor3D.MapScene.prototype.renderShadows = function(renderer, mapData) {
+Reactor3D.MapScene.prototype.renderShadows = function(renderer, mapData, options) {
     if (!this._scene) return;
-    Reactor3D.Shadows.render(renderer, this._scene, mapData);
+    Reactor3D.Shadows.render(renderer, this._scene, mapData, options);
 };
 
 /**
