@@ -5690,3 +5690,100 @@ details.mp-section:not([open]) > .mp-section-body { display:none; }
     box-sizing: border-box;
 }
 .map-props-card > .map-props-card-header .map-props-btn { text-transform: none; letter-spacing: 0; }
+
+/* 3D Models: the Motion editor, one motion on one timeline, docked over the viewport's foot. */
+.r3d-motion {
+    position: absolute;
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    max-height: 44%;
+    background-color: var(--color-bg-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+    overflow: hidden;
+    font-size: 12px;
+    color: var(--color-text);
+}
+.r3d-motion .r3d-motion-head { flex-wrap: wrap; gap: 8px; text-transform: none; letter-spacing: 0; font-weight: 500; }
+.r3d-motion-name { width: 140px; font-weight: 600 !important; }
+.r3d-motion-length { width: 68px; }
+.r3d-motion-field { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; color: var(--color-text-muted); }
+.r3d-motion-play { min-width: 34px; padding: 2px 8px; }
+.r3d-motion-close { background: none; border: none; color: var(--color-text-muted); font-size: 16px; cursor: pointer; padding: 0 4px; }
+.r3d-motion-close:hover { color: var(--color-text); }
+.r3d-motion-body { display: flex; min-height: 0; flex: 1; }
+.r3d-motion-tracks {
+    flex: 0 0 150px;
+    display: flex;
+    flex-direction: column;
+    padding-top: 20px;
+    border-right: 1px solid var(--color-border);
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+.r3d-motion-track, .r3d-motion-row { height: 24px; flex: 0 0 24px; box-sizing: border-box; border-bottom: 1px solid var(--color-border-subtle, var(--color-border)); }
+.r3d-motion-track { display: flex; align-items: center; gap: 4px; padding: 0 4px 0 8px; cursor: pointer; }
+.r3d-motion-track > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.r3d-motion-track em { color: var(--color-text-muted); font-style: normal; }
+.r3d-motion-track.active, .r3d-motion-row.active { background: var(--color-accent-tint-25); }
+.r3d-motion-track-remove { visibility: hidden; background: none; border: none; color: var(--color-text-muted); cursor: pointer; padding: 0 4px; }
+.r3d-motion-track:hover .r3d-motion-track-remove { visibility: visible; }
+.r3d-motion-add { margin: 4px 6px; font-size: 11px; }
+.r3d-motion-timeline {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 20px 10px 0;
+    overflow-y: auto;
+    cursor: text;
+    background: var(--color-bg-panel);
+}
+.r3d-motion-ruler { position: absolute; left: 10px; right: 10px; top: 0; height: 20px; border-bottom: 1px solid var(--color-border); }
+.r3d-motion-ruler > span { position: absolute; top: 3px; transform: translateX(-50%); font-size: 10px; color: var(--color-text-muted); }
+.r3d-motion-ruler > span:first-child { transform: none; }
+.r3d-motion-ruler > span:last-child { transform: translateX(-100%); }
+.r3d-motion-row { position: relative; }
+.r3d-motion-key {
+    position: absolute;
+    top: 50%;
+    width: 10px;
+    height: 10px;
+    margin: -5px 0 0 -5px;
+    transform: rotate(45deg);
+    background: var(--color-accent);
+    border: 1px solid var(--color-bg-deep);
+    cursor: ew-resize;
+}
+.r3d-motion-key.stance { margin-left: -10px; cursor: default; }
+.r3d-motion-playhead {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 0;
+    border-left: 2px solid var(--color-warning, #e8b04a);
+    pointer-events: none;
+    transform: translateX(-1px);
+}
+.r3d-motion-pose {
+    flex: 0 0 240px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px 10px;
+    border-left: 1px solid var(--color-border);
+    overflow-y: auto;
+}
+.r3d-motion-pose-title { font-weight: 600; margin-bottom: 2px; }
+.r3d-motion-pose-title em { font-weight: 400; font-style: normal; color: var(--color-text-muted); }
+.r3d-motion-slider { display: grid; grid-template-columns: 34px 1fr 60px; align-items: center; gap: 6px; }
+.r3d-motion-slider > span { color: var(--color-text-muted); }
+.r3d-motion-slider input[type="number"] { width: 100%; box-sizing: border-box; }
+.r3d-motion-pose-actions { display: flex; gap: 6px; margin-top: 4px; }
+.r3d-motion-pose-actions > button { flex: 1; font-size: 11px; padding: 3px 6px; }

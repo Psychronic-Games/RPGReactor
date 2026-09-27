@@ -170,6 +170,8 @@ class Database3DEditor {
         this._cardCollapsed = false;
         this._editingRule = -1;
         this._hoverName = '';
+        // A motion (every pose rule sharing a name) is edited as one, on one timeline.
+        this.motionEditor = typeof RRMotionEditor !== 'undefined' ? new RRMotionEditor(this) : null;
         // Working edits survive deselection: choosing a target again
         // resumes exactly where its sliders were left, with an undo trail.
         this._poses = {};
@@ -1720,6 +1722,8 @@ class Database3DEditor {
                     });
                 }
                 if (extra) rules = rules.concat([extra]);
+                // The Motion editor shows its motion at the playhead, and nothing else moves.
+                if (this.motionEditor && this.motionEditor.active) rules = this.motionEditor.previewRules(this.playRules, frame);
                 // A moving model would slide out from under the marquee, so
                 // rules freeze while a selection is being drawn.
                 // Once per animation frame, not per display refresh: spin
@@ -1939,6 +1943,7 @@ class Database3DEditor {
             audio.src = '';
         }
         this._previewSounds?.clear();
+        if (this.motionEditor && this.motionEditor.active) this.motionEditor.close();
         this._binding?.mixer?.stopAllAction();
         this._object?.parent?.remove(this._object);
         this._object = null;
@@ -5840,6 +5845,11 @@ class Database3DEditor {
         // the card's chooser; the anchor tool keeps the canvas.
         if (this._cardMode === 'effect') return;
         const found = this._partUnderPointer(event.clientX, event.clientY);
+        // With a motion open, a click on the model picks that part's track.
+        if (this.motionEditor && this.motionEditor.active) {
+            if (found) this.motionEditor.pickPart(found.name);
+            return;
+        }
         if (found) {
             this.selectPartByName(found.name);
         } else if (this.selectedPartName !== null) {
@@ -7272,16 +7282,38 @@ class Database3DEditor {
         return `${raw.name || '?'} — ${label} · ${subject} · ${trigger}`;
     }
 
+    /**
+     * The rule indices of the motion rule `index` belongs to: every rule
+     * sharing its name, when one of them is a pose. Null for a clip, or a
+     * lone spin, swing or bob, which keep their own card.
+     */
+    motionGroup(index) {
+        const raw = this.rawAnimations[index];
+        if (!raw || raw.type === 'clip') return null;
+        const group = [];
+        this.rawAnimations.forEach((other, i) => { if (other && other.type !== 'clip' && other.name === raw.name) group.push(i); });
+        return group.some(i => this.rawAnimations[i].type === 'pose') ? group : null;
+    }
+
+    motionSummary(raw, parts) {
+        const trigger = this.ruleSummary(raw).split(' · ').pop();
+        return `${raw.name || '?'} — ${parts === 1 ? this._t('1 part') : this._t('{n} parts', { n: parts })} · ${trigger}`;
+    }
+
     renderRuleList() {
         const list = this._detail.querySelector('.r3d-rule-list');
         list.innerHTML = '';
+        const open = this.motionEditor && this.motionEditor.active ? this.motionEditor.motion.original : null;
         this.rawAnimations.forEach((raw, index) => {
+            // Every pose rule sharing a name is one motion: one row, opened in the Motion editor.
+            const group = this.motionGroup(index);
+            if (group && group[0] !== index) return;
             const row = document.createElement('div');
             row.dataset.modelRecordIndex = String(index);
             row.style.cssText = 'display:flex;align-items:center;gap:6px;padding:3px 10px;cursor:pointer;font-size:12px;color:var(--color-text);'
-                + (index === this.selectedRule ? 'background:var(--color-accent-tint-25);' : '');
+                + ((group ? raw.name === open || group.includes(this.selectedRule) : index === this.selectedRule) ? 'background:var(--color-accent-tint-25);' : '');
             const label = document.createElement('span');
-            label.textContent = this.ruleSummary(raw);
+            label.textContent = group ? this.motionSummary(raw, group.length) : this.ruleSummary(raw);
             label.style.cssText = 'flex:1;min-width:0;';
             row.appendChild(label);
             // On-demand motions play from their own row: one button per name (a preset's parts play together).
@@ -7296,6 +7328,13 @@ class Database3DEditor {
                 row.appendChild(play);
             }
             row.addEventListener('click', () => {
+                if (group && this.motionEditor) {
+                    this.deselectPart();
+                    this.selectedRule = index;
+                    this.motionEditor.open(raw.name);
+                    return;
+                }
+                if (this.motionEditor && this.motionEditor.active) this.motionEditor.close();
                 this.selectedRule = index;
                 this.renderRuleList();
                 this._refreshHighlight();
@@ -7402,6 +7441,12 @@ class Database3DEditor {
 
     /** Add opens the card on a fresh, motionless animation. */
     addRule() {
+        if (this.motionEditor) { this.deselectPart(); this.motionEditor.open(null); return; }
+        this.addSingleRule();
+    }
+
+    /** A lone spin, swing or bob (or a pose) on the classic card. */
+    addSingleRule() {
         if (this.selectedPartName === null) this.selectedPartName = '';
         this._editingRule = -1;
         this.selectedRule = -1;
@@ -7417,6 +7462,20 @@ class Database3DEditor {
     deleteRule() {
         const index = this.selectedRule;
         if (index < 0 || !this.rawAnimations[index]) return;
+        // A motion goes as a whole.
+        const group = this.motionGroup(index);
+        if (group && group.length > 1) {
+            const name = this.rawAnimations[index].name;
+            if (this.motionEditor && this.motionEditor.active) this.motionEditor.close();
+            this.deselectPart();
+            for (const snapshot of Object.values(this._poses)) snapshot.editingRule = -1;
+            this.rawAnimations = this.rawAnimations.filter(raw => !(raw && raw.type !== 'clip' && raw.name === name));
+            this.selectedRule = -1;
+            this.saveRules();
+            this.renderRuleList();
+            return;
+        }
+        if (group && this.motionEditor && this.motionEditor.active) this.motionEditor.close();
         if (this._editingRule === index) {
             this.deselectPart();
         } else if (this._editingRule > index) {
