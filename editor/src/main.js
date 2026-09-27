@@ -757,7 +757,7 @@ class RPGReactor {
             if (owner !== 'pieces') {
                 this.pieceBuilderManager?.deactivate();
                 // Lighting and Media Surfaces are part of building: opened from the bar (or over it), the bar stays and shows which is in hand.
-                if (this.buildHotbar?.visible && (owner === 'lighting' || owner === 'media')) this.buildHotbar.render();
+                if (this.buildHotbar?.visible && (owner === 'lighting' || owner === 'media' || owner === 'terrain')) this.buildHotbar.render();
                 else this.buildHotbar?.hide(false);
             }
             if (owner !== 'events' && this.eventManager?.eventMode) this.eventManager.setEventMode(false);

@@ -3814,6 +3814,8 @@
         .rr-build-facing { display: flex; align-items: center; gap: 4px; }
         .rr-build-facing .rr-build-chip { width: 34px; justify-content: center; font-size: 14px; }
         .rr-build-modes { display: flex; gap: 4px; margin-bottom: 4px; }
+        .rr-build-chip.rr-build-look { flex: 1; justify-content: center; border-color: var(--color-border); }
+        .rr-build-chip.rr-build-look[aria-pressed="true"] { border-color: var(--color-accent); }
         .rr-build-shapes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
         .rr-build-shapes .rr-build-chip { flex-direction: column; justify-content: center; gap: 2px; padding: 5px 2px; font-size: 10px; min-width: 0; }
         .rr-build-shapes .rr-build-chip span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -3840,6 +3842,14 @@
         .rr-build-slot[aria-pressed="true"] { border-color: var(--color-accent); background: color-mix(in srgb, var(--color-accent) 18%, transparent); color: var(--color-text-strong); }
         .rr-build-slot-label { white-space: nowrap; max-width: 58px; overflow: hidden; text-overflow: ellipsis; }
         .rr-build-slot-key { position: absolute; top: 2px; right: 5px; font-size: 9px; color: var(--color-text-muted); }
+        /* Build | Terrain: which group the slots are, at the bar's left end. */
+        .rr-build-groups { display: flex; flex-direction: column; gap: 3px; margin-right: 6px; padding-right: 8px; border-right: 1px solid var(--color-border); }
+        .rr-build-group { display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border: 1px solid var(--color-border); border-radius: 4px; background: transparent; color: var(--color-text-muted); font-size: 11px; cursor: pointer; white-space: nowrap; }
+        .rr-build-group[aria-checked="true"] { border-color: var(--color-accent); background: color-mix(in srgb, var(--color-accent) 18%, transparent); color: var(--color-text-strong); }
+        .rr-build-group:hover { color: var(--color-text); }
+        .rr-build-range { display: grid; grid-template-columns: 64px 1fr 40px; align-items: center; gap: 6px; color: var(--color-text-muted); }
+        .rr-build-range > b { font-weight: 500; color: var(--color-text); text-align: right; }
+        .rr-build-panel-foot > .rr-build-icon-btn { flex: 0 0 auto; width: 34px; padding: 4px 0; }
         .rr-build-chip {
             display: inline-flex;
             align-items: center;

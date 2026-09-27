@@ -113,7 +113,20 @@ class TerrainManager {
     }
 
     /** A word in the status for a moment (the stroke's end would otherwise write the plain status straight over it). */
+    /** What the ground and the water here are, for a status line. */
+    statusText() {
+        const map = this.currentMap(), elevation = this.elevation();
+        if (!map || !elevation) return '';
+        if (!elevation.hasNote(map)) return this._t('terrain.needs3D');
+        let text = elevation.hasTerrain(map) ? this._t('terrain.shaped') : this._t('terrain.flat');
+        if (elevation.hasWater?.(map)) text += ' ' + this._t('terrain.waterCount', { count: elevation.water(map).length });
+        return text;
+    }
+
     _flash(key) {
+        // Over the Build bar when it is up (the terrain tools live there), else the old panel's status line.
+        const bar = window.reactor?.buildHotbar;
+        if (bar?.visible) bar.flash(this._t(key));
         const status = this.panel?.querySelector('.rr-terrain-status');
         if (!status) return;
         status.textContent = this._t(key);

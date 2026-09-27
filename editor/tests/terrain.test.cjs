@@ -107,8 +107,11 @@ test('every ground surface and every stander goes through the terrain', () => {
     // The drifting sky keeps the editor rendering, at fractional frames.
     assert.match(editor3d, /if \(sky && \(sky\.driftX \|\| sky\.driftY\)\) return true;/);
     assert.match(editor3d, /this\.mapScene\.updateSky\?\.\(this\.camera, now \/ \(1000 \/ 60\)\);/);
-    // The tab, the panel and its words.
-    assert.match(read('editor/src/TilesetPaletteViewer.js'), /createLayerTab\('T', TilesetPaletteViewer\.tabIcon\('terrain'\), '3D-T'\)/);
+    // The terrain tools live in the Build bar's Terrain group now, not a palette tab.
+    assert.doesNotMatch(read('editor/src/TilesetPaletteViewer.js'), /createLayerTab\('T'/);
+    const bar = read('editor/src/BuildHotbar.js');
+    assert.match(bar, /static TERRAIN = \['raise', 'lower', 'smooth', 'flatten', 'pour', 'drain', 'look'\];/);
+    assert.match(bar, /if \(!terrain\.active\) terrain\.activate\(\);\n\s*terrain\.setMode\(BuildHotbar\.TERRAIN_MODE\[slot\]\);/);
     assert.match(read('editor/src/main.js'), /onTerrainTabSelected = \(\) => \{/);
     assert.match(read('editor/index.html'), /src\/TerrainManager\.js/);
     const manager = read('editor/src/I18nManager.js');
