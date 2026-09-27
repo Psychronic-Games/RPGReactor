@@ -196,11 +196,13 @@
             Head: [key(0.2, [0, -8, 0]), key(0.8, [0, -8, 0])]
         }),
         motion('bow', 'Take a Bow', 'humanoid', 'action', 100, {
-            Spine: [key(0.35, [35, 0, 0]), key(0.65, [35, 0, 0])],
-            Chest: [key(0.35, [15, 0, 0]), key(0.65, [15, 0, 0])],
-            Head: [key(0.35, [12, 0, 0]), key(0.65, [12, 0, 0])],
-            RightUpperArm: [key(0.35, [-30, 20, 0]), key(0.65, [-30, 20, 0])],
-            RightLowerArm: [key(0.35, [-70, 0, 0]), key(0.65, [-70, 0, 0])]
+            Spine: [key(0.35, [30, 0, 0]), key(0.65, [30, 0, 0])],
+            Chest: [key(0.35, [18, 0, 0]), key(0.65, [18, 0, 0])],
+            Head: [key(0.35, [14, 0, 0]), key(0.65, [14, 0, 0])],
+            // The right hand to the chest: the forearm level and turned 80° across the body.
+            RightUpperArm: [key(0.3, [-18, 0, 10]), key(0.65, [-18, 0, 10])],
+            RightLowerArm: [key(0.3, [-90.9, -4.9, 80]), key(0.65, [-90.9, -4.9, 80])],
+            LeftUpperArm: [key(0.35, [8, 0, 0]), key(0.65, [8, 0, 0])]
         }),
         motion('nod', 'Nod', 'humanoid', 'action', 60, {
             Head: [key(0.25, [18, 0, 0]), key(0.5, [2, 0, 0]), key(0.75, [18, 0, 0])]
@@ -219,21 +221,32 @@
             RightUpperArm: [key(0.12, [25, 0, 0]), key(0.35, [-140, 0, -10]), key(0.5, [-150, 0, -10]), key(0.72, [-20, 0, 0]), key(0.85, [10, 0, 0])],
             Chest: [key(0.12, [12, 0, 0]), key(0.4, [-8, 0, 0]), key(0.8, [6, 0, 0])]
         }),
+        // On a chair: the whole body down 0.75 tiles (a 3-tile character's hips come to
+        // seat height), thighs level, shins straight down to the floor, hands on the knees.
         motion('sit', 'Sit', 'humanoid', 'action', 70, {
-            Hips: { rotate: [0, 0, 0], move: [0, -0.28, 0] },
-            LeftUpperLeg: [-80, 0, 0],
-            RightUpperLeg: [-80, 0, 0],
-            LeftLowerLeg: [85, 0, 0],
-            RightLowerLeg: [85, 0, 0]
+            Body: { rotate: [0, 0, 0], move: [0, -0.75, 0] },
+            LeftUpperLeg: [-88, 0, 3],
+            RightUpperLeg: [-88, 0, -3],
+            LeftLowerLeg: [88, 0, 0],
+            RightLowerLeg: [88, 0, 0],
+            LeftUpperArm: [-22, 0, 4],
+            RightUpperArm: [-22, 0, -4],
+            LeftLowerArm: [-45, 0, 0],
+            RightLowerArm: [-45, 0, 0],
+            Chest: [4, 0, 0]
         }, { hold: true }),
         motion('overhead-strike', 'Overhead Strike', 'humanoid', 'action', 70, {
-            RightUpperArm: [key(0.3, [-150, 0, 0]), key(0.5, [-20, 0, 0]), key(0.72, [-20, 0, 0])],
-            RightLowerArm: [key(0.3, [-45, 0, 0]), key(0.5, [-8, 0, 0]), key(0.72, [-8, 0, 0])],
+            // Up over the head (raised forward, tipped 30° in), down to chest height in front.
+            RightUpperArm: [key(0.3, [-162.5, 9.8, 28.5]), key(0.5, [-55, 0, 0]), key(0.72, [-50, 0, 0])],
+            RightLowerArm: [key(0.3, [-45, 0, 0]), key(0.5, [-8, 0, 0]), key(0.72, [-10, 0, 0])],
             Chest: [key(0.3, [-10, 0, 0]), key(0.5, [14, 0, 0]), key(0.72, [10, 0, 0])]
         }),
         // Coil across the body, sweep through, follow through.
         motion('slash', 'Slash', 'humanoid', 'action', 52, {
-            RightUpperArm: [key(0.25, [-60, 55, 0]), key(0.45, [-75, -45, 0]), key(0.7, [-40, -55, 0])],
+            // Level at the shoulder, swept about the vertical: the arm raised 84° forward and
+            // turned 55° across the body, then 55° out, then 65° out and lower (worked out as
+            // euler angles; a Y on the raised arm alone barely turns it).
+            RightUpperArm: [key(0.25, [-84.2, 8.2, 54.6]), key(0.45, [-84.2, -8.2, -54.6]), key(0.7, [-76.3, -26.9, -61.7])],
             RightLowerArm: [key(0.25, [-35, 0, 0]), key(0.45, [-5, 0, 0]), key(0.7, [-10, 0, 0])],
             Chest: [key(0.25, [0, 28, 0]), key(0.45, [0, -22, 0]), key(0.7, [0, -16, 0])],
             Hips: [key(0.25, [0, 10, 0]), key(0.45, [0, -8, 0]), key(0.7, [0, -5, 0])]
@@ -247,11 +260,14 @@
         }),
         // Held stances: fired once, they stay until another held stance
         // claims the same parts (Lower Arms lets go of all of them).
+        // Fists in front of the chin, elbows in: the arm raised 45° forward, then turned 18°
+        // in about the depth axis, the forearm raised 110° and tilted 40° in, worked out as
+        // euler angles (a plain Y or Z on a raised limb moves the hand the wrong way).
         motion('guard', 'Guard', 'humanoid', 'action', 28, {
-            RightUpperArm: [-45, 20, 0],
-            RightLowerArm: [-100, 0, 0],
-            LeftUpperArm: [-45, -20, 0],
-            LeftLowerArm: [-100, 0, 0],
+            RightUpperArm: [-43.6, -12.6, 12.9],
+            RightLowerArm: [-115.4, 37.2, 16],
+            LeftUpperArm: [-43.6, 12.6, -12.9],
+            LeftLowerArm: [-115.4, -37.2, -16],
             Chest: [6, 0, 0],
             Head: [8, 0, 0]
         }, { hold: true }),
