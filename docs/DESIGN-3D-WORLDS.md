@@ -224,7 +224,7 @@ Ordered by payoff per unit of work, not by dependency. Each step is shippable.
 | 2 | **Per-face material + A4 roof pairing** | Wall tops stop wearing their own face art. Closes handoff limitation 1. | **Done** |
 | 3 | **Panel shape with thickness and derived facing** | Gates, doors and signs stop chasing the camera. Closes the reported bug. | **Done** |
 | 4 | ~~Height brush in the map editor~~ | Built, then removed: nothing on a real 3D map used it, because the massing comes from the tileset's 3D classes. | Dropped |
-| 5 | **Block shape** | Crates, plinths, furniture — the small stuff. | **Done** as pieces and sixteen shapes in the Build bar (0.98.7); furniture pieces are queued |
+| 5 | **Block shape** | Crates, plinths, furniture — the small stuff. | **Done** as pieces and seventeen shapes in the Build bar (0.98.7); furniture pieces are queued |
 | 6 | **Structures: define, stamp, place** | Building a world becomes fast rather than possible. See *Where one structure ends* below. | **Done** as blueprints (`3d/Structures`, Database › Structures, Blueprint slot), plans of plans included (0.98.7) |
 | 7 | **Direct manipulation in the 3D view** | Select, box-select, drag, turn, paint and a specs panel for placed pieces; gizmos on models and events. | **Done** (0.98.7) |
 | 8 | **Lights as 3D lights** | A lantern becomes a sphere, a torch a cone. | **Done** |

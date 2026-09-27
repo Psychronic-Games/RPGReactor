@@ -22,24 +22,29 @@ project; a person can use it to find where anything lives.
 | Materials | `img/materials/*.png` (tileable) | swatches in the Build bar's specs panel | — |
 | Water | `MapNNN.r3d.json` › `water` (a hollow's box, its `level`, a `mask` of the wet cells) | **3D-T** › Pour | `validate-map.cjs` |
 | Placed models | `MapNNN.r3d.json` › `props` | **3D-M** tab | — |
+| Physics (gravity, jump, fall damage, swimming) | `System.json` › `reactorPhysics`; a map's own in `MapNNN.r3d.json` › `physics` | Database › Controls › Physics (3D maps); Map Properties › Physics | — |
+| Keys and gamepad buttons | `System.json` › `reactorControls` (absent while stock) | Database › Controls | — |
 | Lights | `MapNNN.r3d.json` › `lights`, `lighting` | Lighting tool | — |
 | Events | `MapNNN.json` › `events` (RPG Maker data) | Event tool | — |
 
 `MapNNN.json` stays ordinary RPG Maker data. Everything 3D is in the
 sidecar `MapNNN.r3d.json`, so a project with no 3D maps has no sidecars.
 
-In the editor, Database › Structures is a builder over these files: a new
-plan is an empty page. Draw rooms on it, click walls for doors and windows,
-put stairs and people down, pick a shape from the picker and click it down
-(one placed on another sits on top), drag any of them, undo, pick a style,
-and Apply writes the file back the way it was read. The Effect tool puts a screen on a wall,
-a light or an animation on any cell; the preview plays the screens' media.
-The eye button on the 3D view looks inside (the ceiling and roof left off),
-on by itself for a building with no roof. A selected shape wears
-handles in the 3D view: arrows move it (a face dragged near another shape's
-face clicks onto it), rings turn, tilt and roll it, cubes size it (with the
-lock, in proportion); the same numbers sit in the line under the plan, and a
-click on a shape in the 3D view selects it.
+The editor writes these files compactly: a sidecar or structure keeps one
+grid row or one piece per line, and database files one record per line.
+Any valid JSON reads the same; a generator may write whatever layout it
+likes, and the editor rewrites it compactly on the next save.
+
+In the editor, Database › Structures lists the structure files as cards.
+A structure's page has a floor plan beside a 3D view of it: pick a floor,
+paint rooms, floors, walls, doors, windows and stairs with the tools
+(Select picks pieces up to move, nudge, turn or delete; right-drag erases;
+Ctrl+Z undoes), set **Floors** to stack more, and **Rebuild roof** lays
+the roof again over the top floor. **Build** opens the structure's plot in
+the map's 3D view with the same Build bar the map uses, for anything the
+plan cannot paint. The Build bar's Blueprint slot, or Use on the map,
+stamps a structure; **Rebuild from plan** re-lays a stamped one from its
+file.
 
 The rules the engine applies to terrain, pieces and water (where the
 ground is, what blocks a step, how deep the water stands) are in
@@ -61,17 +66,23 @@ fractional tiles for models.
 ```
 
 - `kind`: `wall` (a storey tall), `block` (one tile cube), `floor` (a slab),
-  `pillar`, `stair` (rises one tile across the cell, toward its `rot`),
-  `ramp` (same, a slope), `roof` (a one-cell gable), `doorway` (a lintel
-  only: the opening is the whole cell, tile two side by side for a door),
-  `window` (a sill and a header), `fence`; and the round pieces `dome`,
-  `cylinder` and `cone`, which also carry `size: [w, h, d]` in tiles (the
-  cell is the middle of the footprint) and `angle` in degrees. A round piece
-  blocks every cell its footprint covers, as a wall of its height; nothing
-  walks on it.
+  `pillar`, `stair` (rises one tile across the cell, toward its `rot`;
+  a wider stair is stairs side by side), `ramp` (same, a slope), `roof`
+  (a one-cell gable), `doorway` (a lintel only: the opening is the whole
+  cell, tile two side by side for a door), `window` (a sill and a header),
+  `glass`, `fence`, and `ladder` (one level of rails and rungs on one side
+  of the cell; a stack of them at one cell is one ladder, climbed by
+  walking into it, and nothing stands on it). The shapes are `box`,
+  `wedge`, `pyramid`, `prism`, `hull`, `spike`, `cylinder`, `capsule`,
+  `tube`, `cone`, `dome`, `sphere`, `dish`, `fin`, `arch`, `tunnel` and
+  `ring`: they carry `size: [w, h, d]` in tiles (the cell is the middle of
+  the footprint), `angle` in degrees and optional `tilt` and `roll`, stand
+  at any quarter tile, and some take settings (`sides`, `taper`, `sweep`,
+  `thick`; see `Reactor3D.SHAPE_PARAMS`). A shape blocks every cell its
+  footprint covers, as a wall of its height.
 - `x, y`: the cell. `z`: the level the piece's foot stands at, in tiles
-  above the ground, up to 120 (twenty-four storeys of five). `rot`: quarter turns clockwise seen from above; `0`
-  rises or faces south.
+  above the ground, up to 240 (forty-eight storeys of five). `rot`: quarter
+  turns clockwise seen from above; `0` rises or faces south.
 - `material`: a name under `img/materials` without extension, or `""` for
   plain grey.
 - `group`: pieces of one building share a number. Optional.
@@ -277,9 +288,11 @@ and turns as one, scale is off.
 ```
 
 A sheet over the cells `x0..x1, y0..y1` (inclusive) at world height
-`level`. The ground decides what it is: a cell whose ground is more than
-0.45 tile under the level is deep and cannot be walked into; shallower is
-waded. So a lake is terrain lowered under a sheet, a beach is the slope at
+`level`. The ground decides what it is: water up to the swim depth
+(`reactorPhysics.swimDepth`, 2.2 tiles by default) is waded on its bottom;
+deeper water is swum, entered from its bank or by a fall, and left onto a
+bank no more than a step above the surface. With swimming off, water
+deeper than 0.45 tile cannot be walked into. So a lake is terrain lowered under a sheet, a beach is the slope at
 its rim, and a river is a long thin sheet over a trough. `material` is an
 image under `img/materials`; the runtime waves it, tints it by depth and
 fades it out at the shore.

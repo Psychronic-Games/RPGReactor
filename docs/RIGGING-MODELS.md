@@ -19,3 +19,31 @@ The humanoid template marks the head, chin, hips, shoulders, elbows, wrists, kne
 ## What the runtime reads
 
 The rig lives in the model's sidecar (`model.json`) as `rig: { template, markers, bones, weights }`. The game uses the markers for the hand: the palm point is where a held weapon's grip goes, and the finger bases and tips give the knuckle line and fingertips. Without markers those come from the hand and forearm joints. See [BATTLE-PRESENTATION.md](BATTLE-PRESENTATION.md) for how sequences hold, aim and pose a rigged model.
+
+## Motions a rig gives a model
+
+A rigged humanoid plays a built-in motion for every movement state it has no animation of its own for: Breathe when idle, Walk, Run while dashing, Jump in the air, Swim and Climb on a ladder. A quadruped gets an idle sway and a walk. The Animations list shows which ones are in use ("Rig defaults: …"), and its switch turns them off (`defaultMotions: false` in `model.json`). A motion or clip the model has for a state always wins.
+
+**Motions…** adds a ready-made motion for the model's template. For a humanoid: the movement states above plus Tread Water, gestures (Wave, Take a Bow, Nod, Shake Head, Hop), stances that hold until another stance replaces them (Guard, Aim Rifle, Aim Pistol, Dual Wield, Lower Arms, Sit) and strikes (Overhead Strike, Slash, Thrust). Quadrupeds, plants and vehicles have their own (Pounce, Wind Sway, Rustle, Roll, Bounce). Each lands as one editable motion.
+
+## The Motion editor
+
+A motion is every pose rule in the Animations list that shares a name: one row, however many parts it moves. Clicking the row opens the Motion editor under the model:
+
+- **Top bar:** the name, when it plays (On demand, or While idle, walking, dashing, jumping, swimming, climbing), its length in seconds, Repeat, and **Stance** (take the pose and keep it).
+- **Tracks:** one per part it moves, with its keys on a shared timeline. **+ Part…** adds one, and so does a click on the model. A spin, swing or bob in the motion is listed and opens on its own card.
+- **Playhead:** click or drag the timeline to scrub; the model shows that moment. ▶ plays it. Drag a key to retime it.
+- **Pose:** X, Y and Z sliders for the selected part at the playhead (Lift too for the whole model). Moving one keys the part there, adding a key between keys if needed; **Delete key** removes it.
+
+Motions save as ordinary pose rules in `model.json` › `animations` (`{ name, part, type: "pose", trigger, period, keys: [{ at, rotate, move }] }`, `period` half the length in frames), so a file written by hand or by a generator opens in the editor the same way.
+
+## Pose axes
+
+Rotations are in degrees about the model's own axes, with the character facing +Z and its right side at -X, applied Z first, then Y, then X. A part's pose is in these axes too, whatever its parent does.
+
+- A limb swings forward on -X; a knee or elbow bends on +X.
+- An arm lifts out to the side on -Z (right) or +Z (left). Lifting it far overhead that way folds skinned shoulder armour; raise it forward (-X) instead.
+- The torso and head lean forward on +X and turn left on +Y.
+- Y turns an arm about its length only if the rest pose hangs it straight down. On an A-pose model, Y also moves the arm, and after a twist no single axis moves the hand straight sideways. Wave's keys are the turn it needs worked out per key.
+
+Between keys a motion follows a smooth curve: it slows only where it turns back or holds, never overshoots a key, and a looping motion runs through its end without pausing.
