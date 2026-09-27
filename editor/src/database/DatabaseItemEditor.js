@@ -200,6 +200,7 @@ class DatabaseItemEditor {
                             <input type="checkbox" class="system-checkbox" ${damage.critical ? 'checked' : ''} data-field="damage.critical" data-item-id="${item.id}">
                         </span>
                     </div>
+                    ${ActionSecondaryDamage.rowHTML(damage, 'data-item-id', item.id, damageTypeNames)}
                 </div>
             </div>
         `;
@@ -293,8 +294,10 @@ class DatabaseItemEditor {
                     const normalized = this.updateItemField(itemId, fieldName, value);
                     if (normalized !== undefined && e.target.type === 'number') e.target.value = String(normalized);
                     if (fieldName === 'repeats' || fieldName === 'repeatsMax') ActionRepeats.syncFields(container, this.databaseManager.getItem(itemId), 'data-item-id');
+                    if (fieldName === 'damage.type' || fieldName.startsWith('damage.secondary.')) ActionSecondaryDamage.syncFields(container, this.databaseManager.getItem(itemId), 'data-item-id', damageTypeNames);
                 });
             });
+            ActionSecondaryDamage.syncFields(container, item, 'data-item-id', damageTypeNames);
         }, 0);
     }
 
@@ -302,6 +305,17 @@ class DatabaseItemEditor {
         const item = this.databaseManager.getItem(itemId);
         if (!item) return;
 
+        // The secondary channel's fields. Before the damage arm below, whose
+        // parseInt would read an effect name as 0 and a formula as NaN.
+        if (fieldName.startsWith('damage.secondary.')) {
+            if (!item.damage) {
+                item.damage = { type: 0, elementId: -1, formula: '0', variance: 20, critical: false };
+            }
+            const shown = ActionSecondaryDamage.write(item.damage, fieldName.split('.')[2], value);
+            console.log(`Updated item ${itemId} ${fieldName} to:`, shown);
+            this.databaseManager.updateItem(itemId, item);
+            return shown;
+        }
         // Handle nested damage fields (e.g. "damage.type", "damage.formula")
         if (fieldName.startsWith('damage.')) {
             const subField = fieldName.split('.')[1];

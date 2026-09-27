@@ -5994,7 +5994,8 @@ Window_BattleLog.prototype.makeMpDamageText = function(target) {
     const damage = result.mpDamage;
     const isActor = target.isActor();
     let fmt;
-    if (damage > 0 && result.drain) {
+    // `drain` follows the HP line when a secondary channel moved both.
+    if (damage > 0 && (result.mpDrain ?? result.drain)) {
         fmt = isActor ? TextManager.actorDrain : TextManager.enemyDrain;
         return fmt.format(target.name(), TextManager.mp, damage);
     } else if (damage > 0) {

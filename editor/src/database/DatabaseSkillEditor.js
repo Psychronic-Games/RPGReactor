@@ -221,6 +221,7 @@ class DatabaseSkillEditor {
                             <input type="checkbox" class="system-checkbox" ${damage.critical ? 'checked' : ''} data-field="damage.critical" data-skill-id="${skill.id}">
                         </span>
                     </div>
+                    ${ActionSecondaryDamage.rowHTML(damage, 'data-skill-id', skill.id, damageTypeNames)}
                 </div>
             </div>
         `;
@@ -320,8 +321,10 @@ class DatabaseSkillEditor {
                     const normalized = this.updateSkillField(skillId, fieldName, value);
                     if (normalized !== undefined && e.target.type === 'number') e.target.value = String(normalized);
                     if (fieldName === 'repeats' || fieldName === 'repeatsMax') ActionRepeats.syncFields(container, this.databaseManager.getSkill(skillId), 'data-skill-id');
+                    if (fieldName === 'damage.type' || fieldName.startsWith('damage.secondary.')) ActionSecondaryDamage.syncFields(container, this.databaseManager.getSkill(skillId), 'data-skill-id', damageTypeNames);
                 });
             });
+            ActionSecondaryDamage.syncFields(container, skill, 'data-skill-id', damageTypeNames);
         }, 0);
     }
 
@@ -329,6 +332,17 @@ class DatabaseSkillEditor {
         const skill = this.databaseManager.getSkill(skillId);
         if (!skill) return;
 
+        // The secondary channel's fields. Before the damage arm below, whose
+        // parseInt would read an effect name as 0 and a formula as NaN.
+        if (fieldName.startsWith('damage.secondary.')) {
+            if (!skill.damage) {
+                skill.damage = { type: 0, elementId: -1, formula: '', variance: 20, critical: false };
+            }
+            const shown = ActionSecondaryDamage.write(skill.damage, fieldName.split('.')[2], value);
+            console.log(`Updated skill ${skillId} ${fieldName} to:`, shown);
+            this.databaseManager.updateSkill(skillId, skill);
+            return shown;
+        }
         // Handle nested damage fields (damage.type, damage.elementId, etc.)
         if (fieldName.startsWith('damage.')) {
             const subField = fieldName.split('.')[1];
