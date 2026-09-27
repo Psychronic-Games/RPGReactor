@@ -22,15 +22,15 @@ The rig lives in the model's sidecar (`model.json`) as `rig: { template, markers
 
 ## Motions a rig gives a model
 
-A rigged humanoid plays a built-in motion for every movement state it has no animation of its own for: Breathe when idle, Walk, Run while dashing, Jump in the air, Swim and Climb on a ladder. A quadruped gets an idle sway and a walk. The Animations list shows which ones are in use ("Rig defaults: …"), and its switch turns them off (`defaultMotions: false` in `model.json`). A motion or clip the model has for a state always wins.
+A rigged humanoid plays a built-in motion for every movement state it has no animation of its own for: Breathe when idle, Walk, Run while dashing, Jump in the air, Swim (a front crawl) through deep water, Tread Water when still in it, and Climb on a ladder. A quadruped gets an idle sway and a walk. The Animations list shows which ones are in use ("Rig defaults: …"), and its switch turns them off (`defaultMotions: false` in `model.json`). A motion or clip the model has for a state always wins.
 
-**Motions…** adds a ready-made motion for the model's template. For a humanoid: the movement states above plus Tread Water, gestures (Wave, Take a Bow, Nod, Shake Head, Hop), stances that hold until another stance replaces them (Guard, Aim Rifle, Aim Pistol, Dual Wield, Lower Arms, Sit) and strikes (Overhead Strike, Slash, Thrust). Quadrupeds, plants and vehicles have their own (Pounce, Wind Sway, Rustle, Roll, Bounce). Each lands as one editable motion.
+**Motions…** adds a ready-made motion for the model's template. For a humanoid: the movement states above, gestures (Wave, Take a Bow, Nod, Shake Head, Hop), stances that hold until another stance replaces them (Guard, Aim Rifle, Aim Pistol, Dual Wield, Lower Arms, Sit) and strikes (Overhead Strike, Slash, Thrust). Quadrupeds, plants and vehicles have their own (Pounce, Wind Sway, Rustle, Roll, Bounce). Each lands as one editable motion.
 
 ## The Motion editor
 
 A motion is every pose rule in the Animations list that shares a name: one row, however many parts it moves. Clicking the row opens the Motion editor under the model:
 
-- **Top bar:** the name, when it plays (On demand, or While idle, walking, dashing, jumping, swimming, climbing), its length in seconds, Repeat, and **Stance** (take the pose and keep it).
+- **Top bar:** the name, when it plays (On demand, or While idle, walking, dashing, jumping, swimming, treading water, climbing), its length in seconds, Repeat, and **Stance** (take the pose and keep it).
 - **Tracks:** one per part it moves, with its keys on a shared timeline. **+ Part…** adds one, and so does a click on the model. A spin, swing or bob in the motion is listed and opens on its own card.
 - **Playhead:** click or drag the timeline to scrub; the model shows that moment. ▶ plays it. Drag a key to retime it.
 - **Pose:** X, Y and Z sliders for the selected part at the playhead (Lift too for the whole model). Moving one keys the part there, adding a key between keys if needed; **Delete key** removes it.

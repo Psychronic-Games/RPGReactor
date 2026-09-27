@@ -12435,6 +12435,25 @@ Object.assign(RR_TEXT_TRANSLATIONS.vi, {"Stance": "Thế đứng", "Held until a
 Object.assign(RR_TEXT_TRANSLATIONS.th, {"Stance": "ท่าตั้ง", "Held until another stance moves the same parts.": "คงไว้จนกว่าท่าอื่นจะขยับส่วนเดียวกัน", "Other motion": "การเคลื่อนไหวอื่น", "Edited on its own card.": "แก้ไขในการ์ดของตัวเอง", "Add a part to move it.": "เพิ่มส่วนเพื่อขยับ", "(between keys)": "(ระหว่างคีย์)", "Add key": "เพิ่มคีย์", "Delete key": "ลบคีย์", "Lift": "ยก", "1 part": "1 ส่วน", "{n} parts": "{n} ส่วน", "+ Part…": "+ ส่วน…"});
 Object.assign(RR_TEXT_TRANSLATIONS.tr, {"Stance": "Duruş", "Held until another stance moves the same parts.": "Aynı parçaları başka bir duruş oynatana dek korunur.", "Other motion": "Diğer hareket", "Edited on its own card.": "Kendi kartında düzenlenir.", "Add a part to move it.": "Hareket ettirmek için bir parça ekleyin.", "(between keys)": "(anahtarlar arasında)", "Add key": "Anahtar ekle", "Delete key": "Anahtarı sil", "Lift": "Kaldır", "1 part": "1 parça", "{n} parts": "{n} parça", "+ Part…": "+ Parça…"});
 
+// 3D models: floating still in deep water.
+Object.assign(RR_TEXT_TRANSLATIONS.ja, {"While treading water": "水中で静止中", "Treading": "立ち泳ぎ"});
+Object.assign(RR_TEXT_TRANSLATIONS.es, {"While treading water": "Mientras flota en el sitio", "Treading": "Flotando"});
+Object.assign(RR_TEXT_TRANSLATIONS['zh-Hant'], {"While treading water": "踩水時", "Treading": "踩水"});
+Object.assign(RR_TEXT_TRANSLATIONS['zh-Hans'], {"While treading water": "踩水时", "Treading": "踩水"});
+Object.assign(RR_TEXT_TRANSLATIONS.ru, {"While treading water": "На плаву на месте", "Treading": "На плаву"});
+Object.assign(RR_TEXT_TRANSLATIONS.pt, {"While treading water": "Enquanto boia parado", "Treading": "Boiando"});
+Object.assign(RR_TEXT_TRANSLATIONS.de, {"While treading water": "Beim Wassertreten", "Treading": "Wassertreten"});
+Object.assign(RR_TEXT_TRANSLATIONS.fr, {"While treading water": "En faisant du surplace", "Treading": "Surplace"});
+Object.assign(RR_TEXT_TRANSLATIONS.el, {"While treading water": "Ενώ επιπλέει ακίνητος", "Treading": "Επίπλευση"});
+Object.assign(RR_TEXT_TRANSLATIONS.ko, {"While treading water": "제자리에서 떠 있을 때", "Treading": "선헤엄"});
+Object.assign(RR_TEXT_TRANSLATIONS.ar, {"While treading water": "أثناء الطفو في المكان", "Treading": "طفو"});
+Object.assign(RR_TEXT_TRANSLATIONS.it, {"While treading water": "Mentre sta a galla", "Treading": "A galla"});
+Object.assign(RR_TEXT_TRANSLATIONS.pl, {"While treading water": "Podczas utrzymywania się na wodzie", "Treading": "Na wodzie"});
+Object.assign(RR_TEXT_TRANSLATIONS.id, {"While treading water": "Saat mengapung di tempat", "Treading": "Mengapung"});
+Object.assign(RR_TEXT_TRANSLATIONS.vi, {"While treading water": "Khi đạp nước tại chỗ", "Treading": "Đạp nước"});
+Object.assign(RR_TEXT_TRANSLATIONS.th, {"While treading water": "ขณะลอยตัวอยู่กับที่", "Treading": "ลอยตัว"});
+Object.assign(RR_TEXT_TRANSLATIONS.tr, {"While treading water": "Suda dururken", "Treading": "Suda durma"});
+
 // 3D model import optimizer dialog.
 Object.assign(RR_TEXT_TRANSLATIONS['ja'], {
     'Import 3D Model': '3Dモデルのインポート', 'Optimize (recommended)': '最適化(推奨)', 'Resize textures to 2K, compact skin weights, drop unused data, and cut the mesh to about 60% of its triangles by collapsing the edges that change the shape least. Seams and silhouette are held.': 'テクスチャを2Kに縮小し、スキンウェイトを圧縮、不要データを削除し、形状への影響が最も小さいエッジを折りたたんでメッシュの三角形を約60%まで削減します。継ぎ目とシルエットは維持されます。', 'Optimize aggressively': '積極的に最適化', 'Everything above, cut to about a quarter of the triangles. May soften very fine detail.': '上記すべてに加え、三角形を約4分の1まで削減します。細部がわずかに損なわれる場合があります。', 'Import as-is': 'そのままインポート', 'Keep every byte of the original file.': '元のファイルを一切変更しません。', 'Import': 'インポート', 'largest texture': '最大テクスチャ', 'reducible without visible change': '見た目を変えずに削減可能'

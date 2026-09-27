@@ -32,7 +32,7 @@ class RRMotionEditor {
 
     static TRIGGERS() {
         return [['action', 'On demand'], ['always', 'Always'], ['idle', 'While idle'], ['moving', 'While moving'], ['walking', 'While walking'],
-            ['dashing', 'While dashing'], ['jumping', 'While jumping'], ['swimming', 'While swimming'], ['climbing', 'While climbing']];
+            ['dashing', 'While dashing'], ['jumping', 'While jumping'], ['swimming', 'While swimming'], ['treading', 'While treading water'], ['climbing', 'While climbing']];
     }
 
     /** Pose-rule fields the editor writes; anything else on a rule (effects, cycles) is kept as it was. */

@@ -3298,7 +3298,7 @@ Reactor3D.readModelAnimationRules = function(json) {
             rate: Number(raw.rate) > 0 ? Number(raw.rate) : 1,
             type,
             axis: raw.axis === "x" || raw.axis === "z" ? raw.axis : "y",
-            trigger: ["idle", "moving", "walking", "dashing", "jumping", "swimming", "climbing", "action"].indexOf(raw.trigger) >= 0
+            trigger: ["idle", "moving", "walking", "dashing", "jumping", "swimming", "treading", "climbing", "action"].indexOf(raw.trigger) >= 0
                 ? raw.trigger : "always",
             speed: Number(raw.speed) > 0 ? Number(raw.speed) : 90,
             perTile: Number(raw.perTile) > 0 ? Number(raw.perTile) : 0,
@@ -4105,13 +4105,21 @@ Reactor3D.isAirborne = function(character) {
 /**
  * Movement triggers by specificity: "moving" is any travel, "walking" is
  * travel without dashing, "dashing" is travel while dashing, "jumping" is
- * any time in the air (the rise and the fall), "swimming" any time in deep
- * water. Returns true/false for those triggers and null for every other
- * trigger.
+ * any time in the air (the rise and the fall), "swimming" moving through
+ * deep water and "treading" floating still in it. "idle" is standing still
+ * on the ground. Returns true/false for those triggers and null for every
+ * other trigger.
  */
+/** Standing still on the ground: not moving, in the air, in deep water or on a ladder. */
+Reactor3D.isIdleState = function(state) {
+    return !state.moving && !state.airborne && !state.swimming && !state.climbing;
+};
+
 Reactor3D.moveTriggerActive = function(trigger, state) {
     if (trigger === "jumping") return !!state.airborne;
-    if (trigger === "swimming") return !!state.swimming;
+    if (trigger === "swimming") return !!state.swimming && !!state.moving;
+    if (trigger === "treading") return !!state.swimming && !state.moving;
+    if (trigger === "idle") return Reactor3D.isIdleState(state);
     if (trigger === "climbing") return !!state.climbing;
     if (trigger === "moving") return !!state.moving;
     // A gait is walked on the ground: in the air, in deep water or on a ladder the state's own motion plays.
@@ -4167,7 +4175,7 @@ Reactor3D.poseEase = function(blend) {
  * keys (a breath, a stride) stop dead at each one, a visible judder.
  * The first and last stops ease from and to stillness; a looping
  * timeline (any trigger but an action) whose ends meet runs through
- * the seam instead.
+ * the seam instead, a rotation meeting itself a whole turn on.
  */
 Reactor3D.sampleModelKeys = function(rule, p) {
     const REST = [0, 0, 0], ONE = [1, 1, 1];
@@ -4186,9 +4194,14 @@ Reactor3D.sampleModelKeys = function(rule, p) {
     const loops = !!rule.trigger && rule.trigger !== "action";
     const field = (stop, name, i) => (stop[name] || (name === "resize" ? ONE : REST))[i];
     // Slope of segment j (stops j..j+1), wrapping for a loop.
+    // A turn that ends a whole revolution from where it began (an arm's windmill) meets itself.
+    const meets = (name, i) => {
+        const gap = field(stops[n - 1], name, i) - field(stops[0], name, i);
+        return name === "rotate" ? Math.abs(gap - 360 * Math.round(gap / 360)) < 1e-6 : gap === 0;
+    };
     const slope = (name, i, j) => {
         if (j < 0 || j >= n - 1) {
-            if (!loops || n < 3 || field(stops[0], name, i) !== field(stops[n - 1], name, i)) return null;
+            if (!loops || n < 3 || !meets(name, i)) return null;
             j = j < 0 ? n - 2 : 0;
         }
         const h = stops[j + 1].at - stops[j].at;
@@ -4287,7 +4300,7 @@ Reactor3D.applyModelAnimation = function(binding, rules, state) {
                 }
             } else {
                 const active = rule.trigger === "always"
-                    || (rule.trigger === "idle" && !state.moving && !state.airborne)
+                    || (rule.trigger === "idle" && Reactor3D.isIdleState(state))
                     || Reactor3D.moveTriggerActive(rule.trigger, state) === true;
                 // A state's motion fades in as the state begins and out as it
                 // ends (a jump, a dive, a ladder), rather than snapping on.
@@ -4310,7 +4323,7 @@ Reactor3D.applyModelAnimation = function(binding, rules, state) {
                 sampled.rotate[0] * toRad, sampled.rotate[1] * toRad, sampled.rotate[2] * toRad, "XYZ"));
             if (sampled.move[0] || sampled.move[1] || sampled.move[2]) {
                 slide = nextVec().set(sampled.move[0], sampled.move[1], sampled.move[2])
-                    .multiplyScalar(1 / (state.scale || 1));
+                    .multiplyScalar((state.moveScale || 1) / (state.scale || 1));
             }
             if (sampled.resize[0] !== 1 || sampled.resize[1] !== 1 || sampled.resize[2] !== 1) {
                 grow = nextVec().set(sampled.resize[0], sampled.resize[1], sampled.resize[2]);
@@ -4353,7 +4366,7 @@ Reactor3D.applyModelAnimation = function(binding, rules, state) {
             } else {
                 const gate = Reactor3D.moveTriggerActive(rule.trigger, state);
                 const active = rule.trigger === "always"
-                    || (rule.trigger === "idle" && !state.moving && !state.airborne)
+                    || (rule.trigger === "idle" && Reactor3D.isIdleState(state))
                     || gate === true;
                 const step = 1 / Math.max(1, rule.period);
                 blend = Math.min(1, Math.max(0,
@@ -4369,7 +4382,7 @@ Reactor3D.applyModelAnimation = function(binding, rules, state) {
                 rule.rotate[2] * eased * toRad, "XYZ"));
             if (rule.move[0] || rule.move[1] || rule.move[2]) {
                 slide = nextVec().set(rule.move[0], rule.move[1], rule.move[2])
-                    .multiplyScalar(eased / (state.scale || 1));
+                    .multiplyScalar(eased * (state.moveScale || 1) / (state.scale || 1));
             }
             if (rule.resize[0] !== 1 || rule.resize[1] !== 1 || rule.resize[2] !== 1) {
                 grow = nextVec().set(
@@ -4380,7 +4393,7 @@ Reactor3D.applyModelAnimation = function(binding, rules, state) {
         } else {
             let t = state.frame;
             const gate = Reactor3D.moveTriggerActive(rule.trigger, state);
-            if (rule.trigger === "idle" && (state.moving || state.airborne)) continue;
+            if (rule.trigger === "idle" && !Reactor3D.isIdleState(state)) continue;
             // A movement-driven spin holds its angle when travel stops — a
             // wheel does not snap back to rest — it simply stops gaining.
             if (gate === false && rule.type !== "spin") continue;
@@ -4399,7 +4412,7 @@ Reactor3D.applyModelAnimation = function(binding, rules, state) {
                 const angle = rule.degrees * Math.sin(2 * Math.PI * (t / rule.period + rule.phase));
                 quat = nextQuat().setFromAxisAngle(axisOf(rule), angle * Math.PI / 180);
             } else {
-                const offset = rule.amount * Math.sin(2 * Math.PI * (t / rule.period + rule.phase)) / (state.scale || 1);
+                const offset = rule.amount * (state.moveScale || 1) * Math.sin(2 * Math.PI * (t / rule.period + rule.phase)) / (state.scale || 1);
                 slide = axisOf(rule).multiplyScalar(offset);
             }
         }
@@ -4540,7 +4553,9 @@ Reactor3D.applyModelAnimation = function(binding, rules, state) {
             // trigger never fight — the first in the list plays.
             const pick = trigger => clipRules.find(r => r.trigger === trigger);
             // On a ladder the climb clip, and in the water the swim clip, outrank every gait, and loop.
-            const swim = (state.climbing ? pick("climbing") : null) || (state.swimming ? pick("swimming") : null);
+            // Floating still takes a tread clip, or the swim clip when there is none.
+            const swim = (state.climbing ? pick("climbing") : null)
+                || (state.swimming ? (moving ? pick("swimming") : pick("treading") || pick("swimming")) : null);
             if (swim) {
                 desired = swim.clip;
                 key = swim.clip;
@@ -4560,7 +4575,7 @@ Reactor3D.applyModelAnimation = function(binding, rules, state) {
             // Climb) plays it from the rest pose: a gait clip under it would fight it.
             const procedural = trigger => rules.some(r => r.trigger === trigger && r.type !== "clip");
             const stateMotion = !jump && !swim && ((state.climbing && procedural("climbing"))
-                || (state.swimming && procedural("swimming")) || (state.airborne && procedural("jumping")));
+                || (state.swimming && procedural(moving ? "swimming" : "treading")) || (state.airborne && procedural("jumping")));
             const rule = jump || swim || stateMotion ? null : (moving
                 ? (dashing ? pick("dashing") : pick("walking")) || pick("moving")
                 : pick("idle")) || pick("always");

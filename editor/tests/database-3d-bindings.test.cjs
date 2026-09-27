@@ -332,11 +332,11 @@ test('a rigged model plays its template default motions for the states it has no
     const P = require(path.join(repoRoot, 'runtime', 'reactor_rig_motions.js'));
     const byTrigger = id => [...new Set(P.byId(id).rules.map(r => r.trigger))];
     assert.deepEqual(['walk', 'run', 'breathe', 'jump', 'swim', 'climb', 'tread'].map(byTrigger),
-        [['walking'], ['dashing'], ['idle'], ['jumping'], ['swimming'], ['climbing'], ['swimming']]);
+        [['walking'], ['dashing'], ['idle'], ['jumping'], ['swimming'], ['climbing'], ['treading']]);
     const own = [{ name: 'Walking', type: 'clip', clip: 'Walking', trigger: 'walking' }, { name: 'Idle', type: 'clip', clip: 'Idle', trigger: 'idle' }];
     const rules = Reactor3D.readModelAnimationRules({ animations: own, rig: { template: 'humanoid' } });
     const defaults = [...new Set(rules.filter(r => r.defaultMotion).map(r => r.name))];
-    assert.deepEqual(defaults.sort(), ['Climb', 'Jump', 'Run', 'Swim']);
+    assert.deepEqual(defaults.sort(), ['Climb', 'Jump', 'Run', 'Swim', 'Tread Water']);
     assert.equal(Reactor3D.readModelAnimationRules({ animations: own, rig: { template: 'humanoid' }, defaultMotions: false }).length, 2, 'switched off');
     assert.equal(Reactor3D.readModelAnimationRules({ animations: own }).length, 2, 'no rig, no defaults');
     // A gait is walked on the ground.

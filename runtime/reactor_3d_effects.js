@@ -46,7 +46,7 @@ Reactor3D.readModelEffects = function(json) {
         seen.add(name);
         const anchorRaw = raw.anchor && typeof raw.anchor === "object" ? raw.anchor : {};
         const offsetRaw = Array.isArray(anchorRaw.offset) ? anchorRaw.offset : [];
-        const triggers = ["action", "always", "moving", "walking", "dashing", "jumping", "swimming", "climbing", "idle"];
+        const triggers = ["action", "always", "moving", "walking", "dashing", "jumping", "swimming", "treading", "climbing", "idle"];
         const videoRaw = raw.video && typeof raw.video === "object" ? raw.video : null;
         const effect = {
             // What it shows: a database animation, or a video surface on a
@@ -1919,9 +1919,10 @@ Reactor3D.updateTriggeredEffects = function(holder, character, state) {
             || (effect.trigger === "walking" && state.moving && !state.dashing)
             || (effect.trigger === "dashing" && state.dashing)
             || (effect.trigger === "jumping" && state.airborne)
-            || (effect.trigger === "swimming" && state.swimming)
+            || (effect.trigger === "swimming" && state.swimming && state.moving)
+            || (effect.trigger === "treading" && state.swimming && !state.moving)
             || (effect.trigger === "climbing" && state.climbing)
-            || (effect.trigger === "idle" && !state.moving && !state.airborne);
+            || (effect.trigger === "idle" && Reactor3D.isIdleState(state));
         if (isVideo) {
             const playing = !!(holder.videos && holder.videos[effect.name]);
             if (active && !playing) this.spawnVideoEffect(effect, character, holder);

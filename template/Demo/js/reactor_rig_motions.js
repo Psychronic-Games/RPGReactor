@@ -13,7 +13,7 @@
  * torso and head lean forward on positive X and turn left on positive Y.
  *
  * The movement states (walking, dashing, idle, jumping, swimming,
- * climbing) have a preset each, and a rigged model plays those on its own
+ * treading, climbing) have a preset each, and a rigged model plays those on its own
  * for any state it has no motion of its own for (`DEFAULTS`,
  * `defaultRules`), so a character climbs, swims and jumps plausibly
  * before anyone animates it. The same file is the runtime's
@@ -48,6 +48,22 @@
             const t = i / n;
             const offset = [0, 0, 0];
             offset[AXES[axis]] = amp * Math.sin(2 * Math.PI * (t * cycles + phase));
+            keys.push(key(t, add(base, offset)));
+        }
+        return keys;
+    };
+
+    /**
+     * A steady turn about one axis, `degrees` a cycle (360 for a windmill),
+     * starting `phase` of the way round, as keys over the whole motion. It
+     * ends a whole revolution on from where it began, so it loops smoothly.
+     */
+    const turn = (axis, degrees, phase = 0, base = [0, 0, 0], samples = 8) => {
+        const keys = [];
+        for (let i = 0; i <= samples; i++) {
+            const t = i / samples;
+            const offset = [0, 0, 0];
+            offset[AXES[axis]] = degrees * (t + phase);
             keys.push(key(t, add(base, offset)));
         }
         return keys;
@@ -116,30 +132,38 @@
             Chest: hold([-4, 0, 0]),
             Head: hold([-6, 0, 0])
         }),
-        // In deep water: leaning into a front crawl, the arms reaching over in turn and a flutter kick.
-        motion('swim', 'Swim', 'humanoid', 'swimming', 60, {
-            Body: hold([30, 0, 0]),
-            Head: hold([-28, 0, 0]),
-            LeftUpperArm: osc('x', 75, 0, [-85, 0, 10]),
-            RightUpperArm: osc('x', 75, 0.5, [-85, 0, -10]),
-            LeftLowerArm: osc('x', 22, 0.25, [-20, 0, 0]),
-            RightLowerArm: osc('x', 22, 0.75, [-20, 0, 0]),
-            LeftUpperLeg: osc('x', 16, 0, [6, 0, 0], 3),
-            RightUpperLeg: osc('x', 16, 0.5, [6, 0, 0], 3),
-            LeftLowerLeg: hold([18, 0, 0]),
-            RightLowerLeg: hold([18, 0, 0])
+        // Moving through deep water: a front crawl. The body lies nearly flat just under
+        // the surface (pitched from the feet, then lifted and drawn back: the swimmer
+        // floats feet-down at the swim depth), head up; each arm windmills a whole turn, over the back and
+        // round under the chest, half a stroke after the other; a quick flutter kick.
+        motion('swim', 'Swim', 'humanoid', 'swimming', 70, {
+            // Lifted 1.6 tiles and drawn back 1.45, so the body lies centred over where the swimmer is.
+            Body: [key(0, [75, 0, 0], [0, 1.6, -1.45]), key(1, [75, 0, 0], [0, 1.6, -1.45])],
+            Head: hold([-50, 0, 0]),
+            RightUpperArm: turn('x', 360, 0, [0, 0, -12]),
+            LeftUpperArm: turn('x', 360, 0.5, [0, 0, 12]),
+            // The elbow folds high on the way over (+X leads the hand forward) and straightens through the pull.
+            RightLowerArm: osc('x', 30, 0, [35, 0, 0]),
+            LeftLowerArm: osc('x', 30, 0.5, [35, 0, 0]),
+            LeftUpperLeg: osc('x', 16, 0, [0, 0, 0], 3),
+            RightUpperLeg: osc('x', 16, 0.5, [0, 0, 0], 3),
+            LeftLowerLeg: osc('x', 14, 0.25, [16, 0, 0], 3),
+            RightLowerLeg: osc('x', 14, 0.75, [16, 0, 0], 3)
         }),
-        // In deep water, upright: hands sculling out and in, a slow kick, head well out.
-        motion('tread', 'Tread Water', 'humanoid', 'swimming', 60, {
-            LeftUpperArm: osc('z', 18, 0, [-20, 0, 30]),
-            RightUpperArm: osc('z', 18, 0.5, [-20, 0, -30]),
-            LeftLowerArm: hold([-50, 0, 0]),
-            RightLowerArm: hold([-50, 0, 0]),
-            LeftUpperLeg: osc('x', 18, 0, [-10, 0, 0]),
-            RightUpperLeg: osc('x', 18, 0.5, [-10, 0, 0]),
-            LeftLowerLeg: osc('x', 18, 0.25, [30, 0, 0]),
-            RightLowerLeg: osc('x', 18, 0.75, [30, 0, 0]),
-            Body: bob(0.03, 1)
+        // Floating still in deep water, upright: forearms forward under the surface, the
+        // hands sweeping out and back in together (a turn about the vertical, mirrored),
+        // a slow kick, a gentle bob, head well out.
+        motion('tread', 'Tread Water', 'humanoid', 'treading', 80, {
+            LeftUpperArm: hold([-20, 0, 10]),
+            RightUpperArm: hold([-20, 0, -10]),
+            // Turned in 25° so the forearms point ahead, not out along the arms' rest angle.
+            LeftLowerArm: osc('y', 25, 0, [-65, -25, 0]),
+            RightLowerArm: osc('y', -25, 0, [-65, 25, 0]),
+            LeftUpperLeg: osc('x', 16, 0, [-12, 0, 0]),
+            RightUpperLeg: osc('x', 16, 0.5, [-12, 0, 0]),
+            LeftLowerLeg: osc('x', 14, 0.25, [28, 0, 0]),
+            RightLowerLeg: osc('x', 14, 0.75, [28, 0, 0]),
+            Body: bob(0.04, 2)
         }),
         // Up or down a ladder: hand over hand overhead, the opposite foot stepping up with each.
         motion('climb', 'Climb', 'humanoid', 'climbing', 40, {
@@ -302,7 +326,7 @@
 
     /** The preset a rig plays on its own in each state it has no motion for. */
     const DEFAULTS = {
-        humanoid: { idle: 'breathe', walking: 'walk', dashing: 'run', jumping: 'jump', swimming: 'swim', climbing: 'climb' },
+        humanoid: { idle: 'breathe', walking: 'walk', dashing: 'run', jumping: 'jump', swimming: 'swim', treading: 'tread', climbing: 'climb' },
         quadruped: { idle: 'idle-sway', walking: 'quad-walk', dashing: 'quad-walk' }
     };
 
@@ -312,7 +336,9 @@
      */
     function covers(rules, state) {
         return rules.some(rule => rule && rule.trigger && (rule.trigger === state
-            || (rule.trigger === 'moving' && (state === 'walking' || state === 'dashing'))));
+            || (rule.trigger === 'moving' && (state === 'walking' || state === 'dashing'))
+            // A swim clip also plays while floating still when there is no tread clip.
+            || (state === 'treading' && rule.trigger === 'swimming' && rule.type === 'clip')));
     }
 
     /**

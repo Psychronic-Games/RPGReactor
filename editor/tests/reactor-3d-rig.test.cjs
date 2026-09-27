@@ -567,3 +567,29 @@ test('a keyed swing runs through its keys without stopping, and never overshoots
     assert.equal(Reactor3D.sampleModelKeys(held, 0).rotate[0], 0);
     assert.equal(Reactor3D.sampleModelKeys(held, 1).rotate[0], 0);
 });
+
+test('in deep water a swimmer swims while moving and treads while still; idle is on dry ground only', () => {
+    const active = (trigger, state) => Reactor3D.moveTriggerActive(trigger, state);
+    assert.equal(active('swimming', { swimming: true, moving: true }), true);
+    assert.equal(active('swimming', { swimming: true, moving: false }), false);
+    assert.equal(active('treading', { swimming: true, moving: false }), true);
+    assert.equal(active('treading', { swimming: true, moving: true }), false);
+    assert.equal(active('idle', { swimming: true }), false, 'Breathe does not layer over treading water');
+    assert.equal(active('idle', { climbing: true }), false);
+    assert.equal(active('idle', {}), true);
+    const P = require(path.join(repoRoot, 'editor', 'src', 'database', 'RigMotionPresets.js'));
+    const defaults = P.defaultRules('humanoid', []);
+    assert.ok(defaults.some(rule => rule.name === 'Swim' && rule.trigger === 'swimming'));
+    assert.ok(defaults.some(rule => rule.name === 'Tread Water' && rule.trigger === 'treading'));
+    // A model's own swim clip also covers floating still, so no default tread is laid under it.
+    assert.ok(!P.defaultRules('humanoid', [{ trigger: 'swimming', type: 'clip' }]).some(rule => rule.trigger === 'treading'));
+    assert.ok(P.defaultRules('humanoid', [{ trigger: 'swimming', type: 'pose' }]).some(rule => rule.trigger === 'treading'));
+});
+
+test('a windmill that ends a whole turn on runs through its loop without pausing', () => {
+    const P = require(path.join(repoRoot, 'editor', 'src', 'database', 'RigMotionPresets.js'));
+    const rule = Reactor3D.readModelAnimationRules({ animations: P.byId('swim').rules }).find(r => r.part === 'RightUpperArm');
+    const at = p => Reactor3D.sampleModelKeys(rule, p).rotate[0];
+    const start = at(0.01) - at(0), end = at(1) - at(0.99);
+    assert.ok(start > 2 && end > 2 && Math.abs(start - end) < 0.5, `speed at the seam ${start} / ${end}`);
+});

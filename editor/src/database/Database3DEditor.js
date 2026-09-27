@@ -1740,6 +1740,9 @@ class Database3DEditor {
                         climbing: !!this._sim.climbing,
                         distance: this._sim.walking ? (this._sim.dashing ? 1 / 8 : 1 / 16) : 0,
                         scale: this._scale,
+                        // A move is in tiles; the preview draws the model 1.6 units tall where the game
+                        // draws a character 3 tiles tall, so moves shrink to the same share of the body.
+                        moveScale: (Reactor3D.EFFECT_PREVIEW_SPAN || 1.6) / 3,
                         action: this._sim.action
                             ? { name: this._sim.action.name, frame: this._sim.action.frame }
                             : null
@@ -3179,6 +3182,7 @@ class Database3DEditor {
                     <option value="dashing"${work.trigger === 'dashing' ? ' selected' : ''}>${this._t('While dashing')}</option>
                     <option value="jumping"${work.trigger === 'jumping' ? ' selected' : ''}>${this._t('While jumping')}</option>
                     <option value="swimming"${work.trigger === 'swimming' ? ' selected' : ''}>${this._t('While swimming')}</option>
+                    <option value="treading"${work.trigger === 'treading' ? ' selected' : ''}>${this._t('While treading water')}</option>
                     <option value="climbing"${work.trigger === 'climbing' ? ' selected' : ''}>${this._t('While climbing')}</option>
                     <option value="idle"${work.trigger === 'idle' ? ' selected' : ''}>${this._t('While idle')}</option>
                     <option value="always"${work.trigger === 'always' ? ' selected' : ''}>${this._t('Always')}</option>
@@ -3677,7 +3681,7 @@ class Database3DEditor {
             const animations = this.databaseManager?.data?.animations || [];
             const record = raw.type === 'video' ? (raw.video && raw.video.file ? { name: raw.video.file } : null)
                 : raw.type === 'light' ? { name: this._lightSummary(raw.light) } : animations[Number(raw.animation)];
-            const when = { moving: this._t('While moving'), walking: this._t('While walking'), dashing: this._t('While dashing'), jumping: this._t('While jumping'), swimming: this._t('While swimming'), climbing: this._t('While climbing'), idle: this._t('While idle'), always: this._t('Always') }[raw.trigger];
+            const when = { moving: this._t('While moving'), walking: this._t('While walking'), dashing: this._t('While dashing'), jumping: this._t('While jumping'), swimming: this._t('While swimming'), treading: this._t('While treading water'), climbing: this._t('While climbing'), idle: this._t('While idle'), always: this._t('Always') }[raw.trigger];
             row.textContent = `\u2726 ${raw.name || '?'}` + (record && record.name ? ` \u2014 ${record.name}` : '') + (when ? ` \u00b7 ${when}` : '');
             row.style.cssText = 'padding:4px 10px;cursor:pointer;font-size:12px;color:var(--color-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'
                 + (index === this.selectedEffect ? 'background:var(--color-accent-tint-25);' : '');
@@ -3909,7 +3913,7 @@ class Database3DEditor {
                 : this._axisSlidersHtml('r3d-fxcard-slider', spec);
         const trigger = work.trigger || 'action';
         const triggerOptions = [['action', this._t('On demand')], ['moving', this._t('While moving')], ['walking', this._t('While walking')],
-            ['dashing', this._t('While dashing')], ['jumping', this._t('While jumping')], ['swimming', this._t('While swimming')], ['climbing', this._t('While climbing')], ['idle', this._t('While idle')], ['always', this._t('Always')]];
+            ['dashing', this._t('While dashing')], ['jumping', this._t('While jumping')], ['swimming', this._t('While swimming')], ['treading', this._t('While treading water')], ['climbing', this._t('While climbing')], ['idle', this._t('While idle')], ['always', this._t('Always')]];
         card.innerHTML = header
             + `<div style="font-size:11px;color:var(--color-text-muted);margin:-4px 0 6px;">${this._k('r3dcard.effectHint')}</div>`
             + this._tabStripHtml('r3d-fxcard-tab', tabs, this._fxTab)
@@ -5324,9 +5328,10 @@ class Database3DEditor {
                 || (trigger === 'walking' && moving && !dashing)
                 || (trigger === 'dashing' && dashing)
                 || (trigger === 'jumping' && jumping)
-                || (trigger === 'swimming' && swimming)
+                || (trigger === 'swimming' && swimming && moving)
+                || (trigger === 'treading' && swimming && !moving)
                 || (trigger === 'climbing' && !!this._sim.climbing)
-                || (trigger === 'idle' && !moving && !jumping);
+                || (trigger === 'idle' && !moving && !jumping && !swimming && !this._sim.climbing);
             if (!active) return;
             if (isLight) {
                 if (!wantedLight || index === this.selectedEffect) { wantedLight = raw; wantedLightIndex = index; }
@@ -7087,7 +7092,7 @@ class Database3DEditor {
             detail.style.cssText = 'font-size:10px;color:var(--color-text-muted);';
             detail.textContent = `${preset.rules.length} × · ${triggers.map(t => this._t(
                 t === 'moving' ? 'While moving' : t === 'walking' ? 'While walking'
-                    : t === 'dashing' ? 'While dashing' : t === 'jumping' ? 'While jumping' : t === 'swimming' ? 'While swimming' : t === 'climbing' ? 'While climbing' : t === 'idle' ? 'While idle'
+                    : t === 'dashing' ? 'While dashing' : t === 'jumping' ? 'While jumping' : t === 'swimming' ? 'While swimming' : t === 'treading' ? 'While treading water' : t === 'climbing' ? 'While climbing' : t === 'idle' ? 'While idle'
                     : t === 'action' ? 'On demand' : 'Always')).join(', ')}`;
             const apply = document.createElement('button');
             apply.type = 'button';
@@ -7212,20 +7217,22 @@ class Database3DEditor {
         if (triggers.has('dashing')) states.push('dashing');
         if (triggers.has('jumping')) states.push('jumping');
         if (triggers.has('swimming')) states.push('swimming');
+        if (triggers.has('treading')) states.push('treading');
         if (triggers.has('climbing')) states.push('climbing');
         return states.length ? ['standing'].concat(states) : [];
     }
 
     previewState() {
         const sim = this._sim;
-        return sim.climbing ? 'climbing' : sim.swimming ? 'swimming' : sim.jumping ? 'jumping' : sim.dashing ? 'dashing' : sim.walking ? 'walking' : 'standing';
+        return sim.climbing ? 'climbing' : sim.swimming ? (sim.walking ? 'swimming' : 'treading') : sim.jumping ? 'jumping' : sim.dashing ? 'dashing' : sim.walking ? 'walking' : 'standing';
     }
 
     setPreviewState(state) {
-        this._sim.walking = state === 'walking' || state === 'dashing';
+        // Swimming is moving through deep water; treading is floating still in it.
+        this._sim.walking = state === 'walking' || state === 'dashing' || state === 'swimming';
         this._sim.dashing = state === 'dashing';
         this._sim.jumping = state === 'jumping';
-        this._sim.swimming = state === 'swimming';
+        this._sim.swimming = state === 'swimming' || state === 'treading';
         this._sim.climbing = state === 'climbing';
         this.renderSimBar();
     }
@@ -7251,8 +7258,8 @@ class Database3DEditor {
         if (!states.includes(this.previewState())) { this._sim.walking = this._sim.dashing = this._sim.jumping = this._sim.swimming = this._sim.climbing = false; }
         const held = this.playRules.some(rule => rule.type === 'pose' && rule.hold);
         // A model that only "moves" (a car, a drone) is Idle or Moving; one that walks is Standing or Walking.
-        const walker = (this.rawAnimations || []).concat(this.rawEffects || []).some(raw => raw && ['walking', 'dashing', 'jumping', 'swimming', 'climbing'].includes(raw.trigger));
-        const names = { standing: walker ? 'Standing' : 'Idle', walking: walker ? 'Walking' : 'Moving', dashing: 'Dashing', jumping: 'Jumping', swimming: 'Swimming', climbing: 'Climbing' };
+        const walker = (this.rawAnimations || []).concat(this.rawEffects || []).some(raw => raw && ['walking', 'dashing', 'jumping', 'swimming', 'treading', 'climbing'].includes(raw.trigger));
+        const names = { standing: walker ? 'Standing' : 'Idle', walking: walker ? 'Walking' : 'Moving', dashing: 'Dashing', jumping: 'Jumping', swimming: 'Swimming', treading: 'Treading', climbing: 'Climbing' };
         const current = this.previewState();
         bar.innerHTML = states.map(state => `<button type="button" class="r3d-preview-state${state === current ? ' active' : ''}" data-state="${state}" aria-pressed="${state === current}">${this._t(names[state])}</button>`).join('')
             + (held ? `<button type="button" class="r3d-preview-state r3d-preview-reset" title="${this._t('Reset pose')}">↺</button>` : '');
@@ -7276,6 +7283,7 @@ class Database3DEditor {
             : raw.trigger === 'dashing' ? this._t('While dashing')
             : raw.trigger === 'jumping' ? this._t('While jumping')
             : raw.trigger === 'swimming' ? this._t('While swimming')
+            : raw.trigger === 'treading' ? this._t('While treading water')
             : raw.trigger === 'climbing' ? this._t('While climbing')
             : raw.trigger === 'action' ? this._t('On demand') : this._t('Always');
         const subject = type === 'clip' ? (raw.clip || '?') : (raw.part || this._t('Whole model'));
