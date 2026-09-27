@@ -500,11 +500,19 @@ class BuildHotbar {
             body = note('terrain.hint.drain');
         } else {
             const look = terrain.waterLook;
-            const same = preset => ['reflect', 'gloss', 'tint'].every(key => preset[key] === look[key]);
-            body = section(t('terrain.waterLook'), `<div class="rr-build-modes">${['water', 'mercury', 'plain'].map(p => `<button type="button" class="rr-build-chip rr-build-look" data-preset="${p}" aria-pressed="${same(TerrainManager.WATER_LOOKS[p])}"><span>${t('terrain.look.' + p)}</span></button>`).join('')}</div>`
-                + range('rr-build-treflect', t('terrain.look.reflect'), look.reflect, 0, 1, 0.01, Math.round(look.reflect * 100) + '%')
+            const keys = ['reflect', 'gloss', 'tint', 'colour', 'clear', 'waves', 'glow'];
+            const same = preset => keys.every(key => (preset[key] ?? '') === (look[key] ?? ''));
+            const swatch = (cls, value) => typeof RRColorPopup !== 'undefined' ? RRColorPopup.swatch(cls, value) : `<input type="color" class="${cls}" value="${value}">`;
+            // The liquid (what it is), then how it reflects.
+            body = section(t('terrain.liquid'), `<div class="rr-build-finishes">${Object.keys(TerrainManager.WATER_LOOKS).map(p => `<button type="button" class="rr-build-chip rr-build-look" data-preset="${p}" aria-pressed="${same(TerrainManager.WATER_LOOKS[p])}"><span>${t('terrain.look.' + p)}</span></button>`).join('')}</div>`
+                // No colour of its own is water's depth blue, shown as such.
+                + `<div class="rr-build-range"><span>${t('terrain.look.colour')}</span>${swatch('rr-build-tcolour', look.colour || '#2a5f96')}</div>`
+                + range('rr-build-tclear', t('terrain.look.clear'), look.clear ?? 0.6, 0, 1, 0.01, Math.round((look.clear ?? 0.6) * 100) + '%')
+                + range('rr-build-twaves', t('terrain.look.waves'), look.waves ?? 1, 0, 2, 0.01, Math.round((look.waves ?? 1) * 100) + '%')
+                + range('rr-build-tglow', t('terrain.look.glow'), look.glow ?? 0, 0, 1, 0.01, Math.round((look.glow ?? 0) * 100) + '%'))
+                + section(t('terrain.waterLook'), range('rr-build-treflect', t('terrain.look.reflect'), look.reflect, 0, 1, 0.01, Math.round(look.reflect * 100) + '%')
                 + range('rr-build-tgloss', t('terrain.look.gloss'), look.gloss, 0, 1, 0.01, Math.round(look.gloss * 100) + '%')
-                + `<div class="rr-build-range"><span>${t('terrain.look.tint')}</span>${typeof RRColorPopup !== 'undefined' ? RRColorPopup.swatch('rr-build-ttint', look.tint) : `<input type="color" class="rr-build-ttint" value="${look.tint}">`}</div>`) + note('terrain.look.hint');
+                + `<div class="rr-build-range"><span>${t('terrain.look.tint')}</span>${swatch('rr-build-ttint', look.tint)}</div>`) + note('terrain.look.hint');
         }
         const status = terrain.statusText ? terrain.statusText() : '';
         const iconButton = (cls, icon, key) => `<button type="button" class="rr-btn-secondary rr-build-icon-btn ${cls}" title="${t(key)}" aria-label="${t(key)}">${this.icon(icon, 16)}</button>`;
@@ -519,6 +527,12 @@ class BuildHotbar {
         bindRange('rr-build-tstrength', v => { terrain.strength = v; }, v => v);
         bindRange('rr-build-treflect', v => { terrain.waterLook.reflect = v; }, v => Math.round(v * 100) + '%');
         bindRange('rr-build-tgloss', v => { terrain.waterLook.gloss = v; }, v => Math.round(v * 100) + '%');
+        bindRange('rr-build-tclear', v => { terrain.waterLook.clear = v; }, v => Math.round(v * 100) + '%');
+        bindRange('rr-build-twaves', v => { terrain.waterLook.waves = v; }, v => Math.round(v * 100) + '%');
+        bindRange('rr-build-tglow', v => { terrain.waterLook.glow = v; }, v => Math.round(v * 100) + '%');
+        const colour = panel.querySelector('.rr-build-tcolour');
+        if (colour && colour.tagName === 'BUTTON') RRColorPopup.bind(colour, hex => { terrain.waterLook.colour = hex; });
+        else colour?.addEventListener('input', event => { terrain.waterLook.colour = event.target.value; });
         const tint = panel.querySelector('.rr-build-ttint');
         if (tint && tint.tagName === 'BUTTON') RRColorPopup.bind(tint, hex => { terrain.waterLook.tint = hex; });
         else tint?.addEventListener('input', event => { terrain.waterLook.tint = event.target.value; });

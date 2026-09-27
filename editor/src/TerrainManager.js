@@ -7,10 +7,14 @@
  */
 class TerrainManager {
     /** Water looks to start from: clear water with a sky in it, liquid mercury, and no reflection. */
+    /** The liquids: how each reflects (reflect, gloss, tint) and what it is (colour, clear, waves, glow). */
     static WATER_LOOKS = {
-        water: { reflect: 0.45, gloss: 0.85, tint: '#ffffff' },
-        mercury: { reflect: 1, gloss: 0.92, tint: '#d8dde3' },
-        plain: { reflect: 0, gloss: 0.85, tint: '#ffffff' }
+        water: { reflect: 0.45, gloss: 0.85, tint: '#ffffff', colour: '', clear: 0.6, waves: 1, glow: 0 },
+        mercury: { reflect: 1, gloss: 0.92, tint: '#d8dde3', colour: '#9aa3ad', clear: 0, waves: 0.4, glow: 0 },
+        tar: { reflect: 0.35, gloss: 0.95, tint: '#ffffff', colour: '#0b0b0d', clear: 0, waves: 0.12, glow: 0 },
+        lava: { reflect: 0, gloss: 0.3, tint: '#ffffff', colour: '#ff4a10', clear: 0, waves: 0.3, glow: 1 },
+        slime: { reflect: 0.25, gloss: 0.85, tint: '#d6ffc4', colour: '#46c22c', clear: 0.2, waves: 0.5, glow: 0 },
+        plain: { reflect: 0, gloss: 0.85, tint: '#ffffff', colour: '', clear: 0.6, waves: 1, glow: 0 }
     };
 
     constructor(projectController) {
@@ -211,6 +215,9 @@ class TerrainManager {
         if (standing && standing.level >= basin.level - 1e-6) { this._flash('terrain.waterFull'); return false; }
         const saved = elevation.waterSnapshot(map);
         if (!elevation.fillWaterAt(map, cell.x, cell.y, this.waterMaterial)) return false;
+        // Poured as the liquid in hand: tar pours as tar.
+        const poured = elevation.waterAt(map, cell.x, cell.y);
+        if (poured) elevation.styleWaterRegion(map, poured, this.waterLook);
         this.undoStack.push({ water: saved }); if (this.undoStack.length > 50) this.undoStack.shift(); this.redoStack.length = 0;
         this.announce(null, true); this.refreshStatus();
         return true;

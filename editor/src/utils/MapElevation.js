@@ -897,6 +897,12 @@
         if (unit(raw.reflect) !== null) region.reflect = unit(raw.reflect);
         if (unit(raw.gloss) !== null) region.gloss = unit(raw.gloss);
         if (typeof raw.tint === 'string' && /^#[0-9a-f]{6}$/i.test(raw.tint)) region.tint = raw.tint.toLowerCase();
+        // The liquid itself: its colour, clarity (0-1), waves (0-2) and glow (0-1).
+        if (typeof raw.colour === 'string' && /^#[0-9a-f]{6}$/i.test(raw.colour)) region.colour = raw.colour.toLowerCase();
+        if (unit(raw.clear) !== null) region.clear = unit(raw.clear);
+        const waves = Number(raw.waves);
+        if (Number.isFinite(waves)) region.waves = Math.max(0, Math.min(2, Math.round(waves * 100) / 100));
+        if (unit(raw.glow) !== null) region.glow = unit(raw.glow);
         return region;
     };
     /** Whether a sheet stands over a cell. */
@@ -941,7 +947,7 @@
         if (kept.length === list.length) return false;
         return writeWater(mapData, kept);
     };
-    /** Give one sheet a look (reflect, gloss, tint); a look that reflects nothing clears it. */
+    /** Give one sheet a look: its reflection (reflect, gloss, tint) and its liquid (colour, clear, waves, glow). Water's own values are left unwritten. */
     const styleWaterRegion = (mapData, region, look) => {
         if (!region || !look) return false;
         const list = water(mapData);
@@ -950,8 +956,12 @@
             if (!(other.x0 === region.x0 && other.y0 === region.y0 && other.x1 === region.x1 && other.y1 === region.y1 && Math.abs(other.level - region.level) < 1e-6)) return other;
             found = true;
             const next = Object.assign({}, other);
-            delete next.reflect; delete next.gloss; delete next.tint;
+            for (const key of ['reflect', 'gloss', 'tint', 'colour', 'clear', 'waves', 'glow']) delete next[key];
             if (Number(look.reflect) > 0) Object.assign(next, { reflect: Number(look.reflect), gloss: Number(look.gloss), tint: look.tint });
+            if (look.colour) next.colour = look.colour;
+            if (look.clear !== undefined && Math.abs(Number(look.clear) - 0.6) > 1e-6) next.clear = Number(look.clear);
+            if (look.waves !== undefined && Math.abs(Number(look.waves) - 1) > 1e-6) next.waves = Number(look.waves);
+            if (Number(look.glow) > 0) next.glow = Number(look.glow);
             return normalizeWater(next, mapData);
         });
         return found ? writeWater(mapData, styled.filter(Boolean)) : false;

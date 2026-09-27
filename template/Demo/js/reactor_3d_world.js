@@ -703,6 +703,13 @@ Reactor3D.waterLookOf = function(raw) {
     if (unit(raw.reflect) !== null) out.reflect = unit(raw.reflect);
     if (unit(raw.gloss) !== null) out.gloss = unit(raw.gloss);
     if (typeof raw.tint === "string" && /^#[0-9a-f]{6}$/i.test(raw.tint)) out.tint = raw.tint.toLowerCase();
+    // What the liquid is: its own colour (none: the depth blue of water), how clear it is
+    // (0 opaque, like tar), how much it waves (0-2, tar barely stirs) and whether it glows (lava).
+    if (typeof raw.colour === "string" && /^#[0-9a-f]{6}$/i.test(raw.colour)) out.colour = raw.colour.toLowerCase();
+    if (unit(raw.clear) !== null) out.clear = unit(raw.clear);
+    const waves = Number(raw.waves);
+    if (Number.isFinite(waves)) out.waves = Math.max(0, Math.min(2, Math.round(waves * 100) / 100));
+    if (unit(raw.glow) !== null) out.glow = unit(raw.glow);
     return out;
 };
 
@@ -1566,24 +1573,35 @@ Reactor3D.waterMaterial = function(texture, look) {
     const reflect = look && look.reflect > 0 ? look.reflect : 0;
     material.userData.rrWaterLook = new THREE.Vector4(reflect, 1 - (look && look.gloss !== undefined ? look.gloss : 0.85), 0, 0);
     material.userData.rrWaterTint = new THREE.Color(look && look.tint ? look.tint : "#ffffff");
+    // The liquid: its colour (w 1 when it has its own), and its clarity, waves and glow.
+    const colour = look && look.colour ? new THREE.Color(look.colour) : null;
+    material.userData.rrWaterColour = new THREE.Vector4(colour ? colour.r : 0, colour ? colour.g : 0, colour ? colour.b : 0, colour ? 1 : 0);
+    const glow = look && look.glow > 0 ? look.glow : 0;
+    material.userData.rrWaterForm = new THREE.Vector4(look && look.clear !== undefined ? look.clear : 0.6, look && look.waves !== undefined ? look.waves : 1, glow, 0);
+    // A glowing liquid lights itself: lava is bright in the dark.
+    if (glow >= 0.5) material.__reactorSelfLit = true;
     if (reflect > 0 && this.Reflections) { this.Reflections.wanted = true; this.Reflections.hook(material); }
     const env = this.Reflections ? this.Reflections.uniforms() : null;
     material.onBeforeCompile = function(shader) {
         shader.uniforms.rrWaveTime = shared.rrWaveTime;
         shader.uniforms.rrWaterLook = { value: material.userData.rrWaterLook };
         shader.uniforms.rrWaterTint = { value: material.userData.rrWaterTint };
+        shader.uniforms.rrWaterColour = { value: material.userData.rrWaterColour };
+        shader.uniforms.rrWaterForm = { value: material.userData.rrWaterForm };
         if (env) { shader.uniforms.rrEnvMap = env.rrEnvMap; shader.uniforms.rrEnvMaxLod = env.rrEnvMaxLod; shader.uniforms.rrEnvFlip = env.rrEnvFlip; }
         const mirror = env && Reactor3D.Mirrors ? Reactor3D.Mirrors.uniforms() : null;
         if (mirror) for (const name of Object.keys(mirror)) shader.uniforms[name] = mirror[name];
-        shader.vertexShader = "uniform float rrWaveTime;\nattribute float rrDepth;\nvarying float vRRDepth;\nvarying vec3 vRRWaveNormal;\n" + shader.vertexShader.replace(
+        shader.vertexShader = "uniform float rrWaveTime;\nuniform vec4 rrWaterForm;\nattribute float rrDepth;\nvarying float vRRDepth;\nvarying vec3 vRRWaveNormal;\n" + shader.vertexShader.replace(
             "#include <begin_vertex>",
             [
                 "#include <begin_vertex>",
                 "{",
                 "\tvec2 rrP = vec2(position.x, position.z);",
                 "\tvec2 rrK1 = vec2(0.9, 0.45), rrK2 = vec2(-0.35, 0.8);",
-                "\tfloat rrA1 = 0.07, rrA2 = 0.045;",
-                "\tfloat rrPh1 = dot(rrK1, rrP) - rrWaveTime * 1.1, rrPh2 = dot(rrK2, rrP) - rrWaveTime * 1.7;",
+                // How much it waves: higher and quicker for more, low and sluggish for tar.
+                "\tfloat rrA1 = 0.07 * rrWaterForm.y, rrA2 = 0.045 * rrWaterForm.y;",
+                "\tfloat rrPace = mix(0.25, 1.0, clamp(rrWaterForm.y, 0.0, 1.0));",
+                "\tfloat rrPh1 = dot(rrK1, rrP) - rrWaveTime * 1.1 * rrPace, rrPh2 = dot(rrK2, rrP) - rrWaveTime * 1.7 * rrPace;",
                 "\tfloat rrLift = rrA1 * sin(rrPh1) + rrA2 * sin(rrPh2);",
                 "\tfloat rrDx = rrA1 * cos(rrPh1) * rrK1.x + rrA2 * cos(rrPh2) * rrK2.x;",
                 "\tfloat rrDz = rrA1 * cos(rrPh1) * rrK1.y + rrA2 * cos(rrPh2) * rrK2.y;",
@@ -1595,7 +1613,7 @@ Reactor3D.waterMaterial = function(texture, look) {
                 "}"
             ].join("\n")
         );
-        shader.fragmentShader = "varying float vRRDepth;\nvarying vec3 vRRWaveNormal;\nuniform vec4 rrWaterLook;\nuniform vec3 rrWaterTint;\n"
+        shader.fragmentShader = "varying float vRRDepth;\nvarying vec3 vRRWaveNormal;\nuniform vec4 rrWaterLook;\nuniform vec3 rrWaterTint;\nuniform vec4 rrWaterColour;\nuniform vec4 rrWaterForm;\n"
             + (env ? "uniform samplerCube rrEnvMap;\nuniform float rrEnvMaxLod;\nuniform float rrEnvFlip;\n" : "")
             + (mirror ? "uniform float rrMirrorOn0;\nuniform vec4 rrMirrorPlane0;\nuniform mat4 rrMirrorMatrix0;\nuniform sampler2D rrMirrorMap0;\nuniform float rrMirrorOn1;\nuniform vec4 rrMirrorPlane1;\nuniform mat4 rrMirrorMatrix1;\nuniform sampler2D rrMirrorMap1;\nuniform float rrMirrorTolerance;\n" : "")
             + shader.fragmentShader.replace(
@@ -1605,13 +1623,19 @@ Reactor3D.waterMaterial = function(texture, look) {
                 "{",
                 "\tvec3 rrShallow = vec3(0.55, 0.85, 0.95), rrDeep = vec3(0.10, 0.32, 0.58);",
                 "\tvec3 rrTint = mix(rrShallow, rrDeep, smoothstep(0.0, 2.5, vRRDepth));",
+                // A liquid of its own colour: a touch lighter in the shallows.
+                "\tif (rrWaterColour.w > 0.5) rrTint = mix(min(rrWaterColour.rgb * 1.3 + 0.04, vec3(1.0)), rrWaterColour.rgb, smoothstep(0.0, 1.5, vRRDepth));",
                 "\tvec3 rrLightDir = normalize(vec3(0.35, 1.0, 0.25));",
                 "\tvec3 rrViewDir = normalize(cameraPosition - vRRWorldPos);",
                 "\tvec3 rrHalf = normalize(rrLightDir + rrViewDir);",
                 "\tfloat rrGlint = pow(max(dot(vRRWaveNormal, rrHalf), 0.0), 48.0);",
                 "\tfloat rrFresnel = pow(1.0 - max(dot(vRRWaveNormal, rrViewDir), 0.0), 3.0);",
-                "\tdiffuseColor.rgb = mix(diffuseColor.rgb * rrTint, vec3(1.0), rrGlint * 0.7);",
-                "\tdiffuseColor.a *= (0.55 + 0.3 * smoothstep(0.0, 2.0, vRRDepth) + 0.15 * rrFresnel) * smoothstep(0.0, 0.35, vRRDepth);",
+                "\tdiffuseColor.rgb = mix(diffuseColor.rgb * rrTint, vec3(1.0), rrGlint * 0.7 * (1.0 - rrWaterForm.z));",
+                // Clarity 0.6 is water as it always was; lower is murkier to opaque (tar, lava), higher clearer.
+                "\tfloat rrSeen = 0.55 + 0.3 * smoothstep(0.0, 2.0, vRRDepth) + 0.15 * rrFresnel;",
+                "\tdiffuseColor.a *= clamp(mix(1.0, rrSeen, rrWaterForm.x / 0.6), 0.05, 1.0) * smoothstep(0.0, 0.35, vRRDepth);",
+                // A glowing liquid burns brighter at its crests.
+                "\tif (rrWaterForm.z > 0.0) diffuseColor.rgb *= 1.0 + rrWaterForm.z * (0.35 + 2.5 * (1.0 - vRRWaveNormal.y));",
                 // A reflective sheet mirrors the world through its waves, more at a
                 // glancing angle, and turns opaque as it does: mercury is a mirror.
                 env ? [
