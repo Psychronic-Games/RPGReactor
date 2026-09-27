@@ -4568,6 +4568,10 @@ class MapEditor3D {
         const scene = this.mapScene.scene();
         // A face of the reflection capture, as the game takes it.
         if (typeof Reactor3D !== 'undefined' && Reactor3D.Reflections && this.camera) Reactor3D.Reflections.update(this.renderer, scene, this.camera.position, this.mapScene.reflectionHidden?.());
+        // Mirror pieces and reflective water show their sharp mirrors here as in the game.
+        if (typeof Reactor3D !== 'undefined' && Reactor3D.Mirrors && this.camera && this.mapScene.mirrorCandidates) {
+            Reactor3D.Mirrors.update(this.renderer, scene, this.camera, this.mapScene.mirrorCandidates(this.camera), null, null);
+        }
         const background = scene.background;
         const autoClear = this.renderer.autoClear;
         const eventVisible = this.eventGroup ? this.eventGroup.visible : null;

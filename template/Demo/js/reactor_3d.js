@@ -1369,6 +1369,11 @@ Reactor3D.Viewport.prototype.renderPass = function(mapScene, which, slot) {
                 const probe = mapScene.reflectionProbe ? mapScene.reflectionProbe(this._camera) : null;
                 if (probe) Reactor3D.Reflections.update(this._renderer, scene, probe.position, probe.hidden, probe.toward, probe.radius);
             }
+            // Mirror finishes near the camera: the sharp planar pictures, the party in them.
+            if (Reactor3D.Mirrors && this._camera) {
+                const mirrors = mapScene.mirrorCandidates ? mapScene.mirrorCandidates(this._camera) : [];
+                Reactor3D.Mirrors.update(this._renderer, scene, this._camera, mirrors, null, mirrors.length && mapScene.mirrorSubject ? mapScene.mirrorSubject() : null);
+            }
         }
     }
     mapScene.setPass(which);
@@ -6910,6 +6915,62 @@ Reactor3D.MapScene.prototype.reflectionProbe = function(camera) {
         return { position, hidden: [best.object], toward: camera.position, radius: Math.max(1.5, Math.min(40, radius)) };
     }
     return { position: camera.position, hidden: this.reflectionHidden(), toward: null };
+};
+
+/** The points a mirror tries to show: the player's feet, chest and head. */
+Reactor3D.MapScene.prototype.mirrorSubject = function() {
+    for (const holder of this._modelInstances ? this._modelInstances.values() : []) {
+        if (!holder || !holder.object || typeof $gamePlayer === "undefined" || holder.character !== $gamePlayer) continue;
+        const box = new THREE.Box3().setFromObject(holder.object);
+        if (box.isEmpty()) return null;
+        const mid = box.getCenter(new THREE.Vector3());
+        return [new THREE.Vector3(mid.x, box.min.y + 0.1, mid.z), mid, new THREE.Vector3(mid.x, box.max.y - 0.15, mid.z)];
+    }
+    return null;
+};
+
+/** The mirror-finish models near the camera, nearest first (at most two), for `Reactor3D.Mirrors`. */
+Reactor3D.MapScene.prototype.mirrorCandidates = function(camera) {
+    const frame = typeof Graphics !== "undefined" ? Graphics.frameCount : 0;
+    if (!this._mirrorList || frame - this._mirrorList.frame >= 15 || frame < this._mirrorList.frame) {
+        const list = [];
+        for (const holder of this._modelInstances ? this._modelInstances.values() : []) {
+            const object = holder && holder.object;
+            if (object && Reactor3D.mirrorOf(object) >= 0.5 && Reactor3D.isMirrorFinish(object)) list.push(object);
+        }
+        // Built pieces with a mirror finish, chunk by chunk.
+        for (const mesh of this._pieceMeshes || []) if (mesh.userData.pieceFinish && Reactor3D.isMirrorFinish(mesh)) list.push(mesh);
+        // Reflective water: a level plane, facing up.
+        for (const mesh of this._waterMeshes || []) {
+            const look = mesh.material && mesh.material.userData && mesh.material.userData.rrWaterLook;
+            if (!look || !(look.x > 0)) continue;
+            if (!mesh.userData.rrMirrorPlane) {
+                mesh.updateMatrixWorld();
+                const level = new THREE.Vector3(0, mesh.userData.water.level, 0).applyMatrix4(mesh.matrixWorld).y;
+                mesh.userData.rrMirrorPlane = { normal: new THREE.Vector3(0, 1, 0), point: new THREE.Vector3(0, level, 0) };
+            }
+            list.push(mesh);
+        }
+        this._mirrorList = { frame, list };
+    }
+    const reach = Reactor3D.MIRROR_PLANE_REACH;
+    // Distance to the thing's bounds, not its origin: a chunk or a sheet has its origin at the map's corner.
+    const distance = object => {
+        const still = object.userData.pieceChunk !== undefined || !!object.userData.water;
+        let sphere = still ? object.userData.__rrMirrorSphere : null;
+        if (!sphere) {
+            const box = new THREE.Box3().setFromObject(object);
+            sphere = box.isEmpty() ? null : box.getBoundingSphere(new THREE.Sphere());
+            if (still) object.userData.__rrMirrorSphere = sphere;
+        }
+        return sphere ? Math.max(0, sphere.center.distanceTo(camera.position) - sphere.radius) : Infinity;
+    };
+    return this._mirrorList.list
+        .filter(object => object.parent && object.visible)
+        .map(object => ({ object, distance: distance(object) }))
+        .filter(entry => entry.distance <= reach)
+        .sort((a, b) => a.distance - b.distance)
+        .slice(0, 2).map(entry => entry.object);
 };
 
 /** How strongly a model mirrors: its shiniest lit material's reflection (0 for none), worked out once it has meshes. */

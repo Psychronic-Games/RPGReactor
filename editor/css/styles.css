@@ -3814,8 +3814,11 @@
         .rr-build-facing { display: flex; align-items: center; gap: 4px; }
         .rr-build-facing .rr-build-chip { width: 34px; justify-content: center; font-size: 14px; }
         .rr-build-modes { display: flex; gap: 4px; margin-bottom: 4px; }
-        .rr-build-chip.rr-build-look { flex: 1; justify-content: center; border-color: var(--color-border); }
-        .rr-build-chip.rr-build-look[aria-pressed="true"] { border-color: var(--color-accent); }
+        /* Word chips (a water look, a finish) read as buttons on the card: their own fill and edge. */
+        .rr-build-chip:is(.rr-build-look, .rr-build-finish) { flex: 1 1 auto; justify-content: center; background: var(--color-bg-input); border-color: var(--color-border-input); border-radius: 5px; }
+        .rr-build-chip:is(.rr-build-look, .rr-build-finish):hover { border-color: var(--color-accent-border-strong, var(--color-accent)); }
+        .rr-build-chip:is(.rr-build-look, .rr-build-finish)[aria-pressed="true"] { border-color: var(--color-accent); background: color-mix(in srgb, var(--color-accent) 22%, var(--color-bg-input)); color: var(--color-text-strong); }
+        .rr-build-finishes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
         .rr-build-shapes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
         .rr-build-shapes .rr-build-chip { flex-direction: column; justify-content: center; gap: 2px; padding: 5px 2px; font-size: 10px; min-width: 0; }
         .rr-build-shapes .rr-build-chip span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -3841,7 +3844,6 @@
         .rr-build-slot:hover { background: rgba(255, 255, 255, 0.06); }
         .rr-build-slot[aria-pressed="true"] { border-color: var(--color-accent); background: color-mix(in srgb, var(--color-accent) 18%, transparent); color: var(--color-text-strong); }
         .rr-build-slot-label { white-space: nowrap; max-width: 58px; overflow: hidden; text-overflow: ellipsis; }
-        .rr-build-slot-key { position: absolute; top: 2px; right: 5px; font-size: 9px; color: var(--color-text-muted); }
         .rr-build-slot-thumb { width: 26px; height: 26px; object-fit: contain; border-radius: 3px; }
         /* The prop panel inside the side panel: it scrolls with the panel, not in its own box. */
         .rr-build-models-body { padding: 0; }

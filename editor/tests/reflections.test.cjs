@@ -148,3 +148,41 @@ test('near a mirror-bright model the capture stands inside it, with it hidden an
     assert.equal(far.position.x, 80, 'out of reach, from the camera');
     assert.equal(far.hidden.length, 2, 'with the characters left out, as before');
 });
+
+test('a mirror finish finds its flat panels, reflects the camera in the one facing it, and clips at the glass', () => {
+    // Two facing mirror slabs, the player between: the house of mirrors picks both.
+    const shiny = Reactor3D.litMaterial(new THREE.MeshBasicMaterial());
+    Reactor3D.setMaterialShine(shiny, Reactor3D.PIECE_FINISHES.mirror);
+    const slab = z => { const m = new THREE.Mesh(new THREE.BoxGeometry(10, 4, 1), shiny); m.position.set(0, 2, z); return m; };
+    const room = new THREE.Group(); room.add(slab(0.5), slab(8.5)); room.updateMatrixWorld(true);
+    assert.ok(Reactor3D.isMirrorFinish(room));
+    const panels = Reactor3D.mirrorPanels(room);
+    assert.ok(panels.some(p => p.normal.z > 0.99 && Math.abs(p.d - 1) < 0.01), 'the near slab\'s face toward the room');
+    assert.ok(panels.some(p => p.normal.z < -0.99 && Math.abs(p.d + 8) < 0.01), 'the far slab\'s face toward the room');
+    const camera = new THREE.PerspectiveCamera(60, 16 / 9, 0.1, 200); camera.position.set(0, 1.6, 6.5); camera.lookAt(0, 1.6, 0); camera.updateMatrixWorld(true);
+    const out = new THREE.PerspectiveCamera(), matrix = new THREE.Matrix4();
+    assert.ok(Reactor3D.Mirrors.reflect(camera, new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0, 1), out, matrix));
+    assert.ok(Math.abs(out.position.z - (2 - 6.5)) < 1e-6, 'the reflected eye stands as far behind the glass as the eye before it');
+    assert.equal(Reactor3D.Mirrors.reflect(camera, new THREE.Vector3(0, 0, -1), new THREE.Vector3(0, 0, 1), out, matrix), false, 'no picture from behind a mirror');
+    // A frame: the renderer draws each mirror once (depth 2 with the other inside), and the main draw then reads them.
+    const draws = [];
+    const renderer = { getRenderTarget: () => null, setRenderTarget() {}, render: (s, cam) => draws.push(cam.position.z), getDrawingBufferSize: v => v.set(640, 360) };
+    const M = Reactor3D.Mirrors, weak = Reactor3D.isWeakGpu; Reactor3D.isWeakGpu = () => false;
+    try {
+        M.update(renderer, new THREE.Scene(), camera, [room], null, [new THREE.Vector3(0, 0.1, 4), new THREE.Vector3(0, 1, 4), new THREE.Vector3(0, 1.8, 4)]);
+        assert.equal(M.active, true);
+        assert.equal(M._live.length, 2, 'the mirror before the eye and the one it reflects');
+        assert.ok(draws.length >= 2 && draws.length <= 2 * (Reactor3D.MIRROR_DEPTH + 1), 'bounded by the depth');
+        assert.equal(M.uniforms().rrMirrorOn0.value, 1);
+    } finally { Reactor3D.isWeakGpu = weak; M.clear(); M.active = false; M._live = null; M._applied = null; }
+});
+
+test('a built piece keeps its finish and wears it in its own shiny draw; water can be a mirror', () => {
+    assert.equal(Reactor3D.normalizePiece({ kind: 'block', x: 1, y: 1, z: 0, material: '', finish: 'mirror' }).finish, 'mirror');
+    assert.equal('finish' in Reactor3D.normalizePiece({ kind: 'block', x: 1, y: 1, finish: 'velvet' }), false, 'only known finishes');
+    const E = require(path.join(repoRoot, 'editor', 'src', 'utils', 'MapElevation.js'));
+    assert.equal(E.normalizePiece({ kind: 'block', x: 1, y: 1, finish: 'gold' }, null).finish, 'gold', 'the editor keeps it too');
+    const world = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d_world.js'), 'utf8');
+    assert.match(world, /const look = piece\.finish \? piece\.material \+ "\\u0001" \+ piece\.finish : piece\.material;/, 'a finish is its own chunk draw');
+    assert.match(world, /rrMirrorPlane0\.y > 0\.9 && abs\(vRRWorldPos\.y - rrMirrorPlane0\.w\) < 0\.4/, 'water reads the mirror picture on its level');
+});

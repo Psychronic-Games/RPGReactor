@@ -631,6 +631,8 @@
      */
     const SHAPE_KINDS = ['box', 'wedge', 'pyramid', 'prism', 'hull', 'spike', 'cylinder', 'capsule', 'tube', 'cone', 'dome', 'sphere', 'dish', 'fin', 'arch', 'tunnel', 'ring'];
     const SHAPE_PARAMS = { hull: { sides: 8, taper: 0.8 }, spike: { sides: 6, taper: 0 }, capsule: { sides: 24 }, dish: { sides: 32 }, fin: { taper: 0.4 }, cylinder: { sweep: 360 }, tube: { sweep: 360, thick: 0.3 }, ring: { sweep: 360, thick: 0.2 } };
+    /** A piece's finish over its material (the runtime's `PIECE_FINISHES`). */
+    const PIECE_FINISHES = ['mirror', 'chrome', 'polished', 'glossy', 'gold'];
     const PIECE_KINDS = ['wall', 'block', 'floor', 'pillar', 'stair', 'ramp', 'roof', 'doorway', 'window', 'fence', 'glass', 'ladder'].concat(SHAPE_KINDS);
     const PIECE_MAX_LEVEL = 240;
     const normalizePiece = (raw, mapData) => {
@@ -648,6 +650,7 @@
         // Pieces stamped from one plan share a group, so the building moves as one.
         const group = Number(raw.group);
         if (Number.isFinite(group) && group > 0) piece.group = Math.floor(group);
+        if (typeof raw.finish === 'string' && PIECE_FINISHES.includes(raw.finish)) piece.finish = raw.finish;
         // A shape has a size in tiles and a free turn in degrees.
         if (SHAPE_KINDS.includes(raw.kind)) {
             const size = Array.isArray(raw.size) ? raw.size : [];
@@ -1021,7 +1024,7 @@
 
     const api = {
         WATER_MAX_LEVEL, normalizeWater, water, hasWater, addWater, waterCovers, waterAt, removeWaterAt, removeWaterRegion, styleWaterRegion, waterBasin, fillWaterAt, waterSnapshot, restoreWater,
-        PIECE_KINDS, SHAPE_KINDS, SHAPE_PARAMS, PIECE_MAX_LEVEL, normalizePiece, pieces, hasPieces, pieceAt, setPiece, removePiece,
+        PIECE_KINDS, PIECE_FINISHES, SHAPE_KINDS, SHAPE_PARAMS, PIECE_MAX_LEVEL, normalizePiece, pieces, hasPieces, pieceAt, setPiece, removePiece,
         piecesSnapshot, restorePieces, clearPieces, pieceMaterials,
         nextPieceGroup, pieceGroup, pieceGroupBounds, pieceGroupAt, groupConnectedPieces, movePieceGroup, removePieceGroup, rotatePieceGroup,
         structures, structureOf, setStructure, restoreStructures, removeStructure, relocatePropsOff,

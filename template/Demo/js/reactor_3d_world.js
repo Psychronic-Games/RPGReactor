@@ -452,6 +452,19 @@ Reactor3D.pieceHeight = function(kind) {
     return kind === "wall" || kind === "doorway" || kind === "window" || kind === "pillar" || kind === "glass" ? this.PIECE_STOREY : 1;
 };
 
+/**
+ * The finishes a built piece can wear over its material, as model surfaces
+ * (see `readModelSurface`): a mirror (sharp, the party in it), chrome,
+ * polished, glossy paint and gold.
+ */
+Reactor3D.PIECE_FINISHES = {
+    mirror: { reflect: 1, gloss: 1, metal: 1, tint: "#ffffff", texture: 0 },
+    chrome: { reflect: 1, gloss: 0.95, metal: 1, tint: "#ffffff", texture: 0.15 },
+    polished: { reflect: 0.9, gloss: 0.9, metal: 0.55, tint: "#ffffff", texture: 0.85 },
+    glossy: { reflect: 0.9, gloss: 0.9, metal: 0, tint: "#ffffff", texture: 1 },
+    gold: { reflect: 1, gloss: 0.85, metal: 1, tint: "#ffcc55", texture: 0.2 }
+};
+
 Reactor3D.normalizePiece = function(raw, mapData) {
     if (!raw || typeof raw !== "object") return null;
     const kind = this.PIECE_KINDS.includes(raw.kind) ? raw.kind : null;
@@ -468,6 +481,7 @@ Reactor3D.normalizePiece = function(raw, mapData) {
     const piece = { id: Number.isFinite(id) && id > 0 ? Math.floor(id) : 0, kind, x, y, z, rot, material };
     const group = Number(raw.group);
     if (Number.isFinite(group) && group > 0) piece.group = Math.floor(group);
+    if (typeof raw.finish === "string" && Object.prototype.hasOwnProperty.call(this.PIECE_FINISHES, raw.finish)) piece.finish = raw.finish;
     if (this.isShapeKind(kind)) {
         const size = Array.isArray(raw.size) ? raw.size : [];
         const n = (v, fallback) => { const k = Number(v); return Number.isFinite(k) && k > 0 ? Math.min(60, Math.round(k * 100) / 100) : fallback; };
@@ -1326,10 +1340,11 @@ Reactor3D.pieceChunkKey = function(x, y) {
     return Math.floor(x / this.PIECE_CHUNK) * 65536 + Math.floor(y / this.PIECE_CHUNK);
 };
 
-/** One material's material object, shared by every chunk that wears it. */
-Reactor3D.MapScene.prototype.pieceMaterial = function(name, load) {
+/** One material's material object (in a finish, when it has one), shared by every chunk that wears it. */
+Reactor3D.MapScene.prototype.pieceMaterial = function(name, load, finish) {
     if (!this._pieceMaterials) this._pieceMaterials = new Map();
-    let material = this._pieceMaterials.get(name);
+    const key = finish ? name + "\u0001" + finish : name;
+    let material = this._pieceMaterials.get(key);
     if (material) return material;
     const look = Reactor3D.materialLook(name);
     const texture = look.glass ? null : this.materialTexture(name, load);
@@ -1347,8 +1362,10 @@ Reactor3D.MapScene.prototype.pieceMaterial = function(name, load) {
     material.__reactorSelfLit = look.glow;
     material.userData.rrPieceMaterial = name;
     Reactor3D.litMaterial(material);
+    const surface = finish && Reactor3D.PIECE_FINISHES[finish];
+    if (surface && Reactor3D.setMaterialShine) Reactor3D.setMaterialShine(material, surface);
     this._materials.push(material);
-    this._pieceMaterials.set(name, material);
+    this._pieceMaterials.set(key, material);
     return material;
 };
 
@@ -1439,17 +1456,21 @@ Reactor3D.MapScene.prototype.layPieceChunks = function(mapData, load, keys) {
         if (wanted && !wanted.has(key)) continue;
         let byMaterial = byChunk.get(key);
         if (!byMaterial) byChunk.set(key, byMaterial = new Map());
-        let list = byMaterial.get(piece.material);
-        if (!list) byMaterial.set(piece.material, list = []);
+        // Material and finish: a mirror wall is its own draw.
+        const look = piece.finish ? piece.material + "\u0001" + piece.finish : piece.material;
+        let list = byMaterial.get(look);
+        if (!list) byMaterial.set(look, list = []);
         list.push(piece);
     }
     const group = this.piecesGroup();
     for (const [key, byMaterial] of byChunk) {
-        for (const [name, list] of byMaterial) {
+        for (const [look, list] of byMaterial) {
+            const name = list[0].material, finish = list[0].finish || "";
             const geometry = Reactor3D.pieceGeometry(list, mapData);
-            const mesh = new THREE.Mesh(geometry, this.pieceMaterial(name, load));
+            const mesh = new THREE.Mesh(geometry, this.pieceMaterial(name, load, finish));
             mesh.userData.pieces = true;
             mesh.userData.pieceMaterial = name;
+            if (finish) mesh.userData.pieceFinish = finish;
             mesh.userData.pieceChunk = key;
             // Glass draws after everything solid, so what is behind it shows through.
             mesh.renderOrder = Reactor3D.materialLook(name).glass ? 5 : -5;
@@ -1552,6 +1573,8 @@ Reactor3D.waterMaterial = function(texture, look) {
         shader.uniforms.rrWaterLook = { value: material.userData.rrWaterLook };
         shader.uniforms.rrWaterTint = { value: material.userData.rrWaterTint };
         if (env) { shader.uniforms.rrEnvMap = env.rrEnvMap; shader.uniforms.rrEnvMaxLod = env.rrEnvMaxLod; shader.uniforms.rrEnvFlip = env.rrEnvFlip; }
+        const mirror = env && Reactor3D.Mirrors ? Reactor3D.Mirrors.uniforms() : null;
+        if (mirror) for (const name of Object.keys(mirror)) shader.uniforms[name] = mirror[name];
         shader.vertexShader = "uniform float rrWaveTime;\nattribute float rrDepth;\nvarying float vRRDepth;\nvarying vec3 vRRWaveNormal;\n" + shader.vertexShader.replace(
             "#include <begin_vertex>",
             [
@@ -1573,7 +1596,9 @@ Reactor3D.waterMaterial = function(texture, look) {
             ].join("\n")
         );
         shader.fragmentShader = "varying float vRRDepth;\nvarying vec3 vRRWaveNormal;\nuniform vec4 rrWaterLook;\nuniform vec3 rrWaterTint;\n"
-            + (env ? "uniform samplerCube rrEnvMap;\nuniform float rrEnvMaxLod;\nuniform float rrEnvFlip;\n" : "") + shader.fragmentShader.replace(
+            + (env ? "uniform samplerCube rrEnvMap;\nuniform float rrEnvMaxLod;\nuniform float rrEnvFlip;\n" : "")
+            + (mirror ? "uniform float rrMirrorOn0;\nuniform vec4 rrMirrorPlane0;\nuniform mat4 rrMirrorMatrix0;\nuniform sampler2D rrMirrorMap0;\nuniform float rrMirrorOn1;\nuniform vec4 rrMirrorPlane1;\nuniform mat4 rrMirrorMatrix1;\nuniform sampler2D rrMirrorMap1;\nuniform float rrMirrorTolerance;\n" : "")
+            + shader.fragmentShader.replace(
             "#include <map_fragment>",
             [
                 "#include <map_fragment>",
@@ -1594,6 +1619,18 @@ Reactor3D.waterMaterial = function(texture, look) {
                     "\t\tvec3 rrR = reflect(-rrViewDir, vRRWaveNormal);",
                     "\t\trrR.x *= rrEnvFlip;",
                     "\t\tvec3 rrEnvC = textureLod(rrEnvMap, rrR, rrWaterLook.y * rrEnvMaxLod).rgb * rrWaterTint;",
+                    // The sheet's own mirror picture when it is one of the frame's mirrors: the world sharp and
+                    // in place, rippled by the waves (and blurred a little as the water roughens).
+                    mirror ? [
+                        "\t\tvec2 rrRipple = vRRWaveNormal.xz * (0.035 + 0.1 * rrWaterLook.y);",
+                        "\t\tif (rrMirrorOn0 > 0.5 && rrMirrorPlane0.y > 0.9 && abs(vRRWorldPos.y - rrMirrorPlane0.w) < 0.4) {",
+                        "\t\t\tvec4 rrMC = rrMirrorMatrix0 * vec4(vRRWorldPos, 1.0); vec2 rrMU = clamp(rrMC.xy / rrMC.w + rrRipple, 0.001, 0.999);",
+                        "\t\t\tif (rrMC.w > 0.0) rrEnvC = textureLod(rrMirrorMap0, rrMU, 0.0).rgb * rrWaterTint;",
+                        "\t\t} else if (rrMirrorOn1 > 0.5 && rrMirrorPlane1.y > 0.9 && abs(vRRWorldPos.y - rrMirrorPlane1.w) < 0.4) {",
+                        "\t\t\tvec4 rrMC = rrMirrorMatrix1 * vec4(vRRWorldPos, 1.0); vec2 rrMU = clamp(rrMC.xy / rrMC.w + rrRipple, 0.001, 0.999);",
+                        "\t\t\tif (rrMC.w > 0.0) rrEnvC = textureLod(rrMirrorMap1, rrMU, 0.0).rgb * rrWaterTint;",
+                        "\t\t}"
+                    ].join("\n") : "",
                     "\t\tfloat rrMirror = clamp(rrWaterLook.x * (0.55 + 0.45 * pow(1.0 - max(dot(vRRWaveNormal, rrViewDir), 0.0), 2.0)), 0.0, 1.0);",
                     "\t\tdiffuseColor.rgb = mix(diffuseColor.rgb, rrEnvC + vec3(rrGlint * 0.8), rrMirror);",
                     "\t\tdiffuseColor.a = mix(diffuseColor.a, smoothstep(0.0, 0.35, vRRDepth), rrWaterLook.x * 0.85);",
@@ -1603,7 +1640,7 @@ Reactor3D.waterMaterial = function(texture, look) {
             ].join("\n")
         );
     };
-    material.customProgramCacheKey = function() { return "reactor3d-water" + (env ? "|env" : ""); };
+    material.customProgramCacheKey = function() { return "reactor3d-water" + (env ? "|env|mirror" : ""); };
     this.litMaterial(material);
     return material;
 };

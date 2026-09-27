@@ -1062,7 +1062,9 @@ Reactor3D.waterVolumeMaterial = function(material) {
 // surfaces read a blurrier mip level. Until the first capture completes, and
 // on a weak GPU always, the studio gradient stands in.
 
-Reactor3D.REFLECTION_SIZE = 128;
+/** The cube capture's face size: sharp enough to read a room in chrome (half on a middling GPU, see `reflectionSize`). */
+Reactor3D.REFLECTION_SIZE = 512;
+Reactor3D.reflectionSize = function() { return this.tier() === "full" ? this.REFLECTION_SIZE : this.REFLECTION_SIZE / 2; };
 
 Reactor3D.Reflections = {
     _target: null,
@@ -1094,7 +1096,7 @@ Reactor3D.Reflections = {
 
     _ensure() {
         if (this._target) return;
-        this._target = new THREE.WebGLCubeRenderTarget(Reactor3D.REFLECTION_SIZE, {
+        this._target = new THREE.WebGLCubeRenderTarget(Reactor3D.reflectionSize(), {
             generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter
         });
         this._camera = new THREE.CubeCamera(0.1, 400, this._target);
@@ -1171,10 +1173,14 @@ Reactor3D.Reflections = {
         const live = this._ready && this._target && renderer === this._renderer && !this._capturing;
         const texture = live ? this._target.texture : (Reactor3D.studioEnvMap ? Reactor3D.studioEnvMap() : null);
         if (live && this._probe) uniforms.rrEnvProbe.value.copy(this._probe); else uniforms.rrEnvProbe.value.set(0, 0, 0, 0);
+        // The mirror pictures: the main draw of the renderer that made them only (a mirror's own
+        // draws set their slots themselves; a capture and any other renderer see none).
+        const mirrors = Reactor3D.Mirrors;
+        if (mirrors && !mirrors._rendering) mirrors.apply(renderer === mirrors._renderer && !this._capturing);
         if (uniforms.rrEnvMap.value === texture) return;
         uniforms.rrEnvMap.value = texture;
         uniforms.rrEnvFlip.value = live ? 1 : -1;
-        uniforms.rrEnvMaxLod.value = live ? Math.log2(Reactor3D.REFLECTION_SIZE) : 0;
+        uniforms.rrEnvMaxLod.value = live ? Math.log2(Reactor3D.reflectionSize()) : 0;
     },
 
     /** A material that reads the reflections picks them per renderer as it draws. */
@@ -1195,6 +1201,290 @@ Reactor3D.Reflections = {
         this._tick = 0;
         this._ready = false;
         if (this._uniforms) this._uniforms.rrEnvMap.value = null;
+    }
+};
+
+//-----------------------------------------------------------------------------
+// Mirrors
+//
+// A mirror finish (a model reflecting fully and perfectly smooth) shows the
+// world as a mirror does, sharp and in place, the party included: the flat
+// panel of it that faces the camera is a plane, the scene is drawn again
+// from the camera reflected in that plane (clipped at the plane, so nothing
+// behind the panel shows), and the panel's fragments read that picture at
+// their own place on screen. Two mirror models facing each other reflect
+// each other, and each other's reflections, MIRROR_DEPTH times over (a
+// house of mirrors), each level at half the size of the last. Surfaces off
+// the panel keep the cube capture. Only near the camera, never on a weak GPU.
+
+/** How many reflections deep two facing mirrors go (each level another, smaller draw of the scene). */
+Reactor3D.MIRROR_DEPTH = 2;
+/** How far off a panel's plane (tiles) a fragment still takes the mirror picture. */
+Reactor3D.MIRROR_TOLERANCE = 0.3;
+/** How close (tiles) a mirror model must stand to the camera. */
+Reactor3D.MIRROR_PLANE_REACH = 24;
+
+/** Whether a model is a mirror finish: some lit material reflecting fully and nearly perfectly smooth. */
+Reactor3D.isMirrorFinish = function(object) {
+    let mirror = false;
+    object.traverse(node => {
+        if (mirror || !node.isMesh || !node.material) return;
+        for (const material of [].concat(node.material)) {
+            const shine = this.shineOf(material);
+            if (shine && shine.vector.x >= 0.85 && shine.vector.y <= 0.15 && (shine.vector.w || 0) <= 0.5) { mirror = true; break; }
+        }
+    });
+    return mirror;
+};
+
+/**
+ * A model's flat panels, largest first, in its own frame: `{ normal, d, area }`
+ * with the plane dot(x, normal) = d. Worked out once from its triangles
+ * (normals and offsets gathered into bins), kept on the model.
+ */
+Reactor3D.mirrorPanels = function(object) {
+    if (object.userData.__rrPanels) return object.userData.__rrPanels;
+    object.updateMatrixWorld(true);
+    const toLocal = new THREE.Matrix4().copy(object.matrixWorld).invert();
+    const box = new THREE.Box3();
+    const bins = new Map();
+    const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), n = new THREE.Vector3(), e1 = new THREE.Vector3(), e2 = new THREE.Vector3();
+    const meshes = [];
+    object.traverse(node => { if (node.isMesh && !node.isSkinnedMesh && node.geometry && node.geometry.attributes.position) meshes.push(node); });
+    if (!meshes.length) return [];
+    for (const mesh of meshes) { mesh.geometry.computeBoundingBox?.(); const bb = mesh.geometry.boundingBox; if (bb) box.union(bb.clone().applyMatrix4(new THREE.Matrix4().multiplyMatrices(toLocal, mesh.matrixWorld))); }
+    const step = Math.max(1e-4, box.getSize(new THREE.Vector3()).length() * 0.004);
+    for (const mesh of meshes) {
+        const m = new THREE.Matrix4().multiplyMatrices(toLocal, mesh.matrixWorld);
+        const pos = mesh.geometry.attributes.position, index = mesh.geometry.index;
+        const count = index ? index.count : pos.count;
+        for (let i = 0; i + 2 < count; i += 3) {
+            const i0 = index ? index.getX(i) : i, i1 = index ? index.getX(i + 1) : i + 1, i2 = index ? index.getX(i + 2) : i + 2;
+            a.fromBufferAttribute(pos, i0).applyMatrix4(m); b.fromBufferAttribute(pos, i1).applyMatrix4(m); c.fromBufferAttribute(pos, i2).applyMatrix4(m);
+            n.crossVectors(e1.subVectors(b, a), e2.subVectors(c, a));
+            const twice = n.length();
+            if (twice < 1e-12) continue;
+            n.divideScalar(twice);
+            const d = n.dot(a);
+            const key = Math.round(n.x * 20) + "," + Math.round(n.y * 20) + "," + Math.round(n.z * 20) + "," + Math.round(d / step);
+            let bin = bins.get(key);
+            if (!bin) bins.set(key, bin = { nx: 0, ny: 0, nz: 0, d: 0, area: 0, box: new THREE.Box3() });
+            const area = twice / 2;
+            bin.nx += n.x * area; bin.ny += n.y * area; bin.nz += n.z * area; bin.d += d * area; bin.area += area;
+            bin.box.expandByPoint(a); bin.box.expandByPoint(b); bin.box.expandByPoint(c);
+        }
+    }
+    // Each panel keeps where it lies (its box in the model's frame), so a mirror can pick the one your reflection falls in.
+    const panels = [...bins.values()].sort((p, q) => q.area - p.area).slice(0, 48).map(bin => {
+        const normal = new THREE.Vector3(bin.nx, bin.ny, bin.nz).normalize();
+        return { normal, d: bin.d / bin.area, area: bin.area, box: bin.box.expandByScalar(step * 2) };
+    });
+    object.userData.__rrPanels = panels;
+    return panels;
+};
+
+Reactor3D.Mirrors = {
+    _targets: new Map(),
+    _cameras: [],
+    _dummy: null,
+    _uniforms: null,
+    active: false,
+
+    uniforms() {
+        if (!this._uniforms) {
+            this._uniforms = {};
+            for (const slot of [0, 1]) {
+                this._uniforms["rrMirrorOn" + slot] = { value: 0 };
+                this._uniforms["rrMirrorPlane" + slot] = { value: new THREE.Vector4(0, 1, 0, -1e6) };
+                this._uniforms["rrMirrorMatrix" + slot] = { value: new THREE.Matrix4() };
+                this._uniforms["rrMirrorMap" + slot] = { value: this.dummy() };
+            }
+            this._uniforms.rrMirrorTolerance = { value: Reactor3D.MIRROR_TOLERANCE };
+        }
+        return this._uniforms;
+    },
+
+    dummy() {
+        if (!this._dummy) { this._dummy = new THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1); this._dummy.needsUpdate = true; }
+        return this._dummy;
+    },
+
+    /** Every slot off: nothing reads a mirror picture (a preview, a capture, the edge of the recursion). */
+    clear() {
+        const u = this.uniforms();
+        for (const slot of [0, 1]) { u["rrMirrorOn" + slot].value = 0; u["rrMirrorMap" + slot].value = this.dummy(); }
+    },
+
+    target(slot, level, width, height) {
+        const key = slot + ":" + level;
+        let target = this._targets.get(key);
+        if (!target) {
+            target = new THREE.WebGLRenderTarget(width, height, { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, generateMipmaps: false });
+            this._targets.set(key, target);
+        } else if (target.width !== width || target.height !== height) target.setSize(width, height);
+        return target;
+    },
+
+    /** The camera `camera` reflected in the plane (normal n, point p), with its near plane on the mirror, and the picture's lookup matrix; false when the camera is behind it. */
+    reflect(camera, n, p, out, matrix) {
+        const camPos = new THREE.Vector3().setFromMatrixPosition(camera.matrixWorld);
+        const view = new THREE.Vector3().subVectors(p, camPos);
+        if (view.dot(n) > 0) return false;
+        view.reflect(n).negate().add(p);
+        const rotation = new THREE.Matrix4().extractRotation(camera.matrixWorld);
+        const look = new THREE.Vector3(0, 0, -1).applyMatrix4(rotation).add(camPos);
+        const target = new THREE.Vector3().subVectors(p, look).reflect(n).negate().add(p);
+        out.position.copy(view);
+        out.up.set(0, 1, 0).applyMatrix4(rotation).reflect(n);
+        out.lookAt(target);
+        out.near = camera.near; out.far = camera.far;
+        out.updateMatrixWorld(true);
+        out.projectionMatrix.copy(camera.projectionMatrix);
+        out.projectionMatrixInverse.copy(camera.projectionMatrixInverse);
+        matrix.set(0.5, 0, 0, 0.5, 0, 0.5, 0, 0.5, 0, 0, 0.5, 0.5, 0, 0, 0, 1).multiply(out.projectionMatrix).multiply(out.matrixWorldInverse);
+        // An oblique near plane on the mirror: what stands behind the glass is not drawn.
+        const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(n, p).applyMatrix4(out.matrixWorldInverse);
+        const clip = new THREE.Vector4(plane.normal.x, plane.normal.y, plane.normal.z, plane.constant);
+        const e = out.projectionMatrix.elements;
+        const q = new THREE.Vector4((Math.sign(clip.x) + e[8]) / e[0], (Math.sign(clip.y) + e[9]) / e[5], -1, (1 + e[10]) / e[14]);
+        clip.multiplyScalar(2 / clip.dot(q));
+        e[2] = clip.x; e[6] = clip.y; e[10] = clip.z + 1 - 0.003; e[14] = clip.w;
+        return true;
+    },
+
+    /**
+     * The mirror pictures seen from `camera`, `level` reflections deep: for
+     * each plane in front of it, the view from its reflection (with the
+     * other plane's own picture from there drawn first), into a target of
+     * its own. Returns the slots' pictures and matrices as seen from `camera`.
+     */
+    renderLevel(renderer, scene, camera, planes, level, width, height, hidden) {
+        const seen = [];
+        if (level < 0 || width < 16 || height < 16) return seen;
+        for (let slot = 0; slot < planes.length; slot++) {
+            const plane = planes[slot];
+            const out = this._cameras[slot * 8 + level] || (this._cameras[slot * 8 + level] = new THREE.PerspectiveCamera());
+            const matrix = new THREE.Matrix4();
+            const camPos = new THREE.Vector3().setFromMatrixPosition(camera.matrixWorld);
+            if (camPos.clone().sub(plane.point).dot(plane.normal) <= 0.01) continue;
+            if (!this.reflect(camera, plane.normal, plane.point, out, matrix)) continue;
+            // The other mirrors as seen in this one, first.
+            // (This plane is behind its own reflected camera, so only the others come back.)
+            const others = planes.length > 1 ? this.renderLevel(renderer, scene, out, planes, level - 1, width >> 1, height >> 1, hidden).filter(entry => entry.slot !== slot) : [];
+            this.clear();
+            const u = this.uniforms();
+            for (const entry of others) {
+                u["rrMirrorOn" + entry.slot].value = 1;
+                u["rrMirrorPlane" + entry.slot].value.set(planes[entry.slot].normal.x, planes[entry.slot].normal.y, planes[entry.slot].normal.z, planes[entry.slot].d);
+                u["rrMirrorMatrix" + entry.slot].value.copy(entry.matrix);
+                u["rrMirrorMap" + entry.slot].value = entry.texture;
+            }
+            const target = this.target(slot, level, width, height);
+            const previous = renderer.getRenderTarget();
+            for (const object of hidden) object.visible = false;
+            renderer.setRenderTarget(target);
+            try { renderer.render(scene, out); }
+            finally { for (const object of hidden) object.visible = true; renderer.setRenderTarget(previous); }
+            seen.push({ slot, texture: target.texture, matrix });
+        }
+        return seen;
+    },
+
+    /**
+     * This frame's mirrors, before the main draw: up to two mirror-finish
+     * models near `camera` (`candidates`, their objects), the panel of each
+     * facing the camera, drawn MIRROR_DEPTH deep. With none, every slot off.
+     */
+    update(renderer, scene, camera, candidates, hidden, subject) {
+        this.clear();
+        this._applied = null;
+        this.active = false;
+        if (!renderer || !scene || !camera || !camera.isPerspectiveCamera || (Reactor3D.isWeakGpu && Reactor3D.isWeakGpu())) return;
+        camera.updateMatrixWorld(true);
+        const camPos = new THREE.Vector3().setFromMatrixPosition(camera.matrixWorld);
+        // Every panel of every candidate facing the camera, scored: first by how much of the party
+        // its mirror shows on screen, then by how much of it is in view (area and facing).
+        const scored = [];
+        const toLocal = new THREE.Matrix4();
+        const onScreen = point => { const v = point.clone().project(camera); return v.z < 1 && v.z > -1 && Math.abs(v.x) <= 1 && Math.abs(v.y) <= 1; };
+        for (const object of candidates || []) {
+            // A water sheet names its own plane: level, facing up.
+            const own = object.userData && object.userData.rrMirrorPlane;
+            if (own) {
+                if (camPos.clone().sub(own.point).dot(own.normal) > 0.05) scored.push({ normal: own.normal.clone(), point: own.point.clone(), d: own.normal.dot(own.point), score: 1e3, primary: true, object });
+                continue;
+            }
+            const panels = Reactor3D.mirrorPanels(object);
+            if (!panels.length) continue;
+            const normalMatrix = new THREE.Matrix3().getNormalMatrix(object.matrixWorld);
+            toLocal.copy(object.matrixWorld).invert();
+            for (const panel of panels) {
+                const normal = panel.normal.clone().applyMatrix3(normalMatrix).normalize();
+                const point = panel.normal.clone().multiplyScalar(panel.d).applyMatrix4(object.matrixWorld);
+                // Facing and view are judged from the panel's own middle (a plane's point at the
+                // origin can lie tiles away, where the panel looks edge-on).
+                const middle = panel.box.getCenter(new THREE.Vector3()).applyMatrix4(object.matrixWorld);
+                const facing = normal.dot(camPos.clone().sub(middle).normalize());
+                if (facing <= 0.15) continue;
+                const inView = onScreen(middle);
+                let shows = 0;
+                for (const s of subject || []) {
+                    const side = s.clone().sub(point).dot(normal);
+                    if (side <= 0) continue;
+                    const image = s.clone().addScaledVector(normal, -2 * side);
+                    const ray = image.clone().sub(camPos);
+                    const along = normal.dot(ray);
+                    if (Math.abs(along) < 1e-6) continue;
+                    const t = normal.dot(point.clone().sub(camPos)) / along;
+                    if (t <= 0 || t >= 1) continue;
+                    const cross = camPos.clone().addScaledVector(ray, t);
+                    if (onScreen(cross) && panel.box.containsPoint(cross.clone().applyMatrix4(toLocal))) shows++;
+                }
+                // Off screen and showing nothing it can still be the second mirror: the one the first reflects.
+                scored.push({ normal, point, d: normal.dot(point), score: shows * 1e6 + (inView ? 1e3 : 0) + panel.area * facing, primary: shows > 0 || inView, object });
+            }
+        }
+        scored.sort((a, b) => b.score - a.score);
+        const planes = [];
+        if (scored.length && scored[0].primary) {
+            planes.push(scored[0]);
+            // The second: one facing the first (a house of mirrors) before any other.
+            const first = scored[0];
+            const facingFirst = scored.find(p => p !== first && p.normal.dot(first.normal) < -0.9 && Math.abs(p.d + first.d) > 0.2);
+            const next = facingFirst || scored.find(p => p !== first && p.primary && (p.object !== first.object || Math.abs(p.normal.dot(first.normal)) < 0.9));
+            if (next) planes.push(next);
+        }
+        if (!planes.length) return;
+        const size = renderer.getDrawingBufferSize(new THREE.Vector2());
+        const height = Math.min(1080, size.y), width = Math.round(height * (camera.aspect || size.x / size.y));
+        const shadowSentinel = Reactor3D.Shadows && Reactor3D.Shadows._sentinel;
+        const hide = (hidden || []).concat(shadowSentinel ? [shadowSentinel] : []).filter(object => object && object.visible);
+        this._rendering = true;
+        let seen;
+        try { seen = this.renderLevel(renderer, scene, camera, planes, Reactor3D.MIRROR_DEPTH, width, height, hide); }
+        finally { this._rendering = false; }
+        this._live = seen.map(entry => Object.assign({ plane: planes[entry.slot] }, entry));
+        this._renderer = renderer;
+        this.active = seen.length > 0;
+        this._applied = null;
+        this.apply(true);
+    },
+
+    /** The main draw's pictures into the slots (on), or every slot off (a capture, another renderer). */
+    apply(on) {
+        const want = on && this.active;
+        if (this._applied === want) return;
+        this._applied = want;
+        this.clear();
+        if (!want) return;
+        const u = this.uniforms();
+        for (const entry of this._live || []) {
+            const plane = entry.plane;
+            u["rrMirrorOn" + entry.slot].value = 1;
+            u["rrMirrorPlane" + entry.slot].value.set(plane.normal.x, plane.normal.y, plane.normal.z, plane.d);
+            u["rrMirrorMatrix" + entry.slot].value.copy(entry.matrix);
+            u["rrMirrorMap" + entry.slot].value = entry.texture;
+        }
     }
 };
 
@@ -1231,6 +1521,8 @@ Reactor3D.injectShine = function(material, shader) {
     shader.uniforms.rrEnvMaxLod = env.rrEnvMaxLod;
     shader.uniforms.rrEnvFlip = env.rrEnvFlip;
     shader.uniforms.rrEnvProbe = env.rrEnvProbe;
+    const mirror = this.Mirrors.uniforms();
+    for (const name of Object.keys(mirror)) shader.uniforms[name] = mirror[name];
     shader.uniforms.rrShine = { value: shine.vector };
     shader.uniforms.rrShineTint = { value: shine.tint };
     shader.vertexShader = "varying vec3 vRRWorldNormal;\n" + shader.vertexShader.replace(
@@ -1255,6 +1547,9 @@ Reactor3D.injectShine = function(material, shader) {
         "uniform float rrEnvMaxLod;",
         "uniform float rrEnvFlip;",
         "uniform vec4 rrEnvProbe;",
+        "uniform float rrMirrorOn0;", "uniform vec4 rrMirrorPlane0;", "uniform mat4 rrMirrorMatrix0;", "uniform sampler2D rrMirrorMap0;",
+        "uniform float rrMirrorOn1;", "uniform vec4 rrMirrorPlane1;", "uniform mat4 rrMirrorMatrix1;", "uniform sampler2D rrMirrorMap1;",
+        "uniform float rrMirrorTolerance;",
         "uniform vec4 rrShine;",
         "uniform vec3 rrShineTint;",
         "varying vec3 vRRWorldNormal;"
@@ -1280,6 +1575,15 @@ Reactor3D.injectShine = function(material, shader) {
             "\t}",
             "\trrR.x *= rrEnvFlip;",
             "\tvec3 rrEnv = textureLod(rrEnvMap, rrR, rrShine.y * rrEnvMaxLod).rgb;",
+            // On a mirror panel (facing the plane's way and lying on it) the mirror picture, sharp, at this
+            // fragment's own place in the reflected view.
+            "\tif (rrMirrorOn0 > 0.5 && dot(rrN, rrMirrorPlane0.xyz) > 0.92 && abs(dot(vRRWorldPos, rrMirrorPlane0.xyz) - rrMirrorPlane0.w) < rrMirrorTolerance) {",
+            "\t\tvec4 rrMC = rrMirrorMatrix0 * vec4(vRRWorldPos, 1.0); vec2 rrMU = rrMC.xy / rrMC.w;",
+            "\t\tif (rrMC.w > 0.0 && rrMU.x > 0.0 && rrMU.y > 0.0 && rrMU.x < 1.0 && rrMU.y < 1.0) rrEnv = textureLod(rrMirrorMap0, rrMU, 0.0).rgb;",
+            "\t} else if (rrMirrorOn1 > 0.5 && dot(rrN, rrMirrorPlane1.xyz) > 0.92 && abs(dot(vRRWorldPos, rrMirrorPlane1.xyz) - rrMirrorPlane1.w) < rrMirrorTolerance) {",
+            "\t\tvec4 rrMC = rrMirrorMatrix1 * vec4(vRRWorldPos, 1.0); vec2 rrMU = rrMC.xy / rrMC.w;",
+            "\t\tif (rrMC.w > 0.0 && rrMU.x > 0.0 && rrMU.y > 0.0 && rrMU.x < 1.0 && rrMU.y < 1.0) rrEnv = textureLod(rrMirrorMap1, rrMU, 0.0).rgb;",
+            "\t}",
             "\tfloat rrF0 = mix(0.04, 1.0, rrShine.z);",
             "\tfloat rrFres = rrF0 + (1.0 - rrF0) * pow(1.0 - clamp(dot(rrN, rrV), 0.0, 1.0), 5.0);",
             // How much of the texture stays (w): the rest is mirrored over, and what stays
