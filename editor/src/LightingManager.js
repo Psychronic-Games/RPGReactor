@@ -1458,8 +1458,8 @@ class LightingManager {
             }
             select.appendChild(holder);
         };
-        group(this._k('lit.types'), [['point', this._k('lit.point')], ['spot', this._k('lit.spot')], ['beam', this._k('lit.beam')]]);
-        const shapes = ['point', 'spot', 'beam'];
+        group(this._k('lit.types'), [['point', this._k('lit.point')], ['spot', this._k('lit.spot')], ['beam', this._k('lit.beam')], ['sun', this._k('lit.preset.sun')]]);
+        const shapes = ['point', 'spot', 'beam', 'sun'];
         const presets = this._presets().filter(preset => preset.template && !preset.template.compound && !shapes.includes(preset.key));
         if (presets.length) group(this._k('lit.presets'), presets.map(preset => ['preset:' + preset.key, preset.label]));
         select.value = light.type;
@@ -2036,7 +2036,9 @@ class LightingManager {
         look.appendChild(this._row(this._k('lit.color'), this._colour(light.color,
             hex => this._liveUpdate({ color: hex }), hex => commit({ color: hex }))));
         look.appendChild(this._row(this._k('lit.intensity'), this._slider('intensity', light.intensity, 0, 4, 0.05)));
-        look.appendChild(this._row(this._k('lit.radius'), this._slider('radius', light.radius, 0.1, 30, 0.1, { numberMax: 200 })));
+        // A sun hangs high and covers a map: its sliders reach that far.
+        const sun = light.type === 'sun';
+        look.appendChild(this._row(this._k('lit.radius'), this._slider('radius', light.radius, sun ? 10 : 0.1, sun ? 500 : 30, sun ? 1 : 0.1, { numberMax: sun ? 2000 : 200 })));
         if (light.type === 'spot') {
             look.appendChild(this._row(this._k('lit.angle'), this._slider('angle', light.angle, 1, 179, 1)));
         }
@@ -2052,7 +2054,7 @@ class LightingManager {
         const spanY = attached ? [-10, 10] : [0, Math.max(1, map.height || 1)];
         position.appendChild(this._row(this._k('lit.x'), this._slider('x', light.x, spanX[0], spanX[1], 0.05, { numberMin: -10000, numberMax: 10000 })));
         position.appendChild(this._row(this._k('lit.y'), this._slider('y', light.y, spanY[0], spanY[1], 0.05, { numberMin: -10000, numberMax: 10000 })));
-        position.appendChild(this._row(this._k('lit.height'), this._slider('height', light.height, 0, 12, 0.05, { numberMax: 512 })));
+        position.appendChild(this._row(this._k('lit.height'), this._slider('height', light.height, 0, light.type === 'sun' ? 400 : 12, light.type === 'sun' ? 1 : 0.05, { numberMax: 512 })));
 
         // Which way it aims — nothing to aim on a point light.
         if (aimed) {

@@ -15,7 +15,7 @@
     'use strict';
 
     const VERSION = 1;
-    const TYPES = ['point', 'spot', 'beam'];
+    const TYPES = ['point', 'spot', 'beam', 'sun'];
     const DEFAULT_CONE_ANGLE = 70;
     const DEFAULT_CONE_LENGTH = 6;
     // A beam is a laser: a constant-width cylinder of light `radius` tiles
@@ -63,10 +63,10 @@
           ] } },
         { key: 'fluorescent', labelKey: 'lit.preset.fluorescent',
           template: { key: 'fluorescent', type: 'point', color: '#d9f3ff', radius: 7, intensity: 1.15, height: 3, flicker: 0.06 } },
-        // High and far-reaching: lights the whole map from above and
-        // casts one set of long shadows. A warm ball hangs where it is.
+        // High and far-reaching: lights the ground under it out to its radius
+        // however high it hangs, and casts one set of long shadows.
         { key: 'sun', labelKey: 'lit.preset.sun',
-          template: { key: 'sun', type: 'point', color: '#fff3d2', radius: 150, intensity: 2, height: 40, shadow: true } }
+          template: { key: 'sun', type: 'sun', color: '#fff3d2', radius: 150, intensity: 2, height: 40, shadow: true } }
     ];
     /**
      * What a preset changes about a light that already exists: its kind and
@@ -125,7 +125,7 @@
             height: number(raw.height, 0, 0, 512),
             yaw: number(raw.yaw, 0, -100000, 100000),
             pitch: number(raw.pitch, 0, -90, 90),
-            radius: number(raw.radius, type === 'spot' ? DEFAULT_CONE_LENGTH : type === 'beam' ? DEFAULT_BEAM_LENGTH : 3, 0.1, 200),
+            radius: number(raw.radius, type === 'spot' ? DEFAULT_CONE_LENGTH : type === 'beam' ? DEFAULT_BEAM_LENGTH : 3, 0.1, type === 'sun' ? 2000 : 200),
             angle: number(raw.angle, DEFAULT_CONE_ANGLE, 1, 179),
             width: number(raw.width, DEFAULT_BEAM_WIDTH, 0.005, 5),
             color: colour(raw.color !== undefined ? raw.color : raw.colour),

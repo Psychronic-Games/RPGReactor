@@ -374,3 +374,41 @@ test('a ragdoll lays a standing figure down on the ground, whole', () => {
         assert.ok(Math.abs(doll.points[a].p.distanceTo(doll.points[b].p) - length) < 0.05, 'the bones keep their lengths');
     }
 });
+
+test('a jump taken walking up a step (a stair, a stepped roof) goes on rising instead of landing', () => {
+    const c = sandbox({ reactorPhysics: { jumpHeight: 1.25 } });
+    let ground = 0;
+    c.Reactor3D = { isMap3D: () => true, groundHeightAt: () => ground, TERRAIN_SLOPE_LIMIT: 0.75 };
+    const player = { x: 0, y: 0, _realX: 0, _realY: 0, _reactorGround: 0, _reactorAlt: 0 };
+    c.$gamePlayer = player;
+    c.ReactorPhysics.update(player);
+    assert.ok(c.ReactorPhysics.jump(player));
+    ground = 0.65;
+    c.ReactorPhysics.update(player);
+    assert.ok(player._reactorVz > 0, 'still rising after the step');
+    assert.ok(player._reactorAlt >= 0.65, 'carried up onto it');
+    let peak = 0;
+    for (let i = 0; i < 120; i++) { c.ReactorPhysics.update(player); peak = Math.max(peak, player._reactorAlt); }
+    assert.ok(peak > 1.2, `the jump still clears its height over the step (${peak.toFixed(2)})`);
+    assert.equal(player._reactorAir, 0, 'and lands on it');
+});
+
+test('a sun lights the ground under it however high it hangs, and the light grid covers its whole column', () => {
+    require(path.join(repoRoot, 'runtime', 'libs', 'three.js'));
+    const Reactor3D = require(path.join(repoRoot, 'runtime', 'reactor_3d.js'));
+    const [sun] = Reactor3D.readMapLights({ reactor3d: { lights: [{ type: 'sun', x: 10, y: 10, height: 200, radius: 600 }] } });
+    assert.equal(sun.type, Reactor3D.LIGHT_SUN);
+    assert.equal(sun.radius, 600, 'a sun reaches further than any lamp');
+    assert.match(Reactor3D.lightGlsl(false), /lc\.w > 2\.5[\s\S]*length\(d\.xz\)/, 'its falloff is across the ground');
+    const grid = Object.create(Reactor3D.LightGrid);
+    grid.size = [4, 4, 4]; grid.step = 5;
+    const cells = [];
+    const pos = new Float32Array([10, 200, 10, 30]), color = new Float32Array([1, 1, 1, 3]), aim = new Float32Array([0, -1, 0, -1]);
+    grid.fill(null, [0, 0, 0], 1, pos, color, aim, -1, cells);
+    const nx = 4, ny = 4;
+    const lowest = cells.some(cell => Math.floor(cell / nx) % ny === 0);
+    assert.ok(lowest, 'the ground cells under a sun 200 tiles up are lit');
+    const editorLights = fs.readFileSync(path.join(repoRoot, 'editor/src/utils/MapLights.js'), 'utf8');
+    assert.match(editorLights, /const TYPES = \['point', 'spot', 'beam', 'sun'\]/);
+    assert.match(editorLights, /key: 'sun', type: 'sun'/);
+});

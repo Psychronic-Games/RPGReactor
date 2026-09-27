@@ -40,6 +40,10 @@ Reactor3D.LIGHT_SPOT = "spot";
 // A laser: a constant-width cylinder of light `radius` tiles long and
 // `width` tiles across, aimed by yaw and pitch exactly as a spot is.
 Reactor3D.LIGHT_BEAM = "beam";
+// A sun: high over the map, lighting the ground under it to its radius
+// whatever its height (its reach is measured across the ground), casting
+// from where it really is.
+Reactor3D.LIGHT_SUN = "sun";
 Reactor3D.DEFAULT_BEAM_LENGTH = 8;
 // A beam's full thickness in tiles: the shader and the body take half.
 Reactor3D.DEFAULT_BEAM_WIDTH = 0.08;
@@ -188,13 +192,16 @@ Reactor3D.LightGrid = {
             const r2 = radius * radius, sr = cellRadius + pad, bit = (1 << i) >>> 0;
             const x0 = Math.max(0, Math.floor((x - radius - origin[0]) / step));
             const x1 = Math.min(nx - 1, Math.floor((x + radius - origin[0]) / step));
-            const y0 = Math.max(0, Math.floor((y - radius - origin[1]) / step));
-            const y1 = Math.min(ny - 1, Math.floor((y + radius - origin[1]) / step));
+            const kind = color[a + 3];
+            // A sun covers the whole column under it, however high it hangs.
+            const column = kind > 2.5;
+            const y0 = column ? 0 : Math.max(0, Math.floor((y - radius - origin[1]) / step));
+            const y1 = column ? ny - 1 : Math.min(ny - 1, Math.floor((y + radius - origin[1]) / step));
             const z0 = Math.max(0, Math.floor((z - radius - origin[2]) / step));
             const z1 = Math.min(nz - 1, Math.floor((z + radius - origin[2]) / step));
-            const kind = color[a + 3], ax = aim[a], ay = aim[a + 1], az = aim[a + 2];
+            const ax = aim[a], ay = aim[a + 1], az = aim[a + 2];
             const length = Math.hypot(ax, ay, az);
-            const shaped = kind > 0.5 && Math.abs(length - 1) < 0.0001;
+            const shaped = kind > 0.5 && kind < 2.5 && Math.abs(length - 1) < 0.0001;
             const cosine = aim[a + 3] / length;
             const sine = Math.sqrt(Math.max(0, 1 - cosine * cosine));
             for (let iz = z0; iz <= z1; iz++) {
@@ -202,7 +209,7 @@ Reactor3D.LightGrid = {
                 const bz = Math.max(Math.abs(dz) - half, 0);
                 for (let iy = y0; iy <= y1; iy++) {
                     const dy = origin[1] + (iy + 0.5) * step - y;
-                    const by = Math.max(Math.abs(dy) - half, 0), yz2 = by * by + bz * bz;
+                    const by = column ? 0 : Math.max(Math.abs(dy) - half, 0), yz2 = by * by + bz * bz;
                     if (yz2 > r2) continue;
                     const row = (iz * ny + iy) * nx;
                     for (let ix = x0; ix <= x1; ix++) {
@@ -434,15 +441,22 @@ Reactor3D.lightGlsl = function(shadows, taps) {
         "\t\tif (i >= rrLightCount) break;",
         "\t\tvec4 lp = rrLightPos[i];",
         "\t\tvec3 d = p - lp.xyz;",
+        "\t\tvec4 lc = rrLightColor[i];",
+        "\t\tfloat fall;",
+        // A sun: full over the middle of the ground it covers, fading at its
+        // edge, measured across the ground so its height never dims it.
+        "\t\tif (lc.w > 2.5) {",
+        "\t\t\tfall = smoothstep(lp.w, lp.w * 0.6, length(d.xz));",
+        "\t\t\tif (fall <= 0.0) continue;",
+        "\t\t} else {",
         // Outside the enclosing cube the spherical falloff is already zero.
         // Reject there before length/division; retain the exact falloff inside.
         "\t\tif (max(max(abs(d.x), abs(d.y)), abs(d.z)) >= max(lp.w, 0.001)) continue;",
         "\t\tfloat dist = length(d);",
         // The same falloff the flat pool's picture carries: (1 - d/r)^2.
-        "\t\tfloat fall = 1.0 - dist / max(lp.w, 0.001);",
+        "\t\tfall = 1.0 - dist / max(lp.w, 0.001);",
         "\t\tif (fall <= 0.0) continue;",
         "\t\tfall *= fall;",
-        "\t\tvec4 lc = rrLightColor[i];",
         "\t\tif (lc.w > 1.5) {",
         // A beam: how far along the axis the point sits and how far off it.
         // Inside the width it is lit at full, out to the length, with only a
@@ -462,6 +476,7 @@ Reactor3D.lightGlsl = function(shadows, taps) {
         // Outside the cone the contribution is exactly zero; avoid fetching
         // both shadow atlases for a light that cannot affect this fragment.
         "\t\t\tif (fall <= 0.0) continue;",
+        "\t\t}",
         "\t\t}",
         shadows ? "\t\tfloat sh = rrLightShadow[i];\n\t\tif (sh >= 0.0) fall *= rrShadowAt(int(sh + 0.5), p);" : "",
         "\t\tsum += lc.rgb * fall;",
@@ -525,7 +540,7 @@ Reactor3D.packLightUniforms = function(lights, ambient, uniforms = this.lightUni
         col[at] = (((rgb >> 16) & 255) / 255) * gain;
         col[at + 1] = (((rgb >> 8) & 255) / 255) * gain;
         col[at + 2] = ((rgb & 255) / 255) * gain;
-        col[at + 3] = beam ? 2 : spot ? 1 : 0;
+        col[at + 3] = light.type === this.LIGHT_SUN ? 3 : beam ? 2 : spot ? 1 : 0;
         aim[at] = ax; aim[at + 1] = ay; aim[at + 2] = az; aim[at + 3] = shape;
         count++;
     }
@@ -3241,7 +3256,8 @@ Reactor3D.readMapLights = function(mapData) {
         list.push({
             id: entry.id ? String(entry.id) : "light" + (i + 1),
             type: entry.type === "spot" ? this.LIGHT_SPOT
-                : entry.type === "beam" ? this.LIGHT_BEAM : this.LIGHT_POINT,
+                : entry.type === "beam" ? this.LIGHT_BEAM
+                    : entry.type === "sun" ? this.LIGHT_SUN : this.LIGHT_POINT,
             x: number(entry.x, 0, -10000, 10000),
             y: number(entry.y, 0, -10000, 10000),
             height: number(entry.height, 0, 0, 512),
@@ -3250,7 +3266,7 @@ Reactor3D.readMapLights = function(mapData) {
             pitch: number(entry.pitch, 0, -90, 90),
             radius: number(entry.radius,
                 entry.type === "spot" ? this.DEFAULT_CONE_LENGTH
-                    : entry.type === "beam" ? this.DEFAULT_BEAM_LENGTH : 3, 0.1, 200),
+                    : entry.type === "beam" ? this.DEFAULT_BEAM_LENGTH : 3, 0.1, entry.type === "sun" ? 2000 : 200),
             angle: number(entry.angle, this.DEFAULT_CONE_ANGLE, 1, 179),
             // A beam's thickness in tiles; a cone and a sphere carry it unused.
             width: number(entry.width, this.DEFAULT_BEAM_WIDTH, 0.005, 5),

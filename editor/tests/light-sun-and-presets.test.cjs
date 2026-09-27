@@ -61,9 +61,9 @@ test('a preset gives an existing light its look and nothing else; the Sun is one
     vm.runInNewContext(read('editor/src/utils/MapLights.js'), context);
     const L = context.RRMapLights;
     const sun = L.PRESETS.find(preset => preset.key === 'sun');
-    assert.ok(sun && sun.template.type === 'point' && sun.template.height >= 30 && sun.template.radius >= 100 && sun.template.shadow === true);
+    assert.ok(sun && sun.template.type === 'sun' && sun.template.height >= 30 && sun.template.radius >= 100 && sun.template.shadow === true);
     const look = L.presetLook('sun');
-    assert.deepEqual({ ...look }, { flicker: 0, pulse: null, type: 'point', color: '#fff3d2', radius: 150, intensity: 2, shadow: true });
+    assert.deepEqual({ ...look }, { flicker: 0, pulse: null, type: 'sun', color: '#fff3d2', radius: 150, intensity: 2, shadow: true });
     for (const key of ['x', 'y', 'height', 'id', 'key', 'tag', 'attach']) assert.equal(key in look, false, key + ' stays the light\'s own');
     assert.equal(L.PRESETS.length % 4, 0, 'the tray fills its rows of four (no chip sits alone on a row)');
     assert.equal(L.PRESETS.find(preset => preset.key === 'point'), undefined, 'no plain Point chip: a Lamp is the everyday point light');

@@ -4112,11 +4112,13 @@ Reactor3D.RAGDOLL_BONES = [
     ["RightUpperLeg", "Hips"], ["RightLowerLeg", "RightUpperLeg"], ["RightFoot", "RightLowerLeg"]
 ];
 /** Constraint passes a frame, air damping, and the share of sliding speed ground contact keeps. */
-Reactor3D.RAGDOLL_ITERATIONS = 10;
+Reactor3D.RAGDOLL_ITERATIONS = 6;
 Reactor3D.RAGDOLL_DAMPING = 0.995;
-Reactor3D.RAGDOLL_GROUND_KEEP = 0.72;
+Reactor3D.RAGDOLL_GROUND_KEEP = 0.8;
 /** Share of a hard landing's speed a body bounces back with. */
-Reactor3D.RAGDOLL_BOUNCE = 0.2;
+Reactor3D.RAGDOLL_BOUNCE = 0.4;
+/** How hard the impact flings each hand and foot its own way (tiles a frame, per unit of impact). */
+Reactor3D.RAGDOLL_FLING = 0.9;
 
 Reactor3D.startRagdoll = function(holder, character) {
     if (typeof THREE === "undefined" || !holder.binding || !holder.object) return null;
@@ -4161,9 +4163,10 @@ Reactor3D.startRagdoll = function(holder, character) {
     const torso = first("Chest", "Spine", "Neck");
     tie("LeftUpperLeg", "RightUpperLeg"); tie("LeftUpperArm", "RightUpperArm");
     tie("Hips", torso); tie(first("Spine", "Chest"), "LeftUpperArm"); tie(first("Spine", "Chest"), "RightUpperArm");
-    tie("Hips", "LeftUpperArm", 0.6); tie("Hips", "RightUpperArm", 0.6);
-    tie("Chest", "LeftUpperLeg", 0.6); tie("Chest", "RightUpperLeg", 0.6);
-    tie("Chest", "Head", 0.5); tie("LeftUpperArm", "Head", 0.3); tie("RightUpperArm", "Head", 0.3);
+    // Only loosely: a limp body folds at the waist and its head lolls.
+    tie("Hips", "LeftUpperArm", 0.25); tie("Hips", "RightUpperArm", 0.25);
+    tie("Chest", "LeftUpperLeg", 0.25); tie("Chest", "RightUpperLeg", 0.25);
+    tie("Chest", "Head", 0.15);
     // The fall's speed carries on: the character's own run, the impact, and a topple
     // that grows with height so the body folds and goes over rather than dropping straight.
     const start = character._reactorRagdoll || {};
@@ -4171,10 +4174,23 @@ Reactor3D.startRagdoll = function(holder, character) {
     const lean = (Math.random() < 0.5 ? -1 : 1) * (0.3 + Math.random() * 0.5);
     const topple = facing.clone().multiplyScalar(0.8 + Math.random() * 0.4).addScaledVector(side, lean).normalize();
     const ground = object.position.y;
-    for (const point of points) {
+    // The impact flings each hand and foot (and its end) its own way, up and out: limbs flail.
+    const impact = Math.min(1, Math.abs(start.vy || 0) / 0.3);
+    const flung = {};
+    for (const name of ["LeftHand", "RightHand", "LeftFoot", "RightFoot", "LeftLowerArm", "RightLowerArm", "Head"]) {
+        const angle = Math.random() * Math.PI * 2;
+        const share = name.includes("Lower") ? 0.6 : name === "Head" ? 0.4 : 1;
+        const kick = Reactor3D.RAGDOLL_FLING * impact * share * (0.5 + Math.random() * 0.5) * 0.2;
+        flung[name] = new THREE.Vector3(Math.cos(angle) * kick, kick * (0.8 + Math.random() * 0.6), Math.sin(angle) * kick);
+        flung[name + "Tip"] = flung[name];
+    }
+    for (let i = 0; i < points.length; i++) {
+        const point = points[i];
         const up = Math.max(0, (point.p.y - ground) / height);
         const v = new THREE.Vector3(start.vx || 0, Math.min(0, start.vy || 0) * 0.25 * up, start.vz || 0)
             .addScaledVector(topple, 0.055 * up);
+        const name = Object.keys(index).find(key => index[key] === i);
+        if (flung[name]) v.add(flung[name]);
         point.q.sub(v);
     }
     // Each driven bone: what it aims at and how it lay when the body went limp.
@@ -4255,9 +4271,12 @@ Reactor3D.runRagdoll = function(holder, character) {
             if (point.p.y < floor) {
                 const into = point.p.y - point.q.y;
                 point.p.y = floor;
-                // Ground contact scrubs the slide: a body skids a little and stops.
-                point.q.x = point.p.x - (point.p.x - point.q.x) * Reactor3D.RAGDOLL_GROUND_KEEP;
-                point.q.z = point.p.z - (point.p.z - point.q.z) * Reactor3D.RAGDOLL_GROUND_KEEP;
+                // Ground contact scrubs the slide, once a frame (every pass stopped a body dead):
+                // a body skids and rolls a little and stops.
+                if (pass === 0) {
+                    point.q.x = point.p.x - (point.p.x - point.q.x) * Reactor3D.RAGDOLL_GROUND_KEEP;
+                    point.q.z = point.p.z - (point.p.z - point.q.z) * Reactor3D.RAGDOLL_GROUND_KEEP;
+                }
                 // The first touch bounces a little; after that the ground just holds it.
                 point.q.y = pass === 0 && into < -0.03 ? point.p.y + into * Reactor3D.RAGDOLL_BOUNCE : Math.max(point.q.y, point.p.y);
             }

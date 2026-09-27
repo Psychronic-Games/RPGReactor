@@ -312,7 +312,11 @@
             }
             height += vz;
             character._reactorPeak = Math.max(Number.isFinite(character._reactorPeak) ? character._reactorPeak : height, height);
-            if (height <= ground) {
+            // A jump taken walking up a step (a stair, a stepped roof) meets higher ground
+            // while still rising: it is carried up onto the step and goes on rising,
+            // where it used to count as a landing and stop dead.
+            if (height <= ground && vz > 0) height = ground;
+            if (height <= ground && vz <= 0) {
                 const fell = (character._reactorPeak || ground) - ground;
                 height = ground; vz = 0;
                 character._reactorPeak = undefined;

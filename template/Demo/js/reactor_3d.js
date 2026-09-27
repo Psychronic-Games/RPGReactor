@@ -6746,6 +6746,8 @@ Reactor3D.MapScene.prototype.syncVolumeLights = function(declared, focus) {
         if (!(radius > 0) || count >= max) continue;
         const beam = light.type === Reactor3D.LIGHT_BEAM;
         const spot = light.type === Reactor3D.LIGHT_SPOT || beam;
+        // A sun lights the ground under it out to its radius, however high it hangs.
+        const sun = light.type === Reactor3D.LIGHT_SUN;
         const width = light.width === undefined ? Reactor3D.DEFAULT_BEAM_WIDTH : light.width;
         const facade = Reactor3D.facadeAt(Math.round(light.x), Math.round(light.y));
         const standsOn = light.groundY !== undefined
@@ -6763,7 +6765,7 @@ Reactor3D.MapScene.prototype.syncVolumeLights = function(declared, focus) {
         // This is free frame time, not a quality setting: the pixels come
         // out identical. Nine of the Demo's ten lights are off screen at
         // any moment, and every lit fragment was paying for all ten.
-        if (!Reactor3D.sphereInView(x, y, z, radius)) continue;
+        if (!Reactor3D.sphereInView(x, sun ? standsOn + lift : y, z, radius)) continue;
 
         const rgb = light.colour === undefined ? 0xffffff : light.colour;
         const intensity = (light.intensity === undefined ? 1 : light.intensity) * Reactor3D.LIGHT_GAIN;
@@ -6809,7 +6811,7 @@ Reactor3D.MapScene.prototype.syncVolumeLights = function(declared, focus) {
         // The colour's w says the shape: 0 a sphere, 1 a cone, 2 a beam. The
         // aim's w is what that shape needs — the cone's cosine of its half
         // angle, the beam's half width in tiles.
-        col[at] = r * gain; col[at + 1] = g * gain; col[at + 2] = b * gain; col[at + 3] = beam ? 2 : spot ? 1 : 0;
+        col[at] = r * gain; col[at + 1] = g * gain; col[at + 2] = b * gain; col[at + 3] = sun ? 3 : beam ? 2 : spot ? 1 : 0;
         aim[at] = ax; aim[at + 1] = ay; aim[at + 2] = az; aim[at + 3] = beam ? width * 0.5 : cosHalf;
         // Bodies are counted separately so the pool stays packed when a
         // light asks not to be seen (a carried torch); `trim` below takes
@@ -6832,16 +6834,18 @@ Reactor3D.MapScene.prototype.syncVolumeLights = function(declared, focus) {
         }
         if (light.shadow !== false) {
             const gap = Math.hypot((light.x || 0) - fx, (light.y || 0) - fy) - radius;
+            // A sun's shadows reach from its height down to the edge of the ground it lights.
+            const castReach = sun ? Math.hypot(radius, height) : radius;
             candidates.push({
                 index: count,
                 id: light.id !== undefined && light.id !== null ? String(light.id) : "#" + count,
-                x, y: y + Math.max(0, Reactor3D.SHADOW_LIFT - height), z, radius,
+                x, y: y + Math.max(0, Reactor3D.SHADOW_LIFT - height), z, radius: castReach,
                 gap,
                 // What `Shadows._incident` needs to say how much of this
                 // light lands on the player: where it really is, its shape
                 // and aim, and how bright it is.
                 lightY: y, spot, beam, ax, ay, az, cosHalf, width,
-                priorityRadius: light.priorityRadius === undefined ? radius : light.priorityRadius,
+                priorityRadius: sun ? castReach : light.priorityRadius === undefined ? radius : light.priorityRadius,
                 strength: (light.priorityIntensity === undefined ? (light.intensity === undefined ? 1 : light.intensity) : light.priorityIntensity) * (r + g + b) / 3,
                 carrier: light.carrier || null
             });
