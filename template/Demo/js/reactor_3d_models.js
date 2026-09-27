@@ -4148,6 +4148,9 @@ Reactor3D.modelRuleDuration = function(rule, clips) {
     return rule.period * rule.cycles;
 };
 
+/** How many frames a state's looping motion takes to fade in or out. */
+Reactor3D.MOTION_FADE_FRAMES = 8;
+
 /** Smoothstep: pose blends accelerate in and settle out. */
 Reactor3D.poseEase = function(blend) {
     const b = Math.min(1, Math.max(0, blend));
@@ -4241,8 +4244,10 @@ Reactor3D.applyModelAnimation = function(binding, rules, state) {
             // ambient trigger. The timeline owns easing, so a cancelled
             // action simply rests.
             let progress = null;
+            let weight = 1;
             const duration = Math.max(1, rule.period * 2 * rule.cycles);
             if (rule.trigger === "action") {
+                binding.angles[i] = 0;
                 if (state.action && state.action.name === rule.name) {
                     const t = state.frame - state.action.frame;
                     // A zero-frame pose is there the frame its action starts.
@@ -4254,11 +4259,21 @@ Reactor3D.applyModelAnimation = function(binding, rules, state) {
                 const active = rule.trigger === "always"
                     || (rule.trigger === "idle" && !state.moving && !state.airborne)
                     || Reactor3D.moveTriggerActive(rule.trigger, state) === true;
-                if (active) progress = (state.frame % duration) / duration;
+                // A state's motion fades in as the state begins and out as it
+                // ends (a jump, a dive, a ladder), rather than snapping on.
+                const fade = Math.max(0, Math.min(1, (binding.angles[i] || 0) + (active ? 1 : -1) / Reactor3D.MOTION_FADE_FRAMES));
+                binding.angles[i] = fade;
+                if (fade > 0) { progress = (state.frame % duration) / duration; weight = this.poseEase(fade); }
             }
-            binding.angles[i] = 0;
             if (progress === null) continue;
             const sampled = this.sampleModelKeys(rule, progress);
+            if (weight < 1) {
+                for (let k = 0; k < 3; k++) {
+                    sampled.rotate[k] *= weight;
+                    sampled.move[k] *= weight;
+                    sampled.resize[k] = 1 + (sampled.resize[k] - 1) * weight;
+                }
+            }
             if (rule.fromRest) restWeight = rule.instant ? 1 : Math.max(0, Math.min(1, progress));
             const toRad = Math.PI / 180;
             quat = nextQuat().setFromEuler(euler.set(
