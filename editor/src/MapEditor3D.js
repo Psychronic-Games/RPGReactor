@@ -1141,7 +1141,9 @@ class MapEditor3D {
          * transparent, and transparent boxes are what sliced the labels.
          */
         const boxHeight = Math.max(height, 0.94);
-        const box = this.eventBox(boxHeight, this.eventColor(event));
+        // A sized event's box spans its footprint (right and down from its tile).
+        const footprint = typeof RRMapElevation !== 'undefined' && RRMapElevation.eventSize ? RRMapElevation.eventSize(mapData, event.id) : [1, 1];
+        const box = this.eventBox(boxHeight, this.eventColor(event), footprint);
         mesh.userData.box = box;
         mesh.userData.boxHeight = boxHeight;
         this.eventGroup.add(box);
@@ -1205,7 +1207,8 @@ class MapEditor3D {
             event.x, event.y, event.name, event.note, previewIndex,
             page && page.image, page && page.stepAnime,
             Reactor3D.eventModelSpec ? Reactor3D.eventModelSpec(mapData, event.id, previewIndex ?? 0) : null,
-            Reactor3D.eventZAt ? Reactor3D.eventZAt(mapData, event.id) : 0
+            Reactor3D.eventZAt ? Reactor3D.eventZAt(mapData, event.id) : 0,
+            typeof RRMapElevation !== 'undefined' && RRMapElevation.eventSize ? RRMapElevation.eventSize(mapData, event.id) : null
         ]);
     }
 
@@ -1302,9 +1305,11 @@ class MapEditor3D {
      * Slightly under a full cell so two events side by side do not fight over
      * the edge they would otherwise share.
      */
-    eventBox(height, colour) {
+    eventBox(height, colour, footprint = [1, 1]) {
         const side = 0.94;
-        const shape = new THREE.BoxGeometry(side, height, side);
+        const [w, d] = footprint;
+        // Centred on the event's own tile, reaching w tiles right and d down.
+        const shape = new THREE.BoxGeometry(side + (w - 1), height, side + (d - 1)).translate((w - 1) / 2, 0, (d - 1) / 2);
         const geometry = new THREE.EdgesGeometry(shape);
         shape.dispose();
         const box = new THREE.LineSegments(geometry, new THREE.LineBasicMaterial({

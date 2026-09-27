@@ -129,14 +129,32 @@ class EventManager {
         } else if (map.reactor3d) delete map.reactor3d.eventZ;
     }
 
+    /** The events' footprints (`reactor3d.eventSize`), for an undo step. */
+    _eventSizesSnapshot() {
+        const sizes = this.currentMap?.reactor3d?.eventSize;
+        return sizes ? JSON.parse(JSON.stringify(sizes)) : null;
+    }
+
+    _restoreEventSizes(snapshot) {
+        if (!snapshot || !Object.prototype.hasOwnProperty.call(snapshot, 'sizes')) return;
+        const map = this.currentMap;
+        if (snapshot.sizes && Object.keys(snapshot.sizes).length) {
+            map.reactor3d ||= { version: 1 };
+            map.reactor3d.eventSize = JSON.parse(JSON.stringify(snapshot.sizes));
+        } else if (map.reactor3d) delete map.reactor3d.eventSize;
+    }
+
     _eventPlacement(eventId) {
         const sidecar = this.currentMap?.reactor3d;
-        return { height: Number(sidecar?.eventZ?.[eventId]) || 0, preview: sidecar?.eventPreviews?.[eventId] ?? null };
+        const size = sidecar?.eventSize?.[eventId];
+        return { height: Number(sidecar?.eventZ?.[eventId]) || 0, preview: sidecar?.eventPreviews?.[eventId] ?? null, size: Array.isArray(size) ? size.slice() : null };
     }
 
     _setEventPlacement(eventId, placement) {
         const map = this.currentMap;
         if (!map) return;
+        // A copied event keeps its footprint; a removed one takes it with it.
+        if (typeof RRMapElevation !== 'undefined' && RRMapElevation.setEventSize) RRMapElevation.setEventSize(map, eventId, placement?.size || [1, 1]);
         for (const [field, value] of [['eventZ', placement?.height], ['eventPreviews', placement?.preview]]) {
             const present = field === 'eventZ' ? Number.isFinite(value) && value > 0 : Number.isInteger(value) && value >= 0;
             if (present) {
@@ -180,6 +198,7 @@ class EventManager {
             events: JSON.parse(JSON.stringify(this.currentMap.events || [])),
             models: this._eventModelsSnapshot(),
             heights: this._eventHeightsSnapshot(),
+            sizes: this._eventSizesSnapshot(),
             previews: this._eventPreviewsSnapshot()
         };
         this.undoStack.push(eventsData);
@@ -204,6 +223,7 @@ class EventManager {
             events: JSON.parse(JSON.stringify(this.currentMap.events || [])),
             models: this._eventModelsSnapshot(),
             heights: this._eventHeightsSnapshot(),
+            sizes: this._eventSizesSnapshot(),
             previews: this._eventPreviewsSnapshot()
         });
 
@@ -215,6 +235,7 @@ class EventManager {
         this.currentMap.events = previousData.events;
         this._restoreEventModels(previousData.models);
         this._restoreEventHeights(previousData);
+        this._restoreEventSizes(previousData);
         this._restoreEventPreviews(previousData);
 
         // Undo restores cloned data, so the selection must follow that object.
@@ -235,6 +256,7 @@ class EventManager {
             events: JSON.parse(JSON.stringify(this.currentMap.events || [])),
             models: this._eventModelsSnapshot(),
             heights: this._eventHeightsSnapshot(),
+            sizes: this._eventSizesSnapshot(),
             previews: this._eventPreviewsSnapshot()
         });
 
@@ -246,6 +268,7 @@ class EventManager {
         this.currentMap.events = nextData.events;
         this._restoreEventModels(nextData.models);
         this._restoreEventHeights(nextData);
+        this._restoreEventSizes(nextData);
         this._restoreEventPreviews(nextData);
 
         // Undo restores cloned data, so the selection must follow that object.
@@ -2811,6 +2834,19 @@ class EventManager {
 
         // Always draw the black background box with white border (RPG Maker style)
         const graphics = new PIXI.Graphics();
+
+        // A sized event: its whole footprint, faint, behind its own square.
+        const footprint = typeof RRMapElevation !== 'undefined' && RRMapElevation.eventSize ? RRMapElevation.eventSize(this.currentMap, event.id) : [1, 1];
+        if (footprint[0] > 1 || footprint[1] > 1) {
+            const area = new PIXI.Graphics();
+            const fw = footprint[0] * this.tilemapManager.TILE_WIDTH, fh = footprint[1] * this.tilemapManager.TILE_HEIGHT;
+            const tone = isSelected ? 0x00ff00 : 0xffffff;
+            area.rect(0, 0, fw, fh);
+            area.fill({ color: tone, alpha: 0.12 });
+            area.rect(0.5, 0.5, fw - 1, fh - 1);
+            area.stroke({ width: 1, color: tone, alpha: 0.7 });
+            container.addChild(area);
+        }
 
         // Black background - more opaque - PIXI v8 API
         const bgAlpha = isDragging ? 0.9 : 0.75;

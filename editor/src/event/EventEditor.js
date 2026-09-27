@@ -42,6 +42,8 @@ class EventEditor {
             this.needsInitialCommit = options?.isNew === true;
             this.pendingZ = this.needsInitialCommit ? 0 : this._eventZ(event.id);
             this.pendingZBaseline = this.pendingZ;
+            this.pendingSize = this.needsInitialCommit ? [1, 1] : this._eventSize(event.id);
+            this.pendingSizeBaseline = this.pendingSize.slice();
             this.onCancel = options?.onCancel || null;
             this._loadPendingModels(event);
         }
@@ -207,6 +209,12 @@ class EventEditor {
         return map && typeof Reactor3D !== 'undefined' && Reactor3D.eventZAt ? Reactor3D.eventZAt(map, eventId) : 0;
     }
 
+    /** The event's footprint in tiles, from the sidecar. */
+    _eventSize(eventId) {
+        const map = this._currentMap(), E = typeof RRMapElevation !== 'undefined' ? RRMapElevation : null;
+        return map && E && E.eventSize ? E.eventSize(map, eventId) : [1, 1];
+    }
+
     _readPositionFields() {
         const map = this._currentMap();
         const event = this.currentEvent;
@@ -219,6 +227,8 @@ class EventEditor {
         event.x = Math.max(0, Math.min((map.width || 1) - 1, Math.round(number('event-position-x', event.x))));
         event.y = Math.max(0, Math.min((map.height || 1) - 1, Math.round(number('event-position-y', event.y))));
         this.pendingZ = Math.max(0, number('event-position-z', this.pendingZ || 0));
+        const size = this.pendingSize || [1, 1];
+        this.pendingSize = [Math.max(1, Math.round(number('event-size-w', size[0]))), Math.max(1, Math.round(number('event-size-h', size[1])))];
     }
 
     _writePendingModels() {
@@ -227,6 +237,9 @@ class EventEditor {
         if (!map || !event || event.id == null) return;
         if (typeof Reactor3D !== 'undefined' && Reactor3D.setEventZ && this.pendingZ != null) {
             Reactor3D.setEventZ(map, event.id, this.pendingZ);
+        }
+        if (this.pendingSize && typeof RRMapElevation !== 'undefined' && RRMapElevation.setEventSize) {
+            RRMapElevation.setEventSize(map, event.id, this.pendingSize);
         }
         if (typeof Reactor3D !== 'undefined' && Reactor3D.setEventModelSpec) {
             const pageCount = (event.pages || []).length;
@@ -277,7 +290,8 @@ class EventEditor {
     _commitChanges() {
         if (!this.currentEvent || !this.sourceEvent) return false;
         this._readPositionFields();
-        const zChanged = this.pendingZ != null && this.pendingZ !== this._eventZ(this.currentEvent.id);
+        const zChanged = (this.pendingZ != null && this.pendingZ !== this._eventZ(this.currentEvent.id))
+            || (!!this.pendingSize && JSON.stringify(this.pendingSize) !== JSON.stringify(this._eventSize(this.currentEvent.id)));
         const committed = this._clone(this.currentEvent);
         const eventChanged = JSON.stringify(committed) !== JSON.stringify(this.cancelBaseline);
         const modelsChanged = zChanged
@@ -347,6 +361,11 @@ class EventEditor {
                         style="width: 64px; padding: 3px 6px; background: var(--color-bg-input-alt); color: var(--color-text); border: 1px solid var(--color-border-input); border-radius: 3px; font-size: 12px;">
                     <span>Z:</span><input type="number" id="event-position-z" data-no-stepper min="0" step="0.25" value="${this.pendingZ ?? this._eventZ(event.id)}"
                         style="width: 64px; padding: 3px 6px; background: var(--color-bg-input-alt); color: var(--color-text); border: 1px solid var(--color-border-input); border-radius: 3px; font-size: 12px;">
+                    <label style="font-weight: bold; margin-left: 8px;" title="${rrEscapeHtml(this._t('event.sizeHint'))}">${this._t('event.size')}</label>
+                    <span>W:</span><input type="number" id="event-size-w" data-no-stepper min="1" max="64" step="1" value="${(this.pendingSize || this._eventSize(event.id))[0]}" title="${rrEscapeHtml(this._t('event.sizeHint'))}"
+                        style="width: 52px; padding: 3px 6px; background: var(--color-bg-input-alt); color: var(--color-text); border: 1px solid var(--color-border-input); border-radius: 3px; font-size: 12px;">
+                    <span>H:</span><input type="number" id="event-size-h" data-no-stepper min="1" max="64" step="1" value="${(this.pendingSize || this._eventSize(event.id))[1]}" title="${rrEscapeHtml(this._t('event.sizeHint'))}"
+                        style="width: 52px; padding: 3px 6px; background: var(--color-bg-input-alt); color: var(--color-text); border: 1px solid var(--color-border-input); border-radius: 3px; font-size: 12px;">
                 </div>
             </div>
         `;

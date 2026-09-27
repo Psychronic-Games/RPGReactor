@@ -21497,3 +21497,23 @@ Object.assign(RR_I18N_STRINGS["id"], {"ctx3d.copy": "Salin", "ctx3d.paste": "Tem
 Object.assign(RR_I18N_STRINGS["vi"], {"ctx3d.copy": "Sao chép", "ctx3d.paste": "Dán vào đây", "ctx3d.duplicate": "Nhân bản", "ctx3d.delete": "Xóa"});
 Object.assign(RR_I18N_STRINGS["th"], {"ctx3d.copy": "คัดลอก", "ctx3d.paste": "วางที่นี่", "ctx3d.duplicate": "ทำซ้ำ", "ctx3d.delete": "ลบ"});
 Object.assign(RR_I18N_STRINGS["tr"], {"ctx3d.copy": "Kopyala", "ctx3d.paste": "Buraya yapıştır", "ctx3d.duplicate": "Çoğalt", "ctx3d.delete": "Sil"});
+
+// Event editor: an event's footprint.
+Object.assign(RR_I18N_STRINGS["en"], {"event.size": "Size", "event.sizeHint": "How many tiles the event covers, right and down from its own. Touching or facing any of them counts; it blocks them all."});
+Object.assign(RR_I18N_STRINGS["ja"], {"event.size": "サイズ", "event.sizeHint": "イベントが覆うタイル数（自分のタイルから右と下へ）。どのタイルに触れても向いても反応し、すべてを塞ぎます。"});
+Object.assign(RR_I18N_STRINGS["es"], {"event.size": "Tamaño", "event.sizeHint": "Cuántas casillas cubre el evento, a la derecha y hacia abajo desde la suya. Tocar o mirar cualquiera cuenta; las bloquea todas."});
+Object.assign(RR_I18N_STRINGS["zh-Hant"], {"event.size": "大小", "event.sizeHint": "事件覆蓋的圖塊數（自其圖塊向右、向下）。碰觸或面向其中任一格都算，並會擋住全部。"});
+Object.assign(RR_I18N_STRINGS["zh-Hans"], {"event.size": "大小", "event.sizeHint": "事件覆盖的图块数（自其图块向右、向下）。碰触或面向其中任一格都算，并会挡住全部。"});
+Object.assign(RR_I18N_STRINGS["ru"], {"event.size": "Размер", "event.sizeHint": "Сколько клеток занимает событие вправо и вниз от своей. Касание или взгляд на любую из них считается; оно загораживает их все."});
+Object.assign(RR_I18N_STRINGS["pt"], {"event.size": "Tamanho", "event.sizeHint": "Quantas células o evento cobre, para a direita e para baixo da sua. Tocar ou encarar qualquer uma conta; bloqueia todas."});
+Object.assign(RR_I18N_STRINGS["de"], {"event.size": "Größe", "event.sizeHint": "Wie viele Felder das Ereignis bedeckt, nach rechts und unten von seinem eigenen. Jedes davon zu berühren oder anzusehen zählt; es blockiert alle."});
+Object.assign(RR_I18N_STRINGS["fr"], {"event.size": "Taille", "event.sizeHint": "Combien de cases l’événement couvre, vers la droite et vers le bas depuis la sienne. Toucher ou faire face à l’une d’elles compte ; il les bloque toutes."});
+Object.assign(RR_I18N_STRINGS["el"], {"event.size": "Μέγεθος", "event.sizeHint": "Πόσα πλακίδια καλύπτει το συμβάν, δεξιά και κάτω από το δικό του. Η επαφή ή η στροφή προς οποιοδήποτε μετράει· τα μπλοκάρει όλα."});
+Object.assign(RR_I18N_STRINGS["ko"], {"event.size": "크기", "event.sizeHint": "이벤트가 차지하는 타일 수(자기 타일에서 오른쪽과 아래로). 어느 타일을 밟거나 마주해도 반응하고, 모두 막습니다."});
+Object.assign(RR_I18N_STRINGS["ar"], {"event.size": "الحجم", "event.sizeHint": "عدد المربعات التي يغطيها الحدث يمينًا وأسفل من مربعه. لمس أيٍّ منها أو مواجهته يُحتسب؛ ويسدّها كلها."});
+Object.assign(RR_I18N_STRINGS["it"], {"event.size": "Dimensione", "event.sizeHint": "Quante caselle copre l’evento, a destra e in basso dalla sua. Toccarne o guardarne una qualsiasi conta; le blocca tutte."});
+Object.assign(RR_I18N_STRINGS["pl"], {"event.size": "Rozmiar", "event.sizeHint": "Ile pól zajmuje zdarzenie, w prawo i w dół od własnego. Dotknięcie lub zwrócenie się ku któremukolwiek się liczy; blokuje wszystkie."});
+Object.assign(RR_I18N_STRINGS["id"], {"event.size": "Ukuran", "event.sizeHint": "Berapa petak yang ditutupi event, ke kanan dan ke bawah dari petaknya. Menyentuh atau menghadap salah satunya dihitung; semuanya terhalang."});
+Object.assign(RR_I18N_STRINGS["vi"], {"event.size": "Kích thước", "event.sizeHint": "Sự kiện phủ bao nhiêu ô, sang phải và xuống dưới từ ô của nó. Chạm hoặc hướng vào ô nào cũng tính; nó chặn tất cả."});
+Object.assign(RR_I18N_STRINGS["th"], {"event.size": "ขนาด", "event.sizeHint": "จำนวนช่องที่เหตุการณ์ครอบคลุม ไปทางขวาและลงล่างจากช่องของมัน แตะหรือหันไปที่ช่องใดก็นับ และจะกันทุกช่อง"});
+Object.assign(RR_I18N_STRINGS["tr"], {"event.size": "Boyut", "event.sizeHint": "Olayın kendi karesinden sağa ve aşağı kaç kare kapladığı. Herhangi birine dokunmak ya da yönelmek sayılır; hepsini kapatır."});

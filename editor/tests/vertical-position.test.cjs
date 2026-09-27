@@ -136,3 +136,24 @@ test('the editor carries height: position fields, 3D placement, arrows, overlays
     const sprites = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_sprites.js'), 'utf8');
     assert.match(sprites, /Reactor3D\.isEventProp\(this\._character\.eventId\(\)\)/, 'a flat map ignores an event\'s height');
 });
+
+test('a sized event is at every tile of its footprint, stored in the sidecar by editor and runtime alike', () => {
+    const map = { width: 20, height: 20, reactor3d: { version: 1 } };
+    Reactor3D.setEventSize(map, 2, [3, 2]);
+    assert.deepEqual(map.reactor3d.eventSize, { 2: [3, 2] });
+    assert.deepEqual(Reactor3D.eventSizeAt(map, 2), [3, 2]);
+    assert.deepEqual(Reactor3D.eventSizeAt(map, 5), [1, 1], 'unset: one tile');
+    Reactor3D.setEventSize(map, 2, [1, 1]);
+    assert.equal('eventSize' in map.reactor3d, false, 'back to one tile leaves nothing behind');
+    const E = require(path.join(editorRoot, 'src', 'utils', 'MapElevation.js'));
+    E.setEventSize(map, 7, [2, 4]);
+    assert.deepEqual(Reactor3D.eventSizeAt(map, 7), [2, 4], 'the editor writes what the runtime reads');
+    // pos: the footprint, right and down from the event's tile.
+    global.Game_Event = function() {}; Game_Event.prototype.pos = function(x, y) { return this._x === x && this._y === y; };
+    global.$dataMap = map;
+    try {
+        Reactor3D.installEventFootprints();
+        const event = Object.assign(Object.create(Game_Event.prototype), { _eventId: 7, _x: 5, _y: 5 });
+        assert.deepEqual([[5, 5], [6, 8], [7, 5], [4, 5], [5, 9]].map(([x, y]) => event.pos(x, y)), [true, true, false, false, false]);
+    } finally { delete global.Game_Event; delete global.$dataMap; }
+});

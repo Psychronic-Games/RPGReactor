@@ -6855,6 +6855,51 @@ Reactor3D.setEventZ = function(mapData, eventId, z) {
     mapData.reactor3d.eventZ[String(eventId)] = value;
 };
 
+/**
+ * An event's footprint in tiles, `[w, h]` from its own tile rightward and
+ * down (`reactor3d.eventSize[id]`; 1 by 1 when unset). One event can stand
+ * over a whole ramp or doorway: touching or facing any tile of it counts, and
+ * it blocks all of them as it would its own. 2D maps too.
+ */
+Reactor3D.EVENT_SIZE_MAX = 64;
+Reactor3D.eventSizeAt = function(mapData, eventId) {
+    const store = mapData && mapData.reactor3d && mapData.reactor3d.eventSize;
+    const raw = store ? store[String(eventId)] : null;
+    if (!Array.isArray(raw)) return [1, 1];
+    const n = v => Math.max(1, Math.min(this.EVENT_SIZE_MAX, Math.floor(Number(v)) || 1));
+    return [n(raw[0]), n(raw[1])];
+};
+
+Reactor3D.setEventSize = function(mapData, eventId, size) {
+    if (!mapData || !eventId) return;
+    const n = v => Math.max(1, Math.min(this.EVENT_SIZE_MAX, Math.floor(Number(v)) || 1));
+    const w = n(size && size[0]), h = n(size && size[1]);
+    if (w === 1 && h === 1) {
+        if (mapData.reactor3d && mapData.reactor3d.eventSize) {
+            delete mapData.reactor3d.eventSize[String(eventId)];
+            if (!Object.keys(mapData.reactor3d.eventSize).length) delete mapData.reactor3d.eventSize;
+        }
+        return;
+    }
+    if (!mapData.reactor3d || typeof mapData.reactor3d !== "object") mapData.reactor3d = { version: 1 };
+    if (!mapData.reactor3d.eventSize || typeof mapData.reactor3d.eventSize !== "object") mapData.reactor3d.eventSize = {};
+    mapData.reactor3d.eventSize[String(eventId)] = [w, h];
+};
+
+/** A sized event is at every tile of its footprint (triggers, the action button and collision all ask `pos`). */
+Reactor3D.installEventFootprints = function() {
+    if (typeof Game_Event === "undefined" || Game_Event.prototype.pos.__reactorFootprint) return;
+    const basePos = Game_Event.prototype.pos;
+    Game_Event.prototype.pos = function(x, y) {
+        const map = typeof $dataMap !== "undefined" ? $dataMap : null;
+        if (!map || !map.reactor3d || !map.reactor3d.eventSize) return basePos.call(this, x, y);
+        const [w, h] = Reactor3D.eventSizeAt(map, this._eventId);
+        if (w === 1 && h === 1) return basePos.call(this, x, y);
+        return x >= this._x && x < this._x + w && y >= this._y && y < this._y + h;
+    };
+    Game_Event.prototype.pos.__reactorFootprint = true;
+};
+
 /** The height a character may rise to: the room's ceiling, else a tall default. */
 Reactor3D.verticalCeiling = function() {
     const map = typeof $dataMap !== "undefined" ? $dataMap : null;
@@ -6898,9 +6943,16 @@ Reactor3D.partyCharacter = function(character) {
         || (typeof Game_Follower !== "undefined" && character instanceof Game_Follower));
 };
 
-Reactor3D.charactersOverlapVertically = function(a, b) {
+Reactor3D.charactersOverlapVertically = function(a, b, at) {
     if (!a || !b) return true;
-    const za = this.characterFeet(a), zb = this.characterFeet(b);
+    let za = this.characterFeet(a), zb = this.characterFeet(b);
+    // At a tile (`at`): an event stands at least on that tile's ground. One physics never moves has
+    // no altitude of its own (it read as 0 and a walker on a ramp passed through it), and a sized
+    // event spans ground of several heights.
+    if (at && typeof $dataMap !== "undefined" && $dataMap && this.groundHeightAt && typeof Game_Event !== "undefined") {
+        const ground = this.groundHeightAt($dataMap, at.x + 0.5, at.y + 0.5, za);
+        if (b instanceof Game_Event && Number.isFinite(ground)) zb = Math.max(zb, ground + (b._reactorLift || 0));
+    }
     if (!za && !zb) return true;
     const ha = this.characterHeightTiles(a), hb = this.characterHeightTiles(b);
     return za < zb + hb - 1e-6 && zb < za + ha - 1e-6;
@@ -6949,7 +7001,7 @@ Reactor3D.installVerticalMotion = function() {
     proto.isCollidedWithEvents = function(x, y) {
         if (typeof $gameMap === "undefined" || !$gameMap || !$gameMap.eventsXyNt) return baseCollided.call(this, x, y);
         const events = $gameMap.eventsXyNt(x, y);
-        return events.some(event => event.isNormalPriority() && Reactor3D.charactersOverlapVertically(this, event));
+        return events.some(event => event.isNormalPriority() && Reactor3D.charactersOverlapVertically(this, event, { x, y }));
     };
     if (typeof Game_Event !== "undefined" && Game_Event.prototype.isCollidedWithPlayerCharacters) {
         const basePlayer = Game_Event.prototype.isCollidedWithPlayerCharacters;
@@ -6982,6 +7034,7 @@ Reactor3D.installRoomFloorPassage = function() {
 };
 
 Reactor3D.installPropHooks = function() {
+    Reactor3D.installEventFootprints();
     Reactor3D.installRoomFloorPassage();
     Reactor3D.installVerticalMotion();
     if (typeof Game_Map === "undefined" || !Game_Map.prototype.setupEvents

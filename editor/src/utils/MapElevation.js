@@ -631,6 +631,28 @@
      */
     const SHAPE_KINDS = ['box', 'wedge', 'pyramid', 'prism', 'hull', 'spike', 'cylinder', 'capsule', 'tube', 'cone', 'dome', 'sphere', 'dish', 'fin', 'arch', 'tunnel', 'ring'];
     const SHAPE_PARAMS = { hull: { sides: 8, taper: 0.8 }, spike: { sides: 6, taper: 0 }, capsule: { sides: 24 }, dish: { sides: 32 }, fin: { taper: 0.4 }, cylinder: { sweep: 360 }, tube: { sweep: 360, thick: 0.3 }, ring: { sweep: 360, thick: 0.2 } };
+    /** An event's footprint `[w, h]` in tiles from its own tile right and down (the runtime's `eventSizeAt`); 1 by 1 unset. */
+    const EVENT_SIZE_MAX = 64;
+    const eventSize = (mapData, eventId) => {
+        const raw = mapData && mapData.reactor3d && mapData.reactor3d.eventSize ? mapData.reactor3d.eventSize[String(eventId)] : null;
+        const n = v => Math.max(1, Math.min(EVENT_SIZE_MAX, Math.floor(Number(v)) || 1));
+        return Array.isArray(raw) ? [n(raw[0]), n(raw[1])] : [1, 1];
+    };
+    const setEventSize = (mapData, eventId, size) => {
+        if (!mapData || !eventId) return false;
+        const n = v => Math.max(1, Math.min(EVENT_SIZE_MAX, Math.floor(Number(v)) || 1));
+        const w = n(size && size[0]), h = n(size && size[1]);
+        const store = mapData.reactor3d && mapData.reactor3d.eventSize;
+        if (w === 1 && h === 1) {
+            if (store && store[String(eventId)]) { delete store[String(eventId)]; if (!Object.keys(store).length) delete mapData.reactor3d.eventSize; return true; }
+            return false;
+        }
+        if (!mapData.reactor3d || typeof mapData.reactor3d !== 'object') mapData.reactor3d = { version: 1 };
+        if (!mapData.reactor3d.eventSize || typeof mapData.reactor3d.eventSize !== 'object') mapData.reactor3d.eventSize = {};
+        mapData.reactor3d.eventSize[String(eventId)] = [w, h];
+        return true;
+    };
+
     /** A piece's finish over its material (the runtime's `PIECE_FINISHES`). */
     const PIECE_FINISHES = ['mirror', 'chrome', 'polished', 'glossy', 'gold'];
     const PIECE_KINDS = ['wall', 'block', 'floor', 'pillar', 'stair', 'ramp', 'roof', 'doorway', 'window', 'fence', 'glass', 'ladder'].concat(SHAPE_KINDS);
@@ -1040,7 +1062,7 @@
 
     const api = {
         WATER_MAX_LEVEL, normalizeWater, water, hasWater, addWater, waterCovers, waterAt, removeWaterAt, removeWaterRegion, styleWaterRegion, waterBasin, fillWaterAt, waterSnapshot, restoreWater,
-        PIECE_KINDS, PIECE_FINISHES, SHAPE_KINDS, SHAPE_PARAMS, PIECE_MAX_LEVEL, normalizePiece, pieces, hasPieces, pieceAt, setPiece, removePiece,
+        EVENT_SIZE_MAX, eventSize, setEventSize, PIECE_KINDS, PIECE_FINISHES, SHAPE_KINDS, SHAPE_PARAMS, PIECE_MAX_LEVEL, normalizePiece, pieces, hasPieces, pieceAt, setPiece, removePiece,
         piecesSnapshot, restorePieces, clearPieces, pieceMaterials,
         nextPieceGroup, pieceGroup, pieceGroupBounds, pieceGroupAt, groupConnectedPieces, movePieceGroup, removePieceGroup, rotatePieceGroup,
         structures, structureOf, setStructure, restoreStructures, removeStructure, relocatePropsOff,
