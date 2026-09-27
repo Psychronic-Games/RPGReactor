@@ -529,14 +529,20 @@
         const roofZ = floors.length * S;
         const top = floors[floors.length - 1];
         if (top) for (const [name, rect] of Object.entries(top.rooms || {})) {
-            for (let x = rect[0]; x <= rect[2]; x++) for (let y = rect[1]; y <= rect[3]; y++) put('floor', x, y, roofZ, 0, M.inner || M.floor);
+            for (let x = rect[0]; x <= rect[2]; x++) for (let y = rect[1]; y <= rect[3]; y++) put('floor', x, y, roofZ, 0, plan.roof && plan.roof.style === 'flat' ? M.wall : M.inner || M.floor);
         }
         // A roof over each building of the top floor (its rooms and their walls): ramps up
         // from each eave for `pitch` rows, a flat top between, gables of blocks at the ends.
         // The two end columns are the gable walls' own tops, in the wall's material: a
         // roof-coloured wedge over each step of blocks read as a row of teeth.
         const roof = Object.assign({ pitch: 6 }, plan.roof || {});
-        if (roof.pitch !== null) for (const [bx0, by0, bx1, by1] of buildingBoxes(top ? top.rooms : {}, plan.size)) {
+        // A flat roof: the top floor's slab with a parapet a tile high round each building's edge.
+        if (roof.style === 'flat') for (const [bx0, by0, bx1, by1] of buildingBoxes(top ? top.rooms : {}, plan.size)) {
+            for (let x = bx0; x <= bx1; x++) for (let y = by0; y <= by1; y++) {
+                if (x === bx0 || x === bx1 || y === by0 || y === by1) put('block', x, y, roofZ, 0, M.wall);
+            }
+        }
+        if (roof.pitch !== null && roof.style !== 'flat') for (const [bx0, by0, bx1, by1] of buildingBoxes(top ? top.rooms : {}, plan.size)) {
             const bh = by1 - by0 + 1;
             const pitch = Math.max(0, Math.min(Math.floor((bh - 1) / 2), Math.floor(roof.pitch)));
             for (let x = bx0; x <= bx1; x++) {

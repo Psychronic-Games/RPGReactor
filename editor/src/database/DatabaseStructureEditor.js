@@ -218,7 +218,8 @@ class DatabaseStructureEditor {
             dir: this.DIRECTIONS.includes(stair?.dir) ? stair.dir : 'north', width: int(stair?.width, 1, 1, 8)
         }));
         // A roof of so many rows, or none at all (`pitch: null`): a bridge, a hangar, a flat-topped tower.
-        plan.roof = { pitch: plan.roof && plan.roof.pitch === null ? null : int(plan.roof?.pitch, 2, 0, 20) };
+        plan.roof = Object.assign({ pitch: plan.roof && plan.roof.pitch === null ? null : int(plan.roof?.pitch, 2, 0, 20) },
+            plan.roof && (plan.roof.style === 'flat' || plan.roof.style === 'gable') ? { style: plan.roof.style } : {});
         plan.windows = { every: int(plan.windows?.every, 6, 0, 60), width: int(plan.windows?.width, 2, 1, 8) };
         plan.spots = Object.fromEntries(Object.entries(plan.spots || {}).map(([name, cell]) => [name, [int(cell?.[0], 0, 0, this.SIZE_MAX), int(cell?.[1], 0, 0, this.SIZE_MAX)]]));
         plan.effects = (Array.isArray(plan.effects) ? plan.effects : []).filter(fx => fx && this.EFFECT_KINDS.includes(fx.type)).map(fx => {
@@ -294,7 +295,7 @@ class DatabaseStructureEditor {
             return f;
         });
         if (plan.stairs.length || had.has('stairs')) fields.stairs = plan.stairs.map(stair => ({ floor: stair.floor, from: stair.from.slice(), dir: stair.dir, width: stair.width }));
-        if (plan.floors.length || had.has('roof')) fields.roof = { pitch: plan.roof.pitch };
+        if (plan.floors.length || had.has('roof')) fields.roof = Object.assign({ pitch: plan.roof.pitch }, plan.roof.style ? { style: plan.roof.style } : {});
         if (plan.floors.length || had.has('windows')) fields.windows = { every: plan.windows.every, width: plan.windows.width };
         if (Object.keys(plan.spots).length || had.has('spots')) fields.spots = Object.fromEntries(Object.entries(plan.spots).map(([name, cell]) => [name, cell.slice()]));
         if (plan.events.length || had.has('events')) fields.events = plan.events.map(event => ({ ...event }));
@@ -542,6 +543,7 @@ class DatabaseStructureEditor {
             <div class="rr-structures-side-title">${rrEscapeHtml(tt('Floors'))}</div>
             <div class="rr-structures-floorlist">${floors.join('')}</div>
             <button type="button" class="rr-btn-secondary rr-structures-addfloor">${rrEscapeHtml(tt('+ Add floor'))}</button>
+            <label class="rr-structures-side-field"><span>${rrEscapeHtml(tt('Roof'))}</span><select class="database-field-value rr-structures-roof-style">${[['gable', 'Gable'], ['flat', 'Flat']].map(([v, l]) => `<option value="${v}"${v === ((this.current?.plan?.roof && this.current.plan.roof.style) || 'gable') ? ' selected' : ''}>${rrEscapeHtml(tt(l))}</option>`).join('')}</select></label>
             <button type="button" class="rr-btn-secondary rr-structures-roof" title="${rrEscapeHtml(tt('Lay the roof again over the top floor.'))}">${rrEscapeHtml(tt('Rebuild roof'))}</button>
             <div class="rr-structures-side-title">${rrEscapeHtml(tt('Tools'))}</div>
             <div class="rr-structures-toolgrid">${tools}</div>
@@ -611,7 +613,9 @@ class DatabaseStructureEditor {
         if (!F || !plan) return;
         this.pushHistory();
         if (F.isDescribed(plan)) F.buildOut(plan, typeof RRStructurePlan !== 'undefined' ? RRStructurePlan : null, name => this.resolve(name));
-        F.rebuildRoof(plan);
+        const style = (typeof document !== 'undefined' && document.querySelector('.rr-structures-roof-style')?.value) || (plan.roof && plan.roof.style) || 'gable';
+        plan.roof = Object.assign({}, plan.roof || {}, { style });
+        F.rebuildRoof(plan, { style });
         this._sel = [];
         this.markDirty();
         this.renderBar();

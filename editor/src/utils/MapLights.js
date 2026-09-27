@@ -66,7 +66,7 @@
         // High and far-reaching: lights the ground under it out to its radius
         // however high it hangs, and casts one set of long shadows.
         { key: 'sun', labelKey: 'lit.preset.sun',
-          template: { key: 'sun', type: 'sun', color: '#fff3d2', radius: 150, intensity: 2, height: 40, shadow: true } }
+          template: { key: 'sun', type: 'sun', color: '#fff3d2', radius: 150, intensity: 1, height: 40, shadow: true } }
     ];
     /**
      * What a preset changes about a light that already exists: its kind and

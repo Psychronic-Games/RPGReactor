@@ -374,6 +374,9 @@
         const wall = options.wall || M.wall || commonMaterial(top.filter(p => WALLISH.includes(p.kind)));
         const roofMaterial = options.roof || M.roof || commonMaterial(above.filter(p => p.kind === 'ramp')) || wall;
         const ceiling = options.ceiling || M.inner || commonMaterial(above.filter(p => p.kind === 'floor')) || commonMaterial(top.filter(p => p.kind === 'floor'));
+        // Gable (ramps up from two eaves) or flat (a flat top with a low wall round its edge,
+        // for a tower or a block), from the option, else the plan's own, else gable.
+        const style = options.style || (plan.roof && plan.roof.style) || 'gable';
         // A built plan's roof.pitch is null (its roof is in its pieces): a rebuild lays the standard one.
         const pitchWanted = Number.isFinite(Number(options.pitch)) ? Math.max(0, Math.floor(Number(options.pitch))) : (plan.roof && plan.roof.pitch !== null && Number.isFinite(Number(plan.roof.pitch)) ? Number(plan.roof.pitch) : 6);
         plan.pieces = (plan.pieces || []).filter(p => (Number(p.z) || 0) < roofZ);
@@ -397,7 +400,17 @@
         let laid = 0;
         const put = (kind, x, y, z, rot, material) => { add(plan, Object.assign({ kind, x, y, z, material: material || '' }, rot ? { rot } : {})); laid++; };
         for (const [bx0, by0, bx1, by1] of boxes) {
-            for (let x = bx0; x <= bx1; x++) for (let y = by0; y <= by1; y++) if (cells.has(x + ',' + y)) put('floor', x, y, roofZ, 0, ceiling);
+            // A flat roof's top is outside, in the walls' material; a gable's is the ceiling under it.
+            for (let x = bx0; x <= bx1; x++) for (let y = by0; y <= by1; y++) if (cells.has(x + ',' + y)) put('floor', x, y, roofZ, 0, style === 'flat' ? wall : ceiling);
+            if (style === 'flat') {
+                // A parapet a tile high on every edge cell of the top floor's footprint.
+                for (let x = bx0; x <= bx1; x++) for (let y = by0; y <= by1; y++) {
+                    if (!cells.has(x + ',' + y)) continue;
+                    const edge = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => !cells.has((x + dx) + ',' + (y + dy)));
+                    if (edge) put('block', x, y, roofZ, 0, wall);
+                }
+                continue;
+            }
             const pitch = Math.max(0, Math.min(Math.floor((by1 - by0) / 2), pitchWanted));
             for (let x = bx0; x <= bx1; x++) {
                 const material = x === bx0 || x === bx1 ? wall : roofMaterial;

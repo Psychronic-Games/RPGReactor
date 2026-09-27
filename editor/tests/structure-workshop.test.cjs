@@ -231,3 +231,21 @@ test('a map sidecar is written readable and compact: a grid row a line, a piece 
     const source = fs.readFileSync(path.join(repoRoot, 'editor', 'src', 'utils', 'MapElevation.js'), 'utf8');
     assert.match(source, /const json = api\.stringifySidecar\(sidecar\);/);
 });
+
+test('a flat roof is the top floor in the walls\' material with a parapet round its edge', () => {
+    const F = require('../src/utils/StructureFloors.js');
+    const plan = { size: [6, 5], storey: 5, materials: { wall: 'Stone', inner: 'Plaster', roof: 'RoofTile' }, pieces: [] };
+    for (let x = 0; x < 6; x++) for (let y = 0; y < 5; y++) plan.pieces.push({ kind: 'floor', x, y, z: 0, material: 'Wood' });
+    plan.floors = 1;
+    F.rebuildRoof(plan, { style: 'flat' });
+    const roofZ = F.floorsOf(plan) * F.storeyOf(plan);
+    const roof = plan.pieces.filter(p => p.z >= roofZ);
+    assert.equal(roof.filter(p => p.kind === 'ramp').length, 0, 'no ramps');
+    assert.equal(roof.filter(p => p.kind === 'floor').length, 30, 'the whole top covered');
+    assert.ok(roof.filter(p => p.kind === 'floor').every(p => p.material === 'Stone'), 'in the walls\' material');
+    const parapet = roof.filter(p => p.kind === 'block');
+    assert.equal(parapet.length, 18, 'a block on every edge cell of a 6 by 5 top');
+    assert.ok(parapet.every(p => p.x === 0 || p.x === 5 || p.y === 0 || p.y === 4));
+    F.rebuildRoof(plan, { style: 'gable' });
+    assert.ok(plan.pieces.some(p => p.kind === 'ramp'), 'a gable again on request');
+});

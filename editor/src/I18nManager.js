@@ -12473,6 +12473,25 @@ Object.assign(RR_TEXT_TRANSLATIONS.vi, {"Landing sound": "Âm thanh tiếp đấ
 Object.assign(RR_TEXT_TRANSLATIONS.th, {"Landing sound": "เสียงลงพื้น", "Hard landing sound": "เสียงกระแทกพื้น", "Go limp on a fatal fall": "ร่างทรุดเมื่อตกจนเสียชีวิต"});
 Object.assign(RR_TEXT_TRANSLATIONS.tr, {"Landing sound": "İniş sesi", "Hard landing sound": "Sert iniş sesi", "Go limp on a fatal fall": "Ölümcül düşüşte gevşeyip yığıl"});
 
+// Structures: roof style.
+Object.assign(RR_TEXT_TRANSLATIONS.ja, {"Gable": "切妻"});
+Object.assign(RR_TEXT_TRANSLATIONS.es, {"Gable": "A dos aguas"});
+Object.assign(RR_TEXT_TRANSLATIONS['zh-Hant'], {"Gable": "山牆式"});
+Object.assign(RR_TEXT_TRANSLATIONS['zh-Hans'], {"Gable": "山墙式"});
+Object.assign(RR_TEXT_TRANSLATIONS.ru, {"Gable": "Двускатная"});
+Object.assign(RR_TEXT_TRANSLATIONS.pt, {"Gable": "Duas águas"});
+Object.assign(RR_TEXT_TRANSLATIONS.de, {"Gable": "Satteldach"});
+Object.assign(RR_TEXT_TRANSLATIONS.fr, {"Gable": "À deux pans"});
+Object.assign(RR_TEXT_TRANSLATIONS.el, {"Gable": "Δίρριχτη"});
+Object.assign(RR_TEXT_TRANSLATIONS.ko, {"Gable": "박공"});
+Object.assign(RR_TEXT_TRANSLATIONS.ar, {"Gable": "جملوني"});
+Object.assign(RR_TEXT_TRANSLATIONS.it, {"Gable": "A due falde"});
+Object.assign(RR_TEXT_TRANSLATIONS.pl, {"Gable": "Dwuspadowy"});
+Object.assign(RR_TEXT_TRANSLATIONS.id, {"Gable": "Pelana"});
+Object.assign(RR_TEXT_TRANSLATIONS.vi, {"Gable": "Mái dốc hai phía"});
+Object.assign(RR_TEXT_TRANSLATIONS.th, {"Gable": "หน้าจั่ว"});
+Object.assign(RR_TEXT_TRANSLATIONS.tr, {"Gable": "Beşik çatı"});
+
 // 3D model import optimizer dialog.
 Object.assign(RR_TEXT_TRANSLATIONS['ja'], {
     'Import 3D Model': '3Dモデルのインポート', 'Optimize (recommended)': '最適化(推奨)', 'Resize textures to 2K, compact skin weights, drop unused data, and cut the mesh to about 60% of its triangles by collapsing the edges that change the shape least. Seams and silhouette are held.': 'テクスチャを2Kに縮小し、スキンウェイトを圧縮、不要データを削除し、形状への影響が最も小さいエッジを折りたたんでメッシュの三角形を約60%まで削減します。継ぎ目とシルエットは維持されます。', 'Optimize aggressively': '積極的に最適化', 'Everything above, cut to about a quarter of the triangles. May soften very fine detail.': '上記すべてに加え、三角形を約4分の1まで削減します。細部がわずかに損なわれる場合があります。', 'Import as-is': 'そのままインポート', 'Keep every byte of the original file.': '元のファイルを一切変更しません。', 'Import': 'インポート', 'largest texture': '最大テクスチャ', 'reducible without visible change': '見た目を変えずに削減可能'
