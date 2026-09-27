@@ -155,12 +155,13 @@
         }),
         // ── Humanoid: gestures, on demand ────────────────────────────
         motion('wave', 'Wave', 'humanoid', 'action', 90, {
-            // The upper arm out and a little forward, no higher than the shoulder
-            // (lifting it overhead crushes shoulder armour); the forearm up and
-            // turned palm-out, swinging side to side from the elbow.
-            RightUpperArm: [key(0.15, [-30, 0, -65]), key(0.85, [-30, 0, -65])],
-            RightLowerArm: [key(0.15, [0, 60, -95]), key(0.28, [22, 60, -95]), key(0.4, [-22, 60, -95]),
-                key(0.52, [22, 60, -95]), key(0.64, [-22, 60, -95]), key(0.76, [0, 60, -95]), key(0.85, [0, 60, -95])],
+            // The arm raised up in front (a forward raise leaves shoulder armour
+            // whole, where a sideways lift overhead folds it), the whole arm
+            // sweeping side to side from the shoulder with the forearm a beat behind.
+            RightUpperArm: [key(0.15, [-155, 0, -10]), key(0.27, [-150, 0, -26]), key(0.39, [-157, 0, 4]),
+                key(0.51, [-150, 0, -26]), key(0.63, [-157, 0, 4]), key(0.75, [-155, 0, -10]), key(0.85, [-155, 0, -10])],
+            RightLowerArm: [key(0.15, [-15, 0, 0]), key(0.3, [-15, 0, -12]), key(0.42, [-15, 0, 12]),
+                key(0.54, [-15, 0, -12]), key(0.66, [-15, 0, 12]), key(0.78, [-15, 0, 0]), key(0.85, [-15, 0, 0])],
             Head: [key(0.2, [0, -8, 0]), key(0.8, [0, -8, 0])]
         }),
         motion('bow', 'Take a Bow', 'humanoid', 'action', 100, {
