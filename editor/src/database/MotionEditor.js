@@ -145,7 +145,8 @@ class RRMotionEditor {
             const rule = Object.assign(JSON.parse(JSON.stringify(track.extra || {})), { name, part: track.part, type: 'pose', trigger, period });
             if (motion.hold) Object.assign(rule, { hold: true, rotate: track.keys[0].rotate.slice(), move: track.keys[0].move.slice() });
             else rule.keys = track.keys.map(k => ({ at: Math.round(k.at * 1000) / 1000, rotate: k.rotate.map(v => Math.round(v * 10) / 10), move: k.move.map(v => Math.round(v * 1000) / 1000) }));
-            if (motion.repeat && trigger === 'action') rule.repeat = true;
+            // An on-demand motion repeats until stopped; a jump's replays through a long fall instead of holding.
+            if (motion.repeat && (trigger === 'action' || trigger === 'jumping')) rule.repeat = true;
             return rule;
         });
     }
@@ -221,8 +222,8 @@ class RRMotionEditor {
                 <input type="text" class="database-field-value r3d-motion-name" value="${rrEscapeHtml(m.name)}" title="${rrEscapeHtml(tt('Name'))}">
                 <select class="database-field-value r3d-motion-trigger" title="${rrEscapeHtml(tt('Play when'))}">${RRMotionEditor.TRIGGERS().map(([v, l]) => `<option value="${v}"${v === m.trigger ? ' selected' : ''}>${rrEscapeHtml(tt(l))}</option>`).join('')}</select>
                 <label class="r3d-motion-field">${rrEscapeHtml(tt('Length'))} <input type="number" class="database-field-value r3d-motion-length" min="0.1" max="60" step="0.1" value="${(m.frames / 60).toFixed(2)}"> s</label>
-                ${m.trigger === 'action' ? `<label class="r3d-motion-field"><input type="checkbox" class="r3d-motion-repeat"${m.repeat ? ' checked' : ''}> ${rrEscapeHtml(tt('Repeat'))}</label>
-                <label class="r3d-motion-field" title="${rrEscapeHtml(tt('Held until another stance moves the same parts.'))}"><input type="checkbox" class="r3d-motion-hold"${m.hold ? ' checked' : ''}> ${rrEscapeHtml(tt('Stance'))}</label>` : ''}
+                ${m.trigger === 'action' || m.trigger === 'jumping' ? `<label class="r3d-motion-field"><input type="checkbox" class="r3d-motion-repeat"${m.repeat ? ' checked' : ''}> ${rrEscapeHtml(tt('Repeat'))}</label>
+                ${m.trigger === 'action' ? `<label class="r3d-motion-field" title="${rrEscapeHtml(tt('Held until another stance moves the same parts.'))}"><input type="checkbox" class="r3d-motion-hold"${m.hold ? ' checked' : ''}> ${rrEscapeHtml(tt('Stance'))}</label>` : ''}` : ''}
                 <span style="flex:1"></span>
                 <button type="button" class="rr-btn-secondary r3d-motion-play"></button>
                 <button type="button" class="r3d-motion-close" title="${rrEscapeHtml(tt('Close'))}">×</button>

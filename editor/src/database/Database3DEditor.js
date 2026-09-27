@@ -1735,7 +1735,7 @@ class Database3DEditor {
                         frame,
                         moving: this._sim.walking,
                         dashing: this._sim.dashing,
-                        airborne: !!this._sim.jumping && !this._sim.swimming,
+                        airborne: this._previewAirborne(frame),
                         swimming: !!this._sim.swimming,
                         climbing: !!this._sim.climbing,
                         distance: this._sim.walking ? (this._sim.dashing ? 1 / 8 : 1 / 16) : 0,
@@ -7222,6 +7222,25 @@ class Database3DEditor {
         return states.length ? ['standing'].concat(states) : [];
     }
 
+    /**
+     * Whether the preview is in the air this frame. A jump's motion plays once
+     * and holds, so the Jumping preview lands for a moment after the longest
+     * one and takes off again.
+     */
+    _previewAirborne(frame) {
+        if (!this._sim.jumping || this._sim.swimming) return false;
+        let longest = 0;
+        for (const rule of this.playRules || []) {
+            if (rule.trigger === 'jumping' && rule.type === 'pose' && rule.keys && rule.keys.length && !rule.repeat) {
+                longest = Math.max(longest, rule.period * 2 * (rule.cycles || 1));
+            }
+        }
+        if (!longest) return true;
+        if (this._sim.jumpFrom === undefined) this._sim.jumpFrom = frame;
+        const cycle = longest + 40;
+        return (frame - this._sim.jumpFrom) % cycle < longest + 16;
+    }
+
     previewState() {
         const sim = this._sim;
         return sim.climbing ? 'climbing' : sim.swimming ? (sim.walking ? 'swimming' : 'treading') : sim.jumping ? 'jumping' : sim.dashing ? 'dashing' : sim.walking ? 'walking' : 'standing';
@@ -7232,6 +7251,7 @@ class Database3DEditor {
         this._sim.walking = state === 'walking' || state === 'dashing' || state === 'swimming';
         this._sim.dashing = state === 'dashing';
         this._sim.jumping = state === 'jumping';
+        this._sim.jumpFrom = undefined;
         this._sim.swimming = state === 'swimming' || state === 'treading';
         this._sim.climbing = state === 'climbing';
         this.renderSimBar();

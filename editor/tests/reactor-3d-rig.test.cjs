@@ -593,3 +593,30 @@ test('a windmill that ends a whole turn on runs through its loop without pausing
     const start = at(0.01) - at(0), end = at(1) - at(0.99);
     assert.ok(start > 2 && end > 2 && Math.abs(start - end) < 0.5, `speed at the seam ${start} / ${end}`);
 });
+
+test('a jump motion plays once from the takeoff and holds its end through a fall', () => {
+    require(path.join(repoRoot, 'runtime', 'libs', 'three.js'));
+    const THREE = global.THREE;
+    const root = new THREE.Group();
+    const bone = new THREE.Bone();
+    bone.name = 'Leg';
+    bone.userData.parts = [{ name: 'Leg', pivot: [0, 0, 0] }];
+    root.add(bone);
+    const binding = Reactor3D.prepareModelInstance(root, null);
+    const rules = Reactor3D.readModelAnimationRules({ animations: [
+        { name: 'Jump', part: 'Leg', type: 'pose', trigger: 'jumping', period: 10, keys: [
+            { at: 0.5, rotate: [-60, 0, 0] }, { at: 1, rotate: [-20, 0, 0] }
+        ] }
+    ] });
+    const xAt = () => new THREE.Euler().setFromQuaternion(bone.quaternion, 'XYZ').x * 180 / Math.PI;
+    const air = (from, to, airborne) => { for (let f = from; f <= to; f++) Reactor3D.applyModelAnimation(binding, rules, { frame: f, airborne, scale: 1 }); };
+    // Takeoff at frame 1003 (not a multiple of the 20-frame length): the timeline starts there, not on the clock.
+    air(1000, 1002, false);
+    air(1003, 1013, true);
+    assert.ok(Math.abs(xAt() - (-60)) < 1, `the tuck lands mid-jump (${xAt()})`);
+    air(1014, 1100, true);
+    assert.ok(Math.abs(xAt() - (-20)) < 1, `a long fall holds the last key (${xAt()})`);
+    air(1101, 1120, false);
+    air(1121, 1131, true);
+    assert.ok(Math.abs(xAt() - (-60)) < 1, `the next jump starts over (${xAt()})`);
+});

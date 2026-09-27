@@ -119,18 +119,21 @@
             RightUpperArm: osc('x', 3, 0.5, [0, 0, -4]),
             Head: osc('x', 2, 0.3)
         }),
-        // In the air (a jump or a fall): knees drawn up, arms forward and a little out.
-        motion('jump', 'Jump', 'humanoid', 'jumping', 60, {
-            LeftUpperLeg: hold([-48, 0, 4]),
-            RightUpperLeg: hold([-22, 0, -4]),
-            LeftLowerLeg: hold([70, 0, 0]),
-            RightLowerLeg: hold([46, 0, 0]),
-            LeftUpperArm: hold([-40, 0, 22]),
-            RightUpperArm: hold([-40, 0, -22]),
-            LeftLowerArm: hold([-30, 0, 0]),
-            RightLowerArm: hold([-30, 0, 0]),
-            Chest: hold([-4, 0, 0]),
-            Head: hold([-6, 0, 0])
+        // In the air, once from the takeoff (a jump's motion holds its last frame through
+        // a long fall): arms swing up as the back leg pushes off, knees tuck at the top,
+        // then the legs reach down for the landing with the arms out for balance.
+        motion('jump', 'Jump', 'humanoid', 'jumping', 50, {
+            LeftUpperLeg: [key(0, [0, 0, 4]), key(0.3, [-45, 0, 4]), key(0.55, [-60, 0, 4]), key(0.85, [-20, 0, 4]), key(1, [-12, 0, 4])],
+            RightUpperLeg: [key(0, [10, 0, -4]), key(0.3, [-25, 0, -4]), key(0.55, [-40, 0, -4]), key(0.85, [-10, 0, -4]), key(1, [-6, 0, -4])],
+            LeftLowerLeg: [key(0, [10, 0, 0]), key(0.3, [70, 0, 0]), key(0.55, [90, 0, 0]), key(0.85, [30, 0, 0]), key(1, [20, 0, 0])],
+            RightLowerLeg: [key(0, [25, 0, 0]), key(0.3, [55, 0, 0]), key(0.55, [75, 0, 0]), key(0.85, [25, 0, 0]), key(1, [18, 0, 0])],
+            // Out for balance only a little past the rest pose: most rigs already hang their arms out.
+            LeftUpperArm: [key(0, [-60, 0, 10]), key(0.3, [-45, 0, 16]), key(0.55, [-32, 0, 22]), key(0.85, [-26, 0, 20]), key(1, [-22, 0, 18])],
+            RightUpperArm: [key(0, [-60, 0, -10]), key(0.3, [-45, 0, -16]), key(0.55, [-32, 0, -22]), key(0.85, [-26, 0, -20]), key(1, [-22, 0, -18])],
+            LeftLowerArm: [key(0, [-20, 0, 0]), key(0.55, [-35, 0, 0]), key(1, [-25, 0, 0])],
+            RightLowerArm: [key(0, [-20, 0, 0]), key(0.55, [-35, 0, 0]), key(1, [-25, 0, 0])],
+            Chest: [key(0, [-6, 0, 0]), key(0.55, [8, 0, 0]), key(1, [4, 0, 0])],
+            Head: [key(0, [-8, 0, 0]), key(0.55, [0, 0, 0]), key(1, [10, 0, 0])]
         }),
         // Moving through deep water: a front crawl. The body lies nearly flat just under
         // the surface (pitched from the feet, then lifted and drawn back: the swimmer

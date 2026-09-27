@@ -4306,7 +4306,21 @@ Reactor3D.applyModelAnimation = function(binding, rules, state) {
                 // ends (a jump, a dive, a ladder), rather than snapping on.
                 const fade = Math.max(0, Math.min(1, (binding.angles[i] || 0) + (active ? 1 : -1) / Reactor3D.MOTION_FADE_FRAMES));
                 binding.angles[i] = fade;
-                if (fade > 0) { progress = (state.frame % duration) / duration; weight = this.poseEase(fade); }
+                // A jump's motion plays once from the takeoff and holds its last frame
+                // through a long fall, as a jump clip does, unless it repeats.
+                const once = rule.trigger === "jumping" && !rule.repeat;
+                if (once) {
+                    const live = binding.stateLive || (binding.stateLive = []);
+                    const starts = binding.stateStarts || (binding.stateStarts = []);
+                    if (active && !live[i]) starts[i] = state.frame;
+                    live[i] = active;
+                }
+                if (fade > 0) {
+                    progress = once
+                        ? Math.min(1, Math.max(0, state.frame - (binding.stateStarts[i] ?? state.frame)) / duration)
+                        : (state.frame % duration) / duration;
+                    weight = this.poseEase(fade);
+                }
             }
             if (progress === null) continue;
             const sampled = this.sampleModelKeys(rule, progress);
