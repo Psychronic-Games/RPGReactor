@@ -389,7 +389,10 @@ class BuildHotbar {
             if (kind === 'stair') body += section(tt('Size'), num('rr-build-steps', this._t('build.steps'), flight ? flight.steps : manager.stairSteps, 1, BuildHotbar.MAX_RUN, 1, 'steps')
                 + num('rr-build-stairwidth', this._t('build.stairWidth'), flight ? flight.width : manager.stairWidth, 1, 20, 1, 'width'));
             // A ladder's height, in hand or placed: a placed one grows or shrinks from its foot.
-            if (kind === 'ladder') body += section(tt('Size'), num('rr-build-ladderheight', tt('Height'), piece ? manager.ladderStack(piece).length : manager.ladderHeight, 1, BuildHotbar.MAX_RUN, 1, 'height'));
+            // A ladder's height and width, in hand or placed (a placed one is laid again from its foot).
+            const ladder = kind === 'ladder' && piece && manager.ladderFlight ? manager.ladderFlight(piece) : null;
+            if (kind === 'ladder') body += section(tt('Size'), num('rr-build-ladderheight', tt('Height'), ladder ? ladder.height : manager.ladderHeight, 1, BuildHotbar.MAX_RUN, 1, 'height')
+                + num('rr-build-ladderwidth', tt('Width'), ladder ? ladder.width : manager.ladderWidth, 1, 20, 1, 'width'));
             if (s.shape) {
                 const size = piece ? piece.size : manager.sizeFor(kind);
                 const labels = kind === 'wedge' ? [tt('Width'), tt('Height'), tt('Length')] : [tt('Width'), tt('Height'), tt('Depth')];
@@ -513,7 +516,12 @@ class BuildHotbar {
         });
         panel.querySelector('.rr-build-ladderheight')?.addEventListener('change', event => {
             const height = Math.max(1, Math.min(BuildHotbar.MAX_RUN, Math.round(Number(event.target.value)) || 1));
-            if (s.piece) manager.setLadderHeight(s.piece, height); else manager.ladderHeight = height;
+            if (s.piece) { const f = manager.ladderFlight(s.piece); manager.setLadderSize(s.piece, height, f ? f.width : 1); } else manager.ladderHeight = height;
+            this.renderPanel();
+        });
+        panel.querySelector('.rr-build-ladderwidth')?.addEventListener('change', event => {
+            const width = Math.max(1, Math.min(20, Math.round(Number(event.target.value)) || 1));
+            if (s.piece) { const f = manager.ladderFlight(s.piece); manager.setLadderSize(s.piece, f ? f.height : 1, width); } else manager.ladderWidth = width;
             this.renderPanel();
         });
         panel.querySelector('.rr-build-stairwidth')?.addEventListener('change', event => {

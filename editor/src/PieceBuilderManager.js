@@ -36,6 +36,7 @@ class PieceBuilderManager {
         this.stairWidth = 1;
         // A ladder reaches a storey unless told otherwise.
         this.ladderHeight = 5;
+        this.ladderWidth = 1;
         this.selected = 0;
         this.selectedIds = [];
         this.gizmoMode = 'all';          // every handle at once: arrows, rings and size cubes
@@ -1107,7 +1108,7 @@ class PieceBuilderManager {
         if (group) piece.group = group;
         let changed;
         if (this._stroke.mode === 'erase') changed = this.eraseAt(map, target);
-        else if ((piece.kind === 'stair' && (this.stairSteps > 1 || this.stairWidth > 1)) || (piece.kind === 'ladder' && this.ladderHeight > 1)) {
+        else if ((piece.kind === 'stair' && (this.stairSteps > 1 || this.stairWidth > 1)) || (piece.kind === 'ladder' && (this.ladderHeight > 1 || this.ladderWidth > 1))) {
             changed = false;
             for (const step of (piece.kind === 'ladder' ? this.ladderRun(piece) : this.stairRun(piece))) {
                 if (step.x < 0 || step.y < 0 || step.x >= map.width || step.y >= map.height) continue;
@@ -1144,10 +1145,62 @@ class PieceBuilderManager {
         return out;
     }
 
-    /** A ladder from one piece: `ladderHeight` levels of it, one over another. */
+    /** A ladder from one piece: `ladderHeight` levels of it, one over another, `ladderWidth` columns across (to the right, as a stair's width). */
     ladderRun(piece) {
-        const height = Math.max(1, Math.floor(this.ladderHeight) || 1);
-        return Array.from({ length: height }, (_, i) => Object.assign({}, piece, { z: piece.z + i }));
+        const height = Math.max(1, Math.floor(this.ladderHeight) || 1), width = Math.max(1, Math.floor(this.ladderWidth) || 1);
+        const [dx, dy] = PieceBuilderManager.stepOf(piece.rot);
+        const out = [];
+        for (let k = 0; k < width; k++) for (let i = 0; i < height; i++) out.push(Object.assign({}, piece, { x: piece.x - dy * k, y: piece.y + dx * k, z: piece.z + i }));
+        return out;
+    }
+
+    /** A placed ladder's columns: `{ foot, height, width, pieces }`, the foot the bottom of its left column. */
+    ladderFlight(piece) {
+        const map = this.currentMap(), elevation = this.elevation();
+        if (!map || !elevation || !piece || piece.kind !== 'ladder') return null;
+        const all = elevation.pieces(map);
+        const [dx, dy] = PieceBuilderManager.stepOf(piece.rot), lx = -dy, ly = dx;
+        const at = (x, y, z) => all.find(p => p.kind === 'ladder' && p.rot === piece.rot && p.x === x && p.y === y && p.z === z) || null;
+        let foot = this.ladderStack(piece)[0] || piece;
+        for (let l = at(foot.x - lx, foot.y - ly, foot.z); l; l = at(foot.x - lx, foot.y - ly, foot.z)) foot = l;
+        let width = 1;
+        while (at(foot.x + lx * width, foot.y + ly * width, foot.z)) width++;
+        const pieces = [];
+        let height = 0;
+        for (let k = 0; k < width; k++) {
+            const column = this.ladderStack(at(foot.x + lx * k, foot.y + ly * k, foot.z));
+            height = Math.max(height, column.length);
+            pieces.push(...column);
+        }
+        return { foot, height, width, pieces };
+    }
+
+    /** Lay a placed ladder again from its foot, so tall and so wide (one undo step). */
+    setLadderSize(piece, height, width, record = true) {
+        const map = this.currentMap(), elevation = this.elevation();
+        const flight = this.ladderFlight(piece);
+        if (!map || !elevation || !flight) return false;
+        height = Math.max(1, Math.min((elevation.PIECE_MAX_LEVEL || 240) - flight.foot.z + 1, Math.floor(height) || 1));
+        width = Math.max(1, Math.min(20, Math.floor(width) || 1));
+        if (height === flight.height && width === flight.width) return false;
+        if (record) { this.undoStack.push(this._snapshot(map)); if (this.undoStack.length > 50) this.undoStack.shift(); this.redoStack.length = 0; }
+        const gone = new Set(flight.pieces.map(p => p.id));
+        const list = elevation.pieces(map).filter(p => !gone.has(p.id));
+        let id = list.reduce((max, p) => Math.max(max, p.id || 0), 0);
+        const [dx, dy] = PieceBuilderManager.stepOf(flight.foot.rot);
+        let footId = 0;
+        for (let k = 0; k < width; k++) for (let i = 0; i < height; i++) {
+            const next = Object.assign({}, flight.foot, { id: ++id, x: flight.foot.x - dy * k, y: flight.foot.y + dx * k, z: flight.foot.z + i });
+            if (next.x < 0 || next.y < 0 || next.x >= map.width || next.y >= map.height) continue;
+            if (!footId) footId = next.id;
+            list.push(next);
+        }
+        elevation.restorePieces(map, list);
+        this.selected = footId;
+        const reach = Math.max(width, flight.width) + 1;
+        this.announce(false, { x0: flight.foot.x - reach, y0: flight.foot.y - reach, x1: flight.foot.x + reach, y1: flight.foot.y + reach });
+        this._syncPanel(); this._ghostChanged();
+        return true;
     }
 
     /** setPiece returns the id even when nothing changed; the list identity says whether it did. */

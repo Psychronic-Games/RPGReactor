@@ -1071,3 +1071,17 @@ test('a stair on a roof stands on the roof, not on a pillar down to the ground; 
     assert.match(read('editor/src/BuildHotbar.js'), /manager\.setStairFlight\(s\.piece, steps, f \? f\.width : 1\)/, 'Steps on a placed stair lays its flight again');
     assert.match(read('runtime/reactor_physics.js'), /Straight steps only: a follower that came at the ladder diagonally went up it askew\./);
 });
+
+test('ladders side by side are one wide ladder, and a placed ladder takes a width', () => {
+    require(path.join(repoRootForRamp(), 'runtime', 'libs', 'three.js'));
+    const R = require(path.join(repoRootForRamp(), 'runtime', 'reactor_3d.js'));
+    const pieces = [0, 1, 2].map(k => ({ id: k + 1, kind: 'ladder', x: 5 + k, y: 5, z: 0, rot: 0, material: '' }));
+    const map = { width: 20, height: 20, reactor3d: { version: 1, pieces } };
+    const span = piece => { const g = R.pieceGeometry([piece], map); g.computeBoundingBox(); return [g.boundingBox.min.x, g.boundingBox.max.x].map(v => Math.round(v * 100) / 100); };
+    const list = R.pieceIndex(map).list;
+    assert.deepEqual(list.map(span), [[5.14, 6], [6, 7], [7, 7.86]], 'rails only at the outer edges, rungs across');
+    const manager = read('editor/src/PieceBuilderManager.js');
+    assert.match(manager, /ladderFlight\(piece\) \{/);
+    assert.match(manager, /setLadderSize\(piece, height, width, record = true\) \{/);
+    assert.match(read('editor/src/BuildHotbar.js'), /rr-build-ladderwidth/);
+});

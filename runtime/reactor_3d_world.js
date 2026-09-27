@@ -887,8 +887,16 @@ Reactor3D.pieceShapes = function(kind, piece) {
         case "ramp": return [{ wedge: true }];
         case "roof": return [{ gable: true }];
         // A level of ladder against the side it climbs toward (+v): two rails, two rungs.
-        case "ladder": return [box(0.14, 0, 0.84, 0.22, 1, 0.94), box(0.78, 0, 0.84, 0.86, 1, 0.94),
-            box(0.22, 0.22, 0.86, 0.78, 0.29, 0.92), box(0.22, 0.72, 0.86, 0.78, 0.79, 0.92)];
+        case "ladder": {
+            // Beside another level of ladder (a wide ladder), the shared side has no rail and the
+            // rungs run on across (`ladderJoin`, set where the geometry is laid).
+            const join = (piece && piece.ladderJoin) || {};
+            const u0 = join.lo ? 0 : 0.22, u1 = join.hi ? 1 : 0.78;
+            const parts = [box(u0, 0.22, 0.86, u1, 0.29, 0.92), box(u0, 0.72, 0.86, u1, 0.79, 0.92)];
+            if (!join.lo) parts.push(box(0.14, 0, 0.84, 0.22, 1, 0.94));
+            if (!join.hi) parts.push(box(0.78, 0, 0.84, 0.86, 1, 0.94));
+            return parts;
+        }
         // A doorway is a wall with its bottom gone: a lintel band across the
         // top and nothing under it, the whole cell wide. The walls either
         // side are the posts, so two doorways side by side are one opening
@@ -1303,6 +1311,17 @@ Reactor3D.pieceGeometry = function(pieces, mapData) {
     const index = mapData ? this.pieceIndex(mapData) : null;
     for (let piece of pieces) {
         const base = mapData ? this.pieceBaseAt(mapData, piece.x, piece.y) : 0;
+        // A ladder level beside another (same turn, same level): the two draw as one wide ladder.
+        if (piece.kind === "ladder" && index) {
+            const join = {};
+            for (const [ox, oy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+                const local = this.pieceLocal(piece, 0.5 + ox, 0.5 + oy);
+                if (Math.abs(local.u - 0.5) < 0.9) continue; // along the climb, not beside it
+                const stack = index.cells.get((piece.y + oy) * 65536 + piece.x + ox) || [];
+                if (stack.some(other => other.kind === "ladder" && other.rot === piece.rot && other.z === piece.z)) join[local.u > 0.5 ? "hi" : "lo"] = true;
+            }
+            if (join.lo || join.hi) piece = Object.assign({}, piece, { ladderJoin: join });
+        }
         // A raised stair's support stops on the highest piece top under it in its cell.
         if (piece.kind === "stair" && piece.z > 0 && index) {
             const stack = index.cells.get(piece.y * 65536 + piece.x) || [];
