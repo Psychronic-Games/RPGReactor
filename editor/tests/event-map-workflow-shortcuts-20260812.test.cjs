@@ -198,10 +198,14 @@ test('Delete removes the event picked in the events column in any mode, and the 
     assert.deepEqual(run({ eventMode: true, focusIn: null }), { eventsDeleted: 1, mapsDeleted: 0, prevented: true });
     // The map tree itself focused: the map, as the tree's own Delete has always meant.
     assert.deepEqual(run({ eventMode: false, focusIn: '#maps-list' }), { eventsDeleted: 0, mapsDeleted: 1, prevented: true });
-    // No event selected: the map.
+    // No event selected and the focus elsewhere (a model or a piece picked on the map): never the map.
     let mapsDeleted = 0;
     const handler = loadShortcutHandler({ eventMode: false, selectedEvent: null }, { reactor: { projectController: { deleteMap: () => { mapsDeleted++; } } }, activeElement: { tagName: 'DIV', closest: () => null }, querySelector: () => selectedMapRow });
     handler(keyEvent('Delete'));
+    assert.equal(mapsDeleted, 0, 'a Delete meant for the map canvas never deletes the map');
+    // The map list focused: the map.
+    const inTree = loadShortcutHandler({ eventMode: false, selectedEvent: null }, { reactor: { projectController: { deleteMap: () => { mapsDeleted++; } } }, activeElement: { tagName: 'DIV', closest: selector => (selector.includes('#maps-list') ? {} : null) }, querySelector: () => selectedMapRow });
+    inTree(keyEvent('Delete'));
     assert.equal(mapsDeleted, 1);
 });
 
@@ -228,4 +232,20 @@ test('modal Delete and Ctrl+X cannot remove a selected prop', () => {
     const handler = loadShortcutHandler({}, { reactor });
     handler(keyEvent('x', { ctrlKey: true }));
     assert.equal(removed, 0);
+});
+
+test('Delete while building takes the selected piece and never the map', () => {
+    let mapsDeleted = 0, removed = 0;
+    const pieces = { active: true, mode: 'select', selectionIds: () => [4], removeSelection() { removed++; } };
+    const handler = loadShortcutHandler({ eventMode: false, selectedEvent: null }, {
+        reactor: { pieceBuilderManager: pieces, buildHotbar: { visible: true }, projectController: { deleteMap: () => { mapsDeleted++; } } },
+        activeElement: { tagName: 'BUTTON', closest: () => null },
+        querySelector: () => ({ getAttribute: () => '3' })
+    });
+    const event = keyEvent('Delete');
+    handler(event);
+    assert.deepEqual([removed, mapsDeleted, event.prevented], [1, 0, true]);
+    pieces.selectionIds = () => [];
+    handler(keyEvent('Delete'));
+    assert.deepEqual([removed, mapsDeleted], [1, 0], 'nothing selected: nothing happens, least of all to the map');
 });

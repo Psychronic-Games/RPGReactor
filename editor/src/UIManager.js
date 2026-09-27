@@ -594,6 +594,17 @@ class UIManager {
             const propsManager = window.reactor?.projectController?.modelPropsManager || window.reactor?.modelPropsManager;
             const lightsManager = window.reactor?.projectController?.lightingManager || window.reactor?.lightingManager;
             const objectTool = lightsManager?.active ? lightsManager : (propsManager?.active ? propsManager : null);
+            // Building in the world (the Build bar up, or its pieces tool) owns Delete too: a selected
+            // piece goes, and the key never reaches the map list behind it.
+            const piecesManager = window.reactor?.projectController?.pieceBuilderManager || window.reactor?.pieceBuilderManager;
+            const building = !!(piecesManager?.active || window.reactor?.buildHotbar?.visible || window.reactor?.terrainManager?.active);
+            if ((e.key === 'Delete' || e.key === 'Backspace') && !isTextInput && !eventEditorOpen && !objectTool && building
+                && !e.target?.closest?.('#maps-list, #quick-access-list')) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (piecesManager?.active && piecesManager.mode === 'select' && piecesManager.selectionIds?.().length) piecesManager.removeSelection();
+                return;
+            }
             if ((e.key === 'Delete' || e.key === 'Backspace') && !isTextInput && !eventEditorOpen
                 && objectTool) {
                 // Claim the key before map shortcuts, including repeats after
@@ -831,14 +842,17 @@ class UIManager {
                         return;
                     }
 
+                    // A map goes only when the map list itself has the focus: a Delete meant for
+                    // something picked on the map must never reach it.
                     const selectedMap = document.querySelector('#maps-list .tree-item.selected[data-map-id], #quick-access-list .tree-item.selected[data-map-id]');
-                    if ((inMapTree || !(eventManager && eventManager.selectedEvent)) && selectedMap && window.reactor?.projectController?.deleteMap) {
+                    if (inMapTree && selectedMap && window.reactor?.projectController?.deleteMap) {
                         e.preventDefault();
                         window.reactor.projectController.deleteMap(parseInt(selectedMap.getAttribute('data-map-id'), 10));
                     }
                 } else if (!isTextInput && !eventEditorOpen) {
+                    const inMapTree = !!(activeElement && activeElement.closest && activeElement.closest('#maps-list, #quick-access-list'));
                     const selectedMap = document.querySelector('#maps-list .tree-item.selected[data-map-id], #quick-access-list .tree-item.selected[data-map-id]');
-                    if (selectedMap && window.reactor?.projectController?.deleteMap) {
+                    if (inMapTree && selectedMap && window.reactor?.projectController?.deleteMap) {
                         e.preventDefault();
                         window.reactor.projectController.deleteMap(parseInt(selectedMap.getAttribute('data-map-id'), 10));
                     }
