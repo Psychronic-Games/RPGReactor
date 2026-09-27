@@ -544,9 +544,12 @@
                     && (leader.x !== this.x || leader.y !== this.y) && !ReactorPhysics.followerClimbing(this)
                     && typeof Reactor3D !== "undefined" && Reactor3D.ladderAt && typeof $dataMap !== "undefined" && Reactor3D.ladderAt($dataMap, leader.x, leader.y)) {
                     // A climbing leader stays on its cell, so the line would never close up: walk to it, then onto the ladder.
+                    // Straight steps only: a follower that came at the ladder diagonally went up it askew.
+                    // The longer way first, then the other, ending square in front of the rungs.
                     const sx = this.deltaXFrom(leader.x), sy = this.deltaYFrom(leader.y);
-                    if (Math.abs(sx) + Math.abs(sy) === 1) this.moveStraight(sx > 0 ? 4 : sx < 0 ? 6 : sy > 0 ? 8 : 2);
-                    else this.chaseCharacter(leader);
+                    const alongX = Math.abs(sx) > Math.abs(sy) || (Math.abs(sx) === Math.abs(sy) && sx !== 0);
+                    this.moveStraight(alongX ? (sx > 0 ? 4 : 6) : (sy > 0 ? 8 : 2));
+                    if (!this.isMovementSucceeded() && sx && sy) this.moveStraight(alongX ? (sy > 0 ? 8 : 2) : (sx > 0 ? 4 : 6));
                     this._reactorChaseLater = null;
                 }
                 const lead = this._reactorChaseLater;

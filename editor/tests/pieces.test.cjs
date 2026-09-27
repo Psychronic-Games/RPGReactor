@@ -1055,3 +1055,19 @@ test('a crooked wedge is still a ramp, and a ramp laid over a hill is walked fro
     }
 });
 function repoRootForRamp() { return path.resolve(__dirname, '..', '..'); }
+
+test('a stair on a roof stands on the roof, not on a pillar down to the ground; a placed flight can be resized', () => {
+    require(path.join(repoRootForRamp(), 'runtime', 'libs', 'three.js'));
+    const R = require(path.join(repoRootForRamp(), 'runtime', 'reactor_3d.js'));
+    const pieces = [{ id: 1, kind: 'block', x: 5, y: 5, z: 120, rot: 0, material: '' }, { id: 2, kind: 'stair', x: 5, y: 5, z: 121, rot: 0, material: '' }, { id: 3, kind: 'stair', x: 6, y: 5, z: 12, rot: 0, material: '' }];
+    const map = { width: 20, height: 20, reactor3d: { version: 1, pieces } };
+    const low = piece => { const g = R.pieceGeometry([piece], map); g.computeBoundingBox(); return g.boundingBox.min.y; };
+    const list = R.pieceIndex(map).list;
+    assert.equal(low(list.find(p => p.id === 2)), 121, 'on the roof: nothing hangs below it');
+    assert.equal(low(list.find(p => p.id === 3)), 0, 'over open ground: its support still reaches the ground');
+    const manager = read('editor/src/PieceBuilderManager.js');
+    assert.match(manager, /stairFlight\(piece\) \{/);
+    assert.match(manager, /setStairFlight\(piece, steps, width, record = true\) \{/);
+    assert.match(read('editor/src/BuildHotbar.js'), /manager\.setStairFlight\(s\.piece, steps, f \? f\.width : 1\)/, 'Steps on a placed stair lays its flight again');
+    assert.match(read('runtime/reactor_physics.js'), /Straight steps only: a follower that came at the ladder diagonally went up it askew\./);
+});

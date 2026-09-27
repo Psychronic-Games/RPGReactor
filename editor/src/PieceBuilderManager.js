@@ -196,6 +196,63 @@ class PieceBuilderManager {
         return true;
     }
 
+    /**
+     * The flight a placed stair belongs to: the stairs turned the same way
+     * that rise a level per cell along its climb, and the ones beside them
+     * across its width. `{ foot, steps, width, pieces }`, the foot being the
+     * bottom step at the flight's left edge.
+     */
+    stairFlight(piece) {
+        const map = this.currentMap(), elevation = this.elevation();
+        if (!map || !elevation || !piece || piece.kind !== 'stair') return null;
+        const all = elevation.pieces(map);
+        const at = (x, y, z) => all.find(p => p.kind === 'stair' && p.rot === piece.rot && p.x === x && p.y === y && p.z === z) || null;
+        const [dx, dy] = PieceBuilderManager.stepOf(piece.rot);
+        const [lx, ly] = [-dy, dx]; // to the right of the climb, as `stairRun` lays it
+        // Back down the climb, then to the left edge.
+        let foot = piece;
+        for (let b = at(foot.x - dx, foot.y - dy, foot.z - 1); b; b = at(foot.x - dx, foot.y - dy, foot.z - 1)) foot = b;
+        for (let l = at(foot.x - lx, foot.y - ly, foot.z); l; l = at(foot.x - lx, foot.y - ly, foot.z)) foot = l;
+        let steps = 1, width = 1;
+        while (at(foot.x + dx * steps, foot.y + dy * steps, foot.z + steps)) steps++;
+        while (at(foot.x + lx * width, foot.y + ly * width, foot.z)) width++;
+        const pieces = [];
+        for (let i = 0; i < steps; i++) for (let k = 0; k < width; k++) {
+            const p = at(foot.x + dx * i + lx * k, foot.y + dy * i + ly * k, foot.z + i);
+            if (p) pieces.push(p);
+        }
+        return { foot, steps, width, pieces };
+    }
+
+    /** Lay a placed flight again from its foot with so many steps and so wide (one undo step). */
+    setStairFlight(piece, steps, width, record = true) {
+        const map = this.currentMap(), elevation = this.elevation();
+        const flight = this.stairFlight(piece);
+        if (!map || !elevation || !flight) return false;
+        const max = elevation.PIECE_MAX_LEVEL || 240;
+        steps = Math.max(1, Math.min(max - flight.foot.z + 1, Math.floor(steps) || 1));
+        width = Math.max(1, Math.min(20, Math.floor(width) || 1));
+        if (steps === flight.steps && width === flight.width) return false;
+        if (record) { this.undoStack.push(this._snapshot(map)); if (this.undoStack.length > 50) this.undoStack.shift(); this.redoStack.length = 0; }
+        const gone = new Set(flight.pieces.map(p => p.id));
+        const list = elevation.pieces(map).filter(p => !gone.has(p.id));
+        let id = list.reduce((max, p) => Math.max(max, p.id || 0), 0);
+        const [dx, dy] = PieceBuilderManager.stepOf(flight.foot.rot);
+        const [lx, ly] = [-dy, dx];
+        let footId = 0;
+        for (let i = 0; i < steps; i++) for (let k = 0; k < width; k++) {
+            const next = Object.assign({}, flight.foot, { id: ++id, x: flight.foot.x + dx * i + lx * k, y: flight.foot.y + dy * i + ly * k, z: flight.foot.z + i });
+            if (!i && !k) footId = next.id;
+            list.push(next);
+        }
+        elevation.restorePieces(map, list);
+        this.selected = footId;
+        const reach = Math.max(steps, width, flight.steps, flight.width) + 1;
+        this.announce(false, { x0: flight.foot.x - reach, y0: flight.foot.y - reach, x1: flight.foot.x + reach, y1: flight.foot.y + reach });
+        this._syncPanel(); this._ghostChanged();
+        return true;
+    }
+
     updateSelected(patch, record = true) {
         const map = this.currentMap(), elevation = this.elevation();
         const piece = this.selectedPiece();

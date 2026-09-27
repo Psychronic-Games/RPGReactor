@@ -877,8 +877,11 @@ Reactor3D.pieceShapes = function(kind, piece) {
         case "pillar": return [box(0.24, 0, 0.24, 0.76, 0.12, 0.76), { column: [0.5, 0.5, 0.2, 0.12, S - 0.12] }, box(0.24, S - 0.12, 0.24, 0.76, S, 0.76)];
         case "stair": {
             const steps = [0, 1, 2, 3].map(i => box(0, 0, i * 0.25, 1, (i + 1) * 0.25, 1));
-            // A step above the ground stands on a solid down to it: a plan lays no slab under a stair, and the ground showed through the run.
-            const drop = piece && Number.isFinite(piece.z) && piece.z > 0 ? piece.z : 0;
+            // A step above what it stands on has a solid down to it: a plan lays no slab under a stair,
+            // and the ground showed through the run. Down to the roof or floor under it, not the ground
+            // (a stair on a skyscraper's roof ran the building's whole height down its side).
+            const under = piece && Number.isFinite(piece.supportTop) ? piece.supportTop : 0;
+            const drop = piece && Number.isFinite(piece.z) && piece.z > under ? piece.z - under : 0;
             return drop > 0 ? steps.concat([box(0, -drop, 0, 1, 0, 1)]) : steps;
         }
         case "ramp": return [{ wedge: true }];
@@ -1297,8 +1300,19 @@ Reactor3D.hiddenFacesOf = function(piece, mapData) {
 /** A geometry of the given pieces, each on its own cell's ground. */
 Reactor3D.pieceGeometry = function(pieces, mapData) {
     const out = { positions: [], uvs: [], colors: [] };
-    for (const piece of pieces) {
+    const index = mapData ? this.pieceIndex(mapData) : null;
+    for (let piece of pieces) {
         const base = mapData ? this.pieceBaseAt(mapData, piece.x, piece.y) : 0;
+        // A raised stair's support stops on the highest piece top under it in its cell.
+        if (piece.kind === "stair" && piece.z > 0 && index) {
+            const stack = index.cells.get(piece.y * 65536 + piece.x) || [];
+            let top = 0;
+            for (const other of stack) {
+                if (other === piece || other.id === piece.id || other.kind === "ladder" || other.z >= piece.z) continue;
+                top = Math.max(top, Math.min(piece.z, this.pieceTop(other, 0.5, 0.5)));
+            }
+            if (top > 0) piece = Object.assign({}, piece, { supportTop: top });
+        }
         const hidden = this.hiddenFacesOf(piece, mapData);
         this.emitPiece(hidden ? Object.assign({}, piece, { rot: 0 }) : piece, base, out, hidden);
     }

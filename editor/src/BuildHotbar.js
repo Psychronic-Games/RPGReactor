@@ -384,8 +384,10 @@ class BuildHotbar {
             if (!s.shape && (BuildHotbar.FACING.includes(kind) || s.placed)) body += section(this._t('build.direction'), facing(rot));
             body += section(this._t('pieces.material'), swatches(piece ? piece.material : manager.material));
             body += section(this._t('build.finish'), finishes(piece || { finish: manager.finish, surface: manager.surface }));
-            if (kind === 'stair' && !s.placed) body += section(tt('Size'), num('rr-build-steps', this._t('build.steps'), manager.stairSteps, 1, BuildHotbar.MAX_RUN, 1, 'steps')
-                + num('rr-build-stairwidth', this._t('build.stairWidth'), manager.stairWidth, 1, 20, 1, 'width'));
+            // A flight's steps and width, in hand or placed (a placed flight is laid again from its foot).
+            const flight = kind === 'stair' && s.placed && manager.stairFlight ? manager.stairFlight(piece) : null;
+            if (kind === 'stair') body += section(tt('Size'), num('rr-build-steps', this._t('build.steps'), flight ? flight.steps : manager.stairSteps, 1, BuildHotbar.MAX_RUN, 1, 'steps')
+                + num('rr-build-stairwidth', this._t('build.stairWidth'), flight ? flight.width : manager.stairWidth, 1, 20, 1, 'width'));
             // A ladder's height, in hand or placed: a placed one grows or shrinks from its foot.
             if (kind === 'ladder') body += section(tt('Size'), num('rr-build-ladderheight', tt('Height'), piece ? manager.ladderStack(piece).length : manager.ladderHeight, 1, BuildHotbar.MAX_RUN, 1, 'height'));
             if (s.shape) {
@@ -503,13 +505,23 @@ class BuildHotbar {
             if (key === 'taper' || key === 'thick') v = Math.max(0, Math.min(1, Math.round(v) / 100)); else if (key === 'sides') v = Math.max(3, Math.min(32, Math.round(v))); else v = Math.max(15, Math.min(360, Math.round(v)));
             edit({ [key]: v }, () => { manager.params = manager.params || {}; manager.params[s.kind] = Object.assign({}, manager.params[s.kind], { [key]: v }); manager._ghostChanged(); });
         }));
-        panel.querySelector('.rr-build-steps')?.addEventListener('change', event => { manager.stairSteps = Math.max(1, Math.min(BuildHotbar.MAX_RUN, Math.round(Number(event.target.value)) || 1)); this.renderPanel(); });
+        panel.querySelector('.rr-build-steps')?.addEventListener('change', event => {
+            const steps = Math.max(1, Math.min(BuildHotbar.MAX_RUN, Math.round(Number(event.target.value)) || 1));
+            if (s.piece && s.piece.kind === 'stair' && manager.setStairFlight) { const f = manager.stairFlight(s.piece); manager.setStairFlight(s.piece, steps, f ? f.width : 1); }
+            else manager.stairSteps = steps;
+            this.renderPanel();
+        });
         panel.querySelector('.rr-build-ladderheight')?.addEventListener('change', event => {
             const height = Math.max(1, Math.min(BuildHotbar.MAX_RUN, Math.round(Number(event.target.value)) || 1));
             if (s.piece) manager.setLadderHeight(s.piece, height); else manager.ladderHeight = height;
             this.renderPanel();
         });
-        panel.querySelector('.rr-build-stairwidth')?.addEventListener('change', event => { manager.stairWidth = Math.max(1, Math.min(20, Math.round(Number(event.target.value)) || 1)); this.renderPanel(); });
+        panel.querySelector('.rr-build-stairwidth')?.addEventListener('change', event => {
+            const width = Math.max(1, Math.min(20, Math.round(Number(event.target.value)) || 1));
+            if (s.piece && s.piece.kind === 'stair' && manager.setStairFlight) { const f = manager.stairFlight(s.piece); manager.setStairFlight(s.piece, f ? f.steps : 1, width); }
+            else manager.stairWidth = width;
+            this.renderPanel();
+        });
         panel.querySelectorAll('.rr-build-mode').forEach(el => el.addEventListener('click', () => { manager.gizmoMode = el.dataset.mode; manager._ghostChanged(); this.renderPanel(); }));
         panel.querySelector('.rr-build-remove')?.addEventListener('click', () => { manager.removeSelection(); this.renderPanel(); });
         panel.querySelector('.rr-build-plan')?.addEventListener('change', event => { manager.structure = event.target.value; manager.setMode('stamp'); });
