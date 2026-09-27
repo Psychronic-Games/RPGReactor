@@ -6401,7 +6401,49 @@ Window_BattleEnemy.prototype.validTargets = function() {
 
 Window_BattleEnemy.prototype.refresh = function() {
     this._enemies = this.validTargets();
+    // Picked on the battlefield (the list itself hidden): left to right as they stand.
+    if (this._reactorVisualPick) this._enemies = Window_BattleEnemy.byScreenX(this._enemies);
     Window_Selectable.prototype.refresh.call(this);
+};
+
+/** Battlers left to right on screen (then top to bottom); the list's order when targets are picked on the field. */
+Window_BattleEnemy.byScreenX = function(battlers) {
+    // Where each is drawn: its sprite as the battle cursor finds it (a 3D room places sprites
+    // away from their troop positions), else its troop position.
+    const scene = typeof SceneManager !== "undefined" ? SceneManager._scene : null;
+    const spriteset = scene && scene._spriteset;
+    const sprites = spriteset ? (spriteset._enemySprites || []).concat(spriteset._actorSprites || []) : [];
+    const at = battler => {
+        const sprite = sprites.find(s => s && s._battler === battler);
+        if (sprite && typeof ReactorUI !== "undefined" && ReactorUI.battlerTop) {
+            try { const p = ReactorUI.battlerTop(scene, sprite); if (p && Number.isFinite(p.x)) return [p.x, p.y]; } catch (e) { /* fall back below */ }
+        }
+        const x = battler && battler.screenX ? Number(battler.screenX()) : NaN;
+        const y = battler && battler.screenY ? Number(battler.screenY()) : NaN;
+        return [Number.isFinite(x) ? x : 0, Number.isFinite(y) ? y : 0];
+    };
+    return battlers.map((battler, order) => ({ battler, order, p: at(battler) }))
+        .sort((a, b) => a.p[0] - b.p[0] || a.p[1] - b.p[1] || a.order - b.order)
+        .map(entry => entry.battler);
+};
+
+// Picked on the battlefield, every arrow steps round the targets: right and
+// down to the next, left and up to the one before, wrapping at either end.
+Window_BattleEnemy.prototype.cursorRight = function(wrap) {
+    if (!this._reactorVisualPick) return Window_Selectable.prototype.cursorRight.call(this, wrap);
+    if (this.maxItems() > 1) this.smoothSelect((this.index() + 1) % this.maxItems());
+};
+Window_BattleEnemy.prototype.cursorLeft = function(wrap) {
+    if (!this._reactorVisualPick) return Window_Selectable.prototype.cursorLeft.call(this, wrap);
+    if (this.maxItems() > 1) this.smoothSelect((this.index() - 1 + this.maxItems()) % this.maxItems());
+};
+Window_BattleEnemy.prototype.cursorDown = function(wrap) {
+    if (!this._reactorVisualPick) return Window_Selectable.prototype.cursorDown.call(this, wrap);
+    this.cursorRight(wrap);
+};
+Window_BattleEnemy.prototype.cursorUp = function(wrap) {
+    if (!this._reactorVisualPick) return Window_Selectable.prototype.cursorUp.call(this, wrap);
+    this.cursorLeft(wrap);
 };
 
 Window_BattleEnemy.prototype.select = function(index) {

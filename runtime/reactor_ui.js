@@ -4712,6 +4712,9 @@
             state.ready = true;
             const rect = this.windowRect(entry.rect, scene);
             if (node.windowColumns > 0) win.maxCols = () => node.windowColumns;
+            // A target window the HUD hides is picked on the battlefield: its order is the
+            // battlers' on screen and the arrows step round them (Window_BattleEnemy.visualPick).
+            if (node.hideWindow && (node.battleWindow === "enemy" || node.battleWindow === "actor")) win._reactorVisualPick = true;
             this.customizeBattleCommands(scene, win, node);
             if (rect.width > 0 && rect.height > 0) {
                 win.move(rect.x, rect.y, rect.width, rect.height);
