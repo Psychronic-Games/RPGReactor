@@ -355,6 +355,18 @@
         return true;
     };
 
+    /** Why a Jump press did nothing, on the console (and in `lastJumpRefusal`). */
+    ReactorPhysics.noteJumpRefused = function(character, reason) {
+        if (!reason) {
+            reason = !this.jumpAllowed() ? "jumping is switched off (Database › Controls, or the map)"
+                : this.isAirborne(character) ? "already in the air (air " + (character._reactorAir || 0).toFixed(3) + ", rising " + (character._reactorVz || 0).toFixed(3) + ")"
+                : character._reactorClimb ? "climbing out of the water"
+                : character._reactorSwim ? "diving" : "unknown";
+        }
+        this.lastJumpRefusal = { frame: typeof Graphics !== "undefined" ? Graphics.frameCount : 0, reason, x: character.x, y: character.y, alt: character._reactorAlt };
+        if (typeof console !== "undefined") console.info("RPG Reactor: Jump did nothing: " + reason + " at " + character.x + "," + character.y);
+    };
+
     /** Into the water: the splash the 3D view draws, and the project's splash sound for the player. */
     ReactorPhysics.onSplash = function(character, speed) {
         character._reactorSplash = { frame: typeof Graphics !== "undefined" ? Graphics.frameCount : 0, speed: Math.max(0, speed || 0) };
@@ -499,7 +511,13 @@
                 && typeof $gameMap !== "undefined" && !$gameMap.isEventRunning();
             // In the water Dash dives and Jump rises; at the surface Jump leaps out.
             const under = free && this._reactorSwim ? ReactorPhysics.steerDive(this, Input.isPressed("shift"), Input.isPressed("jump") && (this._reactorDive || 0) > 0, ReactorPhysics.lookDive(this)) : false;
-            if (free && !under && !((this._reactorDive || 0) > 0) && Input.isTriggered("jump")) ReactorPhysics.jump(this);
+            if (Input.isTriggered && Input.isTriggered("jump")) {
+                // A press that does not jump says why, once, on the console: "sometimes it will not jump"
+                // is otherwise unanswerable.
+                if (free && !under && !((this._reactorDive || 0) > 0)) { if (!ReactorPhysics.jump(this)) ReactorPhysics.noteJumpRefused(this); }
+                else ReactorPhysics.noteJumpRefused(this, !sceneActive ? "the scene is busy" : !this.canMove() ? "the player cannot move (a message, a move route, followers gathering)"
+                    : this.isInVehicle() ? "in a vehicle" : $gameMap.isEventRunning() ? "an event is running (Jump shares its key with an event's action button?)" : "diving");
+            }
             _updateP.apply(this, arguments);
         };
         // On a ladder the way toward the wall climbs and the way back climbs
