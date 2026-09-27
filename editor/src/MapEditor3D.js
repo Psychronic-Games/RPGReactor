@@ -3770,9 +3770,9 @@ class MapEditor3D {
             if (this.pointer.eventArrow) this.pointer.pan = false;
         };
         this._onPointerMove = event => {
+            this._lastActiveAt = performance.now();
             // Where Ctrl+V pastes.
             this._lastPointerClient = { x: event.clientX, y: event.clientY };
-            this._lastActiveAt = performance.now();
             if (!this.pointer) {
                 // One raycast answers both questions.
                 const tile = this.tileAt(event.clientX, event.clientY);
