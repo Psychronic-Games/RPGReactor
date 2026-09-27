@@ -1221,6 +1221,8 @@ Reactor3D.Reflections = {
 Reactor3D.MIRROR_DEPTH = 2;
 /** How far off a panel's plane (tiles) a fragment still takes the mirror picture. */
 Reactor3D.MIRROR_TOLERANCE = 0.3;
+/** A model with a flat face this share of its surface or more can be a planar mirror (see `mirrorPanels`). */
+Reactor3D.MIRROR_FLAT_SHARE = 0.15;
 /** How close (tiles) a mirror model must stand to the camera. */
 Reactor3D.MIRROR_PLANE_REACH = 24;
 
@@ -1275,10 +1277,15 @@ Reactor3D.mirrorPanels = function(object) {
         }
     }
     // Each panel keeps where it lies (its box in the model's frame), so a mirror can pick the one your reflection falls in.
+    let total = 0;
+    for (const bin of bins.values()) total += bin.area;
     const panels = [...bins.values()].sort((p, q) => q.area - p.area).slice(0, 48).map(bin => {
         const normal = new THREE.Vector3(bin.nx, bin.ny, bin.nz).normalize();
         return { normal, d: bin.d / bin.area, area: bin.area, box: bin.box.expandByScalar(step * 2) };
     });
+    // How much of the whole surface its largest flat panel is: a mirror wall is nearly all panel,
+    // a faceted hull (a tank) none worth a planar mirror.
+    panels.flatShare = total > 0 && panels.length ? panels[0].area / total : 0;
     object.userData.__rrPanels = panels;
     return panels;
 };
@@ -1416,6 +1423,9 @@ Reactor3D.Mirrors = {
             }
             const panels = Reactor3D.mirrorPanels(object);
             if (!panels.length) continue;
+            // A model is a planar mirror only when it has a real flat face; else its cube reflection
+            // stands alone (a faceted hull's facets flicker as the chosen plane jumps between them).
+            if (object.userData.pieceChunk === undefined && panels.flatShare < Reactor3D.MIRROR_FLAT_SHARE) continue;
             const normalMatrix = new THREE.Matrix3().getNormalMatrix(object.matrixWorld);
             toLocal.copy(object.matrixWorld).invert();
             for (const panel of panels) {
@@ -1444,6 +1454,10 @@ Reactor3D.Mirrors = {
                 scored.push({ normal, point, d: normal.dot(point), score: shows * 1e6 + (inView ? 1e3 : 0) + panel.area * facing, primary: shows > 0 || inView, object });
             }
         }
+        // The mirror kept last frame stays unless another clearly wins: no flicker between near equals.
+        for (const entry of scored) {
+            if ((this._live || []).some(live => live.plane.object === entry.object && live.plane.normal.dot(entry.normal) > 0.999 && Math.abs(live.plane.d - entry.d) < 0.05)) entry.score *= 1.5;
+        }
         scored.sort((a, b) => b.score - a.score);
         const planes = [];
         if (scored.length && scored[0].primary) {
@@ -1451,7 +1465,10 @@ Reactor3D.Mirrors = {
             // The second: one facing the first (a house of mirrors) before any other.
             const first = scored[0];
             const facingFirst = scored.find(p => p !== first && p.normal.dot(first.normal) < -0.9 && Math.abs(p.d + first.d) > 0.2);
-            const next = facingFirst || scored.find(p => p !== first && p.primary && (p.object !== first.object || Math.abs(p.normal.dot(first.normal)) < 0.9));
+            // Never the first plane again from another chunk (one long wall is one mirror: the shader
+            // takes every fragment on the plane, whichever chunk drew it).
+            const samePlane = p => p.normal.dot(first.normal) > 0.999 && Math.abs(p.d - first.d) < 0.05;
+            const next = facingFirst || scored.find(p => p !== first && p.primary && !samePlane(p) && (p.object !== first.object || Math.abs(p.normal.dot(first.normal)) < 0.9));
             if (next) planes.push(next);
         }
         if (!planes.length) return;

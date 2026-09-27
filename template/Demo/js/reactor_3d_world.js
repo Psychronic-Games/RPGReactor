@@ -1670,7 +1670,11 @@ Reactor3D.waterMaterial = function(texture, look) {
                         "\t\t\tif (rrMC.w > 0.0) rrEnvC = textureLod(rrMirrorMap1, rrMU, 0.0).rgb * rrWaterTint;",
                         "\t\t}"
                     ].join("\n") : "",
-                    "\t\tfloat rrMirror = clamp(rrWaterLook.x * (0.55 + 0.45 * pow(1.0 - max(dot(vRRWaveNormal, rrViewDir), 0.0), 2.0)), 0.0, 1.0);",
+                    // Glancing light is reflected, light from above goes in: a dark liquid stays dark seen from
+                    // above (tar is black, not sky blue) and mirrors the world toward the horizon; only a full
+                    // mirror (mercury) reflects as strongly straight down.
+                    "\t\tfloat rrFloor = mix(0.12, 0.9, rrWaterLook.x * rrWaterLook.x * rrWaterLook.x);",
+                    "\t\tfloat rrMirror = clamp(rrWaterLook.x * mix(rrFloor, 1.0, pow(1.0 - max(dot(vRRWaveNormal, rrViewDir), 0.0), 3.0)), 0.0, 1.0);",
                     "\t\tdiffuseColor.rgb = mix(diffuseColor.rgb, rrEnvC + vec3(rrGlint * 0.8), rrMirror);",
                     "\t\tdiffuseColor.a = mix(diffuseColor.a, smoothstep(0.0, 0.35, vRRDepth), rrWaterLook.x * 0.85);",
                     "\t}"

@@ -354,7 +354,7 @@ class BuildHotbar {
         let head, body = '';
         if (s.kind === 'many') {
             head = this._t('build.selectedMany', { count: s.count });
-            body = section(this._t('pieces.material'), swatches(null)) + section(this._t('build.finish'), finishes(null))
+            body = section(this._t('pieces.material'), swatches(null)) + section(this._t('build.finish'), finishes(manager.selectionPieces ? manager.selectionPieces()[0] || null : null))
                 + `<div class="rr-build-note rr-build-wrap">${this._t('build.manyHint')}</div>`;
             foot = `<button type="button" class="rr-btn-secondary rr-build-turn-all">${this.icon('turn', 16)}<span>${tt('Turn')}</span></button><button type="button" class="rr-btn-secondary rr-build-remove">${this._t('build.remove')}</button>`;
         } else if (s.kind === 'select') {
@@ -437,7 +437,8 @@ class BuildHotbar {
         }));
         // The surface's own values: sliders live (one undo step a drag), numbers in percent, the tint by the colour popup.
         const currentSurface = () => {
-            const holder = s.kind === 'many' ? null : (placed ? manager.selectedPiece() : { finish: manager.finish, surface: manager.surface });
+            // Many selected: they start from the first one's surface (gold stays gold while a slider moves).
+            const holder = s.kind === 'many' ? (manager.selectionPieces()[0] || null) : (placed ? manager.selectedPiece() : { finish: manager.finish, surface: manager.surface });
             const base = holder ? (holder.surface || (holder.finish && presets[holder.finish])) : null;
             return Object.assign({ reflect: 0, gloss: 0.8, metal: 0, texture: 0, tint: '#ffffff' }, base || {});
         };
@@ -548,7 +549,10 @@ class BuildHotbar {
                 + range('rr-build-tglow', t('terrain.look.glow'), look.glow ?? 0, 0, 1, 0.01, Math.round((look.glow ?? 0) * 100) + '%'))
                 + section(t('terrain.waterLook'), range('rr-build-treflect', t('terrain.look.reflect'), look.reflect, 0, 1, 0.01, Math.round(look.reflect * 100) + '%')
                 + range('rr-build-tgloss', t('terrain.look.gloss'), look.gloss, 0, 1, 0.01, Math.round(look.gloss * 100) + '%')
-                + `<div class="rr-build-range"><span>${t('terrain.look.tint')}</span>${swatch('rr-build-ttint', look.tint)}</div>`) + note('terrain.look.hint');
+                + `<div class="rr-build-range"><span>${t('terrain.look.tint')}</span>${swatch('rr-build-ttint', look.tint)}</div>`);
+            // Which sheet these change: the one clicked in the 3D view, outlined there.
+            const chosen = terrain.selectedRegion ? terrain.selectedRegion() : null;
+            body = (chosen ? `<div class="rr-build-note rr-build-wrap rr-build-tselected">${t('terrain.look.selected').replace('{w}', chosen.x1 - chosen.x0 + 1).replace('{h}', chosen.y1 - chosen.y0 + 1)}</div>` : note('terrain.look.pick')) + body;
         }
         const status = terrain.statusText ? terrain.statusText() : '';
         const iconButton = (cls, icon, key) => `<button type="button" class="rr-btn-secondary rr-build-icon-btn ${cls}" title="${t(key)}" aria-label="${t(key)}">${this.icon(icon, 16)}</button>`;
@@ -561,19 +565,31 @@ class BuildHotbar {
         });
         bindRange('rr-build-tradius', v => { terrain.radius = v; }, v => v);
         bindRange('rr-build-tstrength', v => { terrain.strength = v; }, v => v);
-        bindRange('rr-build-treflect', v => { terrain.waterLook.reflect = v; }, v => Math.round(v * 100) + '%');
-        bindRange('rr-build-tgloss', v => { terrain.waterLook.gloss = v; }, v => Math.round(v * 100) + '%');
-        bindRange('rr-build-tclear', v => { terrain.waterLook.clear = v; }, v => Math.round(v * 100) + '%');
-        bindRange('rr-build-twaves', v => { terrain.waterLook.waves = v; }, v => Math.round(v * 100) + '%');
-        bindRange('rr-build-tglow', v => { terrain.waterLook.glow = v; }, v => Math.round(v * 100) + '%');
+        // The look's sliders edit the selected sheet as they move (one undo step a drag), else only the look in hand.
+        const lookRange = (cls, key) => {
+            bindRange(cls, v => { if (terrain.editLook) terrain.editLook({ [key]: v }, 'live'); else terrain.waterLook[key] = v; }, v => Math.round(v * 100) + '%');
+            panel.querySelector('.' + cls)?.addEventListener('change', () => terrain.editLook?.({}, 'commit'));
+        };
+        lookRange('rr-build-treflect', 'reflect');
+        lookRange('rr-build-tgloss', 'gloss');
+        lookRange('rr-build-tclear', 'clear');
+        lookRange('rr-build-twaves', 'waves');
+        lookRange('rr-build-tglow', 'glow');
+        // A colour from the popup: live as it moves, kept a moment after the last change.
+        const colourInput = key => hex => {
+            if (terrain.editLook) terrain.editLook({ [key]: hex }, 'live'); else terrain.waterLook[key] = hex;
+            clearTimeout(this._lookCommit);
+            this._lookCommit = setTimeout(() => terrain.editLook?.({}, 'commit'), 450);
+        };
         const colour = panel.querySelector('.rr-build-tcolour');
-        if (colour && colour.tagName === 'BUTTON') RRColorPopup.bind(colour, hex => { terrain.waterLook.colour = hex; });
-        else colour?.addEventListener('input', event => { terrain.waterLook.colour = event.target.value; });
+        if (colour && colour.tagName === 'BUTTON') RRColorPopup.bind(colour, colourInput('colour'));
+        else colour?.addEventListener('input', event => colourInput('colour')(event.target.value));
         const tint = panel.querySelector('.rr-build-ttint');
-        if (tint && tint.tagName === 'BUTTON') RRColorPopup.bind(tint, hex => { terrain.waterLook.tint = hex; });
-        else tint?.addEventListener('input', event => { terrain.waterLook.tint = event.target.value; });
+        if (tint && tint.tagName === 'BUTTON') RRColorPopup.bind(tint, colourInput('tint'));
+        else tint?.addEventListener('input', event => colourInput('tint')(event.target.value));
         panel.querySelectorAll('.rr-build-look').forEach(el => el.addEventListener('click', () => {
-            Object.assign(terrain.waterLook, TerrainManager.WATER_LOOKS[el.dataset.preset]);
+            const preset = TerrainManager.WATER_LOOKS[el.dataset.preset];
+            if (terrain.editLook) terrain.editLook(Object.assign({}, preset), 'commit'); else Object.assign(terrain.waterLook, preset);
             this.renderTerrainPanel();
         }));
         panel.querySelector('.rr-build-tundo').addEventListener('click', () => { terrain.undo(); this.renderTerrainPanel(); });

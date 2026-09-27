@@ -110,6 +110,7 @@ class TerrainManager {
     setMode(mode) {
         if (!this.elevation()?.TERRAIN_MODES.includes(mode) && mode !== 'drain' && mode !== 'fill' && mode !== 'look') return;
         this.mode = mode;
+        if (mode !== 'look' && this.selectedWater) this.selectWater(null);
         const look = this.panel?.querySelector('.rr-terrain-look');
         if (look) look.hidden = mode !== 'look';
         window.reactor?.mapEditor3D?.hideWaterGhost?.();
@@ -167,6 +168,8 @@ class TerrainManager {
     deactivate() {
         if (!this.active) return;
         this.active = false;
+        this.selectedWater = null;
+        window.reactor?.mapEditor3D?.showWaterSelection?.(null);
         this._stroke = null;
         document.removeEventListener('keydown', this._onKeyDown);
         const mapEditor = window.reactor?.mapEditor;
@@ -220,6 +223,53 @@ class TerrainManager {
         if (poured) elevation.styleWaterRegion(map, poured, this.waterLook);
         this.undoStack.push({ water: saved }); if (this.undoStack.length > 50) this.undoStack.shift(); this.redoStack.length = 0;
         this.announce(null, true); this.refreshStatus();
+        return true;
+    }
+
+    /** A sheet's look as the panel shows it, its unset values filled with water's. */
+    lookOf(region) {
+        return { reflect: region.reflect ?? 0, gloss: region.gloss ?? 0.85, tint: region.tint || '#ffffff', colour: region.colour || '',
+            clear: region.clear ?? 0.6, waves: region.waves ?? 1, glow: region.glow ?? 0 };
+    }
+
+    /**
+     * Pick the sheet the Look panel edits (a click on it in Look mode): it is
+     * outlined, and its look fills the panel. Null lets go.
+     */
+    selectWater(region) {
+        this.selectedWater = region ? { x0: region.x0, y0: region.y0, x1: region.x1, y1: region.y1, level: region.level } : null;
+        if (region) this.waterLook = this.lookOf(region);
+        this._lookSnapshot = null;
+        window.reactor?.mapEditor3D?.showWaterSelection?.(this.selectedWater);
+        window.reactor?.buildHotbar?.render?.();
+    }
+
+    /** The selected sheet as it stands in the sidecar now, or null. */
+    selectedRegion() {
+        const key = this.selectedWater, map = this.currentMap(), elevation = this.elevation();
+        if (!key || !map || !elevation) return null;
+        return elevation.water(map).find(r => r.x0 === key.x0 && r.y0 === key.y0 && r.x1 === key.x1 && r.y1 === key.y1 && Math.abs(r.level - key.level) < 1e-6) || null;
+    }
+
+    /**
+     * Change the look in hand and, with a sheet selected, that sheet: 'live'
+     * while a slider moves (the sheet's material follows at once, one undo step
+     * gathered), 'commit' when it lets go (the step is kept, the view rebuilt).
+     */
+    editLook(patch, phase = 'commit') {
+        Object.assign(this.waterLook, patch || {});
+        const map = this.currentMap(), elevation = this.elevation(), region = this.selectedRegion();
+        if (!map || !elevation || !region) return false;
+        if (!this._lookSnapshot) this._lookSnapshot = elevation.waterSnapshot(map);
+        elevation.styleWaterRegion(map, region, this.waterLook);
+        if (phase === 'live') {
+            window.reactor?.mapEditor3D?.restyleWater?.(this.selectedWater, this.waterLook);
+            return true;
+        }
+        this.undoStack.push({ water: this._lookSnapshot }); if (this.undoStack.length > 50) this.undoStack.shift(); this.redoStack.length = 0;
+        this._lookSnapshot = null;
+        this.announce(null, true); this.refreshStatus();
+        window.reactor?.mapEditor3D?.showWaterSelection?.(this.selectedWater);
         return true;
     }
 

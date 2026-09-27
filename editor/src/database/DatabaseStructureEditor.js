@@ -1254,7 +1254,7 @@ class DatabaseStructureEditor {
                     + this._field(tt('Facing'), arrows('rr-structures-effect-facing', fx.facing))
                     + this._field(tt('Sound'), `<input type="checkbox" class="system-checkbox rr-structures-effect-audio" ${fx.audio ? 'checked' : ''}>`);
             } else if (fx.type === 'light') {
-                fields = this._field(tt('Colour'), `<input type="color" class="rr-structures-effect-color" value="${fx.color}" style="width:36px;height:26px;padding:0;border:1px solid var(--color-border-input);background:none;">`)
+                fields = this._field(tt('Color'), `<input type="color" class="rr-structures-effect-color" value="${fx.color}" style="width:36px;height:26px;padding:0;border:1px solid var(--color-border-input);background:none;">`)
                     + field('rr-structures-effect-num', tt('Radius'), fx.radius, 0.5, 60, 0.5, 'radius') + field('rr-structures-effect-num', tt('Strength'), fx.intensity, 0, 4, 0.1, 'intensity') + field('rr-structures-effect-num', tt('Up'), fx.z, 0, 120, 0.25, 'z');
             } else {
                 const animations = this.animationChoices();

@@ -1664,6 +1664,36 @@ class MapEditor3D {
         return hit ? hit.object.userData.water || null : null;
     }
 
+    /** The selected sheet outlined at its level (the Look panel edits it); null takes the outline away. */
+    showWaterSelection(key) {
+        if (this.waterSelection) { this.waterSelection.parent?.remove(this.waterSelection); this.waterSelection.geometry.dispose(); this.waterSelection.material.dispose(); this.waterSelection = null; }
+        if (!key || !this.mapScene || typeof THREE === 'undefined') return;
+        const mesh = (this.mapScene._waterMeshes || []).find(m => { const r = m.userData.water; return r && r.x0 === key.x0 && r.y0 === key.y0 && r.x1 === key.x1 && r.y1 === key.y1 && Math.abs(r.level - key.level) < 1e-6; });
+        const y = mesh ? new THREE.Vector3(0, key.level, 0).applyMatrix4(mesh.matrixWorld).y + 0.08 : key.level + 0.08;
+        // The sheet's own shoreline when it has one (its geometry's edge), else its box.
+        const geometry = mesh ? new THREE.EdgesGeometry(mesh.geometry, 1) : new THREE.EdgesGeometry(new THREE.PlaneGeometry(key.x1 - key.x0 + 1, key.y1 - key.y0 + 1).rotateX(-Math.PI / 2).translate((key.x0 + key.x1 + 1) / 2, 0, (key.y0 + key.y1 + 1) / 2));
+        const line = new THREE.LineSegments(geometry, new THREE.LineBasicMaterial({ color: 0xffd166, depthTest: false, transparent: true, opacity: 0.95 }));
+        if (mesh) line.applyMatrix4(mesh.matrixWorld); else line.position.y = y;
+        line.renderOrder = 999;
+        line.userData.__reactorOverlay = true;
+        this.mapScene.scene().add(line);
+        this.waterSelection = line;
+        this._lastActiveAt = performance.now();
+    }
+
+    /** A sheet's look set on its material at once, while a slider moves (the rebuild follows on release). */
+    restyleWater(key, look) {
+        const mesh = key && (this.mapScene?._waterMeshes || []).find(m => { const r = m.userData.water; return r && r.x0 === key.x0 && r.y0 === key.y0 && r.x1 === key.x1 && r.y1 === key.y1 && Math.abs(r.level - key.level) < 1e-6; });
+        const u = mesh && mesh.material && mesh.material.userData;
+        if (!u || !u.rrWaterLook) return;
+        u.rrWaterLook.x = look.reflect > 0 ? look.reflect : 0;
+        u.rrWaterLook.y = 1 - (look.gloss ?? 0.85);
+        u.rrWaterTint?.set(look.tint || '#ffffff');
+        if (u.rrWaterColour) { if (look.colour) { const c = new THREE.Color(look.colour); u.rrWaterColour.set(c.r, c.g, c.b, 1); } else u.rrWaterColour.w = 0; }
+        if (u.rrWaterForm) u.rrWaterForm.set(look.clear ?? 0.6, look.waves ?? 1, look.glow ?? 0, 0);
+        this._lastActiveAt = performance.now();
+    }
+
     /** A translucent ghost of a sheet: the hollow's own surface when the region has a mask (or the runtime can shape it), else its box. */
     showWaterGhost(rect, level = rect.level) {
         if (!this.mapScene || !rect) return;
@@ -3595,7 +3625,7 @@ class MapEditor3D {
                 const point = sheet || mode === 'look' ? null : this.groundPointAt(event.clientX, event.clientY);
                 if (sheet) {
                     this.pointer.terrain = true;
-                    if (mode === 'look') this.terrainManager().styleRegion(sheet);
+                    if (mode === 'look') this.terrainManager().selectWater(sheet);
                     else this.terrainManager().drainRegion(sheet);
                 }
                 else if (point) {

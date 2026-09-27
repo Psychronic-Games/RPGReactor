@@ -1364,6 +1364,11 @@ Reactor3D.Viewport.prototype.renderPass = function(mapScene, which, slot) {
             scene.updateMatrixWorld();
             // The shadow maps, while every group is still visible.
             if (mapScene.renderShadows) mapScene.renderShadows(this._renderer, null);
+            // The capture and the mirrors draw lit materials before the pass's own draw, and PIXI
+            // (between passes) unbound every texture unit behind three's back (`Shadows.unbindFrom`):
+            // three must forget what it thinks is bound, or the shadow samplers meet empty units
+            // ("mismatch between texture format and sampler type") and those draws are dropped.
+            if ((Reactor3D.Reflections && Reactor3D.Reflections.enabled()) || (Reactor3D.Mirrors && Reactor3D.Mirrors.active !== undefined)) this._renderer.resetState();
             // A face of the reflection capture: from inside the nearest mirror-bright model, else the camera.
             if (Reactor3D.Reflections && this._camera && Reactor3D.Reflections.enabled()) {
                 const probe = mapScene.reflectionProbe ? mapScene.reflectionProbe(this._camera) : null;
