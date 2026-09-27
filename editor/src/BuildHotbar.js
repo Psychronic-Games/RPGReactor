@@ -16,10 +16,14 @@
  * The PieceBuilderManager stays the model (kind, mode, material, level,
  * strokes, selection, undo); this is its face.
  *
- * The bar has two groups, switched at its left end: Build (the above) and
+ * The bar has three groups, switched at its left end: Build (the above),
  * Terrain (the ground's brushes and the water: raise, lower, smooth,
  * flatten, pour, drain, and a sheet's look), whose model is the
- * TerrainManager. The panel shows the settings of whichever is in hand.
+ * TerrainManager, and Models (3D models stood on the map: Select, Remove,
+ * the Library, then the models in hand this session and on this map), whose
+ * model is the ModelPropsManager. The panel shows the settings of whichever
+ * is in hand; for Models it is the prop's own panel (placement, transform,
+ * playback). Build's Select picks a placed model too, turning to Models.
  */
 class BuildHotbar {
     constructor(projectController) {
@@ -36,6 +40,9 @@ class BuildHotbar {
     /** The Terrain group: the ground's brushes, then the water. Each is a TerrainManager mode. */
     static TERRAIN = ['raise', 'lower', 'smooth', 'flatten', 'pour', 'drain', 'look'];
     static TERRAIN_MODE = { raise: 'raise', lower: 'lower', smooth: 'smooth', flatten: 'flatten', pour: 'fill', drain: 'drain', look: 'look' };
+    /** The Models group's fixed slots; the models themselves follow as model0, model1... */
+    static MODELS = ['mselect', 'mremove', 'library'];
+    static GROUPS = ['build', 'terrain', 'models'];
     /** The kinds whose facing matters: they climb, slope, open or run one way. */
     /** The longest stair run or ladder: as high as a piece may stand. */
     static get MAX_RUN() { return (typeof Reactor3D !== 'undefined' && Reactor3D.PIECE_MAX_LEVEL) || 240; }
@@ -45,9 +52,15 @@ class BuildHotbar {
     _tt(text) { return window.I18n ? window.I18n.tText(text) : text; }
     manager() { return this.projectController?.pieceBuilderManager || window.reactor?.pieceBuilderManager || null; }
     terrain() { return this.projectController?.terrainManager || window.reactor?.terrainManager || null; }
-    /** Which group the bar shows: Terrain while the terrain tool holds the map. */
-    group() { return window.reactor?.mapTool === 'terrain' ? 'terrain' : 'build'; }
-    slots() { return this.group() === 'terrain' ? BuildHotbar.TERRAIN : BuildHotbar.SLOTS; }
+    props() { return this.projectController?.modelPropsManager || window.reactor?.modelPropsManager || null; }
+    /** Which group the bar shows: Terrain or Models while that tool holds the map. */
+    group() { const tool = window.reactor?.mapTool; return tool === 'terrain' ? 'terrain' : tool === 'models' ? 'models' : 'build'; }
+    slots() {
+        const group = this.group();
+        if (group === 'terrain') return BuildHotbar.TERRAIN;
+        if (group === 'models') return BuildHotbar.MODELS.concat((this.props()?.libraryModels() || []).map((_, i) => 'model' + i));
+        return BuildHotbar.SLOTS;
+    }
     currentMap() { return this.projectController?.getTilemapManager?.()?.currentMap || null; }
     is3D() { const map = this.currentMap(); const E = typeof RRMapElevation !== 'undefined' ? RRMapElevation : null; return !!(map && E && E.hasNote(map)); }
 
@@ -100,6 +113,13 @@ class BuildHotbar {
             const mode = this.terrain()?.mode;
             return BuildHotbar.TERRAIN.find(slot => BuildHotbar.TERRAIN_MODE[slot] === mode) || 'raise';
         }
+        if (this.group() === 'models') {
+            const props = this.props();
+            if (!props || props.tool === 'erase') return 'mremove';
+            if (!props.placing()) return 'mselect';
+            const index = props.libraryModels().findIndex(entry => entry.name === props.model.name);
+            return index >= 0 ? 'model' + index : 'mselect';
+        }
         const docked = this.docked();
         if (docked) return docked;
         if (manager.mode === 'select') return 'select';
@@ -109,10 +129,47 @@ class BuildHotbar {
         return BuildHotbar.PIECES.includes(manager.kind) ? manager.kind : 'shape';
     }
 
+    /** The models tool takes the map (the bar stays), its panel in the bar's side panel. */
+    enterModels() {
+        const props = this.props();
+        if (!props) return null;
+        if (!props.active) {
+            this._modelsBody = null;
+            props.activate();
+            window.reactor?.eventManager?.eventMode && window.reactor.eventManager.setEventMode(false);
+        }
+        return props;
+    }
+
+    /** Pick up a placed model (or just turn to Models in Select, with no id). */
+    selectModel(id) {
+        const props = this.enterModels();
+        if (!props) return;
+        props.tool = 'select';
+        if (id) props.select(id);
+        this._lastModels = 'mselect';
+        this.render();
+    }
+
     /** Pick a slot: pieces place, the hammer erases, Select picks up, the rest open their specs. */
     pick(slot) {
         const manager = this.manager();
         if (!manager) return;
+        // A models slot: Select picks up, Remove takes away, the Library opens the picker, a model is placed.
+        if (BuildHotbar.MODELS.includes(slot) || /^model\d+$/.test(slot)) {
+            const props = this.enterModels();
+            if (!props) return;
+            if (slot === 'library') { props.openModelPicker(); this.render(); return; }
+            this._lastModels = slot;
+            if (slot === 'mselect') props.tool = 'select';
+            else if (slot === 'mremove') { props.tool = 'erase'; props.select(null); }
+            else {
+                const entry = props.libraryModels()[Number(slot.slice(5))];
+                if (entry) props.chooseModel(entry);
+            }
+            this.render();
+            return;
+        }
         // A terrain slot: the terrain tool takes the map (the bar stays) in that mode.
         if (BuildHotbar.TERRAIN.includes(slot)) {
             const terrain = this.terrain();
@@ -123,7 +180,7 @@ class BuildHotbar {
             this.render();
             return;
         }
-        if (this.group() === 'terrain') manager.activate();
+        if (this.group() !== 'build') manager.activate();
         // Screens and lights have their own editors: the slot opens the one for the map, and the bar stays.
         if (slot === 'screen') { if (this.docked() !== 'screen') window.reactor?.mediaSurfaceManager?.open?.(); return; }
         if (slot === 'light') { if (this.docked() !== 'light') window.reactor?.lightingManager?.setActive?.(true); return; }
@@ -165,7 +222,12 @@ class BuildHotbar {
             redo: 'M15 14l5-5-5-5 M20 9H10a6 6 0 0 0 0 12h3',
             level: 'M3 16h18 M5 12h14 M4 8h16',
             build: 'M4 20V10l8-6 8 6v10z M9 20v-6h6v6',
-            terrain: 'M2 19l6-9 4 5 3-3 7 7z'
+            terrain: 'M2 19l6-9 4 5 3-3 7 7z',
+            // The models group: a cube; Select, Remove and the Library within it.
+            models: 'M12 3l8 4.5v9L12 21l-8-4.5v-9z M4 7.5l8 4.5 8-4.5 M12 12v9',
+            mselect: 'M5 3l14 9-6 1.5L10 20z',
+            mremove: 'M14 4l6 6-3 3-6-6z M11 7l-8 8 3 3 8-8 M13 5l2-2',
+            library: 'M4 4h6v6H4z M14 4h6v6h-6z M4 14h6v6H4z M14 14h6v6h-6z'
         };
         const path = own[name] || M[name] || '';
         return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" aria-hidden="true"><path d="${path}" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/></svg>`;
@@ -173,6 +235,10 @@ class BuildHotbar {
 
     label(slot) {
         if (BuildHotbar.PIECES.includes(slot)) return this._t('pieces.kind.' + slot);
+        if (slot === 'mselect') return this._t('build.select');
+        if (slot === 'mremove') return this._t('build.hammer');
+        if (slot === 'library') return this._t('build.library');
+        if (/^model\d+$/.test(slot)) return (this.props()?.libraryModels()[Number(slot.slice(5))]?.name || '').split('/').pop();
         if (BuildHotbar.TERRAIN.includes(slot)) return this._t({ pour: 'terrain.waterPour', drain: 'terrain.drain', look: 'terrain.lookShort' }[slot] || 'terrain.' + slot);
         return this._t('build.' + slot);
     }
@@ -181,23 +247,62 @@ class BuildHotbar {
         const root = this.root, manager = this.manager();
         if (!root || !manager) return;
         const active = this.activeSlot();
-        const terrain = this.group() === 'terrain';
+        const group = this.group(), terrain = group === 'terrain';
         const slots = this.slots();
-        const button = (slot, index) => `<button type="button" class="rr-build-slot" data-slot="${slot}" aria-pressed="${slot === active}" title="${this.label(slot)}${index < 10 ? ' (' + ((index + 1) % 10) + ')' : ''}">
-            ${this.icon(slot === 'shape' && active === 'shape' ? manager.kind : slot)}<span class="rr-build-slot-label">${this.label(slot)}</span>${index < 10 ? `<span class="rr-build-slot-key">${(index + 1) % 10}</span>` : ''}</button>`;
+        const escape = text => String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+        const face = slot => {
+            if (!/^model\d+$/.test(slot)) return this.icon(slot === 'shape' && active === 'shape' ? manager.kind : slot);
+            const url = this.modelThumb(this.props()?.libraryModels()[Number(slot.slice(5))]);
+            return url ? `<img class="rr-build-slot-thumb" src="${url}" alt="">` : this.icon('models');
+        };
+        const button = (slot, index) => `<button type="button" class="rr-build-slot${/^model\d+$/.test(slot) ? ' rr-build-slot-model' : ''}" data-slot="${slot}" aria-pressed="${slot === active}" title="${escape(this.label(slot))}${index < 10 ? ' (' + ((index + 1) % 10) + ')' : ''}">
+            ${face(slot)}<span class="rr-build-slot-label">${escape(this.label(slot))}</span>${index < 10 ? `<span class="rr-build-slot-key">${(index + 1) % 10}</span>` : ''}</button>`;
         root.innerHTML = `
             ${this.is3D() ? '' : `<div class="rr-build-note">${this._t('build.needs3D')}</div>`}
             <div class="rr-build-row rr-build-slots">
-                <div class="rr-build-groups" role="radiogroup">${['build', 'terrain'].map(g => `<button type="button" class="rr-build-group" data-group="${g}" role="radio" aria-checked="${(g === 'terrain') === terrain}" title="${this._t('build.group.' + g)}">${this.icon(g, 18)}<span>${this._t('build.group.' + g)}</span></button>`).join('')}</div>
+                <div class="rr-build-groups" role="radiogroup">${BuildHotbar.GROUPS.map(g => `<button type="button" class="rr-build-group" data-group="${g}" role="radio" aria-checked="${g === group}" title="${this._t('build.group.' + g)}">${this.icon(g, 18)}<span>${this._t('build.group.' + g)}</span></button>`).join('')}</div>
                 ${slots.map(button).join('')}</div>
-            <div class="rr-build-hint">${terrain ? this._t('terrain.keys') : `${this._t('build.level')} <b class="rr-build-level">${manager.level}</b> · ${this._t('build.keys')}`}</div>`;
+            <div class="rr-build-hint">${terrain ? this._t('terrain.keys') : group === 'models' ? this._t('build.modelKeys') : `${this._t('build.level')} <b class="rr-build-level">${manager.level}</b> · ${this._t('build.keys')}`}</div>`;
+        this._slotsKey = slots.join('|');
         root.querySelectorAll('.rr-build-slot').forEach(el => el.addEventListener('click', () => this.pick(el.dataset.slot)));
         root.querySelectorAll('.rr-build-group').forEach(el => el.addEventListener('click', () => {
-            if ((el.dataset.group === 'terrain') === terrain) return;
-            this.pick(el.dataset.group === 'terrain' ? (this._lastTerrain || 'raise') : (this._lastBuild || 'select'));
+            const to = el.dataset.group;
+            if (to === group) return;
+            const last = this._lastModels && this.slots().includes(this._lastModels) ? this._lastModels : 'mselect';
+            this.pick(to === 'terrain' ? (this._lastTerrain || 'raise') : to === 'models' ? (/^model/.test(last) && !this.props()?.libraryModels().length ? 'mselect' : last) : (this._lastBuild || 'select'));
         }));
         if (this.panel && this.visible) this.panel.style.display = this.docked() ? 'none' : 'flex';
         this.renderPanel();
+    }
+
+    /** A model's picture for its slot, or null while it is drawn (the bar redraws when it lands). */
+    modelThumb(entry) {
+        if (!entry || typeof RREventPreviewModels === 'undefined' || typeof Reactor3D === 'undefined' || !Reactor3D.normalizeModelSpec) return null;
+        this._thumbs = this._thumbs || new Map();
+        const known = this._thumbs.get(entry.name);
+        if (known !== undefined) return known;
+        this._thumbs.set(entry.name, null);
+        const spec = Reactor3D.normalizeModelSpec({ name: entry.name, ext: entry.ext, file: entry.file, texture: entry.texture, size: 1, scale: 1 });
+        const project = this.projectController?.getCurrentProject?.() || this.projectController?.currentProject;
+        if (!spec || !project) return null;
+        Promise.resolve(RREventPreviewModels.thumbnail(project, spec, window.reactor?.mapEditor3D || this.projectController?.mapEditor3D, 64, 2)).then(result => {
+            if (!result?.url) { this._thumbs.delete(entry.name); return; }
+            this._thumbs.set(entry.name, result.url);
+            if (this.visible && this.group() === 'models') this.render();
+        }).catch(() => this._thumbs.delete(entry.name));
+        return null;
+    }
+
+    /** The Models group's panel: the prop panel itself, mounted once and kept (it syncs itself). */
+    renderModelsPanel() {
+        const panel = this.panel, props = this.props();
+        if (!panel || !props) return;
+        if (this._modelsBody && panel.contains(this._modelsBody) && props.panel === this._modelsBody) return;
+        panel.innerHTML = `<div class="rr-build-panel-head">${this.icon('models', 20)}<span>${this._t('build.group.models')}</span></div><div class="rr-build-panel-body rr-build-models-body"></div>`;
+        this._modelsBody = panel.querySelector('.rr-build-models-body');
+        // With the room of the side panel, the transform card opens first.
+        if (!props._activeSection) props._activeSection = 'transform';
+        props.initializeUI(this._modelsBody);
     }
 
     // ---- The specs panel ------------------------------------------------------
@@ -216,7 +321,9 @@ class BuildHotbar {
     renderPanel() {
         const panel = this.panel, manager = this.manager();
         if (!panel || !manager) return;
-        if (this.group() === 'terrain') { this.renderTerrainPanel(); return; }
+        if (this.group() === 'terrain') { this._modelsBody = null; this.renderTerrainPanel(); return; }
+        if (this.group() === 'models') { this.renderModelsPanel(); return; }
+        this._modelsBody = null;
         const s = this.subject();
         const tt = text => this._tt(text);
         // The dock's convention (Lighting, Media Surfaces): a card per group, its header on an accent strip.
@@ -391,9 +498,11 @@ class BuildHotbar {
     /** The manager changed: the bar and the panel follow. */
     sync() {
         if (!this.visible || !this.root) return;
-        if (this.group() === 'terrain') {
+        if (this.group() !== 'build') {
+            // Terrain and Models: redraw when the slot in hand or the models on offer change.
             const shown = this.root.querySelector('.rr-build-slot[aria-pressed="true"]')?.dataset.slot;
-            if (shown !== this.activeSlot()) this.render();
+            const groupShown = this.root.querySelector('.rr-build-group[aria-checked="true"]')?.dataset.group;
+            if (shown !== this.activeSlot() || groupShown !== this.group() || this._slotsKey !== this.slots().join('|')) this.render();
             return;
         }
         const active = this.activeSlot();

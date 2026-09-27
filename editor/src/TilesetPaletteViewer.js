@@ -125,7 +125,6 @@ class TilesetPaletteViewer {
                     ${this.createLayerTab('G')}
                     ${this.createLayerTab('R', TilesetPaletteViewer.tabIcon('region'))}
                     ${this.createLayerTab('O', TilesetPaletteViewer.tabIcon('object3d'))}
-                    ${this.createLayerTab('M', TilesetPaletteViewer.tabIcon('model3d'), '3D-M')}
                 </div>
 
                 <!-- Tileset Preview Canvas -->

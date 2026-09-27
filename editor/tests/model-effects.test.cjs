@@ -84,7 +84,7 @@ test('the picker previews on black by default and does not scroll', () => {
     assert.match(picker, /class="anim-picker-stage"[^>]*overflow: hidden/);
     assert.match(picker, /max-height: calc\(100% - 64px\)/);
     assert.match(read('editor/src/utils/ThemeColors.js'), /\|\| CHOICES\[2\];/);
-    assert.match(read('editor/src/TilesetPaletteViewer.js'), /createLayerTab\('M', TilesetPaletteViewer\.tabIcon\('model3d'\), '3D-M'\)/);
+    assert.doesNotMatch(read('editor/src/TilesetPaletteViewer.js'), /createLayerTab\('M'/, 'models are placed from the Build bar, not a palette tab');
 });
 
 test('a model base transform wraps every instance and effects carry a turn', () => {

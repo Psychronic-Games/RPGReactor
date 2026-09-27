@@ -757,7 +757,7 @@ class RPGReactor {
             if (owner !== 'pieces') {
                 this.pieceBuilderManager?.deactivate();
                 // Lighting and Media Surfaces are part of building: opened from the bar (or over it), the bar stays and shows which is in hand.
-                if (this.buildHotbar?.visible && (owner === 'lighting' || owner === 'media' || owner === 'terrain')) this.buildHotbar.render();
+                if (this.buildHotbar?.visible && (owner === 'lighting' || owner === 'media' || owner === 'terrain' || owner === 'models')) this.buildHotbar.render();
                 else this.buildHotbar?.hide(false);
             }
             if (owner !== 'events' && this.eventManager?.eventMode) this.eventManager.setEventMode(false);
@@ -784,7 +784,7 @@ class RPGReactor {
 
     syncMapToolButtons() {
         const owner = this.mapTool, map = this.mapEditor;
-        const building = owner === 'pieces' || (!!this.buildHotbar?.visible && (owner === 'lighting' || owner === 'media'));
+        const building = owner === 'pieces' || (!!this.buildHotbar?.visible && (owner === 'lighting' || owner === 'media' || owner === 'terrain' || owner === 'models'));
         for (const [selector,tool] of [['#toolbar-event-manager-btn','events'],['[data-action="media-surfaces"]','media'],['[data-action="lighting-tool"]','lighting'],['[data-action="build-tool"]','pieces']]) {
             const on = tool === 'pieces' ? building : owner === tool;
             const button=document.querySelector(selector);button?.classList.toggle('active',on);button?.setAttribute('aria-pressed',String(on));

@@ -3460,7 +3460,12 @@ class MapEditor3D {
                     this.pointer.propHold = true;
                     const manager = this.pieceManager();
                     const held = this.grabShapeGizmo(event.clientX, event.clientY);
-                    if (held) {
+                    const propHit = held ? null : this.propAt(event.clientX, event.clientY);
+                    if (propHit && this.propsManager() && window.reactor?.buildHotbar?.selectModel) {
+                        // A placed model: the bar turns to Models in Select, and the models
+                        // tool (below, now holding the map) picks it up and carries a drag.
+                        window.reactor.buildHotbar.selectModel(null);
+                    } else if (held) {
                         this.pointer.gizmo = { held, snapshot: manager._snapshot(this.currentMap()), changed: false, start: JSON.parse(JSON.stringify(manager.selectedPiece())) };
                     } else {
                         const pick = this.pieceTargetAt(event.clientX, event.clientY, { erase: true });
@@ -3543,7 +3548,10 @@ class MapEditor3D {
                     this.pointer.propRing = ring;
                 } else {
                     const hitId = this.propAt(event.clientX, event.clientY);
-                    if (hitId) {
+                    if (hitId && manager.tool === 'erase') {
+                        manager.remove(hitId);
+                        this.pointer.propPlaced = true;
+                    } else if (hitId) {
                         manager.select(hitId, { fromThree: true });
                         this.selectProp(hitId);
                         const prop = manager.prop(hitId);
@@ -3553,7 +3561,7 @@ class MapEditor3D {
                         if (this.canvas) this.canvas.style.cursor = 'grabbing';
                     } else {
                         const point = this.groundPointAt(event.clientX, event.clientY);
-                        if (point && manager.model) {
+                        if (point && manager.placing()) {
                             const id = manager.place(point.x, point.y);
                             if (id) this.pointer.propPlaced = true;
                         } else {
@@ -4091,9 +4099,10 @@ class MapEditor3D {
             if (!this._propHoverAt || at - this._propHoverAt >= 33) {
                 this._propHoverAt = at;
                 this._hoverOverProp = this.propAt(clientX, clientY) !== null;
-                this.canvas.style.cursor = this._hoverOverProp ? 'grab' : (this.propsManager()?.model ? 'copy' : 'default');
+                const props = this.propsManager();
+                this.canvas.style.cursor = this._hoverOverProp ? (props?.tool === 'erase' ? 'not-allowed' : 'grab') : (props?.placing?.() ? 'copy' : 'default');
             }
-            if (this._hoverOverProp || !tile) this.hidePlacementGhost();
+            if (this._hoverOverProp || !tile || !this.propsManager()?.placing?.()) this.hidePlacementGhost();
             else this.updatePlacementGhost(clientX, clientY);
             return;
         }

@@ -20,8 +20,8 @@ project; a person can use it to find where anything lives.
 | Pieces (the 3D tileset) | `MapNNN.r3d.json` › `pieces` | **Build** bar over the 3D view (the Build button in the toolbar); drawn as a plan on the flat map too | `validate-map.cjs` |
 | Buildings, built or described | `3d/Structures/*.json` (project-wide), placed as `MapNNN.r3d.json` › `structures` | Database › Structures › Build (the plot in the 3D view with the Build bar), Build bar › Blueprint or Use on the map stamps one | `build-structure.cjs --check`, and the page's own walk |
 | Materials | `img/materials/*.png` (tileable) | swatches in the Build bar's specs panel | — |
-| Water | `MapNNN.r3d.json` › `water` (a hollow's box, its `level`, a `mask` of the wet cells) | **3D-T** › Pour | `validate-map.cjs` |
-| Placed models | `MapNNN.r3d.json` › `props` | **3D-M** tab | — |
+| Water | `MapNNN.r3d.json` › `water` (a hollow's box, its `level`, a `mask` of the wet cells) | Build bar › Terrain › Pour | `validate-map.cjs` |
+| Placed models | `MapNNN.r3d.json` › `props` | Build bar › Models (Select there, or Build › Select, picks a placed one up) | — |
 | Physics (gravity, jump, fall damage, swimming) | `System.json` › `reactorPhysics`; a map's own in `MapNNN.r3d.json` › `physics` | Database › Controls › Physics (3D maps); Map Properties › Physics | — |
 | Keys and gamepad buttons | `System.json` › `reactorControls` (absent while stock) | Database › Controls | — |
 | Lights | `MapNNN.r3d.json` › `lights`, `lighting` | Lighting tool | — |

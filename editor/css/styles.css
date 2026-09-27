@@ -3842,6 +3842,10 @@
         .rr-build-slot[aria-pressed="true"] { border-color: var(--color-accent); background: color-mix(in srgb, var(--color-accent) 18%, transparent); color: var(--color-text-strong); }
         .rr-build-slot-label { white-space: nowrap; max-width: 58px; overflow: hidden; text-overflow: ellipsis; }
         .rr-build-slot-key { position: absolute; top: 2px; right: 5px; font-size: 9px; color: var(--color-text-muted); }
+        .rr-build-slot-thumb { width: 26px; height: 26px; object-fit: contain; border-radius: 3px; }
+        /* The prop panel inside the side panel: it scrolls with the panel, not in its own box. */
+        .rr-build-models-body { padding: 0; }
+        .rr-build-models-body .mp-panel { height: auto; flex: 1 1 auto; background: transparent; padding: 8px; }
         /* Build | Terrain: which group the slots are, at the bar's left end. */
         .rr-build-groups { display: flex; flex-direction: column; gap: 3px; margin-right: 6px; padding-right: 8px; border-right: 1px solid var(--color-border); }
         .rr-build-group { display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border: 1px solid var(--color-border); border-radius: 4px; background: transparent; color: var(--color-text-muted); font-size: 11px; cursor: pointer; white-space: nowrap; }

@@ -92,7 +92,7 @@ test('runtime hooks lift props and read their free position after the events are
 
 test('the editor has a props tab, a manager, and 3D placement with pose rings', () => {
     const palette = read('editor/src/TilesetPaletteViewer.js');
-    assert.match(palette, /createLayerTab\('M', TilesetPaletteViewer\.tabIcon\('model3d'\), '3D-M'\)/);
+    assert.doesNotMatch(palette, /createLayerTab\('M'/, 'the Build bar\'s Models group replaced the 3D-M tab');
     assert.match(palette, /id="model-props-ui-container"/);
     assert.match(palette, /this\.onModelPropsTabSelected\?\.\(\);/);
     const main = read('editor/src/main.js');

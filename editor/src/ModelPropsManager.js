@@ -19,6 +19,8 @@ class ModelPropsManager {
         this.active = false;            // the M tab is up
         this.selectedId = null;
         this.model = null;              // the list entry a new prop is placed from
+        this.tool = 'place';            // what a click on the map does: 'select', 'place' or 'erase'
+        this.recent = [];               // models chosen this session, newest first (the Build bar's slots)
         this.fields = { size: 2, scale: 1, direction: 2, z: 0, passable: false, yaw: 0, pitch: 0, roll: 0, animations: [], repeat: false, effects: [] };
         this._undo = [];
         this._redo = [];
@@ -49,6 +51,20 @@ class ModelPropsManager {
     props() {
         const elevation = this.elevation();
         return elevation && this.currentMap ? elevation.props(this.currentMap) : [];
+    }
+
+    /** Whether a click on bare ground puts a model down. */
+    placing() {
+        return !!this.model && this.tool === 'place';
+    }
+
+    /** The models the Build bar offers: chosen this session, then the ones on this map. */
+    libraryModels(limit = 8) {
+        const out = [];
+        const add = entry => { if (entry && entry.name && out.length < limit && !out.some(m => m.name === entry.name)) out.push({ name: entry.name, ext: entry.ext, file: entry.file, texture: entry.texture || '' }); };
+        this.recent.forEach(add);
+        this.props().forEach(add);
+        return out;
     }
 
     prop(id) {
@@ -225,6 +241,7 @@ class ModelPropsManager {
     _changed(ids = []) {
         this.render();
         this._syncPanel();
+        window.reactor?.buildHotbar?.sync?.();
         const map3d = this.mapEditor3D();
         if (map3d?.isEnabled?.()) map3d.refreshProps?.(ids);
         this.tilemapManager?.refreshPassage?.();
@@ -354,6 +371,7 @@ class ModelPropsManager {
         }
         this.render();
         this._syncPanel();
+        window.reactor?.buildHotbar?.sync?.();
         if (!options.fromThree) this.mapEditor3D()?.selectProp?.(this.selectedId);
     }
 
@@ -426,6 +444,7 @@ class ModelPropsManager {
         const pos = event.data.getLocalPosition(container);
         const tw = this.tilemapManager.TILE_WIDTH, th = this.tilemapManager.TILE_HEIGHT;
         const hit = this.propAtPoint(pos.x, pos.y);
+        if (hit && this.tool === 'erase') { this.remove(hit.id); return; }
         if (hit) {
             this.select(hit.id);
             this.pushUndo();
@@ -435,7 +454,7 @@ class ModelPropsManager {
         }
         const tileX = Math.floor(pos.x / tw), tileY = Math.floor(pos.y / th);
         if (tileX < 0 || tileY < 0 || tileX >= this.currentMap.width || tileY >= this.currentMap.height) return;
-        if (!this.model) {
+        if (!this.placing()) {
             this.select(null);
             return;
         }
@@ -453,7 +472,7 @@ class ModelPropsManager {
             const pos = event.data.getLocalPosition(container);
             const tw = this.tilemapManager.TILE_WIDTH, th = this.tilemapManager.TILE_HEIGHT;
             const gx = Math.floor(pos.x / tw), gy = Math.floor(pos.y / th);
-            if (this.model && !this.propAtPoint(pos.x, pos.y) && gx >= 0 && gy >= 0) this._showGhost(gx, gy);
+            if (this.placing() && !this.propAtPoint(pos.x, pos.y) && gx >= 0 && gy >= 0) this._showGhost(gx, gy);
             else this._hideGhost();
             return;
         }
@@ -838,6 +857,10 @@ class ModelPropsManager {
         // with none, since its names are different.
         const same = this.model && model && this.model.name === model.name && this.model.file === model.file;
         this.model = model;
+        if (model && model.name) {
+            this.tool = 'place';
+            this.recent = [model].concat(this.recent.filter(entry => entry.name !== model.name)).slice(0, 8);
+        }
         // A new model means a new placement, not a swap of the selected one.
         this.selectedId = null;
         if (!same) {

@@ -357,11 +357,12 @@ at the default 45-degree view, Up advances east/north together, and Up+Right
 advances east. WASD follows the same mapping. Fixed and top-down controls keep
 their existing behavior.
 
-The 3D-M palette inspector groups model selection, Placement, Transform and
-Playback into compact themed cards. The 64-pixel model preview and model selector
-stay visible above the settings while the settings scroll. Placement, Transform
-and Playback open one at a time to fit the limited palette height; the action
-buttons stay at the bottom. Animations and Effects use searchable dropdowns with multiple checkboxes; hidden
+Models are placed from the Build bar's Models group: Select, Remove (the
+hammer), the Library (the model picker), then the models chosen this session
+and those already on the map as picture slots. Build › Select on a placed model
+turns the bar to Models with it picked up. The side panel holds the prop's
+cards (model selection, Placement, Transform, Playback), Transform open first;
+they open one at a time and the action buttons stay at the bottom. Animations and Effects use searchable dropdowns with multiple checkboxes; hidden
 search results retain their selection. Animations preserve the model's declared
 order and effects can run together. Escape, outside clicks and leaving the tab
 close the dropdown. Transform changes remain synchronized with the placement
@@ -369,9 +370,9 @@ fields so later playback edits do not restore old size or position values.
 Rigging spheres use half their previous radius, with a 10-pixel selection radius.
 
 Model-prop input is rebound when map canvases change. The selected palette tool
-is restored after the map and event managers bind the new map; Events and 3D-M
-keep separate pointer ownership. Returning to a regular tileset restores painting.
-Global Delete/Backspace routing gives the active Lights or 3D-M tool priority over
+is restored after the map and event managers bind the new map; Events and the
+models tool keep separate pointer ownership. Returning to a regular tileset restores painting.
+Global Delete/Backspace routing gives the active Lights or models tool priority over
 the map tree, including repeated presses after deletion. Form fields and modal
 editors keep their own keys. Model and light deletion use their existing undo histories.
 The Lights property groups (Light, Position, Rotation, Animation, Grouping) are

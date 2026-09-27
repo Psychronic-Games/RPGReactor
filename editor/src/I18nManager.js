@@ -12548,6 +12548,24 @@ Object.assign(RR_I18N_STRINGS["id"], {"build.group.build": "Bangun", "build.grou
 Object.assign(RR_I18N_STRINGS["vi"], {"build.group.build": "Xây dựng", "build.group.terrain": "Địa hình", "terrain.drain": "Rút nước", "terrain.lookShort": "Vẻ ngoài", "terrain.hint.brush": "Kéo trên mặt đất.", "terrain.hint.pour": "Nhấp vào chỗ trũng: nước dâng đến mép.", "terrain.hint.drain": "Nhấp vào nước để xóa."});
 Object.assign(RR_I18N_STRINGS["th"], {"build.group.build": "สร้าง", "build.group.terrain": "ภูมิประเทศ", "terrain.drain": "ระบายน้ำ", "terrain.lookShort": "ลักษณะ", "terrain.hint.brush": "ลากไปบนพื้น", "terrain.hint.pour": "คลิกที่แอ่ง: น้ำจะขึ้นถึงขอบ", "terrain.hint.drain": "คลิกที่น้ำเพื่อเอาออก"});
 Object.assign(RR_I18N_STRINGS["tr"], {"build.group.build": "İnşa", "build.group.terrain": "Arazi", "terrain.drain": "Boşalt", "terrain.lookShort": "Görünüm", "terrain.hint.brush": "Zeminin üzerinde sürükleyin.", "terrain.hint.pour": "Bir çukura tıklayın: su kenarına kadar yükselir.", "terrain.hint.drain": "Kaldırmak için suya tıklayın."});
+Object.assign(RR_I18N_STRINGS["en"], {"build.group.models": "Models", "build.library": "Library", "build.modelKeys": "1–0 pick · click to place · drag moves · Delete removes · Ctrl+Z undo"});
+Object.assign(RR_I18N_STRINGS["ja"], {"build.group.models": "モデル", "build.library": "ライブラリ", "build.modelKeys": "1〜0で選択 · クリックで置く · ドラッグで移動 · Deleteで削除 · Ctrl+Zで元に戻す"});
+Object.assign(RR_I18N_STRINGS["es"], {"build.group.models": "Modelos", "build.library": "Biblioteca", "build.modelKeys": "1–0 elige · clic coloca · arrastrar mueve · Supr quita · Ctrl+Z deshace"});
+Object.assign(RR_I18N_STRINGS["zh-Hant"], {"build.group.models": "模型", "build.library": "模型庫", "build.modelKeys": "1–0 選取 · 點擊放置 · 拖曳移動 · Delete 移除 · Ctrl+Z 復原"});
+Object.assign(RR_I18N_STRINGS["zh-Hans"], {"build.group.models": "模型", "build.library": "模型库", "build.modelKeys": "1–0 选取 · 点击放置 · 拖动移动 · Delete 移除 · Ctrl+Z 撤销"});
+Object.assign(RR_I18N_STRINGS["ru"], {"build.group.models": "Модели", "build.library": "Библиотека", "build.modelKeys": "1–0 выбор · щелчок ставит · перетаскивание двигает · Delete удаляет · Ctrl+Z отмена"});
+Object.assign(RR_I18N_STRINGS["pt"], {"build.group.models": "Modelos", "build.library": "Biblioteca", "build.modelKeys": "1–0 escolhe · clique coloca · arrastar move · Delete remove · Ctrl+Z desfaz"});
+Object.assign(RR_I18N_STRINGS["de"], {"build.group.models": "Modelle", "build.library": "Bibliothek", "build.modelKeys": "1–0 wählen · Klick setzt · Ziehen verschiebt · Entf entfernt · Strg+Z rückgängig"});
+Object.assign(RR_I18N_STRINGS["fr"], {"build.group.models": "Modèles", "build.library": "Bibliothèque", "build.modelKeys": "1–0 choisit · clic pose · glisser déplace · Suppr retire · Ctrl+Z annule"});
+Object.assign(RR_I18N_STRINGS["el"], {"build.group.models": "Μοντέλα", "build.library": "Βιβλιοθήκη", "build.modelKeys": "1–0 επιλογή · κλικ τοποθετεί · σύρσιμο μετακινεί · Delete αφαιρεί · Ctrl+Z αναίρεση"});
+Object.assign(RR_I18N_STRINGS["ko"], {"build.group.models": "모델", "build.library": "라이브러리", "build.modelKeys": "1–0 선택 · 클릭으로 배치 · 드래그로 이동 · Delete로 제거 · Ctrl+Z 실행 취소"});
+Object.assign(RR_I18N_STRINGS["ar"], {"build.group.models": "النماذج", "build.library": "المكتبة", "build.modelKeys": "1–0 للاختيار · النقر يضع · السحب ينقل · Delete يزيل · Ctrl+Z تراجع"});
+Object.assign(RR_I18N_STRINGS["it"], {"build.group.models": "Modelli", "build.library": "Libreria", "build.modelKeys": "1–0 sceglie · clic posiziona · trascina sposta · Canc rimuove · Ctrl+Z annulla"});
+Object.assign(RR_I18N_STRINGS["pl"], {"build.group.models": "Modele", "build.library": "Biblioteka", "build.modelKeys": "1–0 wybór · klik stawia · przeciągnij przesuwa · Delete usuwa · Ctrl+Z cofa"});
+Object.assign(RR_I18N_STRINGS["id"], {"build.group.models": "Model", "build.library": "Pustaka", "build.modelKeys": "1–0 pilih · klik menaruh · seret memindah · Delete menghapus · Ctrl+Z urung"});
+Object.assign(RR_I18N_STRINGS["vi"], {"build.group.models": "Mô hình", "build.library": "Thư viện", "build.modelKeys": "1–0 chọn · nhấp để đặt · kéo để di chuyển · Delete xóa · Ctrl+Z hoàn tác"});
+Object.assign(RR_I18N_STRINGS["th"], {"build.group.models": "โมเดล", "build.library": "คลัง", "build.modelKeys": "1–0 เลือก · คลิกเพื่อวาง · ลากเพื่อย้าย · Delete ลบ · Ctrl+Z เลิกทำ"});
+Object.assign(RR_I18N_STRINGS["tr"], {"build.group.models": "Modeller", "build.library": "Kitaplık", "build.modelKeys": "1–0 seç · tıkla yerleştir · sürükle taşı · Delete kaldırır · Ctrl+Z geri al"});
 
 // 3D Models: the Surface section's switch.
 Object.assign(RR_TEXT_TRANSLATIONS.ja, {"Reflections": "反射", "Off. Switch on for chrome, gold or a glossy finish.": "オフ。クローム、金、つや仕上げにするにはオンにします。"});
