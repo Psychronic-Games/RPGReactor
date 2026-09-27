@@ -1435,10 +1435,14 @@ Reactor3D.Mirrors = {
             }
             const target = this.target(slot, level, width, height);
             const previous = renderer.getRenderTarget();
+            // A lake is left out of its own picture: its wave crests stand above the level the glass
+            // clips at, and their undersides showed in the reflection as a grid of dark blots.
+            const own = plane.object && plane.object.userData && plane.object.userData.water && plane.object.visible ? [plane.object] : [];
+            for (const object of own) object.visible = false;
             for (const object of hidden) object.visible = false;
             renderer.setRenderTarget(target);
             try { Reactor3D.withSkyAt(scene, out.position, () => renderer.render(scene, out)); }
-            finally { for (const object of hidden) object.visible = true; renderer.setRenderTarget(previous); }
+            finally { for (const object of hidden) object.visible = true; for (const object of own) object.visible = true; renderer.setRenderTarget(previous); }
             seen.push({ slot, texture: target.texture, matrix });
         }
         return seen;
