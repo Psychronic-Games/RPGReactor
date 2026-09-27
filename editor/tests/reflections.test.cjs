@@ -95,8 +95,9 @@ test('a water sheet\'s look survives both the runtime\'s and the editor\'s readi
 
 test('the capture is taken after the shadow maps, in the game and in the editor', () => {
     const core = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
-    assert.match(core, /renderShadows\(this\._renderer, null\);[\s\S]{0,700}this\._renderer\.resetState\(\);/, 'three forgets the texture units PIXI unbound before the capture and the mirrors draw');
-    assert.match(core, /\/\/ A face of the reflection capture[^\n]*\n\s*if \(Reactor3D\.Reflections && this\._camera && Reactor3D\.Reflections\.enabled\(\)\) \{\n\s*const probe = mapScene\.reflectionProbe \? mapScene\.reflectionProbe\(this\._camera\) : null;\n\s*if \(probe\) Reactor3D\.Reflections\.update\(this\._renderer, scene, probe\.position, probe\.hidden, probe\.toward, probe\.radius, probe\.reach\);/);
+    assert.match(core, /renderShadows\(this\._renderer, null\);\s*Reactor3D\.prepareReflections\(this\._renderer, mapScene, scene, this\._camera\);/, 'the capture and the mirrors after the shadow maps');
+    assert.match(core, /Reactor3D\.prepareReflections = function[\s\S]{0,900}renderer\.resetState\(\);/, 'three forgets the texture units PIXI unbound before the capture and the mirrors draw');
+    assert.match(core, /const probe = mapScene\.reflectionProbe \? mapScene\.reflectionProbe\(camera\) : null;\n\s*if \(probe\) Reactor3D\.Reflections\.update\(renderer, scene, probe\.position, probe\.hidden, probe\.toward, probe\.radius, probe\.reach\);/);
     const editor = fs.readFileSync(path.join(repoRoot, 'editor', 'src', 'MapEditor3D.js'), 'utf8');
     assert.match(editor, /Reactor3D\.Reflections\.update\(this\.renderer, scene, this\.camera\.position, this\.mapScene\.reflectionHidden\?\.\(\)\)/);
 });
@@ -139,7 +140,7 @@ test('near a mirror-bright model the capture stands inside it, with it hidden an
     const tank = new THREE.Group(); tank.add(new THREE.Mesh(new THREE.BoxGeometry(2, 2, 2), shiny)); tank.position.set(10, 1, 10);
     const hero = new THREE.Group(); hero.add(new THREE.Mesh(new THREE.BoxGeometry(1, 2, 1), Reactor3D.litMaterial(new THREE.MeshBasicMaterial()))); hero.position.set(10, 1, 13);
     const scene = new THREE.Scene(); scene.add(tank, hero); scene.updateMatrixWorld(true);
-    const fake = { _modelInstances: new Map([[1, { object: tank }], [2, { object: hero }]]), reflectionHidden: Reactor3D.MapScene.prototype.reflectionHidden };
+    const fake = { _modelInstances: new Map([[1, { object: tank }], [2, { object: hero }]]), reflectionHidden: Reactor3D.MapScene.prototype.reflectionHidden, reflectionHolders: Reactor3D.MapScene.prototype.reflectionHolders, reflectionSubject: Reactor3D.MapScene.prototype.reflectionSubject };
     const near = Reactor3D.MapScene.prototype.reflectionProbe.call(fake, { position: new THREE.Vector3(10, 4, 18) });
     assert.deepEqual([near.position.x, near.position.z], [10, 10], 'from the model\'s middle');
     assert.deepEqual(near.hidden, [tank], 'only the model itself is left out: the hero is in the mirror');
@@ -204,4 +205,21 @@ test('a capture sees no underwater wash, the ground at the feet is never cut, an
     volume.rrWaterCount.value = 0;
     const lighting = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d_lighting.js'), 'utf8');
     assert.match(lighting, /if \(abs\(rrFaceN\.y\) >= 0\.55 && vRRWorldPos\.y <= rrF\.y \+ 0\.5\) continue;/, 'ground about the character is never in the way');
+});
+
+test('the battle room reflects through the map\'s own frame step, its props and lead actor included', () => {
+    const main = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+    const battle = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_battle_room.js'), 'utf8');
+    assert.match(main, /Reactor3D\.prepareReflections\(this\._renderer, mapScene, scene, this\._camera\);/, 'the map viewport');
+    assert.match(battle, /R\.prepareReflections\?\.\(this\.renderer,this\.world,this\.scene,this\.camera\);\s*this\.renderer\.render\(this\.scene,this\.camera\);/, 'the battle room, right before its draw');
+    assert.match(battle, /this\.world\.guestModels = \(\) => this\.models\.values\(\);/);
+    const scene = Object.create(Reactor3D.MapScene.prototype);
+    const tank = { object: { position: { distanceTo: () => 3 } } }, lead = { object: { position: {} } };
+    scene._modelInstances = new Map();
+    scene.guestModels = () => [tank, lead].values();
+    scene.guestSubject = () => lead;
+    assert.deepEqual(scene.reflectionHolders(), [tank, lead]);
+    assert.equal(scene.reflectionSubject(), lead);
+    const lighting = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d_lighting.js'), 'utf8');
+    assert.match(lighting, /if \(this\._renderer && this\._renderer !== renderer\) \{ this\._ready = false;/, 'a new renderer starts its capture over');
 });

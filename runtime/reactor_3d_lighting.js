@@ -1136,6 +1136,8 @@ Reactor3D.Reflections = {
         }
         cube.position.set(position.x, position.y, position.z);
         cube.updateMatrixWorld(true);
+        // Another renderer (the battle room after the map): its copy of the cube starts empty.
+        if (this._renderer && this._renderer !== renderer) { this._ready = false; this._tick = 0; this._face = 0; }
         this._tick++;
         let face;
         if (toward && this._ready && this._tick % 2 === 0) {

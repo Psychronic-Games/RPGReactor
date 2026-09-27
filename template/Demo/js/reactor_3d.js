@@ -1341,6 +1341,32 @@ Reactor3D.Viewport.prototype.render = function(slot) {
 };
 
 /**
+ * A frame's reflections, before its draw: a face of the reflection capture
+ * (from inside the nearest mirror-bright model, else the camera) and the
+ * planar mirrors near the camera. The map's viewport and the battle room both
+ * call this, so a model shines the same in either. Once a frame, after the
+ * world matrices are current.
+ */
+Reactor3D.prepareReflections = function(renderer, mapScene, scene, camera) {
+    if (!renderer || !mapScene || !scene || !camera) return;
+    const reflections = Reactor3D.Reflections && Reactor3D.Reflections.enabled();
+    // The capture and the mirrors draw lit materials before the frame's own draw, and PIXI
+    // (between passes) unbound every texture unit behind three's back (`Shadows.unbindFrom`):
+    // three must forget what it thinks is bound, or the shadow samplers meet empty units
+    // ("mismatch between texture format and sampler type") and those draws are dropped.
+    if (reflections || (Reactor3D.Mirrors && Reactor3D.Mirrors.active !== undefined)) renderer.resetState();
+    if (reflections) {
+        const probe = mapScene.reflectionProbe ? mapScene.reflectionProbe(camera) : null;
+        if (probe) Reactor3D.Reflections.update(renderer, scene, probe.position, probe.hidden, probe.toward, probe.radius, probe.reach);
+    }
+    // Mirror finishes near the camera: the sharp planar pictures, the party in them.
+    if (Reactor3D.Mirrors) {
+        const mirrors = mapScene.mirrorCandidates ? mapScene.mirrorCandidates(camera) : [];
+        Reactor3D.Mirrors.update(renderer, scene, camera, mirrors, null, mirrors.length && mapScene.mirrorSubject ? mapScene.mirrorSubject() : null);
+    }
+};
+
+/**
  * Draw one pass on its own, over a cleared canvas.
  *
  * The two passes sandwich the character sprites: the ground goes down, PIXI
@@ -1364,21 +1390,7 @@ Reactor3D.Viewport.prototype.renderPass = function(mapScene, which, slot) {
             scene.updateMatrixWorld();
             // The shadow maps, while every group is still visible.
             if (mapScene.renderShadows) mapScene.renderShadows(this._renderer, null);
-            // The capture and the mirrors draw lit materials before the pass's own draw, and PIXI
-            // (between passes) unbound every texture unit behind three's back (`Shadows.unbindFrom`):
-            // three must forget what it thinks is bound, or the shadow samplers meet empty units
-            // ("mismatch between texture format and sampler type") and those draws are dropped.
-            if ((Reactor3D.Reflections && Reactor3D.Reflections.enabled()) || (Reactor3D.Mirrors && Reactor3D.Mirrors.active !== undefined)) this._renderer.resetState();
-            // A face of the reflection capture: from inside the nearest mirror-bright model, else the camera.
-            if (Reactor3D.Reflections && this._camera && Reactor3D.Reflections.enabled()) {
-                const probe = mapScene.reflectionProbe ? mapScene.reflectionProbe(this._camera) : null;
-                if (probe) Reactor3D.Reflections.update(this._renderer, scene, probe.position, probe.hidden, probe.toward, probe.radius, probe.reach);
-            }
-            // Mirror finishes near the camera: the sharp planar pictures, the party in them.
-            if (Reactor3D.Mirrors && this._camera) {
-                const mirrors = mapScene.mirrorCandidates ? mapScene.mirrorCandidates(this._camera) : [];
-                Reactor3D.Mirrors.update(this._renderer, scene, this._camera, mirrors, null, mirrors.length && mapScene.mirrorSubject ? mapScene.mirrorSubject() : null);
-            }
+            Reactor3D.prepareReflections(this._renderer, mapScene, scene, this._camera);
         }
     }
     mapScene.setPass(which);
@@ -6893,11 +6905,12 @@ Reactor3D.MapScene.prototype.syncVolumeLights = function(declared, focus) {
 Reactor3D.MIRROR_REACH = 18;
 Reactor3D.MapScene.prototype.reflectionProbe = function(camera) {
     if (!camera) return null;
-    const frame = typeof Graphics !== "undefined" ? Graphics.frameCount : 0;
+    // Outside a game (the editor, a battle preview) the calls themselves keep time.
+    const frame = typeof Graphics !== "undefined" ? Graphics.frameCount : (this._reflectTick = (this._reflectTick || 0) + 1);
     const box = this._probeBox || (this._probeBox = new THREE.Box3());
     if (!this._probeChoice || frame - this._probeChoice.frame >= 15 || frame < this._probeChoice.frame) {
         let best = null;
-        for (const holder of this._modelInstances ? this._modelInstances.values() : []) {
+        for (const holder of this.reflectionHolders()) {
             const object = holder && holder.object;
             if (!object || !object.visible) continue;
             const reflect = Reactor3D.mirrorOf(object);
@@ -6916,10 +6929,8 @@ Reactor3D.MapScene.prototype.reflectionProbe = function(camera) {
         const position = best.object.position.clone().add(best.offset);
         // The mirror's world is taken to lie as far off as the player stands (the camera's focus
         // otherwise): the party then shows in it where a mirror would put them.
-        let radius = 0;
-        for (const holder of this._modelInstances.values()) {
-            if (holder && holder.object && typeof $gamePlayer !== "undefined" && holder.character === $gamePlayer) { radius = holder.object.position.distanceTo(position); break; }
-        }
+        const subject = this.reflectionSubject();
+        let radius = subject ? subject.object.position.distanceTo(position) : 0;
         if (!(radius > 0)) radius = camera.position.distanceTo(position) * 0.5;
         return { position, hidden: [best.object], toward: camera.position, radius: Math.max(1.5, Math.min(40, radius)), reach: best.reach };
     }
@@ -6928,22 +6939,42 @@ Reactor3D.MapScene.prototype.reflectionProbe = function(camera) {
 
 /** The points a mirror tries to show: the player's feet, chest and head. */
 Reactor3D.MapScene.prototype.mirrorSubject = function() {
-    for (const holder of this._modelInstances ? this._modelInstances.values() : []) {
-        if (!holder || !holder.object || typeof $gamePlayer === "undefined" || holder.character !== $gamePlayer) continue;
-        const box = new THREE.Box3().setFromObject(holder.object);
-        if (box.isEmpty()) return null;
-        const mid = box.getCenter(new THREE.Vector3());
-        return [new THREE.Vector3(mid.x, box.min.y + 0.1, mid.z), mid, new THREE.Vector3(mid.x, box.max.y - 0.15, mid.z)];
+    const holder = this.reflectionSubject();
+    if (!holder) return null;
+    const box = new THREE.Box3().setFromObject(holder.object);
+    if (box.isEmpty()) return null;
+    const mid = box.getCenter(new THREE.Vector3());
+    return [new THREE.Vector3(mid.x, box.min.y + 0.1, mid.z), mid, new THREE.Vector3(mid.x, box.max.y - 0.15, mid.z)];
+};
+
+/**
+ * The models reflections look at: the map's own, then any a host keeps
+ * outside it (`guestModels`, the battle room's props and battlers).
+ */
+Reactor3D.MapScene.prototype.reflectionHolders = function() {
+    const own = this._modelInstances ? [...this._modelInstances.values()] : [];
+    const guests = typeof this.guestModels === "function" ? this.guestModels() : null;
+    return guests ? own.concat([...guests]) : own;
+};
+
+/** Who a mirror shows first: the player's model, or the host's pick (`guestSubject`, the battle's lead actor). */
+Reactor3D.MapScene.prototype.reflectionSubject = function() {
+    if (typeof this.guestSubject === "function") {
+        const holder = this.guestSubject();
+        if (holder && holder.object) return holder;
     }
+    if (typeof $gamePlayer === "undefined" || !this._modelInstances) return null;
+    for (const holder of this._modelInstances.values()) if (holder && holder.object && holder.character === $gamePlayer) return holder;
     return null;
 };
 
 /** The mirror-finish models near the camera, nearest first (at most two), for `Reactor3D.Mirrors`. */
 Reactor3D.MapScene.prototype.mirrorCandidates = function(camera) {
-    const frame = typeof Graphics !== "undefined" ? Graphics.frameCount : 0;
+    // Outside a game (the editor, a battle preview) the calls themselves keep time.
+    const frame = typeof Graphics !== "undefined" ? Graphics.frameCount : (this._reflectTick = (this._reflectTick || 0) + 1);
     if (!this._mirrorList || frame - this._mirrorList.frame >= 15 || frame < this._mirrorList.frame) {
         const list = [];
-        for (const holder of this._modelInstances ? this._modelInstances.values() : []) {
+        for (const holder of this.reflectionHolders()) {
             const object = holder && holder.object;
             if (object && Reactor3D.mirrorOf(object) >= 0.5 && Reactor3D.isMirrorFinish(object)) list.push(object);
         }
@@ -7002,7 +7033,7 @@ Reactor3D.mirrorOf = function(object) {
 
 Reactor3D.MapScene.prototype.reflectionHidden = function() {
     const out = [];
-    for (const holder of this._modelInstances ? this._modelInstances.values() : []) if (holder && holder.object) out.push(holder.object);
+    for (const holder of this.reflectionHolders()) if (holder && holder.object) out.push(holder.object);
     return out;
 };
 

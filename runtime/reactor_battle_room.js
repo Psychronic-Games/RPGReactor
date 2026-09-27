@@ -24,6 +24,9 @@
                     tileSize: this.assets.tileSize || 48, loadParallax: name => parallaxes.get(name) });
             } finally { keys.forEach((key, i) => R[key] = saved[i]); }
             this.world.setPass('all'); this.scene = this.world.scene();
+            // Reflections see the battle's props and battlers, the lead actor first in a mirror.
+            this.world.guestModels = () => this.models.values();
+            this.world.guestSubject = () => this.models.get('actor:0') || this.billboards.get('actor:0') || null;
             this.scene.background = new T.Color(0x171a21);
             this.camera = this.settings.projection === '2d' ? new T.OrthographicCamera(-12,12,7,-7,.1,2000) : R.createCamera({ fov: 40 });
             this.renderer = new T.WebGLRenderer({ antialias: true, alpha: false, preserveDrawingBuffer: true });
@@ -1091,6 +1094,7 @@
             R.packLightUniforms(lights,{intensity:a.ambient??1,colour:R.parseColour(a.ambientColour??'#ffffff')},this.uniforms);
             this.updateEffects();
             for(const update of this.sequenceVisualUpdates||[])update();
+            R.prepareReflections?.(this.renderer,this.world,this.scene,this.camera);
             this.renderer.render(this.scene,this.camera);
         }
         /** A rule's timed effects (a muzzle flash at the cannon, a sound) fire once each as the action clock passes them. */
