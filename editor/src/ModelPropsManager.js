@@ -329,8 +329,10 @@ class ModelPropsManager {
             size: this.fields.size, scale: this.fields.scale, passable: this.fields.passable,
             animations: this.fields.animations.slice(), repeat: this.fields.repeat, effects: this.fields.effects.slice()
         });
+        // What was put down is not selected: the fields stay the next placement's,
+        // so changing them does not reach back into the one just placed.
         if (id) {
-            this.selectedId = id;
+            this.selectedId = null;
             this._changed([id]);
         }
         return id;
@@ -642,7 +644,11 @@ class ModelPropsManager {
             };
             if (this.selectedId) this.update(this.selectedId, this.fields);
         };
-        for (const id of ['model-props-size', 'model-props-z', 'model-props-speed']) byId(id)?.addEventListener('change', readFields);
+        for (const id of ['model-props-size', 'model-props-z', 'model-props-speed']) {
+            byId(id)?.addEventListener('change', readFields);
+            // Shown as typed: the placement ghost and the selected prop follow the number.
+            byId(id)?.addEventListener('input', () => { const v = Number(byId(id).value); if (byId(id).value !== '' && Number.isFinite(v) && v > 0) readFields(); });
+        }
         byId('model-props-direction')?.addEventListener('change', readFields);
         byId('model-props-passable')?.addEventListener('change', readFields);
         byId('model-props-animation')?.addEventListener('change', readFields);
@@ -904,9 +910,11 @@ class ModelPropsManager {
                 : '';
             status.title = this._t('props.hintPlace');
         }
-        if (byId('model-props-size')) byId('model-props-size').value = Math.round(this.fields.size * (this.fields.scale || 1) * 100) / 100;
-        if (byId('model-props-direction')) byId('model-props-direction').value = String(this.fields.direction);
-        if (byId('model-props-z')) byId('model-props-z').value = this.fields.z;
+        // A field being typed in keeps what is typed ("2." is not rewritten to "2").
+        const put = (id, value) => { const el = byId(id); if (el && el !== document.activeElement) el.value = value; };
+        put('model-props-size', Math.round(this.fields.size * (this.fields.scale || 1) * 100) / 100);
+        put('model-props-direction', String(this.fields.direction));
+        put('model-props-z', this.fields.z);
         if (byId('model-props-passable')) byId('model-props-passable').checked = !!this.fields.passable;
         if (byId('model-props-remove')) byId('model-props-remove').disabled = !shown;
         this._syncCard();
@@ -932,48 +940,48 @@ class ModelPropsManager {
         };
     }
 
-    _cardRows() {
+    /**
+     * The card's groups, all shown at once: where it stands, how it is turned,
+     * how big it is. Each row wears its handle's colour in the 3D view: red X,
+     * green up, blue Z for the arrows (map x, lift, map y), and the rings
+     * alike (pitch turns about red, yaw about green, roll about blue).
+     */
+    _cardGroups() {
         const v = this._cardValues();
-        const tab = this._cardTab || 'offset';
-        if (tab === 'rotate') {
-            return [['yaw', this._tx('Yaw'), -180, 180, 1, v.yaw, '°'], ['pitch', this._tx('Pitch'), -180, 180, 1, v.pitch, '°'], ['roll', this._tx('Roll'), -180, 180, 1, v.roll, '°']];
-        }
-        if (tab === 'scale') {
-            const proportional = this._cardProportional !== false && v.sx === 1 && v.sy === 1 && v.sz === 1 ? true : this._cardProportional === true;
-            const rows = [['size', this._t('props.size'), 0.1, 20, 0.05, v.size, '']];
-            if (!proportional) rows.push(['sx', 'X', 0.1, 4, 0.01, v.sx, '×'], ['sy', 'Y', 0.1, 4, 0.01, v.sy, '×'], ['sz', 'Z', 0.1, 4, 0.01, v.sz, '×']);
-            return rows;
-        }
         const x = v.x == null ? 0 : v.x, y = v.y == null ? 0 : v.y;
-        return [['x', 'X', Math.max(0, x - 4), x + 4, 0.05, x, ''], ['y', 'Y', Math.max(0, y - 4), y + 4, 0.05, y, ''], ['z', 'Z', 0, 32, 0.05, v.z, '']];
+        const proportional = this._cardProportional !== false && v.sx === 1 && v.sy === 1 && v.sz === 1 ? true : this._cardProportional === true;
+        const size = [['size', this._t('props.size'), 0.1, Math.max(20, Math.ceil(v.size * 2)), 0.05, v.size, '', 'size']];
+        if (!proportional) size.push(['sx', 'X', 0.1, 8, 0.01, v.sx, '×', 'x'], ['sy', 'Y', 0.1, 8, 0.01, v.sy, '×', 'y'], ['sz', 'Z', 0.1, 8, 0.01, v.sz, '×', 'z']);
+        return [
+            ['offset', this._tx('Coordinates'), [['x', 'X', Math.max(0, x - 4), x + 4, 0.05, x, '', 'x'], ['z', 'Y', 0, Math.max(8, Math.ceil(v.z) + 4), 0.05, v.z, '', 'y'], ['y', 'Z', Math.max(0, y - 4), y + 4, 0.05, y, '', 'z']]],
+            ['rotate', this._tx('Rotate'), [['pitch', this._tx('Pitch'), -180, 180, 1, v.pitch, '°', 'x'], ['yaw', this._tx('Yaw'), -180, 180, 1, v.yaw, '°', 'y'], ['roll', this._tx('Roll'), -180, 180, 1, v.roll, '°', 'z']]],
+            ['scale', this._tx('Scale'), size]
+        ];
     }
 
-    /** Build the card for the current tab and selection; sliders edit live. */
+    /** Build the card for the selection; sliders edit live. */
     _renderCard() {
         const panel = this.panel;
         const tabs = panel && panel.querySelector('#model-props-card-tabs');
         const body = panel && panel.querySelector('#model-props-card-body');
         if (!tabs || !body) return;
         const escape = text => String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
-        const tab = this._cardTab || 'offset';
-        tabs.innerHTML = [['offset', this._tx('Coordinates')], ['rotate', this._tx('Rotate')], ['scale', this._tx('Scale')]]
-            .map(([id, label]) => `<button type="button" class="map-props-btn${id === tab ? ' primary' : ''}" data-card-tab="${id}" >${escape(label)}</button>`).join('');
-        const v = this._cardValues();
+        tabs.innerHTML = '';
+        tabs.style.display = 'none';
         const hasProp = !!this.prop(this.selectedId);
-        const rows = this._cardRows();
-        const proportional = !rows.some(r => r[0] === 'sx');
-        body.innerHTML = rows.map(([key, label, min, max, step, value, unit]) => `
-            <div class="mp-transform-row" style="${(key === 'x' || key === 'y') && !hasProp ? ' opacity: 0.4;' : ''}">
-                <span style="color: var(--color-text);">${escape(label)}</span>
-                <input type="range" class="mp-card-slider" data-key="${key}" min="${min}" max="${max}" step="${step}" value="${value}" style="width: 100%; min-width: 0;"${(key === 'x' || key === 'y') && !hasProp ? ' disabled' : ''}>
-                <input type="number" class="mp-card-num" data-key="${key}" data-no-stepper min="${key === 'x' || key === 'y' ? 0 : min}" max="${key === 'x' || key === 'y' ? 9999 : max}" step="${step}" value="${value}" title="${escape(unit)}"
-                    ${(key === 'x' || key === 'y') && !hasProp ? ' disabled' : ''}>
-            </div>`).join('')
-            + (tab === 'scale' ? `<label style="display: flex; align-items: center; gap: 6px; margin-top: 4px; color: var(--color-text); cursor: pointer;"><input type="checkbox" class="mp-card-proportional"${proportional ? ' checked' : ''}> ${escape(this._t('r3dcard.proportional'))}</label>` : '');
-        tabs.querySelectorAll('[data-card-tab]').forEach(button => button.addEventListener('click', () => {
-            this._cardTab = button.dataset.cardTab;
-            this._renderCard();
-        }));
+        const groups = this._cardGroups();
+        const proportional = !groups[2][2].some(r => r[0] === 'sx');
+        const row = ([key, label, min, max, step, value, unit, axis]) => {
+            const off = (key === 'x' || key === 'y') && !hasProp;
+            return `
+            <div class="mp-transform-row mp-axis-${axis}" style="${off ? 'opacity: 0.4;' : ''}">
+                <span class="mp-axis-label">${escape(label)}</span>
+                <input type="range" class="mp-card-slider" data-key="${key}" min="${min}" max="${max}" step="${step}" value="${value}" style="width: 100%; min-width: 0;"${off ? ' disabled' : ''}>
+                <input type="number" class="mp-card-num" data-key="${key}" data-no-stepper min="${key === 'x' || key === 'y' ? 0 : key === 'size' || key[0] === 's' ? 0.1 : min}" max="${key === 'x' || key === 'y' ? 9999 : key === 'size' ? 64 : max}" step="${step}" value="${value}" title="${escape(unit)}"${off ? ' disabled' : ''}>
+            </div>`;
+        };
+        body.innerHTML = groups.map(([id, title, rows]) => `<div class="mp-card-group" data-card-group="${id}"><div class="mp-card-group-title">${escape(title)}</div>${rows.map(row).join('')}`
+            + (id === 'scale' ? `<label class="mp-card-proportional-row"><input type="checkbox" class="mp-card-proportional"${proportional ? ' checked' : ''}> ${escape(this._t('r3dcard.proportional'))}</label>` : '') + '</div>').join('');
         const apply = (key, raw, live) => {
             const value = Number(raw);
             if (!Number.isFinite(value)) return;
@@ -987,19 +995,23 @@ class ModelPropsManager {
             });
             slider.addEventListener('change', () => { this._cardUndoPushed = false; });
         });
-        body.querySelectorAll('.mp-card-num').forEach(num => num.addEventListener('change', () => {
-            const slider = body.querySelector(`.mp-card-slider[data-key="${num.dataset.key}"]`);
-            if (slider) slider.value = num.value;
-            apply(num.dataset.key, num.value, false);
-            this._cardUndoPushed = false;
-        }));
+        body.querySelectorAll('.mp-card-num').forEach(num => {
+            // Typed values show as they are typed; the undo step closes when the field is left.
+            num.addEventListener('input', () => {
+                if (num.value === '' || !Number.isFinite(Number(num.value))) return;
+                const slider = body.querySelector(`.mp-card-slider[data-key="${num.dataset.key}"]`);
+                if (slider) { if (Number(num.value) > Number(slider.max)) slider.max = num.value; slider.value = num.value; }
+                apply(num.dataset.key, num.value, true);
+            });
+            num.addEventListener('change', () => { this._cardUndoPushed = false; this._cardFor = null; this._syncCard(); });
+        });
         const box = body.querySelector('.mp-card-proportional');
         if (box) box.addEventListener('change', () => {
             this._cardProportional = box.checked;
             if (box.checked) this._cardApply('stretch', [1, 1, 1], false);
             this._renderCard();
         });
-        this._cardFor = `${this.selectedId || ''}|${tab}|${this.model ? this.model.name : ''}`;
+        this._cardFor = `${this.selectedId || ''}|${this.model ? this.model.name : ''}`;
     }
 
     /** One card value changed: patch the selected prop (undo once per drag), or the next placement's fields. */
@@ -1033,7 +1045,7 @@ class ModelPropsManager {
     _syncCard() {
         const panel = this.panel;
         if (!panel || !panel.querySelector('#model-props-card-body')) return;
-        const key = `${this.selectedId || ''}|${this._cardTab || 'offset'}|${this.model ? this.model.name : ''}`;
+        const key = `${this.selectedId || ''}|${this.model ? this.model.name : ''}`;
         // A different prop, tab or model: build the card afresh. The same
         // one, mid-drag or not: only its numbers move.
         if (this._cardFor !== key) { this._renderCard(); return; }

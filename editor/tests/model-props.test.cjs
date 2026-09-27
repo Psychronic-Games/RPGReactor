@@ -100,7 +100,7 @@ test('the editor has a props tab, a manager, and 3D placement with pose rings', 
     assert.match(main, /onModelPropsTabSelected = \(\) => \{/);
     assert.match(main, /onModelPropsTabLeft = \(\) => \{/);
     const editor3d = read('editor/src/MapEditor3D.js');
-    for (const method of ['buildProps(', 'refreshProps(ids)', 'propAt(', 'groundPointAt(', 'selectProp(', 'pickPropRing(', 'dragPropRing(', 'dragPropTo(', 'finishPropDrag()']) {
+    for (const method of ['buildProps(', 'refreshProps(ids)', 'propAt(', 'groundPointAt(', 'selectProp(', 'pickPropRing(', 'dragPropRing(', 'dragPropTo(', 'finishPropDrag(drag = null)', 'pickPropSize(', 'dragPropSize(']) {
         assert.ok(editor3d.includes('    ' + method), method);
     }
     assert.match(editor3d, /this\.buildProps\(mapData, request\);/);
@@ -196,7 +196,7 @@ test('the props panel has one Size, the longest side in tiles; an old scale fold
     const source = fs.readFileSync(path.join(editorRoot, 'src', 'ModelPropsManager.js'), 'utf8');
     assert.doesNotMatch(source, /stepper\('model-props-scale'/, 'no Scale stepper');
     assert.match(source, /size: Math\.max\(0\.1, number\('model-props-size', 2\)\),\s*scale: 1,/, 'an edit writes size with scale 1');
-    assert.match(source, /byId\('model-props-size'\)\.value = Math\.round\(this\.fields\.size \* \(this\.fields\.scale \|\| 1\) \* 100\) \/ 100;/, 'shown as size times scale');
+    assert.match(source, /put\('model-props-size', Math\.round\(this\.fields\.size \* \(this\.fields\.scale \|\| 1\) \* 100\) \/ 100\);/, 'shown as size times scale');
 });
 
 test('a themed dropdown shows a value set by code, not the label it had', () => {

@@ -11,6 +11,12 @@
  * the map), so the same handles serve both.
  *
  * Built on the pose rings and axis arrows the lights and models use.
+ *
+ * Mode 'all' shows every handle at once: the arrows from the middle along
+ * +X, up and +Z, the rings around it, and the size cubes on the shape's
+ * back faces (-u, -v) and its top back corner, clear of the arrows. A size
+ * grab says which way its face points (`dir`, in the world), so the owner
+ * can hold the opposite face still while the grabbed one follows the pointer.
  */
 (function(root) {
     'use strict';
@@ -61,17 +67,22 @@
         const at = (u, y, v) => shape.corners[u * 4 + y * 2 + v];
         const near = at(0, 0, 0), far = at(1, 1, 1);
         const centre = new THREE.Vector3((near[0] + far[0]) / 2, (near[1] + far[1]) / 2, (near[2] + far[2]) / 2);
-        if (mode === 'move') root.RRAxisArrows3D.sync(g.arrows, centre, true);
-        else if (mode === 'turn') root.RRPoseRings3D.sync(g.rings, centre, -(shape.angle || 0), shape.tilt || 0, true);
-        else if (mode === 'size') {
+        const all = mode === 'all';
+        if (all || mode === 'move') root.RRAxisArrows3D.sync(g.arrows, centre, true);
+        if (all || mode === 'turn') root.RRPoseRings3D.sync(g.rings, centre, -(shape.angle || 0), shape.tilt || 0, true);
+        if (all || mode === 'size') {
             g.cubes.root.visible = true;
-            const size = Math.max(0.25, Math.min(0.8, Math.max(...shape.size) * 0.05 + 0.2));
-            const ends = { u: [at(1, 0, 0), at(1, 1, 1)], y: [at(0, 1, 0), at(1, 1, 1)], v: [at(0, 0, 1), at(1, 1, 1)] };
+            const size = Math.max(0.2, Math.min(0.6, Math.max(...shape.size) * 0.04 + 0.16));
+            const v3 = p => new THREE.Vector3(p[0], p[1], p[2]);
+            const mid = (a, b) => v3(a).add(v3(b)).multiplyScalar(0.5);
+            // Alone, the cubes sit on the front faces; with the arrows, on the back ones.
+            const faces = all
+                ? { u: [mid(at(0, 0, 0), at(0, 1, 1)), v3(at(0, 0, 0)).sub(v3(at(1, 0, 0)))], v: [mid(at(0, 0, 0), at(1, 1, 0)), v3(at(0, 0, 0)).sub(v3(at(0, 0, 1)))], y: [v3(at(0, 1, 0)), v3(at(0, 1, 0)).sub(v3(at(0, 0, 0)))] }
+                : { u: [mid(at(1, 0, 0), at(1, 1, 1)), v3(at(1, 0, 0)).sub(v3(at(0, 0, 0)))], v: [mid(at(0, 0, 1), at(1, 1, 1)), v3(at(0, 0, 1)).sub(v3(at(0, 0, 0)))], y: [mid(at(0, 1, 0), at(1, 1, 1)), v3(at(0, 1, 0)).sub(v3(at(0, 0, 0)))] };
             for (const axis of AXES) {
-                const [a, b] = ends[axis];
-                const face = new THREE.Vector3((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2);
-                const dir = face.clone().sub(centre).normalize();
-                g.cubes[axis].position.copy(face.add(dir.clone().multiplyScalar(size * 0.8)));
+                const [face, out] = faces[axis];
+                const dir = out.lengthSq() > 1e-9 ? out.normalize() : new THREE.Vector3(0, 1, 0);
+                g.cubes[axis].position.copy(face.add(dir.clone().multiplyScalar(size * 0.9)));
                 g.cubes[axis].scale.setScalar(size);
                 g.cubes[axis].userData.dir = dir;
             }
@@ -100,6 +111,12 @@
     function grab(g, camera, rect, clientX, clientY, mode, shape) {
         if (!g || !shape) return null;
         const { THREE } = g;
+        if (mode === 'all') {
+            // Nearest handle wins by kind: a cube, then an arrow, then a ring.
+            return grab(g, camera, rect, clientX, clientY, 'size', shape)
+                || grab(g, camera, rect, clientX, clientY, 'move', shape)
+                || grab(g, camera, rect, clientX, clientY, 'turn', shape);
+        }
         if (mode === 'move') {
             const got = root.RRAxisArrows3D.pick(THREE, g.arrows, camera, rect, clientX, clientY);
             if (!got) return null;
@@ -119,8 +136,9 @@
         const axis = hit.object.userData.axis, dir = hit.object.userData.dir.clone(), origin = hit.object.position.clone();
         const t0 = axisTravel(THREE, camera, rect, clientX, clientY, origin, dir);
         if (t0 === null) return null;
+        if (!g.cubes.root.visible) return null;
         for (const key of AXES) g.cubes[key].material.opacity = key === axis ? 1 : 0.25;
-        return { mode, axis, travel: (cx, cy) => { const t = axisTravel(THREE, camera, rect, cx, cy, origin, dir); return t === null ? 0 : t - t0; } };
+        return { mode: 'size', axis, dir: dir.clone(), travel: (cx, cy) => { const t = axisTravel(THREE, camera, rect, cx, cy, origin, dir); return t === null ? 0 : t - t0; } };
     }
 
     /** A turn grab's new angle in degrees for the pointer, snapped to five, or null off its plane. */

@@ -36,7 +36,7 @@ class PieceBuilderManager {
         this.ladderHeight = 5;
         this.selected = 0;
         this.selectedIds = [];
-        this.gizmoMode = 'move';
+        this.gizmoMode = 'all';          // every handle at once: arrows, rings and size cubes
     }
 
     // ---- A selection of many: a box dragged round them ----------------------
@@ -869,6 +869,8 @@ class PieceBuilderManager {
         this.active = false;
         this._stroke = null;
         document.removeEventListener('keydown', this._onKeyDown);
+        // Another tool holds the map: its selection lets go too (the outline and handles went with it, or looked live).
+        this.clearSelection();
         window.reactor?.mapEditor3D?.hidePieceGhost?.();
         const mapEditor = window.reactor?.mapEditor;
         if (mapEditor && this._resumeMapEditor) {

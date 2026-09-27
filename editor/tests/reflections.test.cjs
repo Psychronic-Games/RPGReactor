@@ -63,15 +63,19 @@ test('a renderer that did not draw the capture reflects the studio gradient inst
     const R = Reactor3D.Reflections;
     R.reset();
     const map = {}, preview = {};
-    R._targets = [{ texture: 'cubeA' }, { texture: 'cubeB' }];
-    R._front = 1; R._ready = true; R._renderer = map;
+    R._target = { texture: 'cube' };
+    R._ready = true; R._renderer = map;
     R.bind(map);
-    assert.equal(R.uniforms().rrEnvMap.value, 'cubeB');
+    assert.equal(R.uniforms().rrEnvMap.value, 'cube');
     assert.equal(R.uniforms().rrEnvFlip.value, 1);
+    R._capturing = true;
+    R.bind(map);
+    assert.notEqual(R.uniforms().rrEnvMap.value, 'cube', 'while a face is drawn, what shines in it reads the studio, never the cube being written');
+    R._capturing = false;
     R.bind(preview);
-    assert.notEqual(R.uniforms().rrEnvMap.value, 'cubeB', 'a preview gets the fallback');
+    assert.notEqual(R.uniforms().rrEnvMap.value, 'cube', 'a preview gets the fallback');
     assert.equal(R.uniforms().rrEnvFlip.value, -1);
-    R._targets = null; R.reset();
+    R._target = null; R.reset();
 });
 
 test('a water sheet\'s look survives both the runtime\'s and the editor\'s reading of it', () => {
@@ -91,7 +95,7 @@ test('a water sheet\'s look survives both the runtime\'s and the editor\'s readi
 
 test('the capture is taken after the shadow maps, in the game and in the editor', () => {
     const core = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
-    assert.match(core, /renderShadows\(this\._renderer, null\);\n\s*\/\/ A face of the reflection capture, from where the camera stands\.\n\s*if \(Reactor3D\.Reflections && this\._camera\) Reactor3D\.Reflections\.update\(this\._renderer, scene, this\._camera\.position, mapScene\.reflectionHidden \? mapScene\.reflectionHidden\(\) : null\);/);
+    assert.match(core, /renderShadows\(this\._renderer, null\);\n\s*\/\/ A face of the reflection capture[^\n]*\n\s*if \(Reactor3D\.Reflections && this\._camera && Reactor3D\.Reflections\.enabled\(\)\) \{\n\s*const probe = mapScene\.reflectionProbe \? mapScene\.reflectionProbe\(this\._camera\) : null;\n\s*if \(probe\) Reactor3D\.Reflections\.update\(this\._renderer, scene, probe\.position, probe\.hidden, probe\.toward, probe\.radius\);/);
     const editor = fs.readFileSync(path.join(repoRoot, 'editor', 'src', 'MapEditor3D.js'), 'utf8');
     assert.match(editor, /Reactor3D\.Reflections\.update\(this\.renderer, scene, this\.camera\.position, this\.mapScene\.reflectionHidden\?\.\(\)\)/);
 });
@@ -112,14 +116,35 @@ test('nothing reflects until its model says so; the capture leaves out the shado
     Reactor3D.Shadows._sentinel = sentinel;
     R.reset(); R.wanted = true;
     const weak = Reactor3D.isWeakGpu; Reactor3D.isWeakGpu = () => false;
-    R._targets = [{ texture: {} }, { texture: {} }];
-    R._cameras = [{ position: { set() {} }, updateMatrixWorld() {}, children: [{}, {}, {}, {}, {}, {}] }, { position: { set() {} }, updateMatrixWorld() {}, children: [{}, {}, {}, {}, {}, {}] }];
-    const renderer = { getRenderTarget: () => null, setRenderTarget() {}, autoClear: false, render: () => seen.push([sentinel.visible, hero.visible]) };
+    R._target = { texture: {} };
+    R._camera = { position: { set() {} }, updateMatrixWorld() {}, children: [0, 1, 2, 3, 4, 5] };
+    const faces = [];
+    const renderer = { getRenderTarget: () => null, setRenderTarget(target, face) { if (target) faces.push(face); }, autoClear: false, render: () => seen.push([sentinel.visible, hero.visible, R._capturing]) };
     try {
         R.update(renderer, {}, { x: 0, y: 0, z: 0 }, [hero]);
+        assert.deepEqual(seen, [[false, false, true]], 'both left out of the face, drawn as a capture');
+        assert.deepEqual([sentinel.visible, hero.visible, R._capturing], [true, true, false], 'and back afterwards');
+        // Round the cube once, then the face toward the camera (at -z) every other frame.
+        for (let i = 0; i < 9; i++) R.update(renderer, {}, { x: 0, y: 0, z: 0 }, [], { x: 0.2, y: 0.5, z: -4 });
     } finally {
-        Reactor3D.Shadows._sentinel = saved; Reactor3D.isWeakGpu = weak; R._targets = null; R._cameras = null; R.reset();
+        Reactor3D.Shadows._sentinel = saved; Reactor3D.isWeakGpu = weak; R._target = null; R._camera = null; R.reset();
     }
-    assert.deepEqual(seen, [[false, false]], 'both left out of the face');
-    assert.deepEqual([sentinel.visible, hero.visible], [true, true], 'and back afterwards');
+    assert.deepEqual(faces, [0, 1, 2, 3, 4, 5, 0, 5, 1, 5], 'the mirror face (-z, toward the camera) comes round every other frame once the cube is whole');
+});
+
+test('near a mirror-bright model the capture stands inside it, with it hidden and the party in view', () => {
+    const shiny = Reactor3D.litMaterial(new THREE.MeshBasicMaterial());
+    Reactor3D.setMaterialShine(shiny, { reflect: 1, gloss: 0.95, metal: 1, tint: '#ffffff', texture: 0 });
+    const tank = new THREE.Group(); tank.add(new THREE.Mesh(new THREE.BoxGeometry(2, 2, 2), shiny)); tank.position.set(10, 1, 10);
+    const hero = new THREE.Group(); hero.add(new THREE.Mesh(new THREE.BoxGeometry(1, 2, 1), Reactor3D.litMaterial(new THREE.MeshBasicMaterial()))); hero.position.set(10, 1, 13);
+    const scene = new THREE.Scene(); scene.add(tank, hero); scene.updateMatrixWorld(true);
+    const fake = { _modelInstances: new Map([[1, { object: tank }], [2, { object: hero }]]), reflectionHidden: Reactor3D.MapScene.prototype.reflectionHidden };
+    const near = Reactor3D.MapScene.prototype.reflectionProbe.call(fake, { position: new THREE.Vector3(10, 4, 18) });
+    assert.deepEqual([near.position.x, near.position.z], [10, 10], 'from the model\'s middle');
+    assert.deepEqual(near.hidden, [tank], 'only the model itself is left out: the hero is in the mirror');
+    assert.ok(near.toward, 'and the face toward the camera is kept fresh');
+    fake._probeChoice = null;
+    const far = Reactor3D.MapScene.prototype.reflectionProbe.call(fake, { position: new THREE.Vector3(80, 4, 80) });
+    assert.equal(far.position.x, 80, 'out of reach, from the camera');
+    assert.equal(far.hidden.length, 2, 'with the characters left out, as before');
 });

@@ -75,9 +75,9 @@ test('a selected map model drags along axis arrows, height included', () => {
     const body = map3d.slice(map3d.indexOf('dragPropAlongAxis(state'), map3d.indexOf('dragPropTo(id'));
     assert.match(body, /\{ x: Math\.max\(0, round\(state\.startX \+ travel\)\) \}/, 'X slides freely — props are not tile-bound');
     assert.match(body, /RRMapElevation\.PROP_MAX_LIFT/, 'height stops at the sidecar ceiling');
-    assert.match(map3d, /const ring = arrow \? null : this\.pickPropRing/, 'a grabbed arrow is never also a ring');
+    assert.match(map3d, /const ring = arrow \|\| sizeGrab \? null : this\.pickPropRing/, 'a grabbed arrow or size cube is never also a ring');
     const card = read('ModelPropsManager.js');
-    assert.match(card, /\[\['offset', this\._tx\('Coordinates'\)\]/, 'the card calls the place a place, not an offset');
+    assert.match(card, /\['offset', this\._tx\('Coordinates'\), \[/, 'the card calls the place a place, not an offset');
     const i18n = read('I18nManager.js');
     assert.match(i18n, /'Coordinates': '座標'/, 'and the word is translated');
 });

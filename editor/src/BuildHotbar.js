@@ -329,7 +329,12 @@ class BuildHotbar {
         // The dock's convention (Lighting, Media Surfaces): a card per group, its header on an accent strip.
         const section = (title, body) => body ? `<div class="lit-section rr-build-section"><div class="lit-section-header">${title}</div><div class="lit-section-body">${body}</div></div>` : '';
         let foot = '';
-        const num = (cls, label, value, min, max, step, key) => `<label class="rr-build-field"><span>${label}</span><input type="number" class="database-field-value ${cls}" data-key="${key}" value="${value}" min="${min}" max="${max}" step="${step}"></label>`;
+        const num = (cls, label, value, min, max, step, key, axis) => `<label class="rr-build-field${axis ? ' mp-axis-' + axis : ''}"><span${axis ? ' class="mp-axis-label"' : ''}>${label}</span><input type="number" class="database-field-value ${cls}" data-key="${key}" value="${value}" min="${min}" max="${max}" step="${step}"></label>`;
+        // A row with a slider: the slider edits live (one undo step per drag), the number when it is typed.
+        const slide = (cls, label, value, min, max, step, key, axis, span) => {
+            const lo = span ? Math.max(min, Math.floor(value - span)) : min, hi = span ? Math.min(max, Math.ceil(value + span)) : max;
+            return `<div class="mp-transform-row rr-build-slide mp-axis-${axis}"><span class="mp-axis-label">${label}</span><input type="range" class="rr-build-slider" data-for="${cls}" data-key="${key}" min="${lo}" max="${hi}" step="${step}" value="${value}" data-no-stepper><input type="number" class="database-field-value ${cls}" data-key="${key}" value="${value}" min="${min}" max="${max}" step="${step}" data-no-stepper></div>`;
+        };
         const swatches = current => `<div class="rr-build-swatches"><button type="button" class="rr-build-swatch rr-build-material" data-material="" aria-pressed="${!current}" title="${this._t('pieces.plain')}"><span class="rr-build-swatch-plain"></span></button>`
             + manager.materials().map(entry => `<button type="button" class="rr-build-swatch rr-build-material" data-material="${entry.name}" aria-pressed="${current === entry.name}" title="${entry.name}" style="background-image:url('${entry.url}');"></button>`).join('') + '</div>';
         const facing = rot => `<div class="rr-build-facing">${[[2, '↑'], [3, '→'], [0, '↓'], [1, '←']].map(([r, arrow]) => `<button type="button" class="rr-build-chip rr-build-rot" data-rot="${r}" aria-pressed="${r === rot}">${arrow}</button>`).join('')}<span class="rr-build-note">R</span></div>`;
@@ -372,12 +377,12 @@ class BuildHotbar {
             if (s.shape) {
                 const size = piece ? piece.size : manager.sizeFor(kind);
                 const labels = kind === 'wedge' ? [tt('Width'), tt('Height'), tt('Length')] : [tt('Width'), tt('Height'), tt('Depth')];
-                body += section(tt('Size'), [0, 1, 2].map(i => num('rr-build-size', labels[i], size[i], 0.25, 60, 0.25, String(i))).join(''));
+                body += section(tt('Size'), [0, 1, 2].map(i => slide('rr-build-size', labels[i], size[i], 0.25, 60, 0.05, String(i), ['x', 'y', 'z'][i], Math.max(4, size[i]))).join(''));
                 if (piece) {
                     const shapeAt = [piece.x + 0.5 + (piece.offset ? piece.offset[0] || 0 : 0), piece.y + 0.5 + (piece.offset ? piece.offset[1] || 0 : 0)];
-                    body += section(this._t('build.handles'), `<div class="rr-build-modes">${['move', 'turn', 'size'].map(m => `<button type="button" class="rr-build-chip rr-build-mode" data-mode="${m}" aria-pressed="${manager.gizmoMode === m}" title="${tt(m === 'move' ? 'Move' : m === 'turn' ? 'Turn' : 'Size')}">${this.icon(m, 18)}<span>${tt(m === 'move' ? 'Move' : m === 'turn' ? 'Turn' : 'Size')}</span></button>`).join('')}</div>`
-                        + num('rr-build-pos', 'X', shapeAt[0], 0, 999, 0.25, 'x') + num('rr-build-pos', 'Y', shapeAt[1], 0, 999, 0.25, 'y') + num('rr-build-pos', tt('Up'), piece.z, 0, 120, 0.25, 'z')
-                        + num('rr-build-turn', tt('Turn'), piece.angle || 0, 0, 359, 5, 'angle') + num('rr-build-turn', tt('Tilt'), piece.tilt || 0, 0, 359, 5, 'tilt') + num('rr-build-turn', tt('Roll'), piece.roll || 0, 0, 359, 5, 'roll'));
+                    // In the handles' colours: red X, green up, blue Z; the rings alike (tilt about red, turn about green, roll about blue).
+                    body += section(this._t('build.handles'), slide('rr-build-pos', 'X', shapeAt[0], 0, 999, 0.05, 'x', 'x', 4) + slide('rr-build-pos', tt('Up'), piece.z, 0, 120, 0.05, 'z', 'y', 6) + slide('rr-build-pos', 'Z', shapeAt[1], 0, 999, 0.05, 'y', 'z', 4)
+                        + slide('rr-build-turn', tt('Tilt'), piece.tilt || 0, 0, 359, 1, 'tilt', 'x') + slide('rr-build-turn', tt('Turn'), piece.angle || 0, 0, 359, 1, 'angle', 'y') + slide('rr-build-turn', tt('Roll'), piece.roll || 0, 0, 359, 1, 'roll', 'z'));
                 }
                 const own = (typeof DatabaseStructureEditor !== 'undefined' && DatabaseStructureEditor.SHAPE_PARAMS[kind]) || {};
                 let settings = '';
@@ -415,16 +420,43 @@ class BuildHotbar {
         panel.querySelectorAll('.rr-build-size').forEach(el => el.addEventListener('change', () => {
             const i = Number(el.dataset.key), v = Number(el.value);
             if (!Number.isFinite(v) || v <= 0) { this.renderPanel(); return; }
-            const size = (placed ? s.piece.size : manager.sizeFor(s.kind)).slice(); size[i] = Math.max(0.25, Math.min(60, Math.round(v * 4) / 4));
+            const size = (placed ? s.piece.size : manager.sizeFor(s.kind)).slice(); size[i] = Math.max(0.25, Math.min(60, Math.round(v * 20) / 20));
             edit({ size }, () => manager.setSize(s.kind, size));
         }));
         panel.querySelectorAll('.rr-build-pos').forEach(el => el.addEventListener('change', () => {
             const v = Number(el.value); if (!Number.isFinite(v) || !placed) { this.renderPanel(); return; }
             const cx = s.piece.x + 0.5 + (s.piece.offset ? s.piece.offset[0] || 0 : 0), cy = s.piece.y + 0.5 + (s.piece.offset ? s.piece.offset[1] || 0 : 0);
-            if (el.dataset.key === 'z') manager.updateSelected({ z: Math.max(0, Math.round(v * 4) / 4) }); else manager.moveSelectedPieceTo(el.dataset.key === 'x' ? v : cx, el.dataset.key === 'y' ? v : cy);
+            if (el.dataset.key === 'z') manager.updateSelected({ z: Math.max(0, Math.round(v * 20) / 20) }); else manager.moveSelectedPieceTo(el.dataset.key === 'x' ? v : cx, el.dataset.key === 'y' ? v : cy);
             this.renderPanel();
         }));
         panel.querySelectorAll('.rr-build-turn').forEach(el => el.addEventListener('change', () => { const v = ((Math.round(Number(el.value)) || 0) % 360 + 360) % 360; if (placed) manager.updateSelected({ [el.dataset.key]: v }); this.renderPanel(); }));
+        // Sliders: live while dragged, the number beside them following, one undo step on release.
+        panel.querySelectorAll('.rr-build-slider').forEach(el => {
+            const number = el.parentElement.querySelector('input[type=number]');
+            let snapshot = null;
+            el.addEventListener('pointerdown', () => { snapshot = placed ? manager._snapshot(manager.currentMap()) : null; });
+            el.addEventListener('input', () => {
+                const v = Number(el.value), key = el.dataset.key, kind = el.dataset.for;
+                number.value = el.value;
+                if (kind === 'rr-build-size') {
+                    const size = (placed ? manager.selectedPiece().size : manager.sizeFor(s.kind)).slice(); size[Number(key)] = v;
+                    if (placed) manager.updateSelected({ size }, false); else manager.setSize(s.kind, size);
+                } else if (!placed) return;
+                else if (kind === 'rr-build-turn') manager.updateSelected({ [key]: v }, false);
+                else if (key === 'z') manager.updateSelected({ z: v }, false);
+                else {
+                    const now = manager.selectedPiece();
+                    const cx = now.x + 0.5 + (now.offset ? now.offset[0] || 0 : 0), cy = now.y + 0.5 + (now.offset ? now.offset[1] || 0 : 0);
+                    manager.moveSelectedPieceTo(key === 'x' ? v : cx, key === 'y' ? v : cy, undefined, false);
+                }
+            });
+            el.addEventListener('change', () => {
+                if (snapshot) { manager.undoStack.push(snapshot); if (manager.undoStack.length > 50) manager.undoStack.shift(); manager.redoStack.length = 0; }
+                snapshot = null;
+                el.blur();
+                this.renderPanel();
+            });
+        });
         panel.querySelectorAll('.rr-build-param').forEach(el => el.addEventListener('change', () => {
             const key = el.dataset.key; let v = Number(el.value); if (!Number.isFinite(v)) { this.renderPanel(); return; }
             if (key === 'taper' || key === 'thick') v = Math.max(0, Math.min(1, Math.round(v) / 100)); else if (key === 'sides') v = Math.max(3, Math.min(32, Math.round(v))); else v = Math.max(15, Math.min(360, Math.round(v)));
@@ -513,8 +545,36 @@ class BuildHotbar {
         if (level) level.textContent = String(manager.level);
         // A selection change or a live drag redraws the panel, without stealing a field being typed in.
         if (document.activeElement && this.panel.contains(document.activeElement) && document.activeElement.tagName === 'INPUT') return;
-        const key = JSON.stringify([manager.selected, manager.selectedIds, manager.mode, manager.kind, manager.material, manager.rot, manager.gizmoMode, manager.selectedPiece?.()]);
-        if (key !== this._panelKey) { this._panelKey = key; this.renderPanel(); }
+        const piece = manager.selectedPiece?.();
+        const shape = JSON.stringify([manager.selected, manager.selectedIds, manager.mode, manager.kind, manager.material, manager.rot, manager.gizmoMode, piece && piece.kind, piece && piece.material, piece && piece.rot]);
+        const key = shape + JSON.stringify(piece || null);
+        if (key === this._panelKey) return;
+        // The same piece moved, turned or sized (a handle drag): the numbers follow in place.
+        // Rebuilding the whole panel on every pointer move made the drag stutter.
+        if (shape === this._panelShape && piece && this.refreshPanelValues(piece)) { this._panelKey = key; return; }
+        this._panelKey = key; this._panelShape = shape;
+        this.renderPanel();
+    }
+
+    /** Put a placed shape's place, turns and size into the panel's fields; false when the panel has none to take them. */
+    refreshPanelValues(piece) {
+        const panel = this.panel;
+        if (!panel || !panel.querySelector('.rr-build-pos, .rr-build-size')) return false;
+        const round = n => Math.round(n * 100) / 100;
+        const values = {
+            'rr-build-pos': { x: round(piece.x + 0.5 + (piece.offset ? piece.offset[0] || 0 : 0)), y: round(piece.y + 0.5 + (piece.offset ? piece.offset[1] || 0 : 0)), z: piece.z },
+            'rr-build-turn': { angle: piece.angle || 0, tilt: piece.tilt || 0, roll: piece.roll || 0 },
+            'rr-build-size': { 0: (piece.size || [])[0], 1: (piece.size || [])[1], 2: (piece.size || [])[2] }
+        };
+        for (const [cls, byKey] of Object.entries(values)) {
+            for (const input of panel.querySelectorAll(`input.${cls}, input.rr-build-slider[data-for="${cls}"]`)) {
+                const value = byKey[input.dataset.key];
+                if (value === undefined || input === document.activeElement) continue;
+                if (input.type === 'range') { if (value > Number(input.max)) input.max = Math.ceil(value); if (value < Number(input.min)) input.min = Math.floor(value); }
+                input.value = value;
+            }
+        }
+        return true;
     }
 
     /** A line that shows for a moment over the bar: why a click did nothing, what just happened. */

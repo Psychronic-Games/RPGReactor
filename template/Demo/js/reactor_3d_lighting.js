@@ -1053,26 +1053,32 @@ Reactor3D.waterVolumeMaterial = function(material) {
 //
 // A shiny surface (chrome, polished metal, glossy paint, mercury water)
 // mirrors the world around it. The world is captured into a small cube
-// map from beside the camera's focus, one face a frame so the cost is
-// spread thin; two cubes take turns, one drawn into while materials read
-// the other, so no draw reads the texture it is writing. Rougher surfaces
-// read a blurrier mip level. Until the first capture completes, and on a
-// weak GPU always, the fixed studio gradient stands in.
+// map, one face a frame so the cost is spread thin: from inside the nearest
+// mirror-bright model when there is one (so it shows what stands before
+// it, the party too), else from the camera. The face that looks back toward
+// the camera, the one a mirror shows, is taken every other frame; the rest
+// in turn between. While a face is drawn, anything shiny in it reads the
+// fixed studio gradient, so no draw reads the cube it is writing. Rougher
+// surfaces read a blurrier mip level. Until the first capture completes, and
+// on a weak GPU always, the studio gradient stands in.
 
 Reactor3D.REFLECTION_SIZE = 128;
 
 Reactor3D.Reflections = {
-    _targets: null,
-    _cameras: null,
+    _target: null,
+    _camera: null,
     _face: 0,
-    _front: 0,
+    _tick: 0,
     _uniforms: null,
+    _capturing: false,
     /** Set when something shiny is in the scene; a scene with none never captures. */
     wanted: false,
 
     uniforms() {
         if (!this._uniforms) {
-            this._uniforms = { rrEnvMap: { value: null }, rrEnvMaxLod: { value: 0 }, rrEnvFlip: { value: -1 } };
+            // rrEnvProbe: where the live capture stood (xyz) and how far off its world is taken
+            // to lie (w, 0 for infinitely far: the studio, or a capture from the camera).
+            this._uniforms = { rrEnvMap: { value: null }, rrEnvMaxLod: { value: 0 }, rrEnvFlip: { value: -1 }, rrEnvProbe: { value: new THREE.Vector4(0, 0, 0, 0) } };
         }
         if (!this._uniforms.rrEnvMap.value && Reactor3D.studioEnvMap) {
             this._uniforms.rrEnvMap.value = Reactor3D.studioEnvMap();
@@ -1087,54 +1093,71 @@ Reactor3D.Reflections = {
     },
 
     _ensure() {
-        if (this._targets) return;
-        const size = Reactor3D.REFLECTION_SIZE;
-        const make = () => new THREE.WebGLCubeRenderTarget(size, {
+        if (this._target) return;
+        this._target = new THREE.WebGLCubeRenderTarget(Reactor3D.REFLECTION_SIZE, {
             generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter
         });
-        this._targets = [make(), make()];
-        this._cameras = this._targets.map(target => new THREE.CubeCamera(0.1, 400, target));
+        this._camera = new THREE.CubeCamera(0.1, 400, this._target);
+    },
+
+    /** The cube face (three's order: +x, -x, +y, -y, +z, -z) that looks along `d`. */
+    faceToward(d) {
+        const ax = Math.abs(d.x), ay = Math.abs(d.y), az = Math.abs(d.z);
+        if (ax >= ay && ax >= az) return d.x >= 0 ? 0 : 1;
+        if (ay >= az) return d.y >= 0 ? 2 : 3;
+        return d.z >= 0 ? 4 : 5;
     },
 
     /**
-     * One face of the next capture, from `position`, into the cube the
-     * materials are not reading. `hidden` stays out of the capture: the
-     * shadow pass's sentinel (drawing it here ran the shadow maps mid-face
-     * and lost which face was bound: the reflections flickered) and the
-     * characters, who move every frame and stand right before the camera.
+     * One face of the capture from `position`. `hidden` stays out of it (the
+     * model the capture stands in, or the characters when it stands at the
+     * camera) along with the shadow pass's sentinel: drawing it here ran the
+     * shadow maps mid-face and lost which face was bound (the old flicker).
+     * `toward`, a point (the camera), picks the face taken every other frame.
+     * `radius`, when given, is how far off the captured world is taken to lie
+     * (the party's distance from a mirror), so a flat mirror shows it in place.
      */
-    update(renderer, scene, position, hidden) {
+    update(renderer, scene, position, hidden, toward, radius) {
         if (!this.enabled() || !renderer || !scene || !position) return;
         this._ensure();
-        const back = 1 - this._front;
-        const target = this._targets[back], cube = this._cameras[back];
-        if (this._face === 0) {
-            cube.position.set(position.x, position.y, position.z);
-            cube.updateMatrixWorld(true);
+        const cube = this._camera;
+        // three turns a cube camera's six faces only inside its own update(), which this
+        // capture does not call (it draws one face a frame): turned here, or all six look one way.
+        if (cube.coordinateSystem !== renderer.coordinateSystem && cube.updateCoordinateSystem) {
+            cube.coordinateSystem = renderer.coordinateSystem;
+            cube.updateCoordinateSystem();
         }
-        const camera = cube.children[this._face];
+        cube.position.set(position.x, position.y, position.z);
+        cube.updateMatrixWorld(true);
+        this._tick++;
+        let face;
+        if (toward && this._ready && this._tick % 2 === 0) {
+            face = this.faceToward({ x: toward.x - position.x, y: toward.y - position.y, z: toward.z - position.z });
+        } else {
+            face = this._face;
+            this._face = (this._face + 1) % 6;
+        }
+        const camera = cube.children[face];
         const previous = renderer.getRenderTarget();
         const autoClear = renderer.autoClear;
         renderer.autoClear = true;
-        // Mipmaps once, with the last face: every face written before them.
-        target.texture.generateMipmaps = this._face === 5;
         const shadowSentinel = Reactor3D.Shadows && Reactor3D.Shadows._sentinel;
         const hide = (hidden || []).concat(shadowSentinel ? [shadowSentinel] : []).filter(object => object && object.visible);
         for (const object of hide) object.visible = false;
-        renderer.setRenderTarget(target, this._face);
+        this._capturing = true;
+        renderer.setRenderTarget(this._target, face);
         try {
             renderer.render(scene, camera);
         } finally {
+            this._capturing = false;
             for (const object of hide) object.visible = true;
             renderer.setRenderTarget(previous);
         }
         renderer.autoClear = autoClear;
         this._renderer = renderer;
-        this._face = (this._face + 1) % 6;
-        if (this._face === 0) {
-            this._front = back;
-            this._ready = true;
-        }
+        this._probe = this._probe || new THREE.Vector4();
+        this._probe.set(position.x, position.y, position.z, Number(radius) > 0 ? Number(radius) : 0);
+        if (this._face === 0 && !this._ready && this._tick >= 6) this._ready = true;
     },
 
     /**
@@ -1144,8 +1167,10 @@ Reactor3D.Reflections = {
      */
     bind(renderer) {
         const uniforms = this.uniforms();
-        const live = this._ready && this._targets && renderer === this._renderer;
-        const texture = live ? this._targets[this._front].texture : (Reactor3D.studioEnvMap ? Reactor3D.studioEnvMap() : null);
+        // While a face is being drawn the cube is the target: whatever shines in that face reads the studio.
+        const live = this._ready && this._target && renderer === this._renderer && !this._capturing;
+        const texture = live ? this._target.texture : (Reactor3D.studioEnvMap ? Reactor3D.studioEnvMap() : null);
+        if (live && this._probe) uniforms.rrEnvProbe.value.copy(this._probe); else uniforms.rrEnvProbe.value.set(0, 0, 0, 0);
         if (uniforms.rrEnvMap.value === texture) return;
         uniforms.rrEnvMap.value = texture;
         uniforms.rrEnvFlip.value = live ? 1 : -1;
@@ -1167,6 +1192,7 @@ Reactor3D.Reflections = {
     reset() {
         this.wanted = false;
         this._face = 0;
+        this._tick = 0;
         this._ready = false;
         if (this._uniforms) this._uniforms.rrEnvMap.value = null;
     }
@@ -1204,6 +1230,7 @@ Reactor3D.injectShine = function(material, shader) {
     shader.uniforms.rrEnvMap = env.rrEnvMap;
     shader.uniforms.rrEnvMaxLod = env.rrEnvMaxLod;
     shader.uniforms.rrEnvFlip = env.rrEnvFlip;
+    shader.uniforms.rrEnvProbe = env.rrEnvProbe;
     shader.uniforms.rrShine = { value: shine.vector };
     shader.uniforms.rrShineTint = { value: shine.tint };
     shader.vertexShader = "varying vec3 vRRWorldNormal;\n" + shader.vertexShader.replace(
@@ -1227,6 +1254,7 @@ Reactor3D.injectShine = function(material, shader) {
         "uniform samplerCube rrEnvMap;",
         "uniform float rrEnvMaxLod;",
         "uniform float rrEnvFlip;",
+        "uniform vec4 rrEnvProbe;",
         "uniform vec4 rrShine;",
         "uniform vec3 rrShineTint;",
         "varying vec3 vRRWorldNormal;"
@@ -1240,6 +1268,16 @@ Reactor3D.injectShine = function(material, shader) {
             // reads as grazing everywhere and glazes the whole surface over.
             "\trrN = dot(rrN, rrV) < 0.0 ? -rrN : rrN;",
             "\tvec3 rrR = reflect(-rrV, rrN);",
+            // A capture taken close by (inside a mirror-bright model): its world is taken to lie on
+            // a sphere about it, and the lookup aims where the reflected ray meets that sphere, so each
+            // point of a flat panel sees its own part of the room and the party stands where a mirror
+            // would show them. Far captures (w = 0) look up by direction alone.
+            "\tif (rrEnvProbe.w > 0.0) {",
+            "\t\tvec3 rrL = vRRWorldPos - rrEnvProbe.xyz;",
+            "\t\tfloat rrB = dot(rrL, rrR);",
+            "\t\tfloat rrH = rrB * rrB - (dot(rrL, rrL) - rrEnvProbe.w * rrEnvProbe.w);",
+            "\t\tif (rrH > 0.0) rrR = normalize(rrL + rrR * (-rrB + sqrt(rrH)));",
+            "\t}",
             "\trrR.x *= rrEnvFlip;",
             "\tvec3 rrEnv = textureLod(rrEnvMap, rrR, rrShine.y * rrEnvMaxLod).rgb;",
             "\tfloat rrF0 = mix(0.04, 1.0, rrShine.z);",

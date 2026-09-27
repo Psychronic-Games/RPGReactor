@@ -1364,8 +1364,11 @@ Reactor3D.Viewport.prototype.renderPass = function(mapScene, which, slot) {
             scene.updateMatrixWorld();
             // The shadow maps, while every group is still visible.
             if (mapScene.renderShadows) mapScene.renderShadows(this._renderer, null);
-            // A face of the reflection capture, from where the camera stands.
-            if (Reactor3D.Reflections && this._camera) Reactor3D.Reflections.update(this._renderer, scene, this._camera.position, mapScene.reflectionHidden ? mapScene.reflectionHidden() : null);
+            // A face of the reflection capture: from inside the nearest mirror-bright model, else the camera.
+            if (Reactor3D.Reflections && this._camera && Reactor3D.Reflections.enabled()) {
+                const probe = mapScene.reflectionProbe ? mapScene.reflectionProbe(this._camera) : null;
+                if (probe) Reactor3D.Reflections.update(this._renderer, scene, probe.position, probe.hidden, probe.toward, probe.radius);
+            }
         }
     }
     mapScene.setPass(which);
@@ -6863,6 +6866,70 @@ Reactor3D.MapScene.prototype.syncVolumeLights = function(declared, focus) {
 };
 
 /** What the reflection capture leaves out: every character's model (the moving things right before the camera). */
+/**
+ * Where this frame's reflection capture stands, and what it leaves out.
+ *
+ * Near a shiny model (a chrome car, a mirror-bright tank) the capture moves
+ * into it: from its middle, with it hidden, so its faces reflect what stands
+ * around it, the party included, as a mirror would. Anywhere else it stands
+ * at the camera and leaves the characters out (they would fill the cube from
+ * there). The nearest shiny model within MIRROR_REACH of the camera wins;
+ * the choice is made again every few frames, its place every frame.
+ */
+Reactor3D.MIRROR_REACH = 18;
+Reactor3D.MapScene.prototype.reflectionProbe = function(camera) {
+    if (!camera) return null;
+    const frame = typeof Graphics !== "undefined" ? Graphics.frameCount : 0;
+    const box = this._probeBox || (this._probeBox = new THREE.Box3());
+    if (!this._probeChoice || frame - this._probeChoice.frame >= 15 || frame < this._probeChoice.frame) {
+        let best = null;
+        for (const holder of this._modelInstances ? this._modelInstances.values() : []) {
+            const object = holder && holder.object;
+            if (!object || !object.visible) continue;
+            const reflect = Reactor3D.mirrorOf(object);
+            if (reflect < 0.5) continue;
+            box.setFromObject(object);
+            if (box.isEmpty()) continue;
+            const centre = box.getCenter(new THREE.Vector3());
+            const distance = centre.distanceTo(camera.position);
+            if (distance > Reactor3D.MIRROR_REACH) continue;
+            if (!best || distance < best.distance) best = { object, distance, offset: centre.sub(object.position) };
+        }
+        this._probeChoice = { frame, best };
+    }
+    const best = this._probeChoice.best;
+    if (best && best.object.parent && best.object.visible) {
+        const position = best.object.position.clone().add(best.offset);
+        // The mirror's world is taken to lie as far off as the player stands (the camera's focus
+        // otherwise): the party then shows in it where a mirror would put them.
+        let radius = 0;
+        for (const holder of this._modelInstances.values()) {
+            if (holder && holder.object && typeof $gamePlayer !== "undefined" && holder.character === $gamePlayer) { radius = holder.object.position.distanceTo(position); break; }
+        }
+        if (!(radius > 0)) radius = camera.position.distanceTo(position) * 0.5;
+        return { position, hidden: [best.object], toward: camera.position, radius: Math.max(1.5, Math.min(40, radius)) };
+    }
+    return { position: camera.position, hidden: this.reflectionHidden(), toward: null };
+};
+
+/** How strongly a model mirrors: its shiniest lit material's reflection (0 for none), worked out once it has meshes. */
+Reactor3D.mirrorOf = function(object) {
+    if (!object) return 0;
+    const known = object.userData.__rrMirror;
+    if (known !== undefined && object.userData.__rrMirrorMeshes === object.children.length) return known;
+    let reflect = 0, meshes = false;
+    object.traverse(node => {
+        if (!node.isMesh || !node.material) return;
+        meshes = true;
+        for (const material of [].concat(node.material)) {
+            const shine = Reactor3D.shineOf ? Reactor3D.shineOf(material) : null;
+            if (shine) reflect = Math.max(reflect, shine.vector.x * (1 - 0.5 * (shine.vector.w || 0)));
+        }
+    });
+    if (meshes) { object.userData.__rrMirror = reflect; object.userData.__rrMirrorMeshes = object.children.length; }
+    return reflect;
+};
+
 Reactor3D.MapScene.prototype.reflectionHidden = function() {
     const out = [];
     for (const holder of this._modelInstances ? this._modelInstances.values() : []) if (holder && holder.object) out.push(holder.object);

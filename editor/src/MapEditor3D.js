@@ -1842,12 +1842,14 @@ class MapEditor3D {
         if (!piece) return false;
         const { held, start } = drag;
         let patch = null;
+        // Drags snap finely (a twentieth of a tile): quarter steps read as the shape jumping.
+        const snap = n => Math.round(n * 20) / 20;
+        const ox = (start.offset || [0, 0])[0], oy = (start.offset || [0, 0])[1];
         if (held.mode === 'move') {
-            const t = Math.round(held.travel(clientX, clientY) * 4) / 4;
-            const ox = (start.offset || [0, 0])[0], oy = (start.offset || [0, 0])[1];
+            const t = snap(held.travel(clientX, clientY));
             if (held.axis === 'x') return manager.moveSelectedPieceTo(start.x + 0.5 + ox + t, start.y + 0.5 + oy, undefined, false);
             if (held.axis === 'z') return manager.moveSelectedPieceTo(start.x + 0.5 + ox, start.y + 0.5 + oy + t, undefined, false);
-            patch = { z: Math.max(0, Math.round((start.z + t) * 4) / 4) };
+            patch = { z: Math.max(0, snap(start.z + t)) };
         } else if (held.mode === 'turn') {
             const deg = RRShapeGizmo3D.turn(this.shapeGizmo, held, this.camera, this.canvas.getBoundingClientRect(), clientX, clientY);
             if (deg === null) return false;
@@ -1856,8 +1858,19 @@ class MapEditor3D {
             const t = held.travel(clientX, clientY);
             const i = held.axis === 'u' ? 0 : held.axis === 'y' ? 1 : 2;
             const size = (start.size || [1, 1, 1]).slice();
-            size[i] = Math.max(0.25, Math.min(60, Math.round((size[i] + t) * 4) / 4));
+            const was = size[i];
+            size[i] = Math.max(0.25, Math.min(60, snap(was + t)));
             patch = { size };
+            // A shape grows about its middle across and along (upward from its foot):
+            // the middle moves half the growth toward the grabbed face, so the far
+            // face stays put and the grabbed one stays under the pointer.
+            if (held.axis !== 'y' && held.dir) {
+                const half = (size[i] - was) / 2;
+                const map = this.currentMap();
+                const cx = start.x + 0.5 + ox + held.dir.x * half, cy = start.y + 0.5 + oy + held.dir.z * half;
+                const ax = Math.max(0, Math.min(map.width - 1, Math.floor(cx))), ay = Math.max(0, Math.min(map.height - 1, Math.floor(cy)));
+                Object.assign(patch, { x: ax, y: ay, offset: [Math.round((cx - ax - 0.5) * 100) / 100, Math.round((cy - ay - 0.5) * 100) / 100] });
+            }
         }
         return manager.updateSelected(patch, false);
     }
@@ -2763,7 +2776,12 @@ class MapEditor3D {
     }
 
     /** The prop under the pointer, by id, or null — by bounding box, which is cheap and enough to pick. */
-    propAt(clientX, clientY) {
+    /**
+     * The prop under the pointer. A box test by default (hover, many times a
+     * second); `precise` for a click also asks the model's own triangles, so a
+     * tall tree's box does not take a press on the floor beside it.
+     */
+    propAt(clientX, clientY, precise = false) {
         if (!this.propGroup || !this.propGroup.children.length || !this.camera || !this.canvas) return null;
         const rect = this.canvas.getBoundingClientRect();
         if (!rect.width || !rect.height) return null;
@@ -2779,7 +2797,12 @@ class MapEditor3D {
             if (child.userData.propId === undefined) continue;
             const box = child.userData.pickBox || (child.userData.pickBox = new THREE.Box3().setFromObject(child));
             if (!ray.intersectBox(box, point)) continue;
-            const distance = point.distanceTo(ray.origin);
+            let distance = point.distanceTo(ray.origin);
+            if (precise) {
+                const hit = this._raycaster.intersectObject(child, true).find(h => !h.object.userData?.__reactorOverlay);
+                if (!hit) continue;
+                distance = hit.distance;
+            }
             if (!best || distance < best.distance) best = { id: child.userData.propId, distance };
         }
         return best ? best.id : null;
@@ -2824,6 +2847,11 @@ class MapEditor3D {
             RRAxisArrows3D.dispose(this.propArrows);
             this.propArrows = null;
         }
+        if (this.propSizeHandle) {
+            this.propSizeHandle.parent?.remove(this.propSizeHandle);
+            this.propSizeHandle.geometry.dispose(); this.propSizeHandle.material.dispose();
+            this.propSizeHandle = null;
+        }
         this.showPropFootprint(object ? object.userData.propId : null);
         if (!object || typeof RRPoseRings3D === 'undefined' || !this.propGroup) return;
         const prop = this.propsManager()?.prop(object.userData.propId);
@@ -2835,6 +2863,13 @@ class MapEditor3D {
             this.propArrows = RRAxisArrows3D.create(THREE, radius * 1.15, 'prop-arrows');
             this.propGroup.add(this.propArrows.root);
         }
+        // The size handle: a cube up and back from the middle, clear of the arrows (+X, up, +Z).
+        const cube = Math.max(0.14, radius * 0.12);
+        this.propSizeHandle = new THREE.Mesh(new THREE.BoxGeometry(cube, cube, cube),
+            new THREE.MeshBasicMaterial({ color: 0xffd166, transparent: true, opacity: 0.9, depthTest: false, fog: false }));
+        this.propSizeHandle.renderOrder = 8;
+        this.propSizeHandle.userData.reach = radius * 1.1;
+        this.propGroup.add(this.propSizeHandle);
         this.syncPropRings();
     }
 
@@ -2852,6 +2887,11 @@ class MapEditor3D {
         RRPoseRings3D.sync(this.propRings, centre,
             object.rotation.y * 180 / Math.PI, object.rotation.x * 180 / Math.PI, true);
         if (this.propArrows) RRAxisArrows3D.sync(this.propArrows, centre, true);
+        if (this.propSizeHandle) {
+            const reach = this.propSizeHandle.userData.reach;
+            this.propSizeHandle.userData.dir = new THREE.Vector3(-1, 1, -1).normalize();
+            this.propSizeHandle.position.copy(centre).addScaledVector(this.propSizeHandle.userData.dir, reach);
+        }
         this.showPropFootprint(prop.id);
     }
 
@@ -2934,6 +2974,39 @@ class MapEditor3D {
         manager._syncCard?.();
     }
 
+    /** A press on the selected prop's size cube: its size then, and the pointer's place along the cube's line. */
+    pickPropSize(clientX, clientY) {
+        const handle = this.propSizeHandle, prop = this.propsManager()?.prop(this.selectedPropId), rect = this._propRect();
+        if (!handle || !prop || !rect || !handle.userData.dir) return null;
+        const ray = new THREE.Raycaster();
+        ray.setFromCamera(new THREE.Vector2(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1), this.camera);
+        handle.updateMatrixWorld();
+        if (!ray.intersectObject(handle, false).length) return null;
+        const origin = handle.getWorldPosition(new THREE.Vector3()), dir = handle.userData.dir.clone();
+        const travel = (cx, cy) => {
+            ray.setFromCamera(new THREE.Vector2(((cx - rect.left) / rect.width) * 2 - 1, -((cy - rect.top) / rect.height) * 2 + 1), this.camera);
+            const o = ray.ray.origin, r = ray.ray.direction, w0 = origin.clone().sub(o);
+            const b = dir.dot(r), c = r.dot(r), p = dir.dot(w0), q = r.dot(w0), denom = c - b * b;
+            return Math.abs(denom) < 1e-9 ? null : (b * q - c * p) / denom;
+        };
+        const start = travel(clientX, clientY);
+        if (start === null) return null;
+        handle.material.opacity = 1;
+        return { id: prop.id, startSize: (prop.size || 2) * (prop.scale || 1), reach: handle.userData.reach, start, travel };
+    }
+
+    /** Size the selected prop from its cube: outward grows it in proportion, as far as the pointer goes. */
+    dragPropSize(state, clientX, clientY) {
+        const now = state.travel(clientX, clientY);
+        const manager = this.propsManager(), object = this.propObject(state.id);
+        if (now === null || !manager || !object) return;
+        const size = Math.max(0.1, Math.min(64, Math.round(state.startSize * (1 + (now - state.start) / state.reach) * 100) / 100));
+        manager.elevation()?.updateProp(manager.currentMap, state.id, { size, scale: 1 });
+        this.placeProp(object, manager.prop(state.id));
+        manager._syncCard?.();
+        this._propMoved = true;
+    }
+
     /** Slide the selected prop along one arrow: X and Z over the map (fractional), Y its height. */
     dragPropAlongAxis(state, clientX, clientY) {
         const travel = state.grab.travel(clientX, clientY);
@@ -2965,11 +3038,12 @@ class MapEditor3D {
         this._propMoved = true;
     }
 
-    finishPropDrag() {
+    finishPropDrag(drag = null) {
         if (this.canvas) this.canvas.style.cursor = 'default';
         if (this.propRings) RRPoseRings3D.emphasize(this.propRings, null, false);
         if (this.propArrows && typeof RRAxisArrows3D !== 'undefined') RRAxisArrows3D.emphasize(this.propArrows, null, false);
         const moved = this._propMoved || this._propRingPending;
+        const sized = !!drag?.propSize;
         this._propMoved = false;
         this._propRingPending = null;
         // The sidecar already holds the new values; the flat map redraws from it.
@@ -2984,7 +3058,10 @@ class MapEditor3D {
                 manager._syncCard?.();
             }
             manager?._syncPanel?.();
+            // A new size: the rings, arrows and cube are made again to fit it.
+            if (sized && this.selectedPropId) this.selectPropRings(this.propObject(this.selectedPropId));
         }
+        if (this.propSizeHandle) this.propSizeHandle.material.opacity = 0.9;
     }
 
     /** Advance stepping-animation previews at the game's cadence. */
@@ -3460,7 +3537,7 @@ class MapEditor3D {
                     this.pointer.propHold = true;
                     const manager = this.pieceManager();
                     const held = this.grabShapeGizmo(event.clientX, event.clientY);
-                    const propHit = held ? null : this.propAt(event.clientX, event.clientY);
+                    const propHit = held ? null : this.propAt(event.clientX, event.clientY, true);
                     if (propHit && this.propsManager() && window.reactor?.buildHotbar?.selectModel) {
                         // A placed model: the bar turns to Models in Select, and the models
                         // tool (below, now holding the map) picks it up and carries a drag.
@@ -3537,8 +3614,12 @@ class MapEditor3D {
                 const arrow = this.selectedPropId && this.propArrows && typeof RRAxisArrows3D !== 'undefined' && this.canvas
                     ? RRAxisArrows3D.pick(THREE, this.propArrows, this.camera, this.canvas.getBoundingClientRect(), event.clientX, event.clientY)
                     : null;
-                const ring = arrow ? null : this.pickPropRing(event.clientX, event.clientY);
-                if (arrow) {
+                const sizeGrab = this.pickPropSize(event.clientX, event.clientY);
+                const ring = arrow || sizeGrab ? null : this.pickPropRing(event.clientX, event.clientY);
+                if (sizeGrab) {
+                    manager.pushUndo?.();
+                    this.pointer.propSize = sizeGrab;
+                } else if (arrow) {
                     const prop = manager.prop(this.selectedPropId);
                     manager.pushUndo?.();
                     this.pointer.propArrow = { grab: arrow, id: this.selectedPropId, startX: prop.x, startY: prop.y, startZ: prop.z || 0 };
@@ -3547,7 +3628,7 @@ class MapEditor3D {
                     manager.pushUndo?.();
                     this.pointer.propRing = ring;
                 } else {
-                    const hitId = this.propAt(event.clientX, event.clientY);
+                    const hitId = this.propAt(event.clientX, event.clientY, true);
                     if (hitId && manager.tool === 'erase') {
                         manager.remove(hitId);
                         this.pointer.propPlaced = true;
@@ -3570,7 +3651,7 @@ class MapEditor3D {
                         }
                     }
                 }
-                if (this.pointer.propRing || this.pointer.propArrow || this.pointer.propDrag || this.pointer.propPlaced) {
+                if (this.pointer.propRing || this.pointer.propArrow || this.pointer.propSize || this.pointer.propDrag || this.pointer.propPlaced) {
                     this.pointer.pan = false;
                     this.pointer.propHold = true;
                 }
@@ -3673,6 +3754,8 @@ class MapEditor3D {
             } else if (this.pointer.terrain) {
                 const point = this.groundPointAt(event.clientX, event.clientY);
                 if (point) { this.terrainManager()?.paintAt(point); this.updateTerrainRing(point); }
+            } else if (this.pointer.propSize) {
+                this.dragPropSize(this.pointer.propSize, event.clientX, event.clientY);
             } else if (this.pointer.propArrow) {
                 this.dragPropAlongAxis(this.pointer.propArrow, event.clientX, event.clientY);
             } else if (this.pointer.propRing) {
@@ -3744,7 +3827,7 @@ class MapEditor3D {
             }
             if (!drag || drag.pan || drag.look) return;
             if (drag.propHold) {
-                this.finishPropDrag();
+                this.finishPropDrag(drag);
                 return;
             }
 

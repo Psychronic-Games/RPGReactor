@@ -68,8 +68,28 @@ test('Build\'s Select turns to Models with the model under the pointer', () => {
     assert.equal(props.tool, 'select');
     assert.equal(props.selectedId, 2);
     const view = read('editor/src/MapEditor3D.js');
-    assert.match(view, /const propHit = held \? null : this\.propAt\(event\.clientX, event\.clientY\);/, 'the pick checks models first');
+    assert.match(view, /const propHit = held \? null : this\.propAt\(event\.clientX, event\.clientY, true\);/, 'the pick checks models first, by their triangles');
     assert.match(view, /if \(hitId && manager\.tool === 'erase'\) \{\s*manager\.remove\(hitId\);/, 'the hammer removes in 3D');
     assert.match(view, /if \(point && manager\.placing\(\)\) \{/, 'the ground takes a model only while one is in hand');
     assert.match(read('editor/src/ModelPropsManager.js'), /if \(hit && this\.tool === 'erase'\) \{ this\.remove\(hit\.id\); return; \}/, 'and on the flat map');
+});
+
+test('placing does not select what was placed; leaving Build lets its selection go; a size handle keeps the far face', () => {
+    const { props } = load();
+    const added = [];
+    props.elevation = () => ({ addProp: (map, prop) => { added.push(prop); return 7; } });
+    props.currentMap = {};
+    props.pushUndo = () => {};
+    props._changed = () => {};
+    props.model = { name: 'Map-Objects/Tree-02' };
+    assert.equal(props.place(3, 4), 7);
+    assert.equal(props.selectedId, null, 'the fields in hand stay the next placement\'s');
+    const pieces = read('editor/src/PieceBuilderManager.js');
+    assert.match(pieces, /deactivate\(\) \{[\s\S]{0,300}this\.clearSelection\(\);/, 'another tool taking the map clears the pieces\' selection');
+    assert.match(pieces, /this\.gizmoMode = 'all';/, 'every handle at once');
+    const view = read('editor/src/MapEditor3D.js');
+    assert.match(view, /const half = \(size\[i\] - was\) \/ 2;/, 'the middle moves half the growth toward the grabbed face');
+    const gizmo = require(path.join(root, 'editor', 'src', 'utils', 'ShapeGizmo3D.js'));
+    assert.equal(typeof gizmo.grab, 'function');
+    assert.match(read('editor/src/utils/ShapeGizmo3D.js'), /if \(mode === 'all'\) \{[\s\S]{0,300}'size'[\s\S]{0,120}'move'[\s\S]{0,120}'turn'/, 'cubes, then arrows, then rings');
 });
