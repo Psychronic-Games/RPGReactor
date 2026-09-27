@@ -361,7 +361,7 @@ class BuildHotbar {
             body = section(t('terrain.waterLook'), `<div class="rr-build-modes">${['water', 'mercury', 'plain'].map(p => `<button type="button" class="rr-build-chip rr-build-look" data-preset="${p}" aria-pressed="${same(TerrainManager.WATER_LOOKS[p])}"><span>${t('terrain.look.' + p)}</span></button>`).join('')}</div>`
                 + range('rr-build-treflect', t('terrain.look.reflect'), look.reflect, 0, 1, 0.01, Math.round(look.reflect * 100) + '%')
                 + range('rr-build-tgloss', t('terrain.look.gloss'), look.gloss, 0, 1, 0.01, Math.round(look.gloss * 100) + '%')
-                + `<label class="rr-build-range"><span>${t('terrain.look.tint')}</span><input type="color" class="rr-build-ttint" value="${look.tint}"></label>`) + note('terrain.look.hint');
+                + `<div class="rr-build-range"><span>${t('terrain.look.tint')}</span>${typeof RRColorPopup !== 'undefined' ? RRColorPopup.swatch('rr-build-ttint', look.tint) : `<input type="color" class="rr-build-ttint" value="${look.tint}">`}</div>`) + note('terrain.look.hint');
         }
         const status = terrain.statusText ? terrain.statusText() : '';
         const iconButton = (cls, icon, key) => `<button type="button" class="rr-btn-secondary rr-build-icon-btn ${cls}" title="${t(key)}" aria-label="${t(key)}">${this.icon(icon, 16)}</button>`;
@@ -376,7 +376,9 @@ class BuildHotbar {
         bindRange('rr-build-tstrength', v => { terrain.strength = v; }, v => v);
         bindRange('rr-build-treflect', v => { terrain.waterLook.reflect = v; }, v => Math.round(v * 100) + '%');
         bindRange('rr-build-tgloss', v => { terrain.waterLook.gloss = v; }, v => Math.round(v * 100) + '%');
-        panel.querySelector('.rr-build-ttint')?.addEventListener('input', event => { terrain.waterLook.tint = event.target.value; });
+        const tint = panel.querySelector('.rr-build-ttint');
+        if (tint && tint.tagName === 'BUTTON') RRColorPopup.bind(tint, hex => { terrain.waterLook.tint = hex; });
+        else tint?.addEventListener('input', event => { terrain.waterLook.tint = event.target.value; });
         panel.querySelectorAll('.rr-build-look').forEach(el => el.addEventListener('click', () => {
             Object.assign(terrain.waterLook, TerrainManager.WATER_LOOKS[el.dataset.preset]);
             this.renderTerrainPanel();

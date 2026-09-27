@@ -16,7 +16,8 @@ const THREE = global.THREE;
 test('a model\'s surface is read, clamped, and saved only while it reflects', () => {
     assert.equal(Reactor3D.readModelSurface({}), null, 'no surface: the file\'s own metal stands');
     assert.deepEqual({ ...Reactor3D.readModelSurface({ surface: { reflect: 3, gloss: -1, metal: 0.5, tint: '#FFCC55' } }) },
-        { reflect: 1, gloss: 0, metal: 0.5, tint: '#FFCC55' });
+        { reflect: 1, gloss: 0, metal: 0.5, tint: '#FFCC55', texture: 0 });
+    assert.equal(Reactor3D.readModelSurface({ surface: { reflect: 1, texture: 0.85 } }).texture, 0.85, 'how much paint stays under the shine');
     assert.ok('surface' in Reactor3D.readModelTransform({}), 'the transform carries it to every placement');
     const Database3DEditor = require(path.join(repoRoot, 'editor', 'src', 'database', 'Database3DEditor.js'));
     const chrome = { reflect: 1, gloss: 0.95, metal: 1, tint: '#ffffff' };
@@ -43,8 +44,19 @@ test('a shiny material carries the reflection; a plain one compiles as before; a
     const clone = shiny.clone();
     clone.userData = JSON.parse(JSON.stringify(shiny.userData));
     assert.ok(Reactor3D.shineOf(clone).vector.isVector4, 'userData copied through JSON is made whole again');
+    assert.match(shader.fragmentShader, /rrN = dot\(rrN, rrV\) < 0\.0 \? -rrN : rrN/, 'an inward normal is turned to the eye, not read as grazing');
+    assert.match(shader.fragmentShader, /rrShine\.w/, 'the texture it keeps is a uniform');
+    // Off and on again: the material must compile afresh, or three reuses the cached
+    // shiny program with the plain compile's uniforms and drops every draw.
+    let disposed = 0;
+    shiny.addEventListener('dispose', () => disposed++);
     Reactor3D.setMaterialShine(shiny, null);
     assert.equal(Reactor3D.shineOf(shiny), null);
+    Reactor3D.setMaterialShine(shiny, { reflect: 1, gloss: 0.9, metal: 1, tint: '#ffffff', texture: 0.5 });
+    assert.equal(disposed, 2, 'each toggle releases the cached programs');
+    Reactor3D.setMaterialShine(shiny, { reflect: 0.5, gloss: 0.9, metal: 1, tint: '#ffffff', texture: 0.5 });
+    assert.equal(disposed, 2, 'a change while shining only moves the uniforms');
+    assert.equal(Reactor3D.shineOf(shiny).vector.w, 0.5);
 });
 
 test('a renderer that did not draw the capture reflects the studio gradient instead', () => {

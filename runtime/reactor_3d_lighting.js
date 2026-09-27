@@ -1174,7 +1174,7 @@ Reactor3D.Reflections = {
 
 /**
  * How a material shines: its `rrShine` of `{ vector: (reflect, roughness,
- * metal, 0), tint }`, or null for a plain surface. Set by
+ * metal, texture kept), tint }`, or null for a plain surface. Set by
  * `applyModelSurface` (a model's own settings, or its file's metal).
  */
 Reactor3D.shineOf = function(material) {
@@ -1235,14 +1235,23 @@ Reactor3D.injectShine = function(material, shader) {
         [
             "{",
             "\tvec3 rrN = normalize(vRRWorldNormal);",
-            "\trrN = gl_FrontFacing ? rrN : -rrN;",
             "\tvec3 rrV = normalize(cameraPosition - vRRWorldPos);",
+            // Toward the eye whichever way the file wound it: an inward normal
+            // reads as grazing everywhere and glazes the whole surface over.
+            "\trrN = dot(rrN, rrV) < 0.0 ? -rrN : rrN;",
             "\tvec3 rrR = reflect(-rrV, rrN);",
             "\trrR.x *= rrEnvFlip;",
             "\tvec3 rrEnv = textureLod(rrEnvMap, rrR, rrShine.y * rrEnvMaxLod).rgb;",
             "\tfloat rrF0 = mix(0.04, 1.0, rrShine.z);",
             "\tfloat rrFres = rrF0 + (1.0 - rrF0) * pow(1.0 - clamp(dot(rrN, rrV), 0.0, 1.0), 5.0);",
-            "\toutgoingLight = mix(outgoingLight, rrEnv * rrShineTint, clamp(rrShine.x * rrFres, 0.0, 1.0));",
+            // How much of the texture stays (w): the rest is mirrored over, and what stays
+            // takes the reflection as a glaze (a screen blend) of its bright parts only
+            // (cubed): crisp highlights over the paint, never a milky wash.
+            "\tvec3 rrRefl = rrEnv * rrShineTint;",
+            "\tfloat rrA = clamp(rrShine.x * rrFres, 0.0, 1.0);",
+            "\tvec3 rrMirror = mix(outgoingLight, rrRefl, rrA * (1.0 - rrShine.w));",
+            "\tvec3 rrGlaze = clamp(rrRefl * rrRefl * rrRefl * 1.6 * rrA * rrShine.w, 0.0, 1.0);",
+            "\toutgoingLight = rrMirror + rrGlaze - rrMirror * rrGlaze;",
             "}",
             "#include <opaque_fragment>"
         ].join("\n")

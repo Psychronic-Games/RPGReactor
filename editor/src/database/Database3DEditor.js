@@ -4087,10 +4087,11 @@ class Database3DEditor {
 
     /** Ready-made surfaces: a mirror, gold, a lacquer, satin metal. */
     static SURFACE_PRESETS = [
-        ['Chrome', { reflect: 1, gloss: 0.95, metal: 1, tint: '#ffffff' }],
-        ['Gold', { reflect: 1, gloss: 0.85, metal: 1, tint: '#ffcc55' }],
-        ['Glossy', { reflect: 0.9, gloss: 0.9, metal: 0, tint: '#ffffff' }],
-        ['Brushed', { reflect: 0.8, gloss: 0.45, metal: 1, tint: '#dfe3e8' }]
+        ['Chrome', { reflect: 1, gloss: 0.95, metal: 1, tint: '#ffffff', texture: 0 }],
+        ['Polished', { reflect: 0.9, gloss: 0.9, metal: 0.55, tint: '#ffffff', texture: 0.85 }],
+        ['Glossy', { reflect: 0.9, gloss: 0.9, metal: 0, tint: '#ffffff', texture: 1 }],
+        ['Gold', { reflect: 1, gloss: 0.85, metal: 1, tint: '#ffcc55', texture: 0.2 }],
+        ['Brushed', { reflect: 0.8, gloss: 0.45, metal: 1, tint: '#dfe3e8', texture: 0.35 }]
     ];
 
     /**
@@ -4116,7 +4117,7 @@ class Database3DEditor {
                 this.rawSurface = null;
             }
             this._applyBaseTransform();
-            this.saveRules();
+            this.saveSurface();
             this.renderSurfaceForm();
         };
         if (!surface) {
@@ -4127,21 +4128,26 @@ class Database3DEditor {
         const slider = (field, label) => `<label style="display:grid;grid-template-columns:70px 1fr 38px;align-items:center;gap:6px;font-size:11px;margin:3px 0;">
             <span>${tt(label)}</span><input type="range" class="r3d-surface" data-field="${field}" min="0" max="1" step="0.01" value="${surface[field]}">
             <span class="r3d-surface-value" data-field="${field}" style="text-align:right;color:var(--color-text-muted);">${Math.round(surface[field] * 100)}%</span></label>`;
-        const same = look => ['reflect', 'gloss', 'metal', 'tint'].every(key => look[key] === surface[key]);
-        form.innerHTML = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-bottom:4px;">${Database3DEditor.SURFACE_PRESETS.map(([name, look]) => `<button type="button" class="rr-btn-secondary r3d-surface-preset" data-preset="${name}" aria-pressed="${same(look)}" style="padding:3px 0;font-size:11px;${same(look) ? 'border-color:var(--color-accent);' : ''}">${tt(name)}</button>`).join('')}</div>`
-            + slider('reflect', 'Reflection') + slider('gloss', 'Gloss') + slider('metal', 'Metal')
-            + `<label style="display:grid;grid-template-columns:70px 1fr;align-items:center;gap:6px;font-size:11px;margin:3px 0;"><span>${tt('Tint')}</span><input type="color" class="r3d-surface-tint" value="${surface.tint || '#ffffff'}"></label>`;
+        if (surface.texture === undefined) surface.texture = 0;
+        const same = look => ['reflect', 'gloss', 'metal', 'tint', 'texture'].every(key => look[key] === surface[key]);
+        form.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(52px,1fr));gap:4px;margin-bottom:4px;">${Database3DEditor.SURFACE_PRESETS.map(([name, look]) => `<button type="button" class="rr-btn-secondary r3d-surface-preset" data-preset="${name}" aria-pressed="${same(look)}" style="padding:3px 0;font-size:11px;${same(look) ? 'border-color:var(--color-accent);' : ''}">${tt(name)}</button>`).join('')}</div>`
+            + slider('reflect', 'Reflection') + slider('gloss', 'Gloss') + slider('metal', 'Metal') + slider('texture', 'Texture')
+            + `<div style="display:grid;grid-template-columns:70px 1fr;align-items:center;gap:6px;font-size:11px;margin:3px 0;"><span>${tt('Tint')}</span>${typeof RRColorPopup !== 'undefined' ? RRColorPopup.swatch('r3d-surface-tint', surface.tint || '#ffffff') : `<input type="color" class="r3d-surface-tint" value="${surface.tint || '#ffffff'}">`}</div>`;
+        // Only the file is written: a full save rebuilds the animation playback, and
+        // restarting the model's motion on every nudge of a slider made it jump.
         const changed = () => {
             this._applyBaseTransform();
             clearTimeout(this._surfaceSave);
-            this._surfaceSave = setTimeout(() => this.saveRules(), 300);
+            this._surfaceSave = setTimeout(() => this.saveSurface(), 300);
         };
         form.querySelectorAll('.r3d-surface').forEach(input => input.addEventListener('input', () => {
             surface[input.dataset.field] = Number(input.value);
             form.querySelector(`.r3d-surface-value[data-field="${input.dataset.field}"]`).textContent = Math.round(surface[input.dataset.field] * 100) + '%';
             changed();
         }));
-        form.querySelector('.r3d-surface-tint').addEventListener('input', event => { surface.tint = event.target.value; changed(); });
+        const tint = form.querySelector('.r3d-surface-tint');
+        if (typeof RRColorPopup !== 'undefined' && tint.tagName === 'BUTTON') RRColorPopup.bind(tint, hex => { surface.tint = hex; changed(); });
+        else tint.addEventListener('input', event => { surface.tint = event.target.value; changed(); });
         form.querySelectorAll('.r3d-surface-preset').forEach(button => button.addEventListener('click', () => {
             const preset = Database3DEditor.SURFACE_PRESETS.find(([name]) => name === button.dataset.preset);
             if (!preset) return;
@@ -4149,6 +4155,22 @@ class Database3DEditor {
             changed();
             this.renderSurfaceForm();
         }));
+    }
+
+    /** Write the surface to model.json, leaving the preview's animation running. */
+    saveSurface() {
+        const fs = require('fs');
+        try {
+            const previous = this._readSidecarForUpdate(fs);
+            this._writeFileAtomic(fs, this.rulesPath(),
+                Database3DEditor.mergeSidecar(previous, this.rawAnimations, this.customParts, this.customPivots, this.rawEffects, this.rawTransform, this.rawCollision, this.rawSurface));
+        } catch (error) {
+            this._reportModelSaveError(error);
+            return;
+        }
+        const status = this._detail.querySelector('.r3d-status');
+        if (status) status.textContent = `${this._t('Saved')} — 3d/${this.selectedName}/model.json`;
+        if (typeof RREventPreviewModels !== 'undefined' && RREventPreviewModels.clear) RREventPreviewModels.clear();
     }
 
     /** The shine the model's own file declares (polished metal), if any: a starting point, never on by itself. */

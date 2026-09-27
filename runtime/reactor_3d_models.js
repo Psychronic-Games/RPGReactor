@@ -2225,24 +2225,35 @@ Reactor3D.studioEnvMap = function() {
         this._studioEnv = null;
         return null;
     }
-    const size = 32;
-    const stops = [
-        [[228, 232, 236], [118, 122, 128]],
-        [[176, 180, 186], [86, 90, 96]],
-        [[248, 246, 242], [198, 194, 188]],
-        [[72, 70, 68], [36, 34, 32]],
-        [[210, 214, 218], [102, 106, 112]],
-        [[164, 168, 174], [78, 82, 88]]
-    ];
-    const faces = stops.map(([hi, lo]) => {
+    // A photo studio a shiny surface can read: sky overhead, a bright horizon,
+    // a dark floor, and two softboxes for the crisp highlights chrome needs.
+    // Faces in three's order: +X, -X, +Y, -Y, +Z, -Z.
+    const size = 64;
+    const faces = [0, 1, 2, 3, 4, 5].map(face => {
         const canvas = document.createElement("canvas");
         canvas.width = canvas.height = size;
         const ctx = canvas.getContext("2d");
-        const gradient = ctx.createLinearGradient(0, 0, 0, size);
-        gradient.addColorStop(0, "rgb(" + hi.join(",") + ")");
-        gradient.addColorStop(1, "rgb(" + lo.join(",") + ")");
-        ctx.fillStyle = gradient;
+        if (face === 2 || face === 3) {
+            const top = face === 2;
+            const glow = ctx.createRadialGradient(size / 2, size / 2, 2, size / 2, size / 2, size * 0.75);
+            glow.addColorStop(0, top ? "rgb(236,242,250)" : "rgb(58,54,50)");
+            glow.addColorStop(1, top ? "rgb(150,182,222)" : "rgb(30,28,26)");
+            ctx.fillStyle = glow;
+            ctx.fillRect(0, 0, size, size);
+            return canvas;
+        }
+        const wall = ctx.createLinearGradient(0, 0, 0, size);
+        wall.addColorStop(0, "rgb(142,176,220)");
+        wall.addColorStop(0.46, "rgb(226,232,238)");
+        wall.addColorStop(0.52, "rgb(250,248,244)");
+        wall.addColorStop(0.58, "rgb(120,114,106)");
+        wall.addColorStop(1, "rgb(44,40,38)");
+        ctx.fillStyle = wall;
         ctx.fillRect(0, 0, size, size);
+        if (face === 0 || face === 4) {
+            ctx.fillStyle = "rgb(255,255,255)";
+            ctx.fillRect(size * 0.3, size * 0.14, size * 0.4, size * 0.22);
+        }
         return canvas;
     });
     const cube = new THREE.CubeTexture(faces);
@@ -5720,7 +5731,9 @@ Reactor3D.readModelSurface = function(json) {
         reflect: unit(raw.reflect, 0),
         gloss: unit(raw.gloss, 0.8),
         metal: unit(raw.metal, 0),
-        tint: typeof raw.tint === "string" && /^#[0-9a-f]{6}$/i.test(raw.tint) ? raw.tint : "#ffffff"
+        tint: typeof raw.tint === "string" && /^#[0-9a-f]{6}$/i.test(raw.tint) ? raw.tint : "#ffffff",
+        // How much of the texture stays under the reflection: 0 a mirror, 1 a clear lacquer over the paint.
+        texture: unit(raw.texture, 0)
     };
 };
 
@@ -5734,13 +5747,17 @@ Reactor3D.setMaterialShine = function(material, surface) {
             material.userData.rrShine = { vector: new THREE.Vector4(), tint: new THREE.Color() };
         }
         const shine = material.userData.rrShine;
-        shine.vector.set(surface.reflect, 1 - surface.gloss, surface.metal, 0);
+        shine.vector.set(surface.reflect, 1 - surface.gloss, surface.metal, Number(surface.texture) || 0);
         shine.tint.set(surface.tint || "#ffffff");
         if (this.Reflections) { this.Reflections.wanted = true; this.Reflections.hook(material); }
     } else if (material.userData.rrShine) {
         material.userData.rrShine.vector.x = 0;
     }
-    if (had !== shines) material.needsUpdate = true;
+    // three keeps one uniform set per material, from its latest compile: back on a
+    // program it cached earlier it would draw with the other program's uniforms
+    // (no reflection sampler, every draw dropped). Dispose so the next draw compiles
+    // afresh; the GL program itself is shared and reused.
+    if (had !== shines) { material.dispose(); material.needsUpdate = true; }
 };
 
 /** A model's surface on every lit material it has; with none, nothing reflects. */
