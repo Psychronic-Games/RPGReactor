@@ -412,3 +412,9 @@ test('a sun lights the ground under it however high it hangs, and the light grid
     assert.match(editorLights, /const TYPES = \['point', 'spot', 'beam', 'sun'\]/);
     assert.match(editorLights, /key: 'sun', type: 'sun'/);
 });
+
+test('jump keys taken back on a 3D map are put back and said', () => {
+    const src = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', '..', 'runtime', 'reactor_controls.js'), 'utf8');
+    assert.match(src, /ReactorControls\.checkField3D = function\(scene\) \{/);
+    assert.match(src, /Graphics\.frameCount % 60 === 0\) ReactorControls\.checkField3D\(this\);/);
+});

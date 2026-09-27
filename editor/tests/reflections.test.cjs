@@ -193,3 +193,15 @@ test('a built piece keeps its finish and wears it in its own shiny draw; water c
     const lookup = Reactor3D.mirrorLookup('x', slot => 'on' + slot, '', '1.0');
     for (let slot = 0; slot < Reactor3D.MIRROR_SLOTS; slot++) assert.match(lookup, new RegExp('rrMirrorMap' + slot), 'every slot is read');
 });
+
+test('a capture sees no underwater wash, the ground at the feet is never cut, and the sky follows the capture', () => {
+    const volume = Reactor3D.waterVolumeUniforms();
+    volume.rrWaterCount.value = 2;
+    let during = null;
+    Reactor3D.withSkyAt(null, null, () => { during = volume.rrWaterCount.value; });
+    assert.equal(during, 0, 'a mirror eye under its lake drew murky water');
+    assert.equal(volume.rrWaterCount.value, 2, 'and the wash comes back after');
+    volume.rrWaterCount.value = 0;
+    const lighting = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d_lighting.js'), 'utf8');
+    assert.match(lighting, /if \(abs\(rrFaceN\.y\) >= 0\.55 && vRRWorldPos\.y <= rrF\.y \+ 0\.5\) continue;/, 'ground about the character is never in the way');
+});

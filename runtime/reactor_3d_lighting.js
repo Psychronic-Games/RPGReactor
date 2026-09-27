@@ -667,11 +667,16 @@ Reactor3D.injectCutaway = function(material, shader) {
             // the followers and the nearest events (rrCutFoci).
             material.__reactorPieces ? [
                 "bool rrInWay = false;",
+                // Nothing walked on is in the way: a ramp or floor seen between the eye and the feet
+                // was ghosted, a hole in the ground at the party's feet. Its facing from the screen.
+                "vec3 rrFaceN = normalize(cross(dFdx(vRRWorldPos), dFdy(vRRWorldPos)));",
                 "if (rrCutRadius > 0.0) {",
                 "\tfor (int rrI = 0; rrI < " + Reactor3D.CUTAWAY_FOCI + "; rrI++) {",
                 "\t\tif (rrI >= rrCutFocusCount) break;",
                 "\t\tvec3 rrF = rrCutFoci[rrI];",
                 "\t\tif (vRRWorldPos.y <= rrF.y - 1.4) continue;",
+                // Ground about the character's own height (it faces up) is walked on, never in the way.
+                "\t\tif (abs(rrFaceN.y) >= 0.55 && vRRWorldPos.y <= rrF.y + 0.5) continue;",
                 "\t\tvec2 rrSight2 = rrF.xz - rrCutEye.xz;",
                 "\t\tfloat rrSight2Length = length(rrSight2);",
                 "\t\tif (rrSight2Length <= 0.001) continue;",
@@ -1227,13 +1232,20 @@ Reactor3D.Reflections = {
  * the dome follows the main camera, and a reflected eye stood outside it looking at nothing.
  */
 Reactor3D.withSkyAt = function(scene, position, draw) {
+    // The underwater wash is judged from the eye: a mirror's eye stands under the lake it is
+    // for, and the whole picture came back as murky water. A capture sees none.
+    const volume = this.waterVolumeUniforms ? this.waterVolumeUniforms() : null;
+    const count = volume ? volume.rrWaterCount.value : 0;
+    if (volume) volume.rrWaterCount.value = 0;
     const dome = scene && scene.userData && scene.userData.rrSkyDome;
-    if (!dome || !dome.parent || !position) return draw();
+    if (!dome || !dome.parent || !position) {
+        try { return draw(); } finally { if (volume) volume.rrWaterCount.value = count; }
+    }
     const saved = dome.position.clone();
     dome.position.set(position.x, position.y, position.z);
     dome.updateMatrix(); dome.updateMatrixWorld(true);
     try { return draw(); }
-    finally { dome.position.copy(saved); dome.updateMatrix(); dome.updateMatrixWorld(true); }
+    finally { dome.position.copy(saved); dome.updateMatrix(); dome.updateMatrixWorld(true); if (volume) volume.rrWaterCount.value = count; }
 };
 
 /** How many reflections deep two facing mirrors go (each level another, smaller draw of the scene). */

@@ -94,5 +94,29 @@
         };
     }
 
+    /**
+     * On a 3D map the jump keys must say "jump". Something can write them back (a plugin's key
+     * config, a scene that restores the maps) and Jump then quietly confirms instead: checked
+     * about once a second, put back, and said on the console so the culprit can be found.
+     */
+    ReactorControls.checkField3D = function(scene) {
+        if (typeof Input === "undefined" || !this._saved || !this.isField3D(scene)) return false;
+        const settings = this.settings();
+        const lostKey = settings.jumpKeys.find(code => Input.keyMapper[code] !== "jump");
+        const lostPad = settings.jumpButtons.find(button => Input.gamepadMapper[button] !== "jump");
+        if (lostKey === undefined && lostPad === undefined) return false;
+        if (typeof console !== "undefined") console.warn("RPG Reactor: the jump " + (lostKey !== undefined ? "key " + lostKey + " had become \"" + Input.keyMapper[lostKey] + "\"" : "button " + lostPad + " had become \"" + Input.gamepadMapper[lostPad] + "\"") + "; put back.");
+        this._saved = null;
+        this.setField3D(true);
+        return true;
+    };
+    if (typeof Scene_Map !== "undefined") {
+        const _update = Scene_Map.prototype.update;
+        Scene_Map.prototype.update = function() {
+            _update.apply(this, arguments);
+            if (typeof Graphics !== "undefined" && Graphics.frameCount % 60 === 0) ReactorControls.checkField3D(this);
+        };
+    }
+
     if (typeof module !== "undefined" && module.exports) module.exports = ReactorControls;
 })(typeof window !== "undefined" ? window : globalThis);
