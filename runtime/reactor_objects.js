@@ -2033,7 +2033,18 @@ Game_Action.prototype.testApply = function(target) {
         ($gameParty.inBattle() ||
             (this.isHpRecover() && target.hp < target.mhp) ||
             (this.isMpRecover() && target.mp < target.mmp) ||
+            this.testSecondaryRecover(target) ||
             this.hasItemAnyValidEffects(target))
+    );
+};
+
+/** A secondary Recover makes the action worth using, as a primary one does. */
+Game_Action.prototype.testSecondaryRecover = function(target) {
+    const secondary = this.secondaryDamage();
+    if (!secondary) return false;
+    return (
+        (secondary.type === 3 && target.hp < target.mhp) ||
+        (secondary.type === 4 && target.mp < target.mmp)
     );
 };
 
@@ -2134,9 +2145,11 @@ Game_Action.prototype.apply = function(target) {
     result.drain = this.isDrain();
     if (result.isHit()) {
         if (this.item().damage.type > 0) {
-            result.critical = Math.random() < this.itemCri(target);
-            const value = this.makeDamageValue(target, result.critical);
+            const critical = Math.random() < this.itemCri(target);
+            result.critical = critical;
+            const value = this.makeDamageValue(target, critical);
             this.executeDamage(target, value);
+            this.executeSecondaryDamage(target, value, critical);
         }
         if (!result.dodged) {
             for (const effect of this.item().effects) {
@@ -2147,6 +2160,87 @@ Game_Action.prototype.apply = function(target) {
     }
     this.updateLastTarget(target);
     ReactorEvents.emit("actionApplied", { action: this, subject: this.subject(), target, result });
+};
+
+/**
+ * The second resource a skill or item moves, or null. `damage.secondary`
+ * names an effect - damage, recover or drain - that always lands on the
+ * resource the primary type does not use, so HP Damage with an MP Drain
+ * can be written and HP Damage with an HP Drain cannot. Its amount is its
+ * own formula, or a rate of the primary's calculated value. Written only
+ * when used, so an action without it reads exactly as it always has.
+ */
+Game_Action.SECONDARY_DAMAGE_EFFECTS = ["damage", "recover", "drain"];
+
+Game_Action.prototype.secondaryDamage = function() {
+    const item = this.item();
+    const damage = item && item.damage;
+    const secondary = damage && damage.secondary;
+    if (!secondary || !(damage.type >= 1 && damage.type <= 6)) return null;
+    const effect = Game_Action.SECONDARY_DAMAGE_EFFECTS.indexOf(secondary.effect);
+    if (effect < 0) return null;
+    const basis = secondary.basis === "formula" ? "formula" : "rate";
+    const rate = Number(secondary.rate) || 0;
+    const formula = String(secondary.formula ?? "");
+    if (basis === "rate" ? !(rate > 0) : !formula.trim()) return null;
+    // HP types are odd (1, 3, 5) and MP types even (2, 4, 6).
+    const type = effect * 2 + (damage.type % 2 === 1 ? 2 : 1);
+    return { type, basis, rate, formula };
+};
+
+Game_Action.damageTypeSign = function(type) {
+    return type === 3 || type === 4 ? -1 : 1;
+};
+
+/**
+ * Apply the secondary channel to a target the primary has just hit, as a
+ * pass of its own through makeDamageValue and executeDamage. For that pass
+ * the item's damage type (and, by formula, its formula) are the
+ * secondary's, so every check and every wrapper sees an ordinary action of
+ * one type: an undead reversal, a barrier or a break shield judges each
+ * resource by itself. Plugins read `damage.type` and `damage.formula` off
+ * the item directly, which is why the fields themselves change rather than
+ * a method answering differently; both are put back before this returns.
+ *
+ * By rate, the amount is the primary's value scaled, carrying its sign, so
+ * a primary an element absorbed turns the secondary round with it; element,
+ * critical and variance are already in that number and are not applied
+ * again. Returns the value executed, or null when there was nothing to do.
+ */
+Game_Action.prototype.executeSecondaryDamage = function(target, primaryValue, critical) {
+    const secondary = this.secondaryDamage();
+    const result = target.result();
+    if (!secondary || result.dodged) return null;
+    const damage = this.item().damage;
+    const primaryType = damage.type;
+    const primaryFormula = damage.formula;
+    const priorChannel = this._rrDamageChannel;
+    const primaryCritical = result.critical;
+    let value = 0;
+    damage.type = secondary.type;
+    if (secondary.basis === "formula") damage.formula = secondary.formula;
+    this._rrDamageChannel = "secondary";
+    try {
+        value = secondary.basis === "formula"
+            ? this.makeDamageValue(target, critical)
+            : Math.round(primaryValue * secondary.rate / 100 *
+                Game_Action.damageTypeSign(secondary.type) / Game_Action.damageTypeSign(primaryType));
+        this.executeDamage(target, value);
+    } finally {
+        damage.type = primaryType;
+        damage.formula = primaryFormula;
+        this._rrDamageChannel = priorChannel;
+    }
+    // executeDamage clears the flag for a value of 0: a secondary that did
+    // nothing must not take the primary's critical away.
+    result.critical = primaryCritical || (critical && value !== 0);
+    // One drain flag per resource. `drain` itself follows the HP channel,
+    // which is what decides whether the HP line shakes and how it reads.
+    const hpIsPrimary = primaryType % 2 === 1;
+    result.hpDrain = hpIsPrimary ? primaryType === 5 : secondary.type === 5;
+    result.mpDrain = hpIsPrimary ? secondary.type === 6 : primaryType === 6;
+    result.drain = result.hpDrain;
+    return value;
 };
 
 Game_Action.prototype.makeDamageValue = function(target, critical) {
@@ -2609,6 +2703,10 @@ Game_ActionResult.prototype.clear = function() {
     this.dodged = false;
     this.physical = false;
     this.drain = false;
+    // Per resource, set only by an action with a secondary channel; unset,
+    // a reader falls back to `drain`, which is right for every other hit.
+    this.hpDrain = undefined;
+    this.mpDrain = undefined;
     this.critical = false;
     this.success = false;
     this.hpAffected = false;

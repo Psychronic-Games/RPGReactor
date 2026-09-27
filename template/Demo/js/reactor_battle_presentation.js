@@ -332,7 +332,8 @@
             const methods={};
             const override=(key,fn)=>{methods[key]={own:Object.hasOwn(action,key),value:action[key]};action[key]=fn;};
             if(action){
-                if(formula!==null)override('evalDamageFormula',function(target){const sign=[3,4].includes(this.item().damage.type)?-1:1;return Math.max(0,number(formula,target))*sign;});
+                // A secondary damage channel keeps its own formula; the sequence's replaces the primary's only.
+                if(formula!==null)override('evalDamageFormula',function(target){if(this._rrDamageChannel==='secondary')return methods.evalDamageFormula.value.call(this,target);const sign=[3,4].includes(this.item().damage.type)?-1:1;return Math.max(0,number(formula,target))*sign;});
                 if(elements)override('calcElementRate',target=>Math.max(...elements.map(id=>target.elementRate(id))));
                 if(rate!==100){const make=action.makeDamageValue;override('makeDamageValue',function(...args){return Math.round(make.apply(this,args)*rate/100);});}
             }
