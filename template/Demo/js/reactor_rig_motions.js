@@ -155,10 +155,12 @@
         }),
         // ── Humanoid: gestures, on demand ────────────────────────────
         motion('wave', 'Wave', 'humanoid', 'action', 90, {
-            // The arm out and up at the side, the forearm swinging from the elbow.
-            RightUpperArm: [key(0.18, [-10, 0, -120]), key(0.82, [-10, 0, -120])],
-            RightLowerArm: [key(0.18, [0, 0, -25]), key(0.3, [0, 0, 22]), key(0.42, [0, 0, -45]),
-                key(0.54, [0, 0, 22]), key(0.66, [0, 0, -45]), key(0.78, [0, 0, -15])],
+            // The upper arm out and a little forward, no higher than the shoulder
+            // (lifting it overhead crushes shoulder armour); the forearm up and
+            // turned palm-out, swinging side to side from the elbow.
+            RightUpperArm: [key(0.15, [-30, 0, -65]), key(0.85, [-30, 0, -65])],
+            RightLowerArm: [key(0.15, [0, 60, -95]), key(0.28, [22, 60, -95]), key(0.4, [-22, 60, -95]),
+                key(0.52, [22, 60, -95]), key(0.64, [-22, 60, -95]), key(0.76, [0, 60, -95]), key(0.85, [0, 60, -95])],
             Head: [key(0.2, [0, -8, 0]), key(0.8, [0, -8, 0])]
         }),
         motion('bow', 'Take a Bow', 'humanoid', 'action', 100, {
