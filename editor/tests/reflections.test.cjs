@@ -189,5 +189,7 @@ test('a built piece keeps its finish and wears it in its own shiny draw; water c
     assert.deepEqual({ ...own.surface }, { reflect: 0.7, gloss: 0.5, metal: 0.2, tint: '#FFCC55', texture: 0.4 }, 'the sliders\' surface is kept');
     assert.equal(Reactor3D.pieceSurface(own), own.surface, 'and wins over the finish');
     assert.equal(Reactor3D.pieceSurface({ finish: 'gold' }).tint, '#ffcc55');
-    assert.match(world, /rrMirrorPlane0\.y > 0\.9 && abs\(vRRWorldPos\.y - rrMirrorPlane0\.w\) < 0\.4/, 'water reads the mirror picture on its level');
+    assert.match(world, /Reactor3D\.mirrorLookup\("rrEnvC", slot => "rrMirrorPlane" \+ slot \+ "\.y > 0\.9 && abs\(vRRWorldPos\.y - rrMirrorPlane" \+ slot \+ "\.w\) < 0\.4"/, 'water reads the mirror picture on its level');
+    const lookup = Reactor3D.mirrorLookup('x', slot => 'on' + slot, '', '1.0');
+    for (let slot = 0; slot < Reactor3D.MIRROR_SLOTS; slot++) assert.match(lookup, new RegExp('rrMirrorMap' + slot), 'every slot is read');
 });

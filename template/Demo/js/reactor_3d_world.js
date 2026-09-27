@@ -1666,7 +1666,7 @@ Reactor3D.waterMaterial = function(texture, look) {
         );
         shader.fragmentShader = "varying float vRRDepth;\nvarying vec3 vRRWaveNormal;\nuniform vec4 rrWaterLook;\nuniform vec3 rrWaterTint;\nuniform vec4 rrWaterColour;\nuniform vec4 rrWaterForm;\n"
             + (env ? "uniform samplerCube rrEnvMap;\nuniform float rrEnvMaxLod;\nuniform float rrEnvFlip;\n" : "")
-            + (mirror ? "uniform float rrMirrorOn0;\nuniform vec4 rrMirrorPlane0;\nuniform mat4 rrMirrorMatrix0;\nuniform sampler2D rrMirrorMap0;\nuniform float rrMirrorOn1;\nuniform vec4 rrMirrorPlane1;\nuniform mat4 rrMirrorMatrix1;\nuniform sampler2D rrMirrorMap1;\nuniform float rrMirrorTolerance;\n" : "")
+            + (mirror ? Reactor3D.mirrorUniformDeclarations() + "\nuniform float rrMirrorTolerance;\n" : "")
             + shader.fragmentShader.replace(
             "#include <map_fragment>",
             [
@@ -1700,13 +1700,7 @@ Reactor3D.waterMaterial = function(texture, look) {
                     // in place, rippled by the waves (and blurred a little as the water roughens).
                     mirror ? [
                         "\t\tvec2 rrRipple = vRRWaveNormal.xz * (0.035 + 0.1 * rrWaterLook.y);",
-                        "\t\tif (rrMirrorOn0 > 0.5 && rrMirrorPlane0.y > 0.9 && abs(vRRWorldPos.y - rrMirrorPlane0.w) < 0.4) {",
-                        "\t\t\tvec4 rrMC = rrMirrorMatrix0 * vec4(vRRWorldPos, 1.0); vec2 rrMU = clamp(rrMC.xy / rrMC.w + rrRipple, 0.001, 0.999);",
-                        "\t\t\tif (rrMC.w > 0.0) rrEnvC = textureLod(rrMirrorMap0, rrMU, 0.0).rgb * rrWaterTint;",
-                        "\t\t} else if (rrMirrorOn1 > 0.5 && rrMirrorPlane1.y > 0.9 && abs(vRRWorldPos.y - rrMirrorPlane1.w) < 0.4) {",
-                        "\t\t\tvec4 rrMC = rrMirrorMatrix1 * vec4(vRRWorldPos, 1.0); vec2 rrMU = clamp(rrMC.xy / rrMC.w + rrRipple, 0.001, 0.999);",
-                        "\t\t\tif (rrMC.w > 0.0) rrEnvC = textureLod(rrMirrorMap1, rrMU, 0.0).rgb * rrWaterTint;",
-                        "\t\t}"
+                        Reactor3D.mirrorLookup("rrEnvC", slot => "rrMirrorPlane" + slot + ".y > 0.9 && abs(vRRWorldPos.y - rrMirrorPlane" + slot + ".w) < 0.4", "rrRipple", "rrWaterTint")
                     ].join("\n") : "",
                     // Glancing light is reflected, light from above goes in: a dark liquid stays dark seen from
                     // above (tar is black, not sky blue) and mirrors the world toward the horizon; only a full

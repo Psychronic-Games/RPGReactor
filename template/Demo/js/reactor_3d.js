@@ -5416,6 +5416,10 @@ Reactor3D.MapScene.prototype.addSkyImage = function(sky, bitmap, tileSize) {
     this.belowGroup().add(mesh);
     this._meshes.push(mesh);
     this._sky = mesh;
+    // The dome stands around whichever camera draws: mirrors and the reflection capture move it
+    // to their own eye for their draw (see `Reactor3D.withSkyAt`).
+    mesh.userData.rrSkyDome = true;
+    if (this._scene) this._scene.userData.rrSkyDome = mesh;
 };
 
 /**
@@ -6975,7 +6979,7 @@ Reactor3D.MapScene.prototype.mirrorCandidates = function(camera) {
         .map(object => ({ object, distance: distance(object) }))
         .filter(entry => entry.distance <= reach)
         .sort((a, b) => a.distance - b.distance)
-        .slice(0, 2).map(entry => entry.object);
+        .slice(0, 12).map(entry => entry.object);
 };
 
 /** How strongly a model mirrors: its shiniest lit material's reflection (0 for none), worked out once it has meshes. */
