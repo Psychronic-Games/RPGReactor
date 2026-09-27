@@ -1033,3 +1033,25 @@ test('a plan roof lays its gable-end columns in the wall material', () => {
     assert.ok(ramps.filter(p => p.x === x0 || p.x === x1).every(p => p.material === wall));
     assert.ok(ramps.filter(p => p.x > x0 && p.x < x1).every(p => p.material !== wall));
 });
+
+test('a crooked wedge is still a ramp, and a ramp laid over a hill is walked from its own base', () => {
+    require(path.join(repoRootForRamp(), 'runtime', 'libs', 'three.js'));
+    const R = require(path.join(repoRootForRamp(), 'runtime', 'reactor_3d.js'));
+    const wedge = { id: 1, kind: 'wedge', x: 10, y: 10, z: 0, rot: 0, material: '', size: [6, 4, 8], angle: 0 };
+    const rolled = Object.assign({}, wedge, { roll: 5 });
+    const tops = piece => [7, 9, 11, 13].map(y => R.pieceTop(y === 10 ? piece : Object.assign({}, piece, { y, standIn: true, anchor: [10, 10] }), 0.5, 0.5));
+    const flat = tops(wedge), crooked = tops(rolled);
+    for (let i = 1; i < flat.length; i++) assert.ok(flat[i] > flat[i - 1] && crooked[i] > crooked[i - 1], 'both rise along the run');
+    assert.ok(Math.max(...crooked) < 4.6, 'a 5° roll is not a 4-high block');
+    // A hill under the ramp: its top is read from the base it is drawn on.
+    const width = 20, height = 20, grid = new Array((width + 1) * (height + 1)).fill(0);
+    for (let y = 0; y <= height; y++) for (let x = 0; x <= width; x++) grid[y * (width + 1) + x] = y >= 12 ? (y - 12) * 0.6 : 0;
+    const map = { width, height, reactor3d: { version: 1, pieces: [Object.assign({}, wedge, { angle: 180 })], terrain: grid } };
+    assert.ok(R.terrainOf(map), 'the hill is read');
+    let alt = R.groundHeightAt(map, 10.5, 14.5, 0);
+    for (let y = 14; y > 7; y--) {
+        assert.equal(R.terrainBlocks(map, 10, y, 10, y - 1, alt), false, 'walked up from ' + y);
+        alt = R.groundHeightAt(map, 10.5, y - 0.5, alt);
+    }
+});
+function repoRootForRamp() { return path.resolve(__dirname, '..', '..'); }

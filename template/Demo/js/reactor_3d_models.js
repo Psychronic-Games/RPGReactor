@@ -6875,9 +6875,19 @@ Reactor3D.characterHeightTiles = function(character) {
 };
 
 /** Whether two characters' height ranges cross; on a flat map (all heights 0) always. */
+/**
+ * Where a character's feet are, in tiles: the physics altitude when it has one
+ * (the ground, a roof, a ladder rung), else its scripted lift. A player on a
+ * roof 120 up is not in the way of a tree standing on the ground below it.
+ */
+Reactor3D.characterFeet = function(c) {
+    const lift = c._reactorLift || 0;
+    return Number.isFinite(c._reactorAlt) ? Math.max(c._reactorAlt, lift) : lift;
+};
+
 Reactor3D.charactersOverlapVertically = function(a, b) {
     if (!a || !b) return true;
-    const za = a._reactorLift || 0, zb = b._reactorLift || 0;
+    const za = this.characterFeet(a), zb = this.characterFeet(b);
     if (!za && !zb) return true;
     const ha = this.characterHeightTiles(a), hb = this.characterHeightTiles(b);
     return za < zb + hb - 1e-6 && zb < za + ha - 1e-6;

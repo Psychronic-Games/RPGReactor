@@ -79,7 +79,7 @@ Reactor3D.terrainHeightAt = function(mapData, wx, wz) {
 Reactor3D.groundHeightAt = function(mapData, wx, wz, near) {
     const base = this.elevationAt(mapData, Math.floor(wx), Math.floor(wz)) + this.terrainHeightAt(mapData, wx, wz);
     // `near` is a world height; the piece stacks count from the cell's ground.
-    return base + this.pieceSurfaceAt(mapData, wx, wz, Number.isFinite(near) ? near - base : 0);
+    return base + this.pieceSurfaceAt(mapData, wx, wz, Number.isFinite(near) ? near - base : 0, base);
 };
 
 /**
@@ -610,6 +610,19 @@ Reactor3D.pieceTop = function(piece, u, v) {
                 }
                 if (!this.shapeTurned(piece)) return piece.z + this.shapeSize(piece)[1];
                 const at = this.shapePlacer(piece, 0);
+                // A rolled or tilted wedge is still a ramp: its slope (y = v in its own frame) is an
+                // affine sheet, so the point under the walker is found by inverting it across the
+                // ground, and the height read there. (Its highest corner made a crooked ramp a wall.)
+                if (piece.kind === "wedge") {
+                    const p00 = at(0, 0, 0), p10 = at(1, 0, 0), p01 = at(0, 1, 1);
+                    const ax = p10[0] - p00[0], az = p10[2] - p00[2], bx = p01[0] - p00[0], bz = p01[2] - p00[2];
+                    const det = ax * bz - bx * az;
+                    if (Math.abs(det) > 1e-9) {
+                        const qx = piece.x + (Number.isFinite(u) ? u : 0.5) - p00[0], qz = piece.y + (Number.isFinite(v) ? v : 0.5) - p00[2];
+                        const su = Math.max(0, Math.min(1, (qx * bz - bx * qz) / det)), sv = Math.max(0, Math.min(1, (ax * qz - qx * az) / det));
+                        return p00[1] + su * (p10[1] - p00[1]) + sv * (p01[1] - p00[1]);
+                    }
+                }
                 let top = -Infinity;
                 for (const u of [0, 1]) for (const y of [0, 1]) for (const v of [0, 1]) top = Math.max(top, at(u, y, v)[1]);
                 return top;
@@ -635,7 +648,7 @@ Reactor3D.pieceTop = function(piece, u, v) {
  * with nothing under it is a bridge walked under from below and a floor
  * arrived at from a stair.
  */
-Reactor3D.pieceSurfaceAt = function(mapData, wx, wz, near) {
+Reactor3D.pieceSurfaceAt = function(mapData, wx, wz, near, base) {
     const index = this.pieceIndex(mapData);
     if (!index) return 0;
     const x = Math.floor(wx), y = Math.floor(wz);
@@ -645,15 +658,24 @@ Reactor3D.pieceSurfaceAt = function(mapData, wx, wz, near) {
     const standing = Number.isFinite(near) ? near : 0;
     let surface = 0;
     const u = wx - x, v = wz - y;
+    // A shape is drawn from one base, its own cell's ground: over rising ground its top is
+    // read from there, not from each cell it covers (a ramp laid on a hill was a wall).
+    const cellBase = Number.isFinite(base) ? base : null;
+    const shapeTop = piece => {
+        const top = this.pieceTop(piece, u, v);
+        if (cellBase === null || !this.isShapeKind(piece.kind)) return top;
+        const anchor = Array.isArray(piece.anchor) ? piece.anchor : [piece.x, piece.y];
+        return top + this.pieceBaseAt(mapData, anchor[0], anchor[1]) - cellBase;
+    };
     for (const piece of stack) {
         // A ladder is climbed, never stood on.
         if (piece.kind === "ladder") continue;
         if (piece.z > surface + reach) {
             if (standing + reach < piece.z) break;
-            surface = Math.max(0, this.pieceTop(piece, u, v));
+            surface = Math.max(0, shapeTop(piece));
             continue;
         }
-        const height = this.pieceTop(piece, u, v);
+        const height = shapeTop(piece);
         if (height > surface) surface = height;
     }
     return surface;
@@ -1648,7 +1670,9 @@ Reactor3D.waterMaterial = function(texture, look) {
                 "\tdiffuseColor.rgb = mix(diffuseColor.rgb * rrTint, vec3(1.0), rrGlint * 0.7 * (1.0 - rrWaterForm.z));",
                 // Clarity 0.6 is water as it always was; lower is murkier to opaque (tar, lava), higher clearer.
                 "\tfloat rrSeen = 0.55 + 0.3 * smoothstep(0.0, 2.0, vRRDepth) + 0.15 * rrFresnel;",
-                "\tdiffuseColor.a *= clamp(mix(1.0, rrSeen, rrWaterForm.x / 0.6), 0.05, 1.0) * smoothstep(0.0, 0.35, vRRDepth);",
+                // Past water's own 0.6 it thins only so far: a clear liquid is still there to see.
+                "\tfloat rrOpacity = rrWaterForm.x <= 0.6 ? mix(1.0, rrSeen, rrWaterForm.x / 0.6) : mix(rrSeen, max(rrSeen * 0.55, 0.25), (rrWaterForm.x - 0.6) / 0.4);",
+                "\tdiffuseColor.a *= rrOpacity * smoothstep(0.0, 0.35, vRRDepth);",
                 // A glowing liquid burns brighter at its crests.
                 "\tif (rrWaterForm.z > 0.0) diffuseColor.rgb *= 1.0 + rrWaterForm.z * (0.35 + 2.5 * (1.0 - vRRWaveNormal.y));",
                 // A reflective sheet mirrors the world through its waves, more at a

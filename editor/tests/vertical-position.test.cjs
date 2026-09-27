@@ -51,6 +51,10 @@ test('collision is by vertical overlap', () => {
     assert.equal(Reactor3D.charactersOverlapVertically(at(0), at(12)), false, 'a scaffold overhead blocks nobody');
     assert.equal(Reactor3D.charactersOverlapVertically(at(12), at(12)), true, 'on the scaffold, the scaffold is there');
     assert.equal(Reactor3D.charactersOverlapVertically(at(1), at(2)), true, 'a tile apart, a character is taller than that');
+    // Physics altitude counts too: on a roof 121 up, a tree on the ground below is not in the way.
+    const roof = { _reactorAlt: 121 }, tree = { _reactorAlt: 0 };
+    assert.equal(Reactor3D.charactersOverlapVertically(roof, tree), false, 'the roof walker passes over the tree');
+    assert.equal(Reactor3D.charactersOverlapVertically({ _reactorAlt: 121 }, { _reactorAlt: 121.2 }), true, 'two on the roof still meet');
 });
 
 test('Rise, Descend and Set Height ride a Script route step RPG Maker ignores', () => {
