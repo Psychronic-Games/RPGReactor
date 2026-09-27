@@ -317,6 +317,33 @@ class ModelPropsManager {
         return true;
     }
 
+    /** Copy the selected model (everything but where it stands) for Paste. */
+    copySelected() {
+        const prop = this.prop(this.selectedId);
+        if (!prop) return false;
+        const copy = JSON.parse(JSON.stringify(prop));
+        delete copy.id;
+        ModelPropsManager.clipboard = copy;
+        return true;
+    }
+
+    /** Stand the copied model at map coordinates; it comes selected, one undo step. */
+    pasteAt(x, y) {
+        const clip = ModelPropsManager.clipboard, elevation = this.elevation();
+        if (!clip || !elevation || !this.currentMap || !Number.isFinite(x) || !Number.isFinite(y)) return 0;
+        this.pushUndo();
+        const id = elevation.addProp(this.currentMap, Object.assign({}, clip, { x: Math.round(x * 100) / 100, y: Math.round(y * 100) / 100 }));
+        if (id) { this._changed([id]); this.select(id); }
+        return id;
+    }
+
+    /** A copy of the selected model a tile east of it. */
+    duplicateSelected() {
+        const prop = this.prop(this.selectedId);
+        if (!prop || !this.copySelected()) return 0;
+        return this.pasteAt(prop.x + Math.max(1, Math.ceil(prop.size * (prop.scale || 1) / 2)), prop.y);
+    }
+
     /** Put a new prop at map coordinates (tiles, fractional allowed) from the chosen model. */
     place(x, y) {
         const elevation = this.elevation();

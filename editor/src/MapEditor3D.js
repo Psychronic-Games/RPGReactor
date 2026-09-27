@@ -2838,6 +2838,63 @@ class MapEditor3D {
         return best ? best.id : null;
     }
 
+    /** Right-click in Build › Select: Copy, Paste here, Duplicate, Delete for the piece under the pointer and the selection. */
+    showPieceMenu(clientX, clientY) {
+        const manager = this.pieceManager(), t = key => (window.I18n ? window.I18n.t(key) : key);
+        const pick = this.pieceTargetAt(clientX, clientY, { erase: true });
+        const under = pick ? manager.pieceAtTarget(pick) : null;
+        if (under && !manager.selectionIds().includes(under.id)) manager.selectAt(pick);
+        const has = manager.selectionIds().length > 0;
+        const place = this.pieceTargetAt(clientX, clientY);
+        const mod = /Mac/.test(navigator.platform || '') ? 'Cmd' : 'Ctrl';
+        RRContextMenu.show(clientX, clientY, [
+            { label: t('ctx3d.copy'), shortcut: mod + '+C', enabled: has, action: () => manager.copySelection() },
+            { label: t('ctx3d.paste'), shortcut: mod + '+V', enabled: !!(PieceBuilderManager.clipboard && place), action: () => manager.pasteAt(place) },
+            { label: t('ctx3d.duplicate'), shortcut: mod + '+D', enabled: has, action: () => manager.duplicateSelection() },
+            { separator: true },
+            { label: t('ctx3d.delete'), shortcut: 'Delete', enabled: has, action: () => manager.removeSelection() }
+        ]);
+    }
+
+    /** Right-click with the models tool: Copy, Paste here, Duplicate, Delete, Deselect. */
+    showPropMenu(clientX, clientY) {
+        const manager = this.propsManager(), t = key => (window.I18n ? window.I18n.t(key) : key);
+        const hit = this.propAt(clientX, clientY, true);
+        if (hit && manager.selectedId !== hit) { manager.select(hit, { fromThree: true }); this.selectProp(hit); }
+        const has = !!manager.prop(manager.selectedId);
+        const ground = this.groundPointAt(clientX, clientY);
+        const mod = /Mac/.test(navigator.platform || '') ? 'Cmd' : 'Ctrl';
+        RRContextMenu.show(clientX, clientY, [
+            { label: t('ctx3d.copy'), shortcut: mod + '+C', enabled: has, action: () => manager.copySelected() },
+            { label: t('ctx3d.paste'), shortcut: mod + '+V', enabled: !!(ModelPropsManager.clipboard && ground), action: () => { manager.pasteAt(ground.x, ground.y); this.selectProp(manager.selectedId); } },
+            { label: t('ctx3d.duplicate'), shortcut: mod + '+D', enabled: has, action: () => { manager.duplicateSelected(); this.selectProp(manager.selectedId); } },
+            { separator: true },
+            { label: t('ctx3d.delete'), shortcut: 'Delete', enabled: has, action: () => manager.remove(manager.selectedId) },
+            { label: t('props.deselect'), enabled: has, action: () => { manager.select(null, { fromThree: true }); this.selectProp(null); } }
+        ]);
+    }
+
+    /** Ctrl+C / Ctrl+V / Ctrl+D for the models tool or Build › Select, pasting where the pointer last was. True when it took the key. */
+    handleClipboardKey(key) {
+        const at = this._lastPointerClient;
+        if (this.canEditProps()) {
+            const manager = this.propsManager();
+            if (key === 'c') return manager.copySelected();
+            if (key === 'd') { const id = manager.duplicateSelected(); this.selectProp(manager.selectedId); return !!id; }
+            const ground = at ? this.groundPointAt(at.x, at.y) : null;
+            if (key === 'v' && ground) { const id = manager.pasteAt(ground.x, ground.y); this.selectProp(manager.selectedId); return !!id; }
+            return false;
+        }
+        if (this.canEditPieces() && this.pieceManager().mode === 'select') {
+            const manager = this.pieceManager();
+            if (key === 'c') return manager.copySelection();
+            if (key === 'd') return manager.duplicateSelection();
+            const place = at ? this.pieceTargetAt(at.x, at.y) : null;
+            if (key === 'v' && place) return manager.pasteAt(place);
+        }
+        return false;
+    }
+
     /** Where the pointer meets the map, in tiles (fractional), or null off the map. */
     groundPointAt(clientX, clientY) {
         const mapData = this.currentMap();
@@ -3713,6 +3770,8 @@ class MapEditor3D {
             if (this.pointer.eventArrow) this.pointer.pan = false;
         };
         this._onPointerMove = event => {
+            // Where Ctrl+V pastes.
+            this._lastPointerClient = { x: event.clientX, y: event.clientY };
             this._lastActiveAt = performance.now();
             if (!this.pointer) {
                 // One raycast answers both questions.
@@ -3895,19 +3954,20 @@ class MapEditor3D {
             const drag = this.pointer;
             if (drag && Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) > 4) return;
 
-            // With the pieces tool up, a right-click pulls off the piece under
-            // the pointer, the way a brick comes off a model.
+            // With the pieces tool up: in Select, a menu for the piece under the pointer (and the
+            // rest of the selection); placing, a right-click pulls the piece off, the way a brick
+            // comes off a model.
             if (this.canEditPieces()) {
                 const manager = this.pieceManager();
+                if (manager.mode === 'select' && typeof RRContextMenu !== 'undefined') { this.showPieceMenu(event.clientX, event.clientY); return; }
                 const target = this.pieceTargetAt(event.clientX, event.clientY, { erase: true });
                 if (target) manager.removeAt(target);
                 return;
             }
-            // With the models tool up, a right-click lets go of the selected
-            // model — on the model or on the ground alike. Placing one
-            // selects it, and the panel's Deselect button was the only way
-            // back to placing the next.
+            // With the models tool up: a menu for the model under the pointer, or (on the ground)
+            // Paste here and letting go of the selection.
             if (this.canEditProps()) {
+                if (typeof RRContextMenu !== 'undefined') { this.showPropMenu(event.clientX, event.clientY); return; }
                 const manager = this.propsManager();
                 if (manager?.selectedId) {
                     manager.select(null, { fromThree: true });

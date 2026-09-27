@@ -21477,3 +21477,23 @@ Object.assign(RR_I18N_STRINGS["id"], {"terrain.look.selected": "Mengedit cairan 
 Object.assign(RR_I18N_STRINGS["vi"], {"terrain.look.selected": "Đang sửa chất lỏng {w}×{h} được viền trong khung nhìn. Nhấp chất lỏng khác để đổi.", "terrain.look.pick": "Nhấp một chất lỏng trong khung nhìn để chọn; các thiết lập này sẽ đổi nó."});
 Object.assign(RR_I18N_STRINGS["th"], {"terrain.look.selected": "กำลังแก้ไขของเหลว {w}×{h} ที่มีเส้นขอบในมุมมอง คลิกอันอื่นเพื่อสลับ", "terrain.look.pick": "คลิกของเหลวในมุมมองเพื่อเลือก แล้วการตั้งค่าเหล่านี้จะเปลี่ยนมัน"});
 Object.assign(RR_I18N_STRINGS["tr"], {"terrain.look.selected": "Görünümde çerçevelenen {w}×{h} sıvı düzenleniyor. Değiştirmek için başka birine tıklayın.", "terrain.look.pick": "Seçmek için görünümde bir sıvıya tıklayın; bu ayarlar onu değiştirir."});
+
+// Right-click menu for models and built pieces.
+Object.assign(RR_I18N_STRINGS["en"], {"ctx3d.copy": "Copy", "ctx3d.paste": "Paste here", "ctx3d.duplicate": "Duplicate", "ctx3d.delete": "Delete"});
+Object.assign(RR_I18N_STRINGS["ja"], {"ctx3d.copy": "コピー", "ctx3d.paste": "ここに貼り付け", "ctx3d.duplicate": "複製", "ctx3d.delete": "削除"});
+Object.assign(RR_I18N_STRINGS["es"], {"ctx3d.copy": "Copiar", "ctx3d.paste": "Pegar aquí", "ctx3d.duplicate": "Duplicar", "ctx3d.delete": "Eliminar"});
+Object.assign(RR_I18N_STRINGS["zh-Hant"], {"ctx3d.copy": "複製", "ctx3d.paste": "貼上到此處", "ctx3d.duplicate": "再製", "ctx3d.delete": "刪除"});
+Object.assign(RR_I18N_STRINGS["zh-Hans"], {"ctx3d.copy": "复制", "ctx3d.paste": "粘贴到此处", "ctx3d.duplicate": "创建副本", "ctx3d.delete": "删除"});
+Object.assign(RR_I18N_STRINGS["ru"], {"ctx3d.copy": "Копировать", "ctx3d.paste": "Вставить сюда", "ctx3d.duplicate": "Дублировать", "ctx3d.delete": "Удалить"});
+Object.assign(RR_I18N_STRINGS["pt"], {"ctx3d.copy": "Copiar", "ctx3d.paste": "Colar aqui", "ctx3d.duplicate": "Duplicar", "ctx3d.delete": "Eliminar"});
+Object.assign(RR_I18N_STRINGS["de"], {"ctx3d.copy": "Kopieren", "ctx3d.paste": "Hier einfügen", "ctx3d.duplicate": "Duplizieren", "ctx3d.delete": "Löschen"});
+Object.assign(RR_I18N_STRINGS["fr"], {"ctx3d.copy": "Copier", "ctx3d.paste": "Coller ici", "ctx3d.duplicate": "Dupliquer", "ctx3d.delete": "Supprimer"});
+Object.assign(RR_I18N_STRINGS["el"], {"ctx3d.copy": "Αντιγραφή", "ctx3d.paste": "Επικόλληση εδώ", "ctx3d.duplicate": "Διπλότυπο", "ctx3d.delete": "Διαγραφή"});
+Object.assign(RR_I18N_STRINGS["ko"], {"ctx3d.copy": "복사", "ctx3d.paste": "여기에 붙여넣기", "ctx3d.duplicate": "복제", "ctx3d.delete": "삭제"});
+Object.assign(RR_I18N_STRINGS["ar"], {"ctx3d.copy": "نسخ", "ctx3d.paste": "لصق هنا", "ctx3d.duplicate": "تكرار", "ctx3d.delete": "حذف"});
+Object.assign(RR_I18N_STRINGS["it"], {"ctx3d.copy": "Copia", "ctx3d.paste": "Incolla qui", "ctx3d.duplicate": "Duplica", "ctx3d.delete": "Elimina"});
+Object.assign(RR_I18N_STRINGS["pl"], {"ctx3d.copy": "Kopiuj", "ctx3d.paste": "Wklej tutaj", "ctx3d.duplicate": "Duplikuj", "ctx3d.delete": "Usuń"});
+Object.assign(RR_I18N_STRINGS["id"], {"ctx3d.copy": "Salin", "ctx3d.paste": "Tempel di sini", "ctx3d.duplicate": "Gandakan", "ctx3d.delete": "Hapus"});
+Object.assign(RR_I18N_STRINGS["vi"], {"ctx3d.copy": "Sao chép", "ctx3d.paste": "Dán vào đây", "ctx3d.duplicate": "Nhân bản", "ctx3d.delete": "Xóa"});
+Object.assign(RR_I18N_STRINGS["th"], {"ctx3d.copy": "คัดลอก", "ctx3d.paste": "วางที่นี่", "ctx3d.duplicate": "ทำซ้ำ", "ctx3d.delete": "ลบ"});
+Object.assign(RR_I18N_STRINGS["tr"], {"ctx3d.copy": "Kopyala", "ctx3d.paste": "Buraya yapıştır", "ctx3d.duplicate": "Çoğalt", "ctx3d.delete": "Sil"});

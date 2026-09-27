@@ -594,6 +594,17 @@ class UIManager {
             const propsManager = window.reactor?.projectController?.modelPropsManager || window.reactor?.modelPropsManager;
             const lightsManager = window.reactor?.projectController?.lightingManager || window.reactor?.lightingManager;
             const objectTool = lightsManager?.active ? lightsManager : (propsManager?.active ? propsManager : null);
+            // Copy, paste and duplicate of models and built pieces, when one of those tools holds the map.
+            if (commandModifier && !e.altKey && !e.shiftKey && ['c', 'v', 'd'].includes(e.key.toLowerCase()) && !isTextInput && !eventEditorOpen) {
+                const map3d = window.reactor?.mapEditor3D;
+                const worldTool = window.reactor?.modelPropsManager?.active || (window.reactor?.pieceBuilderManager?.active && window.reactor.pieceBuilderManager.mode === 'select');
+                if (worldTool && map3d?.handleClipboardKey) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (!e.repeat) map3d.handleClipboardKey(e.key.toLowerCase());
+                    return;
+                }
+            }
             // Building in the world (the Build bar up, or its pieces tool) owns Delete too: a selected
             // piece goes, and the key never reaches the map list behind it.
             const piecesManager = window.reactor?.projectController?.pieceBuilderManager || window.reactor?.pieceBuilderManager;

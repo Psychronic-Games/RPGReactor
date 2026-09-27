@@ -196,6 +196,43 @@ class PieceBuilderManager {
         return true;
     }
 
+    /** Copy the selected pieces (relative to their lowest corner) for Paste. */
+    copySelection() {
+        const list = this.selectionPieces();
+        if (!list.length) return false;
+        const x0 = Math.min(...list.map(p => p.x)), y0 = Math.min(...list.map(p => p.y)), z0 = Math.min(...list.map(p => p.z));
+        PieceBuilderManager.clipboard = list.map(p => { const c = Object.assign({}, p, { x: p.x - x0, y: p.y - y0, z: p.z - z0 }); delete c.id; delete c.group; return c; });
+        return true;
+    }
+
+    /** Lay the copied pieces with their lowest corner at `target` (a cell and level); they come selected, one undo step. */
+    pasteAt(target) {
+        const clip = PieceBuilderManager.clipboard, map = this.currentMap(), elevation = this.elevation();
+        if (!clip || !clip.length || !target || !map || !elevation) return false;
+        const list = elevation.pieces(map);
+        let id = list.reduce((max, p) => Math.max(max, p.id || 0), 0);
+        const added = clip.map(p => Object.assign({}, p, { id: ++id, x: target.x + p.x, y: target.y + p.y, z: Math.max(0, (target.z || 0) + p.z) }))
+            .filter(p => p.x >= 0 && p.y >= 0 && p.x < map.width && p.y < map.height);
+        if (!added.length) return false;
+        this.undoStack.push(this._snapshot(map)); if (this.undoStack.length > 50) this.undoStack.shift(); this.redoStack.length = 0;
+        elevation.restorePieces(map, list.concat(added));
+        this.mode = 'select';
+        this.selectedIds = added.map(p => p.id);
+        this.selected = added[0].id;
+        const xs = added.map(p => p.x), ys = added.map(p => p.y);
+        this.announce(false, { x0: Math.min(...xs) - 2, y0: Math.min(...ys) - 2, x1: Math.max(...xs) + 2, y1: Math.max(...ys) + 2 });
+        this._syncPanel(); this._ghostChanged(); this.refreshStatus?.();
+        return true;
+    }
+
+    /** A copy of the selection laid just east of it. */
+    duplicateSelection() {
+        const list = this.selectionPieces();
+        if (!list.length || !this.copySelection()) return false;
+        const x1 = Math.max(...list.map(p => p.x));
+        return this.pasteAt({ x: x1 + 1, y: Math.min(...list.map(p => p.y)), z: Math.min(...list.map(p => p.z)) });
+    }
+
     /**
      * The flight a placed stair belongs to: the stairs turned the same way
      * that rise a level per cell along its climb, and the ones beside them
