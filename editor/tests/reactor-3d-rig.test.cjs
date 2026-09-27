@@ -547,3 +547,23 @@ test('the runtime gives each rig hand its palm point, from markers or derived, a
     const derived = hand2.localToWorld(new THREE.Vector3().fromArray(hand2.userData.__reactorPalm)), wrist = new THREE.Vector3().fromArray(markers.wristR), elbow = new THREE.Vector3().fromArray(markers.elbowR);
     assert.ok(derived.distanceTo(elbow.clone().lerp(wrist, 1.33)) < 1e-6, 'a third of a forearm past the wrist');
 });
+
+test('a keyed swing runs through its keys without stopping, and never overshoots them', () => {
+    const P = require(path.join(repoRoot, 'editor', 'src', 'database', 'RigMotionPresets.js'));
+    const breathe = Reactor3D.readModelAnimationRules({ animations: P.byId('breathe').rules }).find(rule => rule.part === 'Chest');
+    const at = p => Reactor3D.sampleModelKeys(breathe, p).rotate[0];
+    const steps = [];
+    for (let f = 0; f <= 150; f++) steps.push(at(f / 150));
+    const speed = steps.slice(1).map((v, i) => Math.abs(v - steps[i]));
+    const peak = Math.max(...speed);
+    // A sine sampled into 8 keys only slows where it turns (twice); easing into every key stopped it 8 times.
+    const stalls = speed.filter((s, i) => s < peak * 0.05 && i > 0 && i < speed.length - 1).length;
+    assert.ok(stalls <= 6, `stalls ${stalls}`);
+    assert.ok(Math.abs(speed[0] - speed[speed.length - 1]) < peak * 0.2, 'a loop runs through its seam');
+    assert.ok(Math.max(...steps) <= 2.5 + 1e-9 && Math.min(...steps) >= -2.5 - 1e-9, 'no overshoot past the keys');
+    // A held stretch stays still, and an action still leaves and returns to rest.
+    const held = { trigger: 'action', keys: [{ at: 0.2, rotate: [30, 0, 0], move: [0, 0, 0], resize: [1, 1, 1] }, { at: 0.8, rotate: [30, 0, 0], move: [0, 0, 0], resize: [1, 1, 1] }] };
+    assert.equal(Reactor3D.sampleModelKeys(held, 0.5).rotate[0], 30);
+    assert.equal(Reactor3D.sampleModelKeys(held, 0).rotate[0], 0);
+    assert.equal(Reactor3D.sampleModelKeys(held, 1).rotate[0], 0);
+});

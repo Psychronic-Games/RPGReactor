@@ -4159,29 +4159,59 @@ Reactor3D.poseEase = function(blend) {
 
 /**
  * Sample a keyed pose timeline at progress p (0..1). The timeline starts
- * at rest, eases smoothly between the authored stops, and returns to
- * rest at the end unless the final key sits at 1. Rotations interpolate
- * per-euler-component — authored stops, not arbitrary orientations, so
- * component lerp reads exactly as the author dragged the sliders.
+ * at rest and returns to rest at the end unless the final key sits at 1.
+ * Between stops it follows a monotone cubic through them, per euler
+ * component: it slows to a stop only where the motion turns back or
+ * holds, never overshoots a stop, and passes through every other stop
+ * at speed. Easing in and out of every stop made a swing sampled into
+ * keys (a breath, a stride) stop dead at each one, a visible judder.
+ * The first and last stops ease from and to stillness; a looping
+ * timeline (any trigger but an action) whose ends meet runs through
+ * the seam instead.
  */
 Reactor3D.sampleModelKeys = function(rule, p) {
-    const rest = { at: 0, rotate: [0, 0, 0], move: [0, 0, 0], resize: [1, 1, 1] };
-    const stops = [rest].concat(rule.keys);
-    const last = rule.keys[rule.keys.length - 1];
-    if (!last || last.at < 1) stops.push({ at: 1, rotate: [0, 0, 0], move: [0, 0, 0], resize: [1, 1, 1] });
-    let a = stops[0];
-    let b = stops[stops.length - 1];
-    for (let k = 0; k + 1 < stops.length; k++) {
-        if (p >= stops[k].at && p <= stops[k + 1].at) {
-            a = stops[k];
-            b = stops[k + 1];
-            break;
-        }
-    }
+    const REST = [0, 0, 0], ONE = [1, 1, 1];
+    const stops = [{ at: 0, rotate: REST, move: REST, resize: ONE }].concat(rule.keys);
+    // A key at 0 replaces the rest stop rather than sitting on top of it.
+    if (stops.length > 1 && stops[1].at <= 0) stops.shift();
+    const last = stops[stops.length - 1];
+    if (last.at < 1) stops.push({ at: 1, rotate: REST, move: REST, resize: ONE });
+    const n = stops.length;
+    let k = 0;
+    while (k + 2 < n && p > stops[k + 1].at) k++;
+    const a = stops[k], b = stops[Math.min(n - 1, k + 1)];
     const span = b.at - a.at;
-    const s = this.poseEase(span > 0 ? (p - a.at) / span : 1);
-    const mix = (from, to) => [0, 1, 2].map(i => from[i] + (to[i] - from[i]) * s);
-    return { rotate: mix(a.rotate, b.rotate), move: mix(a.move, b.move), resize: mix(a.resize, b.resize) };
+    if (!(span > 0)) return { rotate: b.rotate.slice(), move: (b.move || REST).slice(), resize: (b.resize || ONE).slice() };
+    const t = Math.min(1, Math.max(0, (p - a.at) / span));
+    const loops = !!rule.trigger && rule.trigger !== "action";
+    const field = (stop, name, i) => (stop[name] || (name === "resize" ? ONE : REST))[i];
+    // Slope of segment j (stops j..j+1), wrapping for a loop.
+    const slope = (name, i, j) => {
+        if (j < 0 || j >= n - 1) {
+            if (!loops || n < 3 || field(stops[0], name, i) !== field(stops[n - 1], name, i)) return null;
+            j = j < 0 ? n - 2 : 0;
+        }
+        const h = stops[j + 1].at - stops[j].at;
+        return h > 0 ? (field(stops[j + 1], name, i) - field(stops[j], name, i)) / h : 0;
+    };
+    const width = j => {
+        if (j < 0) j = n - 2; else if (j >= n - 1) j = 0;
+        return stops[j + 1].at - stops[j].at;
+    };
+    // Fritsch-Butland tangent at stop j: zero at a turn or a hold.
+    const tangent = (name, i, j) => {
+        const d0 = slope(name, i, j - 1), d1 = slope(name, i, j);
+        if (d0 === null || d1 === null || d0 * d1 <= 0) return 0;
+        const h0 = width(j - 1), h1 = width(j);
+        return 3 * (h0 + h1) / ((2 * h1 + h0) / d0 + (h1 + 2 * h0) / d1);
+    };
+    const t2 = t * t, t3 = t2 * t;
+    const h00 = 2 * t3 - 3 * t2 + 1, h10 = t3 - 2 * t2 + t, h01 = -2 * t3 + 3 * t2, h11 = t3 - t2;
+    const curve = name => [0, 1, 2].map(i => {
+        const v0 = field(a, name, i), v1 = field(b, name, i);
+        return h00 * v0 + h10 * span * tangent(name, i, k) + h01 * v1 + h11 * span * tangent(name, i, k + 1);
+    });
+    return { rotate: curve("rotate"), move: curve("move"), resize: curve("resize") };
 };
 
 /** Drive one instance's rules for this frame. */

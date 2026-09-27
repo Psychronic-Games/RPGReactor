@@ -119,7 +119,7 @@ class RRMotionEditor {
         if (!track || !track.keys || typeof Reactor3D === 'undefined') return { rotate: [0, 0, 0], move: [0, 0, 0] };
         if (this.motion.hold) return { rotate: track.keys[0].rotate.slice(), move: track.keys[0].move.slice() };
         const keys = track.keys.map(k => ({ at: k.at, rotate: k.rotate, move: k.move, resize: [1, 1, 1] }));
-        const sampled = Reactor3D.sampleModelKeys({ keys }, Math.max(0, Math.min(1, at)));
+        const sampled = Reactor3D.sampleModelKeys({ keys, trigger: this.motion.trigger }, Math.max(0, Math.min(1, at)));
         return { rotate: sampled.rotate, move: sampled.move };
     }
 

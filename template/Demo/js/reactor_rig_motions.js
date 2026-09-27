@@ -156,12 +156,16 @@
         // ── Humanoid: gestures, on demand ────────────────────────────
         motion('wave', 'Wave', 'humanoid', 'action', 90, {
             // The arm raised up in front (a forward raise leaves shoulder armour
-            // whole, where a sideways lift overhead folds it), the whole arm
-            // sweeping side to side from the shoulder with the forearm a beat behind.
-            RightUpperArm: [key(0.15, [-155, 0, -10]), key(0.27, [-150, 0, -26]), key(0.39, [-157, 0, 4]),
-                key(0.51, [-150, 0, -26]), key(0.63, [-157, 0, 4]), key(0.75, [-155, 0, -10]), key(0.85, [-155, 0, -10])],
-            RightLowerArm: [key(0.15, [-15, 0, 0]), key(0.3, [-15, 0, -12]), key(0.42, [-15, 0, 12]),
-                key(0.54, [-15, 0, -12]), key(0.66, [-15, 0, 12]), key(0.78, [-15, 0, 0]), key(0.85, [-15, 0, 0])],
+            // whole, where a sideways lift overhead folds it) and turned palm-out
+            // (the 60° Y). The sweep turns the raised arm about the depth axis, so
+            // the hand goes side to side, not toward the viewer; in these euler
+            // angles that moves all three, so each key is that turn worked out:
+            // [-155, 60, -10] turned 12° out and 10° in. The forearm flicks
+            // (on Z, side to side) a beat behind.
+            RightUpperArm: [key(0.15, [-155, 60, -10]), key(0.27, [-139.5, 53.4, -28.4]), key(0.39, [-172.7, 62.8, 10.2]),
+                key(0.51, [-139.5, 53.4, -28.4]), key(0.63, [-172.7, 62.8, 10.2]), key(0.75, [-155, 60, -10]), key(0.85, [-155, 60, -10])],
+            RightLowerArm: [key(0.15, [0, 0, 0]), key(0.3, [0, 0, 14]), key(0.42, [0, 0, -14]),
+                key(0.54, [0, 0, 14]), key(0.66, [0, 0, -14]), key(0.78, [0, 0, 0]), key(0.85, [0, 0, 0])],
             Head: [key(0.2, [0, -8, 0]), key(0.8, [0, -8, 0])]
         }),
         motion('bow', 'Take a Bow', 'humanoid', 'action', 100, {
