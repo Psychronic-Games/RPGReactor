@@ -797,13 +797,19 @@ Sprite_Battler.prototype.setupDamagePopup = function() {
     if (this._battler.isDamagePopupRequested()) {
         if (this._battler.isSpriteVisible()) {
             this.createDamageSprite();
+            // Sprite_Damage shows HP when a result carries both, so a hit
+            // that also moved MP (a secondary channel) gets a second number.
+            const result = this._battler.result();
+            if (result.hpAffected && result.mpDamage !== 0 && !result.missed && !result.evaded && this._battler.isAlive()) {
+                this.createDamageSprite(Object.assign({}, result, { hpAffected: false }));
+            }
         }
         this._battler.clearDamagePopup();
         this._battler.clearResult();
     }
 };
 
-Sprite_Battler.prototype.createDamageSprite = function() {
+Sprite_Battler.prototype.createDamageSprite = function(result) {
     const last = this._damages[this._damages.length - 1];
     const sprite = new Sprite_Damage();
     if (last) {
@@ -813,7 +819,7 @@ Sprite_Battler.prototype.createDamageSprite = function() {
         sprite.x = this.x + this.damageOffsetX();
         sprite.y = this.y + this.damageOffsetY();
     }
-    sprite.setup(this._battler);
+    sprite.setup(this._battler, result);
     this._damages.push(sprite);
     this.parent.addChild(sprite);
 };
@@ -3449,8 +3455,9 @@ Sprite_Damage.prototype.destroy = function(options) {
     Sprite.prototype.destroy.call(this, options);
 };
 
-Sprite_Damage.prototype.setup = function(target) {
-    const result = target.result();
+// `result` defaults to the target's own; setupDamagePopup passes an MP-only
+// copy when one hit moved both HP and MP.
+Sprite_Damage.prototype.setup = function(target, result = target.result()) {
     if (result.missed || result.evaded) {
         this._colorType = 0;
         this.createMiss();
