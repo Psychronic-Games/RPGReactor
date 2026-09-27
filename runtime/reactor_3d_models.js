@@ -4095,6 +4095,205 @@ Reactor3D.LADDER_CHEST_GAP = 0.45;
 /** Tiles climbed for one whole climbing cycle: two rungs, one reach of each hand. */
 Reactor3D.CLIMB_CYCLE = 1;
 
+/**
+ * A limp body (a fatal fall): the rig's joints become points under gravity,
+ * held apart at their bone lengths, braced across the hips and shoulders so
+ * the torso stays one piece, landing on the map's own ground. Each frame
+ * the model's bones turn to lie along them: the hips and chest as whole
+ * frames, every other bone aimed at the next joint down its limb. Nothing
+ * holds a limb up, so it falls wherever the body's momentum and the ground
+ * take it. Works on a rig built in the editor and on a model's own bones.
+ */
+Reactor3D.RAGDOLL_BONES = [
+    ["Hips", null], ["Spine", "Hips"], ["Chest", "Spine"], ["Neck", "Chest"], ["Head", "Neck"],
+    ["LeftUpperArm", "Chest"], ["LeftLowerArm", "LeftUpperArm"], ["LeftHand", "LeftLowerArm"],
+    ["RightUpperArm", "Chest"], ["RightLowerArm", "RightUpperArm"], ["RightHand", "RightLowerArm"],
+    ["LeftUpperLeg", "Hips"], ["LeftLowerLeg", "LeftUpperLeg"], ["LeftFoot", "LeftLowerLeg"],
+    ["RightUpperLeg", "Hips"], ["RightLowerLeg", "RightUpperLeg"], ["RightFoot", "RightLowerLeg"]
+];
+/** Constraint passes a frame, air damping, and the share of sliding speed ground contact keeps. */
+Reactor3D.RAGDOLL_ITERATIONS = 10;
+Reactor3D.RAGDOLL_DAMPING = 0.995;
+Reactor3D.RAGDOLL_GROUND_KEEP = 0.72;
+/** Share of a hard landing's speed a body bounces back with. */
+Reactor3D.RAGDOLL_BOUNCE = 0.2;
+
+Reactor3D.startRagdoll = function(holder, character) {
+    if (typeof THREE === "undefined" || !holder.binding || !holder.object) return null;
+    const object = holder.object;
+    object.updateMatrixWorld(true);
+    // The body leaves the model's standing bounds as it falls.
+    object.traverse(node => { if (node.isMesh) node.frustumCulled = false; });
+    const nodes = {};
+    for (const entry of holder.binding.meshes) for (const part of entry.parts) if (!nodes[part.name]) nodes[part.name] = entry.mesh;
+    const bones = Reactor3D.RAGDOLL_BONES.filter(([name]) => nodes[name]);
+    if (!nodes.Hips || bones.length < 6) return { rigid: true };
+    const points = [], index = {};
+    const add = (name, at, radius) => { index[name] = points.length; points.push({ p: at.clone(), q: at.clone(), r: radius }); };
+    for (const [name] of bones) add(name, nodes[name].getWorldPosition(new THREE.Vector3()), name === "Head" ? 0.16 : 0.08);
+    // A bone at the end of a chain gets a tip to aim at: the head's crown, a hand's fingers, a foot's toes.
+    const height = Math.max(0.5, (points[index.Head ?? index.Chest].p.y - object.position.y) || 1.5);
+    const facing = new THREE.Vector3(0, 0, 1).applyQuaternion(object.getWorldQuaternion(new THREE.Quaternion())).setY(0).normalize();
+    const tip = (name, from, length, dir) => {
+        if (index[name] === undefined) return;
+        const base = points[index[name]].p;
+        const d = dir || base.clone().sub(points[index[from]].p).normalize();
+        add(name + "Tip", base.clone().addScaledVector(d, length), 0.06);
+    };
+    tip("Head", nodes.Neck ? "Neck" : "Chest", height * 0.1);
+    for (const side of ["Left", "Right"]) {
+        if (index[side + "LowerArm"] !== undefined) tip(side + "Hand", side + "LowerArm", height * 0.07);
+        tip(side + "Foot", null, height * 0.09, facing);
+    }
+    // A rig without a spine, chest or neck part reaches past the gap to the next joint it has.
+    const first = (...names) => names.find(name => index[name] !== undefined);
+    const constraints = [];
+    const tie = (a, b, stiff = 1) => {
+        if (index[a] === undefined || index[b] === undefined) return;
+        constraints.push([index[a], index[b], points[index[a]].p.distanceTo(points[index[b]].p), stiff]);
+    };
+    // Each joint ties to its nearest ancestor the rig has.
+    const parentOf = Object.fromEntries(Reactor3D.RAGDOLL_BONES);
+    const present = name => { let at = parentOf[name]; while (at && !nodes[at]) at = parentOf[at]; return at; };
+    for (const [name] of bones) { const up = present(name); if (up) tie(name, up); }
+    for (const name of ["Head", "LeftHand", "RightHand", "LeftFoot", "RightFoot"]) tie(name, name + "Tip");
+    // Braces: the pelvis, the ribcage and the shoulders keep their shape; a neck is stiff.
+    const torso = first("Chest", "Spine", "Neck");
+    tie("LeftUpperLeg", "RightUpperLeg"); tie("LeftUpperArm", "RightUpperArm");
+    tie("Hips", torso); tie(first("Spine", "Chest"), "LeftUpperArm"); tie(first("Spine", "Chest"), "RightUpperArm");
+    tie("Hips", "LeftUpperArm", 0.6); tie("Hips", "RightUpperArm", 0.6);
+    tie("Chest", "LeftUpperLeg", 0.6); tie("Chest", "RightUpperLeg", 0.6);
+    tie("Chest", "Head", 0.5); tie("LeftUpperArm", "Head", 0.3); tie("RightUpperArm", "Head", 0.3);
+    // The fall's speed carries on: the character's own run, the impact, and a topple
+    // that grows with height so the body folds and goes over rather than dropping straight.
+    const start = character._reactorRagdoll || {};
+    const side = new THREE.Vector3(facing.z, 0, -facing.x);
+    const lean = (Math.random() < 0.5 ? -1 : 1) * (0.3 + Math.random() * 0.5);
+    const topple = facing.clone().multiplyScalar(0.8 + Math.random() * 0.4).addScaledVector(side, lean).normalize();
+    const ground = object.position.y;
+    for (const point of points) {
+        const up = Math.max(0, (point.p.y - ground) / height);
+        const v = new THREE.Vector3(start.vx || 0, Math.min(0, start.vy || 0) * 0.25 * up, start.vz || 0)
+            .addScaledVector(topple, 0.055 * up);
+        point.q.sub(v);
+    }
+    // Each driven bone: what it aims at and how it lay when the body went limp.
+    const aim = { Hips: first("Spine", "Chest", "Neck", "Head"), Spine: first("Chest", "Neck", "Head"), Chest: first("Neck", "Head"), Neck: "Head", Head: "HeadTip",
+        LeftUpperArm: "LeftLowerArm", LeftLowerArm: "LeftHand", LeftHand: "LeftHandTip",
+        RightUpperArm: "RightLowerArm", RightLowerArm: "RightHand", RightHand: "RightHandTip",
+        LeftUpperLeg: "LeftLowerLeg", LeftLowerLeg: "LeftFoot", LeftFoot: "LeftFootTip",
+        RightUpperLeg: "RightLowerLeg", RightLowerLeg: "RightFoot", RightFoot: "RightFootTip" };
+    const across = { Hips: ["RightUpperLeg", "LeftUpperLeg"], Chest: ["RightUpperArm", "LeftUpperArm"] };
+    const drive = [];
+    for (const [name] of bones) {
+        const to = aim[name];
+        if (index[to] === undefined) continue;
+        const bone = { name, node: nodes[name], from: index[name], to: index[to], rest: nodes[name].getWorldQuaternion(new THREE.Quaternion()) };
+        const pair = across[name];
+        if (pair && index[pair[0]] !== undefined && index[pair[1]] !== undefined) bone.across = [index[pair[0]], index[pair[1]]];
+        bone.basis = Reactor3D.ragdollBasis(points, bone);
+        drive.push(bone);
+    }
+    return { points, constraints, drive, frame: -1, still: 0 };
+};
+
+/** A bone's frame from the points: along it, and across it where it has a width (hips, shoulders). */
+Reactor3D.ragdollBasis = function(points, bone) {
+    const along = points[bone.to].p.clone().sub(points[bone.from].p).normalize();
+    if (!bone.across) return along;
+    const x = points[bone.across[1]].p.clone().sub(points[bone.across[0]].p);
+    x.addScaledVector(along, -x.dot(along)).normalize();
+    const z = new THREE.Vector3().crossVectors(x, along);
+    return new THREE.Matrix4().makeBasis(x, along, z);
+};
+
+Reactor3D.stepRagdoll = function(holder, character) {
+    // A body that cannot go limp (an odd rig, a failure) still falls over rather than stopping the game.
+    try {
+        Reactor3D.runRagdoll(holder, character);
+    } catch (error) {
+        console.error("Reactor3D: ragdoll failed; the model tips over instead.", error);
+        holder.ragdoll = { rigid: true };
+        character._reactorPosePitch = -1;
+    }
+};
+
+Reactor3D.runRagdoll = function(holder, character) {
+    if (!holder.ragdoll) holder.ragdoll = Reactor3D.startRagdoll(holder, character) || { rigid: true };
+    const doll = holder.ragdoll;
+    const frame = typeof Graphics !== "undefined" ? Graphics.frameCount : (doll.frame + 1);
+    if (doll.rigid) {
+        // No rig to go limp with: the whole model tips over onto its face.
+        character._reactorPosePitch = -1;
+        return;
+    }
+    if (frame === doll.frame) return;
+    doll.frame = frame;
+    const map = typeof $dataMap !== "undefined" ? $dataMap : null;
+    const physics = typeof ReactorPhysics !== "undefined" ? ReactorPhysics : null;
+    const gravity = physics ? physics.gravityPerFrame() : 0.0045;
+    let moving = 0;
+    for (const point of doll.points) {
+        const vx = (point.p.x - point.q.x) * Reactor3D.RAGDOLL_DAMPING;
+        const vy = (point.p.y - point.q.y) * Reactor3D.RAGDOLL_DAMPING;
+        const vz = (point.p.z - point.q.z) * Reactor3D.RAGDOLL_DAMPING;
+        point.q.copy(point.p);
+        point.p.x += vx; point.p.y += vy - gravity; point.p.z += vz;
+        moving = Math.max(moving, Math.abs(vx) + Math.abs(vy) + Math.abs(vz));
+    }
+    for (let pass = 0; pass < Reactor3D.RAGDOLL_ITERATIONS; pass++) {
+        for (const [a, b, length, stiff] of doll.constraints) {
+            const pa = doll.points[a].p, pb = doll.points[b].p;
+            const dx = pb.x - pa.x, dy = pb.y - pa.y, dz = pb.z - pa.z;
+            const d = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1e-6;
+            const k = (d - length) / d * 0.5 * stiff;
+            pa.x += dx * k; pa.y += dy * k; pa.z += dz * k;
+            pb.x -= dx * k; pb.y -= dy * k; pb.z -= dz * k;
+        }
+        for (const point of doll.points) {
+            const floor = (map && Reactor3D.groundHeightAt ? Reactor3D.groundHeightAt(map, point.p.x, point.p.z, point.p.y) : 0) + point.r;
+            if (point.p.y < floor) {
+                const into = point.p.y - point.q.y;
+                point.p.y = floor;
+                // Ground contact scrubs the slide: a body skids a little and stops.
+                point.q.x = point.p.x - (point.p.x - point.q.x) * Reactor3D.RAGDOLL_GROUND_KEEP;
+                point.q.z = point.p.z - (point.p.z - point.q.z) * Reactor3D.RAGDOLL_GROUND_KEEP;
+                // The first touch bounces a little; after that the ground just holds it.
+                point.q.y = pass === 0 && into < -0.03 ? point.p.y + into * Reactor3D.RAGDOLL_BOUNCE : Math.max(point.q.y, point.p.y);
+            }
+        }
+    }
+    doll.still = moving < 0.001 ? doll.still + 1 : 0;
+    Reactor3D.poseRagdoll(holder, doll);
+};
+
+/** Turn each driven bone, parent before child, so it lies along its points. */
+Reactor3D.poseRagdoll = function(holder, doll) {
+    const turn = new THREE.Quaternion(), world = new THREE.Quaternion(), parentWorld = new THREE.Quaternion();
+    const rest = new THREE.Matrix4(), now = new THREE.Matrix4();
+    for (const bone of doll.drive) {
+        const current = Reactor3D.ragdollBasis(doll.points, bone);
+        if (bone.across) {
+            rest.copy(bone.basis).invert();
+            now.copy(current).multiply(rest);
+            turn.setFromRotationMatrix(now);
+        } else {
+            turn.setFromUnitVectors(bone.basis, current);
+        }
+        world.copy(turn).multiply(bone.rest);
+        const node = bone.node, parent = node.parent;
+        if (parent) {
+            parent.updateMatrixWorld(true);
+            parent.getWorldQuaternion(parentWorld);
+            node.quaternion.copy(parentWorld.invert().multiply(world));
+            if (bone.name === "Hips") node.position.copy(parent.worldToLocal(doll.points[bone.from].p.clone()));
+        } else {
+            node.quaternion.copy(world);
+        }
+        node.updateMatrixWorld(true);
+    }
+};
+
 /** How far ahead of its feet a model's chest stands, in world tiles (0 when it has none). */
 Reactor3D.chestForward = function(holder) {
     if (typeof THREE === "undefined" || !holder || !holder.binding || !holder.object) return 0;
@@ -6003,7 +6202,10 @@ Reactor3D.MapScene.prototype.syncCharacterModels = function(characters) {
             && !Reactor3D.cameraInsideModel(character, object)
             && !Reactor3D.characterHiddenByCamera(character, true);
         Reactor3D.registerPluginCommands();
-        if (holder.binding && holder.rules && holder.rules.length) {
+        // A limp body (a fatal fall) is the ragdoll's, not the animation's.
+        if (character._reactorRagdoll && holder.binding) {
+            Reactor3D.stepRagdoll(holder, character);
+        } else if (holder.binding && holder.rules && holder.rules.length) {
             let frame = typeof Graphics !== "undefined" ? Graphics.frameCount : 0;
             const distance = holder.lastX === undefined
                 ? 0
@@ -6032,7 +6234,7 @@ Reactor3D.MapScene.prototype.syncCharacterModels = function(characters) {
         }
         // After the animation pass: a clip writes every bone each frame, so
         // the look's lean goes on top of whatever the head was doing.
-        Reactor3D.applyLookLean(object, character);
+        if (!character._reactorRagdoll) Reactor3D.applyLookLean(object, character);
         // Effects run for every placed model, rules or none: a reactor with
         // no animation of its own still plays its core glow. Asked for by
         // name (the Play 3D Effect command, a rule that names one), by

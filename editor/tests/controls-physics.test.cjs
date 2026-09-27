@@ -302,3 +302,75 @@ test('a ladder above a climber is not a roof over it, and the party climbs one l
     follower._reactorAlt = 30;
     assert.equal(c.ReactorPhysics.followerLadderTarget(follower).target, 23, 'above it going down');
 });
+
+test('a landing plays its sound; a fatal fall on a 3D map goes limp, holds the game over, then ends it', () => {
+    const c = sandbox({ reactorPhysics: { fallDamage: true, fallFrom: 3, fallPercent: 100, landSe: { name: 'Land' }, hardLandSe: { name: 'Crack' } } });
+    const played = [];
+    c.AudioManager = { playSe: se => played.push(se.name) };
+    c.Graphics = { frameCount: 1000 };
+    c.Reactor3D = { isMap3D: () => true, groundHeightAt: () => 0, TERRAIN_SLOPE_LIMIT: 0.75, MODE_3D: '3d', mapMode: () => '3d' };
+    const scenes = [];
+    c.SceneManager = { goto: scene => scenes.push(scene) };
+    c.Scene_Gameover = function() {};
+    c.$gameTemp = {};
+    c.$gameScreen = { startFlash() {} };
+    let hp = 100;
+    const member = { isAlive: () => hp > 0, mhp: 100, gainHp: v => { hp = Math.max(0, hp + v); } };
+    c.$gameParty = { members: () => [member], isAllDead: () => hp <= 0 };
+    const follower = { _reactorAir: 0 };
+    const player = { _realX: 0, _realY: 0, followers: () => ({ visibleFollowers: () => [follower] }) };
+    c.$gamePlayer = player;
+    c.ReactorPhysics.isAirborne = character => character._reactorAir > 0;
+    const settings = c.ReactorPhysics.settings();
+    c.ReactorPhysics.onLand(player, 1.2, settings);
+    assert.deepEqual(played, ['Land'], 'a jump lands with the landing sound');
+    c.ReactorPhysics.onLand(player, 20, settings);
+    assert.deepEqual(played, ['Land', 'Crack'], 'a hard landing plays its own');
+    assert.ok(player._reactorRagdoll && follower._reactorRagdoll, 'the party goes limp');
+    assert.ok(player._reactorRagdoll.vy < 0, 'carrying the impact');
+    assert.deepEqual(scenes, [], 'the game over waits for the bodies');
+    c.Graphics.frameCount += c.ReactorPhysics.FATAL_FALL_FRAMES;
+    c.ReactorPhysics.updateFatalFall();
+    assert.equal(scenes.length, 1, 'then the game ends');
+    const flat = sandbox({ reactorPhysics: { fallDamage: true, fallFrom: 3, fallPercent: 100, ragdoll: false } });
+    Object.assign(flat, { SceneManager: c.SceneManager, Scene_Gameover: c.Scene_Gameover, $gameTemp: {}, $gameScreen: c.$gameScreen, $gamePlayer: player, Reactor3D: c.Reactor3D });
+    hp = 100; flat.$gameParty = c.$gameParty;
+    flat.ReactorPhysics.onLand(player, 20, flat.ReactorPhysics.settings());
+    assert.equal(scenes.length, 2, 'with limp bodies off, a fatal fall ends the game at once');
+});
+
+test('a ragdoll lays a standing figure down on the ground, whole', () => {
+    require(path.join(repoRoot, 'runtime', 'libs', 'three.js'));
+    const THREE = global.THREE;
+    const Reactor3D = require(path.join(repoRoot, 'runtime', 'reactor_3d.js'));
+    const object = new THREE.Group();
+    const joints = { Hips: [0, 1.5, 0], Spine: [0, 1.9, 0], Chest: [0, 2.2, 0], Neck: [0, 2.6, 0], Head: [0, 2.75, 0],
+        LeftUpperArm: [0.35, 2.45, 0], LeftLowerArm: [0.45, 1.95, 0], LeftHand: [0.5, 1.5, 0],
+        RightUpperArm: [-0.35, 2.45, 0], RightLowerArm: [-0.45, 1.95, 0], RightHand: [-0.5, 1.5, 0],
+        LeftUpperLeg: [0.18, 1.45, 0], LeftLowerLeg: [0.18, 0.8, 0], LeftFoot: [0.18, 0.12, 0],
+        RightUpperLeg: [-0.18, 1.45, 0], RightLowerLeg: [-0.18, 0.8, 0], RightFoot: [-0.18, 0.12, 0] };
+    const meshes = [];
+    for (const [name, at] of Object.entries(joints)) {
+        const node = new THREE.Object3D();
+        node.position.set(...at);
+        object.add(node);
+        meshes.push({ mesh: node, parts: [{ name }] });
+    }
+    const holder = { object, binding: { meshes } };
+    const character = { _reactorRagdoll: { vx: 0.02, vz: 0, vy: -0.3 } };
+    for (let frame = 0; frame < 300; frame++) {
+        global.Graphics = { frameCount: frame };
+        Reactor3D.stepRagdoll(holder, character);
+    }
+    delete global.Graphics;
+    const doll = holder.ragdoll;
+    assert.ok(!doll.rigid, 'a full rig goes limp');
+    const ys = doll.points.map(point => point.p.y);
+    assert.ok(ys.every(Number.isFinite), 'no point lost to NaN');
+    assert.ok(Math.max(...ys) < 0.6, `lying down (highest point ${Math.max(...ys).toFixed(2)})`);
+    assert.ok(Math.min(...ys) >= 0.05, 'nothing through the ground');
+    assert.ok(doll.still > 30, 'and at rest');
+    for (const [a, b, length] of doll.constraints.slice(0, 16)) {
+        assert.ok(Math.abs(doll.points[a].p.distanceTo(doll.points[b].p) - length) < 0.05, 'the bones keep their lengths');
+    }
+});

@@ -75,7 +75,7 @@ class DatabaseControlsEditor {
     }
 
     physics() {
-        return Object.assign({ gravity: 1, jumpHeight: 1.25, fallDamage: false, fallFrom: 6, fallPercent: 10, fallCommonEvent: 0, swim: true, swimDepth: 2.2, splashSe: null }, this.system().reactorPhysics || {});
+        return Object.assign({ gravity: 1, jumpHeight: 1.25, fallDamage: false, fallFrom: 6, fallPercent: 10, fallCommonEvent: 0, swim: true, swimDepth: 2.2, splashSe: null, landSe: null, hardLandSe: null, ragdoll: true }, this.system().reactorPhysics || {});
     }
 
     savePhysics(physics) {
@@ -149,6 +149,9 @@ class DatabaseControlsEditor {
                         <label class="rr-controls-check"><input type="checkbox" class="rr-controls-fall"${physics.fallDamage ? ' checked' : ''}> ${rrEscapeHtml(tt('Long falls hurt'))}</label>
                         <label>${rrEscapeHtml(tt('Safe fall'))}</label><div><input type="number" class="database-field-value rr-controls-num" data-field="fallFrom" min="0" max="200" step="1" value="${physics.fallFrom}"> <span class="rr-controls-unit">${rrEscapeHtml(tt('tiles'))}</span></div>
                         <label>${rrEscapeHtml(tt('Damage per tile beyond'))}</label><div><input type="number" class="database-field-value rr-controls-num" data-field="fallPercent" min="0" max="100" step="1" value="${physics.fallPercent}"> <span class="rr-controls-unit">${rrEscapeHtml(tt('% of max HP'))}</span></div>
+                        <label>${rrEscapeHtml(tt('Landing sound'))}</label><div class="rr-controls-inline"><button type="button" class="rr-btn-secondary rr-controls-sound" data-field="landSe" data-title="Landing sound">${rrEscapeHtml(physics.landSe && physics.landSe.name ? physics.landSe.name : tt('(none)'))}</button></div>
+                        <label>${rrEscapeHtml(tt('Hard landing sound'))}</label><div class="rr-controls-inline"><button type="button" class="rr-btn-secondary rr-controls-sound" data-field="hardLandSe" data-title="Hard landing sound">${rrEscapeHtml(physics.hardLandSe && physics.hardLandSe.name ? physics.hardLandSe.name : tt('(none)'))}</button></div>
+                        <label class="rr-controls-check"><input type="checkbox" class="rr-controls-ragdoll"${physics.ragdoll !== false ? ' checked' : ''}> ${rrEscapeHtml(tt('Go limp on a fatal fall'))}</label>
                         <label>${rrEscapeHtml(tt('Or run a common event'))}</label><select class="database-field-value rr-controls-event">${commonEvents.map(([id, name]) => `<option value="${id}"${Number(physics.fallCommonEvent) === Number(id) ? ' selected' : ''}>${rrEscapeHtml(name)}</option>`).join('')}</select>
                         <div class="rr-controls-note rr-controls-span">${rrEscapeHtml(tt('Gravity 1 is Earth. A map can set its own in Map Properties › Physics (the Moon, a low-gravity station).'))}</div>
                     </div>
@@ -158,7 +161,7 @@ class DatabaseControlsEditor {
                     <div class="database-section-content rr-controls-form">
                         <label class="rr-controls-check"><input type="checkbox" class="rr-controls-swim"${physics.swim !== false ? ' checked' : ''}> ${rrEscapeHtml(tt('Players can swim in deep water'))}</label>
                         <label>${rrEscapeHtml(tt('Float depth'))}</label><div><input type="number" class="database-field-value rr-controls-num" data-field="swimDepth" min="0.2" max="20" step="0.1" value="${physics.swimDepth}"> <span class="rr-controls-unit">${rrEscapeHtml(tt('tiles under the surface'))}</span></div>
-                        <label>${rrEscapeHtml(tt('Splash sound'))}</label><div class="rr-controls-inline"><button type="button" class="rr-btn-secondary rr-controls-splash">${rrEscapeHtml(physics.splashSe && physics.splashSe.name ? physics.splashSe.name : tt('(none)'))}</button></div>
+                        <label>${rrEscapeHtml(tt('Splash sound'))}</label><div class="rr-controls-inline"><button type="button" class="rr-btn-secondary rr-controls-sound" data-field="splashSe" data-title="Splash sound">${rrEscapeHtml(physics.splashSe && physics.splashSe.name ? physics.splashSe.name : tt('(none)'))}</button></div>
                         <div class="rr-controls-note rr-controls-span">${rrEscapeHtml(tt('Shallower water is waded; deeper water is swum. Dash dives, Jump rises; at the surface Jump leaps out.'))}</div>
                     </div>
                 </div>
@@ -166,16 +169,16 @@ class DatabaseControlsEditor {
         this.bind();
     }
 
-    /** The splash sound: any sound effect of the project, or none. */
-    pickSplash() {
+    /** A physics sound (splash, landing, hard landing): any sound effect of the project, or none. */
+    pickSound(field, title) {
         const pc = this.projectController;
         const project = pc && (pc.getCurrentProject ? pc.getCurrentProject() : pc.currentProject);
         if (!project?.path || typeof RRAudioPickerModal === 'undefined' || typeof RRAssetFiles === 'undefined') return;
         let files = [];
         try { files = RRAssetFiles.listUnique(require('path').join(project.path, 'audio', 'se'), RRAssetFiles.AUDIO_EXTENSIONS); } catch (error) { console.error('Error reading se folder:', error); return; }
-        const current = this.physics().splashSe || { name: '', volume: 90, pitch: 100, pan: 0 };
+        const current = this.physics()[field] || { name: '', volume: 90, pitch: 100, pan: 0 };
         RRAudioPickerModal.open({
-            title: this._t('Splash sound'),
+            title: this._t(title),
             folderLabel: 'SE',
             files,
             selected: current.name || '',
@@ -184,7 +187,7 @@ class DatabaseControlsEditor {
             zIndex: 21000,
             onOk: result => {
                 const p = this.physics();
-                p.splashSe = result && result.name ? { name: result.name, volume: result.volume, pitch: result.pitch, pan: result.pan } : null;
+                p[field] = result && result.name ? { name: result.name, volume: result.volume, pitch: result.pitch, pan: result.pan } : null;
                 this.savePhysics(p);
                 this.render();
             }
@@ -207,7 +210,8 @@ class DatabaseControlsEditor {
         root.querySelector('.rr-controls-jumpon').addEventListener('change', event => { const c = this.controls(); c.jump = event.target.checked; this.saveControls(c); });
         root.querySelector('.rr-controls-fall').addEventListener('change', event => { const p = this.physics(); p.fallDamage = event.target.checked; this.savePhysics(p); });
         root.querySelector('.rr-controls-swim').addEventListener('change', event => { const p = this.physics(); p.swim = event.target.checked; this.savePhysics(p); });
-        root.querySelector('.rr-controls-splash').addEventListener('click', () => this.pickSplash());
+        root.querySelectorAll('.rr-controls-sound').forEach(button => button.addEventListener('click', () => this.pickSound(button.dataset.field, button.dataset.title)));
+        root.querySelector('.rr-controls-ragdoll').addEventListener('change', event => { const p = this.physics(); p.ragdoll = event.target.checked; this.savePhysics(p); });
         root.querySelector('.rr-controls-event').addEventListener('change', event => { const p = this.physics(); p.fallCommonEvent = Math.max(0, Number(event.target.value) || 0); this.savePhysics(p); });
         root.querySelector('.rr-controls-gravity').addEventListener('change', event => {
             if (event.target.value === 'custom') return;

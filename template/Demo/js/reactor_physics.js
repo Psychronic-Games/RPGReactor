@@ -25,7 +25,7 @@
 
     /** Tiles per second squared for one Earth: 9.8 m/s² at 0.6 m a tile. */
     ReactorPhysics.EARTH = 9.8 / 0.6;
-    ReactorPhysics.DEFAULTS = { gravity: 1, jumpHeight: 1.25, jump: true, fallDamage: false, fallFrom: 6, fallPercent: 10, fallCommonEvent: 0, swim: true, swimDepth: 2.2, splashSe: null };
+    ReactorPhysics.DEFAULTS = { gravity: 1, jumpHeight: 1.25, jump: true, fallDamage: false, fallFrom: 6, fallPercent: 10, fallCommonEvent: 0, swim: true, swimDepth: 2.2, splashSe: null, landSe: null, hardLandSe: null, ragdoll: true };
     /** Named gravities the editor offers, in Earths. */
     ReactorPhysics.PRESETS = { earth: 1, moon: 0.166, mars: 0.38, low: 0.5, heavy: 2 };
 
@@ -53,7 +53,11 @@
         out.fallCommonEvent = Math.max(0, Math.floor(Number(out.fallCommonEvent) || 0));
         out.swimDepth = num(out.swimDepth, 2.2, 0.2, 20);
         out.swim = out.swim !== false;
-        out.splashSe = out.splashSe && typeof out.splashSe === "object" && out.splashSe.name ? out.splashSe : null;
+        const sound = se => se && typeof se === "object" && se.name ? se : null;
+        out.splashSe = sound(out.splashSe);
+        out.landSe = sound(out.landSe);
+        out.hardLandSe = sound(out.hardLandSe);
+        out.ragdoll = out.ragdoll !== false;
         out.jump = out.jump !== false;
         out.fallDamage = !!out.fallDamage;
         return out;
@@ -355,11 +359,57 @@
         if (se) AudioManager.playSe({ name: se.name, volume: Number.isFinite(se.volume) ? se.volume : 90, pitch: Number.isFinite(se.pitch) ? se.pitch : 100, pan: Number.isFinite(se.pan) ? se.pan : 0 });
     };
 
-    /** A long fall hurts: a share of max HP per tile past the safe height, or the project's common event. */
+    /** A sound effect from the settings, played as authored. */
+    ReactorPhysics.playSe = function(se) {
+        if (!se || typeof AudioManager === "undefined") return;
+        AudioManager.playSe({ name: se.name, volume: Number.isFinite(se.volume) ? se.volume : 90, pitch: Number.isFinite(se.pitch) ? se.pitch : 100, pan: Number.isFinite(se.pan) ? se.pan : 0 });
+    };
+
+    /** Frames a fatal fall leaves the bodies on the ground before the game ends. */
+    ReactorPhysics.FATAL_FALL_FRAMES = 180;
+    /** Landings from lower than this (tiles) are steps, not landings: no sound. */
+    ReactorPhysics.LAND_SOUND_FROM = 0.5;
+
+    /** A party member of the map: the player or a follower. */
+    ReactorPhysics.isPartyCharacter = function(character) {
+        return typeof $gamePlayer !== "undefined" && (character === $gamePlayer
+            || (typeof Game_Follower !== "undefined" && character instanceof Game_Follower));
+    };
+
+    /**
+     * A character goes limp: the 3D view hands its model to a ragdoll from this
+     * frame on, carrying the speed it had. Input stops for the player.
+     */
+    ReactorPhysics.goLimp = function(character, impact) {
+        if (!character || character._reactorRagdoll) return;
+        let vx = 0, vz = 0;
+        if (character.isMoving && character.isMoving() && character.distancePerFrame) {
+            const d = character.direction(), step = character.distancePerFrame();
+            vx = d === 6 ? step : d === 4 ? -step : 0;
+            vz = d === 2 ? step : d === 8 ? -step : 0;
+        }
+        character._reactorRagdoll = { frame: typeof Graphics !== "undefined" ? Graphics.frameCount : 0, vx, vz, vy: -Math.max(0, impact || 0) };
+    };
+
+    /**
+     * Landing: the landing sound; a long fall hurts (a share of max HP per tile
+     * past the safe height, or the project's common event); a fall that kills
+     * the whole party leaves the bodies limp on the ground for a moment before
+     * the game ends, and a follower still falling goes limp where it lands.
+     */
     ReactorPhysics.onLand = function(character, fell, settings) {
-        if (typeof $gamePlayer === "undefined" || character !== $gamePlayer || !settings.fallDamage || !(fell > settings.fallFrom)) return;
+        if (typeof $gamePlayer === "undefined") return;
+        const fatal = typeof $gameTemp !== "undefined" && $gameTemp._reactorFatalFall;
+        if (fatal && this.isPartyCharacter(character)) { this.goLimp(character, this.impactSpeed(fell, settings)); return; }
+        if (character !== $gamePlayer) return;
+        const hurts = settings.fallDamage && fell > settings.fallFrom;
+        if (!hurts) {
+            if (fell >= this.LAND_SOUND_FROM) this.playSe(settings.landSe);
+            return;
+        }
         const tiles = fell - settings.fallFrom;
         if (settings.fallCommonEvent > 0 && typeof $gameTemp !== "undefined") {
+            this.playSe(settings.hardLandSe || settings.landSe);
             if (typeof $gameVariables !== "undefined" && settings.fallVariable > 0) $gameVariables.setValue(settings.fallVariable, Math.round(tiles));
             $gameTemp.reserveCommonEvent(settings.fallCommonEvent);
             return;
@@ -371,8 +421,33 @@
             actor.gainHp(-Math.max(1, Math.round(actor.mhp * share)));
         }
         if (typeof $gameScreen !== "undefined") $gameScreen.startFlash([255, 0, 0, 128], 8);
-        if (typeof SoundManager !== "undefined" && SoundManager.playActorDamage) SoundManager.playActorDamage();
-        if ($gameParty.isAllDead() && typeof SceneManager !== "undefined" && typeof Scene_Gameover !== "undefined") SceneManager.goto(Scene_Gameover);
+        if (settings.hardLandSe) this.playSe(settings.hardLandSe);
+        else if (typeof SoundManager !== "undefined" && SoundManager.playActorDamage) SoundManager.playActorDamage();
+        if (!$gameParty.isAllDead() || typeof SceneManager === "undefined" || typeof Scene_Gameover === "undefined") return;
+        // Limp bodies need the 3D view to fall in; a flat map ends at once.
+        const threeD = typeof Reactor3D !== "undefined" && Reactor3D.mapMode && typeof $dataMap !== "undefined" && Reactor3D.mapMode($dataMap) === Reactor3D.MODE_3D;
+        if (!settings.ragdoll || !threeD) { SceneManager.goto(Scene_Gameover); return; }
+        $gameTemp._reactorFatalFall = { frame: typeof Graphics !== "undefined" ? Graphics.frameCount : 0 };
+        const impact = this.impactSpeed(fell, settings);
+        this.goLimp($gamePlayer, impact);
+        // Followers already down go limp now; one still in the air, where it lands.
+        for (const follower of $gamePlayer.followers ? $gamePlayer.followers().visibleFollowers() : []) {
+            if (!this.isAirborne(follower)) this.goLimp(follower, impact * 0.5);
+        }
+    };
+
+    /** The speed (tiles a frame) of a body that fell this far under these settings. */
+    ReactorPhysics.impactSpeed = function(fell, settings = this.settings()) {
+        return Math.sqrt(2 * this.gravityPerFrame(settings) * Math.max(0, fell));
+    };
+
+    /** A fatal fall ends the game once its bodies have lain long enough. */
+    ReactorPhysics.updateFatalFall = function() {
+        const fatal = typeof $gameTemp !== "undefined" && $gameTemp._reactorFatalFall;
+        if (!fatal || typeof Graphics === "undefined") return;
+        if (Graphics.frameCount - fatal.frame < this.FATAL_FALL_FRAMES) return;
+        $gameTemp._reactorFatalFall = null;
+        SceneManager.goto(Scene_Gameover);
     };
 
     /**
@@ -394,7 +469,26 @@
         };
     }
 
+    if (typeof Scene_Map !== "undefined") {
+        const _updateScene = Scene_Map.prototype.update;
+        Scene_Map.prototype.update = function() {
+            _updateScene.apply(this, arguments);
+            ReactorPhysics.updateFatalFall();
+        };
+        // The stock check would end the game the frame the party died; the bodies fall first.
+        const _checkGameover = Scene_Map.prototype.checkGameover;
+        Scene_Map.prototype.checkGameover = function() {
+            if (typeof $gameTemp !== "undefined" && $gameTemp._reactorFatalFall) return;
+            _checkGameover.apply(this, arguments);
+        };
+    }
+
     if (typeof Game_Player !== "undefined") {
+        // A limp body goes nowhere.
+        const _canMove = Game_Player.prototype.canMove;
+        Game_Player.prototype.canMove = function() {
+            return !this._reactorRagdoll && _canMove.apply(this, arguments);
+        };
         const _updateP = Game_Player.prototype.update;
         Game_Player.prototype.update = function(sceneActive) {
             const free = sceneActive && typeof Input !== "undefined" && this.canMove() && !this.isInVehicle()
@@ -495,6 +589,15 @@
                 return !ReactorPhysics.airBlocks(this, x2, y2);
             }
             return _isMapPassable.apply(this, arguments);
+        };
+    }
+
+    if (typeof Game_Follower !== "undefined") {
+        // After a fatal fall nobody walks on: a follower still in the air only falls.
+        const _chase = Game_Follower.prototype.chaseCharacter;
+        Game_Follower.prototype.chaseCharacter = function() {
+            if (typeof $gameTemp !== "undefined" && $gameTemp._reactorFatalFall) return;
+            _chase.apply(this, arguments);
         };
     }
 

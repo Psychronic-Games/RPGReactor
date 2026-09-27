@@ -12454,6 +12454,25 @@ Object.assign(RR_TEXT_TRANSLATIONS.vi, {"While treading water": "Khi đạp nư�
 Object.assign(RR_TEXT_TRANSLATIONS.th, {"While treading water": "ขณะลอยตัวอยู่กับที่", "Treading": "ลอยตัว"});
 Object.assign(RR_TEXT_TRANSLATIONS.tr, {"While treading water": "Suda dururken", "Treading": "Suda durma"});
 
+// Controls › Physics: landing sounds and the limp fall.
+Object.assign(RR_TEXT_TRANSLATIONS.ja, {"Landing sound": "着地音", "Hard landing sound": "激しい着地音", "Go limp on a fatal fall": "致命的な落下でぐったり倒れる"});
+Object.assign(RR_TEXT_TRANSLATIONS.es, {"Landing sound": "Sonido de aterrizaje", "Hard landing sound": "Sonido de aterrizaje duro", "Go limp on a fatal fall": "Desplomarse en una caída mortal"});
+Object.assign(RR_TEXT_TRANSLATIONS['zh-Hant'], {"Landing sound": "落地音效", "Hard landing sound": "重摔音效", "Go limp on a fatal fall": "致命墜落時癱軟倒地"});
+Object.assign(RR_TEXT_TRANSLATIONS['zh-Hans'], {"Landing sound": "落地音效", "Hard landing sound": "重摔音效", "Go limp on a fatal fall": "致命坠落时瘫软倒地"});
+Object.assign(RR_TEXT_TRANSLATIONS.ru, {"Landing sound": "Звук приземления", "Hard landing sound": "Звук жёсткого приземления", "Go limp on a fatal fall": "Обмякнуть при смертельном падении"});
+Object.assign(RR_TEXT_TRANSLATIONS.pt, {"Landing sound": "Som de aterrissagem", "Hard landing sound": "Som de queda forte", "Go limp on a fatal fall": "Desabar numa queda fatal"});
+Object.assign(RR_TEXT_TRANSLATIONS.de, {"Landing sound": "Landegeräusch", "Hard landing sound": "Geräusch bei harter Landung", "Go limp on a fatal fall": "Bei tödlichem Sturz erschlaffen"});
+Object.assign(RR_TEXT_TRANSLATIONS.fr, {"Landing sound": "Son d’atterrissage", "Hard landing sound": "Son d’atterrissage brutal", "Go limp on a fatal fall": "S’effondrer lors d’une chute mortelle"});
+Object.assign(RR_TEXT_TRANSLATIONS.el, {"Landing sound": "Ήχος προσγείωσης", "Hard landing sound": "Ήχος σκληρής προσγείωσης", "Go limp on a fatal fall": "Χαλαρό σώμα σε θανάσιμη πτώση"});
+Object.assign(RR_TEXT_TRANSLATIONS.ko, {"Landing sound": "착지 소리", "Hard landing sound": "강한 착지 소리", "Go limp on a fatal fall": "치명적인 낙하 시 축 늘어짐"});
+Object.assign(RR_TEXT_TRANSLATIONS.ar, {"Landing sound": "صوت الهبوط", "Hard landing sound": "صوت الهبوط العنيف", "Go limp on a fatal fall": "ارتخاء الجسد عند سقوط قاتل"});
+Object.assign(RR_TEXT_TRANSLATIONS.it, {"Landing sound": "Suono di atterraggio", "Hard landing sound": "Suono di atterraggio violento", "Go limp on a fatal fall": "Accasciarsi in una caduta mortale"});
+Object.assign(RR_TEXT_TRANSLATIONS.pl, {"Landing sound": "Dźwięk lądowania", "Hard landing sound": "Dźwięk twardego lądowania", "Go limp on a fatal fall": "Bezwładne ciało po śmiertelnym upadku"});
+Object.assign(RR_TEXT_TRANSLATIONS.id, {"Landing sound": "Suara mendarat", "Hard landing sound": "Suara mendarat keras", "Go limp on a fatal fall": "Lemas saat jatuh fatal"});
+Object.assign(RR_TEXT_TRANSLATIONS.vi, {"Landing sound": "Âm thanh tiếp đất", "Hard landing sound": "Âm thanh tiếp đất mạnh", "Go limp on a fatal fall": "Ngã mềm khi rơi chết người"});
+Object.assign(RR_TEXT_TRANSLATIONS.th, {"Landing sound": "เสียงลงพื้น", "Hard landing sound": "เสียงกระแทกพื้น", "Go limp on a fatal fall": "ร่างทรุดเมื่อตกจนเสียชีวิต"});
+Object.assign(RR_TEXT_TRANSLATIONS.tr, {"Landing sound": "İniş sesi", "Hard landing sound": "Sert iniş sesi", "Go limp on a fatal fall": "Ölümcül düşüşte gevşeyip yığıl"});
+
 // 3D model import optimizer dialog.
 Object.assign(RR_TEXT_TRANSLATIONS['ja'], {
     'Import 3D Model': '3Dモデルのインポート', 'Optimize (recommended)': '最適化(推奨)', 'Resize textures to 2K, compact skin weights, drop unused data, and cut the mesh to about 60% of its triangles by collapsing the edges that change the shape least. Seams and silhouette are held.': 'テクスチャを2Kに縮小し、スキンウェイトを圧縮、不要データを削除し、形状への影響が最も小さいエッジを折りたたんでメッシュの三角形を約60%まで削減します。継ぎ目とシルエットは維持されます。', 'Optimize aggressively': '積極的に最適化', 'Everything above, cut to about a quarter of the triangles. May soften very fine detail.': '上記すべてに加え、三角形を約4分の1まで削減します。細部がわずかに損なわれる場合があります。', 'Import as-is': 'そのままインポート', 'Keep every byte of the original file.': '元のファイルを一切変更しません。', 'Import': 'インポート', 'largest texture': '最大テクスチャ', 'reducible without visible change': '見た目を変えずに削減可能'
