@@ -570,7 +570,7 @@ Reactor3D.injectLightShader = function(shader, renderer) {
     shader.fragmentShader = this.LightGrid.glsl(shadows ? this.lightGlsl(true, this.Shadows.quality().taps) : this.LIGHT_GLSL)
         + shader.fragmentShader.replace(
             "vec4 diffuseColor = vec4( diffuse, opacity );",
-            "vec4 diffuseColor = vec4( diffuse * mix(rrLight(vRRWorldPos), vec3(1.0), rrSelfLit), opacity );"
+            "vec3 rrLightTerm = mix(rrLight(vRRWorldPos), vec3(1.0), rrSelfLit);\n\tvec4 diffuseColor = vec4( diffuse * rrLightTerm, opacity );"
         );
 };
 
@@ -1048,6 +1048,194 @@ Reactor3D.waterVolumeMaterial = function(material) {
     return material;
 };
 
+//-----------------------------------------------------------------------------
+// Reflections
+//
+// A shiny surface (chrome, polished metal, glossy paint, mercury water)
+// mirrors the world around it. The world is captured into a small cube
+// map from beside the camera's focus, one face a frame so the cost is
+// spread thin; two cubes take turns, one drawn into while materials read
+// the other, so no draw reads the texture it is writing. Rougher surfaces
+// read a blurrier mip level. Until the first capture completes, and on a
+// weak GPU always, the fixed studio gradient stands in.
+
+Reactor3D.REFLECTION_SIZE = 128;
+
+Reactor3D.Reflections = {
+    _targets: null,
+    _cameras: null,
+    _face: 0,
+    _front: 0,
+    _uniforms: null,
+    /** Set when something shiny is in the scene; a scene with none never captures. */
+    wanted: false,
+
+    uniforms() {
+        if (!this._uniforms) {
+            this._uniforms = { rrEnvMap: { value: null }, rrEnvMaxLod: { value: 0 }, rrEnvFlip: { value: -1 } };
+        }
+        if (!this._uniforms.rrEnvMap.value && Reactor3D.studioEnvMap) {
+            this._uniforms.rrEnvMap.value = Reactor3D.studioEnvMap();
+            this._uniforms.rrEnvFlip.value = -1;
+            this._uniforms.rrEnvMaxLod.value = 0;
+        }
+        return this._uniforms;
+    },
+
+    enabled() {
+        return this.wanted && typeof THREE !== "undefined" && !(Reactor3D.isWeakGpu && Reactor3D.isWeakGpu());
+    },
+
+    _ensure() {
+        if (this._targets) return;
+        const size = Reactor3D.REFLECTION_SIZE;
+        const make = () => new THREE.WebGLCubeRenderTarget(size, {
+            generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter
+        });
+        this._targets = [make(), make()];
+        this._cameras = this._targets.map(target => new THREE.CubeCamera(0.1, 400, target));
+    },
+
+    /** One face of the next capture, from `position`, into the cube the materials are not reading. */
+    update(renderer, scene, position) {
+        if (!this.enabled() || !renderer || !scene || !position) return;
+        this._ensure();
+        const back = 1 - this._front;
+        const target = this._targets[back], cube = this._cameras[back];
+        if (this._face === 0) {
+            cube.position.set(position.x, position.y, position.z);
+            cube.updateMatrixWorld(true);
+        }
+        const camera = cube.children[this._face];
+        const previous = renderer.getRenderTarget();
+        const autoClear = renderer.autoClear;
+        renderer.autoClear = true;
+        // Mipmaps once, with the last face: every face written before them.
+        target.texture.generateMipmaps = this._face === 5;
+        renderer.setRenderTarget(target, this._face);
+        renderer.render(scene, camera);
+        renderer.setRenderTarget(previous);
+        renderer.autoClear = autoClear;
+        this._renderer = renderer;
+        this._face = (this._face + 1) % 6;
+        if (this._face === 0) {
+            this._front = back;
+            this._ready = true;
+        }
+    },
+
+    /**
+     * What a shiny material reflects in the renderer about to draw it: the
+     * capture in the renderer that made it, the studio gradient anywhere else
+     * (a preview, a battle room). A cube drawn in one context is nothing in another.
+     */
+    bind(renderer) {
+        const uniforms = this.uniforms();
+        const live = this._ready && this._targets && renderer === this._renderer;
+        const texture = live ? this._targets[this._front].texture : (Reactor3D.studioEnvMap ? Reactor3D.studioEnvMap() : null);
+        if (uniforms.rrEnvMap.value === texture) return;
+        uniforms.rrEnvMap.value = texture;
+        uniforms.rrEnvFlip.value = live ? 1 : -1;
+        uniforms.rrEnvMaxLod.value = live ? Math.log2(Reactor3D.REFLECTION_SIZE) : 0;
+    },
+
+    /** A material that reads the reflections picks them per renderer as it draws. */
+    hook(material) {
+        if (!material || material.__reactorReflects) return;
+        material.__reactorReflects = true;
+        const before = material.onBeforeRender;
+        material.onBeforeRender = function(renderer) {
+            if (typeof before === "function") before.apply(this, arguments);
+            Reactor3D.Reflections.bind(renderer);
+        };
+    },
+
+    /** A new map: no capture carries over, and nothing is known to shine yet. */
+    reset() {
+        this.wanted = false;
+        this._face = 0;
+        this._ready = false;
+        if (this._uniforms) this._uniforms.rrEnvMap.value = null;
+    }
+};
+
+/**
+ * How a material shines: its `rrShine` of `{ vector: (reflect, roughness,
+ * metal, 0), tint }`, or null for a plain surface. Set by
+ * `applyModelSurface` (a model's own settings, or its file's metal).
+ */
+Reactor3D.shineOf = function(material) {
+    const shine = material && material.userData && material.userData.rrShine;
+    if (!shine || !shine.vector) return null;
+    // A cloned material copies its userData through JSON: the vector and the
+    // colour arrive as plain objects, and a uniform needs the real things.
+    if (!shine.vector.isVector4 && typeof THREE !== "undefined") {
+        const v = shine.vector, t = shine.tint || {};
+        shine.vector = new THREE.Vector4(Number(v.x) || 0, Number(v.y) || 0, Number(v.z) || 0, Number(v.w) || 0);
+        shine.tint = new THREE.Color(Number.isFinite(t.r) ? t.r : 1, Number.isFinite(t.g) ? t.g : 1, Number.isFinite(t.b) ? t.b : 1);
+    }
+    return shine.vector.x > 0 ? shine : null;
+};
+
+/**
+ * The reflection term for a shiny lit material: the world in the capture,
+ * mirrored about the surface normal, blurred by roughness, stronger at a
+ * glancing angle (fresnel) unless it is metal, which reflects as strongly
+ * face on, in the surface's tint (white chrome, yellow gold). A mirror-bright
+ * metal is almost all reflection.
+ */
+Reactor3D.injectShine = function(material, shader) {
+    const shine = this.shineOf(material);
+    if (!shine) return;
+    const env = this.Reflections.uniforms();
+    shader.uniforms.rrEnvMap = env.rrEnvMap;
+    shader.uniforms.rrEnvMaxLod = env.rrEnvMaxLod;
+    shader.uniforms.rrEnvFlip = env.rrEnvFlip;
+    shader.uniforms.rrShine = { value: shine.vector };
+    shader.uniforms.rrShineTint = { value: shine.tint };
+    shader.vertexShader = "varying vec3 vRRWorldNormal;\n" + shader.vertexShader.replace(
+        "#include <project_vertex>",
+        [
+            "#include <project_vertex>",
+            "{",
+            "#ifdef USE_SKINNING",
+            "\tvec3 rrObjN = objectNormal;",
+            "#else",
+            "\tvec3 rrObjN = normal;",
+            "#endif",
+            "#ifdef USE_INSTANCING",
+            "\trrObjN = mat3(instanceMatrix) * rrObjN;",
+            "#endif",
+            "\tvRRWorldNormal = normalize(mat3(modelMatrix) * rrObjN);",
+            "}"
+        ].join("\n")
+    );
+    shader.fragmentShader = [
+        "uniform samplerCube rrEnvMap;",
+        "uniform float rrEnvMaxLod;",
+        "uniform float rrEnvFlip;",
+        "uniform vec4 rrShine;",
+        "uniform vec3 rrShineTint;",
+        "varying vec3 vRRWorldNormal;"
+    ].join("\n") + "\n" + shader.fragmentShader.replace(
+        "#include <opaque_fragment>",
+        [
+            "{",
+            "\tvec3 rrN = normalize(vRRWorldNormal);",
+            "\trrN = gl_FrontFacing ? rrN : -rrN;",
+            "\tvec3 rrV = normalize(cameraPosition - vRRWorldPos);",
+            "\tvec3 rrR = reflect(-rrV, rrN);",
+            "\trrR.x *= rrEnvFlip;",
+            "\tvec3 rrEnv = textureLod(rrEnvMap, rrR, rrShine.y * rrEnvMaxLod).rgb;",
+            "\tfloat rrF0 = mix(0.04, 1.0, rrShine.z);",
+            "\tfloat rrFres = rrF0 + (1.0 - rrF0) * pow(1.0 - clamp(dot(rrN, rrV), 0.0, 1.0), 5.0);",
+            "\toutgoingLight = mix(outgoingLight, rrEnv * rrShineTint, clamp(rrShine.x * rrFres, 0.0, 1.0));",
+            "}",
+            "#include <opaque_fragment>"
+        ].join("\n")
+    );
+};
+
 Reactor3D.litMaterial = function(material) {
     if (!material || material.__reactorLit) return material;
     material.__reactorLit = true;
@@ -1061,11 +1249,13 @@ Reactor3D.litMaterial = function(material) {
         Reactor3D.injectDissolve(this, shader);
         Reactor3D.injectCutaway(this, shader);
         Reactor3D.injectWaterVolume(this, shader);
+        Reactor3D.injectShine(this, shader);
     };
     const earlierKey = material.customProgramCacheKey;
     material.customProgramCacheKey = function() {
         return (typeof earlierKey === "function" ? earlierKey.call(this) : "") + "|reactor3d-lit" + (this.__reactorPieces ? "|cutaway" : this.__reactorModel ? "|sightline" : "") + (this.__reactorGhost ? "|ghost" : "")
-            + (Reactor3D.Shadows.active() ? "|shadows" + Reactor3D.Shadows.quality().taps : "");
+            + (Reactor3D.Shadows.active() ? "|shadows" + Reactor3D.Shadows.quality().taps : "")
+            + (Reactor3D.shineOf(this) ? "|shine" : "");
     };
     return material;
 };

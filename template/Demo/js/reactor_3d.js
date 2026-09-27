@@ -1364,6 +1364,8 @@ Reactor3D.Viewport.prototype.renderPass = function(mapScene, which, slot) {
             scene.updateMatrixWorld();
             // The shadow maps, while every group is still visible.
             if (mapScene.renderShadows) mapScene.renderShadows(this._renderer, null);
+            // A face of the reflection capture, from where the camera stands.
+            if (Reactor3D.Reflections && this._camera) Reactor3D.Reflections.update(this._renderer, scene, this._camera.position);
         }
     }
     mapScene.setPass(which);
@@ -4786,6 +4788,8 @@ Reactor3D.MapScene = function() {
 };
 
 Reactor3D.MapScene.prototype.initialize = function(mapData, bitmaps, options) {
+    // A new map: its own reflections, captured once something in it shines.
+    if (Reactor3D.Reflections) Reactor3D.Reflections.reset();
     this._scene = new THREE.Scene();
     this._materials = [];
     this._meshes = [];

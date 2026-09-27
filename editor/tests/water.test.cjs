@@ -117,7 +117,7 @@ test('the terrain tab pours into a hollow, previews it under the pointer, remove
     assert.match(view, /if \(event\?\.detail\?\.water && this\.updateWaterInPlace\(\)\) return;/);
     assert.match(view, /this\.mapScene\.updateWater\?\.\(now \/ \(1000 \/ 60\)\);/, 'the editor drifts the water too');
     const i18n = read('editor/src/I18nManager.js');
-    assert.match(view, /const sheet = this\.terrainManager\(\)\.mode === 'drain' \? this\.waterMeshAt\(event\.clientX, event\.clientY\) : null;/, 'Remove picks the sheet drawn under the pointer');
+    assert.match(view, /const sheet = mode === 'drain' \|\| mode === 'look' \? this\.waterMeshAt\(event\.clientX, event\.clientY\) : null;/, 'Remove and Look pick the sheet drawn under the pointer');
     assert.match(view, /manager\.hoverAt\?\.\(point\);/, 'the pointer previews the hollow');
     for (const key of ['terrain.water', 'terrain.waterPour', 'terrain.waterErase', 'terrain.waterFull', 'terrain.waterHint', 'terrain.waterCount']) {
         assert.equal((i18n.match(new RegExp('"' + key.replace(/\./g, '\\.') + '": "', 'g')) || []).length, 18, key + ' in 18 locales');

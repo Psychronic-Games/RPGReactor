@@ -6,6 +6,13 @@
  * the panel, and an undo stack of whole height fields per stroke.
  */
 class TerrainManager {
+    /** Water looks to start from: clear water with a sky in it, liquid mercury, and no reflection. */
+    static WATER_LOOKS = {
+        water: { reflect: 0.45, gloss: 0.85, tint: '#ffffff' },
+        mercury: { reflect: 1, gloss: 0.92, tint: '#d8dde3' },
+        plain: { reflect: 0, gloss: 0.85, tint: '#ffffff' }
+    };
+
     constructor(projectController) {
         this.projectController = projectController;
         this.active = false;
@@ -13,6 +20,7 @@ class TerrainManager {
         this.radius = 3;
         this.strength = 0.5;
         this.waterMaterial = 'Water';
+        this.waterLook = Object.assign({}, TerrainManager.WATER_LOOKS.water);
         this._preview = null;
         this._onKeyDown = event => this.handleKey(event);
         this.panel = null;
@@ -55,6 +63,15 @@ class TerrainManager {
                     <div class="rr-terrain-water-modes" role="radiogroup" style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px;">
                         <button type="button" class="rr-btn-secondary rr-terrain-mode" data-terrain-mode="fill" role="radio" aria-checked="false" style="padding: 6px 4px; font-size: 12px;" data-i18n="terrain.waterPour">${t('terrain.waterPour')}</button>
                         <button type="button" class="rr-btn-secondary rr-terrain-mode" data-terrain-mode="drain" role="radio" aria-checked="false" style="padding: 6px 4px; font-size: 12px;" data-i18n="terrain.waterErase">${t('terrain.waterErase')}</button>
+                        <button type="button" class="rr-btn-secondary rr-terrain-mode" data-terrain-mode="look" role="radio" aria-checked="false" style="padding: 6px 4px; font-size: 12px; grid-column: span 2;" data-i18n="terrain.waterLook">${t('terrain.waterLook')}</button>
+                    </div>
+                    <div class="rr-terrain-look" hidden style="display: flex; flex-direction: column; gap: 5px;">
+                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px;">
+                            ${['water', 'mercury', 'plain'].map(p => `<button type="button" class="rr-btn-secondary rr-terrain-look-preset" data-preset="${p}" style="padding: 4px; font-size: 11px;" data-i18n="terrain.look.${p}">${t('terrain.look.' + p)}</button>`).join('')}
+                        </div>
+                        ${['reflect', 'gloss'].map(f => `<label style="display: grid; grid-template-columns: 70px 1fr 34px; align-items: center; gap: 6px; font-size: 11px; color: var(--color-text-muted);"><span data-i18n="terrain.look.${f}">${t('terrain.look.' + f)}</span><input type="range" class="rr-terrain-look-${f}" min="0" max="1" step="0.01" value="${this.waterLook[f]}" data-no-stepper><span class="rr-terrain-look-${f}-value" style="color: var(--color-text);">${Math.round(this.waterLook[f] * 100)}%</span></label>`).join('')}
+                        <label style="display: grid; grid-template-columns: 70px 1fr; align-items: center; gap: 6px; font-size: 11px; color: var(--color-text-muted);"><span data-i18n="terrain.look.tint">${t('terrain.look.tint')}</span><input type="color" class="rr-terrain-look-tint" value="${this.waterLook.tint}"></label>
+                        <div style="font-size: 11px; color: var(--color-text-muted);" data-i18n="terrain.look.hint">${t('terrain.look.hint')}</div>
                     </div>
                     <div class="rr-terrain-status" style="font-size: 11px; color: var(--color-text-muted);" data-rr-i18n-skip></div>
                     <div style="font-size: 11px; color: var(--color-text-muted); line-height: 1.4;" data-i18n="terrain.keys">${t('terrain.keys')}</div>
@@ -67,13 +84,30 @@ class TerrainManager {
             container.querySelector('.rr-terrain-undo').addEventListener('click', () => this.undo());
             container.querySelector('.rr-terrain-redo').addEventListener('click', () => this.redo());
             container.querySelector('.rr-terrain-clear').addEventListener('click', () => this.clear());
+            const lookInputs = () => {
+                for (const f of ['reflect', 'gloss']) {
+                    container.querySelector(`.rr-terrain-look-${f}`).value = this.waterLook[f];
+                    container.querySelector(`.rr-terrain-look-${f}-value`).textContent = Math.round(this.waterLook[f] * 100) + '%';
+                }
+                container.querySelector('.rr-terrain-look-tint').value = this.waterLook.tint;
+            };
+            for (const f of ['reflect', 'gloss']) {
+                container.querySelector(`.rr-terrain-look-${f}`).addEventListener('input', event => { this.waterLook[f] = Number(event.target.value); lookInputs(); });
+            }
+            container.querySelector('.rr-terrain-look-tint').addEventListener('input', event => { this.waterLook.tint = event.target.value; });
+            container.querySelectorAll('.rr-terrain-look-preset').forEach(button => button.addEventListener('click', () => {
+                Object.assign(this.waterLook, TerrainManager.WATER_LOOKS[button.dataset.preset]);
+                lookInputs();
+            }));
         }
         this.refreshStatus();
     }
 
     setMode(mode) {
-        if (!this.elevation()?.TERRAIN_MODES.includes(mode) && mode !== 'drain' && mode !== 'fill') return;
+        if (!this.elevation()?.TERRAIN_MODES.includes(mode) && mode !== 'drain' && mode !== 'fill' && mode !== 'look') return;
         this.mode = mode;
+        const look = this.panel?.querySelector('.rr-terrain-look');
+        if (look) look.hidden = mode !== 'look';
         window.reactor?.mapEditor3D?.hideWaterGhost?.();
         this.panel?.querySelectorAll('.rr-terrain-mode').forEach(button => button.setAttribute('aria-checked', String(button.dataset.terrainMode === mode)));
     }
@@ -167,6 +201,13 @@ class TerrainManager {
         this.undoStack.push({ water: saved }); if (this.undoStack.length > 50) this.undoStack.shift(); this.redoStack.length = 0;
         this.announce(null, true); this.refreshStatus();
         return true;
+    }
+
+    /** Give the sheet the 3D view found under the pointer the look set in the panel. */
+    styleRegion(region) {
+        const map = this.currentMap(), elevation = this.elevation();
+        if (!map || !elevation || !region) return false;
+        return this.drain(() => elevation.styleWaterRegion(map, region, this.waterLook));
     }
 
     /** Remove the sheet the 3D view found under the pointer (so a sheet standing high over the ground still goes). */

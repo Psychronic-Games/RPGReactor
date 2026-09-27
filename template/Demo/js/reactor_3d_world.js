@@ -673,7 +673,23 @@ Reactor3D.normalizeWater = function(raw, mapData) {
     const region = { x0, y0, x1, y1, level: Math.round(level * 100) / 100, material: typeof raw.material === "string" ? raw.material.trim() : "" };
     const mask = this.waterMaskFor(raw, region);
     if (mask) region.mask = mask;
+    Object.assign(region, this.waterLookOf(raw));
     return region;
+};
+
+/**
+ * A sheet's look beyond its image, only what was set: `reflect` (0-1, how
+ * much of the world its surface mirrors), `gloss` (0-1, 1 a clean mirror)
+ * and `tint` (the colour the reflection takes). Mercury is all three high:
+ * reflect 1, gloss 0.9, a pale steel tint.
+ */
+Reactor3D.waterLookOf = function(raw) {
+    const out = {};
+    const unit = value => { const n = Number(value); return Number.isFinite(n) ? Math.max(0, Math.min(1, n)) : null; };
+    if (unit(raw.reflect) !== null) out.reflect = unit(raw.reflect);
+    if (unit(raw.gloss) !== null) out.gloss = unit(raw.gloss);
+    if (typeof raw.tint === "string" && /^#[0-9a-f]{6}$/i.test(raw.tint)) out.tint = raw.tint.toLowerCase();
+    return out;
 };
 
 /** The raw sheet's mask cut to the region's box (the box may have been clamped to the map), or null when it covers the box. */
@@ -1517,7 +1533,7 @@ Reactor3D.waterUniforms = function() {
  * the ground rises to meet it, so a shore is a shore. Cheap: a sum of
  * sines in the vertex stage, one dot product in the fragment stage.
  */
-Reactor3D.waterMaterial = function(texture) {
+Reactor3D.waterMaterial = function(texture, look) {
     const material = new THREE.MeshBasicMaterial({
         map: texture || null, color: 0xffffff, transparent: true, opacity: 1,
         depthWrite: false, side: THREE.DoubleSide, forceSinglePass: true
@@ -1525,8 +1541,17 @@ Reactor3D.waterMaterial = function(texture) {
     material.__reactorShaded = true;
     material.__reactorWater = true;
     const shared = this.waterUniforms();
+    // Its look: reflect, roughness, then the tint the reflection takes.
+    const reflect = look && look.reflect > 0 ? look.reflect : 0;
+    material.userData.rrWaterLook = new THREE.Vector4(reflect, 1 - (look && look.gloss !== undefined ? look.gloss : 0.85), 0, 0);
+    material.userData.rrWaterTint = new THREE.Color(look && look.tint ? look.tint : "#ffffff");
+    if (reflect > 0 && this.Reflections) { this.Reflections.wanted = true; this.Reflections.hook(material); }
+    const env = this.Reflections ? this.Reflections.uniforms() : null;
     material.onBeforeCompile = function(shader) {
         shader.uniforms.rrWaveTime = shared.rrWaveTime;
+        shader.uniforms.rrWaterLook = { value: material.userData.rrWaterLook };
+        shader.uniforms.rrWaterTint = { value: material.userData.rrWaterTint };
+        if (env) { shader.uniforms.rrEnvMap = env.rrEnvMap; shader.uniforms.rrEnvMaxLod = env.rrEnvMaxLod; shader.uniforms.rrEnvFlip = env.rrEnvFlip; }
         shader.vertexShader = "uniform float rrWaveTime;\nattribute float rrDepth;\nvarying float vRRDepth;\nvarying vec3 vRRWaveNormal;\n" + shader.vertexShader.replace(
             "#include <begin_vertex>",
             [
@@ -1547,7 +1572,8 @@ Reactor3D.waterMaterial = function(texture) {
                 "}"
             ].join("\n")
         );
-        shader.fragmentShader = "varying float vRRDepth;\nvarying vec3 vRRWaveNormal;\n" + shader.fragmentShader.replace(
+        shader.fragmentShader = "varying float vRRDepth;\nvarying vec3 vRRWaveNormal;\nuniform vec4 rrWaterLook;\nuniform vec3 rrWaterTint;\n"
+            + (env ? "uniform samplerCube rrEnvMap;\nuniform float rrEnvMaxLod;\nuniform float rrEnvFlip;\n" : "") + shader.fragmentShader.replace(
             "#include <map_fragment>",
             [
                 "#include <map_fragment>",
@@ -1561,11 +1587,23 @@ Reactor3D.waterMaterial = function(texture) {
                 "\tfloat rrFresnel = pow(1.0 - max(dot(vRRWaveNormal, rrViewDir), 0.0), 3.0);",
                 "\tdiffuseColor.rgb = mix(diffuseColor.rgb * rrTint, vec3(1.0), rrGlint * 0.7);",
                 "\tdiffuseColor.a *= (0.55 + 0.3 * smoothstep(0.0, 2.0, vRRDepth) + 0.15 * rrFresnel) * smoothstep(0.0, 0.35, vRRDepth);",
+                // A reflective sheet mirrors the world through its waves, more at a
+                // glancing angle, and turns opaque as it does: mercury is a mirror.
+                env ? [
+                    "\tif (rrWaterLook.x > 0.0) {",
+                    "\t\tvec3 rrR = reflect(-rrViewDir, vRRWaveNormal);",
+                    "\t\trrR.x *= rrEnvFlip;",
+                    "\t\tvec3 rrEnvC = textureLod(rrEnvMap, rrR, rrWaterLook.y * rrEnvMaxLod).rgb * rrWaterTint;",
+                    "\t\tfloat rrMirror = clamp(rrWaterLook.x * (0.55 + 0.45 * pow(1.0 - max(dot(vRRWaveNormal, rrViewDir), 0.0), 2.0)), 0.0, 1.0);",
+                    "\t\tdiffuseColor.rgb = mix(diffuseColor.rgb, rrEnvC + vec3(rrGlint * 0.8), rrMirror);",
+                    "\t\tdiffuseColor.a = mix(diffuseColor.a, smoothstep(0.0, 0.35, vRRDepth), rrWaterLook.x * 0.85);",
+                    "\t}"
+                ].join("\n") : "",
                 "}"
             ].join("\n")
         );
     };
-    material.customProgramCacheKey = function() { return "reactor3d-water"; };
+    material.customProgramCacheKey = function() { return "reactor3d-water" + (env ? "|env" : ""); };
     this.litMaterial(material);
     return material;
 };
@@ -1629,7 +1667,7 @@ Reactor3D.MapScene.prototype.addWater = function(mapData, load) {
         // The image repeats once per tile, drifting.
         const texture = this.materialTexture(region.material, load);
         if (texture) { texture.repeat.set(w, h); }
-        const material = Reactor3D.waterMaterial(texture);
+        const material = Reactor3D.waterMaterial(texture, region);
         const mesh = new THREE.Mesh(geometry, material);
         mesh.userData.water = region;
         mesh.renderOrder = 6;

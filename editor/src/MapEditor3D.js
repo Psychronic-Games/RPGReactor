@@ -3508,9 +3508,14 @@ class MapEditor3D {
                 && !this.pointer.paint && this.canEditTerrain()) {
                 // Remove takes the sheet drawn under the pointer first: a sheet standing
                 // high over the ground is not over the cell the ray meets beyond it.
-                const sheet = this.terrainManager().mode === 'drain' ? this.waterMeshAt(event.clientX, event.clientY) : null;
-                const point = sheet ? null : this.groundPointAt(event.clientX, event.clientY);
-                if (sheet) { this.pointer.terrain = true; this.terrainManager().drainRegion(sheet); }
+                const mode = this.terrainManager().mode;
+                const sheet = mode === 'drain' || mode === 'look' ? this.waterMeshAt(event.clientX, event.clientY) : null;
+                const point = sheet || mode === 'look' ? null : this.groundPointAt(event.clientX, event.clientY);
+                if (sheet) {
+                    this.pointer.terrain = true;
+                    if (mode === 'look') this.terrainManager().styleRegion(sheet);
+                    else this.terrainManager().drainRegion(sheet);
+                }
                 else if (point) {
                     this.pointer.terrain = true;
                     this.terrainManager().beginStroke(point);
@@ -4071,7 +4076,7 @@ class MapEditor3D {
         this.updateHoverCell(this.canEditTerrain() ? null : tile);
         if (this.canEditTerrain()) {
             const manager = this.terrainManager(), point = this.groundPointAt(clientX, clientY);
-            const water = manager.mode === 'fill' || manager.mode === 'drain';
+            const water = manager.mode === 'fill' || manager.mode === 'drain' || manager.mode === 'look';
             this.updateTerrainRing(water ? null : point);
             manager.hoverAt?.(point);
         } else if (this.terrainRing) this.terrainRing.visible = false;
@@ -4469,6 +4474,8 @@ class MapEditor3D {
         // game's viewport takes, from the same lights the feed just synced.
         this.mapScene.renderShadows?.(this.renderer, this.currentMap());
         const scene = this.mapScene.scene();
+        // A face of the reflection capture, as the game takes it.
+        if (typeof Reactor3D !== 'undefined' && Reactor3D.Reflections && this.camera) Reactor3D.Reflections.update(this.renderer, scene, this.camera.position);
         const background = scene.background;
         const autoClear = this.renderer.autoClear;
         const eventVisible = this.eventGroup ? this.eventGroup.visible : null;

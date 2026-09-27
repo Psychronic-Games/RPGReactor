@@ -889,6 +889,11 @@
             for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const c = raw.mask[(y0 + y - box.y0) * bw + (x0 + x - box.x0)] === '1' ? '1' : '0'; if (c === '0') full = false; mask += c; }
             if (!full) region.mask = mask;
         }
+        // Its look, only what was set: reflect and gloss (0-1) and the reflection's tint.
+        const unit = value => { const n = Number(value); return Number.isFinite(n) ? Math.max(0, Math.min(1, n)) : null; };
+        if (unit(raw.reflect) !== null) region.reflect = unit(raw.reflect);
+        if (unit(raw.gloss) !== null) region.gloss = unit(raw.gloss);
+        if (typeof raw.tint === 'string' && /^#[0-9a-f]{6}$/i.test(raw.tint)) region.tint = raw.tint.toLowerCase();
         return region;
     };
     /** Whether a sheet stands over a cell. */
@@ -932,6 +937,21 @@
         const kept = list.filter(other => !(other.x0 === region.x0 && other.y0 === region.y0 && other.x1 === region.x1 && other.y1 === region.y1 && Math.abs(other.level - region.level) < 1e-6));
         if (kept.length === list.length) return false;
         return writeWater(mapData, kept);
+    };
+    /** Give one sheet a look (reflect, gloss, tint); a look that reflects nothing clears it. */
+    const styleWaterRegion = (mapData, region, look) => {
+        if (!region || !look) return false;
+        const list = water(mapData);
+        let found = false;
+        const styled = list.map(other => {
+            if (!(other.x0 === region.x0 && other.y0 === region.y0 && other.x1 === region.x1 && other.y1 === region.y1 && Math.abs(other.level - region.level) < 1e-6)) return other;
+            found = true;
+            const next = Object.assign({}, other);
+            delete next.reflect; delete next.gloss; delete next.tint;
+            if (Number(look.reflect) > 0) Object.assign(next, { reflect: Number(look.reflect), gloss: Number(look.gloss), tint: look.tint });
+            return normalizeWater(next, mapData);
+        });
+        return found ? writeWater(mapData, styled.filter(Boolean)) : false;
     };
     /**
      * The hollow under a cell, as water poured there would fill it: the
@@ -1000,7 +1020,7 @@
     const pieceMaterials = mapData => Array.from(new Set(pieces(mapData).map(piece => piece.material).concat(water(mapData).map(region => region.material)).filter(Boolean))).sort();
 
     const api = {
-        WATER_MAX_LEVEL, normalizeWater, water, hasWater, addWater, waterCovers, waterAt, removeWaterAt, removeWaterRegion, waterBasin, fillWaterAt, waterSnapshot, restoreWater,
+        WATER_MAX_LEVEL, normalizeWater, water, hasWater, addWater, waterCovers, waterAt, removeWaterAt, removeWaterRegion, styleWaterRegion, waterBasin, fillWaterAt, waterSnapshot, restoreWater,
         PIECE_KINDS, SHAPE_KINDS, SHAPE_PARAMS, PIECE_MAX_LEVEL, normalizePiece, pieces, hasPieces, pieceAt, setPiece, removePiece,
         piecesSnapshot, restorePieces, clearPieces, pieceMaterials,
         nextPieceGroup, pieceGroup, pieceGroupBounds, pieceGroupAt, groupConnectedPieces, movePieceGroup, removePieceGroup, rotatePieceGroup,

@@ -136,7 +136,7 @@ test('GLB materials are unlit like the rest of the 3D scene', () => {
     assert.match(source, /flattenModelWorld/);
     assert.match(source, /applyRestSkins/);
     assert.match(source, /skinGeometryAtRest/);
-    assert.match(source, /reflectivity/);
+    assert.match(source, /glbShine/, 'a file\'s polished metal shines by default');
     assert.doesNotMatch(source, /buildGlbTemplate[\s\S]*MeshStandardMaterial/);
 });
 

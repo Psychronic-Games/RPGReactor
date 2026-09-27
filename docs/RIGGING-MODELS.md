@@ -47,3 +47,7 @@ Rotations are in degrees about the model's own axes, with the character facing +
 - Y turns an arm about its length only if the rest pose hangs it straight down. On an A-pose model, Y also moves the arm, and after a twist no single axis moves the hand straight sideways. Wave's keys are the turn it needs worked out per key.
 
 Between keys a motion follows a smooth curve: it slows only where it turns back or holds, never overshoots a key, and a looping motion runs through its end without pausing.
+
+## Surface
+
+The whole model's card has a **Surface** tab: Reflection (how much of the world it mirrors), Gloss (1 a clean mirror, lower blurs it), Metal (1 reflects as strongly face on as at an angle, as chrome does; 0 only at glancing angles, as paint does) and a Tint for the reflection. Chrome, Gold, Glossy and Brushed are starting points. It is saved as `model.json` › `surface` and applies wherever the model is placed. A model whose file is already polished metal shines without one.

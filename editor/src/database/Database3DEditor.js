@@ -1354,6 +1354,8 @@ class Database3DEditor {
         this.rawTransform = parsed.transform && typeof parsed.transform === 'object' && !Array.isArray(parsed.transform)
             ? parsed.transform : null;
         this._transformWork = null;
+        this.rawSurface = parsed.surface && typeof parsed.surface === 'object' && !Array.isArray(parsed.surface) ? parsed.surface : null;
+        this._surfaceWork = null;
         this.rawCollision = parsed.collision === 'box' ? 'box' : 'mesh';
         this.landmarks = parsed.landmarks && typeof parsed.landmarks === 'object' ? parsed.landmarks : {};
         this.customParts = Array.isArray(parsed.parts) ? parsed.parts : [];
@@ -1399,7 +1401,7 @@ class Database3DEditor {
      * preserving any keys other tools may have put there. Pure, so the
      * write path is testable without a project on disk.
      */
-    static mergeSidecar(previousText, animations, parts, pivots, effects, transform, collision) {
+    static mergeSidecar(previousText, animations, parts, pivots, effects, transform, collision, surface) {
         let json = {};
         if (previousText) {
             const parsed = JSON.parse(previousText);
@@ -1420,6 +1422,11 @@ class Database3DEditor {
             if (collision === 'box') json.collision = 'box';
             else delete json.collision;
         }
+        // A surface that reflects nothing is no surface: the file's own metal stands.
+        if (surface !== undefined) {
+            if (surface && Number(surface.reflect) > 0) json.surface = surface;
+            else delete json.surface;
+        }
         if (parts && parts.length) json.parts = parts;
         else delete json.parts;
         if (pivots && Object.keys(pivots).length) json.pivots = pivots;
@@ -1433,7 +1440,7 @@ class Database3DEditor {
         try {
             const previous = this._readSidecarForUpdate(fs);
             this._writeFileAtomic(fs, this.rulesPath(),
-                Database3DEditor.mergeSidecar(previous, this.rawAnimations, this.customParts, this.customPivots, this.rawEffects, this.rawTransform, this.rawCollision));
+                Database3DEditor.mergeSidecar(previous, this.rawAnimations, this.customParts, this.customPivots, this.rawEffects, this.rawTransform, this.rawCollision, this.rawSurface));
         } catch (error) {
             this._reportModelSaveError(error);
             throw error;
@@ -3064,6 +3071,10 @@ class Database3DEditor {
             this._renderEffectCard(card, header);
             return;
         }
+        if (this.selectedPartName === '' && this._modelTab === 'surface') {
+            this._renderSurfaceCard(card, header);
+            return;
+        }
         if (this.selectedPartName === '' && this._modelTab !== 'animation') {
             this._renderTransformCard(card, header);
             return;
@@ -4009,7 +4020,7 @@ class Database3DEditor {
             ? this._scaleSlidersHtml('r3d-tcard', work.scale)
             : this._axisSlidersHtml('r3d-tcard-slider', spec);
         card.innerHTML = header
-            + this._tabStripHtml('r3d-tcard-mode', [{ id: 'transform', label: this._k('r3dcard.transform') }, { id: 'animation', label: this._t('Animations') }], 'transform')
+            + this._tabStripHtml('r3d-tcard-mode', Database3DEditor.modelTabs(this), 'transform')
             + `<div style="font-size:11px;color:var(--color-text-muted);margin:-4px 0 6px;">${this._k('r3dcard.transformHint')}</div>`
             + this._tabStripHtml('r3d-tcard-tab', [{ id: 'offset', label: this._t('Offset') }, { id: 'rotate', label: this._t('Rotate') }, { id: 'scale', label: this._t('Scale') }], tab)
             + body
@@ -4065,10 +4076,77 @@ class Database3DEditor {
         });
     }
 
+    /** The whole model's card tabs: its placement, its animations, its surface. */
+    static modelTabs(editor) {
+        return [{ id: 'transform', label: editor._k('r3dcard.transform') }, { id: 'animation', label: editor._t('Animations') }, { id: 'surface', label: editor._t('Surface') }];
+    }
+
+    /** Ready-made surfaces: a mirror, gold, a lacquer, satin metal. */
+    static SURFACE_PRESETS = [
+        ['Chrome', { reflect: 1, gloss: 0.95, metal: 1, tint: '#ffffff' }],
+        ['Gold', { reflect: 1, gloss: 0.85, metal: 1, tint: '#ffcc55' }],
+        ['Glossy', { reflect: 0.9, gloss: 0.9, metal: 0, tint: '#ffffff' }],
+        ['Brushed', { reflect: 0.8, gloss: 0.45, metal: 1, tint: '#dfe3e8' }]
+    ];
+
+    /**
+     * The whole model's surface: how much of the world it mirrors, how sharp
+     * the reflection is, how metal it is and the reflection's tint. Changes
+     * show on the model as the sliders move; Save writes them to model.json.
+     */
+    _renderSurfaceCard(card, header) {
+        if (!this._surfaceWork) {
+            const base = (typeof Reactor3D !== 'undefined' && Reactor3D.readModelSurface ? Reactor3D.readModelSurface({ surface: this.rawSurface }) : null)
+                || { reflect: 0, gloss: 0.8, metal: 0, tint: '#ffffff' };
+            this._surfaceWork = JSON.parse(JSON.stringify(base));
+        }
+        const work = this._surfaceWork, tt = text => rrEscapeHtml(this._t(text));
+        const slider = (field, label) => `<label style="display:grid;grid-template-columns:70px 1fr 38px;align-items:center;gap:6px;font-size:11px;margin:4px 0;">
+            <span>${tt(label)}</span><input type="range" class="r3d-surface" data-field="${field}" min="0" max="1" step="0.01" value="${work[field]}">
+            <span class="r3d-surface-value" data-field="${field}" style="text-align:right;color:var(--color-text-muted);">${Math.round(work[field] * 100)}%</span></label>`;
+        card.innerHTML = header
+            + this._tabStripHtml('r3d-tcard-mode', Database3DEditor.modelTabs(this), 'surface')
+            + `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-bottom:6px;">${Database3DEditor.SURFACE_PRESETS.map(([name]) => `<button type="button" class="rr-btn-secondary r3d-surface-preset" data-preset="${name}" style="padding:3px 0;font-size:11px;">${tt(name)}</button>`).join('')}</div>`
+            + slider('reflect', 'Reflection') + slider('gloss', 'Gloss') + slider('metal', 'Metal')
+            + `<label style="display:grid;grid-template-columns:70px 1fr;align-items:center;gap:6px;font-size:11px;margin:4px 0;"><span>${tt('Tint')}</span><input type="color" class="r3d-surface-tint" value="${work.tint}"></label>
+            <div style="display:flex;gap:6px;margin-top:10px;">
+                <button type="button" class="rr-btn-secondary r3d-surface-clear" style="flex:1;">${tt('Clear')}</button>
+                <button type="button" class="rr-button-primary r3d-surface-save" style="flex:1;">${tt('Save')}</button>
+            </div>`;
+        this._mountCardChooser(card);
+        card.querySelector('.r3d-card-close').addEventListener('click', () => { this._cardCollapsed = true; this.deselectPart(); this.renderEditCard(); });
+        card.querySelector('.r3d-card-undo').style.opacity = '0.35';
+        card.querySelector('.r3d-card-redo').style.opacity = '0.35';
+        card.querySelectorAll('.r3d-tcard-mode').forEach(button => button.addEventListener('click', () => { this._modelTab = button.dataset.tab; this.renderEditCard(); }));
+        const live = () => this._applyBaseTransform();
+        card.querySelectorAll('.r3d-surface').forEach(input => input.addEventListener('input', () => {
+            work[input.dataset.field] = Number(input.value);
+            card.querySelector(`.r3d-surface-value[data-field="${input.dataset.field}"]`).textContent = Math.round(work[input.dataset.field] * 100) + '%';
+            live();
+        }));
+        card.querySelector('.r3d-surface-tint').addEventListener('input', event => { work.tint = event.target.value; live(); });
+        card.querySelectorAll('.r3d-surface-preset').forEach(button => button.addEventListener('click', () => {
+            const preset = Database3DEditor.SURFACE_PRESETS.find(([name]) => name === button.dataset.preset);
+            if (preset) { Object.assign(work, preset[1]); live(); this.renderEditCard(); }
+        }));
+        card.querySelector('.r3d-surface-clear').addEventListener('click', () => {
+            this.rawSurface = null;
+            this._surfaceWork = null;
+            this.saveRules();
+            this._applyBaseTransform();
+            this.renderEditCard();
+        });
+        card.querySelector('.r3d-surface-save').addEventListener('click', () => {
+            this.rawSurface = work.reflect > 0 ? JSON.parse(JSON.stringify(work)) : null;
+            this.saveRules();
+            this.renderEditCard();
+        });
+    }
+
     /** Put the working (or saved) base transform on the placed model. */
     _applyBaseTransform() {
         if (!this._object || typeof Reactor3D === 'undefined' || !Reactor3D.applyModelTransform) return;
-        const transform = Reactor3D.readModelTransform({ transform: this._transformWork || this.rawTransform });
+        const transform = Reactor3D.readModelTransform({ transform: this._transformWork || this.rawTransform, surface: this._surfaceWork || this.rawSurface });
         Reactor3D.applyModelTransform(this._object, transform);
         this._syncEffectAnchorMarker();
         this._lastInputAt = performance.now();

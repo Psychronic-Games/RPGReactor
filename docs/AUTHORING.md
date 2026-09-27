@@ -295,7 +295,8 @@ bank no more than a step above the surface. With swimming off, water
 deeper than 0.45 tile cannot be walked into. So a lake is terrain lowered under a sheet, a beach is the slope at
 its rim, and a river is a long thin sheet over a trough. `material` is an
 image under `img/materials`; the runtime waves it, tints it by depth and
-fades it out at the shore.
+fades it out at the shore. Optional `reflect` and `gloss` (0-1) and `tint` (`#rrggbb`) make it mirror the
+world through its waves: `reflect: 1, gloss: 0.92, tint: "#d8dde3"` is mercury.
 
 ## Terrain and elevation
 

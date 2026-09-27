@@ -2364,13 +2364,12 @@ Reactor3D.buildGlbTemplate = function(json, bin, baseUrl, bitmaps) {
         const map = this._loadGlbTexture(
             json, bin, texInfo, baseUrl, textures, bitmaps, usedBitmaps);
         if (map) mat.map = map;
+        // A file's own polished metal shines by default; a model's Surface settings override it.
         const metallic = pbr.metallicFactor != null ? pbr.metallicFactor : 1;
         const roughness = pbr.roughnessFactor != null ? pbr.roughnessFactor : 1;
-        const env = this.studioEnvMap();
-        if (env && metallic > 0.25 && roughness < 0.65) {
-            mat.envMap = env;
-            mat.combine = THREE.MultiplyOperation;
-            mat.reflectivity = Math.max(0.2, metallic * (1 - roughness * 0.65));
+        if (metallic > 0.25 && roughness < 0.65) {
+            mat.userData.glbShine = { reflect: Math.max(0.2, metallic * (1 - roughness * 0.65)), gloss: 1 - roughness, metal: metallic, tint: "#ffffff" };
+            Reactor3D.setMaterialShine(mat, mat.userData.glbShine);
         }
         return mat;
     });
@@ -5704,6 +5703,57 @@ Reactor3D.scaleAxes = function(scale) {
     return Array.isArray(scale) ? scale : [scale || 1, scale || 1, scale || 1];
 };
 
+/**
+ * A model's surface: how much it reflects the world (0-1), how glossy it is
+ * (1 a mirror, lower blurs the reflection), how metal (1 reflects as
+ * strongly face on as at an angle, as chrome does; 0 only at glancing
+ * angles, as paint or plastic does) and the reflection's tint (white for
+ * chrome, yellow for gold).
+ * Null when the model has none (its file's own metal, if any, stands).
+ */
+Reactor3D.readModelSurface = function(json) {
+    const raw = json && json.surface && typeof json.surface === "object" ? json.surface : null;
+    if (!raw) return null;
+    const unit = (value, fallback) => { const n = Number(value); return Number.isFinite(n) ? Math.max(0, Math.min(1, n)) : fallback; };
+    return {
+        reflect: unit(raw.reflect, 0),
+        gloss: unit(raw.gloss, 0.8),
+        metal: unit(raw.metal, 0),
+        tint: typeof raw.tint === "string" && /^#[0-9a-f]{6}$/i.test(raw.tint) ? raw.tint : "#ffffff"
+    };
+};
+
+/** Give one lit material a surface (or take it away), recompiling only when it starts or stops shining. */
+Reactor3D.setMaterialShine = function(material, surface) {
+    if (!material || typeof THREE === "undefined") return;
+    const shines = !!surface && surface.reflect > 0;
+    const had = !!this.shineOf(material);
+    if (shines) {
+        if (!material.userData.rrShine || !material.userData.rrShine.vector || !material.userData.rrShine.vector.isVector4) {
+            material.userData.rrShine = { vector: new THREE.Vector4(), tint: new THREE.Color() };
+        }
+        const shine = material.userData.rrShine;
+        shine.vector.set(surface.reflect, 1 - surface.gloss, surface.metal, 0);
+        shine.tint.set(surface.tint || "#ffffff");
+        if (this.Reflections) { this.Reflections.wanted = true; this.Reflections.hook(material); }
+    } else if (material.userData.rrShine) {
+        material.userData.rrShine.vector.x = 0;
+    }
+    if (had !== shines) material.needsUpdate = true;
+};
+
+/** A model's surface on every lit material it has; with none, each material's own (its file's metal). */
+Reactor3D.applyModelSurface = function(object, surface) {
+    if (!object || typeof THREE === "undefined") return;
+    object.traverse(node => {
+        if (!node.isMesh || !node.material) return;
+        for (const material of Array.isArray(node.material) ? node.material : [node.material]) {
+            if (!material.__reactorLit) continue;
+            this.setMaterialShine(material, surface || material.userData.glbShine || null);
+        }
+    });
+};
+
 Reactor3D.readModelTransform = function(json) {
     const raw = json && json.transform && typeof json.transform === "object" ? json.transform : {};
     const vec = value => [0, 1, 2].map(i => {
@@ -5714,7 +5764,8 @@ Reactor3D.readModelTransform = function(json) {
     return {
         offset: vec(raw.offset),
         rotate: vec(raw.rotate),
-        scale: this.readScale(raw.scale, 1)
+        scale: this.readScale(raw.scale, 1),
+        surface: this.readModelSurface(json)
     };
 };
 
@@ -5730,6 +5781,8 @@ Reactor3D.isIdentityTransform = function(transform) {
  */
 Reactor3D.applyModelTransform = function(object, transform) {
     if (!object || typeof THREE === "undefined") return null;
+    // The surface goes with the transform, so every place a model is put down shines alike.
+    if (transform && "surface" in transform) this.applyModelSurface(object, transform.surface);
     let wrapper = object.children.find(child => child.userData && child.userData.__reactorTransform);
     if (!wrapper) {
         if (this.isIdentityTransform(transform)) return null;

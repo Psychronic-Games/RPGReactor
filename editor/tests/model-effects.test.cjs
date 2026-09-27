@@ -68,8 +68,8 @@ test('the editor wires the Play 3D Effect command and the Effects section', () =
     for (const method of ['renderEffectList()', 'renderEffectForm()', 'addModelEffect()', 'deleteModelEffect()', '_placeEffectAnchor(event)', '_playEffectPreview(raw)', '_updateEffectPreview()']) {
         assert.ok(db3d.includes('    ' + method), method);
     }
-    assert.match(db3d, /static mergeSidecar\(previousText, animations, parts, pivots, effects, transform, collision\)/);
-    assert.match(db3d, /this\.customPivots, this\.rawEffects, this\.rawTransform, this\.rawCollision\)\);/);
+    assert.match(db3d, /static mergeSidecar\(previousText, animations, parts, pivots, effects, transform, collision, surface\)/);
+    assert.match(db3d, /this\.customPivots, this\.rawEffects, this\.rawTransform, this\.rawCollision, this\.rawSurface\)\);/);
     assert.match(db3d, /mode === 'fxanchor' && stationary/);
     assert.match(db3d, /if \(effect\.effect\) \{\s*const raw = this\.rawEffects\.find/);
     const html = read('editor/index.html');
@@ -89,7 +89,7 @@ test('the picker previews on black by default and does not scroll', () => {
 
 test('a model base transform wraps every instance and effects carry a turn', () => {
     const transform = Reactor3D.readModelTransform({ transform: { offset: [1, '2', 'x'], rotate: [0, 90, 0], scale: '2' } });
-    assert.deepEqual(transform, { offset: [1, 2, 0], rotate: [0, 90, 0], scale: 2 });
+    assert.deepEqual(transform, { offset: [1, 2, 0], rotate: [0, 90, 0], scale: 2, surface: null });
     assert.equal(Reactor3D.isIdentityTransform(Reactor3D.readModelTransform({})), true);
     assert.equal(Reactor3D.isIdentityTransform(transform), false);
     const effects = Reactor3D.readModelEffects({ effects: [{ name: 'a', animation: 1, rotate: [10, 'b', 30], scale: 2 }] });
@@ -113,7 +113,7 @@ test('the 3D editor card chooses model, parts, bones and effects, and edits each
     assert.match(db3d, /r3dcard\.groupModel[\s\S]*?r3dcard\.groupBones[\s\S]*?r3dfx\.title/, 'chooser groups by type');
     assert.match(db3d, /mode = 'fxdrag';/);
     assert.match(db3d, /repeat: !!rule\.repeat,/);
-    assert.match(db3d, /this\.customPivots, this\.rawEffects, this\.rawTransform, this\.rawCollision\)\);/);
+    assert.match(db3d, /this\.customPivots, this\.rawEffects, this\.rawTransform, this\.rawCollision, this\.rawSurface\)\);/);
     assert.doesNotMatch(db3d, /class="r3d-card-part"/, 'the native select is gone');
     const select = require(path.join(editorRoot, 'src', 'utils', 'SearchSelect.js'));
     assert.equal(typeof select.create, 'function');
@@ -201,7 +201,7 @@ test('video effects, mesh collision, repeat and player-relative controls are wir
     assert.match(db3d, /class="r3d-fx-type"/);
     assert.match(db3d, /_playVideoPreview\(raw\) \{/);
     assert.match(db3d, /class="r3d-tcard-collision"/);
-    assert.match(db3d, /this\.rawTransform, this\.rawCollision\)\);/);
+    assert.match(db3d, /this\.rawTransform, this\.rawCollision, this\.rawSurface\)\);/);
     const editor3d = read('editor/src/MapEditor3D.js');
     assert.match(editor3d, /animateModels\(now\) \{/);
     assert.match(editor3d, /ray\.intersectBox\(box, point\)/, 'props pick by bounding box');
