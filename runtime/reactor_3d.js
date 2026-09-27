@@ -1365,7 +1365,7 @@ Reactor3D.Viewport.prototype.renderPass = function(mapScene, which, slot) {
             // The shadow maps, while every group is still visible.
             if (mapScene.renderShadows) mapScene.renderShadows(this._renderer, null);
             // A face of the reflection capture, from where the camera stands.
-            if (Reactor3D.Reflections && this._camera) Reactor3D.Reflections.update(this._renderer, scene, this._camera.position);
+            if (Reactor3D.Reflections && this._camera) Reactor3D.Reflections.update(this._renderer, scene, this._camera.position, mapScene.reflectionHidden ? mapScene.reflectionHidden() : null);
         }
     }
     mapScene.setPass(which);
@@ -6860,6 +6860,13 @@ Reactor3D.MapScene.prototype.syncVolumeLights = function(declared, focus) {
     Reactor3D.LightGrid.update(uniforms, focus);
     bodies.trim(bodyCount);
     Reactor3D.Shadows.setCandidates(candidates);
+};
+
+/** What the reflection capture leaves out: every character's model (the moving things right before the camera). */
+Reactor3D.MapScene.prototype.reflectionHidden = function() {
+    const out = [];
+    for (const holder of this._modelInstances ? this._modelInstances.values() : []) if (holder && holder.object) out.push(holder.object);
+    return out;
 };
 
 /**

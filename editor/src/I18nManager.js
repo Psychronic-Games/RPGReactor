@@ -12549,6 +12549,25 @@ Object.assign(RR_I18N_STRINGS["vi"], {"build.group.build": "Xây dựng", "build
 Object.assign(RR_I18N_STRINGS["th"], {"build.group.build": "สร้าง", "build.group.terrain": "ภูมิประเทศ", "terrain.drain": "ระบายน้ำ", "terrain.lookShort": "ลักษณะ", "terrain.hint.brush": "ลากไปบนพื้น", "terrain.hint.pour": "คลิกที่แอ่ง: น้ำจะขึ้นถึงขอบ", "terrain.hint.drain": "คลิกที่น้ำเพื่อเอาออก"});
 Object.assign(RR_I18N_STRINGS["tr"], {"build.group.build": "İnşa", "build.group.terrain": "Arazi", "terrain.drain": "Boşalt", "terrain.lookShort": "Görünüm", "terrain.hint.brush": "Zeminin üzerinde sürükleyin.", "terrain.hint.pour": "Bir çukura tıklayın: su kenarına kadar yükselir.", "terrain.hint.drain": "Kaldırmak için suya tıklayın."});
 
+// 3D Models: the Surface section's switch.
+Object.assign(RR_TEXT_TRANSLATIONS.ja, {"Reflections": "反射", "Off. Switch on for chrome, gold or a glossy finish.": "オフ。クローム、金、つや仕上げにするにはオンにします。"});
+Object.assign(RR_TEXT_TRANSLATIONS.es, {"Reflections": "Reflejos", "Off. Switch on for chrome, gold or a glossy finish.": "Desactivado. Actívalo para cromo, oro o un acabado brillante."});
+Object.assign(RR_TEXT_TRANSLATIONS['zh-Hant'], {"Reflections": "反射", "Off. Switch on for chrome, gold or a glossy finish.": "關閉。開啟以呈現鉻、金或亮面。"});
+Object.assign(RR_TEXT_TRANSLATIONS['zh-Hans'], {"Reflections": "反射", "Off. Switch on for chrome, gold or a glossy finish.": "关闭。开启以呈现铬、金或亮面。"});
+Object.assign(RR_TEXT_TRANSLATIONS.ru, {"Reflections": "Отражения", "Off. Switch on for chrome, gold or a glossy finish.": "Выключено. Включите для хрома, золота или глянца."});
+Object.assign(RR_TEXT_TRANSLATIONS.pt, {"Reflections": "Reflexos", "Off. Switch on for chrome, gold or a glossy finish.": "Desligado. Ligue para cromo, ouro ou acabamento brilhante."});
+Object.assign(RR_TEXT_TRANSLATIONS.de, {"Reflections": "Spiegelungen", "Off. Switch on for chrome, gold or a glossy finish.": "Aus. Einschalten für Chrom, Gold oder Hochglanz."});
+Object.assign(RR_TEXT_TRANSLATIONS.fr, {"Reflections": "Reflets", "Off. Switch on for chrome, gold or a glossy finish.": "Désactivé. Activez pour du chrome, de l’or ou un fini brillant."});
+Object.assign(RR_TEXT_TRANSLATIONS.el, {"Reflections": "Αντανακλάσεις", "Off. Switch on for chrome, gold or a glossy finish.": "Ανενεργό. Ενεργοποιήστε για χρώμιο, χρυσό ή γυαλιστερό φινίρισμα."});
+Object.assign(RR_TEXT_TRANSLATIONS.ko, {"Reflections": "반사", "Off. Switch on for chrome, gold or a glossy finish.": "꺼짐. 크롬, 금, 유광 마감을 원하면 켜세요."});
+Object.assign(RR_TEXT_TRANSLATIONS.ar, {"Reflections": "الانعكاسات", "Off. Switch on for chrome, gold or a glossy finish.": "متوقف. شغّله للكروم أو الذهب أو اللمعة."});
+Object.assign(RR_TEXT_TRANSLATIONS.it, {"Reflections": "Riflessi", "Off. Switch on for chrome, gold or a glossy finish.": "Spento. Attivalo per cromo, oro o una finitura lucida."});
+Object.assign(RR_TEXT_TRANSLATIONS.pl, {"Reflections": "Odbicia", "Off. Switch on for chrome, gold or a glossy finish.": "Wyłączone. Włącz dla chromu, złota lub połysku."});
+Object.assign(RR_TEXT_TRANSLATIONS.id, {"Reflections": "Pantulan", "Off. Switch on for chrome, gold or a glossy finish.": "Mati. Nyalakan untuk krom, emas, atau hasil mengilap."});
+Object.assign(RR_TEXT_TRANSLATIONS.vi, {"Reflections": "Phản chiếu", "Off. Switch on for chrome, gold or a glossy finish.": "Tắt. Bật để có crôm, vàng hoặc bề mặt bóng."});
+Object.assign(RR_TEXT_TRANSLATIONS.th, {"Reflections": "การสะท้อน", "Off. Switch on for chrome, gold or a glossy finish.": "ปิดอยู่ เปิดเพื่อให้เป็นโครม ทอง หรือผิวเงา"});
+Object.assign(RR_TEXT_TRANSLATIONS.tr, {"Reflections": "Yansımalar", "Off. Switch on for chrome, gold or a glossy finish.": "Kapalı. Krom, altın ya da parlak yüzey için açın."});
+
 // 3D model import optimizer dialog.
 Object.assign(RR_TEXT_TRANSLATIONS['ja'], {
     'Import 3D Model': '3Dモデルのインポート', 'Optimize (recommended)': '最適化(推奨)', 'Resize textures to 2K, compact skin weights, drop unused data, and cut the mesh to about 60% of its triangles by collapsing the edges that change the shape least. Seams and silhouette are held.': 'テクスチャを2Kに縮小し、スキンウェイトを圧縮、不要データを削除し、形状への影響が最も小さいエッジを折りたたんでメッシュの三角形を約60%まで削減します。継ぎ目とシルエットは維持されます。', 'Optimize aggressively': '積極的に最適化', 'Everything above, cut to about a quarter of the triangles. May soften very fine detail.': '上記すべてに加え、三角形を約4分の1まで削減します。細部がわずかに損なわれる場合があります。', 'Import as-is': 'そのままインポート', 'Keep every byte of the original file.': '元のファイルを一切変更しません。', 'Import': 'インポート', 'largest texture': '最大テクスチャ', 'reducible without visible change': '見た目を変えずに削減可能'

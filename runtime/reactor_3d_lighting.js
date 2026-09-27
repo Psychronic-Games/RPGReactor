@@ -1096,8 +1096,14 @@ Reactor3D.Reflections = {
         this._cameras = this._targets.map(target => new THREE.CubeCamera(0.1, 400, target));
     },
 
-    /** One face of the next capture, from `position`, into the cube the materials are not reading. */
-    update(renderer, scene, position) {
+    /**
+     * One face of the next capture, from `position`, into the cube the
+     * materials are not reading. `hidden` stays out of the capture: the
+     * shadow pass's sentinel (drawing it here ran the shadow maps mid-face
+     * and lost which face was bound: the reflections flickered) and the
+     * characters, who move every frame and stand right before the camera.
+     */
+    update(renderer, scene, position, hidden) {
         if (!this.enabled() || !renderer || !scene || !position) return;
         this._ensure();
         const back = 1 - this._front;
@@ -1112,9 +1118,16 @@ Reactor3D.Reflections = {
         renderer.autoClear = true;
         // Mipmaps once, with the last face: every face written before them.
         target.texture.generateMipmaps = this._face === 5;
+        const shadowSentinel = Reactor3D.Shadows && Reactor3D.Shadows._sentinel;
+        const hide = (hidden || []).concat(shadowSentinel ? [shadowSentinel] : []).filter(object => object && object.visible);
+        for (const object of hide) object.visible = false;
         renderer.setRenderTarget(target, this._face);
-        renderer.render(scene, camera);
-        renderer.setRenderTarget(previous);
+        try {
+            renderer.render(scene, camera);
+        } finally {
+            for (const object of hide) object.visible = true;
+            renderer.setRenderTarget(previous);
+        }
         renderer.autoClear = autoClear;
         this._renderer = renderer;
         this._face = (this._face + 1) % 6;

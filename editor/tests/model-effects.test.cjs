@@ -106,7 +106,7 @@ test('a model base transform wraps every instance and effects carry a turn', () 
 test('the 3D editor card chooses model, parts, bones and effects, and edits each with sliders', () => {
     const db3d = read('editor/src/database/Database3DEditor.js');
     assert.match(db3d, /class="r3d-card" style="position:absolute;right:10px;top:10px;/, 'the card sits in the upper right');
-    assert.equal((db3d.match(/class="sidebar-header r3d-sec-header"/g) || []).length, 4, 'section headers use the accent-strip convention and fold');
+    assert.equal((db3d.match(/class="sidebar-header r3d-sec-header"/g) || []).length, 5, 'section headers (stats, parts, animations, effects, surface) use the accent-strip convention and fold');
     for (const method of ['_mountCardChooser(card)', '_onCardChooserPick(id)', '_renderEffectCard(card, header)', '_renderTransformCard(card, header)', '_applyBaseTransform()', '_saveEffectWork()', '_commitAnchorFromMarker()']) {
         assert.ok(db3d.includes('    ' + method), method);
     }

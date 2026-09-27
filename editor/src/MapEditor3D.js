@@ -4475,7 +4475,7 @@ class MapEditor3D {
         this.mapScene.renderShadows?.(this.renderer, this.currentMap());
         const scene = this.mapScene.scene();
         // A face of the reflection capture, as the game takes it.
-        if (typeof Reactor3D !== 'undefined' && Reactor3D.Reflections && this.camera) Reactor3D.Reflections.update(this.renderer, scene, this.camera.position);
+        if (typeof Reactor3D !== 'undefined' && Reactor3D.Reflections && this.camera) Reactor3D.Reflections.update(this.renderer, scene, this.camera.position, this.mapScene.reflectionHidden?.());
         const background = scene.background;
         const autoClear = this.renderer.autoClear;
         const eventVisible = this.eventGroup ? this.eventGroup.visible : null;

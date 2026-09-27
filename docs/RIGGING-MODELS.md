@@ -50,4 +50,4 @@ Between keys a motion follows a smooth curve: it slows only where it turns back 
 
 ## Surface
 
-The whole model's card has a **Surface** tab: Reflection (how much of the world it mirrors), Gloss (1 a clean mirror, lower blurs it), Metal (1 reflects as strongly face on as at an angle, as chrome does; 0 only at glancing angles, as paint does) and a Tint for the reflection. Chrome, Gold, Glossy and Brushed are starting points. It is saved as `model.json` › `surface` and applies wherever the model is placed. A model whose file is already polished metal shines without one.
+The **Surface** section (under Effects) has a Reflections switch; switched on: Reflection (how much of the world it mirrors), Gloss (1 a clean mirror, lower blurs it), Metal (1 reflects as strongly face on as at an angle, as chrome does; 0 only at glancing angles, as paint does) and a Tint for the reflection. Chrome, Gold, Glossy and Brushed are starting points. It is saved as `model.json` › `surface` and applies wherever the model is placed. Nothing reflects until it is switched on; a model whose file is polished metal starts from the file's own values.

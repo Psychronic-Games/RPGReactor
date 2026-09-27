@@ -2364,12 +2364,13 @@ Reactor3D.buildGlbTemplate = function(json, bin, baseUrl, bitmaps) {
         const map = this._loadGlbTexture(
             json, bin, texInfo, baseUrl, textures, bitmaps, usedBitmaps);
         if (map) mat.map = map;
-        // A file's own polished metal shines by default; a model's Surface settings override it.
+        // A file's own polished metal is remembered as a starting point for its
+        // Surface; nothing reflects until the model's surface says so.
         const metallic = pbr.metallicFactor != null ? pbr.metallicFactor : 1;
         const roughness = pbr.roughnessFactor != null ? pbr.roughnessFactor : 1;
         if (metallic > 0.25 && roughness < 0.65) {
-            mat.userData.glbShine = { reflect: Math.max(0.2, metallic * (1 - roughness * 0.65)), gloss: 1 - roughness, metal: metallic, tint: "#ffffff" };
-            Reactor3D.setMaterialShine(mat, mat.userData.glbShine);
+            const round = v => Math.round(v * 100) / 100;
+            mat.userData.glbShine = { reflect: round(Math.max(0.2, metallic * (1 - roughness * 0.65))), gloss: round(1 - roughness), metal: round(metallic), tint: "#ffffff" };
         }
         return mat;
     });
@@ -5704,7 +5705,7 @@ Reactor3D.scaleAxes = function(scale) {
 };
 
 /**
- * A model's surface: how much it reflects the world (0-1), how glossy it is
+ * A model's surface (off unless a model has one): how much it reflects the world (0-1), how glossy it is
  * (1 a mirror, lower blurs the reflection), how metal (1 reflects as
  * strongly face on as at an angle, as chrome does; 0 only at glancing
  * angles, as paint or plastic does) and the reflection's tint (white for
@@ -5742,14 +5743,14 @@ Reactor3D.setMaterialShine = function(material, surface) {
     if (had !== shines) material.needsUpdate = true;
 };
 
-/** A model's surface on every lit material it has; with none, each material's own (its file's metal). */
+/** A model's surface on every lit material it has; with none, nothing reflects. */
 Reactor3D.applyModelSurface = function(object, surface) {
     if (!object || typeof THREE === "undefined") return;
     object.traverse(node => {
         if (!node.isMesh || !node.material) return;
         for (const material of Array.isArray(node.material) ? node.material : [node.material]) {
             if (!material.__reactorLit) continue;
-            this.setMaterialShine(material, surface || material.userData.glbShine || null);
+            this.setMaterialShine(material, surface || null);
         }
     });
 };

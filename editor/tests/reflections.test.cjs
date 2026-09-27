@@ -79,7 +79,35 @@ test('a water sheet\'s look survives both the runtime\'s and the editor\'s readi
 
 test('the capture is taken after the shadow maps, in the game and in the editor', () => {
     const core = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
-    assert.match(core, /renderShadows\(this\._renderer, null\);\n\s*\/\/ A face of the reflection capture, from where the camera stands\.\n\s*if \(Reactor3D\.Reflections && this\._camera\) Reactor3D\.Reflections\.update\(this\._renderer, scene, this\._camera\.position\);/);
+    assert.match(core, /renderShadows\(this\._renderer, null\);\n\s*\/\/ A face of the reflection capture, from where the camera stands\.\n\s*if \(Reactor3D\.Reflections && this\._camera\) Reactor3D\.Reflections\.update\(this\._renderer, scene, this\._camera\.position, mapScene\.reflectionHidden \? mapScene\.reflectionHidden\(\) : null\);/);
     const editor = fs.readFileSync(path.join(repoRoot, 'editor', 'src', 'MapEditor3D.js'), 'utf8');
-    assert.match(editor, /Reactor3D\.Reflections\.update\(this\.renderer, scene, this\.camera\.position\)/);
+    assert.match(editor, /Reactor3D\.Reflections\.update\(this\.renderer, scene, this\.camera\.position, this\.mapScene\.reflectionHidden\?\.\(\)\)/);
+});
+
+test('nothing reflects until its model says so; the capture leaves out the shadow sentinel and the characters', () => {
+    const models = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d_models.js'), 'utf8');
+    assert.doesNotMatch(models, /setMaterialShine\(mat, mat\.userData\.glbShine\)/, 'a file\'s metal is a starting point, not on by itself');
+    const material = Reactor3D.litMaterial(new THREE.MeshBasicMaterial());
+    material.userData.glbShine = { reflect: 0.7, gloss: 0.6, metal: 1, tint: '#ffffff' };
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(), material);
+    Reactor3D.applyModelSurface(mesh, null);
+    assert.equal(Reactor3D.shineOf(material), null);
+    // The capture: the sentinel and the listed objects are hidden for the face and shown again after.
+    const R = Reactor3D.Reflections;
+    const sentinel = { visible: true }, hero = { visible: true };
+    const seen = [];
+    const saved = Reactor3D.Shadows._sentinel;
+    Reactor3D.Shadows._sentinel = sentinel;
+    R.reset(); R.wanted = true;
+    const weak = Reactor3D.isWeakGpu; Reactor3D.isWeakGpu = () => false;
+    R._targets = [{ texture: {} }, { texture: {} }];
+    R._cameras = [{ position: { set() {} }, updateMatrixWorld() {}, children: [{}, {}, {}, {}, {}, {}] }, { position: { set() {} }, updateMatrixWorld() {}, children: [{}, {}, {}, {}, {}, {}] }];
+    const renderer = { getRenderTarget: () => null, setRenderTarget() {}, autoClear: false, render: () => seen.push([sentinel.visible, hero.visible]) };
+    try {
+        R.update(renderer, {}, { x: 0, y: 0, z: 0 }, [hero]);
+    } finally {
+        Reactor3D.Shadows._sentinel = saved; Reactor3D.isWeakGpu = weak; R._targets = null; R._cameras = null; R.reset();
+    }
+    assert.deepEqual(seen, [[false, false]], 'both left out of the face');
+    assert.deepEqual([sentinel.visible, hero.visible], [true, true], 'and back afterwards');
 });

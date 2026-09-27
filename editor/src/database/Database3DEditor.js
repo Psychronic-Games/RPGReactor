@@ -279,6 +279,12 @@ class Database3DEditor {
                     </div>
                     <div class="r3d-effect-list" data-model-record-kind="effect" style="flex:0 0 auto;min-height:64px;max-height:96px;overflow-y:auto;border-top:1px solid var(--color-border);"></div>
                     <div class="r3d-effect-form" data-model-record-kind="effect" style="flex:0 0 auto;max-height:46%;overflow-y:auto;padding:0 10px;border-top:1px solid var(--color-border);"></div>
+                    <div class="sidebar-header r3d-sec-header" data-sec="surface" style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+                        <span class="r3d-sec-toggle" style="flex:0 0 12px;font-size:10px;color:var(--color-text-muted);">▾</span>
+                        <span style="flex:1;">${this._t('Surface')}</span>
+                        <label class="r3d-surface-switch" style="display:inline-flex;align-items:center;gap:5px;font-size:11px;text-transform:none;letter-spacing:0;cursor:pointer;" title="${this._t('Reflections')}"><input type="checkbox" class="r3d-surface-on"> ${this._t('Reflections')}</label>
+                    </div>
+                    <div class="r3d-surface-form" style="flex:0 0 auto;padding:6px 10px;border-top:1px solid var(--color-border);"></div>
                     <div class="r3d-status" data-model-record-kind="effect" style="padding:4px 10px;font-size:11px;color:var(--color-text-muted);min-height:20px;"></div>
                 </div>
             </div>`;
@@ -301,7 +307,7 @@ class Database3DEditor {
         // click on a list's empty space lets go of whatever was selected.
         this._sectionsCollapsed = this._sectionsCollapsed || {};
         detailEl.querySelectorAll('.r3d-sec-header').forEach(header => header.addEventListener('click', event => {
-            if (event.target.closest('button')) return;
+            if (event.target.closest('button, input, label')) return;
             this.toggleSection(header.dataset.sec);
         }));
         const clickOff = (selector, clear) => detailEl.querySelector(selector)?.addEventListener('click', event => {
@@ -1355,7 +1361,8 @@ class Database3DEditor {
             ? parsed.transform : null;
         this._transformWork = null;
         this.rawSurface = parsed.surface && typeof parsed.surface === 'object' && !Array.isArray(parsed.surface) ? parsed.surface : null;
-        this._surfaceWork = null;
+        this._surfaceLast = null;
+        this.renderSurfaceForm();
         this.rawCollision = parsed.collision === 'box' ? 'box' : 'mesh';
         this.landmarks = parsed.landmarks && typeof parsed.landmarks === 'object' ? parsed.landmarks : {};
         this.customParts = Array.isArray(parsed.parts) ? parsed.parts : [];
@@ -3071,10 +3078,6 @@ class Database3DEditor {
             this._renderEffectCard(card, header);
             return;
         }
-        if (this.selectedPartName === '' && this._modelTab === 'surface') {
-            this._renderSurfaceCard(card, header);
-            return;
-        }
         if (this.selectedPartName === '' && this._modelTab !== 'animation') {
             this._renderTransformCard(card, header);
             return;
@@ -3658,7 +3661,8 @@ class Database3DEditor {
             stats: ['.r3d-stats'],
             parts: ['.r3d-part-list', '.r3d-part-form'],
             animations: ['.r3d-motions-row', '.r3d-rule-list', '.r3d-rule-note'],
-            effects: ['.r3d-effect-list', '.r3d-effect-form']
+            effects: ['.r3d-effect-list', '.r3d-effect-form'],
+            surface: ['.r3d-surface-form']
         }[name] || [];
         for (const selector of bodies) {
             const el = this._detail.querySelector(selector);
@@ -4076,9 +4080,9 @@ class Database3DEditor {
         });
     }
 
-    /** The whole model's card tabs: its placement, its animations, its surface. */
+    /** The whole model's card tabs: its placement, its animations. */
     static modelTabs(editor) {
-        return [{ id: 'transform', label: editor._k('r3dcard.transform') }, { id: 'animation', label: editor._t('Animations') }, { id: 'surface', label: editor._t('Surface') }];
+        return [{ id: 'transform', label: editor._k('r3dcard.transform') }, { id: 'animation', label: editor._t('Animations') }];
     }
 
     /** Ready-made surfaces: a mirror, gold, a lacquer, satin metal. */
@@ -4090,63 +4094,79 @@ class Database3DEditor {
     ];
 
     /**
-     * The whole model's surface: how much of the world it mirrors, how sharp
-     * the reflection is, how metal it is and the reflection's tint. Changes
-     * show on the model as the sliders move; Save writes them to model.json.
+     * The model's surface, in its own section of the column: a switch for
+     * reflections in the header; under it the look (presets, how much it
+     * reflects, how glossy, how metal, the reflection's tint). Changes show
+     * on the preview at once and are written to model.json a moment later.
      */
-    _renderSurfaceCard(card, header) {
-        if (!this._surfaceWork) {
-            const base = (typeof Reactor3D !== 'undefined' && Reactor3D.readModelSurface ? Reactor3D.readModelSurface({ surface: this.rawSurface }) : null)
-                || { reflect: 0, gloss: 0.8, metal: 0, tint: '#ffffff' };
-            this._surfaceWork = JSON.parse(JSON.stringify(base));
-        }
-        const work = this._surfaceWork, tt = text => rrEscapeHtml(this._t(text));
-        const slider = (field, label) => `<label style="display:grid;grid-template-columns:70px 1fr 38px;align-items:center;gap:6px;font-size:11px;margin:4px 0;">
-            <span>${tt(label)}</span><input type="range" class="r3d-surface" data-field="${field}" min="0" max="1" step="0.01" value="${work[field]}">
-            <span class="r3d-surface-value" data-field="${field}" style="text-align:right;color:var(--color-text-muted);">${Math.round(work[field] * 100)}%</span></label>`;
-        card.innerHTML = header
-            + this._tabStripHtml('r3d-tcard-mode', Database3DEditor.modelTabs(this), 'surface')
-            + `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-bottom:6px;">${Database3DEditor.SURFACE_PRESETS.map(([name]) => `<button type="button" class="rr-btn-secondary r3d-surface-preset" data-preset="${name}" style="padding:3px 0;font-size:11px;">${tt(name)}</button>`).join('')}</div>`
-            + slider('reflect', 'Reflection') + slider('gloss', 'Gloss') + slider('metal', 'Metal')
-            + `<label style="display:grid;grid-template-columns:70px 1fr;align-items:center;gap:6px;font-size:11px;margin:4px 0;"><span>${tt('Tint')}</span><input type="color" class="r3d-surface-tint" value="${work.tint}"></label>
-            <div style="display:flex;gap:6px;margin-top:10px;">
-                <button type="button" class="rr-btn-secondary r3d-surface-clear" style="flex:1;">${tt('Clear')}</button>
-                <button type="button" class="rr-button-primary r3d-surface-save" style="flex:1;">${tt('Save')}</button>
-            </div>`;
-        this._mountCardChooser(card);
-        card.querySelector('.r3d-card-close').addEventListener('click', () => { this._cardCollapsed = true; this.deselectPart(); this.renderEditCard(); });
-        card.querySelector('.r3d-card-undo').style.opacity = '0.35';
-        card.querySelector('.r3d-card-redo').style.opacity = '0.35';
-        card.querySelectorAll('.r3d-tcard-mode').forEach(button => button.addEventListener('click', () => { this._modelTab = button.dataset.tab; this.renderEditCard(); }));
-        const live = () => this._applyBaseTransform();
-        card.querySelectorAll('.r3d-surface').forEach(input => input.addEventListener('input', () => {
-            work[input.dataset.field] = Number(input.value);
-            card.querySelector(`.r3d-surface-value[data-field="${input.dataset.field}"]`).textContent = Math.round(work[input.dataset.field] * 100) + '%';
-            live();
-        }));
-        card.querySelector('.r3d-surface-tint').addEventListener('input', event => { work.tint = event.target.value; live(); });
-        card.querySelectorAll('.r3d-surface-preset').forEach(button => button.addEventListener('click', () => {
-            const preset = Database3DEditor.SURFACE_PRESETS.find(([name]) => name === button.dataset.preset);
-            if (preset) { Object.assign(work, preset[1]); live(); this.renderEditCard(); }
-        }));
-        card.querySelector('.r3d-surface-clear').addEventListener('click', () => {
-            this.rawSurface = null;
-            this._surfaceWork = null;
-            this.saveRules();
+    renderSurfaceForm() {
+        const form = this._detail && this._detail.querySelector('.r3d-surface-form');
+        const on = this._detail && this._detail.querySelector('.r3d-surface-on');
+        if (!form || !on) return;
+        const surface = this.rawSurface && Number(this.rawSurface.reflect) > 0 ? this.rawSurface : null;
+        on.checked = !!surface;
+        on.disabled = !this.selectedName;
+        on.onchange = () => {
+            if (on.checked) {
+                // Back to the look it had, else the file's own metal, else chrome.
+                const glb = this._object ? this._fileShine() : null;
+                this.rawSurface = Object.assign({}, this._surfaceLast || glb || Database3DEditor.SURFACE_PRESETS[0][1]);
+            } else {
+                if (this.rawSurface) this._surfaceLast = this.rawSurface;
+                this.rawSurface = null;
+            }
             this._applyBaseTransform();
-            this.renderEditCard();
-        });
-        card.querySelector('.r3d-surface-save').addEventListener('click', () => {
-            this.rawSurface = work.reflect > 0 ? JSON.parse(JSON.stringify(work)) : null;
             this.saveRules();
-            this.renderEditCard();
+            this.renderSurfaceForm();
+        };
+        if (!surface) {
+            form.innerHTML = `<div style="font-size:11px;color:var(--color-text-muted);">${this._t('Off. Switch on for chrome, gold or a glossy finish.')}</div>`;
+            return;
+        }
+        const tt = text => rrEscapeHtml(this._t(text));
+        const slider = (field, label) => `<label style="display:grid;grid-template-columns:70px 1fr 38px;align-items:center;gap:6px;font-size:11px;margin:3px 0;">
+            <span>${tt(label)}</span><input type="range" class="r3d-surface" data-field="${field}" min="0" max="1" step="0.01" value="${surface[field]}">
+            <span class="r3d-surface-value" data-field="${field}" style="text-align:right;color:var(--color-text-muted);">${Math.round(surface[field] * 100)}%</span></label>`;
+        const same = look => ['reflect', 'gloss', 'metal', 'tint'].every(key => look[key] === surface[key]);
+        form.innerHTML = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-bottom:4px;">${Database3DEditor.SURFACE_PRESETS.map(([name, look]) => `<button type="button" class="rr-btn-secondary r3d-surface-preset" data-preset="${name}" aria-pressed="${same(look)}" style="padding:3px 0;font-size:11px;${same(look) ? 'border-color:var(--color-accent);' : ''}">${tt(name)}</button>`).join('')}</div>`
+            + slider('reflect', 'Reflection') + slider('gloss', 'Gloss') + slider('metal', 'Metal')
+            + `<label style="display:grid;grid-template-columns:70px 1fr;align-items:center;gap:6px;font-size:11px;margin:3px 0;"><span>${tt('Tint')}</span><input type="color" class="r3d-surface-tint" value="${surface.tint || '#ffffff'}"></label>`;
+        const changed = () => {
+            this._applyBaseTransform();
+            clearTimeout(this._surfaceSave);
+            this._surfaceSave = setTimeout(() => this.saveRules(), 300);
+        };
+        form.querySelectorAll('.r3d-surface').forEach(input => input.addEventListener('input', () => {
+            surface[input.dataset.field] = Number(input.value);
+            form.querySelector(`.r3d-surface-value[data-field="${input.dataset.field}"]`).textContent = Math.round(surface[input.dataset.field] * 100) + '%';
+            changed();
+        }));
+        form.querySelector('.r3d-surface-tint').addEventListener('input', event => { surface.tint = event.target.value; changed(); });
+        form.querySelectorAll('.r3d-surface-preset').forEach(button => button.addEventListener('click', () => {
+            const preset = Database3DEditor.SURFACE_PRESETS.find(([name]) => name === button.dataset.preset);
+            if (!preset) return;
+            Object.assign(surface, preset[1]);
+            changed();
+            this.renderSurfaceForm();
+        }));
+    }
+
+    /** The shine the model's own file declares (polished metal), if any: a starting point, never on by itself. */
+    _fileShine() {
+        let found = null;
+        this._object?.traverse(node => {
+            if (found || !node.isMesh) return;
+            for (const material of Array.isArray(node.material) ? node.material : [node.material]) {
+                if (material?.userData?.glbShine) { found = Object.assign({}, material.userData.glbShine); break; }
+            }
         });
+        return found;
     }
 
     /** Put the working (or saved) base transform on the placed model. */
     _applyBaseTransform() {
         if (!this._object || typeof Reactor3D === 'undefined' || !Reactor3D.applyModelTransform) return;
-        const transform = Reactor3D.readModelTransform({ transform: this._transformWork || this.rawTransform, surface: this._surfaceWork || this.rawSurface });
+        const transform = Reactor3D.readModelTransform({ transform: this._transformWork || this.rawTransform, surface: this.rawSurface });
         Reactor3D.applyModelTransform(this._object, transform);
         this._syncEffectAnchorMarker();
         this._lastInputAt = performance.now();
@@ -6743,22 +6763,23 @@ class Database3DEditor {
             this._buildRigVisuals();
         });
         bar.appendChild(templatePick);
-        const bind = document.createElement('button');
+        // The rig's buttons share one size: the main action highlighted, removing in red.
+        const sized = button => { button.style.cssText = 'height:26px;padding:0 12px;font-size:12px;display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;white-space:nowrap;'; return button; };
+        const bind = sized(document.createElement('button'));
         bind.type = 'button';
         bind.className = 'rr-button-primary';
-        bind.style.padding = '3px 12px';
         bind.textContent = this._t('Bind rig');
         bind.addEventListener('click', () => this.bindRig());
         bar.appendChild(bind);
-        const face = document.createElement('button');
+        const face = sized(document.createElement('button'));
         face.type = 'button';
         face.className = 'rr-btn-secondary';
         face.textContent = this._t('Face points');
         face.addEventListener('click', () => this.setTool('face'));
         bar.appendChild(face);
-        const reset = document.createElement('button');
+        const reset = sized(document.createElement('button'));
         reset.type = 'button';
-        reset.className = 'rr-btn-chip';
+        reset.className = 'rr-btn-secondary';
         reset.textContent = this._t('Reset markers');
         reset.addEventListener('click', () => {
             this._rigMarkers = ModelRigger.defaultMarkers(
@@ -6767,9 +6788,9 @@ class Database3DEditor {
         });
         bar.appendChild(reset);
         if (this.customRig) {
-            const remove = document.createElement('button');
+            const remove = sized(document.createElement('button'));
             remove.type = 'button';
-            remove.className = 'rr-btn-chip-danger';
+            remove.className = 'rr-button-danger';
             remove.textContent = this._t('Remove rig');
             remove.addEventListener('click', () => this.removeRig());
             bar.appendChild(remove);
