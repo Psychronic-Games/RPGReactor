@@ -1372,7 +1372,7 @@ Reactor3D.Viewport.prototype.renderPass = function(mapScene, which, slot) {
             // A face of the reflection capture: from inside the nearest mirror-bright model, else the camera.
             if (Reactor3D.Reflections && this._camera && Reactor3D.Reflections.enabled()) {
                 const probe = mapScene.reflectionProbe ? mapScene.reflectionProbe(this._camera) : null;
-                if (probe) Reactor3D.Reflections.update(this._renderer, scene, probe.position, probe.hidden, probe.toward, probe.radius);
+                if (probe) Reactor3D.Reflections.update(this._renderer, scene, probe.position, probe.hidden, probe.toward, probe.radius, probe.reach);
             }
             // Mirror finishes near the camera: the sharp planar pictures, the party in them.
             if (Reactor3D.Mirrors && this._camera) {
@@ -6903,7 +6903,7 @@ Reactor3D.MapScene.prototype.reflectionProbe = function(camera) {
             const centre = box.getCenter(new THREE.Vector3());
             const distance = centre.distanceTo(camera.position);
             if (distance > Reactor3D.MIRROR_REACH) continue;
-            if (!best || distance < best.distance) best = { object, distance, offset: centre.sub(object.position) };
+            if (!best || distance < best.distance) best = { object, distance, offset: centre.clone().sub(object.position), reach: box.getBoundingSphere(new THREE.Sphere()).radius + 0.5 };
         }
         this._probeChoice = { frame, best };
     }
@@ -6917,7 +6917,7 @@ Reactor3D.MapScene.prototype.reflectionProbe = function(camera) {
             if (holder && holder.object && typeof $gamePlayer !== "undefined" && holder.character === $gamePlayer) { radius = holder.object.position.distanceTo(position); break; }
         }
         if (!(radius > 0)) radius = camera.position.distanceTo(position) * 0.5;
-        return { position, hidden: [best.object], toward: camera.position, radius: Math.max(1.5, Math.min(40, radius)) };
+        return { position, hidden: [best.object], toward: camera.position, radius: Math.max(1.5, Math.min(40, radius)), reach: best.reach };
     }
     return { position: camera.position, hidden: this.reflectionHidden(), toward: null };
 };

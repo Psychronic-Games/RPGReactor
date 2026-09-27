@@ -1080,7 +1080,7 @@ Reactor3D.Reflections = {
         if (!this._uniforms) {
             // rrEnvProbe: where the live capture stood (xyz) and how far off its world is taken
             // to lie (w, 0 for infinitely far: the studio, or a capture from the camera).
-            this._uniforms = { rrEnvMap: { value: null }, rrEnvMaxLod: { value: 0 }, rrEnvFlip: { value: -1 }, rrEnvProbe: { value: new THREE.Vector4(0, 0, 0, 0) } };
+            this._uniforms = { rrEnvMap: { value: null }, rrEnvMaxLod: { value: 0 }, rrEnvFlip: { value: -1 }, rrEnvProbe: { value: new THREE.Vector4(0, 0, 0, 0) }, rrEnvProbeReach: { value: 0 } };
         }
         if (!this._uniforms.rrEnvMap.value && Reactor3D.studioEnvMap) {
             this._uniforms.rrEnvMap.value = Reactor3D.studioEnvMap();
@@ -1119,7 +1119,7 @@ Reactor3D.Reflections = {
      * `radius`, when given, is how far off the captured world is taken to lie
      * (the party's distance from a mirror), so a flat mirror shows it in place.
      */
-    update(renderer, scene, position, hidden, toward, radius) {
+    update(renderer, scene, position, hidden, toward, radius, reach) {
         if (!this.enabled() || !renderer || !scene || !position) return;
         this._ensure();
         const cube = this._camera;
@@ -1159,6 +1159,8 @@ Reactor3D.Reflections = {
         this._renderer = renderer;
         this._probe = this._probe || new THREE.Vector4();
         this._probe.set(position.x, position.y, position.z, Number(radius) > 0 ? Number(radius) : 0);
+        // How far from the capture the correction holds: the model it stands in. Beyond, direction only.
+        this._probeReach = Number(reach) > 0 ? Number(reach) : 0;
         if (this._face === 0 && !this._ready && this._tick >= 6) this._ready = true;
     },
 
@@ -1173,6 +1175,7 @@ Reactor3D.Reflections = {
         const live = this._ready && this._target && renderer === this._renderer && !this._capturing;
         const texture = live ? this._target.texture : (Reactor3D.studioEnvMap ? Reactor3D.studioEnvMap() : null);
         if (live && this._probe) uniforms.rrEnvProbe.value.copy(this._probe); else uniforms.rrEnvProbe.value.set(0, 0, 0, 0);
+        uniforms.rrEnvProbeReach.value = live ? (this._probeReach || 0) : 0;
         // The mirror pictures: the main draw of the renderer that made them only (a mirror's own
         // draws set their slots themselves; a capture and any other renderer see none).
         const mirrors = Reactor3D.Mirrors;
@@ -1233,7 +1236,9 @@ Reactor3D.isMirrorFinish = function(object) {
         if (mirror || !node.isMesh || !node.material) return;
         for (const material of [].concat(node.material)) {
             const shine = this.shineOf(material);
-            if (shine && shine.vector.x >= 0.85 && shine.vector.y <= 0.15 && (shine.vector.w || 0) <= 0.5) { mirror = true; break; }
+            // Gloss 0.85 and up (gold's 0.85 is 1 - 0.85 = 0.15000000000000002 rough, so the
+            // bound leaves room), reflecting nearly fully, keeping little of its paint.
+            if (shine && shine.vector.x >= 0.85 && shine.vector.y <= 0.2 && (shine.vector.w || 0) <= 0.5) { mirror = true; break; }
         }
     });
     return mirror;
@@ -1538,6 +1543,7 @@ Reactor3D.injectShine = function(material, shader) {
     shader.uniforms.rrEnvMaxLod = env.rrEnvMaxLod;
     shader.uniforms.rrEnvFlip = env.rrEnvFlip;
     shader.uniforms.rrEnvProbe = env.rrEnvProbe;
+    shader.uniforms.rrEnvProbeReach = env.rrEnvProbeReach;
     const mirror = this.Mirrors.uniforms();
     for (const name of Object.keys(mirror)) shader.uniforms[name] = mirror[name];
     shader.uniforms.rrShine = { value: shine.vector };
@@ -1564,6 +1570,7 @@ Reactor3D.injectShine = function(material, shader) {
         "uniform float rrEnvMaxLod;",
         "uniform float rrEnvFlip;",
         "uniform vec4 rrEnvProbe;",
+        "uniform float rrEnvProbeReach;",
         "uniform float rrMirrorOn0;", "uniform vec4 rrMirrorPlane0;", "uniform mat4 rrMirrorMatrix0;", "uniform sampler2D rrMirrorMap0;",
         "uniform float rrMirrorOn1;", "uniform vec4 rrMirrorPlane1;", "uniform mat4 rrMirrorMatrix1;", "uniform sampler2D rrMirrorMap1;",
         "uniform float rrMirrorTolerance;",
@@ -1584,7 +1591,9 @@ Reactor3D.injectShine = function(material, shader) {
             // a sphere about it, and the lookup aims where the reflected ray meets that sphere, so each
             // point of a flat panel sees its own part of the room and the party stands where a mirror
             // would show them. Far captures (w = 0) look up by direction alone.
-            "\tif (rrEnvProbe.w > 0.0) {",
+            // Only on the model the capture stands in: anything else shiny, far off, reflects by direction
+            // (bent around another model's sphere, it came out magnified and blurred).
+            "\tif (rrEnvProbe.w > 0.0 && distance(vRRWorldPos, rrEnvProbe.xyz) < rrEnvProbeReach) {",
             "\t\tvec3 rrL = vRRWorldPos - rrEnvProbe.xyz;",
             "\t\tfloat rrB = dot(rrL, rrR);",
             "\t\tfloat rrH = rrB * rrB - (dot(rrL, rrL) - rrEnvProbe.w * rrEnvProbe.w);",

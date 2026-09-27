@@ -6318,6 +6318,10 @@ Reactor3D.MapScene.prototype.syncCharacterModels = function(characters) {
                 climbHeight: Reactor3D.isClimbing(character) ? character._reactorAlt : undefined,
                 distance,
                 scale,
+                // A part's move is authored against the Database preview, where every model stands as
+                // tall as a character (3 tiles): a placed model of another size moves in proportion
+                // (a room's door rose a fifth of its travel). The party keeps its moves as tuned.
+                moveScale: Reactor3D.partyCharacter(character) ? 1 : Math.max(0.05, (spec.size > 0 ? spec.size : 2) * (spec.scale > 0 ? spec.scale : 1) / Reactor3D.MOVE_REFERENCE_TILES),
                 playbackRate: holder.playbackRate,
                 action: holder.action || null
             });
@@ -6883,6 +6887,15 @@ Reactor3D.characterHeightTiles = function(character) {
 Reactor3D.characterFeet = function(c) {
     const lift = c._reactorLift || 0;
     return Number.isFinite(c._reactorAlt) ? Math.max(c._reactorAlt, lift) : lift;
+};
+
+/** How tall a model's moves are authored against: the Database preview shows every model as tall as a character. */
+Reactor3D.MOVE_REFERENCE_TILES = 3;
+
+/** The player or a follower (their moves are tuned as they are). */
+Reactor3D.partyCharacter = function(character) {
+    return !!character && ((typeof Game_Player !== "undefined" && character instanceof Game_Player)
+        || (typeof Game_Follower !== "undefined" && character instanceof Game_Follower));
 };
 
 Reactor3D.charactersOverlapVertically = function(a, b) {

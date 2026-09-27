@@ -96,7 +96,7 @@ test('a water sheet\'s look survives both the runtime\'s and the editor\'s readi
 test('the capture is taken after the shadow maps, in the game and in the editor', () => {
     const core = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
     assert.match(core, /renderShadows\(this\._renderer, null\);[\s\S]{0,700}this\._renderer\.resetState\(\);/, 'three forgets the texture units PIXI unbound before the capture and the mirrors draw');
-    assert.match(core, /\/\/ A face of the reflection capture[^\n]*\n\s*if \(Reactor3D\.Reflections && this\._camera && Reactor3D\.Reflections\.enabled\(\)\) \{\n\s*const probe = mapScene\.reflectionProbe \? mapScene\.reflectionProbe\(this\._camera\) : null;\n\s*if \(probe\) Reactor3D\.Reflections\.update\(this\._renderer, scene, probe\.position, probe\.hidden, probe\.toward, probe\.radius\);/);
+    assert.match(core, /\/\/ A face of the reflection capture[^\n]*\n\s*if \(Reactor3D\.Reflections && this\._camera && Reactor3D\.Reflections\.enabled\(\)\) \{\n\s*const probe = mapScene\.reflectionProbe \? mapScene\.reflectionProbe\(this\._camera\) : null;\n\s*if \(probe\) Reactor3D\.Reflections\.update\(this\._renderer, scene, probe\.position, probe\.hidden, probe\.toward, probe\.radius, probe\.reach\);/);
     const editor = fs.readFileSync(path.join(repoRoot, 'editor', 'src', 'MapEditor3D.js'), 'utf8');
     assert.match(editor, /Reactor3D\.Reflections\.update\(this\.renderer, scene, this\.camera\.position, this\.mapScene\.reflectionHidden\?\.\(\)\)/);
 });
