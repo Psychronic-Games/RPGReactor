@@ -1,6 +1,6 @@
-# RPG Reactor 0.98.8 (in development)
+# RPG Reactor 0.98.8: Import Any RPG Maker Game
 
-0.98.8 imports RPG Maker 2000, 2003, XP, VX and VX Ace games into Reactor, lets you design your own menus and battle HUD, and fills 3D maps with jumping, swimming, ladders, a structure builder, chrome and real mirrors. The full technical list is in the [editor changelog](../editor/changelog/0.98.8.md).
+0.98.8 imports RPG Maker 2000, 2003, XP, VX and VX Ace games into Reactor, lets you design your own menus and battle HUD, and fills 3D maps with jumping, swimming, ladders, a structure builder, chrome and real mirrors. The full technical list is in the [editor changelog](../../editor/changelog/0.98.8.md).
 
 [Download the binaries on itch.io](https://psychronic.itch.io/rpg-reactor). GitHub provides the source release. A 2D project stays a 2D project until a map is switched to 3D.
 
@@ -8,7 +8,7 @@
 
 **Import from RPG Maker 2000, 2003, XP, VX and VX Ace**
 
-**File › Import Project…** (or `import-legacy-project.cjs <source> <destination>`) turns an older game into a new Reactor project and never changes the original. Maps, events, the database, tilesets, the window skin, graphics, audio and fonts convert at the game's own screen size, packed games (`.rgssad`, `.rgss2a`, `.rgss3a`) included. An Import Report lists anything the game names but never shipped. See [Importing legacy projects](../docs/IMPORTING-LEGACY-PROJECTS.md).
+**File › Import Project…** (or `import-legacy-project.cjs <source> <destination>`) turns an older game into a new Reactor project and never changes the original. Maps, events, the database, tilesets, the window skin, graphics, audio and fonts convert at the game's own screen size, packed games (`.rgssad`, `.rgss2a`, `.rgss3a`) included. An Import Report lists anything the game names but never shipped. See [Importing legacy projects](../../docs/IMPORTING-LEGACY-PROJECTS.md).
 
 - **Each engine's rules carry over:** 2003 battle arithmetic, XP's stats, fog and 40 fps pacing, VX's per-class equipment and encounter areas, Ace's parallax layers, name boxes and text codes.
 - **2000/2003:** chipsets become MZ tilesets, DynRPG text, sprite and particle plugins become engine features, the bitmap font becomes a pixel-exact TrueType file, and languages the game ships become switchable packs. RTP files are copied from an installed RTP. Hold F or G to fast-forward, as in EasyRPG.

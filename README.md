@@ -6,15 +6,15 @@ Use RPG Reactor to create, edit, playtest, and package 2D RPGs with familiar RPG
 
 Pre-built download binaries are available at <https://psychronic.itch.io/rpg-reactor>. The current development version is 0.98.8 and is not published yet; the latest tagged source release is [0.98.7](https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.98.7).
 
-## What's new in 0.98.7
+## What's new in 0.98.8
 
-- **Build in the world:** a Build bar over the 3D map lays floors, walls, doors, windows, stairs, roofs, sixteen shapes and saved buildings with a snapping ghost; select, box-select, paint, move and turn what you built; materials are any tileable image.
-- **Ground and water:** terrain brushes shape rolling ground, and water is poured into the hollows you dig, with waves, a shore and shallows you can wade.
-- **Walk inside:** the roof and upper floors cut away over the storey you stand in, sliced walls wear a top, a wall between the camera and anyone in the party goes see-through, and stairs lead to a second floor.
-- **Blueprints and lights:** buildings are plain JSON plans on a card in the database, stamped from the bar; Lighting and Media Surfaces dock beside the map; a Sun light throws long shadows across the map.
-- **Battles and fixes:** Ash, Ember, Wisp and Shatter collapses, 3D battlers dissolving in a battle room, class curves to a target level, several states on an enemy action condition, and community fixes for buff stacks, state icons and group collapses.
+- **Import older games:** File › Import Project turns an RPG Maker 2000, 2003, XP, VX or VX Ace game into a new Reactor project, the original untouched: maps, events, database, graphics, audio and fonts, each engine's rules, Ruby script calls and formulas translated, and over 110 published scripts ported as plugins.
+- **Your own screens:** Items, Skills, Equipment, Shop and Name Input as screens you design, a battle HUD of your own (faces, meters, states, sliding windows, a target cursor), custom battle commands and Text Input fields.
+- **Move in 3D:** jump, gravity and fall damage you set, swimming and diving, ladders, ragdoll falls, rigged characters that walk, jump, swim and climb on their own, and a Controls page for every key and button.
+- **Build and place:** structures built on their own plot and stamped anywhere, floor plans, flat roofs, 3D models in the Build bar with all handles at once, right-click Copy/Paste/Duplicate, resizable stairs and ladders, events of any size, and liquids from water to lava.
+- **Chrome and mirrors:** reflective surfaces for models and built pieces, sharp mirrors that show the party near or far, mirror water, and battles that reflect and cast shadows like the map.
 
-Read the [0.98.7 release notes](docs/posts/release-notes-0.98.7.md) for details and current limitations. Everything here is opt-in; a 2D project stays a 2D project until a map is switched to 3D. Earlier updates remain in the [changelog](CHANGELOG.md) and [devlog archive](docs/README.md).
+Read the [0.98.8 release notes](docs/posts/release-notes-0.98.8.md) for details. Everything here is opt-in; a 2D project stays a 2D project until a map is switched to 3D. Earlier updates remain in the [changelog](CHANGELOG.md) and [devlog archive](docs/README.md).
 
 ## Repository Layout
 
@@ -33,7 +33,7 @@ RPGReactor/
 ## Documentation
 
 - [Editor README](editor/README.md): detailed feature list, source launch steps, project structure, shortcuts, and technical notes.
-- [Latest release notes](docs/posts/release-notes-0.98.7.md): features, fixes, and compatibility limits for 0.98.7.
+- [Latest release notes](docs/posts/release-notes-0.98.8.md): features, fixes, and compatibility limits for 0.98.8.
 - [Changelog](CHANGELOG.md): upcoming development and previous releases.
 - [Current status](docs/STATUS.md): the verified state of the tree, runtime defaults, test results, and open work.
 - [Authoring a world](docs/AUTHORING.md): where every part of a 3D map lives, which tool edits it by hand, what a generator writes, and what checks it.

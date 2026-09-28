@@ -1,6 +1,6 @@
 # Current status
 
-The verified state of the tree as of **2026-09-26**. This page states what is true now; dated engineering history is in [HANDOFF.md](HANDOFF.md) and [docs/archive](archive/README.md), and released behaviour is described in the [changelog](../CHANGELOG.md) and [release notes](posts/release-notes-0.98.7.md).
+The verified state of the tree as of **2026-09-26**. This page states what is true now; dated engineering history is in [HANDOFF.md](HANDOFF.md) and [docs/archive](archive/README.md), and released behaviour is described in the [changelog](../CHANGELOG.md) and [release notes](posts/release-notes-0.98.8.md).
 
 ## Version and validation
 
