@@ -1175,7 +1175,11 @@ class PieceBuilderManager {
         return { foot, height, width, pieces };
     }
 
-    /** Lay a placed ladder again from its foot, so tall and so wide (one undo step). */
+    /**
+     * Lay a placed ladder again from its foot, so tall and so wide (one undo
+     * step). A width grows around the middle column, a column each side in
+     * turn: 1 → 2 adds one on the right, 2 → 3 one on the left, and so on.
+     */
     setLadderSize(piece, height, width, record = true) {
         const map = this.currentMap(), elevation = this.elevation();
         const flight = this.ladderFlight(piece);
@@ -1188,8 +1192,9 @@ class PieceBuilderManager {
         const list = elevation.pieces(map).filter(p => !gone.has(p.id));
         let id = list.reduce((max, p) => Math.max(max, p.id || 0), 0);
         const [dx, dy] = PieceBuilderManager.stepOf(flight.foot.rot);
+        const middle = Math.floor((flight.width - 1) / 2), start = middle - Math.floor((width - 1) / 2);
         let footId = 0;
-        for (let k = 0; k < width; k++) for (let i = 0; i < height; i++) {
+        for (let k = start; k < start + width; k++) for (let i = 0; i < height; i++) {
             const next = Object.assign({}, flight.foot, { id: ++id, x: flight.foot.x - dy * k, y: flight.foot.y + dx * k, z: flight.foot.z + i });
             if (next.x < 0 || next.y < 0 || next.x >= map.width || next.y >= map.height) continue;
             if (!footId) footId = next.id;
@@ -1197,7 +1202,7 @@ class PieceBuilderManager {
         }
         elevation.restorePieces(map, list);
         this.selected = footId;
-        const reach = Math.max(width, flight.width) + 1;
+        const reach = Math.max(width, flight.width) + Math.abs(start) + 1;
         this.announce(false, { x0: flight.foot.x - reach, y0: flight.foot.y - reach, x1: flight.foot.x + reach, y1: flight.foot.y + reach });
         this._syncPanel(); this._ghostChanged();
         return true;

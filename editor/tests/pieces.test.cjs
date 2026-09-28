@@ -1085,3 +1085,32 @@ test('ladders side by side are one wide ladder, and a placed ladder takes a widt
     assert.match(manager, /setLadderSize\(piece, height, width, record = true\) \{/);
     assert.match(read('editor/src/BuildHotbar.js'), /rr-build-ladderwidth/);
 });
+
+test('a ladder widens around its middle column, a column each side in turn', () => {
+    const vm = require('node:vm');
+    const context = { console, Math, Number, String, Array, Object, JSON, Set, Map };
+    context.window = context; context.document = { addEventListener() {}, removeEventListener() {} };
+    vm.createContext(context);
+    vm.runInContext(read('editor/src/PieceBuilderManager.js') + '\nwindow.PieceBuilderManager = PieceBuilderManager;', context);
+    const map = { width: 40, height: 40, reactor3d: { pieces: [{ id: 1, kind: 'ladder', x: 10, y: 5, z: 0, rot: 0, material: '' }] } };
+    const elevation = { PIECE_MAX_LEVEL: 240, pieces: m => m.reactor3d.pieces, restorePieces: (m, list) => { m.reactor3d.pieces = list; } };
+    const manager = new context.PieceBuilderManager(null);
+    Object.assign(manager, { currentMap: () => map, elevation: () => elevation, announce() {}, _syncPanel() {}, _ghostChanged() {}, _snapshot: () => null, undoStack: [], redoStack: [] });
+    const columns = () => [...new Set(map.reactor3d.pieces.map(p => p.x))].sort((a, b) => a - b);
+    const widen = width => { const piece = map.reactor3d.pieces[0]; manager.setLadderSize(piece, manager.ladderFlight(piece).height, width); return columns(); };
+    const [, dy] = context.PieceBuilderManager.stepOf(0), side = -dy;
+    const at = ks => ks.map(k => 10 + side * k).sort((a, b) => a - b);
+    assert.deepEqual(widen(2), at([0, 1]));
+    assert.deepEqual(widen(3), at([-1, 0, 1]), 'the third column goes on the other side');
+    assert.deepEqual(widen(5), at([-2, -1, 0, 1, 2]), 'the first column stays the middle');
+    assert.deepEqual(widen(1), [10], 'and narrowing comes back to it');
+});
+
+test('a piece\'s surface is kept at no reflection: the other sliders hold, and raising it brings them back', () => {
+    const E = require(path.join(__dirname, '..', 'src', 'utils', 'MapElevation.js'));
+    const map = { width: 10, height: 10, reactor3d: { pieces: [{ id: 1, kind: 'block', x: 1, y: 1, z: 0, rot: 0, material: '', surface: { reflect: 0, gloss: 0.3, metal: 1, tint: '#ffcc55', texture: 0.2 } }] } };
+    assert.deepEqual({ ...E.pieces(map)[0].surface }, { reflect: 0, gloss: 0.3, metal: 1, tint: '#ffcc55', texture: 0.2 });
+    const bar = read('editor/src/BuildHotbar.js');
+    assert.match(bar, /const value = \{ finish: '', surface: plain \? null : surface \};/, 'only an all-default surface is dropped');
+    assert.match(bar, /\.rr-surface-row:not\(\[data-surface="reflect"\]\)'\)\.forEach\(row => row\.classList\.toggle\('is-dimmed', !\(surface\.reflect > 0\)\)\)/, 'the rest dim while nothing reflects');
+});

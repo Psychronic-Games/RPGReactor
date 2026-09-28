@@ -4125,14 +4125,16 @@ class Database3DEditor {
             return;
         }
         const tt = text => rrEscapeHtml(this._t(text));
-        const slider = (field, label) => `<label style="display:grid;grid-template-columns:70px 1fr 38px;align-items:center;gap:6px;font-size:11px;margin:3px 0;">
+        // The rest show only through the reflection: dimmed while it is 0.
+        const dim = field => field !== 'reflect' && !(surface.reflect > 0) ? ' is-dimmed' : '';
+        const slider = (field, label) => `<label class="rr-surface-row${dim(field)}" data-surface="${field}" style="display:grid;grid-template-columns:70px 1fr 38px;align-items:center;gap:6px;font-size:11px;margin:3px 0;">
             <span>${tt(label)}</span><input type="range" class="r3d-surface" data-field="${field}" min="0" max="1" step="0.01" value="${surface[field]}">
             <span class="r3d-surface-value" data-field="${field}" style="text-align:right;color:var(--color-text-muted);">${Math.round(surface[field] * 100)}%</span></label>`;
         if (surface.texture === undefined) surface.texture = 0;
         const same = look => ['reflect', 'gloss', 'metal', 'tint', 'texture'].every(key => look[key] === surface[key]);
         form.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(52px,1fr));gap:4px;margin-bottom:4px;">${Database3DEditor.SURFACE_PRESETS.map(([name, look]) => `<button type="button" class="rr-btn-secondary r3d-surface-preset" data-preset="${name}" aria-pressed="${same(look)}" style="padding:3px 0;font-size:11px;${same(look) ? 'border-color:var(--color-accent);' : ''}">${tt(name)}</button>`).join('')}</div>`
             + slider('reflect', 'Reflection') + slider('gloss', 'Gloss') + slider('metal', 'Metal') + slider('texture', 'Texture')
-            + `<div style="display:grid;grid-template-columns:70px 1fr;align-items:center;gap:6px;font-size:11px;margin:3px 0;"><span>${tt('Tint')}</span>${typeof RRColorPopup !== 'undefined' ? RRColorPopup.swatch('r3d-surface-tint', surface.tint || '#ffffff') : `<input type="color" class="r3d-surface-tint" value="${surface.tint || '#ffffff'}">`}</div>`;
+            + `<div class="rr-surface-row${dim('tint')}" data-surface="tint" style="display:grid;grid-template-columns:70px 1fr;align-items:center;gap:6px;font-size:11px;margin:3px 0;"><span>${tt('Tint')}</span>${typeof RRColorPopup !== 'undefined' ? RRColorPopup.swatch('r3d-surface-tint', surface.tint || '#ffffff') : `<input type="color" class="r3d-surface-tint" value="${surface.tint || '#ffffff'}">`}</div>`;
         // Only the file is written: a full save rebuilds the animation playback, and
         // restarting the model's motion on every nudge of a slider made it jump.
         const changed = () => {
@@ -4143,6 +4145,7 @@ class Database3DEditor {
         form.querySelectorAll('.r3d-surface').forEach(input => input.addEventListener('input', () => {
             surface[input.dataset.field] = Number(input.value);
             form.querySelector(`.r3d-surface-value[data-field="${input.dataset.field}"]`).textContent = Math.round(surface[input.dataset.field] * 100) + '%';
+            if (input.dataset.field === 'reflect') form.querySelectorAll('.rr-surface-row:not([data-surface="reflect"])').forEach(row => row.classList.toggle('is-dimmed', !(surface.reflect > 0)));
             changed();
         }));
         const tint = form.querySelector('.r3d-surface-tint');

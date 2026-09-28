@@ -3819,6 +3819,8 @@
         .rr-build-chip:is(.rr-build-look, .rr-build-finish):hover { border-color: var(--color-accent-border-strong, var(--color-accent)); }
         .rr-build-chip:is(.rr-build-look, .rr-build-finish)[aria-pressed="true"] { border-color: var(--color-accent); background: color-mix(in srgb, var(--color-accent) 22%, var(--color-bg-input)); color: var(--color-text-strong); }
         .rr-build-finishes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+        /* Gloss, metal, texture and tint show only through a reflection: dimmed (still editable) while it is 0. */
+        .rr-surface-row.is-dimmed { opacity: 0.45; }
         .rr-build-shapes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
         .rr-build-shapes .rr-build-chip { flex-direction: column; justify-content: center; gap: 2px; padding: 5px 2px; font-size: 10px; min-width: 0; }
         .rr-build-shapes .rr-build-chip span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -346,9 +346,11 @@ class BuildHotbar {
             const current = surfaceOf(holder);
             const chips = `<div class="rr-build-finishes">${FINISHES.map(f => `<button type="button" class="rr-build-chip rr-build-finish" data-finish="${f}" aria-pressed="${sameSurface(current, f ? PRESETS[f] : null)}">${f === 'mirror' ? this._t('build.finish.mirror') : tt(f ? f[0].toUpperCase() + f.slice(1) : 'Plain')}</button>`).join('')}</div>`;
             const v = current || { reflect: 0, gloss: 0.8, metal: 0, texture: 0, tint: '#ffffff' };
-            const row = (key, label) => `<div class="mp-transform-row rr-build-slide"><span class="mp-axis-label">${label}</span><input type="range" class="rr-build-slider" data-for="rr-build-surface" data-key="${key}" min="0" max="1" step="0.01" value="${v[key] || 0}" data-no-stepper><input type="number" class="database-field-value rr-build-surface" data-key="${key}" value="${Math.round((v[key] || 0) * 100)}" min="0" max="100" step="1" data-no-stepper></div>`;
+            // The rest show only through the reflection: dimmed while it is 0, their values kept.
+            const dim = key => key !== 'reflect' && !(v.reflect > 0) ? ' is-dimmed' : '';
+            const row = (key, label) => `<div class="mp-transform-row rr-build-slide rr-surface-row${dim(key)}" data-surface="${key}"><span class="mp-axis-label">${label}</span><input type="range" class="rr-build-slider" data-for="rr-build-surface" data-key="${key}" min="0" max="1" step="0.01" value="${v[key] || 0}" data-no-stepper><input type="number" class="database-field-value rr-build-surface" data-key="${key}" value="${Math.round((v[key] || 0) * 100)}" min="0" max="100" step="1" data-no-stepper></div>`;
             return chips + row('reflect', tt('Reflection')) + row('gloss', tt('Gloss')) + row('metal', tt('Metal')) + row('texture', tt('Texture'))
-                + `<div class="mp-transform-row"><span class="mp-axis-label">${tt('Tint')}</span>${typeof RRColorPopup !== 'undefined' ? RRColorPopup.swatch('rr-build-surface-tint', v.tint || '#ffffff') : ''}</div>`;
+                + `<div class="mp-transform-row rr-surface-row${dim('tint')}" data-surface="tint"><span class="mp-axis-label">${tt('Tint')}</span>${typeof RRColorPopup !== 'undefined' ? RRColorPopup.swatch('rr-build-surface-tint', v.tint || '#ffffff') : ''}</div>`;
         };
         const facing = rot => `<div class="rr-build-facing">${[[2, '↑'], [3, '→'], [0, '↓'], [1, '←']].map(([r, arrow]) => `<button type="button" class="rr-build-chip rr-build-rot" data-rot="${r}" aria-pressed="${r === rot}">${arrow}</button>`).join('')}<span class="rr-build-note">R</span></div>`;
         let head, body = '';
@@ -449,7 +451,10 @@ class BuildHotbar {
         };
         const setSurface = (patch, record) => {
             const surface = Object.assign(currentSurface(), patch);
-            const value = { finish: '', surface: surface.reflect > 0 ? surface : null };
+            // Kept whatever the reflection: at 0 it shows nothing, and raising it again brings the rest back.
+            const plain = !surface.reflect && !surface.metal && !surface.texture && Math.abs(surface.gloss - 0.8) < 1e-6 && String(surface.tint).toLowerCase() === '#ffffff';
+            const value = { finish: '', surface: plain ? null : surface };
+            if (patch.reflect !== undefined) panel.querySelectorAll('.rr-surface-row:not([data-surface="reflect"])').forEach(row => row.classList.toggle('is-dimmed', !(surface.reflect > 0)));
             if (s.kind === 'many') manager.updateSelection(value, record);
             else if (placed) manager.updateSelected(value, record);
             else { manager.finish = ''; manager.surface = value.surface; }
