@@ -2,7 +2,7 @@
 
 The full technical list, one file per release, newest first. The short version of each release is in the [root changelog](../CHANGELOG.md).
 
-- [0.98.8](changelog/0.98.8.md) (in development)
+- [0.98.8](changelog/0.98.8.md) - 2026-09-28
 - [0.98.7](changelog/0.98.7.md) - 2026-09-21
 - [0.98.6](changelog/0.98.6.md) - 2026-09-14
 - [0.98.5](changelog/0.98.5.md) - 2026-09-07

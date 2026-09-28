@@ -2,7 +2,7 @@
 
 One file per release, newest first. Each is that release's GitHub release notes; the [editor changelog](editor/CHANGELOG.md) has the full technical list for the same version.
 
-- [0.98.8](changelog/0.98.8.md) (in development)
+- [0.98.8](changelog/0.98.8.md) - 2026-09-28
 - [0.98.7](changelog/0.98.7.md) - 2026-09-21
 - [0.98.6](changelog/0.98.6.md) - 2026-09-14
 - [0.98.5](changelog/0.98.5.md) - 2026-09-07
