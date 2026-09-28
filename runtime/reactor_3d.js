@@ -5421,6 +5421,15 @@ Reactor3D.MapScene.prototype.addSkyImage = function(sky, bitmap, tileSize) {
     });
     // Seen from under the water, the sky hazes like everything else above the surface.
     if (Reactor3D.waterVolumeMaterial) Reactor3D.waterVolumeMaterial(material);
+    // Drawn at infinity: the background, whatever planes clip the view. A mirror's view has its
+    // near plane on the glass and its far plane tilted with it, which cut the dome to a disc and
+    // left a lake seen from a rooftop mirroring the white clear colour around it.
+    const skyCompile = material.onBeforeCompile, skyKey = material.customProgramCacheKey;
+    material.onBeforeCompile = function(shader, renderer) {
+        if (typeof skyCompile === "function") skyCompile.call(this, shader, renderer);
+        shader.vertexShader = shader.vertexShader.replace("#include <project_vertex>", "#include <project_vertex>\n\tgl_Position.z = gl_Position.w * 0.99999;");
+    };
+    material.customProgramCacheKey = function() { return (typeof skyKey === "function" ? skyKey.call(this) : "") + "|sky-infinite"; };
     this._materials.push(material);
     const geometry = new THREE.SphereGeometry(radius, 48, 24);
     const mesh = new THREE.Mesh(geometry, material);

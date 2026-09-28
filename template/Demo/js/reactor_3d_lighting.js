@@ -1258,15 +1258,21 @@ Reactor3D.withSkyAt = function(scene, position, draw) {
     const volume = this.waterVolumeUniforms ? this.waterVolumeUniforms() : null;
     const count = volume ? volume.rrWaterCount.value : 0;
     if (volume) volume.rrWaterCount.value = 0;
+    // Nor is anything cut away for it: the cut is judged from the player's camera, and from a mirror's
+    // eye (under a lake) it opened the buildings' storeys in the picture.
+    const cut = this._cutawayUniforms || null;
+    const cutTop = cut ? cut.rrCutTop.value : 0, cutRadius = cut ? cut.rrCutRadius.value : 0;
+    if (cut) { cut.rrCutTop.value = 1e9; cut.rrCutRadius.value = 0; }
+    const restore = () => { if (volume) volume.rrWaterCount.value = count; if (cut) { cut.rrCutTop.value = cutTop; cut.rrCutRadius.value = cutRadius; } };
     const dome = scene && scene.userData && scene.userData.rrSkyDome;
     if (!dome || !dome.parent || !position) {
-        try { return draw(); } finally { if (volume) volume.rrWaterCount.value = count; }
+        try { return draw(); } finally { restore(); }
     }
     const saved = dome.position.clone();
     dome.position.set(position.x, position.y, position.z);
     dome.updateMatrix(); dome.updateMatrixWorld(true);
     try { return draw(); }
-    finally { dome.position.copy(saved); dome.updateMatrix(); dome.updateMatrixWorld(true); if (volume) volume.rrWaterCount.value = count; }
+    finally { dome.position.copy(saved); dome.updateMatrix(); dome.updateMatrixWorld(true); restore(); }
 };
 
 /** How many reflections deep two facing mirrors go (each level another, smaller draw of the scene). */

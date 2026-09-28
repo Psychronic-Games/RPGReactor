@@ -276,3 +276,18 @@ test('a mirror in view stays a sharp mirror far past the near reach; one off scr
     assert.ok(!picked.includes(behind), '120 tiles off, behind: left to the capture');
     assert.ok(picked.includes(near), 'within the near reach either way');
 });
+
+test('a lake seen from a rooftop: the sky is never clipped out of a mirror, nothing is cut away in it, and far waves lie flat', () => {
+    const cut = Reactor3D.cutawayUniforms();
+    cut.rrCutTop.value = 12; cut.rrCutRadius.value = 3;
+    let during = null;
+    Reactor3D.withSkyAt(null, null, () => { during = [cut.rrCutTop.value, cut.rrCutRadius.value]; });
+    assert.deepEqual(during, [1e9, 0], 'a reflection draws the buildings whole');
+    assert.deepEqual([cut.rrCutTop.value, cut.rrCutRadius.value], [12, 3], 'and the cut comes back after');
+    cut.rrCutTop.value = 1e9; cut.rrCutRadius.value = 0;
+    const core = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+    assert.match(core, /gl_Position\.z = gl_Position\.w \* 0\.99999;/, 'the sky dome is drawn at infinity: an oblique mirror frustum cut it to a disc');
+    const world = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d_world.js'), 'utf8');
+    assert.match(world, /vec3 rrWaveN = normalize\(mix\(vRRWaveNormal, vec3\(0\.0, 1\.0, 0\.0\), smoothstep\(30\.0, 90\.0, distance\(cameraPosition, vRRWorldPos\)\)\)\);/, 'far waves lie flat');
+    assert.match(world, /float rrGlint = pow\(max\(dot\(rrWaveN, rrHalf\), 0\.0\), 400\.0\);/, 'the glint is the sun\'s, not a wash over a lake seen from above');
+});

@@ -1725,9 +1725,15 @@ Reactor3D.waterMaterial = function(texture, look) {
                 "\tif (rrWaterColour.w > 0.5) rrTint = mix(min(rrWaterColour.rgb * 1.3 + 0.04, vec3(1.0)), rrWaterColour.rgb, smoothstep(0.0, 1.5, vRRDepth));",
                 "\tvec3 rrLightDir = normalize(vec3(0.35, 1.0, 0.25));",
                 "\tvec3 rrViewDir = normalize(cameraPosition - vRRWorldPos);",
+                // Waves flatten with distance: seen from far off (a rooftop) their spacing falls between
+                // the sheet's vertices and pixels, and they came back as broad regular bands of glint.
+                "\tvec3 rrWaveN = normalize(mix(vRRWaveNormal, vec3(0.0, 1.0, 0.0), smoothstep(30.0, 90.0, distance(cameraPosition, vRRWorldPos))));",
                 "\tvec3 rrHalf = normalize(rrLightDir + rrViewDir);",
-                "\tfloat rrGlint = pow(max(dot(vRRWaveNormal, rrHalf), 0.0), 48.0);",
-                "\tfloat rrFresnel = pow(1.0 - max(dot(vRRWaveNormal, rrViewDir), 0.0), 3.0);",
+                // The sun's glint on the waves: a tight highlight, the sun's own reflection. A broad one
+                // (48) covered a lake seen from above, where the view lines up with this light, in a
+                // pale wash banded by the waves.
+                "\tfloat rrGlint = pow(max(dot(rrWaveN, rrHalf), 0.0), 400.0);",
+                "\tfloat rrFresnel = pow(1.0 - max(dot(rrWaveN, rrViewDir), 0.0), 3.0);",
                 "\tdiffuseColor.rgb = mix(diffuseColor.rgb * rrTint, vec3(1.0), rrGlint * 0.7 * (1.0 - rrWaterForm.z));",
                 // Clarity 0.6 is water as it always was; lower is murkier to opaque (tar, lava), higher clearer.
                 "\tfloat rrSeen = 0.55 + 0.3 * smoothstep(0.0, 2.0, vRRDepth) + 0.15 * rrFresnel;",
@@ -1735,7 +1741,7 @@ Reactor3D.waterMaterial = function(texture, look) {
                 "\tfloat rrOpacity = rrWaterForm.x <= 0.6 ? mix(1.0, rrSeen, rrWaterForm.x / 0.6) : mix(rrSeen, max(rrSeen * 0.55, 0.25), (rrWaterForm.x - 0.6) / 0.4);",
                 "\tdiffuseColor.a *= rrOpacity * smoothstep(0.0, 0.35, vRRDepth);",
                 // A glowing liquid burns brighter at its crests.
-                "\tif (rrWaterForm.z > 0.0) diffuseColor.rgb *= 1.0 + rrWaterForm.z * (0.35 + 2.5 * (1.0 - vRRWaveNormal.y));",
+                "\tif (rrWaterForm.z > 0.0) diffuseColor.rgb *= 1.0 + rrWaterForm.z * (0.35 + 2.5 * (1.0 - rrWaveN.y));",
                 // A reflective sheet mirrors the world through its waves, more at a
                 // glancing angle, and turns opaque as it does: mercury is a mirror.
                 env ? [
@@ -1745,26 +1751,26 @@ Reactor3D.waterMaterial = function(texture, look) {
                     // mirror the underwater world back, faintly. It had mirrored the lakebed overhead.
                     "\tif (rrViewDir.y < 0.0) {",
                     "\t\tfloat rrWindow = smoothstep(0.18, 0.4, -rrViewDir.y);",
-                    "\t\tvec3 rrRb = reflect(-rrViewDir, -vRRWaveNormal);",
+                    "\t\tvec3 rrRb = reflect(-rrViewDir, -rrWaveN);",
                     "\t\trrRb.x *= rrEnvFlip;",
                     "\t\tvec3 rrUnder = textureLod(rrEnvMap, rrRb, 0.35 * rrEnvMaxLod).rgb * rrTint;",
                     "\t\tdiffuseColor.rgb = mix(diffuseColor.rgb, rrUnder, 0.6 * (1.0 - rrWindow));",
                     "\t\tdiffuseColor.a = mix(max(diffuseColor.a, 0.9), 0.12, rrWindow);",
                     "\t} else if (rrWaterLook.x > 0.0) {",
-                    "\t\tvec3 rrR = reflect(-rrViewDir, vRRWaveNormal);",
+                    "\t\tvec3 rrR = reflect(-rrViewDir, rrWaveN);",
                     "\t\trrR.x *= rrEnvFlip;",
                     "\t\tvec3 rrEnvC = textureLod(rrEnvMap, rrR, rrWaterLook.y * rrEnvMaxLod).rgb * rrWaterTint;",
                     // The sheet's own mirror picture when it is one of the frame's mirrors: the world sharp and
                     // in place, rippled by the waves (and blurred a little as the water roughens).
                     mirror ? [
-                        "\t\tvec2 rrRipple = vRRWaveNormal.xz * (0.035 + 0.1 * rrWaterLook.y);",
+                        "\t\tvec2 rrRipple = rrWaveN.xz * (0.035 + 0.1 * rrWaterLook.y);",
                         Reactor3D.mirrorLookup("rrEnvC", slot => "rrMirrorPlane" + slot + ".y > 0.9 && abs(vRRWorldPos.y - rrMirrorPlane" + slot + ".w) < 0.4", "rrRipple", "rrWaterTint")
                     ].join("\n") : "",
                     // Glancing light is reflected, light from above goes in: a dark liquid stays dark seen from
                     // above (tar is black, not sky blue) and mirrors the world toward the horizon; only a full
                     // mirror (mercury) reflects as strongly straight down.
                     "\t\tfloat rrFloor = mix(0.12, 0.9, rrWaterLook.x * rrWaterLook.x * rrWaterLook.x);",
-                    "\t\tfloat rrMirror = clamp(rrWaterLook.x * mix(rrFloor, 1.0, pow(1.0 - max(dot(vRRWaveNormal, rrViewDir), 0.0), 3.0)), 0.0, 1.0);",
+                    "\t\tfloat rrMirror = clamp(rrWaterLook.x * mix(rrFloor, 1.0, pow(1.0 - max(dot(rrWaveN, rrViewDir), 0.0), 3.0)), 0.0, 1.0);",
                     "\t\tdiffuseColor.rgb = mix(diffuseColor.rgb, rrEnvC + vec3(rrGlint * 0.8), rrMirror);",
                     "\t\tdiffuseColor.a = mix(diffuseColor.a, smoothstep(0.0, 0.35, vRRDepth), rrWaterLook.x * 0.85);",
                     "\t}"
