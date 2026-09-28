@@ -1507,16 +1507,30 @@ Reactor3D.Mirrors = {
         const onScreen = point => { const v = point.clone().project(camera); return v.z < 1 && v.z > -1 && Math.abs(v.x) <= 1 && Math.abs(v.y) <= 1; };
         // In view is any of it in the camera's frustum (a long wall's middle can be off screen while it fills the view).
         const frustum = new THREE.Frustum().setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
+        // How much of the screen a box covers, 0..1: its projected corners' rectangle, clipped to the view.
+        // (A distance falloff had judged a wall 150 tiles off, plain on screen, as filling nothing.)
+        const corner = new THREE.Vector3();
+        const cover = box => {
+            let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+            for (let i = 0; i < 8; i++) {
+                corner.set(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z);
+                corner.applyMatrix4(camera.matrixWorldInverse);
+                if (corner.z > -camera.near) return 1; // reaches behind the eye: all about it
+                corner.applyMatrix4(camera.projectionMatrix);
+                x0 = Math.min(x0, corner.x); x1 = Math.max(x1, corner.x); y0 = Math.min(y0, corner.y); y1 = Math.max(y1, corner.y);
+            }
+            const w = Math.min(1, x1) - Math.max(-1, x0), h = Math.min(1, y1) - Math.max(-1, y0);
+            return w > 0 && h > 0 ? (w * h) / 4 : 0;
+        };
         for (const object of candidates || []) {
             // A water sheet names its own plane: level, facing up.
             const own = object.userData && object.userData.rrMirrorPlane;
             if (own) {
                 if (camPos.clone().sub(own.point).dot(own.normal) > 0.05) {
                     // Water competes on what it fills of the view, like any mirror.
-                    const bounds = new THREE.Box3().setFromObject(object), middle = bounds.getCenter(new THREE.Vector3()), size = bounds.getSize(new THREE.Vector3());
-                    const far = camPos.distanceTo(middle), facing = Math.max(0.05, own.normal.dot(camPos.clone().sub(middle).normalize()));
+                    const bounds = new THREE.Box3().setFromObject(object);
                     const inView = frustum.intersectsBox(bounds);
-                    scored.push({ normal: own.normal.clone(), point: own.point.clone(), d: own.normal.dot(own.point), score: (inView ? 1e3 : 0) + size.x * size.z * facing / (1 + far * far / 400), primary: inView, object });
+                    scored.push({ normal: own.normal.clone(), point: own.point.clone(), d: own.normal.dot(own.point), score: (inView ? 1e3 : 0) + 1000 * cover(bounds), primary: inView, object });
                 }
                 continue;
             }
@@ -1535,7 +1549,8 @@ Reactor3D.Mirrors = {
                 const middle = panel.box.getCenter(new THREE.Vector3()).applyMatrix4(object.matrixWorld);
                 const facing = normal.dot(camPos.clone().sub(middle).normalize());
                 if (facing <= 0.15) continue;
-                const inView = frustum.intersectsBox(panel.box.clone().applyMatrix4(object.matrixWorld));
+                const worldBox = panel.box.clone().applyMatrix4(object.matrixWorld);
+                const inView = frustum.intersectsBox(worldBox);
                 let shows = 0;
                 for (const s of subject || []) {
                     const side = s.clone().sub(point).dot(normal);
@@ -1550,10 +1565,8 @@ Reactor3D.Mirrors = {
                     if (onScreen(cross) && panel.box.containsPoint(cross.clone().applyMatrix4(toLocal))) shows++;
                 }
                 // Off screen and showing nothing it can still be the second mirror: the one the first reflects.
-                // How much of the view it fills: its area, as squarely as it faces, less with distance.
-                const far = camPos.distanceTo(middle);
-                const cover = panel.area * facing / (1 + far * far / 400);
-                scored.push({ normal, point, d: normal.dot(point), score: shows * 1e6 + (inView ? 1e3 : 0) + cover, primary: shows > 0 || inView, object });
+                // How much of the view it fills (per mille of the screen), as squarely as it faces.
+                scored.push({ normal, point, d: normal.dot(point), score: shows * 1e6 + (inView ? 1e3 : 0) + 1000 * cover(worldBox) * facing, primary: shows > 0 || inView, object });
             }
         }
         // The mirror kept last frame stays unless another clearly wins: no flicker between near equals.
@@ -1580,8 +1593,8 @@ Reactor3D.Mirrors = {
             for (const p of scored) {
                 // A middling GPU draws the first two only (each plane is another draw of the scene).
                 if (planes.length >= (Reactor3D.tier() === "full" ? Reactor3D.MIRROR_SLOTS : 2)) break;
-                // Past the first two, only what fills a real share of the view (not a wall's top strip).
-                if (p.primary && !known(p) && p.score - 1e3 >= 2) planes.push(p);
+                // Past the first two, only what fills a real share of the view (half a percent: not a wall's top strip).
+                if (p.primary && !known(p) && p.score % 1e6 - 1e3 >= 5) planes.push(p);
             }
         }
         if (!planes.length) return;

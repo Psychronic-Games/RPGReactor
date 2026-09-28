@@ -291,3 +291,11 @@ test('a lake seen from a rooftop: the sky is never clipped out of a mirror, noth
     assert.match(world, /vec3 rrWaveN = normalize\(mix\(vRRWaveNormal, vec3\(0\.0, 1\.0, 0\.0\), smoothstep\(30\.0, 90\.0, distance\(cameraPosition, vRRWorldPos\)\)\)\);/, 'far waves lie flat');
     assert.match(world, /float rrGlint = pow\(max\(dot\(rrWaveN, rrHalf\), 0\.0\), 400\.0\);/, 'the glint is the sun\'s, not a wash over a lake seen from above');
 });
+
+test('a mirror earns a picture by how much of the screen it covers, not a distance guess', () => {
+    const lighting = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d_lighting.js'), 'utf8');
+    assert.match(lighting, /const cover = box => \{[\s\S]{0,900}return w > 0 && h > 0 \? \(w \* h\) \/ 4 : 0;/, 'the projected box, clipped to the view');
+    assert.match(lighting, /score: shows \* 1e6 \+ \(inView \? 1e3 : 0\) \+ 1000 \* cover\(worldBox\) \* facing/);
+    assert.match(lighting, /if \(p\.primary && !known\(p\) && p\.score % 1e6 - 1e3 >= 5\) planes\.push\(p\);/, 'past the first two, half a percent of the screen');
+    assert.doesNotMatch(lighting, /far \* far \/ 400/, 'the distance falloff that left a plain wall 150 tiles off to the capture is gone');
+});
