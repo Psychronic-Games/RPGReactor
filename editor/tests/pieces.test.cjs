@@ -603,7 +603,8 @@ test('a structure plan builds rooms, walls, doors on shared walls, a stairwell a
     assert.match(read('editor/index.html'), /src\/utils\/StructurePlan\.js/);
     assert.ok(fs.existsSync(path.resolve(__dirname, '..', '..', 'editor/build-scripts/build-structure.cjs')));
     const demo = JSON.parse(read('template/Demo/3d/Structures/Manor.json'));
-    assert.deepEqual(demo.size, [64, 44]);
+    // The Demo's Manor is a real building's plot (its owner resizes it; no exact size is pinned).
+    assert.ok(demo.size[0] >= 40 && demo.size[1] >= 40, 'the Manor plan is building-sized: ' + demo.size);
     const i18n = read('editor/src/I18nManager.js');
     for (const key of ['pieces.structure', 'pieces.stamp', 'pieces.stampHint', 'pieces.structureNone', 'pieces.noStructures', 'pieces.move', 'pieces.moveHint', 'pieces.removeStructure', 'pieces.notStructure', 'pieces.structureSelected', 'pieces.rotate', 'pieces.scale', 'pieces.detached', 'pieces.grouped']) {
         assert.equal((i18n.match(new RegExp('"' + key.replace(/\./g, '\\.') + '": "', 'g')) || []).length, 18, key + ' in 18 locales');

@@ -10,5 +10,6 @@
   "pivots": {"Full-Turret":[-2.263933882207813,2.138503769121598,0.025748653064354695],"Canon Shaft":[0.5869342512174126,1.259704926076757,-0.000045693107514961274]},
   "effects": [
     {"name":"effect","animation":123,"anchor":{"part":"Canon Shaft","offset":[5.5,1.722,0]},"scale":1,"loop":false,"rotate":[0,0,0],"video":{"file":"","width":0.3,"height":0.2,"loop":true,"audio":false,"volume":100}}
-  ]
+  ],
+  "surface": {"reflect":1,"gloss":1,"metal":1,"tint":"#ffffff","texture":0}
 }

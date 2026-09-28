@@ -211,5 +211,6 @@
     }
   },
   "commandWindow": "battler",
-  "startMessages": false
+  "startMessages": false,
+  "escapeMessages": false
 }

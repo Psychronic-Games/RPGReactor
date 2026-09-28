@@ -1,4 +1,7 @@
 {
-  "animations": [],
-  "pivots": {"Sci-Fi Space Station_FloorMiddle_0":[1.0706292283467314,9.425273168445823,-25.40331306145419],"Sci-Fi Space Station_Backdrop_0":[-0.12694768582947,9.800189045776754,-25.63924277520066]}
+  "animations": [
+    {"name":"Door Open","cycles":1,"part":"Sci-Fi Space Station_Door_0","type":"pose","trigger":"action","rotate":[0,-2,0],"move":[0,0.56,0],"resize":[1,1,1],"period":125,"hold":true,"repeat":false}
+  ],
+  "pivots": {"Sci-Fi Space Station_FloorMiddle_0":[1.0706292283467314,9.425273168445823,-25.40331306145419],"Sci-Fi Space Station_Backdrop_0":[-0.12694768582947,9.800189045776754,-25.63924277520066]},
+  "surface": {"reflect":0.53,"gloss":1,"metal":0,"tint":"#ffffff","texture":1}
 }
