@@ -1298,8 +1298,9 @@ Reactor3D.mirrorLookup = function(target, on, offset, scale) {
 
 /** A model with a flat face this share of its surface or more can be a planar mirror (see `mirrorPanels`). */
 Reactor3D.MIRROR_FLAT_SHARE = 0.15;
-/** How close (tiles) a mirror model must stand to the camera. */
+/** How close (tiles) a mirror must stand to the camera: off screen (the one another reflects), and in view. */
 Reactor3D.MIRROR_PLANE_REACH = 60;
+Reactor3D.MIRROR_VIEW_REACH = 250;
 /** How many mirror planes a frame draws: the first two reflect each other (a house of mirrors), the rest once, at half size. */
 Reactor3D.MIRROR_SLOTS = 4;
 

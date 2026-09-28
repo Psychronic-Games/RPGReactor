@@ -7003,7 +7003,13 @@ Reactor3D.MapScene.prototype.mirrorCandidates = function(camera) {
         }
         this._mirrorList = { frame, list };
     }
-    const reach = Reactor3D.MIRROR_PLANE_REACH;
+    const reach = Reactor3D.MIRROR_PLANE_REACH, viewReach = Reactor3D.MIRROR_VIEW_REACH || reach;
+    // A mirror in view stays sharp from much farther off: beyond the near reach it fell back to the
+    // capture, whose few texels spread over a flat wall as bands of sky and ground.
+    camera.updateMatrixWorld();
+    const frustum = this._mirrorFrustum || (this._mirrorFrustum = new THREE.Frustum());
+    frustum.setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
+    let sphereOf = null;
     // Distance to the thing's bounds, not its origin: a chunk or a sheet has its origin at the map's corner.
     const distance = object => {
         const still = object.userData.pieceChunk !== undefined || !!object.userData.water;
@@ -7013,13 +7019,15 @@ Reactor3D.MapScene.prototype.mirrorCandidates = function(camera) {
             sphere = box.isEmpty() ? null : box.getBoundingSphere(new THREE.Sphere());
             if (still) object.userData.__rrMirrorSphere = sphere;
         }
+        sphereOf = sphere;
         return sphere ? Math.max(0, sphere.center.distanceTo(camera.position) - sphere.radius) : Infinity;
     };
+    // Those in view first, nearest first: the list is cut at twelve.
     return this._mirrorList.list
         .filter(object => object.parent && object.visible)
-        .map(object => ({ object, distance: distance(object) }))
-        .filter(entry => entry.distance <= reach)
-        .sort((a, b) => a.distance - b.distance)
+        .map(object => { const far = distance(object); return { object, distance: far, inView: !!sphereOf && frustum.intersectsSphere(sphereOf) }; })
+        .filter(entry => entry.distance <= reach || (entry.inView && entry.distance <= viewReach))
+        .sort((a, b) => (b.inView - a.inView) || (a.distance - b.distance))
         .slice(0, 12).map(entry => entry.object);
 };
 

@@ -261,3 +261,18 @@ test('a second owner takes the shadow rows only once the map has left them', () 
     assert.equal(Reactor3D.claimShadows(room), true, 'the map has stopped drawing');
     S._renderer = saved.renderer; S.lastRenderAt = saved.at;
 });
+
+test('a mirror in view stays a sharp mirror far past the near reach; one off screen does not', () => {
+    const scene = Object.create(Reactor3D.MapScene.prototype);
+    const camera = new THREE.PerspectiveCamera(60, 16 / 9, 0.1, 2000);
+    camera.position.set(0, 2, 0); camera.lookAt(0, 2, -10); camera.updateMatrixWorld(); camera.updateProjectionMatrix();
+    const chunk = (x, z) => { const m = new THREE.Mesh(new THREE.BoxGeometry(4, 4, 0.2)); m.position.set(x, 2, z); m.userData.pieceChunk = 0; m.updateMatrixWorld(); return m; };
+    const ahead = chunk(0, -120), behind = chunk(0, 120), near = chunk(0, 30);
+    const parent = new THREE.Group(); parent.add(ahead, behind, near);
+    scene._modelInstances = new Map(); scene._waterMeshes = []; scene._pieceMeshes = [];
+    scene._mirrorList = { frame: 0, list: [ahead, behind, near] };
+    const picked = scene.mirrorCandidates(camera);
+    assert.ok(picked.includes(ahead), '120 tiles off, in view: a planar mirror');
+    assert.ok(!picked.includes(behind), '120 tiles off, behind: left to the capture');
+    assert.ok(picked.includes(near), 'within the near reach either way');
+});
