@@ -679,10 +679,15 @@
             piece.surface = { reflect: u(raw.surface.reflect, 0), gloss: u(raw.surface.gloss, 0.8), metal: u(raw.surface.metal, 0),
                 tint: typeof raw.surface.tint === 'string' && /^#[0-9a-f]{6}$/i.test(raw.surface.tint) ? raw.surface.tint : '#ffffff', texture: u(raw.surface.texture, 0) };
         }
-        // An even-width ladder is drawn half a tile over, to stay centred on the column it grew from.
-        if (raw.kind === 'ladder' && Array.isArray(raw.offset)) {
-            const shift = raw.offset.slice(0, 2).map(v => Math.max(-0.5, Math.min(0.5, Math.round((Number(v) || 0) * 100) / 100)));
-            if (shift[0] || shift[1]) piece.offset = [shift[0] || 0, shift[1] || 0];
+        // How a ladder's level is drawn: shifted across, narrower than its cell, the top one part way up.
+        if (raw.kind === 'ladder') {
+            if (Array.isArray(raw.offset)) {
+                const shift = raw.offset.slice(0, 2).map(v => Math.max(-1, Math.min(1, Math.round((Number(v) || 0) * 1000) / 1000)));
+                if (shift[0] || shift[1]) piece.offset = [shift[0] || 0, shift[1] || 0];
+            }
+            const span = Math.round(Number(raw.span) * 1000) / 1000, rise = Math.round(Number(raw.rise) * 1000) / 1000;
+            if (span >= 0.5 && span < 1) piece.span = span;
+            if (rise > 0 && rise < 1) piece.rise = rise;
         }
         // A shape has a size in tiles and a free turn in degrees.
         if (SHAPE_KINDS.includes(raw.kind)) {

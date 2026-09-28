@@ -93,3 +93,9 @@ test('placing does not select what was placed; leaving Build lets its selection 
     assert.equal(typeof gizmo.grab, 'function');
     assert.match(read('editor/src/utils/ShapeGizmo3D.js'), /if \(mode === 'all'\) \{[\s\S]{0,300}'size'[\s\S]{0,120}'move'[\s\S]{0,120}'turn'/, 'cubes, then arrows, then rings');
 });
+
+test('the Build bar opens in Select', () => {
+    const bar = read('editor/src/BuildHotbar.js');
+    assert.match(bar, /const opening = !this\.visible;[\s\S]{0,300}if \(opening && manager\.mode !== 'select'\) manager\.setMode\('select'\);/);
+    assert.match(read('editor/src/PieceBuilderManager.js'), /this\.mode = 'select';\n\s*this\.structure = '';/, 'and a fresh manager starts there');
+});

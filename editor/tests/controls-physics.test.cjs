@@ -200,7 +200,7 @@ test('a placed ladder is edited whole: its height from the foot, its turn, its m
     assert.match(src, /setLadderHeight\(piece, height, record = true\)/);
     assert.match(src, /if \(piece\.kind === 'ladder'\) \{\n\s+const ids = new Set\(this\.ladderStack\(piece\)/);
     assert.match(src, /const gone = new Set\(piece\.kind === 'ladder' \? this\.ladderStack\(piece\)/);
-    assert.match(bar, /if \(s\.piece\) \{ const f = manager\.ladderFlight\(s\.piece\); manager\.setLadderSize\(s\.piece, height, f \? f\.width : 1\); \}/);
+    assert.match(bar, /if \(s\.piece\) \{ const f = manager\.ladderFlight\(s\.piece\); manager\.setLadderSize\(s\.piece, key === 'height' \? size : \(f \? f\.height : 1\), key === 'width' \? size : \(f \? f\.width : 1\)\); \}/);
     assert.match(css, /\.rr-build-note\.rr-build-wrap \{ white-space: normal;/);
 });
 

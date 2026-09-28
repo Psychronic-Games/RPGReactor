@@ -83,10 +83,13 @@ class BuildHotbar {
     show() {
         const manager = this.manager();
         if (!this.root || !manager) return;
+        const opening = !this.visible;
         this.visible = true;
         this.root.style.display = 'flex';
         this.panel.style.display = 'flex';
         manager.activate();
+        // Opened, the bar starts in Select: a click picks up, nothing is laid by accident.
+        if (opening && manager.mode !== 'select') manager.setMode('select');
         document.addEventListener('keydown', this._onKeyDown, true);
         this.render();
     }
@@ -393,8 +396,8 @@ class BuildHotbar {
             // A ladder's height, in hand or placed: a placed one grows or shrinks from its foot.
             // A ladder's height and width, in hand or placed (a placed one is laid again from its foot).
             const ladder = kind === 'ladder' && piece && manager.ladderFlight ? manager.ladderFlight(piece) : null;
-            if (kind === 'ladder') body += section(tt('Size'), num('rr-build-ladderheight', tt('Height'), ladder ? ladder.height : manager.ladderHeight, 1, BuildHotbar.MAX_RUN, 1, 'height')
-                + num('rr-build-ladderwidth', tt('Width'), ladder ? ladder.width : manager.ladderWidth, 1, 20, 1, 'width'));
+            if (kind === 'ladder') body += section(tt('Size'), num('rr-build-ladderheight', tt('Height'), ladder ? ladder.height : manager.ladderHeight, 0.5, BuildHotbar.MAX_RUN, 0.1, 'height')
+                + num('rr-build-ladderwidth', tt('Width'), ladder ? ladder.width : manager.ladderWidth, 0.5, 20, 0.1, 'width'));
             if (s.shape) {
                 const size = piece ? piece.size : manager.sizeFor(kind);
                 const labels = kind === 'wedge' ? [tt('Width'), tt('Height'), tt('Length')] : [tt('Width'), tt('Height'), tt('Depth')];
@@ -519,16 +522,16 @@ class BuildHotbar {
             else manager.stairSteps = steps;
             this.renderPanel();
         });
-        panel.querySelector('.rr-build-ladderheight')?.addEventListener('change', event => {
-            const height = Math.max(1, Math.min(BuildHotbar.MAX_RUN, Math.round(Number(event.target.value)) || 1));
-            if (s.piece) { const f = manager.ladderFlight(s.piece); manager.setLadderSize(s.piece, height, f ? f.width : 1); } else manager.ladderHeight = height;
+        // A ladder's size in tiles, fractions allowed (1.5 wide, 5.5 tall).
+        const ladderSize = (key, value) => {
+            const size = manager.constructor.clampLadderSize(value, key === 'height' ? BuildHotbar.MAX_RUN : 20);
+            if (s.piece) { const f = manager.ladderFlight(s.piece); manager.setLadderSize(s.piece, key === 'height' ? size : (f ? f.height : 1), key === 'width' ? size : (f ? f.width : 1)); }
+            else if (key === 'height') manager.ladderHeight = size; else manager.ladderWidth = size;
+            manager._ghostChanged?.();
             this.renderPanel();
-        });
-        panel.querySelector('.rr-build-ladderwidth')?.addEventListener('change', event => {
-            const width = Math.max(1, Math.min(20, Math.round(Number(event.target.value)) || 1));
-            if (s.piece) { const f = manager.ladderFlight(s.piece); manager.setLadderSize(s.piece, f ? f.height : 1, width); } else manager.ladderWidth = width;
-            this.renderPanel();
-        });
+        };
+        panel.querySelector('.rr-build-ladderheight')?.addEventListener('change', event => ladderSize('height', event.target.value));
+        panel.querySelector('.rr-build-ladderwidth')?.addEventListener('change', event => ladderSize('width', event.target.value));
         panel.querySelector('.rr-build-stairwidth')?.addEventListener('change', event => {
             const width = Math.max(1, Math.min(20, Math.round(Number(event.target.value)) || 1));
             if (s.piece && s.piece.kind === 'stair' && manager.setStairFlight) { const f = manager.stairFlight(s.piece); manager.setStairFlight(s.piece, f ? f.steps : 1, width); }

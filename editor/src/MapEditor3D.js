@@ -1947,10 +1947,12 @@ class MapEditor3D {
         if (shape) corners = this.shapeView(piece).corners;
         else {
             const base = Reactor3D.pieceBaseAt(mapData, piece.x, piece.y) + piece.z, h = Reactor3D.pieceHeight(piece.kind);
-            // Where it is drawn: an even-width ladder stands half a tile over.
+            // Where it is drawn: a ladder's level shifted over, narrowed across its cell, its top cut short.
             const [ox, oy] = piece.offset || [0, 0];
+            const [ax, ay] = Reactor3D.stairAxis(piece.rot || 0), across = piece.kind === 'ladder' ? 1 - (piece.span || 1) : 0;
+            const inX = Math.abs(ay) * across / 2, inY = Math.abs(ax) * across / 2, top = h * (piece.rise || 1);
             corners = [];
-            for (const u of [0, 1]) for (const y of [0, 1]) for (const v of [0, 1]) corners.push([piece.x + ox + u, base + y * h, piece.y + oy + v]);
+            for (const u of [0, 1]) for (const y of [0, 1]) for (const v of [0, 1]) corners.push([piece.x + ox + (u ? 1 - inX : inX), base + y * top, piece.y + oy + (v ? 1 - inY : inY)]);
         }
         const edges = [[0, 1], [0, 2], [0, 4], [1, 3], [1, 5], [2, 3], [2, 6], [3, 7], [4, 5], [4, 6], [5, 7], [6, 7]];
         const positions = new Float32Array(edges.length * 6);

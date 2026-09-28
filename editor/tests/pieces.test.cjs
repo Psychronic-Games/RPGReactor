@@ -1110,7 +1110,8 @@ test('a ladder widens around its middle column, a column each side in turn', () 
     assert.deepEqual(laid(2), at([0, 1]), 'its even width grown the same way as a placed one');
     const shifts = () => [...new Set(map.reactor3d.pieces.map(p => JSON.stringify(p.offset || null)))];
     widen(2);
-    assert.deepEqual(shifts(), [JSON.stringify(Array.from(context.PieceBuilderManager.ladderShift(0, 2)))], 'an even width is drawn half a tile over');
+    const half = JSON.stringify(Array.from(manager._layLadder({ x: 0, y: 0, z: 0, rot: 0 }, 2, 1, 0)[0].piece.offset));
+    assert.deepEqual(shifts(), [half], 'an even width is drawn half a tile over');
     widen(3);
     assert.deepEqual(shifts(), ['null'], 'an odd one on whole tiles');
     // Drawn: the 2-wide ladder's middle is the column it grew from.
@@ -1118,7 +1119,7 @@ test('a ladder widens around its middle column, a column each side in turn', () 
     const R = require(path.join(repoRootForRamp(), 'runtime', 'reactor_3d.js'));
     const middle = pieces => { const m = { width: 40, height: 40, reactor3d: { version: 1, pieces } }; const g = R.pieceGeometry(R.pieceIndex(m).list, m); g.computeBoundingBox(); return Math.round((g.boundingBox.min.x + g.boundingBox.max.x) * 50) / 100; };
     const lone = middle([{ id: 1, kind: 'ladder', x: 10, y: 5, z: 0, rot: 0, material: '' }]);
-    const two = middle(Array.from(laid(2), (x, i) => ({ id: i + 1, kind: 'ladder', x, y: 5, z: 0, rot: 0, material: '', offset: Array.from(context.PieceBuilderManager.ladderShift(0, 2)) })));
+    const two = middle(Array.from(laid(2), (x, i) => ({ id: i + 1, kind: 'ladder', x, y: 5, z: 0, rot: 0, material: '', offset: JSON.parse(half) })));
     assert.equal(two, lone, 'centred where the one column stood');
 });
 
@@ -1129,4 +1130,35 @@ test('a piece\'s surface is kept at no reflection: the other sliders hold, and r
     const bar = read('editor/src/BuildHotbar.js');
     assert.match(bar, /const value = \{ finish: '', surface: plain \? null : surface \};/, 'only an all-default surface is dropped');
     assert.match(bar, /\.rr-surface-row:not\(\[data-surface="reflect"\]\)'\)\.forEach\(row => row\.classList\.toggle\('is-dimmed', !\(surface\.reflect > 0\)\)\)/, 'the rest dim while nothing reflects');
+});
+
+test('a ladder takes fractions: 1.5 wide and 2.5 tall, centred, the top cut short, and climbed to where it ends', () => {
+    const vm = require('node:vm');
+    const context = { console, Math, Number, String, Array, Object, JSON, Set, Map };
+    context.window = context; context.document = { addEventListener() {}, removeEventListener() {} };
+    vm.createContext(context);
+    vm.runInContext(read('editor/src/PieceBuilderManager.js') + '\nwindow.PieceBuilderManager = PieceBuilderManager;', context);
+    const map = { width: 40, height: 40, reactor3d: { version: 1, pieces: [{ id: 1, kind: 'ladder', x: 10, y: 5, z: 0, rot: 0, material: '' }] } };
+    const elevation = { PIECE_MAX_LEVEL: 240, pieces: m => m.reactor3d.pieces, restorePieces: (m, list) => { m.reactor3d.pieces = list; } };
+    const manager = new context.PieceBuilderManager(null);
+    Object.assign(manager, { currentMap: () => map, elevation: () => elevation, announce() {}, _syncPanel() {}, _ghostChanged() {}, _snapshot: () => null, undoStack: [], redoStack: [] });
+    assert.equal(manager.setLadderSize(map.reactor3d.pieces[0], 2.5, 1.5), true);
+    const flight = manager.ladderFlight(map.reactor3d.pieces[0]);
+    assert.deepEqual([flight.columns, flight.levels, flight.width, flight.height], [2, 3, 1.5, 2.5], 'whole cells to climb on, the size as typed');
+    const pieces = JSON.parse(JSON.stringify(map.reactor3d.pieces));
+    assert.ok(pieces.every(p => p.span === 0.75), 'each column drawn three quarters of a tile');
+    assert.deepEqual(pieces.filter(p => p.rise).map(p => [p.z, p.rise]), [[2, 0.5], [2, 0.5]], 'the top level half way up');
+    require(path.join(repoRootForRamp(), 'runtime', 'libs', 'three.js'));
+    const R = require(path.join(repoRootForRamp(), 'runtime', 'reactor_3d.js'));
+    const drawn = { width: 40, height: 40, reactor3d: { version: 1, pieces } };
+    const g = R.pieceGeometry(R.pieceIndex(drawn).list, drawn); g.computeBoundingBox();
+    const box = g.boundingBox, lone = R.pieceGeometry([{ id: 1, kind: 'ladder', x: 10, y: 5, z: 0, rot: 0, material: '' }], null); lone.computeBoundingBox();
+    const r2 = n => Math.round(n * 100) / 100;
+    assert.equal(r2((box.min.x + box.max.x) / 2), r2((lone.boundingBox.min.x + lone.boundingBox.max.x) / 2), 'centred where it stood');
+    assert.equal(r2(box.max.x - box.min.x), r2(1.5 - 2 * 0.14 * 0.75), 'a tile and a half across, less its rails\' inset');
+    assert.equal(r2(box.max.y - box.min.y), 2.5, 'two and a half levels up');
+    const ladder = R.ladderAt(drawn, pieces[0].x, pieces[0].y);
+    assert.equal(r2(ladder.top - ladder.bottom), 2.5, 'climbed to where it ends');
+    const back = R.normalizePiece(pieces.find(p => p.rise));
+    assert.deepEqual([back.span, back.rise], [0.75, 0.5], 'both survive a save');
 });

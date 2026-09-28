@@ -18,7 +18,7 @@ class PieceBuilderManager {
         this.material = '';
         this.finish = '';               // mirror, chrome, polished, glossy, gold, or plain
         this.surface = null;            // the sliders' surface for new pieces (wins over the finish)
-        this.mode = 'place';
+        this.mode = 'select';
         this.structure = '';
         this.selectedGroup = 0;
         this.panel = null;
@@ -365,17 +365,6 @@ class PieceBuilderManager {
     }
     setSize(kind, size) { this.sizes[kind] = size.map(v => Math.max(0.25, Math.min(60, Math.round(v * 4) / 4))); this._syncPanel(); this._ghostChanged(); }
     /** The way a piece's own +v points for its turn: the direction a stair climbs, a ramp rises. */
-    /**
-     * The half-tile shift an even-width ladder is drawn with, back across its
-     * columns so the ladder stays centred on the one it grew from; null for
-     * an odd width (it sits on whole tiles).
-     */
-    static ladderShift(rot, width) {
-        if (width % 2) return null;
-        const [dx, dy] = PieceBuilderManager.stepOf(rot);
-        return [dy * 0.5 || 0, -dx * 0.5 || 0];
-    }
-
     static stepOf(rot) { return [[0, 1], [-1, 0], [0, -1], [1, 0]][((rot % 4) + 4) % 4]; }
 
     /** A shape's size for the next placement: its kind's own, scaled. */
@@ -1119,7 +1108,7 @@ class PieceBuilderManager {
         if (group) piece.group = group;
         let changed;
         if (this._stroke.mode === 'erase') changed = this.eraseAt(map, target);
-        else if ((piece.kind === 'stair' && (this.stairSteps > 1 || this.stairWidth > 1)) || (piece.kind === 'ladder' && (this.ladderHeight > 1 || this.ladderWidth > 1))) {
+        else if ((piece.kind === 'stair' && (this.stairSteps > 1 || this.stairWidth > 1)) || (piece.kind === 'ladder' && (this.ladderHeight !== 1 || this.ladderWidth !== 1))) {
             changed = false;
             for (const step of (piece.kind === 'ladder' ? this.ladderRun(piece) : this.stairRun(piece))) {
                 if (step.x < 0 || step.y < 0 || step.x >= map.width || step.y >= map.height) continue;
@@ -1157,23 +1146,20 @@ class PieceBuilderManager {
     }
 
     /**
-     * A ladder from one piece: `ladderHeight` levels of it, one over another,
-     * `ladderWidth` columns across, centred on the piece's column (an even
-     * width drawn half a tile over, as `setLadderSize` lays it).
+     * A ladder from one piece, `ladderWidth` wide and `ladderHeight` tall
+     * (either may be a fraction), centred on the piece's column: laid out by
+     * `ladderLayout`.
      */
     ladderRun(piece) {
-        const height = Math.max(1, Math.floor(this.ladderHeight) || 1), width = Math.max(1, Math.floor(this.ladderWidth) || 1);
-        const [dx, dy] = PieceBuilderManager.stepOf(piece.rot);
-        const out = [], start = -Math.floor((width - 1) / 2), shift = PieceBuilderManager.ladderShift(piece.rot, width);
-        for (let k = start; k < start + width; k++) for (let i = 0; i < height; i++) {
-            const next = Object.assign({}, piece, { x: piece.x - dy * k, y: piece.y + dx * k, z: piece.z + i });
-            if (shift) next.offset = shift; else delete next.offset;
-            out.push(next);
-        }
-        return out;
+        return this._layLadder(piece, this.ladderWidth, this.ladderHeight, 0).map(({ piece: next }) => next);
     }
 
-    /** A placed ladder's columns: `{ foot, height, width, pieces }`, the foot the bottom of its left column. */
+    /**
+     * A placed ladder: `{ foot, pieces, columns, levels, width, height, middle }`.
+     * The foot is the bottom of its first column; `width` and `height` are its
+     * drawn size (fractions allowed), `middle` where its middle stands across,
+     * in columns from the foot's.
+     */
     ladderFlight(piece) {
         const map = this.currentMap(), elevation = this.elevation();
         if (!map || !elevation || !piece || piece.kind !== 'ladder') return null;
@@ -1182,48 +1168,84 @@ class PieceBuilderManager {
         const at = (x, y, z) => all.find(p => p.kind === 'ladder' && p.rot === piece.rot && p.x === x && p.y === y && p.z === z) || null;
         let foot = this.ladderStack(piece)[0] || piece;
         for (let l = at(foot.x - lx, foot.y - ly, foot.z); l; l = at(foot.x - lx, foot.y - ly, foot.z)) foot = l;
-        let width = 1;
-        while (at(foot.x + lx * width, foot.y + ly * width, foot.z)) width++;
+        let columns = 1;
+        while (at(foot.x + lx * columns, foot.y + ly * columns, foot.z)) columns++;
         const pieces = [];
-        let height = 0;
-        for (let k = 0; k < width; k++) {
+        let levels = 0, rise = 1, middle = 0;
+        for (let k = 0; k < columns; k++) {
             const column = this.ladderStack(at(foot.x + lx * k, foot.y + ly * k, foot.z));
-            height = Math.max(height, column.length);
+            if (column.length > levels) { levels = column.length; rise = column[column.length - 1].rise || 1; }
+            const shift = column[0].offset ? column[0].offset[0] * lx + column[0].offset[1] * ly : 0;
+            middle += (k + shift) / columns;
             pieces.push(...column);
         }
-        return { foot, height, width, pieces };
+        const round = n => Math.round(n * 1000) / 1000;
+        return { foot, pieces, columns, levels, width: round(columns * (foot.span || 1)), height: round(levels - 1 + rise), middle: round(middle) };
     }
 
     /**
-     * Lay a placed ladder again from its foot, so tall and so wide (one undo
-     * step), centred on its middle column: an odd width a column each side,
-     * an even one drawn half a tile over (`ladderShift`).
+     * How a ladder so wide and so tall is laid: whole columns and levels (the
+     * cells it is climbed on), each column drawn `span` wide and shifted so
+     * together they stand centred on `middle` (columns across, from the
+     * first), and the top level drawn `rise` of the way up.
+     */
+    static ladderLayout(width, height, middle = 0) {
+        const round = n => Math.round(n * 1000) / 1000;
+        const count = Math.max(1, Math.ceil(width - 1e-6)), span = round(width / count);
+        const levels = Math.max(1, Math.ceil(height - 1e-6)), rise = round(height - (levels - 1));
+        const first = Math.round(middle - (count - 1) / 2) || 0;
+        const columns = [];
+        for (let k = 0; k < count; k++) columns.push({ t: first + k, shift: round(middle + (k - (count - 1) / 2) * span - (first + k)) });
+        return { columns, span, levels, rise };
+    }
+
+    /** The pieces of a ladder so wide and tall from `from` (a piece: its cell, level and turn), `middle` as in `ladderLayout`. */
+    _layLadder(from, width, height, middle) {
+        const [dx, dy] = PieceBuilderManager.stepOf(from.rot), lx = -dy, ly = dx;
+        const layout = PieceBuilderManager.ladderLayout(width, height, middle);
+        const out = [];
+        for (const { t, shift } of layout.columns) for (let i = 0; i < layout.levels; i++) {
+            const next = Object.assign({}, from, { x: from.x + lx * t, y: from.y + ly * t, z: from.z + i });
+            delete next.offset; delete next.span; delete next.rise;
+            if (shift) next.offset = [lx * shift || 0, ly * shift || 0];
+            if (layout.span < 1) next.span = layout.span;
+            if (i === layout.levels - 1 && layout.rise < 1) next.rise = layout.rise;
+            out.push({ piece: next, t });
+        }
+        return out;
+    }
+
+    static clampLadderSize(value, max) {
+        const n = Math.round(Number(value) * 20) / 20;
+        return Math.max(0.5, Math.min(max, Number.isFinite(n) && n > 0 ? n : 1));
+    }
+
+    /**
+     * Lay a placed ladder again from its foot, so wide and so tall (fractions
+     * allowed, one undo step), staying centred where it stood.
      */
     setLadderSize(piece, height, width, record = true) {
         const map = this.currentMap(), elevation = this.elevation();
         const flight = this.ladderFlight(piece);
         if (!map || !elevation || !flight) return false;
-        height = Math.max(1, Math.min((elevation.PIECE_MAX_LEVEL || 240) - flight.foot.z + 1, Math.floor(height) || 1));
-        width = Math.max(1, Math.min(20, Math.floor(width) || 1));
+        height = PieceBuilderManager.clampLadderSize(height, (elevation.PIECE_MAX_LEVEL || 240) - flight.foot.z + 1);
+        width = PieceBuilderManager.clampLadderSize(width, 20);
         if (height === flight.height && width === flight.width) return false;
         if (record) { this.undoStack.push(this._snapshot(map)); if (this.undoStack.length > 50) this.undoStack.shift(); this.redoStack.length = 0; }
         const gone = new Set(flight.pieces.map(p => p.id));
         const list = elevation.pieces(map).filter(p => !gone.has(p.id));
         let id = list.reduce((max, p) => Math.max(max, p.id || 0), 0);
-        const [dx, dy] = PieceBuilderManager.stepOf(flight.foot.rot);
-        const middle = Math.floor((flight.width - 1) / 2), start = middle - Math.floor((width - 1) / 2);
-        let footId = 0;
-        const shift = PieceBuilderManager.ladderShift(flight.foot.rot, width);
-        for (let k = start; k < start + width; k++) for (let i = 0; i < height; i++) {
-            const next = Object.assign({}, flight.foot, { id: ++id, x: flight.foot.x - dy * k, y: flight.foot.y + dx * k, z: flight.foot.z + i });
-            if (shift) next.offset = shift; else delete next.offset;
+        let footId = 0, reach = flight.columns;
+        for (const { piece: next, t } of this._layLadder(flight.foot, width, height, flight.middle)) {
+            next.id = ++id;
+            reach = Math.max(reach, Math.abs(t) + 1);
             if (next.x < 0 || next.y < 0 || next.x >= map.width || next.y >= map.height) continue;
             if (!footId) footId = next.id;
             list.push(next);
         }
         elevation.restorePieces(map, list);
         this.selected = footId;
-        const reach = Math.max(width, flight.width) + Math.abs(start) + 1;
+        reach += 1;
         this.announce(false, { x0: flight.foot.x - reach, y0: flight.foot.y - reach, x1: flight.foot.x + reach, y1: flight.foot.y + reach });
         this._syncPanel(); this._ghostChanged();
         return true;

@@ -202,7 +202,8 @@ Reactor3D.ladderAt = function(mapData, x, y) {
     for (const piece of stack) {
         if (piece.kind !== "ladder") continue;
         if (piece.z < low) { low = piece.z; rot = piece.rot || 0; }
-        high = Math.max(high, piece.z + 1);
+        // A top level cut short (a height that is no whole number) ends where it is drawn.
+        high = Math.max(high, piece.z + (piece.rise || 1));
     }
     if (!Number.isFinite(low)) return null;
     const base = this.pieceBaseAt(mapData, x, y);
@@ -485,10 +486,17 @@ Reactor3D.normalizePiece = function(raw, mapData) {
     // A surface of its own (the sliders): it wins over the finish's.
     const surface = raw.surface && typeof raw.surface === "object" && this.readModelSurface ? this.readModelSurface({ surface: raw.surface }) : null;
     if (surface) piece.surface = surface;
-    // An even-width ladder is drawn half a tile over, to stay centred on the column it grew from.
-    if (kind === "ladder" && Array.isArray(raw.offset)) {
-        const shift = raw.offset.slice(0, 2).map(v => Math.max(-0.5, Math.min(0.5, Math.round((Number(v) || 0) * 100) / 100)));
-        if (shift[0] || shift[1]) piece.offset = [shift[0] || 0, shift[1] || 0];
+    // How a ladder's level is drawn: shifted across (`offset`, tiles, so a ladder stays centred
+    // at any width), narrower than its cell (`span`, a width that is no whole number of tiles),
+    // and the top level only part way up (`rise`, a height that is none). Climbing keeps the cells.
+    if (kind === "ladder") {
+        if (Array.isArray(raw.offset)) {
+            const shift = raw.offset.slice(0, 2).map(v => Math.max(-1, Math.min(1, Math.round((Number(v) || 0) * 1000) / 1000)));
+            if (shift[0] || shift[1]) piece.offset = [shift[0] || 0, shift[1] || 0];
+        }
+        const span = Math.round(Number(raw.span) * 1000) / 1000, rise = Math.round(Number(raw.rise) * 1000) / 1000;
+        if (span >= 0.5 && span < 1) piece.span = span;
+        if (rise > 0 && rise < 1) piece.rise = rise;
     }
     if (this.isShapeKind(kind)) {
         const size = Array.isArray(raw.size) ? raw.size : [];
@@ -1340,9 +1348,19 @@ Reactor3D.pieceGeometry = function(pieces, mapData) {
         const hidden = this.hiddenFacesOf(piece, mapData);
         const from = out.positions.length;
         this.emitPiece(hidden ? Object.assign({}, piece, { rot: 0 }) : piece, base, out, hidden);
-        // A ladder's half-tile shift (an even width, centred): its level moves over as drawn.
-        if (piece.kind === "ladder" && piece.offset) {
-            for (let i = from; i < out.positions.length; i += 3) { out.positions[i] += piece.offset[0]; out.positions[i + 2] += piece.offset[1]; }
+        // A ladder's level as drawn: narrowed across its cell (`span`), cut short (`rise`), shifted over (`offset`).
+        if (piece.kind === "ladder" && (piece.offset || piece.span || piece.rise)) {
+            const [ax, ay] = this.stairAxis(piece.rot), lx = -ay, lz = ax;
+            const cx = piece.x + 0.5, cz = piece.y + 0.5, narrow = (piece.span || 1) - 1;
+            const [ox, oz] = piece.offset || [0, 0];
+            let bottom = Infinity;
+            for (let i = from + 1; i < out.positions.length; i += 3) bottom = Math.min(bottom, out.positions[i]);
+            for (let i = from; i < out.positions.length; i += 3) {
+                const across = ((out.positions[i] - cx) * lx + (out.positions[i + 2] - cz) * lz) * narrow;
+                out.positions[i] += lx * across + ox;
+                out.positions[i + 2] += lz * across + oz;
+                if (piece.rise) out.positions[i + 1] = bottom + (out.positions[i + 1] - bottom) * piece.rise;
+            }
         }
     }
     const geometry = new THREE.BufferGeometry();
