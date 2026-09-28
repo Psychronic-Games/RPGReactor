@@ -521,6 +521,30 @@ function createNwPackage(sourceDir, destPath) {
     }
 }
 
+/**
+ * A zip of `sourceDir` holding only its files: no entry per folder. Browser
+ * storefronts count every entry against their cap (itch: 1000), folders
+ * included, and unzipping makes the folders from the files' paths anyway.
+ */
+function createFlatZip(sourceDir, destPath) {
+    assertWindowsSafeNames(sourceDir);
+    if (fs.existsSync(destPath)) fs.rmSync(destPath, { force: true });
+    normalizeArchiveTimestamps(sourceDir);
+    if (process.platform === 'win32') {
+        const list = destPath + '.files';
+        fs.writeFileSync(list, walkWebFiles(sourceDir).filter(entry => entry.type === 'file').map(entry => entry.path).join('\n') + '\n');
+        try {
+            execFileSync('tar', ['-a', '-c', '-f', destPath, '-C', sourceDir, '--no-recursion', '-T', list], {
+                env: { ...process.env, TZ: 'UTC' }, stdio: 'pipe'
+            });
+        } finally { fs.rmSync(list, { force: true }); }
+    } else {
+        execFileSync('zip', ['-qrXD', destPath, '.'], {
+            cwd: sourceDir, env: { ...process.env, TZ: 'UTC' }, stdio: 'pipe'
+        });
+    }
+}
+
 function appendPackageToExecutable(exePath, packagePath) {
     fs.appendFileSync(exePath, fs.readFileSync(packagePath));
 }
@@ -890,6 +914,8 @@ function trimWebProject(projectRoot, log) {
         return face ? actorIds.has(face[1]) : true;
     });
     trimDir('img/enemies', file => referenced(path.parse(file).name));
+    // A playtest's battle and event test data: written afresh before every test.
+    trimDir('data', file => !/^Test_.*\.json$/i.test(file));
     // 3D model folders the maps never place are library stock too — and by
     // far the heaviest kind. Collect every model name the map sidecars
     // reference and drop the rest of 3d/ from the web bundle.
@@ -1034,6 +1060,8 @@ function buildWeb(stageRoot, stagingDir) {
     fs.mkdirSync(webRoot, { recursive: true });
     copyDirRecursive(path.join(stageRoot, 'css'), path.join(webRoot, 'css'));
     copyDirRecursive(path.join(stageRoot, 'images'), path.join(webRoot, 'images'));
+    // The store page's art, not the app's.
+    fs.rmSync(path.join(webRoot, 'images', 'rpg-reactor-itch.png'), { force: true });
     copyDirRecursive(path.join(stageRoot, 'libs'), path.join(webRoot, 'libs'));
     fs.copyFileSync(path.join(stageRoot, 'THIRD_PARTY_NOTICES.md'), path.join(webRoot, 'THIRD_PARTY_NOTICES.md'));
     fs.copyFileSync(path.join(stageRoot, 'LICENSE'), path.join(webRoot, 'LICENSE'));
@@ -1118,7 +1146,7 @@ function buildWeb(stageRoot, stagingDir) {
     const archiveName = `RPGReactor-v${appVersion}-web.zip`;
     const outputPath = path.join(outputDir, archiveName);
     logInfo(`Creating web archive: ${archiveName}`);
-    createNwPackage(webRoot, outputPath);
+    createFlatZip(webRoot, outputPath);
     createdArtifacts.add(outputPath);
     logGood(`Created: ${archiveName} (${(fs.statSync(outputPath).size / 1048576).toFixed(1)} MB, ${outputFiles.length} files)`);
     // File count and extracted size are a storefront's rules, not the

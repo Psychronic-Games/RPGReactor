@@ -203,3 +203,14 @@ test('the web host is spared the desktop runtime-refresh probes', () => {
     assert.ok(guard > 0 && firstRead > 0 && guard < firstRead,
         'web guard precedes the first synchronous read');
 });
+
+test('the web zip stays under a storefront\'s entry cap: no folder entries, no playtest leftovers, no dead icons', () => {
+    const worker = fs.readFileSync(path.join(__dirname, '..', 'build-scripts', 'dist-editor-worker.js'), 'utf8');
+    assert.match(worker, /createFlatZip\(webRoot, outputPath\);/, 'the web archive is written flat');
+    assert.match(worker, /execFileSync\('zip', \['-qrXD', destPath, '\.'\]/, 'zip -D: itch counted 88 folder entries against its 1000');
+    assert.match(worker, /'--no-recursion', '-T', list\]/, 'and on Windows only the listed files');
+    assert.match(worker, /trimDir\('data', file => !\/\^Test_\.\*\\\.json\$\/i\.test\(file\)\);/, 'a playtest\'s Test_ data is written afresh before each test');
+    for (const name of ['icon-undo.png', 'icon-L1.png', 'icon-database.png']) {
+        assert.equal(fs.existsSync(path.join(__dirname, '..', 'images', name)), false, name + ': the editor draws the SVG');
+    }
+});
