@@ -1104,6 +1104,10 @@ test('a ladder widens around its middle column, a column each side in turn', () 
     assert.deepEqual(widen(3), at([-1, 0, 1]), 'the third column goes on the other side');
     assert.deepEqual(widen(5), at([-2, -1, 0, 1, 2]), 'the first column stays the middle');
     assert.deepEqual(widen(1), [10], 'and narrowing comes back to it');
+    manager.ladderHeight = 1;
+    const laid = width => { manager.ladderWidth = width; return Array.from(manager.ladderRun({ id: 0, kind: "ladder", x: 10, y: 5, z: 0, rot: 0 }), p => p.x).sort((a, b) => a - b); };
+    assert.deepEqual(laid(3), at([-1, 0, 1]), 'a new ladder is laid around the clicked column too');
+    assert.deepEqual(laid(2), at([0, 1]), 'its even width grown the same way as a placed one');
 });
 
 test('a piece\'s surface is kept at no reflection: the other sliders hold, and raising it brings them back', () => {

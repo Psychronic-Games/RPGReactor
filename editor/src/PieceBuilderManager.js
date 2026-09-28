@@ -1124,7 +1124,7 @@ class PieceBuilderManager {
         // (a hidden face between touching walls belongs to both).
         if (changed) {
             this._stroke.moved = true;
-            const reach = this.isShape(piece.kind) ? Math.ceil(Math.max(...(piece.size || [1, 1, 1])) / 2) + 1 : Math.max(1, this.stairSteps, this.stairWidth);
+            const reach = this.isShape(piece.kind) ? Math.ceil(Math.max(...(piece.size || [1, 1, 1])) / 2) + 1 : Math.max(1, this.stairSteps, this.stairWidth, piece.kind === 'ladder' ? this.ladderWidth : 1);
             this.announce(false, { x0: target.x - reach, y0: target.y - reach, x1: target.x + reach, y1: target.y + reach });
         }
         return changed;
@@ -1145,12 +1145,16 @@ class PieceBuilderManager {
         return out;
     }
 
-    /** A ladder from one piece: `ladderHeight` levels of it, one over another, `ladderWidth` columns across (to the right, as a stair's width). */
+    /**
+     * A ladder from one piece: `ladderHeight` levels of it, one over another,
+     * `ladderWidth` columns across, centred on the piece's column (an even
+     * width has its extra column on the right, as `setLadderSize` grows it).
+     */
     ladderRun(piece) {
         const height = Math.max(1, Math.floor(this.ladderHeight) || 1), width = Math.max(1, Math.floor(this.ladderWidth) || 1);
         const [dx, dy] = PieceBuilderManager.stepOf(piece.rot);
-        const out = [];
-        for (let k = 0; k < width; k++) for (let i = 0; i < height; i++) out.push(Object.assign({}, piece, { x: piece.x - dy * k, y: piece.y + dx * k, z: piece.z + i }));
+        const out = [], start = -Math.floor((width - 1) / 2);
+        for (let k = start; k < start + width; k++) for (let i = 0; i < height; i++) out.push(Object.assign({}, piece, { x: piece.x - dy * k, y: piece.y + dx * k, z: piece.z + i }));
         return out;
     }
 
