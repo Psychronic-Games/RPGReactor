@@ -1108,6 +1108,18 @@ test('a ladder widens around its middle column, a column each side in turn', () 
     const laid = width => { manager.ladderWidth = width; return Array.from(manager.ladderRun({ id: 0, kind: "ladder", x: 10, y: 5, z: 0, rot: 0 }), p => p.x).sort((a, b) => a - b); };
     assert.deepEqual(laid(3), at([-1, 0, 1]), 'a new ladder is laid around the clicked column too');
     assert.deepEqual(laid(2), at([0, 1]), 'its even width grown the same way as a placed one');
+    const shifts = () => [...new Set(map.reactor3d.pieces.map(p => JSON.stringify(p.offset || null)))];
+    widen(2);
+    assert.deepEqual(shifts(), [JSON.stringify(Array.from(context.PieceBuilderManager.ladderShift(0, 2)))], 'an even width is drawn half a tile over');
+    widen(3);
+    assert.deepEqual(shifts(), ['null'], 'an odd one on whole tiles');
+    // Drawn: the 2-wide ladder's middle is the column it grew from.
+    require(path.join(repoRootForRamp(), 'runtime', 'libs', 'three.js'));
+    const R = require(path.join(repoRootForRamp(), 'runtime', 'reactor_3d.js'));
+    const middle = pieces => { const m = { width: 40, height: 40, reactor3d: { version: 1, pieces } }; const g = R.pieceGeometry(R.pieceIndex(m).list, m); g.computeBoundingBox(); return Math.round((g.boundingBox.min.x + g.boundingBox.max.x) * 50) / 100; };
+    const lone = middle([{ id: 1, kind: 'ladder', x: 10, y: 5, z: 0, rot: 0, material: '' }]);
+    const two = middle(Array.from(laid(2), (x, i) => ({ id: i + 1, kind: 'ladder', x, y: 5, z: 0, rot: 0, material: '', offset: Array.from(context.PieceBuilderManager.ladderShift(0, 2)) })));
+    assert.equal(two, lone, 'centred where the one column stood');
 });
 
 test('a piece\'s surface is kept at no reflection: the other sliders hold, and raising it brings them back', () => {

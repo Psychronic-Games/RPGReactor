@@ -365,6 +365,17 @@ class PieceBuilderManager {
     }
     setSize(kind, size) { this.sizes[kind] = size.map(v => Math.max(0.25, Math.min(60, Math.round(v * 4) / 4))); this._syncPanel(); this._ghostChanged(); }
     /** The way a piece's own +v points for its turn: the direction a stair climbs, a ramp rises. */
+    /**
+     * The half-tile shift an even-width ladder is drawn with, back across its
+     * columns so the ladder stays centred on the one it grew from; null for
+     * an odd width (it sits on whole tiles).
+     */
+    static ladderShift(rot, width) {
+        if (width % 2) return null;
+        const [dx, dy] = PieceBuilderManager.stepOf(rot);
+        return [dy * 0.5 || 0, -dx * 0.5 || 0];
+    }
+
     static stepOf(rot) { return [[0, 1], [-1, 0], [0, -1], [1, 0]][((rot % 4) + 4) % 4]; }
 
     /** A shape's size for the next placement: its kind's own, scaled. */
@@ -1148,13 +1159,17 @@ class PieceBuilderManager {
     /**
      * A ladder from one piece: `ladderHeight` levels of it, one over another,
      * `ladderWidth` columns across, centred on the piece's column (an even
-     * width has its extra column on the right, as `setLadderSize` grows it).
+     * width drawn half a tile over, as `setLadderSize` lays it).
      */
     ladderRun(piece) {
         const height = Math.max(1, Math.floor(this.ladderHeight) || 1), width = Math.max(1, Math.floor(this.ladderWidth) || 1);
         const [dx, dy] = PieceBuilderManager.stepOf(piece.rot);
-        const out = [], start = -Math.floor((width - 1) / 2);
-        for (let k = start; k < start + width; k++) for (let i = 0; i < height; i++) out.push(Object.assign({}, piece, { x: piece.x - dy * k, y: piece.y + dx * k, z: piece.z + i }));
+        const out = [], start = -Math.floor((width - 1) / 2), shift = PieceBuilderManager.ladderShift(piece.rot, width);
+        for (let k = start; k < start + width; k++) for (let i = 0; i < height; i++) {
+            const next = Object.assign({}, piece, { x: piece.x - dy * k, y: piece.y + dx * k, z: piece.z + i });
+            if (shift) next.offset = shift; else delete next.offset;
+            out.push(next);
+        }
         return out;
     }
 
@@ -1181,8 +1196,8 @@ class PieceBuilderManager {
 
     /**
      * Lay a placed ladder again from its foot, so tall and so wide (one undo
-     * step). A width grows around the middle column, a column each side in
-     * turn: 1 → 2 adds one on the right, 2 → 3 one on the left, and so on.
+     * step), centred on its middle column: an odd width a column each side,
+     * an even one drawn half a tile over (`ladderShift`).
      */
     setLadderSize(piece, height, width, record = true) {
         const map = this.currentMap(), elevation = this.elevation();
@@ -1198,8 +1213,10 @@ class PieceBuilderManager {
         const [dx, dy] = PieceBuilderManager.stepOf(flight.foot.rot);
         const middle = Math.floor((flight.width - 1) / 2), start = middle - Math.floor((width - 1) / 2);
         let footId = 0;
+        const shift = PieceBuilderManager.ladderShift(flight.foot.rot, width);
         for (let k = start; k < start + width; k++) for (let i = 0; i < height; i++) {
             const next = Object.assign({}, flight.foot, { id: ++id, x: flight.foot.x - dy * k, y: flight.foot.y + dx * k, z: flight.foot.z + i });
+            if (shift) next.offset = shift; else delete next.offset;
             if (next.x < 0 || next.y < 0 || next.x >= map.width || next.y >= map.height) continue;
             if (!footId) footId = next.id;
             list.push(next);

@@ -1947,8 +1947,10 @@ class MapEditor3D {
         if (shape) corners = this.shapeView(piece).corners;
         else {
             const base = Reactor3D.pieceBaseAt(mapData, piece.x, piece.y) + piece.z, h = Reactor3D.pieceHeight(piece.kind);
+            // Where it is drawn: an even-width ladder stands half a tile over.
+            const [ox, oy] = piece.offset || [0, 0];
             corners = [];
-            for (const u of [0, 1]) for (const y of [0, 1]) for (const v of [0, 1]) corners.push([piece.x + u, base + y * h, piece.y + v]);
+            for (const u of [0, 1]) for (const y of [0, 1]) for (const v of [0, 1]) corners.push([piece.x + ox + u, base + y * h, piece.y + oy + v]);
         }
         const edges = [[0, 1], [0, 2], [0, 4], [1, 3], [1, 5], [2, 3], [2, 6], [3, 7], [4, 5], [4, 6], [5, 7], [6, 7]];
         const positions = new Float32Array(edges.length * 6);
@@ -1979,7 +1981,7 @@ class MapEditor3D {
         const stamp = manager.mode === 'stamp' ? manager.structurePlan() : bounds ? { size: [bounds.x1 - bounds.x0 + 1, bounds.y1 - bounds.y0 + 1] } : null;
         if (manager.mode === 'move' && !bounds) { this.hidePieceGhost(); return; }
         const turn = stamp && !bounds ? (manager.rot || 0) : 0;
-        const key = stamp ? (bounds ? 'move:' + manager.selectedGroup : 'stamp:' + manager.structure + ':' + turn) : (erase ? 'erase' : manager.kind) + ':' + (manager.kind === 'ladder' && manager.ladderRotFor ? manager.ladderRotFor(target) ?? manager.rot : manager.rot) + ':' + JSON.stringify([manager.sizeFor ? manager.sizeFor(manager.kind) : null, manager.params && manager.params[manager.kind], manager.kind === 'stair' ? [manager.stairSteps, manager.stairWidth] : manager.kind === 'ladder' ? manager.ladderHeight : null]);
+        const key = stamp ? (bounds ? 'move:' + manager.selectedGroup : 'stamp:' + manager.structure + ':' + turn) : (erase ? 'erase' : manager.kind) + ':' + (manager.kind === 'ladder' && manager.ladderRotFor ? manager.ladderRotFor(target) ?? manager.rot : manager.rot) + ':' + JSON.stringify([manager.sizeFor ? manager.sizeFor(manager.kind) : null, manager.params && manager.params[manager.kind], manager.kind === 'stair' ? [manager.stairSteps, manager.stairWidth] : manager.kind === 'ladder' ? [manager.ladderHeight, manager.ladderWidth] : null]);
         if (!this.pieceGhost || this.pieceGhost.userData.key !== key) {
             this.hidePieceGhost(true);
             // A plan's ghost is the building itself, translucent; a selected

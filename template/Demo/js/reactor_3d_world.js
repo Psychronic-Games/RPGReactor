@@ -485,6 +485,11 @@ Reactor3D.normalizePiece = function(raw, mapData) {
     // A surface of its own (the sliders): it wins over the finish's.
     const surface = raw.surface && typeof raw.surface === "object" && this.readModelSurface ? this.readModelSurface({ surface: raw.surface }) : null;
     if (surface) piece.surface = surface;
+    // An even-width ladder is drawn half a tile over, to stay centred on the column it grew from.
+    if (kind === "ladder" && Array.isArray(raw.offset)) {
+        const shift = raw.offset.slice(0, 2).map(v => Math.max(-0.5, Math.min(0.5, Math.round((Number(v) || 0) * 100) / 100)));
+        if (shift[0] || shift[1]) piece.offset = [shift[0] || 0, shift[1] || 0];
+    }
     if (this.isShapeKind(kind)) {
         const size = Array.isArray(raw.size) ? raw.size : [];
         const n = (v, fallback) => { const k = Number(v); return Number.isFinite(k) && k > 0 ? Math.min(60, Math.round(k * 100) / 100) : fallback; };
@@ -1333,7 +1338,12 @@ Reactor3D.pieceGeometry = function(pieces, mapData) {
             if (top > 0) piece = Object.assign({}, piece, { supportTop: top });
         }
         const hidden = this.hiddenFacesOf(piece, mapData);
+        const from = out.positions.length;
         this.emitPiece(hidden ? Object.assign({}, piece, { rot: 0 }) : piece, base, out, hidden);
+        // A ladder's half-tile shift (an even width, centred): its level moves over as drawn.
+        if (piece.kind === "ladder" && piece.offset) {
+            for (let i = from; i < out.positions.length; i += 3) { out.positions[i] += piece.offset[0]; out.positions[i + 2] += piece.offset[1]; }
+        }
     }
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(out.positions), 3));
