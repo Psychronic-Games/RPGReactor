@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "noEmit": true,
+    "target": "ES2022",
+    "lib": [
+      "ES2022"
+    ],
+    "types": [],
+    "skipLibCheck": false,
+    "paths": {
+      "pixi.js": [
+        "./editor/node_modules/pixi.js"
+      ]
+    },
+    "typeRoots": [
+      "./types/compat"
+    ]
+  },
+  "include": [
+    "types/**/*.ts"
+  ]
+}
