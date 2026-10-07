@@ -8,6 +8,7 @@
     "start": "nw .",
     "dev": "nw .",
     "test": "node --test",
+    "typecheck": "node ../types/tools/typecheck.cjs",
     "smoke:web": "node tests/smoke/web-editor-persistence.cjs",
     "smoke:nw": "node tests/smoke/nw-editor-save.cjs",
     "smoke:nw-interactions": "node tests/smoke/nw-interaction-order.cjs",
@@ -71,6 +72,7 @@
   },
   "devDependencies": {
     "nw-builder": "^4.17.13",
-    "png-to-ico": "^3.0.1"
+    "png-to-ico": "^3.0.1",
+    "typescript": "7.0.2"
   }
 }
