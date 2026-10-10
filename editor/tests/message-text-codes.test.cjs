@@ -701,3 +701,90 @@ test('the picture codes steer an author towards an icon on a description field',
             'the advice names the code, not a bare letter');
     }
 });
+
+test('MessageCore custom fonts are read the way Scene_Boot registers them', () => {
+    const fonts = JSON.stringify([
+        JSON.stringify({ 'FontFamily:str': 'CDread', 'Filename:str': 'ChozoDread.woff2' }),
+        JSON.stringify({ 'FontFamily:str': 'Unnamed', 'Filename:str': 'Other.ttf' }),
+        JSON.stringify({ 'FontFamily:str': 'Blank', 'Filename:str': 'Unnamed.ttf' }),
+        JSON.stringify({ 'FontFamily:str': '  ', 'Filename:str': 'Space.ttf' })
+    ]);
+    const plugins = [{ name: 'VisuMZ_1_MessageCore', status: true, parameters: { 'CustomFonts:arraystruct': fonts } }];
+    assert.deepEqual(TextCodes.customFonts(plugins), [{ family: 'CDread', filename: 'ChozoDread.woff2' }]);
+    assert.deepEqual(TextCodes.customFonts([Object.assign({}, plugins[0], { status: false })]), [],
+        'a disabled MessageCore registers nothing');
+    assert.deepEqual(TextCodes.customFonts([]), []);
+});
+
+test('the overflow scanner follows \\FontChange and \\ResetFont across a box', () => {
+    // Glyphs measure 2 wide in the "Wide" face and 1 wide otherwise.
+    let font = '13px "x"';
+    const context = {
+        set font(value) { font = value; },
+        get font() { return font; },
+        measureText: text => ({ width: [...String(text)].length * (font.includes('Wide') ? 2 : 1) })
+    };
+    const subs = { fontFace: name => (name === 'W' ? 'Wide' : null) };
+    const scan = (line, pen) => TextCodes.scanMessageLine(line, context, 'x', 13, 100, subs, pen);
+
+    assert.equal(scan('ab\\FontChange<W>cd').width, 6, 'the face changes mid-line');
+    assert.equal(scan('\\FontChange<W>ab\\ResetFont cd').width, 7, '\\ResetFont restores the face');
+    assert.equal(scan('\\FontChange<Nope>ab').width, 2, 'an unresolved face keeps the current one');
+    assert.equal(scan('\\HexColor<#ff0000>ab').width, 2, 'an <argument> is consumed with its code');
+
+    const pen = {};
+    scan('\\FontChange<W>a', pen);
+    assert.equal(scan('ab', pen).width, 4, 'the face carries into the next line of the box');
+    assert.equal(scan('ab', {}).width, 2, 'and a new box starts clean');
+});
+
+test('the preview draws \\FontChange in the named face and carries it down the box', () => {
+    const MessageCommandEditor = require(
+        path.join(srcRoot, 'event', 'commands', 'MessageCommandEditor.js'));
+    const tokens = MessageCommandEditor.tokenizeLine('\\FontChange<CDread>Hi\\ResetFont!\\HexColor<#fff>');
+    assert.deepEqual(tokens, [
+        { type: 'fontFace', name: 'CDread' },
+        { type: 'text', text: 'Hi' },
+        { type: 'resetFont' },
+        // An angle code the preview cannot draw stays visible, as before.
+        { type: 'text', text: '!\\HexColor<#fff>' }
+    ]);
+    assert.equal(MessageCommandEditor.buildTimeline(['\\FontChange<CDread>A']).lineTimes[0][0], 2,
+        'the font code costs a frame like any other escape');
+
+    const hadWindow = 'window' in globalThis;
+    const previousWindow = globalThis.window;
+    globalThis.window = { RRTextCodes: TextCodes };
+    try {
+        const editor = Object.create(MessageCommandEditor.prototype);
+        editor._previewFontFamily = 'rr-main';
+        editor._previewFaces = new Map([['ChozoDread.woff2', { family: 'rr-preview-ChozoDread-woff2' }]]);
+        editor._pluginList = () => [{
+            name: 'VisuMZ_1_MessageCore', status: true,
+            parameters: { 'CustomFonts:arraystruct': JSON.stringify([JSON.stringify(
+                { 'FontFamily:str': 'CDread', 'Filename:str': 'ChozoDread.woff2' })]) }
+        }];
+        assert.equal(editor._previewFaceFamily('cdread'), 'rr-preview-ChozoDread-woff2',
+            'a registered family resolves to its loaded file, case-insensitively');
+        assert.equal(editor._previewFaceFamily('rmmz-mainfont'), 'rr-main');
+        assert.equal(editor._previewFaceFamily('Arial'), '"Arial"', 'anything else passes through as written');
+
+        const drawn = [];
+        const context = {
+            font: '', fillStyle: '',
+            fillText(text) { drawn.push({ text, font: this.font }); },
+            measureText: text => ({ width: text.length })
+        };
+        const pen = {};
+        editor.drawPreviewLine(context, '\\FontChange<CDread>Hi', 0, 0, 26, 'rr-main', null, pen);
+        editor.drawPreviewLine(context, 'there\\ResetFont!', 0, 36, 26, 'rr-main', null, pen);
+        assert.deepEqual(drawn, [
+            { text: 'Hi', font: '26px rr-preview-ChozoDread-woff2' },
+            { text: 'there', font: '26px rr-preview-ChozoDread-woff2' },
+            { text: '!', font: '26px rr-main' }
+        ]);
+    } finally {
+        if (hadWindow) globalThis.window = previousWindow;
+        else delete globalThis.window;
+    }
+});

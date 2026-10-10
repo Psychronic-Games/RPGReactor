@@ -590,6 +590,27 @@
     }
 
     /**
+     * The fonts MessageCore registers at boot, as { family, filename } with
+     * the file under fonts/. \FontChange<x> names one of these by family,
+     * so a preview can only draw it after loading the same file. Entries are
+     * skipped exactly where Scene_Boot.loadCustomFontsMessageCore skips them:
+     * a blank or "unnamed" family, and the "Unnamed.ttf" placeholder.
+     */
+    function customFonts(plugins) {
+        const core = findPlugin(plugins, 'VisuMZ_1_MessageCore');
+        const raw = core && core.parameters && core.parameters['CustomFonts:arraystruct'];
+        const fonts = [];
+        for (const struct of parseArrayStruct(raw)) {
+            const family = String(struct['FontFamily:str'] ?? '').trim();
+            const filename = String(struct['Filename:str'] ?? '');
+            if (!family || family.toLowerCase() === 'unnamed') continue;
+            if (!filename || filename === 'Unnamed.ttf') continue;
+            fonts.push({ family, filename });
+        }
+        return fonts;
+    }
+
+    /**
      * How many lines fit in one message box.
      *
      * MessageCore's General struct owns the row count once it is enabled, and a
@@ -652,21 +673,29 @@
      * measured: colours and speed cost nothing, an icon costs its 36 px,
      * font-size steps change the pen, and the substitution codes measure as
      * what they will say (an actor's real name, the currency unit, a
-     * stand-in for a variable's unknowable value).
+     * stand-in for a variable's unknowable value). \FontChange<x> switches
+     * the face through `substitutions.fontFace(x)`, which returns a CSS
+     * family or nothing to keep the current one; \ResetFont restores both
+     * the face and the size.
+     *
+     * `pen`, when given, carries { family, size } from one line to the next:
+     * Window_Message resets the font once per box, not per line, so the
+     * caller passes one pen per box and a fresh one at each box boundary.
      *
      * Returns { width, overflowIndex }: the line's drawn width in pixels and
      * the RAW string index of the first character that no longer fits, or -1
      * when the whole line fits.
      */
-    function scanMessageLine(line, context, fontFamily, baseSize, available, substitutions) {
+    function scanMessageLine(line, context, fontFamily, baseSize, available, substitutions, pen) {
         const text = String(line || '');
         const subs = substitutions || {};
-        let size = baseSize > 0 ? baseSize : 26;
+        let size = pen && pen.size > 0 ? pen.size : (baseSize > 0 ? baseSize : 26);
         let width = 0;
         let overflowIndex = -1;
-        const family = String(fontFamily || 'sans-serif');
-        const quoted = family.indexOf(',') >= 0 || family.indexOf('"') >= 0 ? family : `"${family}"`;
-        const setFont = () => { context.font = `${size}px ${quoted}, sans-serif`; };
+        const baseFamily = String(fontFamily || 'sans-serif');
+        let family = (pen && pen.family) || baseFamily;
+        const quote = name => name.indexOf(',') >= 0 || name.indexOf('"') >= 0 ? name : `"${name}"`;
+        const setFont = () => { context.font = `${size}px ${quote(family)}, sans-serif`; };
         setFont();
         const measure = piece => piece ? context.measureText(piece).width : 0;
         let i = 0;
@@ -710,8 +739,20 @@
                     // measured as glyphs they pushed the overflow mark a
                     // whole word early on a pause-heavy line.
                     i += 2;
-                } else if ((matched = rest.match(/^[A-Za-z]+(\[[^\]]*\])?/))) {
-                    // Any other code — colour, speed, a plugin's — draws nothing.
+                } else if ((matched = rest.match(/^FontChange<([^>]*)>/i))) {
+                    const face = typeof subs.fontFace === 'function' ? subs.fontFace(matched[1]) : null;
+                    family = face || family;
+                    setFont();
+                    i += 1 + matched[0].length;
+                } else if ((matched = rest.match(/^ResetFont(?![A-Za-z])/i))) {
+                    family = baseFamily;
+                    size = baseSize > 0 ? baseSize : 26;
+                    setFont();
+                    i += 1 + matched[0].length;
+                } else if ((matched = rest.match(/^[A-Za-z]+(\[[^\]]*\]|<[^>]*>)?/))) {
+                    // Any other code — colour, speed, a plugin's — draws
+                    // nothing, and neither does its <argument>: measured as
+                    // glyphs, \HexColor<#ff0000> cost nine characters.
                     i += 1 + matched[0].length;
                 } else {
                     advance = measure(ch);
@@ -725,6 +766,10 @@
             if (overflowIndex < 0 && advance > 0 && width > available + 1e-6) {
                 overflowIndex = startedAt;
             }
+        }
+        if (pen) {
+            pen.family = family;
+            pen.size = size;
         }
         return { width, overflowIndex };
     }
@@ -839,6 +884,7 @@
         readManifest,
         messageRows,
         messageTextWidth,
+        customFonts,
         scanMessageLine,
         hasWordWrap,
         DEFAULT_MESSAGE_WIDTH,
