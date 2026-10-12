@@ -1,6 +1,7 @@
 // A web build carries an index of its files so the runtime can correct filename
 // casing in a browser, where no directory can be read.
 const assert = require('node:assert/strict');
+const { runtimeSource } = require('./helpers/runtime-source.cjs');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -11,7 +12,7 @@ const { INDEX_PATH, listFiles, writeWebFileIndex } = require(path.join(repoRoot,
 
 /** The runtime's index helpers, lifted from the source onto a bare Utils object. */
 function runtimeUtils() {
-    const source = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_core.js'), 'utf8');
+    const source = runtimeSource('reactor_core.js');
     const lift = name => {
         const at = source.indexOf(`Utils.${name} = function(`);
         assert.ok(at >= 0, `${name} is in the runtime`);
@@ -56,5 +57,23 @@ test('both web builds write the index after the project is staged', () => {
         const source = fs.readFileSync(path.join(repoRoot, 'editor', 'build-scripts', worker), 'utf8');
         assert.match(source, /require\('\.\/web-file-index\.cjs'\)/, `${worker} loads the writer`);
         assert.match(source, /writeWebFileIndex\(/, `${worker} writes the index`);
+    }
+});
+
+test('a web build over a storefront\'s file or size cap is warned about, never blocked', () => {
+    const index = require(path.join(repoRoot, 'editor', 'build-scripts', 'web-file-index.cjs'));
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rr-web-caps-'));
+    try {
+        fs.mkdirSync(path.join(root, 'img'));
+        for (let i = 0; i < 1000; i++) fs.writeFileSync(path.join(root, 'img', `p${i}.png`), '');
+        index.writeWebFileIndex(root);
+        const warnings = index.storefrontWarnings(root);
+        assert.equal(warnings.length, 1);
+        assert.match(warnings[0], /1001 files/);
+        fs.rmSync(path.join(root, 'img', 'p0.png'));
+        fs.rmSync(path.join(root, 'img', 'p1.png'));
+        assert.equal(index.storefrontWarnings(root).length, 0, '999 files fit');
+    } finally {
+        fs.rmSync(root, { recursive: true, force: true });
     }
 });

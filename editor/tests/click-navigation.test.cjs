@@ -1,4 +1,5 @@
 const test = require('node:test');
+const { runtimeSource } = require('./helpers/runtime-source.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
@@ -20,7 +21,7 @@ function navigation({width=40,height=24,loop=false}={}) {
     };
     const context = {Game_Character:function(){},Game_Temp:function(){},$gameMap:map};
     vm.createContext(context);
-    const source=read('reactor_objects.js');
+    const source=runtimeSource('reactor_objects.js');
     vm.runInContext(source.slice(source.indexOf('Game_Temp.prototype.setDestination'),source.indexOf('Game_Temp.prototype.setTouchState')),context);
     vm.runInContext(source.slice(source.indexOf('Game_Character._touchRoutes ='),source.indexOf('//-----------------------------------------------------------------------------\n// Game_Player')),context);
     const temp=new context.Game_Temp(); temp._destinationX=temp._destinationY=null;

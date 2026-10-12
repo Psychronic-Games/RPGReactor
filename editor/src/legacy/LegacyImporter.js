@@ -63,26 +63,141 @@ function printReport(report) {
 
 /**
  * The RPG Maker 2000 or 2003 RTP folder: options.rtpPath, else the variable
- * EasyRPG reads (RPG2K_RTP_PATH / RPG2K3_RTP_PATH), else where the Windows
- * installers put it (and the same under Wine's default prefix). Null when
- * none is found. A folder counts when it holds CharSet and ChipSet.
+ * EasyRPG reads (RPG2K_RTP_PATH / RPG2K3_RTP_PATH), else the path the Windows
+ * installer writes to the registry, then folders the author chose before
+ * (options.known), where the installers put it (and the same under Wine's
+ * default prefix), EasyRPG's own RTP folders, and an RTP folder beside the
+ * game (options.source). A folder counts when it holds CharSet and ChipSet.
  */
-function findRtp(engine, options = {}) {
+function rtpCandidates(engine, options = {}) {
     const is2003 = /2003/.test(String(engine || ''));
-    const ok = (dir) => { try { const names = fs.readdirSync(dir).map(n => n.toLowerCase()); return names.includes('charset') && names.includes('chipset'); } catch (_) { return false; } };
     const env = is2003 ? [process.env.RPG2K3_RTP_PATH, process.env.RPG2K_RTP_PATH] : [process.env.RPG2K_RTP_PATH, process.env.RPG2K3_RTP_PATH];
     const version = is2003 ? ['RPG2003', 'RPG Maker 2003'] : ['RPG2000', 'RPG Maker 2000'];
-    const roots = [];
+    const found = [options.rtpPath, ...env, ...registryRtp(is2003), ...(options.known || [])];
     const programFiles = [process.env['ProgramFiles(x86)'], process.env.ProgramFiles, 'C:\\Program Files (x86)', 'C:\\Program Files'];
     const home = process.env.HOME || process.env.USERPROFILE || '';
     if (home) programFiles.push(path.join(home, '.wine', 'drive_c', 'Program Files (x86)'), path.join(home, '.wine', 'drive_c', 'Program Files'));
     for (const base of programFiles.filter(Boolean)) {
         for (const vendor of ['ASCII', 'Enterbrain', 'KADOKAWA', 'Common Files/Enterbrain', path.join('Steam', 'steamapps', 'common')]) {
-            for (const v of version) roots.push(path.join(base, vendor, v, 'RTP'));
+            for (const v of version) found.push(path.join(base, vendor, v, 'RTP'));
         }
     }
-    for (const dir of [options.rtpPath, ...env, ...roots]) if (dir && ok(dir)) return path.resolve(dir);
+    // Where Import Project downloads the official RTP, then EasyRPG Player's folders: $XDG_DATA_HOME/rtp/2000, the system share.
+    const year = is2003 ? '2003' : '2000';
+    const downloaded = require('./RtpManager.js').downloadFolder(engine);
+    // An unpack beside an RTP the user keeps there lands in <folder>-2.
+    for (const d of [downloaded, downloaded + '-donmiguel', downloaded + '-other']) found.push(d, d + '-2');
+    const xdg = process.env.XDG_DATA_HOME || (home && path.join(home, '.local', 'share'));
+    if (xdg) found.push(path.join(xdg, 'rtp', year));
+    found.push(path.join('/usr/share/rtp', year), path.join('/usr/local/share/rtp', year));
+    if (home) found.push(path.join(home, 'Library', 'Application Support', 'RTP', year));
+    // An RTP folder kept with the game: inside it, or beside it.
+    if (options.source) {
+        const game = path.resolve(options.source);
+        for (const dir of [game, path.dirname(game)]) for (const name of ['RTP', `RTP ${year}`, `RTP${year}`, `RPG${year === '2000' ? '2000' : '2003'} RTP`]) found.push(path.join(dir, name));
+    }
+    return found.filter(Boolean);
+}
+
+function isRtpFolder(dir) {
+    try { const names = fs.readdirSync(dir).map(n => n.toLowerCase()); return names.includes('charset') && names.includes('chipset'); } catch (_) { return false; }
+}
+
+/** The RTP paths the Windows installers record (HKCU/HKLM, 32-bit view too); none elsewhere. */
+function registryRtp(is2003) {
+    if (process.platform !== 'win32') return [];
+    const keys = is2003
+        ? ['Software\\Enterbrain\\RPG2003', 'Software\\ASCII\\RPG2003', 'Software\\WOW6432Node\\Enterbrain\\RPG2003']
+        : ['Software\\ASCII\\RPG2000', 'Software\\Enterbrain\\RPG2000', 'Software\\WOW6432Node\\ASCII\\RPG2000'];
+    const out = [];
+    for (const hive of ['HKCU', 'HKLM']) for (const key of keys) {
+        try {
+            const text = require('child_process').execFileSync('reg', ['query', `${hive}\\${key}`, '/v', 'RuntimePackagePath'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 3000 });
+            const m = /RuntimePackagePath\s+REG_\w+\s+(.+)/i.exec(text);
+            if (m) out.push(m[1].trim());
+        } catch (_) { /* key absent */ }
+    }
+    return out;
+}
+
+/**
+ * The RTP to import from: options.rtpPath when it is one; otherwise, of every
+ * RTP found, the one answering to most of the names the game uses
+ * (options.referenced, by RTP folder), the first found on a tie or without them.
+ * None when options.noRtp says the author chose to import without one.
+ */
+function findRtp(engine, options = {}) {
+    if (options.noRtp) return null;
+    const seen = new Set(), folders = [];
+    for (const dir of rtpCandidates(engine, options)) {
+        const full = path.resolve(dir);
+        if (!seen.has(full) && isRtpFolder(full)) { seen.add(full); folders.push(full); }
+    }
+    if (!folders.length) return null;
+    if (options.rtpPath && folders[0] === path.resolve(options.rtpPath)) return folders[0];
+    if (!options.referenced || folders.length === 1) return folders[0];
+    const RM = require('./RtpManager.js');
+    let best = folders[0], bestHits = -1;
+    for (const dir of folders) { const hits = RM.coverage(dir, engine, options.referenced); if (hits > bestHits) { best = dir; bestHits = hits; } }
+    return best;
+}
+
+/**
+ * The 2000/2003 bitmap font: the game ships it in the old engines' few cases,
+ * otherwise RPG Maker's installer put it in the system's fonts. Looked for in
+ * the game, options.fontPath (a file or a folder), the RTP and the folder above
+ * it, then the font folders of Windows, Wine, Linux and macOS. Null when absent.
+ */
+function findLegacyFont(wanted, roots) {
+    const home = process.env.HOME || process.env.USERPROFILE || '';
+    const windir = process.env.WINDIR || process.env.SystemRoot || 'C:\\Windows';
+    const system = [
+        path.join(windir, 'Fonts'),
+        process.env.LOCALAPPDATA && path.join(process.env.LOCALAPPDATA, 'Microsoft', 'Windows', 'Fonts'),
+        home && path.join(home, '.wine', 'drive_c', 'windows', 'Fonts'),
+        home && path.join(home, '.local', 'share', 'fonts'),
+        home && path.join(home, '.fonts'),
+        '/usr/local/share/fonts', '/usr/share/fonts',
+        home && path.join(home, 'Library', 'Fonts'), '/Library/Fonts'
+    ];
+    const lower = wanted.map(n => n.toLowerCase());
+    const look = (dir, depth) => {
+        let entries;
+        try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch (_) { return null; }
+        for (const name of lower) { const hit = entries.find(e => e.isFile() && e.name.toLowerCase() === name); if (hit) return path.join(dir, hit.name); }
+        if (depth > 0) for (const e of entries) if (e.isDirectory()) { const hit = look(path.join(dir, e.name), depth - 1); if (hit) return hit; }
+        return null;
+    };
+    for (const root of roots.filter(Boolean)) {
+        try { if (fs.statSync(root).isFile()) { if (lower.includes(path.basename(root).toLowerCase())) return root; continue; } } catch (_) { continue; }
+        const hit = look(root, 1);
+        if (hit) return hit;
+    }
+    for (const dir of system.filter(Boolean)) { const hit = look(dir, 2); if (hit) return hit; }
     return null;
+}
+
+/**
+ * The engine a game's own RPG_RT.exe is, from its version resource as EasyRPG
+ * Player reads it: 1.6.x is RPG Maker 2000's English release, 1.0.x and 1.1.x
+ * are RPG Maker 2003. A 2000 database is often shipped with the 2003 runtime
+ * (A Blurred Line's Steam release), which then decides its menus and battles.
+ * Null when there is no exe or no version to read.
+ */
+function runtimeEngine(folder) {
+    let exe = null;
+    try { const name = fs.readdirSync(folder).find(n => n.toLowerCase() === 'rpg_rt.exe'); if (name) exe = fs.readFileSync(path.join(folder, name)); } catch (_) { return null; }
+    if (!exe) return null;
+    const key = Buffer.from('FileVersion\0', 'utf16le');
+    const at = exe.indexOf(key);
+    if (at < 0) return null;
+    let p = at + key.length;
+    while (p + 1 < exe.length && exe[p] === 0 && exe[p + 1] === 0) p += 2;   // padding to the value
+    let value = '';
+    for (; p + 1 < exe.length && value.length < 32; p += 2) { const c = exe.readUInt16LE(p); if (!c) break; value += String.fromCharCode(c); }
+    const m = /^(\d+)[.,]\s*(\d+)/.exec(value);
+    if (!m || m[1] !== '1') return null;
+    return m[2] === '6' ? 'RPG Maker 2000' : (m[2] === '0' || m[2] === '1') ? 'RPG Maker 2003' : null;
 }
 
 function open(source, destination, options) {
@@ -109,6 +224,8 @@ function open(source, destination, options) {
     const started = Date.now();
     const project = L.readProject(files, { encoding: options.encoding || undefined });
     const db = project.database;
+    // The runtime the game shipped with plays it: its menus, battles and limits follow the exe, its data the database.
+    db.runtime = runtimeEngine(source) || db.engine;
     const count = (arr) => (arr || []).filter(Boolean).length;
     
     // ---- inventory ------------------------------------------------------------
@@ -202,10 +319,10 @@ function open(source, destination, options) {
     
     // ---- writing the project ---------------------------------------------------
     const { PNG } = require('pngjs');
-    const repo = path.resolve(__dirname, '..', '..', '..');
-    const editorPackage = JSON.parse(fs.readFileSync(path.join(repo, 'editor', 'package.json'), 'utf8'));
-    const skeleton = path.join(repo, 'template', 'Barebones');
-    const runtime = path.join(repo, 'runtime');
+    const EditorPaths = require('./EditorPaths.js');
+    const editorPackage = EditorPaths.editorPackage();
+    // Found when an import starts; a report does not need it.
+    let runtime = null;
     
     /** Decode a PNG to RGBA, and make palette entry 0 transparent when `key` is set (the 2000/2003 rule). */
     function decodePng(bytes, key) {
@@ -240,11 +357,10 @@ function open(source, destination, options) {
     const mkdir = (p) => fs.mkdirSync(p, { recursive: true });
     const writeJson = (p, v) => fs.writeFileSync(p, JSON.stringify(v));
     
-    function copyTree(from, to, skip = () => false) {
+    function copyTree(from, to) {
         for (const entry of fs.readdirSync(from, { withFileTypes: true })) {
             const s = path.join(from, entry.name), d = path.join(to, entry.name);
-            if (skip(path.relative(skeleton, s))) continue;
-            if (entry.isDirectory()) { mkdir(d); copyTree(s, d, skip); } else { mkdir(path.dirname(d)); fs.copyFileSync(s, d); }
+            if (entry.isDirectory()) { mkdir(d); copyTree(s, d); } else { mkdir(path.dirname(d)); fs.copyFileSync(s, d); }
         }
     }
     
@@ -323,13 +439,20 @@ function open(source, destination, options) {
         return written;
     }
     
+    // The RTP view an import made (a temporary folder for Don Miguel's names) goes when the import ends, however it ends.
+    let rtpCleanup = null;
     async function importProject() {
+        try { return await importBody(); } finally { if (rtpCleanup) { rtpCleanup(); rtpCleanup = null; } }
+    }
+
+    async function importBody() {
         // log(message, level): level is 'stage', 'info', 'warn' or 'done'; a console ignores it.
         const log = typeof options.log === 'function' ? options.log : () => {};
         // progress(fraction 0..1, status): the import's weight is mostly maps and pictures.
         const report = typeof options.progress === 'function' ? options.progress : () => {};
         const span = (from, to) => (done, total, status) => report(from + (to - from) * (total ? Math.min(1, done / total) : 1), status);
         const dest = path.resolve(destination);
+        runtime = EditorPaths.runtime();
         if (fs.existsSync(dest) && fs.readdirSync(dest).length && !options.force) throw new Error(`${dest} exists and is not empty.`);
         mkdir(dest);
         const t0 = Date.now();
@@ -337,25 +460,38 @@ function open(source, destination, options) {
         const sys = db.system || {};
         // A game built with FullPackageFlag=1 carries everything; otherwise it may take files from the RTP.
         const needsRtp = String((project.ini.RPG_RT || {}).FullPackageFlag || '0').trim() !== '1';
-        const rtp = needsRtp ? findRtp(db.engine, options) : null;
-        if (rtp) log(`  RTP: ${rtp}`, 'info');
-    
+        // Which RTP the game's names are, and the RTP on hand that answers to most of them. An RTP made for
+        // other names (the official one for a game made with Don Miguel's, or the reverse) is read through a
+        // temporary copy holding each file under both names; files no RTP on hand has are reported.
+        const RM = require('./RtpManager.js');
+        const shipped = (folder, name) => ['.png', '.bmp', '.xyz', '.wav', '.mid', '.ogg', '.mp3'].some(e => !!resolveInsensitive(source, path.join(folder, name + e)));
+        const referenced = needsRtp ? RM.referencedNames(db, project.tree, shipped) : null;
+        const rtpUse = referenced ? RM.classify(db.engine, referenced) : null;
+        const rtpFound = needsRtp ? findRtp(db.engine, Object.assign({ source, referenced }, options)) : null;
+        if (rtpFound) log(`  RTP: ${rtpFound}`, 'info');
+        const rtpView = rtpFound ? RM.translatedView(rtpFound, db.engine) : { folder: null, cleanup() {} };
+        const rtp = rtpView.folder;
+        rtpCleanup = rtpView.cleanup;
+        if (rtpFound && rtp !== rtpFound && rtpUse && /^donMiguel/.test(rtpUse.variant) && RM.isOfficial(rtpFound, db.engine)) log('  The game names its RTP files as Don Miguel\'s English RTP did; the official names stand in for them.', 'info');
+        const addonMissing = rtp && rtpUse ? rtpUse.addon.filter(ref => { const [folder, name] = ref.split('/'); return !['.png', '.wav', '.mid'].some(e => resolveInsensitive(rtp, path.join(folder, name + e))); }) : [];
+        if (addonMissing.length) {
+            notes.skipped.push(`Don Miguel's RTP Addon: the game uses ${addonMissing.length} files only it has (${addonMissing.join(', ')}); choose a Don Miguel RTP (a folder, or his RTPE.exe)`);
+            log(`  ${addonMissing.length} files come from Don Miguel's RTP Addon, which this RTP does not have: ${addonMissing.join(', ')}.`, 'warn');
+        }
+
         log('Copying the project skeleton and runtime…', 'stage');
         report(0, 'Copying the project skeleton and runtime…');
-        // 1. Skeleton: the Barebones template minus its art and music, then the runtime.
-        // Everything but the template's art, music and runtime; img/system (icons, balloons, window skin) does come.
-        copyTree(skeleton, dest, rel => {
-            const r = rel.replace(/\\/g, '/');
+        // 1. Skeleton: an empty project with its system pictures (icons, balloons, window skin), then the runtime.
+        EditorPaths.copySkeleton(dest, r => {
             if (options.skipAssets && r === 'img/system/Window.png' && fs.existsSync(path.join(dest, 'img', 'system', 'Window.png'))) return true;   // a converted skin survives a data-only re-import
-            if (r === 'img' || r === 'img/system' || r.startsWith('img/system/')) return false;
-            return r.startsWith('img/') || r.startsWith('audio/') || r.startsWith('js/');
+            return r.startsWith('js/');
         });
         mkdir(path.join(dest, 'js'));
         for (const entry of fs.readdirSync(runtime, { withFileTypes: true })) {
             const s = path.join(runtime, entry.name), d = path.join(dest, 'js', entry.name);
             if (entry.isDirectory()) { mkdir(d); copyTree(s, d); } else fs.copyFileSync(s, d);
         }
-        if (fs.existsSync(path.join(skeleton, 'js', 'reactor_plugins.js'))) fs.copyFileSync(path.join(skeleton, 'js', 'reactor_plugins.js'), path.join(dest, 'js', 'reactor_plugins.js'));
+        fs.copyFileSync(EditorPaths.skeletonFile('js/reactor_plugins.js'), path.join(dest, 'js', 'reactor_plugins.js'));
         for (const folder of ['audio/bgm', 'audio/bgs', 'audio/me', 'audio/se', 'img/animations', 'img/characters', 'img/enemies', 'img/faces', 'img/parallaxes', 'img/pictures', 'img/tilesets', 'img/titles1', 'img/titles2', 'img/battlebacks1', 'img/battlebacks2', 'img/sv_actors', 'img/sv_enemies', 'movies']) mkdir(path.join(dest, folder));
     
         log('Converting the database…', 'stage');
@@ -443,11 +579,11 @@ function open(source, destination, options) {
             for (const [k, n] of Object.entries(mapNotes)) addNote(notes.maps, k, n);
             written.push(info.id);
         }
-        for (const stale of fs.readdirSync(path.join(dest, 'data'))) if (/^Map\d+\.json$/.test(stale) && !written.includes(Number(stale.slice(3, 6)))) fs.unlinkSync(path.join(dest, 'data', stale));
+        for (const stale of fs.readdirSync(path.join(dest, 'data'))) if (/^Map\d+\.json$/.test(stale) && !written.includes(parseInt(stale.slice(3), 10))) fs.unlinkSync(path.join(dest, 'data', stale));   // Map1000.json is map 1000
         writeJson(path.join(dest, 'data', 'MapInfos.json'), infos.map(i => i || null));
     
         // 4. System: the old engine's framework.
-        const base = JSON.parse(fs.readFileSync(path.join(skeleton, 'data', 'System.json'), 'utf8'));
+        const base = JSON.parse(fs.readFileSync(EditorPaths.skeletonFile('data/System.json'), 'utf8'));
         const system = D.system(K.systemJson(base, db, project.tree, project.ini), db, project.tree, dbNotes);
         if (translator) {   // terms are translated by value: the 2003 term table was laid into MZ's
             const walk = (obj) => { for (const k of Object.keys(obj)) { const v = obj[k]; if (typeof v === 'string') { const t = translator.term(v); if (t !== undefined) obj[k] = t; } else if (v && typeof v === 'object') walk(v); } };
@@ -481,6 +617,8 @@ function open(source, destination, options) {
             const wanted = sys.font_id === 0 ? ['RMG2000.fon', 'RM2000.fon'] : ['RM2000.fon', 'RMG2000.fon'];
             let fontFile = null;
             for (const folder of ['', 'fonts', 'Font', 'Fonts']) for (const name of wanted) { const p = resolveInsensitive(source, folder ? path.join(folder, name) : name); if (p && !fontFile) fontFile = p; }
+            if (!fontFile) fontFile = findLegacyFont(wanted, [options.fontPath, rtpFound, rtpFound && path.dirname(rtpFound)]);
+            if (fontFile && !fontFile.startsWith(source)) log(`  Game font: ${fontFile}`, 'info');
             if (fontFile) {
                 try {
                     const decoder = new TextDecoder(project.encoding || 'windows-1252');
@@ -493,7 +631,7 @@ function open(source, destination, options) {
                     system.advanced.fontSize = font.height;
                     addNote(notes.images, `font:${font.name}`, font.glyphs);
                 } catch (error) { notes.skipped.push(`${path.basename(fontFile)}: ${error.message}; the template font stands in`); }
-            } else notes.skipped.push('RM2000.fon: the game font is not in the project; the template font stands in');
+            } else notes.skipped.push('RM2000.fon: the game font is neither with the game nor installed; the template font stands in (set it with --font or put RM2000.fon in the RTP folder or the system fonts)');
         }
         const plugins = [];   // the importer's own plugins this game gets
         {   // 4b. Language packs: a game that switches language while it plays (EasyRPG's set_language) gets
@@ -515,13 +653,13 @@ function open(source, destination, options) {
                 if (tr) for (const info of texts['MapInfos.json']) if (info) { const v = tr.field('maps.name', info.name); if (v !== undefined) info.name = v; }
                 for (const info of texts['MapInfos.json']) if (info && !baseMaps.has(`Map${String(info.id).padStart(3, '0')}.json`)) texts['MapInfos.json'][info.id] = infos[info.id] || null;
                 {   // terms: the stock conversion, then the pack's translation by value
-                    const terms = JSON.parse(JSON.stringify(D.system(K.systemJson(JSON.parse(fs.readFileSync(path.join(skeleton, 'data', 'System.json'), 'utf8')), db, project.tree, project.ini), db, project.tree, {}).terms));
+                    const terms = JSON.parse(JSON.stringify(D.system(K.systemJson(JSON.parse(fs.readFileSync(EditorPaths.skeletonFile('data/System.json'), 'utf8')), db, project.tree, project.ini), db, project.tree, {}).terms));
                     const walk = (obj) => { for (const k of Object.keys(obj)) { const v = obj[k]; if (typeof v === 'string') { const t = tr ? tr.term(v) : undefined; if (t !== undefined) obj[k] = t; } else if (v && typeof v === 'object') walk(v); } };
                     walk(terms);
                     texts['System.json'] = { terms };
                 }
                 for (const [file, records] of [['Actors', other.actors], ['Classes', other.classes], ['Skills', other.skills], ['Items', other.items], ['Weapons', other.weapons], ['Armors', other.armors], ['Enemies', other.enemies], ['Troops', other.troops], ['States', other.states], ['Animations', other.animations], ['CommonEvents', other.commonEvents]]) texts[`${file}.json`] = records.map(r => r || null);
-                for (const [file] of baseMaps) { const id = Number(file.slice(3, 6)); texts[file] = mapFor(infos[id], project.maps[id], cmds, route).json; }
+                for (const [file] of baseMaps) { const id = parseInt(file.slice(3), 10); texts[file] = mapFor(infos[id], project.maps[id], cmds, route).json; }
                 const stats = { wholeLists: 0 };
                 const files = {};
                 let count = 0;
@@ -567,7 +705,7 @@ function open(source, destination, options) {
         await importImages('System', 'img/system', { key: true });
         {   // the game's window skin, over the stock Window.png for the parts 2003 had no equivalent of
             const skinFile = sys.system_name ? resolveInsensitive(source, path.join('System', sys.system_name + '.png')) : null;
-            const baseFile = path.join(skeleton, 'img', 'system', 'Window.png');
+            const baseFile = EditorPaths.skeletonFile('img/system/Window.png');
             if (skinFile) {
                 try {
                     const skin = K.windowSkin(decodePng(fs.readFileSync(skinFile), true), fs.existsSync(baseFile) ? decodePng(fs.readFileSync(baseFile), false) : null);
@@ -616,7 +754,7 @@ function open(source, destination, options) {
     
         // 6. Project identity.
         const pkg = JSON.parse(fs.readFileSync(path.join(dest, 'package.json'), 'utf8'));
-        pkg.name = 'rr-' + safeName(title).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+        pkg.name = PF.packageName(safeName(title));
         pkg.version = editorPackage.version;
         pkg.window = Object.assign({}, pkg.window, { title, width: 640, height: 480, min_width: 320, min_height: 240 });
         pkg['chromium-args'] = '--force-color-profile=srgb --window-size=640,480';
@@ -624,10 +762,11 @@ function open(source, destination, options) {
         const now = new Date().toISOString();
         writeJson(path.join(dest, 'project.rpgreactor'), { name: title, version: editorPackage.version, engine: 'RPG Reactor', engineVersion: editorPackage.version, imported: true, importedFrom: db.engine, importedAt: now, created: now, modified: now });
     
-        const summary = { source: path.resolve(source), engine: db.engine, encoding: project.encoding, title, writtenAt: now, ms: Date.now() - t0, tilesets: chipsets.length, maps: written.length, approximations: Object.assign({}, notes.maps, dbNotes), files: notes.images, skipped: notes.skipped, stage: 'assets, tilesets, maps, database, events and their commands; DynRPG comment commands converted where Reactor has an equivalent' };
+        const summary = { source: path.resolve(source), engine: db.engine, runtime: db.runtime, encoding: project.encoding, title, writtenAt: now, ms: Date.now() - t0, tilesets: chipsets.length, maps: written.length, approximations: Object.assign({}, notes.maps, dbNotes), files: notes.images, skipped: notes.skipped, stage: 'assets, tilesets, maps, database, events and their commands; DynRPG comment commands converted where Reactor has an equivalent' };
         // Files the game names that are nowhere: listed for the author (MIDI and movies converting later still count as present).
         summary.missingFiles = require('./ProjectFiles.js').missingList(dest);
         if (summary.missingFiles.length) log(`  ${summary.missingFiles.length} files the game names are not in it (listed in the import report).`, 'warn');
+        if (rtpUse) summary.rtp = { folder: rtpFound, names: rtpUse.variant, addonFiles: rtpUse.addon, addonMissing };
         fs.writeFileSync(path.join(dest, 'import-report.json'), JSON.stringify(summary, null, 2));
         summary.destination = dest;
     
@@ -719,11 +858,29 @@ function probe(folder) {
     if (has('RPG_RT.ldb')) {
         const out = Object.assign({}, none, { kind: '2003', engine: 'RPG Maker 2000/2003', languages: languages(folder) });
         out.title = iniValue(iniOf('RPG_RT.ini'), 'GameTitle') || path.basename(folder);
+        // A game built with FullPackageFlag=1 carries everything; otherwise it may take files from the RTP.
+        out.needsRtp = iniValue(iniOf('RPG_RT.ini'), 'FullPackageFlag') !== '1';
+        let encoding = iniValue(iniOf('RPG_RT.ini'), 'Encoding');
         try {
-            const db = L.readDatabase(fs.readFileSync(path.join(folder, lower.get('rpg_rt.ldb'))));
+            const bytes = fs.readFileSync(path.join(folder, lower.get('rpg_rt.ldb')));
+            if (!encoding || /^auto$/i.test(encoding)) encoding = L.detectEncoding(L.textSamples(bytes));
+            const db = L.readDatabase(bytes, encoding);
             out.engine = db.engine || out.engine;
             out.kind = out.engine === 'RPG Maker 2000' ? '2000' : '2003';
+            out.runtime = runtimeEngine(folder) || out.engine;
+            // Which RTP its names belong to, from the database and the map tree (the maps themselves are not read).
+            if (out.needsRtp) {
+                const RM = require('./RtpManager.js');
+                let tree = null;
+                try { if (has('RPG_RT.lmt')) tree = L.readMapTree(fs.readFileSync(path.join(folder, lower.get('rpg_rt.lmt')))); } catch (_) { /* no tree */ }
+                const exts = ['.png', '.bmp', '.xyz', '.wav', '.mid', '.ogg', '.mp3'];
+                const shipped = (sub, name) => { try { const dir = lower.get(sub.toLowerCase()); return !!dir && fs.readdirSync(path.join(folder, dir)).some(f => exts.some(e => f.toLowerCase() === (name + e).toLowerCase())); } catch (_) { return false; } };
+                out.rtpRefs = RM.referencedNames(db, tree, shipped);
+                out.rtpUse = RM.classify(db.engine, out.rtpRefs);
+            }
         } catch (_) { /* unreadable: still a 2000/2003 folder, the import will say why */ }
+        // The title is in the game's code page (a Japanese game's is Shift_JIS), as the import reads it.
+        try { const t = L.parseIni(new TextDecoder(L.normalizeEncoding(encoding)).decode(fs.readFileSync(path.join(folder, lower.get('rpg_rt.ini'))))).RPG_RT?.GameTitle; if (t) out.title = t; } catch (_) { /* no ini */ }
         try { if (has('RPG_RT.lmt')) out.maps = L.readMapTree(fs.readFileSync(path.join(folder, lower.get('rpg_rt.lmt')))).maps.filter(m => m && m.type === 1).length; } catch (_) { /* tree unreadable */ }
         return out;
     }
@@ -734,15 +891,27 @@ function probe(folder) {
         const mz = scripts.some(n => n.startsWith('rmmz_')) || has('game.rmmzproject');
         return Object.assign({}, none, { kind: mz ? 'mz' : 'mv', engine: mz ? 'RPG Maker MZ' : 'RPG Maker MV', title: path.basename(folder) });
     }
-    const ini = iniOf('Game.ini');
+    // In the code page the game's editor wrote it in (a Japanese title is Shift_JIS).
+    const ini = (() => { try { return require('./RgssImporter.js').iniText(fs.readFileSync(path.join(folder, lower.get('game.ini')))); } catch (_) { return ''; } })();
     const library = iniValue(ini, 'Library').toLowerCase();
+    // A game keeping its text in Local/<Language>.csv files offers those languages.
+    const keyedLanguages = () => { try { return require('./KeyedLocalization.js').languages((dir) => require('./RgssImporter.js').source(folder).files(dir)); } catch (_) { return []; } };
     const rgss = (kind, engine, project, archive, data2, lib) => (ext(project) || has(archive) || data.some(n => n.endsWith(data2)) || library.startsWith(lib))
-        ? Object.assign({}, none, { kind, engine, title: iniValue(ini, 'Title') || path.basename(folder), packed: has(archive), maps: data.filter(n => /^map\d+\./.test(n) && n.endsWith(data2)).length }) : null;
+        ? Object.assign({}, none, { kind, engine, title: iniValue(ini, 'Title') || path.basename(folder), packed: has(archive), maps: data.filter(n => /^map\d+\./.test(n) && n.endsWith(data2)).length, languages: has('Local') ? keyedLanguages() : [] }) : null;
     return rgss('ace', 'RPG Maker VX Ace', '.rvproj2', 'Game.rgss3a', '.rvdata2', 'rgss3')
         || rgss('vx', 'RPG Maker VX', '.rvproj', 'Game.rgss2a', '.rvdata', 'rgss2')
         || rgss('xp', 'RPG Maker XP', '.rxproj', 'Game.rgssad', '.rxdata', 'rgss1')
         || none;
 }
-function importProject(source, destination, options) { return rgssKind(source) ? rgssImporter(source).importProject(source, destination, options) : open(source, destination, options).importProject(); }
+/** The game is never written to: the new project may not be its folder, inside it, or a folder holding it. */
+function checkDestination(source, destination) {
+    const src = path.resolve(source), dest = path.resolve(destination);
+    const within = (outer, inner) => { const rel = path.relative(outer, inner); return rel === '' || (rel !== '..' && !rel.startsWith('..' + path.sep) && !path.isAbsolute(rel)); };
+    if (within(src, dest) || within(dest, src)) throw new Error(`${dest} is the game's own folder or holds it; choose a folder outside the game.`);
+}
+function importProject(source, destination, options) {
+    checkDestination(source, destination);
+    return rgssKind(source) ? rgssImporter(source).importProject(source, destination, options) : open(source, destination, options).importProject();
+}
 
-module.exports = { findRtp, open, report, printReport, importProject, languages, probe };
+module.exports = { findRtp, rtpCandidates, findLegacyFont, runtimeEngine, open, report, printReport, importProject, languages, probe };

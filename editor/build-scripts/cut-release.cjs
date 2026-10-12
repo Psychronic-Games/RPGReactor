@@ -170,6 +170,29 @@ function main() {
     if (dirty) throw new Error(`working tree is not clean:\n${dirty}`);
     if (run('git', ['tag', '-l', tag])) throw new Error(`${tag} already exists`);
 
+    // GitHub may hold commits this checkout lacks (a pull request merged with
+    // the Merge button). The branch push is then rejected after the tag has
+    // already gone up and published: 0.98.8 went out that way. Stop first.
+    if (options.push && !options.dryRun) {
+        say('Checking GitHub for commits this checkout does not have...');
+        try {
+            run('git', ['fetch', '--quiet', 'origin', 'main']);
+        } catch (error) {
+            throw new Error(`could not fetch origin/main to check it (${error.message.split('\n')[0]}); use --no-push to tag without pushing`);
+        }
+        try {
+            run('git', ['merge-base', '--is-ancestor', 'origin/main', 'HEAD']);
+        } catch (error) {
+            const missing = run('git', ['log', '--oneline', 'HEAD..origin/main']);
+            throw new Error(`GitHub's main has commits this checkout lacks:\n${missing}\nRun: git merge origin/main (then run this again)`);
+        }
+    }
+
+    // CI checks the syntax of every tracked JavaScript file, smoke scripts
+    // included, which the test suite never loads.
+    say('Checking the syntax of every tracked JavaScript file...');
+    execFileSync('node', [path.join('.github', 'scripts', 'check-syntax.cjs')], { cwd: repoRoot, encoding: 'utf8' });
+
     say('Running the editor test suite...');
     const testOutput = execFileSync('node', ['--test'], {
         cwd: path.join(repoRoot, 'editor'), encoding: 'utf8'

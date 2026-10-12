@@ -377,6 +377,8 @@ class RegionManager {
     selectRegion(regionId) {
         if (window.reactor?.mapTool !== 'paint') window.reactor?.tilesetPaletteViewer?.selectLayer('R');
         if (this.mapEditor?.mapStamp) this.mapEditor.clearMapStamp();
+        // Picking a region to paint puts the eraser down, as picking a tile does; region 0 is itself the eraser.
+        if (regionId > 0 && this.mapEditor?.eraserMode) this.mapEditor.setEraserMode(false);
         this.selectedRegion = regionId;
 
         // Update selectedTiles array (similar to tileset palette)

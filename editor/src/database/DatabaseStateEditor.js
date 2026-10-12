@@ -32,7 +32,7 @@ class DatabaseStateEditor {
         const generalSection = document.createElement('div');
         generalSection.className = 'database-section state-general-section';
         generalSection.innerHTML = `
-            <div class="database-section-header">${tt('General')}</div>
+            <div class="database-section-header" data-section-key="general">${tt('General')}</div>
             <div class="database-section-content"><div class="db-general-grid">
                 <div style="display: flex; flex-direction: column; align-items: center; gap: 6px;">
                     <label style="font-size: 11px; color: var(--color-text-muted); font-weight: 600;">${tt('Icon')}</label>
@@ -103,7 +103,7 @@ class DatabaseStateEditor {
         durationSection.className = 'database-section state-duration-section';
         const showTurns = (state.autoRemovalTiming || 0) > 0;
         durationSection.innerHTML = `
-            <div class="database-section-header">${tt('Duration')}</div>
+            <div class="database-section-header" data-section-key="duration">${tt('Duration')}</div>
             <div class="database-section-content">
                 <div class="state-duration-form">
                     <label class="state-duration-row">
@@ -161,7 +161,7 @@ class DatabaseStateEditor {
         const messagesSection = document.createElement('div');
         messagesSection.className = 'database-section state-messages-section';
         messagesSection.innerHTML = `
-            <div class="database-section-header">${tt('Messages')}</div>
+            <div class="database-section-header" data-section-key="messages">${tt('Messages')}</div>
             <div class="database-section-content">
                 <div class="state-message-help"><code>%1</code><span>= ${tt('Actor')} / ${tt('Enemy')} ${tt('Name')}</span></div>
                 <div class="state-message-row">
@@ -191,7 +191,7 @@ class DatabaseStateEditor {
         traitsSection.setAttribute('tabindex', '0');
         traitsSection.style.outline = 'none';
         traitsSection.innerHTML = `
-            <div class="database-section-header">${tt('Traits')}</div>
+            <div class="database-section-header" data-section-key="traits">${tt('Traits')}</div>
             <div class="database-section-content">
                 ${this.buildTraitsTable(state)}
             </div>
@@ -201,7 +201,7 @@ class DatabaseStateEditor {
         const noteSection = document.createElement('div');
         noteSection.className = 'database-section state-note-section';
         noteSection.innerHTML = `
-            <div class="database-section-header">${tt('Note')}</div>
+            <div class="database-section-header" data-section-key="note">${tt('Note')}</div>
             <div class="database-section-content">
                 <textarea class="database-field-value" rows="4" style="width: 100%;" data-field="note" data-state-id="${state.id}">${rrEscapeHtml(state.note)}</textarea>
             </div>
@@ -209,7 +209,9 @@ class DatabaseStateEditor {
 
         const durationNotes = document.createElement('div');
         durationNotes.className = 'state-duration-notes';
-        durationNotes.append(durationSection, noteSection);
+        // Combat settings grouped by shared rules, Tactical movement and Action attacks.
+        const tacticsSection = window.RRTactics?.createSection({ kind: 'state', record: state, databaseManager: this.databaseManager });
+        durationNotes.append(...[durationSection, tacticsSection, noteSection].filter(Boolean));
         // Match keyboard/reading order to the two visual rows. The lower-right
         // cards wrap independently before the whole page becomes one column.
         gridWrapper.append(generalSection, traitsSection, messagesSection, durationNotes);

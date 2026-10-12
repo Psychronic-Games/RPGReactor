@@ -1,0 +1,21 @@
+{
+  "name": "Market Stall",
+  "size": [6,5],
+  "storey": 5,
+  "floors": [],
+  "materials": {"wall":"Wood"},
+  "roof": {"pitch":null},
+  "shapes": [
+    {"kind":"cylinder","at":[0,0],"size":[0.25,3.6,0.25],"offset":[0.1,0.1],"material":"Wood"},
+    {"kind":"cylinder","at":[5,0],"size":[0.25,3.6,0.25],"offset":[-0.1,0.1],"material":"Wood"},
+    {"kind":"cylinder","at":[0,3],"size":[0.25,3,0.25],"offset":[0.1,0],"material":"Wood"},
+    {"kind":"cylinder","at":[5,3],"size":[0.25,3,0.25],"offset":[-0.1,0],"material":"Wood"},
+    {"kind":"box","at":[3,3],"size":[5.4,1.25,1.2],"offset":[-0.5,0],"material":"Wood"},
+    {"kind":"box","at":[3,1],"z":3.25,"size":[6.4,0.15,4.6],"tilt":12,"offset":[-0.5,0.5],"material":"Thatch"},
+    {"kind":"box","at":[1,1],"size":[1,0.9,1],"material":"Wood"},
+    {"kind":"box","at":[4,1],"size":[1,0.9,1],"angle":15,"material":"Wood"},
+    {"kind":"dome","at":[2,3],"z":1.25,"size":[1,0.4,0.8],"material":"Moss"},
+    {"kind":"dome","at":[4,3],"z":1.25,"size":[1,0.4,0.8],"material":"Sand"}
+  ],
+  "spots": {"start":[3,4],"keeper":[3,1]}
+}

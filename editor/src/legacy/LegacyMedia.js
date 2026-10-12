@@ -81,13 +81,24 @@ async function resolveFfmpeg(options) {
     });
 }
 
+// FFmpeg and FluidSynth processes still running: a cancelled import stops them (stopAll).
+const running = new Set();
+
 function run(executable, args) {
     return new Promise((resolve, reject) => {
-        execFile(executable, args, { windowsHide: true, maxBuffer: 8 * 1024 * 1024, timeout: 60 * 60 * 1000, killSignal: 'SIGKILL' }, (error, stdout, stderr) => {
+        const child = execFile(executable, args, { windowsHide: true, maxBuffer: 8 * 1024 * 1024, timeout: 60 * 60 * 1000, killSignal: 'SIGKILL' }, (error, stdout, stderr) => {
+            running.delete(child);
             if (error) reject(new Error(String(stderr || error.message).trim().split('\n').slice(-3).join(' ')));
             else resolve(stdout);
         });
+        running.add(child);
     });
+}
+
+/** Kills every converter this module started that is still running. */
+function stopAll() {
+    for (const child of running) { try { child.kill('SIGKILL'); } catch (_) { /* already gone */ } }
+    running.clear();
 }
 
 async function convertMovies(projectDir, options = {}) {
@@ -343,4 +354,4 @@ async function convertMedia(projectDir, options = {}) {
 
 const pendingMedia = (projectDir) => pendingImages(projectDir).length + pendingMovies(projectDir).length + pendingMusic(projectDir).length;
 
-module.exports = { convertImages, convertMovies, convertMusic, convertMedia, pendingImages, pendingMovies, pendingMusic, pendingMedia, midiLoop, resolveFfmpeg };
+module.exports = { run, stopAll, convertImages, convertMovies, convertMusic, convertMedia, pendingImages, pendingMovies, pendingMusic, pendingMedia, midiLoop, resolveFfmpeg };

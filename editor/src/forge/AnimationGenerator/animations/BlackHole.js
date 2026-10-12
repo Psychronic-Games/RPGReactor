@@ -103,7 +103,7 @@
     ctx.fill();
 
     // --- 6. RELATIVISTIC JETS ---
-    const halfCount = Math.max(1, Math.floor(particleCount / 2));
+    const halfCount = particleCount > 0 ? Math.max(1, Math.floor(particleCount / 2)) : 0;
     for (let i = 0; i < 2; i++) {
       const dirY = i === 0 ? 1 : -1;
       for (let j = 0; j < halfCount; j++) {

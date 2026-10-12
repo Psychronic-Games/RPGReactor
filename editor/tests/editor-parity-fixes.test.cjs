@@ -116,9 +116,10 @@ test('the parameter parser and shared annotation tokenizer agree on every bundle
 
 test('the System 1 music rows target the slots the engine reads', () => {
     // Only Title and Battle are `<type>Bgm`. Victory/Defeat/Game Over are ME
-    // (and Game Over is spelled gameoverMe), and vehicle BGM nests inside the
-    // vehicle object. Synthesising `<type>Bgm` read six empty slots and wrote
-    // six keys nothing consumes.
+    // (and Game Over is spelled gameoverMe). Synthesising `<type>Bgm` read
+    // empty slots and wrote keys nothing consumes. A vehicle's BGM nests
+    // inside the vehicle object and is set in Database > Vehicles: System 1
+    // has no row for it.
     const source = read('src/database/DatabaseSystem1Editor.js');
     const at = source.indexOf('static resolveMusicSlot(system, type) {');
     assert.ok(at >= 0, 'the resolver exists');
@@ -130,10 +131,14 @@ test('the System 1 music rows target the slots the engine reads', () => {
         victoryMe: { name: 'V' }, defeatMe: { name: 'D' }, gameoverMe: { name: 'G' },
         boat: { bgm: { name: 'Bo' } }, ship: { bgm: { name: 'Sh' } }, airship: { bgm: { name: 'Ai' } }
     };
-    const expected = { title: 'T', battle: 'B', victory: 'V', defeat: 'D', gameOver: 'G', boat: 'Bo', ship: 'Sh', airship: 'Ai' };
+    const expected = { title: 'T', battle: 'B', victory: 'V', defeat: 'D', gameOver: 'G' };
     for (const [type, name] of Object.entries(expected)) {
         assert.equal(resolve(system, type).get().name, name, type);
     }
+    const before = JSON.stringify(system);
+    for (const type of ['boat', 'ship', 'airship']) assert.equal(resolve(system, type), null, `${type} is not a System 1 music row`);
+    assert.equal(JSON.stringify(system), before);
+    assert.match(source, /const musicTypes = \['title', 'battle', 'victory', 'defeat', 'gameOver'\];/);
 
     assert.doesNotMatch(source, /system\[`\$\{type\}Bgm`\]/, 'no synthesised read remains');
     assert.doesNotMatch(source, /system\[`\$\{identifier\}Bgm`\]/, 'no synthesised write remains');
@@ -152,10 +157,7 @@ test('writing a music slot does not invent a key the engine ignores', () => {
 
     resolve(system, 'gameOver').ensure().name = 'Over';
     assert.equal(system.gameoverMe.name, 'Over', 'lowercase, as System.json spells it');
-
-    resolve(system, 'boat').ensure().name = 'Sail';
-    assert.equal(system.boat.bgm.name, 'Sail');
-    assert.equal('boatBgm' in system, false);
+    assert.deepEqual(Object.keys(system), ['victoryMe', 'gameoverMe']);
 });
 
 test('a new animation declares how it displays over multiple targets', () => {

@@ -6,6 +6,13 @@ const test = require('node:test');
 const editorRoot = path.resolve(__dirname, '..');
 const bindings = require(path.join(editorRoot, 'src', 'database', 'Database3DBindings.js'));
 
+function slotPickerCallback(source) {
+    const slot=source.slice(source.indexOf('function decorateSlot('));
+    const start=slot.indexOf('picker.show('),end=slot.indexOf('resyncWhenClosed();',start);
+    assert.ok(start>=0 && end>start,'the shared graphic slot has a picker callback');
+    return slot.slice(start,end);
+}
+
 test('actor model picker avoids HiDPI resize loops and disposes replaced resources', () => {
     const source = fs.readFileSync(path.join(editorRoot, 'src', 'event', 'ModelGraphicPicker.js'), 'utf8');
     assert.match(source, /bufferWidth = Math\.floor\(width \* pixelRatio\)/);
@@ -39,7 +46,7 @@ test('actor thumbnails deduplicate concurrent cold renders', async () => {
 
 test('actor picker confirmation relies on one modal-close refresh', () => {
     const source = fs.readFileSync(path.join(editorRoot, 'src', 'database', 'Database3DBindings.js'), 'utf8');
-    const callback = source.slice(source.indexOf('picker.show(bound()'), source.indexOf('resyncWhenClosed();', source.indexOf('picker.show(bound()')));
+    const callback = slotPickerCallback(source);
     assert.doesNotMatch(callback, /sync\(\)/);
     assert.match(source, /render\(\);/);
     assert.doesNotMatch(source, /setTimeout\(render, 2500\)/);
@@ -47,9 +54,10 @@ test('actor picker confirmation relies on one modal-close refresh', () => {
 
 test('an actor slot that goes 3D drops the 2D image it replaces', () => {
     const source = fs.readFileSync(path.join(editorRoot, 'src', 'database', 'Database3DBindings.js'), 'utf8');
-    const callback = source.slice(source.indexOf('picker.show(bound()'), source.indexOf('resyncWhenClosed();', source.indexOf('picker.show(bound()')));
+    const callback = slotPickerCallback(source);
     // Only a binding that saved and names a model clears anything.
-    assert.match(callback, /if \(trySet\([^)]*\)\s*&& result && result\.name && options\.onBound\) options\.onBound\(result\)/);
+    assert.match(callback, /if \(write\(result\)\s*&& result && result\.name && options\.onBound\) options\.onBound\(result\)/);
+    assert.match(source, /const write = spec => options\.setBound \? options\.setBound\(spec\) !== false : trySet\(project\.path, 'actors', id, spec, slot\)/);
 
     const actorEditor = fs.readFileSync(path.join(editorRoot, 'src', 'database', 'DatabaseActorEditor.js'), 'utf8');
     assert.match(actorEditor, /slot: 'character'[^\n]*clear2d: \{ characterName: '', characterIndex: 0 \}/);

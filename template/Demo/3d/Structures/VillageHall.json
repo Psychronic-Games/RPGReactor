@@ -1,0 +1,20 @@
+{
+  "name": "Village Hall",
+  "size": [22,14],
+  "storey": 5,
+  "materials": {"wall":"Stone","inner":"Plaster","floor":"Wood","wet":"Stone","roof":"RoofTile","stair":"Wood"},
+  "floors": [
+    {"rooms":{"hall":[1,1,14,12],"office":[16,1,20,12]},"doors":[["hall","outside",4,8,"south",{"style":"panelled"}],["hall","office",2]]}
+  ],
+  "stairs": [],
+  "roof": {"pitch":6},
+  "windows": {"every":4,"width":2,"frame":"two"},
+  "shapes": [
+    {"kind":"box","at":[7,3],"size":[7,1.1,2],"material":"Wood"},
+    {"kind":"box","at":[18,3],"size":[2.6,1.2,1.4],"material":"Wood"}
+  ],
+  "spots": {"desk":[18,6],"hall":[7,8]},
+  "events": [
+    {"spot":"desk","name":"Steward","template":"elder","direction":2}
+  ]
+}

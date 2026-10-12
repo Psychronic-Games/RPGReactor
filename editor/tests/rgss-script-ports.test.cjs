@@ -239,7 +239,7 @@ test('MapName Plus+ settings, and the older engines\' window, touch and fade con
     assert.match(scenes, /if \(\$dataSystem && \$dataSystem\.rrMapNameStays\) return;/);
     assert.match(scenes, /\$dataSystem\.rrTouchUiOff && !ConfigManager\._rrTouchUiSaved\) ConfigManager\.touchUI = false/);
     assert.match(scenes, /return ace\(\) \? 30 : _fadeSpeed\.call\(this\);/);
-    assert.match(scenes, /\$dataSystem && \$dataSystem\.rrRgssWindows \? 0 : Window\.defaultMargin\(\) \* 2/, 'an Ace message window is exactly its lines tall');
+    assert.match(scenes, /\$dataSystem && \(\$dataSystem\.rrRgssWindows \|\| \$dataSystem\.rrLegacyWindows\) \? 0 : Window\.defaultMargin\(\) \* 2/, 'an Ace message window is exactly its lines tall');
     const compat = fs.readFileSync(path.join(runtime, 'libs', 'pixi_compat.js'), 'utf8');
     assert.match(compat, /blendModesMap\.subtract = \[gl\.ONE, gl\.ONE, gl\.ZERO, gl\.ONE, gl\.FUNC_REVERSE_SUBTRACT, gl\.FUNC_ADD\]/, 'v8 regains the subtract blend');
 });

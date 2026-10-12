@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Battle Setup">
+  <defs>
+    <linearGradient id="bs-steel" x1="10" y1="6" x2="54" y2="58" gradientUnits="userSpaceOnUse"><stop stop-color="#ffffff"/><stop offset=".45" stop-color="#b9c8de"/><stop offset="1" stop-color="#4c5f82"/></linearGradient>
+    <linearGradient id="bs-gold" x1="8" y1="18" x2="56" y2="60" gradientUnits="userSpaceOnUse"><stop stop-color="#fff3a0"/><stop offset=".4" stop-color="#ffd529"/><stop offset="1" stop-color="#c26a08"/></linearGradient>
+    <linearGradient id="bs-red" x1="8" y1="40" x2="56" y2="62" gradientUnits="userSpaceOnUse"><stop stop-color="#ff8a7a"/><stop offset="1" stop-color="#b3261c"/></linearGradient>
+  </defs>
+  <!-- Two swords crossed, points up: chunky and inked like the rest of the bar. -->
+  <g transform="rotate(-45 32 32)">
+    <path d="M32 0l6 9v31H26V9z" fill="url(#bs-steel)" stroke="#010718" stroke-width="4" stroke-linejoin="round"/>
+    <rect x="18" y="40" width="28" height="7" rx="3" fill="url(#bs-gold)" stroke="#010718" stroke-width="4" stroke-linejoin="round"/>
+    <rect x="28" y="47" width="8" height="13" rx="3" fill="url(#bs-red)" stroke="#010718" stroke-width="4" stroke-linejoin="round"/>
+  </g>
+  <g transform="rotate(45 32 32)">
+    <path d="M32 0l6 9v31H26V9z" fill="url(#bs-steel)" stroke="#010718" stroke-width="4" stroke-linejoin="round"/>
+    <rect x="18" y="40" width="28" height="7" rx="3" fill="url(#bs-gold)" stroke="#010718" stroke-width="4" stroke-linejoin="round"/>
+    <rect x="28" y="47" width="8" height="13" rx="3" fill="url(#bs-red)" stroke="#010718" stroke-width="4" stroke-linejoin="round"/>
+  </g>
+</svg>

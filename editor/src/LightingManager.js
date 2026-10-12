@@ -32,6 +32,11 @@ class LightingManager {
         this._undo = [];
         this._redo = [];
         this._boundMap = null;
+        // Counts every change to what the lights resolve to — an edit, an
+        // undo, the ambient, another map — so a reader such as the flat prop
+        // preview can tell "nothing changed" without resolving them again.
+        this.revision = 0;
+        this._needsDraw = false;
         this._onKeyDown = event => this._keyDown(event);
     }
 
@@ -62,10 +67,11 @@ class LightingManager {
         if (enabled) window.reactor?.claimMapTool?.('lighting');
         if (this.active === !!enabled) return;
         this.active = !!enabled;
-        const button = document.querySelector('[data-action="lighting-tool"]');
+        const button = document.querySelector('.tool-button[data-action="lighting-tool"]');
         if (button) button.classList.toggle('active', this.active);
         if (this.active) this._activate();
         else { this._deactivate(); window.reactor?.releaseMapTool?.('lighting'); }
+        this.syncHistoryButtons();
     }
 
     toggle() {
@@ -162,6 +168,7 @@ class LightingManager {
             mapEditor.setEnabled(true);
             mapEditor.setupMapInteraction?.();
         }
+        this.render();
     }
 
     //-------------------------------------------------------------------------
@@ -173,8 +180,10 @@ class LightingManager {
         this._undo.push(RRMapLights.snapshot(map));
         if (this._undo.length > 100) this._undo.shift();
         this._redo = [];
+        this.syncHistoryButtons();
     }
 
+    // Ctrl+Z / Ctrl+Y and the toolbar's Undo and Redo reach these through UIManager while the tool is up.
     undo() {
         this._timeTravel(this._undo, this._redo);
     }
@@ -183,13 +192,27 @@ class LightingManager {
         this._timeTravel(this._redo, this._undo);
     }
 
+    canUndo() { return this._undo.length > 0; }
+    canRedo() { return this._redo.length > 0; }
+
+    syncHistoryButtons() {
+        const reactor = typeof window !== 'undefined' ? window.reactor : null, ui = reactor?.uiManager;
+        if (!ui?.updateUndoRedoButtons) return;
+        if (this.active) ui.updateUndoRedoButtons(this.canUndo(), this.canRedo());
+        else { const map = reactor.mapEditor; ui.updateUndoRedoButtons(!!map?.canUndo?.(), !!map?.canRedo?.()); }
+    }
+
     _timeTravel(from, to) {
         const map = this.map();
         if (!map || !from.length || typeof RRMapLights === 'undefined') return;
+        // A drag in progress ends here, or it would keep moving the restored light.
+        this.drag = null;
+        this._end3DDrag();
         to.push(RRMapLights.snapshot(map));
         RRMapLights.restore(map, from.pop());
         if (this.selectedId && !RRMapLights.get(map, this.selectedId)) this.selectedId = null;
         this._changed();
+        this.syncHistoryButtons();
     }
 
     //-------------------------------------------------------------------------
@@ -301,10 +324,13 @@ class LightingManager {
         if (!at) {
             if (this._ghost) this._ghost.visible = false;
             if (this._ring3d) this._ring3d.visible = false;
+            this._requestViews();
             return;
         }
         const m3d = this.mapEditor3D();
-        if (m3d?.isEnabled?.() && m3d.mapScene) this._showRingAt(m3d.mapScene, at);
+        // Not from _showRingAt itself: the 3D view calls that on every frame it
+        // draws (feed3D), and a request from there would keep it drawing forever.
+        if (m3d?.isEnabled?.() && m3d.mapScene) { this._showRingAt(m3d.mapScene, at); m3d.requestRender?.(); }
         else this._moveGhost(at);
     }
 
@@ -392,7 +418,8 @@ class LightingManager {
                 colour: this._colourNumber(light.color), occlude: light.occlude,
                 shadow: light.shadow,
                 animated: !!(light.pulse || light.flicker),
-                attached: !!light.attach
+                attached: !!light.attach,
+                daylight: light.daylight
             });
         }
         return out;
@@ -514,8 +541,45 @@ class LightingManager {
         return group;
     }
 
-    /** Draw the darkness, the lights and the markers for this frame. */
+    /**
+     * Something the lights show changed: count it, and draw it in both views.
+     * Every edit — the panel, a drag, undo, the ambient, another tool's call —
+     * comes through here; the frame loop draws with `_draw` alone.
+     */
     render(frame = this._frame) {
+        this.revision = (this.revision || 0) + 1;
+        this._draw(frame);
+        this.mapEditor3D()?.requestRender?.();
+    }
+
+    /** Ask both map views for a frame: the flat one draws on demand, the 3D one on request. */
+    _requestViews() {
+        this.tilemapManager?.app?.requestRender?.();
+        this.mapEditor3D()?.requestRender?.();
+    }
+
+    /**
+     * Whether any placed light on this map flickers or pulses. Resolved once
+     * per change (`revision`, or the map's list replaced) rather than on
+     * every frame that asks.
+     */
+    hasAnimatedLights() {
+        const map = this.map();
+        const list = map?.reactor3d?.lights;
+        if (!Array.isArray(list) || !list.length) return false;
+        const seen = this._animatedSeen || (this._animatedSeen = {});
+        if (seen.revision !== this.revision || seen.map !== map || seen.list !== list || seen.length !== list.length) {
+            seen.revision = this.revision;
+            seen.map = map;
+            seen.list = list;
+            seen.length = list.length;
+            seen.value = this.resolvedLights(0).some(light => light.animated);
+        }
+        return seen.value;
+    }
+
+    /** Draw the darkness, the lights and the markers for this frame. */
+    _draw(frame = this._frame) {
         const state = this._overlay;
         const map = this.map();
         // The runtime arrives one file at a time; a frame drawn between the
@@ -581,6 +645,7 @@ class LightingManager {
 
         state.markers.clear();
         if (this.active) this._renderMarkers(state.markers, tw);
+        this.tilemapManager?.app?.requestRender?.();
     }
 
     /** Handles: a dot per light, reach and aim handles on the selection. */
@@ -1083,6 +1148,7 @@ class LightingManager {
         this._ghost.alpha = 0.55;
         this._ghost.position.set(at.x * tw, at.y * tw);
         this._ghost.visible = true;
+        this.tilemapManager?.app?.requestRender?.();
     }
 
     _pointerUp() {
@@ -1097,10 +1163,15 @@ class LightingManager {
         if (!this.active || event.defaultPrevented || window.reactor?.uiManager?.isEditorModalOpenForGlobalShortcuts?.()) return;
         const editing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || '') || document.activeElement?.isContentEditable;
         if (event.key === 'Escape') {
+            // One press lets go of one thing: what the tool holds claims it before the map's selection.
             if (this.placing || this._cancelChipDrag) {
                 this._cancelChipDrag?.();
                 this.armPlacement(null);
-            } else this.select(null);
+                event.preventDefault();
+            } else if (this.selectedId) {
+                this.select(null);
+                event.preventDefault();
+            }
             return;
         }
         if (editing) return;
@@ -1122,10 +1193,29 @@ class LightingManager {
     }
 
     //-------------------------------------------------------------------------
-    // Animation tick: animated lights breathe, the 3D preview stays live,
-    // and a map switch under the open panel rebuilds cleanly.
+    // Animation tick: animated lights breathe, and a map switch under the
+    // open panel rebuilds cleanly.
+    //
+    // A still map draws nothing here. Edits draw at once through `render`;
+    // the loop draws the flat overlay only while a light animates, or when
+    // `_watchChanged` sees something it is drawn against move — work that
+    // is a few property reads a frame, where resolving every light each
+    // frame and redrawing every sixth used to be.
 
     _startTicking() {
+        // Called on every map load: whatever the lights show is drawn again.
+        this._needsDraw = true;
+        if (!this._onMapContentChanged && typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+            // Another tool moved an event a light rides on, or changed the
+            // map's sidecar: the lights may resolve differently now.
+            this._onMapContentChanged = () => {
+                this.revision = (this.revision || 0) + 1;
+                this._needsDraw = true;
+                this.tilemapManager?.app?.requestRender?.();
+            };
+            document.addEventListener('rr-events-changed', this._onMapContentChanged);
+            document.addEventListener('rr-map-edited', this._onMapContentChanged);
+        }
         if (this._raf) return;
         const tick = () => {
             this._raf = requestAnimationFrame(tick);
@@ -1134,6 +1224,12 @@ class LightingManager {
                 this._unbind3DPointer();
                 this._bind3DPointer();
                 this._sync3D();
+            }
+            // Another map: the steps kept belong to the last one, whether or not the 3D libraries are in yet.
+            if (this.map() !== this._historyMap) {
+                this._historyMap = this.map();
+                this._undo = [];
+                this._redo = [];
             }
             if (typeof Reactor3D !== 'undefined' && (this.map() !== this._boundMap || this._overlay?.root.parent !== this.tilemapManager?.container)) {
                 this._cancelChipDrag?.();
@@ -1150,6 +1246,10 @@ class LightingManager {
                 this._buildOverlay();
                 this._syncPanel();
                 this._syncDiskNotice();
+                if (this.active) this.syncHistoryButtons();
+                // Another map's lights: counted as a change, and drawn.
+                this.revision = (this.revision || 0) + 1;
+                this._needsDraw = true;
             }
             if (this.mapEditor3D()?.isEnabled?.()) {
                 if (this._overlay) this._overlay.root.visible = false;
@@ -1165,9 +1265,14 @@ class LightingManager {
             }
             if (this._overlay) this._overlay.root.visible = true;
             const modelLights = this.projectController?.modelPropsManager?.preview2D?.lights || [];
-            const animated = modelLights.length > 0 || this.resolvedLights(this._frame).some(light => light.animated);
-            // Static maps need only a cheap periodic refresh for sidecar edits.
-            if (animated || this.drag || this._frame % 6 === 1) this.render(this._frame);
+            // Looked at first: a change it sees is a new revision, which the
+            // animated check below is cached against.
+            const watched = this._watchChanged(modelLights);
+            const animated = modelLights.length > 0 || this.hasAnimatedLights();
+            if (animated || this._needsDraw || watched) {
+                this._needsDraw = false;
+                this._draw(this._frame);
+            }
         };
         this._raf = requestAnimationFrame(tick);
     }
@@ -1175,6 +1280,67 @@ class LightingManager {
     _stopTicking() {
         if (this._raf) cancelAnimationFrame(this._raf);
         this._raf = null;
+        if (this._onMapContentChanged && typeof document !== 'undefined' && typeof document.removeEventListener === 'function') {
+            document.removeEventListener('rr-events-changed', this._onMapContentChanged);
+            document.removeEventListener('rr-map-edited', this._onMapContentChanged);
+        }
+        this._onMapContentChanged = null;
+    }
+
+    /**
+     * What the flat overlay is drawn against that other tools change without
+     * a word to this one: the map's sidecar and light list (replaced by an
+     * undo or a paste elsewhere), the events lights ride on, the props layer
+     * (its redraw takes the carried glows off it), the prop shadows the glows
+     * are masked by, the overlay's place on top of the map, and — with the
+     * panel up — the zoom the markers are sized for. Plain values, compared
+     * in place each frame; true when any moved since the last look. A change
+     * to the lights themselves also counts toward `revision`.
+     */
+    _watchChanged(modelLights) {
+        const map = this.map();
+        const sidecar = map?.reactor3d || null;
+        const lights = sidecar?.lights;
+        const props = this.projectController?.modelPropsManager;
+        const shadows = props?.preview2D?.shadows?.states;
+        const parent = this._overlay?.root.parent || null;
+        let carriers = 0;
+        if (Array.isArray(lights)) {
+            for (const light of lights) {
+                const id = light?.attach?.event;
+                const event = id ? (map.events || [])[id] : null;
+                if (event) carriers += (Number(event.x) || 0) * 7919 + (Number(event.y) || 0) * 104729 + Number(id);
+            }
+        }
+        let shadowStamp = 0;
+        if (shadows) for (const state of shadows.values()) shadowStamp += (state.at || 0) + (state.empty ? 0.5 : 0);
+        let attached = 0;
+        for (const group of this._propGlowGroups.values()) if (!group.destroyed && group.parent) attached++;
+        const values = this._watchValues || (this._watchValues = new Array(14));
+        values[0] = sidecar;
+        values[1] = lights;
+        values[2] = Array.isArray(lights) ? lights.length : -1;
+        values[3] = sidecar?.lighting;
+        values[4] = carriers;
+        values[5] = props?.container || null;
+        values[6] = props?._sprites?.size ?? -1;
+        values[7] = modelLights.length;
+        values[8] = shadows?.size ?? -1;
+        values[9] = shadowStamp;
+        values[10] = attached;
+        values[11] = parent ? parent.children.length : -1;
+        values[12] = parent ? parent.children[parent.children.length - 1] === this._overlay.root : true;
+        values[13] = this.active ? this._viewScale() : 0;
+        const seen = this._watchSeen || (this._watchSeen = new Array(14));
+        let changed = false, lightsChanged = false;
+        for (let i = 0; i < values.length; i++) {
+            if (seen[i] === values[i]) continue;
+            seen[i] = values[i];
+            changed = true;
+            if (i <= 4) lightsChanged = true;
+        }
+        if (lightsChanged) this.revision = (this.revision || 0) + 1;
+        return changed;
     }
 
     //-------------------------------------------------------------------------
@@ -1206,11 +1372,11 @@ class LightingManager {
             intensity: ambient.ambient,
             colour: this._colourNumber(ambient.ambientColour)
         });
-        Reactor3D.setLights(this.resolvedLights(this._frame).map(light => ({
+        Reactor3D.setLights(this.resolvedLights(this._frame).map(light => this._atDaylight({
             id: light.id, type: light.type, x: light.x, y: light.y, height: light.height,
             radius: light.radius, colour: light.colour, intensity: light.intensity,
             priorityRadius: light.priorityRadius, priorityIntensity: light.priorityIntensity,
-            angle: light.angle, width: light.width, yaw: -light.yaw, pitch: light.pitch, occlude: light.occlude,
+            angle: light.angle, width: light.width, yaw: -light.yaw, pitch: light.pitch, occlude: light.occlude, daylight: light.daylight,
             shadow: light.shadow
         })).concat(modelLights));
         const map = this.map();
@@ -1219,19 +1385,29 @@ class LightingManager {
         this._update3DRing(scene);
     }
 
+    /** A sun at the map's time of day (its ambient), as the game shows it; anything else as it is. */
+    _atDaylight(light) {
+        if (light.type !== 'sun' || light.daylight === 'fixed' || !Reactor3D.sunAtDaylight) return light;
+        const day = Reactor3D.daylight();
+        const lit = Reactor3D.sunAtDaylight(light, light.colour, light.intensity, day, this._sunLit || (this._sunLit = {}));
+        light.colour = lit.colour;
+        light.intensity = lit.intensity;
+        if (light.priorityIntensity !== undefined) light.priorityIntensity *= day.sun;
+        return light;
+    }
+
     /**
      * Whether the 3D view should keep drawing frames for lighting's sake:
      * always while the panel works, and while any placed light animates.
      */
     wants3DFrames() {
-        if (this.active) return true;
-        if (typeof Reactor3D !== 'undefined' && Array.isArray(Reactor3D._editorEffectLights) && Reactor3D._editorEffectLights.length) return true;
-        if (!this.map()?.reactor3d?.lights?.length) return false;
-        return this.resolvedLights(this._frame).some(light => light.animated);
+        return this.hasAnimatedLights();
     }
 
+    /** Feed the compositor and have the 3D view draw what it now holds. */
     _sync3D() {
         this.feed3D();
+        this.mapEditor3D()?.requestRender?.();
     }
 
     /**
@@ -1291,6 +1467,7 @@ class LightingManager {
 
     _clear3D() {
         this._dispose3DRing();
+        this.mapEditor3D()?.requestRender?.();
         if (typeof Reactor3D === 'undefined') return;
         Reactor3D.setLights([]);
         Reactor3D.setAmbient(null);
@@ -1373,6 +1550,16 @@ class LightingManager {
         if (!window.reactor?.dockMapPanel?.(panel)) (workspace || document.body).appendChild(panel);
         this._panel = panel;
         this._syncPanel();
+    }
+
+    /** A language switch with the tool up: the panel is built from keys once, so it is built again. */
+    refreshLanguage() {
+        if (!this.active || !this._panel) return;
+        this._buildPanel();
+        this.render();
+        this._syncPanel();
+        this._syncAddButtons();
+        this._syncDiskNotice();
     }
 
     _destroyPanel() {
@@ -1906,8 +2093,11 @@ class LightingManager {
      * The tag control: a dropdown of every tag on the map, the presets'
      * tags, none, and "new", which turns into a field for the name.
      */
-    _tagControl(light, commit) {
+    _tagControl(light, commitTag) {
         const NEW = '*new*';
+        // A stamped building's light from before lights carried the building's number keeps it when its tag changes.
+        const legacy = !light.structure && /^structure:(\d+)$/.exec(String(light.tag || ''));
+        const commit = patch => commitTag(legacy ? Object.assign({ structure: Number(legacy[1]) }, patch) : patch);
         const known = new Set(typeof RRMapLights !== 'undefined' ? RRMapLights.tags(this.map()) : []);
         for (const preset of this._presets()) if (preset.template.tag) known.add(preset.template.tag);
         if (light.tag) known.add(light.tag);
@@ -2039,6 +2229,16 @@ class LightingManager {
         // A sun hangs high and covers a map: its sliders reach that far.
         const sun = light.type === 'sun';
         look.appendChild(this._row(this._k('lit.radius'), this._slider('radius', light.radius, sun ? 10 : 0.1, sun ? 500 : 30, sun ? 1 : 0.1, { numberMax: sun ? 2000 : 200 })));
+        if (sun) {
+            // A sun follows the map's ambient (day, dusk, night) unless fixed.
+            const follows = this._el('div', 'lit-flags');
+            const wrap = this._el('label');
+            const input = this._input('checkbox', '', field => commit({ daylight: field.checked ? 'auto' : 'fixed' }));
+            input.checked = light.daylight !== 'fixed';
+            wrap.append(input, this._el('span', '', this._k('lit.daylight')));
+            follows.appendChild(wrap);
+            look.append(follows, this._el('div', 'lit-note', this._k('lit.daylightHint')));
+        }
         if (light.type === 'spot') {
             look.appendChild(this._row(this._k('lit.angle'), this._slider('angle', light.angle, 1, 179, 1)));
         }

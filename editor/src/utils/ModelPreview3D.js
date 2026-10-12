@@ -18,7 +18,78 @@ class ModelPreview3D {
         this.lastFrameAt = 0;
         this.lastRenderAt = 0;
         this.lastInputAt = 0;
+        // Drawn on demand: a still model is drawn once and then left alone.
+        // `dirty` asks for one more frame; the camera easing toward its goal,
+        // a texture landing, a theme switch or a resize each set it.
+        this.dirty = true;
+        this.sizeDirty = true;
+        this.textures = [];
+        this.textureVersion = -1;
+        this.theme = null;
         this.bindInput();
+    }
+
+    /** Ask for one more frame: the preview draws nothing while nothing changes. */
+    invalidate() {
+        this.dirty = true;
+    }
+
+    /**
+     * Every texture a model draws with, gathered once so a frame can tell a
+     * late texture from a still one by adding up version numbers instead of
+     * walking the model. three.js bumps a texture's version when its image
+     * arrives, which is what a GLB's decoded images do after the first draw.
+     */
+    static collectTextures(...roots) {
+        const textures = new Set();
+        for (const root of roots) {
+            if (!root) continue;
+            for (const texture of root.userData?.glbTextures || []) if (texture) textures.add(texture);
+            root.traverse?.(node => {
+                for (const material of [node.material].flat()) {
+                    if (!material) continue;
+                    for (const value of Object.values(material)) if (value?.isTexture) textures.add(value);
+                }
+            });
+        }
+        return Array.from(textures);
+    }
+
+    static textureVersionSum(textures) {
+        let sum = 0;
+        for (const texture of textures || []) sum += (texture && texture.version) || 0;
+        return sum;
+    }
+
+    /** The editor theme the backdrop was last drawn for; a switch repaints a still preview. */
+    static themeKey() {
+        return (typeof document !== 'undefined' && document.documentElement?.getAttribute?.('data-theme')) || 'dark';
+    }
+
+    /**
+     * Report size changes instead of measuring the canvas every frame. Returns
+     * a disconnect function, or null where ResizeObserver is missing and the
+     * caller has to measure for itself.
+     */
+    static watchSize(element, onResize) {
+        if (!element || typeof ResizeObserver === 'undefined') return null;
+        const observer = new ResizeObserver(() => onResize());
+        observer.observe(element);
+        return () => observer.disconnect();
+    }
+
+    /**
+     * Draw a preview that is only drawn when its picture changes, and say
+     * whether it has to be drawn again. The draw leaves out any mesh whose
+     * shaders are still compiling or whose pictures are still uploading
+     * (Reactor3D.ShaderWarmup) and expects the next frame to show it; a
+     * still preview has no next frame unless it asks for one.
+     */
+    static render(renderer, scene, camera) {
+        Reactor3D.renderScene(renderer, scene, camera);
+        // lastHidden is the last draw's, whichever renderer made it: only a renderer the warmup holds things for reads it.
+        const warmup = Reactor3D.ShaderWarmup;
+        return !!(warmup && warmup.enabled !== false && (!warmup.supported || warmup.supported(renderer)) && warmup.lastHidden > 0);
     }
 
     /** Inspection viewports own their light field; map lighting is never borrowed. */
@@ -91,6 +162,7 @@ class ModelPreview3D {
             this.viewGoal.yaw -= dx * 0.4;
             this.viewGoal.pitch = Math.min(72, Math.max(5, this.viewGoal.pitch - dy * 0.3));
             this.lastInputAt = performance.now();
+            this.dirty = true;
         };
         this.pointerUp = event => {
             dragging = false;
@@ -102,6 +174,7 @@ class ModelPreview3D {
             const factor = event.deltaY > 0 ? 1.15 : 1 / 1.15;
             this.viewGoal.distance = Math.min(20, Math.max(1.2, this.viewGoal.distance * factor));
             this.lastInputAt = performance.now();
+            this.dirty = true;
         };
         this.contextMenu = event => event.preventDefault();
         this.canvas.addEventListener('pointerdown', this.pointerDown);
@@ -170,7 +243,10 @@ class ModelPreview3D {
         this.object.add(model);
         ModelPreview3D.isolateLighting(this.object);
         this.scene.add(this.object);
+        this.textures = ModelPreview3D.collectTextures(template, this.object);
+        this.textureVersion = -1;
         this.lastInputAt = performance.now();
+        this.dirty = true;
     }
 
     createRenderer() {
@@ -180,18 +256,36 @@ class ModelPreview3D {
         this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: true });
         this.renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
         if (THREE.SRGBColorSpace) this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+        // The canvas is measured when it changes size, not on every frame:
+        // reading its rectangle forces a layout, and the loop runs at the
+        // display's refresh rate whether or not anything moved.
+        this.unwatchSize = ModelPreview3D.watchSize(this.canvas, () => { this.sizeDirty = true; });
         this.tick = now => {
             if (this.disposed || !this.renderer) return;
-            const rect = this.canvas.getBoundingClientRect();
-            const width = Math.max(1, Math.round(rect.width));
-            const height = Math.max(1, Math.round(rect.height));
-            const pixelRatio = this.renderer.getPixelRatio();
-            const bufferWidth = Math.floor(width * pixelRatio);
-            const bufferHeight = Math.floor(height * pixelRatio);
-            if (this.canvas.width !== bufferWidth || this.canvas.height !== bufferHeight) {
-                this.renderer.setSize(width, height, false);
-                this.camera.aspect = width / height;
-                this.camera.updateProjectionMatrix();
+            if (this.sizeDirty || !this.unwatchSize) {
+                this.sizeDirty = false;
+                const rect = this.canvas.getBoundingClientRect();
+                const width = Math.max(1, Math.round(rect.width));
+                const height = Math.max(1, Math.round(rect.height));
+                const pixelRatio = this.renderer.getPixelRatio();
+                const bufferWidth = Math.floor(width * pixelRatio);
+                const bufferHeight = Math.floor(height * pixelRatio);
+                if (this.canvas.width !== bufferWidth || this.canvas.height !== bufferHeight) {
+                    this.renderer.setSize(width, height, false);
+                    this.camera.aspect = width / height;
+                    this.camera.updateProjectionMatrix();
+                    this.dirty = true;
+                }
+            }
+            const theme = ModelPreview3D.themeKey();
+            if (theme !== this.theme) {
+                this.theme = theme;
+                this.dirty = true;
+            }
+            const textureVersion = ModelPreview3D.textureVersionSum(this.textures);
+            if (textureVersion !== this.textureVersion) {
+                this.textureVersion = textureVersion;
+                this.dirty = true;
             }
             const dt = Math.min(0.1, (now - (this.lastFrameAt || now)) / 1000);
             this.lastFrameAt = now;
@@ -202,10 +296,13 @@ class ModelPreview3D {
             const moving = Math.abs(this.viewGoal.yaw - this.view.yaw) > 0.01
                 || Math.abs(this.viewGoal.pitch - this.view.pitch) > 0.01
                 || Math.abs(this.viewGoal.distance - this.view.distance) > 0.001;
-            if (moving || now - this.lastInputAt < 1000 || now - this.lastRenderAt >= 100) {
+            // A still model is not drawn again: the old 10 Hz idle repaint
+            // kept an integrated GPU busy for a picture that never changed.
+            if (moving || this.dirty) {
+                this.dirty = false;
                 Reactor3D.aimCamera(this.camera, { x: -0.5, y: 0, z: -0.5 }, this.view);
                 ModelPreview3D.updateBackground(this.scene);
-                Reactor3D.renderScene(this.renderer, this.scene, this.camera);
+                if (ModelPreview3D.render(this.renderer, this.scene, this.camera)) this.dirty = true;
                 this.lastRenderAt = now;
             }
             this.raf = requestAnimationFrame(this.tick);
@@ -255,6 +352,9 @@ class ModelPreview3D {
         this.generation++;
         if (this.raf) cancelAnimationFrame(this.raf);
         this.raf = 0;
+        this.unwatchSize?.();
+        this.unwatchSize = null;
+        this.textures = [];
         this.canvas.removeEventListener('pointerdown', this.pointerDown);
         window.removeEventListener('pointermove', this.pointerMove);
         window.removeEventListener('pointerup', this.pointerUp);

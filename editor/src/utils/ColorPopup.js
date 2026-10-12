@@ -4,7 +4,7 @@
  * hex field, a saturation/brightness square and a hue strip. It is the
  * Forge's picker made shareable; its look is in theme.css (.rr-color-*).
  *
- *   html:  RRColorPopup.swatch('my-tint', '#ffcc55')
+ *   html:  RRColorPopup.swatch('my-tint', '#ffcc55')            (a third argument of true: a disabled swatch)
  *   bind:  RRColorPopup.bind(button, hex => ...)   (called as the colour changes)
  */
 (function(root) {
@@ -37,9 +37,9 @@
     };
 
     const api = {
-        swatch(cls, value) {
+        swatch(cls, value, disabled = false) {
             const hex = valid(value) ? value.toLowerCase() : '#ffffff';
-            return `<button type="button" class="rr-color-swatch-btn ${escape(cls)}" data-value="${hex}" style="background:${hex};"><span class="rr-color-swatch-hex">${hex.toUpperCase()}</span></button>`;
+            return `<button type="button" class="rr-color-swatch-btn ${escape(cls)}" data-value="${hex}" style="background:${hex};"${disabled ? ' disabled' : ''}><span class="rr-color-swatch-hex">${hex.toUpperCase()}</span></button>`;
         },
 
         /** Make a swatch button open the popup; `onInput(hex)` runs as the colour changes. */

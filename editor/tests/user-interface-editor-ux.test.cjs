@@ -150,7 +150,9 @@ test('Interface Settings renders initially and applies existing record semantics
     const editor = editorWith();
     editor.current = editor.normalizeInterface({ id: 4, coordinateSpace: 'screen', mode: 'scene', background: 'blur', nodes: [] });
     const markup = editor.interfacePropertiesMarkup();
-    assert.match(markup, /Interface Settings/);
+    // The inspector header names the panel once; the body does not repeat it.
+    assert.doesNotMatch(markup, /rr-ui-prop-title/);
+    assert.match(source, /if \(title\) title\.textContent = tt\('Interface Settings'\);/);
     for (const group of ['Behavior', 'Transitions', 'Notes']) assert.match(markup, new RegExp(`rr-ui-group[^>]*>${group}<`));
     for (const cls of ['rr-ui-background', 'rr-ui-first-focus', 'cancel-type', 'overlay-visible-type', 'rr-ui-open-transition', 'rr-ui-close-transition', 'rr-ui-transition-duration', 'rr-ui-interface-note']) assert.match(markup, new RegExp(cls));
     assert.doesNotMatch(source, /Select a node on the canvas or in the list\./);
@@ -292,4 +294,28 @@ test('a Battle HUD previews as the battle shows it: the whole party, no focus, t
         'a common event command is named after the event unless labelled; a missing one is not listed');
     const troop = fs.readFileSync(path.join(__dirname, '..', 'src', 'database', 'DatabaseTroopEditor.js'), 'utf8');
     assert.match(troop, /drawRecordInto\(ctx, hud, \{ party: setup\.party\.map\(entry => entry\.actor\) \}\)/, 'Show Battle UI draws the bound HUD with the battle-test party');
+});
+
+test('Escape closes an open Add Node or Stock Layout menu instead of the database', () => {
+    const Editor = require('../src/database/DatabaseUserInterfaceEditor.js');
+    const editor = Object.create(Editor.prototype);
+    const summary = { focused: false, focus() { this.focused = true; } };
+    const menu = { open: true, querySelector: () => summary };
+    editor.wrapper = { querySelector: selector => selector === '.rr-ui-add-menu[open]' && menu.open ? menu : null };
+    let prevented = 0;
+    const event = { key: 'Escape', target: summary, preventDefault() { prevented++; }, stopPropagation() {} };
+    editor.onKey(event);
+    assert.deepEqual([menu.open, summary.focused, prevented], [false, true, 1]);
+});
+
+test('deleting the control Cancel focuses leaves Cancel on Automatic, as a node\'s own focus links do', () => {
+    const Editor = require('../src/database/DatabaseUserInterfaceEditor.js');
+    const editor = Object.create(Editor.prototype);
+    Object.assign(editor, {
+        current: { nodes: [{ id: 1, type: 'button', parent: 0, focusDown: 2 }, { id: 2, type: 'button', parent: 0 }], firstFocus: 2, cancel: { type: 'focusNode', id: 2 } },
+        selectedIds: new Set(), selectedId: 2, undoStack: [], redoStack: [],
+        touch() {}, refreshFirstFocus() {}, renderTree() {}, renderProperties() {}, scheduleRender() {}
+    });
+    editor.deleteNode(2);
+    assert.deepEqual([editor.current.nodes.length, editor.current.nodes[0].focusDown, editor.current.firstFocus, editor.current.cancel.id], [1, 0, 0, 0]);
 });

@@ -1,0 +1,124 @@
+{
+  "rig": {
+    "template": "gun",
+    "markers": {
+      "gripTop": [
+        0.23901186441764144,
+        0.10943492758766885,
+        0.0001654551909729962
+      ],
+      "gripBottom": [
+        0.2796,
+        0.0328,
+        0.0002
+      ],
+      "trigger": [
+        0.19652195834969421,
+        0.12425986368970533,
+        -0.002028368075454451
+      ],
+      "muzzle": [
+        -0.4868,
+        0.1826,
+        0.0002
+      ],
+      "rear": [
+        0.2951,
+        0.1911,
+        0.0002
+      ],
+      "foreGrip": [
+        -0.0697,
+        0.1231,
+        0.0002
+      ],
+      "stock": [
+        0.4798,
+        0.1648,
+        0.0002
+      ]
+    }
+  },
+  "variants": [
+    {
+      "name": "Black Carbine",
+      "color": {
+        "mode": "colorize",
+        "color": "#15171b",
+        "strength": 0.92,
+        "lightness": -0.3
+      },
+      "surface": {
+        "reflect": 0.05,
+        "gloss": 0.15,
+        "metal": 0.2,
+        "tint": "#ffffff",
+        "texture": 1
+      }
+    },
+    {
+      "name": "Railgun Rifle Mk II",
+      "color": {
+        "mode": "adjust",
+        "hue": 140,
+        "saturation": 1.2,
+        "brightness": 1.05
+      },
+      "surface": {
+        "reflect": 0.7,
+        "gloss": 0.9,
+        "metal": 0.9,
+        "tint": "#ffffff",
+        "texture": 0.5
+      }
+    },
+    {
+      "name": "Brass Marksman Rifle",
+      "color": {
+        "mode": "colorize",
+        "color": "#c8963c",
+        "strength": 0.85,
+        "lightness": 0.05
+      },
+      "surface": {
+        "reflect": 0.7,
+        "gloss": 0.9,
+        "metal": 0.9,
+        "tint": "#ffffff",
+        "texture": 0.5
+      }
+    },
+    {
+      "name": "Scattergun",
+      "color": {
+        "mode": "colorize",
+        "color": "#8c3b24",
+        "strength": 0.85,
+        "lightness": -0.05
+      },
+      "surface": {
+        "reflect": 0.05,
+        "gloss": 0.15,
+        "metal": 0.2,
+        "tint": "#ffffff",
+        "texture": 1
+      }
+    },
+    {
+      "name": "Autocannon",
+      "color": {
+        "mode": "colorize",
+        "color": "#56603a",
+        "strength": 0.85,
+        "lightness": -0.1
+      },
+      "surface": {
+        "reflect": 0.05,
+        "gloss": 0.15,
+        "metal": 0.2,
+        "tint": "#ffffff",
+        "texture": 1
+      }
+    }
+  ]
+}

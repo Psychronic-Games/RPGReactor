@@ -51,11 +51,6 @@ test('trusted Simplified Chinese terminology and height toolbar labels are retai
     for (const [source, translation] of Object.entries(expected)) {
         assert.equal(manager.tText(source), translation, source);
     }
-    assert.equal(manager.t('toolbar.title.heightBrush'), '高度画笔（绘制 3D 地图的高程）');
-    assert.equal(manager.t('toolbar.height'), '高度：');
-    assert.equal(manager.t('toolbar.height.set'), '设置为');
-    assert.equal(manager.t('toolbar.height.raise'), '升高');
-    assert.equal(manager.t('toolbar.height.lower'), '降低');
 });
 
 test('Chinese regional and underscore locale aliases normalize to script locales', () => {

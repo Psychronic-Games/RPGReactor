@@ -91,3 +91,68 @@ test('the step picker asks which step to add and inserts the choice where it was
  // Escape closes without adding anything.
  const third=e.showStepPicker();third.querySelector('.rr-modal-close').fire('click');assert.equal(third.parentNode===null,true);assert.equal(inserted.length,3);
 });
+
+test('a phase head\'s buttons wrap together under a long name instead of running out of the step list', () => {
+    const fs = require('node:fs'), path = require('node:path');
+    const css = fs.readFileSync(path.join(__dirname, '..', 'css', 'styles.css'), 'utf8');
+    const editor = fs.readFileSync(path.join(__dirname, '..', 'src', 'database', 'DatabaseActionSequenceEditor.js'), 'utf8');
+    assert.match(css, /\.rr-sequence-phase-head \{ display:flex;flex-wrap:wrap;/);
+    assert.match(css, /\.rr-sequence-phase-actions \{ display:flex;gap:6px;margin-inline-start:auto; \}/);
+    assert.match(editor, /const actions=U\.element\('span','rr-sequence-phase-actions'\);actions\.append\(add\);head\.append\(actions\);/);
+    assert.match(editor, /inherit\.classList\.add\('rr-sequence-phase-inherit'\);.{0,200}actions\.append\(inherit\);/);
+});
+
+test('a pose step moves the weapon in the hand: a concurrent weapon move rides it over the same frames',()=>{
+ const e=editor({});
+ const show=B.step('weapon',{mode:'show',attachment:'rightHand',x:.5,z:.2,rotation:-30}),raise=B.step('weapon',{mode:'move',duration:4,x:.4,z:.6,rotation:20,rotateY:0,rotateZ:0,y:0,scale:1});
+ const pose=B.step('motion',{motion:B.POSE_MOTION,duration:8,parts:[{part:'RightUpperArm',rotate:[-60,0,0]}]}),hide=B.step('weapon',{visible:false,duration:0}),after=B.step('motion',{motion:'idle',duration:6});
+ e.sequence={version:1,id:1,name:'Swing',steps:[B.step('motion',{motion:'idle',duration:0}),show,raise,pose,hide,after]};
+ // What is in hand as each step begins.
+ assert.equal(e.heldStateBefore(1,'user'),null,'nothing before the weapon is shown');
+ assert.equal(e.heldStateBefore(2,'user').x,.5);
+ const before=e.heldStateBefore(3,'user');assert.deepEqual([before.x,before.z,before.rotation],[.4,.6,20],'a Move since the Show is laid over it');
+ assert.equal(e.heldStateBefore(5,'user'),null,'and nothing once it is hidden');
+ assert.equal(e.poseWeaponStep(pose),null);
+ assert.equal(e.ensurePoseWeaponStep(after),null,'no weapon in hand: nothing to move');
+ // Made for the pose: just before it, concurrent, as long as the pose, starting as the weapon already is.
+ const errorsBefore=[...B.validateSequence(e.sequence)];
+ e.selected=3;const rider=e.ensurePoseWeaponStep(pose);
+ assert.equal(e.sequence.steps.indexOf(rider),3);assert.equal(e.sequence.steps.indexOf(pose),4);assert.equal(e.selected,4,'the pose stays the selected step');
+ assert.equal(B.weaponMode(rider),'move');assert.equal(rider.concurrent,true);assert.equal(rider.duration,8);assert.equal(rider.withStep,pose.id);
+ assert.deepEqual(B.heldKeys.map(k=>rider[k]),[.4,0,.6,20,0,0,1],'every held key, so the move changes nothing until one is edited');
+ assert.equal(e.poseWeaponStep(pose),rider);assert.equal(e.ensurePoseWeaponStep(pose),rider,'made once');
+ assert.deepEqual([...B.validateSequence(e.sequence)],errorsBefore,'ordinary steps: the rider adds nothing the game would refuse');
+ const cues=B.timeline(e.sequence);
+ assert.equal(cues[3].start,cues[4].start,'the weapon and the limbs start on the same frame');assert.equal(cues[3].end,cues[4].end,'and arrive together');
+ assert.equal(cues[5].start,cues[4].end,'the next step waits for the pose, not twice as long');
+ // The weapon's own state after the pose is what the rider says.
+ rider.rotation=95;assert.equal(e.heldStateBefore(5,'user').rotation,95);
+ // Deleting the pose takes the rider with it; an unrelated weapon step before a motion is left alone.
+ e.edit=fn=>fn();e.refresh=()=>{};e.selectStep=()=>{};e.revealStep=()=>{};
+ assert.equal(e.deleteStep(4),true);assert.ok(!e.sequence.steps.includes(rider)&&!e.sequence.steps.includes(pose));assert.equal(e.sequence.steps.length,5);
+ assert.equal(e.poseWeaponStep(after),null,'the Hide before the next motion is not its rider');
+ e.deleteStep(e.sequence.steps.indexOf(after));assert.ok(e.sequence.steps.includes(hide),'so deleting that motion keeps the Hide');
+});
+
+test('the sequence editor keeps the stage clear: the preview cast folds away, the wheel zooms, a drag on nothing turns the view',()=>{
+ const source=fs.readFileSync(path.join(__dirname,'../src/database/DatabaseActionSequenceEditor.js'),'utf8'),preview=fs.readFileSync(path.join(__dirname,'../src/database/ActionSequencePreview.js'),'utf8');
+ assert.match(source,/castFold\.open=!!prefs\.castOpen/,'the cast is folded unless it was left open');
+ assert.match(source,/castFold\.append\(cast\)/);
+ assert.doesNotMatch(preview,/U\.button\('Zoom In'/,'no zoom buttons: the wheel zooms');
+ assert.match(preview,/const hit=ring\|\|arrow\?key:this\.pickBattler\(event\);if\(!hit\)\{turnView\(\);return;\}/,'a press on nothing turns the view');
+ // What a weapon or a motion step needs is in view; the rest waits under Advanced.
+ assert.match(source,/U\.field\(advanced,'Phase'/);
+ assert.match(source,/U\.field\(advanced,'Graphic'/);
+ assert.match(source,/U\.field\(this\.inspector,'Held By'/);
+ assert.match(source,/U\.field\(this\.inspector,'Held With'/);
+ assert.match(source,/U\.field\(this\.inspector,'Aim'/);
+ assert.match(source,/advanced\.append\(edit\)/,'Edit Model Poses is an advanced route');
+});
+
+test('a click picks a part of a posed skinned model: neither its rest sphere nor its rest box turns the ray away',()=>{
+ const preview=fs.readFileSync(path.join(__dirname,'../src/database/ActionSequencePreview.js'),'utf8');
+ // three tests a skinned mesh's ray against boundingSphere, then boundingBox when it is not null; both describe the rest pose.
+ assert.match(preview,/skinned\.push\(\[o,o\.boundingSphere,o\.boundingBox\]\)/);
+ assert.match(preview,/o\.boundingSphere=new THREE\.Sphere\(new THREE\.Vector3\(\),1e6\);o\.boundingBox=null;/);
+ assert.match(preview,/finally\{for\(const \[o,sphere,box\] of skinned\)\{o\.boundingSphere=sphere;o\.boundingBox=box;\}\}/,'and both are put back');
+});

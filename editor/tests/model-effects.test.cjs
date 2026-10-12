@@ -44,7 +44,8 @@ test('the runtime plays anchored animations through a stand-in target and regist
     assert.match(runtime, /PluginManager\.registerCommand\("RPGReactor", "PlayModelEffect"/);
     assert.match(runtime, /sprite\._targets = \[standIn\];/);
     assert.match(runtime, /const sprite = list\.length > count \? list\[list\.length - 1\] : null;/, 'the stock factory returns nothing');
-    assert.match(runtime, /current\.effects = sidecar \? Reactor3D\.readModelEffects\(sidecar\) : \[\];/);
+    // Read with the use's spec, so a variant's media reaches the instance.
+    assert.match(runtime, /current\.effects = sidecar \? Reactor3D\.readModelEffects\(sidecar, spec\) : \[\];/);
     assert.match(runtime, /for \(const name of Reactor3D\.takeModelEffects\(character\)\)/);
     assert.match(runtime, /Reactor3D\.updateAnchoredAnimations\(holder\);/);
     assert.match(read('runtime/reactor_main.js'), /runtime revision: \d{8}\.\d+/);
@@ -65,7 +66,7 @@ test('the editor wires the Play 3D Effect command and the Effects section', () =
     assert.equal((read('editor/src/database/DatabaseCommonEventEditor.js').match(/getEditor\('playModelEffect', PlayModelEffectEditor\)/g) || []).length, 2);
 
     const db3d = read('editor/src/database/Database3DEditor.js');
-    for (const method of ['renderEffectList()', 'renderEffectForm()', 'addModelEffect()', 'deleteModelEffect()', '_placeEffectAnchor(event)', '_playEffectPreview(raw)', '_updateEffectPreview()']) {
+    for (const method of ['renderEffectList()', 'renderEffectForm()', 'addModelEffect(extra = null)', 'deleteModelEffect()', '_placeEffectAnchor(event)', '_playEffectPreview(raw)', '_updateEffectPreview()']) {
         assert.ok(db3d.includes('    ' + method), method);
     }
     assert.match(db3d, /static mergeSidecar\(previousText, animations, parts, pivots, effects, transform, collision, surface\)/);
@@ -89,7 +90,7 @@ test('the picker previews on black by default and does not scroll', () => {
 
 test('a model base transform wraps every instance and effects carry a turn', () => {
     const transform = Reactor3D.readModelTransform({ transform: { offset: [1, '2', 'x'], rotate: [0, 90, 0], scale: '2' } });
-    assert.deepEqual(transform, { offset: [1, 2, 0], rotate: [0, 90, 0], scale: 2, surface: null });
+    assert.deepEqual(transform, { offset: [1, 2, 0], rotate: [0, 90, 0], scale: 2, surface: null, look: null });
     assert.equal(Reactor3D.isIdentityTransform(Reactor3D.readModelTransform({})), true);
     assert.equal(Reactor3D.isIdentityTransform(transform), false);
     const effects = Reactor3D.readModelEffects({ effects: [{ name: 'a', animation: 1, rotate: [10, 'b', 30], scale: 2 }] });
@@ -97,7 +98,7 @@ test('a model base transform wraps every instance and effects carry a turn', () 
     const rules = Reactor3D.readModelAnimationRules({ animations: [{ name: 'idle-loop', trigger: 'action', repeat: true }] });
     assert.equal(rules[0].repeat, true);
     const runtime = source3D();
-    assert.equal((runtime.match(/applyModelTransform\(object, (?:this|Reactor3D)\.readModelTransform\(sidecar\)\)/g) || []).length, 5, 'every instance site applies the base transform');
+    assert.equal((runtime.match(/applyModelTransform\(object, (?:this|Reactor3D)\.readModelTransform\(sidecar, spec\)\)/g) || []).length, 5, 'every instance site applies the base transform, read with the use\'s spec');
     assert.match(runtime, /sprite\._animation = Object\.assign\(\{\}, animation, \{/, 'effect turn and size ride on a copy of the record');
     assert.match(runtime, /holder\.action = !ended\.sequence && rule && \(rule\.repeat \|\| holder\.action\.repeat\)/, 'a repeating action starts over');
     assert.match(read('runtime/reactor_main.js'), /runtime revision: \d{8}\.\d+/);
@@ -106,7 +107,9 @@ test('a model base transform wraps every instance and effects carry a turn', () 
 test('the 3D editor card chooses model, parts, bones and effects, and edits each with sliders', () => {
     const db3d = read('editor/src/database/Database3DEditor.js');
     assert.match(db3d, /class="r3d-card" style="position:absolute;right:10px;top:10px;/, 'the card sits in the upper right');
-    assert.equal((db3d.match(/class="sidebar-header r3d-sec-header"/g) || []).length, 5, 'section headers (stats, parts, animations, effects, surface) use the accent-strip convention and fold');
+    assert.match(db3d, /class="lit-section-header r3d-sec-header" data-sec="\$\{sec\}"/, 'every section of the column is the dock\'s card: an accent-strip header that folds');
+    assert.equal((db3d.match(/\$\{sectionHead\('(?:parts|animations|effects|look)', /g) || []).length, 4, 'Parts, Animations, Effects and Look share the one header');
+    assert.equal((db3d.match(/class="sidebar-header r3d-sec-header" data-sec="stats"/g) || []).length, 1, 'the cost card folds the same way');
     for (const method of ['_mountCardChooser(card)', '_onCardChooserPick(id)', '_renderEffectCard(card, header)', '_renderTransformCard(card, header)', '_applyBaseTransform()', '_saveEffectWork()', '_commitAnchorFromMarker()']) {
         assert.ok(db3d.includes('    ' + method), method);
     }
@@ -120,7 +123,8 @@ test('the 3D editor card chooses model, parts, bones and effects, and edits each
     assert.match(read('editor/index.html'), /src\/utils\/SearchSelect\.js/);
     const layer = read('editor/src/utils/AnimationPreviewLayer.js');
     assert.match(layer, /setTransform\(transform\)/);
-    assert.match(read('editor/src/utils/EventPreviewModels.js'), /Reactor3D\.applyModelTransform\(object, template\.userData\.reactorTransform\)/);
+    // The template's own transform, or the one read for the use's variant.
+    assert.match(read('editor/src/utils/EventPreviewModels.js'), /: template\.userData\.reactorTransform;\s*if \(transform && Reactor3D\.applyModelTransform\) Reactor3D\.applyModelTransform\(object, transform\);/);
 });
 
 test('effects play on their own by state, and scale proportionally or per axis', () => {
@@ -392,7 +396,7 @@ test('an in-scene effect is drawn as its own screen box at full resolution, smal
     const editor = fs.readFileSync(path.join(repoRoot, 'editor', 'src', 'MapEditor3D.js'), 'utf8');
     assert.match(editor, /const rect = \{ x: 0, y: 0, w: size\.x, h: size\.y, scale \};/, 'the map view draws the whole view at its own resolution');
     assert.match(editor, /rect, viewWidth: size\.x, viewHeight: size\.y\s*\}\);/, 'the layer draws it on its own loop');
-    assert.match(editor, /play\.quad && play\.layer && play\.layer\.active\)\) return true;/, 'and a playing effect keeps the view rendering at full rate');
+    assert.match(editor, /if \(play\.quad && play\.layer && play\.layer\.active\) return true;/, 'and a playing effect keeps the view rendering at full rate');
     // three allocates a canvas texture immutably at its first size: a resized source must get a new GL texture.
     assert.match(editor, /if \(play\.texWidth !== source\.width \|\| play\.texHeight !== source\.height\) \{[\s\S]*?play\.quad\.texture\.dispose\(\);/, 'the editor lets go of the texture when its canvas changes size');
     assert.match(runtime, /scratch\.height = drawH;[\s\S]*?play\.quad\.texture\.dispose\(\);\s*\}/, 'so does the game when the box changes size');
@@ -405,7 +409,7 @@ test('a map with models is drawn under one depth buffer, in the editor and the g
     assert.match(runtime, /this\.modelsInWorld \? world : \(which === "above" \|\| which === "overlay"\)/, 'the overlay joins the world pass on a model map');
     assert.match(fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_sprites.js'), 'utf8'), /state\.scene\.modelsInWorld = !!modelsInWorld;/);
     const editor = fs.readFileSync(path.join(editorRoot, 'src', 'MapEditor3D.js'), 'utf8');
-    assert.match(editor, /if \(modelsInWorld\) \{\n\s+this\.mapScene\.setPass\('world'\);\n\s+this\.renderer\.autoClear = true;\n\s+Reactor3D\.renderScene\(this\.renderer, scene, this\.camera\);\n\s+this\.renderLightsPass\(scene\);\n\s+return;/, 'the editor skips the depth-clearing passes on a model map, then composites the lights');
+    assert.match(editor, /if \(modelsInWorld\) \{\n\s+this\.mapScene\.setPass\('world'\);\n\s+this\.renderer\.autoClear = true;\n\s+this\.renderMainPass\(scene\);\n\s+this\.renderLightsPass\(scene\);\n\s+return;/, 'the editor skips the depth-clearing passes on a model map, then composites the lights');
     assert.match(editor, /Reactor3D\.EffekseerScene\.quadFor\(layer\.fxCanvas\)/, 'and shows Effekseer effects on depth quads');
     const layer = fs.readFileSync(path.join(editorRoot, 'src', 'utils', 'AnimationPreviewLayer.js'), 'utf8');
     assert.match(layer, /setWorld\(world\)/);

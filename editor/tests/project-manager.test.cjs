@@ -610,3 +610,44 @@ test('ProjectManager can create a blank project beside the Demo template', async
         fs.rmSync(tempRoot, { recursive: true, force: true });
     }
 });
+
+test('a blank project has every img/system picture the runtime loads, cut the way the engine cuts it', async () => {
+    // A blank project had only the window skin and the icon sheet: New Game stopped at
+    // "Failed to load img/system/Balloon.png" as soon as the map asked for its system pictures.
+    const ProjectManager = loadBrowserClass(path.join(repoRoot, 'src', 'ProjectManager.js'), 'ProjectManager');
+    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'rpg-reactor-blank-system-'));
+    const targetPath = path.join(tempRoot, 'Blank RPG');
+    const previousCwd = process.cwd();
+    process.chdir(repoRoot);
+    try {
+        const manager = new ProjectManager();
+        assert.equal(await manager.createNewProject(targetPath, 'Blank RPG', { blank: true }), true);
+        const named = new Set(['Weapons1', 'Weapons2', 'Weapons3']);
+        for (const file of fs.readdirSync(path.join(workspaceRoot, 'runtime')).filter(name => name.endsWith('.js'))) {
+            const source = fs.readFileSync(path.join(workspaceRoot, 'runtime', file), 'utf8');
+            for (const match of source.matchAll(/ImageManager\.loadSystem\("([A-Za-z0-9_]+)"\)/g)) named.add(match[1]);
+        }
+        assert.ok(named.has('Balloon') && named.has('Shadow1') && named.has('ButtonSet'), 'the scan finds the map\'s own pictures');
+        const size = name => { const bytes = fs.readFileSync(path.join(targetPath, 'img', 'system', `${name}.png`)); return [bytes.readUInt32BE(16), bytes.readUInt32BE(20)]; };
+        for (const name of named) {
+            assert.ok(fs.existsSync(path.join(targetPath, 'img', 'system', `${name}.png`)), `img/system/${name}.png`);
+        }
+        assert.deepEqual(size('Balloon'), [384, 720], 'eight frames of 48 across, fifteen balloons down');
+        assert.deepEqual(size('ButtonSet'), [528, 96], 'eleven 48 px blocks, a pressed row under them');
+        assert.deepEqual(size('States'), [768, 960]);
+        assert.deepEqual(size('Weapons1'), [576, 384]);
+        const [damageWidth, damageHeight] = size('Damage');
+        assert.equal(damageWidth % 10, 0, 'ten digits across');
+        assert.equal(damageHeight % 5, 0, 'five rows');
+        // The digits are drawn, not blank: a damage popup in a blank project still shows its number.
+        const zlib = require('node:zlib');
+        const png = fs.readFileSync(path.join(targetPath, 'img', 'system', 'Damage.png'));
+        const raw = zlib.inflateSync(png.subarray(png.indexOf('IDAT') + 4, png.indexOf('IEND') - 8));
+        let lit = 0;
+        for (let y = 0; y < damageHeight; y++) for (let x = 0; x < damageWidth; x++) if (raw[y * (damageWidth * 4 + 1) + 1 + x * 4 + 3] === 255) lit++;
+        assert.ok(lit > 2000, `digits are drawn (${lit} solid pixels)`);
+    } finally {
+        process.chdir(previousCwd);
+        fs.rmSync(tempRoot, { recursive: true, force: true });
+    }
+});

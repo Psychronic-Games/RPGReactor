@@ -1,6 +1,6 @@
 # Battle Rooms and Action Sequences
 
-Current implementation: runtime **20260920.24**, editor **0.98.7**. The 2026-09-11 reports on [phases and battler graphics](archive/sessions/ACTION-SEQUENCE-EXPANSION-2026-09-11.md) and [held items and throws](archive/sessions/HELD-ITEMS-AND-THROWS-2026-09-11.md) record how those parts arrived; this page is the current guide.
+The 2026-09-11 reports on [phases and battler graphics](archive/sessions/ACTION-SEQUENCE-EXPANSION-2026-09-11.md) and [held items and throws](archive/sessions/HELD-ITEMS-AND-THROWS-2026-09-11.md) record how those parts arrived; this page is the current guide.
 
 `BattlePresentation.json` top-level switches: `"commandWindow": "battler"` parks the actor command window above the acting battler; `"startMessages": false` skips the "emerged" and preemptive/surprise lines (System › Options › Announce enemies at battle start); `"escapeMessages": false` escapes, or fails to, without the Terms escape messages (System › Options › Show escape messages).
 
@@ -40,7 +40,7 @@ Troop event pages remain in Troops. Each map event can be **Called Only**, **On 
 
 Runtime **20260906.14** adds **Troops → Battle Room → Set Up Room → Override for This Troop → Mode: Cinematic Cuts**. Position the overview using the usual preview navigation and camera fields, then Apply and save. The setup preview shows the overview; Battle Test demonstrates the action camera.
 
-The camera eases toward the acting battler over 30 frames, gently orbits, moves toward the target on impact over 24 frames, and returns to the saved overview over 42 frames. Rotations take the shortest arc and the orbit is bounded. Area attacks frame the distinct target group; repeated hits do not restart the camera transition. A new action can smoothly take over during the return. Saved camera values remain unchanged by automatic playback.
+The camera cuts to the acting battler and gently orbits, follows a runner or a projectile, cuts to the target as the hit lands (nearer and lower, creeping in), and cuts back to the saved overview. The hit shot is let go 75 frames after the last hit, so the walk home is seen from the overview, and comes back for a later hit; the last shot of an action stays 24 frames. A cut within 20 frames of the one before is a 14-frame ease instead. A shot is sized by the posed model's height and footprint. Area attacks frame the distinct target group; repeated hits do not restart the shot. Saved camera values remain unchanged by automatic playback.
 
 This mode hooks ordinary battle actions and built-in action sequences through the existing action/impact lifecycle. While a sequence runs it also tells the camera where the action is each frame: a projectile in flight with its target, a battler running at its target, the targets at the hit, and the shot glides after that focus. Explicit sequence camera keys and Battle Room Camera commands take control of the camera; built-in sequence cleanup restores its original camera configuration. Inherited map cameras and other troop camera modes retain their behavior. The sweeping perspective applies to 3D rooms; 2D rooms retain top-down projection while focus and zoom transition. Automatic obstacle avoidance and battleback cinematic cameras are not implemented, so check the authored room and overview in Battle Test.
 
@@ -52,7 +52,7 @@ Runtime **20260906.9** skips a known-missing local one-shot sound with one diagn
 
 ## Build an Action Sequence
 
-1. Open **Database → Action Sequences**. Use **Add Starter Sequences** to add the 16 editable starters to an existing project, or create an entry. Save the database to persist the library.
+1. Open **Database → Action Sequences**. Use **Add Starter Sequences** to add the 19 editable starters to an existing project, or create an entry. Save the database to persist the library.
 2. Choose a template such as **Unarmed Punch**, **Melee Strike**, **Heal**, **Use Item**, **Throw Item**, **Throw Weapon**, or **Boomerang**, and click **Use Template**. Movement and held-item routines provide reusable building blocks.
 3. Choose the preview user and target from existing actors/enemies. Their active 2D or 3D graphic is used. Preview casting is temporary; the sequence works with whichever battlers use it in battle. The default formation faces opponents toward one another; **Mirror Formation** reverses the sides.
 4. Play, pause, step a frame or scrub the timeline. Select a step to adjust its duration and properties. Drag steps to reorder them, duplicate/delete steps, or add another step. Undo/Redo applies to sequence edits.
@@ -91,21 +91,29 @@ Existing sequences without the optional motion `transform` and `targetIndex` pro
 
 ### Weapons in hand
 
+The same sequences play in battles on the map (see [BATTLE-MODES.md](BATTLE-MODES.md)). 3D models play Motion and pose steps as in the battle scene; sprites answer with a short lunge, hop or flinch. Projectiles, icons and pictures are drawn over the map in 2D and 3D.
+
 A weapon step shows, moves or hides the equipped weapon (or the skill's item) in the hand for the sequence. Selecting a step in the editor previews the sequence as of that step, so a weapon shown by the next step is not yet in the hand.
+
+A hand whose rig has finger markers closes on what it holds and opens again when the item is hidden. **Held By › In the fist** on a Show step puts the handle across the palm along the knuckles, the blade out by the thumb (a gun by its grip, the trigger finger free), with the step's offset and turns in the hand's own frame, so it stays in the fist however the arm moves; choosing it clears the step's offset and turns. New Show steps start that way. A held model with its own markers (Database › 3D Models › Rig, Blade or tool / Gun) is gripped where they say; see [RIGGING-MODELS.md](RIGGING-MODELS.md). A step saved before it keeps the older hold (the handle along the forearm, offsets in the battler's frame), where the wrist turns to take the handle as far as it can.
+
+A Motion step can move the weapon while it poses. With a weapon in hand, the step shows a **Weapon in Hand** card (Offset, Rotate), and a click on the weapon in the preview puts the arrows and rings on it; a click on a limb goes back to posing. What it writes is an ordinary weapon Move step just before the Motion step, marked Concurrent and as long as it, so the weapon and the limbs arrive together; it follows the Motion step's duration and is deleted with it.
+
+A step's inspector shows what the step needs; Phase, what the weapon is drawn as, its layer, hand and grip, Edit Model Poses, Start from rest and Aim at target are under **Advanced**.
 
 ### The preview camera
 
-Right-drag orbits the preview, middle-drag or Shift + right-drag pans it, and the wheel zooms; **Reset View** brings it home and **Frame Battler** keeps the selected battler centred. The view is remembered with the other preview choices and never touches the battle's own camera, which stays as the troop's room sets it.
+Drag empty space to turn the preview (right-drag turns it from anywhere), Shift-drag or middle-drag pans it, and the wheel zooms; **Reset View** brings it home and **Frame Battler** keeps the selected battler centred. The preview's cast (User, Target, Skill / Item, Weapon in Hand, Targets, Scene, Projection) folds under one **Preview** line above the stage. The view is remembered with the other preview choices and never touches the battle's own camera, which stays as the troop's room sets it.
 
 ### Phases inside the sequence (2026-09-12)
 
 An action sequence's step list is divided into phase sections: Prepare, Movement, Execute, Return and Finish, each with a numbered head where it begins. The hit is part of Execute: a Show Animation step on the targets and one Apply Action Effect step land it, wherever in the swing the author puts them, and an Execute with no Apply Action Effect of its own gets the built-in animation and hit after its last step. A step belongs to the section it sits in: drag it into another, choose its Phase in the inspector, or press the + on a head to add a step there. A section with no steps can be let go with Inherit; **Phases…** adds one back, or sorts the steps into phases automatically from what they do. The sequence provides exactly the phases it marks. Sequences kept for battler motions or routines say so under Used As at the foot of the editor.
 
-A record (skill or item, weapon, class, actor or enemy) picks one Action Sequence, or **None**, which is read level by level: on an actor or enemy it means the built-in action plays unless a skill, item or weapon brings a sequence; on a class it means the battler's own sequence; on a weapon, the class's or battler's; on a skill or item, the weapon's, class's or battler's. Each phase of the action comes from the first record down the priority chain whose sequence provides it, and the built-in default fills any phase nobody provides. So a sword that only marks Execute and Effect keeps the actor's run-up and return; a gun that marks Movement too replaces the run-up with its own step forward; a starter provides every phase and owns the whole action until you let a phase inherit. Older per-phase assignments still work and show as such.
+A record (skill or item, weapon, class, actor or enemy) picks one Action Sequence, or **None**, which is read level by level: on an actor or enemy it means the built-in action plays unless a skill, item or weapon brings a sequence; on a class it means the battler's own sequence; on a weapon, the class's or battler's; on a skill or item, the weapon's, class's or battler's. Each phase of the action comes from the first record down the priority chain whose sequence provides it, and the built-in default fills any phase nobody provides. So a sword that only marks Execute keeps the actor's run-up and return; a gun that marks Movement too replaces the run-up with its own step forward; a starter provides every phase and owns the whole action until you let a phase inherit. Older per-phase assignments still work and show as such.
 
 ### Whole Action versus phases (older records)
 
-Resolution is one decision per action, made along the priority chain (skill or item, then weapon, then class, then actor or enemy): the first record with a setting other than Inherit wins. If that setting is a **Whole Action** (a sequence with the Complete Action purpose, such as Railgun Shot on the pistol), the whole sequence plays and the phase settings further down the chain are not consulted at all. If it is **Phases**, each of the six phases is resolved on its own among the records set to Phases, with the built-in default for any phase nobody set. So a pistol that should never charge the target is right to own a Whole Action; a weapon that only changes how the blow lands can set just its Execute phase and let the class or actor keep supplying the run-up and the return.
+Resolution is one decision per action, made along the priority chain (skill or item, then weapon, then class, then actor or enemy): the first record with a setting other than Inherit wins. If that setting is a **Whole Action** (a sequence with the Complete Action purpose, such as Railgun Shot on the pistol), the whole sequence plays and the phase settings further down the chain are not consulted at all. If it is **Phases**, each of the five phases is resolved on its own among the records set to Phases, with the built-in default for any phase nobody set. So a pistol that should never charge the target is right to own a Whole Action; a weapon that only changes how the blow lands can set just its Execute phase and let the class or actor keep supplying the run-up and the return.
 
 ### One transform card (2026-09-12)
 
@@ -113,7 +121,7 @@ Wherever a step places something, the inspector shows the same card: **Offset**,
 
 Held items are edited in the viewport too. Select a Show or Move weapon step and the arrows stand on the held thing: drag them to move it in the hand (X is forward of the hand), drag the rings to **Tilt**, **Turn** and **Roll** it, and the card follows. Turn and Roll only turn a 3D model; an icon has Tilt alone.
 
-A bound 3D model is read by its shape and held by its own grip: the long axis is the blade or barrel, the widest part marks the handle end, and it lies along the forearm with the tip out, turning with the arm. **Held By** offers that grip first, then the middle or the top. **Held With** both hands puts the other hand on the forestock; **Aim** at the target bends the holding arm down the line to the target so a gun points at it (a long gun's stock ends at the shoulder, a pistol goes out at arm's length), with no arm poses to author. The model's size comes from its binding under Database › Weapons or Items; the step's Scale multiplies it. A model with an authored front face points where its holder faces; one without keeps the long-axis assumption. In Advanced, **Bone Name** names a specific bone to attach to (blank finds the hand), and the icon grip fields place a 2D icon.
+A bound 3D model is read by its shape and held by its own grip: the long axis is the blade or barrel, the widest part marks the handle end, and it lies along the forearm with the tip out, turning with the arm. **Held By** offers that grip first, then the middle or the top. **Held With** both hands puts the other hand on the forestock (the chest turns the other shoulder forward until that hand reaches a marked Fore grip); **Aim** at the target bends the holding arm down the line to the target so a gun points at it (a long gun's stock ends at the shoulder, a pistol goes out at arm's length), with no arm poses to author. The model's size comes from its binding under Database › Weapons or Items; the step's Scale multiplies it. A model with an authored front face points where its holder faces; one without keeps the long-axis assumption. In Advanced, **Bone Name** names a specific bone to attach to (blank finds the hand), and the icon grip fields place a 2D icon.
 
 The **User** and **Target** above the preview are a preview cast only. Nothing about them is stored in the sequence: in battle, whichever battler uses the sequence plays it, with its own equipment and model. ### Pose Parts (2026-09-12)
 
@@ -137,25 +145,25 @@ Runtime **20260906.10** adds **Unarmed Punch**: run toward the target for 30 fra
 
 3D battlers reuse their configured running/walking clips. An authored action rule named `punch` takes priority; otherwise a compatible humanoid skeleton with a right upper arm, forearm and hand receives a generated short jab on that model instance. This fallback does not alter the model asset and cannot infer limbs for arbitrary creature rigs or static props. Such models need their own named motion rules. Side-view sprites use their thrust motion. Preview scrubbing samples exact clip poses, including backward seeks; game playback retains animation crossfades.
 
-Demo now contains sequence **#1 Unarmed Punch**, assigned under **Actors → Fleagus / Carol → Unarmed Attack Sequence**. Their normal default follows lower-priority defaults (the former **Inherit** option). For Battle Test, choose a configured actor, remove their weapon in the test equipment, then use **Attack**. Starting equipment, the saved test party, map formations and plugin choices were preserved. Explicit skill assignments retain priority.
+Demo contains sequence **#1 Unarmed Punch**; choose it as an actor's **Action Sequence** to make it that actor's unarmed attack. For Battle Test, choose that actor, remove their weapon in the test equipment, then use **Attack**. Explicit skill assignments retain priority.
 
 ## Assign action sequences
 
 Action Sequences has its own database list. Troops contains room and battle-event configuration, with no sequence assignment.
 
-Every skill, item, weapon, class, actor and enemy shows the same card: a priority line, a **Whole Action** control, and the five phases (Prepare, Movement, Execute, Return, Finish). Priority follows Victor's Battle Motions: **Skill / Item › Weapon › Class › Actor / Enemy**. A phase assigned on a record overrides that phase on every level after it; a phase left on **Inherit** keeps looking down the chain and ends at the built-in behavior. Weapon assignments apply to normal attacks. An actor's or enemy's own Execute is its default action, an unarmed attack unless something higher assigns one, so there is no separate unarmed override (a saved one from 0.98.5 becomes the actor's Whole Action when the actor had nothing else assigned).
+Every skill, item, weapon, class, actor and enemy shows the same card: a priority line and one **Action Sequence** choice. Priority follows Victor's Battle Motions: **Skill / Item › Weapon › Class › Actor / Enemy**. A sequence provides the phases it marks; the others keep looking down the chain and end at the built-in behavior. Weapon assignments apply to normal attacks. An actor's or enemy's own Execute is its default action, an unarmed attack unless something higher assigns one, so there is no separate unarmed override (a saved one from 0.98.5 becomes the actor's Action Sequence when the actor had nothing else assigned).
 
-| Whole Action | What happens |
+| Action Sequence | What happens |
 | --- | --- |
-| **Use the Phases Below** (default) | Resolve each phase through the priority chain |
-| A complete action sequence | That sequence controls the entire action; the phases are not used |
+| **None** (default) | The next level down decides, ending at the built-in action |
+| A sequence | Its marked phases play; the rest inherit |
 | **Use Engine / Plugin Action** | Stop the lookup here and use the project's existing action presentation |
 
 Weapon steps are **Show**, **Move** or **Hide**: show the equipped weapon (its icon, or its bound 3D model in a battle room) once at a hand offset and rotation, then add Move steps that tween offset, rotation and scale over their frames with easing; Hide puts it away. The sequence editor's Options offer a Preview Weapon so a swing can be authored with any weapon.
 
 States carry a **Reaction Sequence** (a motion-purpose sequence played instead of idle while the state is on the battler; the highest-priority afflicting state with one wins), so poison, sleep and custom states each animate from the State record rather than from every battler. Character-set battlers pick their sheet row from their facing (Facing: Face the Target, or a fixed direction), which is what a vertical formation needs. Weapons and thrown items bound to 3D models are held and thrown as those models in battle rooms.
 
-Each phase can inherit, use its built-in behavior, or reference a sequence with the matching purpose. Battler state/reaction controls separately cover idle, movement, guard, damage and other states; they yield to active actions. Actors/enemies also have an explicit SV/character/static/model graphic selector. See the [assignment and graphics guide](archive/sessions/ACTION-SEQUENCE-EXPANSION-2026-09-11.md).
+In an older per-phase assignment, each phase can inherit, use its built-in behavior, or reference a sequence with the matching purpose. Battler state/reaction controls separately cover idle, movement, guard, damage and other states; they yield to active actions. Actors/enemies also have an explicit SV/character/static/model graphic selector. See the [assignment and graphics guide](archive/sessions/ACTION-SEQUENCE-EXPANSION-2026-09-11.md).
 
 The builder lists **Where Used** references. Referenced sequences cannot be deleted or truncated by Change Maximum until their assignments are removed. Assignments, graphic settings and 3D model bindings travel with copied and duplicated records inside the same project; copying into another project does not carry unrelated sequence IDs.
 
@@ -167,7 +175,7 @@ The initial runtime adapter preserves PSYCHRONIC Battle Engine's combat resoluti
 
 VE Battle Motions, YEP Battle Engine Core, VisuStella Battle Core and LeTBS retain existing sequence behavior with a diagnostic; they need explicit adapters before Reactor can own their choreography. Their syntax inspired the builder but is not imported. Retaining Scene_Battle helps HUD integration; it does not establish compatibility with every MOG or third-party plugin configuration.
 
-Current room limitations include dynamic shadow integration, plugin fog/overlays, map-dependent plugin commands and full performance profiling. Map and model media surfaces are supported, as described below. A room reproduces the implemented tiles/models/lights/effects, not every exploration renderer extension. The presentation also retains a canvas copy into the battle display; dense-room performance needs measurement.
+Current room limitations include plugin fog/overlays, map-dependent plugin commands and full performance profiling. Map and model media surfaces are supported, as described below. A room reproduces the implemented tiles/models/lights/effects, not every exploration renderer extension. The room draws on the game's own WebGL context; `Reactor3D.battleRoomShared = false` keeps the canvas copy.
 
 ## Verification
 
@@ -183,6 +191,8 @@ The complete counter/reflection/substitution and victory/defeat/escape/abort/plu
 ### Hits on 3D battlers (2026-09-13)
 
 A battler's model in a room takes a hit on the body: pushed back along the line from the attacker over six frames, springing forward past home and settling, less so for a big model. The stock damage blink flashes the model white instead of hiding it. Models wear the engine's sprite effects (hit and animation flashes, collapse fade, boss shake, gone once a dead enemy has collapsed) and stand on a soft floor shadow. While a pose step stands, the model's idle clip freezes on its first frame so the posed arm is not moved under the pose; battle matches the editor. An enemy whose Collapse Effect trait is **Ash**, **Ember** or **Wisp** dissolves as a model too: shards in its own colours leave its surface on a wave from the feet up while the model is eaten away behind them, Ember tinted towards fire with sparks and Wisp green, soft and slow. **Shatter** breaks rather than dissolves: the model comes apart into triangular shards cut flat against its own surface and lit by the room's lights, thrown outward from the middle, tumbling, falling and settling on the floor. In a flat battle every one of these runs on the battler's sprite instead, Shatter cutting its art into a mesh of triangles.
+
+**Corpse** (Collapse Effect, Traits › Other) leaves the enemy on the ground instead of removing it: a picture turns onto its side and dims, a model in a room goes over. It stays for the battle and gets up if it is revived.
 
 On the Enemies page, a **Collapse Sound** row sits under Collapse Effect in Traits › Other and says what that collapse sounds like. It reads *System default* until you choose one through the usual audio picker, with its own volume, pitch and pan, and the choice plays for whichever effect is set — including Instant, which has no sound of its own. Choosing nothing restores the default. The sound is stored per enemy in `BattlePresentation.json` as `enemies[id].collapseSe`; the same trait on a state or a class keeps the engine's sound, since the sound is resolved from the enemy's own record.
 

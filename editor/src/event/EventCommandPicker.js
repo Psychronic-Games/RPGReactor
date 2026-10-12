@@ -169,6 +169,7 @@ class EventCommandPicker {
                                 title: 'Scene Control',
                                 commands: [
                                     { name: 'Battle Processing', code: 301 },
+                                    { name: 'Start Battle on Map', code: 357, reactor: 'StartMapBattle' },
                                     { name: 'Shop Processing', code: 302 },
                                     { name: 'Name Input Processing', code: 303 },
                                     { name: 'Open Menu Screen', code: 351 },
@@ -239,6 +240,13 @@ class EventCommandPicker {
                     {
                         sections: [
                             {
+                                title: 'Vehicles',
+                                commands: [
+                                    { name: 'Get On Reactor Vehicle', code: 357, reactor: 'GetOnVehicle' },
+                                    { name: 'Get Off Reactor Vehicle', code: 357, reactor: 'GetOffVehicle' }
+                                ]
+                            },
+                            {
                                 title: '3D',
                                 commands: [
                                     { name: 'Play Model Animation', code: 357, reactor: 'PlayModelAnimation' },
@@ -268,14 +276,6 @@ class EventCommandPicker {
                                     { name: 'Quest Reward', code: 357, reactor: 'QuestReward' },
                                     { name: 'Open Quest Log', code: 357, reactor: 'OpenQuestLog' }
                                 ]
-                            },
-                            {
-                                title: 'Media Surfaces',
-                                commands: [
-                                    { name: 'Show Media Surface', code: 357, reactor: 'ShowVideoSurface' },
-                                    { name: 'Transform Media Surface', code: 357, reactor: 'TransformVideoSurface' },
-                                    { name: 'Stop Media Surface', code: 357, reactor: 'StopVideoSurface' }
-                                ]
                             }
                         ]
                     },
@@ -285,6 +285,34 @@ class EventCommandPicker {
                                 title: 'User Interfaces',
                                 commands: [
                                     { name: 'Call User Interface', code: 357, reactor: 'CallUserInterface' }
+                                ]
+                            },
+                            {
+                                title: 'Party Followers',
+                                commands: [
+                                    { name: 'Change Follower Formation', code: 357, reactor: 'ChangeFollowerFormation' },
+                                    { name: 'Follower Orders', code: 357, reactor: 'FollowerOrders' }
+                                ]
+                            },
+                            {
+                                title: 'Battles on the Map',
+                                commands: [
+                                    { name: 'Start Battle on Map', code: 357, reactor: 'StartMapBattle' },
+                                    { name: 'Spawn Unit', code: 357, reactor: 'SpawnUnit' },
+                                    { name: 'Change Unit Side', code: 357, reactor: 'ChangeUnitSide' },
+                                    { name: 'Remove Unit', code: 357, reactor: 'RemoveUnit' },
+                                    { name: 'End Battle on Map', code: 357, reactor: 'EndMapBattle' },
+                                    { name: 'Change Battle Goal', code: 357, reactor: 'ChangeBattleGoal' },
+                                    { name: 'Change Battle Mode', code: 357, reactor: 'ChangeBattleMode' },
+                                    { name: 'Set Terrain Cost', code: 357, reactor: 'SetTerrainCost' }
+                                ]
+                            },
+                            {
+                                title: 'Media Surfaces',
+                                commands: [
+                                    { name: 'Show Media Surface', code: 357, reactor: 'ShowVideoSurface' },
+                                    { name: 'Transform Media Surface', code: 357, reactor: 'TransformVideoSurface' },
+                                    { name: 'Stop Media Surface', code: 357, reactor: 'StopVideoSurface' }
                                 ]
                             }
                         ]
@@ -415,9 +443,12 @@ class EventCommandPicker {
                 transition: background-color 0.15s;
             `;
 
+            tab.dataset.commandTab = String(index);
             tab.addEventListener('click', () => {
                 this.currentTab = index;
                 this.renderContent();
+                // The redraw replaced the tab that held the focus: the new one takes it, so Escape and Tab still answer.
+                this.modal.querySelector(`[data-command-tab="${index}"]`)?.focus({ preventScroll: true });
             });
 
             tab.addEventListener('mouseenter', () => {

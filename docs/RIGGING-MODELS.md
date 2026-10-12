@@ -4,9 +4,15 @@ Database › 3D Models › **Rig** fits a skeleton to a static model so motions 
 
 ## Markers
 
-Pick a template (Humanoid, Quadruped, and others), then drag each marker onto the joint it names. Left and right markers mirror. The yellow chain draws marker to marker so the skeleton reads as connected. **Bind rig** computes skin weights and the bones become poseable parts; **Reset markers** and **Remove rig** do what they say.
+Pick a template (Humanoid, Quadruped, and others), then drag each marker onto the joint it names. Left and right markers mirror. The yellow chain draws marker to marker so the skeleton reads as connected. **Save rig** writes the markers and, with a skeleton, computes skin weights so the bones become poseable parts; **Reset markers** and **Remove rig** do what they say. Unsaved markers, face points and effects are marked on their Save button and in the status line; OK and Apply save them, Cancel and leaving ask first.
 
 The humanoid template marks the head, chin, hips, shoulders, elbows, wrists, knees and ankles, and on each hand a **palm** centre plus a **base** and **tip** for the thumb and each finger. Held weapons sit at the palm; the finger markers say where the hand ends and which way it closes. A rig saved before these markers existed keeps what was placed and derives the hand from its own elbow and wrist.
+
+## Things held in a hand
+
+A sword, a tool or a gun takes a rig of markers only: no bones, nothing to bind. The **Blade or tool** template marks **Grip top**, **Grip bottom**, **Tip** and **Edge**; the **Gun** template marks **Grip top**, **Grip bottom**, **Trigger finger**, **Muzzle**, **Rear**, **Fore grip** and **Stock**. Muzzle, Rear and Stock snap to the model's middle plane. Saved as `rig: { template, markers }`.
+
+A marked model is held by what its markers say instead of by its shape: the hand closes between Grip bottom and Grip top, the blade runs to Tip with Edge leading, a gun points from Rear to Muzzle and the index finger rests at Trigger finger. A model without markers is still read by its shape.
 
 ## Placing markers precisely
 
@@ -18,7 +24,7 @@ The humanoid template marks the head, chin, hips, shoulders, elbows, wrists, kne
 
 ## What the runtime reads
 
-The rig lives in the model's sidecar (`model.json`) as `rig: { template, markers, bones, weights }`. The game uses the markers for the hand: the palm point is where a held weapon's grip goes, and the finger bases and tips give the knuckle line and fingertips. Without markers those come from the hand and forearm joints. See [BATTLE-PRESENTATION.md](BATTLE-PRESENTATION.md) for how sequences hold, aim and pose a rigged model.
+The rig lives in the model's sidecar (`model.json`) as `rig: { template, markers, bones, weights }`. The game uses the markers for the hand: the palm point is where a held weapon's grip goes, and the finger bases and tips give the knuckle line and fingertips. Each finger and thumb with a base and a tip marker also becomes two joints, made when the model loads, which close on what the hand holds. A finger is the mesh surface that grows from its tip, and fingers the mesh does not separate close as one. Without markers those come from the hand and forearm joints. See [BATTLE-PRESENTATION.md](BATTLE-PRESENTATION.md) for how sequences hold, aim and pose a rigged model.
 
 ## Motions a rig gives a model
 
@@ -48,6 +54,10 @@ Rotations are in degrees about the model's own axes, with the character facing +
 
 Between keys a motion follows a smooth curve: it slows only where it turns back or holds, never overshoots a key, and a looping motion runs through its end without pausing.
 
+## Variants
+
+A model can have variants: the same model worn several ways. Database › 3D Models › **Variants** lists **Model's own** and each variant; **+** adds one, and a row opens its card (Color, Texture, Surface, Effects; the name is changed in the card's title, delete is on the row, changes save as they are made). The preview wears the selected variant until the chip under the tools is clicked. Renaming a variant renames it in every effect's list; deleting one removes it, and an effect only it wore shows in no variant until Shown in is changed. In play, changing a model's variant adds and removes its effects. Model's own holds the model's Surface. A variant can change **Color** (Colorize: one color over the model's own light and dark, with Strength and Lightness; Adjust: hue, saturation and brightness of what is there), **Texture** (a picture in the model's `textures` folder), **Surface**, and what each media surface shows (or off). What a variant leaves alone is the model's. Choose the variant where the model is used: an event page, a placed model, a Database binding. One color recolors the whole model; different colors per part need a replacement texture. Scripts: `Reactor3D.setModelVariant(character, "Name")`, `""` for the model's own.
+
 ## Surface
 
-The **Surface** section (under Effects) has a Reflections switch; switched on: Reflection (how much of the world it mirrors), Gloss (1 a clean mirror, lower blurs it), Metal (1 reflects as strongly face on as at an angle, as chrome does; 0 only at glancing angles, as paint does) and a Tint for the reflection. Chrome, Gold, Glossy and Brushed are starting points. It is saved as `model.json` › `surface` and applies wherever the model is placed. Nothing reflects until it is switched on; a model whose file is polished metal starts from the file's own values.
+The **Surface** section (under Effects) has a Reflections switch; switched on: Reflection (how much of the world it mirrors), Gloss (1 a clean mirror, lower blurs it), Metal (1 reflects as strongly face on as at an angle, as chrome does; 0 only at glancing angles, as paint does), Texture (how much of the model's own texture shows under the reflection: 0 a mirror, 1 a clear lacquer) and a Tint for the reflection. Chrome, Polished, Glossy, Gold and Brushed are starting points. It is saved as `model.json` › `surface` and applies wherever the model is placed. Nothing reflects until it is switched on; a model whose file is polished metal starts from the file's own values.

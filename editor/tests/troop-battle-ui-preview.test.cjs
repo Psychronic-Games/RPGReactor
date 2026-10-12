@@ -144,7 +144,23 @@ test('the actor home position follows the runtime for each stack', () => {
     const editor = troopEditor(DatabaseTroopEditor);
     const base = { screenWidth: 1280, screenHeight: 800, boxWidth: 1272, boxHeight: 792, maxBattleMembers: 3 };
     // Sprite_Actor.setActorHome in runtime/reactor_sprites.js.
-    assert.deepEqual(plain(editor.actorHomePosition(1, { ...base, battleCore: false, coreEngine: false })), { x: 632, y: 328 });
+    assert.deepEqual(plain(editor.actorHomePosition(1, { ...base, boxWidth: 808, boxHeight: 616, battleCore: false, coreEngine: false })), { x: 632, y: 328 });
+    assert.deepEqual(plain(editor.actorHomePosition(1, { ...base, battleCore: false, coreEngine: false })), { x: 995, y: 422 });
+    // The same numbers from the runtime itself, at the default field and at this one.
+    const sprites = fs.readFileSync(path.join(__dirname, '..', '..', 'runtime', 'reactor_sprites.js'), 'utf8');
+    const from = sprites.indexOf('Sprite_Battler.FIELD_FIT = true;');
+    const block = sprites.slice(from, sprites.indexOf('};', sprites.indexOf('Sprite_Actor.prototype.setActorHome', from)) + 2);
+    const homeAt = (boxWidth, boxHeight, index) => {
+        const Sprite_Battler = {}; const Sprite_Actor = { prototype: {} }; const Graphics = { boxWidth, boxHeight };
+        new Function('Sprite_Battler', 'Sprite_Actor', 'Graphics', block)(Sprite_Battler, Sprite_Actor, Graphics);
+        let home = null;
+        Sprite_Actor.prototype.setActorHome.call({ setHome: (x, y) => { home = { x, y }; } }, index);
+        return home;
+    };
+    assert.deepEqual(homeAt(808, 616, 1), { x: 632, y: 328 });
+    assert.deepEqual(homeAt(1272, 792, 1), { x: 995, y: 422 });
+    assert.deepEqual(homeAt(1912, 1072, 0), { x: 1420, y: 487 });
+    assert.match(sprites, /this\.setHome\(battler\.screenX\(\), battler\.screenY\(\)\);/, 'troop positions are used as written');
     // BattleCore's default HomePosJS / CoreEngine's RepositionActors.
     const home = plain(editor.actorHomePosition(0, { ...base, battleCore: true }));
     assert.deepEqual(home, { x: 828, y: 452 });
@@ -225,7 +241,7 @@ test('battle test launches as a playtest too, on every host', () => {
 function battleTestModal(overrides = {}) {
     const alerts = [];
     const BattleTestConfigModal = loadClass(['src', 'database', 'BattleTestConfigModal.js'], 'BattleTestConfigModal', {
-        alert: message => alerts.push(message),
+        RRDialog: { alert: async message => { alerts.push(message); } },
         require: name => {
             if (name === 'path') return path;
             if (name === 'fs') return overrides.fs;

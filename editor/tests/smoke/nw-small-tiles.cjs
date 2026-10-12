@@ -107,8 +107,8 @@ const driver = new WebDriverClient(path.join(sdkRoot, 'chromedriver'));
             fs.writeFileSync(evidence+'-icons.png',Buffer.from(await driver.sessionRequest('GET','/screenshot'),'base64'));
         }
         await driver.execute(`document.getElementById('database-cancel-btn').click();window.__char=new CharacterGraphicPicker(reactor.projectController);__char.show('$AuditTiny',0,1,2,()=>{});`);
-        await driver.waitForScript('return !!document.querySelector(".character-preview-zoom");');
-        check('8px sprite preview starts at 64px',await driver.execute('return document.querySelector("#char-preview-area canvas").width;'),64);
+        await driver.waitForScript('return !!document.querySelector("#char-preview-area canvas");');
+        check('8px sprite preview starts at 64px',await driver.execute('return parseFloat(document.querySelector("#char-preview-area canvas").style.width);'),64);
         await driver.execute(`const z=document.querySelector('.character-preview-zoom');z.value='4';z.dispatchEvent(new Event('change'));`);
         check('character zoom adjusts displayed cell',await driver.execute('return parseFloat(document.querySelector("#char-preview-area canvas").style.width);'),32);
         await driver.execute('document.getElementById("char-picker-close").click();');

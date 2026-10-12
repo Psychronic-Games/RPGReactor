@@ -8,6 +8,7 @@
  * because it has no thickness.
  */
 const { source3D } = require('./helpers/runtime-3d-source.cjs');
+const { runtimeSource } = require('./helpers/runtime-source.cjs');
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const test = require('node:test');
@@ -349,8 +350,7 @@ test('everything standing shares one idea of where the ground is', () => {
         /Number\.isFinite\(object\.planeZ\) \? object\.planeZ : footing \+ 0\.5;/,
         'props otherwise use the common footing or their declared flat-row hinge');
     assert.match(three, /z: character\._realY \+ 0\.5/, 'characters');
-    const objectsSource = fs.readFileSync(
-        path.join(repoRoot, 'runtime', 'reactor_objects.js'), 'utf8');
+    const objectsSource = runtimeSource('reactor_objects.js');
     assert.match(objectsSource, /ground, this\._realY \+ 0\.5\)/,
         'and the position every plugin is told');
     assert.match(three, /const level = footing - cell\.y;/, 'and rows are heights above it');
@@ -361,8 +361,7 @@ test('everything standing shares one idea of where the ground is', () => {
     assert.match(sprites, /standScaleAt\(camera, at\.x, at\.y, at\.z, wide, tall\)/,
         'and the scale is measured where the sprite actually stands');
 
-    const objects = fs.readFileSync(
-        path.join(repoRoot, 'runtime', 'reactor_objects.js'), 'utf8');
+    const objects = runtimeSource('reactor_objects.js');
     assert.match(objects, /this\._realX \+ 0\.5, ground, this\._realY \+ 0\.5\)/,
         'and what plugins are told matches what is drawn');
 });

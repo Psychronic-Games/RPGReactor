@@ -60,16 +60,31 @@ function projectRelativePath(url) {
     return decodeURIComponent(url.pathname.slice(prefix.length));
 }
 
+// A build whose project is packed puts the pack reader (pack-reader.js) in front of this file: a project file
+// that no browser-saved edit shadows is then read from the packs.
+const projectPacks = self.RRPackReader
+    ? self.RRPackReader.create(new URL('project/', self.registration.scope).href)
+    : null;
+
 self.addEventListener('fetch', event => {
-    if (event.request.method !== 'GET') return;
+    const method = event.request.method;
+    if (method !== 'GET' && !(projectPacks && method === 'HEAD')) return;
     const relativePath = projectRelativePath(new URL(event.request.url));
     if (relativePath === null) return;
     event.respondWith((async () => {
         try {
             const record = await storedFile(relativePath);
-            if (record) return new Response(record.data, { headers: { 'Content-Type': contentType(relativePath), 'Cache-Control': 'no-store' } });
+            if (record) return new Response(method === 'HEAD' ? null : record.data, { headers: { 'Content-Type': contentType(relativePath), 'Cache-Control': 'no-store' } });
         } catch (error) {
             console.warn('RPG Reactor overlay lookup failed:', error);
+        }
+        if (projectPacks && !relativePath.startsWith('packs/')) {
+            try {
+                const packed = await projectPacks.respond(relativePath, event.request);
+                if (packed) return packed;
+            } catch (error) {
+                console.warn('RPG Reactor pack read failed:', relativePath, error);
+            }
         }
         return fetch(event.request);
     })());

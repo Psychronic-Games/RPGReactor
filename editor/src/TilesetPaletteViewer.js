@@ -75,7 +75,7 @@ class TilesetPaletteViewer {
         const tt = text => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
         const chosen = this._selection;
         info.innerHTML = chosen
-            ? `<div>${tt('Selected:')} ${chosen.width}x${chosen.height} ${tt('tiles')} (${chosen.count} ${tt('tiles')}) ${tt('on layer')} ${chosen.layer}</div>`
+            ? `<div>${tt('Selected: {width}x{height} tiles ({count} tiles) on layer {layer}').replace(/\{(\w+)\}/g, (token, key) => Object.hasOwn(chosen, key) ? String(chosen[key]) : token)}</div>`
             : `<div>${tt('No tiles selected')}</div>`;
     }
 
@@ -1132,7 +1132,7 @@ class TilesetPaletteViewer {
     // Draw a checkerboard pattern to represent transparency. Canvas 2D
     // cannot parse var(--…) — resolve to concrete colors.
     drawCheckerboard(ctx, width, height, squareSize = 8) {
-        const color1 = ThemeColors.resolve('--color-syntax-comment', '#6a6a6a');
+        const color1 = ThemeColors.resolve('--color-tileset-checker-primary', '#808080');
         const color2 = ThemeColors.resolve('--color-tileset-checker-secondary', '#999999');
 
         for (let y = 0; y < height; y += squareSize) {

@@ -89,6 +89,7 @@
                     <div class="html-menu-option" data-db="animations" data-i18n="menu.animations" style="padding: 8px 16px; cursor: pointer;">Animations</div>
                     <div class="html-menu-option" data-db="tilesets" data-i18n="menu.tilesets" style="padding: 8px 16px; cursor: pointer;">Tilesets</div>
                     <div class="html-menu-option" data-db="reactor3d" data-i18n="menu.models3d" style="padding: 8px 16px; cursor: pointer;">3D Models</div>
+                    <div class="html-menu-option" data-db="vehicles" data-i18n="vehicle.database" style="padding: 8px 16px; cursor: pointer;">Vehicles</div>
                     <div class="html-menu-option" data-db="structures" data-i18n="menu.structures" style="padding: 8px 16px; cursor: pointer;">Structures</div>
                     <div class="html-menu-option" data-db="commonEvents" data-i18n="menu.commonEvents" style="padding: 8px 16px; cursor: pointer;">Common Events</div>
                     <div class="html-menu-option" data-db="userInterfaces" data-i18n="menu.userInterfaces" style="padding: 8px 16px; cursor: pointer;">User Interfaces</div>
@@ -113,9 +114,11 @@
                 <span data-i18n="menu.tools">Tools</span>
                 <div class="html-submenu" id="submenu-tools" style="display: none; position: absolute; top: 100%; left: 0; background-color: var(--color-bg-toolbar); color: var(--color-text); border: 1px solid var(--color-border); min-width: 200px; z-index: 10000; box-shadow: var(--shadow-popup);">
                     <div class="html-menu-option" data-action="toggle-event-mode" data-i18n="menu.eventManager" style="padding: 8px 16px; cursor: pointer;">Event Manager</div>
+                    <div class="html-menu-option" data-action="battle-setup" data-i18n="battleSetup.title" style="padding: 8px 16px; cursor: pointer;">Battle Setup</div>
                     <div class="html-menu-option" data-action="build-tool" data-i18n="menu.buildInWorld" style="padding: 8px 16px; cursor: pointer;">Build in the World</div>
                     <div class="html-menu-option" data-action="lighting-tool" data-i18n="toolbar.title.lighting" style="padding: 8px 16px; cursor: pointer;">Lighting Tool</div>
                     <div class="html-menu-option" data-action="media-surfaces" data-i18n="menu.mediaSurfaces" style="padding: 8px 16px; cursor: pointer;">Media Surfaces</div>
+                    <div class="html-menu-option" data-action="image-layers" data-i18n="menu.imageLayers" style="padding: 8px 16px; cursor: pointer;">Image Layers</div>
                     <div class="html-menu-option" data-action="resource-manager" data-i18n="menu.resourceManager" style="padding: 8px 16px; cursor: pointer;">Resource Manager</div>
                     <div class="html-menu-option" data-action="audio-player" data-i18n="menu.audioPlayer" style="padding: 8px 16px; cursor: pointer;">♪ Audio Player</div>
                     <div class="html-menu-option" data-action="import-report" data-i18n="menu.importReport" style="padding: 8px 16px; cursor: pointer;">Import Report…</div>
@@ -197,6 +200,7 @@
             <div class="toolbar-separator"></div>
             <span class="toolbar-label" data-i18n="toolbar.tools">Tools:</span>
             <button class="tool-button" id="toolbar-event-manager-btn" data-action="toggle-event-mode" title="Event Manager" data-i18n-title="toolbar.title.eventManager"><img src="images/icon-event.png" onerror="this.style.display='none'; this.parentElement.innerHTML='EV';"></button>
+            <button class="tool-button" id="toolbar-battle-setup-btn" data-action="battle-setup" title="Battle Setup: put enemies on this map" aria-label="Battle Setup: put enemies on this map" aria-pressed="false" data-i18n-title="battleSetup.button" data-i18n-aria="battleSetup.button"><img src="images/icon-battle-setup.svg" alt="" onerror="this.style.display='none'; this.parentElement.innerHTML='BS';"></button>
             <button class="tool-button" id="toolbar-database-btn" data-action="open-database" title="Database" data-i18n-title="toolbar.title.database">
                 <img src="images/icon-database.svg" alt="" onerror="this.style.display='none'; this.parentElement.innerHTML='DB';">
             </button>
@@ -210,6 +214,7 @@
             <button class="tool-button" data-action="build-tool" title="Build in the world: pieces, shapes, screens and lights" data-i18n-title="toolbar.title.build"><img src="images/icon-build.svg" alt="" onerror="this.style.display='none'; this.parentElement.innerHTML='BD';"></button>
             <button class="tool-button" data-action="lighting-tool" title="Lighting Tool" data-i18n-title="toolbar.title.lighting"><img src="images/icon-lighting.svg" alt="" onerror="this.style.display='none'; this.parentElement.innerHTML='LT';"></button>
             <button class="tool-button" data-action="media-surfaces" title="Media Surfaces" aria-label="Media Surfaces" data-i18n-title="menu.mediaSurfaces" data-i18n-aria="menu.mediaSurfaces"><img src="images/icon-media-surfaces.svg" alt=""></button>
+            <button class="tool-button" data-action="image-layers" title="Image Layers" aria-label="Image Layers" data-i18n-title="menu.imageLayers" data-i18n-aria="menu.imageLayers"><img src="images/icon-image-layers.svg" alt=""></button>
 
             <!-- Forge Section -->
             <div class="toolbar-separator"></div>
@@ -319,7 +324,7 @@
                                     <input id="map-grid" type="checkbox" aria-label="Show the tile grid" data-i18n-aria="toolbar.title.showGrid">
                                     <span data-i18n="workspace.grid">Grid</span>
                                 </label>
-                                <label class="map-info-item map-passage" title="Show passability: X where nothing can walk, a red edge where one direction cannot, red where a 3D model stands" data-i18n-title="toolbar.title.showPassage">
+                                <label class="map-info-item map-passage" title="Show where a character can go. Flat map: X where nothing walks, a red edge where one direction is shut, red under a 3D model. 3D view: each side of a place marked as a hop, a mantle, a ladder, a drop or blocked, with words under the pointer" data-i18n-title="toolbar.title.showPassage">
                                     <input id="map-passage" type="checkbox" aria-label="Show passability" data-i18n-aria="toolbar.title.showPassage">
                                     <span data-i18n="workspace.passage">Passage</span>
                                 </label>
@@ -330,6 +335,10 @@
                                 <label class="map-info-item map-video-previews" title="Show media surface previews" data-i18n-title="toolbar.title.videoPreviews">
                                     <input id="map-video-previews" type="checkbox" checked aria-label="Show media surface previews" data-i18n-aria="toolbar.title.videoPreviews">
                                     <span data-i18n="workspace.video">Video</span>
+                                </label>
+                                <label class="map-info-item map-surround-view" title="Show the land past the map's border in the 3D view" data-i18n-title="toolbar.title.surroundings">
+                                    <input id="map-surround-view" type="checkbox" checked aria-label="Show the land past the map's border in the 3D view" data-i18n-aria="toolbar.title.surroundings">
+                                    <span data-i18n="workspace.surroundings">Surroundings</span>
                                 </label>
                                 <span class="map-info-item"><span data-i18n="workspace.zoom">Zoom:</span> <span class="map-info-value" id="map-zoom">100%</span></span>
                                 <span class="map-info-item">(<span class="map-info-value" id="map-coordinates">--,--</span>)</span>
@@ -551,7 +560,7 @@
                                     <button type="button" id="map-battle-bgm-choose-btn" class="map-props-btn primary" style="flex: 0 0 auto; padding: 5px 12px; font-size: 12px;" data-i18n="mapProps.choose">Choose…</button>
                                     <button type="button" id="map-battle-bgm-clear-btn" class="map-props-btn" style="flex: 0 0 auto; padding: 5px 12px; font-size: 12px;">Clear</button>
                                 </div>
-                                <div style="font-size: 11px; color: var(--color-text-muted); line-height: 1.5; margin-top: 4px;" data-i18n="mapProps.battleMusicHint">A track, or a sequence from Database › Music Sequences, for battles on this map. A troop’s own battle music, or one set by Change Battle BGM, plays instead.</div>
+                                <div style="font-size: 11px; color: var(--color-text-muted); line-height: 1.5; margin-top: 4px; margin-bottom: 8px;" data-i18n="mapProps.battleMusicHint">A track, or a sequence from Database › Music Sequences, for battles on this map. A troop’s own battle music, or one set by Change Battle BGM, plays instead.</div>
                             </div>
                         </div>
 
@@ -601,8 +610,6 @@
                                 </label>
                             </div>
                         </div>
-                        <!-- Image layers: pictures locked to the map (MapImageLayersEditor) -->
-                        <div id="map-image-layers-section" class="map-props-card"></div>
                         <!-- 3D Section: the in-game switch and the room a 3D map is built in -->
                         <div class="map-props-card">
                             <div class="lit-section-header map-props-card-header" data-i18n="mapProps.threeD">3D</div>
@@ -611,6 +618,7 @@
                                 <span data-i18n="mapProps.map3D">3D Map</span>
                             </label>
                             <div id="map-3d-options" style="display: none; margin-top: 6px; padding: 6px; background-color: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 3px;">
+                                <div class="map-props-subhead is-first" data-i18n="mapProps.groupRoom">Room and Sky</div>
                                 <div style="display: grid; grid-template-columns: auto 1fr; gap: 8px; align-items: center; margin-bottom: 8px;">
                                     <label class="map-props-label" data-i18n="mapProps.roomHeight">Room Height (tiles):</label>
                                     <div style="max-width: 120px;"><div class="rr-number-stepper"><input class="rr-number-stepper-input" style="flex: 1; min-width: 0; width: 100%; box-sizing: border-box; padding: 5px 6px; border: 0; background: transparent; color: var(--color-text); font-size: 12px;" type="number" id="map-3d-height-input" min="1" max="512" step="1" value="4"><div class="rr-number-stepper-buttons"><button type="button" tabindex="-1" data-map-props-step="1" data-target="map-3d-height-input" aria-label="+">&#9650;</button><button type="button" tabindex="-1" data-map-props-step="-1" data-target="map-3d-height-input" aria-label="-">&#9660;</button></div></div></div>
@@ -649,6 +657,8 @@
                                     <label class="map-props-label" data-i18n="mapProps.skyScrollY">Sky Scroll Y:</label>
                                     <input type="number" id="map-3d-sky-sy-input" min="-32" max="32" step="0.05" value="0" class="database-field-value" style="width: 100%; box-sizing: border-box;">
                                 </div>
+                                <div class="map-props-hint" data-i18n="mapProps.roomHint">The floor lies under the parallax background. Walls and the ceiling face inward, so the camera looks past them into the room.</div>
+                                <div class="map-props-subhead" data-i18n="mapProps.groupCamera">Camera</div>
                                 <div style="margin-bottom: 6px;">
                                     <label class="map-props-label" style="display: block; margin-bottom: 3px;" data-i18n="mapProps.defaultCamera">Default Camera:</label>
                                     <select id="map-3d-camera-select" style="width: 100%; padding: 5px 6px; background-color: var(--color-bg-input); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; font-size: 12px;">
@@ -677,7 +687,6 @@
                                         <div class="rr-number-stepper"><input class="rr-number-stepper-input" style="flex: 1; min-width: 0; width: 100%; box-sizing: border-box; padding: 5px 6px; border: 0; background: transparent; color: var(--color-text); font-size: 12px;" type="number" id="map-3d-camera-fov" step="any" min="5" max="150" placeholder="auto" data-i18n-placeholder="cam3d.auto"><div class="rr-number-stepper-buttons"><button type="button" tabindex="-1" data-map-props-step="1" data-target="map-3d-camera-fov" aria-label="+">&#9650;</button><button type="button" tabindex="-1" data-map-props-step="-1" data-target="map-3d-camera-fov" aria-label="-">&#9660;</button></div></div>
                                     </div>
                                 </div>
-                                <div style="font-size: 11px; color: var(--color-text-muted); line-height: 1.4;" data-i18n="mapProps.roomHint">The floor lies under the parallax background. Walls and the ceiling face inward, so the camera looks past them into the room.</div>
                             </div>
                         </div>
                         <!-- Physics: this map's own gravity, jumping, falls and swimming, for a 3D map. Blank or "Project default" uses Database › Controls. -->
@@ -795,7 +804,7 @@
             <div class="modal-body">
                 <img src="images/logo.png" alt="RPG Reactor" style="max-width: 300px; width: 100%; height: auto; margin-bottom: 24px;" onerror="this.style.display='none'">
 
-                <h3 data-i18n="about.version" style="color: #e8b817; margin-bottom: 16px;">RPG Reactor v0.98.8</h3>
+                <h3 data-i18n="about.version" style="color: #e8b817; margin-bottom: 16px;">RPG Reactor v0.99.0</h3>
 
                 <p data-i18n="about.description" style="color: var(--color-text); line-height: 1.6; margin-bottom: 16px;">
                     An open-source, cross-platform RPG game engine built with NW.js, PixiJS v8, and Three.js
@@ -971,6 +980,7 @@
     <script src="src/utils/AudioCoverArt.js"></script>
     <script src="src/utils/AudioLoopTags.js"></script>
     <script src="src/utils/KeyboardNavigation.js"></script>
+    <script src="src/utils/Dialog.js"></script>
     <script src="src/utils/PickerIndex.js"></script>
     <script src="src/utils/EnemyActionForecast.js"></script>
     <script src="src/utils/AudioPickerModal.js"></script>
@@ -984,16 +994,25 @@
     <script src="src/utils/PluginParamWidgets.js"></script>
     <script src="src/utils/IconPicker.js"></script>
     <script src="src/utils/EditorCache.js"></script>
+    <script src="src/utils/FightHud.js"></script>
+    <script src="src/utils/InterfaceFit.js"></script>
+    <script src="src/utils/ActionHud.js"></script>
+    <script src="src/utils/VictoryHud.js"></script>
+    <script src="src/utils/FightLook.js"></script>
     <script src="src/utils/StockInterfaces.js"></script>
     <script src="src/utils/EquipSlots.js"></script>
     <script src="src/utils/TilesetSheets.js"></script>
     <script src="src/utils/TileMetrics.js"></script>
     <script src="src/utils/MapElevation.js"></script>
+    <script src="src/utils/MapFoliage.js"></script>
+    <script src="src/utils/MapGround.js"></script>
+    <script src="src/utils/ModelRelease.js"></script>
     <script src="src/utils/EventPreviewModels.js"></script>
     <script src="src/utils/MapObjects3D.js"></script>
     <script src="src/utils/Tileset3DClass.js"></script>
     <script src="src/utils/EditorNames.js"></script>
     <script src="src/utils/FsAtomic.js"></script>
+    <script src="src/utils/DatabaseSections.js"></script>
     <script src="src/I18nDeepTranslations.js"></script>
     <script src="src/I18nReviewedTranslations.js"></script>
     <script src="src/I18nManager.js"></script>
@@ -1164,6 +1183,7 @@
     <script src="src/utils/PoseRings3D.js"></script>
     <script src="src/Object3DManager.js"></script>
     <script src="src/utils/AxisArrows3D.js"></script>
+    <script src="src/utils/SizeHandles3D.js"></script>
     <script src="src/utils/ShapeGizmo3D.js"></script>
     <script src="src/utils/ModelPropEffects2D.js"></script>
     <script src="src/utils/FlatLightField2D.js"></script>
@@ -1173,10 +1193,21 @@
     <script src="src/TerrainManager.js"></script>
     <script src="src/utils/StructurePlan.js"></script>
     <script src="src/utils/StructureFloors.js"></script>
+    <script src="src/utils/StructureCapture.js"></script>
+    <script src="src/utils/MaterialPopup.js"></script>
+    <script src="src/utils/MapEdges.js"></script>
+    <script src="src/utils/MapEdgeLabels.js"></script>
+    <script src="src/utils/MapNeighborView.js"></script>
+    <script src="src/utils/MapPicker3D.js"></script>
+    <script src="src/utils/MapHistory.js"></script>
     <script src="src/PieceBuilderManager.js"></script>
     <script src="src/BuildHotbar.js"></script>
     <script src="src/StructureWorkshop.js"></script>
     <script src="src/EventModelPanel.js"></script>
+    <script src="src/utils/BattleCheck.js"></script>
+    <script src="src/event/BattleSetup.js"></script>
+    <script src="src/event/VehicleSetup.js"></script>
+    <script src="src/utils/VehicleCheck.js"></script>
     <script src="src/utils/ColourPopover.js"></script>
     <script src="src/utils/MapLights.js"></script>
     <script src="src/utils/FlatShadowLight2D.js"></script>
@@ -1281,6 +1312,10 @@
     <script src="src/event/commands/MediaSurfaceEditor.js"></script>
     <script src="src/MediaSurfacePreviewManager.js"></script>
     <script src="src/MediaSurfaceManager.js"></script>
+    <!-- Image Layers tool: its rules and words, then the panel and the map drawing. The game's own rules
+         (runtime/reactor_image_layers.js) are loaded by the manager from the runtime folder, as the 3D view loads its scripts. -->
+    <script src="src/MapImageLayersEditor.js"></script>
+    <script src="src/MapImageLayersManager.js"></script>
     <script src="src/event/EventCollapsePreferences.js"></script>
     <script src="src/event/EventCommandList.js"></script>
     <!-- Plugin Manager -->
@@ -1289,7 +1324,6 @@
     <!-- Refactored modules -->
     <script src="src/UIManager.js"></script>
     <script src="src/SidebarResizer.js"></script>
-    <script src="src/MapImageLayersEditor.js"></script>
     <script src="src/ProjectController.js"></script>
     <script src="src/AudioPlayer.js"></script>
     <script src="src/PlaytestManager.js"></script>
@@ -1299,6 +1333,7 @@
     <script src="src/database/AnimationPickerModal.js"></script>
     <script src="src/database/DatabaseCommonUI.js"></script>
     <script src="src/database/PassiveStatesSection.js"></script>
+    <script src="src/database/TacticsSection.js"></script>
     <script src="src/database/ActionScopes.js"></script>
     <script src="src/database/ActionElements.js"></script>
     <script src="src/database/ActionRepeats.js"></script>
@@ -1325,6 +1360,7 @@
     <script src="src/database/DatabaseStateEditor.js"></script>
     <script src="src/database/DatabaseAnimationEditor.js"></script>
     <script src="src/database/DatabaseTilesetEditor.js"></script>
+    <script src="src/utils/PartNames.js"></script>
     <script src="src/database/ModelRigger.js"></script>
     <script src="src/database/MeshSurfacePicker.js"></script>
     <script src="src/database/RigMotionPresets.js"></script>
@@ -1333,8 +1369,10 @@
     <script src="src/utils/SearchSelect.js"></script>
     <script src="src/utils/ColorPopup.js"></script>
     <script src="src/utils/ContextMenu.js"></script>
+    <script src="src/database/ModelVariantsPanel.js"></script>
     <script src="src/database/Database3DEditor.js"></script>
     <script src="src/database/DatabaseStructureEditor.js"></script>
+    <script src="src/database/DatabaseVehicleEditor.js"></script>
     <script src="src/event/commands/PlayModelAnimationEditor.js"></script>
     <script src="src/event/commands/Camera3DEditor.js"></script>
     <script src="src/event/commands/TransformModel3DEditor.js"></script>
@@ -1344,6 +1382,9 @@
     <script src="src/event/commands/SpeakModel3DEditor.js"></script>
     <script src="src/event/commands/CallUserInterfaceEditor.js"></script>
     <script src="src/event/commands/QuestCommandEditor.js"></script>
+    <script src="src/event/commands/VehicleCommandEditor.js"></script>
+    <script src="src/event/commands/FightCommandEditor.js"></script>
+    <script src="src/event/commands/FollowerCommandEditor.js"></script>
     <script src="src/database/DatabaseSystem1Editor.js"></script>
     <script src="src/database/DatabaseSystem2Editor.js"></script>
     <script src="src/database/DatabaseControlsEditor.js"></script>

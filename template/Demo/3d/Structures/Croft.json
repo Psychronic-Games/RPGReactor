@@ -1,0 +1,13 @@
+{
+  "name": "Croft",
+  "size": [12,10],
+  "storey": 5,
+  "materials": {"wall":"Plaster","inner":"Plaster","floor":"Wood","wet":"Stone","roof":"RoofTile","stair":"Wood"},
+  "floors": [
+    {"rooms":{"main":[1,1,7,8],"store":[9,1,10,8]},"doors":[["main","outside",3,4,"south"],["main","store",2]],"wet":["store"]}
+  ],
+  "stairs": [],
+  "roof": {"pitch":4},
+  "windows": {"every":5,"width":2,"shutters":"#3f5f3a","flowerBox":true},
+  "spots": {"hearth":[6,2],"table":[3,5]}
+}

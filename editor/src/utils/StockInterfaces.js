@@ -17,6 +17,9 @@
  * stock character grid. Battle is a Battle HUD: a party panel with face
  * reactions and ATB, the stock battle windows placed by Battle Window nodes
  * (the actor command follows the active actor), and a Target Cursor.
+ * Tactical Battle is the HUD over a Tactical battle on the map (FightHud
+ * builds it). Victory is what a won battle shows (VictoryHud builds it):
+ * the EXP gained, the levels gained and what was found.
  */
 (function(root) {
     'use strict';
@@ -123,7 +126,7 @@
 
     const StockInterfaces = {
         // New baselines append in phases so every prior ID remains stable.
-        KINDS: ['title', 'menu', 'gameEnd', 'status', 'options', 'save', 'load', 'item', 'skill', 'equip', 'shop', 'name', 'battle'],
+        KINDS: ['title', 'menu', 'gameEnd', 'status', 'options', 'save', 'load', 'item', 'skill', 'equip', 'shop', 'name', 'battle', 'tactical', 'action', 'firstPerson', 'victory'],
 
         /** The screen and UI area a project draws in, from System.json. */
         metrics(system) {
@@ -198,9 +201,13 @@
             const m = this.metrics(system);
             const b = new Builder();
             const goldHeight = fittingHeight(1);
-            const commandX = m.boxX + m.boxWidth - COMMAND_WIDTH;
-            const commands = b.box('Commands', commandX, m.boxY + m.mainAreaTop, COMMAND_WIDTH, m.mainAreaHeight - goldHeight);
-            const inner = COMMAND_WIDTH - PADDING * 2;
+            // On a narrow screen (640 wide) the commands and the portraits give room to the actors' numbers, and on a
+            // short one the rows are lower so two actors still show. From 760 wide and 600 high nothing changes.
+            const narrow = m.boxWidth < 760, low = m.boxHeight < 600;
+            const COMMAND = narrow ? 200 : COMMAND_WIDTH;
+            const commandX = m.boxX + m.boxWidth - COMMAND;
+            const commands = b.box('Commands', commandX, m.boxY + m.mainAreaTop, COMMAND, m.mainAreaHeight - goldHeight);
+            const inner = COMMAND - PADDING * 2;
             const entries = [];
             const partyEnabled = () => condition('script', { script: '$gameParty.exists()' });
             const actorEnabled = partyEnabled;
@@ -218,16 +225,16 @@
                     enabled ? { enabled } : {});
                 if (!firstFocus) firstFocus = button.id;
             });
-            const gold = b.box('Gold', commandX, m.boxY + m.mainAreaTop + m.mainAreaHeight - goldHeight, COMMAND_WIDTH, goldHeight);
-            b.text(gold.id, '\\GOLD \\G', PADDING, PADDING, COMMAND_WIDTH - PADDING * 2, { name: 'Gold', align: 'right' });
-            const statusWidth = m.boxWidth - COMMAND_WIDTH;
+            const gold = b.box('Gold', commandX, m.boxY + m.mainAreaTop + m.mainAreaHeight - goldHeight, COMMAND, goldHeight);
+            b.text(gold.id, '\\GOLD \\G', PADDING, PADDING, COMMAND - PADDING * 2, { name: 'Gold', align: 'right' });
+            const statusWidth = m.boxWidth - COMMAND;
             b.list('Actor Panel', 0, 'party', m.boxX, m.boxY + m.mainAreaTop, statusWidth, m.mainAreaHeight, {
-                contextName: 'selectedActor', rowLayout: 'actorPanel', rowHeight: 256, portraitSize: 144,
+                contextName: 'selectedActor', rowLayout: 'actorPanel', rowHeight: low ? 208 : 256, portraitSize: narrow ? 96 : 144,
                 actorFields: ['portrait', 'name', 'class', 'level', 'hp', 'mp', 'exp', 'states']
             });
             const record = this.record('menu', 'Main Menu', b, { firstFocus });
             record.menuCommandVersion = 2;
-            record.note = 'Baseline of the stock main menu. Bind it in System 2 to replace the main / pause menu; the stock menu stays in use until this one is called or bound.';
+            record.note = 'Baseline of the stock main menu. Bind it in Use As to replace the main / pause menu; the stock menu stays in use until this one is called or bound.';
             return record;
         },
 
@@ -301,7 +308,7 @@
                 Object.assign({ name: 'Profile', height: profileHeight - PADDING * 2, wrap: true, fitText: true }, actor));
 
             const record = this.record('status', 'Status', b, { firstFocus: previous.id });
-            record.note = 'Read-only baseline of the stock status screen. Bind it in System 2 to replace Status; it follows the current menu actor.';
+            record.note = 'Read-only baseline of the stock status screen. Bind it in Use As to replace Status; it follows the current menu actor.';
             return record;
         },
 
@@ -525,13 +532,20 @@
             const m = this.metrics(system);
             const b = new Builder();
             const width = Math.min(m.boxWidth, 480);
-            const height = FACE + PADDING * 2;
+            // The stock character grid is nine rows; where the screen is too short for it under a box with the face
+            // (640x480), the box is the field alone at the top, so the grid never covers it.
+            const grid = 9 * (LINE + 8) + PADDING * 2 + 8;
+            const room = m.boxHeight - grid;
+            const compact = room < FACE + PADDING * 2;
+            const height = compact ? LINE + PADDING : FACE + PADDING * 2;
             const actor = { actorSource: 'sceneActor' };
-            const box = b.box('Name', m.boxX + Math.floor((m.boxWidth - width) / 2), m.boxY + m.mainAreaTop, width, height);
-            b.partyFace(box.id, 0, PADDING, PADDING, Object.assign({ name: 'Face' }, actor));
+            // Under the button row where there is room for it; else as high as the grid leaves.
+            const top = compact ? Math.max(0, Math.floor((room - height) / 2)) : Math.min(m.mainAreaTop, room - height);
+            const box = b.box('Name', m.boxX + Math.floor((m.boxWidth - width) / 2), m.boxY + top, width, height);
+            if (!compact) b.partyFace(box.id, 0, PADDING, PADDING, Object.assign({ name: 'Face' }, actor));
             const field = b.add('input', Object.assign({
-                name: 'Name field', parent: box.id, x: PADDING + FACE + 16, y: Math.floor((height - LINE - PADDING) / 2),
-                width: width - FACE - PADDING * 2 - 16, height: LINE + PADDING, fill: 'none', text: '', align: 'left',
+                name: 'Name field', parent: box.id, x: compact ? PADDING : PADDING + FACE + 16, y: Math.floor((height - LINE - PADDING) / 2),
+                width: compact ? width - PADDING * 2 : width - FACE - PADDING * 2 - 16, height: LINE + PADDING, fill: 'none', text: '', align: 'left',
                 fontSize: 0, textColor: 0, outline: true, color: '#000000', color2: '#000000', fillOpacity: 160, vertical: true,
                 borderWidth: 0, borderColor: '#ffffff', radius: 0, inputTarget: 'actorName', maxLength: 16,
                 onScreenKeys: true, autoEdit: true, action: action('close'), enabled: condition('always'), highlightColor: '#ffffff', se: null
@@ -575,22 +589,71 @@
                     states: { x: 10, y: 1, width: 32, height: 32, iconSize: 32, statesMode: 'cycle' }
                 }
             });
-            b.add('battleWindow', { name: 'Help', x: m.boxX + 10, y: m.boxY + 64, width: m.boxWidth - 15, height: 102, battleWindow: 'help', fill: 'window', slideY: -50 });
-            const listY = hudY - 359;
-            b.add('battleWindow', { name: 'Skills', x: m.boxX + 10, y: listY, width: m.boxWidth - 15, height: 250, battleWindow: 'skill', windowColumns: 2, slideY: 50 });
-            b.add('battleWindow', { name: 'Items', x: m.boxX + 10, y: listY, width: m.boxWidth - 15, height: 250, battleWindow: 'item', windowColumns: 3, slideY: 50 });
+            // Under 720 high the help window stands at the top and the lists start under it, so neither covers the other
+            // and nothing leaves the screen (640x480, 816x624, 1024x576). From 720 up the MOG placement is unchanged.
+            const helpY = m.height >= 720 ? m.boxY + 64 : m.boxY;
+            b.add('battleWindow', { name: 'Help', x: m.boxX + 10, y: helpY, width: m.boxWidth - 15, height: 102, battleWindow: 'help', fill: 'window', slideY: -50 });
+            const listY = Math.max(hudY - 359, helpY + 102 + 4);
+            const listHeight = Math.max(108, Math.min(250, hudY - 4 - listY));
+            b.add('battleWindow', { name: 'Skills', x: m.boxX + 10, y: listY, width: m.boxWidth - 15, height: listHeight, battleWindow: 'skill', windowColumns: 2, slideY: 50 });
+            b.add('battleWindow', { name: 'Items', x: m.boxX + 10, y: listY, width: m.boxWidth - 15, height: listHeight, battleWindow: 'item', windowColumns: m.boxWidth >= 900 ? 3 : 2, slideY: 50 });
             b.add('battleWindow', { name: 'Actor Command', x: -19, y: -383, width: 192, height: 243, battleWindow: 'actorCommand', followActor: true, slideY: 64 });
-            b.add('battleWindow', { name: 'Party Command', x: m.boxX + Math.round(m.boxWidth / 2) + 56, y: m.boxY + 134, width: 384, height: 310,
+            b.add('battleWindow', { name: 'Party Command', x: Math.min(m.boxX + Math.round(m.boxWidth / 2) + 56, m.boxX + m.boxWidth - 384), y: Math.min(m.boxY + 134, Math.max(m.boxY, hudY - 310 - 4)), width: 384, height: 310,
                 battleWindow: 'partyCommand', fill: 'none', slideY: -100, file: 'system/BattleHud_Layout_Party', imageX: -450, imageY: -42 });
-            b.add('battleWindow', { name: 'Enemy Target', x: m.boxX, y: listY, width: m.boxWidth, height: 180, battleWindow: 'enemy', hideWindow: true });
+            b.add('battleWindow', { name: 'Enemy Target', x: m.boxX, y: listY, width: m.boxWidth, height: Math.min(180, listHeight), battleWindow: 'enemy', hideWindow: true });
             b.add('battleWindow', { name: 'Ally Target', x: m.boxX, y: hudY, width: m.boxWidth, height: 180, battleWindow: 'actor', hideWindow: true });
             b.add('battleCursor', { name: 'Target Cursor', x: Math.floor(m.width / 2) - 15, y: Math.floor(m.height / 3), width: 30, height: 19,
                 source: 'system', file: 'system/BattleCursor_B', actorFile: 'system/BattleCursor_A', frames: 1, frameSpeed: 8, floatRange: 6,
                 showName: true, fontSize: 18, cursorSlide: true });
             const record = this.record('battle', 'Battle', b, { mode: 'battle', background: 'none', cancel: action('none'),
                 openTransition: 'slideUp', closeTransition: 'none', transitionDuration: 30, hideStatusWindow: true, firstFocus: 0 });
-            record.note = 'Baseline battle HUD after the Demo\'s MOG battle HUD: picture panels, meters and numbers from img/system (BattleHud_*), the command window over the acting actor, and red/blue target cursors. Bind it as Battle in System 2.';
+            record.note = 'Baseline battle HUD after the Demo\'s MOG battle HUD: picture panels, meters and numbers from img/system (BattleHud_*), the command window over the acting actor, and red/blue target cursors. Bind it as Battle in Use As.';
             return record;
+        },
+
+        /**
+         * The Tactical battle HUD: the acting unit lower left, the unit under
+         * the cursor lower right, the turn order across the top. Built by the
+         * shared FightHud, so it is the layout a game with no Tactical HUD of
+         * its own shows. Nothing of it is used in a Classic battle.
+         */
+        tactical(data) {
+            const hud = root.ReactorFightHud || (typeof require === 'function' ? require('./FightHud.js') : null);
+            const m = this.metrics(data.system || {});
+            const advanced = (data.system && data.system.advanced) || {};
+            const read = (key, fallback) => (advanced[key] !== '' && advanced[key] != null && Number.isFinite(Number(advanced[key])) ? Number(advanced[key]) : fallback);
+            return hud.stockRecord({ width: m.width, height: m.height, itemHeight: read('lineHeight', 36) + 8, padding: read('windowPadding', 12) });
+        },
+
+        /**
+         * The Action battle HUD (third person) and the First Person battle
+         * HUD: a crosshair, the vitals lower left, the weapon and its magazine
+         * lower right, the hotbar between them, the target on top. Built by
+         * the shared ActionHud, so each is the layout a game with no HUD of
+         * its own for that mode shows.
+         */
+        action(data) {
+            const hud = root.ReactorActionHud || (typeof require === 'function' ? require('./ActionHud.js') : null);
+            const m = this.metrics(data.system || {});
+            return hud.stockRecord('action', { width: m.width, height: m.height });
+        },
+
+        firstPerson(data) {
+            const hud = root.ReactorActionHud || (typeof require === 'function' ? require('./ActionHud.js') : null);
+            const m = this.metrics(data.system || {});
+            return hud.stockRecord('firstPerson', { width: m.width, height: m.height });
+        },
+
+        /**
+         * The Victory interface: the screen dimmed and one panel in its
+         * middle, with a page for the EXP each member gained, one for the
+         * levels gained and one for the gold and items found. Built by the
+         * shared VictoryHud. A game shows it only once it is bound as Victory.
+         */
+        victory(data) {
+            const hud = root.ReactorVictoryHud || (typeof require === 'function' ? require('./VictoryHud.js') : null);
+            const m = this.metrics(data.system || {});
+            return hud.stockRecord({ width: m.width, height: m.height });
         },
 
         /** One baseline by kind (for Stock Layout on an existing record). */

@@ -27,3 +27,11 @@ test('mixed queues retain normal 2D effects in order and still clear an empty ov
  A._pendingRenders.push({_reactorInScene:true},a,{_reactorInScene:true},b);A.renderActive({});assert.deepEqual(order,['a','b']);assert.equal(counts().copies,1);assert.equal(A._pendingRenders.length,0);
  A.renderActive({});assert.equal(counts().clears,2);assert.equal(counts().copies,1);
 });
+test('an overlay that stayed empty is neither cleared again nor shown, and shows while 2D effects draw',()=>{
+ const {A,context,counts}=setup();const shown=[];context.Graphics.showEffekseerOverlay=v=>shown.push(v);
+ A.renderActive({});A.renderActive({});A.renderActive({});assert.equal(counts().clears,1,'only the first, unknown state is cleared');
+ A._pendingRenders.push({_doEffekseerDraw(){}});A.renderActive({});assert.equal(counts().clears,2);
+ A.renderActive({});assert.equal(counts().clears,3,'what the effect drew is cleared once');A.renderActive({});assert.equal(counts().clears,3);
+ context.Graphics._effekseerOverlayDirty=true;A.renderActive({});assert.equal(counts().clears,4,'an in-scene draw on the overlay marks it for clearing');
+ assert.deepEqual(shown,[false,false,false,true,false,false,false]);
+});

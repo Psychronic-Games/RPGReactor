@@ -254,6 +254,7 @@ class BattleTestConfigModal {
 
     getCompatibleEquipment(actor, etypeId) {
         if (!actor || this.collectActorTraitDataIds(actor, 54).has(etypeId)) return [];
+        if (this.databaseManager.unsettledEquipTypes?.(actor.classId)?.has(etypeId)) return [];
         if (etypeId === 1) {
             const allowedWtypes = this.collectActorTraitDataIds(actor, 51);
             return this.databaseManager.getWeapons()
@@ -333,10 +334,11 @@ class BattleTestConfigModal {
         const levelRow = this.createFormRow('Level:');
         const levelInput = document.createElement('input');
         levelInput.type = 'number';
+        levelInput.className = 'database-field-value';
         levelInput.min = 1;
         levelInput.max = actorLevelLimit;
         levelInput.value = battler.level || 1;
-        levelInput.style.cssText = 'width: 60px; background: var(--color-bg-menubar); border: 1px solid var(--color-border-input); color: var(--color-text); padding: 4px; border-radius: 3px;';
+        levelInput.style.width = '80px';
         levelInput.onchange = () => {
             battler.level = Math.max(1, Math.min(actorLevelLimit, parseInt(levelInput.value) || 1));
             levelInput.value = battler.level;
@@ -599,7 +601,7 @@ class BattleTestConfigModal {
     async launch() {
         const system = this.databaseManager.getSystem();
         if (!system) {
-            alert(this._t('System data not available'));
+            await RRDialog.alert(this._t('System data not available'), { title: this._t('Battle Test Configuration'), kind: 'error' });
             return;
         }
 
@@ -607,13 +609,13 @@ class BattleTestConfigModal {
         // `Game_Party.setupBattleTestMembers` skips actorId 0 - and Scene_Battle
         // cannot open on nobody. Refuse here, where the fix is one dropdown away.
         if (!BattleTestConfigModal.hasBattleParty(this.battlers, this.databaseManager)) {
-            alert(this._t('Please select at least one party member for the battle test.'));
+            await RRDialog.alert(this._t('Please select at least one party member for the battle test.'), { title: this._t('Battle Test Configuration'), kind: 'warning' });
             return;
         }
 
         const missing = this.missingBattlerGraphics();
         if (missing.length) {
-            alert(this._t('Missing battle graphic. Choose another actor or set their graphic in Actors.') + '\n' + missing.join('\n'));
+            await RRDialog.alert(this._t('Missing battle graphic. Choose another actor or set their graphic in Actors.') + '\n' + missing.join('\n'), { title: this._t('Battle Test Configuration'), kind: 'warning' });
             return;
         }
 
@@ -653,6 +655,10 @@ class BattleTestConfigModal {
             ['ActionSequences.json', dm.data.actionSequences],
             ['BattlePresentation.json', dm.data.battlePresentation],
         ];
+        // The interfaces too (a Battle HUD moved a moment ago), once the project has its own; a project still on
+        // the stock screens has no UserInterfaces.json and gets no test copy.
+        if (Array.isArray(dm.data.userInterfaces) && typeof dm.hasUserInterfaces === 'function' && dm.hasUserInterfaces()) testFiles.push(['UserInterfaces.json', dm.data.userInterfaces]);
+        else fs.rmSync(path.join(dataDir, 'Test_UserInterfaces.json'), { force: true });
 
         try {
             for (const [filename, data] of testFiles) {
@@ -666,15 +672,25 @@ class BattleTestConfigModal {
                     : BattleTestConfigModal.readProjectDataFile(fs, path.join(dataDir, filename));
                 this._writeFileAtomic(fs, path.join(dataDir, 'Test_' + filename), JSON.stringify(payload));
             }
+            // The 3D model bindings too, so a model bound a moment ago fights in the test. Unreadable
+            // bindings (null) leave the game to the file itself; a stale copy from an earlier test goes.
+            const bindings = dm.data.modelBindings, testBindings = path.join(dataDir, 'Test_Database.r3d.json');
+            if (bindings && typeof bindings === 'object') this._writeFileAtomic(fs, testBindings, JSON.stringify(Object.assign({}, bindings, { version: 1 })));
+            else fs.rmSync(testBindings, { force: true });
         } catch (e) {
-            alert(`${this._t('Failed to write test data:')} ${e.message}`);
+            await RRDialog.alert(`${this._t('Failed to write test data:')} ${e.message}`, { title: this._t('Battle Test Configuration'), kind: 'error' });
             return;
         }
 
-        // Also save normal System.json so testTroopId persists
+        // The test party and troop persist in the project's System.json too. Only those two
+        // fields: the rest of the System page is unsaved work that Cancel must still be able to drop.
         try {
-            const onDisk = typeof dm.fileContent === 'function' ? dm.fileContent('System.json', system) : system;
-            this._writeFileAtomic(fs, path.join(dataDir, 'System.json'), (typeof RRJson !== 'undefined' && RRJson.stringify ? RRJson.stringify(onDisk) : JSON.stringify(onDisk, null, 2)));
+            const onDisk = BattleTestConfigModal.readProjectDataFile(fs, path.join(dataDir, 'System.json'));
+            if (onDisk && typeof onDisk === 'object' && !Array.isArray(onDisk)) {
+                onDisk.testBattlers = JSON.parse(JSON.stringify(this.battlers));
+                onDisk.testTroopId = this.troopId;
+                this._writeFileAtomic(fs, path.join(dataDir, 'System.json'), (typeof RRJson !== 'undefined' && RRJson.stringify ? RRJson.stringify(onDisk) : JSON.stringify(onDisk, null, 2)));
+            }
         } catch (e) {
             // Non-fatal, test files are what matter
         }
@@ -697,7 +713,8 @@ class BattleTestConfigModal {
     static readProjectDataFile(fs, filePath) {
         try {
             if (fs.existsSync(filePath)) {
-                const parsed = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+                const text = fs.readFileSync(filePath, 'utf8');
+                const parsed = typeof RRJson !== 'undefined' && RRJson.parse ? RRJson.parse(text) : JSON.parse(text);
                 if (parsed !== undefined) return parsed;
             }
         } catch (error) {

@@ -1,436 +1,220 @@
 # Runtime performance checks
 
-## Acer 1440p movement pass — runtime 20260907.2
+## Draws thrown away each frame (2026-10-09, runtime 20261009.1)
 
-**Removed repeat shader compilation from looping 3D effects and a fully hidden floor draw. No quality settings were reduced.** Three baseline walking samples aggregate to **25.47 FPS**, versus **26.07 FPS** across four optimized samples. That small difference is within substantial session variation: p95 remains 55.6 ms, and p99 and the worst frame did not improve overall. This does **not** establish resolved spikes or sustained 60/144 FPS.
+The owner reported lag spikes and uneven frame pacing on every map, worst on North Haven, on an RTX 5070 with a Ryzen 9 9950X3D and a 180 Hz monitor. The frame was bound by the main thread, not the GPU: standing in North Haven's village square, with no water in sight, the scene was drawn three more times a frame for its lakes' mirror pictures, and every piece chunk a second time for the see-through pass.
 
-### Hardware and measurement
+| Change | Switch | What it stops |
+| --- | --- | --- |
+| A water sheet takes a mirror picture only while it has a pixel on screen | `Reactor3D.WaterSight.enabled` (`HOLD`: 30 frames) | A whole draw of the scene per lake whose bounds touch the view, up to four. Asked with an occlusion query round each sheet's draw; in a game only. |
+| Mirror pictures at the view's render scale | `Reactor3D.MIRROR_AT_VIEW_SCALE` | Pictures drawn at 1920x1080 for a frame drawn at 1440x810. |
+| Only the ghost chunks a see-through corridor crosses are drawn | `Reactor3D.CUT_GHOST_CULL` | Every piece chunk drawn twice (462 ghosts on North Haven; 3 to 11 with a corridor, none without). |
+| Light arrays compared in one shared function, one loop per array kind | none | Hundreds of cold closures, 160 KB of number objects a frame. |
+| A door's reach asked without making records | none | About 60 KB a frame for 39 doors against every character. |
 
-AMD Ryzen 5 PRO 5650U, 12 logical processors, 15.3 GiB usable RAM, integrated AMD Radeon through normal ANGLE Direct3D11. Testing used the external Acer, not the laptop's 1920×1080/60 Hz display. The game canvas rendered at **2560×1440**; idle animation-frame intervals had a 6.9 ms median, consistent with the Acer's 144 Hz refresh. The window fits the image into its available client area; the rendering buffer remains full resolution.
+North Haven, a 45 s walk round a 60-tile square from the fountain (83, 65), 1920x1080, a 60 Hz headless output:
 
-A disposable Demo copy and isolated NW.js profile preserve authored project data. Each measured route starts at (24,45), moves 24 tiles north and 24 south at speed 4, and finishes at (24,45), with collision bypass for repeatability. Four seconds of warmup precede each route; each completed route contains 384 measured animation-frame intervals and 385 3D renders. Browser frame limiting stays enabled. Test-only focus/background overrides allow measurement while the user works elsewhere. No test suite or CPU profiler ran during these samples; other desktop activity was not controlled.
+| | Before | After |
+| --- | --- | --- |
+| RTX 5070, main thread per frame | 12.87 ms | 5.37 ms |
+| RTX 5070, frames over 25 ms | 10 (33 ms each) | 0 |
+| RTX 5070, standing in the square, tick to composite | 11.2 ms | 5.2 ms |
+| RTX 5070, main thread slowed four times | 15.9 fps, median frame 66.7 ms | 41.5 fps, median 16.7 ms |
+| Radeon iGPU (weak tier), main thread per frame | 5.62 ms | 4.59 ms |
+| Radeon iGPU, GPU median / p95 | 14.5 / 19.1 ms | 14.1 / 17.8 ms |
+| Radeon iGPU, main thread slowed four times, standing in the square | 49 to 50 fps, 72 to 87 frames over 25 ms in 8 s | 55 to 59 fps, 9 to 34 |
+| Garbage made per frame (RTX walk) | 1,155 KB | 937 KB |
 
-Baseline disables `Reactor3D.CoveredFloor.enabled` and `Reactor3D.EffekseerScene.reuseQuads`, disposing inactive cached quads before warmup. Optimized enables both. No resolution, texture/filtering, shadow/light budget, model-detail error limit, effect budget or antialiasing change is part of this pass. Older 1080p results below use a different workload and are not a direct baseline.
+The Reactor Room on the RTX after the changes: 6.42 ms a frame, no long frame in 30 s. The picture was compared with each switch on and off with the game running: the fountain's and the lake's reflections, and a wall seen through at three places (differences were the idle animation and the grass's sway only). Full Node suite: **6,743 tests; 6,733 passed, 10 skipped, zero failed** (127.9 s).
 
-| Sample, in collection order | FPS | Mean ms | p95 ms | p99 ms | Maximum ms | Shader compilations |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| baseline-a | 25.70 | 38.92 | 55.5 | 90.1 | 125.0 | 12 |
-| optimized-a | 26.13 | 38.27 | 48.8 | 166.7 | 291.8 | 0 |
-| optimized-b | 25.07 | 39.90 | 62.4 | 125.0 | 179.9 | 0 |
-| baseline-b | 24.58 | 40.69 | 55.7 | 132.2 | 207.9 | 12 |
-| optimized-c | 26.89 | 37.18 | 48.7 | 76.1 | 83.3 | 0 |
-| baseline-c | 26.19 | 38.18 | 55.5 | 83.1 | 125.0 | 12 |
-| optimized-d | 26.27 | 38.07 | 55.5 | 124.9 | 139.0 | 0 |
+Still open, measured:
 
-Aggregate frame time is 39.26 → 38.35 ms, about 2.3% lower. Intervals over 50 ms account for 70/1152 baseline frames and 90/1536 optimized frames. Aggregate p99 is 104.4 → 118.0 ms and maximum is 207.9 → 291.8 ms. All seven samples are retained, including the slower optimized runs. The last pair includes additional image-decode readiness and conservative fallback guards; the first five used the same two rendering optimizations before those guards were finalized. See [machine-readable results and validation](archive/evidence/benchmarks/2026-09-07-potato-1440p.json).
+- **The weak tier is GPU-bound on North Haven:** 12.1 ms median over an 81-point grid of the map on the Radeon iGPU, about 14 ms in the village, with nothing wasted found: ground 1.4 ms, the party's four models 2.5 ms (one is 149,000 triangles), pieces 3.5 ms. A frame past 16.7 ms is shown for two refreshes; `Reactor3D.adaptiveResolution` is the existing answer and is off by the owner's choice.
+- **Refresh rates that 60 does not divide:** the game runs 60 updates a second, and the 3D world is drawn on update frames. At 180 Hz that is every third refresh; at 144 Hz and 100 Hz the updates fall on uneven refreshes (2, 2, 3 at 144), which reads as judder however fast the frame is. Not addressed.
+- **The reflection capture** draws a cube face every frame on the full tier: 1.2 ms of main thread on North Haven (about 220 draws).
+- **Garbage left:** most is three.js's own render lists and matrix math; `LightVolume.dynamicRegion` recomputes some geometry's bounding box on each walk of the scene (45 KB a frame), and a visible lake's bounds are measured afresh each frame.
+- **Arriving on North Haven** (measured before these changes, not again after): the first second holds one frame of 0.5 to 0.85 s (the build) and about a dozen of 50 to 300 ms.
 
-### Changes and evidence
+Method: `editor/tests/perf/headless-display.sh` starts a headless display on the real GPUs (the integrated GPU by default, the NVIDIA card with the offload variables it names), and `nw-frame-breakdown.cjs` took `--map=<id>,<x>,<y>`, `--walk-size` and `--throttle`. A whole-frame GPU timer query on the RTX measures the main thread's submission, not GPU work (0.7 ms with the capture off, 12 ms with it on, the same scene): read per-pass sums and the CPU profile there.
 
-- **Keep a bounded set of effect drawing quads across loops.** Disposing the final matching Three.js material also discarded its shader-source cache, causing identical shaders to compile again when the next effect began. Diagnostic program queries sometimes blocked for 15–50 ms. Retain at most four small quads/materials per owning scene; release every play's texture and GPU targets immediately, reset drawing uniforms before reuse, and dispose cached geometry/materials on scene teardown. Every baseline route compiled 12 shaders; every optimized route compiled zero after warmup.
-- **Skip the room floor only when an opaque parallax completely covers it.** Prove opacity against every source pixel once after decoding. Check the generated surfaces, camera bounds/near plane, transforms, depth/blend settings, visibility, shadow casting and intervening draws. Animated, translucent, edited, clipped, unknown and unsupported cases retain the original draw. Restore visibility after rendering, including exceptions. Frozen full-frame GPU comparisons for the eligible floor saved about 9.3% in one repeated comparison (17.55/17.99 → 15.38/16.86 ms); this is GPU time for a frozen view, not a live FPS promise.
+## Editor map loading (2026-10-07)
 
-GPU pressure remains a major limit. An earlier instrumented moving sample after quad reuse measured a 35.8 ms median GPU interval, with 52.0 ms p95. These diagnostics include instrumentation and a different movement segment, so they are not used for the live comparison above. Individual-draw probes locate large costs in full-screen floor lighting, dense skinned characters and light bodies; timer queries around each draw disturb execution, so those timings are only prioritization evidence. Full utilization can amplify small bursts, but this pass does not attribute every stall to the GPU.
+Runtime **20261007.2**: the editor prepares rock geometry using the existing runtime workers while tileset, parallax and material images load together. It waits for every rock chunk before constructing the scene; individual rock/terrain edits still use the same signatures and meshing program. The two most recently visited maps retain CPU arrays within a 64 MiB budget (16 MiB on low-memory hosts), cleared when the project changes. Deleted chunks are removed; concurrent rebuilds share matching jobs and discard obsolete results.
 
-Additional native-buffer reuse, shadow-lookup short-circuiting and shared shadow-coordinate experiments did not demonstrate sufficient repeatable benefit and were left out. The two shadow experiments matched pixels in three frozen views but did not justify changing production shaders. Existing quality levels remain intact.
+North Haven on a disposable Demo copy (NW.js, RTX 5070, Node suite run separately):
 
-### Validation and remaining limits
+| Map build | Before | After |
+| --- | --- | --- |
+| First visit | 3.15–3.28 s | 1.99–2.93 s |
+| Return after another map | 2.41–2.61 s | 0.39–0.49 s |
+| Piece geometry on the main thread | about 2.2 s | about 0.12–0.16 s |
 
-- Saved-build GPU comparisons: **11 floor cases match every channel at 2560×1440**. Five eligible views omit the lower draw; six boundary/transparency cases keep it. Three nonempty effect-quad comparisons also match exactly with material reuse. No WebGL errors.
-- Title → new map, image reload and resize 1600×900 → 2560×1440 pass. The custom `Scene_ReactorUI` title releases all plays, the quad pool and covered-floor registry; returning to the map restores live effects at four samples. Deferred image-decode completion cannot revive a cleared scene. Normal collision/input state is restored after tests.
-- **175 focused tests pass**, including eight new behavioral regressions. Both runtime/template synchronization checks pass for all 13 local projects. JavaScript syntax and whitespace checks pass.
-- Full Windows suite before final corrections: **2,912 passed, 34 failed, 1 skipped** (2,947 total). Ten old revision assertions and one template synchronization failure were corrected and passed on rerun. The remaining 23 failures concern platform paths/case, symlink/lock permissions, archive/codec tooling, packaging and thumbnail caching outside these rendering changes. The full suite was not rerun after those corrections; it is not claimed green.
-- Runtime **20260907.2** is synchronized to local projects. No authored map/settings changes, resolution reduction, release build, publication or commit was made by this pass. The isolated diagnostic window/server is closed after validation.
+These are map-build timings, not a guarantee of click-to-visible latency. Image uploads and first-time shader compilation add work. The GUI harness lost its WebGL context with both the original rebuild and the optimization, on shared and separate contexts; it therefore did not establish a successful visual or 2D/3D toggle smoke. A subsequent session sandbox change denied the harness's local TCP listener (`EPERM`), preventing further GUI investigation. The North Haven cache holds 44,431,068 bytes in this fixture, with 171 rock meshes prepared before scene construction.
 
-Local detailed evidence is in ignored `scratchpad/perf-20260907/`: `host.cjs`, `route.cjs`, `measure.js`, all `final-baseline-*.json` / `final-optimized-*.json`, `final-quality.json`, `quad-quality.json`, `lifecycle.json`, `focused-final.log`, `sync-final.log` and `full-tests.log`. The compact JSON linked above is retained with the documentation. Remaining work is to reduce the expensive visible rendering and investigate the residual long frames without reducing fidelity.
+Six functional regression tests cover exact worker/synchronous arrays (positions, UVs, normals and colours), reuse, rock/ground invalidation, deleted rocks, overlapping preparation and undo, worker failure/fallback, map eviction, memory limits and project isolation. Full Node suite: **6,712 tests; 6,702 passed, 10 skipped, zero failed** (131.4 s). Evidence: `/tmp/rr-northhaven-load.cjs`, `/tmp/rr-northhaven-control-results.json`, `/tmp/rr-northhaven-opengl-results.json`, `/tmp/rr-northhaven-final-results.json`, `/tmp/rr-northhaven-full-suite.log`.
 
-## Shared GPU effects and exact frame reuse — runtime 20260905.5
+## Quality levels (2026-10-09, runtime 20261009.2)
 
-**Final normal-backend verification: 55.4 and 54.8 FPS at 1920×1080. Sustained 60 FPS is not yet achieved.** Revision 20260905.5 is installed in the engine and tracked Demo. The shared rendering changes also load in editor map and model previews. No resolution, texture filtering, shadow budget, effect antialiasing, effect pixel budget or model-detail error limit was reduced in these two passes (.4 and .5).
+The owner's rule: a game runs well on any hardware, looks good on the weakest and better on the best. Level 0 is the picture as it has always been drawn, and a machine that holds its frame rate never leaves it. `Reactor3D.Quality` (in `runtime/reactor_3d.js`) steps a machine that does not hold it down a level at a time, along what its frames wait for, and never along the other:
 
-### What changed
+| Kind | Level 1 | Level 2 | Level 3 |
+| --- | --- | --- | --- |
+| GPU (the graphics card) | world drawn at 0.83 of the project's `renderScale` | 0.67 of it, models a level coarser (`pixelError` x2) | shadows off, `pixelError` x3 |
+| CPU (the main thread) | no depth-first draw, foliage at 0.65 of its distances and 0.7 of its clumps | foliage at 0.45 and 0.5, shadows off | |
+| Either, its levels spent and still a quarter short | the world drawn on every other update: 30 pictures a second under 60 updates | | |
 
-- Attached Effekseer animations render into the owning renderer's GPU textures, avoiding the old WebGL-to-canvas-to-WebGL copy. The original 4-sample antialiasing is retained on this laptop. A GPU colour conversion preserves the original sRGB texture filtering; unsupported contexts keep the canvas path. Normal 2D animations keep their overlay.
-- Coverage checks use asynchronous GPU readback and the existing worker. A timeout or context loss cancels a result instead of blocking or learning false empty bounds. Native effect contexts remain alive through outstanding asset callbacks, then release safely.
-- Map and viewport cleanup now stops only the effects they own. Rebuilding a map keeps four targets instead of accumulating old plays. Leaving the map releases all live plays and targets; recreating the viewport leaves the main graphics context intact.
-- Light-cell changes touch only the affected cells when that is cheaper; widespread changes use the original bulk rebuild. Every bit matches a freshly rebuilt reference, including light slot 31, removals and moving grid origins. Colours alone do not trigger mask uploads.
-- Stored video-surface settings reuse their validated result while unchanged. Playback time remains live; nested edits and malformed values still pass through the original parser.
-- Attached-effect quads use an outward-rounded scissor for pixels already discarded by their shader, restoring the caller's scissor afterwards.
-- Neutral engine colour passes are skipped only when an intact opaque backdrop makes that safe. Fades, flashes, colour changes, zoom, opacity, masks, custom shaders and unsafe blending retain the necessary passes. Ordinary sprite filters retain their compositing behavior. The backdrop check is shared within each PIXI render, and repeated for the next render.
+- **What is measured:** the world frames a second of play delivers, against the screen's own refresh (read from the game's quickest frames, so a 50 Hz panel showing 50 is not short). A two-second window short by 12% twice running, or by 40% once, takes a step. The main thread is the cause when its work fills 60% of the frame or 75% of a refresh's budget, the graphics card otherwise. Loading, a window out of focus and the two seconds after a step are not judged.
+- **Back up:** only as another map opens, after ten calm seconds, one step; a step that does not hold is not tried again that session.
+- **Kept:** the levels a machine settles at are saved with the player's options (`ConfigManager.graphicsAuto`) and start its next session.
+- **The player's say:** Options, Graphics: Auto (the default), High, Medium, Low (`ConfigManager.graphicsQuality`; High is level 0, Medium is GPU 1 and CPU 1, Low is GPU 3 and CPU 2). The row appears once the machine has drawn a 3D map. A project whose options plugin builds its own list adds the entry there: the Demo's is in the Visual category. `Window_Options.GRAPHICS_TEXT` holds the words.
+- **Switches:** `Reactor3D.Quality.enabled = false` draws level 0 always; `Reactor3D.Quality.reset()` returns the automatic levels to the top.
 
-The original misplaced-flash fix remains: hidden 3D-owned handles cannot also draw through the 2D projection. The editor's AnimationPreviewLayer now uses the shared GPU path in both map and model views, and draws after receiving the current anchor and camera.
+Measured on the Radeon iGPU (weak tier), North Haven, runtime 20261009.2:
 
-### Measured performance
+| Case | Without | With |
+| --- | --- | --- |
+| Main thread slowed four times, the 60-tile walk | 29 to 38 world frames a second, uneven | CPU 1 in 4 s (45 to 52), CPU 2 in 10 s, then a steady 30 at the full picture size |
+| The world drawn at full 1080p (a GPU pushed past its budget) | 45 to 50 a second | GPU 1 and GPU 2 within 16 s, then a steady 60 |
+| Normal walk, and the RTX 5070 | 60 | 60, level 0 throughout |
 
-One game window, ANGLE/D3D11, 1920×1080, AC power. Live samples use 15 seconds of plain animation-frame intervals after warmup; player [24,15], camera position and rotation match at both ends. This is a different view from the older [24,49] samples below, so those figures are historical rather than a direct baseline. Unit tests and CPU profiling were not running during the live samples.
+What each setting buys there, standing in the square (GPU ms per frame; main thread ms with it slowed four times): the defaults 14.0 and 16.2; scale 0.6, 11.6; scale 0.5, 9.6; shadows off, 13.0; no depth-first draw, 14.9 and 14.1; thinner foliage, 13.8 and 14.9; the light at an eighth, 14.0 (nothing). High, Medium and Low were looked at side by side on the weak tier: Medium is a little softer, Low softer and without shadows, both clean.
 
-| Comparison | Original path | Optimized path |
-| --- | ---: | ---: |
-| Shared-effect ABBA, same session | 41.50 / 35.93 FPS | 48.56 / 47.16 FPS |
-| Neutral colour passes, same session | 53.82 FPS | 55.89 FPS; cached guard 56.29 FPS |
-| Earlier fresh saved .5 build | — | 55.89 FPS, mean 17.89 ms, p95 16.8 ms |
-| Final .5 verification, normal Direct3D | — | 55.42 / 54.82 FPS; mean 18.04 / 18.24 ms; p95 16.8 / 33.3 ms |
+Not covered: a Classic battle's room is not measured (it keeps the levels the map left), and a 2D map has nothing to step.
 
-The shared-effect comparison had substantial drift; its combined mean frame time was 25.96 → 20.90 ms (about 19.5% lower), not a guarantee for every scene. Earlier separate-launch .4 samples reached 55.69 FPS. The earlier saved sample had 23 intervals over 25 ms; the final pair had 28 and 75 respectively; occasional long frames still lower the average even when most frames fit the display refresh.
+### Game speed below 60 frames a second
 
-Frozen full-image colour-pass comparisons consistently save about 0.9–1.1 ms GPU time in the neutral case. Those are GPU timings, not gameplay FPS. One flash timing sample suffered a large transient slowdown, so it is used only for image validation. Effect scissors saved about 0.23 ms in one frozen comparison. Sparse light changes and video validation have small microbenchmark gains; no independent live FPS gain is claimed for them.
+`SceneManager.determineRepeatNumber` rounded the smoothed frame interval to a whole number of updates, which is one update a frame all the way from 60 down to 40 frames a second: a machine at 45 ran the game at three quarters of its speed. It now adds the time up and makes the updates as they come due (up to four a frame), with one a frame kept for a screen within 3% of 60 Hz. `SceneManager.trueSpeed = false` rounds as before.
 
-### Quality and regression evidence
+| Frames a second | 180 to 62 | 60 | 55 | 50 | 45 | 40 | 30 | 24 | 20 | 15 | 10 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Updates a second, before | 60 (62 at 62) | 60 | 55 | 50 | 45 | 72 | 60 | 48 | 40 | 30 | 20 |
+| Updates a second, now | 60 | 60 | 60 | 60 | 60 | 60 | 60 | 60 | 60 | 60 | 40 |
 
-- Native legacy/shared draws match exactly for four effects (RPGReactor-Core, FireAll1, ThunderOne1, CureOne1) at three sampled times with identical seeds, including nonempty frames and 4-sample antialiasing.
-- Filtered runtime and premultiplied editor colour comparisons differ by at most 2/255 per channel, with identical alpha and lit-pixel counts. The earlier conversion that differed by up to 61/255 was rejected.
-- Shared graphics-state handoff, including deliberately disturbed state: zero pixel differences and no graphics errors.
-- Neutral, flash, tone, fade, opacity, zoom and direct-matrix cases in the saved .5 build: zero pixel differences. Scissors also match exactly across five camera angles.
-- Editor map and model preview checks: attached effects visible on the shared path, original 4-sample antialiasing, no errors, correct cleanup. These verify function and appearance, not an editor FPS promise.
-- Latest runtime resize/focus/movement/map-rebuild test: 39 normal 2D draws, zero duplicate 3D draws, no error display or graphics errors. Title transition: zero plays and zero targets. Explicit viewport release/recreation: main context remains live and a fresh effect context is created.
-- Installed-source focused checks: **180 passed**. The broader related selection was **185 passed / 1 failed**; the existing Windows thumbnail PNG disk-cache test remains failing. The full suite was not rerun for .5; older full-suite failures below remain unresolved.
-- Runtime/template source hashes match. Syntax and whitespace checks pass. Unrelated author edits are preserved; nothing was committed.
+Live on the weak tier, the party walking North Haven (tiles a second; 3.73 on an unslowed machine): main thread slowed four times 3.11 before and 3.67 now; slowed six times 2.49 and 3.67. A 60 Hz screen with its frames 6% off never gets a frame with no update or two. A 50 Hz screen now plays at full speed (six updates in five frames) where it played at five sixths.
 
-Experiments without a demonstrated benefit were left out: early video uploads, broader transform memoization, effect-target pooling, floor depth prepasses, and exact skinned-vertex welding. Reordering floors changed visible pixels and was rejected. Further work must address the remaining frame cost and occasional stalls without lowering authored quality.
+## Quality settings
 
-Additional .5 backend checks measured 42.57 FPS with OpenGL and 32.98 with Vulkan; normal Direct3D is restored. Removing the browser frame limit produced 86.68 callbacks/second but only 51.76 newly rendered 3D frames/second (normal scheduling measured 51.04 in the matching diagnostic). That is not a real 60 FPS result, and the flag was removed. The diagnostic adds instrumentation and is separate from the plain RAF samples above. Skinned-detail experiments, transform memoization and hiding an empty composite did not establish a worthwhile further gain and are not installed.
+The levels above move a few of these; all remain engine defaults a script call or plugin can change at any time. Figures: Intel UHD 630, 1080p, the Demo's start map, frozen GPU frame unless noted (runtime 20260930.9).
 
-One clean Direct3D playtest remains open with normal input and focus behavior restored. The final health check confirmed runtime .5, full 1920×1080, shared rendering, 4-sample attached effects, advancing simulation, two ready effects, and no error display or graphics error.
+| Setting | Default | What it trades | Measured |
+| --- | --- | --- | --- |
+| `Reactor3D.renderScale` | 0.75 | The 3D is drawn at this fraction of the screen each way and enlarged. The saving is the pixels not drawn (0.75 draws 56% of them); fine texture softens a little. 1 = native. | native 11.2 ms, 0.75 9.3 ms; walking about 100 → 117 fps |
+| `Reactor3D.SharpUpscale.mode` | `"cas"` | How the smaller picture is enlarged: `"crisp"` keeps each pixel flat with a hard, slightly stepped edge; `"cas"` filters and sharpens within each pixel's neighbours (softer, no steps). `enabled = false` lets PIXI enlarge it pixel for pixel (blocky). | crisp 9.3, cas 9.4, PIXI nearest 8.3 ms |
+| `Reactor3D.SharpUpscale.sharpness` | 0.5 | 0–1. Crisp: how hard the edge blend is (1: half a screen pixel). CAS: how strongly it sharpens. | no cost difference |
+| `Reactor3D.HalfLight.SCALE` | 0.25 | The size the lighting and shadows are worked out at, each way, before being filtered up. Surfaces keep their full detail; only the light is coarser. 0.125 and below put light rims on models against much brighter or darker ground. `enabled = false` lights every pixel (the old way). | full 20.3, 1/4 10.6, 1/8 9.9, 1/16 9.8 ms (three places, before `renderScale`) |
+| `Reactor3D.HalfLight.matchSurfaces` | true | The small light is filtered up from the samples on each pixel's own surface, and a pixel with none (a rim, a thin part) is lit at full size. `false` filters plainly: a blocky rim of the ground's light on models. `PLAIN_SPREAD` (0.02) lets pixels whose four samples agree skip the depth read; `exactEdges = false` drops the full-size fallback. | harness iGPU, 0.75 of 1080p: combine 0.48 → 1.1 ms; pixels 24+ levels off full-size light 9,139 → 538 |
+| `Reactor3D.HalfHaze.SCALE` | 0.25 | The size the lights' haze (cones, balls) is drawn at. `enabled = false` draws it full size. | 3.8 → about 0.8 ms for eleven cones |
+| `Reactor3D.GeometryDetail.pixelError` | 1 | How far, in screen pixels, a simplified model may stray from the full one before the finer level is drawn. | 0.35 → 1: 0.85 ms, single texels moved |
+| `Reactor3D.SHADOWS`, `Reactor3D.SHADOW_QUALITY` | `"auto"`, weak/full tiers | Shadow rows, their size and filtering. The tier is picked from the GPU. | rows about 1.3 ms walking |
+| `Reactor3D.LightVolume.dynamicEnabled` | true | Moving lights baked once a frame instead of per pixel. Evens out on average, saves up to 3.5 ms where many swing across the view. | |
+| `Reactor3D.FOLIAGE_LOD` | full: near 22, far 64, scale 1; weak: near 12, far 38, scale 0.5 | Grass, flowers, ferns and reeds: tiles from the eye where the field starts to thin and where it is gone, and the share drawn at all. Chunks past `far` are not drawn; the blades are drawn before the ground (whatever they hide is never shaded) and stay out of reflections. | harness iGPU (weak tier), North Haven with about 100,000 clumps painted, 3D update with `gl.finish`: +0.2 to +1 ms across meadow, cliff, wide and high views (runtime 20261002.6 + foliage) |
+| `Reactor3D.adaptiveResolution` | false | Let the scale fall when frames run long and climb back when calm. Off: a scale that moves reads as the picture changing under the player. | |
 
+A menu would most naturally offer presets over these (for example Low: renderScale 0.6, lighting 1/8; Medium: 0.75, 1/4; High: 1, 1/4; Ultra: 1 with `HalfLight` and `HalfHaze` off and pixelError 0.35), saved per player with the other options.
 
-## Third laptop pass — runtime 20260905.3
+## Editor memory
 
-The shared renderer now avoids additional duplicate work, and the runtime fixes misplaced flashes from 3D-attached animations. **The final controlled live samples averaged 44.8 and 45.8 FPS with the new performance switches enabled. Sustained 60 FPS remains unachieved.** No resolution, texture, shadow, effect-budget or model-detail settings were reduced in this pass.
+Editor previews hold only what they show. A model loaded to draw a thumbnail is released as soon as the picture exists, and the thumbnail renderer is dropped with its WebGL context four seconds after its last use. The 3D Models page keeps the model on screen and the one before it; closing the page releases every model and both renderers. The 3D map view frees its models' graphics-card copies before its renderer is disposed, because a renderer's own dispose leaves them behind on the context it shares with the 2D view. On North Haven (video memory / ArrayBuffers, MB): closing the Database after eight previews ended at 804, 978, 975 / 323, 351, 351 over three rounds before and 502, 475, 477 / 207, 219, 219 after; three 2D/3D toggles went 1103, 1179, 1256 before and 471, 484, 482 after. Still open: switching maps keeps every model for the project (a release on map change left copies held and is off: `MapEditor3D.SWEEP_MODELS_ON_MAP_CHANGE`), and the builder's 50-step undo can hold about 97 MB on North Haven. Measure with `scratchpad/memory/ed-mem.cjs <out> 5 --loops`: three rounds of each open-and-close loop should end where the first ended.
 
-### Fixed: attached animations flashing in the wrong place
+## Battle start on the map (runtime 20261003.29, weak tier, 1080p, one window)
 
-PIXI 8's render callback was queuing hidden Sprite_Animation instances after their effects had been claimed by the 3D renderer. Those handles were then drawn again through the 2D screen projection. A real game probe observed 730 duplicate draws across 357 frames in 12 seconds. The corrected runtime refuses scene-owned effects at enqueue and draw time, and removes entries whose ownership changed while queued before deciding whether to copy the screen behind effects. Normal 2D animations and sound/flash/lifetime updates remain active.
+What a battle can play is readied with the map: each unit's and party member's sequences, pictures, effects and projectile models (one action a frame, once a session), a collision footprint for every size a model stands at, every model's bounds, and the Tactical HUD (hidden until the battle takes it, made again a second after a battle ends). Units that join a running battle are built inside 4 ms a frame (`Reactor3D.ModelJoins.BUDGET`), and carried weapons are taken up one unit a frame.
 
-After the fix the duplicate count was zero across 409 live frames, with correctly anchored core effects still ready and visible in the scene. A fresh saved-build probe also recorded zero duplicates across 565 frames. The latter starting view culls some off-screen core effects; the earlier visible-effect probe is the evidence that the correct effects remain. Tests cover hidden callbacks, ownership changes after queuing, mixed 2D/3D queues and continued overlay clearing.
+First five seconds, frames over 33 / 50 / 66 ms and the worst frame; "4x" is with the CPU throttled four times (`Emulation.setCPUThrottlingRate`), the nearer picture of a low-end PC:
 
-### Additional shared savings
+| Battle | Before | After | 4x before | 4x after |
+| --- | --- | --- | --- | --- |
+| Tactical raid, 11 units | 50/5/1, 68 ms | 60/10/0, 65 | 98/24/13, 300 | 69 to 100/11 to 14/7 to 8, 141 to 165 |
+| Raid, second start | 53/9/0, 57 | 49/3/0, 55 | 89/7/3, 104 | 31 to 89/5 to 6/2, 96 to 102 |
+| Action skirmish | 17/2/0, 66 | 19/0/0, 49 | 33 to 79/8 to 12/7 to 8, 232 | 83 to 101/10 to 11/6, 212 to 218 |
+| First Person | 29/4/0, 65 | 15/0/0, 44 | 50/9/6, 274 | 58 to 81/10/6, 151 |
+| Army drill, 43 units | 46/11/2, 92 | 22/2/0, 60 | 72/56/35, 264 | 78/63/33, 161 |
+| 2D Deck Drill | 1/0/0, 37 | 1/0/0, 46 | 12/8/7, 123 | 14/7/6, 205 |
 
-- Skip exactly zero-alpha tile pixels before expensive lighting when the material blends normally and writes neither depth nor stencil. Fractional and opaque pixels keep their existing drawing and overlap order. The optimization follows material changes and falls back when its conditions no longer hold.
-- Draw both sides of additive sphere/cone/beam light bodies in a single pass. Their surfaces and brightness are retained; the tested image differences are limited to rounding of at most 2/255 per channel.
-- Reuse an already-cleared shared render target while a pass is empty. New content, pending shadows, callbacks, disposal and resizing require a real draw. Separate canvas passes retain their existing behavior.
-- Reuse unchanged skeleton palettes across repeated color/shadow passes. Bone poses, inverse-bind changes, manual palette edits, replacement arrays and replacement textures invalidate the cache. Custom skeleton update functions are left intact.
-- Repack only light intersections whose exact inputs changed, and upload the mask only if its bits change. RGB-only changes do not alter intersections. A frame that changes most lights uses a full rebuild. Grid size, radius and shader equations are unchanged.
-- Resolve an attachment's world point, model scale/rotation and relative part rotation from one fresh ancestor walk. Video surfaces retain the old-helper fallback for older projects.
-- Clear all six faces of a shadow row together, then draw the same selected faces in the same order. Original shadow geometry and existing budgets are retained.
+Unthrottled, no CPU hitch is left at a raid's start: the remaining long frames are GPU wait (the tactical view is GPU-bound at about 22 ms a frame here). Throttled, the worst frames are the fight's first frame (turn order, `Game_Fight.start`, unit model builds), one grip solve a frame (30 to 40 ms each), the HUD's first uploads and portrait painting. New shader programs still compile at a battle's start (7 for the raid, 5 for Action, 33 for the army after its Transfer Player rebuilds the scene). Measure with `scratchpad/perf/battle-perf.cjs <out> begin` (`MENU=0..4`, `THROTTLE=4`, `SECOND=1`, `PROF=start`, `NOCHECK=1` for a shipped game's shader checks).
 
-These renderer changes are in the shared runtime loaded by editor map/model views. The duplicate overlay fix belongs to the game/playtest Sprite_Animation path; the editor's independent AnimationPreviewLayer keeps its existing drawing implementation.
+## Memory (runtime 20261003.27 to .30, weak tier, 1080p)
 
-### Final controlled live comparison
+Since .30 a model stays loaded while the map being played, a battle on it, its encounters or its events name it. When another map opens, unclaimed models are released; the newest stay while they fit 96 MB (32 MB on low-memory machines). `Reactor3D.ModelUse.enabled = false` keeps every model for the session. A model's embedded pictures are decoded once (the GLB worker decoded and dropped them, and the main thread decoded them again). North Haven straight from the title now takes about 1.4 GB of process memory (1.3 GB on a low-memory machine; 1.9 GB before today) plus 0.6 to 0.8 GB of video memory, and plays with a battle inside a 1.6 GB limit on the low tier; at 1.5 GB it loads and walks and is killed when a battle starts. Arriving through the Reactor Room still needs 2 GB: that room's pictures are each held as a decoded image, a canvas and a texture, and one 2400x2400 wall picture is uploaded three times.
 
-One NW.js game window, D3D11/ANGLE, 1920×1080, laptop on AC. The full test suite had finished before these measurements. Movement was held temporarily at player [24,49]; recorded player position, camera position and rotation match at both ends of all samples. Animations remained live. Each sample followed five seconds of warmup and collected 15 seconds of plain animation-frame intervals without GPU query instrumentation. The flash fix and combined attachment transforms remain enabled in both variants; switches cover the other new performance features. Older .2 optimizations remain enabled in both.
+Since .31 a picture used by several surfaces (walls, floor, a poster) is uploaded once per sampling (`Reactor3D.ScenePictures`), with no canvas copy; large pictures cost width x height x 4 bytes of video memory (a 4000x2250 poster: 34 MB), and machines reporting 4 GB or less keep them at 2048 on the longest side (`Reactor3D.ScenePictures.LOW_MEMORY_SIZE`). A hidden tile layer builds no 2D atlas. The Reactor Room went from 1,853 to about 1,440 MB of process memory. The Demo walk (title, Static Room, Reactor Room, North Haven, a battle) passes inside 2 GB with no reclaim; inside 1.5 GB it is killed loading North Haven after the Reactor Room. The editor on North Haven in the 3D view takes about 1.75 GB plus 0.7 GB of video memory; its model thumbnails and previews are not yet released (video memory 838 to 1,017 MB over two rounds of previews).
 
-| Sample | Mean frame time | Average FPS | p95 frame time |
-| --- | ---: | ---: | ---: |
-| New switches off A | 24.08 ms | 41.5 | 50.0 ms |
-| New switches on A | 22.31 ms | 44.8 | 49.9 ms |
-| New switches off B | 22.04 ms | 45.4 | 49.9 ms |
-| New switches on B | 21.85 ms | 45.8 | 49.9 ms |
+The figures below are from .27.
 
-Paired mean frame time: **23.06 → 22.08 ms**, about **4.3% less time per frame**. This is a modest gain and the p95 remains near 50 ms. Earlier 46–52 FPS samples and later lower samples are not a substitute for this controlled comparison: the user was moving around the map during parts of that exploration, as confirmed by recorded positions [37,12] and [8,18]. Frozen GPU timings must not be presented as live FPS.
+A 2D game takes about 0.5 GB and runs inside a 1 GB limit. A large 3D map takes 1.6 to 1.8 GB of process memory plus about 0.8 GB of video memory, which is system RAM on integrated graphics. Each 2048 model texture costs 21 MB of video memory; 1024 costs 5 MB. Machines reporting 4 GB or less load model textures at 1024 (`Reactor3D.memoryTier`: `"auto"`, `"low"`, `"normal"`; `Reactor3D.lowMemoryTextureSize`). Music is decoded whole: about 22 MB per minute.
 
-### Image and regression checks
+| Stage (all processes, PSS) | MB | Video memory |
+| --- | --- | --- |
+| Title | 730 | 236 |
+| Small 2D map | 1,266 | 436 |
+| North Haven, straight from the title | 1,944 before, 1,625 to 1,805 after the cuts | 760 to 811 (619 on the low tier) |
+| North Haven, arriving through two other 3D maps | 2,562 | 783 |
 
-- Five frozen camera views: the initial four-feature bundle differs by at most 2/255 in a small number of light-glow channels; no graphics errors. Zero-alpha tile rejection alone is pixel-identical.
-- Synthetic GPU fixtures covering alpha 0/128/254/255, opacity 1/0.6, overlap and depth-writing fallback: exact image matches. Shadow-row fixtures for empty, single, alternating and all faces: exact depth-image matches.
-- A forced dynamic-shadow comparison retained identical pixels. Row-clear GPU medians averaged 14.05 → 13.96 ms; this is a small saving.
-- 240 animated shadow frames passed with five slot changes, no mismatched maps, no budget overruns and no graphics errors.
-- 201 focused tests passed. The seven shared-context tests also pass after replacing an obsolete source-pattern assertion with a behavioral reset/exception test.
-- Full Windows run: 2,748 tests; 2,717 passed, 30 failed, one skipped. One failure was the obsolete shared-context assertion just corrected and rerun successfully. The other 29 failures are in platform/tooling, path/permission, existing authored-content or ignored-project synchronization checks; the full suite is not green. Raw results are retained. Compared with the prior 27-failure run, additional non-render failures concern the thumbnail disk cache and packaged-runtime copying; no unrelated fixes were attempted.
+Cuts in this revision: a decoded bitmap is closed once its texture is on the GPU (145 to 209 MB; `Reactor3D.ShaderWarmup.releaseImages`), workers end after 8 s idle (`Reactor3D.IdleWorkers.REST_MS`), the 2D tile atlas is made by the first tile drawn (48 MB each side). Inside a hard limit with no swap: North Haven plays in 2 GB (peak 1,958 during the load) and is killed during the load at 1.5 GB; an imported 2003 game peaks at 371 to 497 MB. Largest thing left: `Reactor3D._glbCache` keeps every model and its textures for the session, so each 3D map visited adds to the next (about 620 MB at North Haven after two others). Measure with `scratchpad/memory/mem.cjs` and `limited.sh`.
 
-### Experiments not shipped
+## World and models on weak graphics (runtime 20261003.26, Ryzen integrated Radeon, 1080p, frozen frames, one window)
 
-GPU-built/finer light grids, general world-matrix caching, triangle reordering, front-to-back material sorting, light-body instancing and direct cross-context effect-image transfers did not produce a reliable acceptable improvement. Opaque-pixel removal in the blend pass was replaced by the safer zero-alpha-only optimization. OpenGL performed worse, and Vulkan lost its graphics context. No backend or power-mode changes were retained. No new encoder dependency was added.
+| Change | Measured | Picture |
+| --- | --- | --- |
+| `Reactor3D.DepthFirst` (pieces, floor; the sky tests depth) | isometric 20.69 to 18.42 ms, third person 12.82 to 11.39, first person at the map edge 23.23 to 19.70 | identical (0 channels differ, including the indoor cutaway) |
+| `GeometryDetail` shared per model, index lists kept | 43.8 to 22 ms for 40 standing units while levels arrive | same levels |
+| A skinned body's distance taken from its joints | 691k to 599k triangles, 22.75 to 21.98 ms | mean 0.18 of a level |
+| Model sprites on flat maps take detail levels | Deck Drill 13.46 to 6.0 ms GPU | within `pixelError` |
+| Ground edge noise only where paint is part-way | 8 types 2.14 to 1.72 ms (3 types 0.9 ms) | identical |
+| Battle models and weapons readied at map load; a weapon measured once per model | tactical start: frames over 50 ms 12 to 8, over 33 ms 59 to 28 | none |
 
-The direct-transfer prototype was restored to the established canvas path after it measured slower; it is not in the saved runtime. Its small crop probe followed the [WebGL 2 texture upload API](https://registry.khronos.org/webgl/specs/2.0/).
+Surroundings cost 0.0 to 0.05 ms out of view; a map-wide glowing foliage layer costs what a plain one does. A profile of the party walking North Haven with weapons shows none of the roof, climbing or held-weapon helpers above 0.1% of the frame. North Haven holds 726 geometries and 67 textures after each of three round trips (no leak): model textures 133 MB, piece buffers 66 MB, piece textures 28 MB, model buffers 23 MB. Still over budget: isometric on North Haven at 18.4 ms GPU (the tank's 20 double-sided meshes are about 3.3 ms of it); battle start still has frames over 50 ms (an effect model loaded by the sequence warm-up, a GPU wait of 16 to 28 ms, the first grip solves).
 
-## Second laptop pass — runtime 20260905.2
+## Battles on the map (runtime 20261003.24, Ryzen integrated Radeon, 1080p, one window)
 
-The shared changes are installed in the editor, source runtime and tracked Demo. **Live gameplay improved from 25–28 FPS to 40–41 FPS in the final paired test. Sustained 60 FPS has not been achieved.** All NW.js benchmark windows and drivers were closed after testing.
+| Scene | Frame | CPU | Battle code |
+|---|---|---|---|
+| Exploring, before any battle | 16.7 ms (capped) | 4.0 | 0 |
+| Tactical, 14 units, at rest | 23.8 ms | 7.0 | 0.11 ms |
+| Tactical, enemy phase | 28.3 | 8.2 | 0.24, worst 8.1 |
+| Action, third person, 8 enemies | 22.4 | 8.2 | 0.64 |
+| First Person, 8 enemies | 26.5 | 9.1 | 0.71 |
+| Army of 61, at rest / enemy phase | 34.0 / 48.0 | 13.1 / 18.3 | 0.25 / 1.64, worst 20 |
+| 2D battle, 11 units | 16.7 (capped) | 4.2 | 0.11 |
 
-### What changed
+The battle's own code is a small share; the frame is the world and the models. A unit's AI thinks within `ReactorFight.AI_BUDGET_MS` (4) a frame, shared by every unit deciding in that frame (three times that above 20 units); its floods and its weighing yield to the clock. Model portraits are fetched from the graphics card without waiting and kept for the session. Battle start still has about ten frames over 50 ms (the worst 90 to 105 ms at raid size, 340 ms for an army): the first carry of each weapon model, a model's first load, new texture uploads and shader compiles. The 2D battle row is with flat-map models sharing their detail levels (20.6 ms before). Measure with `scratchpad/harness-slot.sh -x node scratchpad/perf/battle-perf.cjs <out> tactical|army|action3|action1|drill` (`NODRAIN=1` for frame times, `PROFILE=1`, `ALLOC=1`, `LEAKS=10`).
 
-- A conservative 3D light index skips lights that cannot contribute to a pixel. Moving lights update immediately; pixels outside the indexed area retain the original light loop. Lighting equations, falloff and shadow samples are unchanged.
-- One background worker prepares index-only detail levels for dense, rigid models. The renderer chooses levels using a conservative camera scale and an estimated 0.35-pixel geometric error. Original vertex data, textures and source files remain intact. Close views, skinned/transparent/partial meshes, edited geometry and worker failure use full detail. Shadow drawing, collision and editor picking retain original geometry.
-- A second worker measures effect coverage away from the main thread. It uses the same small coverage image and captured camera pose; drawing proceeds while the measurement is pending. Unsupported or failed workers fall back to the existing path. Effect rendering, resolution and budgets are unchanged.
-- The editor map, database model view, model picker and event previews share the geometry drawing helper. The editor supplies same-origin worker URLs even when runtime scripts are injected as Blobs. Its separate AnimationPreviewLayer coverage implementation is still synchronous; the coverage worker belongs to the shared runtime EffekseerScene path.
+## Edges and beams — runtime 20260930.12
 
-The authored 1920×1080 output, texture data, effect budgets, lighting and shadow quality settings were retained. Runtime draw geometry can differ as described above. The previous revision's range checks, beam bounds reuse and attachment matrix savings remain active.
+Harness iGPU (Ryzen 9 9950X3D's Radeon, radeonsi on X11, weak tier since this runtime), 1920×1080, the start map near the Psychronic mascot (37,11) and the start area (24,47). Looks were judged with game updates stopped and the clock running, each variant drawn for a second first; the frozen mode's stopped clock can hold programs a variant never compiled and drew a wrong reference.
 
-### Final live measurements
+| Change | Cost | What it fixed |
+| --- | --- | --- |
+| The small light's passes stand at the camera (`cameraPosition`) | none | the volume read from the far side of faces: dark floors, bright model faces, in quarter-size blocks |
+| Shadows switching on refresh the originals, not the twins | none | start-map floor compiled without the shadow lookup (full-size path only) |
+| Light filtered up by surface, full-size at rims | about +0.6 ms | blocky rims of the ground's light on models (24+ level errors 9,139 → 538) |
+| Haze filtered up by surface | +0.16 ms | haze bleeding across silhouettes |
+| Beams in the pass at full size | negligible | a laser drawn as a row of soft blocks |
+| Ryzen APUs on Linux weak tier | −15 ms here | full-tier reflection capture (6.2 ms) and full-detail meshes on a 2-CU iGPU |
 
-Same process, same scene and settings; five seconds of warmup before each 15-second sample. Baseline disables this round's three features. Animation keeps running, so phases vary. FPS below is calculated from all sampled frame intervals, not the instantaneous overlay counter.
+Weak tier, start map, GPU per frame: 7.95 ms at the defaults, 9.28 at `renderScale = 1`, 7.58 with `SharpUpscale.mode = "crisp"`.
 
-| Sample | Mean frame time | Average FPS | Median GPU frame time |
-| --- | ---: | ---: | ---: |
-| Baseline A | 35.94 ms | 27.8 | 29.55 ms |
-| Optimized A | 24.54 ms | 40.7 | 17.80 ms |
-| Baseline B | 40.06 ms | 25.0 | 31.78 ms |
-| Optimized B | 24.68 ms | 40.5 | 18.49 ms |
+## Intel UHD 630 pass — runtimes 20260930.2–.6
 
-Optimized p95 frame intervals were 33.5 and 49.9 ms. That variability is material: this is not a locked 60 FPS result. Optimized main-thread update averages were 14.14–14.75 ms, plus approximately 1.9 ms for the final composite; median live GPU time was 17.80–18.49 ms. Both sides still have little or no headroom within a 16.67 ms frame budget.
+Laptop: i5-10500H with its integrated Intel UHD 630 forced on (the RTX 3060 idle), 1920×1080, ANGLE/D3D11, weak tier. Tool: `editor/tests/perf/nw-frame-breakdown.cjs` on a disposable Demo copy: `--mode=passes` (GPU per three.js pass and PIXI composite), `--mode=draws` (GPU per draw call, for ranking only), `--mode=spikes` (every long frame with the CPU samples and the GL traffic inside it), `--mode=frozen` (clocks, tickers and videos stopped; the same frame drawn under a timer per variant; pixels compared with the baseline's own noise; variants from a `--setup` script's `window.__rrVariants`). The harness waits for the geometry worker before measuring: until it has simplified the dense models the full geometry is drawn.
 
-### Controlled rendering and quality checks
+Findings that shaped the pass:
 
-The final frozen-view run used 40 GPU timer samples per batch, pausing clocks, scene updates and videos. Baseline/lighting/combined/baseline/combined medians were 24.03 / 13.26 / 12.70 / 23.21 / 12.66 ms. Averaging paired baseline and combined medians gives **23.62 → 12.68 ms, 46.3% less GPU time**. An earlier controlled pose showed 31.1% savings. These are rendering measurements, not live FPS: animated shadow refreshes, updates and media work are excluded.
+- The frame is GPU-bound: the main thread idled for most of every long frame while the GPU ran 40–90 ms. Spikes were GPU back-pressure, not script, GC or shader compiles.
+- On a frozen start-map frame the light loop was about 12 ms of 30, but not for its arithmetic: the inlined double shadow lookup slowed every lit pixel (removing its code, with no pixel change, saved 8 ms). Merged, the frame went 29.8 to 23.9 ms. A loop indexed identically across pixels and a depth pre-pass measured no gain; drawing the room's walls as opaque made it slower (they are rejected behind props only as late, transparent draws).
+- Of 23 lights on the start map only 6 are unchanged from frame to frame (seven sweeping searchlights, flicker), so caching the summed light across frames does not pay there.
+- Remaining weight on that frame: lighting about 11 ms, vertex and fixed work about 11 ms (three 488k-triangle props, 149k-triangle characters), PIXI composite 2 ms.
 
-Lighting-only pixels matched exactly in the final run and at four earlier camera positions (original, near, far and orbit). Both repeated baseline images matched exactly. The final combined image differed in 77,777 of 8,294,400 RGBA channels, with mean absolute difference 0.0346 on a 0–255 scale and maximum 135. Earlier four-camera mean differences ranged from 0.0284 to 0.0654. Screenshots were visually inspected and showed no obvious loss at the tested views. These aggregate differences and the simplifier's approximate geometric error are **not a proof of imperceptibility for every model or camera**; broader content and motion review remains necessary.
+Walking route (20 s, same start, collision off), before → after this pass (before the merged shadow lookup): median frame 48.7 → 34.7 ms, p95 124.8 → 69 ms, worst 368 → 264 ms, long frames 46 → 30. The changes are listed in the 0.98.9 editor changelog, Performance.
 
-All comparisons retained 24 lights, 100 lit materials and the same shadow settings, with zero graphics errors or failed shader programs. A real worker probe returned exactly the same coverage bounds/history as synchronous measurement for a synthetic effect image. The real editor loaded model detail levels through its Blob worker, and its Reactor model preview displayed both authored effects with no logged errors. The latest runtime passed 240 animated shadow frames with one slot change, no mismatched static/dynamic maps and no budget overruns or graphics errors.
+Runtime 20260930.6, the second round (measured with frozen frames drawn back to back, which an integrated GPU needs: timed with gaps between draws it dropped its clock, and the same frame read 12.9 to 20.4 ms):
 
-### Validation and scope
+- Frozen, three places along the walk: 24.8 ms before the round, 11.0 ms after. Walking, 20 s: about 95 to 100 fps (it began the day near 40), the median frame on the 144 Hz display's 7 ms refresh.
+- Largest steps: the light at a quarter size from the pass's depth (`HalfLight`; in the view with the most lights 23.1 → 12.5 ms); the haze at a quarter size (`HalfHaze`, 3.8 → about 0.8 ms); an opaque game canvas (the browser's blend of an alpha canvas pushed most frames past the refresh: 91 → 101 fps); distance levels at a pixel of error (0.85 ms); the moving lights' bake on a one-tile grid.
+- Where the remaining frame goes (live, per pass): the unlit surfaces about 5 ms (757k triangles, 83 draws; the three dense props alone 1.2 ms of vertex work), PIXI's composite 1.3 ms, the combine 1 ms, the shadow rows 1.3 ms, surfaces lit as before (49 reflective meshes, 328k triangles) 1.1 ms, the light pass 0.8 ms. At a quarter of the resolution the frame still costs about 5 ms: 144 fps at 1080p on this GPU needs the fixed costs cut as well as the pixels.
+- Fixed on the way: the light volume's bakes were refused by the driver whenever PIXI had drawn since three (a shadow sampler met PIXI's texture), so some earlier volume measurements included lights that were not being drawn; the figures above are after the fix.
 
-- 259 focused runtime/editor tests passed. Regression cases include conservative light masks, movement, grid shifts, geometry mutation/disposal, partial draw ranges, parent shear, full shadow geometry, worker failure and asynchronous effect lifetime.
-- Final full Windows suite: **2709 passed, 27 failed, 1 skipped (2737 total)**. Remaining failures concern Windows path/zip/unzip/symlink assumptions, existing editor/content expectations, and ignored corpus runtime drift. This is not a clean release run. The exact failures are included in the measurements JSON.
-- Source runtime, version marker and four new library/license files match the tracked Demo copies byte-for-byte. New/existing project refreshes copy the runtime libraries through the existing recursive updater. Twelve ignored local corpus projects were not bulk rewritten; their drift remains reported by the suite.
-- Pinned meshoptimizer 1.1 JavaScript/WASM is bundled with its MIT license. Source: [meshoptimizer](https://github.com/zeux/meshoptimizer/tree/v1.1). No OS power, driver or quality setting changes were made. Existing unrelated edits were preserved; no commit was created.
+Later the same day (runtimes 20260930.3–.5), the light volume and loading:
 
-Hardware: HP EliteBook 845 G8, Ryzen 5 PRO 5650U, integrated Radeon, 16 GB RAM, Windows 11, ANGLE/D3D11 with AMD driver 31.0.21924.61, AC power and Balanced plan. Existing weak tier: four static/two dynamic shadow rows, 256-pixel faces, one shadow tap.
-
-### Reproduction and next bottlenecks
-
-Use a fully copied disposable Demo, since project plugins may autosave. From the repository root, run the existing NW.js harness with the new setup:
-
-`node editor/tests/perf/nw-game-profile.cjs --project=<disposable-Demo> --nw-root=nwjs-win --seconds=15 --setup=editor/tests/perf/render-budget-compare-setup.js --out=<results-directory>`
-
-The setup restores clocks, media, feature settings and program keys after its comparison; the harness closes its test process. Its pass flag checks rendering validity and exact lighting equality, not perceptual equivalence of geometry. Allow model workers to finish before interpreting geometry gains (the report includes detailReady).
-
-The remaining work toward 60 FPS is the live update/render pipeline: animated world transforms, effect/canvas texture transfers and shadow refresh cost. Workers cannot remove GPU shading or transfer costs merely by moving JavaScript off the main thread. A shared effect-rendering context would require a compatible Effekseer integration and separate visual regression work; that change is not included here.
-
-## Ryzen 5 5650U laptop pass — 2026-09-05
-
-Applied three changes to the source runtime and bundled Demo, revision **20260905.1**:
-
-- Reject lights outside their enclosing cube before the fragment shader calculates distance. The existing radial falloff, cone edges and shadow sampling remain intact.
-- Reuse each model's beam-collision bounds within one light update, rebuilding them on the next update.
-- Calculate an attachment's rotation with one ancestor-matrix update instead of two, retaining Three.js's treatment of scaled parents.
-
-The authored 1920×1080 resolution, textures, geometry, lighting and shadow settings were retained. No assets were reduced.
-
-Hardware: HP EliteBook 845 G8, Ryzen 5 PRO 5650U, integrated Radeon graphics, approximately 16 GB RAM, Windows 11. ANGLE/D3D11, AMD driver 31.0.21924.61, AC power, Balanced plan. The existing weak GPU tier uses four static shadow rows, two dynamic rows, 256-pixel faces and one shadow tap.
-
-### Measurements
-
-Two frozen-view comparisons, each alternating baseline/optimized/baseline/optimized with 40 GPU samples per batch:
-
-| Run | Baseline GPU time | Optimized GPU time | Reduction |
-| --- | ---: | ---: | ---: |
-| 1 | 31.72 ms | 27.54 ms | 13.2% |
-| 2 | 28.76 ms | 27.20 ms | 5.4% |
-
-Each time is the average of the two batch medians. Both runs retained 24 packed lights and 100 lit materials. Every baseline/optimized pixel comparison was identical, with no graphics errors or failed shader programs. The final harness also pauses detached video texture sources; an intervening exploratory run failed baseline-versus-baseline image stability and was discarded.
-
-Live animation was less consistent. Four 10-second samples in the same process, with five seconds of warmup per switch, recorded **18.83 / 23.36 / 21.15 / 18.67 FPS** in baseline/optimized/baseline/optimized order. This does **not** establish a reliable live FPS increase or 60 FPS at 1080p. Animation phases and GPU scheduling differ between batches. The initial profiled run averaged 21.2 FPS. The measured GPU savings are the clearer result.
-
-### Verification and remaining work
-
-- **121 focused tests passed**, with no failures or skips. New cases cover movement, replacement geometry, visibility/removal, beam carriers, fresh standalone calls, scaled/rotated attachments and light-range boundaries. Existing runtime-version assertions were updated; the movie-discovery fixture now avoids a Windows-invalid question-mark filename while retaining its lexical path check.
-- **240 animated frames passed** shadow continuity checks: no static/dynamic mismatches, budget overruns or WebGL errors. Four light-slot changes occurred as animated lights changed priority.
-- Source runtime and the tracked Demo copies match byte-for-byte. The other 12 ignored local corpus projects still carry the prior engine; the broad sync check reports those 24 expected differences. They were not needed for this Demo benchmark.
-- The full project test suite was not rerun. Existing unrelated working-tree edits were preserved; no commit was created.
-- The baseline CPU profile still shows animation image readbacks and texture uploads as expensive operations. This pass does not remove those stalls. Further substantial gains need work on that rendering path or more selective light lists, with new visual comparisons.
-
-Reproduce the shader comparison with the existing NW game profiler on a disposable Demo copy and `--setup=editor/tests/perf/light-range-compare-setup.js`. The profiler reports CPU and GPU time separately. Use `shadow-continuity-setup.js` for the moving-shadow check. Profile copies only: plugins may autosave.
-
-
-## 2D editor light field and prop previews (2026-09-04)
-
-`LightingManager` r14 evaluates the runtime's point/spot/beam falloff on the
-flat ground plane, using world anchors and height/pitch/yaw. Downward cones
-intersect the floor as ellipses. Full fragment precision avoids edge errors
-seen with default shader precision. All floor lights sit below the prop layer;
-individual shadow masks only attenuate their own additive light. This retains
-the flat renderer's brightness treatment: it is not a full 3D material/volume
-compositor, and walls, self-shadowing and event-model casters remain outside
-this editor ground-shadow approximation.
-
-Placed props retain Three targets on PIXI's WebGL2 context, without per-frame
-canvas copies. Target density follows zoom and device resolution with at least
-25% sampling headroom (subject to the 4096/hardware limit), linear filtering and
-four MSAA samples. Zoom-in restores detail; it does not change animation speed.
-Pose/media/light-anchor updates run at the existing 60 Hz model presentation
-rate. Static/hidden props reuse textures, and hidden media pauses. Flat model
-materials own their ambient uniforms so another preview cannot recolor them.
-
-Shadow masks cover each light's ground footprint, grow in retained 64-pixel
-blocks to at most 512 per side, and refresh at most 30 Hz. Projected caster
-bounds reject irrelevant geometry; empty pools skip rendering. Static masks
-and flicker-only changes reuse their targets. A mask is unbound from consumers
-before replacement/removal. Model/bone boxes are cached; production rendering
-does not read pixels back to the CPU.
-
-Run `node editor/tests/perf/nw-flat-preview.cjs` from the repository root.
-It copies Demo, isolates the NW.js profile, compares 24 rendered light fields
-against the runtime's actual GLSL, checks a caster outside the light footprint,
-checks model-lighting isolation and zoom resolution, profiles 20 seconds of
-animation, and saves 2D/3D screenshots. `RR_RENDER_NODE=/dev/dri/renderD129`
-selected this machine's AMD integrated graphics. The script prints its temp
-artifact directory; the author's Demo and lock are not modified.
-
-Recorded NVIDIA comparison at map zoom 0.3: model texture area fell about 86%;
-preview CPU time averaged 0.588 ms per display tick before and 0.271 ms after;
-shadow submissions fell from 325 to 179 per second. Samples were 10 seconds
-before and 20 seconds after, not frozen identical poses, so these describe
-representative workload reduction rather than an exact GPU speedup. The final
-NVIDIA sample's combined Three/PIXI GPU time averaged 0.443 ms (p95 1.649 ms).
-The AMD integrated sample averaged 4.262 ms (p95 14.784 ms, max 20.526 ms).
-Queries cover the editor canvas, excluding Effekseer's separate context and the
-browser compositor. These devices do not establish performance on every old PC.
-
-The 24 GPU field comparisons differed by at most one 8-bit level. The projected
-shadow fixture produced 366 opaque pixels and restored caster state. Separate
-NW.js lifecycle checks verify visible video/animation/shadow pixels, overlapping
-colored lights preserving ambient, view/map switching and project-close cleanup.
-
-
-
-Optimize repeated CPU work and GPU work separately. A cheap JavaScript update
-can submit expensive drawing, and timing only the final PIXI composite misses
-the Three.js passes submitted during the game update. Keep resolution, light
-counts, shadow quality and scene state constant when comparing an optimization.
-
-## Flat model sprites — 2026-09-04, revision .17
-
-Animated models on 2D maps previously rendered into a private WebGL canvas,
-then copied through a 2D canvas and uploaded to PIXI on each draw. The shared
-path now renders directly into sprite textures, retaining the model sprite's
-pixel dimensions and up to four antialiasing samples. Only the compatibility
-fallback copies pixels. Culled models retain simulation but skip drawing;
-catch-up ticks also skip redundant draws.
-
-A local NW.js check on a disposable 1920×1080 Demo copy loaded 18 model
-instances and 12 carried lights. A shared → canvas → shared comparison used
-roughly 1.5-second samples. CPU time inside model painting averaged about
-**0.11 ms per draw shared versus 0.98 ms copied** (about 89% less). Browser
-presentation cadence measured about 29 FPS during the copied sample and
-127 FPS in the warmed shared sample; game simulation remained near 60 ticks/s.
-These are short local measurements, not an older-PC performance guarantee or
-GPU timer-query results. The first shared sample included more warm-up work.
-
-A frozen-view comparison retained resolution and showed a mean RGB difference
-of 0.17/255 between shared and canvas paths; about 0.4% of pixels differed by
-more than eight channel values. Thus this is not a pixel-identical claim.
-Visual inspection confirmed intact model detail and soft translucent lighting.
-The separate lighting correction replaces the rectangle-only cone falloff
-with a tapered texture and uses reduced body opacity, avoiding white washes.
-
-Local harness: `scratchpad/flat-model-profile.cjs` (ignored development aid).
-Regression coverage lives in `editor/tests/model-playback-lifecycle.test.cjs`.
-
-A follow-up with expanding animated bounds retained the shared-path benefit:
-about 0.10 ms/draw shared versus 1.31 ms copied, and roughly 106 versus 24
-presented frames/s in the warmed samples. Bone bounds are cached by geometry
-and bind matrices; moving frames transform boxes instead of reading vertices.
-These measurements retain the same short-run/local-machine limitations above.
-
-## Spotlight and anchor optimization — 2026-09-04
-
-Runtime revision **20260904.15** stops processing a spotlight once its cone
-falloff reaches exactly zero, before sampling either shadow atlas. The soft
-cone edge, lit pixels, shadow filtering and caster budgets retain their existing
-calculations. Model effect anchors also stop explicitly updating world matrices
-before `localToWorld`, because the bundled Three.js already updates the node and
-its ancestors inside that method. A real-Three.js regression checks fresh parent
-translation/rotation, model scale and part offsets, with one update per node.
-
-Measured on the **integrated AMD GPU in a Ryzen 9 9950X3D**, using NW.js,
-ANGLE/radeonsi, a 1280×720 Demo start-map view, 22 packed lights and 100 lit
-materials. The CPU is a modern desktop CPU; this is evidence about integrated
-GPU cost, not a complete old-PC benchmark.
-
-| Shader settings | Baseline GPU median | Optimized GPU median | Pixel comparison |
-| --- | ---: | ---: | --- |
-| Full, 8 shadow rows, 5 taps | 27.53 ms | 22.36 ms | Identical |
-| Full, repeated | 27.91 ms | 22.17 ms | Identical |
-| Weak, 4 shadow rows, 1 tap | 16.01 ms | 16.43 ms | Identical |
-| Weak, repeated | 15.77 ms | 15.09 ms | Identical |
-
-Each median contains 40 GPU timer samples after shader warmup. Full quality
-saved approximately 19–21% in these comparisons; weak quality showed no
-consistent gain. Both tiers returned zero WebGL errors and zero failed shader
-programs. An earlier full-quality experiment measured about 17.5% savings.
-Normal GPU scheduling, clock changes and the animated scene's freeze point
-affect timings between runs.
-
-These are **frozen-scene rendering comparisons**, including Three.js world and
-overlay passes plus the PIXI composite. They isolate the fragment-shader change;
-they do not measure moving-caster atlas refreshes, simulation, media playback,
-or the CPU anchor improvement. Exact pixels in these views are useful regression
-evidence, not exhaustive visual coverage of every map, camera and GPU driver.
-The new branch only skips mathematically zero contributions; it does not lower
-any quality setting. The weak-tier run explicitly selected the existing weak
-Reactor3D tier in a disposable runtime copy, since this GPU's renderer string
-currently defaults to full quality.
-
-## Reproduce
-
-Use the matching NW.js SDK/chromedriver under `nwjs-linux` (or the platform's
-equivalent directory), or pass `--nw-root`. From the repository root:
-
-```bash
-BENCH_DIR=$(mktemp -d)
-cp -RL template/Demo "$BENCH_DIR/Demo"
-cp runtime/reactor_3d.js runtime/reactor_main.js "$BENCH_DIR/Demo/js/"
-node editor/tests/perf/nw-game-profile.cjs \
-  --project="$BENCH_DIR/Demo" --seconds=6 --out="$BENCH_DIR" \
-  --setup=editor/tests/perf/lighting-compare-setup.js \
-  --shot="$BENCH_DIR/game.png" > "$BENCH_DIR/profile.log" 2>&1
-```
-
-Use a real copy with symlinks dereferenced: project plugins can autosave even
-though the profiler itself never requests a save. On Linux with multiple GPUs,
-optionally pass `--render-node=/dev/dri/renderD129`, substituting the actual
-device. Check the report's renderer description rather than assuming an
-environment variable selected the intended GPU.
-
-The setup script freezes game updates, clocks and playing media, then alternates
-baseline/optimized/baseline/optimized. Baseline removes only the spotlight exit
-from the current shader. Materials are recompiled and warmed before sampling;
-the report requires identical framebuffer pixels, a nonuniform image, 40 valid
-GPU samples per batch, and no WebGL or shader errors. The normal shader, clocks,
-tickers and media resume afterwards. Custom time-driven plugins may require
-additional freezing; a baseline-versus-baseline mismatch detects that problem.
-
-The subsequent `frames` report measures the running game. Its shared-context GPU
-query spans the update handler and final PIXI render; it excludes separate
-contexts and effects submitted after that render. CPU update time, render
-submission time and frame intervals are reported separately. GPU time is not
-interchangeable with FPS. Omit `--setup` for ordinary live-game profiling.
-
-## Moving-scene shadow continuity — 2026-09-04
-
-Revision **20260904.16** fixes a separate temporal problem: a cached static
-shadow could adopt a new light origin before its dynamic partner refreshed,
-temporarily suppressing character shadows. The pair now updates together
-within the same budgets and intervals. Shadow-slot selection retains incumbents
-through near ties, uses pre-flicker light values for priority, and changes cone
-priority smoothly. Rendering still uses the actual animated light values.
-
-Run the same profiler command above with
-`--setup=editor/tests/perf/shadow-continuity-setup.js` to observe 240 rendered
-frames with lights, actors and camera updates running. It checks for mismatched
-static/dynamic maps, budget overruns and GL errors, and logs slot changes.
-Changing slots is allowed when lights move, disappear or become substantially
-more important; zero slot changes is not a general correctness condition.
-
-The .15 Demo run recorded 24 slot changes and 46 mismatched pairs over 240
-frames. Final .16 probes recorded two changes at full quality on NVIDIA and
-one at weak quality on AMD integrated graphics, with zero mismatched pairs,
-budget overruns or GL errors in either run. Weak quality was explicitly selected
-in the disposable runtime copy. Animation phases differ across launches, so
-these counts are diagnostic observations rather than a deterministic performance
-comparison. The Node regressions separately reproduce controlled near ties and
-paired-refresh contention; the three initial continuity cases fail on .15.
-
-Full/weak shadow capacities and filtering remain unchanged. Lights without an
-assigned shadow row still illuminate the scene; this fix does not make shadow
-capacity unlimited or establish visual correctness for every scene and driver.
-
-## Further candidates
-
-Profile before expanding the changes. Promising remaining targets include
-reusing beam-collision bounds within a frame, reducing repeated effect-anchor
-lookups, and restricting each object's shader light list to lights that can
-actually reach it. Any cache must invalidate on movement, animation, geometry
-changes and removal. Existing static shadow caching and moving-shadow budgets
-already avoid some redraws; extending them needs moving-scene comparisons to
-catch stale shadows. Lowering resolution or geometry detail is a separate
-quality decision, not part of this optimization.
+- Baked light volume: still, flickering and pulsing lights read from half-tile 3D textures (15 of 23 on the start map); moving lights without their own shadow row are gathered once a frame into a view atlas. Frozen: 8.3 ms saved by the baked lights; walking, 20 s: 699/703 → 755/778 frames, GPU median about 23 ms, p95 41 → 33 ms. The frame is still GPU-bound at about 40 FPS on this GPU; the per-pixel cost left is the texture shading every pixel pays (about 6 ms at 1080p), the party's sharp shadows, and vertex work on dense models.
+- Loading: shader compiles on the driver's threads with meshes shown when ready, pictures decoded in a worker and uploaded under a budget. Fresh profile, New Game, 15 s: 298 → 453 frames, worst frame 2.4 → 0.62 s. Left: Effekseer's WebAssembly start (0.3–0.6 s once) and single large texture uploads (about 70 ms each).

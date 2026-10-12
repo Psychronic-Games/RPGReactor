@@ -1,4 +1,5 @@
 const assert = require('node:assert/strict');
+const { runtimeSource } = require('./helpers/runtime-source.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
@@ -125,7 +126,7 @@ test('MV filterArea shaders use PIXI 8 filter globals without overriding them', 
 });
 
 test('PIXI 8 snapshots stay finite and game-loop startup waits for Application.init', async () => {
-    const source = fs.readFileSync(path.join(workspaceRoot, 'runtime', 'reactor_core.js'), 'utf8');
+    const source = runtimeSource('reactor_core.js');
     const start = source.indexOf('Bitmap.snap = function(stage)');
     const end = source.indexOf('\nBitmap.prototype.isReady', start);
     assert.ok(start >= 0 && end > start);

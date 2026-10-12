@@ -42,7 +42,7 @@ class DatabaseItemEditor {
         const generalSection = document.createElement('div');
         generalSection.className = 'database-section';
         generalSection.innerHTML = `
-            <div class="database-section-header">${tt('General')}</div>
+            <div class="database-section-header" data-section-key="general">${tt('General')}</div>
             <div class="database-section-content"><div class="db-general-grid">
                 <div style="display: flex; flex-direction: column; align-items: center; gap: 6px;">
                     <label style="font-size: 11px; color: var(--color-text-muted); font-weight: 600;">${tt('Icon')}</label>
@@ -132,7 +132,7 @@ class DatabaseItemEditor {
         const invocationSection = document.createElement('div');
         invocationSection.className = 'database-section';
         invocationSection.innerHTML = `
-            <div class="database-section-header">${tt('Invocation')}</div>
+            <div class="database-section-header" data-section-key="invocation">${tt('Invocation')}</div>
             <div class="database-section-content">
                 <div class="db-form">
                     <div class="db-row-pair">
@@ -171,7 +171,7 @@ class DatabaseItemEditor {
         const damageSection = document.createElement('div');
         damageSection.className = 'database-section';
         damageSection.innerHTML = `
-            <div class="database-section-header">${tt('Damage')}</div>
+            <div class="database-section-header" data-section-key="damage">${tt('Damage')}</div>
             <div class="database-section-content">
                 <div class="db-form">
                     <div class="db-row-cols">
@@ -212,7 +212,7 @@ class DatabaseItemEditor {
         effectsSection.setAttribute('tabindex', '0');
         effectsSection.style.outline = 'none';
         effectsSection.innerHTML = `
-            <div class="database-section-header">${tt('Effects')}</div>
+            <div class="database-section-header" data-section-key="effects">${tt('Effects')}</div>
             <div class="database-section-content">
                 <table class="traits-table" id="item-effects-table-${item.id}">
                     <thead>
@@ -256,11 +256,15 @@ class DatabaseItemEditor {
             }
         }, 0);
 
+        // Combat settings grouped by shared rules, Tactical movement and Action attacks.
+        const tacticsSection = window.RRTactics?.createSection({ kind: 'item', record: item, databaseManager: this.databaseManager });
+        if (tacticsSection) gridWrapper.appendChild(tacticsSection);
+
         // --- Note Section ---
         const noteSection = document.createElement('div');
         noteSection.className = 'database-section';
         noteSection.innerHTML = `
-            <div class="database-section-header">${tt('Note')}</div>
+            <div class="database-section-header" data-section-key="note">${tt('Note')}</div>
             <div class="database-section-content">
                 <textarea class="database-field-value" rows="4" style="width: 100%;" data-field="note" data-item-id="${item.id}">${rrEscapeHtml(item.note)}</textarea>
             </div>
@@ -271,7 +275,9 @@ class DatabaseItemEditor {
         const rightColumn = document.createElement('div');
         leftColumn.className = rightColumn.className = 'database-item-column';
         leftColumn.append(generalSection, noteSection);
-        rightColumn.append(invocationSection, damageSection, effectsSection);
+        // Combat settings grouped by shared rules, Tactical movement and Action attacks.
+        // cell of the grid they would take the place of a column.
+        rightColumn.append(...[invocationSection, damageSection, effectsSection, tacticsSection].filter(Boolean));
         gridWrapper.append(leftColumn, rightColumn);
         wrapper.appendChild(gridWrapper);
         container.appendChild(wrapper);

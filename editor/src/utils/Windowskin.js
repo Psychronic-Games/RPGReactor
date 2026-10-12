@@ -15,7 +15,7 @@
  *
  *   The window itself. The frame, the tiled back and the dim variant all come
  *   out of fixed rectangles of the same sheet, laid out by
- *   `Window._refreshBack` / `_refreshFrame` (runtime/reactor_core.js:5839) and
+ *   `Window._refreshBack` / `_refreshFrame` (runtime/reactor_core_display.js) and
  *   `Window_Base.refreshDimmerBitmap` (runtime/reactor_windows.js:555).
  *
  * Loading goes through a Blob rather than a file:// URL on purpose. Colour

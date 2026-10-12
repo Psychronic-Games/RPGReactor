@@ -15,6 +15,14 @@ class EventPageEditor {
     }
 
     /** A phrase rather than a key, for the strings that have no key of their own. */
+    /** The picked frame in the picker's own words ("Character 4 · Left · Frame 2"), counted from 1 as a person counts. */
+    frameWords(image, directionName) {
+        const params = { index: (Number(image.characterIndex) || 0) + 1, direction: this._tt(directionName), frame: (Number(image.pattern) || 0) + 1 };
+        const single = typeof RRAssetFiles !== 'undefined' && RRAssetFiles.isBigCharacter && RRAssetFiles.isBigCharacter(image.characterName || '');
+        const words = this._tt(single ? '{direction} · Frame {frame}' : 'Character {index} · {direction} · Frame {frame}');
+        return words.replace(/\{(\w+)\}/g, (token, key) => (Object.hasOwn(params, key) ? String(params[key]) : token));
+    }
+
     _tt(text) {
         return typeof window !== 'undefined' && window.I18n ? window.I18n.tText(text) : text;
     }
@@ -143,7 +151,7 @@ class EventPageEditor {
                        data-field="variableValid"
                        data-page-index="${pageIndex}"
                        ${conditions.variableValid ? 'checked' : ''}>
-                <label style="min-width: 70px; flex-shrink: 0; font-size: 12px;">${tt('Variable')}</label>
+                <label style="min-width: 70px; flex-shrink: 0; font-size: 12px;">${tt('Variable')}:</label>
                 <button class="variable-picker-btn"
                         data-field="variableId"
                         data-page-index="${pageIndex}"
@@ -221,10 +229,95 @@ class EventPageEditor {
             </div>
         `;
 
+        section.appendChild(this.createFightHookRow(page));
+
         // Add event listeners
         this.attachConditionListeners(section);
 
         return section;
+    }
+
+    /**
+     * The battle row in Conditions: the page runs when its moment in a battle
+     * on the map comes (runtime/reactor_fight.js), on top of the conditions
+     * above. Stored as `page.rrFightHook`; "Never" removes it.
+     */
+    /**
+     * A battle hook as the page stores it, from the row's controls: the moment
+     * (`on`) and only the fields that moment has. `fields` holds what the
+     * controls show: `{ turn, team, unit, region }`, each as typed.
+     */
+    static hookValue(on, fields = {}) {
+        if (!on) return null;
+        const hook = { on };
+        const sides = ['any', 'ally', 'enemy'];
+        if (on === 'turnStart' || on === 'turnEnd') {
+            hook.turn = Math.max(0, Math.floor(Number(fields.turn) || 0));
+            hook.team = sides.includes(fields.team) ? fields.team : 'any';
+        } else if (on === 'unitDefeated') {
+            hook.unit = ['any', 'ally', 'enemy', 'this'].includes(fields.unit) ? fields.unit : 'any';
+        } else if (on === 'unitEnters') {
+            hook.region = Math.max(1, Math.floor(Number(fields.region) || 1));
+            hook.team = sides.includes(fields.team) ? fields.team : 'any';
+        }
+        return hook;
+    }
+
+    createFightHookRow(page) {
+        const tt = text => this._tt(text);
+        const hook = page.rrFightHook || null;
+        const on = hook ? hook.on : '';
+        const row = document.createElement('div');
+        row.className = 'event-fight-hook';
+        row.title = tt('Runs when its battle moment comes; it is never the page the event shows.');
+        const choices = [['battleStart', 'When the battle starts'], ['turnStart', 'When a turn starts'], ['turnEnd', 'When a turn ends'],
+            ['unitDefeated', 'When a unit is defeated'], ['unitEnters', 'When a unit steps on a region']];
+        const plain = (value, label, current) => `<option value="${value}"${String(value) === String(current) ? ' selected' : ''}>${rrEscapeHtml(label)}</option>`;
+        const option = (value, label, current) => plain(value, tt(label), current);
+        row.innerHTML = `
+            <label class="event-fight-hook-label">${rrEscapeHtml(tt('Runs during a battle'))}</label>
+            <select class="event-fight-hook-on">${plain('', this._t('event.hookNever'), on)}${choices.map(([v, l]) => option(v, l, on)).join('')}</select>
+            <span class="event-fight-hook-more"></span>
+            <div class="event-fight-hook-note" hidden>${rrEscapeHtml(row.title)}</div>`;
+        const more = row.querySelector('.event-fight-hook-more');
+        const select = row.querySelector('.event-fight-hook-on');
+        const team = current => `<select class="event-fight-hook-team">${[['any', 'Any side'], ['ally', 'Allies'], ['enemy', 'Enemies']].map(([v, l]) => option(v, l, current)).join('')}</select>`;
+        const words = text => `<span class="event-fight-hook-words">${rrEscapeHtml(text)}</span>`;
+        const note = row.querySelector('.event-fight-hook-note');
+        const fill = () => {
+            const h = page.rrFightHook || {};
+            // What choosing one means, in words, once one is chosen.
+            note.hidden = !h.on;
+            if (h.on === 'turnStart' || h.on === 'turnEnd') {
+                more.innerHTML = `${words(this._t('event.hookTurn'))}<input type="number" class="event-fight-hook-turn" min="0" max="999" step="1" value="${Number(h.turn) || 0}">${words(tt('(0: every turn)'))}${team(h.team || 'any')}`;
+            } else if (h.on === 'unitDefeated') {
+                more.innerHTML = `<select class="event-fight-hook-unit">${[['any', 'Any unit'], ['ally', 'An ally'], ['enemy', 'An enemy'], ['this', 'This unit']].map(([v, l]) => option(v, l, h.unit || 'any')).join('')}</select>`;
+            } else if (h.on === 'unitEnters') {
+                more.innerHTML = `${words(this._t('event.hookRegion'))}<input type="number" class="event-fight-hook-region" min="1" max="255" step="1" value="${Number(h.region) || 1}">${team(h.team || 'any')}`;
+            } else {
+                more.innerHTML = '';
+            }
+            const write = () => {
+                const value = name => { const control = more.querySelector('.event-fight-hook-' + name); return control ? control.value : undefined; };
+                const next = EventPageEditor.hookValue(select.value, { turn: value('turn'), team: value('team'), unit: value('unit'), region: value('region') });
+                page.rrFightHook = next;
+            };
+            more.querySelectorAll('input, select').forEach(control => control.addEventListener('change', write));
+        };
+        select.addEventListener('change', () => {
+            if (!select.value) delete page.rrFightHook;
+            else page.rrFightHook = { on: select.value };
+            fill();
+        });
+        fill();
+        return row;
+    }
+
+    vehicleModelSpec(pageIndex) {
+        if (this.pageModelSpec(pageIndex) || typeof RRVehicles === 'undefined') return null;
+        const event = this.parentEditor.currentEvent, image = event?.pages?.[pageIndex]?.image;
+        if (image?.characterName || image?.tileId > 0) return null;
+        return RRVehicles.modelOf(event, this.databaseManager.data.vehicles);
     }
 
     /**
@@ -237,6 +330,8 @@ class EventPageEditor {
         const image = page.image || {};
         const model = this.pageModelSpec(pageIndex);
         const use3d = !!(model && model.name);
+        // An event that is a vehicle (the Vehicle row) wears the vehicle's own model on a page that gives it none.
+        const worn = use3d ? null : this.vehicleModelSpec(pageIndex);
         section.style.backgroundColor = 'var(--color-bg-input)';
         section.style.padding = '4px';
         section.style.borderRadius = '4px';
@@ -247,14 +342,14 @@ class EventPageEditor {
         // Get direction name
         const directionNames = { 2: 'Down', 4: 'Left', 6: 'Right', 8: 'Up' };
         const directionName = directionNames[image.direction] || 'Down';
-        const displayName = use3d ? model.name : (image.characterName || '');
-        const title = use3d ? tt('3D Model') : this._t('event.image');
+        const displayName = use3d ? model.name + (model.variant ? ' · ' + model.variant : '') : worn ? worn.name : (image.characterName || '');
+        const title = use3d ? tt('3D Model') : worn ? tt('3D Model') : this._t('event.image');
 
         section.innerHTML = `
             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 3px; flex-shrink: 0;">
                 <div style="font-weight: bold; font-size: 13px;">${title}</div>
                 <label style="display: flex; align-items: center; gap: 4px; font-size: 11px; font-weight: normal;">
-                    <input type="checkbox" class="image-3d-checkbox" data-page-index="${pageIndex}" ${use3d ? 'checked' : ''}>
+                    <input type="checkbox" class="image-3d-checkbox" data-page-index="${pageIndex}" ${use3d || worn ? 'checked' : ''} ${worn ? `disabled title="${rrEscapeHtml(this._t('vehicle.inherited'))}"` : ''}>
                     ${tt('3D')}
                 </label>
             </div>
@@ -290,7 +385,7 @@ class EventPageEditor {
                                 return `<button type="button" class="image-dir-btn" data-dir="${dir}"
                                     style="margin-left:3px;padding:1px 5px;font-size:10px;border-radius:3px;cursor:pointer;border:1px solid ${on ? 'var(--color-accent-bright)' : 'var(--color-border-input)'};background:${on ? 'var(--color-accent-tint-30)' : 'var(--color-bg-surface)'};color:var(--color-text);">${tt(label)}</button>`;
                             }).join('')}`
-                        : `${this._t('event.index')} <strong style="color: var(--color-text);">${image.characterIndex || 0}</strong> | ${this._t('event.dir')} <strong style="color: var(--color-text);">${tt(directionName)}</strong> | ${this._t('event.pattern')} <strong style="color: var(--color-text);">${image.pattern || 0}</strong>${image.tileId > 0 ? ` | ${this._t('event.tile')} <strong style="color: var(--color-text);">${image.tileId}</strong>` : ''}`}
+                        : `${image.characterName ? `<strong style="color: var(--color-text);">${rrEscapeHtml(this.frameWords(image, directionName))}</strong>` : ''}${image.tileId > 0 ? `${image.characterName ? ' | ' : ''}${this._t('event.tile')} <strong style="color: var(--color-text);">${image.tileId}</strong>` : ''}`}
                 </div>
             </div>
         `;
@@ -309,7 +404,7 @@ class EventPageEditor {
      */
     renderCharacterPreview(section, page) {
         const tt = (text) => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
-        const image = page.image;
+        let image = page.image;
         const canvas = section.querySelector('.character-preview-canvas');
         if (!canvas) return;
 
@@ -328,13 +423,36 @@ class EventPageEditor {
 
         this._disposeModelPreview();
 
-        const model = this.pageModelSpec(this.parentEditor.currentPageIndex);
+        const row = RRVehicles.vehicleOf(this.parentEditor.currentEvent);
+        const sheet = row && this.databaseManager.data.vehicles?.[row.type]?.sheet;
+        const currentMap = this.parentEditor.currentMap || window.reactor?.eventManager?.currentMap;
+        const flat = currentMap && !window.Reactor3D?.isMap3D?.(currentMap) && !/<3d>/i.test(currentMap.note || '');
+        const inheritedSprite = !image.characterName && !image.tileId && sheet?.characterName;
+        if (inheritedSprite && flat) image = {...image,...sheet};
+        const model = this.pageModelSpec(this.parentEditor.currentPageIndex) || (flat && inheritedSprite ? null : this.vehicleModelSpec(this.parentEditor.currentPageIndex));
         if (model && model.name) {
+            this._showUnitLookNote(canvas, this.vehicleModelSpec(this.parentEditor.currentPageIndex) ? this._t('vehicle.inherited') : '');
             this._renderModelPreview(canvas, model, page);
             return;
         }
 
         const fit = () => this._fitPreviewCanvas(canvas);
+
+        // A unit with no picture or model of its own stands as its record's look.
+        const look = EventPageEditor.showsUnitLook(image, model) ? this.unitLook(this.parentEditor.currentPageIndex) : null;
+        this._showUnitLookNote(canvas, look ? look.note : '');
+        if (look && look.kind === 'model') {
+            this._renderModelPreview(canvas, look.spec, page);
+            return;
+        }
+        if (look && look.kind === 'character') {
+            image = Object.assign({}, image, { characterName: look.characterName, characterIndex: look.characterIndex || 0 });
+        } else if (look) {
+            requestAnimationFrame(() => {
+                if (canvas.isConnected) this._drawUnitLook(canvas, fit(), look);
+            });
+            return;
+        }
 
         console.log('renderCharacterPreview - image data:', image);
         console.log('renderCharacterPreview - tileId:', image.tileId);
@@ -469,6 +587,137 @@ class EventPageEditor {
         };
 
         img.src = imgPath;
+    }
+
+    /** Draws the Image box again: the unit row changed what the event stands as. */
+    refreshCharacterPreview() {
+        const section = document.querySelector('.event-page-config .image-section');
+        const editor = this.parentEditor;
+        const page = editor && editor.currentEvent && editor.currentEvent.pages[editor.currentPageIndex];
+        if (!section || !page) return;
+        // A canvas that drew a model cannot draw a picture afterwards: each look starts on a canvas of its own.
+        const canvas = section.querySelector('.character-preview-canvas');
+        if (canvas) {
+            this._disposeModelPreview();
+            const fresh = canvas.cloneNode(false);
+            // As the section first makes it: the preview then measures it again and sets its own proportions.
+            fresh.width = 192;
+            fresh.height = 88;
+            canvas.replaceWith(fresh);
+        }
+        this.renderCharacterPreview(section, page);
+    }
+
+    /** Whether the Image box shows the unit's look: the page has no model, no tile and no character picture of its own. */
+    static showsUnitLook(image, model) {
+        return !(model && model.name) && !((image && image.tileId) > 0) && !(image && image.characterName);
+    }
+
+    /**
+     * What a unit stands as when its event has no picture of its own, the
+     * first that exists: the look Battle Setup gives (`given`), the model the
+     * Database binds to its record (`model`), an actor's character or an
+     * enemy's own picture on the map, an enemy's battler picture, a
+     * plain figure in its side's color (`colors`). `record` is its Database
+     * record, `sideView` whether the game's battles are side view, `tx(text,
+     * params)` translates. `{ kind: "model" | "character" | "picture" | "figure", note, … }`.
+     */
+    static lookOf(unit, record, { given = null, model = null, sideView = false, colors = {}, tx }) {
+        const figure = note => ({ kind: 'figure', color: colors[unit.team] || colors.neutral || '#e6d15a', note });
+        if (!record) return figure('');
+        const actor = unit.record === 'actor';
+        const name = record.name || String(unit.id).padStart(4, '0');
+        const note = tx(actor ? 'Looks like {name} (Database › Actors)' : 'Looks like {name} (Database › Enemies)', { name });
+        if (given && ['model', 'character', 'picture', 'figure'].includes(given.kind)) return Object.assign({ note }, given);
+        if (model && model.name) return { kind: 'model', spec: model, note };
+        if (actor && record.characterName) return { kind: 'character', characterName: record.characterName, characterIndex: record.characterIndex || 0, note };
+        // An enemy's own picture on the map (`rrBattle.character`), else its `<unit character:>` tag: the game's own rule (FightLook.js).
+        const rule = typeof ReactorFightLook !== 'undefined' ? ReactorFightLook : typeof require === 'function' ? require('../utils/FightLook.js') : null;
+        const sheet = actor || !rule ? null : rule.recordCharacter(unit, record);
+        if (sheet) return { kind: 'character', characterName: sheet.characterName, characterIndex: sheet.characterIndex, note };
+        if (!actor && record.battlerName) return { kind: 'picture', folder: sideView ? 'sv_enemies' : 'enemies', name: record.battlerName, hue: Number(record.battlerHue) || 0, note };
+        return figure(tx('{name} has no picture: it stands as a plain figure.', { name }));
+    }
+
+    /**
+     * What the event stands as on page `pageIndex` when it is a unit with no
+     * picture of its own (`lookOf`); null when it is not a unit on that page.
+     */
+    unitLook(pageIndex) {
+        const editor = this.parentEditor, event = editor && editor.currentEvent;
+        const unit = event && typeof FightCommandEditor !== 'undefined' ? FightCommandEditor.unitOf(event) : null;
+        // A unit made by a comment is one on that page only.
+        if (!unit || (unit.from === 'comment' && unit.page !== pageIndex + 1)) return null;
+        const tx = (text, params) => (typeof window !== 'undefined' && window.I18n ? window.I18n.formatText(text, params)
+            : String(text).replace(/\{(\w+)\}/g, (token, key) => (key in params ? String(params[key]) : token)));
+        const colors = (typeof RRBattleSetup !== 'undefined' && RRBattleSetup.TEAM_COLORS) || { ally: '#4aa8ff', enemy: '#ff5a4a', neutral: '#e6d15a' };
+        const actor = unit.record === 'actor';
+        const list = (actor ? this.databaseManager.getActors() : this.databaseManager.getEnemies()) || [];
+        const record = unit.id > 0 ? list.find(entry => entry && Number(entry.id) === Number(unit.id)) : null;
+        const given = record && typeof RRBattleSetup !== 'undefined' && typeof RRBattleSetup.lookOf === 'function' ? RRBattleSetup.lookOf(unit, event) : null;
+        const project = this.projectController.getCurrentProject ? this.projectController.getCurrentProject() : this.projectController.currentProject;
+        const bindings = typeof RRDatabase3DBindings !== 'undefined' ? RRDatabase3DBindings : null;
+        let model = null;
+        if (record && project && project.path && bindings && bindings.get) {
+            try { model = actor ? bindings.get(project.path, 'actors', unit.id, 'character') : bindings.get(project.path, 'enemies', unit.id); } catch (error) { model = null; }
+        }
+        const system = this.databaseManager.getSystem ? this.databaseManager.getSystem() : null;
+        return EventPageEditor.lookOf(unit, record, { given, model, sideView: !!(system && system.optSideView), colors, tx });
+    }
+
+    /** The line under the Image box that says whose look it shows; '' takes it away. */
+    _showUnitLookNote(canvas, text) {
+        const box = canvas.parentElement, holder = box && box.parentElement;
+        if (!holder) return;
+        let note = holder.querySelector('.event-unit-look');
+        if (!text) { if (note) note.remove(); return; }
+        if (!note) {
+            note = document.createElement('div');
+            note.className = 'event-unit-look';
+            box.after(note);
+        }
+        note.textContent = text;
+        note.title = text;
+    }
+
+    /** A battler picture fitted in the box, or a plain figure in the side's color. */
+    _drawUnitLook(canvas, ctx, look) {
+        const background = () => {
+            ctx.fillStyle = '#3e3e42';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        };
+        const figure = color => {
+            background();
+            const h = canvas.height * 0.72, w = h * 0.42, x = canvas.width / 2, top = (canvas.height - h) / 2;
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            ctx.arc(x, top + h * 0.16, h * 0.16, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.moveTo(x - w / 2, top + h);
+            ctx.lineTo(x - w / 2, top + h * 0.5);
+            ctx.quadraticCurveTo(x - w / 2, top + h * 0.36, x, top + h * 0.36);
+            ctx.quadraticCurveTo(x + w / 2, top + h * 0.36, x + w / 2, top + h * 0.5);
+            ctx.lineTo(x + w / 2, top + h);
+            ctx.closePath();
+            ctx.fill();
+        };
+        if (look.kind !== 'picture') { figure(look.color || '#e6d15a'); return; }
+        const project = this.projectController.getCurrentProject ? this.projectController.getCurrentProject() : this.projectController.currentProject;
+        if (!project) { figure('#ff5a4a'); return; }
+        const picture = new Image();
+        picture.onload = () => {
+            if (!canvas.isConnected) return;
+            background();
+            const scale = Math.min(canvas.width / picture.width, canvas.height / picture.height);
+            const w = picture.width * scale, h = picture.height * scale;
+            ctx.imageSmoothingEnabled = true;
+            if (look.hue) ctx.filter = `hue-rotate(${look.hue}deg)`;
+            ctx.drawImage(picture, (canvas.width - w) / 2, (canvas.height - h) / 2, w, h);
+            ctx.filter = 'none';
+        };
+        picture.onerror = () => { if (canvas.isConnected) figure('#ff5a4a'); };
+        picture.src = RRAssetFiles.imageUrlFor(require('path').join(project.path, 'img', look.folder), look.name);
     }
 
     /**
@@ -950,6 +1199,8 @@ class EventPageEditor {
         this.parentEditor.pendingModels[pageIndex] = spec;
         // The preview reads pendingModels directly; only Apply/OK commits
         // this selection to the map alongside the rest of the event draft.
+        // An Auto size follows the model.
+        this.parentEditor.refreshAutoSize?.();
     }
 
     _fitPreviewCanvas(canvas) {
@@ -964,8 +1215,12 @@ class EventPageEditor {
     }
 
     _disposeModelPreview() {
+        // A model still loading must not build its preview after this.
+        this._modelPreviewGen = (this._modelPreviewGen || 0) + 1;
         if (this._modelPreviewRaf) cancelAnimationFrame(this._modelPreviewRaf);
         this._modelPreviewRaf = 0;
+        this._modelPreviewUnwatch?.();
+        this._modelPreviewUnwatch = null;
         if (this._modelPreviewRenderer) {
             this._modelPreviewRenderer.dispose();
             const gl = this._modelPreviewRenderer.getContext && this._modelPreviewRenderer.getContext();
@@ -1044,6 +1299,7 @@ class EventPageEditor {
             const scene = new THREE.Scene();
             ModelPreview3D.updateBackground(scene);
             ModelPreview3D.isolateLighting(object);
+            if (model.variant && typeof ModelVariantsPanel !== 'undefined') ModelVariantsPanel.wear(mesh, project.path, model.name, model.variant);
             scene.add(object);
             const camera = Reactor3D.createCamera({ fov: 35 });
             const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -1052,20 +1308,42 @@ class EventPageEditor {
             this._modelPreviewScene = scene;
             this._modelPreviewCamera = camera;
             this._modelPreviewRenderer = renderer;
+            // The page's model stands still, so it is drawn when something
+            // about the picture changes — its size, the theme behind it, or a
+            // texture decoding after the first draw — and not sixty times a
+            // second. The canvas is measured only when it reports a resize.
+            const textures = ModelPreview3D.collectTextures(template, object);
+            let dirty = true, sizeDirty = true, theme = null, textureVersion = -1;
+            const unwatchSize = ModelPreview3D.watchSize(canvas, () => { sizeDirty = true; });
+            this._modelPreviewUnwatch = unwatchSize;
             const tick = () => {
-                if (gen !== this._modelPreviewGen || !canvas.isConnected || !this._modelPreviewRenderer) return;
-                const rect = canvas.getBoundingClientRect();
-                const width = Math.max(1, Math.round(rect.width));
-                const height = Math.max(1, Math.round(rect.height));
-                const ratio = renderer.getPixelRatio();
-                if (canvas.width !== Math.floor(width * ratio) || canvas.height !== Math.floor(height * ratio)) {
-                    renderer.setSize(width, height, false);
-                    camera.aspect = width / height;
-                    camera.updateProjectionMatrix();
+                if (gen !== this._modelPreviewGen || !canvas.isConnected || !this._modelPreviewRenderer) {
+                    unwatchSize?.();
+                    return;
                 }
-                Reactor3D.aimCamera(camera, { x: -0.5, y: 0, z: -0.5 }, { yaw: 0, pitch: 12, distance: 2.4 });
-                ModelPreview3D.updateBackground(scene);
-                Reactor3D.renderScene(renderer, scene, camera);
+                if (sizeDirty || !unwatchSize) {
+                    sizeDirty = false;
+                    const rect = canvas.getBoundingClientRect();
+                    const width = Math.max(1, Math.round(rect.width));
+                    const height = Math.max(1, Math.round(rect.height));
+                    const ratio = renderer.getPixelRatio();
+                    if (canvas.width !== Math.floor(width * ratio) || canvas.height !== Math.floor(height * ratio)) {
+                        renderer.setSize(width, height, false);
+                        camera.aspect = width / height;
+                        camera.updateProjectionMatrix();
+                        dirty = true;
+                    }
+                }
+                const nextTheme = ModelPreview3D.themeKey();
+                if (nextTheme !== theme) { theme = nextTheme; dirty = true; }
+                const nextVersion = ModelPreview3D.textureVersionSum(textures);
+                if (nextVersion !== textureVersion) { textureVersion = nextVersion; dirty = true; }
+                if (dirty) {
+                    Reactor3D.aimCamera(camera, { x: -0.5, y: 0, z: -0.5 }, { yaw: 0, pitch: 12, distance: 2.4 });
+                    ModelPreview3D.updateBackground(scene);
+                    // Drawn again next frame while the model is still left out of the draw.
+                    dirty = ModelPreview3D.render(renderer, scene, camera);
+                }
                 this._modelPreviewRaf = requestAnimationFrame(tick);
             };
             this._modelPreviewRaf = requestAnimationFrame(tick);
@@ -1100,6 +1378,7 @@ class EventPageEditor {
             btn.addEventListener('click', () => {
                 if (!page.image) page.image = {};
                 page.image.direction = Number(btn.dataset.dir) || 2;
+                this.parentEditor.refreshAutoSize?.();
                 this.parentEditor.renderCurrentPage();
             });
         });
@@ -1135,6 +1414,8 @@ class EventPageEditor {
 
                         // Re-render the page configuration to show updated values
                         this.parentEditor.renderCurrentPage();
+                        // The page was drawn again: the keyboard goes back to the button that opened the picker.
+                        document.querySelector(`.image-browse-button[data-page-index="${pageIndex}"]`)?.focus();
                     }
                 );
             });

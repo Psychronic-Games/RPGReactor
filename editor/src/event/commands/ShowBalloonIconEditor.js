@@ -597,7 +597,7 @@ class ShowBalloonIconEditor {
             };
 
             characterImage.onerror = () => {
-                console.error('Failed to load character image:', imagePath);
+                console.error('Failed to load character image:', characterImage.src);
             };
         }
     }

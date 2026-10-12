@@ -80,6 +80,13 @@
     }
 
     /** Which arrow the pointer is on, with what a later move means, or null. */
+    /** How far a screen point lies from the segment a-b, in pixels. */
+    function segmentDistance(x, y, a, b) {
+        const dx = b[0] - a[0], dy = b[1] - a[1], length2 = dx * dx + dy * dy;
+        const t = length2 > 0 ? Math.max(0, Math.min(1, ((x - a[0]) * dx + (y - a[1]) * dy) / length2)) : 0;
+        return Math.hypot(a[0] + t * dx - x, a[1] + t * dy - y);
+    }
+
     function pick(THREE, arrows, camera, rect, clientX, clientY) {
         if (!arrows || !arrows.root.visible || !camera || !rect || !rect.width) return null;
         const origin = arrows.root.getWorldPosition(new THREE.Vector3());
@@ -88,14 +95,16 @@
         let best = null;
         for (const axis of AXES) {
             const dir = direction(axis);
+            // The shaft as screen segments (not loose points: a long arrow on screen has gaps between them).
+            let prev = null;
             for (let i = 1; i <= 10; i++) {
                 const world = origin.clone().add(dir.clone().multiplyScalar(arrows.length * 1.2 * i / 10));
                 const v = world.clone().project(camera);
-                if (v.z > 1) continue;
-                const sx = rect.left + (v.x + 1) / 2 * rect.width;
-                const sy = rect.top + (1 - v.y) / 2 * rect.height;
-                const dist = Math.hypot(sx - clientX, sy - clientY);
+                if (v.z > 1) { prev = null; continue; }
+                const point = [rect.left + (v.x + 1) / 2 * rect.width, rect.top + (1 - v.y) / 2 * rect.height];
+                const dist = prev ? segmentDistance(clientX, clientY, prev, point) : Math.hypot(point[0] - clientX, point[1] - clientY);
                 if (dist <= 10 && (!best || dist < best.dist)) best = { axis, dist };
+                prev = point;
             }
         }
         if (!best) return null;
@@ -112,7 +121,7 @@
         };
     }
 
-    const api = { create, sync, dispose, emphasize, pick };
+    const api = { create, sync, dispose, emphasize, pick, segmentDistance };
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
     root.RRAxisArrows3D = api;
 })(typeof window !== 'undefined' ? window : globalThis);

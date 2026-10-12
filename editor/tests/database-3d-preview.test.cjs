@@ -63,7 +63,7 @@ test('a looping effect starts over at its last lit frame, found at a resolution 
 
 test('Optimize sits with the cost panel, acts on the selected model, and reaches the dialog from either host', () => {
     const db = read('database/Database3DEditor.js');
-    assert.match(db, /What this model costs'\)\}<\/span>\n\s*<button type="button" class="rr-btn-secondary r3d-optimize"/, 'beside the numbers it acts on');
+    assert.match(db, /Model Specifications'\)\}<\/span>\n\s*<button type="button" class="rr-btn-secondary r3d-optimize"/, 'beside the numbers it acts on');
     assert.doesNotMatch(db, /\$\{this\._t\('Models'\)\}<\/span>\n\s*<button/, 'not in the list header, where it read as bulk');
     assert.match(db, /const ui = \(this\.projectController && this\.projectController\.uiManager\)\n\s*\|\| \(typeof window !== 'undefined' && window\.reactor && window\.reactor\.uiManager\);/);
     assert.match(db, /const entry = this\.listModels\(\)\.find\(m => m\.name === this\.selectedName\);\n\s*if \(!entry\) return say\(this\._t\('Select a model first\.'\)\);/, 'one model, the selected one');

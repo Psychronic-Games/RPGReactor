@@ -4,14 +4,14 @@
  * dispatch, compatibility fields, and value conversions cannot drift apart.
  */
 const assert = require('node:assert/strict');
+const { runtimeSource } = require('./helpers/runtime-source.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
 
 const repoRoot = path.resolve(__dirname, '..', '..');
-const objectsSource = fs.readFileSync(
-    path.join(repoRoot, 'runtime', 'reactor_objects.js'), 'utf8');
+const objectsSource = runtimeSource('reactor_objects.js');
 const enemyEditorSource = fs.readFileSync(
     path.join(repoRoot, 'editor', 'src', 'database', 'DatabaseEnemyEditor.js'), 'utf8');
 

@@ -10,7 +10,7 @@ test('Show Text previews sample the selected face and fit the preview at every s
     for (const size of [32,40,48,96,144,288]) {
         const calls = [];
         const ctx = { clearRect() {}, drawImage(...args) { calls.push(args.slice(1)); } };
-        const canvas = { width:144, height:144, getContext:()=>ctx };
+        const canvas = { width:144, height:144, style:{}, getContext:()=>ctx };
         class Image {
             constructor() { this.naturalHeight = size * 2; this.complete = true; }
             set src(value) { this.onload(); }
@@ -22,11 +22,14 @@ test('Show Text previews sample the selected face and fit the preview at every s
             window:{RRFaceSheet:face,RRAssetFiles:{},RRWindowskin:{METRICS:{FACE_SIZE:144}}}
         });
         const editor = Object.create(Editor.prototype);
+        // The face is the active box's: a picture chosen by hand here.
         Object.assign(editor, {
-            modal:{querySelector:()=>canvas}, faceImage:'Faces', faceIndex:5,
+            modal:{querySelector:()=>canvas, querySelectorAll:()=>[]},
+            boxes:[{header:{faceName:'Faces',faceIndex:5,background:0,positionType:2,speakerName:''},lines:['']}], activeIndex:0,
             projectController:{currentProject:{path:'/fixture'}},
             _projectPath:()=>'/fixture',_faceCache:{name:'Faces',image:new Image()}
         });
+        editor._defineHeaderAccessors();
         editor.updateFacePreview();
         assert.deepEqual(calls.pop(),[size,size,size,size,0,0,144,144],`${size}px selection preview`);
         editor.drawPreviewFace(ctx,{faceName:'Faces',faceIndex:5},12,24);

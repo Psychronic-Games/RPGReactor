@@ -98,7 +98,12 @@ class ForgeManager {
         this.activeToolId = null;
         // Tool instances are lazy-cached on this object via tool.getter.
         window.addEventListener('rr-language-changed', () => {
-            if (this.workspaceModal && this.workspaceModal.style.display !== 'none') this._renderWorkspace();
+            if (!this.workspaceModal || this.workspaceModal.style.display === 'none') return;
+            // A tool with work in hand that a re-mount would throw away (a running project tool) keeps
+            // its page: only the workspace's own words change.
+            const tool = FORGE_TOOLS.find(t => t.id === this.activeToolId), instance = tool && this[tool.getter];
+            if (instance && typeof instance.holdsWork === 'function' && instance.holdsWork()) this._relabelWorkspace();
+            else this._renderWorkspace();
         });
     }
 
@@ -167,7 +172,7 @@ class ForgeManager {
             return `
                 <div class="rr-forge-sidebar-item" data-tool-id="${tool.id}" style="padding: 10px 14px; cursor: pointer; font-size: 12px; color: var(--color-text); background: ${active ? 'var(--color-bg-hover)' : 'transparent'}; border-left: 3px solid ${active ? 'var(--color-accent-bright)' : 'transparent'}; display: flex; align-items: center; gap: 8px;">
                     <span style="line-height: 1; color: var(--color-accent-bright); flex-shrink: 0; width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center;">${tool.icon(18)}</span>
-                    <span>${name}</span>
+                    <span class="rr-forge-sidebar-name">${name}</span>
                 </div>
             `;
         }).join('');
@@ -231,6 +236,17 @@ class ForgeManager {
                 this[tool.getter].renderInto(contentEl, this.projectController);
             }
         }
+    }
+
+    /** The workspace's own words in the language now set, leaving the active tool's page as it is. */
+    _relabelWorkspace() {
+        const activeTool = FORGE_TOOLS.find(t => t.id === this.activeToolId);
+        const title = this.workspaceModal.querySelector('.rr-modal-title');
+        if (title) title.textContent = this._t('menu.forge') + (activeTool ? ` | ${this._t(activeTool.nameKey)}` : '');
+        this.workspaceModal.querySelectorAll('.rr-forge-sidebar-item').forEach(el => {
+            const tool = FORGE_TOOLS.find(t => t.id === el.dataset.toolId), name = el.querySelector('.rr-forge-sidebar-name');
+            if (tool && name) name.textContent = this._t(tool.nameKey);
+        });
     }
 
     _renderWelcome() {

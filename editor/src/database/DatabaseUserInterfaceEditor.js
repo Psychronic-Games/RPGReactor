@@ -6,7 +6,32 @@
  * shows is where the game draws.
  */
 class DatabaseUserInterfaceEditor {
-    static get NODE_TYPES() { return ['box', 'image', 'text', 'button', 'list', 'gauge', 'input', 'battleWindow', 'battleCursor']; }
+    static get NODE_TYPES() { return ['box', 'image', 'text', 'button', 'list', 'gauge', 'input', 'battleWindow', 'battleCursor',
+        'fightUnit', 'fightTurnOrder', 'fightInfo', 'fightWindow',
+        'actionCrosshair', 'actionVitals', 'actionWeapon', 'actionHotbar', 'actionTarget', 'actionBars', 'actionDamage', 'actionInfo',
+        'victoryParty', 'victoryLevels', 'victoryRewards', 'victoryText']; }
+    /** The Victory interface's shared half (the same file the game runs): node settings, pages and drawing. */
+    static victoryHud() {
+        if (typeof ReactorVictoryHud !== 'undefined') return ReactorVictoryHud;
+        try { return require('../utils/VictoryHud.js'); } catch (error) { return null; }
+    }
+    static isVictoryNode(type) { return ['victoryParty', 'victoryLevels', 'victoryRewards', 'victoryText'].includes(type); }
+    /** The Action and First Person battle HUD's shared half (the same file the game runs). */
+    static actionHud() {
+        if (typeof ReactorActionHud !== 'undefined') return ReactorActionHud;
+        try { return require('../utils/ActionHud.js'); } catch (error) { return null; }
+    }
+    static isActionNode(type) { return typeof type === 'string' && type.startsWith('action') && DatabaseUserInterfaceEditor.NODE_TYPES.includes(type); }
+    /** The presentations that are a battle's HUD or its Victory interface: each fills the role of its own name and no other. */
+    static get HUD_MODES() { return ['battle', 'tactical', 'action', 'firstPerson', 'victory']; }
+    /** The map battle HUD's shared half (the same file the game runs): node settings, layout and drawing. */
+    static fightHud() {
+        if (typeof ReactorFightHud !== 'undefined') return ReactorFightHud;
+        try { return require('../utils/FightHud.js'); } catch (error) { return null; }
+    }
+    static isFightNode(type) { return ['fightUnit', 'fightTurnOrder', 'fightInfo', 'fightWindow'].includes(type); }
+    /** The stock tactical windows a Tactical Window node places. */
+    static get FIGHT_WINDOWS() { return [['command', 'Commands'], ['skill', 'Skills'], ['item', 'Items']]; }
     /** The stock battle windows a Battle Window node places. */
     static get BATTLE_WINDOWS() {
         return [['partyCommand', 'Party Command'], ['actorCommand', 'Actor Command'], ['help', 'Help'], ['skill', 'Skills'], ['item', 'Items'],
@@ -78,7 +103,11 @@ class DatabaseUserInterfaceEditor {
             ['equip', 'Equipment', 'reactorEquipInterfaceId'],
             ['shop', 'Shop', 'reactorShopInterfaceId'],
             ['name', 'Name Input', 'reactorNameInterfaceId'],
-            ['battle', 'Battle', 'reactorBattleInterfaceId']
+            ['battle', 'Battle', 'reactorBattleInterfaceId'],
+            ['tactical', 'Tactical Battle', 'reactorTacticalInterfaceId'],
+            ['action', 'Action Battle', 'reactorActionInterfaceId'],
+            ['firstPerson', 'First Person Battle', 'reactorFirstPersonInterfaceId'],
+            ['victory', 'Victory', 'reactorVictoryInterfaceId']
         ];
     }
     static get GRID() { return 8; }
@@ -122,10 +151,37 @@ class DatabaseUserInterfaceEditor {
     // ==========================================
 
     static defaultNode(type, id) {
+        if (DatabaseUserInterfaceEditor.isActionNode(type)) {
+            const hud = DatabaseUserInterfaceEditor.actionHud();
+            return Object.assign({
+                id, type, name: '', parent: 0, anchor: 'topLeft', x: 0, y: 0, width: 200, height: 100, index: 0, opacity: 255,
+                visible: { type: 'always', id: 1, on: true, op: '==', value: 0, script: '' },
+                fill: 'none', color: '#000000', color2: '#000000', fillOpacity: 160, vertical: true, borderWidth: 0, borderColor: '#ffffff', radius: 0,
+                align: 'left', fontSize: 0, textColor: 0, fontFace: '', fontBold: false, fontItalic: false, outline: true, outlineColor: '', outlineWidth: 3, letterSpacing: 0
+            }, hud ? hud.defaultProps(type) : {});
+        }
+        if (DatabaseUserInterfaceEditor.isFightNode(type)) {
+            const hud = DatabaseUserInterfaceEditor.fightHud();
+            return Object.assign({
+                id, type, name: '', parent: 0, anchor: 'topLeft', x: 0, y: 0, width: 200, height: 100, index: 0, opacity: 255,
+                visible: { type: 'always', id: 1, on: true, op: '==', value: 0, script: '' },
+                fill: 'window', color: '#000000', color2: '#000000', fillOpacity: 160, vertical: true, borderWidth: 0, borderColor: '#ffffff', radius: 0,
+                align: 'left', fontSize: 0, textColor: 0, fontFace: '', fontBold: false, fontItalic: false, outline: true, outlineColor: '', outlineWidth: 3, letterSpacing: 0
+            }, hud ? hud.defaultProps(type) : {});
+        }
+        if (DatabaseUserInterfaceEditor.isVictoryNode(type)) {
+            const hud = DatabaseUserInterfaceEditor.victoryHud();
+            return Object.assign({
+                id, type, name: '', parent: 0, anchor: 'topLeft', x: 0, y: 0, width: 200, height: 100, index: 0, opacity: 255,
+                visible: { type: 'always', id: 1, on: true, op: '==', value: 0, script: '' },
+                fill: 'none', color: '#000000', color2: '#000000', fillOpacity: 160, vertical: true, borderWidth: 0, borderColor: '#ffffff', radius: 0,
+                align: 'left', fontSize: 0, textColor: 0, fontFace: '', fontBold: false, fontItalic: false, outline: true, outlineColor: '', outlineWidth: 3, letterSpacing: 0, se: null
+            }, hud ? hud.defaultProps(type) : {});
+        }
         if (type === 'battleWindow') return {
             id, type, name: '', parent: 0, anchor: 'topLeft', x: 0, y: 0, width: 240, height: 200, index: 0, opacity: 255,
             visible: { type: 'always', id: 1, on: true, op: '==', value: 0, script: '' },
-            battleWindow: 'actorCommand', fill: 'window', windowColumns: 0, commandAlign: 'center', commands: [], hideWindow: false, followActor: false,
+            battleWindow: 'actorCommand', fill: 'window', windowColumns: 0, commandAlign: 'center', commands: [], hideWindow: false, followActor: false, followTarget: 'slot',
             slideX: 0, slideY: 0, slideDuration: 12, file: '', imageX: 0, imageY: 0
         };
         if (type === 'battleCursor') return {
@@ -422,7 +478,15 @@ class DatabaseUserInterfaceEditor {
         entry.menuCommandVersion=2;
         const legacyCoordinates = entry.coordinateSpace !== 'screen';
         if (typeof entry.name !== 'string') entry.name = '';
-        if (!['scene', 'overlay', 'battle'].includes(entry.mode)) entry.mode = 'scene';
+        if (entry.mode === 'fight') entry.mode = 'tactical';
+        if (!['scene', 'overlay', 'battle', 'tactical', 'action', 'firstPerson', 'victory'].includes(entry.mode)) entry.mode = 'scene';
+        // The screen the record's numbers are written for. One without it was made at the project's size.
+        const made = DatabaseUserInterfaceEditor.designOf(entry.design);
+        if (made) entry.design = made;
+        else if (typeof this.screenMetrics === 'function') {
+            const project = this.screenMetrics();
+            entry.design = { width: project.width, height: project.height };
+        }
         entry.hideStatusWindow = entry.hideStatusWindow !== false;
         if (!['blur', 'dim', 'none'].includes(entry.background)) entry.background = 'blur';
         entry.visible = Object.assign({ type: 'always', id: 1, on: true, op: '==', value: 0, script: '' }, entry.visible || {});
@@ -469,6 +533,21 @@ class DatabaseUserInterfaceEditor {
                 for (const key of ['focusedOpacity', 'pressedOpacity', 'disabledOpacity']) merged[key] = DatabaseUserInterfaceEditor.optionalByte(merged[key]);
                 merged.pressedOffsetX = Math.min(32, Math.max(-32, Math.round(Number(merged.pressedOffsetX) || 0)));
                 merged.pressedOffsetY = Math.min(32, Math.max(-32, Math.round(Number(merged.pressedOffsetY) || 0)));
+            }
+            if (DatabaseUserInterfaceEditor.isFightNode(type)) {
+                const hud = DatabaseUserInterfaceEditor.fightHud();
+                if (hud) Object.assign(merged, hud.normalizeProps(merged, type));
+            }
+            if (DatabaseUserInterfaceEditor.isActionNode(type)) {
+                const hud = DatabaseUserInterfaceEditor.actionHud();
+                if (hud) Object.assign(merged, hud.normalizeProps(merged, type));
+            }
+            const victory = DatabaseUserInterfaceEditor.victoryHud();
+            if (victory && DatabaseUserInterfaceEditor.isVictoryNode(type)) Object.assign(merged, victory.normalizeProps(merged, type));
+            // Any other node of a Victory record may name the one page it shows on.
+            else if (victory && merged.victoryPage !== undefined) {
+                merged.victoryPage = victory.normalizePage(merged.victoryPage);
+                if (!merged.victoryPage) delete merged.victoryPage;
             }
             if (type === 'battleWindow') {
                 if (!['center', 'left', 'right'].includes(merged.commandAlign)) merged.commandAlign = 'center';
@@ -548,7 +627,9 @@ class DatabaseUserInterfaceEditor {
     showUserInterfaceDetail(container, entry) {
         const tt = text => this._t(text);
         this.detach();
-        this.current = this.normalizeInterface(entry);
+        this.current = this.parentEditor && typeof this.parentEditor.normalizeOnView === 'function'
+            ? this.parentEditor.normalizeOnView('userInterfaces', entry, record => this.normalizeInterface(record))
+            : this.normalizeInterface(entry);
         this.selectedId = 0;
         this.selectedIds = new Set();
         this.selectionAnchor = 0;
@@ -556,6 +637,9 @@ class DatabaseUserInterfaceEditor {
         this.redoStack = [];
         this.drag = null;
         this._controlPreviewState = 'automatic';
+        this._victoryPage = 0;
+        this._victoryPlay = null;
+        this._victoryFollowed = 0;
         this.container = container;
         this.skin = null;
         this.images.clear();
@@ -572,6 +656,10 @@ class DatabaseUserInterfaceEditor {
                         <option value="scene">${tt('Focused scene')}</option>
                         <option value="overlay">${tt('Map overlay / HUD')}</option>
                         <option value="battle">${tt('Battle HUD')}</option>
+                        <option value="tactical">${tt('Tactical Battle HUD')}</option>
+                        <option value="action">${tt('Action Battle HUD')}</option>
+                        <option value="firstPerson">${tt('First Person Battle HUD')}</option>
+                        <option value="victory">${tt('Victory')}</option>
                     </select>
                 </label>
                 <div class="rr-ui-toolbar-field rr-ui-replacements"><span>${tt('Use As')}</span>
@@ -628,8 +716,16 @@ class DatabaseUserInterfaceEditor {
                             <label><input type="checkbox" class="rr-ui-grid" checked> ${tt('Grid')}</label>
                             <label class="rr-ui-reference-tools" hidden><input type="checkbox" class="rr-ui-reference" checked> ${tt('Reference')}
                                 <span class="rr-ui-reference-opacity-wrap"><input type="range" class="rr-ui-reference-opacity" min="10" max="100" value="60" title="${tt('Reference opacity')}"></span></label>
+                            <span class="rr-ui-victory-pages" hidden>
+                                <button type="button" class="rr-btn-chip rr-ui-victory-prev" aria-label="${tt('Previous page')}" title="${tt('Previous page')}">‹</button>
+                                <span class="rr-ui-victory-page" aria-live="polite"></span>
+                                <button type="button" class="rr-btn-chip rr-ui-victory-next" aria-label="${tt('Next page')}" title="${tt('Next page')}">›</button>
+                                <button type="button" class="rr-btn-chip rr-ui-victory-play" title="${this.escapeHTML(tt('Plays the page as the game does: the bars fill and the Level Up marks land.'))}">${tt('Play')}</button>
+                            </span>
                             <button type="button" class="rr-btn-chip rr-ui-undo" title="Ctrl+Z">${tt('Undo')}</button>
                             <button type="button" class="rr-btn-chip rr-ui-redo" title="Ctrl+Y">${tt('Redo')}</button>
+                            <label title="${this.escapeHTML(tt('The layout as the game shows it on that screen. The saved numbers stay as they are.'))}">${tt('Preview at')}
+                                <select class="rr-ui-preview-at" aria-label="${tt('Preview at')}"></select></label>
                             <label>${tt('Zoom')} <select class="rr-ui-zoom" aria-label="${tt('Interface zoom')}">
                                 <option value="0">${tt('Fit')}</option>
                                 ${[0.5, 1, 2, 3, 4, 6, 8].map(zoom => `<option value="${zoom}" ${this.previewZoom === zoom ? 'selected' : ''}>${zoom * 100}%</option>`).join('')}
@@ -641,6 +737,11 @@ class DatabaseUserInterfaceEditor {
                                 </select></label><span class="rr-ui-size"></span>
                         </span>
                     </div>
+                    <div class="rr-ui-fit-notice" hidden>
+                        <span class="rr-ui-fit-text"></span>
+                        <button type="button" class="rr-btn-chip rr-ui-refit" title="${this.escapeHTML(tt("Rewrites this interface's numbers for the project screen. Undo takes it back."))}">${tt('Refit to this size')}</button>
+                    </div>
+                    <div class="rr-ui-fit-notice rr-ui-victory-notice" hidden></div>
                     <div class="database-section-content rr-ui-canvas-host">
                         <canvas class="rr-ui-canvas" tabindex="0"></canvas>
                     </div>
@@ -659,6 +760,17 @@ class DatabaseUserInterfaceEditor {
             this.previewZoom = Number(event.target.value) || 0;
             this.fitCanvas();
             this.scheduleRender();
+        });
+        wrapper.querySelector('.rr-ui-preview-at').addEventListener('change', event => {
+            const [width, height] = String(event.target.value).split('x').map(Number);
+            this.previewAt = width > 0 && height > 0 ? { width, height } : null;
+            this.refreshFitControls();
+            this.fitCanvas();
+            this.scheduleRender();
+        });
+        wrapper.querySelector('.rr-ui-refit').addEventListener('click', () => this.refitToProject());
+        wrapper.addEventListener('change', event => {
+            if (event.target.matches && event.target.matches('.rr-ui-design-width, .rr-ui-design-height')) this.applyDesignSize();
         });
         wrapper.querySelector('.rr-ui-preview-party').addEventListener('change', event => {
             const count = Math.max(0, Math.min(8, Number(event.target.value) || 0));
@@ -681,6 +793,7 @@ class DatabaseUserInterfaceEditor {
         this.attachListeners();
         this.loadSkin();
         this.loadGameFont();
+        this.refreshFitControls();
         this.fitCanvas();
         this.scheduleRender();
     }
@@ -699,9 +812,110 @@ class DatabaseUserInterfaceEditor {
         };
     }
 
-    screenSize() {
+    /** The project's screen, from System. */
+    projectScreenSize() {
         const { width, height } = this.screenMetrics();
         return { width, height };
+    }
+
+    static fitApi() {
+        return typeof RRInterfaceFit !== 'undefined' ? RRInterfaceFit : null;
+    }
+
+    static designOf(raw) {
+        const api = DatabaseUserInterfaceEditor.fitApi();
+        if (api) return api.designOf(raw);
+        const width = Math.round(Number(raw && raw.width) || 0), height = Math.round(Number(raw && raw.height) || 0);
+        return width >= 160 && width <= 16384 && height >= 120 && height <= 16384 ? { width, height } : null;
+    }
+
+    /** The screen the open record is designed for. */
+    designSize() {
+        return DatabaseUserInterfaceEditor.designOf(this.current && this.current.design) || this.projectScreenSize();
+    }
+
+    /** The record laid out for the Preview at screen, as the game does it; null at its design size. */
+    previewFit() {
+        if (this._renderFit !== undefined) return this._renderFit;
+        const api = DatabaseUserInterfaceEditor.fitApi();
+        return api && this.previewAt && this.current ? api.fit(this.current, this.previewAt, this.fontSize({ fontSize: 0 })) : null;
+    }
+
+    /** The frame the canvas draws: the design size, or the fitted frame of a preview (in design units). */
+    screenSize() {
+        const fit = this.previewFit();
+        return fit ? { width: fit.width, height: fit.height } : this.designSize();
+    }
+
+    /** Preview at choices and the design-size notice, for the open record. */
+    refreshFitControls() {
+        if (!this.wrapper || !this.current) return;
+        const tt = text => this._t(text);
+        const api = DatabaseUserInterfaceEditor.fitApi();
+        const design = this.designSize(), project = this.projectScreenSize();
+        const name = size => `${size.width}×${size.height}`;
+        const same = (a, b) => a.width === b.width && a.height === b.height;
+        const select = this.wrapper.querySelector('.rr-ui-preview-at');
+        if (select) {
+            const sizes = (api ? api.SIZES : []).map(([width, height]) => ({ width, height }));
+            if (!sizes.some(size => same(size, project))) sizes.push(project);
+            if (this.previewAt && same(this.previewAt, design)) this.previewAt = null;
+            const chosen = this.previewAt ? `${this.previewAt.width}x${this.previewAt.height}` : '';
+            select.innerHTML = `<option value="">${this.escapeHTML(tt('Design size'))} (${name(design)})</option>` + sizes.filter(size => !same(size, design)).map(size => {
+                const value = `${size.width}x${size.height}`;
+                return `<option value="${value}"${value === chosen ? ' selected' : ''}>${name(size)}${same(size, project) ? ' · ' + this.escapeHTML(tt('Project screen')) : ''}</option>`;
+            }).join('');
+            select.disabled = !api;
+        }
+        const notice = this.wrapper.querySelector('.rr-ui-fit-notice');
+        if (notice) {
+            const previewing = !!this.previewFit(), differs = !same(design, project);
+            const parts = [];
+            if (differs) parts.push(tt('Designed for {design}. The game fits it to {screen}.').replace('{design}', name(design)).replace('{screen}', name(project)));
+            if (previewing) parts.push(tt('Preview of {screen}: layers cannot be moved here.').replace('{screen}', name(this.previewAt)));
+            notice.querySelector('.rr-ui-fit-text').textContent = parts.join(' ');
+            notice.querySelector('.rr-ui-refit').hidden = !differs || !api;
+            notice.hidden = !parts.length;
+        }
+        if (this.canvas) this.canvas.classList.toggle('rr-ui-canvas-preview', !!this.previewFit());
+    }
+
+    /** Rewrites the open record for the project screen: one undo step. */
+    refitToProject() {
+        const api = DatabaseUserInterfaceEditor.fitApi();
+        if (!api || !this.current) return;
+        const next = api.refit(this.current, this.projectScreenSize(), this.fontSize({ fontSize: 0 }));
+        if (next === this.current) return;
+        this.pushUndo();
+        this.current.nodes = DatabaseUserInterfaceEditor.orderNodes(next.nodes);
+        this.current.design = next.design;
+        this.afterDesignChange();
+    }
+
+    /** The Designed for fields: the numbers stay, the screen they are read against changes. */
+    applyDesignSize() {
+        const panel = this.wrapper && this.wrapper.querySelector('.rr-ui-props');
+        const width = panel && panel.querySelector('.rr-ui-design-width'), height = panel && panel.querySelector('.rr-ui-design-height');
+        if (!width || !height) return;
+        const now = this.designSize();
+        const next = DatabaseUserInterfaceEditor.designOf({ width: width.value, height: height.value });
+        if (!next || (next.width === now.width && next.height === now.height)) {
+            width.value = now.width;
+            height.value = now.height;
+            return;
+        }
+        this.pushUndo();
+        this.current.design = next;
+        this.afterDesignChange();
+    }
+
+    afterDesignChange() {
+        this.touch();
+        this.refreshFitControls();
+        if (this.wrapper) this.fitCanvas();
+        this.renderTree();
+        this.renderProperties();
+        this.scheduleRender();
     }
 
     touch() {
@@ -711,7 +925,20 @@ class DatabaseUserInterfaceEditor {
     updatePresentationFields() {
         if (!this.wrapper) return;
         // A battle HUD, like a map overlay, never takes focus: the stock battle windows do.
-        const overlay = this.current.mode === 'overlay' || this.current.mode === 'battle';
+        const overlay = ['overlay', 'battle', 'tactical', 'action', 'firstPerson', 'victory'].includes(this.current.mode);
+        const realTime = this.current.mode === 'action' || this.current.mode === 'firstPerson';
+        const victory = this.current.mode === 'victory';
+        // Tactical nodes belong to a Tactical Battle HUD alone.
+        this.wrapper.querySelectorAll('[data-add]').forEach(button => {
+            if (DatabaseUserInterfaceEditor.isFightNode(button.dataset.add)) button.hidden = this.current.mode !== 'tactical';
+            // The Action nodes to an Action or First Person Battle HUD alone.
+            else if (DatabaseUserInterfaceEditor.isActionNode(button.dataset.add)) button.hidden = !realTime;
+            // The Victory nodes to a Victory record alone.
+            else if (DatabaseUserInterfaceEditor.isVictoryNode(button.dataset.add)) button.hidden = !victory;
+            // And a Classic battle's windows and cursor are nothing in a map battle's HUD or after the battle.
+            else if (button.dataset.add === 'battleWindow' || button.dataset.add === 'battleCursor') button.hidden = this.current.mode === 'tactical' || realTime || victory;
+        });
+        this.refreshVictoryControls();
         this.wrapper.querySelectorAll('.rr-ui-scene-setting').forEach(element => { element.hidden = overlay; });
         this.wrapper.querySelectorAll('.rr-ui-overlay-setting').forEach(element => { element.hidden = !overlay; });
         this.wrapper.querySelectorAll('.rr-ui-battle-setting').forEach(element => { element.hidden = this.current.mode !== 'battle'; });
@@ -723,10 +950,10 @@ class DatabaseUserInterfaceEditor {
             : this.databaseManager && this.databaseManager.data ? this.databaseManager.data.system : null;
     }
 
-    /** A role fits a record's presentation: Battle takes a Battle HUD, every other role a focused scene. */
+    /** A role fits a record's presentation: Battle takes a Battle HUD, Tactical Battle a Tactical Battle HUD, every other role a focused scene. */
     roleFitsMode(role) {
         const mode = this.current ? this.current.mode : 'scene';
-        return role === 'battle' ? mode === 'battle' : mode === 'scene';
+        return DatabaseUserInterfaceEditor.HUD_MODES.includes(role) ? mode === role : mode === 'scene';
     }
 
     replacementRoleMarkup() {
@@ -897,11 +1124,12 @@ class DatabaseUserInterfaceEditor {
         const built = stock && stock.buildOne(kind, (this.databaseManager && this.databaseManager.data) || {});
         if (!built || !this.current) return false;
         const label = (this.stockLayoutKinds().find(entry => entry[0] === kind) || [kind, kind])[1];
-        if (this.current.nodes.length && typeof window !== 'undefined' && window.confirm
-            && !window.confirm(this._t('Replace every layer with the {name} layout?').replace('{name}', label))) return false;
-        this.pushUndo();
+        this.pushUndo(true);
         const normalized = this.normalizeInterface(Object.assign({}, built, { id: this.current.id }));
         this.current.nodes = normalized.nodes;
+        // A stock layout is built for the project screen.
+        this.current.design = normalized.design;
+        if (this.wrapper) { this.refreshFitControls(); this.fitCanvas(); }
         this.current.firstFocus = normalized.firstFocus;
         this.current.cancel = normalized.cancel;
         this.current.background = normalized.background;
@@ -914,9 +1142,11 @@ class DatabaseUserInterfaceEditor {
         if (!this.current.name) {
             this.current.name = label;
             const field = this.wrapper && this.wrapper.querySelector('[data-field="name"]');
-            if (field) field.value = label;
+            // The list row is named from the field's own event, as when the name is typed.
+            if (field) { field.value = label; field.dispatchEvent(new Event('input', { bubbles: true })); }
         }
         if (!this.current.note) this.current.note = normalized.note;
+        this.dropUnfitReplacementRoles();
         const mode = this.wrapper && this.wrapper.querySelector('.rr-ui-mode');
         if (mode) mode.value = this.current.mode;
         this.updatePresentationFields();
@@ -931,16 +1161,73 @@ class DatabaseUserInterfaceEditor {
         return true;
     }
 
+    /**
+     * A stock layout picked from the menu. Layers already there are replaced
+     * only once the question is answered yes. Resolves true when it was applied.
+     */
+    async askStockLayout(kind) {
+        const target = this.current;
+        if (!target) return false;
+        if (target.nodes.length) {
+            const label = (this.stockLayoutKinds().find(entry => entry[0] === kind) || [kind, kind])[1];
+            const replace = await RRDialog.confirm(this._t('Replace every layer with the {name} layout?').replace('{name}', label),
+                { title: this._t('Replace Layers'), ok: this._t('Replace'), danger: true });
+            // Another interface may have been opened while the question was up.
+            if (!replace || this.current !== target) return false;
+        }
+        return this.applyStockLayout(kind);
+    }
+
     // ==========================================
     // UNDO
     // ==========================================
 
-    snapshot() {
-        return JSON.stringify({ nodes: this.current.nodes, firstFocus: this.current.firstFocus });
+    /** The record settings a Stock Layout replaces, with the System roles bound to this record. */
+    static get STOCK_RECORD_FIELDS() {
+        return ['mode', 'background', 'cancel', 'hideStatusWindow', 'openTransition', 'transitionDuration', 'stock'];
     }
 
-    pushUndo() {
-        this.undoStack.push(this.snapshot());
+    recordState() {
+        const system = this.replacementSystem() || {};
+        const id = Number(this.current.id) || 0;
+        const state = { bound: DatabaseUserInterfaceEditor.REPLACEMENT_ROLES.filter(([, , field]) => id > 0 && Number(system[field]) === id).map(([, , field]) => field) };
+        for (const key of DatabaseUserInterfaceEditor.STOCK_RECORD_FIELDS) state[key] = this.current[key];
+        state.name = this.current.name || '';
+        return state;
+    }
+
+    restoreRecordState(state) {
+        for (const key of DatabaseUserInterfaceEditor.STOCK_RECORD_FIELDS) {
+            if (state[key] === undefined) delete this.current[key];
+            else this.current[key] = state[key];
+        }
+        const system = this.replacementSystem();
+        const id = Number(this.current.id) || 0;
+        if (system && id > 0) {
+            for (const [, , field] of DatabaseUserInterfaceEditor.REPLACEMENT_ROLES) {
+                if (state.bound.includes(field)) system[field] = id;
+                else if (Number(system[field]) === id) system[field] = 0;
+            }
+        }
+        const mode = this.wrapper && this.wrapper.querySelector('.rr-ui-mode');
+        if (mode) mode.value = this.current.mode;
+        // A name a Stock Layout gave goes with the layout; a name the author typed stays.
+        const named = this.current.name || '';
+        if (typeof state.name === 'string' && state.name !== named && (!named || this.stockLayoutKinds().some(entry => entry[1] === named))) {
+            this.current.name = state.name;
+            const field = this.wrapper && this.wrapper.querySelector('[data-field="name"]');
+            if (field) { field.value = state.name; field.dispatchEvent(new Event('input', { bubbles: true })); }
+        }
+        this.updatePresentationFields();
+    }
+
+    /** Layers only, or with the record's settings too (a Stock Layout replaces both). */
+    snapshot(record = false) {
+        return JSON.stringify(Object.assign({ nodes: this.current.nodes, firstFocus: this.current.firstFocus, design: this.current.design }, record ? { record: this.recordState() } : {}));
+    }
+
+    pushUndo(record = false) {
+        this.undoStack.push(this.snapshot(record));
         if (this.undoStack.length > 100) this.undoStack.shift();
         this.redoStack = [];
     }
@@ -949,6 +1236,10 @@ class DatabaseUserInterfaceEditor {
         const parsed = JSON.parse(serialized);
         this.current.nodes = parsed.nodes;
         this.current.firstFocus = parsed.firstFocus;
+        if (parsed.design) this.current.design = parsed.design; else delete this.current.design;
+        if (parsed.record) this.restoreRecordState(parsed.record);
+        this.refreshFitControls();
+        if (this.wrapper) this.fitCanvas();
         this.selectedIds = new Set(this.selectedNodes().map(node => node.id));
         if (!this.node(this.selectedId)) this.selectedId = [...this.selectedIds][0] || 0;
         this.touch();
@@ -960,14 +1251,16 @@ class DatabaseUserInterfaceEditor {
 
     undo() {
         if (!this.undoStack.length) return;
-        this.redoStack.push(this.snapshot());
-        this.restore(this.undoStack.pop());
+        const entry = this.undoStack.pop();
+        this.redoStack.push(this.snapshot(!!JSON.parse(entry).record));
+        this.restore(entry);
     }
 
     redo() {
         if (!this.redoStack.length) return;
-        this.undoStack.push(this.snapshot());
-        this.restore(this.redoStack.pop());
+        const entry = this.redoStack.pop();
+        this.undoStack.push(this.snapshot(!!JSON.parse(entry).record));
+        this.restore(entry);
     }
 
     // ==========================================
@@ -1080,6 +1373,8 @@ class DatabaseUserInterfaceEditor {
             if (candidate.action && ['focusNode', 'equip'].includes(candidate.action.type) && doomed.has(candidate.action.id)) candidate.action.id = 0;
         }
         if (doomed.has(this.current.firstFocus)) this.current.firstFocus = 0;
+        const cancel = this.current.cancel;
+        if (cancel && ['focusNode', 'equip'].includes(cancel.type) && doomed.has(cancel.id)) cancel.id = 0;
         this.selectedId = 0;
         this.selectedIds = new Set();
         this.selectionAnchor = 0;
@@ -1299,7 +1594,11 @@ class DatabaseUserInterfaceEditor {
 
     typeLabel(type) {
         return this._t({ box: 'Box', image: 'Image', text: 'Text', button: 'Button', list: 'List', gauge: 'Gauge', input: 'Text Input',
-            battleWindow: 'Battle Window', battleCursor: 'Target Cursor', actorPanel: 'Actor Panel' }[type] || type);
+            battleWindow: 'Battle Window', battleCursor: 'Target Cursor', actorPanel: 'Actor Panel',
+            fightUnit: 'Unit Panel', fightTurnOrder: 'Turn Order', fightInfo: 'Battle Text', fightWindow: 'Tactical Window',
+            actionCrosshair: 'Crosshair', actionVitals: 'Vitals', actionWeapon: 'Weapon', actionHotbar: 'Hotbar', actionTarget: 'Target',
+            actionBars: 'Enemy Bars', actionDamage: 'Damage Marks', actionInfo: 'Action Text',
+            victoryParty: 'Party Experience', victoryLevels: 'Level Up', victoryRewards: 'Rewards', victoryText: 'Victory Text' }[type] || type);
     }
 
     nodeLabel(node) {
@@ -1727,8 +2026,7 @@ class DatabaseUserInterfaceEditor {
 
     interfacePropertiesMarkup() {
         const tt = text => this._t(text);
-        return `<div class="rr-ui-prop-title">${tt('Interface Settings')}</div>
-            ${this.group(tt('Behavior'))}
+        return `${this.group(tt('Behavior'))}
             <div class="rr-ui-sub rr-ui-scene-setting">
                 ${this.row(tt('Background'), this.selectControl('rr-ui-background', this.current.background, [
                     ['blur', tt('Blurred map')], ['dim', tt('Dimmed map')], ['none', tt('Map as is')]
@@ -1741,8 +2039,11 @@ class DatabaseUserInterfaceEditor {
             </div>
             <div class="rr-ui-sub rr-ui-battle-setting">
                 ${this.row('', this.checkControl('rr-ui-hide-status', this.current.hideStatusWindow !== false, tt('Hide the stock battle status')), tt('The HUD replaces it. A Battle Window node for the status places it instead.'))}
-                ${this.hintRow(tt('Bind this interface as Battle in System 2 or Use As. Battle Window nodes place the stock battle windows; the battle itself stays stock, so battle plugins keep working.'))}
+                ${this.hintRow(tt('Bind this interface as Battle in Use As. Battle Window nodes place the stock battle windows; the battle itself stays stock, so battle plugins keep working.'))}
             </div>
+            ${this.group(tt('Screen'))}
+            ${this.row(tt('Designed for'), `<span class="rr-ui-design">${this.numberControl('rr-ui-design-width', this.designSize().width, 160, 16384)}<span>×</span>${this.numberControl('rr-ui-design-height', this.designSize().height, 120, 16384)}</span>`,
+                tt('The screen these numbers are written for. The game fits the interface to any other screen.'))}
             ${this.group(tt('Transitions'))}
             ${this.pair(tt('Transition in'), this.selectControl('rr-ui-open-transition', this.current.openTransition, [
                 ['none', tt('None')], ['fade', tt('Fade')], ['slideLeft', tt('Slide left')], ['slideUp', tt('Slide up')]
@@ -1783,7 +2084,9 @@ class DatabaseUserInterfaceEditor {
         if (title) title.textContent = node.name && node.name.trim() ? node.name.trim()
             : node.type === 'button' && node.text ? node.text : this.typeLabel(node.rowLayout === 'actorPanel' ? 'actorPanel' : node.type);
         const fills = [['window', tt('Window skin')], ['color', tt('Solid color')], ['gradient', tt('Gradient')], ['none', tt('None')]];
-        const isSurface = node.type === 'box' || DatabaseUserInterfaceEditor.isControl(node.type);
+        const fightSurface = ['fightUnit', 'fightTurnOrder', 'fightInfo', 'actionVitals', 'actionWeapon', 'actionHotbar', 'actionTarget', 'actionInfo'].includes(node.type)
+            || DatabaseUserInterfaceEditor.isVictoryNode(node.type);
+        const isSurface = node.type === 'box' || fightSurface || DatabaseUserInterfaceEditor.isControl(node.type);
         const isLabel = node.type === 'text' || node.type === 'button' || node.type === 'input';
         const colorFill = node.fill === 'color' || node.fill === 'gradient';
         let html = '';
@@ -1983,7 +2286,10 @@ class DatabaseUserInterfaceEditor {
                     [['left', tt('Left')], ['center', tt('Center')], ['right', tt('Right')]]));
             }
             html += this.row('', this.checkControl('p-hideWindow', !!node.hideWindow, tt('Hide the window')), tt('It still takes input: pair an ally or enemy target window with a Target Cursor.'));
-            html += this.row('', this.checkControl('p-followActor', !!node.followActor, tt('Follow the active actor')), tt('X and Y become offsets from the active actor\'s row in the party panel.'));
+            html += this.row('', this.checkControl('p-followActor', !!node.followActor, tt('Follow the active actor')),
+                node.followTarget === 'model' ? tt('X and Y become offsets from the top of the actor in the battle.') : tt('X and Y become offsets from the active actor\'s row in the party panel.'));
+            if (node.followActor) html += this.row(tt('Follows'), this.selectControl('p-followTarget', node.followTarget === 'model' ? 'model' : 'slot',
+                [['slot', tt('The actor\'s row in the party panel')], ['model', tt('The actor in the battle')]]));
             if (commandKinds) html += this.battleCommandsMarkup(node, commandKinds);
             html += this.group(tt('Slide in'));
             html += this.pair(`${tt('Slide')} X`, this.numberControl('p-slideX', node.slideX || 0, -2000, 2000), `${tt('Slide')} Y`, this.numberControl('p-slideY', node.slideY || 0, -2000, 2000));
@@ -1992,6 +2298,9 @@ class DatabaseUserInterfaceEditor {
             html += this.row(tt('Picture'), file, tt('Drawn behind the window, shown with it.'));
             html += this.pair('X', this.numberControl('p-imageX', node.imageX || 0, -2000, 2000), 'Y', this.numberControl('p-imageY', node.imageY || 0, -2000, 2000));
         }
+        if (DatabaseUserInterfaceEditor.isFightNode(node.type)) html += this.fightPropertiesMarkup(node);
+        if (DatabaseUserInterfaceEditor.isActionNode(node.type)) html += this.actionPropertiesMarkup(node);
+        if (this.current.mode === 'victory' || DatabaseUserInterfaceEditor.isVictoryNode(node.type)) html += this.victoryPropertiesMarkup(node);
         if (node.type === 'battleCursor') {
             html += this.group(tt('Target Cursor'));
             html += this.row(tt('Source'), this.selectControl('p-source', node.source === 'system' ? 'system' : 'picture', [['picture', tt('Picture')], ['system', tt('System')]]));
@@ -2004,7 +2313,7 @@ class DatabaseUserInterfaceEditor {
             html += this.row('', this.checkControl('p-showName', node.showName !== false, tt('Show the target\'s name')));
             html += this.row(tt('Font size'), this.numberControl('p-fontSize', node.fontSize || 0, 0, 200), tt('0 uses the game default.'));
             html += this.group(tt('Placement'));
-            html += this.hintRow(tt('Offsets from the top centre of the target. A positive Y moves it down.'));
+            html += this.hintRow(tt('Offsets from the top center of the target. A positive Y moves it down.'));
             html += this.pair(`${tt('Enemy')} X`, this.numberControl('p-enemyOffsetX', node.enemyOffsetX || 0, -2000, 2000), `${tt('Enemy')} Y`, this.numberControl('p-enemyOffsetY', node.enemyOffsetY || 0, -2000, 2000));
             html += this.pair(`${tt('Ally')} X`, this.numberControl('p-actorOffsetX', node.actorOffsetX || 0, -2000, 2000), `${tt('Ally')} Y`, this.numberControl('p-actorOffsetY', node.actorOffsetY || 0, -2000, 2000));
             html += this.hintRow(tt('Shows while an enemy or ally is being chosen: over the enemy, or over the ally\'s row in the party panel.'));
@@ -2063,6 +2372,7 @@ class DatabaseUserInterfaceEditor {
         }
         panel.innerHTML = html;
         this.drawGaugeStylePreview();
+        this.mountFightIconFields(panel, node);
         this.organizeProperties(panel);
     }
 
@@ -2070,7 +2380,8 @@ class DatabaseUserInterfaceEditor {
     organizeProperties(panel) {
         if (!panel.ownerDocument) return;
         const doc = panel.ownerDocument;
-        const openTitles = ['Label', 'Text', 'Image', 'Rows', 'Actor Panel', 'Gauge', 'Behavior', 'Battle Window', 'Commands', 'Target Cursor', 'Placement'].map(title => this._t(title));
+        const openTitles = ['Label', 'Text', 'Image', 'Rows', 'Actor Panel', 'Gauge', 'Behavior', 'Battle Window', 'Commands', 'Target Cursor', 'Placement',
+            'Party Experience', 'Level Up', 'Rewards', 'Victory Text', 'Victory'].map(title => this._t(title));
         openTitles.push(`${this._t('Text')} ${this._t('Style')}`);
         const headings = [...panel.children].filter(el => el.classList.contains('rr-ui-group'));
         for (const heading of headings) {
@@ -2164,7 +2475,11 @@ class DatabaseUserInterfaceEditor {
         node.height = num('p-height', 0, 9999, node.height);
         node.opacity = num('p-opacity', 0, 255, node.opacity);
         this.readCondition(panel, 'p-visible', node.visible);
-        if (node.type === 'box' || DatabaseUserInterfaceEditor.isControl(node.type)) {
+        if (DatabaseUserInterfaceEditor.isFightNode(node.type)) this.applyFightProperties(node, q, num);
+        if (DatabaseUserInterfaceEditor.isActionNode(node.type)) this.applyActionProperties(node, q, num);
+        if (this.current.mode === 'victory' || DatabaseUserInterfaceEditor.isVictoryNode(node.type)) this.applyVictoryProperties(node, q, num);
+        if (node.type === 'box' || ['fightUnit', 'fightTurnOrder', 'fightInfo', 'actionVitals', 'actionWeapon', 'actionHotbar', 'actionTarget', 'actionInfo'].includes(node.type)
+            || DatabaseUserInterfaceEditor.isVictoryNode(node.type) || DatabaseUserInterfaceEditor.isControl(node.type)) {
             node.fill = q('p-fill').value;
             node.color = q('p-color').value;
             node.color2 = q('p-color2').value;
@@ -2297,6 +2612,7 @@ class DatabaseUserInterfaceEditor {
             }
             node.hideWindow = q('p-hideWindow').checked;
             node.followActor = q('p-followActor').checked;
+            node.followTarget = q('p-followTarget') && q('p-followTarget').value === 'model' ? 'model' : 'slot';
             node.slideX = num('p-slideX', -2000, 2000, 0);
             node.slideY = num('p-slideY', -2000, 2000, 0);
             node.slideDuration = num('p-slideDuration', 1, 120, 12);
@@ -2387,7 +2703,7 @@ class DatabaseUserInterfaceEditor {
             this.touch();
         });
         q('.rr-ui-mode').addEventListener('change', event => {
-            this.current.mode = ['overlay', 'battle'].includes(event.target.value) ? event.target.value : 'scene';
+            this.current.mode = ['overlay', 'battle', 'tactical', 'action', 'firstPerson', 'victory'].includes(event.target.value) ? event.target.value : 'scene';
             this.dropUnfitReplacementRoles();
             this.touch();
             this.updatePresentationFields();
@@ -2487,7 +2803,7 @@ class DatabaseUserInterfaceEditor {
             button.addEventListener('click', () => {
                 const menu = button.closest('.rr-ui-add-menu');
                 if (menu) menu.open = false;
-                this.applyStockLayout(button.dataset.stockLayout);
+                this.askStockLayout(button.dataset.stockLayout);
             });
         });
         wrapper.querySelectorAll('[data-add]').forEach(button => {
@@ -2558,6 +2874,9 @@ class DatabaseUserInterfaceEditor {
         q('.rr-ui-bring-front').addEventListener('click', () => this.moveNode(this.selectedId, Infinity));
         q('.rr-ui-node-duplicate').addEventListener('click', () => this.duplicateNode(this.selectedId));
         q('.rr-ui-node-delete').addEventListener('click', () => this.deleteNode(this.selectedId));
+        q('.rr-ui-victory-prev').addEventListener('click', () => this.stepVictoryPage(-1));
+        q('.rr-ui-victory-next').addEventListener('click', () => this.stepVictoryPage(1));
+        q('.rr-ui-victory-play').addEventListener('click', () => this.playVictoryPage());
         q('.rr-ui-undo').addEventListener('click', () => this.undo());
         q('.rr-ui-redo').addEventListener('click', () => this.redo());
         q('.rr-ui-snap').addEventListener('change', event => { this.snap = event.target.checked; });
@@ -2611,7 +2930,7 @@ class DatabaseUserInterfaceEditor {
                 this.scheduleRender();
             } else if (this.selected()) this.applyProperties(event.target);
             else this.applyInterfaceProperties();
-            if(event.type==='change' && /p-(actorField-|actorPadding|actorGap|portraitSize|rowHeight|battleWindow|cmd-kind)/.test(event.target.className)) this.renderProperties();
+            if(event.type==='change' && /p-(actorField-|actorPadding|actorGap|portraitSize|rowHeight|battleWindow|cmd-kind|fightUnit|fightInfo|fightWindow|commandIcons|victory-victoryText|victory-levelUpSound)/.test(event.target.className)) this.renderProperties();
         };
         props.addEventListener('input', onPropChange);
         props.addEventListener('change', onPropChange);
@@ -2655,6 +2974,7 @@ class DatabaseUserInterfaceEditor {
         };
         canvas.addEventListener('mousedown', event => {
             if (event.button !== 0) return;
+            if (this.previewFit()) return;
             // Measure before focusing: a focus that scrolls the canvas would
             // move the bounds the event's coordinates were taken against.
             const point = toCanvas(event);
@@ -2714,11 +3034,27 @@ class DatabaseUserInterfaceEditor {
             if (this.drag.kind === 'move' && !this.drag.moved) this.undoStack.pop();
             this.drag = null;
         });
+        this.followLanguage();
+    }
+
+    /** The page stepper and the plugin line are put together from several phrases: a language switch writes them again. */
+    followLanguage() {
+        if (typeof window === 'undefined' || this._onLanguage) return;
+        window.addEventListener('rr-language-changed', this._onLanguage = () => this.refreshVictoryControls());
     }
 
     /** Keyboard for everything in the editor that is not a text field. */
     onKey(event) {
         const target = event.target;
+        // Escape closes an open + Add Node or Stock Layout menu before it would close the database.
+        const menu = event.key === 'Escape' && this.wrapper ? this.wrapper.querySelector('.rr-ui-add-menu[open]') : null;
+        if (menu) {
+            event.preventDefault();
+            event.stopPropagation();
+            menu.open = false;
+            menu.querySelector('summary')?.focus({ preventScroll: true });
+            return;
+        }
         const tag = target && target.tagName;
         if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (target && target.isContentEditable)) return;
         const handled = () => { event.preventDefault(); event.stopPropagation(); };
@@ -2779,11 +3115,12 @@ class DatabaseUserInterfaceEditor {
         if (this._onMouseMove) window.removeEventListener('mousemove', this._onMouseMove);
         if (this._onMouseUp) window.removeEventListener('mouseup', this._onMouseUp);
         if (this._onRoleOutside && typeof document !== 'undefined') document.removeEventListener('pointerdown', this._onRoleOutside);
+        if (this._onLanguage) window.removeEventListener('rr-language-changed', this._onLanguage);
         if (this._captureTimer) clearTimeout(this._captureTimer);
         if (this._resizeObserver) this._resizeObserver.disconnect();
         this.captureInFlight = false;
         this._layerDragId = 0;
-        this._onMouseMove = this._onMouseUp = this._onRoleOutside = this._resizeObserver = this._captureTimer = null;
+        this._onMouseMove = this._onMouseUp = this._onRoleOutside = this._onLanguage = this._resizeObserver = this._captureTimer = null;
     }
 
     syncPositionFields(node) {
@@ -2859,7 +3196,8 @@ class DatabaseUserInterfaceEditor {
         for (let i = ordered.length - 1; i >= 0; i--) {
             const node = ordered[i];
             const rect = rects.get(node.id);
-            if (!rect) continue;
+            // A layer of another Victory page is not on the canvas to be picked.
+            if (!rect || !this.onVictoryPage(node)) continue;
             if (point.x >= rect.x && point.y >= rect.y && point.x < rect.x + rect.width && point.y < rect.y + rect.height) return node;
         }
         return null;
@@ -2918,7 +3256,7 @@ class DatabaseUserInterfaceEditor {
     browseSe() {
         const node = this.selected();
         const project = this.project();
-        if (!node || (node.type !== 'button' && node.type !== 'list') || !project || !project.path) return;
+        if (!node || (node.type !== 'button' && node.type !== 'list' && node.type !== 'victoryParty') || !project || !project.path) return;
         if (typeof RRAudioPickerModal === 'undefined' || typeof RRAssetFiles === 'undefined') return;
         const path = require('path');
         const sePath = path.join(project.path, 'audio', 'se');
@@ -3409,11 +3747,15 @@ class DatabaseUserInterfaceEditor {
         const workspace = this.wrapper.querySelector('.rr-ui-workspace');
         const fitHeight = workspace && getComputedStyle(workspace).getPropertyValue('--rr-ui-fit').trim() === 'both';
         const availableWidth = Math.max(200, host.clientWidth - 20);
-        let scale = Math.min(1, availableWidth / screen.width);
+        // A preview draws the fitted frame in the record's own units and shows it at the game's factor.
+        const fit = this.previewFit();
+        const shown = fit ? fit.scale : 1;
+        let scale = Math.min(1, availableWidth / (screen.width * shown));
         if (fitHeight && host.clientHeight > 0) {
-            scale = Math.min(scale, Math.max(120, host.clientHeight - 20) / screen.height);
+            scale = Math.min(scale, Math.max(120, host.clientHeight - 20) / (screen.height * shown));
         }
-        this.scale = this.previewZoom || scale;
+        const zoom = this.previewZoom || scale;
+        this.scale = zoom * shown;
         this.canvas.width = screen.width;
         this.canvas.height = screen.height;
         this.canvas.style.imageRendering = 'pixelated';
@@ -3422,7 +3764,15 @@ class DatabaseUserInterfaceEditor {
         this.canvas.style.width = Math.round(screen.width * this.scale) + 'px';
         this.canvas.style.height = Math.round(screen.height * this.scale) + 'px';
         const size = this.wrapper.querySelector('.rr-ui-size');
-        if (size) size.textContent = `${screen.width}×${screen.height} · ${Math.round(this.scale * 100)}%`;
+        if (size) {
+            const label = fit ? this.previewAt : screen;
+            const api = DatabaseUserInterfaceEditor.fitApi();
+            const text = fit && api ? api.smallestText(fit.nodes, this.fontSize({ fontSize: 0 }), fit.scale) : 0;
+            const small = text > 0 && text < Math.floor(api.readableFloor(this.previewAt.height));
+            size.textContent = `${label.width}×${label.height} · ${Math.round(zoom * 100)}%` + (small ? ` · ${this._t('Smallest text {size} px').replace('{size}', text)}` : '');
+            size.classList.toggle('rr-ui-size-warn', small);
+            size.title = small ? this._t('Hard to read at this size.') : '';
+        }
     }
 
     scheduleRender() {
@@ -4046,7 +4396,7 @@ class DatabaseUserInterfaceEditor {
                 ${needsId ? `<div class="rr-ui-command-line">${idControl}</div>` : ''}
                 <div class="rr-ui-command-line">${this.textControl('p-cmd-label', command.label, this.battleCommandDefaultLabel(command).replace(/\\[A-Za-z]+\[[^\]]*\]/g, '').trim() || tt('Label'))}</div>
                 ${command.kind === 'skillTypes' ? `<div class="rr-ui-hint">${tt('One command per skill type the actor has, named as in Types.')}</div>` : ''}
-                ${command.kind === 'escape' ? `<div class="rr-ui-hint">${tt('Greyed out in battles that cannot be escaped.')}</div>` : ''}
+                ${command.kind === 'escape' ? `<div class="rr-ui-hint">${tt('Grayed out in battles that cannot be escaped.')}</div>` : ''}
                 ${command.kind === 'commonEvent' ? `<div class="rr-ui-hint">${tt('Runs at once while the battle waits, then the same window chooses again. For a command that takes the actor\'s turn, use a skill with a Common Event effect.')}</div>` : ''}
                 ${command.kind === 'skillType' || command.kind === 'skill' ? `<div class="rr-ui-command-line">${this.checkControl('p-cmd-known', command.knownOnly, known)}</div>` : ''}
             </div>`;
@@ -4097,7 +4447,7 @@ class DatabaseUserInterfaceEditor {
         const read = (key, fallback) => Number.isFinite(Number(advanced[key])) && advanced[key] !== '' && advanced[key] != null ? Number(advanced[key]) : fallback;
         const lineHeight = read('lineHeight', 36);
         const stockColumns = ['skill', 'item'].includes(node.battleWindow) ? 2 : 1;
-        return { padding: read('windowPadding', 12), lineHeight, itemHeight: lineHeight + 8, columns: node.windowColumns || stockColumns };
+        return { padding: read('windowPadding', 12), lineHeight, itemHeight: node._itemHeight || lineHeight + 8, columns: node.windowColumns || stockColumns };
     }
 
     /** What a battle window lists in the preview, or null for windows drawn as outlines. */
@@ -4123,7 +4473,12 @@ class DatabaseUserInterfaceEditor {
     drawBattleWindowNode(node, rect) {
         const ctx = this.ctx;
         let r = rect;
-        if (node.followActor) {
+        if (node.followActor && node.followTarget === 'model') {
+            // Over the actor in the battle: a figure stands in for it on the canvas, and the window sits on its head as in the game.
+            const top = this.previewActorTop();
+            r = Object.assign({}, rect, { x: Math.round(top.x - rect.width / 2 + node.x), y: Math.round(top.y - rect.height + node.y) });
+            this.drawPreviewActor(top);
+        } else if (node.followActor) {
             const slot = this.previewSlotRect();
             if (slot) r = Object.assign({}, rect, { x: slot.x + node.x, y: slot.y + node.y });
         }
@@ -4179,6 +4534,18 @@ class DatabaseUserInterfaceEditor {
             // The game never shrinks a command to fit; a long name runs to the column edge.
             const style = { type: 'text', align, fontSize: 0, textColor: 0, fill: 'none', wrap: false, fitText: false, outline: true, outlineWidth: 3, letterSpacing: 0 };
             const costWidth = row.right ? 48 : 0;
+            if (row.glyph) {
+                // As the game draws it: the HUD's own icon in an icon's 36 pixels, a space, the word.
+                const word = ' ' + row.text, size = this.fontSize(style);
+                this.setTextFont(ctx, style, size);
+                const wordWidth = Math.ceil(ctx.measureText(word).width), width = 36 + wordWidth;
+                const x = align === 'center' ? text.x + Math.floor((text.width - width) / 2) : align === 'right' ? text.x + text.width - width : text.x;
+                DatabaseUserInterfaceEditor.fightHud().drawGlyph(ctx, row.glyph, x + 2, text.y + Math.floor((text.height - 32) / 2), 32, this.skinColor(0));
+                this.drawText(Object.assign({}, style, { text: row.text.replace(/\\/g, '\\\\'), align: 'left', width: wordWidth + 8, height: text.height }),
+                    { x: x + 36 + Math.ceil(ctx.measureText(' ').width), y: text.y, width: wordWidth + 8, height: text.height });
+                ctx.restore();
+                return;
+            }
             this.drawText(Object.assign({}, style, { text: row.text, width: text.width - costWidth, height: text.height }), Object.assign({}, text, { width: text.width - costWidth }));
             if (row.right) this.drawText(Object.assign({}, style, { text: row.right, align: 'right', width: text.width, height: text.height }), text);
             ctx.restore();
@@ -4242,6 +4609,7 @@ class DatabaseUserInterfaceEditor {
                 const rect = rects.get(node.id);
                 if (!rect || rect.width <= 0 || rect.height <= 0 || node.type === 'battleCursor') continue;
                 if (node.visible && node.visible.type === 'never') continue;
+                if (!this.onVictoryPage(node)) continue;
                 ctx.save();
                 ctx.globalAlpha *= (node.opacity ?? 255) / 255;
                 const drawn = DatabaseUserInterfaceEditor.isControl(node.type) ? this.previewControl(node).node : node;
@@ -4252,13 +4620,944 @@ class DatabaseUserInterfaceEditor {
                     case 'gauge': this.drawGaugeNode(drawn, rect); break;
                     case 'list': this.drawListNode(drawn, rect); break;
                     case 'battleWindow': this.drawBattleWindowNode(drawn, rect); break;
-                    default: break;
+                    case 'fightUnit': case 'fightTurnOrder': case 'fightInfo': case 'fightWindow': this.drawFightNode(drawn, rect); break;
+                    case 'victoryParty': case 'victoryLevels': case 'victoryRewards': case 'victoryText': this.drawVictoryNode(drawn, rect); break;
+                    default: if (DatabaseUserInterfaceEditor.isActionNode(drawn.type)) this.drawActionNode(drawn, rect); break;
                 }
                 ctx.restore();
             }
         } finally {
             Object.assign(this, { ctx: saved.ctx, current: saved.current, scale: saved.scale, _previewParty: saved.party, _gameView: saved.gameView });
         }
+    }
+
+    // ==========================================
+    // ACTION AND FIRST PERSON BATTLE HUD (drawn by the shared ActionHud, as the game draws it)
+    // ==========================================
+
+    /** An Action node's own settings, straight from the shared file's list of them. */
+    actionPropertiesMarkup(node) {
+        const tt = text => this._t(text);
+        const hud = DatabaseUserInterfaceEditor.actionHud();
+        if (!hud) return '';
+        let html = this.group(this.typeLabel(node.type));
+        for (const [key, kind, name, , a, b] of hud.SETTINGS[node.type]) {
+            // MP and TP are the game's own abbreviations, shown as they are.
+            const label = /^[A-Z]{2,3}$/.test(name) ? name : name;
+            if (kind === 'check') html += this.row('', this.checkControl('p-action-' + key, !!node[key], /^[A-Z]{2,3}$/.test(name) ? name : tt(name)));
+            else if (kind === 'number') html += this.row(tt(label), this.numberControl('p-action-' + key, node[key], a, b));
+            else if (kind === 'color') html += this.row(tt(label), this.colorControl('p-action-' + key, node[key]));
+            else html += this.row(tt(label), this.selectControl('p-action-' + key, node[key], a.map(([value, text]) => [value, tt(text)])));
+        }
+        if (node.type === 'actionCrosshair') html += this.hintRow(tt('In the game it sits where the battle aims; here it marks the middle of the screen. On maps seen from above the battle marks the ground itself.'));
+        if (node.type === 'actionBars') html += this.hintRow(tt('In the game the bars sit over opponents that were just hit or are aimed at; here one shows where the node is.'));
+        if (node.type === 'actionHotbar') html += this.hintRow(tt('Slot size 0 fits the height.'));
+        if (node.type === 'actionInfo') {
+            html += this.pair(tt('Align'), this.selectControl('p-align', node.align || 'left', [['left', tt('Left')], ['center', tt('Center')], ['right', tt('Right')]]),
+                tt('Size'), this.numberControl('p-fontSize', node.fontSize || 0, 0, 200));
+            html += this.row(tt('Color'), this.textColorControl('p-textColor', node.textColor));
+        }
+        const words = { actionWeapon: ['reloading'], actionInfo: ['defeated'] }[node.type];
+        if (words) {
+            html += this.group(tt('Words'));
+            html += this.hintRow(tt('Blank uses the default word.'));
+            for (const key of words) html += this.row(hud.LABELS[key], this.textControl('p-actionLabel-' + key, (node.actionLabels && node.actionLabels[key]) || '', hud.LABELS[key]));
+        }
+        return html;
+    }
+
+    applyActionProperties(node, q, num) {
+        const hud = DatabaseUserInterfaceEditor.actionHud();
+        if (!hud) return;
+        for (const [key, kind, , value, a, b] of hud.SETTINGS[node.type]) {
+            const el = q('p-action-' + key);
+            if (!el) continue;
+            node[key] = kind === 'check' ? el.checked : kind === 'number' ? num('p-action-' + key, a, b, value) : el.value;
+        }
+        const labels = {};
+        for (const key of Object.keys(hud.LABELS)) {
+            const el = q('p-actionLabel-' + key);
+            const text = el ? el.value : (node.actionLabels && node.actionLabels[key]) || '';
+            if (text) labels[key] = text;
+        }
+        if (node.type === 'actionInfo') {
+            node.align = q('p-align').value;
+            node.fontSize = num('p-fontSize', 0, 200, 0);
+            node.textColor = DatabaseUserInterfaceEditor.parseTextColor(q('p-textColor').value);
+        }
+        Object.assign(node, hud.normalizeProps(Object.assign({}, node, { actionLabels: labels }), node.type));
+    }
+
+    /** The battle the canvas shows for an Action HUD: the first party member, armed, an opponent aimed at. */
+    actionPreview() {
+        const hud = DatabaseUserInterfaceEditor.actionHud();
+        const data = (this.databaseManager && this.databaseManager.data) || {};
+        const sample = hud.sampleHud(data, { party: this.previewPartyActors(), locked: this.current && this.current.mode === 'action' });
+        // The costs wear the colors the game gives them.
+        sample.extra.costColors = sample.extra.costKinds.map(kind => this.skinColor(kind === 'tp' ? 29 : 23));
+        return sample;
+    }
+
+    drawActionNode(node, rect) {
+        const hud = DatabaseUserInterfaceEditor.actionHud();
+        if (!hud) return;
+        const ctx = this.ctx;
+        // Outside an Action or First Person Battle HUD the game draws nothing for it: an outline marks where it sits.
+        if (!this.current || (this.current.mode !== 'action' && this.current.mode !== 'firstPerson')) {
+            if (this._gameView) return;
+            ctx.save();
+            ctx.globalAlpha *= 0.5;
+            ctx.setLineDash([6 / this.scale, 4 / this.scale]);
+            ctx.strokeStyle = '#ff9a7f';
+            ctx.lineWidth = 1 / this.scale;
+            ctx.strokeRect(rect.x + 0.5, rect.y + 0.5, rect.width - 1, rect.height - 1);
+            ctx.restore();
+            return;
+        }
+        const sample = this.actionPreview(), theme = this.fightTheme(node), data = sample.hud;
+        if (node.type === 'actionCrosshair') {
+            const size = Math.max(64, rect.width, rect.height);
+            ctx.save();
+            ctx.translate(Math.round(rect.x + rect.width / 2 - size / 2), Math.round(rect.y + rect.height / 2 - size / 2));
+            hud.drawCrosshair(ctx, size, node, hud.crossState(data, false, {}));
+            ctx.restore();
+            return;
+        }
+        if (node.type === 'actionBars') {
+            const enemy = data.enemies[0];
+            ctx.save();
+            ctx.translate(Math.round(rect.x + (rect.width - node.barWidth) / 2), rect.y);
+            hud.drawWorldBar(ctx, node.barWidth, node.barHeight, node, enemy.hp / enemy.mhp, enemy.alerted);
+            if (node.lockMarker && data.target && data.target.locked) {
+                const size = Math.max(40, Math.round(node.barWidth * 0.9));
+                ctx.translate(Math.round((node.barWidth - size) / 2), node.barHeight);
+                hud.drawLockMarker(ctx, size, this.skinColor(17));
+            }
+            ctx.restore();
+            return;
+        }
+        if (node.type === 'actionDamage') {
+            // A hit from behind and to the right, and the edge at a third of its strength, so both can be seen and placed.
+            ctx.save();
+            ctx.beginPath(); ctx.rect(rect.x, rect.y, rect.width, rect.height); ctx.clip();
+            if (node.showVignette) { ctx.globalAlpha *= 0.4; ctx.translate(rect.x, rect.y); hud.drawVignette(ctx, rect.width, rect.height, node.enemyColor); ctx.translate(-rect.x, -rect.y); ctx.globalAlpha /= 0.4; }
+            if (node.showDirection) {
+                const size = Math.round(Math.min(rect.height * 0.46, 440));
+                ctx.translate(rect.x + rect.width / 2, rect.y + rect.height / 2);
+                ctx.rotate(data.damage.angle * Math.PI / 180);
+                ctx.globalAlpha *= data.damage.pulse;
+                ctx.translate(-size / 2, -size / 2);
+                hud.drawDamageArc(ctx, size, node.enemyColor);
+            }
+            ctx.restore();
+            return;
+        }
+        this.drawSurface(node, rect);
+        const inner = this.contentRect(node, rect);
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(inner.x, inner.y, inner.width, inner.height);
+        ctx.clip();
+        ctx.translate(inner.x, inner.y);
+        if (node.type === 'actionVitals') hud.drawVitals(ctx, inner.width, inner.height, node, data, sample.unit, theme);
+        else if (node.type === 'actionWeapon') hud.drawWeapon(ctx, inner.width, inner.height, node, data, theme, sample.extra);
+        else if (node.type === 'actionHotbar') hud.drawHotbar(ctx, inner.width, inner.height, node, data, theme, sample.extra);
+        else if (node.type === 'actionTarget') hud.drawTarget(ctx, inner.width, inner.height, node, data, theme);
+        else hud.drawInfo(ctx, inner.width, inner.height, node, data, theme, sample.feed);
+        ctx.restore();
+    }
+
+
+    // ==========================================
+    // VICTORY (drawn by the shared VictoryHud, as the game draws it)
+    // ==========================================
+
+    static get VICTORY_PAGE_NAMES() { return { exp: 'Experience', levelUp: 'Level Up', rewards: 'Rewards' }; }
+
+    /** A Victory node's own settings, straight from the shared file's list of them; any other node of a Victory record gets the page it shows on. */
+    victoryPropertiesMarkup(node) {
+        const tt = text => this._t(text);
+        const hud = DatabaseUserInterfaceEditor.victoryHud();
+        if (!hud) return '';
+        const control = ([key, kind, name, , a, b]) => {
+            if (kind === 'check') return this.row('', this.checkControl('p-victory-' + key, !!node[key], tt(name)));
+            if (kind === 'number') return this.row(tt(name), this.numberControl('p-victory-' + key, node[key], a, b));
+            if (kind === 'color') return this.row(tt(name), this.colorControl('p-victory-' + key, node[key]));
+            return this.row(tt(name), this.selectControl('p-victory-' + key, node[key] || '', a.map(([value, text]) => [value, tt(text)])));
+        };
+        if (!DatabaseUserInterfaceEditor.isVictoryNode(node.type)) {
+            return this.group(tt('Victory')) + control(hud.PAGE_SETTING) + this.hintRow(tt('A layer with a page shows on that page alone.'));
+        }
+        let html = this.group(this.typeLabel(node.type));
+        for (const setting of hud.SETTINGS[node.type]) html += control(setting);
+        if (node.type === 'victoryParty') {
+            html += this.hintRow(tt('Columns 0 puts the members side by side where they fit.'));
+            html += `<div class="rr-ui-sub"${node.levelUpSound ? '' : ' hidden'}>`
+                + this.row(tt('Sound'), `<div class="rr-ui-file-row">${this.textControl('p-se', node.se ? node.se.name : '', tt('Default'))}<button type="button" class="rr-btn-chip p-se-browse">${tt('Browse')}</button></div>`,
+                    tt("Blank plays the game's Use Item sound.")) + '</div>';
+        }
+        if (node.type === 'victoryRewards') html += this.hintRow(tt('Columns 0 fits the width. Gold icon 0 draws a coin. Description size 0 follows the card.'));
+        if (node.type === 'victoryText') {
+            html += this.pair(tt('Align'), this.selectControl('p-align', node.align || 'center', [['left', tt('Left')], ['center', tt('Center')], ['right', tt('Right')]]),
+                tt('Size'), this.numberControl('p-fontSize', node.fontSize || 0, 0, 200));
+            html += this.row(tt('Color'), this.textColorControl('p-textColor', node.textColor));
+            html += this.row('', this.checkControl('p-fontBold', !!node.fontBold, tt('Bold')));
+            if (node.victoryText === 'exp' || node.victoryText === 'gold') html += this.hintRow(tt("The game's own message from Terms."));
+        }
+        const listed = hud.NODE_LABELS[node.type];
+        const words = Array.isArray(listed) ? listed : (listed && listed[node.victoryText]) || [];
+        if (words.length) {
+            html += this.group(tt('Words'));
+            html += this.hintRow(tt('Blank uses the default word.'));
+            for (const key of words) html += this.row(hud.LABELS[key], this.textControl('p-victoryLabel-' + key, (node.victoryLabels && node.victoryLabels[key]) || '', hud.LABELS[key]));
+        }
+        return html;
+    }
+
+    applyVictoryProperties(node, q, num) {
+        const hud = DatabaseUserInterfaceEditor.victoryHud();
+        if (!hud) return;
+        if (!DatabaseUserInterfaceEditor.isVictoryNode(node.type)) {
+            const el = q('p-victory-victoryPage');
+            if (!el) return;
+            const page = hud.normalizePage(el.value);
+            if (page) node.victoryPage = page; else delete node.victoryPage;
+            return;
+        }
+        for (const [key, kind, , value, a, b] of hud.SETTINGS[node.type]) {
+            const el = q('p-victory-' + key);
+            if (!el) continue;
+            node[key] = kind === 'check' ? el.checked : kind === 'number' ? num('p-victory-' + key, a, b, value) : el.value;
+        }
+        const labels = {};
+        for (const key of Object.keys(hud.LABELS)) {
+            const el = q('p-victoryLabel-' + key);
+            const text = el ? el.value : (node.victoryLabels && node.victoryLabels[key]) || '';
+            if (text) labels[key] = text;
+        }
+        if (node.type === 'victoryText') {
+            node.align = q('p-align').value;
+            node.fontSize = num('p-fontSize', 0, 200, 0);
+            node.textColor = DatabaseUserInterfaceEditor.parseTextColor(q('p-textColor').value);
+            node.fontBold = q('p-fontBold').checked;
+        }
+        if (node.type === 'victoryParty' && q('p-se')) {
+            const se = q('p-se').value.trim();
+            node.se = se ? Object.assign({ name: se, volume: 90, pitch: 100, pan: 0 }, node.se || {}, { name: se }) : null;
+        }
+        Object.assign(node, hud.normalizeProps(Object.assign({}, node, { victoryLabels: labels }), node.type));
+    }
+
+    /** Fonts, colors, pictures and the project's own words, for the shared drawing. */
+    victoryTheme(node) {
+        const system = (this.databaseManager && this.databaseManager.data && this.databaseManager.data.system) || {};
+        const terms = system.terms || {}, basic = terms.basic || [], messages = terms.messages || {};
+        const theme = this.fightTheme(node);
+        theme.terms = Object.assign(theme.terms, {
+            exp: basic[9] || 'EXP', expName: basic[8] || 'EXP', currency: system.currencyUnit || 'G', params: (terms.params || []).slice(0, 8),
+            obtainExp: messages.obtainExp || '%1 %2 received!', obtainGold: messages.obtainGold || '%1\\G found!'
+        });
+        theme.own = (system.reactorBattle && system.reactorBattle.terms) || {};
+        return theme;
+    }
+
+    /**
+     * The won battle the canvas shows: the preview party's rewards made from
+     * the database, the pages they take under this record's nodes, and the
+     * page stepped to with its bars filled (or at the frame Play has reached).
+     */
+    victoryPreview() {
+        if (this._victoryPreview) return this._victoryPreview;
+        const hud = DatabaseUserInterfaceEditor.victoryHud();
+        if (!hud || !this.current) return null;
+        const data = (this.databaseManager && this.databaseManager.data) || {};
+        const bindings = data.modelBindings || {};
+        const modelOf = actor => {
+            const entry = bindings.actors && bindings.actors[actor.id];
+            const spec = entry && (entry.name ? entry : entry.face || entry.character || entry.battler);
+            return spec && spec.name ? spec : null;
+        };
+        const summary = hud.sampleSummary(data, { party: this.previewPartyActors(), modelOf });
+        const rects = this.rects();
+        const sizeOf = node => {
+            const rect = rects.get(node.id) || { x: 0, y: 0, width: node.width, height: node.height };
+            const inner = this.contentRect(node, rect), inset = this.victoryInset(node);
+            return { width: Math.max(0, inner.width - inset * 2), height: Math.max(0, inner.height - inset * 2) };
+        };
+        const nodes = this.current.nodes;
+        const pages = hud.pages(nodes, summary, sizeOf);
+        const run = hud.newRun(summary, pages, nodes.find(node => node.type === 'victoryParty') || null);
+        this._victoryPage = Math.min(Math.max(0, this._victoryPage || 0), pages.length - 1);
+        run.lock = 0;
+        const playing = this._victoryPlay && this._victoryPlay.page === this._victoryPage ? this._victoryPlay : null;
+        const idle = { ok: false, cancel: false, held: false };
+        // Every page before it is passed with OK; the page itself is played to the frame Play has reached, else shown at rest.
+        for (let guard = 0; run.index < this._victoryPage && guard < 4096; guard++) hud.step(run, { ok: true });
+        const frames = playing ? Math.floor((Date.now() - playing.start) / (1000 / 60)) : Infinity;
+        if (frames === Infinity) { if (hud.isFilling(run)) hud.step(run, { ok: true }); }
+        else for (let frame = 0; frame < frames && hud.isAnimating(run); frame++) hud.step(run, idle);
+        if (playing && !hud.isAnimating(run)) this._victoryPlay = null;
+        this._victoryPreview = { hud, summary, pages, run, page: pages[this._victoryPage], playing: !!this._victoryPlay };
+        return this._victoryPreview;
+    }
+
+    victoryInset(node) {
+        return node.type !== 'victoryText' && (node.fill === 'color' || node.fill === 'gradient') ? 8 : 0;
+    }
+
+    /** Whether a node shows on the page the canvas is on (every node outside a Victory record does). */
+    onVictoryPage(node) {
+        if (!this.current || this.current.mode !== 'victory') return true;
+        const preview = this.victoryPreview();
+        if (!preview) return true;
+        const page = preview.hud.pageOf(node);
+        return !page || page === preview.page.kind;
+    }
+
+    /** Selecting a layer that belongs to another page turns the canvas to that page. */
+    followVictorySelection() {
+        if (!this.current || this.current.mode !== 'victory') return;
+        const node = this.selectedNodes().length === 1 ? this.selected() : null;
+        if (!node) { this._victoryFollowed = 0; return; }
+        // Once per selection: the pages can still be stepped through with the layer selected.
+        if (this._victoryFollowed === node.id) return;
+        this._victoryFollowed = node.id;
+        const preview = this.victoryPreview();
+        if (!preview) return;
+        const page = preview.hud.pageOf(node);
+        if (!page || page === preview.page.kind) return;
+        const at = preview.pages.findIndex(entry => entry.kind === page);
+        if (at < 0) return;
+        this._victoryPage = at;
+        this._victoryPreview = null;
+        this.refreshVictoryControls();
+    }
+
+    stepVictoryPage(by) {
+        const preview = this.victoryPreview();
+        if (!preview) return;
+        this._victoryPage = Math.min(Math.max(0, (this._victoryPage || 0) + by), preview.pages.length - 1);
+        this._victoryPlay = null;
+        this._victoryPreview = null;
+        this.refreshVictoryControls();
+        this.scheduleRender();
+    }
+
+    /** Plays the page on the canvas from its first frame, at the game's pace. */
+    playVictoryPage() {
+        this._victoryPlay = { page: this._victoryPage || 0, start: Date.now() };
+        this._victoryPreview = null;
+        const tick = () => {
+            if (!this.wrapper || !this._victoryPlay) return;
+            this._victoryPreview = null;
+            this.render();
+            if (this._victoryPlay) requestAnimationFrame(tick); else this.scheduleRender();
+        };
+        requestAnimationFrame(tick);
+    }
+
+    /** The page stepper and the plugin line, shown for a Victory record alone. */
+    refreshVictoryControls() {
+        if (!this.wrapper || !this.current) return;
+        const host = this.wrapper.querySelector('.rr-ui-victory-pages');
+        const victory = this.current.mode === 'victory';
+        if (host) host.hidden = !victory;
+        this._victoryPreview = null;
+        const preview = victory ? this.victoryPreview() : null;
+        if (host && preview) {
+            const names = DatabaseUserInterfaceEditor.VICTORY_PAGE_NAMES;
+            const at = this._victoryPage || 0;
+            host.querySelector('.rr-ui-victory-page').textContent = DatabaseUserInterfaceEditor.victoryPageLabel(names[preview.page.kind], at, preview.pages.length, text => this._t(text));
+            host.querySelector('.rr-ui-victory-prev').disabled = at <= 0;
+            host.querySelector('.rr-ui-victory-next').disabled = at >= preview.pages.length - 1;
+            host.querySelector('.rr-ui-victory-play').disabled = !(preview.page.frames > 0);
+        }
+        this._victoryPreview = null;
+        this.refreshVictoryNotice();
+    }
+
+    /** What the page stepper says: the page's name and where it is among the pages. */
+    static victoryPageLabel(name, index, count, tt) {
+        return `${tt(name || '')} · ${index + 1}/${count}`;
+    }
+
+    /**
+     * What a plugin's source does with a Classic battle's victory:
+     * 'replaces': it puts its own function in place of
+     * BattleManager.processVictory or BattleManager.displayRewards and never
+     * calls the one it replaced, so it runs the victory itself; 'words': it
+     * wraps displayRewards and calls on, so its own lines play with the
+     * game's message lines; 'unreadable': protected code that names the
+     * step, so what it does cannot be told; '': none of these. A plugin
+     * that wraps processVictory and calls on leaves the Victory interface
+     * to show. `name` is the plugin's name, read only where the code is
+     * protected.
+     */
+    static victoryStepOf(source, name) {
+        const raw = String(source || '');
+        const mentionsStep = raw.indexOf('processVictory') >= 0, mentionsWords = raw.indexOf('displayRewards') >= 0;
+        if (!mentionsStep && !mentionsWords) return '';
+        const E = DatabaseUserInterfaceEditor;
+        if (E.isProtectedSource(raw)) {
+            // A plugin named for the victory is taken at its name. Otherwise the old function kept under a name
+            // (VisuStella's BattleManager_processVictory) is the mark of a wrapper that calls on.
+            if (/victory|aftermath/i.test(String(name || '')) || mentionsWords) return 'unreadable';
+            return /[A-Za-z]_processVictory\b/.test(raw) ? '' : 'unreadable';
+        }
+        const text = E.stripComments(raw);
+        const word = value => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        // BattleManager, and any short name the plugin gives it.
+        const owners = ['BattleManager'];
+        for (const found of text.matchAll(/\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*BattleManager\s*(?=[;,\n]|$)/g)) owners.push(found[1]);
+        const owner = '(?<![\\w$.])(?:' + owners.map(word).join('|') + ')';
+        const member = key => owner + '\\s*(?:\\.\\s*' + key + '\\b|\\[\\s*[\'"`]' + key + '[\'"`]\\s*\\])';
+        // The function put in place at `from`: its body, or nothing where it is named and not written there.
+        const bodyAt = from => {
+            const open = text.indexOf('{', from), stop = text.indexOf(';', from);
+            return open >= 0 && (stop < 0 || open < stop) ? E.blockAfter(text, from) : '';
+        };
+        // What becomes of one of BattleManager's functions: 'replaced' (another put in its place that never calls
+        // it), 'wrapped' (every one put in its place calls the one kept before it), or '' (left alone).
+        const taken = key => {
+            const kept = new RegExp('([A-Za-z_$][\\w$]*(?:\\s*\\.\\s*[A-Za-z_$][\\w$]*)*)\\s*=\\s*' + member(key) + '(?!\\s*[=(])', 'g');
+            // The one kept by another plugin (Yanfly.BEC.BattleManager_processVictory.call(this)) is called on as well.
+            const elsewhere = new RegExp('[\\w$]' + key + '\\s*\\.\\s*(?:call|apply)\\s*\\(', 'i');
+            const callsOn = (index, body) => {
+                if (elsewhere.test(body)) return true;
+                kept.lastIndex = 0;
+                for (let found = kept.exec(text); found && found.index < index; found = kept.exec(text)) {
+                    if (new RegExp('(?<![\\w$.])' + word(found[1]) + '\\s*(?:\\.\\s*(?:call|apply|bind)\\s*)?\\(').test(body)) return true;
+                }
+                return false;
+            };
+            let wrapped = false;
+            const assign = new RegExp(member(key) + '\\s*=(?!=)', 'g');
+            for (let found = assign.exec(text); found; found = assign.exec(text)) {
+                if (!callsOn(found.index, bodyAt(assign.lastIndex))) return 'replaced';
+                wrapped = true;
+            }
+            // Object.assign(BattleManager, { processVictory() { ... } }) puts functions in place too.
+            const merged = new RegExp('Object\\s*\\.\\s*assign\\s*\\(\\s*' + owner + '\\s*,', 'g');
+            const named = new RegExp('(?<![\\w$.])' + key + '\\s*(?:\\(|:)');
+            for (let found = merged.exec(text); found; found = merged.exec(text)) {
+                const block = E.blockAfter(text, merged.lastIndex), at = named.exec(block);
+                if (!at) continue;
+                if (!callsOn(found.index, E.blockAfter(block, at.index))) return 'replaced';
+                wrapped = true;
+            }
+            return wrapped ? 'wrapped' : '';
+        };
+        const words = mentionsWords ? taken('displayRewards') : '';
+        if (words === 'replaced' || (mentionsStep && taken('processVictory') === 'replaced')) return 'replaces';
+        return words === 'wrapped' ? 'words' : '';
+    }
+
+    /** Whether a source text is protected code (an obfuscator's names all through it): nothing in it can be read. */
+    static isProtectedSource(source) {
+        const names = /_0x[0-9a-f]{4,}/g;
+        let count = 0;
+        while (names.exec(source)) if (++count >= 20) return true;
+        return false;
+    }
+
+    /** A source text without its comments (its strings kept), so a line that is only written about is not read as code. */
+    static stripComments(source) {
+        const text = String(source || ''), parts = [];
+        let from = 0, quote = '';
+        for (let i = 0; i < text.length; i++) {
+            const c = text[i];
+            // An escaped character is itself, inside a string or a regular expression.
+            if (c === '\\') { i++; continue; }
+            if (quote) {
+                if (c === quote || (c === '\n' && quote !== '`')) quote = '';
+            } else if (c === '"' || c === "'" || c === '`') {
+                quote = c;
+            } else if (c === '/' && (text[i + 1] === '/' || text[i + 1] === '*')) {
+                parts.push(text.slice(from, i));
+                if (text[i + 1] === '/') {
+                    const end = text.indexOf('\n', i);
+                    i = end < 0 ? text.length : end;
+                    from = i;
+                } else {
+                    const end = text.indexOf('*/', i + 2);
+                    i = end < 0 ? text.length : end + 2;
+                    parts.push(' ');
+                    from = i;
+                }
+                i--;
+            }
+        }
+        parts.push(text.slice(from));
+        return parts.join('');
+    }
+
+    /** The braces block that opens first after `from` in a source text, to its closing brace. */
+    static blockAfter(text, from) {
+        const open = text.indexOf('{', from);
+        if (open < 0) return '';
+        let depth = 0;
+        for (let i = open; i < text.length; i++) {
+            const c = text[i];
+            if (c === '{') depth++;
+            else if (c === '}' && --depth === 0) return text.slice(open, i + 1);
+        }
+        return text.slice(open);
+    }
+
+    /** The plugins a project has on, in order, from the text of its plugin list (js/reactor_plugins.js, or js/plugins.js). */
+    static enabledPlugins(text) {
+        const source = String(text || '');
+        const from = source.indexOf('['), to = source.lastIndexOf(']');
+        if (from < 0 || to <= from) return [];
+        try {
+            return JSON.parse(source.slice(from, to + 1)).filter(entry => entry && entry.status && typeof entry.name === 'string' && entry.name).map(entry => entry.name);
+        } catch (error) { return []; }
+    }
+
+    /** The project's enabled plugins that take a hand in the victory, as `[{ name, how }]` (`how` as `victoryStepOf` says). Read once per plugin list. */
+    async victoryPlugins() {
+        const project = this.project();
+        if (!project || !project.path || typeof require !== 'function') return [];
+        const fs = require('fs'), path = require('path');
+        // A project on this engine keeps its list in reactor_plugins.js; one that still boots its own corescript in plugins.js.
+        let listPath = '', stamp = '';
+        for (const file of ['reactor_plugins.js', 'plugins.js']) {
+            try {
+                const candidate = path.join(project.path, 'js', file), stat = await fs.promises.stat(candidate);
+                listPath = candidate; stamp = candidate + '|' + stat.mtimeMs + '|' + stat.size;
+                break;
+            } catch (error) { /* the other name */ }
+        }
+        if (!listPath) return [];
+        const known = DatabaseUserInterfaceEditor._victoryPlugins;
+        if (known && known.stamp === stamp) return known.found;
+        const found = [];
+        try {
+            for (const name of DatabaseUserInterfaceEditor.enabledPlugins(await fs.promises.readFile(listPath, 'utf8'))) {
+                try {
+                    const how = DatabaseUserInterfaceEditor.victoryStepOf(await fs.promises.readFile(path.join(project.path, 'js', 'plugins', name + '.js'), 'utf8'), name);
+                    if (how) found.push({ name, how });
+                } catch (error) { /* a listed plugin with no file replaces nothing */ }
+            }
+        } catch (error) { return []; }
+        DatabaseUserInterfaceEditor._victoryPlugins = { stamp, found };
+        return found;
+    }
+
+    /** One line on a Victory record when a plugin keeps the victory for itself. */
+    refreshVictoryNotice() {
+        const notice = this.wrapper && this.wrapper.querySelector('.rr-ui-victory-notice');
+        if (!notice) return;
+        if (!this.current || this.current.mode !== 'victory') { notice.hidden = true; return; }
+        const record = this.current;
+        this.victoryPlugins().then(found => {
+            if (!this.wrapper || this.current !== record) return;
+            notice.textContent = DatabaseUserInterfaceEditor.victoryNoticeText(found, text => this._t(text));
+            notice.hidden = !found.length;
+        }).catch(() => { notice.hidden = true; });
+    }
+
+    /** The line for the plugins `victoryPlugins` found: what each kind does to the victory, and what to turn off. */
+    static victoryNoticeText(found, tt) {
+        const lines = {
+            replaces: '{plugin} runs the victory itself, so Classic battles show its victory and not this interface. Turn {plugin} off in the Plugin Manager to use this one.',
+            words: '{plugin} adds its own lines to the victory messages, so Classic battles show the messages and not this interface. Turn {plugin} off in the Plugin Manager to use this one.',
+            unreadable: '{plugin} may run the victory itself: its code is protected and cannot be checked. If Classic battles do not show this interface, turn {plugin} off in the Plugin Manager.'
+        };
+        return Object.keys(lines).map(how => {
+            const names = (found || []).filter(entry => entry.how === how).map(entry => entry.name);
+            return names.length ? tt(lines[how]).replace(/\{plugin\}/g, names.join(', ')) : '';
+        }).filter(Boolean).join(' ');
+    }
+
+    drawVictoryNode(node, rect) {
+        const hud = DatabaseUserInterfaceEditor.victoryHud();
+        if (!hud) return;
+        const ctx = this.ctx;
+        // Outside a Victory record the game draws nothing for it: an outline marks where it sits.
+        if (!this.current || this.current.mode !== 'victory') {
+            if (this._gameView) return;
+            ctx.save();
+            ctx.globalAlpha *= 0.5;
+            ctx.setLineDash([6 / this.scale, 4 / this.scale]);
+            ctx.strokeStyle = '#ff9a7f';
+            ctx.lineWidth = 1 / this.scale;
+            ctx.strokeRect(rect.x + 0.5, rect.y + 0.5, rect.width - 1, rect.height - 1);
+            ctx.restore();
+            return;
+        }
+        const preview = this.victoryPreview();
+        if (!preview) return;
+        this.drawSurface(node, rect);
+        const theme = this.victoryTheme(node);
+        const inner = this.contentRect(node, rect), inset = this.victoryInset(node);
+        const width = Math.max(0, inner.width - inset * 2), height = Math.max(0, inner.height - inset * 2);
+        const run = preview.run, page = preview.page;
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(inner.x, inner.y, inner.width, inner.height);
+        ctx.clip();
+        ctx.translate(inner.x + inset, inner.y + inset);
+        if (node.type === 'victoryParty') { if (page.kind === 'exp') hud.drawParty(ctx, width, height, node, run, page, theme, 'all'); }
+        else if (node.type === 'victoryLevels') { if (page.kind === 'levelUp') hud.drawLevels(ctx, width, height, node, preview.summary, page, theme); }
+        else if (node.type === 'victoryRewards') { if (page.kind === 'rewards') hud.drawRewards(ctx, width, height, node, preview.summary, page, theme); }
+        else hud.drawText(ctx, width, height, node, hud.textOf(node, run, theme), theme);
+        ctx.restore();
+    }
+
+    // ==========================================
+    // MAP BATTLE HUD (drawn by the shared FightHud, as the game draws it)
+    // ==========================================
+
+    /** A Unit Panel, Turn Order, Battle Text or Tactical Window node's own settings. */
+    fightPropertiesMarkup(node) {
+        const tt = text => this._t(text);
+        const hud = DatabaseUserInterfaceEditor.fightHud();
+        if (!hud) return '';
+        let html = '';
+        // HP, ATK and the like are the game's own abbreviations, shown as they are.
+        const checks = (prefix, keys, chosen, labels) => `<div class="rr-ui-check-grid">${keys.map(key =>
+            this.checkControl(`${prefix}${key}`, chosen.includes(key), labels[key] ? tt(labels[key]) : key.toUpperCase())).join('')}</div>`;
+        const words = keys => {
+            let out = this.group(tt('Words'));
+            out += this.hintRow(tt('Blank uses the default word.'));
+            for (const key of keys) out += this.row(hud.LABELS[key], this.textControl(`p-fightLabel-${key}`, (node.fightLabels && node.fightLabels[key]) || '', hud.LABELS[key]));
+            return out;
+        };
+        const teamColors = () => this.group(tt('Team colors'))
+            + this.row(tt('Ally'), this.colorControl('p-allyColor', node.allyColor))
+            + this.row(tt('Enemy'), this.colorControl('p-enemyColor', node.enemyColor))
+            + this.row(tt('Neutral'), this.colorControl('p-neutralColor', node.neutralColor));
+        if (node.type === 'fightUnit') {
+            html += this.group(tt('Unit Panel'));
+            html += this.row(tt('Shows'), this.selectControl('p-fightUnit', node.fightUnit, [['active', tt('The unit whose turn it is')], ['focused', tt('The unit under the cursor')]]));
+            html += `<div class="rr-ui-sub"${node.fightUnit === 'focused' ? '' : ' hidden'}>`
+                + this.row('', this.checkControl('p-hideSameUnit', node.hideSameUnit !== false, tt('Hide while it is the acting unit'))) + '</div>';
+            html += this.row(tt('Parts'), checks('p-fightField-', hud.UNIT_FIELDS, node.fightFields || [], { portrait: 'Portrait', name: 'Name', level: 'Level',
+                states: 'States', stats: 'Parameters', preview: 'Action forecast' }),
+                tt('While an action is aimed the forecast takes the room of MP, TP and the parameters: hit chance, damage, critical, cover, and whether it defeats the target. An action that lands on several units steps through them.'));
+            html += this.row(tt('Parameters'), checks('p-fightStat-', hud.STATS, node.fightStats || [], { move: 'Move', jump: 'Jump' }));
+            html += this.row(tt('Gauges'), this.selectControl('p-gaugeStyle', node.gaugeStyle || 'clipped', [['clipped', tt('Clipped corners')], ['bar', tt('Thin bar')]]));
+            html += this.row(tt('Portrait size'), this.numberControl('p-fightPortrait', node.fightPortrait || 0, 0, 512), tt('0 fits the panel. A unit shows its face, else a portrait of its model, else its map sprite or battle picture, else its initials.'));
+            html += teamColors();
+            html += words([...hud.STATS, 'hit', 'critical', 'damage', 'heal', 'defeats', 'halfCover', 'fullCover', 'side', 'back', 'highGround', 'lowGround', 'targets']);
+        } else if (node.type === 'fightTurnOrder') {
+            html += this.group(tt('Turn Order'));
+            html += this.pair(tt('Box size'), this.numberControl('p-cellSize', node.cellSize || 0, 0, 256), tt('Gap'), this.numberControl('p-cellGap', node.cellGap ?? 6, 0, 64));
+            html += this.hintRow(tt('Box size 0 fits the height.'));
+            html += this.pair(tt('Most boxes'), this.numberControl('p-maxCells', node.maxCells || 0, 0, 99), tt('Align'),
+                this.selectControl('p-align', node.align || 'center', [['left', tt('Left')], ['center', tt('Center')], ['right', tt('Right')]]));
+            html += this.hintRow(tt('Most boxes 0 shows as many as fit.'));
+            html += this.row('', this.checkControl('p-turnAnimate', node.turnAnimate !== false, tt('Slide when the order changes')));
+            html += teamColors();
+        } else if (node.type === 'fightInfo') {
+            html += this.group(tt('Battle Text'));
+            html += this.row(tt('Shows'), this.selectControl('p-fightInfo', node.fightInfo, [['objective', tt('Objective')], ['turn', tt('Turn and phase')],
+                ['phase', tt('Phase banner')], ['hint', tt('What to do next')]]));
+            html += this.pair(tt('Align'), this.selectControl('p-align', node.align || 'left', [['left', tt('Left')], ['center', tt('Center')], ['right', tt('Right')]]),
+                tt('Size'), this.numberControl('p-fontSize', node.fontSize || 0, 0, 200));
+            html += this.hintRow(tt('Size 0 fits the height.'));
+            html += this.row(tt('Color'), this.textColorControl('p-textColor', node.textColor));
+            html += this.row('', this.checkControl('p-fontBold', !!node.fontBold, tt('Bold')));
+            html += `<div class="rr-ui-sub"${node.fightInfo === 'phase' ? '' : ' hidden'}>`
+                + this.row(`${tt('Duration')} (${tt('Frames')})`, this.numberControl('p-bannerFrames', node.bannerFrames || 90, 10, 600), tt('Shown each time the turn passes to a side, in that side\'s color.'))
+                + teamColors() + '</div>';
+            const keys = { turn: ['turn', 'allyPhase', 'enemyPhase'], phase: ['allyPhase', 'enemyPhase'],
+                hint: ['hintUnit', 'hintMove', 'hintCommand', 'hintTarget', 'hintEnemy', 'whyAttack', 'whySkill', 'whyItem', 'whyCost', 'whyUse', 'whyRange', 'whyNoTarget'] }[node.fightInfo];
+            if (keys) html += words(keys);
+        } else if (node.type === 'fightWindow') {
+            html += this.group(tt('Tactical Window'));
+            html += this.row(tt('Window'), this.selectControl('p-fightWindow', node.fightWindow, DatabaseUserInterfaceEditor.FIGHT_WINDOWS.map(([key, label]) => [key, tt(label)])));
+            html += this.hintRow(tt('Places the stock tactical window here; the battle still runs it.'));
+            const columns = [[0, `${tt('Default')} (${node.fightWindow === 'command' ? 1 : 2})`], ...Array.from({ length: 12 }, (_, i) => [i + 1, String(i + 1)])];
+            html += this.pair(tt('Fill'), this.selectControl('p-fill', node.fill === 'none' ? 'none' : 'window', [['window', tt('Window skin')], ['none', tt('None')]]),
+                tt('Columns'), this.selectControl('p-windowColumns', node.windowColumns || 0, columns));
+            html += this.row('', this.checkControl('p-hideWindow', !!node.hideWindow, tt('Hide the window')));
+            if (node.fightWindow === 'command') {
+                html += this.row(tt('Align'), this.selectControl('p-commandAlign', node.commandAlign || 'left', [['left', tt('Left')], ['center', tt('Center')], ['right', tt('Right')]]));
+                html += this.row('', this.checkControl('p-fitCommands', node.fitCommands !== false, tt('Fit the window to its commands')),
+                    tt('As wide as the longest command; its rows share the height set here.'));
+                html += this.row('', this.checkControl('p-commandIcons', node.commandIcons !== false, tt('Icons on Overwatch, Wait and End Turn')),
+                    tt('Shown where Attack, Skill and Item carry icons. Blank words follow the case of those three.'));
+                html += `<div class="rr-ui-sub"${node.commandIcons !== false ? '' : ' hidden'}>`;
+                for (const [key, label] of [['mountIcon', 'Mount'], ['dismountIcon', 'Dismount'], ['overwatchIcon', 'Overwatch'], ['waitIcon', 'Wait'], ['endTurnIcon', 'End Turn'], ['autoIcon', 'Auto']]) {
+                    html += this.row(tt(label), `<div class="rr-ui-icon-slot" data-icon-key="${key}"></div>`);
+                }
+                html += '</div>';
+            }
+            html += this.group(tt('Slide in'));
+            html += this.pair(`${tt('Slide')} X`, this.numberControl('p-slideX', node.slideX || 0, -2000, 2000), `${tt('Slide')} Y`, this.numberControl('p-slideY', node.slideY || 0, -2000, 2000));
+            html += this.row(`${tt('Duration')} (${tt('Frames')})`, this.numberControl('p-slideDuration', node.slideDuration || 12, 1, 120), tt('Each time the window appears it moves in from this offset.'));
+            if (node.fightWindow === 'command') html += words(hud.WINDOW_LABELS);
+        }
+        return html;
+    }
+
+    applyFightProperties(node, q, num) {
+        const hud = DatabaseUserInterfaceEditor.fightHud();
+        if (!hud) return;
+        const color = (key, fallback) => { const el = q('p-' + key); return el && /^#[0-9a-f]{6}$/i.test(el.value) ? el.value : fallback; };
+        for (const key of ['allyColor', 'enemyColor', 'neutralColor']) node[key] = color(key, node[key]);
+        const labels = {};
+        for (const key of Object.keys(hud.LABELS)) {
+            const el = q('p-fightLabel-' + key);
+            const value = el ? el.value : (node.fightLabels && node.fightLabels[key]) || '';
+            if (value) labels[key] = value;
+        }
+        node.fightLabels = labels;
+        if (node.type === 'fightUnit') {
+            node.fightUnit = q('p-fightUnit').value === 'focused' ? 'focused' : 'active';
+            node.hideSameUnit = q('p-hideSameUnit').checked;
+            node.fightFields = hud.UNIT_FIELDS.filter(key => q('p-fightField-' + key) && q('p-fightField-' + key).checked);
+            node.fightStats = hud.STATS.filter(key => q('p-fightStat-' + key) && q('p-fightStat-' + key).checked);
+            node.fightPortrait = num('p-fightPortrait', 0, 512, 0);
+            if (q('p-gaugeStyle')) node.gaugeStyle = q('p-gaugeStyle').value;
+        } else if (node.type === 'fightTurnOrder') {
+            node.cellSize = num('p-cellSize', 0, 256, 0);
+            node.cellGap = num('p-cellGap', 0, 64, 6);
+            node.maxCells = num('p-maxCells', 0, 99, 0);
+            node.align = q('p-align').value;
+            node.turnAnimate = q('p-turnAnimate').checked;
+        } else if (node.type === 'fightInfo') {
+            node.fightInfo = q('p-fightInfo').value;
+            node.align = q('p-align').value;
+            node.fontSize = num('p-fontSize', 0, 200, 0);
+            node.textColor = DatabaseUserInterfaceEditor.parseTextColor(q('p-textColor').value);
+            node.fontBold = q('p-fontBold').checked;
+            node.bannerFrames = num('p-bannerFrames', 10, 600, 90);
+        } else if (node.type === 'fightWindow') {
+            node.fightWindow = q('p-fightWindow').value;
+            node.fill = q('p-fill').value === 'none' ? 'none' : 'window';
+            node.windowColumns = num('p-windowColumns', 0, 12, 0);
+            node.hideWindow = q('p-hideWindow').checked;
+            if (q('p-commandIcons')) node.commandIcons = q('p-commandIcons').checked;
+            if (q('p-commandAlign')) node.commandAlign = q('p-commandAlign').value;
+            if (q('p-fitCommands')) node.fitCommands = q('p-fitCommands').checked;
+            node.slideX = num('p-slideX', -2000, 2000, 0);
+            node.slideY = num('p-slideY', -2000, 2000, 0);
+            node.slideDuration = num('p-slideDuration', 1, 120, 12);
+        }
+        Object.assign(node, hud.normalizeProps(node, node.type));
+    }
+
+    /** Whether the project's icon sheet has a picture at an index (true until the sheet has loaded). */
+    fightIconExists(index) {
+        const sheet = this.image('system', 'IconSet');
+        if (!sheet || !sheet.image) return true;
+        const known = this._fightIcons || (this._fightIcons = new Map());
+        if (known.has(index)) return known.get(index);
+        let exists = index >= 0 && Math.floor(index / 16) * 32 < sheet.image.height;
+        if (exists) {
+            try {
+                const probe = document.createElement('canvas');
+                probe.width = probe.height = 32;
+                const context = probe.getContext('2d');
+                context.drawImage(sheet.image, (index % 16) * 32, Math.floor(index / 16) * 32, 32, 32, 0, 0, 32, 32);
+                const data = context.getImageData(0, 0, 32, 32).data;
+                exists = false;
+                for (let i = 3; i < data.length; i += 4) if (data[i] > 0) { exists = true; break; }
+            } catch (error) { /* a sheet that cannot be read is taken at its word */ }
+        }
+        known.set(index, exists);
+        return exists;
+    }
+
+    /** The command icons' fields: the number, the picture, and the shared icon picker behind Change. */
+    mountFightIconFields(panel, node) {
+        const slots = panel.querySelectorAll('.rr-ui-icon-slot');
+        if (!slots.length || !node || typeof window === 'undefined' || !window.RRIconPicker) return;
+        const project = this.project();
+        const iconSetPath = project && project.path ? window.RRIconPicker.iconSetPathFor(project.path) : null;
+        slots.forEach(slot => {
+            const key = slot.dataset.iconKey;
+            slot.appendChild(window.RRIconPicker.createField({
+                value: node[key] || 0, iconSetPath, zIndex: 10010,
+                inputStyle: 'background:var(--color-bg-deep);color:var(--color-text);border:1px solid var(--color-border);border-radius:3px;padding:4px 6px;',
+                onChange: value => {
+                    this.pushUndo();
+                    node[key] = Math.max(0, Math.floor(Number(value) || 0));
+                    this.touch();
+                    this.scheduleRender();
+                }
+            }));
+        });
+    }
+
+    /** Fonts, colors, terms and pictures as the project has them, for the shared drawing. */
+    fightTheme(node) {
+        const system = (this.databaseManager && this.databaseManager.data && this.databaseManager.data.system) || {};
+        const basic = (system.terms && system.terms.basic) || [];
+        const picture = entry => (entry && entry.image) || (entry && entry.failed ? false : null);
+        const family = this.fontFamily(node);
+        return {
+            font: (size, bold) => `${bold ? 'bold ' : ''}${size}px ${family}`,
+            textColor: this.skinColor(0), systemColor: this.skinColor(16), outlineColor: 'rgba(0, 0, 0, 0.6)', outlineWidth: 3,
+            crisisColor: this.skinColor(17), deathColor: this.skinColor(18),
+            gauge: { hp: [this.skinColor(20), this.skinColor(21)], mp: [this.skinColor(22), this.skinColor(23)], tp: [this.skinColor(28), this.skinColor(29)], back: this.skinColor(19) },
+            terms: { level: basic[1] || 'Lv', hp: basic[3] || 'HP', mp: basic[5] || 'MP', tp: basic[7] || 'TP' },
+            paletteColor: index => this.skinColor(index),
+            iconSize: 32, faceSize: 144,
+            face: name => picture(this.image('faces', name)),
+            character: name => picture(this.image('characters', name)),
+            enemy: name => picture(this.image(system.optSideView ? 'sv_enemies' : 'enemies', name)),
+            icons: () => picture(this.image('system', 'IconSet')),
+            thumbnail: model => this.fightModelPicture(model)
+        };
+    }
+
+    /**
+     * A model unit's picture on the canvas: the editor's own rendering of the
+     * model once it is made, null until then and wherever the 3D view is not
+     * to be had (a plain figure stands in, as in the game while its portrait
+     * is being made).
+     */
+    fightModelPicture(model) {
+        if (!model || !model.name) return false;
+        const pictures = this._fightModelPictures || (this._fightModelPictures = new Map());
+        const key = JSON.stringify([model.name, model.file || '', model.variant || '']);
+        let entry = pictures.get(key);
+        if (!entry) pictures.set(key, entry = { image: null, tries: 0, pending: false });
+        if (entry.image || entry.pending || entry.tries >= 4) return entry.image;
+        const preview = typeof RREventPreviewModels !== 'undefined' ? RREventPreviewModels : null;
+        const view = typeof window !== 'undefined' && window.reactor ? (window.reactor.mapEditor3D || (window.reactor.projectController && window.reactor.projectController.mapEditor3D)) : null;
+        const project = this.project();
+        if (!preview || !view || !project) return null;
+        entry.pending = true;
+        entry.tries++;
+        Promise.resolve().then(() => preview.thumbnail(project, model, view, 128, 2)).then(result => {
+            entry.pending = false;
+            if (!result || !result.url) { setTimeout(() => this.scheduleRender(), 800); return; }
+            const image = new Image();
+            image.onload = () => { entry.image = image; this.scheduleRender(); };
+            image.src = result.url;
+        }).catch(() => { entry.pending = false; });
+        return null;
+    }
+
+    /** The battle the canvas shows: the preview party aiming a skill at the database's first enemies. */
+    fightPreviewReader() {
+        const hud = DatabaseUserInterfaceEditor.fightHud();
+        const data = (this.databaseManager && this.databaseManager.data) || {};
+        const bindings = data.modelBindings || {};
+        // A record shown by a model in the game is shown by it here.
+        const modelOf = (record, isActor) => {
+            const entry = bindings[isActor ? 'actors' : 'enemies'] && bindings[isActor ? 'actors' : 'enemies'][record.id];
+            // An enemy's entry is its model; an actor's has one per surface.
+            const spec = entry && (entry.name ? entry : entry.character || entry.battler);
+            return spec && spec.name ? spec : null;
+        };
+        return hud.sampleReader(data, { party: this.previewPartyActors(), modelOf });
+    }
+
+    drawFightNode(node, rect) {
+        const hud = DatabaseUserInterfaceEditor.fightHud();
+        if (!hud) return;
+        const ctx = this.ctx;
+        // Outside a Tactical Battle HUD the game draws nothing for it: an outline marks where it sits.
+        if (!this.current || this.current.mode !== 'tactical') {
+            if (this._gameView) return;
+            ctx.save();
+            ctx.globalAlpha *= 0.5;
+            ctx.setLineDash([6 / this.scale, 4 / this.scale]);
+            ctx.strokeStyle = '#ff9a7f';
+            ctx.lineWidth = 1 / this.scale;
+            ctx.strokeRect(rect.x + 0.5, rect.y + 0.5, rect.width - 1, rect.height - 1);
+            ctx.restore();
+            return;
+        }
+        if (node.type === 'fightWindow') { this.drawFightWindowNode(node, rect); return; }
+        this.drawSurface(node, rect);
+        const reader = this.fightPreviewReader();
+        const theme = this.fightTheme(node);
+        const system = (this.databaseManager && this.databaseManager.data && this.databaseManager.data.system) || {};
+        const inner = this.contentRect(node, rect);
+        const inset = node.type === 'fightUnit' && (node.fill === 'color' || node.fill === 'gradient') ? 8 : 0;
+        const width = Math.max(0, inner.width - inset * 2), height = Math.max(0, inner.height - inset * 2);
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(inner.x, inner.y, inner.width, inner.height);
+        ctx.clip();
+        ctx.translate(inner.x + inset, inner.y + inset);
+        if (node.type === 'fightUnit') {
+            const unit = hud.panelUnit(node, reader);
+            if (unit) {
+                const view = hud.fillUnitView(hud.newUnitView(), reader, unit, system.optDisplayTp !== false, node.fightUnit === 'focused' ? reader.preview(unit) : null);
+                if (view.preview) view.area = hud.areaSummary(reader, unit, {});
+                hud.drawUnit(ctx, width, height, node, view, theme);
+            }
+        } else if (node.type === 'fightTurnOrder') {
+            const view = hud.newUnitView();
+            hud.drawTurnOrder(ctx, width, height, node, reader.turnOrder(), id => hud.fillUnitView(view, reader, reader.unit(id), false, null), theme);
+        } else {
+            hud.drawInfo(ctx, width, height, node, hud.infoText(node, reader), theme, reader.currentTeam());
+        }
+        ctx.restore();
+    }
+
+    /** A Tactical Window as the battle shows it: the command menu with its rows; the skill and item lists while selected, else an outline. */
+    drawFightWindowNode(node, rect) {
+        const ctx = this.ctx;
+        const system = (this.databaseManager && this.databaseManager.data && this.databaseManager.data.system) || {};
+        const commands = (system.terms || {}).commands || [];
+        // Wait and End Turn are the game's words: the project's own (System.json reactorBattle.terms) over the stock ones.
+        const battleTerms = (system.reactorBattle && system.reactorBattle.terms) || {};
+        const label = (DatabaseUserInterfaceEditor.FIGHT_WINDOWS.find(([key]) => key === node.fightWindow) || ['', node.fightWindow])[1];
+        const selected = !this._gameView && this.selectedIds && this.selectedIds.has(node.id);
+        if (!node.hideWindow && (node.fightWindow === 'command' || selected)) {
+            const hud = DatabaseUserInterfaceEditor.fightHud();
+            if (node.fightWindow !== 'command') {
+                // A list shows whole rows, cut from the node's height against the edge its anchor names.
+                const m = this.battleWindowMetrics({ battleWindow: node.fightWindow, windowColumns: node.windowColumns });
+                const height = Math.max(1, Math.floor((rect.height - m.padding * 2) / m.itemHeight)) * m.itemHeight + m.padding * 2;
+                const ay = (DatabaseUserInterfaceEditor.ANCHORS[node.anchor] || [0, 0])[1];
+                const fitted = { x: rect.x, y: Math.round(rect.y + (rect.height - height) * ay), width: rect.width, height };
+                if (node.fill !== 'none') this.drawSurface(Object.assign({}, node, { type: 'box', fill: 'window' }), fitted);
+                this.drawBattleWindowRows({ battleWindow: node.fightWindow, windowColumns: node.windowColumns }, fitted, this.battleWindowRows({ battleWindow: node.fightWindow }) || []);
+                return;
+            }
+            // The commands as the game lists them for a unit with a ranged attack: the project's three, then the battle's own.
+            const stock = [commands[2] || 'Attack', commands[5] || 'Skill', commands[4] || 'Item'];
+            const style = hud.commandStyle(stock);
+            const rows = stock.map(text => ({ text, right: '', enabled: true }));
+            // Auto is offered only while three or more units are still to act: the canvas shows the usual six, and
+            // Mount and Dismount in a project that has vehicles.
+            const vehicles = !!(this.databaseManager && typeof this.databaseManager.getVehicles === 'function' && this.databaseManager.getVehicles().some(Boolean));
+            for (const key of hud.WINDOW_LABELS.filter(entry => entry !== 'auto' && (vehicles || (entry !== 'mount' && entry !== 'dismount')))) {
+                const text = hud.commandText(node, key, battleTerms[key], style, index => this.fightIconExists(index));
+                const glyph = hud.commandGlyph(node, key, text, style) ? key : '';
+                rows.push({ text: glyph ? hud.commandLabel(node, key, battleTerms[key], style) : text, right: '', enabled: true, glyph });
+            }
+            const m = this.battleWindowMetrics({ battleWindow: 'actorCommand' });
+            let fitted = rect, itemHeight = 0;
+            if (node.fitCommands !== false) {
+                const style2 = { type: 'text', align: 'left', fontSize: 0, textColor: 0, fill: 'none', wrap: false, fitText: false, outline: true, outlineWidth: 3, letterSpacing: 0, width: 0, height: 0 };
+                const widths = rows.map(row => (row.glyph ? 36 : 0) + this.measureText(Object.assign({}, style2, { text: row.glyph ? ' ' + row.text : row.text })).width);
+                const fit = hud.fitCommands(rect.height, widths, { padding: m.padding, lineHeight: m.lineHeight, itemPadding: 8, colSpacing: 8, iconSize: 32 }, {});
+                const [ax, ay] = DatabaseUserInterfaceEditor.ANCHORS[node.anchor] || [0, 0];
+                const width = Math.min(Math.max(fit.width, 96), Math.max(rect.width, fit.width));
+                fitted = { x: Math.round(rect.x + (rect.width - width) * ax), y: Math.round(rect.y + (rect.height - fit.height) * ay), width, height: fit.height };
+                itemHeight = fit.itemHeight;
+            }
+            if (node.fill !== 'none') this.drawSurface(Object.assign({}, node, { type: 'box', fill: 'window' }), fitted);
+            this.drawBattleWindowRows({ battleWindow: 'actorCommand', windowColumns: 1, commandAlign: node.commandAlign || 'left', _itemHeight: itemHeight }, fitted, rows);
+            return;
+        }
+        if (this._gameView) return;
+        const shared = this.current.nodes.filter(other => other.type === 'fightWindow' && other.x === node.x && other.y === node.y && other.anchor === node.anchor);
+        // A window on the same spot is showing its rows: this one's outline would only write over them.
+        if (shared.some(other => other !== node && !other.hideWindow && this.selectedIds && this.selectedIds.has(other.id))) return;
+        ctx.save();
+        ctx.globalAlpha *= node.hideWindow ? 0.35 : 0.8;
+        ctx.setLineDash([6 / this.scale, 4 / this.scale]);
+        ctx.strokeStyle = '#7fd3ff';
+        ctx.lineWidth = 1 / this.scale;
+        ctx.strokeRect(rect.x + 0.5, rect.y + 0.5, rect.width - 1, rect.height - 1);
+        ctx.setLineDash([]);
+        const line = Math.max(0, shared.indexOf(node));
+        this.drawText({ type: 'text', text: this._t(label) + (node.hideWindow ? ' (' + this._t('hidden') + ')' : ''), align: 'left', fontSize: 20,
+            textColor: 0, fill: 'none', wrap: false, fitText: false, outline: true, outlineWidth: 3, letterSpacing: 0 },
+            { x: rect.x + 8, y: rect.y + 4 + line * 26, width: Math.max(0, rect.width - 16), height: 28 });
+        ctx.restore();
     }
 
     /** The cursor's stand-in: its image (or the plain arrow) with a sample name. */
@@ -4279,6 +5578,22 @@ class DatabaseUserInterfaceEditor {
             this.drawText(Object.assign({}, node, { type: 'text', text: this._t('Target'), align: 'center', textColor: 0, outline: true, outlineWidth: 3,
                 letterSpacing: 0, wrap: false, fitText: false, fontSize: node.fontSize || 0 }), { x: rect.x - 60, y: rect.y - 36, width: 152, height: 34 });
         }
+    }
+
+    /** Where the top of the acting actor is taken to be on the canvas: a party member's place in a side-view battle. */
+    previewActorTop() {
+        const { width, height } = this.designSize();
+        return { x: Math.round(width * 0.72), y: Math.round(height * 0.52) };
+    }
+
+    /** The figure that stands in for the acting actor, its head at `top`. */
+    drawPreviewActor(top) {
+        const ctx = this.ctx;
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255,255,255,0.75)'; ctx.fillStyle = 'rgba(255,255,255,0.12)'; ctx.lineWidth = 2; ctx.setLineDash([6, 4]);
+        ctx.beginPath(); ctx.arc(top.x, top.y + 18, 16, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(top.x - 26, top.y + 120); ctx.lineTo(top.x - 20, top.y + 44); ctx.quadraticCurveTo(top.x, top.y + 30, top.x + 20, top.y + 44); ctx.lineTo(top.x + 26, top.y + 120); ctx.closePath(); ctx.fill(); ctx.stroke();
+        ctx.restore();
     }
 
     /** The first party-panel row on the canvas, where a following Battle Window is previewed. */
@@ -4872,7 +6187,17 @@ class DatabaseUserInterfaceEditor {
         ctx.restore();
     }
 
+    /** Draws the record, or its fitted layout while Preview at names another screen. */
     render() {
+        const fit = this.previewFit();
+        if (!fit) return this.renderLayout();
+        const nodes = this.current.nodes;
+        this._renderFit = fit;
+        this.current.nodes = fit.nodes;
+        try { this.renderLayout(); } finally { this.current.nodes = nodes; this._renderFit = undefined; }
+    }
+
+    renderLayout() {
         const ctx = this.ctx;
         const screen = this.screenSize();
         const rects = this.rects();
@@ -4921,9 +6246,13 @@ class DatabaseUserInterfaceEditor {
             opacities.set(node.id, factor);
             return factor;
         };
+        // A Victory record shows one page at a time: the page of the selected layer, else the one stepped to.
+        this._victoryPreview = null;
+        this.followVictorySelection();
         for (const node of DatabaseUserInterfaceEditor.orderNodes(this.current.nodes)) {
             const rect = rects.get(node.id);
             if (!rect || rect.width <= 0 || rect.height <= 0) continue;
+            if (!this.onVictoryPage(node)) continue;
             let drawn = node;
             let stateOpacity = 255;
             let drawnRect = rect;
@@ -4954,6 +6283,10 @@ class DatabaseUserInterfaceEditor {
                 }
                 case 'battleWindow': this.drawBattleWindowNode(drawn, drawnRect); break;
                 case 'battleCursor': this.drawBattleCursorNode(drawn, drawnRect); break;
+                case 'fightUnit': case 'fightTurnOrder': case 'fightInfo': case 'fightWindow': this.drawFightNode(drawn, drawnRect); break;
+                case 'victoryParty': case 'victoryLevels': case 'victoryRewards': case 'victoryText': this.drawVictoryNode(drawn, drawnRect); break;
+                case 'actionCrosshair': case 'actionVitals': case 'actionWeapon': case 'actionHotbar': case 'actionTarget': case 'actionBars': case 'actionDamage': case 'actionInfo':
+                    this.drawActionNode(drawn, drawnRect); break;
                 case 'list': this.drawListNode(drawn, drawnRect); break;
                 case 'gauge': this.drawGaugeNode(drawn, drawnRect); break;
                 default: break;
@@ -4962,7 +6295,7 @@ class DatabaseUserInterfaceEditor {
         }
         for (const selected of this.selectedNodes()) {
             const rect = rects.get(selected.id);
-            if (!rect) continue;
+            if (!rect || !this.onVictoryPage(selected)) continue;
             const accent = (typeof ThemeColors !== 'undefined' && ThemeColors.resolve) ? ThemeColors.resolve('--color-accent-bright') : '#4da3ff';
             ctx.save();
             ctx.strokeStyle = accent;

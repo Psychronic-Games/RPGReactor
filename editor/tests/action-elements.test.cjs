@@ -7,6 +7,7 @@
  * an element plugin's list reader is taught about the list at boot.
  */
 const assert = require('node:assert/strict');
+const { runtimeSource } = require('./helpers/runtime-source.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
@@ -14,7 +15,7 @@ const vm = require('node:vm');
 
 const repoRoot = path.resolve(__dirname, '..', '..');
 const read = relative => fs.readFileSync(path.join(repoRoot, relative), 'utf8');
-const objectsSource = read('runtime/reactor_objects.js');
+const objectsSource = runtimeSource('reactor_objects.js');
 
 /** The shipped ActionElements class, with I18n and RRIconCodes absent (English, plain names). */
 function loadActionElements() {

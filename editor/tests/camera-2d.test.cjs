@@ -1,4 +1,5 @@
 const test = require('node:test');
+const { runtimeSource } = require('./helpers/runtime-source.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -12,7 +13,7 @@ function method(source, name) {
     return match[0];
 }
 function world({tile=16,zoom=1,x=0,y=0,width=200,height=200,loop=false,three=false}={}) {
-    const objects=read('reactor_objects.js'), sprites=read('reactor_sprites.js');
+    const objects=runtimeSource('reactor_objects.js'), sprites=read('reactor_sprites.js');
     const context={Game_Map:function(){},Game_Player:function(){},Spriteset_Map:function(){},Graphics:{width:816,height:624},
         $dataSystem:{advanced:{camera2DZoom:zoom,camera2DOffsetX:x,camera2DOffsetY:y}},$dataMap:{width,height,three},
         Reactor3D:{isMap3D:data=>data.three},$gameScreen:{zoomScale:()=>1,zoomX:()=>0,zoomY:()=>0,shake:()=>0}};

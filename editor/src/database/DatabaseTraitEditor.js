@@ -190,7 +190,9 @@ class DatabaseTraitEditor {
         });
         footer.querySelector('.ok-btn').addEventListener('click', () => {
             if (!isCurrent() || modalGeneration !== this._modalGeneration || !overlay.isConnected) return;
-            const saved = this.saveTrait(trait);
+            // Opened to edit and left as it was: nothing is rewritten.
+            if (traitIndex >= 0 && !tabContent._rrTraitTouched) { closeModal(); return; }
+            const saved = this.saveTrait(this.selectedTrait(tabContent));
             if (saved) {
                 closeModal();
             }
@@ -249,6 +251,17 @@ class DatabaseTraitEditor {
         if (window.I18n) window.I18n.applyText(container);
     }
 
+    /**
+     * Options for one of System's type lists (elements, skill types, weapon,
+     * armor and equipment types). An option's value is the type's own number:
+     * a blank name is left out without renumbering the ones after it.
+     */
+    _typeOptions(types, code, trait) {
+        return (types || []).map((type, id) => ({ type, id })).filter(entry => entry.id > 0 && entry.type).map(entry =>
+            `<option value="${entry.id}" ${trait.code === code && trait.dataId === entry.id ? 'selected' : ''}>${rrEscapeHtml(entry.type)}</option>`
+        ).join('');
+    }
+
     _paramOptions(code, trait) {
         return globalThis.rrParamNames(param => this._t(param))
             .map((param, idx) => `<option value="${idx}" ${trait.code === code && trait.dataId === idx ? 'selected' : ''}>${param}</option>`)
@@ -271,9 +284,7 @@ class DatabaseTraitEditor {
 
     createRatesTab(container, trait) {
         const elements = this.databaseManager.getSystem()?.elements || [];
-        const elementOptions = code => (elements || []).filter((e, i) => i > 0 && e).map((elem, idx) =>
-            `<option value="${idx + 1}" ${trait.code === code && trait.dataId === idx + 1 ? 'selected' : ''}>${rrEscapeHtml(elem)}</option>`
-        ).join('');
+        const elementOptions = code => this._typeOptions(elements, code, trait);
 
         container.innerHTML = [
             this._rowHTML(trait, {
@@ -380,9 +391,7 @@ class DatabaseTraitEditor {
 
     createSkillTab(container, trait) {
         const skillTypes = this.databaseManager.getSystem()?.skillTypes || [];
-        const skillTypeOptions = code => (skillTypes || []).filter((st, i) => i > 0 && st).map((type, idx) =>
-            `<option value="${idx + 1}" ${trait.code === code && trait.dataId === idx + 1 ? 'selected' : ''}>${rrEscapeHtml(type)}</option>`
-        ).join('');
+        const skillTypeOptions = code => this._typeOptions(skillTypes, code, trait);
 
         container.innerHTML = [
             this._rowHTML(trait, {
@@ -408,9 +417,7 @@ class DatabaseTraitEditor {
 
     createEquipTab(container, trait) {
         const system = this.databaseManager.getSystem();
-        const typeOptions = (types, code) => types.map((type, id) => ({ type, id })).filter(entry => entry.id > 0 && entry.type).map(entry =>
-            `<option value="${entry.id}" ${trait.code === code && trait.dataId === entry.id ? 'selected' : ''}>${rrEscapeHtml(entry.type)}</option>`
-        ).join('');
+        const typeOptions = (types, code) => this._typeOptions(types, code, trait);
 
         container.innerHTML = [
             this._rowHTML(trait, {
@@ -458,7 +465,7 @@ class DatabaseTraitEditor {
             this._rowHTML(trait, {
                 code: 63, label: this._t('Collapse Effect'),
                 control: this._selectHTML('collapse-select', 63, this._hintedOptions(63, trait,
-                    ['Normal', 'Boss', 'Instant', 'No Disappear', 'Ash', 'Ember', 'Wisp', 'Shatter'].map(label => this._t(label)),
+                    ['Normal', 'Boss', 'Instant', 'No Disappear', 'Ash', 'Ember', 'Wisp', 'Shatter', 'Corpse'].map(label => this._t(label)),
                     help ? help.collapseEffects() : []))
             }) + this._collapseSoundHTML(),
             this._rowHTML(trait, {
@@ -592,104 +599,84 @@ class DatabaseTraitEditor {
         }
     }
 
-    setupRadioInputs(container, trait) {
-        const radios = container.querySelectorAll('input[type="radio"]');
-        let lastChecked = null;
+    /**
+     * The trait one row shows: its code, the number its dropdown holds and its
+     * value as a trait stores it (a percent as a fraction; Attack Speed and
+     * Attack Times+ as typed; 0 where the row has no number).
+     */
+    readRow(row) {
+        const radio = row.querySelector('input[type="radio"][name="trait-type"]');
+        const code = parseInt(radio.value, 10);
+        const select = row.querySelector('select[data-code]');
+        const number = row.querySelector('input[type="number"][data-code]');
+        const dataId = select ? (parseInt(select.value, 10) || 0) : 0;
+        let value = 0;
+        if (number) {
+            const typed = parseFloat(number.value);
+            value = Number.isFinite(typed) ? typed : 0;
+            if (code === 34) value = Math.max(0, Math.min(globalThis.RR_LIMITS?.ACTION_REPEATS || 100, value));
+            else if (code !== 33) value /= 100;
+        }
+        return { code, dataId, value };
+    }
 
-        // Find initially checked radio
-        radios.forEach(radio => {
-            if (radio.checked) {
-                lastChecked = radio;
+    /** The trait selected on the tab in view, or null when no row of it is selected. */
+    selectedTrait(container) {
+        const radio = container.querySelector('input[type="radio"][name="trait-type"]:checked');
+        const row = radio ? radio.closest('.trait-option') : null;
+        return row ? this.readRow(row) : null;
+    }
+
+    /**
+     * Draws which rows of a tab can be used: only the selected row's dropdown
+     * and number answer; every other row's are greyed and inert until its
+     * radio (or its name) is chosen. A line that belongs to a row (a subrow
+     * under it) follows that row. `name` is the radios' group.
+     */
+    static syncRows(container, name) {
+        let off = false;
+        for (const row of Array.from(container.children || [])) {
+            const radio = row.querySelector ? row.querySelector(`input[type="radio"][name="${name}"]`) : null;
+            const subrow = !radio && row.classList && row.classList.contains('rr-trait-subrow');
+            if (!radio && !subrow) continue;
+            if (radio) off = !radio.checked;
+            row.classList.toggle('is-off', off);
+            for (const part of row.children) {
+                if (part === radio || (radio && part.classList.contains('rr-trait-label'))) continue;
+                part.inert = off;
             }
+        }
+    }
+
+    /**
+     * A tab's rows. A row is selected by its radio or its name; only then do
+     * its dropdown and number answer (syncRows). `trait` follows the selected
+     * row, so another tab and the way back show the same choice; what OK
+     * stores is read from the selected row itself (selectedTrait).
+     */
+    setupRadioInputs(container, trait) {
+        const touch = () => { container._rrTraitTouched = true; };
+        const follow = row => { Object.assign(trait, this.readRow(row)); touch(); };
+        container.querySelectorAll('.trait-option').forEach(row => {
+            const radio = row.querySelector('input[type="radio"][name="trait-type"]');
+            if (!radio) return;
+            const select = () => { radio.checked = true; follow(row); DatabaseTraitEditor.syncRows(container, 'trait-type'); };
+            radio.addEventListener('change', select);
+            row.querySelector('.rr-trait-label')?.addEventListener('click', select);
+            // The selected row's own dropdown and number.
+            for (const type of ['change', 'input']) row.addEventListener(type, event => { if (event.target !== radio && radio.checked) follow(row); });
         });
-
-        // Allow deselecting radio buttons by clicking them again
-        radios.forEach(radio => {
-            radio.addEventListener('click', (e) => {
-                // If this radio was already checked before the click
-                if (radio === lastChecked) {
-                    // Uncheck it
-                    radio.checked = false;
-                    lastChecked = null;
-                    // Clear the trait code to indicate no selection
-                    trait.code = null;
-                    trait.dataId = 0;
-                    trait.value = 0;
-                } else {
-                    // New selection - update lastChecked
-                    lastChecked = radio;
-
-                    // Update trait based on selection
-                    const code = parseInt(radio.value);
-                    trait.code = code;
-
-                    // Find the associated inputs for this trait code
-                    const selectWithCode = container.querySelector(`select[data-code="${code}"]`);
-                    const inputWithCode = container.querySelector(`input[type="number"][data-code="${code}"]`);
-
-                    // Set dataId from the select if it exists
-                    if (selectWithCode) {
-                        trait.dataId = parseInt(selectWithCode.value);
-                    }
-
-                    // Set default value based on trait type
-                    if (code === 14 || code === 31 || code === 35 || code === 41 || code === 42 || code === 43 || code === 44 ||
-                        code === 51 || code === 52 || code === 53 || code === 54 || code === 55 ||
-                        code === 62 || code === 63 || code === 64) {
-                        // These traits don't use value or use it as 0
-                        trait.value = 0;
-                    } else if (code === 33 || code === 34) {
-                        // Attack Speed and Attack Times+ use direct value (not percentage)
-                        trait.value = inputWithCode ? parseFloat(inputWithCode.value) : 0;
-                    } else if (code === 22) {
-                        // Ex-Parameter uses decimal
-                        trait.value = inputWithCode ? parseFloat(inputWithCode.value) / 100 : 0;
-                    } else {
-                        // Most traits use percentage as decimal
-                        trait.value = inputWithCode ? parseFloat(inputWithCode.value) / 100 : 1.0;
-                    }
-                }
-            });
+        // The number shows what is kept.
+        container.querySelectorAll('input[type="number"][data-code="34"]').forEach(input => {
+            input.addEventListener('change', () => { input.value = String(this.readRow(input.closest('.trait-option')).value); });
         });
-
-        // Setup change listeners for selects
-        container.querySelectorAll('select').forEach(select => {
-            select.addEventListener('change', (e) => {
-                // Only update if this select's radio is checked
-                const radio = e.target.closest('.trait-option').querySelector('input[type="radio"]');
-                if (radio && radio.checked) {
-                    trait.dataId = parseInt(e.target.value);
-                }
-            });
-        });
-
-        // Setup change listeners for number inputs
-        container.querySelectorAll('input[type="number"]').forEach(input => {
-            input.addEventListener('input', (e) => {
-                const radio = e.target.closest('.trait-option').querySelector('input[type="radio"]');
-                // Only update if this input's radio is checked
-                if (radio && radio.checked) {
-                    const code = parseInt(radio.value);
-                    if (code === 33 || code === 34) {
-                        // Attack Speed and Attack Times+ use direct value.
-                        trait.value = parseFloat(e.target.value) || 0;
-                        if (code === 34) {
-                            trait.value = Math.max(0, Math.min(globalThis.RR_LIMITS?.ACTION_REPEATS || 100, trait.value));
-                            e.target.value = String(trait.value);
-                        }
-                    } else {
-                        // Convert percentage to decimal
-                        trait.value = (parseFloat(e.target.value) || 0) / 100;
-                    }
-                }
-            });
-        });
+        DatabaseTraitEditor.syncRows(container, 'trait-type');
     }
 
     saveTrait(trait) {
         // Validate that a trait type is selected
-        if (!trait.code) {
-            alert(this._t('Please select a trait type before saving.'));
+        if (!trait || !trait.code) {
+            RRDialog.alert(this._t('Please select a trait type before saving.'), { title: this._t('Traits'), kind: 'warning' });
             return false;
         }
 

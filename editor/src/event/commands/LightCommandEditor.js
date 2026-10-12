@@ -231,7 +231,7 @@ class LightCommandEditor {
         }
 
         const modal = document.createElement('div');
-        modal.className = 'rr-modal-overlay';
+        modal.className = 'rr-modal-overlay rr-command-editor-modal';
         modal.style.zIndex = '21000';
         modal.innerHTML = `
             <div class="rr-modal" style="width:min(560px,92vw);display:flex;flex-direction:column;">

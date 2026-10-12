@@ -139,7 +139,7 @@ class DatabaseTroopEditor {
         noteSection.className = 'database-section';
         noteSection.style.cssText = 'width:100%;min-width:0;';
         noteSection.innerHTML = `
-            <div class="database-section-header">${tt('Note')}</div>
+            <div class="database-section-header" data-section-key="note">${tt('Note')}</div>
             <div class="database-section-content">
                 <textarea class="database-field-value" id="troop-note-input" rows="2"
                           style="width: 100%; box-sizing: border-box; resize: vertical;">${this.escapeHTML(this.currentTroop.note || '')}</textarea>
@@ -157,7 +157,7 @@ class DatabaseTroopEditor {
         section.className = 'database-section';
         section.style.cssText = 'width:100%;min-width:0;';
         section.innerHTML = `
-            <div class="database-section-header">${this.escapeHTML(tt('Battle Music'))}</div>
+            <div class="database-section-header" data-section-key="battle-music">${this.escapeHTML(tt('Battle Music'))}</div>
             <div class="database-section-content">
                 <!-- The sidebar is narrow: the choice gets a line of its own, so a
                      sequence or track name is not cut down to its first word. -->
@@ -196,7 +196,7 @@ class DatabaseTroopEditor {
         section.className = 'database-section';
         section.style.cssText = 'width:100%;min-width:0;max-width:none;flex-shrink:0;';
 
-        section.innerHTML = `<div class="database-section-header">${tt('Members')}</div>`;
+        section.innerHTML = `<div class="database-section-header" data-section-key="members">${tt('Members')}</div>`;
 
         const content = document.createElement('div');
         content.className = 'database-section-content';
@@ -728,7 +728,7 @@ class DatabaseTroopEditor {
         section.className = 'database-section rr-troop-battleback';
         section.style.cssText = 'width:100%;min-width:0;max-width:none;flex-shrink:0;';
 
-        section.innerHTML = `<div class="database-section-header">${tt('Battleback')}</div>`;
+        section.innerHTML = `<div class="database-section-header" data-section-key="battleback">${tt('Battleback')}</div>`;
 
         const content = document.createElement('div');
         content.className = 'database-section-content';
@@ -883,6 +883,7 @@ class DatabaseTroopEditor {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const section = document.createElement('div');
         section.className = 'database-section rr-troop-preview-section';
+        section.dataset.sectionKey = 'battle-preview';
         section.style.cssText = 'display:flex;flex-direction:column;min-width:0;';
 
         const header = document.createElement('div');
@@ -942,6 +943,13 @@ class DatabaseTroopEditor {
         this.canvas.addEventListener('mouseup', (e) => this.onCanvasMouseUp(e));
         this.canvas.addEventListener('mouseleave', (e) => this.onCanvasMouseUp(e));
         this.canvas.addEventListener('keydown', (e) => this.onCanvasKeyDown(e));
+
+        // A folded preview draws nothing: its room view is let go, and built again when the card opens.
+        section.addEventListener('rr-section-fold', event => {
+            if (event.target !== section) return;
+            if (event.detail.collapsed) this._roomPreviewCleanup?.();
+            else this.loadAndRenderCanvas();
+        });
 
         return section;
     }
@@ -1016,6 +1024,8 @@ class DatabaseTroopEditor {
         this._roomPreviewCleanup?.();
         const roomMode=this.databaseManager?.data?.battlePresentation?.troops?.[this.currentTroopId]?.type==='room';
         const wrapper=this.canvas?.closest('.rr-troop-editor');if(wrapper)wrapper.dataset.battleScene=roomMode?'room':'battleback';
+        // The room view runs every frame: none is started while the preview's card is folded.
+        if(roomMode && this.canvas?.closest('.database-section.is-collapsed'))return;
         if(roomMode && this.parentEditor.battlePresentationEditor){
             this._canvasLoadGeneration=(this._canvasLoadGeneration||0)+1;
             return this.parentEditor.battlePresentationEditor.previewTroop(this);
@@ -1256,7 +1266,7 @@ class DatabaseTroopEditor {
         section.className = 'database-section rr-troop-events-section';
         section.style.cssText = 'flex:1;display:flex;flex-direction:column;min-height:clamp(180px,24vh,240px);';
 
-        section.innerHTML = `<div class="database-section-header">${tt('Battle Events')}</div>`;
+        section.innerHTML = `<div class="database-section-header" data-section-key="battle-events">${tt('Battle Events')}</div>`;
 
         const content = document.createElement('div');
         content.className = 'database-section-content';
@@ -1395,11 +1405,36 @@ class DatabaseTroopEditor {
         const previousScrollTop = container.scrollTop;
         container.innerHTML = '';
 
-        if (!page.list || page.list.length === 0) {
-            page.list = [{ code: 0, indent: 0, parameters: [] }];
-        }
-
         const ECL = this._eventCommandListClass();
+        // A list that arrives without its End gets one.
+        if (!Array.isArray(page.list)) page.list = [];
+        ECL.ensureTerminator(page.list);
+        ECL.trackHistory(page.list);
+        ECL.enableDragReorder(container, {
+            rowSelector: '[data-cmd-index]',
+            indexKey: 'cmdIndex',
+            indentBase: 11,
+            indentStep: 20,
+            list: () => page.list,
+            dragIndices: pressed => {
+                // A drag from an unselected row moves that row; from a
+                // selected one, the whole selection.
+                if (!this.expandCommandSelection(page).includes(pressed)) {
+                    this.selectedCommandIndices = [pressed];
+                    this.commandSelectionAnchor = pressed;
+                    this.renderCommandList(container, page);
+                }
+                return this.expandCommandSelection(page);
+            },
+            commit: moved => {
+                this.selectedCommandIndices = Array.from({ length: moved.count }, (_value, i) => moved.start + i);
+                this.commandSelectionAnchor = moved.start;
+                this.persistTroop();
+                this.renderCommandList(container, page);
+                container.focus();
+            }
+        });
+
         // Expansion is recorded by position, so it only means anything for the
         // list it was recorded against; drop it when the page changes.
         if (this._expandedPluginList !== page.list) {
@@ -1506,6 +1541,18 @@ class DatabaseTroopEditor {
     handleCommandListKeyDown(event, page, container) {
         const modified = event.ctrlKey || event.metaKey;
         const key = event.key.toLowerCase();
+        const stepped = this._eventCommandListClass().historyKey(event, page.list);
+        if (stepped !== null) {
+            event.preventDefault();
+            event.stopPropagation();
+            if (stepped) {
+                this.selectedCommandIndices = [];
+                this.commandSelectionAnchor = null;
+                this.persistTroop();
+                this.renderCommandList(container, page);
+            }
+            return;
+        }
         if (event.key === 'Delete' && this.selectedCommandIndices.length > 0) {
             event.preventDefault();
             event.stopPropagation();
@@ -1830,9 +1877,14 @@ class DatabaseTroopEditor {
     }
 
     warnVideoSurfaceMapOnly() {
-        const message = 'Show and Transform Media Surface are map-only commands and cannot run in troop events.';
-        if (typeof window !== 'undefined' && typeof window.alert === 'function') window.alert(message);
-        else if (typeof alert === 'function') alert(message);
+        const source = 'Show and Transform Media Surface are map-only commands and cannot run in troop events.';
+        const message = typeof window !== 'undefined' && window.I18n ? window.I18n.tText(source) : source;
+        RRDialog.alert(message, { title: this._dialogTitle(), kind: 'warning' });
+    }
+
+    /** The title the Troops page's dialogs carry. */
+    _dialogTitle() {
+        return typeof window !== 'undefined' && window.I18n ? window.I18n.t('menu.troops') : 'Troops';
     }
 
     buildCommandStructure(code) {
@@ -2118,7 +2170,7 @@ class DatabaseTroopEditor {
                 if (container) this.renderCommandList(container, page);
                 document.body.removeChild(modal);
             } catch (e) {
-                alert(`${tt('Invalid JSON:')} ` + e.message);
+                RRDialog.alert(`${tt('Invalid JSON:')} ` + e.message, { title: this._dialogTitle(), kind: 'error' });
             }
         });
 
@@ -2146,7 +2198,8 @@ class DatabaseTroopEditor {
 
     copyCommands(page) {
         const indices = this.expandCommandSelection(page);
-        if (indices.length === 0) return;
+        // Nothing but the End selected: leave the clipboard as it is.
+        if (indices.length === 0) return Promise.resolve(true);
         this.commandClipboard = indices.map(i => JSON.parse(JSON.stringify(page.list[i])));
         if (typeof ReactorClipboard !== 'undefined') {
             return ReactorClipboard.write('eventCommands', { commands: this.commandClipboard });
@@ -2163,7 +2216,7 @@ class DatabaseTroopEditor {
         const wrote = await this.copyCommands(page);
         if (!isCurrent()) return;
         if (!wrote) {
-            alert(window.I18n?.t('db.clipboardWriteFailed') || 'Could not write data to the clipboard.');
+            RRDialog.alert(window.I18n?.t('db.clipboardWriteFailed') || 'Could not write data to the clipboard.', { title: this._dialogTitle(), kind: 'error' });
             return;
         }
         if (this.currentTroop !== targetTroop || this.currentBattlePageIndex !== targetPageIndex
@@ -2175,8 +2228,8 @@ class DatabaseTroopEditor {
     }
 
     deleteCommands(page, container) {
-        const indices = this.expandCommandSelection(page).sort((a, b) => b - a);
-        indices.forEach(i => page.list.splice(i, 1));
+        // The list keeps its End.
+        this._eventCommandListClass().removeCommands(page.list, this.expandCommandSelection(page));
         this.selectedCommandIndices = [];
         this.commandSelectionAnchor = null;
         this.persistTroop();
@@ -2202,15 +2255,16 @@ class DatabaseTroopEditor {
             || JSON.stringify(page.list) !== listSnapshot
             || selected.length !== this.selectedCommandIndices.length
             || selected.some((index, i) => index !== this.selectedCommandIndices[i])) return;
-        if (!commands?.length) {
-            alert(window.I18n ? window.I18n.tText('No event commands in clipboard to paste.') : 'No event commands in clipboard to paste.');
+        const ECL = this._eventCommandListClass();
+        const pasted = ECL.pasteableCommands(commands);
+        if (!pasted.length) {
+            RRDialog.alert(window.I18n ? window.I18n.tText('No event commands in clipboard to paste.') : 'No event commands in clipboard to paste.', { title: this._dialogTitle() });
             return;
         }
+        ECL.ensureTerminator(page.list);
         const selectedIndex = selected.length > 0 ? Math.max(...selected) : -1;
         let insertAt = selectedIndex >= 0 ? selectedIndex + 1 : page.list.length - 1;
-        const ECL = this._eventCommandListClass();
         insertAt = ECL.safeInsertionIndex(page.list, insertAt);
-        const pasted = commands.map(command => JSON.parse(JSON.stringify(command)));
         const baseIndent = ECL.insertionIndent(page.list, insertAt);
         ECL.rebaseInsertIndent(pasted, baseIndent);
         pasted.forEach((cmd, i) => {
@@ -2540,11 +2594,11 @@ class DatabaseTroopEditor {
 
     openBattleTestConfig() {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
-        if (typeof BattleTestConfigModal === 'undefined') { alert(tt('Battle test module not loaded')); return; }
+        if (typeof BattleTestConfigModal === 'undefined') { RRDialog.alert(tt('Battle test module not loaded'), { title: this._dialogTitle(), kind: 'error' }); return; }
         const project = this.projectManager.getCurrentProject();
-        if (!project) { alert(tt('No project loaded')); return; }
+        if (!project) { RRDialog.alert(tt('No project loaded'), { title: this._dialogTitle(), kind: 'warning' }); return; }
         const playtestManager = this.parentEditor.playtestManager;
-        if (!playtestManager) { alert(tt('Playtest manager not available')); return; }
+        if (!playtestManager) { RRDialog.alert(tt('Playtest manager not available'), { title: this._dialogTitle(), kind: 'error' }); return; }
 
         // Test_Troops.json is written from the database manager's copy, so the
         // placement on screen must be in it before the dialog reads it.
@@ -2887,7 +2941,7 @@ class DatabaseTroopEditor {
     }
 
     /**
-     * The project's Battle HUD (System 2 › Battle), normalized, or null. When
+     * The project's Battle HUD (the interface used as Battle), normalized, or null. When
      * one is bound the battle draws it instead of the stock status and
      * windows, so the preview does too.
      */
@@ -2977,7 +3031,10 @@ class DatabaseTroopEditor {
                 - Math.floor((setup.screenHeight - setup.boxHeight) / 2) + index * 48;
             return { x, y };
         }
-        return { x: 600 + index * 32, y: 280 + index * 48 };
+        // The line is written for the default 808 x 616 field and stands at the same place on any other.
+        const fx = setup.boxWidth > 0 ? setup.boxWidth / 808 : 1;
+        const fy = setup.boxHeight > 0 ? setup.boxHeight / 616 : 1;
+        return { x: Math.round((600 + index * 32) * fx), y: Math.round((280 + index * 48) * fy) };
     }
 
     drawSideviewParty(ctx, setup) {

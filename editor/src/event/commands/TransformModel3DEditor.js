@@ -76,7 +76,7 @@ class TransformModel3DEditor {
         const props = this.mapProps();
 
         const modal = document.createElement('div');
-        modal.className = 'rr-modal-overlay';
+        modal.className = 'rr-modal-overlay rr-command-editor-modal';
         modal.style.zIndex = '21000';
         const row = (key, label, min, max, step, current, unit) => `
             <div style="display:grid;grid-template-columns:70px 1fr 74px;gap:8px;align-items:center;font-size:12px;color:var(--color-text);">

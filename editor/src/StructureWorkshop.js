@@ -92,11 +92,14 @@ class StructureWorkshop {
         // The page's changes go in first (the name, the plot size), the way "Use on the map" does.
         document.getElementById('database-ok-btn')?.click();
         const started = Date.now();
+        let closed = false;
         while (Date.now() - started < 5000) {
             const viewer = document.getElementById('database-viewer');
-            if (!viewer || viewer.style.display === 'none' || viewer.offsetParent === null) break;
+            if (!viewer || viewer.style.display === 'none' || viewer.offsetParent === null) { closed = true; break; }
             await new Promise(resolve => setTimeout(resolve, 80));
         }
+        // A Database that stays open did not save (it says why): the plot waits for a save that worked.
+        if (!closed) return false;
         return this.enter(structureId);
     }
 
@@ -135,7 +138,7 @@ class StructureWorkshop {
         const plan = entry.plan;
         plan.pieces = E.pieces(map).map(piece => { const out = Object.assign({}, piece); delete out.id; delete out.group; return out; });
         const sidecar = map.reactor3d || {};
-        plan.lights = (sidecar.lights || []).filter(Boolean).map(row => { const out = Object.assign({}, row); delete out.tag; return out; });
+        plan.lights = (sidecar.lights || []).filter(Boolean).map(row => { const out = Object.assign({}, row); if (!out.tag || /^structure:\d+$/.test(String(out.tag))) delete out.tag; delete out.structure; return out; });
         plan.surfaces = (sidecar.mediaSurfaces || []).filter(Boolean).map(row => { const out = Object.assign({}, row); delete out.structure; return out; });
         // What the pieces replace: a built structure is its pieces, not rooms described in words.
         plan.floors = []; plan.stairs = []; plan.shapes = []; plan.parts = []; plan.paths = []; plan.effects = [];
@@ -153,17 +156,40 @@ class StructureWorkshop {
             const fs = require('fs'), path = require('path');
             const directory = db.structuresPath ? db.structuresPath(project.path) : path.join(project.path, '3d', 'Structures');
             fs.mkdirSync(directory, { recursive: true });
+            // A record the Database has not saved yet has no file: it gets one, as a Database save would name it.
+            if (!entry.file) {
+                const taken = new Set((db.data?.structures || []).filter(Boolean).map(other => other.file).filter(Boolean).concat([...(db._structureFiles || [])]));
+                entry.file = typeof DatabaseManager !== 'undefined' && DatabaseManager.structureFileName
+                    ? DatabaseManager.structureFileName(entry.name, taken)
+                    : (String(entry.name || 'Plan').replace(/[\\/:*?"<>|]+/g, '').trim().replace(/\s+/g, '-') || 'Plan') + '.json';
+            }
             const trimmed = typeof DatabaseStructureEditor !== 'undefined' ? DatabaseStructureEditor.trimPlan(entry.plan) : entry.plan;
             const target = path.join(directory, entry.file), temp = target + '.tmp';
             fs.writeFileSync(temp, (typeof RRMapElevation !== 'undefined' && RRMapElevation.stringifySidecar ? RRMapElevation.stringifySidecar(trimmed) : JSON.stringify(trimmed, null, 2)) + '\n', 'utf8');
             fs.renameSync(temp, target);
-            db.captureSavedState?.('structures');
+            db._structureFiles?.add?.(entry.file);
+            this.markSaved(db, entry);
             return true;
         } catch (error) {
             console.error('Could not save the structure:', error);
-            alert(this._t('The structure could not be saved.'));
+            RRDialog.alert(this._t('The structure could not be saved.'), { title: this._t('Structures'), kind: 'error' });
             return false;
         }
+    }
+
+    /**
+     * This record now matches its file: only it counts as saved. Other structures changed in the
+     * Database and not saved yet stay unsaved, so the next Database save still writes them.
+     */
+    markSaved(db, entry) {
+        const saved = db.savedState?.structures;
+        let list = null;
+        try { list = saved === undefined ? null : JSON.parse(saved); } catch (_) { list = null; }
+        if (!Array.isArray(list)) return;
+        const copy = JSON.parse(JSON.stringify(entry));
+        const at = list.findIndex(record => record && record.id === entry.id);
+        if (at >= 0) list[at] = copy; else list[entry.id] = copy;
+        db.savedState.structures = typeof db.serialize === 'function' ? db.serialize(list) : JSON.stringify(list);
     }
 
     /** Leave the plot: ask about unsaved work, bring the previous map back, and the Database if asked. */
@@ -171,12 +197,22 @@ class StructureWorkshop {
         if (!this.session) return;
         const tilemap = this.tilemap(), reactor = this.reactor();
         if (save && !this.save()) return;
-        if (!save && tilemap?.isMapDirty?.() && !window.confirm(this._t('Leave the workshop without saving?'))) return;
+        if (!save && tilemap?.isMapDirty?.()) {
+            const leave = await RRDialog.confirm(this._t('Leave the workshop without saving?'), {
+                title: this._t('Unsaved Changes'), ok: this._t('Discard Changes'), danger: true
+            });
+            // The workshop may have been left another way while the question was up.
+            if (!leave || !this.session) return;
+        }
         const session = this.session;
         if (tilemap?.currentMap?.rrWorkshop) tilemap.captureSavedMapState();
         if (!session.barWasUp) reactor?.buildHotbar?.hide();
         this.end();
-        if (session.returnTo != null) await this.projectController.loadMap(session.returnTo, { skipDirtyCheck: true, forceReload: true });
+        // With no map to come back to, the project's first map takes the plot's place: a plot left in the
+        // view with no session would hand Ctrl+S to nothing.
+        const returnTo = session.returnTo ?? (this.projectController.getCurrentProject?.()?.maps || []).find(info => info && info.id)?.id ?? null;
+        const back = returnTo != null && await this.projectController.loadMap(returnTo, { skipDirtyCheck: true, forceReload: true });
+        if (!back && tilemap?.currentMap?.rrWorkshop) tilemap.clearMap?.();
         if (!session.was3D && reactor?.mapEditor3D?.enabled) await reactor.applyMap3DViewPreference?.(false);
         if (toDatabase) {
             reactor?.openDatabase?.('structures');

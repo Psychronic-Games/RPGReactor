@@ -1,4 +1,5 @@
 const assert = require('node:assert/strict');
+const { runtimeSource } = require('./helpers/runtime-source.cjs');
 const path = require('node:path');
 const test = require('node:test');
 
@@ -238,7 +239,7 @@ test('a full-size map stays within a handful of draw calls', () => {
 // compared. If the corescript's autotile handling ever changes, this fails.
 
 const fs = require('node:fs');
-const coreSource = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_core.js'), 'utf8');
+const coreSource = runtimeSource('reactor_core.js');
 
 function literal(name) {
     const match = coreSource.match(new RegExp(`Tilemap\\.${name} = (\\[[\\s\\S]*?\\n\\];)`));
@@ -476,7 +477,7 @@ test('the built-in autotile tables match the corescript exactly', () => {
     // bordered squares. The copy is pinned here so it cannot drift from the
     // corescript it was taken from.
     const fs = require('node:fs');
-    const source = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_core.js'), 'utf8');
+    const source = runtimeSource('reactor_core.js');
 
     const tableFrom = name => {
         const start = source.indexOf(`Tilemap.${name} = [`);

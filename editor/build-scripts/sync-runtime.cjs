@@ -87,11 +87,24 @@ if (!fs.existsSync(templateRoot)) {
     process.exit(0);
 }
 
+/**
+ * A project boots the Reactor runtime when its index.html loads js/reactor_main.js, as the
+ * editor's own refresh decides. An imported RPG Maker project that still runs its own
+ * corescript is left alone: the runtime's js/libs/pixi.js would replace the one it needs.
+ */
+function bootsReactor(projectDir) {
+    try {
+        return /js\/reactor_main\.js/.test(fs.readFileSync(path.join(projectDir, 'index.html'), 'utf8'));
+    } catch (error) {
+        return fs.existsSync(path.join(projectDir, 'js', 'reactor_main.js'));
+    }
+}
+
 const runtimeFiles = filesUnder(runtimeRoot);
 const projects = fs.readdirSync(templateRoot, { withFileTypes: true })
     .filter(entry => entry.isDirectory())
     .map(entry => entry.name)
-    .filter(name => fs.existsSync(path.join(templateRoot, name, 'js')));
+    .filter(name => fs.existsSync(path.join(templateRoot, name, 'js')) && bootsReactor(path.join(templateRoot, name)));
 
 let drifted = 0;
 let copied = 0;

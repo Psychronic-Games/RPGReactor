@@ -79,7 +79,8 @@ test('the box stands on the ground whatever the sprite height', () => {
 });
 
 test('selecting an event carries the box with it', () => {
-    const body = methodBody('highlight');
+    assert.match(methodBody('highlight'), /this\.highlightEventBox\(mesh, on\)/);
+    const body = methodBody('highlightEventBox');
     assert.match(body, /userData\.box/);
     assert.match(body, /box\.material\.color\.setHex/, 'it brightens');
     // But it does not grow: the box says which cell the event is on, and a
@@ -169,7 +170,8 @@ test('dragging an event needs the event tool and an empty hand', () => {
 
 test('a drag only starts on an event', () => {
     // Starting anywhere else has to keep orbiting, or the camera is lost.
-    assert.match(source, /const mesh = this\.eventAt\(event\.clientX, event\.clientY\);\n\s*if \(mesh\) \{\n\s*this\.pointer\.drag = mesh;/);
+    // A vehicle's starting position is a Database record, not an event to move.
+    assert.match(source, /const mesh = this\.eventAt\(event\.clientX, event\.clientY\);\n\s*if \(mesh && !mesh\.userData\.event\?\._rrDatabaseVehicle\) \{\n\s*this\.pointer\.drag = mesh;/);
     assert.match(source, /!this\.pointer\.paint && !this\.pointer\.propHold && this\.canDragEvents\(\)/,
         'and never while a stroke is being painted or a prop is being held');
 });
@@ -186,7 +188,7 @@ test('undo is captured on the first cell crossed, not on the press', () => {
 test('an event cannot be dragged off the map or onto another', () => {
     const body = methodBody('dragEventTo');
     assert.match(body, /tile\.x >= mapData\.width \|\| tile\.y >= mapData\.height/);
-    assert.match(body, /occupant && occupant\.id !== event\.id/);
+    assert.match(body, /manager\?\.canPlaceEvent && !manager\.canPlaceEvent\(event, tile\.x, tile\.y\)/, 'no other event under its footprint');
     assert.match(body, /tile\.x === event\.x && tile\.y === event\.y/,
         'and moving onto its own cell is not a move');
 });
@@ -278,7 +280,7 @@ test('events can only be picked with the event tool up', () => {
     assert.match(methodBody('canSelectEvents'), /eventMode/);
     assert.match(methodBody('handleClick'), /if \(!this\.canSelectEvents\(\)\) return/);
     assert.match(methodBody('updateHover'),
-        /this\.canSelectEvents\(\) && this\.eventAt\(clientX, clientY\)/,
+        /this\.canSelectEvents\(\) && this\.eventAt\(clientX, clientY, tile\)/,
         'and the cursor does not offer what a click will not do');
     // The right-click menu and double-click-to-open go the same way. Stated as
     // the rule rather than as one spelling of it: the context menu asks the

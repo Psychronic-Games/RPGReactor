@@ -7,6 +7,7 @@
  * world matrix once per render pass. After: 2.1 ms.
  */
 const { source3D } = require('./helpers/runtime-3d-source.cjs');
+const { runtimeSource } = require('./helpers/runtime-source.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -17,7 +18,7 @@ const repoRoot = path.resolve(__dirname, '..', '..');
 const read = relativePath => fs.readFileSync(path.join(repoRoot, relativePath), 'utf8');
 
 function eventsFunction() {
-    const source = read('runtime/reactor_objects.js');
+    const source = runtimeSource('reactor_objects.js');
     const start = source.indexOf('const reactorEventLists = new WeakMap();');
     const end = source.indexOf('\n};', start) + 3;
     assert.ok(start > 0 && end > start, 'the memoised events() is in reactor_objects.js');
@@ -66,7 +67,7 @@ test('the live event list is rebuilt once a frame, not on every call', () => {
 });
 
 test('the memo is keyed off the map object, so saves never carry it', () => {
-    const source = read('runtime/reactor_objects.js');
+    const source = runtimeSource('reactor_objects.js');
     assert.match(source, /const reactorEventLists = new WeakMap\(\);\nGame_Map\.prototype\.events = function\(\) \{/);
     assert.doesNotMatch(source, /this\._eventsCache/);
     assert.doesNotMatch(source, /return this\._events\.filter\(event => !!event\);/, 'the per-call filter is gone');
@@ -88,7 +89,7 @@ test('a sparse event array is walked by its keys, not its holes', () => {
     map._events[2] = { id: 2 };
     map._events[100000] = { id: 100000 };
     assert.deepEqual(Array.from(map.events()).map(e => e.id), [2, 100000]);
-    const source = read('runtime/reactor_objects.js');
+    const source = runtimeSource('reactor_objects.js');
     assert.match(source, /if \(events\.length > 512\) \{\n\s*\/\/ Sparse[^\n]*\n\s*const keys = Object\.keys\(events\);/);
 });
 
@@ -111,7 +112,7 @@ test('the map mode is remembered per map against the inputs that decide it', () 
 });
 
 test('the tilemap sorts its children only when they are out of order, without copying the list', () => {
-    const core = read('runtime/reactor_core.js');
+    const core = runtimeSource('reactor_core.js');
     const at = core.indexOf('Tilemap.prototype._sortChildren = function');
     const body = core.slice(at, core.indexOf('\n};', at));
     assert.doesNotMatch(body, /children\.slice\(\)/);

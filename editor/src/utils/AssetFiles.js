@@ -265,6 +265,14 @@
         listImageReferences(rootDir, options) {
             return listImages(rootDir, options).map(record => record.imageReference);
         },
+        /** Whether an image under img/materials is another material's normal or roughness map (`<Name>_normal`, `<Name>_rough`). */
+        isMaterialCompanion(reference) {
+            return /_(normal|rough)$/i.test(String(reference || '').replace(/\.[a-z0-9]+$/i, ''));
+        },
+        /** The materials in img/materials: its images, less the normal and roughness maps that go with them. */
+        listMaterials(rootDir, options) {
+            return listImages(rootDir, options).filter(record => !this.isMaterialCompanion(record.imageReference || record.name));
+        },
         listNames(rootDir, extensions, options) {
             return unique(list(rootDir, extensions, options)).map(record => record.name);
         },

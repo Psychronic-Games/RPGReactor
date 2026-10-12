@@ -18,7 +18,7 @@ class SpeakModel3DEditor extends (typeof PlayModelEffectEditor !== 'undefined'
         const args = SpeakModel3DEditor.build(command?.parameters?.[3] || {}).parameters[3];
         const escape = value => String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
         const modal = document.createElement('div');
-        modal.className = 'rr-modal-overlay rr-speech-overlay'; modal.style.zIndex = '21000';
+        modal.className = 'rr-modal-overlay rr-speech-overlay rr-command-editor-modal'; modal.style.zIndex = '21000';
         const targets = [['0', 'This Event'], ['-1', 'Player']];
         const count = Math.max(3, (window.reactor?.databaseManager?.data?.system?.partyMembers?.length || 1) - 1);
         for (let i = 0; i < count; i++) targets.push([String(-2 - i), this._t('Follower') + ' ' + (i + 1)]);

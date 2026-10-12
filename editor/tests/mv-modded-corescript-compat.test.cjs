@@ -2,6 +2,7 @@
 // lives in the compatibility layer as additive shims: a stock game must
 // see stock behaviour, and the game that needs them must get each one.
 const assert = require('node:assert/strict');
+const { runtimeSource } = require('./helpers/runtime-source.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
@@ -9,7 +10,7 @@ const vm = require('node:vm');
 
 const repoRoot = path.resolve(__dirname, '..', '..');
 const compat = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_mv_compat.js'), 'utf8');
-const objects = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_objects.js'), 'utf8');
+const objects = runtimeSource('reactor_objects.js');
 // Values built inside the sandbox carry another realm's prototypes; compare their shape.
 const plain = value => JSON.parse(JSON.stringify(value));
 
@@ -125,7 +126,12 @@ test("the modded corescript's contracts are supplied to the game that ships them
     assert.equal(party.isAllDead(), true, 'the party is judged by the stock rule');
     // Null-safe pages.
     const event = new Game_Event(); event._pageIndex = -1; event.event = () => ({ pages: [] });
-    assert.deepEqual(plain(event.page()), {});
+    const empty = event.page();
+    assert.deepEqual(plain(empty.list), [], 'a whole empty page: plugins guard with if (page) and walk its list');
+    assert.equal(empty.image.characterName, '');
+    assert.deepEqual(plain(empty.moveRoute.list), [{ code: 0, parameters: [] }]);
+    empty.list.push({ code: 108, parameters: ['<step_se>'] });
+    assert.deepEqual(plain(event.page().list), [], 'what a plugin wrote into it does not stay');
     assert.deepEqual(plain(event.list()), []);
     event.event = () => null;
     assert.equal(event.findProperPageIndex(), -1);

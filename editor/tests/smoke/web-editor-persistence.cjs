@@ -8,7 +8,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 const { Worker } = require('node:worker_threads');
-const { WebDriverClient, getFreePort } = require('./webdriver-client.cjs');
+const { WebDriverClient, getFreePort, reportSmokeFailure } = require('./webdriver-client.cjs');
 
 const editorRoot = path.resolve(__dirname, '..', '..');
 const appVersion = JSON.parse(fs.readFileSync(path.join(editorRoot, 'package.json'), 'utf8')).version;
@@ -121,6 +121,7 @@ async function main() {
         await driver.start();
         await driver.createSession({
             browserName: 'chrome',
+            'goog:loggingPrefs': { browser: 'ALL' },
             'goog:chromeOptions': {
                 binary: chrome,
                 args: [
@@ -241,6 +242,18 @@ async function main() {
         }
 
         process.stdout.write(`Web editor persistence smoke passed: ${token}\n`);
+    } catch (error) {
+        await reportSmokeFailure('Web editor persistence smoke', error, driver, `
+            const controller = window.reactor?.projectController;
+            return {
+                href: location.href, readyState: document.readyState,
+                reactor: Boolean(window.reactor), host: Boolean(window.RPGReactorHost),
+                db: Boolean(window.RPGReactorHost?.db), projectLoaded: Boolean(controller?.projectLoaded),
+                project: controller?.currentProject ? Object.keys(controller.currentProject) : null,
+                smoke: window.__rrWebSmoke ? { ...window.__rrWebSmoke, release: undefined } : null,
+            };`);
+        error.reported = true;
+        throw error;
     } finally {
         if (driver) await driver.close();
         if (server) await new Promise(resolve => server.close(resolve));
@@ -250,6 +263,6 @@ async function main() {
 }
 
 main().catch(error => {
-    console.error(error.stack || error);
+    if (!error.reported) console.error(error.stack || error);
     process.exitCode = 1;
 });

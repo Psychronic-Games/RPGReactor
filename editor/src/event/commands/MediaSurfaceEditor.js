@@ -979,9 +979,11 @@ class MediaSurfaceEditor {
         const files = kind === 'image' ? this.imageFiles(project) : this.movieFiles(project);
         const picker = typeof window !== 'undefined' ? window.reactor?.databaseEditorUI : null;
         if (!files.length) {
-            alert(typeof window !== 'undefined' && window.I18n?.t
+            RRDialog.alert(typeof window !== 'undefined' && window.I18n?.t
                 ? window.I18n.t('r3dfx.noVideos')
-                : 'No videos in the movies folder or images in img/pictures.');
+                : 'No videos in the movies folder or images in img/pictures.', {
+                title: typeof window !== 'undefined' && window.I18n ? window.I18n.tText('Media Surface') : 'Media Surface'
+            });
             return;
         }
         if (!picker || typeof picker.showImagePicker !== 'function') return;
@@ -1805,7 +1807,15 @@ class MediaSurfaceEditor {
             return;
         }
         this.validationMessage.style.display = 'block';
-        for (const error of errors) this.validationMessage.appendChild(this._el('div', '', this._t(error)));
+        for (const error of errors) this.validationMessage.appendChild(this._el('div', '', this._validationText(error)));
+    }
+
+    /** A validation message in the editor's language; a range message names its field and bounds. */
+    _validationText(error) {
+        const range = /^(.+) must be between (\S+) and (\S+)\.$/.exec(error);
+        if (!range) return this._t(error);
+        const values = { label: this._t(range[1]), min: range[2], max: range[3] };
+        return this._t('{label} must be between {min} and {max}.').replace(/\{(\w+)\}/g, (token, key) => values[key] ?? token);
     }
 
     show(command, callback, operation, context = null) {
@@ -1870,6 +1880,8 @@ class MediaSurfaceEditor {
         } else {
             body.style.gridTemplateColumns = 'minmax(260px,420px)';
             body.style.justifyContent = 'center';
+            // One field and no workspace: the dialog is as big as what it holds.
+            if (!this.liveMapAuthoring) Object.assign(dialog.style, { width: 'min(460px,calc(100vw - 24px))', height: 'auto', minHeight: '0' });
         }
         dialog.appendChild(body);
 

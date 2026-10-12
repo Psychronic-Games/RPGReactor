@@ -88,6 +88,22 @@ DataManager.removeInvalidGlobalInfo = function() {
             delete globalInfo[savefileId];
         }
     }
+    this.removeHiddenGlobalInfo();
+};
+
+// The playtest checkpoint is not a save the player made. Its file is written,
+// its entry never stays in the save list, so no list, newest-save lookup or
+// Continue (the engine's or a plugin's) can land on it.
+DataManager.removeHiddenGlobalInfo = function() {
+    const globalInfo = this._globalInfo;
+    if (!globalInfo) return;
+    // Its own name is no slot of the list; the entry saveGame leaves under it goes.
+    if (this.PLAYTEST_CHECKPOINT_ID in globalInfo) delete globalInfo[this.PLAYTEST_CHECKPOINT_ID];
+    // A save index written while the checkpoint lived in slot 99: cleaned, unless the game's own list reaches that slot.
+    const old = this.LEGACY_PLAYTEST_CHECKPOINT_ID;
+    if (!(old > this.maxSavefiles() + 1) || !(old in globalInfo)) return;
+    delete globalInfo[old];
+    while (globalInfo.length > 0 && !globalInfo[globalInfo.length - 1]) globalInfo.length--;
 };
 
 DataManager.saveGlobalInfo = function(info) {
@@ -97,6 +113,7 @@ DataManager.saveGlobalInfo = function(info) {
     if (info !== undefined) {
         this._globalInfo = info;
     }
+    this.removeHiddenGlobalInfo();
     StorageManager.saveObject("global", this._globalInfo);
 };
 
@@ -213,6 +230,12 @@ DataManager.loadMapData = function(mapId) {
     if (mapId > 0) {
         const filename = "Map%1.json".format(mapId.padZero(3));
         this._lastMapSrc = filename;
+        // Crossed into over a border: the map was read as the player came near (Reactor3D.Neighbors), sidecar and all.
+        const read = typeof Reactor3D !== "undefined" && Reactor3D.Neighbors ? Reactor3D.Neighbors.take(mapId) : null;
+        if (read) {
+            $dataMap = read;
+            return;
+        }
         this.loadDataFile("$dataMap", filename);
     } else {
         this.makeEmptyMap();
@@ -492,16 +515,29 @@ DataManager.savefileInfo = function(savefileId) {
 // hidden slot, and F9 on the title screen resumes it, so a crash forty
 // minutes into an intro costs the walk from the last checkpoint, not from
 // the start. Playtests only (Utils.isOptionValid("test")); a deployed game
-// never writes it. Slot 99 sits past every save list.
+// never writes it. It is a file of its own name ("filecheckpoint"), not a
+// numbered slot, so no save list can reach it however long a plugin makes one.
+// Until this build it was slot 99: a checkpoint left there by a session still
+// running is read once, where the game's own list does not reach that slot.
 
-DataManager.PLAYTEST_CHECKPOINT_ID = 99;
+DataManager.PLAYTEST_CHECKPOINT_ID = "checkpoint";
+DataManager.LEGACY_PLAYTEST_CHECKPOINT_ID = 99;
 
 DataManager.isPlaytestCheckpointEnabled = function() {
     return typeof Utils !== "undefined" && Utils.isOptionValid && Utils.isOptionValid("test");
 };
 
+/** The checkpoint to resume: the named file, else one left in slot 99 by an earlier build; null with neither. */
+DataManager.playtestCheckpointId = function() {
+    if (!this.isPlaytestCheckpointEnabled()) return null;
+    if (this.savefileExists(this.PLAYTEST_CHECKPOINT_ID)) return this.PLAYTEST_CHECKPOINT_ID;
+    const old = this.LEGACY_PLAYTEST_CHECKPOINT_ID;
+    const listed = typeof this.maxSavefiles === "function" && !(old > this.maxSavefiles() + 1);
+    return !listed && this.savefileExists(old) ? old : null;
+};
+
 DataManager.hasPlaytestCheckpoint = function() {
-    return this.isPlaytestCheckpointEnabled() && this.savefileExists(this.PLAYTEST_CHECKPOINT_ID);
+    return this.playtestCheckpointId() !== null;
 };
 
 /** Saves the checkpoint, unless one is being written or the party is dead. */
@@ -615,6 +651,15 @@ DataManager.extractSaveContents = function(contents) {
 
 DataManager.correctDataErrors = function() {
     $gameParty.removeInvalidMembers();
+    // A save made before a class's slot list changed: each actor holds one place per slot again.
+    const actors = $gameActors && $gameActors._data;
+    if (actors) {
+        for (const actor of actors) {
+            if (actor && actor.fitEquipSlots) {
+                actor.fitEquipSlots(false);
+            }
+        }
+    }
 };
 
 //-----------------------------------------------------------------------------
@@ -629,6 +674,10 @@ function ConfigManager() {
 ConfigManager.alwaysDash = false;
 ConfigManager.commandRemember = false;
 ConfigManager.touchUI = true;
+// "auto" keeps the frame rate by itself (reactor_3d.js, `Reactor3D.Quality`); "high", "medium" and "low" hold a level.
+ConfigManager.graphicsQuality = "auto";
+ConfigManager.graphicsAuto = null;
+ConfigManager.reactor3dSeen = false;
 ConfigManager._isLoaded = false;
 
 Object.defineProperty(ConfigManager, "bgmVolume", {
@@ -699,6 +748,10 @@ ConfigManager.makeData = function() {
     config.bgsVolume = this.bgsVolume;
     config.meVolume = this.meVolume;
     config.seVolume = this.seVolume;
+    // The player's graphics setting, the levels this machine settled at under "auto", and whether it has drawn a 3D map.
+    config.graphicsQuality = this.graphicsQuality;
+    config.graphicsAuto = this.graphicsAuto;
+    config.reactor3dSeen = this.reactor3dSeen;
     return config;
 };
 
@@ -710,6 +763,9 @@ ConfigManager.applyData = function(config) {
     this.bgsVolume = this.readVolume(config, "bgsVolume");
     this.meVolume = this.readVolume(config, "meVolume");
     this.seVolume = this.readVolume(config, "seVolume");
+    this.graphicsQuality = ["auto", "high", "medium", "low"].includes(config.graphicsQuality) ? config.graphicsQuality : "auto";
+    this.graphicsAuto = config.graphicsAuto && typeof config.graphicsAuto === "object" ? config.graphicsAuto : null;
+    this.reactor3dSeen = config.reactor3dSeen === true;
 };
 
 ConfigManager.readFlag = function(config, name, defaultValue) {
@@ -3056,15 +3112,35 @@ SceneManager.isFinalUpdateOfFrame = function() {
     return this._finalUpdateOfFrame !== false;
 };
 
+/**
+ * How many updates this frame owes.
+ *
+ * Locked to a 60 Hz screen (frames within 3% of a tick apart): one a frame,
+ * with no bookkeeping, so a 59.94 Hz screen never owes a stray second update.
+ * Otherwise time is added up and the updates made as they come due: none or
+ * one on a faster screen, one or two on a 50 Hz screen or a machine short of
+ * its frames, so the game keeps its speed. (This used to round the smoothed
+ * interval instead, which made one update a frame all the way from 60 down
+ * to 40 frames a second: at 45 the game ran at three quarters of its speed,
+ * at 24 at four fifths.) An update is made a tenth of a tick early rather
+ * than a frame late, so a frame a hair short of a tick still gets its own.
+ * Up to MAX_UPDATES a frame: under 15 frames a second the game slows down
+ * rather than chase itself.
+ *
+ * `trueSpeed = false` rounds as before.
+ */
+SceneManager.trueSpeed = true;
+SceneManager.MAX_UPDATES = 4;
 SceneManager.determineRepeatNumber = function(deltaTime) {
     // [Note] We consider environments where the refresh rate is higher than
     //   60Hz, but ignore sudden irregular deltaTime.
     this._smoothDeltaTime *= 0.8;
     this._smoothDeltaTime += Math.min(deltaTime, 2) * 0.2;
-    if (this._smoothDeltaTime >= 0.9) {
-        this._elapsedTime = 0;
-        return Math.round(this._smoothDeltaTime);
-    } else {
+    if (this.trueSpeed === false) {
+        if (this._smoothDeltaTime >= 0.9) {
+            this._elapsedTime = 0;
+            return Math.round(this._smoothDeltaTime);
+        }
         this._elapsedTime += deltaTime;
         if (this._elapsedTime >= 1) {
             this._elapsedTime -= 1;
@@ -3072,6 +3148,19 @@ SceneManager.determineRepeatNumber = function(deltaTime) {
         }
         return 0;
     }
+    if (this._smoothDeltaTime >= 0.97 && this._smoothDeltaTime <= 1.03) {
+        this._elapsedTime = 0;
+        return 1;
+    }
+    this._elapsedTime += deltaTime;
+    const owed = Math.floor(this._elapsedTime + 0.1);
+    if (owed <= 0) return 0;
+    if (owed > this.MAX_UPDATES) {
+        this._elapsedTime = 0;
+        return this.MAX_UPDATES;
+    }
+    this._elapsedTime -= owed;
+    return owed;
 };
 
 SceneManager.terminate = function() {
@@ -4012,10 +4101,18 @@ BattleManager.processVictory = function() {
     this.playVictoryMe();
     this.replayBgmAndBgs();
     this.makeRewards();
-    this.displayVictoryMessage();
-    this.displayRewards();
-    this.gainRewards();
+    // A Victory interface in use gives the rewards (through gainRewards) and shows them itself.
+    if (!this.showVictoryInterface()) {
+        this.displayVictoryMessage();
+        this.displayRewards();
+        this.gainRewards();
+    }
     this.endBattle(0);
+};
+
+/** Hands the rewards to the project's Victory interface; false where there is none in use (or a plugin words the rewards its own way). */
+BattleManager.showVictoryInterface = function() {
+    return typeof ReactorVictory !== "undefined" && !!ReactorVictory && ReactorVictory.classic(this);
 };
 
 BattleManager.processEscape = function() {

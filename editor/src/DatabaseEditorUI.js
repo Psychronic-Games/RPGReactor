@@ -36,6 +36,8 @@ class DatabaseEditorUI {
         this.stateEditor = new DatabaseStateEditor(databaseManager, { getCurrentProject: () => this.currentProject }, this.commonUI, this);
         this.questEditor = typeof DatabaseQuestEditor !== 'undefined'
             ? new DatabaseQuestEditor(databaseManager, { getCurrentProject: () => this.currentProject }, this.commonUI, this) : null;
+        this.vehicleEditor = typeof DatabaseVehicleEditor !== 'undefined'
+            ? new DatabaseVehicleEditor(databaseManager, { getCurrentProject: () => this.currentProject }, this) : null;
         this.structureEditor = typeof DatabaseStructureEditor !== 'undefined'
             ? new DatabaseStructureEditor(databaseManager, { getCurrentProject: () => this.currentProject }, this.commonUI, this) : null;
         this.musicSequenceEditor = typeof DatabaseMusicSequenceEditor !== 'undefined'
@@ -173,6 +175,8 @@ class DatabaseEditorUI {
     }
 
     _selectEntryMarkup(type) {
+        if (type === 'vehicles') return `<div style="padding:24px;line-height:1.5"><p>${rrEscapeHtml(this._t('vehicle.placeHint'))}</p><button class="rr-ui-first-run-create rr-button-primary">+ ${rrEscapeHtml(this._t('vehicle.add'))}</button></div>`;
+
         if (type === 'userInterfaces' && this.databaseManager && this.databaseManager.data
             && !(this.databaseManager.data.userInterfaces || []).some(Boolean)) {
             // A project from before the section existed opens on an empty
@@ -210,6 +214,7 @@ class DatabaseEditorUI {
      */
     setCurrentProject(project) {
         if (project !== this.currentProject) {
+            this.saveDatabaseSelections();
             this.cleanupDatabaseDetail();
             this._dataSnapshot = null;
             this._databaseSession = (this._databaseSession || 0) + 1;
@@ -235,6 +240,135 @@ class DatabaseEditorUI {
         this.databaseManager.mutationGeneration = (this.databaseManager.mutationGeneration || 0) + 1;
     }
 
+    /**
+     * The record last selected on a list page of the open project: this
+     * session's, else the one kept from an earlier session; undefined where
+     * none was.
+     */
+    recalledDatabaseSelection(type) {
+        const project = this.currentProject?.path || '';
+        const kept = this._listSelections;
+        if (kept && kept.project === project && kept.ids.has(type)) return kept.ids.get(type);
+        const helper = typeof window !== 'undefined' ? window.RRDatabaseSections : null;
+        return helper?.recallSelection ? helper.recallSelection(project, type) : undefined;
+    }
+
+    /** Keep the record selected on a list page: at once for this session, and shortly after in the per-user file. */
+    rememberDatabaseSelection(type, id) {
+        if (!type || !Number.isInteger(id)) return;
+        const project = this.currentProject?.path || '';
+        if (!this._listSelections || this._listSelections.project !== project) {
+            this.saveDatabaseSelections();
+            this._listSelections = { project, ids: new Map(), unsaved: new Set() };
+        }
+        const kept = this._listSelections;
+        if (kept.ids.get(type) === id) return;
+        kept.ids.set(type, id);
+        kept.unsaved.add(type);
+        // Walking a list with the arrow keys is one write, not one a row.
+        if (typeof setTimeout !== 'function') return;
+        clearTimeout(this._listSelectionTimer);
+        this._listSelectionTimer = setTimeout(() => this.saveDatabaseSelections(), 400);
+    }
+
+    /** Write the selections not yet in the per-user file. */
+    saveDatabaseSelections() {
+        if (this._listSelectionTimer) clearTimeout(this._listSelectionTimer);
+        this._listSelectionTimer = null;
+        const kept = this._listSelections;
+        const helper = typeof window !== 'undefined' ? window.RRDatabaseSections : null;
+        if (!kept || !kept.unsaved.size || !helper?.rememberSelection) return;
+        for (const type of kept.unsaved) helper.rememberSelection(kept.project, type, kept.ids.get(type));
+        kept.unsaved.clear();
+    }
+
+    /** The record a list page opens on: `wanted` when it is there, else the one last selected there, else the first. */
+    openingDatabaseEntry(type, data, wanted) {
+        if (!Array.isArray(data) || !data.length) return null;
+        const find = id => (Number.isInteger(id) ? data.find(entry => entry && entry.id === id) : null);
+        return find(wanted) || find(this.recalledDatabaseSelection(type)) || data.find(Boolean) || null;
+    }
+
+    /**
+     * The folding of the detail pane's sections: every card folds from its
+     * header and stays as the user left it, per project and per page.
+     */
+    databaseSections() {
+        const helper = typeof window !== 'undefined' ? window.RRDatabaseSections : null;
+        const detail = typeof document !== 'undefined' ? document.getElementById?.('database-detail') : null;
+        if (!helper || !detail) return null;
+        if (!this._sections || this._sections.root !== detail) {
+            this._sections?.dispose();
+            this._sections = helper.attach(detail, {
+                page: () => this._databasePage,
+                project: () => this.currentProject?.path || '',
+                // A battle card (data-section-default) is folded until the project fights its way, or its record sets something in it.
+                defaults: (page, key, section) => helper.battleCardFolded(key, section, () => this.battleModes())
+            });
+        }
+        return this._sections;
+    }
+
+    /** Put the sections of the page just drawn the way the user left them. */
+    refreshDatabaseSections() {
+        this.databaseSections()?.refresh({ sync: true });
+    }
+
+    _mapDataFolder() {
+        const folder = this.currentProject?.path;
+        return folder ? String(folder).replace(/[\\/]+$/, '') + '/data' : '';
+    }
+
+    /**
+     * Which battles on the map the project fights anywhere, `{ tactical,
+     * action }` (Action and First Person are one): the database, the open
+     * map, and what the map files said.
+     */
+    battleModes() {
+        const helper = typeof window !== 'undefined' ? window.RRDatabaseSections : null;
+        const manager = this.databaseManager;
+        if (!helper || !manager) return { tactical: false, action: false };
+        try {
+            return helper.battleModes({
+                system: manager.getSystem?.(),
+                troops: manager.getTroops?.(),
+                commonEvents: manager.getCommonEvents?.(),
+                openMap: window.reactor?.eventManager?.currentMap || null,
+                maps: this._battleScan?.modes(this._mapDataFolder())
+            });
+        } catch (error) {
+            return { tactical: false, action: false };
+        }
+    }
+
+    /** Whether any battle of the project is fought on the map. */
+    usesMapBattles() {
+        const modes = this.battleModes();
+        return modes.tactical || modes.action;
+    }
+
+    /**
+     * Read the project's map files for battles on the map, once per Database
+     * session and off the page's way; a find unfolds the battle cards the
+     * user never touched.
+     */
+    scanMapBattles() {
+        const helper = typeof window !== 'undefined' ? window.RRDatabaseSections : null;
+        const folder = this._mapDataFolder();
+        const session = this._databaseSession || 0;
+        if (!helper || !folder || (this._battleScanSession === session && this._battleScanFolder === folder)) return;
+        this._battleScanSession = session;
+        this._battleScanFolder = folder;
+        this._battleScan ||= helper.createBattleScan();
+        const scan = this._battleScan;
+        // The two cards follow their own way of fighting: either answer changing is news.
+        const found = () => { const modes = scan.modes(folder); return modes ? `${modes.tactical}/${modes.action}` : ''; };
+        const before = found();
+        scan.run(folder).then(() => {
+            if (found() !== before && this._battleScanFolder === folder) this._sections?.refresh();
+        });
+    }
+
     cleanupDatabaseListChrome() {
         const listEl = document.getElementById('database-list');
         const parent = listEl?.parentNode;
@@ -253,6 +387,7 @@ class DatabaseEditorUI {
     }
 
     setActiveDatabaseNav(type) {
+        this._databasePage = type;
         document.querySelectorAll('.database-nav-item').forEach(item => {
             item.classList.toggle('active', item.dataset.type === type);
         });
@@ -277,6 +412,7 @@ class DatabaseEditorUI {
         this._renderedDetail = null;
         this.tilesetEditor?.resetFlagEditing?.({ refresh: false });
         this.troopEditor?.disposePreviewLayout?.();
+        this.vehicleEditor?.dispose?.();
         this.controlsEditor?.detach?.();
         this.actionSequenceEditor?.dispose();
         this.battlePresentationEditor?.dispose();
@@ -342,6 +478,7 @@ class DatabaseEditorUI {
     }
 
     closeDatabaseViewer() {
+        this.saveDatabaseSelections();
         this.cleanupDatabaseDetail();
         this._databaseSession = (this._databaseSession || 0) + 1;
         this.setDatabaseSaveInFlight(false);
@@ -398,6 +535,34 @@ class DatabaseEditorUI {
         this._dataSnapshot = JSON.stringify(this.databaseManager.data);
     }
 
+    /**
+     * Run an editor's fill-in-the-defaults pass on a record it is opening.
+     * Opening is not an edit: when the pass changed the record, the Cancel
+     * baseline takes the filled-in record too, and so does the saved state
+     * when the file had no unsaved edits, so viewing never asks to discard.
+     */
+    normalizeOnView(type, entry, normalize) {
+        const manager = this.databaseManager;
+        const before = JSON.stringify(entry);
+        const saved = manager?.savedState?.[type];
+        const clean = saved !== undefined && typeof manager.serialize === 'function' && manager.serialize(manager.data[type]) === saved;
+        const result = normalize(entry);
+        if (!entry || JSON.stringify(entry) === before) return result;
+        if (clean) manager.captureSavedState(type);
+        if (this._dataSnapshot && Number.isInteger(entry.id)) {
+            try {
+                const snapshot = JSON.parse(this._dataSnapshot);
+                if (Array.isArray(snapshot[type]) && JSON.stringify(snapshot[type][entry.id]) === before) {
+                    snapshot[type][entry.id] = JSON.parse(JSON.stringify(entry));
+                    this._dataSnapshot = JSON.stringify(snapshot);
+                }
+            } catch (error) {
+                console.warn('Database baseline was not updated:', error);
+            }
+        }
+        return result;
+    }
+
     /** Close through Cancel; confirm first when the data differs from the snapshot. */
     async requestCloseDatabase(cancelAndClose) {
         if (this._databaseSaveInFlight) return;
@@ -416,8 +581,8 @@ class DatabaseEditorUI {
         this._databaseCloseDialog = true;
         try {
             discard = ask
-                ? await ask(this._tt('Discard Changes'), this._tt('Close the database and discard the unsaved changes?'), this._tt('Discard'), this._tt('Cancel'))
-                : confirm(this._tt('Close the database and discard the unsaved changes?'));
+                ? await ask(this._tt('Discard Changes'), this._tt('Close the database and discard the unsaved changes?'), this._tt('Discard'), this._tt('Cancel'), { danger: true })
+                : await RRDialog.confirm(this._tt('Close the database and discard the unsaved changes?'), { title: this._tt('Discard Changes'), ok: this._tt('Discard'), danger: true });
         } finally {
             this._databaseCloseDialog = false;
         }
@@ -437,15 +602,33 @@ class DatabaseEditorUI {
             this.closeDatabaseViewer();
         };
 
-        if (closeBtn) closeBtn.onclick = cancelAndClose;
-        if (cancelBtn) cancelBtn.onclick = cancelAndClose;
+        // The 3D Models page writes each model's own file with its own Save
+        // buttons. What one of them has not yet written is asked about before
+        // Cancel closes the page, and saved by OK and Apply before the rest.
+        const models = () => this.reactor3dEditor && this.reactor3dEditor._detail ? this.reactor3dEditor : null;
+        // Every other page closes at once, as before: only that page waits for an answer.
+        const afterModels = then => {
+            const page = models();
+            if (!page) return then();
+            page.settlePending().then(go => { if (go) then(); });
+        };
+        const cancelAsked = () => afterModels(cancelAndClose);
+
+        if (closeBtn) closeBtn.onclick = cancelAsked;
+        if (cancelBtn) cancelBtn.onclick = cancelAsked;
 
         // Escape is Cancel, as in the dialog it mirrors, but edits are never
         // dropped silently: a changed database asks first.
         const viewer = document.getElementById('database-viewer');
         if (viewer && window.RRKeyboardNavigation) {
             window.RRKeyboardNavigation.modal(viewer, {
-                onEscape: () => this.requestCloseDatabase(cancelAndClose),
+                // An open row or field menu takes the Escape: it closes, the database stays.
+                onEscape: () => {
+                    const rowMenu = document.getElementById('database-list-context-menu');
+                    if (rowMenu) { rowMenu.remove(); return; }
+                    if (this._databaseActionMenu) { this.closeDatabaseActionMenu(); return; }
+                    afterModels(() => this.requestCloseDatabase(cancelAndClose));
+                },
                 initialFocus: () => viewer.querySelector('.database-nav-item.active')
             });
         }
@@ -453,6 +636,7 @@ class DatabaseEditorUI {
         if (okBtn) {
             okBtn.onclick = async () => {
                 if (this._databaseSaveInFlight) return;
+                if (models() && !(await models().savePending())) return;
                 const projectPath = this.currentProject?.path;
                 if (projectPath) {
                     const saveSession = this._databaseSession;
@@ -468,7 +652,7 @@ class DatabaseEditorUI {
                         if (!isCurrent()) return;
                         console.error('Database save failed:', error);
                         this._dataSnapshot = JSON.stringify(this.databaseManager.data);
-                        alert(tt('One or more database files could not be saved.'));
+                        RRDialog.alert(tt('One or more database files could not be saved.'), { title: tt('Save'), kind: 'error' });
                         return;
                     } finally {
                         if (isCurrent()) this.setDatabaseSaveInFlight(false);
@@ -481,7 +665,7 @@ class DatabaseEditorUI {
                         // guaranteed to match disk.
                         this._dataSnapshot = JSON.stringify(this.databaseManager.data);
                         if (!this.callbacks.saveProject) {
-                            alert(tt('One or more database files could not be saved.'));
+                            RRDialog.alert(tt('One or more database files could not be saved.'), { title: tt('Save'), kind: 'error' });
                         }
                         return;
                     }
@@ -495,6 +679,7 @@ class DatabaseEditorUI {
         if (applyBtn) {
             applyBtn.onclick = async () => {
                 if (this._databaseSaveInFlight) return;
+                if (models() && !(await models().savePending())) return;
                 const projectPath = this.currentProject?.path;
                 if (projectPath) {
                     const saveSession = this._databaseSession;
@@ -510,7 +695,7 @@ class DatabaseEditorUI {
                         if (!isCurrent()) return;
                         console.error('Database save failed:', error);
                         this._dataSnapshot = JSON.stringify(this.databaseManager.data);
-                        alert(tt('One or more database files could not be saved.'));
+                        RRDialog.alert(tt('One or more database files could not be saved.'), { title: tt('Save'), kind: 'error' });
                         return;
                     } finally {
                         if (isCurrent()) this.setDatabaseSaveInFlight(false);
@@ -519,7 +704,7 @@ class DatabaseEditorUI {
                     if (!saved) {
                         this._dataSnapshot = JSON.stringify(this.databaseManager.data);
                         if (!this.callbacks.saveProject) {
-                            alert(tt('One or more database files could not be saved.'));
+                            RRDialog.alert(tt('One or more database files could not be saved.'), { title: tt('Save'), kind: 'error' });
                         }
                         return;
                     }
@@ -547,14 +732,22 @@ class DatabaseEditorUI {
     }
 
     /**
-     * Open database viewer for a specific type
+     * Open database viewer for a specific type; `select` is the id of the
+     * record a list page opens on instead of the one last selected there.
      */
-    openDatabase(type) {
+    openDatabase(type, { select } = {}) {
         if (this._databaseSaveInFlight) return;
         if (!this.currentProject) {
-            alert(this._t('alert.loadProjectFirst'));
+            RRDialog.alert(this._t('alert.loadProjectFirst'), { title: this._t('menu.database'), kind: 'warning' });
             return;
         }
+        // Leaving the 3D Models page with unsaved work on it asks first, then opens the section.
+        const models = this.reactor3dEditor && this.reactor3dEditor._detail ? this.reactor3dEditor : null;
+        if (models && models.hasPending && models.hasPending()) {
+            models.settlePending().then(go => { if (go) this.openDatabase(type, { select }); });
+            return;
+        }
+        models?.flushAutosaves?.();
         this.cleanupDatabaseDetail();
         this._listGeneration++;
         this._activeDatabaseList = null;
@@ -567,6 +760,7 @@ class DatabaseEditorUI {
 
         console.debug('Opening database:', type);
         this.cleanupDatabaseListChrome();
+        this.scanMapBattles();
 
         // Editors before 0.96.0 stored deletions as null slots in any top-level
         // list, which then read back as hidden gaps. Repair them on open; types
@@ -632,6 +826,10 @@ class DatabaseEditorUI {
                 data = (this.databaseManager.data.actionSequences || []).filter(Boolean);
                 title = this._dbTitle(type, 'Action Sequences');
                 break;
+            case 'vehicles':
+                data = DatabaseVehicleEditor.listEntries(this.databaseManager);
+                title = this._dbTitle(type, 'Vehicles');
+                break;
             case 'quests':
                 data = this.databaseManager.getQuests();
                 title = this._dbTitle(type, 'Quests');
@@ -655,6 +853,7 @@ class DatabaseEditorUI {
                         ? window.reactor.projectController.refreshMap3DView() : undefined
                 };
                 this.reactor3dEditor.show(detailEl);
+                this.refreshDatabaseSections();
                 return;
             }
             case 'structures':
@@ -671,6 +870,7 @@ class DatabaseEditorUI {
                 const { detailEl } = this.prepareDatabaseSection('system1', this._dbTitle('system1', 'System 1'), { showListPanel: false });
 
                 this.system1Editor.showSystem1Detail(detailEl);
+                this.refreshDatabaseSections();
                 return;
             }
             case 'system2': {
@@ -678,11 +878,13 @@ class DatabaseEditorUI {
                 const { detailEl } = this.prepareDatabaseSection('system2', this._dbTitle('system2', 'System 2'), { showListPanel: false });
 
                 this.system2Editor.showSystem2Detail(detailEl);
+                this.refreshDatabaseSections();
                 return;
             }
             case 'controls': {
                 const { detailEl } = this.prepareDatabaseSection('controls', this._dbTitle('controls', 'Controls'), { showListPanel: false });
                 this.controlsEditor?.showControlsDetail(detailEl);
+                this.refreshDatabaseSections();
                 return;
             }
             case 'types': {
@@ -702,18 +904,18 @@ class DatabaseEditorUI {
                 return;
             }
             default:
-                alert(this._t('db.unknownType', { type }));
+                RRDialog.alert(this._t('db.unknownType', { type }), { title: this._t('menu.database'), kind: 'error' });
                 return;
         }
 
         // Show database viewer
-        this.showDatabaseViewer(title, data, type);
+        this.showDatabaseViewer(title, data, type, { select });
     }
 
     /**
      * Show the main database viewer with list and detail panels
      */
-    showDatabaseViewer(title, data, type) {
+    showDatabaseViewer(title, data, type, { select } = {}) {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const viewer = document.getElementById('database-viewer');
         const navEl = document.getElementById('database-navigation');
@@ -729,6 +931,7 @@ class DatabaseEditorUI {
         let focusedId = null;
 
         if (navEl && navEl.children.length === 0) this.setupDatabaseNavigation();
+        this._databasePage = type;
         navEl?.querySelectorAll('.database-nav-item').forEach(item => {
             item.classList.toggle('active', item.dataset.type === type);
         });
@@ -784,6 +987,9 @@ class DatabaseEditorUI {
         if(type==='actionSequences'){
             const starters=document.createElement('button');starters.type='button';starters.className='rr-btn-secondary';starters.style.cssText='width:100%;margin-top:6px';starters.textContent=tt('Add Starter Sequences');
             starters.onclick=()=>{snapshotForUndo();const added=ReactorBattleData.addStarters(this.databaseManager.data.actionSequences);if(!added.length)return;this.databaseManager.mutationGeneration++;listSession.mutationGeneration++;refreshData();refreshList();selectIds([added[0].id]);};searchContainer.append(starters);
+            // Nothing to add once every starter is in the list; the button follows the list as rows come and go.
+            const syncStarters=()=>{starters.disabled=!ReactorBattleData.addStarters((this.databaseManager.data.actionSequences||[]).slice()).length;};
+            const watchStarters=new MutationObserver(()=>{if(starters.isConnected)syncStarters();else watchStarters.disconnect();});watchStarters.observe(listEl,{childList:true});syncStarters();
         }
 
         listEl.parentNode.insertBefore(searchContainer, listEl);
@@ -794,9 +1000,13 @@ class DatabaseEditorUI {
                 item.classList.toggle('selected', selected);
                 item.setAttribute('aria-selected', String(selected));
             });
+            if (type === 'vehicles') {
+                const remove = listEl.parentNode.querySelector('.database-delete-btn');
+                if (remove) remove.disabled = !data.some(entry => !entry.stockVehicle && selectedIds.has(entry.id));
+            }
         };
         const getSelectedEntries = () => filteredData
-            .filter(entry => selectedIds.has(entry.id))
+            .filter(entry => selectedIds.has(entry.id) && !entry.stockVehicle)
             .map(entry => this.databaseManager.data[type]?.[entry.id] || entry);
         const selectIds = (ids, focusId = null, showDetail = true) => {
             selectedIds.clear();
@@ -863,7 +1073,7 @@ class DatabaseEditorUI {
                 this.paintDatabaseListName(nameSpan, labels.primary, type);
                 const idSpan = document.createElement('span');
                 idSpan.className = 'database-list-id';
-                idSpan.textContent = `#${entry.id}`;
+                idSpan.textContent = entry.stockVehicle ? '' : `#${entry.id}`;
                 if (this.listIconTypes.includes(type)) {
                     const iconSpan = document.createElement('span');
                     iconSpan.className = 'database-list-icon';
@@ -896,7 +1106,7 @@ class DatabaseEditorUI {
                         ? entry.id
                         : (getSelectedEntries().at(-1)?.id ?? null);
                     applySelection();
-                    const focusedEntry = this.databaseManager.data[type]?.[focusedId];
+                    const focusedEntry = this.databaseManager.data[type]?.[focusedId] || data.find(entry => entry.id === focusedId);
                     if (focusedEntry) this.showDatabaseDetail(focusedEntry, type, { reuse: true });
                     else { this.cleanupDatabaseDetail(); detailEl.innerHTML = this._selectEntryMarkup(type); }
                 });
@@ -911,7 +1121,7 @@ class DatabaseEditorUI {
                     focusedId = entry.id;
                     applySelection();
                     this.showDatabaseDetail(this.databaseManager.data[type]?.[entry.id] || entry, type, { reuse: true });
-                    this.showListContextMenu(event.clientX, event.clientY, entry, data, type, populateList, searchInput, detailEl);
+                    if (!entry.stockVehicle) this.showListContextMenu(event.clientX, event.clientY, entry, data, type, populateList, searchInput, detailEl);
                 });
                 listEl.appendChild(item);
             });
@@ -921,7 +1131,8 @@ class DatabaseEditorUI {
 
         const refreshData = () => {
             data.length = 0;
-            this.databaseManager.data[type]?.forEach(entry => { if (entry) data.push(entry); });
+            if (type === 'vehicles') data.push(...DatabaseVehicleEditor.listEntries(this.databaseManager));
+            else this.databaseManager.data[type]?.forEach(entry => { if (entry) data.push(entry); });
         };
         const refreshList = () => populateList(searchInput.value, false, { preserveScroll: true });
         const listSession = {
@@ -958,7 +1169,12 @@ class DatabaseEditorUI {
         const snapshotForUndo = () => undoStack.push({
             entries: JSON.parse(JSON.stringify(this.databaseManager.data[type])),
             editorNames: JSON.parse(JSON.stringify(this.databaseManager.data.editorNames)),
-            battlePresentation: JSON.parse(JSON.stringify(this.databaseManager.data.battlePresentation||null))
+            battlePresentation: JSON.parse(JSON.stringify(this.databaseManager.data.battlePresentation||null)),
+            // Clearing an interface also takes it off System's scenes; a tileset carries its 3D classes.
+            interfaceAssignments: type === 'userInterfaces' ? this.interfaceAssignments() : null,
+            tileset3d: type === 'tilesets' ? JSON.parse(JSON.stringify(this.databaseManager.data.tileset3d || null)) : undefined,
+            // Records with 3D models carry their bindings (Database.r3d.json).
+            modelBindings: DatabaseEditorUI.MODEL_BINDING_TYPES.includes(type) ? JSON.parse(JSON.stringify(this.databaseManager.data.modelBindings ?? null)) : undefined
         });
         const performUndo = () => {
             if (undoStack.length === 0) return;
@@ -967,6 +1183,9 @@ class DatabaseEditorUI {
             this.databaseManager.data[type] = snapshot.entries;
             this.databaseManager.data.editorNames = snapshot.editorNames;
             this.databaseManager.data.battlePresentation = snapshot.battlePresentation;
+            if (snapshot.interfaceAssignments && this.databaseManager.data.system) Object.assign(this.databaseManager.data.system, snapshot.interfaceAssignments);
+            if (snapshot.tileset3d !== undefined) this.databaseManager.data.tileset3d = snapshot.tileset3d;
+            if (snapshot.modelBindings !== undefined) this.databaseManager.data.modelBindings = snapshot.modelBindings;
             this._markDatabaseMutation();
             refreshData();
             selectedIds.clear();
@@ -984,7 +1203,7 @@ class DatabaseEditorUI {
         buttonBar.style.cssText = 'display:flex;gap:4px;padding:6px 8px;background-color:var(--color-bg-menubar);border-bottom:1px solid var(--color-border);flex-shrink:0;';
         const addBtn = document.createElement('button');
         addBtn.className = 'database-add-btn';
-        addBtn.textContent = this._t('common.new');
+        addBtn.textContent = type === 'vehicles' ? '+ ' + this._t('vehicle.add') : this._t('common.new');
         addBtn.style.cssText = 'flex:1;padding:4px 8px;background-color:var(--color-bg-panel);color:var(--color-text);border:1px solid var(--color-border-input);border-radius:3px;cursor:pointer;font-size:11px;';
         addBtn.onclick = () => {
             if (this.databaseManager.getMaxEntries(type) >= this.getDatabaseMaximum(type)) return;
@@ -998,16 +1217,26 @@ class DatabaseEditorUI {
             focusedId = newEntry.id;
             selectionAnchorId = newEntry.id;
             refreshList();
+            // The new record opens: the detail must not stay on the one before it.
+            this.showDatabaseDetail(this.databaseManager.data[type]?.[newEntry.id] || newEntry, type, { reuse: true });
+            listEl.querySelector(`[data-entry-id="${newEntry.id}"]`)?.scrollIntoView({ block: 'nearest' });
         };
         const deleteBtn = document.createElement('button');
         deleteBtn.className = 'database-delete-btn';
         deleteBtn.textContent = this._t('common.delete');
         deleteBtn.style.cssText = addBtn.style.cssText;
-        deleteBtn.onclick = () => {
+        deleteBtn.onclick = async () => {
             const entries = getSelectedEntries();
-            if (entries.length === 0) { alert(this._t('db.selectEntryToDelete')); return; }
+            if (entries.length === 0) { RRDialog.alert(this._t('db.selectEntryToDelete'), { title: this._t('common.delete'), kind: 'warning' }); return; }
             const suffix = entries.length > 1 ? ` (+${entries.length - 1})` : '';
-            if (!confirm(this._t('db.deleteConfirm', { name: `${entries[0].name || tt('this entry')}${suffix}` }))) return;
+            const askedAt = listSession.mutationGeneration;
+            if (!(await RRDialog.confirm(this._t('db.deleteConfirm', { name: `${entries[0].name || tt('this entry')}${suffix}` }), {
+                title: this._t('common.delete'), ok: this._t('common.delete'), danger: true
+            }))) return;
+            // The answer can come after the list was left or changed, or the selection moved.
+            if (this._activeDatabaseList !== listSession || listSession.mutationGeneration !== askedAt) return;
+            const selected = getSelectedEntries();
+            if (selected.length !== entries.length || selected.some((entry, index) => entry !== entries[index])) return;
             snapshotForUndo();
             listSession.mutationGeneration++;
             entries.forEach(entry => this.clearDatabaseEntry(type, entry.id));
@@ -1030,13 +1259,27 @@ class DatabaseEditorUI {
         changeMaxBtn.title = `${tt('Max:')} ${this.getDatabaseMaximum(type)}`;
         changeMaxBtn.style.cssText = 'width:100%;padding:6px 8px;background-color:var(--color-bg-panel);color:var(--color-text);border:1px solid var(--color-border-input);border-top:none;cursor:pointer;font-size:11px;flex-shrink:0;';
         changeMaxBtn.onclick = () => {
-            this.showChangeMaximumModal(title, type, this.databaseManager.getMaxEntries(type), newMax => {
+            this.showChangeMaximumModal(title, type, this.databaseManager.getMaxEntries(type), async newMax => {
                 const template = this.getDefaultTemplates()[type];
                 if (!template) return;
-                if (newMax === this.databaseManager.getMaxEntries(type)) return;
+                const currentMax = this.databaseManager.getMaxEntries(type);
+                if (newMax === currentMax) return;
+                if (newMax < currentMax) {
+                    // A smaller maximum removes records: that is asked by name, and starts on Cancel.
+                    const askedAt = listSession.mutationGeneration;
+                    if (!(await RRDialog.confirm(this.describeRemovedEntries(newMax, currentMax), {
+                        title: this._t('db.changeMaximum'), ok: tt('Reduce Maximum'), danger: true
+                    }))) return;
+                    if (this._activeDatabaseList !== listSession || listSession.mutationGeneration !== askedAt
+                        || this.databaseManager.getMaxEntries(type) !== currentMax) return;
+                }
                 snapshotForUndo();
                 listSession.mutationGeneration++;
-                this.databaseManager.changeMaximum(type, newMax, template);
+                if (!this.databaseManager.changeMaximum(type, newMax, template)) {
+                    // Action Sequences refuse to drop a sequence something is still assigned.
+                    RRDialog.alert(tt('The maximum was not changed: records past it are still in use.'), { title: this._t('db.changeMaximum'), kind: 'warning' });
+                    return;
+                }
                 refreshData();
                 selectedIds.clear();
                 refreshList();
@@ -1047,15 +1290,29 @@ class DatabaseEditorUI {
         };
         listEl.parentNode.appendChild(changeMaxBtn);
 
-        searchInput.addEventListener('input', event => {
-            populateList(event.target.value, false, { resetSelection: true });
+        // Filtering rebuilds the list and clears the detail pane, so it waits
+        // for a pause in typing: a keystroke each on a 2,000-entry list used
+        // to rebuild it once per letter. Enter filters at once.
+        let searchTimer = null;
+        const runSearch = () => {
+            clearTimeout(searchTimer);
+            searchTimer = null;
+            if (this._activeDatabaseList !== listSession) return;
+            populateList(searchInput.value, false, { resetSelection: true });
             listEl.scrollTop = 0;
             this.cleanupDatabaseDetail();
             detailEl.innerHTML = this._selectEntryMarkup();
+        };
+        searchInput.addEventListener('input', () => {
+            clearTimeout(searchTimer);
+            searchTimer = setTimeout(runSearch, 150);
+        });
+        searchInput.addEventListener('keydown', event => {
+            if (event.key === 'Enter' && searchTimer !== null) runSearch();
         });
 
         if (this._listKeyHandler) document.removeEventListener('keydown', this._listKeyHandler);
-        const getSelectedEntry = () => data.find(entry => entry?.id === focusedId) || getSelectedEntries()[0] || null;
+        const getSelectedEntry = () => data.find(entry => entry?.id === focusedId && !entry.stockVehicle) || getSelectedEntries()[0] || null;
         const listKeyHandler = event => {
             if (event.defaultPrevented) return;
             if (!viewer.classList.contains('active') || this._activeDatabaseList !== listSession) return;
@@ -1140,8 +1397,20 @@ class DatabaseEditorUI {
         this._listKeyHandler = listKeyHandler;
         document.addEventListener('keydown', listKeyHandler);
 
-        populateList();
+        // The page opens on the record last selected there, or on its first.
+        const opening = this.openingDatabaseEntry(type, data, select);
+        if (opening) {
+            selectedIds.add(opening.id);
+            focusedId = selectionAnchorId = opening.id;
+        }
+        // With a record to open on, the list is built as far as its row.
+        populateList('', false, { preserveScroll: !!opening });
         viewer.classList.add('active');
+        if (opening) {
+            applySelection();
+            this.showDatabaseDetail(this.databaseManager.data[type]?.[opening.id] || opening, type, { reuse: true });
+            listEl.querySelector(`[data-entry-id="${opening.id}"]`)?.scrollIntoView?.({ block: 'center' });
+        }
         this.takeDatabaseSnapshot();
         this.setupDatabaseControls();
         viewer?._rrModalKeys?.enter();
@@ -1383,10 +1652,10 @@ class DatabaseEditorUI {
             this.openDatabase('system1');
             return true;
         }
-        this.openDatabase(type);
+        this.openDatabase(type, { select: id });
         const session = this._activeDatabaseList;
         if (session?.type !== type || !session.reveal) return false;
-        return session.reveal(id);
+        return session.focusedId === id || session.reveal(id);
     }
 
     showDatabaseActionMenu(x, y, items) {
@@ -1517,7 +1786,7 @@ class DatabaseEditorUI {
     insertIconCode(input, selectionStart, selectionEnd) {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
         if (typeof nw === 'undefined' && !window.RPGReactorHost) {
-            alert(tt('Icon selection requires the desktop editor or the browser project host'));
+            RRDialog.alert(tt('Icon selection requires the desktop editor or the browser project host'), { title: tt('Select Icon'), kind: 'warning' });
             return;
         }
         if (!input || !this.currentProject) return;
@@ -1549,7 +1818,9 @@ class DatabaseEditorUI {
         const presentation=sourceEntries.map(entry=>this.databaseManager?.data?.battlePresentation?.[type]?.[entry.id]||null);
         // The 3D model binding lives in the sidecar beside the database, not in the record: it copies with the record or the paste shows a plain battler image.
         const bindings=sourceEntries.map(entry=>this.readModelBinding(type,entry.id));
-        this.listClipboard = { type, entries: copiedEntries, entry: copiedEntries[0] || null, editorNames, presentation:JSON.parse(JSON.stringify(presentation)), bindings };
+        // A tileset's 3D classification lives beside the database too (Tilesets.r3d.json).
+        const tiles3d = type === 'tilesets' ? sourceEntries.map(entry => this.tileset3DClasses(entry.id)) : undefined;
+        this.listClipboard = { type, entries: copiedEntries, entry: copiedEntries[0] || null, editorNames, presentation:JSON.parse(JSON.stringify(presentation)), bindings, tiles3d };
         let writePromise = Promise.resolve(true);
         if (typeof ReactorClipboard !== 'undefined') {
             writePromise = Promise.resolve(ReactorClipboard.write('databaseEntry', {
@@ -1560,6 +1831,7 @@ class DatabaseEditorUI {
                 editorNames,
                 presentation,
                 bindings,
+                tiles3d,
                 sourceProjectName: this.currentProject?.name || null,
                 sourceProjectPath: this.currentProject?.path || null
             }));
@@ -1583,7 +1855,7 @@ class DatabaseEditorUI {
                 typeof payload.editorNames?.[index] === 'string' ? payload.editorNames[index].trim() : '');
             const presentation=payload.sourceProjectPath===this.currentProject?.path?payload.presentation:undefined;
             const bindings=payload.sourceProjectPath===this.currentProject?.path?payload.bindings:undefined;
-            this.listClipboard = { type, entries, entry: entries[0], editorNames, presentation, bindings };
+            this.listClipboard = { type, entries, entry: entries[0], editorNames, presentation, bindings, tiles3d: payload.tiles3d };
             return this.listClipboard;
         }
 
@@ -1622,7 +1894,7 @@ class DatabaseEditorUI {
         }));
         this.writeDatabaseEntryClipboard(type, entries);
         if (!await (this.listClipboard?._writePromise || true)) {
-            alert(this._t('db.clipboardWriteFailed'));
+            RRDialog.alert(this._t('db.clipboardWriteFailed'), { title: this._t('common.cut'), kind: 'error' });
             return;
         }
         if (this._listGeneration !== listGeneration || this.currentProject !== project
@@ -1640,11 +1912,11 @@ class DatabaseEditorUI {
         if (this._snapshotForUndo) this._snapshotForUndo();
         if (session) session.mutationGeneration++;
         if (this.getDefaultTemplates()[type]) {
-            entries.forEach(entry => {
-                const blank = this.clearDatabaseEntry(type, entry.id);
-                const idx = data.findIndex(candidate => candidate?.id === entry.id);
-                if (idx >= 0 && blank) data[idx] = blank;
-            });
+            entries.forEach(entry => this.clearDatabaseEntry(type, entry.id));
+            // The list shows what the database now holds: a cut Action Sequence leaves no record behind.
+            data.length = 0;
+            if (type === 'vehicles') data.push(...DatabaseVehicleEditor.listEntries(this.databaseManager));
+            else targetArray.forEach(entry => { if (entry) data.push(entry); });
         }
         if (session?.type === type) session.selectIds(entries.map(entry => entry.id), entries[0].id, false);
         populateList(searchInput.value, false, { preserveScroll: true });
@@ -1658,7 +1930,7 @@ class DatabaseEditorUI {
     }
 
     async pasteListEntries(targetEntry, data, type, populateList, searchInput, detailEl) {
-        if (!targetEntry) return;
+        if (!targetEntry || targetEntry.stockVehicle) return;
         const targetId = targetEntry.id;
         const session = this._activeDatabaseList;
         const mutationGeneration = session?.mutationGeneration;
@@ -1685,13 +1957,13 @@ class DatabaseEditorUI {
             || (session && session.focusedId !== focusedId));
         if (stale) return;
         if (!clipboard) {
-            alert(this._t('db.noCompatibleClipboard'));
+            RRDialog.alert(this._t('db.noCompatibleClipboard'), { title: this._t('common.paste'), kind: 'warning' });
             return;
         }
         const copiedEntries = clipboard.entries || (clipboard.entry ? [clipboard.entry] : []);
         const lastId = targetId + copiedEntries.length - 1;
         if (lastId >= targetArray.length) {
-            alert(this._t('db.noCompatibleClipboard'));
+            RRDialog.alert(this._t('db.noCompatibleClipboard'), { title: this._t('common.paste'), kind: 'warning' });
             return;
         }
         if (this._snapshotForUndo) this._snapshotForUndo();
@@ -1700,15 +1972,18 @@ class DatabaseEditorUI {
         const pastedEntries = copiedEntries.map((sourceEntry, index) => {
             const pasted = JSON.parse(JSON.stringify(sourceEntry));
             pasted.id = targetId + index;
+            this.releaseSharedIdentity(type, pasted, targetArray);
             targetArray[pasted.id] = pasted;
             const section=this.databaseManager.data.battlePresentation?.[type];if(section){const binding=clipboard.presentation?.[index];if(binding)section[pasted.id]=JSON.parse(JSON.stringify(binding));else delete section[pasted.id];}
             if(Array.isArray(clipboard.bindings))this.writeModelBinding(type,pasted.id,clipboard.bindings[index]||null);
+            if (type === 'tilesets') this.setTileset3DClasses(pasted.id, clipboard.tiles3d?.[index] || null);
             this.setEditorName(type, pasted.id, clipboard.editorNames?.[index] || '');
             return pasted;
         });
         this._markDatabaseMutation();
         data.length = 0;
-        targetArray.forEach(entry => { if (entry) data.push(entry); });
+        if (type === 'vehicles') data.push(...DatabaseVehicleEditor.listEntries(this.databaseManager));
+        else targetArray.forEach(entry => { if (entry) data.push(entry); });
         if (session?.type === type) session.selectIds(pastedEntries.map(entry => entry.id), pastedEntries[0].id, false);
         populateList(searchInput.value, false, { preserveScroll: true });
         this.showDatabaseDetail(pastedEntries[0], type);
@@ -1739,11 +2014,24 @@ class DatabaseEditorUI {
         } catch (error) { console.warn(error); }
     }
 
+    /**
+     * A copy must not share what names its source outside the list: a structure's
+     * file (the earlier record keeps a file two claim, so a copy pasted above its
+     * source would take it) or a quest's key (scripts find the first quest with it).
+     */
+    releaseSharedIdentity(type, copy, records) {
+        const field = { structures: 'file', quests: 'key' }[type];
+        if (!field || !copy[field]) return;
+        if ((records || []).some((entry, id) => entry && entry !== copy && id !== copy.id && entry[field] === copy[field])) copy[field] = '';
+    }
+
     duplicateListEntry(entry, data, type, populateList, searchInput) {
+        if (entry.stockVehicle) return;
         if (this._snapshotForUndo) this._snapshotForUndo();
         if (this._activeDatabaseList?.type === type) this._activeDatabaseList.mutationGeneration++;
         const cloned = JSON.parse(JSON.stringify(entry));
         delete cloned.id;
+        this.releaseSharedIdentity(type, cloned, this.databaseManager.data[type]);
         cloned.name = (cloned.name || this._t('common.unnamed')) + ` (${this._t('common.copy')})`;
         const newEntry = this.databaseManager.addEntry(type, cloned);
         if (newEntry) {
@@ -1755,6 +2043,7 @@ class DatabaseEditorUI {
             const section = this.databaseManager.data?.battlePresentation?.[type];
             if (section && section[entry.id]) section[newEntry.id] = JSON.parse(JSON.stringify(section[entry.id]));
             this.writeModelBinding(type, newEntry.id, this.readModelBinding(type, entry.id));
+            if (type === 'tilesets') this.setTileset3DClasses(newEntry.id, this.tileset3DClasses(entry.id));
             data.push(newEntry);
             if (this._activeDatabaseList?.type === type) {
                 this._activeDatabaseList.selectIds([newEntry.id], newEntry.id, false);
@@ -1787,6 +2076,7 @@ class DatabaseEditorUI {
             { name: 'Animations', type: 'animations' },
             { name: 'Tilesets', type: 'tilesets' },
             { name: '3D Models', type: 'reactor3d' },
+            { name: 'Vehicles', type: 'vehicles' },
             { name: 'Structures', type: 'structures' },
             { name: 'Common Events', type: 'commonEvents' },
             { name: 'User Interfaces', type: 'userInterfaces' },
@@ -1869,6 +2159,9 @@ class DatabaseEditorUI {
             this.actionSequenceEditor.show(detailEl, entry);
         } else if (type === 'quests' && this.questEditor) {
             this.questEditor.showQuestDetail(detailEl, entry);
+        } else if (type === 'vehicles' && this.vehicleEditor) {
+            if (entry.stockVehicle) this.vehicleEditor.showStock(detailEl, entry.stockVehicle);
+            else this.vehicleEditor.show(detailEl, entry);
         } else if (type === 'structures' && this.structureEditor) {
             this.structureEditor.showStructureDetail(detailEl, entry);
         } else if (type === 'musicSequences' && this.musicSequenceEditor) {
@@ -1877,6 +2170,9 @@ class DatabaseEditorUI {
             // Generic display for other types
             this.showGenericDetail(detailEl, entry, type);
         }
+        // The Action Sequences card opens by its own record (open when one is assigned) on a page where the
+        // user never folded it: what it was on the last page shown is not carried over.
+        if (this.battlePresentationEditor) this.battlePresentationEditor.assignmentOpen = undefined;
         if (['skills','items','weapons','actors','enemies','classes'].includes(type)) this.battlePresentationEditor?.assignment(detailEl, type, entry);
         if (['actors','enemies'].includes(type)) this.battlePresentationEditor?.battlerGraphic(detailEl, type, entry);
         if(type==='states')this.battlePresentationEditor?.stateGraphic(detailEl,entry);
@@ -1891,6 +2187,10 @@ class DatabaseEditorUI {
             });
         }
         this.wireLiveDatabaseNameSync(detailEl, entry, type);
+        this.rememberDatabaseSelection(type, entry.id);
+        // Before the label pass: a section is named by the English source of
+        // its title, which the pass no longer tells once it has read the title.
+        this.refreshDatabaseSections();
         if (window.I18n) window.I18n.applyText(detailEl);
         this._renderedDetail = { entry, type, dataGeneration: this.databaseManager.dataGeneration };
     }
@@ -2089,13 +2389,16 @@ class DatabaseEditorUI {
             // it with a strict === 0. The Type control can convert this record
             // into an immediately editable stock MV sprite animation.
             animations: { name: 'New Animation', flashTimings: [], soundTimings: [], effectName: '', displayType: 0, offsetX: 0, offsetY: 0, rotation: { x: 0, y: 0, z: 0 }, scale: 100, speed: 100 },
-            tilesets: { name: 'New Tileset', mode: 0, tilesetNames: ['', '', '', '', '', '', '', '', ''], flags: new Array(8192).fill(0), note: '' },
+            // Tile 0 (the empty tile on every unpainted upper layer) is a star: as an O,
+            // checkPassage would stop at it and every wall on the map would be walkable.
+            tilesets: { name: 'New Tileset', mode: 0, tilesetNames: ['', '', '', '', '', '', '', '', ''], flags: Object.assign(new Array(8192).fill(0), { 0: 0x10 }), note: '' },
             commonEvents: { name: 'New Common Event', trigger: 0, switchId: 1, list: [{code:0,indent:0,parameters:[]}] },
             // Reactor section; the runtime (reactor_ui.js) fills in any field an
             // older record lacks, so this is the whole shape.
             userInterfaces: { name: 'New Interface', mode: 'scene', background: 'blur', visible: { type: 'always' }, cancel: { type: 'close' }, firstFocus: 0, coordinateSpace: 'screen', nodes: [], note: '' },
             // Reactor quests: reactor_quests.js reads this shape as it is.
             actionSequences: typeof ReactorBattleData !== 'undefined' ? ReactorBattleData.template() : {version:1,name:'New Sequence',steps:[]},
+            vehicles: { name: 'New Vehicle', kind: 'motorcycle', model: { name: '', size: 3.5 } },
             quests: { name: 'New Quest', key: '', category: '', iconIndex: 0, difficulty: '', from: '', location: '', description: '', objectives: [], rewards: [], subtext: '', quotes: '', activation: { type: 'command', switchId: 0, variableId: 0, operator: '>=', value: 0 }, completion: { type: 'command', switchId: 0 }, note: '' },
             // Stored on System.json; reactor_managers.js reads this shape as it is.
             musicSequences: { name: 'New Sequence', sequence: { enabled: true, entries: [] } },
@@ -2111,7 +2414,7 @@ class DatabaseEditorUI {
             actors: 9999, classes: 9999, skills: 9999, items: 9999,
             weapons: 9999, armors: 9999, enemies: 9999, troops: 9999,
             states: 9999, animations: 5000, tilesets: 1000, commonEvents: 9999,
-            userInterfaces: 9999, quests: 9999, structures: 9999, musicSequences: 9999, actionSequences: 9999, elements: 512, skillTypes: 128, weaponTypes: 256,
+            userInterfaces: 9999, quests: 9999, vehicles: 9999, structures: 9999, musicSequences: 9999, actionSequences: 9999, elements: 512, skillTypes: 128, weaponTypes: 256,
             armorTypes: 256, equipTypes: 128
         }[type] || 0;
     }
@@ -2126,24 +2429,63 @@ class DatabaseEditorUI {
     }
 
     clearDatabaseEntry(type, id) {
+        if (type === 'vehicles' && id < 1) return;
         const entries = this.databaseManager?.data?.[type];
         if (!entries || !Number.isInteger(id) || id <= 0 || id >= entries.length) return null;
         const blank = this.createBlankDatabaseEntry(type, id);
         if (!blank) return null;
         if (type === 'actionSequences') {
             const refs = typeof ReactorBattleData !== 'undefined' ? ReactorBattleData.references(this.databaseManager.data.battlePresentation, id,this.databaseManager.data.actionSequences) : [];
-            if (refs.length) { alert('This sequence is assigned to ' + refs.map(r => r.kind + ' #' + r.id).join(', ') + '. Change those assignments before deleting it.'); return null; }
+            if (refs.length) {
+                const text = 'This sequence is assigned to {refs}. Change those assignments before deleting it.', values = { refs: refs.map(r => r.kind + ' #' + r.id).join(', ') };
+                RRDialog.alert(typeof window !== 'undefined' && window.I18n?.formatText ? window.I18n.formatText(text, values) : text.replace('{refs}', values.refs),
+                    { title: this._t('common.delete'), kind: 'warning' });
+                return null;
+            }
             entries[id] = null;
         } else {entries[id] = blank;const section=this.databaseManager.data.battlePresentation?.[type];if(section)delete section[id];}
+        if (type === 'tilesets') this.setTileset3DClasses(id, null);
+        // A cleared record keeps no 3D model.
+        if (DatabaseEditorUI.MODEL_BINDING_TYPES.includes(type)) this.writeModelBinding(type, id, null);
+        // A cleared interface no longer replaces the stock scene System assigned it to.
+        if (type === 'userInterfaces') {
+            const assigned = this.interfaceAssignments();
+            for (const field of Object.keys(assigned)) if (Number(assigned[field]) === id) this.databaseManager.data.system[field] = 0;
+        }
         this.setEditorName(type, id, '');
         this._markDatabaseMutation();
         return blank;
     }
 
+    /** A copy of one tileset's 3D tile classes ({ tileId: class }), or null when it has none. */
+    tileset3DClasses(id) {
+        const tiles = this.databaseManager?.data?.tileset3d?.tilesets?.[String(id)];
+        return tiles && typeof tiles === 'object' ? JSON.parse(JSON.stringify(tiles)) : null;
+    }
+
+    /** Give a tileset these 3D tile classes; null takes away whatever it had. */
+    setTileset3DClasses(id, tiles) {
+        const store = this.databaseManager?.data?.tileset3d || (tiles && this.databaseManager?.getTileset3D?.());
+        if (!store || typeof store !== 'object') return;
+        if (!store.tilesets || typeof store.tilesets !== 'object') store.tilesets = {};
+        if (tiles && Object.keys(tiles).length) store.tilesets[String(id)] = JSON.parse(JSON.stringify(tiles));
+        else delete store.tilesets[String(id)];
+    }
+
+    /** System's scene assignments to User Interfaces records ({ reactorMenuInterfaceId: 3, ... }). */
+    interfaceAssignments() {
+        const system = this.databaseManager?.data?.system, out = {};
+        if (system) for (const field of Object.keys(system)) if (/^reactor[A-Za-z]+InterfaceId$/.test(field)) out[field] = system[field];
+        return out;
+    }
+
     createBlankDatabaseEntry(type, id) {
         const template = this.getDefaultTemplates()[type];
         if (!template) return null;
-        return { ...JSON.parse(JSON.stringify(template)), id, name: '' };
+        const blank = { ...JSON.parse(JSON.stringify(template)), id, name: '' };
+        // A new class starts with the standard slots, whatever types the project has added since.
+        if (type === 'classes' && typeof RREquipSlots !== 'undefined') blank.rrEquipSlots = RREquipSlots.standard(this.databaseManager.getSystem());
+        return blank;
     }
 
     restoreNullDatabaseEntries(type) {
@@ -2372,6 +2714,8 @@ class DatabaseEditorUI {
                         clearInterval(walkInterval);
                         return;
                     }
+                    // A folded card shows nothing: the walk waits for it to open.
+                    if (canvas.closest('.database-section.is-collapsed')) return;
                     animate();
                 }, 125);
                 animate();
@@ -2653,7 +2997,7 @@ class DatabaseEditorUI {
     selectCharacterImage(actor) {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
         if (typeof nw === 'undefined' && !window.RPGReactorHost) {
-            alert(tt('Character selection requires the desktop editor or the browser project host'));
+            RRDialog.alert(tt('Character selection requires the desktop editor or the browser project host'), { title: tt('Select Character Sprite'), kind: 'warning' });
             return;
         }
 
@@ -2682,14 +3026,14 @@ class DatabaseEditorUI {
             });
         } catch (error) {
             console.error('Error reading characters folder:', error);
-            alert(tt('Error reading characters folder'));
+            RRDialog.alert(tt('Error reading characters folder'), { title: tt('Select Character Sprite'), kind: 'error' });
         }
     }
 
     selectFaceImage(actor) {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
         if (typeof nw === 'undefined' && !window.RPGReactorHost) {
-            alert(tt('Face selection requires the desktop editor or the browser project host'));
+            RRDialog.alert(tt('Face selection requires the desktop editor or the browser project host'), { title: tt('Select Face Graphic'), kind: 'warning' });
             return;
         }
 
@@ -2718,14 +3062,14 @@ class DatabaseEditorUI {
             });
         } catch (error) {
             console.error('Error reading faces folder:', error);
-            alert(tt('Error reading faces folder'));
+            RRDialog.alert(tt('Error reading faces folder'), { title: tt('Select Face Graphic'), kind: 'error' });
         }
     }
 
     selectSVBattlerImage(actor) {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
         if (typeof nw === 'undefined' && !window.RPGReactorHost) {
-            alert(tt('SV Battler selection requires the desktop editor or the browser project host'));
+            RRDialog.alert(tt('SV Battler selection requires the desktop editor or the browser project host'), { title: tt('Select SV Battler'), kind: 'warning' });
             return;
         }
 
@@ -2747,14 +3091,14 @@ class DatabaseEditorUI {
             }, actor.battlerName, { allowNone: true });
         } catch (error) {
             console.error('Error reading sv_actors folder:', error);
-            alert(tt('Error reading sv_actors folder'));
+            RRDialog.alert(tt('Error reading sv_actors folder'), { title: tt('Select SV Battler'), kind: 'error' });
         }
     }
 
     selectIcon(entry, type) {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
         if (typeof nw === 'undefined' && !window.RPGReactorHost) {
-            alert(tt('Icon selection requires the desktop editor or the browser project host'));
+            RRDialog.alert(tt('Icon selection requires the desktop editor or the browser project host'), { title: tt('Select Icon'), kind: 'warning' });
             return;
         }
 
@@ -2801,140 +3145,37 @@ class DatabaseEditorUI {
         return modal;
     }
 
+    /** What a smaller maximum removes, in one sentence: the entries past the new maximum. */
+    describeRemovedEntries(newMax, currentMax) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        return newMax + 1 === currentMax
+            ? tt('Entry {from} will be removed. Anything that still uses it may stop working.').replace('{from}', currentMax)
+            : tt('Entries {from} to {to} will be removed. Anything that still uses them may stop working.')
+                .replace('{from}', newMax + 1).replace('{to}', currentMax);
+    }
+
     /**
-     * Show a styled modal for changing the maximum number of database entries
+     * Ask for a section's new maximum in the themed prompt and hand it to onConfirm: a whole number
+     * from 1 to the section's cap (the prompt says so under its field and stays open otherwise).
+     * Nothing is handed over when the prompt is cancelled or the page it was asked from has gone.
      */
-    showChangeMaximumModal(title, type, currentMax, onConfirm) {
+    async showChangeMaximumModal(title, type, currentMax, onConfirm) {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const configuredMaximum = this.getDatabaseMaximum(type);
         const maximum = Math.max(currentMax, configuredMaximum);
-        // Overlay
-        const overlay = document.createElement('div');
-        overlay.style.cssText = `
-            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0, 0, 0, 0.7);
-            display: flex; align-items: center; justify-content: center;
-            z-index: 10000;
-        `;
-
-        // Modal container
-        const modal = document.createElement('div');
-        modal.style.cssText = `
-            background: var(--color-bg-menubar); border: 1px solid var(--color-border); border-radius: 6px;
-            width: 360px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
-            display: flex; flex-direction: column;
-        `;
-
-        // Header
-        const header = document.createElement('div');
-        header.style.cssText = `
-            background: var(--color-bg-panel); padding: 16px 20px;
-            border-bottom: 1px solid var(--color-border);
-            display: flex; justify-content: space-between; align-items: center;
-            border-radius: 6px 6px 0 0;
-        `;
-        header.innerHTML = `
-            <h2 style="margin: 0; color: var(--color-text); font-size: 18px;">${tt('Change Maximum')}</h2>
-            <span class="modal-close" style="color: var(--color-text); font-size: 28px; font-weight: bold; cursor: pointer; line-height: 1;">&times;</span>
-        `;
-        modal.appendChild(header);
-
-        // Body
-        const body = document.createElement('div');
-        body.style.cssText = 'padding: 20px;';
-
-        const label = document.createElement('div');
-        label.style.cssText = 'color: var(--color-text); font-size: 13px; margin-bottom: 12px;';
-        label.textContent = `${tt('Set the maximum number of')} ${title} (${tt('Max:')} ${maximum}):`;
-        body.appendChild(label);
-
-        const input = document.createElement('input');
-        input.type = 'number';
-        input.className = 'rr-database-maximum-input';
-        input.min = '1';
-        input.max = String(maximum);
-        input.step = '1';
-        input.value = currentMax;
-        input.style.cssText = `
-            width: 100%; padding: 8px 10px; box-sizing: border-box;
-            background: var(--color-bg-panel); border: 1px solid var(--color-border-input); border-radius: 3px;
-            color: var(--color-text); font-size: 14px;
-        `;
-        body.appendChild(input);
-
-        // Warning message (shown when decreasing)
-        const warning = document.createElement('div');
-        warning.style.cssText = 'color: var(--color-warning-text); font-size: 12px; margin-top: 8px; display: none;';
-        body.appendChild(warning);
-
-        input.addEventListener('input', () => {
-            let val = Number(input.value);
-            if (Number.isFinite(val) && val > maximum) {
-                val = maximum;
-                input.value = String(maximum);
-            }
-            if (!isNaN(val) && val < currentMax) {
-                warning.textContent = `${tt('Warning: This will remove entries')} ${val + 1} ${tt('through')} ${currentMax}.`;
-                warning.style.display = 'block';
-            } else {
-                warning.style.display = 'none';
-            }
-        });
-
-        modal.appendChild(body);
-
-        // Footer buttons
-        const footer = document.createElement('div');
-        // The bottom radii match the modal's own, or the footer's square
-        // corners poke past the rounded boundary.
-        footer.style.cssText = 'padding: 12px 20px; display: flex; justify-content: flex-end; gap: 8px; border-top: 1px solid var(--color-border); background-color: var(--color-bg-panel); border-radius: 0 0 6px 6px;';
-
-        const cancelBtn = document.createElement('button');
-        cancelBtn.textContent = tt('Cancel');
-        cancelBtn.className = 'rr-btn-secondary';
-
-        const okBtn = document.createElement('button');
-        okBtn.textContent = tt('OK');
-        okBtn.className = 'rr-button-primary';
-        okBtn.onmouseenter = () => { okBtn.style.backgroundColor = 'var(--color-accent-muted)'; };
-        okBtn.onmouseleave = () => { okBtn.style.backgroundColor = 'var(--color-accent)'; };
-
-        const close = () => overlay.remove();
         const isCurrent = this.captureDetailContext();
-
-        cancelBtn.onclick = close;
-        header.querySelector('.modal-close').onclick = close;
-        // A destructive dialog closes on purpose only — Cancel or the cross —
-        // never from a stray click beside it.
-
-        okBtn.onclick = () => {
-            if (!isCurrent() || !overlay.isConnected) return;
-            const newMax = Number(input.value);
-            if (!Number.isInteger(newMax) || newMax < 1 || newMax > maximum) {
-                input.style.borderColor = 'var(--color-danger-pressed)';
-                return;
+        const whole = text => (/^\d+$/.test(String(text).trim()) ? Number(String(text).trim()) : NaN);
+        const typed = await RRDialog.prompt(`${title} (${tt('Max:')} ${maximum})`, {
+            title: this._t('db.changeMaximum'),
+            value: String(currentMax),
+            ok: this._t('db.changeMaximum'),
+            validate: text => {
+                const value = whole(text);
+                return value >= 1 && value <= maximum ? '' : tt('Enter a whole number from 1 to {max}.').replace('{max}', maximum);
             }
-            close();
-            onConfirm(newMax);
-        };
-
-        // Enter key submits
-        input.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') okBtn.click();
-            if (e.key === 'Escape') close();
         });
-
-        footer.appendChild(cancelBtn);
-        footer.appendChild(okBtn);
-        modal.appendChild(footer);
-
-        overlay.appendChild(modal);
-        document.body.appendChild(overlay);
-        this.registerDetailModal(overlay);
-
-        // Focus and select the input
-        input.focus();
-        input.select();
+        if (typed === null || !isCurrent()) return;
+        return onConfirm(whole(typed));
     }
 
     showImagePicker(title, files, onSelectCallback, getImagePathCallback, currentFile, options = {}) {
@@ -3187,6 +3428,8 @@ class DatabaseEditorUI {
 
         // Close button handler
         closeBtn.onclick = close;
+        // Escape closes the picker, wherever the focus was left, and not the dialog it was opened from.
+        window.RRKeyboardNavigation?.modal(modal, { onEscape: close });
     }
 
     static imageBrowser(projectController) {
@@ -3212,7 +3455,7 @@ class DatabaseEditorUI {
             console.error(`Error reading img/${request.folder}:`, error);
         }
         if (files.length === 0) {
-            alert(`${tt('No files found in:')} img/${request.folder}`);
+            RRDialog.alert(`${tt('No files found in:')} img/${request.folder}`, { title: request.title, kind: 'warning' });
             return false;
         }
 
@@ -3270,7 +3513,7 @@ class DatabaseEditorUI {
         const TYPES_ICON_SIZE = 14;
         const system = this.databaseManager.getSystem();
         if (!system) {
-            alert(tt('System data not loaded'));
+            RRDialog.alert(tt('System data not loaded'), { title: this._dbTitle('types', 'Types'), kind: 'error' });
             return;
         }
 
@@ -3314,7 +3557,7 @@ class DatabaseEditorUI {
                 </div>
                 <div class="rr-types-grid">
                     ${categories.map(category => `
-                        <section class="rr-types-panel" data-category="${category.key}" title="${rrEscapeHtml(category.description)}">
+                        <section class="rr-types-panel rr-db-fold" data-category="${category.key}" data-section-key="${category.key}" title="${rrEscapeHtml(category.description)}">
                             <div class="rr-types-panel-body"></div>
                         </section>
                     `).join('')}
@@ -3410,7 +3653,7 @@ class DatabaseEditorUI {
             }).join('');
 
             panel.querySelector('.rr-types-panel-body').innerHTML = `
-                <header class="rr-types-panel-header">
+                <header class="rr-types-panel-header rr-db-fold-header">
                     <span>${category.title}</span>
                     <span class="rr-types-count">${data.length - 1}</span>
                 </header>
@@ -3544,10 +3787,17 @@ class DatabaseEditorUI {
             });
             panel.querySelector('.rr-types-change-max').addEventListener('click', () => {
                 const currentMax = data.length - 1;
-                this.showChangeMaximumModal(category.title, category.key, currentMax, newMax => {
-                    if (newMax < currentMax && !confirm(
-                        `${tt('Reducing this maximum will remove type IDs')} ${newMax + 1} ${tt('through')} ${currentMax}. ${tt('Existing references to those IDs may become invalid. Continue?')}`
-                    )) return;
+                this.showChangeMaximumModal(category.title, category.key, currentMax, async newMax => {
+                    if (newMax < currentMax) {
+                        // A smaller maximum removes type IDs: that is asked by name, and starts on Cancel.
+                        const askedAt = mutationGeneration;
+                        if (!(await RRDialog.confirm(this.describeRemovedEntries(newMax, currentMax), {
+                            title: this._t('db.changeMaximum'), ok: tt('Reduce Maximum'), danger: true
+                        }))) return;
+                        // The answer can come after the lists changed or the page was left.
+                        if (mutationGeneration !== askedAt || system[category.key] !== data || data.length - 1 !== currentMax
+                            || panelFor(category.key) !== panel) return;
+                    }
                     if (!this.resizeTypeArray(system, category.key, newMax)) return;
                     mutationGeneration++;
                     const remaining = sortedSelection(category.key).filter(index => index <= newMax);
@@ -3576,7 +3826,7 @@ class DatabaseEditorUI {
             const names = indices.map(index => system[category][index] || '');
             const expectedMutation = mutationGeneration;
             if (!await this.writeTypeClipboard(names)) {
-                alert(this._t('db.clipboardWriteFailed'));
+                RRDialog.alert(this._t('db.clipboardWriteFailed'), { title: this._t('common.cut'), kind: 'error' });
                 return;
             }
             if (activeCategory !== category || mutationGeneration !== expectedMutation
@@ -3599,12 +3849,12 @@ class DatabaseEditorUI {
             if (requestGeneration !== pasteGeneration || mutationGeneration !== expectedMutation) return;
             if (sortedSelection(targetCategory)[0] !== start || system[targetCategory].length - 1 < start) return;
             if (!names.length) {
-                alert(tt('No type names in the clipboard.'));
+                RRDialog.alert(tt('No type names in the clipboard.'), { title: this._t('common.paste'), kind: 'warning' });
                 return;
             }
             const category = categoryByKey.get(targetCategory);
             if (!this.pasteTypeNames(system, targetCategory, start, names)) {
-                alert(`${tt('Max:')} ${this.getDatabaseMaximum(targetCategory)}`);
+                RRDialog.alert(`${tt('Max:')} ${this.getDatabaseMaximum(targetCategory)}`, { title: this._t('common.paste'), kind: 'warning' });
                 return;
             }
             mutationGeneration++;
@@ -3615,13 +3865,22 @@ class DatabaseEditorUI {
             this.updateStatus?.(tt('Pasted {count} type names').replace('{count}', names.length));
         };
 
-        const clearSelected = () => {
-            const indices = sortedSelection(activeCategory);
+        const clearSelected = async () => {
+            const category = activeCategory;
+            const indices = sortedSelection(category);
             if (!indices.length) return;
-            if (!confirm(tt('Clear {count} selected type names? Numeric IDs will remain in place.').replace('{count}', indices.length))) return;
-            this.clearTypeNames(system, activeCategory, indices);
+            const askedAt = mutationGeneration;
+            const workspace = detailEl.querySelector('.rr-types-workspace');
+            if (!(await RRDialog.confirm(tt('Clear {count} selected type names? Numeric IDs will remain in place.').replace('{count}', indices.length), {
+                title: tt('Clear Selected'), ok: tt('Clear'), danger: true
+            }))) return;
+            // The answer can come after the lists changed, another list took the selection, or the page was left.
+            const selected = sortedSelection(category);
+            if (activeCategory !== category || mutationGeneration !== askedAt || !detailEl.contains(workspace)
+                || selected.length !== indices.length || selected.some((index, at) => index !== indices[at])) return;
+            this.clearTypeNames(system, category, indices);
             mutationGeneration++;
-            renderPanel(categoryByKey.get(activeCategory));
+            renderPanel(categoryByKey.get(category));
             this.updateStatus?.(tt('Cleared {count} type names').replace('{count}', indices.length));
         };
 
@@ -3631,6 +3890,7 @@ class DatabaseEditorUI {
         detailEl.querySelector('.rr-types-clear').addEventListener('click', clearSelected);
         categories.forEach(renderPanel);
         setActiveCategory(activeCategory);
+        this.refreshDatabaseSections();
     }
 
     /** Resize a System type array while preserving its reserved zero slot. */
@@ -3774,6 +4034,174 @@ class DatabaseEditorUI {
         return this.normalizeTypeClipboardText(this.plainTextClipboard || '');
     }
 
+    //-------------------------------------------------------------------------
+    // Terms: the words of battles on the map.
+
+    /**
+     * Every word a battle on the map shows that the Terms above do not have,
+     * with its stock English: the game shows it unless System.json ›
+     * reactorBattle.terms has the project's own. One entry per word of the
+     * runtime's tables (ReactorFight.TERMS and the tables beside it, the
+     * battle HUD's reasons for a grayed choice, the Action driver's two
+     * lines, the Victory interface's labels as `victory` + the label's name).
+     */
+    static BATTLE_WORDS = {
+        wait: 'Wait', endTurn: 'End Turn', auto: 'Auto', overwatch: 'Overwatch',
+        mount: 'Mount', dismount: 'Dismount', whyNoRoom: 'No room to get off here',
+        goalDefeatAll: 'Defeat all enemies', goalSurvive: 'Survive %1 turns', goalDefeatUnit: 'Defeat %1', goal: 'Complete the objective',
+        goalEnemiesLeft: 'Enemies left: %1', goalSurviveLeft: 'Survive: %1 turns left', goalSurviveLast: 'Survive: last turn', goalChanged: 'New goal: %1',
+        goalLose: 'You lose if your party falls', goalTurn: 'Turn %1',
+        menuResume: 'Resume', menuUnits: 'Units', menuGoal: 'Goal', menuControls: 'Controls', menuOptions: 'Options', menuRetreat: 'Retreat', menuBack: 'Back',
+        menuThreatShow: 'Show enemy reach', menuThreatHide: 'Hide enemy reach',
+        menuPace: 'Enemy turn speed', paceNormal: 'Normal', paceFast: 'Fast', paceSkip: 'Skip to my turn', menuHints: 'Control hints', on: 'On', off: 'Off',
+        menuGameOptions: 'Game options', unitDone: 'Done', unitWatch: 'On watch',
+        endTurnAsk: '%1 units have not acted.\nEnd the turn?', endTurnAskOne: '1 unit has not acted.\nEnd the turn?', endTurnYes: 'End the turn', endTurnNo: 'Keep playing',
+        retreatAsk: 'Leave the battle?', retreatYes: 'Retreat', retreatNo: 'Stay and fight',
+        autoAsk: 'Your units act by themselves\nfor the rest of this turn?', autoYes: 'Let them act', autoNo: 'Keep playing',
+        tipPick: 'Choose a unit: %1', tipNext: '%1: next unit', tipMenu: '%1: battle menu', tipTurn: '%1 %2: turn the view', tipZoom: 'Mouse wheel: zoom',
+        tipAuto: 'Battle menu: Auto plays the turn',
+        tipMove: 'Where to move: %1', tipStay: '%1 on its own tile: stay', tipBack: '%1: back', tipUnit: '%1: back to the unit', tipLevel: "%1: the tile's next level",
+        tipThreat: '%1: show enemy reach',
+        tipFace: '%1 %2: turn the unit', tipUndo: '%1: undo the move', tipWait: "Wait ends this unit's turn",
+        tipTarget: 'Choose a target: %1', tipNextTarget: '%1: next target', tipHurry: 'Hold %1 to hurry',
+        orClick: '%1 or click', orRightClick: '%1 or right-click',
+        whyNoReach: 'Nobody in reach', whyAttack: 'Cannot attack', whySkill: 'No skill to use', whyItem: 'No item to use', whyCost: 'Not enough %1',
+        whyUse: 'Cannot be used now', whyRange: 'Out of reach', whyNoTarget: 'No target there',
+        unitPlaced: '%1 had no room and was moved', unitsPlaced: '%1 units had no room and were moved', unitNoRoom: '%1 has no room where it stands',
+        ctlOk: 'Choose, confirm', ctlCancel: 'Back, battle menu', ctlCursor: 'Move the cursor', ctlNext: 'Next unit or target',
+        ctlHurry: 'Hurry the other side', ctlView: 'Turn the view', ctlZoom: 'Zoom', ctlUnit: 'Back to the unit', ctlLevel: "A tile's next level", ctlFace: 'Turn the unit',
+        ctlThreat: "Every enemy's reach",
+        keyArrows: 'Arrow keys', keyPad: 'D-pad', keyWheel: 'Mouse wheel', keyHold: '%1 (hold)', keyClick: 'Click', keyRightClick: 'Right-click',
+        lead: '%1 takes the lead', takeMouse: 'Click to take the mouse',
+        victoryTitle: 'Victory!', victoryLevelUpTitle: 'Level Up', victoryRewardsTitle: 'Rewards',
+        victoryLevelUp: 'Level Up!', victoryGained: '+%1 %2', victoryMax: 'MAX',
+        victoryLearned: 'New skills', victoryMore: '+%1 more',
+        victoryGold: 'Gold found', victoryItem: 'Item', victoryKeyItem: 'Key Item', victoryWeapon: 'Weapon', victoryArmor: 'Armor',
+        victoryContinue: 'Continue', victoryClose: 'Close', victoryPage: '%1 / %2'
+    };
+
+    /**
+     * The groups the words are listed under, in order: [id, its heading, the
+     * words it takes]. A stock word no group takes is a command's; a word a
+     * project stores that the table does not have is listed last.
+     */
+    static BATTLE_WORD_GROUPS = [
+        ['commands', 'db.battleWords.commands', null],
+        ['reasons', 'db.battleWords.reasons', /^why[A-Z]/],
+        ['goal', 'db.battleWords.goal', /^goal/],
+        ['notices', 'db.battleWords.notices', /^units?(?:Placed|NoRoom)$/],
+        ['menu', 'db.battleWords.menu', /^(?:menu|pace|unit|endTurn|retreat|escape|auto)[A-Z]|^(?:on|off)$/],
+        ['tips', 'db.battleWords.tips', /^(?:tip|or)[A-Z]/],
+        ['controls', 'db.battleWords.controls', /^(?:ctl|key)[A-Z]/],
+        ['action', 'db.battleWords.action', /^(?:lead|takeMouse)$/],
+        ['victory', 'db.battleWords.victory', /^victory[A-Z]/],
+        ['other', 'db.battleWords.other', null]
+    ];
+
+    /** The panel's own words in English; the label manager's keyed tables translate them. */
+    static BATTLE_WORD_TEXT = {
+        'db.battleWords.stock': 'Stock word',
+        'db.battleWords.own': "This game's word",
+        'db.battleWords.hint': '%1 and %2 are filled in by the game. \\n starts a new line.',
+        'db.battleWords.commands': 'Commands',
+        'db.battleWords.reasons': 'Grayed choices',
+        'db.battleWords.goal': 'Goal',
+        'db.battleWords.notices': 'Notices',
+        'db.battleWords.menu': 'Battle menu',
+        'db.battleWords.tips': 'Control hints',
+        'db.battleWords.controls': 'Controls page',
+        'db.battleWords.action': 'Action and First Person',
+        'db.battleWords.victory': 'Victory',
+        'db.battleWords.other': 'Other words'
+    };
+
+    static battleWordText(key) {
+        const i18n = typeof window !== 'undefined' ? window.I18n : null;
+        const text = i18n && typeof i18n.t === 'function' ? i18n.t(key) : key;
+        return text && text !== key ? text : (DatabaseEditorUI.BATTLE_WORD_TEXT[key] || key);
+    }
+
+    /** The group a battle word is listed under. */
+    static battleWordGroup(key) {
+        if (!Object.prototype.hasOwnProperty.call(DatabaseEditorUI.BATTLE_WORDS, key)) return 'other';
+        for (const [id, , takes] of DatabaseEditorUI.BATTLE_WORD_GROUPS) if (takes && takes.test(key)) return id;
+        return 'commands';
+    }
+
+    /** A project's own battle words (System.json › reactorBattle.terms), or an empty table. */
+    static battleWordsOf(system) {
+        const terms = system && system.reactorBattle && system.reactorBattle.terms;
+        return terms && typeof terms === 'object' ? terms : {};
+    }
+
+    /**
+     * The battle words panel of the Terms page: each word's stock English on
+     * the left and as the field's placeholder, the project's own in the field.
+     * A line break in a word is written \n.
+     */
+    battleWordsPanel(system) {
+        // One of the panel's own words, written into the opening tag of the element that shows it: the element
+        // keeps the word's key, so a change of the editor's language relabels it where it stands.
+        const E = DatabaseEditorUI, keyed = key => ` data-i18n="${key}">${rrEscapeHtml(E.battleWordText(key))}`;
+        const own = E.battleWordsOf(system), shown = text => rrEscapeHtml(String(text).replace(/\n/g, '\\n'));
+        const groups = new Map(E.BATTLE_WORD_GROUPS.map(([id]) => [id, []]));
+        for (const key of Object.keys(E.BATTLE_WORDS)) groups.get(E.battleWordGroup(key)).push(key);
+        for (const key of Object.keys(own)) if (typeof own[key] === 'string' && E.battleWordGroup(key) === 'other') groups.get('other').push(key);
+        const row = key => {
+            const known = Object.prototype.hasOwnProperty.call(E.BATTLE_WORDS, key);
+            const stock = known ? shown(E.BATTLE_WORDS[key]) : '';
+            const id = rrEscapeHtml(key);
+            // The placeholder is the game's word, not an editor label: its source is a parameter, so the label pass
+            // writes the same English in every language.
+            const keep = known ? ` data-i18n-placeholder-source="{word}" data-i18n-text-params="${rrEscapeHtml(JSON.stringify({ word: String(E.BATTLE_WORDS[key]).replace(/\n/g, '\\n') }))}"` : '';
+            return `<label class="rr-terms-message-row" title="reactorBattle.terms.${id}${stock ? `: ${stock}` : ''}">
+                    <span>${stock || id}</span>
+                    <input type="text" class="rr-term-battle-input" data-key="${id}" value="${typeof own[key] === 'string' ? shown(own[key]) : ''}" placeholder="${stock}"${keep}>
+                </label>`;
+        };
+        const rows = E.BATTLE_WORD_GROUPS.filter(([id]) => groups.get(id).length).map(([id, heading]) => `
+                <div class="rr-terms-message-group"${keyed(heading)}</div>
+                ${groups.get(id).map(row).join('')}`).join('');
+        return `<section class="rr-terms-panel rr-terms-battle-panel database-section rr-db-fold" data-section-key="battle-words">
+                <header class="database-section-header rr-db-fold-header" data-i18n-text-source="Battles on the Map">${rrEscapeHtml(this._tt('Battles on the Map'))}</header>
+                <div class="rr-terms-battle-hint"${keyed('db.battleWords.hint')}</div>
+                <div class="rr-terms-message-columns"><span${keyed('db.battleWords.stock')}</span><span${keyed('db.battleWords.own')}</span></div>
+                <div class="rr-terms-battle-list" data-rr-i18n-skip>${rows}</div>
+            </section>`;
+    }
+
+    /** The battle words' fields: each stores its word as it is typed and has the text fields' own menu. */
+    wireBattleWords(container, system) {
+        container.querySelectorAll('.rr-term-battle-input').forEach(input => {
+            input.addEventListener('input', () => this.setBattleWord(system, input.dataset.key, input.value));
+            this.attachTextFieldContextMenu(input);
+        });
+    }
+
+    /**
+     * Stores a battle word as the project's own; a field that is empty or
+     * holds only spaces goes back to the stock word and stores nothing.
+     * \n typed in the field is a line break.
+     */
+    setBattleWord(system, key, text) {
+        // (The battle settings' own editor keeps settings that are back as the Database found them reading as they did.)
+        const settings = this.system1Editor && typeof this.system1Editor.settleBattle === 'function' ? this.system1Editor : null;
+        const found = settings ? settings.battleAsFound(system) : null;
+        const value = String(text == null ? '' : text).replace(/\\n/g, '\n');
+        const battle = system.reactorBattle && typeof system.reactorBattle === 'object' ? system.reactorBattle : null;
+        if (value.trim()) {
+            const target = battle || (system.reactorBattle = {});
+            if (!target.terms || typeof target.terms !== 'object') target.terms = {};
+            target.terms[key] = value;
+        } else if (battle && battle.terms && typeof battle.terms === 'object') {
+            delete battle.terms[key];
+            if (!Object.keys(battle.terms).length) delete battle.terms;
+            if (!Object.keys(battle).length) delete system.reactorBattle;
+        }
+        if (found) settings.settleBattle(system, found);
+        this._markDatabaseMutation();
+    }
+
     /**
      * Show Terms editor (Basic, Commands, Parameters)
      */
@@ -3781,7 +4209,7 @@ class DatabaseEditorUI {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const system = this.databaseManager.getSystem();
         if (!system || !system.terms) {
-            alert(tt('Terms data not loaded'));
+            RRDialog.alert(tt('Terms data not loaded'), { title: this._dbTitle('terms', 'Terms'), kind: 'error' });
             return;
         }
 
@@ -3865,22 +4293,23 @@ class DatabaseEditorUI {
             <div class="rr-terms-workspace">
                 <div class="rr-terms-left">
                     <div class="rr-terms-top-grid">
-                        <section class="rr-terms-panel">
-                            <header>${tt('Basic Statuses')}</header>
-                            <div class="rr-terms-fields rr-terms-fields-two">${renderArrayFields('basic', arrays.basic)}</div>
+                        <section class="rr-terms-panel database-section rr-db-fold" data-section-key="basic">
+                            <header class="database-section-header rr-db-fold-header">${tt('Basic Statuses')}</header>
+                            <div class="database-section-content rr-terms-fields rr-terms-fields-two">${renderArrayFields('basic', arrays.basic)}</div>
                         </section>
-                        <section class="rr-terms-panel">
-                            <header>${tt('Parameters')}</header>
-                            <div class="rr-terms-fields rr-terms-fields-two">${renderArrayFields('params', arrays.params)}</div>
+                        <section class="rr-terms-panel database-section rr-db-fold" data-section-key="params">
+                            <header class="database-section-header rr-db-fold-header">${tt('Parameters')}</header>
+                            <div class="database-section-content rr-terms-fields rr-terms-fields-two">${renderArrayFields('params', arrays.params)}</div>
                         </section>
                     </div>
-                    <section class="rr-terms-panel rr-terms-commands-panel">
-                        <header>${tt('Commands')}</header>
-                        <div class="rr-terms-fields rr-terms-fields-four">${renderArrayFields('commands', arrays.commands)}</div>
+                    <section class="rr-terms-panel rr-terms-commands-panel database-section rr-db-fold" data-section-key="commands">
+                        <header class="database-section-header rr-db-fold-header">${tt('Commands')}</header>
+                        <div class="database-section-content rr-terms-fields rr-terms-fields-four">${renderArrayFields('commands', arrays.commands)}</div>
                     </section>
+                    ${this.battleWordsPanel(system)}
                 </div>
-                <section class="rr-terms-panel rr-terms-messages-panel">
-                    <header>${tt('Messages')}</header>
+                <section class="rr-terms-panel rr-terms-messages-panel database-section rr-db-fold" data-section-key="messages">
+                    <header class="database-section-header rr-db-fold-header">${tt('Messages')}</header>
                     <div class="rr-terms-message-columns"><span>${tt('Type')}</span><span>${tt('Text')}</span></div>
                     <div class="rr-terms-message-list">${messagesHtml}</div>
                 </section>
@@ -3899,6 +4328,8 @@ class DatabaseEditorUI {
             });
             this.attachTextFieldContextMenu(input);
         });
+        this.wireBattleWords(detailEl, system);
+        this.refreshDatabaseSections();
     }
 
     /**
@@ -4101,6 +4532,9 @@ class DatabaseEditorUI {
     }
 
 }
+
+/** Database sections whose records can bind a 3D model (Database.r3d.json). */
+DatabaseEditorUI.MODEL_BINDING_TYPES = ['actors', 'enemies', 'weapons', 'armors', 'items'];
 
 // Export for use in main.js
 if (typeof module !== 'undefined' && module.exports) {

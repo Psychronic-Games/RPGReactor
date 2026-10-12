@@ -1,4 +1,5 @@
 const { source3D } = require('./helpers/runtime-3d-source.cjs');
+const { runtimeSource } = require('./helpers/runtime-source.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -187,7 +188,7 @@ test('a model will not turn into the player', () => {
 });
 
 test('a modeled event does not collide with its own footprint', () => {
-    const source = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_objects.js'), 'utf8');
+    const source = runtimeSource('reactor_objects.js');
     assert.match(source, /event !== this && event\.isNormalPriority/);
 });
 
@@ -338,7 +339,9 @@ test('the event Image section authors models into the sidecar', () => {
     const pageEditor = fs.readFileSync(path.join(repoRoot, 'editor', 'src', 'event', 'EventPageEditor.js'), 'utf8');
     assert.match(pageEditor, /image-3d-checkbox/);
     assert.match(pageEditor, /ModelGraphicPicker/);
-    assert.match(pageEditor, /event\.index.*event\.dir.*event\.pattern/);
+    // A sprite event names its frame in the picker's own words ("Character 4 · Left · Frame 2").
+    assert.match(pageEditor, /this\.frameWords\(image, directionName\)/);
+    assert.match(pageEditor, /Character \{index\} · \{direction\} · Frame \{frame\}/);
     assert.match(pageEditor, /use3d \? tt\('3D Model'\)/);
     assert.match(pageEditor, /applyEventModelPose/);
     assert.match(pageEditor, /image-dir-btn/);
@@ -388,15 +391,19 @@ test('a moving step tests the footprint in both orientations', () => {
     const at = core3d.indexOf('Reactor3D.eventModelWouldOverlap = function(character, x, y, other, direction)');
     assert.ok(at >= 0, 'wouldOverlap accepts the movement direction');
     const body = core3d.slice(at, core3d.indexOf('\n};', at));
-    assert.match(body, /eventModelWorldYaw\(character, spec, direction\)/,
-        'the implied facing joins the yaw list, at the mesh world yaw');
+    assert.match(body, /_bodyStepOf\(character, direction\)/,
+        'and answers through the body rule: the facing the step implies, and what the turn sweeps');
     assert.ok(core3d.includes('Reactor3D.eventModelWouldOverlapEvents = function'),
         'model events collide footprint-wide with other events');
 
-    const objects = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_objects.js'), 'utf8');
-    assert.match(objects, /eventModelWouldOverlapEvents\(this, x, y, this\._reactorMoveDirection\(x, y\)\)/,
-        'event-vs-event collision goes through the footprint');
-    assert.match(objects, /eventModelWouldOverlap\(this, x, y, \$gamePlayer, this\._reactorMoveDirection\(x, y\)\)/,
+    // The map's own collision asks body against body (unit-body.test.cjs plays it), with the step's direction.
+    const step = core3d.slice(core3d.indexOf('Reactor3D._bodyStepOf = function(mover, direction)'));
+    assert.match(step.slice(0, step.indexOf('\n};')), /eventModelWorldYaw\(mover, held\.spec, direction\)[\s\S]*?_heldSweep\(/,
+        'a step that turns the body is tested over everything the turn sweeps');
+    const objects = runtimeSource('reactor_objects.js');
+    assert.match(objects, /bodyMeetsEvents\(this, x, y, this\._reactorMoveDirection\(x, y\)\)/,
+        'event-vs-event collision goes through the body');
+    assert.match(objects, /bodyMeetsParty\(this, x, y, this\._reactorMoveDirection\(x, y\)\)/,
         'event-vs-player collision passes the movement direction');
 });
 
@@ -426,12 +433,13 @@ test('billboards depth-test as if standing upright at their anchor', () => {
     assert.match(matBody, /#include <project_vertex>/, 'and override depth after projection');
 });
 
-test('a turning model must clear the disc its corners sweep', () => {
+test('a turning model must clear the arc its corners sweep', () => {
     const previousMap = global.$dataMap;
     const previousGraphics = global.Graphics;
+    let facing = 6;
     const event = {
         _x: 5, _y: 5, _realX: 5, _realY: 5, _pageIndex: 0,
-        event: () => ({ id: 1 }), eventId: () => 1, direction: () => 6
+        event: () => ({ id: 1 }), eventId: () => 1, direction: () => facing
     };
     global.$dataMap = { reactor3d: { events: { 1: { 0: { name: 'Car', size: 4 } } } } };
     const spec = Reactor3D.characterModelSpec(event);
@@ -439,8 +447,8 @@ test('a turning model must clear the disc its corners sweep', () => {
     const previousEntry = Reactor3D._glbCache[key];
     Reactor3D._glbCache[key] = { template: { userData: { glbSize: { x: 1, y: 1, z: 4 } } } };
     try {
-        // halfX 0.5, halfZ 2 -> corner radius ~2.06, sweep blocks r < 2.56.
-        assert.equal(Number(Reactor3D.eventModelSweepRadius(event, spec).toFixed(2)), 2.06);
+        // halfX 0.5, halfZ 2 -> corner radius ~2.06.
+        assert.equal(Number(Reactor3D.eventBody(event).sweep.toFixed(2)), 2.06);
 
         // (6,6) is outside BOTH end rectangles of an east<->south turn but
         // inside the sweep arc — the exact blind spot a bystander stood in.
@@ -464,9 +472,12 @@ test('a turning model must clear the disc its corners sweep', () => {
         // While the mesh is still easing, the footprint covers the arc, so a
         // character cannot step into the swing; it frees once settled.
         global.Graphics = { frameCount: 100 };
-        event._reactorTurnStamp = 98;
+        assert.equal(Reactor3D.eventModelOccupies(event, 6, 6), false, 'beside it while it faces east');
+        facing = 2;
+        event._reactorTurnStamp = 100;
         assert.equal(Reactor3D.eventModelOccupies(event, 6, 6), true, 'mid-swing blocked');
-        event._reactorTurnStamp = 100 - Reactor3D.MODEL_TURN_SWEEP_FRAMES - 1;
+        assert.equal(Reactor3D.eventModelOccupies(event, 6, 4), false, 'the quarter the turn does not pass through stays free');
+        global.Graphics.frameCount = 100 + Reactor3D.MODEL_TURN_SWEEP_FRAMES;
         assert.equal(Reactor3D.eventModelOccupies(event, 6, 6), false, 'settled swing frees');
     } finally {
         Reactor3D._glbCache[key] = previousEntry;

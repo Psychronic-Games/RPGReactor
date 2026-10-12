@@ -12,7 +12,7 @@ const read = relative => fs.readFileSync(path.join(repoRoot, relative), 'utf8');
  * Loads runtime/reactor_ui.js against stubs for the engine classes it
  * extends, so the data half (normalize, layout, conditions) is testable.
  */
-function loadRuntimeUI({ argv = [], search = '' } = {}) {
+function loadRuntimeUI({ argv = [], search = '', globals = {} } = {}) {
     class Base { initialize() {} }
     const stub = () => { const C = function() {}; C.prototype = Object.create(Base.prototype); return C; };
     const sceneCalls = [];
@@ -69,6 +69,7 @@ function loadRuntimeUI({ argv = [], search = '' } = {}) {
         $gameParty: { members: () => [], allItems: () => [], inBattle: () => false, menuActor: () => null },
         XMLHttpRequest: class { open() {} send() {} overrideMimeType() {} }
     };
+    Object.assign(sandbox, globals);
     sandbox.window = sandbox;
     sandbox.globalThis = sandbox;
     SceneMenuBase.prototype.__sandbox = sandbox;
@@ -85,6 +86,46 @@ test('reactor_ui.js boots after the windows and before MV compatibility and plug
     assert.ok(order.every(index => index >= 0), 'every script is in the manifest');
     assert.deepEqual(order, [...order].sort((a, b) => a - b));
     assert.equal(read('template/Demo/js/reactor_ui.js'), read('runtime/reactor_ui.js'), 'the Demo carries the same file');
+});
+
+test('a battle test reads the Test_ copy of the interfaces when the editor wrote one; a normal game never asks for it', () => {
+    const TEST = 'data/Test_UserInterfaces.json', REAL = 'data/UserInterfaces.json';
+    const real = JSON.stringify([null, { id: 1, name: 'Saved' }]), unsaved = JSON.stringify([null, { id: 1, name: 'Unsaved' }]);
+    // Over XHR (a browser build): each file answers or is missing.
+    const overXhr = (testing, files) => {
+        const sandbox = loadRuntimeUI(), asked = [];
+        sandbox.Utils = { isNwjs: () => false };
+        sandbox.DataManager = Object.assign(sandbox.DataManager || {}, { isBattleTest: () => testing });
+        sandbox.XMLHttpRequest = class {
+            open(method, url) { this.url = url; asked.push(url); }
+            overrideMimeType() {}
+            send() { const body = files[this.url]; this.status = body === undefined ? 404 : 200; this.responseText = body || ''; this.onload(); }
+        };
+        sandbox.ReactorUI._state = null;
+        sandbox.ReactorUI.load();
+        return { asked, name: sandbox.$dataUserInterfaces[1] && sandbox.$dataUserInterfaces[1].name, done: sandbox.ReactorUI.isReady() };
+    };
+    assert.deepEqual(overXhr(true, { [TEST]: unsaved, [REAL]: real }), { asked: [TEST], name: 'Unsaved', done: true });
+    assert.deepEqual(overXhr(true, { [REAL]: real }), { asked: [TEST, REAL], name: 'Saved', done: true }, 'no Test_ file: the saved one');
+    assert.deepEqual(overXhr(true, { [TEST]: '{broken', [REAL]: real }), { asked: [TEST, REAL], name: 'Saved', done: true }, 'a broken Test_ file falls back');
+    assert.deepEqual(overXhr(false, { [TEST]: unsaved, [REAL]: real }), { asked: [REAL], name: 'Saved', done: true }, 'a normal game never asks for the Test_ file');
+    assert.deepEqual(overXhr(true, {}), { asked: [TEST, REAL], name: undefined, done: true });
+    // On disk (NW.js).
+    const onDisk = (testing, files) => {
+        const sandbox = loadRuntimeUI(), read = [];
+        sandbox.Utils = { isNwjs: () => true };
+        sandbox.DataManager = Object.assign(sandbox.DataManager || {}, { isBattleTest: () => testing });
+        sandbox.process = { mainModule: { filename: '/game/index.html' } };
+        sandbox.require = name => name === 'fs'
+            ? { existsSync: file => { read.push(file); return files[file] !== undefined; }, readFileSync: file => files[file] }
+            : require('node:path').posix;
+        sandbox.ReactorUI._state = null;
+        sandbox.ReactorUI.load();
+        return { read, name: sandbox.$dataUserInterfaces[1] && sandbox.$dataUserInterfaces[1].name };
+    };
+    assert.deepEqual(onDisk(true, { ['/game/' + TEST]: unsaved, ['/game/' + REAL]: real }), { read: ['/game/' + TEST], name: 'Unsaved' });
+    assert.deepEqual(onDisk(true, { ['/game/' + REAL]: real }), { read: ['/game/' + TEST, '/game/' + REAL], name: 'Saved' });
+    assert.deepEqual(onDisk(false, { ['/game/' + TEST]: unsaved, ['/game/' + REAL]: real }), { read: ['/game/' + REAL], name: 'Saved' });
 });
 
 test('the runtime registers the Call User Interface plugin command and loads the file optionally', () => {
@@ -326,8 +367,8 @@ test('the editor and runtime agree on anchors, node types, and action types', ()
         assert.ok(runtimeSource.includes(`"${action}"`), `runtime action ${action}`);
         assert.ok(editorSource.includes(`'${action}'`), `editor action ${action}`);
     }
-    assert.match(runtimeSource, /NODE_TYPES = \["box", "image", "text", "button", "list", "gauge", "input", "battleWindow", "battleCursor"\]/);
-    assert.match(editorSource, /NODE_TYPES\(\) \{ return \['box', 'image', 'text', 'button', 'list', 'gauge', 'input', 'battleWindow', 'battleCursor'\]; \}/);
+    assert.match(runtimeSource, /NODE_TYPES = \["box", "image", "text", "button", "list", "gauge", "input", "battleWindow", "battleCursor",\s+"fightUnit", "fightTurnOrder", "fightInfo", "fightWindow",\s+"actionCrosshair", "actionVitals", "actionWeapon", "actionHotbar", "actionTarget", "actionBars", "actionDamage", "actionInfo",\s+"victoryParty", "victoryLevels", "victoryRewards", "victoryText"\]/);
+    assert.match(editorSource, /NODE_TYPES\(\) \{ return \['box', 'image', 'text', 'button', 'list', 'gauge', 'input', 'battleWindow', 'battleCursor',\s+'fightUnit', 'fightTurnOrder', 'fightInfo', 'fightWindow',\s+'actionCrosshair', 'actionVitals', 'actionWeapon', 'actionHotbar', 'actionTarget', 'actionBars', 'actionDamage', 'actionInfo',\s+'victoryParty', 'victoryLevels', 'victoryRewards', 'victoryText'\]; \}/);
     assert.match(runtimeSource, /IMAGE_SOURCES = \["picture", "system", "face", "character", "icon", "partyFace", "title1", "title2"\]/);
     assert.match(editorSource, /IMAGE_SOURCES\(\) \{ return \['picture', 'system', 'face', 'character', 'icon', 'partyFace', 'title1', 'title2'\]; \}/);
     assert.match(runtimeSource, /GAUGE_KINDS = \["hp", "mp", "tp", "exp"/);
@@ -623,19 +664,17 @@ test('overlay records attach to Scene_Map, remain nonfocusable, and update from 
     assert.doesNotMatch(runtime, /Scene_Map\.prototype\.start = function/);
 });
 
-test('System editors expose stock-default selectors for every bounded replacement role', () => {
-    const system1 = read('editor/src/database/DatabaseSystem1Editor.js');
-    const system2 = read('editor/src/database/DatabaseSystem2Editor.js');
-    assert.match(system1, /system\.reactorTitleInterfaceId/);
-    assert.match(system1, /Stock \(default\)/);
-    assert.match(system2, /reactorMenuInterfaceId/);
-    assert.match(system2, /reactorStatusInterfaceId/);
-    assert.match(system2, /reactorGameEndInterfaceId/);
-    assert.match(system2, /reactorOptionsInterfaceId/);
-    assert.match(system2, /reactorSaveInterfaceId/);
-    assert.match(system2, /reactorLoadInterfaceId/);
-    assert.match(system2, /\(entry\.mode \|\| 'scene'\) === \(role === 'battle' \? 'battle' : 'scene'\)/);
-    assert.match(system1, /if \(!record\.roles\.includes\('title'\)\) record\.roles\.push\('title'\)/);
+test('Use As holds every bounded replacement role; the System pages hold none', () => {
+    const Editor = require(path.join(editorRoot, 'src', 'database', 'DatabaseUserInterfaceEditor.js'));
+    assert.deepEqual(Editor.REPLACEMENT_ROLES.map(role => role[2]), ['reactorTitleInterfaceId', 'reactorMenuInterfaceId', 'reactorStatusInterfaceId', 'reactorGameEndInterfaceId',
+        'reactorOptionsInterfaceId', 'reactorSaveInterfaceId', 'reactorLoadInterfaceId', 'reactorItemInterfaceId', 'reactorSkillInterfaceId', 'reactorEquipInterfaceId',
+        'reactorShopInterfaceId', 'reactorNameInterfaceId', 'reactorBattleInterfaceId', 'reactorTacticalInterfaceId', 'reactorActionInterfaceId', 'reactorFirstPersonInterfaceId',
+        'reactorVictoryInterfaceId']);
+    for (const page of ['DatabaseSystem1Editor.js', 'DatabaseSystem2Editor.js']) {
+        const source = read('editor/src/database/' + page);
+        assert.doesNotMatch(source, /reactor[A-Za-z]+InterfaceId/, page + ' neither reads nor writes a binding');
+        assert.doesNotMatch(source, /Stock \(default\)/, page);
+    }
     assert.match(read('runtime/reactor_ui.js'), /record\.roles \|\| \[\]\)\.includes\(role\)/);
 });
 
@@ -935,54 +974,56 @@ test('User Interfaces replacement controls assign and unassign System roles but 
     assert.equal(system.reactorStatusInterfaceId, 0);
 });
 
-test('System 2 lists every interface whose presentation fits the role, binds like Use As, and exposes invalid ids safely', () => {
-    const previousWindow = global.window;
-    const previousEscape = global.rrEscapeHtml;
-    const previousDocument = global.document;
-    global.window = {};
-    global.rrEscapeHtml = value => String(value);
-    global.document = { createElement: () => ({ className: '', innerHTML: '' }) };
-    try {
-        const System2 = require(path.join(repoRoot, 'editor', 'src', 'database', 'DatabaseSystem2Editor.js'));
-        const records = [
-            { id: 1, name: 'Menu', mode: 'scene', roles: ['menu'] },
-            { id: 2, name: 'HUD', mode: 'overlay' },
-            { id: '3', name: 'Status', mode: 'scene', roles: ['status'] },
-            { id: 4, name: 'Battle HUD', mode: 'battle', roles: [] },
-            { id: 5, name: 'Fresh', mode: 'scene' }
-        ];
-        const manager = { getUserInterfaces: () => records, getUserInterface: id => records.find(r => Number(r.id) === id) };
-        const editor = new System2(manager);
-        const valid = editor.userInterfaceOptions(3, 'status');
-        assert.match(valid, /value="0"/);
-        assert.match(valid, /value="1"/, 'a scene record is offered for any scene role, not only the ones it was tagged with');
-        assert.match(valid, /value="3" selected/);
-        assert.match(valid, /value="5"/);
-        assert.doesNotMatch(valid, /value="2"/);
-        assert.doesNotMatch(valid, /value="4"/, 'a battle HUD cannot be a scene');
-        const battle = editor.userInterfaceOptions(0, 'battle');
-        assert.match(battle, /value="4"/);
-        assert.doesNotMatch(battle, /value="1"|value="5"/);
-        assert.match(editor.userInterfaceOptions(4, 'menu'), /value="4" selected>\(Missing\) \/ \(incompatible\) #4/);
-        assert.match(editor.userInterfaceOptions(9, 'status'), /value="9" selected>\(Missing\) \/ \(incompatible\) #9/);
-        const system = {};
-        editor.bindUserInterface(system, 'reactorShopInterfaceId', 'shop', 5);
-        assert.equal(system.reactorShopInterfaceId, 5);
-        assert.deepEqual([...records[4].roles], ['shop'], 'binding from System 2 tags the record so the game routes it');
-        editor.bindUserInterface(system, 'reactorShopInterfaceId', 'shop', 0);
-        assert.equal(system.reactorShopInterfaceId, 0);
-        const section = editor.createCustomInterfacesSection({});
-        assert.match(section.innerHTML, /reactorMenuInterfaceId/);
-        assert.match(section.innerHTML, /reactorStatusInterfaceId/);
-        assert.match(section.innerHTML, /reactorGameEndInterfaceId/);
-        assert.match(section.innerHTML, /reactorOptionsInterfaceId/);
-        assert.match(section.innerHTML, /reactorSaveInterfaceId/);
-        assert.match(section.innerHTML, /reactorLoadInterfaceId/);
-    } finally {
-        global.window = previousWindow;
-        global.rrEscapeHtml = previousEscape;
-        global.document = previousDocument;
+test('System 1 and System 2 offer no interface pickers, and their pages leave the bindings Use As made alone', () => {
+    const { createPages } = require(path.join(editorRoot, 'tests', 'helpers', 'database-pages.cjs'));
+    const Editor = require(path.join(editorRoot, 'src', 'database', 'DatabaseUserInterfaceEditor.js'));
+    const fields = Editor.REPLACEMENT_ROLES.map(role => role[2]);
+    // A project with every role bound, one to a record that is gone (#99).
+    const bound = Object.fromEntries(fields.map((field, index) => [field, index === 2 ? 99 : index + 1]));
+    const system = Object.assign({ gameTitle: 'Sample', equipTypes: ['', 'Weapon'], weaponTypes: [''], attackMotions: [], skillTypes: ['', 'Magic'], magicSkills: [1], partyMembers: [] }, bound);
+    const records = [null, { id: 1, name: 'Title', mode: 'scene', roles: ['title'] }, { id: 2, name: 'Menu', mode: 'scene', roles: ['menu'] }];
+    const manager = {
+        mutationGeneration: 0, data: { system, userInterfaces: records },
+        getSystem: () => system, getActors: () => [], getActor: () => null,
+        getUserInterfaces: () => records.filter(Boolean), getUserInterface: id => records[id] || null
+    };
+    const pages = createPages(manager);
+    const untouched = () => assert.deepEqual(Object.fromEntries(fields.map(field => [field, system[field]])), bound);
+
+    let page = pages.system2();
+    assert.deepEqual(page.querySelectorAll('.database-section-header').map(header => header.dataset.sectionKey),
+        ['menu-commands', 'item-categories', 'sv-magic-skills', 'sv-attack-motions', 'editor-settings', 'compatibility', 'asset-sizes', 'advanced-settings', 'window-text']);
+    assert.equal(page.querySelectorAll('.sys2-interface, [data-system-field]').length, 0);
+    assert.deepEqual(page.querySelectorAll('select').map(select => select.className), ['database-field-value sys2-magic-skill', 'database-field-value sys2-magic-skill'], 'the only lists left are the casting skill types');
+    untouched();
+    // Every control of the page is changed in turn: none reaches a binding.
+    for (const box of page.querySelectorAll('input')) {
+        if (box.getAttribute('type') === 'checkbox') pages.check(box, !box.hasAttribute('checked'));
+        else if (box.getAttribute('type') === 'radio') { box.checked = true; box.dispatchEvent({ type: 'change' }); }
+        else box.choose(box.getAttribute('type') === 'number' ? '7' : 'text');
     }
+    untouched();
+
+    page = pages.system1();
+    assert.equal(page.querySelectorAll('.system-title-interface').length, 0);
+    assert.ok(!page.querySelectorAll('select').some(select => /interface/i.test(select.className + select.id)));
+    assert.deepEqual(page.querySelectorAll('.title-image-picker-btn').map(button => button.dataset.titleLayer), ['1', '2'], 'the title screen keeps its two picture layers');
+    for (const box of page.querySelectorAll('.system-checkbox')) pages.check(box, !box.hasAttribute('checked'));
+    for (const field of page.querySelectorAll('.system-text-field')) field.choose('Renamed');
+    untouched();
+    assert.equal(system.gameTitle, 'Renamed', 'the pages still write their own settings');
+
+    // Use As is where a binding is made and taken off.
+    const editor = new Editor(manager);
+    editor.current = { id: 2, mode: 'scene', roles: ['menu'] };
+    assert.equal(editor.setReplacementRole('status', true), true);
+    assert.equal(system.reactorStatusInterfaceId, 2, 'the binding to the missing record is replaced from Use As');
+    assert.equal(editor.setReplacementRole('status', false), true);
+    assert.equal(system.reactorStatusInterfaceId, 0);
+
+    const read = file => fs.readFileSync(path.join(editorRoot, 'src', 'database', file), 'utf8');
+    for (const gone of ['createCustomInterfacesSection', 'userInterfaceOptions', 'bindUserInterface', 'sys2-interface', 'InterfaceId']) assert.ok(!read('DatabaseSystem2Editor.js').includes(gone), gone);
+    for (const gone of ['system-title-interface', 'userInterfaceOptions', 'InterfaceId']) assert.ok(!read('DatabaseSystem1Editor.js').includes(gone), gone);
 });
 
 test('resume snapshots preserve role, focus, List identity/top row, and contexts in one stack', () => {
@@ -1715,6 +1756,24 @@ test('a Text Input edits a draft: Enter commits and runs the action, Escape leav
 });
 
 
+test('a Text Input lets key releases through to the game, so a movement key held as it opened is let go', () => {
+    const sandbox = loadRuntimeUI(), ui = sandbox.ReactorUI;
+    const listeners = {};
+    const element = { style: {}, setAttribute() {}, focus() {}, addEventListener(type, fn) { (listeners[type] = listeners[type] || []).push(fn); } };
+    sandbox.document = { body: { appendChild() {} }, createElement: () => element };
+    const scene = new sandbox.Scene_ReactorUI();
+    const node = ui.normalizeNode({ type: 'input', variableId: 3, maxLength: 8 });
+    const field = Object.create(sandbox.Window_ReactorUINode.prototype);
+    Object.assign(field, { _uiNode: node, _uiScene: scene, _uiDraft: '' });
+    field.openDomInput();
+    let stopped = false;
+    const event = key => ({ key, isComposing: false, stopPropagation() { stopped = true; }, preventDefault() {} });
+    for (const fn of listeners.keyup || []) fn(event('ArrowUp'));
+    assert.strictEqual(stopped, false, 'the release reaches the document (the 3D camera\'s held keys, the game\'s Input)');
+    for (const fn of listeners.keydown || []) fn(event('w'));
+    assert.strictEqual(stopped, true, 'a key typed into the field still stops there');
+});
+
 // --- Battle HUD ------------------------------------------------------------
 
 test('a Battle HUD binds from System, places stock battle windows, follows the acting actor and points the cursor at the target', () => {
@@ -1756,6 +1815,23 @@ test('a Battle HUD binds from System, places stock battle windows, follows the a
     acting = hero;
     ui.placeBattleWindow(scene, hud, entry);
     assert.strictEqual(commandWindow.x, 122);
+    // Following the actor in the battle: centered on the figure, its bottom edge on the figure's head, X and Y offsets from there.
+    assert.strictEqual(node.followTarget, 'slot', 'the party panel row unless the node says otherwise');
+    const overModel = ui.normalizeNode({ type: 'battleWindow', battleWindow: 'actorCommand', followActor: true, followTarget: 'model', x: 4, y: -6, width: 180, height: 140, fill: 'none' });
+    assert.strictEqual(overModel.followTarget, 'model');
+    if (!sandbox.Point) sandbox.Point = function(x, y) { this.x = x; this.y = y; };
+    const modelWindow = Object.assign({}, commandWindow, { move(x, y, w, h) { Object.assign(this, { x, y, width: w, height: h }); } });
+    const modelScene = { _windowLayer: { x: 0, y: 0 }, _actorCommandWindow: modelWindow, _enemyWindow: enemyWindow,
+        _spriteset: { _enemySprites: [], _reactorRoomSprite: { toGlobal: point => point }, _actorSprites: [{ _battler: mage }, { _battler: hero, _reactorRoomBounds: { x: 600, y: 300, width: 80, height: 200 } }] } };
+    const modelEntry = { node: overModel, rect: new sandbox.Rectangle(0, 0, 180, 140) };
+    for (let i = 0; i < 14; i++) ui.placeBattleWindow(modelScene, hud, modelEntry);
+    assert.deepStrictEqual([modelWindow.x, modelWindow.y], [640 - 90 + 4, 300 - 140 - 6], 'over the acting actor\'s figure');
+    // An actor with no figure on the field (not yet shown) falls back to its row in the party panel.
+    modelScene._spriteset._actorSprites = [];
+    acting = mage;
+    for (let i = 0; i < 14; i++) ui.placeBattleWindow(modelScene, hud, modelEntry);
+    assert.deepStrictEqual([modelWindow.x, modelWindow.y], [312 + 4, 512 - 6]);
+    acting = hero;
     const hidden = { node: ui.normalizeNode({ type: 'battleWindow', battleWindow: 'enemy', hideWindow: true }), rect: new sandbox.Rectangle(0, 0, 0, 0) };
     ui.placeBattleWindow(scene, hud, hidden);
     assert.strictEqual(enemyWindow.alpha, 0, 'hidden, but still the window that takes the input');
@@ -1865,6 +1941,7 @@ test('a Common Event battle command runs at once while time stands still, then t
     sandbox.Game_Interpreter = class { setup(list, id) { this.list = list; this.id = id; } update() { runs--; } isRunning() { return runs > 0; } };
     const actor = { canAttack: () => true, canInput: () => true };
     sandbox.BattleManager = { canEscape: () => true, actor: () => actor, isInputting: () => true };
+    sandbox.$gameParty = { battleMembers: () => [actor] };
     const win = { _actor: actor, active: true, list: [], addCommand(name, symbol, enabled = true, ext = null) { this.list.push([name, symbol, enabled, ext]); },
         setHandler(symbol, fn) { handlers[symbol] = fn; }, currentExt: () => 1, deactivate() { this.active = false; }, activate() { this.active = true; } };
     const opened = [];
@@ -1884,6 +1961,29 @@ test('a Common Event battle command runs at once while time stands still, then t
     assert.match(source, /needsInputWindowChange = function\(\) \{\s*return this\._rrCommandEvent \? false/, 'and the command windows stay closed');
 });
 
+test('a Common Event battle command that takes the choosing actor out of the party reopens no window for them', () => {
+    const sandbox = loadRuntimeUI();
+    const UI = sandbox.ReactorUI;
+    sandbox.$dataCommonEvents = [null, { id: 1, name: 'Leave', list: [{ code: 0 }] }];
+    sandbox.Game_Interpreter = class { setup() {} update() {} isRunning() { return false; } };
+    for (const tpb of [false, true]) {
+        const actor = { canInput: () => true, state: 'inputting', setActionState(s) { this.state = s; } };
+        const manager = { _currentActor: actor, _inputting: true, actor() { return this._currentActor; }, isInputting() { return this._inputting; }, isTpb: () => tpb,
+            cancelActorInput() { if (this._currentActor) this._currentActor.setActionState('undecided'); } };
+        sandbox.BattleManager = manager;
+        sandbox.$gameParty = { battleMembers: () => [] };
+        const opened = [];
+        const win = { deactivate() {} };
+        const scene = { _actorCommandWindow: win, _partyCommandWindow: {}, startActorCommandSelection() { opened.push('actor'); }, startPartyCommandSelection() { opened.push('party'); }, changeInputWindow() { opened.push('change'); } };
+        UI.runCommandEvent(scene, win, 1);
+        assert.equal(UI.updateCommandEvent(scene), false);
+        assert.deepEqual(opened, ['change'], 'the input window follows the battle, not the removed actor');
+        assert.equal(manager._currentActor, null);
+        assert.equal(actor.state, 'undecided');
+        assert.equal(manager._inputting, !tpb, tpb ? 'time progress: the next ready member opens later' : 'turn-based: back to the party command');
+    }
+});
+
 test('the Target Cursor points at the top of the battler as drawn: a 3D model\'s projected box, else the sprite\'s frame on screen', () => {
     const sandbox = loadRuntimeUI();
     const UI = sandbox.ReactorUI;
@@ -1893,4 +1993,150 @@ test('the Target Cursor points at the top of the battler as drawn: a 3D model\'s
     assert.deepEqual({ ...UI.battlerTop(scene, model) }, { x: 760, y: 320 }, 'a model: the top centre of its box, not its 900px picture');
     const sheet = { x: 400, y: 500, scale: { y: 2 }, _frame: { height: 64 }, bitmap: { isReady: () => true, height: 384 }, parent: shift(50, 30) };
     assert.deepEqual({ ...UI.battlerTop({ toLocal: p => p, _spriteset: {} }, sheet) }, { x: 450, y: 402 }, 'a sprite: one frame tall at its scale, where its parent sits');
+});
+
+test('Close All and the nesting limit find interfaces on the stack by the wrapped class pixi_compat puts there', () => {
+    const sandbox = loadRuntimeUI();
+    const UI = sandbox.ReactorUI;
+    // MZGlobalUpgrade replaces the global with a wrapper sharing the prototype; the stack holds the wrapper.
+    const wrapped = function() {};
+    wrapped.prototype = sandbox.Scene_ReactorUI.prototype;
+    const map = function() {};
+    const scene = Object.create(sandbox.Scene_ReactorUI.prototype);
+    scene._closing = false;
+    scene._interface = { closeTransition: 'none' };
+    scene.focusedWindow = () => null;
+    let closed = 0;
+    scene.performClose = () => closed++;
+    sandbox.SceneManager._stack = [map, wrapped, wrapped];
+    UI._resumeStates.push({ interfaceId: 1 }, { interfaceId: 2 });
+    scene.closeAll();
+    assert.equal(sandbox.SceneManager._stack.length, 1, 'every interface under this one is dropped');
+    assert.equal(sandbox.SceneManager._stack[0], map);
+    assert.equal(UI._resumeStates.length, 0);
+    assert.equal(closed, 1);
+    sandbox.$dataUserInterfaces = [null, { id: 1, name: 'Menu', nodes: [] }];
+    sandbox.SceneManager._stack = Array(UI.MAX_NESTING).fill(wrapped);
+    assert.equal(UI.call(1), false, 'the nesting limit counts wrapped interfaces');
+    sandbox.SceneManager._stack = [map];
+    assert.equal(UI.call(1), true);
+});
+
+test('cancelling the target of a Use a Skill battle command returns to the command window', () => {
+    const calls = [];
+    const SceneBattle = function() {};
+    SceneBattle.prototype.onEnemyCancel = function() { calls.push('stock enemy'); };
+    SceneBattle.prototype.onActorCancel = function() { calls.push('stock actor'); };
+    const sandbox = loadRuntimeUI({ globals: { Scene_Battle: SceneBattle } });
+    const scene = new sandbox.Scene_Battle();
+    let symbol = 'rrSkill';
+    scene._actorCommandWindow = { currentSymbol: () => symbol, activate() { calls.push('activate'); } };
+    scene._statusWindow = { show() { calls.push('status'); } };
+    scene.onEnemyCancel();
+    scene.onActorCancel();
+    assert.deepEqual(calls, ['stock enemy', 'status', 'activate', 'stock actor', 'activate']);
+    calls.length = 0;
+    symbol = 'skill';
+    scene.onEnemyCancel();
+    scene.onActorCancel();
+    assert.deepEqual(calls, ['stock enemy', 'stock actor'], 'stock commands keep the stock handling');
+});
+
+test('Call Interface to an interface that cannot open leaves the caller showing and taking input', () => {
+    const sandbox = loadRuntimeUI();
+    const UI = sandbox.ReactorUI;
+    sandbox.SoundManager = { playBuzzer() {} };
+    sandbox.Graphics = { width: 816, height: 624 };
+    sandbox.$dataUserInterfaces = [null, { id: 1, name: 'Menu', nodes: [] }];
+    const scene = Object.create(sandbox.Scene_ReactorUI.prototype);
+    scene._closing = false;
+    scene._transitionPhase = 'idle';
+    scene._interface = { closeTransition: 'fade', openTransition: 'none', transitionDuration: 2 };
+    const window = { _uiTransitionAlpha: 1, syncVisualState() {}, node: () => ({ type: 'list' }), setPressed() {}, deactivate() { this.active = false; }, activate() { this.active = true; } };
+    scene._nodeWindows = [window];
+    scene._focusIndex = 0;
+    scene.resumeState = () => ({ interfaceId: 1 });
+    UI._resumeStates.length = 0;
+    scene.runAction(UI.normalizeAction({ type: 'callInterface', id: 9 }));
+    scene.updateInterfaceTransition();
+    scene.updateInterfaceTransition();
+    assert.equal(scene._closing, false, 'input is taken again');
+    assert.equal(window._uiTransitionAlpha, 1, 'the faded-out interface shows again');
+    assert.equal(window.active, true);
+    assert.equal(UI._resumeStates.length, 0);
+});
+
+test('a scene that throws while it opens leaves the interface showing and taking input', () => {
+    const sandbox = loadRuntimeUI();
+    const UI = sandbox.ReactorUI;
+    sandbox.SoundManager = { playBuzzer() {} };
+    sandbox.Graphics = { width: 816, height: 624 };
+    sandbox.SceneManager = { _stack: [], _nextScene: null, push(cls) { this._stack.push('caller'); this._nextScene = new cls(); } };
+    const scene = Object.create(sandbox.Scene_ReactorUI.prototype);
+    scene._closing = false;
+    scene._transitionPhase = 'idle';
+    scene._interface = { closeTransition: 'fade', openTransition: 'none', transitionDuration: 2 };
+    const window = { _uiTransitionAlpha: 1, syncVisualState() {}, node: () => ({ type: 'list' }), setPressed() {}, deactivate() { this.active = false; }, activate() { this.active = true; } };
+    scene._nodeWindows = [window];
+    scene._focusIndex = 0;
+    scene.resumeState = () => ({ interfaceId: 1 });
+    UI._resumeStates.length = 0;
+    const originalError = console.error;
+    console.error = () => {};
+    try {
+        scene.pushScene(function Broken() { throw new Error('plugin scene broke'); });
+        scene.updateInterfaceTransition();
+        scene.updateInterfaceTransition();
+    } finally { console.error = originalError; }
+    assert.equal(scene._closing, false, 'input is taken again');
+    assert.equal(window._uiTransitionAlpha, 1);
+    assert.equal(window.active, true);
+    assert.equal(sandbox.SceneManager._stack.length, 0, 'the half-made push is undone');
+    assert.equal(sandbox.SceneManager._nextScene, null);
+    assert.equal(UI._resumeStates.length, 0);
+});
+
+test('an interface a plugin or script calls over an open one brings the one beneath back when it closes', () => {
+    const sandbox = loadRuntimeUI();
+    const UI = sandbox.ReactorUI;
+    sandbox.$dataUserInterfaces = [null, { id: 1, name: 'Menu', nodes: [] }, { id: 2, name: 'Popup', nodes: [] }];
+    const beneath = Object.create(sandbox.Scene_ReactorUI.prototype);
+    beneath._closing = false;
+    beneath.resumeState = () => ({ interfaceId: 1 });
+    sandbox.SceneManager._scene = beneath;
+    sandbox.SceneManager._stack = [];
+    UI._resumeStates.length = 0;
+    assert.equal(UI.call(2), true);
+    assert.deepEqual([...UI._resumeStates.map(state => state.interfaceId)], [1], 'the open interface is remembered for when this one pops');
+    beneath.rememberForPush();
+    assert.equal(UI._resumeStates.length, 1, 'an action that also remembers it does not keep it twice');
+    beneath.forgetPush();
+    assert.equal(UI._resumeStates.length, 0);
+    sandbox.SceneManager._scene = {};
+    assert.equal(UI.call(2), true);
+    assert.equal(UI._resumeStates.length, 0, 'over the map nothing is remembered');
+});
+
+test('the name grid is placed under a typing field whose parents name each other, or itself: the walk up ends', () => {
+    class NameGrid {
+        constructor(rect) { this.rect = rect; }
+        setEditWindow() {} setHandler() {} activate() {}
+    }
+    const sandbox = loadRuntimeUI({ globals: { Window_NameInput: NameGrid, Graphics: { width: 816, height: 624, boxWidth: 816, boxHeight: 624 } } });
+    const place = links => {
+        const scene = Object.create(sandbox.Scene_ReactorUI.prototype);
+        let added = null, asked = 0;
+        scene.calcWindowHeight = () => 200;
+        scene.addWindow = window => { added = window; };
+        const windows = links.map(([id, parent, y, height]) => ({ x: 0, y, height, node: () => ({ id, parent, maxLength: 8 }), inputValue: () => '', setDraft() {} }));
+        // The walk is watched: one that never ends would hold the game, and this test, for good.
+        scene._nodeWindows = { find(match) { if (++asked > 50) throw new Error('the walk up the parents never ends'); return windows.find(match); } };
+        scene.openCharacterGrid(windows[0]);
+        return added.rect.y;
+    };
+    // A field in a box in a frame: under the lowest of them.
+    assert.equal(place([[1, 2, 100, 40], [2, 3, 80, 120], [3, 0, 60, 200]]), 60 + 200 + 8);
+    // The box and the frame name each other as parent (a record written by hand or by a script), and a field that names itself.
+    assert.equal(place([[1, 2, 100, 40], [2, 3, 80, 120], [3, 2, 60, 200]]), 60 + 200 + 8);
+    assert.equal(place([[1, 1, 100, 40]]), 100 + 40 + 8);
 });

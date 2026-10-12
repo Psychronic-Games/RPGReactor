@@ -254,7 +254,30 @@ test('the 3D subsystem is the core and the extensions the core names', () => {
     // 25 since 2026-09-21: reactor_screen_fx.js (screen texts, named sprites, particle effects) is its own concern.
     // 27 since 2026-09-26: reactor_controls.js (keys and buttons) and reactor_physics.js (jumping, gravity) are their own concerns.
     // 28 since 2026-09-26: reactor_rig_motions.js (the rig presets, shared byte for byte with the editor) is its own concern.
-    assert.ok(roots.length <= 28, `runtime js/ root has grown to ${roots.length} files`);
+    // 35 since 2026-09-29: reactor_core.js and reactor_objects.js are split by class into parts (runtime-core-split.test.cjs).
+    // 36 since 2026-10-02: reactor_3d_foliage.js (grass, flowers, ferns, reeds and bushes) is its own 3D extension.
+    // 37 since 2026-10-02: reactor_3d_doors.js (doors that open, framed windows) is its own 3D extension.
+    // 38 since 2026-10-02: reactor_fight.js (battles on the live map) is its own concern.
+    // 39 since 2026-10-03: reactor_fight_stage.js (Action Sequences on the live map) is its own concern.
+    // 42 since 2026-10-03: reactor_fight_tactical.js (the tactical driver), reactor_fight_camera.js (the cinematic camera)
+    // and reactor_ui_fight.js (the tactical HUD's drawing, shared byte for byte with the editor) are their own concerns.
+    // 43 since 2026-10-03: reactor_3d_surround.js (the land past a map's border) is its own 3D extension.
+    // 44 since 2026-10-03: reactor_fight_action.js (the real-time driver of Action and First Person battles) is its own concern.
+    // 45 since 2026-10-03: reactor_ui_action.js (the Action and First Person battle HUD's drawing, shared byte for byte with the editor) is its own concern.
+    // 46 since 2026-10-04: reactor_ui_victory.js (the Victory interface's pages and drawing, shared byte for byte with the editor) is its own concern.
+    // 47 since 2026-10-04: reactor_image_layers.js (map image layers: the pure rules shared with the editor, and their game hooks) is its own concern.
+    // 48 since 2026-10-04: reactor_objects_followers.js (the party's followers: formations, orders and their commands) is a part of reactor_objects.js.
+    // 50 since 2026-10-04: reactor_fight_look.js (what a battle unit stands as: the pure rule, shared byte for byte with the editor) is its own concern.
+    // 50 since 2026-10-04: reactor_fight_classic.js (placed enemies on a Classic map open the battle screen) is its own concern.
+    // 51 since 2026-10-04: reactor_speaker_face.js (the speaker's face in the message box: the rules shared with the editor, and their game hooks) is its own concern.
+    // 53 since 2026-10-05: reactor_fight_flow.js (how a battle on the map begins by itself: the map's own start, the Test battle)
+    // and reactor_fight_menu.js (the battle menu of the on-map modes) are their own concerns, out of the tactical driver.
+    // 59 since 2026-10-05: vehicles are two 3D extensions the editor also loads (reactor_3d_vehicles.js: what is true of a vehicle
+    // model, the handling step, the drawn attitude; reactor_3d_rider.js: the rider held to seat, grips and rests) and four game
+    // files (reactor_vehicles.js: a vehicle in the world; _drive: free movement; _feel: the camera and the sound; _hints: the label and the strip).
+    // 60 since 2026-10-11: reactor_vehicles_mount.js (fighting from a vehicle: a mounted unit of a Tactical battle, the
+    // vehicle's commands on the battle screen, a rider seated in a Battle Room) is its own concern.
+    assert.ok(roots.length <= 60, `runtime js/ root has grown to ${roots.length} files`);
 });
 
 test('the game boots every extension straight after the core, before anything reads them', () => {
@@ -369,8 +392,12 @@ test('the map waits for three.js before building its spriteset', () => {
 test('a 3D map releases its GPU allocations on the way out', () => {
     // Geometry, materials and textures are not reclaimed by the collector, so
     // leaving them behind leaks a map's worth on every transfer.
+    // The spriteset gives its world back through releaseReactor3D, which a map change also calls
+    // before the next map loads.
     const at = spritesSource.indexOf('Spriteset_Map.prototype.destroy = function');
-    const body = spritesSource.slice(at, spritesSource.indexOf('\n};', at));
+    assert.match(spritesSource.slice(at, spritesSource.indexOf('\n};', at)), /this\.releaseReactor3D\(true\);/, 'with the spriteset the world goes at once, a border crossing or not');
+    const release = spritesSource.indexOf('Spriteset_Map.prototype.releaseReactor3D = function');
+    const body = spritesSource.slice(release, spritesSource.indexOf('\n};', release));
     assert.match(body, /this\._reactor3d\.scene\.destroy\(\)/);
     assert.match(body, /this\._reactor3d = null;/);
 

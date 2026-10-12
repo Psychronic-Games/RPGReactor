@@ -13,7 +13,7 @@ test('confirmed user-visible English bypasses route through literal text transla
     assert.match(picker, /clearSearch\.setAttribute\('aria-label', tt\('Clear search'\)\)/);
 
     const playtest = read('src/PlaytestManager.js');
-    assert.match(playtest, /window\.alert\(`\$\{tt\('Cannot start playtest\.'\)\}\\n\\n\$\{packageResult\.error\}`\)/);
+    assert.match(playtest, /RRDialog\.alert\(`\$\{tt\('Cannot start playtest\.'\)\}\\n\\n\$\{packageResult\.error\}`, \{ title: tt\('Playtest'\), kind: 'error' \}\)/);
 
     const project = read('src/ProjectController.js');
     assert.match(project, /this\._tt\('The project lock could not be verified\. The project was not opened\.'\)/);

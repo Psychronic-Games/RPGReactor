@@ -435,7 +435,7 @@ class AnimationPickerModal {
             row.style.background = 'var(--color-accent-tint-25)';
             startPlayback(entry.anim);
         };
-        const confirm = () => { cleanup(); onPick(selectedId); };
+        const accept = () => { cleanup(); onPick(selectedId); };
 
         for (const entry of entries) {
             const row = document.createElement('div');
@@ -448,7 +448,7 @@ class AnimationPickerModal {
             row.textContent = entry.label;
             row.dataset.search = entry.label.toLowerCase();
             row.addEventListener('click', () => selectRow(entry, row));
-            row.addEventListener('dblclick', () => { selectRow(entry, row); confirm(); });
+            row.addEventListener('dblclick', () => { selectRow(entry, row); accept(); });
             listEl.appendChild(row);
             rows.push(row);
             if (entry.id === selectedId) startPlayback(entry.anim);
@@ -489,12 +489,12 @@ class AnimationPickerModal {
         };
         const onKey = (ev) => {
             if (ev.key === 'Escape') { ev.stopPropagation(); cleanup(); }
-            if (ev.key === 'Enter' && ev.target !== searchEl) { ev.stopPropagation(); confirm(); }
+            if (ev.key === 'Enter' && ev.target !== searchEl) { ev.stopPropagation(); accept(); }
         };
         document.addEventListener('keydown', onKey, true);
         modal.querySelector('.anim-picker-close').addEventListener('click', cleanup);
         modal.querySelector('.anim-picker-cancel').addEventListener('click', cleanup);
-        modal.querySelector('.anim-picker-ok').addEventListener('click', confirm);
+        modal.querySelector('.anim-picker-ok').addEventListener('click', accept);
         // A click on the backdrop no longer closes the dialog: close deliberately.
 
         // Scroll the current selection into view

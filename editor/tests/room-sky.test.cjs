@@ -53,7 +53,8 @@ test('the dome follows the camera, drifts, and both frame loops tick it; a paral
     assert.match(runtime, /Reactor3D\.MapScene\.prototype\.addSky = function\(sky, load, tileSize\)/);
     assert.match(runtime, /this\.addSky\(Reactor3D\.skyFor\(mapData\), loadParallax, tileSize\);/);
     assert.match(runtime, /new THREE\.SphereGeometry\(radius, 48, 24\)/);
-    assert.match(runtime, /map: texture, side: THREE\.BackSide, depthWrite: false, depthTest: false, fog: false/);
+    // It tests depth and writes none: every pixel passes into a cleared target, and none behind what DepthFirst laid.
+    assert.match(runtime, /map: texture, side: THREE\.BackSide, depthWrite: false, depthTest: true, fog: false/);
     assert.match(runtime, /mesh\.position\.copy\(camera\.position\);[\s\S]{0,600}if \(mesh\.matrixAutoUpdate === false\) mesh\.updateMatrix\(\);/, 'the frozen sky still follows the camera');
     // Behaviourally: a frozen sky mesh's world matrix follows the camera.
     global.self = global; global.window = global;

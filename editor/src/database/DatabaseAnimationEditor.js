@@ -172,10 +172,10 @@ class DatabaseAnimationEditor {
         const converted = DatabaseAnimationEditor.timingRows(animation).map(row => ({
             frame: Number.isFinite(row.frame) ? row.frame : 0,
             se: row.se || { name: '', pan: 0, pitch: 100, volume: 90 },
-            // MZ flash timings always target battlers, so MV's closest scope is 1.
-            // Keyed on the entry existing rather than on its colour: a stock
-            // flash timing may carry no colour at all and is still a flash.
-            flashScope: row.flashIndex >= 0 ? 1 : 0,
+            // A flash timing targets battlers unless its scope says screen (2) or
+            // hide target (3). Keyed on the entry existing rather than on its colour:
+            // a stock flash timing may carry no colour at all and is still a flash.
+            flashScope: row.flashIndex >= 0 ? (row.flashScope === 2 || row.flashScope === 3 ? row.flashScope : 1) : 0,
             flashColor: row.flashIndex >= 0
                 ? DatabaseAnimationEditor.normalizeFlashColor(row.flashColor) : [0, 0, 0, 0],
             flashDuration: Number.isFinite(row.flashDuration) ? row.flashDuration : 0
@@ -484,7 +484,7 @@ class DatabaseAnimationEditor {
                     <div class="anim-editor-content-column">
                     <!-- Properties -->
                     <div class="anim-editor-properties" style="min-width:180px;background:var(--color-bg-panel);border:1px solid var(--color-border);border-radius:3px;padding:6px;display:flex;flex-direction:column;">
-                        <div style="font-size:11px;font-weight:600;margin-bottom:6px;color:var(--color-text);flex-shrink:0;">${tt('Properties')}</div>
+                        <div class="rr-db-fold-header" data-section-key="properties" style="font-size:11px;font-weight:600;margin-bottom:6px;color:var(--color-text);flex-shrink:0;">${tt('Properties')}</div>
                         <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;font-size:10px;flex:1;min-height:0;overflow-y:auto;padding-right:2px;">
                             ${isSpriteAnimation ? `
                                 ${[1, 2].map(slot => {
@@ -513,13 +513,13 @@ class DatabaseAnimationEditor {
                                     </div>
                                     <div style="flex: 1; min-width: 0;">
                                         <div style="color: var(--color-text-muted); margin-bottom: 4px;">${tt('Frames')}</div>
-                                        <div style="background: var(--color-bg-input-alt); padding: 6px; border: 1px solid var(--color-border-input); border-radius: 2px; text-align: center; color: var(--color-text);">${animation.frames ? animation.frames.length : 0}</div>
+                                        <div style="background: var(--color-bg-input-alt); padding: 6px; border: 1px solid var(--color-border-input); border-radius: 2px; text-align: center; color: var(--color-text);" id="animation-frame-total">${animation.frames ? animation.frames.length : 0}</div>
                                     </div>
                                 </div>
                             ` : ''}
 
                             ${isEffekseer ? `
-                                <div style="grid-column:1 / -1;color:var(--color-text-muted);font-size:10px;font-style:italic;padding:4px;">
+                                <div style="grid-column:1 / -1;color:var(--color-text-muted);font-size:10px;padding:4px;">
                                     ${tt('Effect file, display type, scale and other settings are editable in the Particle Effect panel below.')}
                                 </div>
                             ` : ''}
@@ -529,7 +529,7 @@ class DatabaseAnimationEditor {
                 <!-- Sprite Sheet Preview Row -->
                 ${isSpriteAnimation ? `
                     <div class="anim-sprite-sheet-panel" style="background:var(--color-bg-panel);border:1px solid var(--color-border);border-radius:3px;padding:6px;flex-shrink:0;">
-                        <div style="font-size:11px;font-weight:600;margin-bottom:4px;color:var(--color-text);">${tt('Sprite Sheet')}</div>
+                        <div class="rr-db-fold-header" data-section-key="sprite-sheet" style="font-size:11px;font-weight:600;margin-bottom:4px;color:var(--color-text);">${tt('Sprite Sheet')}</div>
                         <div style="overflow-x: auto; overflow-y: hidden; background: var(--color-bg-deep); border: 1px solid var(--color-border-input); border-radius: 2px; padding: 2px;">
                             <canvas id="sprite-sheet-preview" style="display:block;image-rendering:pixelated;height:72px;"></canvas>
                         </div>
@@ -541,7 +541,7 @@ class DatabaseAnimationEditor {
                     <!-- Left: Frame Timeline or Particle Effect Controls -->
                     ${isSpriteAnimation ? `
                     <div style="width:144px;min-width:144px;min-height:0;background:var(--color-bg-panel);border:1px solid var(--color-border);border-radius:3px;padding:6px;display:flex;flex-direction:column;">
-                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                        <div class="rr-db-fold-header" data-section-key="frames" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
                             <div style="font-size: 11px; font-weight: 600; color: var(--color-text);">${tt('Frames')}</div>
                             <div style="display: flex; gap: 3px;">
                                 <button id="add-frame-btn" style="padding: 3px 6px; background: var(--color-success); border: 1px solid var(--color-success-border); color: var(--color-text-strong); border-radius: 2px; cursor: pointer; font-size: 9px;" title="${tt('Add Frame')}">+</button>
@@ -556,7 +556,7 @@ class DatabaseAnimationEditor {
 
                     ${isEffekseer ? `
                     <div style="width:248px;min-width:248px;min-height:0;overflow-y:auto;background:var(--color-bg-panel);border:1px solid var(--color-border);border-radius:3px;padding:8px;display:flex;flex-direction:column;gap:6px;">
-                        <div style="font-size: 11px; font-weight: 600; color: var(--color-text); margin-bottom: 2px;">${tt('Particle Effect')}</div>
+                        <div class="rr-db-fold-header" data-section-key="particle-effect" style="font-size: 11px; font-weight: 600; color: var(--color-text); margin-bottom: 2px;">${tt('Particle Effect')}</div>
 
                         <!-- Effect File -->
                         <div>
@@ -684,7 +684,7 @@ class DatabaseAnimationEditor {
 
                     <!-- Sound & Flash Timings stay independent of Properties and Preview height. -->
                     <aside class="anim-editor-timings" style="background:var(--color-bg-panel);border:1px solid var(--color-border);border-radius:3px;padding:6px;box-sizing:border-box;">
-                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;flex-shrink:0;gap:8px;">
+                        <div class="rr-db-fold-header" data-section-key="timings" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;flex-shrink:0;gap:8px;">
                             <div style="font-size:11px;font-weight:600;color:var(--color-text);">${tt('SE & Flash Timings')}</div>
                             <button id="add-timing-btn" style="padding:4px 8px;background:var(--color-success);border:1px solid var(--color-success-border);color:var(--color-text-strong);border-radius:2px;cursor:pointer;font-size:10px;">+ ${tt('Add')}</button>
                         </div>
@@ -732,7 +732,7 @@ class DatabaseAnimationEditor {
 
             const pickAnimationImage = (slot) => {
                 const currentProject = this.projectManager.getCurrentProject();
-                if (!currentProject) { alert(tt('No project loaded')); return; }
+                if (!currentProject) { RRDialog.alert(tt('No project loaded'), { title: tt('Animations'), kind: 'warning' }); return; }
                 const path = require('path');
                 const fs = require('fs');
                 const animDir = path.join(currentProject.path, 'img', 'animations');
@@ -740,11 +740,11 @@ class DatabaseAnimationEditor {
                 try {
                     files = RRAssetFiles.listImageReferences(animDir);
                 } catch (e) {
-                    alert(tt('No img/animations folder found'));
+                    RRDialog.alert(tt('No img/animations folder found'), { title: tt('Animations'), kind: 'warning' });
                     return;
                 }
                 if (files.length === 0) {
-                    alert(tt('No animation images found in img/animations folder'));
+                    RRDialog.alert(tt('No animation images found in img/animations folder'), { title: tt('Animations'), kind: 'warning' });
                     return;
                 }
                 const title = `${tt('Select Animation')} ${slot} ${tt('Image')}`;
@@ -759,7 +759,7 @@ class DatabaseAnimationEditor {
                 if (this.parentEditor && this.parentEditor.showImagePicker) {
                     this.parentEditor.showImagePicker(title, files, cb, previewCb);
                 } else {
-                    alert(tt('Image picker unavailable'));
+                    RRDialog.alert(tt('Image picker unavailable'), { title: tt('Animations'), kind: 'error' });
                 }
             };
 
@@ -2163,13 +2163,13 @@ class DatabaseAnimationEditor {
         const sePickBtn = document.getElementById('timing-se-pick');
         sePickBtn?.addEventListener('click', () => {
             const currentProject = this.projectManager.getCurrentProject();
-            if (!currentProject) { alert(tt('No project loaded')); return; }
+            if (!currentProject) { RRDialog.alert(tt('No project loaded'), { title: tt('Animations'), kind: 'warning' }); return; }
 
             const fs = require('fs');
             const path = require('path');
             const seFolder = path.join(currentProject.path, 'audio', 'se');
 
-            if (!fs.existsSync(seFolder)) { alert(tt('SE folder not found: audio/se')); return; }
+            if (!fs.existsSync(seFolder)) { RRDialog.alert(tt('SE folder not found: audio/se'), { title: tt('Animations'), kind: 'warning' }); return; }
 
             const files = RRAssetFiles.listUnique(seFolder, RRAssetFiles.AUDIO_EXTENSIONS);
             const seNameInput = document.getElementById('timing-se-name');
@@ -2204,16 +2204,16 @@ class DatabaseAnimationEditor {
         // surfaces cannot drift apart.
         document.getElementById('timing-se-variants')?.addEventListener('click', () => {
             const currentProject = this.projectManager.getCurrentProject();
-            if (!currentProject) { alert(tt('No project loaded')); return; }
+            if (!currentProject) { RRDialog.alert(tt('No project loaded'), { title: tt('Animations'), kind: 'warning' }); return; }
 
             const seNameInput = document.getElementById('timing-se-name');
             const name = seNameInput.value !== noneLabel ? seNameInput.value : '';
-            if (!name) { alert(tt('Pick a sound effect first')); return; }
+            if (!name) { RRDialog.alert(tt('Pick a sound effect first'), { title: tt('Animations'), kind: 'warning' }); return; }
 
             const fs = require('fs');
             const path = require('path');
             const seFolder = path.join(currentProject.path, 'audio', 'se');
-            if (!fs.existsSync(seFolder)) { alert(tt('SE folder not found: audio/se')); return; }
+            if (!fs.existsSync(seFolder)) { RRDialog.alert(tt('SE folder not found: audio/se'), { title: tt('Animations'), kind: 'warning' }); return; }
 
             RRSystemSoundSlotModal.open({
                 label: `${tt('SE:')} ${name}`,
@@ -2791,6 +2791,30 @@ class DatabaseAnimationEditor {
                 removeDragPreview();
             });
         };
+    }
+
+    /**
+     * The Remove Frame button: ask, then take the selected frames out of the
+     * animation. Resolves true when frames were removed. The frames asked
+     * about are the ones selected when the question is put; an answer that
+     * finds the frame list changed removes nothing.
+     */
+    async askRemoveFrames(animation, selectedIndices) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        const count = selectedIndices.size;
+        if (animation.frames.length <= count) {
+            RRDialog.alert(tt('Cannot remove all frames; at least one frame must remain.'), { title: tt('Animations'), kind: 'warning' });
+            return false;
+        }
+        const indicesDesc = Array.from(selectedIndices).sort((a, b) => b - a);
+        const frameTotal = animation.frames.length;
+        const action = count === 1 ? tt('Remove Frame') : tt('Remove Frames');
+        const remove = await RRDialog.confirm(count === 1
+            ? tt('Remove frame {number}?').replace('{number}', indicesDesc[0] + 1)
+            : tt('Remove {count} selected frames?').replace('{count}', count), { title: action, ok: action, danger: true });
+        if (!remove || animation.frames.length !== frameTotal) return false;
+        indicesDesc.forEach(i => animation.frames.splice(i, 1));
+        return true;
     }
 
     setupSpriteAnimationPlayback(animation) {
@@ -3562,19 +3586,8 @@ class DatabaseAnimationEditor {
         }
 
         if (removeFrameBtn) {
-            removeFrameBtn.addEventListener('click', () => {
-                if (animation.frames.length <= selectedFrameIndices.size) {
-                    alert(tt('Cannot remove all frames; at least one frame must remain.'));
-                    return;
-                }
-                const count = selectedFrameIndices.size;
-                const confirmDelete = confirm(count === 1
-                    ? `${tt('Remove frame')} ${currentFrame + 1}?`
-                    : `${tt('Remove')} ${count} ${tt('selected frames?')}`);
-                if (!confirmDelete) return;
-
-                const indicesDesc = Array.from(selectedFrameIndices).sort((a, b) => b - a);
-                indicesDesc.forEach(i => animation.frames.splice(i, 1));
+            removeFrameBtn.addEventListener('click', async () => {
+                if (!(await editorSelf.askRemoveFrames(animation, selectedFrameIndices))) return;
                 selectedFrameIndices.clear();
                 currentFrame = Math.max(0, Math.min(currentFrame, animation.frames.length - 1));
                 selectedFrameIndices.add(currentFrame);
@@ -3680,6 +3693,9 @@ class DatabaseAnimationEditor {
             if (frameCounter) {
                 frameCounter.textContent = `${tt('Frame:')} ${currentFrame + 1} / ${animation.frames.length}`;
             }
+            // The Frames number under Properties counts the same list.
+            const frameTotal = document.getElementById('animation-frame-total');
+            if (frameTotal) frameTotal.textContent = String(animation.frames.length);
         };
         frameList.addEventListener('keydown', (e) => {
             const tag = e.target.tagName;
@@ -3689,19 +3705,17 @@ class DatabaseAnimationEditor {
             if (e.key === 'Delete' && selectedFrameIndices.size > 0) {
                 e.preventDefault();
                 e.stopPropagation();
-                if (animation.frames.length <= selectedFrameIndices.size) {
-                    alert(tt('Cannot remove all frames; at least one frame must remain.'));
-                    return;
-                }
-                const indicesDesc = Array.from(selectedFrameIndices).sort((a, b) => b - a);
-                indicesDesc.forEach(i => animation.frames.splice(i, 1));
-                selectedFrameIndices.clear();
-                currentFrame = Math.max(0, Math.min(currentFrame, animation.frames.length - 1));
-                selectedFrameIndices.add(currentFrame);
-                persistAnimation();
-                populateFrameList();
-                renderStaticFrame(currentFrame);
-                updateFrameCounter();
+                // The key asks as the Remove Frame button does.
+                editorSelf.askRemoveFrames(animation, selectedFrameIndices).then(removed => {
+                    if (!removed) return;
+                    selectedFrameIndices.clear();
+                    currentFrame = Math.max(0, Math.min(currentFrame, animation.frames.length - 1));
+                    selectedFrameIndices.add(currentFrame);
+                    persistAnimation();
+                    populateFrameList();
+                    renderStaticFrame(currentFrame);
+                    updateFrameCounter();
+                });
             } else if (isCtrl && e.key.toLowerCase() === 'c' && selectedFrameIndices.size > 0) {
                 e.preventDefault();
                 e.stopPropagation();
@@ -3711,7 +3725,7 @@ class DatabaseAnimationEditor {
                 e.preventDefault();
                 e.stopPropagation();
                 if (animation.frames.length <= selectedFrameIndices.size) {
-                    alert(tt('Cannot cut all frames; at least one frame must remain.'));
+                    RRDialog.alert(tt('Cannot cut all frames; at least one frame must remain.'), { title: tt('Animations'), kind: 'warning' });
                     return;
                 }
                 const indicesAsc = Array.from(selectedFrameIndices).sort((a, b) => a - b);
@@ -4177,10 +4191,12 @@ class DatabaseAnimationEditor {
                     }
                     effekseerContext.drawHandle(handle);
 
-                    // Check for GL errors
-                    const err = gl.getError();
-                    if (err !== gl.NO_ERROR && renderFrameCount === 1) {
-                        console.error('[Effekseer Render] GL Error:', err);
+                    // Check for GL errors on the first frame only: it is the
+                    // only one reported, and getError waits for the GPU to
+                    // catch up, a stall on every frame of playback otherwise.
+                    if (renderFrameCount === 1) {
+                        const err = gl.getError();
+                        if (err !== gl.NO_ERROR) console.error('[Effekseer Render] GL Error:', err);
                     }
                 } else if (renderFrameCount > 1 && currentFrame > maxTimingFrames
                         && !editorSelf._previewFlashActive()) {

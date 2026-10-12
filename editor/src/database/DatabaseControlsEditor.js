@@ -27,6 +27,33 @@ class DatabaseControlsEditor {
         96: 'escape', 98: 'down', 100: 'left', 102: 'right', 104: 'up', 120: 'debug'
     };
     static DEFAULT_GAMEPAD = { 0: 'ok', 1: 'cancel', 2: 'shift', 3: 'menu', 4: 'pageup', 5: 'pagedown', 12: 'up', 13: 'down', 14: 'left', 15: 'right' };
+    // An Action battle's own keys and buttons (runtime/reactor_controls.js: the same names and defaults).
+    static BATTLE_ACTIONS = [
+        ['attack', 'Attack (hold to fire)'], ['aim', 'Aim'], ['dodge', 'Dodge'], ['guard', 'Guard'], ['reload', 'Reload'], ['weapon', 'Next weapon'], ['lock', 'Lock on'],
+        ['hotbar1', 'Hotbar {n}'], ['hotbar2', 'Hotbar {n}'], ['hotbar3', 'Hotbar {n}'], ['hotbar4', 'Hotbar {n}'],
+        ['hotbar5', 'Hotbar {n}'], ['hotbar6', 'Hotbar {n}'], ['hotbar7', 'Hotbar {n}'], ['hotbar8', 'Hotbar {n}']
+    ];
+    static BATTLE_PAD_ACTIONS = [
+        ['attack', 'Attack (hold to fire)'], ['aim', 'Aim'], ['dodge', 'Dodge'], ['guard', 'Guard'], ['reload', 'Reload'], ['weapon', 'Next weapon'], ['lock', 'Lock on'], ['menu', 'Menu']
+    ];
+    static DEFAULT_ACTION_KEYS = { 70: 'attack', 71: 'aim', 67: 'dodge', 86: 'guard', 82: 'reload', 81: 'weapon', 9: 'lock',
+        49: 'hotbar1', 50: 'hotbar2', 51: 'hotbar3', 52: 'hotbar4', 53: 'hotbar5', 54: 'hotbar6', 55: 'hotbar7', 56: 'hotbar8' };
+    static DEFAULT_ACTION_BUTTONS = { 7: 'attack', 6: 'aim', 1: 'dodge', 5: 'guard', 3: 'reload', 4: 'weapon', 11: 'lock', 9: 'menu' };
+    // A Tactical battle's own keys and buttons (runtime/reactor_controls.js: the same names and defaults). Until a
+    // project binds its own, each stands on the keys and buttons of an ordinary action (TACTICAL_SYMBOLS).
+    static TACTICAL_ACTIONS = [
+        ['viewLeft', 'Turn the view left'], ['viewRight', 'Turn the view right'],
+        ['panUp', 'Move the view up'], ['panDown', 'Move the view down'], ['panLeft', 'Move the view left'], ['panRight', 'Move the view right'],
+        ['level', 'Cursor to the next level'],
+        ['unit', 'Back to the acting unit'], ['skip', "End a unit's turn (hold: fast-forward)"]
+    ];
+    static TACTICAL_SYMBOLS = { viewLeft: 'pageup', viewRight: 'pagedown', level: 'control', unit: 'tab', skip: 'shift' };
+    static TACTICAL_VIEW_KEYS = { 87: 'panUp', 65: 'panLeft', 83: 'panDown', 68: 'panRight', 69: 'viewRight' };
+    static TACTICAL_VIEW_STOCK = { 87: 'pagedown' };
+    static DEFAULT_TACTICAL_KEYS = { 33: 'viewLeft', 81: 'viewLeft', 34: 'viewRight', 69: 'viewRight', 87: 'panUp', 65: 'panLeft', 83: 'panDown', 68: 'panRight', 17: 'level', 18: 'level', 9: 'unit', 16: 'skip' };
+    static DEFAULT_TACTICAL_BUTTONS = { 4: 'viewLeft', 5: 'viewRight', 2: 'skip', 11: 'level', 10: 'unit' };
+    // The keys of `reactorControls` this page writes; any other (look speed, a hand-written key) is kept as it is.
+    static MANAGED = ['keys', 'gamepad', 'jump', 'jumpKeys', 'jumpButtons', 'actionKeys', 'actionButtons', 'tacticalKeys', 'tacticalButtons'];
     static DEFAULT_JUMP_KEYS = [32];
     static DEFAULT_JUMP_BUTTONS = [2];
     static BUTTON_NAMES = ['A', 'B', 'X', 'Y', 'LB', 'RB', 'LT', 'RT', 'Back', 'Start', 'L3', 'R3', 'D-pad Up', 'D-pad Down', 'D-pad Left', 'D-pad Right'];
@@ -39,6 +66,10 @@ class DatabaseControlsEditor {
         this.parentEditor = parentEditor;
         this._capture = null;
         this._onCaptureKey = event => this.captureKey(event);
+        // A click anywhere but the "+" that started it stops listening, keeping the keys as they were.
+        this._onCaptureAway = event => {
+            if (this._capture && !(event.target && event.target.closest && event.target.closest('.rr-controls-add, .rr-controls-listen'))) { this.stopCapture(); this.render(); }
+        };
     }
 
     _t(text, params) {
@@ -49,15 +80,39 @@ class DatabaseControlsEditor {
 
     system() { return this.databaseManager.getSystem ? this.databaseManager.getSystem() : this.databaseManager.data.system; }
 
+    /** The tactical bindings a set of ordinary ones gives when the project names none (the runtime's `tacticalFrom`). */
+    static tacticalFrom(mapper, extras, view) {
+        const out = {}, taken = {};
+        for (const [code, symbol] of Object.entries(mapper || {})) {
+            for (const [name] of DatabaseControlsEditor.TACTICAL_ACTIONS) if (DatabaseControlsEditor.TACTICAL_SYMBOLS[name] === symbol) { out[code] = name; taken[name] = true; }
+        }
+        for (const [code, name] of Object.entries(extras || {})) if (!taken[name] && mapper[code] === undefined) out[code] = name;
+        for (const [code, name] of Object.entries(view || {})) {
+            const symbol = (mapper || {})[code];
+            if (symbol === undefined || symbol === DatabaseControlsEditor.TACTICAL_VIEW_STOCK[code]) out[code] = name;
+        }
+        return out;
+    }
+
     /** The controls as the game will have them: the project's, else the stock ones. */
     controls() {
         const own = this.system().reactorControls || {};
+        const keys = own.keys && typeof own.keys === 'object' ? Object.assign({}, own.keys) : Object.assign({}, DatabaseControlsEditor.DEFAULT_KEYS);
+        const gamepad = own.gamepad && typeof own.gamepad === 'object' ? Object.assign({}, own.gamepad) : Object.assign({}, DatabaseControlsEditor.DEFAULT_GAMEPAD);
         return {
-            keys: own.keys && typeof own.keys === 'object' ? Object.assign({}, own.keys) : Object.assign({}, DatabaseControlsEditor.DEFAULT_KEYS),
-            gamepad: own.gamepad && typeof own.gamepad === 'object' ? Object.assign({}, own.gamepad) : Object.assign({}, DatabaseControlsEditor.DEFAULT_GAMEPAD),
+            keys,
+            gamepad,
+            // A Tactical battle's own, else what the ordinary keys and buttons give it (and follow them until one is changed here).
+            tacticalKeysOwn: !!(own.tacticalKeys && typeof own.tacticalKeys === 'object'),
+            tacticalButtonsOwn: !!(own.tacticalButtons && typeof own.tacticalButtons === 'object'),
+            tacticalKeys: own.tacticalKeys && typeof own.tacticalKeys === 'object' ? Object.assign({}, own.tacticalKeys) : DatabaseControlsEditor.tacticalFrom(keys, null, DatabaseControlsEditor.TACTICAL_VIEW_KEYS),
+            tacticalButtons: own.tacticalButtons && typeof own.tacticalButtons === 'object' ? Object.assign({}, own.tacticalButtons)
+                : DatabaseControlsEditor.tacticalFrom(gamepad, DatabaseControlsEditor.DEFAULT_TACTICAL_BUTTONS),
             jump: own.jump !== false,
             jumpKeys: Array.isArray(own.jumpKeys) ? own.jumpKeys.map(Number) : DatabaseControlsEditor.DEFAULT_JUMP_KEYS.slice(),
-            jumpButtons: Array.isArray(own.jumpButtons) ? own.jumpButtons.map(Number) : DatabaseControlsEditor.DEFAULT_JUMP_BUTTONS.slice()
+            jumpButtons: Array.isArray(own.jumpButtons) ? own.jumpButtons.map(Number) : DatabaseControlsEditor.DEFAULT_JUMP_BUTTONS.slice(),
+            actionKeys: own.actionKeys && typeof own.actionKeys === 'object' ? Object.assign({}, own.actionKeys) : Object.assign({}, DatabaseControlsEditor.DEFAULT_ACTION_KEYS),
+            actionButtons: own.actionButtons && typeof own.actionButtons === 'object' ? Object.assign({}, own.actionButtons) : Object.assign({}, DatabaseControlsEditor.DEFAULT_ACTION_BUTTONS)
         };
     }
 
@@ -68,14 +123,23 @@ class DatabaseControlsEditor {
         const stock = same(controls.keys, DatabaseControlsEditor.DEFAULT_KEYS) && same(controls.gamepad, DatabaseControlsEditor.DEFAULT_GAMEPAD)
             && controls.jump && JSON.stringify(controls.jumpKeys) === JSON.stringify(DatabaseControlsEditor.DEFAULT_JUMP_KEYS)
             && JSON.stringify(controls.jumpButtons) === JSON.stringify(DatabaseControlsEditor.DEFAULT_JUMP_BUTTONS);
-        if (stock) delete system.reactorControls;
-        else system.reactorControls = { keys: controls.keys, gamepad: controls.gamepad, jump: controls.jump, jumpKeys: controls.jumpKeys, jumpButtons: controls.jumpButtons };
+        const own = system.reactorControls && typeof system.reactorControls === 'object' ? system.reactorControls : {};
+        const next = {};
+        for (const [key, value] of Object.entries(own)) if (!DatabaseControlsEditor.MANAGED.includes(key)) next[key] = value;
+        if (!stock) Object.assign(next, { keys: controls.keys, gamepad: controls.gamepad, jump: controls.jump, jumpKeys: controls.jumpKeys, jumpButtons: controls.jumpButtons });
+        // An Action battle's bindings are stored only where they differ from the stock ones.
+        if (controls.actionKeys && !same(controls.actionKeys, DatabaseControlsEditor.DEFAULT_ACTION_KEYS)) next.actionKeys = controls.actionKeys;
+        if (controls.actionButtons && !same(controls.actionButtons, DatabaseControlsEditor.DEFAULT_ACTION_BUTTONS)) next.actionButtons = controls.actionButtons;
+        // A Tactical battle's are stored only where they differ from what the ordinary keys and buttons give it.
+        if (controls.tacticalKeysOwn && controls.tacticalKeys && !same(controls.tacticalKeys, DatabaseControlsEditor.tacticalFrom(controls.keys, null, DatabaseControlsEditor.TACTICAL_VIEW_KEYS))) next.tacticalKeys = controls.tacticalKeys;
+        if (controls.tacticalButtonsOwn && controls.tacticalButtons && !same(controls.tacticalButtons, DatabaseControlsEditor.tacticalFrom(controls.gamepad, DatabaseControlsEditor.DEFAULT_TACTICAL_BUTTONS))) next.tacticalButtons = controls.tacticalButtons;
+        if (Object.keys(next).length) system.reactorControls = next; else delete system.reactorControls;
         this.databaseManager.mutationGeneration = (this.databaseManager.mutationGeneration || 0) + 1;
         this.parentEditor?._markDatabaseMutation?.();
     }
 
     physics() {
-        return Object.assign({ gravity: 1, jumpHeight: 1.25, fallDamage: false, fallFrom: 6, fallPercent: 10, fallCommonEvent: 0, swim: true, swimDepth: 2.2, splashSe: null, landSe: null, hardLandSe: null, ragdoll: true }, this.system().reactorPhysics || {});
+        return Object.assign({ gravity: 1, jumpHeight: 1.25, fallDamage: false, fallFrom: 6, fallPercent: 10, fallCommonEvent: 0, swim: true, swimDepth: 2.2, splashSe: null, landSe: null, hardLandSe: null, ragdoll: true, mantle: true, mantleReach: 3, stepUp: true, stepUpReach: 1.5 }, this.system().reactorPhysics || {});
     }
 
     savePhysics(physics) {
@@ -97,7 +161,13 @@ class DatabaseControlsEditor {
         return 'Key ' + n;
     }
 
-    static buttonName(index) { return DatabaseControlsEditor.BUTTON_NAMES[Number(index)] || 'Button ' + index; }
+    static buttonName(index) {
+        // Face and shoulder buttons keep their printed names; the D-pad and unnamed buttons are described.
+        const tt = text => (typeof window !== 'undefined' && window.I18n ? window.I18n.tText(text) : text);
+        const name = DatabaseControlsEditor.BUTTON_NAMES[Number(index)];
+        if (!name) return tt('Button {n}').replace('{n}', String(index));
+        return name.startsWith('D-pad') ? tt(name) : name;
+    }
 
     showControlsDetail(container) {
         this.container = container;
@@ -120,30 +190,75 @@ class DatabaseControlsEditor {
             const buttons = Object.keys(controls.gamepad).filter(b => controls.gamepad[b] === action).map(Number).sort((a, b) => a - b);
             return `<tr><td>${rrEscapeHtml(tt(label))}</td><td>${buttons.map(b => chip(DatabaseControlsEditor.buttonName(b), `data-kind="pad" data-code="${b}"`)).join('')}${listening('pad', action) ? `<span class="rr-controls-listen">${rrEscapeHtml(tt('Press a gamepad button…'))}</span>` : add(`data-kind="pad" data-action="${action}"`)}</td></tr>`;
         };
+        // An Action battle's rows: their own bindings; a key that does something else outside the battle says what.
+        const elsewhere = (map, labels, code) => {
+            const action = map[code];
+            if (!action) return '';
+            const known = labels.find(([name]) => name === action);
+            return ` title="${rrEscapeHtml(tt('Elsewhere: {what}').replace('{what}', known ? tt(known[1]) : action))}"`;
+        };
+        const sharedChip = (label, data, hint) => `<span class="rr-controls-chip${hint ? ' rr-controls-shared' : ''}"${hint}>${rrEscapeHtml(label)}<button type="button" class="rr-controls-remove" ${data} title="${rrEscapeHtml(tt('Remove'))}" aria-label="${rrEscapeHtml(tt('Remove'))}">×</button></span>`;
+        const battleLabel = (action, label) => tt(label).replace('{n}', action.replace('hotbar', ''));
+        const battleKeyRow = ([action, label]) => {
+            const codes = Object.keys(controls.actionKeys).filter(code => controls.actionKeys[code] === action).map(Number).sort((a, b) => a - b);
+            return `<tr><td>${rrEscapeHtml(battleLabel(action, label))}</td><td>${codes.map(code => sharedChip(DatabaseControlsEditor.keyName(code), `data-kind="key-action" data-code="${code}"`, elsewhere(controls.keys, DatabaseControlsEditor.ACTIONS, code))).join('')}${listening('key-action', action) ? `<span class="rr-controls-listen">${rrEscapeHtml(tt('Press a key…'))}</span>` : add(`data-kind="key-action" data-action="${action}"`)}</td></tr>`;
+        };
+        const battlePadRow = ([action, label]) => {
+            const buttons = Object.keys(controls.actionButtons).filter(b => controls.actionButtons[b] === action).map(Number).sort((a, b) => a - b);
+            return `<tr><td>${rrEscapeHtml(battleLabel(action, label))}</td><td>${buttons.map(b => sharedChip(DatabaseControlsEditor.buttonName(b), `data-kind="pad-action" data-code="${b}"`, elsewhere(controls.gamepad, DatabaseControlsEditor.PAD_ACTIONS, b))).join('')}${listening('pad-action', action) ? `<span class="rr-controls-listen">${rrEscapeHtml(tt('Press a gamepad button…'))}</span>` : add(`data-kind="pad-action" data-action="${action}"`)}</td></tr>`;
+        };
+        const tacticalKeyRow = ([action, label]) => {
+            const codes = Object.keys(controls.tacticalKeys).filter(code => controls.tacticalKeys[code] === action).map(Number).sort((a, b) => a - b);
+            return `<tr><td>${rrEscapeHtml(tt(label))}</td><td>${codes.map(code => sharedChip(DatabaseControlsEditor.keyName(code), `data-kind="key-tactical" data-code="${code}"`, elsewhere(controls.keys, DatabaseControlsEditor.ACTIONS, code))).join('')}${listening('key-tactical', action) ? `<span class="rr-controls-listen">${rrEscapeHtml(tt('Press a key…'))}</span>` : add(`data-kind="key-tactical" data-action="${action}"`)}</td></tr>`;
+        };
+        const tacticalPadRow = ([action, label]) => {
+            const buttons = Object.keys(controls.tacticalButtons).filter(b => controls.tacticalButtons[b] === action).map(Number).sort((a, b) => a - b);
+            return `<tr><td>${rrEscapeHtml(tt(label))}</td><td>${buttons.map(b => sharedChip(DatabaseControlsEditor.buttonName(b), `data-kind="pad-tactical" data-code="${b}"`, elsewhere(controls.gamepad, DatabaseControlsEditor.PAD_ACTIONS, b))).join('')}${listening('pad-tactical', action) ? `<span class="rr-controls-listen">${rrEscapeHtml(tt('Press a gamepad button…'))}</span>` : add(`data-kind="pad-tactical" data-action="${action}"`)}</td></tr>`;
+        };
+        const subhead = text => `<tr class="rr-controls-subhead"><th colspan="2">${rrEscapeHtml(tt(text))}</th></tr>`;
         const jumpRow = (kind, list, name) => `<tr class="rr-controls-jump"><td>${rrEscapeHtml(tt('Jump (3D maps)'))}</td><td>${list.map(code => chip(name(code), `data-kind="${kind}-jump" data-code="${code}"`)).join('')}${listening(kind + '-jump', 'jump') ? `<span class="rr-controls-listen">${rrEscapeHtml(tt(kind === 'key' ? 'Press a key…' : 'Press a gamepad button…'))}</span>` : add(`data-kind="${kind}-jump" data-action="jump"`)}</td></tr>`;
         const commonEvents = [[0, tt('(none)')]].concat((this.databaseManager.data.commonEvents || []).filter(Boolean).map(e => [e.id, `${String(e.id).padStart(4, '0')}: ${e.name || ''}`]));
         const presetValue = DatabaseControlsEditor.GRAVITY_PRESETS.some(([v]) => Number(v) === Number(physics.gravity)) ? String(DatabaseControlsEditor.GRAVITY_PRESETS.find(([v]) => Number(v) === Number(physics.gravity))[0]) : 'custom';
         container.innerHTML = `
             <div class="rr-controls">
+                ${this._moved ? `<div class="rr-controls-moved" role="status">${rrEscapeHtml(tt('{key} was {from}. It is now {to}.').replace('{key}', this._moved.key).replace('{from}', this._moved.from).replace('{to}', this._moved.to))}</div>` : ''}
                 <div class="database-section rr-controls-card">
-                    <div class="database-section-header">${rrEscapeHtml(tt('Keyboard'))}</div>
+                    <div class="database-section-header" data-section-key="keyboard">${rrEscapeHtml(tt('Keyboard'))}</div>
                     <div class="database-section-content">
                         <table class="rr-controls-table"><tbody>${DatabaseControlsEditor.ACTIONS.map(keyRow).join('')}${jumpRow('key', controls.jumpKeys, DatabaseControlsEditor.keyName)}</tbody></table>
                         <div class="rr-controls-note">${rrEscapeHtml(tt('Jump keys jump only on 3D maps; everywhere else they keep what they do above (Space confirms in menus).'))}</div>
                     </div>
                 </div>
                 <div class="database-section rr-controls-card">
-                    <div class="database-section-header">${rrEscapeHtml(tt('Gamepad'))}</div>
+                    <div class="database-section-header" data-section-key="gamepad">${rrEscapeHtml(tt('Gamepad'))}</div>
                     <div class="database-section-content">
                         <table class="rr-controls-table"><tbody>${DatabaseControlsEditor.PAD_ACTIONS.map(padRow).join('')}${jumpRow('pad', controls.jumpButtons, DatabaseControlsEditor.buttonName)}</tbody></table>
                         <button type="button" class="rr-btn-secondary rr-controls-reset">${rrEscapeHtml(tt('Reset keys and buttons to the defaults'))}</button>
                     </div>
                 </div>
                 <div class="database-section rr-controls-card">
-                    <div class="database-section-header">${rrEscapeHtml(tt('Physics (3D maps)'))}</div>
+                    <div class="database-section-header" data-section-key="action-battles">${rrEscapeHtml(tt('Action and First Person Battles'))}</div>
+                    <div class="database-section-content">
+                        <table class="rr-controls-table"><tbody>${subhead('Keyboard')}${DatabaseControlsEditor.BATTLE_ACTIONS.map(battleKeyRow).join('')}${subhead('Gamepad')}${DatabaseControlsEditor.BATTLE_PAD_ACTIONS.map(battlePadRow).join('')}</tbody></table>
+                        <div class="rr-controls-note">${rrEscapeHtml(tt('While an Action battle runs, these keys and buttons do this in place of what they do elsewhere. The left and right mouse buttons attack and aim as well.'))}</div>
+                    </div>
+                </div>
+                <div class="database-section rr-controls-card rr-controls-tactical">
+                    <div class="database-section-header" data-section-key="tactical-battles">${rrEscapeHtml(tt('Tactical Battles'))}</div>
+                    <div class="database-section-content">
+                        <table class="rr-controls-table"><tbody>${subhead('Keyboard')}${DatabaseControlsEditor.TACTICAL_ACTIONS.map(tacticalKeyRow).join('')}${subhead('Gamepad')}${DatabaseControlsEditor.TACTICAL_ACTIONS.map(tacticalPadRow).join('')}</tbody></table>
+                        <div class="rr-controls-note">${rrEscapeHtml(tt('While a Tactical battle runs, these keys and buttons do this in place of what they do elsewhere.'))}</div>
+                    </div>
+                </div>
+                <div class="database-section rr-controls-card">
+                    <div class="database-section-header" data-section-key="physics-3d-maps">${rrEscapeHtml(tt('Physics (3D maps)'))}</div>
                     <div class="database-section-content rr-controls-form">
                         <label class="rr-controls-check"><input type="checkbox" class="rr-controls-jumpon"${controls.jump ? ' checked' : ''}> ${rrEscapeHtml(tt('Players can jump'))}</label>
                         <label>${rrEscapeHtml(tt('Jump height'))}</label><div><input type="number" class="database-field-value rr-controls-num" data-field="jumpHeight" min="0" max="20" step="0.05" value="${physics.jumpHeight}"> <span class="rr-controls-unit">${rrEscapeHtml(tt('tiles'))}</span></div>
+                        <label class="rr-controls-check"><input type="checkbox" class="rr-controls-mantle"${physics.mantle !== false ? ' checked' : ''}> ${rrEscapeHtml(tt('Climb onto ledges within reach'))}</label>
+                        <label>${rrEscapeHtml(tt('Reach above a jump'))}</label><div><input type="number" class="database-field-value rr-controls-num" data-field="mantleReach" min="0" max="20" step="0.25" value="${physics.mantleReach}"> <span class="rr-controls-unit">${rrEscapeHtml(tt('tiles'))}</span></div>
+                        <label class="rr-controls-check"><input type="checkbox" class="rr-controls-stepup"${physics.stepUp !== false ? ' checked' : ''}> ${rrEscapeHtml(tt('Climb low ledges by walking into them'))}</label>
+                        <label>${rrEscapeHtml(tt('Height climbed by walking'))}</label><div><input type="number" class="database-field-value rr-controls-num" data-field="stepUpReach" min="0" max="20" step="0.25" value="${physics.stepUpReach}"> <span class="rr-controls-unit">${rrEscapeHtml(tt('tiles'))}</span></div>
                         <label>${rrEscapeHtml(tt('Gravity'))}</label><div class="rr-controls-inline"><select class="database-field-value rr-controls-gravity">${DatabaseControlsEditor.GRAVITY_PRESETS.map(([v, l]) => `<option value="${v}"${presetValue === v ? ' selected' : ''}>${rrEscapeHtml(tt(l))}</option>`).join('')}<option value="custom"${presetValue === 'custom' ? ' selected' : ''}>${rrEscapeHtml(tt('Custom'))}</option></select>
                             <input type="number" class="database-field-value rr-controls-num" data-field="gravity" min="0.01" max="10" step="0.01" value="${physics.gravity}"> <span class="rr-controls-unit">${rrEscapeHtml(tt('× Earth'))}</span></div>
                         <label class="rr-controls-check"><input type="checkbox" class="rr-controls-fall"${physics.fallDamage ? ' checked' : ''}> ${rrEscapeHtml(tt('Long falls hurt'))}</label>
@@ -153,11 +268,11 @@ class DatabaseControlsEditor {
                         <label>${rrEscapeHtml(tt('Hard landing sound'))}</label><div class="rr-controls-inline"><button type="button" class="rr-btn-secondary rr-controls-sound" data-field="hardLandSe" data-title="Hard landing sound">${rrEscapeHtml(physics.hardLandSe && physics.hardLandSe.name ? physics.hardLandSe.name : tt('(none)'))}</button></div>
                         <label class="rr-controls-check"><input type="checkbox" class="rr-controls-ragdoll"${physics.ragdoll !== false ? ' checked' : ''}> ${rrEscapeHtml(tt('Go limp on a fatal fall'))}</label>
                         <label>${rrEscapeHtml(tt('Or run a common event'))}</label><select class="database-field-value rr-controls-event">${commonEvents.map(([id, name]) => `<option value="${id}"${Number(physics.fallCommonEvent) === Number(id) ? ' selected' : ''}>${rrEscapeHtml(name)}</option>`).join('')}</select>
-                        <div class="rr-controls-note rr-controls-span">${rrEscapeHtml(tt('Gravity 1 is Earth. A map can set its own in Map Properties › Physics (the Moon, a low-gravity station).'))}</div>
+                        <div class="rr-controls-note rr-controls-span">${rrEscapeHtml(tt('Gravity 1 is Earth. A map can set its own in Map Properties › Physics (the Moon, a low-gravity station).') + ' ' + tt('A ledge higher than a jump and within the reach is grabbed and climbed: press Jump while walking into it.') + ' ' + tt('A ledge up to the height climbed by walking is climbed or stepped down by walking into it for a moment.'))}</div>
                     </div>
                 </div>
                 <div class="database-section rr-controls-card">
-                    <div class="database-section-header">${rrEscapeHtml(tt('Swimming (3D maps)'))}</div>
+                    <div class="database-section-header" data-section-key="swimming-3d-maps">${rrEscapeHtml(tt('Swimming (3D maps)'))}</div>
                     <div class="database-section-content rr-controls-form">
                         <label class="rr-controls-check"><input type="checkbox" class="rr-controls-swim"${physics.swim !== false ? ' checked' : ''}> ${rrEscapeHtml(tt('Players can swim in deep water'))}</label>
                         <label>${rrEscapeHtml(tt('Float depth'))}</label><div><input type="number" class="database-field-value rr-controls-num" data-field="swimDepth" min="0.2" max="20" step="0.1" value="${physics.swimDepth}"> <span class="rr-controls-unit">${rrEscapeHtml(tt('tiles under the surface'))}</span></div>
@@ -200,9 +315,12 @@ class DatabaseControlsEditor {
         root.querySelectorAll('.rr-controls-remove').forEach(button => button.addEventListener('click', () => this.remove(button.dataset.kind, Number(button.dataset.code))));
         root.querySelector('.rr-controls-reset').addEventListener('click', () => {
             const system = this.system();
+            this._moved = null;
             const jump = this.controls().jump;
-            delete system.reactorControls;
-            if (!jump) system.reactorControls = { jump: false };
+            const kept = {};
+            for (const [key, value] of Object.entries(system.reactorControls || {})) if (!DatabaseControlsEditor.MANAGED.includes(key)) kept[key] = value;
+            if (!jump) kept.jump = false;
+            if (Object.keys(kept).length) system.reactorControls = kept; else delete system.reactorControls;
             this.databaseManager.mutationGeneration = (this.databaseManager.mutationGeneration || 0) + 1;
             this.parentEditor?._markDatabaseMutation?.();
             this.render();
@@ -212,6 +330,8 @@ class DatabaseControlsEditor {
         root.querySelector('.rr-controls-swim').addEventListener('change', event => { const p = this.physics(); p.swim = event.target.checked; this.savePhysics(p); });
         root.querySelectorAll('.rr-controls-sound').forEach(button => button.addEventListener('click', () => this.pickSound(button.dataset.field, button.dataset.title)));
         root.querySelector('.rr-controls-ragdoll').addEventListener('change', event => { const p = this.physics(); p.ragdoll = event.target.checked; this.savePhysics(p); });
+        root.querySelector('.rr-controls-mantle').addEventListener('change', event => { const p = this.physics(); p.mantle = event.target.checked; this.savePhysics(p); });
+        root.querySelector('.rr-controls-stepup').addEventListener('change', event => { const p = this.physics(); p.stepUp = event.target.checked; this.savePhysics(p); });
         root.querySelector('.rr-controls-event').addEventListener('change', event => { const p = this.physics(); p.fallCommonEvent = Math.max(0, Number(event.target.value) || 0); this.savePhysics(p); });
         root.querySelector('.rr-controls-gravity').addEventListener('change', event => {
             if (event.target.value === 'custom') return;
@@ -230,8 +350,13 @@ class DatabaseControlsEditor {
 
     remove(kind, code) {
         const c = this.controls();
+        this._moved = null;
         if (kind === 'key') delete c.keys[code];
         else if (kind === 'pad') delete c.gamepad[code];
+        else if (kind === 'key-action') delete c.actionKeys[code];
+        else if (kind === 'pad-action') delete c.actionButtons[code];
+        else if (kind === 'key-tactical') { delete c.tacticalKeys[code]; c.tacticalKeysOwn = true; }
+        else if (kind === 'pad-tactical') { delete c.tacticalButtons[code]; c.tacticalButtonsOwn = true; }
         else if (kind === 'key-jump') c.jumpKeys = c.jumpKeys.filter(k => k !== code);
         else if (kind === 'pad-jump') c.jumpButtons = c.jumpButtons.filter(k => k !== code);
         this.saveControls(c);
@@ -245,10 +370,12 @@ class DatabaseControlsEditor {
         this.render();
         if (kind.startsWith('key')) document.addEventListener('keydown', this._onCaptureKey, true);
         else this._padTimer = setInterval(() => this.pollPad(), 50);
+        document.addEventListener('pointerdown', this._onCaptureAway, true);
     }
 
     stopCapture() {
         document.removeEventListener('keydown', this._onCaptureKey, true);
+        document.removeEventListener('pointerdown', this._onCaptureAway, true);
         clearInterval(this._padTimer);
         this._padTimer = null;
         this._capture = null;
@@ -265,6 +392,8 @@ class DatabaseControlsEditor {
         if (!code && /^Key[A-Z]$/.test(event.code || '')) code = event.code.charCodeAt(3);
         if (!code && /^Digit[0-9]$/.test(event.code || '')) code = 48 + Number(event.code.slice(5));
         if (!code) return;
+        // Escape stops listening; only Cancel / Menu, whose key it is, takes it.
+        if (code === 27 && !(this._capture.kind === 'key' && this._capture.action === 'escape')) { this.stopCapture(); this.render(); return; }
         this.assign(this._capture.kind, this._capture.action, code);
     }
 
@@ -278,10 +407,34 @@ class DatabaseControlsEditor {
     }
 
     /** A key or button goes to one action (it leaves any other); a jump key keeps its other action. */
+    /** The binding `code` leaves when it goes to `action`, named for the page's note; null when it had none. */
+    moved(c, kind, action, code) {
+        const tables = {
+            key: [c.keys, DatabaseControlsEditor.ACTIONS, DatabaseControlsEditor.keyName],
+            pad: [c.gamepad, DatabaseControlsEditor.PAD_ACTIONS, DatabaseControlsEditor.buttonName],
+            'key-action': [c.actionKeys, DatabaseControlsEditor.BATTLE_ACTIONS, DatabaseControlsEditor.keyName],
+            'pad-action': [c.actionButtons, DatabaseControlsEditor.BATTLE_PAD_ACTIONS, DatabaseControlsEditor.buttonName],
+            'key-tactical': [c.tacticalKeys, DatabaseControlsEditor.TACTICAL_ACTIONS, DatabaseControlsEditor.keyName],
+            'pad-tactical': [c.tacticalButtons, DatabaseControlsEditor.TACTICAL_ACTIONS, DatabaseControlsEditor.buttonName]
+        };
+        const table = tables[kind];
+        if (!table || !table[0][code] || table[0][code] === action) return null;
+        const label = name => {
+            const known = table[1].find(([id]) => id === name);
+            return known ? this._t(known[1]).replace('{n}', String(name).replace('hotbar', '')) : String(name);
+        };
+        return { key: table[2](code), from: label(table[0][code]), to: label(action) };
+    }
+
     assign(kind, action, code) {
         const c = this.controls();
+        this._moved = this.moved(c, kind, action, Number(code));
         if (kind === 'key') c.keys[code] = action;
         else if (kind === 'pad') c.gamepad[code] = action;
+        else if (kind === 'key-action') c.actionKeys[code] = action;
+        else if (kind === 'pad-action') c.actionButtons[code] = action;
+        else if (kind === 'key-tactical') { c.tacticalKeys[code] = action; c.tacticalKeysOwn = true; }
+        else if (kind === 'pad-tactical') { c.tacticalButtons[code] = action; c.tacticalButtonsOwn = true; }
         else if (kind === 'key-jump' && !c.jumpKeys.includes(code)) c.jumpKeys.push(code);
         else if (kind === 'pad-jump' && !c.jumpButtons.includes(code)) c.jumpButtons.push(code);
         this.stopCapture();

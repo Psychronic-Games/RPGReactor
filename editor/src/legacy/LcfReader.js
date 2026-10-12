@@ -541,12 +541,14 @@
     function readProject(files, options) {
         options = options || {};
         const iniBytes = files.read('RPG_RT.ini');
-        const ini = iniBytes ? parseIni(new TextDecoder('latin1').decode(asBytes(iniBytes))) : {};
+        let ini = iniBytes ? parseIni(new TextDecoder('latin1').decode(asBytes(iniBytes))) : {};
         const ldb = files.read('RPG_RT.ldb');
         if (!ldb) throw new Error('RPG_RT.ldb not found: not an RPG Maker 2000/2003 project');
         let encoding = options.encoding || ini.RPG_RT?.Encoding || (ini.EasyRPG && ini.EasyRPG.Encoding);
         if (!encoding || /^auto$/i.test(encoding)) encoding = detectEncoding(textSamples(ldb));
         const database = readDatabase(ldb, encoding);
+        // The ini's values (GameTitle) are in the game's code page too; its keys are ASCII.
+        if (iniBytes) ini = parseIni(makeDecoder(database.encoding).decode(asBytes(iniBytes)));
         const lmt = files.read('RPG_RT.lmt');
         const tree = lmt ? readMapTree(lmt, encoding) : null;
         const maps = {};

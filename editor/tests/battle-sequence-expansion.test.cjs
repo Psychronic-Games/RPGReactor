@@ -99,7 +99,7 @@ test('preview equipment slots distinguish shields from dual-wielded weapons with
 test('a held model turns about its grip, faces where its holder faces, and tweens every turn',async()=>{
  // Placement: an authored front face takes the holder's facing itself; a model without one keeps the long-axis +90.
  const at={x:5,y:3,z:1.5};
- assert.deepEqual(B.heldPlacement(at,90,{rotation:20,rotateY:10,rotateZ:5,scale:2,gripY:0},{faces:{front:[1,0,0]}}),{x:5,y:3,z:1.5,facing:90,rotateX:-20,rotateY:10,rotateZ:5,scale:2,pivotY:0});
+ assert.deepEqual(B.heldPlacement(at,90,{rotation:20,rotateY:10,rotateZ:5,scale:2,gripY:0},{faces:{front:[1,0,0]}}),{x:5,y:3,z:1.5,facing:90,rotateX:-20,rotateY:10,rotateZ:5,scale:2,pivotY:0,offsetX:0,offsetY:0,offsetZ:0});
  const plain=B.heldPlacement(at,90,{},{});assert.equal(plain.facing,180);assert.equal(plain.pivotY,.5);assert.equal(plain.scale,1);
  // The tween carries Turn and Roll along with the rest.
  assert.deepEqual(B.heldPose({x:0,rotation:0,rotateY:0,rotateZ:0,scale:1},{x:1,rotation:90,rotateY:40,rotateZ:-20,scale:3},.5),{x:.5,y:0,z:0,rotation:45,rotateY:20,rotateZ:-10,scale:2});
@@ -120,7 +120,7 @@ test('preview choices are remembered per sequence and dropped when their records
  const first=make([49]);Object.assign(first,{cast:{user:3,target:2},castKinds:{user:'enemies',target:'enemies'},targetCount:3,mirrored:true,sampleWeapon:49,sampleAction:'items:5',previewProjection:'2d',scene:{kind:'troop',id:4}});first.controls.distance=9;first.savePrefs();
  const second=make([49]),extra=second.loadPrefs();
  assert.deepEqual([second.cast,second.castKinds,second.targetCount,second.mirrored,second.sampleWeapon,second.previewProjection,second.scene],[{user:3,target:2},{user:'enemies',target:'enemies'},3,true,49,'2d',{kind:'troop',id:4}]);
- assert.deepEqual({...extra},{sampleAction:'items:5',distance:9,follow:false,orbit:null,pan:null});
+ assert.deepEqual({...extra},{sampleAction:'items:5',distance:9,follow:false,orbit:null,pan:null,castOpen:false});
  const other=make([49]);other.sequence={id:8};other.loadPrefs();assert.equal(other.targetCount,1,'another sequence keeps its own cast');assert.equal(other.previewProjection,'2d','projection and scene are shared across sequences');
  const gone=make([]);gone.loadPrefs();assert.equal(gone.sampleWeapon,0,'a deleted preview weapon is forgotten');
  store.set('rrSequencePreview:/p','not json');assert.doesNotThrow(()=>make([]).loadPrefs());

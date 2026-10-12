@@ -29,6 +29,8 @@ test('Map Properties rejects an oversized map before allocation or mutation', as
     const height = { value: '10000', focus() { this.focused = true; } };
     const context = {
         alert: message => alerts.push(message),
+        // Map Properties tells through the editor's themed dialog.
+        RRDialog: { alert: async message => { alerts.push(message); } },
         document: {
             getElementById(id) {
                 if (id === 'map-width-input') return width;

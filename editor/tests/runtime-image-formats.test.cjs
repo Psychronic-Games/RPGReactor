@@ -1,11 +1,12 @@
 const assert = require('node:assert/strict');
+const { runtimeSource } = require('./helpers/runtime-source.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 
 const workspaceRoot = path.resolve(__dirname, '..', '..');
 const managersSource = fs.readFileSync(path.join(workspaceRoot, 'runtime', 'reactor_managers.js'), 'utf8');
-const coreSource = fs.readFileSync(path.join(workspaceRoot, 'runtime', 'reactor_core.js'), 'utf8');
+const coreSource = runtimeSource('reactor_core.js');
 const uiSource = fs.readFileSync(path.join(workspaceRoot, 'runtime', 'reactor_ui.js'), 'utf8');
 
 function imageManagerFixture() {

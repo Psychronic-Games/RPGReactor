@@ -149,7 +149,7 @@
                 scope: type === 3 ? 11 : (SCOPE[sk.scope ?? 0] ?? 1), occasion: occasion(sk.occasion_field !== false, sk.occasion_battle !== false),
                 speed: 0, successRate: sk.hit ?? 100, repeats: 1, hitType: (sk.physical_rate || 0) > (sk.magical_rate || 0) ? 1 : 2,
                 animationId: sk.animation_id || 0, messageType: 0,
-                message1: sk.using_message1 ? ' ' + sk.using_message1 : '', message2: sk.using_message2 || '',
+                message1: named(sk.using_message1), message2: sk.using_message2 || '',
                 requiredWtypeId1: 0, requiredWtypeId2: 0,
                 damage: { type: damageType, elementId: attrs[0] || 0, formula: damageType ? skillFormula(sk) : '0', variance: Math.min(100, (sk.variance ?? 4) * 10), critical: false },
                 effects
@@ -262,10 +262,16 @@
                     list: C.convertList(pg.event_commands || [], ctx).list, span: 0
                 };
             });
-            out[t.id] = { id: t.id, name: t.name || '', members: (t.members || []).filter(Boolean).map(m => ({ enemyId: m.enemy_id, x: m.x || 0, y: m.y || 0, hidden: !!m.invisible })), pages: pages.length ? pages : [{ conditions: { actorHp: 50, actorId: 1, actorValid: false, enemyHp: 50, enemyIndex: 0, enemyValid: false, switchId: 1, switchValid: false, turnA: 0, turnB: 0, turnEnding: false, turnValid: false }, list: [{ code: 0, indent: 0, parameters: [] }], span: 0 }] };
+            out[t.id] = { id: t.id, name: t.name || '', members: (t.members || []).filter(Boolean).map(m => ({ enemyId: m.enemy_id || 1, x: m.x || 0, y: m.y || 0, hidden: !!m.invisible })), pages: pages.length ? pages : [{ conditions: { actorHp: 50, actorId: 1, actorValid: false, enemyHp: 50, enemyIndex: 0, enemyValid: false, switchId: 1, switchValid: false, turnA: 0, turnB: 0, turnEnding: false, turnValid: false }, list: [{ code: 0, indent: 0, parameters: [] }], span: 0 }] };
         }
         return out;
     }
+
+    /**
+     * A battle message the old engines print straight after the battler's name, with the name as MZ's %1.
+     * English messages written without their leading space get one; Japanese ones run on from the name.
+     */
+    const named = (message) => !message ? '' : /%S/i.test(message) ? message.replace(/%S/gi, '%1') : '%1' + (/^[A-Za-z0-9]/.test(message) ? ' ' : '') + message;
 
     function states(db, notes) {
         const out = [null];
@@ -284,12 +290,12 @@
             if (st.restrict_skill || st.restrict_magic) { traits.push({ code: 42, dataId: 1, value: 0 }); notes.stateSealsSkills = (notes.stateSealsSkills || 0) + 1; }
             const restriction = { 0: 0, 1: 4, 2: 1, 3: 2 }[st.restriction ?? 0] ?? 0;
             out[st.id] = {
-                id: st.id, name: st.name || '', iconIndex: 0, note: '', priority: Math.max(0, Math.min(100, st.priority ?? 50)), restriction,
+                id: st.id, name: st.name || '', rrColor: st.color ?? 6, iconIndex: 0, note: '', priority: Math.max(0, Math.min(100, st.priority ?? 50)), restriction,
                 motion: restriction === 4 ? 3 : 0, overlay: 0,
                 removeAtBattleEnd: (st.type ?? 0) === 0, removeByRestriction: false, autoRemovalTiming: (st.auto_release_prob || 0) > 0 ? 2 : 0,
                 minTurns: st.hold_turn || 1, maxTurns: st.hold_turn || 1, removeByDamage: (st.release_by_damage || 0) > 0, chanceByDamage: st.release_by_damage || 100,
                 removeByWalking: false, stepsToRemove: 100, messageType: 0,
-                message1: st.message_actor || '', message2: st.message_enemy || '', message3: st.message_already || '', message4: st.message_recovery || '',
+                message1: named(st.message_actor), message2: named(st.message_enemy), message3: named(st.message_already), message4: named(st.message_recovery),
                 traits
             };
         }
@@ -345,10 +351,20 @@
         const set = (arr, i, v) => { if (v && !(F && F.isJapaneseDefault(v, db.encoding))) arr[i] = v; };
         set(terms.basic, 0, t.level); set(terms.basic, 1, t.lvl_short); set(terms.basic, 2, t.health_points); set(terms.basic, 3, t.hp_short); set(terms.basic, 4, t.spirit_points); set(terms.basic, 5, t.sp_short); set(terms.basic, 8, t.exp_short); set(terms.basic, 9, t.exp_short);
         for (const [i, k] of [[0, 'battle_fight'], [1, 'battle_escape'], [2, 'command_attack'], [3, 'command_defend'], [4, 'command_item'], [5, 'command_skill'], [6, 'menu_equipment'], [7, 'status'], [8, 'order'], [9, 'menu_save'], [10, 'menu_quit'], [12, 'weapon'], [13, 'armor'], [18, 'new_game'], [19, 'load_game'], [22, 'no'], [24, 'shop_buy1'], [25, 'shop_sell1']]) set(terms.commands, i, t[k]);
+        // The 2003 menu's commands, as the game set them (1 Item, 2 Skill, 3 Equipment, 4 Save, 5 Status, 6 Row, 7 Order,
+        // 8 Wait); a database without the list (a 2000 one) under the 2003 runtime shows Item alone. And the word a
+        // status line shows for a battler with no state.
+        out.rrMenuCommands = Array.isArray(sys.menu_commands) ? sys.menu_commands.filter(n => n > 0) : [];
+        if (t.normal_status && !(F && F.isJapaneseDefault(t.normal_status, db.encoding))) out.rrNormalStatus = t.normal_status;
+        // The title's third command ends the game, named by the game (2000/2003 have no Options there).
+        out.rrTitleShutdown = (t.exit_game && !(F && F.isJapaneseDefault(t.exit_game, db.encoding)) && t.exit_game) || 'Quit';
+        // The menu's Quit asks the game's own question, answered by its Yes and No.
+        const own = (v) => v && !(F && F.isJapaneseDefault(v, db.encoding)) ? v : undefined;
+        for (const [k, target] of [['exit_game_message', 'rrQuitMessage'], ['yes', 'rrYes'], ['no', 'rrNo']]) if (own(t[k])) out[target] = t[k];
         for (const [i, k] of [[0, 'health_points'], [1, 'spirit_points'], [2, 'attack'], [3, 'defense'], [4, 'spirit'], [6, 'agility']]) set(terms.params, i, t[k]);
         const m = terms.messages;
         const msg = (key, v) => { if (v) m[key] = v; };
-        msg('emerge', t.encounter ? t.encounter.replace(/%S|%s/, '%1') : ''); msg('preemptive', t.special_combat); msg('escapeStart', t.escape_success ? '%1 ' + t.escape_success : ''); msg('escapeFailure', t.escape_failure);
+        msg('emerge', named(t.encounter)); msg('preemptive', t.special_combat); msg('escapeStart', t.escape_success ? '%1 ' + t.escape_success : ''); msg('escapeFailure', t.escape_failure);
         msg('victory', t.victory); msg('defeat', t.defeat); msg('obtainExp', t.exp_received ? '%1 ' + t.exp_received : ''); msg('obtainGold', t.gold_recieved_a ? `${t.gold_recieved_a} %1${t.gold_recieved_b || ''}` : ''); msg('obtainItem', t.item_recieved ? '%1 ' + t.item_recieved : '');
         msg('actorDamage', t.actor_damaged ? '%1 %2 ' + t.actor_damaged : ''); msg('actorNoDamage', t.actor_undamaged ? '%1 ' + t.actor_undamaged : ''); msg('enemyDamage', t.enemy_damaged ? '%1 %2 ' + t.enemy_damaged : ''); msg('enemyNoDamage', t.enemy_undamaged ? '%1 ' + t.enemy_undamaged : '');
         msg('criticalToActor', t.enemy_critical); msg('criticalToEnemy', t.actor_critical); msg('evasion', t.dodge ? '%1 ' + t.dodge : ''); msg('actionFailure', t.skill_failure_a ? '%1 ' + t.skill_failure_a : ''); msg('actorRecovery', t.hp_recovery ? '%1 %3 %2 ' + t.hp_recovery : '');
@@ -362,7 +378,7 @@
         out.armorTypes = ['', t.armor || 'Armor'];
         out.equipTypes = ['', t.weapon || 'Weapon', t.shield || 'Shield', t.helmet || 'Head', t.armor || 'Body', t.accessory || 'Accessory'];
         out.currencyUnit = t.gold || out.currencyUnit;
-        out.battleSystem = db.engine === 'RPG Maker 2000' ? 0 : 1;
+        out.battleSystem = (db.runtime || db.engine) === 'RPG Maker 2000' ? 0 : 1;
         out.optSideView = false; out.optDisplayTp = false; out.optFloorDeath = false; out.optFollowers = false;
         const start = (tree && tree.start) || {};
         for (const [key, name, index, music, map, x, y] of [['boat', 'boat_name', 'boat_index', 'boat_music', 'boat_map_id', 'boat_x', 'boat_y'], ['ship', 'ship_name', 'ship_index', 'ship_music', 'ship_map_id', 'ship_x', 'ship_y'], ['airship', 'airship_name', 'airship_index', 'airship_music', 'airship_map_id', 'airship_x', 'airship_y']]) {
@@ -377,7 +393,8 @@
     /** Apply a baked-in language to the converted records: "<table>.<field>" contexts from the game's translation files. */
     function translateRecords(out, translator) {
         if (!translator) return;
-        const field = (records, ctx, key, target) => { for (const r of records || []) { if (r && typeof r[target || key] === 'string') { const v = translator.field(ctx + '.' + key, r[target || key]); if (v !== undefined) r[target || key] = v; } } };
+        // A message carries the battler's name as a leading %1, which the translation files do not have.
+        const field = (records, ctx, key, target) => { for (const r of records || []) { if (r && typeof r[target || key] === 'string') { const value = r[target || key], lead = value.startsWith('%1') ? '%1' : ''; const v = translator.field(ctx + '.' + key, value.slice(lead.length)); if (v !== undefined) r[target || key] = lead + v; } } };
         field(out.actors, 'actors', 'name'); field(out.actors, 'actors', 'title', 'nickname'); field(out.classes, 'classes', 'name');
         field(out.skills, 'skills', 'name'); field(out.skills, 'skills', 'description');
         for (const table of ['items', 'weapons', 'armors']) { field(out[table], 'items', 'name'); field(out[table], 'items', 'description'); }
@@ -388,7 +405,8 @@
     function convert(db, tree, notes, translator) {
         const engine2000 = db.engine === 'RPG Maker 2000';
         const extra = extraEvents(db);
-        const { actors, classes, classOffset } = actorsAndClasses(db, engine2000);
+        // EXP follows the runtime the game shipped with: a 2000 database on 2003's RPG_RT levels by 2003's curve.
+        const { actors, classes, classOffset } = actorsAndClasses(db, (db.runtime || db.engine) === 'RPG Maker 2000');
         const skillsOut = skills(db, notes, extra);
         const { items: itemsOut, weapons, armors, kinds } = items(db, notes, extra, skillsOut);
         const ctx = {

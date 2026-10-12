@@ -4,6 +4,7 @@
 // parallax grounds through it, stands characters on it, and refuses a step
 // steeper than the slope limit.
 const { source3D } = require('./helpers/runtime-3d-source.cjs');
+const { runtimeSource } = require('./helpers/runtime-source.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -91,9 +92,10 @@ test('every ground surface and every stander goes through the terrain', () => {
     assert.match(runtime, /const geometry = this\.groundPlane\(width, height, lift\);/);
     assert.match(runtime, /const geometry = this\.groundPlane\(width, height, y\);/);
     assert.equal((runtime.match(/Reactor3D\.characterGround\(/g) || []).length, 3, 'both model placements, and the cutaway (one helper for the player and each of the company)');
+    assert.match(runtime, /const floor = this\.characterGround \? this\.characterGround\(map, character\)/, 'and a flat sprite\'s standing place');
     assert.match(runtime, /Reactor3D\.viewGroundAt\(\$dataMap, x \+ 0\.5, y \+ 0\.5, near\)/, 'the camera module, which never looks at a wall stack\'s top');
     assert.match(read('runtime/reactor_sprites.js'), /Reactor3D\.viewGroundAt\(\$dataMap, focus\.x \+ 0\.5, focus\.y \+ 0\.5, near\)/);
-    const objects = read('runtime/reactor_objects.js');
+    const objects = runtimeSource('reactor_objects.js');
     assert.match(objects, /const ground = Reactor3D\.characterGround\(\$dataMap, this\);/);
     assert.match(objects, /Reactor3D\.terrainBlocks\(\$dataMap, x, y, x2, y2, this\._reactorGround\)\) return false;/);
     const editor3d = read('editor/src/MapEditor3D.js');
@@ -105,12 +107,14 @@ test('every ground surface and every stander goes through the terrain', () => {
     assert.match(read('editor/src/TilesetPaletteViewer.js'), /layerName === 'T' \? 'terrain' : layerName === 'P' \? 'pieces' : 'paint'/);
     assert.match(editor3d, /this\.terrainManager\(\)\?\.endStroke\(\);/);
     // The drifting sky keeps the editor rendering, at fractional frames.
-    assert.match(editor3d, /if \(sky && \(sky\.driftX \|\| sky\.driftY\)\) return true;/);
+    // A drifting sky keeps a still view drawing, every other frame (idleInterval).
+    assert.match(editor3d, /if \(sky && \(sky\.driftX \|\| sky\.driftY\)\) return MapEditor3D\.SKY_INTERVAL_MS;/);
     assert.match(editor3d, /this\.mapScene\.updateSky\?\.\(this\.camera, now \/ \(1000 \/ 60\)\);/);
     // The terrain tools live in the Build bar's Terrain group now, not a palette tab.
     assert.doesNotMatch(read('editor/src/TilesetPaletteViewer.js'), /createLayerTab\('T'/);
     const bar = read('editor/src/BuildHotbar.js');
-    assert.match(bar, /static TERRAIN = \['raise', 'lower', 'smooth', 'flatten', 'pour', 'drain', 'look'\];/);
+    // The ground's brushes, dunes, the painted grounds and rock, then the water, then the map's biome and the land past its border.
+    assert.match(bar, /static TERRAIN = \['raise', 'lower', 'smooth', 'flatten', 'dunes', 'ground', 'terase', 'rock', 'pour', 'river', 'drain', 'look', 'biome', 'surround'\];/);
     assert.match(bar, /if \(!terrain\.active\) terrain\.activate\(\);\n\s*terrain\.setMode\(BuildHotbar\.TERRAIN_MODE\[slot\]\);/);
     assert.match(read('editor/src/main.js'), /onTerrainTabSelected = \(\) => \{/);
     assert.match(read('editor/index.html'), /src\/TerrainManager\.js/);
@@ -298,4 +302,318 @@ test('water fills a hollow: it rises from the low point until it would spill, an
     assert.equal(ME.waterCovers(ME.normalizeWater({ x0: 0, y0: 0, x1: 3, y1: 3, level: 1 }, map3), 3, 3), true);
     assert.equal(ME.normalizeWater({ x0: 0, y0: 0, x1: 1, y1: 1, level: 1, mask: '1111' }, map3).mask, undefined, 'a full mask is dropped');
     assert.equal(ME.normalizeWater({ x0: -1, y0: 0, x1: 1, y1: 0, level: 1, mask: '110' }, map3).mask, '10', 'a mask is cut with its box at the map edge');
+});
+
+test('a pond follows the ground: an island dug out under it fills, ground raised through it dries, all of it gone drains', () => {
+    const ME = loadElevation();
+    const W = 20, H = 20;
+    const map = { width: W, height: H, reactor3d: { version: 1, elevation: new Array(W * H).fill(0) } };
+    ME.ensureTerrain(map);
+    const grid = ME.terrain(map), stride = W + 1;
+    // A round hollow with an island standing out of it.
+    for (let y = 0; y <= H; y++) for (let x = 0; x <= W; x++) grid[y * stride + x] = Math.hypot(x - 10, y - 10) < 6 ? -4 : 0;
+    for (let y = 9; y <= 11; y++) for (let x = 9; x <= 11; x++) grid[y * stride + x] = 1;
+    assert.ok(ME.fillWaterAt(map, 6, 10, 'Water'));
+    const poured = ME.water(map)[0];
+    assert.ok(!ME.waterCovers(poured, 10, 10), 'the island is dry when poured');
+    assert.equal(ME.refitWater(map), false, 'nothing to fit while the ground is as poured');
+    // The island dug down to the pond's floor: the water closes over it.
+    for (let y = 9; y <= 11; y++) for (let x = 9; x <= 11; x++) grid[y * stride + x] = -4;
+    assert.equal(ME.refitWater(map), true);
+    const filled = ME.water(map)[0];
+    assert.ok(ME.waterCovers(filled, 10, 10), 'water over the old island');
+    assert.equal(filled.level, poured.level, 'at the level it stood');
+    assert.deepEqual([filled.x0, filled.y0, filled.x1, filled.y1], [poured.x0, poured.y0, poured.x1, poured.y1], 'within its own box');
+    // A hill raised through the water leaves it dry there.
+    for (let y = 5; y <= 7; y++) for (let x = 9; x <= 11; x++) grid[y * stride + x] = 2;
+    assert.equal(ME.refitWater(map), true);
+    assert.ok(!ME.waterCovers(ME.water(map)[0], 10, 6), 'the new hill stands out of it');
+    // Every cell raised above the water: the sheet goes.
+    for (let i = 0; i < grid.length; i++) grid[i] = 5;
+    assert.equal(ME.refitWater(map), true);
+    assert.equal(ME.water(map).length, 0);
+});
+
+// The real TerrainManager against a real map: the editor's globals stubbed, nothing drawn.
+function loadTerrainManager(map, ME, events = [], reactor = undefined) {
+    const context = { console, Math, Number, Object, Array, String, JSON, Date, Map, Set, setTimeout, clearTimeout,
+        CustomEvent: class { constructor(type, init) { this.type = type; this.detail = init && init.detail; } },
+        document: { dispatchEvent: event => events.push(event) } };
+    context.window = context; context.RRMapElevation = ME; context.reactor = reactor;
+    vm.runInNewContext(read('editor/src/TerrainManager.js'), context);
+    const manager = new context.TerrainManager({ getTilemapManager: () => ({ currentMap: map }) });
+    manager.active = true;
+    return manager;
+}
+
+test('a terrain stroke refits the ponds, and its undo puts the ground and the water back together', () => {
+    const ME = loadElevation();
+    const W = 20, H = 20;
+    const map = { id: 1, width: W, height: H, reactor3d: { version: 1, elevation: new Array(W * H).fill(0) } };
+    ME.ensureTerrain(map);
+    const grid = ME.terrain(map), stride = W + 1;
+    for (let y = 0; y <= H; y++) for (let x = 0; x <= W; x++) grid[y * stride + x] = Math.hypot(x - 10, y - 10) < 6 ? -4 : 0;
+    assert.ok(ME.fillWaterAt(map, 10, 10, 'Water'));
+    const pond = JSON.stringify(ME.water(map)), ground = JSON.stringify(ME.terrain(map));
+    const manager = loadTerrainManager(map, ME);
+    manager.setMode('raise'); manager.radius = 3; manager.strength = 1;
+    for (let i = 0; i < 8; i++) { manager.beginStroke({ x: 9.5, y: 9.5 }); manager.endStroke(); }
+    assert.ok(!ME.waterCovers(ME.water(map)[0], 10, 10), 'the hill stands out of the pond');
+    for (let i = 0; i < 8; i++) manager.undo();
+    assert.equal(JSON.stringify(ME.terrain(map)), ground);
+    assert.equal(JSON.stringify(ME.water(map)), pond, 'the pond is whole again');
+    for (let i = 0; i < 8; i++) manager.redo();
+    assert.ok(!ME.waterCovers(ME.water(map)[0], 10, 10), 'redo brings the hill and the dry spot back');
+});
+
+test('terrain undo moves only the corners its stroke moved: a pad levelled since by another tool stays', () => {
+    const ME = loadElevation();
+    const W = 30, H = 10;
+    const map = { id: 1, width: W, height: H, reactor3d: { version: 1, elevation: new Array(W * H).fill(0) } };
+    const manager = loadTerrainManager(map, ME);
+    manager.setMode('raise'); manager.radius = 2; manager.strength = 1;
+    manager.beginStroke({ x: 4.5, y: 4.5 }); manager.endStroke();
+    manager.beginStroke({ x: 19.5, y: 4.5 }); manager.endStroke();
+    // A building stamped over the second hill levels its pad (the builder's own step).
+    const grid = ME.terrain(map), stride = W + 1;
+    for (let y = 2; y <= 7; y++) for (let x = 17; x <= 22; x++) grid[y * stride + x] = 0.5;
+    const pad = () => { const out = []; for (let y = 2; y <= 7; y++) for (let x = 17; x <= 22; x++) out.push(ME.terrainAt(map, x, y)); return out; };
+    const levelled = pad();
+    // Undoing the first stroke takes its hill away and leaves the pad as the building left it.
+    manager.undo(); manager.undo();
+    assert.equal(ME.terrainAt(map, 5, 5), 0, 'the first hill is gone');
+    assert.notDeepEqual(pad(), levelled, 'the second stroke\'s own corners went back');
+    manager.redo();
+    assert.ok(ME.terrainAt(map, 5, 5) > 0, 'redo raises the first hill again');
+    // Only the first stroke undone: the pad is untouched.
+    const other = { id: 1, width: W, height: H, reactor3d: { version: 1, elevation: new Array(W * H).fill(0) } };
+    const second = loadTerrainManager(other, ME);
+    second.setMode('raise'); second.radius = 2; second.strength = 1;
+    second.beginStroke({ x: 4.5, y: 4.5 }); second.endStroke();
+    const g2 = ME.ensureTerrain(other);
+    for (let y = 2; y <= 7; y++) for (let x = 17; x <= 22; x++) g2[y * stride + x] = 0.5;
+    second.undo();
+    assert.equal(ME.terrainAt(other, 5, 5), 0);
+    assert.equal(ME.terrainAt(other, 20, 5), 0.5, 'the pad keeps its level');
+    // Ctrl+Z while a stroke is still being drawn undoes that stroke, and the drag moves nothing more.
+    const third = loadTerrainManager({ id: 1, width: W, height: H, reactor3d: { version: 1, elevation: new Array(W * H).fill(0) } }, ME);
+    const map3 = third.currentMap();
+    third.setMode('raise'); third.radius = 2; third.strength = 1;
+    third.beginStroke({ x: 4.5, y: 4.5 });
+    third.undo();
+    assert.equal(ME.hasTerrain(map3), false);
+    assert.equal(third.paintAt({ x: 8.5, y: 4.5 }), false);
+    third.endStroke();
+    assert.equal(ME.hasTerrain(map3), false);
+    assert.equal(third.undoStack.length, 0); assert.equal(third.redoStack.length, 1);
+});
+
+test('undoing a liquid\'s look shows the look it went back to, and a sheet undone away is let go', () => {
+    const ME = loadElevation();
+    const W = 20, H = 20;
+    const map = { id: 1, width: W, height: H, reactor3d: { version: 1, elevation: new Array(W * H).fill(0) } };
+    const grid = ME.ensureTerrain(map), stride = W + 1;
+    for (let y = 0; y <= H; y++) for (let x = 0; x <= W; x++) grid[y * stride + x] = Math.hypot(x - 10, y - 10) < 6 ? -4 : 0;
+    const manager = loadTerrainManager(map, ME);
+    manager.setMode('fill');
+    assert.equal(manager.pourAt({ x: 10, y: 10 }), true);
+    manager.setMode('look');
+    manager.selectWater(ME.waterAt(map, 10, 10));
+    manager.editLook(Object.assign({}, manager.constructor.WATER_LOOKS.tar), 'commit');
+    assert.equal(ME.waterAt(map, 10, 10).colour, '#0b0b0d');
+    manager.undo();
+    assert.equal(ME.waterAt(map, 10, 10).colour, undefined);
+    assert.equal(manager.waterLook.colour, '', 'the panel shows water again');
+    // A slider moved after the undo keeps it water.
+    manager.editLook({ waves: 1.2 }, 'commit');
+    assert.equal(ME.waterAt(map, 10, 10).colour, undefined);
+    assert.equal(ME.waterAt(map, 10, 10).waves, 1.2);
+    // Undo back past the pour: the sheet is gone and so is the selection.
+    manager.undo(); manager.undo();
+    assert.equal(ME.water(map).length, 0);
+    assert.equal(manager.selectedWater, null);
+});
+
+test('a look changed live is its own undo step when another sheet is picked before it commits', () => {
+    const ME = loadElevation();
+    const W = 30, H = 12;
+    const map = { id: 1, width: W, height: H, reactor3d: { version: 1, elevation: new Array(W * H).fill(0) } };
+    const grid = ME.ensureTerrain(map), stride = W + 1;
+    for (let y = 0; y <= H; y++) for (let x = 0; x <= W; x++) grid[y * stride + x] = Math.hypot(x - 7, y - 6) < 4 || Math.hypot(x - 22, y - 6) < 4 ? -3 : 0;
+    const manager = loadTerrainManager(map, ME);
+    manager.setMode('fill');
+    assert.ok(manager.pourAt({ x: 7, y: 6 }) && manager.pourAt({ x: 22, y: 6 }));
+    manager.setMode('look');
+    manager.selectWater(ME.waterAt(map, 7, 6));
+    // A colour picked (live); the other pond clicked before the popup's commit, which then lands late.
+    manager.editLook({ colour: '#ff0000' }, 'live');
+    manager.selectWater(ME.waterAt(map, 22, 6));
+    manager.editLook({}, 'commit');
+    assert.equal(ME.waterAt(map, 7, 6).colour, '#ff0000');
+    const steps = manager.undoStack.length;
+    manager.undo();
+    assert.equal(ME.waterAt(map, 7, 6).colour, undefined, 'one undo takes the red back');
+    assert.equal(ME.water(map).length, 2, 'and only the red: both ponds stay');
+    assert.equal(steps, 3, 'two pours and the colour, no empty step');
+});
+
+test('a stroke under a pond that leaves its outline alone still lays the water again (its depth is the ground\'s)', () => {
+    const ME = loadElevation();
+    const W = 20, H = 20;
+    const map = { id: 1, width: W, height: H, reactor3d: { version: 1, elevation: new Array(W * H).fill(0) } };
+    const grid = ME.ensureTerrain(map), stride = W + 1;
+    for (let y = 0; y <= H; y++) for (let x = 0; x <= W; x++) grid[y * stride + x] = Math.hypot(x - 10, y - 10) < 6 ? -4 : 0;
+    const events = [];
+    const manager = loadTerrainManager(map, ME, events);
+    manager.setMode('fill'); assert.ok(manager.pourAt({ x: 10, y: 10 }));
+    const mask = ME.water(map)[0].mask;
+    manager.setMode('lower'); manager.radius = 2; manager.strength = 0.5;
+    events.length = 0;
+    manager.beginStroke({ x: 9.5, y: 9.5 }); manager.endStroke();
+    assert.equal(ME.water(map)[0].mask, mask, 'the outline held');
+    assert.ok(events.some(event => event.detail.water), 'the sheet is laid again');
+    // A stroke far from any water does not touch it.
+    const far = { id: 2, width: 60, height: 20, reactor3d: { version: 1, elevation: new Array(1200).fill(0) } };
+    const g2 = ME.ensureTerrain(far);
+    for (let y = 0; y <= 20; y++) for (let x = 0; x <= 60; x++) g2[y * 61 + x] = Math.hypot(x - 10, y - 10) < 6 ? -4 : 0;
+    const farEvents = [];
+    const other = loadTerrainManager(far, ME, farEvents);
+    other.setMode('fill'); assert.ok(other.pourAt({ x: 10, y: 10 }));
+    other.setMode('raise'); other.radius = 2;
+    farEvents.length = 0;
+    other.beginStroke({ x: 50, y: 10 }); other.endStroke();
+    assert.ok(!farEvents.some(event => event.detail.water));
+});
+
+test('a builder undo of a levelled pad leaves terrain shaped since alone, on a map that had none before too', () => {
+    const context = { console, window: {}, document: { addEventListener() {}, removeEventListener() {}, dispatchEvent() {} }, CustomEvent: class { constructor(t, i) { this.type = t; this.detail = i && i.detail; } } };
+    context.window = context;
+    vm.runInNewContext(read('editor/src/utils/MapElevation.js'), context);
+    vm.runInNewContext(read('editor/src/PieceBuilderManager.js'), context);
+    const E = context.RRMapElevation;
+    for (const shaped of [true, false]) {
+        const map = { id: 3, width: 20, height: 8, reactor3d: { version: 1 } };
+        const builder = new context.PieceBuilderManager({ getTilemapManager: () => ({ currentMap: map }) });
+        if (shaped) { const grid = E.ensureTerrain(map); for (let x = 2; x <= 6; x++) grid[3 * 21 + x] = 1; }
+        // A stamp as stampAt lays one: the step saved, the pad levelled, the edit announced.
+        builder.undoStack.push(builder._snapshot(map, { ground: true }));
+        E.setPiece(map, { kind: 'wall', x: 3, y: 3, z: 0, group: 1 });
+        if (shaped) { const grid = E.terrain(map); for (let y = 2; y <= 4; y++) for (let x = 2; x <= 6; x++) grid[y * 21 + x] = 0.5; }
+        builder.announce(true);
+        // Then a hill raised with the terrain tool, away from the pad.
+        E.paintTerrain(map, 15, 4, { mode: 'raise', radius: 2, strength: 1 });
+        const hill = E.terrainAt(map, 15, 4);
+        builder.undo();
+        assert.equal(E.pieces(map).length, 0);
+        assert.equal(E.terrainAt(map, 15, 4), hill, 'the hill raised since stays (' + (shaped ? 'shaped' : 'flat') + ' map)');
+        if (shaped) assert.equal(E.terrainAt(map, 4, 3), 1, 'the pad\'s own corners went back');
+        builder.redo();
+        assert.equal(E.pieces(map).length, 1);
+        assert.equal(E.terrainAt(map, 15, 4), hill);
+        if (shaped) assert.equal(E.terrainAt(map, 4, 3), 0.5, 'redo levels the pad again');
+    }
+});
+
+test('ground moved under pieces and rocks lays them again, after a stroke and after its undo', () => {
+    const ME = loadElevation();
+    const map = { id: 1, width: 40, height: 20, reactor3d: { version: 1, elevation: new Array(800).fill(0) } };
+    ME.setPiece(map, { kind: 'rock', x: 10, y: 10, z: 0 });
+    const events = [];
+    const manager = loadTerrainManager(map, ME, events);
+    manager.setMode('raise'); manager.radius = 3; manager.strength = 1;
+    const relays = () => events.filter(event => event.detail.pieces).map(event => event.detail.region);
+    manager.beginStroke({ x: 30, y: 10 }); manager.endStroke();
+    assert.equal(relays().length, 0, 'a stroke away from every piece relays none');
+    manager.beginStroke({ x: 9.5, y: 9.5 }); manager.endStroke();
+    const [region] = relays();
+    assert.ok(region && region.x0 <= 10 && region.x1 >= 10 && region.y0 <= 10 && region.y1 >= 10, 'the rock\'s cell is laid again: ' + JSON.stringify(region));
+    events.length = 0;
+    manager.undo();
+    const [back] = relays();
+    assert.ok(back && back.x0 <= 10 && back.x1 >= 10 && back.y0 <= 10 && back.y1 >= 10, 'undo lays the rock again: ' + JSON.stringify(back));
+});
+
+test('another tool taken up mid-stroke closes the stroke: the ponds refit and its undo is a whole step', () => {
+    const ME = loadElevation();
+    const W = 20, H = 20;
+    const map = { id: 1, width: W, height: H, reactor3d: { version: 1, elevation: new Array(W * H).fill(0) } };
+    const grid = ME.ensureTerrain(map), stride = W + 1;
+    for (let y = 0; y <= H; y++) for (let x = 0; x <= W; x++) grid[y * stride + x] = Math.hypot(x - 10, y - 10) < 6 ? -1 : 0;
+    const manager = loadTerrainManager(map, ME);
+    manager.setMode('fill'); assert.ok(manager.pourAt({ x: 10, y: 10 }));
+    const pond = JSON.stringify(ME.water(map));
+    manager.setMode('raise'); manager.radius = 3; manager.strength = 4;
+    manager.beginStroke({ x: 9.5, y: 9.5 });
+    manager.deactivate();
+    assert.ok(!ME.waterCovers(ME.water(map)[0], 10, 10), 'the pond refit round the new hill');
+    assert.equal(manager.paintAt({ x: 5, y: 5 }), false, 'the drag paints nothing more');
+    manager.endStroke();
+    manager.active = true;
+    manager.undo();
+    assert.equal(JSON.stringify(ME.water(map)), pond);
+    assert.equal(ME.terrainAt(map, 10, 10), -1);
+});
+
+test('a building levelling ground in a pond refits the pond, and a terrain undo after it keeps the pond on the pad', () => {
+    const context = { console, window: {}, document: { addEventListener() {}, removeEventListener() {}, dispatchEvent() {} }, CustomEvent: class { constructor(t, i) { this.type = t; this.detail = i && i.detail; } } };
+    context.window = context;
+    vm.runInNewContext(read('editor/src/utils/MapElevation.js'), context);
+    vm.runInNewContext(read('editor/src/PieceBuilderManager.js'), context);
+    vm.runInNewContext(read('editor/src/TerrainManager.js'), context);
+    const E = context.RRMapElevation;
+    const W = 30, H = 20, stride = W + 1;
+    const map = { id: 1, width: W, height: H, reactor3d: { version: 1, elevation: new Array(W * H).fill(0) } };
+    const grid = E.ensureTerrain(map);
+    // A pond with an island in it.
+    for (let y = 0; y <= H; y++) for (let x = 0; x <= W; x++) grid[y * stride + x] = Math.hypot(x - 10, y - 10) < 7 ? -3 : 0;
+    for (let y = 8; y <= 12; y++) for (let x = 8; x <= 12; x++) grid[y * stride + x] = 1;
+    const owner = { getTilemapManager: () => ({ currentMap: map }) };
+    const terrain = new context.TerrainManager(owner), builder = new context.PieceBuilderManager(owner);
+    context.reactor = { terrainManager: terrain, pieceBuilderManager: builder };
+    terrain.active = true; terrain.setMode('raise'); terrain.radius = 2; terrain.strength = 0.5;
+    assert.ok(E.fillWaterAt(map, 5, 10, 'Water'));
+    assert.ok(!E.waterCovers(E.water(map)[0], 10, 10), 'the island is dry');
+    terrain.beginStroke({ x: 24, y: 10 }); terrain.endStroke();
+    // A building on the island: its pad levelled down into the pond (as stampAt does it).
+    builder.undoStack.push(builder._snapshot(map, { ground: true }));
+    for (let y = 8; y <= 12; y++) for (let x = 8; x <= 12; x++) grid[y * stride + x] = -2;
+    builder.announce(true);
+    assert.ok(E.waterCovers(E.water(map)[0], 10, 10), 'the pond closes over the sunken pad');
+    // The terrain stroke from before the building undone: the pad and its water stay.
+    terrain.undo();
+    assert.equal(E.terrainAt(map, 10, 10), -2);
+    assert.ok(E.waterCovers(E.water(map)[0], 10, 10), 'no dry hole on the pad');
+});
+
+test('Pour\'s preview goes when another tool is taken up, and shows again at once when Pour is picked again', () => {
+    const ME = loadElevation();
+    const map = { id: 1, width: 20, height: 20, reactor3d: { version: 1, elevation: new Array(400).fill(0) } };
+    const grid = ME.ensureTerrain(map);
+    for (let y = 0; y <= 20; y++) for (let x = 0; x <= 20; x++) grid[y * 21 + x] = Math.hypot(x - 10, y - 10) < 5 ? -2 : 0;
+    let shown = false;
+    const view = { showWaterGhost() { shown = true; }, hideWaterGhost() { shown = false; }, showWaterSelection() {} };
+    const manager = loadTerrainManager(map, ME, [], { mapEditor3D: view });
+    manager.setMode('fill');
+    manager.hoverAt({ x: 10, y: 10 });
+    assert.equal(shown, true);
+    manager.deactivate();
+    assert.equal(shown, false, 'the Build group taken up: no preview left over the hollow');
+    manager.active = true;
+    manager.setMode('fill');
+    manager.hoverAt({ x: 10, y: 10 });
+    assert.equal(shown, true, 'the pointer still over the same cell shows it again');
+});
+
+test('the Look panel\'s Clarity slider is not the button that levels the whole map', () => {
+    // The slider once carried the level button's class, so a click on Clarity flattened the terrain
+    // (and every pond with it): the handler found the slider where the button was not shown.
+    const hotbar = read('editor/src/BuildHotbar.js');
+    assert.match(hotbar, /range\('rr-build-tclarity', t\('terrain\.look\.clear'\)/, 'Clarity has a class of its own');
+    assert.match(hotbar, /lookRange\('rr-build-tclarity', 'clear'\)/);
+    assert.doesNotMatch(hotbar, /range\('rr-build-tclear'/, 'no slider carries the level button\'s class');
+    assert.match(hotbar, /querySelector\('button\.rr-build-tclear'\)\?\.addEventListener\('click', \(\) => \{ terrain\.clear\(\)/, 'the level handler binds to a button only');
+    // No class is both a slider and a button in the terrain panel.
+    const sliders = new Set(Array.from(hotbar.matchAll(/(?:range|lookRange|bindRange)\('(rr-build-[a-z-]+)'/g), m => m[1]));
+    const buttons = Array.from(hotbar.matchAll(/iconButton\('(rr-build-[a-z-]+)'/g), m => m[1]);
+    for (const cls of buttons) assert.ok(!sliders.has(cls), `${cls} is a button and a slider`);
 });

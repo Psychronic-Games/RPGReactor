@@ -1,0 +1,7 @@
+{
+  "name": "project",
+  "version": "0.99.0",
+  "main": "index.html",
+  "chromium-args": "--force-color-profile=srgb --window-size=1280,720",
+  "window": {"title":"Project","width":1280,"height":720,"min_width":1,"min_height":1,"position":"center","resizable":true,"frame":true,"show":true,"icon":"icon/icon.png"}
+}

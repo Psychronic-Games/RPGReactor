@@ -32,7 +32,8 @@ class RRMotionEditor {
 
     static TRIGGERS() {
         return [['action', 'On demand'], ['always', 'Always'], ['idle', 'While idle'], ['moving', 'While moving'], ['walking', 'While walking'],
-            ['dashing', 'While dashing'], ['jumping', 'While jumping'], ['swimming', 'While swimming'], ['treading', 'While treading water'], ['climbing', 'While climbing']];
+            ['dashing', 'While dashing'], ['jumping', 'While jumping'], ['swimming', 'While swimming'], ['treading', 'While treading water'], ['climbing', 'While climbing'],
+            ['riding', 'While riding']];
     }
 
     /** Pose-rule fields the editor writes; anything else on a rule (effects, cycles) is kept as it was. */
@@ -46,8 +47,11 @@ class RRMotionEditor {
         const frames = Math.max(2, Math.round((Number(first.period) || 30) * (first.type === 'pose' || !rules.length ? 2 : 1)));
         const tracks = rules.map(raw => {
             if (raw.type !== 'pose') return { part: raw.part || '', other: JSON.parse(JSON.stringify(raw)) };
+            // In order and within the motion, as the runtime reads them.
             const keys = Array.isArray(raw.keys) && raw.keys.length
-                ? raw.keys.map(stop => ({ at: Number(stop.at) || 0, rotate: RRMotionEditor.vec(stop.rotate), move: RRMotionEditor.vec(stop.move) }))
+                ? raw.keys.filter(stop => stop && typeof stop === 'object')
+                    .map(stop => ({ at: Math.min(1, Math.max(0, Number(stop.at) || 0)), rotate: RRMotionEditor.vec(stop.rotate), move: RRMotionEditor.vec(stop.move) }))
+                    .sort((a, b) => a.at - b.at)
                 : [{ at: hold ? 1 : 0.5, rotate: RRMotionEditor.vec(raw.rotate), move: RRMotionEditor.vec(raw.move) }];
             const extra = JSON.parse(JSON.stringify(raw));
             for (const field of RRMotionEditor.MANAGED) delete extra[field];
@@ -55,7 +59,8 @@ class RRMotionEditor {
         });
         this.motion = {
             name: name || this.freshName(),
-            original: name || null,
+            // The name its rules are saved under (an unnamed motion's too), or null for a new one.
+            original: rules.length ? name : null,
             trigger: first.trigger || 'action',
             frames,
             repeat: !!first.repeat,
@@ -156,11 +161,19 @@ class RRMotionEditor {
         const motion = this.motion;
         if (!motion) return;
         const host = this.host;
-        const at = host.rawAnimations.findIndex(raw => raw && raw.name === (motion.original || motion.name) && raw.type !== 'clip');
-        const kept = host.rawAnimations.filter(raw => !(raw && raw.type !== 'clip' && (raw.name === motion.original || raw.name === motion.name)));
+        // Only the rules saved as this motion are replaced; a new one has none yet.
+        const ours = raw => raw && raw.type !== 'clip' && motion.original !== null && raw.name === motion.original;
+        const at = host.rawAnimations.findIndex(ours);
+        const kept = host.rawAnimations.filter(raw => !ours(raw));
         const mine = this.rulesOf(motion);
-        kept.splice(at >= 0 ? Math.min(at, kept.length) : kept.length, 0, ...mine);
+        const place = at >= 0 ? Math.min(at, kept.length) : kept.length;
+        kept.splice(place, 0, ...mine);
+        const before = host.rawAnimations;
         host.rawAnimations = kept;
+        // Rules after this one moved when its part count changed.
+        if (typeof host._followRuleIndexes === 'function') host._followRuleIndexes(before);
+        // The list's selection (what Delete removes) follows the motion to where it now stands.
+        host.selectedRule = mine.length ? place : -1;
         motion.original = motion.name;
         host.saveRules();
         host.renderRuleList();
@@ -207,7 +220,8 @@ class RRMotionEditor {
             wrap.appendChild(this.root);
         }
         const m = this.motion, tt = text => this._t(text);
-        const partName = part => part === '' ? tt('Whole model') : part;
+        // (A name its file damaged is shown without the damage; the stored name is the part's identity and stays.)
+        const partName = part => part === '' ? tt('Whole model') : typeof RRPartNames !== 'undefined' ? RRPartNames.readable(part) : part;
         const used = new Set(m.tracks.map(t => t.part));
         const addable = [''].concat(this.host.partNames || []).filter(part => !used.has(part));
         const track = m.tracks[this.track];
@@ -225,7 +239,7 @@ class RRMotionEditor {
                 ${m.trigger === 'action' || m.trigger === 'jumping' ? `<label class="r3d-motion-field"><input type="checkbox" class="r3d-motion-repeat"${m.repeat ? ' checked' : ''}> ${rrEscapeHtml(tt('Repeat'))}</label>
                 ${m.trigger === 'action' ? `<label class="r3d-motion-field" title="${rrEscapeHtml(tt('Held until another stance moves the same parts.'))}"><input type="checkbox" class="r3d-motion-hold"${m.hold ? ' checked' : ''}> ${rrEscapeHtml(tt('Stance'))}</label>` : ''}` : ''}
                 <span style="flex:1"></span>
-                <button type="button" class="rr-btn-secondary r3d-motion-play"></button>
+                <button type="button" class="rr-btn-secondary r3d-motion-play" data-rr-i18n-skip="1"></button>
                 <button type="button" class="r3d-motion-close" title="${rrEscapeHtml(tt('Close'))}">×</button>
             </div>
             <div class="r3d-motion-body">
@@ -284,14 +298,19 @@ class RRMotionEditor {
         const changed = (rerender = true) => { this.commit(); if (rerender) this.render(); };
         root.querySelector('.r3d-motion-close').addEventListener('click', () => this.close());
         root.querySelector('.r3d-motion-play').addEventListener('click', () => { this.playing = !this.playing; this._playFrom = null; if (this.playing && this.playhead >= 1) this.playhead = 0; this.renderPlayButton(); });
-        root.querySelector('.r3d-motion-name').addEventListener('change', event => { const name = event.target.value.trim(); if (name) { m.name = name; changed(); } });
+        root.querySelector('.r3d-motion-name').addEventListener('change', event => {
+            const name = event.target.value.trim();
+            // Another animation's name would fold it into this motion.
+            const taken = name !== m.original && this.host.rawAnimations.some(raw => raw && raw.type !== 'clip' && raw.name === name);
+            if (name && !taken) { m.name = name; changed(); } else event.target.value = m.name;
+        });
         root.querySelector('.r3d-motion-trigger').addEventListener('change', event => { m.trigger = event.target.value; if (m.trigger !== 'action') m.hold = false; changed(); });
         root.querySelector('.r3d-motion-length').addEventListener('change', event => { const s = Number(event.target.value); if (s > 0) { m.frames = Math.max(2, Math.round(s * 60)); changed(); } });
         root.querySelector('.r3d-motion-repeat')?.addEventListener('change', event => { m.repeat = event.target.checked; changed(); });
         root.querySelector('.r3d-motion-hold')?.addEventListener('change', event => {
+            // A stance keeps one pose per part: the one at the playhead, sampled before the motion holds.
+            if (event.target.checked) for (const t of m.tracks) if (t.keys) { const pose = this.sampleTrack(t, this.playhead || 1); t.keys = [{ at: 1, rotate: pose.rotate, move: pose.move }]; }
             m.hold = event.target.checked;
-            // A stance keeps one pose per part: the one at the playhead.
-            if (m.hold) for (const t of m.tracks) if (t.keys) { const pose = this.sampleTrack(Object.assign({}, t), this.playhead || 1); t.keys = [{ at: 1, rotate: pose.rotate, move: pose.move }]; }
             changed();
         });
         root.querySelectorAll('.r3d-motion-track').forEach(el => el.addEventListener('click', event => {

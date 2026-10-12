@@ -12,6 +12,7 @@
  * agree.
  */
 const assert = require('node:assert/strict');
+const { runtimeSource } = require('./helpers/runtime-source.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
@@ -37,8 +38,8 @@ function definition(source, head) {
  * counts how often it was consulted.
  */
 function loadRuntime() {
-    const objects = read('runtime/reactor_objects.js');
-    const core = read('runtime/reactor_core.js');
+    const objects = runtimeSource('reactor_objects.js');
+    const core = runtimeSource('reactor_core.js');
     const engineMath = Object.create(Math);
     const state = { rolls: [], randomCalls: 0 };
     engineMath.random = () => {

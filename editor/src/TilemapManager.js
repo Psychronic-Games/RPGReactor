@@ -6,6 +6,217 @@ if (typeof PIXI !== 'undefined' && PIXI.TextureStyle) {
     PIXI.TextureStyle.defaultOptions.scaleMode = 'nearest';
 }
 
+/**
+ * Draws the 2D map only when something on it changed.
+ *
+ * PIXI's Application renders its whole stage on every animation frame for as
+ * long as the editor is open: behind the Database window, with the mouse
+ * still, with nothing on the map moving at all. On an integrated GPU that is
+ * the laptop running warm to draw the same picture sixty times a second.
+ *
+ * The scheduler takes that render off the ticker and puts it behind a test.
+ * The ticker itself keeps running — the water, parallax and stepping-sprite
+ * animations are ticker callbacks — but a frame is only drawn when:
+ *   - someone asked (`app.requestRender()`): input over the map, a key, a
+ *     resize, a context restore and the editor's own mutators all do;
+ *   - PIXI's scene graph has pending work. Every moved, shown, hidden, tinted,
+ *     re-textured, added or removed display object queues itself on its
+ *     render group until the next render consumes the queue, so a queue that
+ *     grew since the last frame is a change nobody had to announce;
+ *   - a texture's pixels changed underneath an unchanged sprite (a canvas or
+ *     video source updated, something rendered into a render texture), which
+ *     the scene graph does not see;
+ *   - a registered animation is running (`app.setAnimating(key, true)`);
+ *   - a second has passed since the last frame. A floor, not a cadence: a
+ *     change none of the above noticed shows within a second, not never.
+ * The Database window covers the map entirely, so nothing is drawn under it;
+ * the first frame after it closes is.
+ */
+class MapRenderScheduler {
+    constructor(app, options = {}) {
+        this.app = app;
+        this.isCovered = options.isCovered || (() => false);
+        this.heartbeatMs = options.heartbeatMs ?? 1000;
+        this.now = options.now || (() => (typeof performance !== 'undefined' ? performance.now() : Date.now()));
+        this.dirty = true;
+        this.animating = new Set();
+        this.lastRenderAt = -Infinity;
+        this.renders = 0;
+        this._covered = false;
+        this._rendering = false;
+        this._sceneStamp = null;
+        this._textureStamp = -1;
+        this._listeners = [];
+    }
+
+    /** Pixels changed in some texture source since the page loaded; see install(). */
+    static textureUpdates = 0;
+
+    /**
+     * Count texture-source updates, once per page. A canvas redrawn and
+     * re-uploaded, a video frame, an image finishing its decode: all of them
+     * call `update()` on the source and none of them touch the sprite that
+     * shows it. Counting is all the hook does.
+     */
+    static watchTextureSources(pixi) {
+        const proto = pixi?.TextureSource?.prototype;
+        if (!proto || typeof proto.update !== 'function' || proto.update.__rrCountsUpdates) return;
+        const original = proto.update;
+        const counted = function(...args) {
+            MapRenderScheduler.textureUpdates++;
+            return original.apply(this, args);
+        };
+        counted.__rrCountsUpdates = true;
+        proto.update = counted;
+    }
+
+    /**
+     * How much render work the stage has queued, as a pair that only grows
+     * between renders: the number of render groups, and the sum of every
+     * group's pending transform, view and structure updates. A render
+     * consumes the queues; whatever it leaves (a cached layer it did not
+     * redraw keeps its own) is the baseline the next frame compares with.
+     */
+    static pendingWork(root) {
+        const stamp = { groups: 0, pending: 0 };
+        const visit = group => {
+            if (!group) return;
+            stamp.groups++;
+            if (group.structureDidChange) stamp.pending++;
+            if (group.isCachedAsTexture && group.textureNeedsUpdate) stamp.pending++;
+            stamp.pending += group.childrenRenderablesToUpdate?.index || 0;
+            const byDepth = group.childrenToUpdate;
+            if (byDepth) for (const depth in byDepth) stamp.pending += byDepth[depth]?.index || 0;
+            const children = group.renderGroupChildren;
+            if (children) for (let i = 0; i < children.length; i++) visit(children[i]);
+        };
+        visit(root?.renderGroup);
+        return stamp;
+    }
+
+    install({ inputElement = null } = {}) {
+        const app = this.app;
+        if (!app?.ticker || app.renderScheduler) return this;
+        const pixi = typeof PIXI !== 'undefined' ? PIXI : null;
+        MapRenderScheduler.watchTextureSources(pixi);
+
+        // Swap PIXI's every-frame render for the gated one, at the same
+        // (low) priority so the animation callbacks still run first.
+        const render = app.render;
+        this._appRender = () => render.call(app);
+        app.ticker.remove(render, app);
+        app.ticker.add(this.tick, this, pixi?.UPDATE_PRIORITY?.LOW ?? -25);
+        app.render = () => this.renderNow();
+        app.requestRender = () => this.requestRender();
+        app.setAnimating = (key, active) => this.setAnimating(key, active);
+        app.renderScheduler = this;
+
+        // Coming back from the 3D view (which stops the ticker) repaints.
+        const start = app.start;
+        if (typeof start === 'function') {
+            app.start = (...args) => { this.dirty = true; return start.apply(app, args); };
+        }
+
+        const renderer = app.renderer;
+        if (renderer) {
+            // Rendering into a texture changes pixels the stage then shows.
+            const rendererRender = renderer.render;
+            renderer.render = (...args) => {
+                if (!this._rendering) this.dirty = true;
+                return rendererRender.apply(renderer, args);
+            };
+            // A resized canvas is a cleared one. The resize can come from a
+            // frame callback that runs after the ticker's, which would put the
+            // blank buffer on screen; redraw as soon as the caller finishes.
+            const resize = renderer.resize;
+            renderer.resize = (...args) => {
+                const result = resize.apply(renderer, args);
+                this.dirty = true;
+                if (!this._resizeQueued) {
+                    this._resizeQueued = true;
+                    queueMicrotask(() => {
+                        this._resizeQueued = false;
+                        if (this.dirty && app.ticker?.started && !this.isCovered()) this.renderNow();
+                    });
+                }
+                return result;
+            };
+        }
+
+        const request = () => this.requestRender();
+        const listen = (target, type, options) => {
+            if (!target?.addEventListener) return;
+            target.addEventListener(type, request, options);
+            this._listeners.push(() => target.removeEventListener(type, request, options));
+        };
+        // Generous on purpose: a frame too many costs a millisecond, a frame
+        // too few leaves the map showing something that is no longer true.
+        for (const type of ['pointerdown', 'pointermove', 'pointerup', 'pointerleave', 'wheel']) {
+            listen(inputElement, type, { passive: true, capture: true });
+        }
+        if (typeof window !== 'undefined') {
+            for (const type of ['keydown', 'keyup', 'resize', 'focus']) listen(window, type, { passive: true, capture: true });
+        }
+        if (typeof document !== 'undefined') listen(document, 'visibilitychange');
+        listen(app.canvas, 'webglcontextrestored');
+        return this;
+    }
+
+    requestRender() {
+        this.dirty = true;
+    }
+
+    setAnimating(key, active) {
+        if (active) this.animating.add(key);
+        else if (this.animating.delete(key)) this.dirty = true;
+    }
+
+    /** Whether the frame the ticker is on needs drawing. */
+    needsRender(now = this.now()) {
+        if (this.dirty || this.animating.size > 0) return true;
+        if (MapRenderScheduler.textureUpdates !== this._textureStamp) return true;
+        const stamp = MapRenderScheduler.pendingWork(this.app?.stage);
+        const last = this._sceneStamp;
+        if (!last || stamp.groups === 0 || stamp.groups !== last.groups || stamp.pending !== last.pending) return true;
+        return now - this.lastRenderAt >= this.heartbeatMs;
+    }
+
+    tick() {
+        if (!this.app?.renderer || !this.app.stage) return;
+        if (this.isCovered()) {
+            this._covered = true;
+            return;
+        }
+        if (this._covered) {
+            this._covered = false;
+            this.dirty = true;
+        }
+        const now = this.now();
+        if (this.needsRender(now)) this.renderNow(now);
+    }
+
+    renderNow(now = this.now()) {
+        this._rendering = true;
+        try {
+            this._appRender?.();
+        } finally {
+            this._rendering = false;
+        }
+        this.dirty = false;
+        this.lastRenderAt = now;
+        this.renders++;
+        this._textureStamp = MapRenderScheduler.textureUpdates;
+        this._sceneStamp = MapRenderScheduler.pendingWork(this.app?.stage);
+    }
+
+    destroy() {
+        for (const remove of this._listeners.splice(0)) remove();
+        this.app?.ticker?.remove(this.tick, this);
+    }
+}
+
+if (typeof window !== 'undefined') window.MapRenderScheduler = MapRenderScheduler;
+
 class TilemapManager {
     // Atomic write for project data: write a temp sibling then rename over
     // the destination, so a crash/kill/full-disk mid-write can never destroy
@@ -512,8 +723,11 @@ class TilemapManager {
             this._previewBackground = null;
         }
 
-        // Create new container for tilemap
+        // Create new container for tilemap. A gesture on the old one can no
+        // longer end (its handlers went with it), so none is under way.
         this._zoomPadding = null;
+        this._viewportGestures = 0;
+        this._wheelGesture = false;
         this.container = new PIXI.Container();
         this.app.stage.addChild(this.container);
 
@@ -528,11 +742,14 @@ class TilemapManager {
         // Create layers
         this.layers.checkerboard = new PIXI.Container();
         this.layers.parallax = new PIXI.Container();
-        // Map image layers ($dataMap.rrImageLayers): painted ground over the lower
-        // tiles, and light/canopy/sky over everything (dimmed so the map stays editable).
-        this.layers.imageGround = new PIXI.Container();
-        this.layers.imageOver = new PIXI.Container();
-        this.layers.imageOver.alpha = 0.6;
+        // Map image layers ($dataMap.rrImageLayers), one container per depth in the game's
+        // order: behind the map, over the lower tiles, with the characters, over everything;
+        // and the marks of the tiles a selected layer blocks. Nothing in them takes input.
+        for (const name of ['imageBack', 'imageGround', 'imageSame', 'imageOver', 'imageMarks']) {
+            this.layers[name] = new PIXI.Container();
+            this.layers[name].eventMode = 'none';
+            this.layers[name].interactiveChildren = false;
+        }
         this.layers.ground = new PIXI.Container();
         this.layers.lower1 = new PIXI.Container();
         this.layers.lower2 = new PIXI.Container();
@@ -603,12 +820,37 @@ class TilemapManager {
             this.layers.shadow
         ]);
 
+        // PIXI hit-tests every pointer move by walking the display tree, and a
+        // tile layer holds a sprite per painted cell — tens of thousands of
+        // them on a large map, visited on every move of the mouse. Nothing
+        // listens on a tile: the map's handlers sit on this container and
+        // work out the cell from the pointer. The sprites only served as
+        // "something is under the pointer" so the event reached the
+        // container, which the hit surface below now does with one test
+        // against the map rectangle. Media surfaces, events and the other
+        // overlays that do take input live outside these layers and are
+        // still walked.
+        for (const name of ['checkerboard', 'parallax', 'ground', 'lower1', 'lower2', 'lower3',
+            'upper0', 'upper1', 'upper2', 'upper3', 'a1ground', 'a1lower1', 'a1lower2', 'a1lower3', 'shadow']) {
+            this.layers[name].interactiveChildren = false;
+        }
+        this._hitSurface = new PIXI.Container();
+        this._hitSurface.label = 'Map hit surface';
+        this._hitSurface.hitArea = {
+            contains: (x, y) => !!this.currentMap && x >= 0 && y >= 0 &&
+                x < this.currentMap.width * this.TILE_WIDTH && y < this.currentMap.height * this.TILE_HEIGHT
+        };
+
         // Add layers in correct rendering order (bottom to top). Each A1
         // overlay draws directly above its z-slot's static container, so
         // stacking between z-slots is unchanged. RPG Maker draws shadows
         // after both base planes (z0 and z1), then draws decorations (z2/z3).
+        // The hit surface goes first, under everything, so anything that
+        // does take input above it is still found first.
+        this.container.addChild(this._hitSurface);
         this.container.addChild(this.layers.checkerboard);
         this.container.addChild(this.layers.parallax);
+        this.container.addChild(this.layers.imageBack);
         this.container.addChild(this.layers.ground);
         this.container.addChild(this.layers.a1ground);
         this.container.addChild(this.layers.lower1);
@@ -619,11 +861,13 @@ class TilemapManager {
         this.container.addChild(this.layers.lower3);
         this.container.addChild(this.layers.a1lower3);
         this.container.addChild(this.layers.imageGround);
+        this.container.addChild(this.layers.imageSame);
         this.container.addChild(this.layers.upper0);
         this.container.addChild(this.layers.upper1);
         this.container.addChild(this.layers.upper2);
         this.container.addChild(this.layers.upper3);
         this.container.addChild(this.layers.imageOver);
+        this.container.addChild(this.layers.imageMarks);
         this.container.addChild(this.layers.layerHighlight);
         this.drawGrid();
         this.drawPassage();
@@ -645,6 +889,7 @@ class TilemapManager {
      * overlays, and faint enough to read as a guide rather than as artwork.
      */
     drawGrid() {
+        this.requestRender();
         if (typeof PIXI === "undefined" || !this.container) return;
         if (this.gridLayer) {
             this.gridLayer.parent?.removeChild(this.gridLayer);
@@ -677,6 +922,7 @@ class TilemapManager {
 
     /** Show or hide the tile grid. */
     setGridVisible(on) {
+        this.requestRender();
         this.gridVisible = on === true;
         if (this.gridLayer) this.gridLayer.visible = this.gridVisible;
     }
@@ -711,6 +957,7 @@ class TilemapManager {
      * a placed 3D model blocks (its footprint, as the game tests it).
      */
     drawPassage() {
+        this.requestRender();
         if (typeof PIXI === "undefined" || !this.container) return;
         if (this.passageLayer) {
             this.passageLayer.parent?.removeChild(this.passageLayer);
@@ -728,9 +975,12 @@ class TilemapManager {
         layer.eventMode = "none";
         const marks = new PIXI.Graphics();
         const inset = Math.max(2, Math.round(tw * 0.18));
+        const imageSolid = (typeof window !== "undefined" && window.reactor?.mapImageLayersManager?.solidTest(map)) || null;
         for (let y = 0; y < map.height; y++) {
             for (let x = 0; x < map.width; x++) {
-                const { blocked } = TilemapManager.tilePassage(map.data, map.width, map.height, flags, x, y, roomFloor);
+                // A picture at the characters' depth stops movement where it is solid, as an impassable tile does.
+                const blocked = imageSolid && imageSolid(x, y) ? 0x0f
+                    : TilemapManager.tilePassage(map.data, map.width, map.height, flags, x, y, roomFloor).blocked;
                 if (!blocked) continue;
                 const px = x * tw, py = y * th;
                 if (blocked === 0x0f) {
@@ -773,7 +1023,8 @@ class TilemapManager {
                 const index = typeof MapEditor3D !== "undefined" && MapEditor3D.previewPageIndex
                     ? MapEditor3D.previewPageIndex(mapData, event) : 0;
                 if (index === null) continue;
-                const spec = Reactor3D.eventModelSpec(mapData, event.id, index);
+                const spec = typeof MapEditor3D !== 'undefined' && MapEditor3D.previewModelSpec
+                    ? MapEditor3D.previewModelSpec(mapData, event, index) : Reactor3D.eventModelSpec(mapData, event.id, index);
                 if (!spec) continue;
                 const page = event.pages && event.pages[index];
                 const z = Reactor3D.eventZAt ? Reactor3D.eventZAt(mapData, event.id) : 0;
@@ -810,6 +1061,7 @@ class TilemapManager {
 
     /** Show or hide the passage marks. */
     setPassageVisible(on) {
+        this.requestRender();
         this.passageVisible = on === true;
         this.drawPassage();
     }
@@ -833,6 +1085,7 @@ class TilemapManager {
      * upper twin); shadows belong to the A layer (z0) for this purpose.
      */
     setLayerDimming(layerMode) {
+        this.requestRender();
         this._layerDimMode = layerMode;
         const DIM = 0.35;
         const sel = layerMode === 'auto' ? null : layerMode;
@@ -855,6 +1108,16 @@ class TilemapManager {
         apply('a1lower3', 3);
     }
 
+    /**
+     * Ask for the map to be drawn on the next frame. The render scheduler
+     * sees most changes on its own (see MapRenderScheduler); the editing
+     * paths say so anyway, because a missed frame is a map showing
+     * something that is no longer true.
+     */
+    requestRender() {
+        this.app?.requestRender?.();
+    }
+
     setupPanning() {
         let isDragging = false;
         let dragStart = { x: 0, y: 0 };
@@ -870,6 +1133,7 @@ class TilemapManager {
             const shiftClaimedByPainter = shiftPressed && event.data.button === 0 &&
                 this.shouldBypassShiftPanning?.(event);
             if (event.data.button === 1 || (shiftPressed && !shiftClaimedByPainter)) {
+                if (!isDragging) this.beginViewportGesture();
                 isDragging = true;
                 dragStart = {
                     x: event.data.global.x - this.container.x,
@@ -910,15 +1174,13 @@ class TilemapManager {
             }
         });
 
-        this.container.on('pointerup', () => {
+        const endDrag = () => {
+            if (isDragging) this.endViewportGesture();
             isDragging = false;
             this.scheduleVirtualViewportRefresh();
-        });
-
-        this.container.on('pointerupoutside', () => {
-            isDragging = false;
-            this.scheduleVirtualViewportRefresh();
-        });
+        };
+        this.container.on('pointerup', endDrag);
+        this.container.on('pointerupoutside', endDrag);
 
         // Remove any existing custom scrollbar elements
         if (canvasContainer) {
@@ -941,79 +1203,37 @@ class TilemapManager {
                 event.preventDefault();
                 if (!this.currentMap) return;
 
-                const delta = event.deltaY;
-                const scaleFactor = delta > 0 ? 0.9 : 1.1;
-                const oldScale = this.container.scale.x;
-
-                // Get ACTUAL viewport dimensions (container size, not canvas size)
-                const canvasContainer = document.getElementById('canvas-container');
-                const containerRect = canvasContainer.getBoundingClientRect();
-                const viewportWidth = containerRect.width;
-                const viewportHeight = containerRect.height;
-                const mapWidthPx = this.currentMap.width * this.TILE_SIZE;
-                const mapHeightPx = this.currentMap.height * this.TILE_SIZE;
-
-                // Minimum zoom = contain-fit (the entire map can fit in the viewport).
-                // Beyond this, the map would shrink inside the canvas — but since
-                // applyViewportCrop() shrinks the canvas itself to match map dimensions,
-                // there's no parallax bleed at any zoom level >= floor.
-                const minScale = this.minimumZoomScale(viewportWidth, viewportHeight);
-                const maxScale = 5;
-
-                // Quantize so a tile is a WHOLE number of device pixels:
-                // fractional tile sizes cause uneven pixel steps and the
-                // occasional hairline seam between uncached tile sprites.
-                let newScale = this._quantizeScale(
-                    Math.max(minScale, Math.min(maxScale, oldScale * scaleFactor)));
-                if (newScale === oldScale) {
-                    // Step at least one quantum in the intended direction
-                    // (at low zoom the 10% step can round back onto itself).
-                    newScale = this._quantizeScale(oldScale, scaleFactor > 1 ? 1 : -1);
+                // A wheel or a touchpad can send several events a frame, and
+                // each one used to re-crop the canvas, rebuild the visible
+                // tile window and move the scrollbars. Collect them, and
+                // apply the lot once in the next frame: every notch still
+                // counts as one zoom step, taken in order, about the pointer's
+                // latest position.
+                const pending = this._pendingWheelZoom || (this._pendingWheelZoom = { steps: [], frame: null });
+                pending.steps.push(event.deltaY > 0 ? 0.9 : 1.1);
+                pending.clientX = event.clientX;
+                pending.clientY = event.clientY;
+                this.beginViewportGesture('wheel');
+                if (pending.frame !== null) return;
+                if (typeof requestAnimationFrame !== 'function') {
+                    this.applyPendingWheelZoom();
+                    return;
                 }
-                if (newScale < minScale) newScale = minScale;
-                newScale = Math.min(maxScale, newScale);
-
-                if (newScale !== oldScale) {
-                    this.pauseLazyLoading();
-
-                    // Get mouse position in viewport
-                    const containerRect = canvasContainer.getBoundingClientRect();
-                    const mouseX = event.clientX - containerRect.left;
-                    const mouseY = event.clientY - containerRect.top;
-
-                    // Get world position under mouse (accounting for container offset)
-                    const worldX = (mouseX - this.container.x) / oldScale;
-                    const worldY = (mouseY - this.container.y) / oldScale;
-
-                    // Build the newly exposed tile window before committing
-                    // the transform, so zoom never reveals an unrendered gap.
-                    this.setViewportTransform(
-                        mouseX - worldX * newScale,
-                        mouseY - worldY * newScale,
-                        newScale, { preserveAnchor: true });
-
-                    // Update scrollbars
-                    this.updateScrollbars();
-
-                    // Re-crop the canvas to the new scaled map size.
-                    this.applyViewportCrop();
-
-                    if (this.onZoomChange) {
-                        this.onZoomChange(newScale);
-                    }
-
-                    setTimeout(() => this.resumeLazyLoading(), 150);
-                }
+                pending.frame = requestAnimationFrame(() => this.applyPendingWheelZoom());
             };
             canvasContainer.addEventListener('wheel', canvasContainer.__rrWheelZoomHandler, { passive: false });
         }
 
         // Handle window resize - adjust zoom to maintain minimum constraints
-        // (same dedupe: one live handler regardless of how many maps loaded)
+        // (same dedupe: one live handler regardless of how many maps loaded).
+        // Once a frame, like ProjectController's: a dragged window edge
+        // fires resize far more often than the screen can show.
         if (window.__rrTilemapResizeHandler) {
             window.removeEventListener('resize', window.__rrTilemapResizeHandler);
         }
-        window.__rrTilemapResizeHandler = () => {
+        let resizeFrame = null;
+        const onResize = () => {
+            resizeFrame = null;
             if (!this.currentMap || !this.container) return;
             if (this.applyMinScaleClamp()) {
                 // Container scale changed; reset position so the map stays anchored.
@@ -1022,11 +1242,92 @@ class TilemapManager {
             }
             this.updateCanvasSize();
             this.ensureVirtualViewportCoverage();
-            // Run AFTER ProjectController's resize handler resets renderer to full
-            // canvas-container size — defer with a microtask so our crop wins.
-            Promise.resolve().then(() => this.applyViewportCrop());
+            // After ProjectController's resize handler has sized the renderer.
+            this.applyViewportCrop();
+        };
+        window.__rrTilemapResizeHandler = () => {
+            this._viewportSize = null;
+            if (resizeFrame !== null) return;
+            if (typeof requestAnimationFrame !== 'function') {
+                onResize();
+                return;
+            }
+            resizeFrame = requestAnimationFrame(onResize);
         };
         window.addEventListener('resize', window.__rrTilemapResizeHandler);
+    }
+
+    /** Apply the wheel steps collected since the last frame; see setupPanning. */
+    applyPendingWheelZoom() {
+        const pending = this._pendingWheelZoom;
+        if (!pending) return;
+        const steps = pending.steps.splice(0);
+        pending.frame = null;
+        if (!this.currentMap || !this.container || steps.length === 0) return;
+        const canvasContainer = document.getElementById('canvas-container');
+        if (!canvasContainer) return;
+        const oldScale = this.container.scale.x;
+
+        // Get ACTUAL viewport dimensions (container size, not canvas size)
+        const viewport = this.viewportSize();
+        if (!viewport) return;
+        const viewportWidth = viewport.width;
+        const viewportHeight = viewport.height;
+
+        // Minimum zoom = contain-fit (the entire map can fit in the viewport).
+        // Beyond this, the map would shrink inside the canvas — but since
+        // applyViewportCrop() shrinks the canvas itself to match map dimensions,
+        // there's no parallax bleed at any zoom level >= floor.
+        const minScale = this.minimumZoomScale(viewportWidth, viewportHeight);
+        const maxScale = 5;
+
+        let newScale = oldScale;
+        for (const scaleFactor of steps) {
+            const from = newScale;
+            // Quantize so a tile is a WHOLE number of device pixels:
+            // fractional tile sizes cause uneven pixel steps and the
+            // occasional hairline seam between uncached tile sprites.
+            newScale = this._quantizeScale(
+                Math.max(minScale, Math.min(maxScale, from * scaleFactor)));
+            if (newScale === from) {
+                // Step at least one quantum in the intended direction
+                // (at low zoom the 10% step can round back onto itself).
+                newScale = this._quantizeScale(from, scaleFactor > 1 ? 1 : -1);
+            }
+            if (newScale < minScale) newScale = minScale;
+            newScale = Math.min(maxScale, newScale);
+        }
+
+        if (newScale === oldScale) return;
+        this.pauseLazyLoading();
+
+        // Get mouse position in viewport
+        const containerRect = canvasContainer.getBoundingClientRect();
+        const mouseX = pending.clientX - containerRect.left;
+        const mouseY = pending.clientY - containerRect.top;
+
+        // Get world position under mouse (accounting for container offset)
+        const worldX = (mouseX - this.container.x) / oldScale;
+        const worldY = (mouseY - this.container.y) / oldScale;
+
+        // Build the newly exposed tile window before committing
+        // the transform, so zoom never reveals an unrendered gap.
+        this.setViewportTransform(
+            mouseX - worldX * newScale,
+            mouseY - worldY * newScale,
+            newScale, { preserveAnchor: true });
+
+        // Update scrollbars
+        this.updateScrollbars();
+
+        // Re-crop the canvas to the new scaled map size.
+        this.applyViewportCrop();
+
+        if (this.onZoomChange) {
+            this.onZoomChange(newScale);
+        }
+
+        setTimeout(() => this.resumeLazyLoading(), 150);
     }
 
     /**
@@ -1051,9 +1352,8 @@ class TilemapManager {
      */
     applyMinScaleClamp() {
         if (!this.currentMap || !this.container) return false;
-        const canvasContainer = document.getElementById('canvas-container');
-        if (!canvasContainer) return false;
-        const containerRect = canvasContainer.getBoundingClientRect();
+        const containerRect = this.viewportSize();
+        if (!containerRect) return false;
         const viewportWidth = containerRect.width;
         const viewportHeight = containerRect.height;
         const mapWidthPx = this.currentMap.width * this.TILE_SIZE;
@@ -1094,11 +1394,13 @@ class TilemapManager {
         // The 3D view draws on this canvas and fills the whole view; shrinking
         // it to a small map's pixels cut the 3D picture off at that width.
         const view3D = typeof window !== 'undefined' ? window.reactor?.mapEditor3D : null;
-        if (view3D?.enabled) { view3D.resize?.(); return; }
-        const canvasContainer = document.getElementById('canvas-container');
-        if (!canvasContainer) return;
-        const rect = canvasContainer.getBoundingClientRect();
-        if (rect.width <= 0 || rect.height <= 0) return;
+        if (view3D?.enabled) {
+            if (this.app.canvas?.style?.clipPath) this.app.canvas.style.clipPath = '';
+            view3D.resize?.();
+            return;
+        }
+        const rect = this.viewportSize();
+        if (!rect || rect.width <= 0 || rect.height <= 0) return;
 
         const scale = transform.scale ?? (this.container ? this.container.scale.x : 1);
         const mapWidthPx = this.currentMap.width * this.TILE_SIZE * scale;
@@ -1107,9 +1409,85 @@ class TilemapManager {
         const targetW = Math.min(rect.width, Math.max(1, mapWidthPx + (transform.x ?? this.container.x)));
         const targetH = Math.min(rect.height, Math.max(1, mapHeightPx + (transform.y ?? this.container.y)));
 
+        // Mid-gesture (a pan, a scrollbar drag, a run of wheel notches) the
+        // crop can move on every event, and resizing the renderer throws the
+        // canvas's buffer away and allocates a new one each time. Grow it to
+        // the whole panel once instead, and let a CSS clip — which costs the
+        // GPU nothing — hide what lies past the map's edge; the gesture's end
+        // puts the exact size back. Same pixels either way: the canvas is
+        // never scaled, only cut.
+        const canvas = this.app.canvas;
+        if (this._viewportGestures > 0 && canvas?.style) {
+            if (this.app.screen.width < targetW || this.app.screen.height < targetH) {
+                this.app.renderer.resize(rect.width, rect.height);
+            }
+            const right = Math.max(0, this.app.screen.width - targetW);
+            const bottom = Math.max(0, this.app.screen.height - targetH);
+            canvas.style.clipPath = right || bottom ? `inset(0px ${right}px ${bottom}px 0px)` : '';
+            return;
+        }
+        if (canvas?.style?.clipPath) canvas.style.clipPath = '';
+
         if (this.app.screen.width !== targetW || this.app.screen.height !== targetH) {
             this.app.renderer.resize(targetW, targetH);
         }
+    }
+
+    /**
+     * A pan, scrollbar drag or wheel zoom is under way: applyViewportCrop
+     * clips rather than resizes until the last one ends. A wheel has no
+     * release, so its gesture ends a moment after the last notch.
+     */
+    beginViewportGesture(kind = 'drag') {
+        if (kind === 'wheel') {
+            clearTimeout(this._wheelGestureTimer);
+            this._wheelGestureTimer = setTimeout(() => {
+                this._wheelGestureTimer = null;
+                if (this._wheelGesture) {
+                    this._wheelGesture = false;
+                    this.endViewportGesture();
+                }
+            }, 200);
+            if (this._wheelGesture) return;
+            this._wheelGesture = true;
+        }
+        this._viewportGestures = (this._viewportGestures || 0) + 1;
+    }
+
+    endViewportGesture() {
+        this._viewportGestures = Math.max(0, (this._viewportGestures || 0) - 1);
+        if (this._viewportGestures === 0 && !this.destroyed) this.applyViewportCrop();
+    }
+
+    /**
+     * The map panel's size, without a layout read per call.
+     *
+     * Panning asked for it several times per pointer move, and each read
+     * after the scrollbar thumbs had moved forced the browser to lay the page
+     * out again. A ResizeObserver says when the panel actually changes size;
+     * until then the last measurement stands. Without one (tests, old hosts)
+     * every call measures, as before.
+     */
+    viewportSize() {
+        const element = typeof document !== 'undefined' ? document.getElementById('canvas-container') : null;
+        if (!element) return null;
+        const cached = this._viewportSize;
+        if (cached && cached.element === element) return cached;
+        const rect = element.getBoundingClientRect();
+        const size = { element, width: rect.width, height: rect.height };
+        if (typeof ResizeObserver === 'function') {
+            if (this._viewportObserved !== element) {
+                this._viewportObserver?.disconnect();
+                this._viewportObserver = new ResizeObserver(() => {
+                    this._viewportSize = null;
+                    this.app?.requestRender?.();
+                });
+                this._viewportObserver.observe(element);
+                this._viewportObserved = element;
+            }
+            this._viewportSize = size;
+        }
+        return size;
     }
 
     // Initialize custom scrollbars
@@ -1153,6 +1531,7 @@ class TilemapManager {
         let startContainerPos = 0;
 
         thumb.addEventListener('mousedown', (e) => {
+            if (!isDragging) this.beginViewportGesture();
             isDragging = true;
             startPos = direction === 'horizontal' ? e.clientX : e.clientY;
             startContainerPos = direction === 'horizontal' ? this.container.x : this.container.y;
@@ -1174,7 +1553,8 @@ class TilemapManager {
             const currentPos = direction === 'horizontal' ? e.clientX : e.clientY;
             const delta = currentPos - startPos;
 
-            const containerRect = document.getElementById('canvas-container').getBoundingClientRect();
+            const containerRect = this.viewportSize();
+            if (!containerRect) return;
             const viewportSize = direction === 'horizontal' ? containerRect.width : containerRect.height;
             const bounds = this.panBounds();
             if (!bounds) return;
@@ -1201,6 +1581,7 @@ class TilemapManager {
             }
         };
         const onUp = () => {
+            if (isDragging) this.endViewportGesture();
             isDragging = false;
             this.scheduleVirtualViewportRefresh();
         };
@@ -1221,8 +1602,7 @@ class TilemapManager {
      */
     panBounds(scale = this.container.scale.x) {
         if (!this.currentMap) return null;
-        const element = document.getElementById('canvas-container');
-        const rect = element && element.getBoundingClientRect();
+        const rect = this.viewportSize();
         if (!rect || !(rect.width > 0) || !(rect.height > 0)) return null;
         const padding = this._zoomPadding || {};
         return {
@@ -1251,8 +1631,8 @@ class TilemapManager {
     updateScrollbars() {
         if (!this.scrollbars || !this.currentMap) return;
 
-        const container = document.getElementById('canvas-container');
-        const rect = container.getBoundingClientRect();
+        const rect = this.viewportSize();
+        if (!rect) return;
 
         const scale = this.container.scale.x;
         const bounds = this.clampContainerToMap(scale);
@@ -1449,6 +1829,7 @@ class TilemapManager {
     }
 
     setViewportTransform(x, y, scale = this.container.scale.x, { preserveAnchor = false } = {}) {
+        this.requestRender();
         if (preserveAnchor) {
             // Cursor-anchored zoom may need a small margin at a map edge.
             // Keep only that margin, rather than snapping the pointed tile to
@@ -1568,6 +1949,7 @@ class TilemapManager {
     // resetting to the map origin — used by undo/redo restores and the
     // huge-batch updateTiles fallback, where a viewport jump would be jarring.
     renderMap(options = {}) {
+        this.requestRender();
         if (!this.currentMap || !this.currentTileset) return;
 
         // Invalidate any in-flight lazy fill from a previous render — its
@@ -1705,6 +2087,7 @@ class TilemapManager {
     // This is 1000x faster than renderMap() when only a few tiles changed
     // positions: Array of {x, y, layer} objects, where layer is 0-4 (0=ground, 1=lower1, 2=lower2, 3=lower3, 4=shadow)
     updateTiles(positions) {
+        this.requestRender();
         if (this.passageVisible) this.refreshPassage();
         if (!this.currentMap || !this.currentTileset) return;
 
@@ -2020,6 +2403,7 @@ class TilemapManager {
     }
 
     refreshLayerCache(layer) {
+        this.requestRender();
         if (!layer?.isCachedAsTexture) return;
         if (this.isLayerCacheSafe(layer)) {
             layer.updateCacheTexture();
@@ -2032,11 +2416,21 @@ class TilemapManager {
         const gl = this.app?.renderer?.gl;
         if (!gl || typeof gl.getParameter !== 'function') return false;
 
+        // The map's own rectangle bounds every tile a layer can hold, and
+        // costs nothing to know. Measuring the layer walked every sprite in
+        // it, and this runs after every paint stroke. An empty layer has
+        // nothing to cache.
         let bounds;
-        try {
-            bounds = layer.getLocalBounds();
-        } catch (_error) {
-            return false;
+        const map = this.currentMap;
+        if (map && Number(map.width) > 0 && Number(map.height) > 0 && Array.isArray(layer?.children)) {
+            if (layer.children.length === 0) return false;
+            bounds = { width: map.width * this.TILE_WIDTH, height: map.height * this.TILE_HEIGHT };
+        } else {
+            try {
+                bounds = layer.getLocalBounds();
+            } catch (_error) {
+                return false;
+            }
         }
         const resolution = this.layerCacheOptions?.resolution || 1;
         const width = Math.ceil(Number(bounds?.width) * resolution);
@@ -2046,6 +2440,26 @@ class TilemapManager {
         const nextPowerOfTwo = value => 2 ** Math.ceil(Math.log2(Math.max(1, value)));
         const textureWidth = nextPowerOfTwo(width);
         const textureHeight = nextPowerOfTwo(height);
+        const maxSide = TilemapManager.maxRenderTargetSide(gl);
+        if (!Number.isFinite(maxSide) || textureWidth > maxSide || textureHeight > maxSide) return false;
+
+        // Pixi pools RGBA8 cache textures at power-of-two dimensions. Keeping
+        // each cache below this budget bounds all eight static layers to a
+        // practical amount instead of allowing a single 1-4 GiB framebuffer.
+        const maxCacheBytes = 32 * 1024 * 1024;
+        return textureWidth * textureHeight * 4 <= maxCacheBytes;
+    }
+
+    /**
+     * The largest square a layer cache can render into on this context.
+     * getParameter is a synchronous round trip to the GPU process, and the
+     * answer never changes for a context, so it is asked once. A context
+     * that is lost answers null; that is not remembered.
+     */
+    static maxRenderTargetSide(gl) {
+        const cache = TilemapManager._renderTargetLimits || (TilemapManager._renderTargetLimits = new WeakMap());
+        if (cache.has(gl)) return cache.get(gl);
+        let maxSide = NaN;
         try {
             const limits = [
                 Number(gl.getParameter(gl.MAX_TEXTURE_SIZE)),
@@ -2053,17 +2467,12 @@ class TilemapManager {
             ];
             const viewport = gl.getParameter(gl.MAX_VIEWPORT_DIMS);
             if (viewport?.length >= 2) limits.push(Number(viewport[0]), Number(viewport[1]));
-            const maxSide = Math.min(...limits.filter(limit => Number.isFinite(limit) && limit > 0));
-            if (!Number.isFinite(maxSide) || textureWidth > maxSide || textureHeight > maxSide) return false;
+            maxSide = Math.min(...limits.filter(limit => Number.isFinite(limit) && limit > 0));
         } catch (_error) {
-            return false;
+            return NaN;
         }
-
-        // Pixi pools RGBA8 cache textures at power-of-two dimensions. Keeping
-        // each cache below this budget bounds all eight static layers to a
-        // practical amount instead of allowing a single 1-4 GiB framebuffer.
-        const maxCacheBytes = 32 * 1024 * 1024;
-        return textureWidth * textureHeight * 4 <= maxCacheBytes;
+        if (Number.isFinite(maxSide)) cache.set(gl, maxSide);
+        return maxSide;
     }
 
     // PERFORMANCE: Cache static layers as textures for faster rendering
@@ -2233,12 +2642,16 @@ class TilemapManager {
                             }
                         }
                         uvBuffer.update();
+                        // New UVs in an unchanged mesh: the scene graph
+                        // does not see a buffer upload, so say so.
+                        this.requestRender();
                     }
                 }
             }
         }
 
         // Only iterate through known A1 tile positions instead of entire map
+        if (this.a1TilePositions.length > 0) this.requestRender();
         for (const tileInfo of this.a1TilePositions) {
             const {x, y, tileId, pixiLayer} = tileInfo;
 
@@ -2366,6 +2779,7 @@ class TilemapManager {
 
     // A solid editor-only underlay keeps transparent tiles readable without a pattern.
     renderPreviewBackground(mapWidth, mapHeight) {
+        this.requestRender();
         const color = typeof ThemeColors !== 'undefined'
             ? ThemeColors.resolve('--color-asset-preview-bg', '#24272d') : '#24272d';
         if (!this._previewBackground || this._previewBackground.destroyed) this._previewBackground = new PIXI.Graphics();
@@ -2377,30 +2791,13 @@ class TilemapManager {
 
     /**
      * Draw the map's image layers (rrImageLayers) as the game draws them at the
-     * start of play: each at its base name (variables at 0), locked to the map.
+     * start of play. The Image Layers tool does the drawing (MapImageLayersManager.drawFlat),
+     * since it draws them again whenever a layer is edited.
      */
-    async renderImageLayers() {
-        const map = this.currentMap, generation = this._mapLoadGeneration;
-        const targets = [this.layers?.imageGround, this.layers?.imageOver];
-        for (const layer of targets) if (layer) layer.removeChildren().forEach(child => child.destroy?.({ children: true }));
-        if (!map || !Array.isArray(map.rrImageLayers) || typeof PIXI === 'undefined' || !this.path) return;
-        const root = this.path.join(this.projectPath, 'img', 'parallaxes');
-        for (const spec of map.rrImageLayers) {
-            if (!spec || !spec.name) continue;
-            const url = typeof RRAssetFiles !== 'undefined' ? RRAssetFiles.imageUrlFor(root, spec.name) : null;
-            if (!url) continue;
-            try {
-                const texture = await PIXI.Assets.load(url);
-                if (this.destroyed || generation !== this._mapLoadGeneration || this.currentMap !== map) return;
-                texture.source.style.scaleMode = 'nearest';
-                const sprite = new PIXI.Sprite(texture);
-                sprite.eventMode = 'none';
-                if (typeof spec.opacity === 'number') sprite.alpha = spec.opacity / 255;
-                (spec.layer === 'over' ? this.layers.imageOver : this.layers.imageGround).addChild(sprite);
-            } catch (error) {
-                console.warn(`Map image layer ${spec.name} could not be loaded.`, error);
-            }
-        }
+    renderImageLayers() {
+        this.requestRender();
+        const tool = typeof window !== 'undefined' ? window.reactor?.mapImageLayersManager : null;
+        return tool ? tool.drawFlat(this) : Promise.resolve();
     }
 
     // Render parallax background
@@ -3246,6 +3643,15 @@ class TilemapManager {
     destroy() {
         this._themeObserver?.disconnect();
         this._themeObserver = null;
+        this._viewportObserver?.disconnect();
+        this._viewportObserver = null;
+        this._viewportObserved = null;
+        this._viewportSize = null;
+        clearTimeout(this._wheelGestureTimer);
+        if (this._pendingWheelZoom?.frame != null && typeof cancelAnimationFrame === 'function') {
+            cancelAnimationFrame(this._pendingWheelZoom.frame);
+        }
+        this._pendingWheelZoom = null;
         this.destroyed = true;
         this.cancelPendingMapLoad();
 
@@ -3417,6 +3823,9 @@ class TilemapManager {
             if (sidecar && typeof sidecar === 'object' && !Array.isArray(sidecar)) {
                 mapData.reactor3d = sidecar;
                 this.unreadableMapSidecars.delete(filePath);
+                // A map saved before footprints were centred on their events (0.98.8) is read as it
+                // was: each sized event moves to its footprint's middle tile, covering the same tiles.
+                if (elevation && elevation.convertEventSizes) elevation.convertEventSizes(mapData);
                 // A map resized elsewhere (RPG Maker, a hand edit) keeps a
                 // sidecar sized for the old map; its heights and terrain are
                 // refitted here, once, so every reader indexes the map it has.
@@ -3460,12 +3869,20 @@ class TilemapManager {
             return false;
         }
         try {
-            return elevation.save(this.fs, this.path, this.projectPath, this.currentMap, {
+            const saved = elevation.save(this.fs, this.path, this.projectPath, this.currentMap, {
                 writeFileAtomicSync: this._writeFileAtomic
                     ? (fs, filePath, data, encoding) =>
                         this._writeFileAtomic(fs, filePath, data, encoding)
                     : null
             });
+            // A neighboring map with no way back gets one: a border crossed one way is crossed back the other.
+            const edges = typeof RRMapEdges !== 'undefined' ? RRMapEdges : null;
+            if (saved && edges && edges.linkBack) {
+                edges.linkBack(this.fs, this.path, this.projectPath, this.currentMap, this._writeFileAtomic
+                    ? (filePath, text) => this._writeFileAtomic(this.fs, filePath, text, 'utf8')
+                    : null);
+            }
+            return saved;
         } catch (error) {
             console.error('Error saving the map 3D sidecar:', error);
             return false;

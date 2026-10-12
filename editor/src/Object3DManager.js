@@ -144,7 +144,11 @@ class Object3DManager {
 
     createObjectLayer() {
         if (!this.tilemapManager || !this.tilemapManager.container) return;
-        if (this.objectLayer) return;
+        // A map load destroys the tilemap's container with its children, this
+        // layer among them: a layer that is no longer on the live container is
+        // made again rather than drawn into where nothing shows it.
+        if (this.objectLayer && !this.objectLayer.destroyed && this.objectLayer.parent === this.tilemapManager.container) return;
+        this.objectLayer = null;
         this.objectLayer = new PIXI.Container();
         this.objectLayer.name = 'object3d-overlay';
         this.objectLayer.zIndex = 900;
@@ -161,6 +165,9 @@ class Object3DManager {
     renderObjects() {
         const map = this.currentMap();
         if (!this.objectLayer || !map) return;
+        this.createObjectLayer();
+        if (!this.objectLayer) return;
+        this.objectLayer.visible = this.enabled;
         this.objectLayer.removeChildren();
 
         const tileW = this.tilemapManager.TILE_WIDTH;

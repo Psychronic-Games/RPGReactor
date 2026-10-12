@@ -2,6 +2,7 @@
 // turns, wearing a material; the runtime stands characters on their tops
 // and blocks what cannot be stepped onto through the terrain's rise rule.
 const { source3D } = require('./helpers/runtime-3d-source.cjs');
+const { runtimeSource } = require('./helpers/runtime-source.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -139,7 +140,7 @@ test('the runtime stands on piece tops, climbs stairs, and blocks what is too ta
     assert.equal(R.groundHeightAt(doors, 1.5, 1.5, 5.1), 5, 'an upstairs doorway is its own threshold, level with the floor beside it');
     assert.equal(R.terrainBlocks(doors, 2, 1, 1, 1, 5.1), false, 'walked through from the upper floor');
     // The game keeps the height on the character and forgets it on locate.
-    const objects = read('runtime/reactor_objects.js');
+    const objects = runtimeSource('reactor_objects.js');
     assert.match(objects, /Reactor3D\.terrainBlocks\(\$dataMap, x, y, x2, y2, this\._reactorGround\)/);
     assert.match(objects, /Game_CharacterBase\.prototype\.locate = function\(x, y\) \{[\s\S]{0,200}this\._reactorGround = undefined;/);
     assert.match(objects, /this\._reactorGround = character\._reactorGround;/, 'a follower copying the leader copies the floor');
@@ -175,7 +176,9 @@ test('the runtime stands on piece tops, climbs stairs, and blocks what is too ta
 test('every kind makes closed, outward-facing geometry that a turn moves as one', () => {
     const THREE = loadThree();
     const R = require(path.resolve(__dirname, '..', '..', 'runtime/reactor_3d.js'));
-    for (const kind of R.PIECE_KINDS) {
+    // A rock is meshed as one mass with its neighbours and reaches past its box (its own test below);
+    // a door is its leaves, which swing, and its casing, laid as trims (doors.test.cjs).
+    for (const kind of R.PIECE_KINDS.filter(k => k !== 'rock' && k !== 'door')) {
         for (const rot of [0, 1, 2, 3]) {
             const geometry = R.pieceGeometry([{ id: 1, kind, x: 3, y: 4, z: 2, rot, material: '' }], mapWith([]));
             const position = geometry.attributes.position;
@@ -226,7 +229,8 @@ test('the scene lays pieces down per material and can lay them again alone', () 
     const load = name => { asked.push(name); return name === 'Stone' ? { image: canvas, width: 4, height: 4 } : null; };
     scene.addPieces(map, load);
     assert.equal(scene._pieceMeshes.length, 3, 'one mesh per material per chunk; these four pieces share one chunk');
-    assert.deepEqual(asked.sort(), ['Stone', 'Wood']);
+    assert.deepEqual(asked.filter(name => !/_(normal|rough)$/.test(name)).sort(), ['Stone', 'Wood']);
+    assert.deepEqual(asked.filter(name => /_(normal|rough)$/.test(name)).sort(), ['Stone_normal', 'Stone_rough'], 'only a material with an image is asked for its normal and roughness maps');
     const stone = scene._pieceMeshes.find(m => m.userData.pieceMaterial === 'Stone');
     assert.ok(stone.material.map && stone.material.map.wrapS === THREE.RepeatWrapping, 'a material image repeats');
     assert.equal(stone.geometry.attributes.position.count, 2 * 10 * 3, 'two blocks side by side on the ground: five faces each (a bottom, no shared face), ten triangles');
@@ -238,7 +242,7 @@ test('the scene lays pieces down per material and can lay them again alone', () 
     assert.equal(again.length, 1);
     assert.equal(scene._meshes.length, 1, 'the old piece meshes left the scene\'s list');
     assert.equal(scene._piecesGroup.children.length, 2, 'the chunk and its see-through twin for the sight corridor');
-    assert.equal(asked.length, 2, 'textures are made once per scene');
+    assert.equal(asked.length, 4, 'textures (and a material\'s maps) are made once per scene');
     assert.equal(again[0].material, stone.material, 'and so are materials: chunks share them');
     // Chunks: pieces far apart are separate meshes, and an edit relays only its own chunk.
     const wide = { width: 64, height: 64, reactor3d: { version: 1, elevation: new Array(64 * 64).fill(0), pieces: [
@@ -277,12 +281,13 @@ test('building happens in the world: the hammer in the toolbar opens a bar over 
     const mainSource = read('editor/src/main.js');
     assert.match(mainSource, /this\.buildHotbar = new BuildHotbar\(this\.projectController\)/);
     assert.match(mainSource, /this\.buildHotbar\.mount\(document\.getElementById\('canvas-container'\)\)/, 'mounted over the map canvas');
-    assert.match(mainSource, /\['\[data-action="build-tool"\]','pieces'\]/, 'the button lights while building');
+    assert.match(mainSource, /\['\.tool-button\[data-action="build-tool"\]','pieces'\]/, 'the button lights while building (the toolbar button, not the Tools menu entry)');
     assert.match(mainSource, /else this\.buildHotbar\?\.hide\(false\);/, 'another owner puts the tool down and the bar away');
     assert.match(mainSource, /new PieceBuilderManager\(this\.projectController\)/);
     const barSource = read('editor/src/BuildHotbar.js');
-    assert.match(barSource, /static PIECES = \['floor', 'wall', 'doorway', 'window', 'glass', 'stair', 'ladder', 'ramp', 'roof', 'pillar', 'fence', 'block'\]/, 'the slots a child reaches for first, by the kinds\' own names');
+    assert.match(barSource, /static PIECES = \['floor', 'wall', 'doorway', 'door', 'window', 'glass', 'stair', 'ladder', 'ramp', 'roof', 'pillar', 'fence', 'block'\]/, 'the slots a child reaches for first, by the kinds\' own names');
     assert.match(barSource, /static SLOTS = \['select'\]\.concat/, 'Select comes first');
+    // Rock is laid from the Terrain group (ground-types.test.cjs).
     assert.match(barSource, /static EXTRA = \['shape', 'screen', 'light', 'hammer', 'blueprint'\]/);
     assert.match(barSource, /if \(\/\^\[0-9\]\$\/\.test\(event\.key\)\)/, 'number keys pick slots');
     const managerSrc = read('editor/src/PieceBuilderManager.js');
@@ -300,7 +305,7 @@ test('building happens in the world: the hammer in the toolbar opens a bar over 
       assert.match(read('editor/src/LightingManager.js'), /if \(!window\.reactor\?\.dockMapPanel\?\.\(panel\)\) \(workspace \|\| document\.body\)\.appendChild\(panel\);/, 'Lighting mounts in the dock');
       assert.match(read('editor/src/MediaSurfaceManager.js'), /if \(!window\.reactor\?\.dockMapPanel\?\.\(panel\)\) document\.body\.appendChild\(panel\);/, 'Media Surfaces mounts in the dock');
       const css = read('editor/css/styles.css'); assert.match(css, /#map-side-dock \{[\s\S]{0,200}background-color: var\(--color-bg-panel\);/, 'the dock wears the theme'); assert.match(css, /#map-side-dock > \.lighting-panel,\s*#map-side-dock > \.media-surfaces-panel \{[\s\S]{0,300}box-shadow: none;/, 'no floating look inside it'); }
-    assert.match(managerSrc, /if \(!stack\.length\) return this\.removeEffectAt\(map, target\);/, 'the hammer takes screens and lights too');
+    assert.match(managerSrc, /if \(covering\) return elevation\.restorePieces[^\n]+\n\s+return this\.removeEffectAt\(map, target\);/, 'the hammer takes screens and lights too, where no piece stands');
     // Select: a placed piece is picked up, edited in place, moved, turned and removed; a stair run climbs; a ramp is a sized wedge.
     const ctx2 = { console, window: {}, document: { addEventListener() {}, removeEventListener() {}, dispatchEvent() {} }, CustomEvent: class { constructor(t, i) { this.type = t; this.detail = i && i.detail; } } };
     ctx2.window = ctx2;
@@ -381,7 +386,7 @@ test('building happens in the world: the hammer in the toolbar opens a bar over 
     for (const key of ['build.selectedMany', 'build.manyHint', 'build.boxHint']) assert.equal((read('editor/src/I18nManager.js').match(new RegExp('"' + key.replace(/\./g, '\\.') + '":', 'g')) || []).length, 18, key + ' in 18 locales');
     assert.match(viewSource, /if \(event\?\.detail\?\.pieces && this\.updatePiecesInPlace\(event\.detail\.region \|\| null\)\) return;/, 'a piece edit never rebuilds the scene');
     assert.match(viewSource, /loadMaterial: name => materials\[name\] \|\| null/);
-    assert.match(viewSource, /return \{ x, y, z: Math\.min\(max, z\), side: sideName, faceCell, height: Math\.max\(0, rel\), top, point: \{ x: point\.x, z: point\.z \} \};/, 'a target knows the face it points at');
+    assert.match(viewSource, /const target = \{ x, y, z: Math\.min\(max, z\), side: sideName, faceCell, height: Math\.max\(0, rel\), top, point: \{ x: point\.x, z: point\.z \} \};/, 'a target knows the face it points at');
     const i18n = read('editor/src/I18nManager.js');
     for (const key of ['pieces.hint', 'pieces.piece', 'pieces.kind.wall', 'pieces.kind.block', 'pieces.kind.fence', 'pieces.material', 'pieces.plain', 'pieces.materialsHint', 'pieces.turn', 'pieces.level', 'pieces.place', 'pieces.erase', 'pieces.undo', 'pieces.redo', 'pieces.clear', 'pieces.keys', 'pieces.needs3D', 'pieces.count']) {
         assert.equal((i18n.match(new RegExp('"' + key.replace(/\./g, '\\.') + '": "', 'g')) || []).length, 18, key + ' in 18 locales');
@@ -513,7 +518,9 @@ test('a structure plan builds rooms, walls, doors on shared walls, a stairwell a
     const pieces = SP.build(plan, 10, 10, 7);
     assert.equal(pieces[0].id, 7, 'ids continue from the map\'s');
     const at = (x, y, z) => pieces.filter(p => p.x === 10 + x && p.y === 10 + y && p.z === z).map(p => p.kind).sort().join('+');
-    assert.equal(at(0, 0, 0), 'floor+wall'); assert.equal(at(7, 4, 0), 'doorway+floor'); assert.equal(at(7, 2, 0), 'floor+wall'); assert.equal(at(3, 9, 0), 'doorway+floor');
+    assert.equal(at(0, 0, 0), 'floor+wall'); assert.equal(at(7, 4, 0), 'doorway+floor'); assert.equal(at(7, 2, 0), 'floor+wall'); assert.equal(at(3, 9, 0), 'door+doorway+floor');
+    // The door hangs from the first cell along its across: the front door faces south, the kitchen's east.
+    assert.deepEqual(pieces.filter(p => p.kind === 'door' && p.z === 0).map(p => [p.x - 10, p.y - 10, p.rot, p.width, p.style]), [[3, 9, 0, 2, 'plank'], [7, 5, 3, 2, 'panelled']]);
     assert.equal(at(9, 3, 0), 'floor'); assert.equal(pieces.find(p => p.x === 19 && p.y === 13 && p.z === 0).material, 'Stone', 'a wet room has the wet floor');
     assert.equal(at(5, 7, 0), 'stair'); assert.equal(at(5, 3, 4), 'stair', 'five steps north');
     assert.equal(at(5, 5, 5), '', 'the floor above the stairs is open');
@@ -523,7 +530,7 @@ test('a structure plan builds rooms, walls, doors on shared walls, a stairwell a
     assert.equal(at(3, 4, 10), 'floor', 'a ceiling over the top-floor room, under the roof');
     assert.equal(at(7, 4, 10), '', 'none over a wall');
     assert.equal(at(0, 3, 10), 'block', 'a gable closes the end');
-    assert.equal(at(0, 3, 11), 'block'); assert.equal(at(0, 1, 10), 'block'); assert.equal(at(0, 1, 11), 'ramp', 'and steps with the pitch: one block under the second row of ramps');
+    assert.equal(at(0, 3, 11), 'block'); assert.equal(at(0, 1, 10), 'block'); assert.equal(at(0, 1, 11), 'box+ramp', 'and steps with the pitch: one block under the second row of ramps (the verge\'s slab rides over it)');
     // Turned a quarter: the size swaps, the rooms turn, the stair runs east, doors still land on shared walls.
     const turned = SP.transform(plan, 1, 1);
     assert.deepEqual(turned.size, [10, 14]);
@@ -585,7 +592,7 @@ test('a structure plan builds rooms, walls, doors on shared walls, a stairwell a
     assert.equal(E.structureOf(map, 1), null, 'the record goes with the pieces');
     const managerSource = read('editor/src/PieceBuilderManager.js');
     assert.match(managerSource, /if \(elevation\.structureOf\(map, this\.selectedGroup\)\) return this\._restamp\(map, \{ x: Math\.floor\(x\), y: Math\.floor\(y\) \}\);/, 'a stamped building is built again where it goes');
-    assert.match(managerSource, /const shaped = SP\.transform\(plan, record\.rot, record\.scale\);/);
+    assert.match(managerSource, /const shaped = SP\.transform\(plan, record\.rot, record\.scale, name => this\.resolvePlan\(name\)\);/);
     assert.match(managerSource, /elevation\.relocatePropsOff\(map, X0, Y0, W, H\);/);
     const report = SP.validate(plan, pieces, 10, 10, 40, 40, R);
     assert.deepEqual(Object.fromEntries(Object.entries(report.report).map(([k, v]) => [k, v.reached])), { hall: true, kitchen: true, 'landing (2)': true, 'bedroom (2)': true }, 'every room on both floors is walked to from the front door');
@@ -598,7 +605,7 @@ test('a structure plan builds rooms, walls, doors on shared walls, a stairwell a
     const manager = read('editor/src/PieceBuilderManager.js');
     assert.match(manager, /path\.join\(projectPath, '3d', 'Structures'\)/);
     assert.match(managerSource, /elevation\.restorePieces\(map, kept\.concat\(SP\.build\(shaped, X0, Y0, firstId, record\.group, name => this\.resolvePlan\(name\)\)\)\);/, 'a stamp keeps what stands off the footprint, tags its own pieces, and resolves its parts');
-    assert.match(manager, /return \{ pieces: elevation\.piecesSnapshot\(map\), terrain: elevation\.terrainSnapshot\(map\), structures: elevation\.structures\(map\),\s*surfaces: JSON\.stringify\(sidecar\.mediaSurfaces \|\| null\), lights: JSON\.stringify\(sidecar\.lights \|\| null\) \};/, 'one undo step: pieces, ground and building records');
+    assert.match(manager, /stampAt\(x, y\) \{[\s\S]{0,400}const saved = this\._snapshot\(map, \{ ground: true, effects: true, events: true, props: this\._bringsProps\(plan\) \}\);/, 'one undo step: pieces, ground, building records, lights, screens, the building\'s people and (a saved structure\'s) models');
     assert.match(read('editor/src/MapEditor3D.js'), /if \(target && this\.pieceManager\(\)\.mode === 'stamp'\) \{[\s\S]{0,300}this\.pieceManager\(\)\.stampAt\(target\.x, target\.y\);/);
     assert.match(read('editor/index.html'), /src\/utils\/StructurePlan\.js/);
     assert.ok(fs.existsSync(path.resolve(__dirname, '..', '..', 'editor/build-scripts/build-structure.cjs')));
@@ -864,7 +871,7 @@ test('a plan places events at its spots; a hand-edited event survives a re-stamp
     // The editor and the CLI both place, and the Manor's Steward is on North Haven.
     assert.match(read('editor/src/PieceBuilderManager.js'), /SP\.placeEvents\(map, record\.group, wanted, name => this\.loadEventTemplate\(name\)\);/);
     assert.match(read('editor/src/PieceBuilderManager.js'), /RRStructurePlan\.removeGroupEvents\(map, this\.selectedGroup\)/);
-    assert.match(read('editor/build-scripts/build-structure.cjs'), /SP\.placeEvents\(map, group, SP\.eventsOf\(plan, X0, Y0, resolve\), loadTemplate\)/);
+    assert.match(read('editor/build-scripts/build-structure.cjs'), /SP\.placeEvents\(map, group, SP\.eventsOf\(plan, X0, Y0, resolve\)\.concat\(effectEvents\), loadTemplate\)/);
     const north = JSON.parse(read('template/Demo/data/Map005.json'));
     const steward = north.events.find(e => e && e.name === 'Steward');
     assert.ok(steward && /<structure:\d+><spot:desk>/.test(steward.note), 'the Steward is tagged with his building and spot');
@@ -899,7 +906,7 @@ test('the round pieces: a shape has a size and a turn, blocks its round footprin
     // An octagon fitted to the cell has apothem one half; a hexagon fitted to it is three quarters of the cell.
     const octagon = 8 * 0.25 * Math.tan(Math.PI / 8);
     const volumes = { box: 1, wedge: 0.5, pyramid: 1 / 3, prism: 0.5, cylinder: Math.PI / 4, tube: Math.PI / 4 * (1 - 0.49), cone: Math.PI / 12, dome: Math.PI / 6, sphere: Math.PI / 6, arch, tunnel: arch, ring: 2 * Math.PI * Math.PI * 0.4 * 0.1 * 0.5,
-        hull: (octagon + octagon * 0.64 + octagon * 0.8) / 3, spike: 0.75 / 3, capsule: Math.PI / 8 + 2 * (2 / 3 * Math.PI * 0.25 * 0.25), dish: 0.0886, fin: 0.7 };
+        hull: (octagon + octagon * 0.64 + octagon * 0.8) / 3, spike: 0.75 / 3, capsule: Math.PI / 8 + 2 * (2 / 3 * Math.PI * 0.25 * 0.25), dish: 0.0886, fin: 0.7, rock: 1 };
     assert.deepEqual(Object.keys(volumes).sort(), [...R.SHAPE_KINDS].sort(), 'every shape kind has a known volume');
     for (const kind of R.SHAPE_KINDS) {
         const out = { positions: [], uvs: [], colors: [] };
@@ -976,7 +983,7 @@ test('the round pieces: a shape has a size and a turn, blocks its round footprin
     // The palette lists the kinds with their own icons and names in every locale.
     const palette = read('editor/src/PieceBuilderManager.js');
     for (const kind of ['dome', 'cylinder', 'cone']) assert.match(palette, new RegExp(`\\b${kind}: '`), kind + ' has an icon');
-    assert.match(read('editor/src/utils/MapElevation.js'), /'window', 'fence', 'glass', 'ladder'\]/, 'the editor keeps the same kinds');
+    assert.match(read('editor/src/utils/MapElevation.js'), /'window', 'fence', 'glass', 'ladder', 'door'\]/, 'the editor keeps the same kinds');
 });
 
 test('Stamp puts a plan down turned by the turn in hand, one undo step', () => {
@@ -1002,6 +1009,19 @@ test('Stamp puts a plan down turned by the turn in hand, one undo step', () => {
     const [w0, h0] = stampWith(0), [w1, h1] = stampWith(1);
     assert.notEqual(w0, h0, 'the Cottage is not square, so a turn shows');
     assert.deepEqual([w1, h1], [h0, w0]);
+    // A model standing where the plan goes is pushed aside; the undo puts it back, the redo aside again.
+    const map = { width: 40, height: 40, reactor3d: { version: 1 } };
+    const E = context.RRMapElevation;
+    const manager = new context.PieceBuilderManager({ getTilemapManager: () => ({ currentMap: map }) });
+    Object.assign(manager, { structures: () => [{ file: 'Cottage.json', name: 'Cottage', plan }], structure: 'Cottage.json', announce() {} });
+    const id = E.addProp(map, { name: 'Tree', file: 'Tree', ext: '.glb', x: 5.5, y: 5.5, size: 1, scale: 1 });
+    manager.stampAt(2, 3);
+    const aside = [E.propById(map, id).x, E.propById(map, id).y];
+    assert.notDeepEqual(aside, [5.5, 5.5], 'pushed off the footprint');
+    manager.undo();
+    assert.deepEqual([E.propById(map, id).x, E.propById(map, id).y], [5.5, 5.5], 'undone, it stands where it stood');
+    manager.redo();
+    assert.deepEqual([E.propById(map, id).x, E.propById(map, id).y], aside);
 });
 
 test('window glass runs along its wall, whichever way the wall runs', () => {
@@ -1162,4 +1182,396 @@ test('a ladder takes fractions: 1.5 wide and 2.5 tall, centred, the top cut shor
     assert.equal(r2(ladder.top - ladder.bottom), 2.5, 'climbed to where it ends');
     const back = R.normalizePiece(pieces.find(p => p.rise));
     assert.deepEqual([back.span, back.rise], [0.75, 0.5], 'both survive a save');
+});
+
+test('a builder undo brings back the building record and the hammered light, and leaves the ground and lights edited since alone', () => {
+    const context = { console, window: {}, document: { addEventListener() {}, removeEventListener() {}, dispatchEvent() {} }, CustomEvent: class { constructor(t, i) { this.type = t; this.detail = i && i.detail; } } };
+    context.window = context;
+    vm.runInNewContext(read('editor/src/utils/MapElevation.js'), context);
+    vm.runInNewContext(read('editor/src/PieceBuilderManager.js'), context);
+    const E = context.RRMapElevation;
+    const map = { id: 3, width: 8, height: 8, reactor3d: { version: 1 } };
+    const manager = new context.PieceBuilderManager({ getTilemapManager: () => ({ currentMap: map }) });
+    // A stamped building: its pieces share group 1, and the record says which plan it came from.
+    for (const x of [2, 3, 4]) E.setPiece(map, { kind: 'wall', x, y: 2, z: 0, group: 1 });
+    E.setStructure(map, { group: 1, plan: 'House.json', x: 2, y: 2, rot: 0, scale: 1 });
+    manager.setKind('floor');
+    manager.beginStroke({ x: 3, y: 2, z: 0 }); manager.endStroke();
+    assert.equal(E.structureOf(map, 1), null, 'a hand edit inside the building detaches it from its plan');
+    manager.undo();
+    assert.equal(E.structureOf(map, 1)?.plan, 'House.json', 'and the undo attaches it again');
+    manager.redo();
+    assert.equal(E.structureOf(map, 1), null);
+    manager.undo();
+    // The hammer takes a light when no piece is there; the undo puts it back.
+    map.reactor3d.lights = [{ id: 'light1', x: 6.5, y: 6.5, height: 48 }];
+    manager.setMode('erase');
+    manager.beginStroke({ x: 6, y: 6, z: 0 }); manager.endStroke();
+    assert.equal(map.reactor3d.lights, undefined);
+    manager.undo();
+    assert.equal(map.reactor3d.lights?.length, 1, 'the light is back');
+    assert.equal(manager.removeAt({ x: 6, y: 6, z: 0 }), true, 'a right-click takes it too');
+    manager.undo();
+    assert.equal(map.reactor3d.lights?.length, 1, 'and its undo brings it back');
+    // A piece edit, then the ground raised and a light added with their own tools: undoing the edit keeps both.
+    manager.setMode('select');
+    manager.selectAt({ x: 2, y: 2, z: 0 });
+    manager.updateSelected({ material: 'Brick' });
+    const ground = new Array(81).fill(0); ground[40] = 2;
+    E.restoreTerrain(map, ground);
+    map.reactor3d.lights.push({ id: 'light2', x: 1.5, y: 1.5, height: 48 });
+    manager.undo();
+    assert.equal(E.pieceAt(map, 2, 2, 0).material, '', 'the edit is undone');
+    assert.equal(E.terrain(map)[40], 2, 'the hill raised since stays');
+    assert.equal(map.reactor3d.lights.length, 2, 'the light added since stays');
+    manager.redo();
+    assert.equal(E.pieceAt(map, 2, 2, 0).material, 'Brick');
+    assert.equal(E.terrain(map)[40], 2);
+});
+
+test('the terrain tool keeps its history per map and takes Ctrl+Z through the editor\'s one shortcut', () => {
+    const context = { console, Math, Number, Object, Array, String, JSON, CustomEvent: class { constructor(t, i) { this.type = t; this.detail = i && i.detail; } },
+        document: { dispatchEvent() {}, addEventListener() { throw new Error('the terrain tool listens for no keys of its own'); }, removeEventListener() {}, getElementById: () => null } };
+    context.window = context;
+    vm.runInNewContext(read('editor/src/utils/MapElevation.js'), context);
+    vm.runInNewContext(read('editor/src/TerrainManager.js'), context);
+    const E = context.RRMapElevation;
+    let map = { id: 1, width: 6, height: 6, note: '<3d>', reactor3d: { version: 1 } };
+    const manager = new context.TerrainManager({ getTilemapManager: () => ({ currentMap: map }) });
+    manager.activate();
+    manager.beginStroke({ x: 2, y: 2 }); manager.endStroke();
+    assert.equal(manager.canUndo(), true);
+    // Another map: the last map's height field must not land on this one.
+    map = { id: 2, width: 6, height: 6, note: '<3d>', reactor3d: { version: 1 } };
+    manager.setMap();
+    assert.equal(manager.canUndo(), false);
+    manager.undo();
+    assert.equal(E.hasTerrain(map), false);
+    assert.match(read('editor/src/main.js'), /this\.terrainManager\?\.setMap\?\.\(\);/, 'every map load resets it');
+});
+
+test('a wide ladder is selected whole: material, turn, move and Delete take every column', () => {
+    const context = { console, window: {}, document: { addEventListener() {}, removeEventListener() {}, dispatchEvent() {} }, CustomEvent: class { constructor(t, i) { this.type = t; this.detail = i && i.detail; } } };
+    context.window = context;
+    vm.runInNewContext(read('editor/src/utils/MapElevation.js'), context);
+    vm.runInNewContext(read('editor/src/PieceBuilderManager.js'), context);
+    const E = context.RRMapElevation;
+    const map = { id: 3, width: 20, height: 20, reactor3d: { version: 1, pieces: [{ id: 1, kind: 'ladder', x: 10, y: 5, z: 0, rot: 0, material: '' }] } };
+    const manager = new context.PieceBuilderManager({ getTilemapManager: () => ({ currentMap: map }) });
+    manager.setLadderSize(E.pieces(map)[0], 3, 3);
+    const ladders = () => E.pieces(map).filter(p => p.kind === 'ladder');
+    assert.equal(ladders().length, 9, 'three columns, three levels');
+    manager.mode = 'select'; manager.selected = manager.selected || ladders()[0].id;
+    manager.updateSelected({ material: 'Iron' });
+    assert.ok(ladders().every(p => p.material === 'Iron'), 'every column takes the material');
+    manager.turnSelected();
+    const turned = manager.ladderFlight(manager.selectedPiece());
+    assert.deepEqual([ladders().length, turned.columns, turned.levels], [9, 3, 3], 'turned, still one ladder three wide');
+    assert.ok(ladders().every(p => p.rot === 1 && p.material === 'Iron'));
+    manager.moveSelectedPieceTo(4.5, 12.5);
+    assert.equal(manager.ladderFlight(manager.selectedPiece()).columns, 3, 'moved whole');
+    manager.removeSelected();
+    assert.equal(ladders().length, 0, 'Delete takes it all');
+    manager.undo();
+    assert.equal(ladders().length, 9);
+    manager.selectAt({ x: ladders()[0].x, y: ladders()[0].y, z: 0 });
+    assert.equal(manager.duplicateSelection(), true);
+    assert.equal(ladders().length, 18, 'a duplicate is the whole ladder, not the one level clicked');
+});
+
+test('another map lets go of the selection: its ids name the new map\'s pieces', () => {
+    const context = { console, window: {}, document: { addEventListener() {}, removeEventListener() {}, dispatchEvent() {} }, CustomEvent: class { constructor(t, i) { this.type = t; this.detail = i && i.detail; } } };
+    context.window = context;
+    vm.runInNewContext(read('editor/src/utils/MapElevation.js'), context);
+    vm.runInNewContext(read('editor/src/PieceBuilderManager.js'), context);
+    const E = context.RRMapElevation;
+    let map = { id: 1, width: 8, height: 8, reactor3d: { version: 1 } };
+    const manager = new context.PieceBuilderManager({ getTilemapManager: () => ({ currentMap: map }) });
+    E.setPiece(map, { kind: 'wall', x: 1, y: 1, z: 0 }); E.setPiece(map, { kind: 'wall', x: 2, y: 1, z: 0 });
+    manager.selectInBox(0, 0, 3, 3);
+    assert.equal(manager.selectionIds().length, 2);
+    map = { id: 2, width: 8, height: 8, reactor3d: { version: 1 } };
+    E.setPiece(map, { kind: 'block', x: 5, y: 5, z: 0 });
+    manager.setMap(map, null);
+    assert.equal(manager.selectionIds().length, 0);
+    assert.equal(manager.removeSelection(), false, 'Delete takes nothing on the new map');
+    assert.equal(E.pieces(map).length, 1);
+});
+
+test('an edit in Select detaches a stamped building from its plan, so moving it later keeps the edit', () => {
+    const context = { console, window: {}, document: { addEventListener() {}, removeEventListener() {}, dispatchEvent() {} }, CustomEvent: class { constructor(t, i) { this.type = t; this.detail = i && i.detail; } } };
+    context.window = context;
+    vm.runInNewContext(read('editor/src/utils/MapElevation.js'), context);
+    vm.runInNewContext(read('editor/src/PieceBuilderManager.js'), context);
+    const E = context.RRMapElevation;
+    const map = { id: 3, width: 12, height: 12, reactor3d: { version: 1 } };
+    const manager = new context.PieceBuilderManager({ getTilemapManager: () => ({ currentMap: map }) });
+    for (const x of [2, 3, 4]) E.setPiece(map, { kind: 'wall', x, y: 2, z: 0, material: 'Stone', group: 1 });
+    E.setStructure(map, { group: 1, plan: 'House.json', x: 2, y: 2, rot: 0, scale: 1 });
+    manager.mode = 'select';
+    manager.selectAt({ x: 3, y: 2, z: 0 });
+    manager.updateSelected({ x: 3, y: 2 }, false);
+    assert.ok(E.structureOf(map, 1), 'a drag that stays on its cell changes nothing');
+    manager.updateSelected({ material: 'Brick' });
+    assert.equal(E.structureOf(map, 1), null, 'a changed piece: the building no longer follows its plan');
+    manager.undo();
+    assert.equal(E.structureOf(map, 1)?.plan, 'House.json', 'undo attaches it again');
+    manager.selectInBox(2, 2, 4, 2);
+    manager.updateSelection({ material: 'Stone' });
+    assert.ok(E.structureOf(map, 1), 'the same material again is no edit');
+    manager.removeSelection();
+    assert.equal(E.structureOf(map, 1), null);
+});
+
+test('the Blueprint slot stamps a plan that exists, not one left from another project or a renamed file', () => {
+    const context = { console, window: {}, document: { addEventListener() {}, removeEventListener() {} } };
+    context.window = context;
+    vm.runInNewContext(read('editor/src/BuildHotbar.js') + '\nwindow.BuildHotbar = BuildHotbar;', context);
+    const manager = { structure: 'Old.json', mode: 'select', structures: () => [{ file: 'Cottage.json' }, { file: 'Tower.json' }], setMode(mode) { this.mode = mode; }, activate() {} };
+    const bar = new context.BuildHotbar({ pieceBuilderManager: manager });
+    bar.pick('blueprint');
+    assert.equal(manager.structure, 'Cottage.json');
+    assert.equal(manager.mode, 'stamp');
+    manager.structure = 'Tower.json';
+    bar.pick('blueprint');
+    assert.equal(manager.structure, 'Tower.json', 'a plan still there stays chosen');
+});
+
+test('rocks: one craggy mass from boxes, the same across chunk edges, stood on as their boxes', () => {
+    loadThree();
+    const R = require(path.resolve(__dirname, '..', '..', 'runtime/reactor_3d.js'));
+    const E = loadElevation();
+    assert.ok(R.SHAPE_KINDS.includes('rock') && E.SHAPE_KINDS.includes('rock'), 'a shape kind in the runtime and the editor');
+    const rock = (x, y, z, size, extra) => R.normalizePiece(Object.assign({ id: 1, kind: 'rock', x, y, z, rot: 0, material: 'Rock', size }, extra || {}));
+    assert.equal(rock(1, 1, 0, [2, 2, 2], { rough: 0.83 }).rough, 0.83, 'its roughness is kept');
+    assert.equal(E.normalizePiece({ kind: 'rock', x: 1, y: 1, z: 0, size: [2, 2, 2], rough: 2 }).rough, 1, 'and clamped by the editor alike');
+    assert.equal('rough' in rock(1, 1, 0, [2, 2, 2]), false, 'a plain rock carries no setting');
+    // A cliff of two rocks side by side and one stacked on them.
+    const frames = [rock(10, 10, 0, [4, 6, 4]), rock(13, 10, 0, [4, 3, 4]), rock(10, 10, 6, [3, 3, 3])].map(p => R.rockFrame(p, 0));
+    const mesh = box => { const out = { positions: [], uvs: [], colors: [] }; R.rockMesh(frames, box, () => out); return out; };
+    const area = P => { let sum = 0; for (let i = 0; i < P.length; i += 9) { const u = [P[i + 3] - P[i], P[i + 4] - P[i + 1], P[i + 5] - P[i + 2]], v = [P[i + 6] - P[i], P[i + 7] - P[i + 1], P[i + 8] - P[i + 2]]; sum += Math.hypot(u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]) / 2; } return sum; };
+    const whole = mesh({ x0: 0, z0: 0, x1: 32, z1: 32 });
+    const west = mesh({ x0: 0, z0: 0, x1: 12, z1: 32 }), east = mesh({ x0: 12, z0: 0, x1: 32, z1: 32 });
+    assert.ok(whole.positions.length / 9 > 500, 'a craggy surface, not a box');
+    assert.equal(west.positions.length + east.positions.length, whole.positions.length, 'split across a chunk edge: the same faces');
+    assert.ok(Math.abs(area(west.positions) + area(east.positions) - area(whole.positions)) < 1e-3, 'and the same surface');
+    assert.equal(whole.uvs.length / 2, whole.positions.length / 3);
+    assert.equal(whole.colors.length, whole.positions.length);
+    // Faces look out of the rock: the field rises across nearly every one.
+    let outward = 0, total = 0;
+    const P = whole.positions;
+    for (let i = 0; i < P.length; i += 9) {
+        const u = [P[i + 3] - P[i], P[i + 4] - P[i + 1], P[i + 5] - P[i + 2]], v = [P[i + 6] - P[i], P[i + 7] - P[i + 1], P[i + 8] - P[i + 2]];
+        const n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+        const c = [(P[i] + P[i + 3] + P[i + 6]) / 3, (P[i + 1] + P[i + 4] + P[i + 7]) / 3, (P[i + 2] + P[i + 5] + P[i + 8]) / 3];
+        const e = 0.05, f = (x, y, z) => R.rockField(frames, x, y, z);
+        const g = [f(c[0] + e, c[1], c[2]) - f(c[0] - e, c[1], c[2]), f(c[0], c[1] + e, c[2]) - f(c[0], c[1] - e, c[2]), f(c[0], c[1], c[2] + e) - f(c[0], c[1], c[2] - e)];
+        total++; if (n[0] * g[0] + n[1] * g[1] + n[2] * g[2] > 0) outward++;
+    }
+    assert.ok(outward / total > 0.95, `faces look out (${outward} of ${total})`);
+    // Its top is walkable: the stacked rock's top is near level 9, and the ground rock reaches into the ground.
+    let top = -Infinity, bottom = Infinity;
+    for (let i = 1; i < P.length; i += 3) { top = Math.max(top, P[i]); bottom = Math.min(bottom, P[i]); }
+    assert.ok(Math.abs(top - 9) < 0.6, 'the top stands where the stack ends: ' + top.toFixed(2));
+    assert.ok(bottom < -0.5, 'a rock on the ground reaches into it');
+    // It is stood on and blocks where its drawn surface is: each cell reads the top of the rock over its middle.
+    const map = mapWith([{ id: 1, kind: 'rock', x: 5, y: 5, z: 0, rot: 0, material: 'Rock', size: [3, 4, 3] }]);
+    assert.equal(R.pieceFootprint(R.piecesOf(map)[0]).length, 9, 'its box still covers three by three cells (selection, plans)');
+    const stood = R.pieceSurfaceAt(map, 5.5, 5.5, 4);
+    const column = R.rockColumns(map, R.piecesOf(map)).find(c => c.x === 5 && c.y === 5);
+    let surface = -Infinity;
+    for (let wy = 6; wy > -2; wy -= 0.01) if (R.rockField([R.rockFrame(R.piecesOf(map)[0], 0)], 5.5, wy, 5.5) < 0) { surface = wy; break; }
+    assert.ok(Math.abs(stood - surface) < 0.05, `stood on at the drawn top (${stood} against ${surface.toFixed(2)})`);
+    assert.equal(column.z, 0, 'a rock on the ground is solid down to it');
+    assert.equal(R.pieceSurfaceAt(map, 12.5, 12.5, 0), 0, 'the ground beside it is the ground');
+    // An arch: a rock held up off the ground over a cell is walked under.
+    const arch = mapWith([{ id: 1, kind: 'rock', x: 5, y: 5, z: 5, rot: 0, material: 'Rock', size: [3, 2, 3], rough: 0 }]);
+    const under = R.rockColumns(arch, R.piecesOf(arch)).find(c => c.x === 5 && c.y === 5);
+    assert.ok(under.z > 3, 'a raised rock starts above the ground: ' + under.z);
+    assert.equal(R.pieceSurfaceAt(arch, 5.5, 5.5, 0), 0, 'and is walked under from the ground');
+    // The bend shapes a rock's outline but leaves it where it was laid: its middle is rock.
+    for (const [x, y, size] of [[20, 20, [2, 2, 2]], [40, 12, [4, 6, 4]], [9, 30, [3, 1, 3]]]) {
+        const lone = { width: 64, height: 64, reactor3d: { version: 1, pieces: [{ id: 1, kind: 'rock', x, y, z: 0, rot: 0, material: 'Rock', size }] } };
+        assert.ok(R.pieceSurfaceAt(lone, x + 0.5, y + 0.5, 0) > size[1] * 0.6, `a rock at ${x},${y} stands where it was laid`);
+    }
+    // The piece geometry of a lone rock (the ghost, a plan's preview) is the rock too.
+    const lone = R.pieceGeometry([{ id: 1, kind: 'rock', x: 0, y: 0, z: 0, rot: 0, material: '', size: [2, 2, 2] }], null);
+    assert.ok(lone.attributes.position.count / 3 > 100);
+    // The Build bar: a Rock slot beside Shape with sizes to start from and its roughness in percent.
+    const bar = read('editor/src/BuildHotbar.js');
+    assert.match(bar, /static ROCK_PRESETS = \{ boulder: \[3, 2, 3\], rock: \[4, 4, 4\], cliff: \[4, 8, 4\], spire: \[2, 8, 2\], ledge: \[6, 2, 3\], slab: \[6, 1, 6\] \};/);
+    assert.match(bar, /if \(key === 'taper' \|\| key === 'thick' \|\| key === 'rough'\) v = Math\.max\(0, Math\.min\(1, Math\.round\(v\) \/ 100\)\);/);
+    assert.match(bar, /\.filter\(k => k !== 'rock'\); \}/, 'the Shape slot leaves rocks to their own slot');
+});
+
+test('rock tops, tints and the rock brush: rows, filled areas, each rock its own', () => {
+    loadThree();
+    const R = require(path.resolve(__dirname, '..', '..', 'runtime/reactor_3d.js'));
+    const rock = (x, y, z, size, extra) => R.normalizePiece(Object.assign({ id: 1, kind: 'rock', x, y, z, rot: 0, material: 'Rock', size }, extra || {}));
+    const capped = rock(10, 10, 0, [6, 4, 6], { cap: 'Moss', tint: '#C8B49A' });
+    assert.deepEqual([capped.cap, capped.tint], ['Moss', '#c8b49a'], 'a top and a tint are kept');
+    assert.equal('tint' in rock(1, 1, 0, [2, 2, 2], { tint: '#ffffff' }), false, 'white is no tint');
+    assert.equal('cap' in R.normalizePiece({ kind: 'box', x: 1, y: 1, cap: 'Moss' }), false, 'only a rock has a top');
+    // The top goes to faces turned up near the rock's top; the sides keep the rock and its tint.
+    const buckets = new Map();
+    R.rockMesh([R.rockFrame(capped, 0)], { x0: 0, z0: 0, x1: 32, z1: 32 }, (frame, isCap) => {
+        const key = isCap ? 'cap' : 'rock';
+        if (!buckets.has(key)) buckets.set(key, { positions: [], uvs: [], colors: [], normals: [] });
+        return buckets.get(key);
+    });
+    const cap = buckets.get('cap'), body = buckets.get('rock');
+    assert.ok(cap && cap.positions.length > 90 && body && body.positions.length > 90, 'both a top and sides');
+    // Up top, bar a little at the foot where the rock flares onto the ground.
+    let high = 0;
+    for (let i = 1; i < cap.positions.length; i += 3) if (cap.positions[i] > 2.5) high++;
+    assert.ok(high / (cap.positions.length / 3) > 0.85, 'the top stays up top: ' + (high / (cap.positions.length / 3)).toFixed(2));
+    assert.equal(cap.normals.length, cap.positions.length, 'each vertex has the field\'s slope for the image blend');
+    assert.ok(body.colors[0] > body.colors[2], 'the sides wear the warm tint');
+    // "ground" is the map's floor, not a material file; any other top is one to load.
+    const E = loadElevation();
+    const map = { id: 1, width: 40, height: 40, reactor3d: { version: 1, pieces: [
+        { id: 1, kind: 'rock', x: 5, y: 5, z: 0, rot: 0, material: 'Rock', size: [3, 3, 3], cap: 'ground' },
+        { id: 2, kind: 'rock', x: 9, y: 5, z: 0, rot: 0, material: 'Rock', size: [3, 3, 3], cap: 'Snow' }] } };
+    assert.deepEqual([...E.pieceMaterials(map)], ['Rock', 'Snow']);
+    // A rock's image is laid from three sides by world position, blended by the surface.
+    const shaded = {}; R.triplanarMaterial(shaded, 5);
+    const shader = { uniforms: {}, vertexShader: '#include <common>\n#include <project_vertex>', fragmentShader: '#include <common>\n#include <map_fragment>' };
+    shaded.onBeforeCompile(shader);
+    assert.match(shader.fragmentShader, /texture2D\(map, vRRTriPos\.zy \* rrTriScale\) \* rrTriW\.x \+ texture2D\(map, vRRTriPos\.xz \* rrTriScale\) \* rrTriW\.y/);
+    assert.equal(shader.uniforms.rrTriScale.value, 0.2);
+    assert.match(shaded.customProgramCacheKey(), /\|triplanar$/);
+    // The brush: a drag lays one rock each spacing, a Ctrl rectangle fills a grid, each rock varies by its seed.
+    const context = { console, window: {}, document: { addEventListener() {}, removeEventListener() {}, dispatchEvent() {} }, CustomEvent: class { constructor(t, i) { this.type = t; this.detail = i && i.detail; } } };
+    context.window = context;
+    vm.runInNewContext(read('editor/src/utils/MapElevation.js'), context);
+    vm.runInNewContext(read('editor/src/PieceBuilderManager.js'), context);
+    const P = context.PieceBuilderManager;
+    assert.deepEqual({ ...P.rockVariation(7) }, { ...P.rockVariation(7) }, 'a seed is always the same rock');
+    assert.notDeepEqual({ ...P.rockVariation(7) }, { ...P.rockVariation(8) });
+    const field = { id: 2, width: 40, height: 40, reactor3d: { version: 1 } };
+    const manager = new P({ getTilemapManager: () => ({ currentMap: field }) });
+    manager.setKind('rock'); manager.setSize('rock', [4, 8, 4]); manager.rockCap = 'ground';
+    const rocks = () => context.RRMapElevation.pieces(field).filter(p => p.kind === 'rock');
+    const next = manager.pieceFor({ x: 0, y: 0, z: 0 });
+    manager.beginStroke({ x: 2, y: 10, z: 0 });
+    for (let x = 3; x <= 14; x++) manager.paintAt({ x, y: 10, z: 0 });
+    manager.endStroke();
+    assert.deepEqual([...rocks().map(p => p.x)], [2, 5, 8, 11, 14], 'a row of rocks three cells apart (three quarters of four wide)');
+    assert.deepEqual([...rocks()[0].size], [...next.size], 'the first rock is the one the ghost showed');
+    assert.ok(new Set(rocks().map(p => p.size.join(','))).size > 1, 'and they are not all alike');
+    assert.ok(rocks().every(p => p.cap === 'ground'), 'each wears the top in hand');
+    assert.equal(manager.undoStack.length, 1, 'one stroke, one undo step');
+    manager.setSize('rock', [3, 2, 3]);
+    manager.beginStroke({ x: 2, y: 20, z: 0 }, undefined, { rectangle: true });
+    manager.paintAt({ x: 9, y: 25, z: 0 }, { rectangle: true });
+    const grid = rocks().filter(p => p.y >= 20);
+    manager.paintAt({ x: 10, y: 25, z: 0 }, { rectangle: true });
+    manager.endStroke();
+    assert.equal(grid.length, 4 * 3, 'a filled rectangle: a rock every two cells across and along');
+    const again = rocks().filter(p => p.y >= 20 && p.x <= 9);
+    assert.deepEqual([...again.map(p => p.size.join(','))], [...grid.map(p => p.size.join(','))], 'dragged bigger, the rectangle keeps its rocks');
+    manager.rockVary = false;
+    assert.deepEqual([...manager.pieceFor({ x: 0, y: 0, z: 0 }).size], [3, 2, 3], 'Vary off lays the size in hand');
+    // The hammer takes a rock struck anywhere on it, not only on the cell it stands on.
+    context.Reactor3D = R;
+    const before = rocks().length, anchor = rocks().find(p => p.x === 2 && p.y === 10);
+    manager.setMode('erase');
+    manager.beginStroke({ x: 1, y: 11, z: 0, height: 1 }); manager.endStroke();
+    assert.equal(rocks().length, before - 1);
+    assert.equal(rocks().some(p => p.id === anchor.id), false, 'the rock the cell belongs to');
+});
+
+test('out of order: Ctrl+Z mid-drag takes back the drag, a turn at the map edge slides, a struck rock goes before the floor under it', () => {
+    const context = { console, window: {}, document: { addEventListener() {}, removeEventListener() {}, dispatchEvent() {} }, CustomEvent: class { constructor(t, i) { this.type = t; this.detail = i && i.detail; } } };
+    context.window = context;
+    vm.runInNewContext(read('editor/src/utils/MapElevation.js'), context);
+    vm.runInNewContext(read('editor/src/PieceBuilderManager.js'), context);
+    const E = context.RRMapElevation;
+    const map = { id: 3, width: 12, height: 12, reactor3d: { version: 1 } };
+    const manager = new context.PieceBuilderManager({ getTilemapManager: () => ({ currentMap: map }) });
+    manager.setKind('wall');
+    manager.beginStroke({ x: 0, y: 0, z: 0 }); manager.endStroke();
+    // A row, Ctrl+Z halfway: the row goes, the wall before it stays, and the rest of the drag lays nothing.
+    manager.beginStroke({ x: 2, y: 2, z: 0 }); manager.paintAt({ x: 3, y: 2, z: 0 });
+    manager.undo();
+    assert.equal(E.pieces(map).length, 1, 'the row so far is taken back, not the wall laid before it');
+    assert.equal(manager.paintAt({ x: 4, y: 2, z: 0 }), false, 'the drag lays nothing more');
+    manager.endStroke();
+    assert.deepEqual([manager.undoStack.length, manager.redoStack.length], [1, 1]);
+    manager.redo();
+    assert.equal(E.pieces(map).length, 3, 'redo brings the row back');
+    // The same for a Ctrl-rectangle (Z pressed with Ctrl still held).
+    manager.setKind('floor');
+    manager.beginStroke({ x: 6, y: 6, z: 0 }, undefined, { rectangle: true });
+    manager.paintAt({ x: 9, y: 9, z: 0 }, { rectangle: true });
+    manager.undo();
+    manager.paintAt({ x: 10, y: 10, z: 0 }, { rectangle: true });
+    manager.endStroke();
+    assert.equal(E.pieces(map).length, 3, 'no rectangle laid after the undo');
+    manager.undo();
+    assert.equal(E.pieces(map).length, 1, 'the next undo takes the row, one step each');
+    // A row along the bottom edge turned: it stands up inside the map, one wall a cell, not stacked on one.
+    E.restorePieces(map, []);
+    for (let x = 2; x <= 6; x++) E.setPiece(map, { kind: 'wall', x, y: 11, z: 0 });
+    manager.mode = 'select'; manager.selectInBox(0, 11, 11, 11);
+    manager.turnSelection();
+    assert.equal(new Set(E.pieces(map).map(p => p.x + ',' + p.y)).size, 5, 'five cells');
+    assert.ok(E.pieces(map).every(p => p.x === 2 && p.y >= 7 && p.y <= 11 && p.rot === 1));
+    // A hand-built group turned in Move: a shape's shift in its cell turns with it.
+    E.restorePieces(map, [{ id: 1, kind: 'floor', x: 1, y: 1, z: 0, group: 2 }, { id: 2, kind: 'floor', x: 2, y: 1, z: 0, group: 2 }, { id: 3, kind: 'box', x: 1, y: 1, z: 0, size: [1, 1, 1], offset: [0.25, 0], group: 2 }]);
+    E.rotatePieceGroup(map, 2);
+    const box = E.pieces(map).find(p => p.kind === 'box');
+    assert.deepEqual([box.x, box.y, box.rot, box.angle, ...box.offset], [1, 1, 1, 0, 0, 0.25]);
+    // The hammer strikes a rock's side over a floor cell: the rock goes, the floor stays.
+    loadThree();
+    context.Reactor3D = require(path.resolve(__dirname, '..', '..', 'runtime/reactor_3d.js'));
+    E.restorePieces(map, [{ id: 1, kind: 'floor', x: 4, y: 4, z: 0 }, { id: 2, kind: 'floor', x: 5, y: 4, z: 0 }, { id: 3, kind: 'rock', x: 5, y: 4, z: 0, size: [3, 3, 3], material: 'Rock' }]);
+    manager.setMode('erase');
+    assert.equal(manager.removeAt({ x: 4, y: 4, z: 1, height: 1.5 }), true);
+    assert.deepEqual(E.pieces(map).map(p => p.kind), ['floor', 'floor']);
+    // Ctrl+D lays a rock's copy clear of it, not a cell over inside it.
+    E.restorePieces(map, [{ id: 1, kind: 'rock', x: 3, y: 3, z: 0, size: [3, 3, 3], material: 'Rock' }]);
+    manager.mode = 'select'; manager.selected = 1; manager.selectedIds = [];
+    assert.equal(manager.duplicateSelection(), true);
+    const cells = E.pieces(map).map(p => context.Reactor3D.pieceFootprint(p).map(c => c[0]));
+    assert.ok(Math.min(...cells[1]) > Math.max(...cells[0]), 'the copy starts east of the rock\'s last cell');
+    // A selected piece taken off (a right-click with a slot in hand, or undone) lets go: the next piece laid takes its id, unselected.
+    E.restorePieces(map, []);
+    manager.setKind('wall');
+    manager.beginStroke({ x: 1, y: 1, z: 0 }); manager.endStroke();
+    manager.beginStroke({ x: 3, y: 1, z: 0 }); manager.endStroke();
+    manager.mode = 'select'; manager.selectAt({ x: 3, y: 1, z: 0 });
+    manager.setKind('wall');
+    manager.removeAt({ x: 3, y: 1, z: 0 });
+    manager.beginStroke({ x: 6, y: 6, z: 0 }); manager.endStroke();
+    assert.equal(E.pieceAt(map, 6, 6, 0).id, 2, 'the id comes round again');
+    assert.deepEqual([...manager.selectionIds()], [], 'and the new wall is not selected');
+    manager.mode = 'select'; manager.selectAt({ x: 6, y: 6, z: 0 });
+    manager.undo();
+    assert.deepEqual([...manager.selectionIds()], [], 'undone, it lets go too');
+    // A paste takes the slots it lands on, as laying there would: one wall on the cell, not two inside each other.
+    manager.redo();
+    manager.mode = 'select'; manager.selectAt({ x: 1, y: 1, z: 0 });
+    manager.copySelection();
+    manager.pasteAt({ x: 6, y: 6, z: 0 });
+    assert.deepEqual([...E.pieces(map).filter(p => p.x === 6 && p.y === 6).map(p => p.kind)], ['wall'], 'the pasted wall replaced the one there');
+    manager.undo();
+    assert.equal(E.pieces(map).filter(p => p.x === 6 && p.y === 6).length, 1, 'and the undo brings the old one back');
+    // The panel follows what an undo changes under the same selection, and a drag ends as one step on an undo.
+    const bar = read('editor/src/BuildHotbar.js'), view = read('editor/src/MapEditor3D.js');
+    assert.match(bar, /const shape = JSON\.stringify\(\[manager\.selected, manager\.selectedIds, manager\.selectedGroup,[^\n]*flight && \[flight\.steps, flight\.width, flight\.height\]\]\)/);
+    assert.match(view, /if \(drag && \(drag\.gizmo \|\| drag\.pieceMove\)\) \{\s+this\.endPieceDrag\(drag\);/);
+    // R, Delete, Ctrl+V or Ctrl+D while pieces are carried: the carry so far is a step of its own first.
+    const builder = read('editor/src/PieceBuilderManager.js');
+    for (const name of ['turnSelection\\(steps = 1\\)', 'removeSelection\\(\\)', 'pasteAt\\(target\\)', 'duplicateSelection\\(\\)']) assert.match(builder, new RegExp('    ' + name + ' \\{\\s+this\\._settleCarry\\(\\);'), name);
+    assert.match(view, /if \(carryOn && drag\.pieceMove\) \{ record\.snapshot = null; record\.moved = false; record\.split = true; return changed; \}/);
+    assert.match(view, /manager\._takeSlots\(this\.currentMap\(\), new Set\(carried\.map\(piece => piece\.id\)\)\)/, 'a carry set down takes its cells');
+    assert.equal((view.match(/if \(!move\.snapshot\) move\.snapshot = manager\._snapshot\(this\.currentMap\(\)\);/g) || []).length, 2, 'the carry after a split starts its step on its next move');
+    // Building keeps Ctrl+C/V/D in every slot (a wall in hand once copied and pasted the whole map), and a double-click keeps the camera.
+    assert.match(read('editor/src/UIManager.js'), /const worldTool = window\.reactor\?\.modelPropsManager\?\.active \|\| window\.reactor\?\.pieceBuilderManager\?\.active \|\| window\.reactor\?\.buildHotbar\?\.visible;/);
+    assert.match(view, /handleDoubleClick\(event\) \{[\s\S]{0,700}if \(this\.canEditPieces\(\) \|\| this\.canEditTerrain\(\) \|\| this\.canEditProps\(\)\) return;/);
+    // A slider moved by its arrow keys, and the surface tint's popup, are undo steps too.
+    assert.match(bar, /if \(!snapshot && \(placed \|\| s\.kind === 'many'\)\) snapshot = manager\._snapshot\(manager\.currentMap\(\)\);/);
+    assert.match(bar, /RRColorPopup\.bind\(surfaceTint, hex => \{ setSurface\(\{ tint: hex \}, !recorded\); recorded = true; \}\);/);
+    assert.match(view, /'move:' \+ manager\.selectedGroup \+ ':' \+ stamp\.size\.join\('x'\)/);
 });

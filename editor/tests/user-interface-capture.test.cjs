@@ -68,7 +68,7 @@ test('the runtime waits for the scene to settle, writes, and exits; the editor n
     // project behind the database's Cancel.
     assert.ok(!/localStorage\.setItem\('rrui\.lastCapture/.test(editor), 'no capture is restored across records or reopens');
     assert.ok(!/loadLastCapture/.test(editor));
-    assert.match(editor, /this\.detach\(\);\s*this\.current = this\.normalizeInterface\(entry\);/, 'a fresh view drops the previous one');
+    assert.match(editor, /this\.detach\(\);\s*this\.current = this\.parentEditor && typeof this\.parentEditor\.normalizeOnView === 'function'/, 'a fresh view drops the previous one');
     assert.match(editor, /this\.reference = null;\s*this\.showReference = true;/);
     assert.match(editor, /clearReference\(\) \{\s*this\.reference = null;/);
     assert.match(editor, /rr-ui-capture-clear/);

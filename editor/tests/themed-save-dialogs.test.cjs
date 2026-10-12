@@ -1,7 +1,6 @@
 /**
- * Save-flow dialogs are the editor's own, not the browser's: the unsaved
- * prompt and every save-failure message go through the themed modals, with
- * the native ones only as a headless fallback.
+ * Save-flow dialogs are the editor's own, never the browser's: the unsaved
+ * prompt and every save-failure message go through the themed modals.
  */
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -14,10 +13,11 @@ const controller = fs.readFileSync(
 
 test('unsaved changes prompt through the themed modal first', () => {
     assert.match(controller, /this\.uiManager\?\.promptUnsavedChanges/);
-    // The native confirm chain survives only as the no-UI fallback.
+    // Without UIManager's three-button prompt the same is asked through RRDialog.
     const at = controller.indexOf('async confirmUnsavedChanges');
     const body = controller.slice(at, controller.indexOf('\n    }', at));
-    assert.match(body, /else if \(confirm\(/, 'native confirm is the fallback branch');
+    assert.match(body, /else if \(await RRDialog\.confirm\(/, 'the fallback asks through the themed dialog');
+    assert.doesNotMatch(body, /[^.\w]confirm\(/, 'no native confirm is left');
 });
 
 test('save failures speak through the themed alert', () => {

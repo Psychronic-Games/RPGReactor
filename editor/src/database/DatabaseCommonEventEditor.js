@@ -127,8 +127,10 @@ class DatabaseCommonEventEditor {
         const section = document.createElement('div');
         section.className = 'database-section';
         section.style.cssText = 'flex: 1; display: flex; flex-direction: column; min-height: 300px;';
+        // The command list is the page: it does not fold.
+        section.dataset.sectionFold = 'off';
 
-        section.innerHTML = `<div class="database-section-header">${tt('Event Commands')}</div>`;
+        section.innerHTML = `<div class="database-section-header" data-section-key="event-commands">${tt('Event Commands')}</div>`;
 
         const content = document.createElement('div');
         content.className = 'database-section-content';
@@ -167,7 +169,16 @@ class DatabaseCommonEventEditor {
             if (tag === 'INPUT' || tag === 'TEXTAREA' || e.target.isContentEditable) return;
 
             const isCtrl = e.ctrlKey || e.metaKey;
-            if (isCtrl && e.key.toLowerCase() === 'a') {
+            const stepped = this._eventCommandListClass().historyKey(e, this.currentEvent.list);
+            if (stepped !== null) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (stepped) {
+                    this.selectedCommandIndices = [];
+                    this.persistEvent();
+                    this.renderCommandList(container, this.currentEvent);
+                }
+            } else if (isCtrl && e.key.toLowerCase() === 'a') {
                 e.preventDefault();
                 e.stopPropagation();
                 this.selectedCommandIndices = this.currentEvent.list
@@ -203,11 +214,36 @@ class DatabaseCommonEventEditor {
         const previousScrollTop = container.scrollTop;
         container.innerHTML = '';
 
-        if (!event.list || event.list.length === 0) {
-            event.list = [{ code: 0, indent: 0, parameters: [] }];
-        }
-
         const ECL = this._eventCommandListClass();
+        // A list that arrives without its End gets one.
+        if (!Array.isArray(event.list)) event.list = [];
+        ECL.ensureTerminator(event.list);
+        ECL.trackHistory(event.list);
+        ECL.enableDragReorder(container, {
+            rowSelector: '[data-cmd-index]',
+            indexKey: 'cmdIndex',
+            indentBase: 11,
+            indentStep: 20,
+            list: () => event.list,
+            dragIndices: pressed => {
+                // A drag from an unselected row moves that row; from a
+                // selected one, the whole selection.
+                if (!this.expandToBlocks(this.selectedCommandIndices, event).includes(pressed)) {
+                    this.selectedCommandIndices = [pressed];
+                    this._selectionAnchor = pressed;
+                    this.renderCommandList(container, event);
+                }
+                return this.expandToBlocks(this.selectedCommandIndices, event);
+            },
+            commit: moved => {
+                this.selectedCommandIndices = Array.from({ length: moved.count }, (_value, i) => moved.start + i);
+                this._selectionAnchor = moved.start;
+                this.persistEvent();
+                this.renderCommandList(container, event);
+                container.focus();
+            }
+        });
+
         // Expansion is recorded by position, so it only means anything for the
         // list it was recorded against; drop it when the event changes.
         if (this._expandedPluginList !== event.list) {
@@ -1379,7 +1415,7 @@ class DatabaseCommonEventEditor {
                 if (container) this.renderCommandList(container, event);
                 document.body.removeChild(modal);
             } catch (e) {
-                alert(`${tt('Invalid JSON:')} ` + e.message);
+                RRDialog.alert(`${tt('Invalid JSON:')} ` + e.message, { title: this._dialogTitle(), kind: 'error' });
             }
         });
 
@@ -1401,7 +1437,8 @@ class DatabaseCommonEventEditor {
         // Expand selection to full blocks so copying a Conditional Branch
         // grabs the entire if/else/end structure, not just the header line.
         const indices = this.expandToBlocks(this.selectedCommandIndices, event);
-        if (indices.length === 0) return;
+        // Nothing but the End selected: leave the clipboard as it is.
+        if (indices.length === 0) return Promise.resolve(true);
         this.commandClipboard = indices.map(i => JSON.parse(JSON.stringify(event.list[i])));
         if (typeof ReactorClipboard !== 'undefined') {
             return ReactorClipboard.write('eventCommands', { commands: this.commandClipboard });
@@ -1439,7 +1476,7 @@ class DatabaseCommonEventEditor {
         const wrote = await this.copyCommands(event);
         if (!isCurrent()) return;
         if (!wrote) {
-            alert(window.I18n?.t('db.clipboardWriteFailed') || 'Could not write data to the clipboard.');
+            RRDialog.alert(window.I18n?.t('db.clipboardWriteFailed') || 'Could not write data to the clipboard.', { title: this._dialogTitle(), kind: 'error' });
             return;
         }
         if (this.currentEvent !== targetEvent || event !== targetEvent
@@ -1451,11 +1488,10 @@ class DatabaseCommonEventEditor {
 
     deleteCommands(event, container) {
         // Expand each selected index into its full block (e.g. a Conditional
-        // Branch header expands to header + body + else + body + end). Sort
-        // descending so splices don't shift indices we still need.
-        const indices = this.expandToBlocks(this.selectedCommandIndices, event)
-            .sort((a, b) => b - a);
-        indices.forEach(i => event.list.splice(i, 1));
+        // Branch header expands to header + body + else + body + end). The
+        // list keeps its End.
+        this._eventCommandListClass().removeCommands(
+            event.list, this.expandToBlocks(this.selectedCommandIndices, event));
         this.selectedCommandIndices = [];
         this.persistEvent();
         if (container) this.renderCommandList(container, event);
@@ -1478,15 +1514,16 @@ class DatabaseCommonEventEditor {
             || JSON.stringify(event.list) !== listSnapshot
             || selected.length !== this.selectedCommandIndices.length
             || selected.some((index, i) => index !== this.selectedCommandIndices[i])) return;
-        if (!commands?.length) {
-            alert(window.I18n ? window.I18n.tText('No event commands in clipboard to paste.') : 'No event commands in clipboard to paste.');
+        const ECL = this._eventCommandListClass();
+        const pasted = ECL.pasteableCommands(commands);
+        if (!pasted.length) {
+            RRDialog.alert(window.I18n ? window.I18n.tText('No event commands in clipboard to paste.') : 'No event commands in clipboard to paste.', { title: this._dialogTitle() });
             return;
         }
+        ECL.ensureTerminator(event.list);
         const selectedIndex = selected.length > 0 ? Math.max(...selected) : -1;
         let insertAt = selectedIndex >= 0 ? selectedIndex + 1 : event.list.length - 1;
-        const ECL = this._eventCommandListClass();
         insertAt = ECL.safeInsertionIndex(event.list, insertAt);
-        const pasted = commands.map(command => JSON.parse(JSON.stringify(command)));
         const baseIndent = ECL.insertionIndent(event.list, insertAt);
         ECL.rebaseInsertIndent(pasted, baseIndent);
         pasted.forEach((cmd, i) => {
@@ -1625,6 +1662,11 @@ class DatabaseCommonEventEditor {
     persistEvent() {
         if (this.currentEvent && this.currentEventId)
             this.databaseManager.updateCommonEvent(this.currentEventId, this.currentEvent);
+    }
+
+    /** The title the Common Events page's dialogs carry. */
+    _dialogTitle() {
+        return typeof window !== 'undefined' && window.I18n ? window.I18n.t('menu.commonEvents') : 'Common Events';
     }
 
     attachMainListeners(container) {

@@ -11,6 +11,8 @@ function loadUIManager() {
     let keydownHandler = null;
     let reloads = 0;
     let fullscreenToggles = 0;
+    // Questions asked through the editor's themed dialog, each answered by the test.
+    const questions = [];
     const documentListeners = new Map();
     class FakeElement {
         constructor(tagName) {
@@ -59,6 +61,9 @@ function loadUIManager() {
             location: { reload: () => { reloads++; } },
             addEventListener(type, handler) {
                 if (type === 'keydown') keydownHandler = handler;
+            },
+            RRDialog: {
+                confirm: (message, options) => new Promise(answer => { questions.push({ message, options, answer }); })
             }
         },
         nw: {
@@ -74,6 +79,7 @@ function loadUIManager() {
         getKeydownHandler: () => keydownHandler,
         getReloads: () => reloads,
         getFullscreenToggles: () => fullscreenToggles,
+        questions,
         getElementById: id => document.getElementById(id),
         dispatchDocumentKey: key => documentListeners.get('keydown')?.({ key, preventDefault() {} }),
     };
@@ -252,34 +258,34 @@ test('F5 confirms before performing an uncached application reload', async () =>
         ...overrides,
     });
 
+    // The question is the editor's themed dialog: a danger question, which starts on Cancel.
+    const { questions } = harness;
+    const turn = () => new Promise(resolve => setImmediate(resolve));
     const cancelled = event();
     handler(cancelled);
     assert.equal(cancelled.prevented, true);
     assert.equal(cancelled.stopped, true);
-    const overlay = harness.getElementById('rr-reload-confirm');
-    assert.equal(overlay.className, 'rr-modal-overlay');
-    assert.equal(overlay.children[0].className, 'rr-modal');
-    assert.equal(harness.getElementById('rr-reload-cancel').className, 'rr-btn-secondary');
-    assert.equal(harness.getElementById('rr-reload-accept').className, 'rr-button-primary');
-    assert.equal(harness.getElementById('rr-reload-cancel').tagName, 'BUTTON');
+    assert.equal(questions.length, 1);
+    assert.equal(questions[0].message, 'Reload RPG Reactor and simulate a browser restart?\n\nAny unsaved changes will be lost.');
+    assert.deepEqual({ ...questions[0].options }, { title: 'Reload Application?', ok: 'Reload', danger: true });
+    assert.equal(harness.getElementById('rr-reload-confirm'), null, 'no dialog of its own is built');
     assert.equal(harness.getReloads(), 0);
 
     handler(event());
-    assert.equal(harness.getElementById('rr-reload-confirm'), overlay, 'repeated F5 does not stack modals');
-    harness.getElementById('rr-reload-cancel').dispatch('click');
-    assert.equal(harness.getElementById('rr-reload-confirm'), null);
+    assert.equal(questions.length, 1, 'repeated F5 does not ask twice');
+    questions[0].answer(false);
+    await turn();
     assert.equal(harness.getReloads(), 0, 'cancelling leaves the editor running');
 
     handler(event());
-    harness.getElementById('rr-reload-accept').dispatch('click');
+    assert.equal(questions.length, 2, 'once answered, F5 asks again');
+    questions[1].answer(true);
+    await turn();
     assert.equal(harness.getReloads(), 1, 'confirmation performs one uncached reload');
-
-    handler(event());
-    harness.dispatchDocumentKey('Escape');
-    assert.equal(harness.getElementById('rr-reload-confirm'), null, 'Escape cancels the modal');
 
     handler(event({ repeat: true }));
     handler(event({ shiftKey: true }));
+    assert.equal(questions.length, 2, 'held or modified F5 asks nothing');
     assert.equal(harness.getReloads(), 1, 'held or modified F5 does not trigger another reload');
 
     const discardDecision = manager.promptUnsavedChanges('the project');
@@ -302,34 +308,7 @@ test('F5 confirms before performing an uncached application reload', async () =>
     assert.equal(await saveDecision, 'save');
 });
 
-test('themed alert and confirm use editor modal chrome instead of window dialogs', async () => {
-    const harness = loadUIManager();
-    const manager = new harness.UIManager({});
-
-    const alertDone = manager.showAlert('Install Reactor Runtime', 'Open a project first.');
-    const alertOverlay = harness.getElementById('rr-themed-dialog');
-    assert.equal(alertOverlay.className, 'rr-modal-overlay');
-    assert.equal(harness.getElementById('rr-themed-dialog-title').textContent, 'Install Reactor Runtime');
-    assert.equal(harness.getElementById('rr-themed-dialog-ok').className, 'rr-button-primary');
-    assert.equal(harness.getElementById('rr-themed-dialog-cancel'), null);
-    harness.getElementById('rr-themed-dialog-ok').dispatch('click');
-    assert.equal(await alertDone, true);
-    assert.equal(harness.getElementById('rr-themed-dialog'), null);
-
-    const confirmDone = manager.showConfirm('Install Reactor Runtime', 'Install into js?', 'Install', 'Cancel');
-    assert.equal(harness.getElementById('rr-themed-dialog-ok').textContent, 'Install');
-    assert.equal(harness.getElementById('rr-themed-dialog-cancel').className, 'rr-button-danger');
-    harness.getElementById('rr-themed-dialog-cancel').dispatch('click');
-    assert.equal(await confirmDone, false);
-
-    const acceptDone = manager.showConfirm('Plugin Manifest', 'Rebuild?', 'Rebuild', 'Keep Current');
-    harness.getElementById('rr-themed-dialog-ok').dispatch('click');
-    assert.equal(await acceptDone, true);
-
-    const escapeDone = manager.showConfirm('Install Reactor Runtime', 'Install?', 'Install', 'Cancel');
-    harness.dispatchDocumentKey('Escape');
-    assert.equal(await escapeDone, false);
-});
+// UIManager's showAlert / showConfirm are the shared themed dialog (utils/Dialog.js): themed-dialogs.test.cjs runs them.
 
 test('F11 toggles native fullscreen without repeating while held', () => {
     const harness = loadUIManager();

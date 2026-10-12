@@ -1,4 +1,5 @@
 const assert = require('node:assert/strict');
+const { runtimeSource } = require('./helpers/runtime-source.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
@@ -7,7 +8,7 @@ const vm = require('node:vm');
 const repoRoot = path.resolve(__dirname, '..', '..');
 const editorRoot = path.resolve(__dirname, '..');
 const limitsSource = fs.readFileSync(path.join(editorRoot, 'src', 'utils', 'DataLimits.js'), 'utf8');
-const objectsSource = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_objects.js'), 'utf8');
+const objectsSource = runtimeSource('reactor_objects.js');
 
 // The editor previews an actor's stats and EXP curve; the game computes them
 // again from the same data. Two implementations, two files — if one is edited

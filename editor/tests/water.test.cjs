@@ -41,9 +41,22 @@ test('a sheet is a rectangle at a level; deep water blocks, shallows wade, dry l
     assert.ok(lake.geometry.attributes.rrDepth.array.some(d => d > 1.5) && lake.geometry.attributes.rrDepth.array.some(d => d < 0.5), 'deep in the middle, shallow at the rim');
     const runtime = source3D();
     assert.match(runtime, /transformed\.y \+= rrLift \* rrCalm;/, 'waves lift the vertices');
-    assert.match(runtime, /smoothstep\(0\.0, 0\.35, vRRDepth\)/, 'and the sheet fades out on the shore');
+    assert.match(runtime, /rrOpacity \* smoothstep\(0\.0, 0\.3, vRRDepth\)/, 'and the sheet fades out on the shore');
     assert.match(runtime, /rrWaveTime\.value = frame \/ 60;/);
-    assert.ok(lake.material.map && lake.material.map.repeat.x === 6, 'the image repeats once per tile');
+    // The image repeats once per tile through the sheet's own UVs; the image is shared by every sheet of
+    // the material, so its repeat stays 1 (with it set per sheet, the last sheet laid set it for all).
+    assert.ok(lake.material.map && lake.material.map.repeat.x === 1 && lake.material.map.repeat.y === 1, 'the shared image keeps its own repeat');
+    const uvSpan = mesh => { const uv = mesh.geometry.attributes.uv.array; let lo = Infinity, hi = -Infinity; for (let i = 0; i < uv.length; i += 2) { lo = Math.min(lo, uv[i]); hi = Math.max(hi, uv[i]); } return hi - lo; };
+    assert.equal(uvSpan(lake), 6, 'six tiles of image across six cells');
+    assert.equal(uvSpan(scene._waterMeshes[1]), 3, 'and three across three: each sheet at one image per tile');
+    // Two ponds of one material and different sizes: one shared image, each pond at one image per tile.
+    const two = { width: 30, height: 12, reactor3d: { version: 1, water: [{ x0: 1, y0: 1, x1: 4, y1: 4, level: 0, material: 'Water' }, { x0: 10, y0: 1, x1: 29, y1: 10, level: 0, material: 'Water' }] } };
+    const pair = Object.create(R.MapScene.prototype);
+    pair._scene = new global.THREE.Scene(); pair._meshes = []; pair._materials = []; pair._textures = [];
+    pair.addWater(two, name => (name === 'Water' ? { image: { width: 4, height: 4 }, width: 4, height: 4 } : null));
+    const [small, big] = pair._waterMeshes;
+    assert.equal(small.material.map, big.material.map, 'one image for both');
+    assert.deepEqual([uvSpan(small), uvSpan(big), small.material.map.repeat.x], [4, 20, 1], 'each at its own size, the image untouched');
     lake.geometry.computeBoundingBox();
     assert.ok(Math.abs(lake.geometry.boundingBox.min.y - 0.4) < 1e-5 && Math.abs(lake.geometry.boundingBox.min.x - 2) < 1e-5 && Math.abs(lake.geometry.boundingBox.max.x - 8) < 1e-5, "a Float32 sheet at the level, spanning its cells");
     scene.updateWater(100);
@@ -115,12 +128,29 @@ test('the terrain tab pours into a hollow, previews it under the pointer, remove
     manager.redo(); assert.equal(E.water(map).length, 1);
     const view = read('editor/src/MapEditor3D.js');
     assert.match(view, /if \(event\?\.detail\?\.water && this\.updateWaterInPlace\(\)\) return;/);
-    assert.match(view, /this\.mapScene\.updateWater\?\.\(now \/ \(1000 \/ 60\)\);/, 'the editor drifts the water too');
+    assert.match(view, /this\.mapScene\.updateWater\?\.\(now \/ \(1000 \/ 60\), this\.view && this\.view\.target \? this\.view\.target : null\);/, 'the editor drifts the water too');
     const i18n = read('editor/src/I18nManager.js');
-    assert.match(view, /const sheet = mode === 'drain' \|\| mode === 'look' \? this\.waterMeshAt\(event\.clientX, event\.clientY\) : null;/, 'Remove and Look pick the sheet drawn under the pointer');
+    assert.match(view, /const sheet = mode === 'drain' \? this\.waterMeshAt\(event\.clientX, event\.clientY\) : null;/, 'Remove picks the sheet drawn under the pointer');
+    assert.match(view, /if \(mode === 'look'\) this\.pointer\.across = \{ from: 'terrain' \};/, 'Look picks with a click, settled on release');
     assert.match(view, /manager\.hoverAt\?\.\(point\);/, 'the pointer previews the hollow');
     for (const key of ['terrain.water', 'terrain.waterPour', 'terrain.waterErase', 'terrain.waterFull', 'terrain.waterHint', 'terrain.waterCount']) {
         assert.equal((i18n.match(new RegExp('"' + key.replace(/\./g, '\\.') + '": "', 'g')) || []).length, 18, key + ' in 18 locales');
     }
     assert.ok(fs.existsSync(path.resolve(__dirname, '..', '..', 'template/Demo/img/materials/Water.png')));
+});
+
+test('a pond poured in a hollow on high ground stands at the hollow\'s level, in the editor and in the game', () => {
+    loadThree();
+    const R = require(path.resolve(__dirname, '..', '..', 'runtime/reactor_3d.js'));
+    const ME = loadElevation();
+    const W = 20, H = 20;
+    // A plateau of tall tiles with a hollow dug into its top.
+    const map = { id: 1, width: W, height: H, reactor3d: { version: 1, width: W, height: H, elevation: new Array(W * H).fill(ME.MAX - 20) } };
+    const grid = ME.ensureTerrain(map);
+    for (let y = 0; y <= H; y++) for (let x = 0; x <= W; x++) grid[y * (W + 1) + x] = Math.hypot(x - 10, y - 10) < 6 ? -4 : ME.TERRAIN_MAX;
+    const basin = ME.waterBasin(map, 10, 10);
+    const sheet = ME.fillWaterAt(map, 10, 10, 'Water');
+    assert.ok(basin.level > ME.MAX - 20 && sheet.level === basin.level, 'not cut down under the ground: ' + sheet.level);
+    assert.equal(R.waterOf(map)[0].level, sheet.level, 'the game reads the same level');
+    assert.ok(ME.WATER_MAX_LEVEL >= ME.MAX + ME.TERRAIN_MAX && R.WATER_MAX_LEVEL === ME.WATER_MAX_LEVEL);
 });

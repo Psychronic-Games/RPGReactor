@@ -45,7 +45,10 @@ class WebDriverClient {
         this.driverPath = driverPath;
         this.host = options.host || '127.0.0.1';
         this.port = options.port || null;
-        this.env = options.env || process.env;
+        // The sound mixer remembers a mute per program name, and NW.js says
+        // "Chromium": a harness muted there muted every Chromium browser on
+        // the desktop afterwards. Harness windows go by a name of their own.
+        this.env = Object.assign({ PULSE_PROP_OVERRIDE: "application.name='RPG Reactor harness'" }, options.env || process.env);
         this.driverArgs = options.driverArgs || [];
         this.process = null;
         this.sessionId = null;
@@ -112,7 +115,8 @@ class WebDriverClient {
                 });
             });
             request.once('error', reject);
-            request.setTimeout(30000, () => request.destroy(new Error('WebDriver request timed out')));
+            // RR_WEBDRIVER_REQUEST_MS: a longer limit for one request (a profile that samples for a minute).
+            request.setTimeout(Number(process.env.RR_WEBDRIVER_REQUEST_MS) || 30000, () => request.destroy(new Error('WebDriver request timed out')));
             if (payload) request.write(payload);
             request.end();
         });
@@ -124,12 +128,14 @@ class WebDriverClient {
      * flag is given, so any smoke that draws a map died on the runner while
      * passing on every desktop. With a GPU the flag changes nothing.
      * `RR_NW_ARGS` adds more, space separated, for emulating such a runner
-     * (`--disable-gpu`) or trying a flag without editing a smoke.
+     * (`--disable-gpu`) or trying a flag without editing a smoke. Sessions
+     * are silent (`--mute-audio`) unless `RR_NW_AUDIO=1`: playback still
+     * runs, nothing reaches the speakers.
      */
     async createSession(alwaysMatch) {
         const options = alwaysMatch && alwaysMatch['goog:chromeOptions'];
         if (options && Array.isArray(options.args)) {
-            const extra = ['--enable-unsafe-swiftshader', ...String(process.env.RR_NW_ARGS || '').split(/\s+/).filter(Boolean)];
+            const extra = ['--enable-unsafe-swiftshader', ...(process.env.RR_NW_AUDIO === '1' ? [] : ['--mute-audio']), ...String(process.env.RR_NW_ARGS || '').split(/\s+/).filter(Boolean)];
             for (const flag of extra) if (!options.args.includes(flag)) options.args.push(flag);
         }
         const result = await this.request('POST', '/session', {
@@ -190,4 +196,32 @@ class WebDriverClient {
     }
 }
 
-module.exports = { WebDriverClient, getFreePort, poll };
+/**
+ * Prints a failed smoke's error with the page's state and browser console,
+ * and on GitHub Actions repeats it as an error annotation: annotations are
+ * readable through the public API without signing in, step logs are not.
+ */
+async function reportSmokeFailure(title, error, driver, probeScript) {
+    const lines = [String(error && (error.stack || error))];
+    if (error && error.cause) lines.push(`cause: ${error.cause.stack || error.cause}`);
+    if (driver && driver.sessionId) {
+        if (probeScript) {
+            try { lines.push(`page: ${JSON.stringify(await driver.execute(probeScript))}`); }
+            catch (probeError) { lines.push(`page probe failed: ${probeError.message}`); }
+        }
+        try {
+            const entries = await driver.sessionRequest('POST', '/se/log', { type: 'browser' });
+            for (const entry of (Array.isArray(entries) ? entries : []).slice(-25)) {
+                lines.push(`console ${entry.level}: ${String(entry.message).slice(0, 400)}`);
+            }
+        } catch {}
+    }
+    const text = lines.join('\n');
+    console.error(text);
+    if (process.env.GITHUB_ACTIONS) {
+        const escape = value => value.replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A');
+        console.log(`::error title=${escape(title).replace(/[:,]/g, ' ')}::${escape(text.slice(0, 6000))}`);
+    }
+}
+
+module.exports = { WebDriverClient, getFreePort, poll, reportSmokeFailure };

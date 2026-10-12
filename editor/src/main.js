@@ -50,8 +50,12 @@ class RPGReactor {
         // Set application icon for taskbar/dock (important for Linux)
         this.setApplicationIcon();
 
-        // Initialize performance profiler
-        window.perfProfiler = new PerformanceProfiler();
+        // The method profiler wraps the tile renderers and the map editor's
+        // paint calls, so every tile drawn pays for a timing call and a
+        // counter. It is a diagnostic: switched on only when asked for, with
+        // localStorage 'rr.perfProfiler' set to '1' or RR_PERF_PROFILER in
+        // the environment, and every wrap site already checks it exists.
+        if (RPGReactor.perfProfilerRequested()) window.perfProfiler = new PerformanceProfiler();
 
         // Wait for DOM to be ready
         if (document.readyState === 'loading') {
@@ -88,11 +92,24 @@ class RPGReactor {
             showAbout: () => this.showAbout(),
             getMapEditor: () => this.mapEditor,
             getEventManager: () => this.eventManager,
-            getBuildHistory: () => (this.pieceBuilderManager?.active ? this.pieceBuilderManager : null),
+            // The history Ctrl+Z and the toolbar's Undo step: the tool holding the map, else the map editor's.
+            getBuildHistory: () => (this.pieceBuilderManager?.active ? this.pieceBuilderManager
+                : this.terrainManager?.active ? this.terrainManager
+                : this.lightingManager?.active ? this.lightingManager
+                : this.mediaSurfaceManager?.panel ? this.mediaSurfaceManager.historyOwner() : null),
             toggleEventMode: () => this.toggleEventMode(),
             disableEventModeIfActive: () => this.disableEventModeIfActive(),
             installRuntime: () => this.projectController.installReactorRuntime(),
-            openBuildManager: () => this.buildManager.open(),
+            openBuildManager: () => {
+                // Deploy Game builds the open project: with none, it says so before any choice is made.
+                if (!this.projectController.isProjectLoaded()) {
+                    RRDialog.alert(window.I18n ? window.I18n.t('alert.loadProjectFirst') : 'Please load a project first.', {
+                        title: window.I18n ? window.I18n.tText('Deploy Game') : 'Deploy Game'
+                    });
+                    return;
+                }
+                this.buildManager.open();
+            },
             openDistEditor: () => this.distEditorManager.open()
         });
 
@@ -100,18 +117,34 @@ class RPGReactor {
         this.sidebarResizer = new SidebarResizer();
         this.sidebarResizer.initialize();
 
-        // Keep sidebar layout correct on window resize and scale toolbar icons
+        // Keep sidebar layout correct on window resize and scale toolbar icons.
+        // A window drag fires resize many times a frame; each pass re-reads
+        // the saved sidebar sizes and forces layout to measure the toolbar,
+        // so the work waits for the next frame and runs once there. A resize
+        // that left the width alone cannot change what fits on the toolbar.
         window.addEventListener('resize', () => {
-            if (this.sidebarResizer) {
-                this.sidebarResizer.refresh();
-            }
-            this.resetSidebarScroll();
-            this.scaleToolbarIcons();
+            if (this._resizeFrame) return;
+            this._resizeFrame = requestAnimationFrame(() => {
+                this._resizeFrame = null;
+                if (this.sidebarResizer) {
+                    this.sidebarResizer.refresh();
+                }
+                this.resetSidebarScroll();
+                if (window.innerWidth !== this._toolbarScaledWidth) this.scaleToolbarIcons();
+            });
         });
         // The bar's natural width also moves when its labels change: a language
         // switch rewrites them, and the web font that sets them arrives after
         // the first layout, so a measurement taken at show time is too narrow.
         window.addEventListener('rr-language-changed', () => this.scaleToolbarIcons());
+        // The tool panels are built from keys when they open; one up during a language switch is built again.
+        window.addEventListener('rr-language-changed', () => {
+            // The bar keeps its Models panel mounted; dropping it has the next render mount it anew.
+            if (this.buildHotbar) this.buildHotbar._modelsBody = null;
+            if (this.buildHotbar?.visible) this.buildHotbar.render();
+            this.lightingManager?.refreshLanguage?.();
+            if (this.mediaSurfaceManager?.panel) this.mediaSurfaceManager.render();
+        });
         document.fonts?.ready?.then?.(() => this.scaleToolbarIcons());
 
         // Initialize Project Controller
@@ -255,6 +288,7 @@ class RPGReactor {
             this.pieceBuilderManager?.setMap(
                 this.projectController.getTilemapManager().currentMap,
                 this.projectController.getTilemapManager());
+            this.terrainManager?.setMap?.();
 
             // Lighting is map content too: the toolbar tool edits it live.
             if (!this.lightingManager && typeof LightingManager !== 'undefined') {
@@ -264,6 +298,10 @@ class RPGReactor {
                 this.projectController.lightingManager = this.lightingManager;
                 this.lightingManager._startTicking();
             }
+
+            // One undo history across the map's tools; another map starts it empty.
+            this.registerMapHistory();
+            this.mapHistory?.mapChanged();
 
             // The card that edits a selected event's 3D model in place.
             if (!this.eventModelPanel && typeof EventModelPanel !== 'undefined') {
@@ -308,11 +346,15 @@ class RPGReactor {
             // not silently turn painting back on underneath another tool.
             if (wasInEventMode && this.eventManager) this.eventManager.setEventMode(true);
             else if (this.lightingManager?.active) this.claimMapTool('lighting');
+            // The Build bar stays up with the tool that was in hand (Media Surfaces is per map: the bar takes over).
+            else if (this.buildHotbar?.visible && ['pieces', 'terrain', 'models'].includes(this.mapTool)) this.claimMapTool(this.mapTool);
+            else if (this.buildHotbar?.visible) this.buildHotbar.show();
             else if (this.tilesetPaletteViewer) this.tilesetPaletteViewer.selectLayer(this.tilesetPaletteViewer.currentLayer || 'A');
             else this.claimMapTool('paint');
 
             // Update map info banner
             this.updateMapInfoBanner();
+            this.updateMapCoordinates(null, null);
             this.mediaSurfacePreviewManager?.setMap(
                 this.projectController.getTilemapManager()?.currentMap,
                 this.projectController.getTilemapManager()
@@ -335,7 +377,13 @@ class RPGReactor {
         // 3D map viewport
         this.mapEditor3D = new MapEditor3D(this.projectController);
         this.projectController.mapEditor3D = this.mapEditor3D;
-        this.projectController.disableMap3DView = () => this.mapEditor3D.setEnabled(false);
+        // A project closed or opened over this one starts in 2D, and the 3D box says so until a map asks for 3D again.
+        this.projectController.disableMap3DView = async () => {
+            const result = await this.mapEditor3D.setEnabled(false);
+            const checkbox = document.getElementById('map-3d-view');
+            if (checkbox) checkbox.checked = false;
+            return result;
+        };
         this.mapEditor3D.onFailure = message => this.handleMap3DViewFailure(message);
         // Double-clicking a cube opens the same editor the 2D map opens, so
         // events are editable from the 3D view rather than only visible in it.
@@ -374,10 +422,9 @@ class RPGReactor {
         this.projectController.mediaSurfacePreviewManager = this.mediaSurfacePreviewManager;
         this.mediaSurfaceManager = new MediaSurfaceManager(this.projectController, this.databaseManager);
         this.projectController.mediaSurfaceManager = this.mediaSurfaceManager;
+        // Image Layers: the tool's panel, and the map's image layers drawn in both views.
+        this.mapImageLayersManager = new MapImageLayersManager(this.projectController, this.databaseManager);
         this.mediaSurfacePreviewManager.setEnabled(this.optionsManager.getShowVideoPreviews());
-        // The height brush's controls only mean anything while it is on, so
-        // they are bound once here and shown with it.
-
         document.getElementById('map-3d-view')?.addEventListener('change', async (event) => {
             const active = await this.applyMap3DViewPreference(event.currentTarget.checked);
             // Ticked or unticked by hand: that is the map's preference from now on.
@@ -576,7 +623,9 @@ class RPGReactor {
             const target = event.target;
             if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA'
                 || target.isContentEditable)) return;
-            if (document.querySelector('.modal-overlay, .rr-modal-overlay, #database-modal')) return;
+            // (The event editor's overlay is always in the page, hidden: only one on screen counts.)
+            if (Array.from(document.querySelectorAll('.modal-overlay, .rr-modal-overlay, #database-modal'))
+                .some(el => el.getClientRects().length > 0)) return;
             if (this.releaseMapSelection()) event.preventDefault();
         });
     }
@@ -712,7 +761,9 @@ class RPGReactor {
     // Show plugin manager
     showPluginManager() {
         if (!this.projectController.isProjectLoaded()) {
-            alert(window.I18n ? window.I18n.t('alert.loadProjectFirst') : 'Please load a project first.');
+            RRDialog.alert(window.I18n ? window.I18n.t('alert.loadProjectFirst') : 'Please load a project first.', {
+                title: window.I18n ? window.I18n.t('menu.plugins') : 'Plugins'
+            });
             return;
         }
         if (this.pluginManager) {
@@ -752,14 +803,18 @@ class RPGReactor {
                 this.projectController?.mediaSurfacePreviewManager?.authoring?.editor?.close(true);
             }
             if (owner !== 'lighting') this.lightingManager?.setActive(false);
+            if (owner !== 'imageLayers') this.mapImageLayersManager?.close();
             if (owner !== 'models') this.modelPropsManager?.deactivate();
             if (owner !== 'terrain') this.terrainManager?.deactivate();
             if (owner !== 'pieces') {
                 this.pieceBuilderManager?.deactivate();
                 // Lighting and Media Surfaces are part of building: opened from the bar (or over it), the bar stays and shows which is in hand.
                 if (this.buildHotbar?.visible && (owner === 'lighting' || owner === 'media' || owner === 'terrain' || owner === 'models')) this.buildHotbar.render();
+                // Image Layers opened over the bar leaves the bar up too, and gives the map back to it when its panel closes.
+                else if (this.buildHotbar?.visible && owner === 'imageLayers') this.buildHotbar.render();
                 else this.buildHotbar?.hide(false);
             }
+            if (owner !== 'events') window.RRBattleSetup?.close?.();
             if (owner !== 'events' && this.eventManager?.eventMode) this.eventManager.setEventMode(false);
             const map = this.mapEditor, palette = this.tilesetPaletteViewer;
             if (owner !== 'paint') {
@@ -785,10 +840,13 @@ class RPGReactor {
     syncMapToolButtons() {
         const owner = this.mapTool, map = this.mapEditor;
         const building = owner === 'pieces' || (!!this.buildHotbar?.visible && (owner === 'lighting' || owner === 'media' || owner === 'terrain' || owner === 'models'));
-        for (const [selector,tool] of [['#toolbar-event-manager-btn','events'],['[data-action="media-surfaces"]','media'],['[data-action="lighting-tool"]','lighting'],['[data-action="build-tool"]','pieces']]) {
-            const on = tool === 'pieces' ? building : owner === tool;
+        // The Build button stays lit under Image Layers too, while the bar is up.
+        const underImageLayers = !!this.buildHotbar?.visible && owner === 'imageLayers';
+        for (const [selector,tool] of [['#toolbar-event-manager-btn','events'],['.tool-button[data-action="media-surfaces"]','media'],['.tool-button[data-action="lighting-tool"]','lighting'],['.tool-button[data-action="build-tool"]','pieces']]) {
+            const on = tool === 'pieces' ? building || underImageLayers : owner === tool;
             const button=document.querySelector(selector);button?.classList.toggle('active',on);button?.setAttribute('aria-pressed',String(on));
         }
+        window.RRBattleSetup?.syncButton?.();
         document.querySelectorAll('.tool-draw-mode').forEach(button=>{
             const active=owner==='paint'&&!map?.shadowPenMode&&button.dataset.tool===map?.currentTool;
             button.classList.toggle('active',active);button.setAttribute('aria-pressed',String(active));
@@ -806,9 +864,71 @@ class RPGReactor {
         if (this._changingMapTool || this.mapTool !== owner) return;
         // Closing the Lighting or Media Surfaces panel with the build bar up hands the map back to the bar.
         if (this.buildHotbar?.visible && (owner === 'lighting' || owner === 'media')) { this.buildHotbar.show(); return; }
+        // So does closing the Image Layers panel.
+        if (this.buildHotbar?.visible && owner === 'imageLayers') { this.buildHotbar.show(); return; }
         const palette=this.tilesetPaletteViewer;
         if (palette) palette.selectLayer(palette.currentLayer || 'A');
         else this.claimMapTool('paint');
+    }
+
+    /**
+     * One undo history for the map view (RRMapHistory): every map tool's steps in the order they
+     * were taken, so Ctrl+Z, the toolbar and each panel's Undo take back the last thing done,
+     * whatever tool did it and whatever tool is in hand.
+     */
+    registerMapHistory() {
+        if (typeof RRMapHistory === 'undefined') return;
+        if (!this.mapHistory) {
+            const ui = this.uiManager, show = ui.updateUndoRedoButtons.bind(ui);
+            this.mapHistory = new RRMapHistory({
+                onChange: (canUndo, canRedo) => show(canUndo, canRedo),
+                onStep: step => this.announceHistoryStep(step)
+            });
+            // Whatever a tool reports for itself, the buttons show the whole history.
+            ui.updateUndoRedoButtons = () => show(this.mapHistory.canUndo(), this.mapHistory.canRedo());
+        }
+        const history = this.mapHistory;
+        if (this.mapEditor) history.register('tiles', { object: this.mapEditor,
+            label: entry => (entry?.kind === 'props' ? 'Models' : entry?.kind === 'elevation' ? 'Height' : entry?.kind === 'object3d' ? 'Models' : 'Tiles') });
+        if (this.eventManager) history.register('events', { object: this.eventManager, label: () => 'Event' });
+        const builder = this.pieceBuilderManager;
+        if (builder) history.register('builder', { object: builder, settle: () => builder._endGesture(), label: () => 'Building' });
+        const terrain = this.terrainManager;
+        if (terrain) history.register('terrain', { object: terrain,
+            // A look, a ground type, the steep ground or the land past the border still being changed, and a stroke still being drawn, are steps first.
+            settle: () => {
+                if (terrain._groundSnapshot) terrain.editGroundType({}, 'commit');
+                if (terrain._lookSnapshot) terrain.editLook({}, 'commit');
+                terrain._settleMapSettings?.();
+                if (terrain._stroke || terrain._foliageStroke || terrain._groundStroke) terrain.endStroke();
+            },
+            label: entry => (entry?.surroundSet ? 'Beyond the Border' : entry?.cliffSet ? 'Steep Ground' : entry?.biome ? (entry.label || 'Biome') : entry?.foliageSet ? 'Foliage' : entry?.groundSet ? 'Ground' : entry?.water && !entry.ground ? 'Water' : 'Terrain') });
+        if (this.lightingManager) history.register('lighting', { object: this.lightingManager, undoKey: '_undo', redoKey: '_redo', label: () => 'Light' });
+        const media = this.mediaSurfaceManager;
+        if (media && !history.owners.has('media')) {
+            // Its steps are kept under `undo` and `redo` themselves, and one method steps either way.
+            const step = media.history;
+            history.register('media', { object: media, undoKey: 'undo', redoKey: 'redo', methods: { undo: null, redo: null, canUndo: null, canRedo: null },
+                undo: () => step.call(media, media.undo, media.redo), redo: () => step.call(media, media.redo, media.undo), label: () => 'Media Surface' });
+            media.history = function(from, to) { return history._quiet ? step.call(this, from, to) : (from === this.undo ? history.undo() : history.redo()); };
+        }
+    }
+
+    /** The status line says what an undo or a redo took back, since the tool in hand may be another. */
+    announceHistoryStep(step) {
+        const tt = text => (window.I18n?.tText ? window.I18n.tText(text) : text);
+        const action = tt(step.kind === 'undo' ? 'Undo' : 'Redo');
+        const text = step.label ? `${action}: ${tt(step.label)}` : action;
+        this.uiManager.updateStatus(text);
+        // A short note over the map: the step may belong to a tool whose panel is not up.
+        const stage = typeof document !== 'undefined' ? document.getElementById('canvas-container') : null;
+        if (!stage) return;
+        let note = stage.querySelector(':scope > .rr-history-note');
+        if (!note) { note = document.createElement('div'); note.className = 'rr-history-note'; note.setAttribute('role', 'status'); stage.appendChild(note); }
+        note.textContent = text;
+        note.classList.add('is-shown');
+        clearTimeout(this._historyNoteTimer);
+        this._historyNoteTimer = setTimeout(() => note.classList.remove('is-shown'), 2200);
     }
 
     toggleEventMode() {
@@ -1075,6 +1195,17 @@ class RPGReactor {
         setTimeout(resetAll, 50);
     }
 
+    static perfProfilerRequested() {
+        try {
+            if (typeof localStorage !== 'undefined' && localStorage.getItem('rr.perfProfiler') === '1') return true;
+        } catch (_) { /* storage unavailable */ }
+        try {
+            return typeof process !== 'undefined' && !!process.env && process.env.RR_PERF_PROFILER === '1';
+        } catch (_) {
+            return false;
+        }
+    }
+
     // Scale toolbar icons to fit available width.
     // At full size: 32px icons. Shrinks proportionally when the window is narrow.
     scaleToolbarIcons() {
@@ -1082,6 +1213,7 @@ class RPGReactor {
         if (!toolbar || toolbar.style.display === 'none') return;
         const last = toolbar.lastElementChild;
         if (!last) return;
+        this._toolbarScaledWidth = window.innerWidth;
 
         const maxSize = 32;
         const minSize = 16;
@@ -1146,7 +1278,9 @@ class RPGReactor {
 
     openDatabase(type) {
         if (!this.projectController.isProjectLoaded()) {
-            alert(window.I18n ? window.I18n.t('alert.loadProjectFirst') : 'Please load a project first.');
+            RRDialog.alert(window.I18n ? window.I18n.t('alert.loadProjectFirst') : 'Please load a project first.', {
+                title: window.I18n ? window.I18n.t('menu.database') : 'Database'
+            });
             return;
         }
 
@@ -1246,7 +1380,7 @@ class RPGReactor {
 
         if (mapInfoContent && mapIdEl && mapNameEl && mapDimensionsEl) {
             // Show the map info content
-            mapInfoContent.style.display = 'block';
+            mapInfoContent.style.display = 'flex';
 
             // Format map ID with leading zeros (e.g., 001, 002, etc.)
             const mapIdStr = String(map.id).padStart(3, '0');
@@ -1259,6 +1393,8 @@ class RPGReactor {
             const unnamedMap = window.I18n ? window.I18n.tText('Unnamed Map') : 'Unnamed Map';
             const mapName = (mapInfo && mapInfo.name) ? mapInfo.name : (map.displayName || unnamedMap);
             mapNameEl.textContent = mapName;
+            // The placeholder's key would put "No Map Loaded" back over the name on a language switch.
+            mapNameEl.removeAttribute('data-i18n');
 
             // Display dimensions
             mapDimensionsEl.textContent = `${map.width} x ${map.height}`;

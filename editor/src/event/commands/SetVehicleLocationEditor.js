@@ -2,6 +2,18 @@
  * SetVehicleLocationEditor - Editor for Set Vehicle Location event command (code 202)
  */
 class SetVehicleLocationEditor {
+    /** The vehicles of the Vehicles page, each copy its own entry (`{ value, label }`); a stored one the page no longer has is kept as it is. */
+    static reactorVehicles(databaseManager, stored) {
+        const list = typeof RRVehicles !== 'undefined' ? RRVehicles.placedVehicles(databaseManager?.data?.vehicles) : [];
+        if (typeof stored === 'string' && stored && !list.some(entry => entry.value === stored)) list.push({ value: stored, label: stored });
+        return list;
+    }
+    /** The name a stored vehicle is listed by: Boat, Ship, Airship, or a vehicle of the Vehicles page. */
+    static vehicleName(stored, databaseManager, tt = text => text) {
+        if (typeof stored !== 'string') return tt(['Boat', 'Ship', 'Airship'][stored] || 'Unknown');
+        const found = SetVehicleLocationEditor.reactorVehicles(databaseManager, stored).find(entry => entry.value === stored);
+        return found ? found.label : stored;
+    }
     constructor(databaseManager, projectController) {
         this.databaseManager = databaseManager;
         this.projectController = projectController;
@@ -117,9 +129,11 @@ class SetVehicleLocationEditor {
             <option value="0" ${this.vehicle === 0 ? 'selected' : ''}>${window.I18n ? window.I18n.tText('Boat') : 'Boat'}</option>
             <option value="1" ${this.vehicle === 1 ? 'selected' : ''}>${window.I18n ? window.I18n.tText('Ship') : 'Ship'}</option>
             <option value="2" ${this.vehicle === 2 ? 'selected' : ''}>${window.I18n ? window.I18n.tText('Airship') : 'Airship'}</option>
-        `;
+        ` + SetVehicleLocationEditor.reactorVehicles(this.databaseManager, this.vehicle).map(entry =>
+            `<option value="${rrEscapeHtml(entry.value)}" ${String(this.vehicle) === entry.value ? 'selected' : ''} data-rr-i18n-skip>${rrEscapeHtml(entry.label)}</option>`).join('');
         vehicleSelect.addEventListener('change', (e) => {
-            this.vehicle = parseInt(e.target.value);
+            // The three of RPG Maker by their number; a vehicle of the Vehicles page by its own identity.
+            this.vehicle = /^\d+$/.test(e.target.value) ? parseInt(e.target.value) : e.target.value;
         });
 
         vehicleRow.appendChild(vehicleLabel);

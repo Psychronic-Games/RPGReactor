@@ -49,9 +49,14 @@ test('the runtime lays Save and Load out as 2003 did, only when an import asks',
     assert.match(block, /legacy\(\) && mode === "save" \? false : autosave/, 'Save lists no autosave row');
     assert.match(block, /Graphics\.width - Graphics\.boxWidth/, 'the whole screen, not MZ\'s box');
     // every override falls through to the stock behaviour without the flag
-    for (const name of ['helpWindowRect', 'listWindowRect', 'needsCancelButton', 'createBackground']) {
-        assert.match(block, new RegExp(`Scene_File\\.prototype\\.${name} = function\\(\\) \\{\\s*if \\(!legacy\\(\\)\\) return _${name}\\.call\\(this\\);|return legacy\\(\\) \\? false : _${name}\\.call\\(this\\);`), name);
+    for (const name of ['helpWindowRect', 'listWindowRect']) {
+        assert.match(block, new RegExp(`Scene_File\\.prototype\\.${name} = function\\(\\) \\{\\s*if \\(!legacy\\(\\)\\) return _${name}\\.call\\(this\\);`), name);
     }
+    // The two Scene_File only inherits are asked of its parent when called (a plugin may replace them after this file loads):
+    // an import hides the cancel button and paints its own band, any other game keeps the parent's answer.
+    assert.match(block, /Scene_File\.prototype\.needsCancelButton = function\(\) \{\s*return legacy\(\) \? false : parentOf\(Scene_File\)\.needsCancelButton\.call\(this\);/);
+    assert.match(block, /Scene_File\.prototype\.createBackground = function\(\) \{\s*if \(!legacy\(\)\) return parentOf\(Scene_File\)\.createBackground\.call\(this\);/);
+    assert.doesNotMatch(block, /const _(needsCancelButton|createBackground) = Scene_File\.prototype/, 'neither is kept at load time');
     assert.doesNotThrow(() => new Function(block));
 });
 

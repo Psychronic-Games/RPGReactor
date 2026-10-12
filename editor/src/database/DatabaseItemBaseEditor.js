@@ -18,7 +18,7 @@ class DatabaseItemBaseEditor {
         const iconSection = document.createElement('div');
         iconSection.className = 'database-section';
         iconSection.style.borderBottom = '2px solid var(--color-accent)';
-        iconSection.innerHTML = `<div class="database-section-header">${tt('Icon')}</div>`;
+        iconSection.innerHTML = `<div class="database-section-header" data-section-key="icon">${tt('Icon')}</div>`;
         const iconContent = document.createElement('div');
         iconContent.className = 'database-section-content';
         iconContent.style.textAlign = 'center';
@@ -35,7 +35,7 @@ class DatabaseItemBaseEditor {
         const section = document.createElement('div');
         section.className = 'database-section';
         section.innerHTML = `
-            <div class="database-section-header">${tt('General')}</div>
+            <div class="database-section-header" data-section-key="general">${tt('General')}</div>
             <div class="database-section-content">
                 <div class="form-row">
                     <div class="form-group">
@@ -63,7 +63,7 @@ class DatabaseItemBaseEditor {
         section.className = 'database-section';
         section.style.gridColumn = '1 / -1';
         section.innerHTML = `
-            <div class="database-section-header">${tt('Note')}</div>
+            <div class="database-section-header" data-section-key="note">${tt('Note')}</div>
             <div class="database-section-content">
                 <textarea class="database-field-value" rows="5" style="width: 100%;" data-field="note" data-${dataAttr}="${entry.id}">${rrEscapeHtml(entry.note)}</textarea>
             </div>
@@ -80,7 +80,7 @@ class DatabaseItemBaseEditor {
         section.className = 'database-section';
         section.style.gridColumn = '1 / -1';
         section.innerHTML = `
-            <div class="database-section-header">${tt('Traits & Effects')}</div>
+            <div class="database-section-header" data-section-key="traits-effects">${tt('Traits & Effects')}</div>
             <div class="database-section-content">
                 <table class="traits-table">
                     <thead>

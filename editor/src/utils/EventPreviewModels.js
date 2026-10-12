@@ -9,10 +9,43 @@
 (function(root) {
     const templates = new Map();
     const thumbnails = new Map();
+    // Who asked for each template and when: one only a thumbnail needed is given back once the
+    // picture is drawn, and one no map has asked for since the last map change goes at the sweep.
+    const asked = new Map();
+    let epoch = 0;
     let revision = 0;
-    let thumbRenderer = null;
-    let thumbScene = null;
-    let thumbCamera = null;
+    /** Thumbnails kept: small pictures, the newest. */
+    const THUMBNAILS_KEPT = 256;
+    const release = () => (typeof root.RRModelRelease !== 'undefined' ? root.RRModelRelease : null);
+    // The thumbnail renderer and its context are dropped a few seconds after the last picture.
+    let thumbs = null;
+    function thumbStage() {
+        const R = release();
+        const make = () => {
+            const canvas = document.createElement('canvas');
+            const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, preserveDrawingBuffer: true });
+            renderer.setClearColor(0x000000, 0);
+            const scene = new THREE.Scene();
+            scene.add(new THREE.HemisphereLight(0xffffff, 0x445566, 1.1));
+            const sun = new THREE.DirectionalLight(0xffffff, 0.9);
+            sun.position.set(1.4, 2.2, 1.8);
+            scene.add(sun);
+            return { renderer, scene, camera: new THREE.OrthographicCamera(-0.5, 0.5, 0.5, -0.5, 0.01, 100) };
+        };
+        if (!thumbs) thumbs = R ? new R.IdleRenderer(make, { name: 'event-thumbnails' }) : { state: null, use(fn) { if (!this.state) this.state = make(); return fn(this.state); } };
+        return thumbs;
+    }
+
+    /** Give a template's graphics-card copies back, and forget it. */
+    function letGo(key, template) {
+        asked.delete(key);
+        if (templates.get(key) === template) templates.delete(key);
+        const R = release();
+        if (!R || !template || typeof template.then === 'function') return;
+        const keep = new Set();
+        for (const other of templates.values()) if (other && other !== template && typeof other.then !== 'function') R.resourcesOf(other, keep);
+        R.releaseTemplate(template, keep);
+    }
 
     async function ensureLibraries(mapEditor3D) {
         if (typeof window !== 'undefined' && window.THREE && window.Reactor3D?.extensionsLoaded?.()) return true;
@@ -27,9 +60,14 @@
     }
 
     /** The parsed model, or null when the file is missing or unreadable. */
-    async function templateFor(project, spec, mapEditor3D) {
+    async function templateFor(project, spec, mapEditor3D, forThumbnail = false) {
         if (!project?.path || !spec?.name || typeof require !== 'function') return null;
         const key = `${project.path}|${keyFor(spec)}|${spec.texture || ""}`;
+        const note = asked.get(key) || { placed: false, epoch };
+        note.epoch = epoch;
+        // Asked for to stand in a view (not only to be drawn once as a picture): it stays.
+        if (!forThumbnail) note.placed = true;
+        asked.set(key, note);
         if (templates.has(key)) return templates.get(key);
         const pending = (async () => {
             if (!await ensureLibraries(mapEditor3D)) return null;
@@ -93,9 +131,11 @@
     /** A placed instance, scaled and turned the way the game places it. */
     function instance(template, spec, direction) {
         const object = Reactor3D.cloneModelTemplate ? Reactor3D.cloneModelTemplate(template) : template.clone(true);
-        if (template.userData.reactorTransform && Reactor3D.applyModelTransform) {
-            Reactor3D.applyModelTransform(object, template.userData.reactorTransform);
-        }
+        // A use that names a variant wears that variant's surface and look.
+        const sidecar = template.userData.reactorSidecar;
+        const transform = spec && spec.variant && sidecar && Reactor3D.readModelTransform
+            ? Reactor3D.readModelTransform(sidecar, spec) : template.userData.reactorTransform;
+        if (transform && Reactor3D.applyModelTransform) Reactor3D.applyModelTransform(object, transform);
         const extent = template.userData.glbSize || { x: 1, y: 1, z: 1 };
         const span = Math.max(extent.x, extent.y, extent.z, 0.0001);
         const fit = (spec.size > 0 ? spec.size : 2) / span;
@@ -156,58 +196,135 @@
         const key = `${project?.path}|${JSON.stringify(spec)}@${pixels}:${direction || 2}`;
         if (thumbnails.has(key)) return thumbnails.get(key);
         const pending = (async () => {
-            const template = await templateFor(project, spec, mapEditor3D);
+            const template = await templateFor(project, spec, mapEditor3D, true);
             if (!template || typeof THREE === 'undefined') return null;
+            const templateKey = `${project.path}|${keyFor(spec)}|${spec.texture || ""}`;
             if (!await whenTexturesDecoded(template)) {
                 // Not ready yet: hand back nothing and forget the attempt so
                 // the next request renders instead of caching a black frame.
                 thumbnails.delete(key);
                 return null;
             }
-            if (!thumbRenderer) {
-                const canvas = document.createElement('canvas');
-                thumbRenderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, preserveDrawingBuffer: true });
-                thumbRenderer.setClearColor(0x000000, 0);
-                thumbScene = new THREE.Scene();
-                thumbScene.add(new THREE.HemisphereLight(0xffffff, 0x445566, 1.1));
-                const sun = new THREE.DirectionalLight(0xffffff, 0.9);
-                sun.position.set(1.4, 2.2, 1.8);
-                thumbScene.add(sun);
-                thumbCamera = new THREE.OrthographicCamera(-0.5, 0.5, 0.5, -0.5, 0.01, 100);
-            }
             const object = instance(template, { ...spec, size: 1, scale: 1 }, direction);
+            // A variant's own picture loads after the model's.
+            if (spec.variant && !await whenTexturesDecoded(object)) {
+                thumbnails.delete(key);
+                return null;
+            }
             ModelPreview3D.isolateLighting(object);
-            thumbScene.add(object);
-            // Framed as the game frames its sprite: the map's pitch, about the
-            // ground origin, so 2D preview and 2D play agree.
-            const framing = Reactor3D.frameModelSprite
-                ? Reactor3D.frameModelSprite(object, Math.round(pixels), thumbCamera)
-                : null;
-            if (!framing) { thumbScene.remove(object); return null; }
-            thumbRenderer.setSize(framing.pixels, framing.pixels, false);
-            thumbRenderer.render(thumbScene, thumbCamera);
-            thumbScene.remove(object);
+            const drawn = thumbStage().use(stage => {
+                stage.scene.add(object);
+                const thumbCamera = stage.camera;
+                // Framed as the game frames its sprite: the map's pitch, about the
+                // ground origin, so 2D preview and 2D play agree.
+                const framing = Reactor3D.frameModelSprite
+                    ? Reactor3D.frameModelSprite(object, Math.round(pixels), thumbCamera)
+                    : null;
+                if (!framing) { stage.scene.remove(object); return null; }
+                stage.renderer.setSize(framing.pixels, framing.pixels, false);
+                stage.renderer.render(stage.scene, stage.camera);
+                stage.scene.remove(object);
+                try {
+                    return { url: stage.renderer.domElement.toDataURL('image/png'), size: framing.pixels, anchorX: framing.anchorX, anchorY: framing.anchorY };
+                } catch (_) { return null; }
+            });
             object.traverse(node => {
                 const materials = Array.isArray(node.material) ? node.material : node.material ? [node.material] : [];
                 for (const material of materials) material?.dispose?.();
             });
-            try {
-                return { url: thumbRenderer.domElement.toDataURL('image/png'), size: framing.pixels, anchorX: framing.anchorX, anchorY: framing.anchorY };
-            } catch (_) { return null; }
+            // A model nothing stands in a view with was loaded for this picture alone: it goes
+            // once no other picture of it is being drawn.
+            const note = asked.get(templateKey);
+            if (drawn && note && !note.placed) {
+                note.pictures = (note.pictures || 0);
+                let drawing = 0;
+                for (const [other, value] of thumbnails) if (other !== key && value && typeof value.then === 'function' && other.startsWith(`${project?.path}|`) && other.indexOf(JSON.stringify(spec.name)) >= 0) drawing++;
+                if (!drawing) letGo(templateKey, template);
+            }
+            return drawn;
         })();
         thumbnails.set(key, pending);
         const url = await pending;
         if (thumbnails.get(key) === pending) {
+            thumbnails.delete(key);
             if (url) thumbnails.set(key, url);
-            else thumbnails.delete(key);
+            // The oldest pictures beyond the bound go (a Map keeps the order they were put in).
+            while (thumbnails.size > THUMBNAILS_KEPT) thumbnails.delete(thumbnails.keys().next().value);
         }
         return url;
     }
 
     function clear() {
         revision++;
+        const all = Array.from(templates.entries());
         templates.clear();
+        asked.clear();
         thumbnails.clear();
+        const R = release();
+        // What a view still shows uploads again on its next draw.
+        if (R) for (const [, template] of all) if (template && typeof template.then !== 'function') R.releaseTemplate(template);
+        if (thumbs && thumbs.drop) thumbs.drop();
+    }
+
+    /** Another map is opening: what it asks for from here on is its own. */
+    function nextMap() { epoch++; return epoch; }
+
+    /** Once the new map's views are built: templates no view has asked for since `nextMap` are given back. */
+    function sweep() {
+        const gone = [];
+        for (const [key, template] of Array.from(templates.entries())) {
+            if (!template || typeof template.then === 'function') continue;
+            const note = asked.get(key);
+            if (note && note.epoch >= epoch) continue;
+            letGo(key, template);
+            gone.push(key);
+        }
+        return gone;
+    }
+
+    /**
+     * A renderer that drew these is going away with its context kept (the 3D view over the 2D
+     * canvas): their copies on the graphics card are given back first, or nothing ever frees them.
+     */
+    function releaseGpu() {
+        const R = release();
+        if (!R) return 0;
+        let count = 0;
+        for (const template of templates.values()) if (template && typeof template.then !== 'function') { R.releaseTemplate(template); count++; }
+        return count;
+    }
+
+    /** Every geometry a loaded template holds: what its copies share and must leave alone. */
+    function sharedGeometry() {
+        const shared = new Set();
+        for (const template of templates.values()) {
+            if (!template || typeof template.then === 'function' || typeof template.traverse !== 'function') continue;
+            template.traverse(node => { if (node.geometry) shared.add(node.geometry); });
+        }
+        return shared;
+    }
+
+    /**
+     * A placed copy leaves its scene: its materials, its skeletons and the geometry made for
+     * that copy alone (a rig's finger skin, a carved part) are disposed. Geometry the template
+     * holds is left for the template. Returns how many geometries went.
+     */
+    function disposeInstance(object, shared = sharedGeometry()) {
+        if (!object || typeof object.traverse !== 'function') return 0;
+        let gone = 0;
+        object.traverse(node => {
+            const materials = Array.isArray(node.material) ? node.material : node.material ? [node.material] : [];
+            for (const material of materials) if (material && typeof material.dispose === 'function') material.dispose();
+            if (node.skeleton && typeof node.skeleton.dispose === 'function') node.skeleton.dispose();
+            if (node.geometry && !shared.has(node.geometry) && typeof node.geometry.dispose === 'function') { node.geometry.dispose(); gone++; }
+        });
+        return gone;
+    }
+
+    function stats() {
+        let loaded = 0;
+        for (const template of templates.values()) if (template && typeof template.then !== 'function') loaded++;
+        return { templates: loaded, thumbnails: thumbnails.size, thumbRenderer: !!(thumbs && (thumbs.active || thumbs.state)), epoch };
     }
 
     /**
@@ -236,7 +353,7 @@
         }
     }
 
-    const api = { templateFor, instance, animate, thumbnail, texturesDecoded, clear, get revision() { return revision; } };
+    const api = { templateFor, instance, animate, thumbnail, texturesDecoded, clear, nextMap, sweep, releaseGpu, sharedGeometry, disposeInstance, stats, THUMBNAILS_KEPT, get revision() { return revision; } };
     root.RREventPreviewModels = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof globalThis !== 'undefined' ? globalThis : window);

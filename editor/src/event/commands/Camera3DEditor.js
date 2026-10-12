@@ -87,7 +87,7 @@ class Camera3DEditor {
         const events = this.mapEvents();
 
         const modal = document.createElement('div');
-        modal.className = 'rr-modal-overlay';
+        modal.className = 'rr-modal-overlay rr-command-editor-modal';
         modal.style.zIndex = '21000';
         const row = (label, control, labelWidth = 120) => `
             <label style="display:flex;align-items:center;gap:8px;min-width:0;font-size:12px;color:var(--color-text);">

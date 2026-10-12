@@ -85,8 +85,9 @@ const KEY = { down: '', up: '', left: '', right: '', enter: '', e
         state = await run('return {fileOpen:__visible(document.getElementById("submenu-file")),dbOpen:__visible(document.getElementById("submenu-database")),active:document.getElementById("submenu-database").querySelector(".rr-menu-key-active")?.textContent?.trim()};');
         check('Right closes File and opens Database with its first row active', !state.fileOpen && state.dbOpen && state.active === 'Actors', state);
         await key(KEY.end);
-        state = await run('return document.getElementById("submenu-database").querySelector(".rr-menu-key-active")?.textContent?.trim();');
-        check('End reaches the last Database row', state === 'Terms', state);
+        // The last row whatever it is: the category list grows (Terms, then Controls).
+        state = await run('const menu=document.getElementById("submenu-database"),rows=[...menu.querySelectorAll(".html-menu-option")].filter(__visible);return {active:menu.querySelector(".rr-menu-key-active")?.textContent?.trim(),last:rows.length?rows[rows.length-1].textContent.trim():null};');
+        check('End reaches the last Database row', state.active && state.active === state.last, state);
         await key(KEY.escape);
         state = await run('return {anyOpen:[...document.querySelectorAll(".html-submenu")].some(__visible),focused:__active()};');
         check('Escape closes the menu and focuses the Database heading', !state.anyOpen && state.focused.cls.includes('html-menu-item') && state.focused.text === 'Database', state);

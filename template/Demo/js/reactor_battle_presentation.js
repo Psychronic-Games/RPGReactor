@@ -282,7 +282,8 @@
                 // A fallen enemy is gone from the room; the shot stays with whoever is left.
                 const u=at(user,1),ts=[...new Set(targets)].filter(b=>!(b.isDead?.()&&b.isEnemy?.())).map(b=>at(ss.findTargetSprite(b),1)).filter(Boolean);
                 if(room.cinematicShot.phase==='impact'){points=ts.length?ts:u?[u]:[];if(u&&ts.some(t=>near(t,u)))points.push(u);yawOffset=70;}
-                else if(time<approachUntil&&u&&ts[0]){points=[u,ts[0]];yawOffset=90;}
+                // The runner is the picture, with room ahead of it toward whoever it runs at.
+                else if(time<approachUntil&&u&&ts[0]){points=[{...u,weight:4},ts[0]];yawOffset=90;}
                 else{points=u?[u]:[];if(u&&ts[0]&&near(ts[0],u))points.push(ts[0]);yawOffset=45;}
             }
             room.setCinematicFocus(points,{yawOffset});
@@ -304,6 +305,48 @@
             cleanup(){closed=true;ss._rrSequenceVisualUpdates?.delete(update);room?.sequenceVisualUpdates?.delete(update);for(const entry of [...held.values(),...flights])destroy(entry);held.clear();flights.length=0;}
         };
     };
+    // A sequence's script: a condition, a formula or a Run Script step, with the user and a target in reach.
+    P.evalSequence=(code,subject,target,action,statement=false)=>Function('user','subject','target','a','b','v','action','item',statement?String(code):'return ('+String(code)+');')(subject,subject,target,subject,target,root.$gameVariables?._data||[],action,action?.item?.());
+    // The steps that change game data, audio or the screen play the same
+    // wherever a sequence runs: the battle scene and a battle on the map
+    // (reactor_fight_stage.js) both hand them here. `env`: the battlers the
+    // step chose, the user, `number` (a step value as a number), `feedback`
+    // (shows a battler's result), `audioSaved` (kept across the run's steps).
+    // Answers null when the step is not one of them, else {ticket} with what
+    // the sequence waits on, if anything.
+    P.gameCue=function(step,env){
+        const {chosen,subject,number,audioSaved}=env;
+        if(step.type==='event'){
+            const event=root.$dataCommonEvents?.[step.eventId];if(!event)throw Error('Missing common event #'+step.eventId);
+            const interpreter=new Game_Interpreter();interpreter.setup(event.list);let ticks=0;
+            return {ticket:{blocking:true,isPlaying(){if(++ticks>18000)throw Error('Sequence common event exceeded five minutes.');interpreter.update();return interpreter.isRunning();},cancel(){interpreter.clear();}}};
+        }
+        if(['hp','mp','tp','buff','state','kill'].includes(step.type)){
+            for(const battler of chosen){battler.clearResult?.();
+                if(['hp','mp','tp'].includes(step.type)){const max=step.type==='hp'?battler.mhp:step.type==='mp'?battler.mmp:battler.maxTp();const value=number(step.amount,battler)*(step.percent==='percent'?max/100:1);battler['gain'+step.type.toUpperCase().replace('HP','Hp').replace('MP','Mp').replace('TP','Tp')](Math.round(value));}
+                if(step.type==='state')battler[step.operation==='remove'?'removeState':'addState'](step.stateId);
+                if(step.type==='buff'){const id=['mhp','mmp','atk','def','mat','mdf','agi','luk'].indexOf(step.param);battler[step.operation==='increase'?'addBuff':step.operation==='decrease'?'addDebuff':'removeBuff'](id,step.turns);}
+                if(step.type==='kill')battler.addState(battler.deathStateId());
+                if(step.show==='show')env.feedback?.(battler);
+            }return {};
+        }
+        if(step.type==='item'){const amount=number(step.amount);if(step.kind==='gold')$gameParty.gainGold(amount);else $gameParty.gainItem(({items:root.$dataItems,weapons:root.$dataWeapons,armors:root.$dataArmors})[step.kind]?.[step.itemId],amount);return {};}
+        if(step.type==='switch'){$gameSwitches.setValue(step.switchId,step.operation==='toggle'?!$gameSwitches.value(step.switchId):step.operation==='on');return {};}
+        if(step.type==='variable'){const a=$gameVariables.value(step.variableId),b=number(step.amount),v={set:()=>b,add:()=>a+b,subtract:()=>a-b,multiply:()=>a*b,divide:()=>b?a/b:0,modulo:()=>b?a%b:0}[step.operation]();$gameVariables.setValue(step.variableId,v);return {};}
+        if(['bgm','bgs','se'].includes(step.type)){
+            const suffix=step.type==='bgm'?'Bgm':step.type==='bgs'?'Bgs':'Se',op=step.operation;
+            if(op==='play')AudioManager['play'+suffix]({name:step.name,volume:step.volume,pitch:step.pitch,pan:step.pan});
+            else if(op==='system')SoundManager.playSystemSound(step.soundId);
+            else if(op==='save')audioSaved[suffix]=AudioManager['save'+suffix]?.();
+            else if(op==='resume'&&audioSaved[suffix])AudioManager['replay'+suffix]?.(audioSaved[suffix]);
+            else if(op==='fadeIn'||op==='fadeOut')AudioManager[op+suffix]?.(step.fade/60);
+            else if(op==='stop')AudioManager['stop'+suffix]?.();return {};
+        }
+        if(step.type==='movie'){Video.play('movies/'+step.name);return {ticket:{blocking:true,isPlaying:()=>Video.isPlaying(),cancel:()=>Video._element?.pause()}};}
+        if(step.type==='flash'){$gameScreen.startFlash([step.red,step.green,step.blue,step.alpha],step.duration);return {};}
+        if(step.type==='shake'){$gameScreen.startShake(step.power,step.speed,step.duration);return {};}
+        return null;
+    };
     P.extendAdapter=function(adapter,env){
         const {manager,subject,targets,ss,room,roles,homes,saved,stateOnly=false}=env;
         const visuals=P.sequenceVisuals(env);adapter.visuals=visuals;
@@ -313,7 +356,7 @@
         const all=()=>[...new Set([subject,...targets,...(root.$gameParty?.battleMembers?.()||[]),...(root.$gameTroop?.members?.()||[])])];
         const choose=step=>B.selectTargets(step,{user:subject,subject:step.callRole?B.selectTargets({role:step.callRole,filter:step.callFilter},{user:subject,targets,actors:root.$gameParty?.battleMembers?.(),enemies:root.$gameTroop?.members?.(),friends:subject.friendsUnit?.().members(),opponents:subject.opponentsUnit?.().members()})[0]:subject,subjects:step.callRole?B.selectTargets({role:step.callRole,filter:step.callFilter},{user:subject,targets,actors:root.$gameParty?.battleMembers?.(),enemies:root.$gameTroop?.members?.(),friends:subject.friendsUnit?.().members(),opponents:subject.opponentsUnit?.().members()}):[subject],targets,selected,
             actors:root.$gameParty?.battleMembers?.(),enemies:root.$gameTroop?.members?.(),friends:subject.friendsUnit?.().members(),opponents:subject.opponentsUnit?.().members(),moved:b=>ss.findTargetSprite(b)?.isMoving?.()});
-        const expression=(code,target=selected[0]||targets[0],statement=false)=>Function('user','subject','target','a','b','v','action','item',statement?String(code):'return ('+String(code)+');')(subject,subject,target,subject,target,root.$gameVariables?._data||[],action,action?.item?.());
+        const expression=(code,target=selected[0]||targets[0],statement=false)=>P.evalSequence(code,subject,target,action,statement);
         adapter.condition=code=>{try{return !!expression(code);}catch(error){P.warn('Sequence condition: '+error.message);return false;}};
         const number=(value,target)=>{const n=typeof value==='number'?value:Number(expression(value??'0',target));if(!Number.isFinite(n))throw Error('Sequence expression must return a finite number.');return n;};
         const capture=sprite=>{
@@ -360,33 +403,8 @@
             if(step.type==='formula'){formula=step.operation==='clear'?null:step.formula;return;}
             if(step.type==='element'){elements=step.operation==='clear'?null:String(step.elements).split(',').map(Number).filter(n=>Number.isInteger(n)&&n>=0);if(elements&&!elements.length)throw Error('Select at least one damage element.');return;}
             if(step.type==='eval'){expression(step.code,chosen[0],true);return;}
-            if(step.type==='event'){
-                const event=root.$dataCommonEvents?.[step.eventId];if(!event)throw Error('Missing common event #'+step.eventId);
-                const interpreter=new Game_Interpreter();interpreter.setup(event.list);let ticks=0;
-                return {blocking:true,isPlaying(){if(++ticks>18000)throw Error('Sequence common event exceeded five minutes.');interpreter.update();return interpreter.isRunning();},cancel(){interpreter.clear();}};
-            }
-            if(['hp','mp','tp','buff','state','kill'].includes(step.type)){
-                for(const battler of chosen){battler.clearResult?.();
-                    if(['hp','mp','tp'].includes(step.type)){const max=step.type==='hp'?battler.mhp:step.type==='mp'?battler.mmp:battler.maxTp();const value=number(step.amount,battler)*(step.percent==='percent'?max/100:1);battler['gain'+step.type.toUpperCase().replace('HP','Hp').replace('MP','Mp').replace('TP','Tp')](Math.round(value));}
-                    if(step.type==='state')battler[step.operation==='remove'?'removeState':'addState'](step.stateId);
-                    if(step.type==='buff'){const id=['mhp','mmp','atk','def','mat','mdf','agi','luk'].indexOf(step.param);battler[step.operation==='increase'?'addBuff':step.operation==='decrease'?'addDebuff':'removeBuff'](id,step.turns);}
-                    if(step.type==='kill')battler.addState(battler.deathStateId());
-                    if(step.show==='show'){battler.startDamagePopup?.();log?.displayActionResults?.(subject,battler);}
-                }return;
-            }
-            if(step.type==='item'){const amount=number(step.amount);if(step.kind==='gold')$gameParty.gainGold(amount);else $gameParty.gainItem(({items:root.$dataItems,weapons:root.$dataWeapons,armors:root.$dataArmors})[step.kind]?.[step.itemId],amount);return;}
-            if(step.type==='switch'){$gameSwitches.setValue(step.switchId,step.operation==='toggle'?!$gameSwitches.value(step.switchId):step.operation==='on');return;}
-            if(step.type==='variable'){const a=$gameVariables.value(step.variableId),b=number(step.amount),v={set:()=>b,add:()=>a+b,subtract:()=>a-b,multiply:()=>a*b,divide:()=>b?a/b:0,modulo:()=>b?a%b:0}[step.operation]();$gameVariables.setValue(step.variableId,v);return;}
-            if(['bgm','bgs','se'].includes(step.type)){
-                const suffix=step.type==='bgm'?'Bgm':step.type==='bgs'?'Bgs':'Se',op=step.operation;
-                if(op==='play')AudioManager['play'+suffix]({name:step.name,volume:step.volume,pitch:step.pitch,pan:step.pan});
-                else if(op==='system')SoundManager.playSystemSound(step.soundId);
-                else if(op==='save')audioSaved[suffix]=AudioManager['save'+suffix]?.();
-                else if(op==='resume'&&audioSaved[suffix])AudioManager['replay'+suffix]?.(audioSaved[suffix]);
-                else if(op==='fadeIn'||op==='fadeOut')AudioManager[op+suffix]?.(step.fade/60);
-                else if(op==='stop')AudioManager['stop'+suffix]?.();return;
-            }
-            if(step.type==='movie'){Video.play('movies/'+step.name);return {blocking:true,isPlaying:()=>Video.isPlaying(),cancel:()=>Video._element?.pause()};}
+            // Game data, audio and the screen: the steps shared with a battle on the map.
+            const shared=P.gameCue(step,{chosen,subject,number,audioSaved,feedback:battler=>{battler.startDamagePopup?.();log?.displayActionResults?.(subject,battler);}});if(shared)return shared.ticket;
             if(step.type==='battlestatus'||step.type==='battlelog'){
                 const window=step.type==='battlelog'?log:SceneManager._scene?._statusWindow;if(!window)return;
                 const visible=window.visible;restore.push(()=>window.visible=visible);
@@ -399,8 +417,6 @@
                 else if(step.operation==='restore')[a.bitmap,b.bitmap]=adapter._savedBattleback||adapter._battleback;
                 else{a.bitmap=ImageManager.loadBattleback1(step.floor);b.bitmap=ImageManager.loadBattleback2(step.background);}return;
             }
-            if(step.type==='flash'){$gameScreen.startFlash([step.red,step.green,step.blue,step.alpha],step.duration);return;}
-            if(step.type==='shake'){$gameScreen.startShake(step.power,step.speed,step.duration);return;}
             if(step.type==='tint'&&step.space!=='battler'){
                 if(step.space==='screen'){const old=$gameScreen.tone().slice();restore.push(()=>$gameScreen.startTint(old,0));$gameScreen.startTint([step.red,step.green,step.blue,step.gray],step.duration);}
                 else{const sprite=step.space==='upper'?ss._back2Sprite:ss._back1Sprite;if(sprite){const tone=sprite.getColorTone();restore.push(()=>sprite.setColorTone(tone));tween(sprite,'tone',[step.red,step.green,step.blue,step.gray],step.duration,start,v=>sprite.setColorTone(v),tone);}}return;
@@ -937,10 +953,49 @@
         P.preloadBattleModels();
         try{await room.build();if(scene._reactorRoomToken!==token){room.dispose();return;}
             const ss=scene._spriteset;room.resize(Graphics.width,Graphics.height);
-            const sprite=new Sprite(new Bitmap(Graphics.width,Graphics.height));ss._baseSprite.addChildAt(sprite,Math.max(0,ss._baseSprite.children.indexOf(ss._battleField)));
+            // A room on the game's context shows its own texture; one on its own canvas is copied into a bitmap.
+            const sprite=room.texture?new PIXI.Sprite(room.texture):new Sprite(new Bitmap(Graphics.width,Graphics.height));ss._baseSprite.addChildAt(sprite,Math.max(0,ss._baseSprite.children.indexOf(ss._battleField)));
             ss._reactorRoom=room;ss._reactorRoomSprite=sprite;P.setupRoomEvents?.(room,ss);
             for(const bg of [ss._backgroundSprite,ss._back1Sprite,ss._back2Sprite])if(bg)bg.visible=false;
         }catch(error){room.dispose();const ss=scene._spriteset;if(ss?._reactorRoom===room){ss._reactorRoom=null;const sprite=ss._reactorRoomSprite;sprite?.removeFromParent();sprite?.bitmap?.destroy();sprite?.destroy();ss._reactorRoomSprite=null;}throw error;}
+    };
+    /**
+     * The game canvas's context came back after a loss: the room is built again
+     * as at the start of the battle. A room carried over draws some of its world
+     * wrong on the new context.
+     */
+    P.rebuildRoom=function(scene){
+        const ss=scene&&scene._spriteset,old=ss&&ss._reactorRoom,config=P.settings.troops?.[$gameTroop._troopId];
+        if(!old||config?.type!=='room'||!(config.mapId>0))return;
+        scene._reactorRoomToken={};const token=scene._reactorRoomToken;
+        old.dispose();ss._reactorRoom=null;
+        const sprite=ss._reactorRoomSprite;sprite?.removeFromParent();sprite?.destroy();ss._reactorRoomSprite=null;
+        P.createRoom(scene,config,token).catch(P.warn);
+    };
+    if(root.Reactor3D?.contextRestoredHandlers)root.Reactor3D.contextRestoredHandlers.push(()=>{const scene=typeof SceneManager!=='undefined'?SceneManager._scene:null;if(scene&&scene._spriteset?._reactorRoom)P.rebuildRoom(scene);});
+    // An actor who falls goes over and lies where it stood, and gets up when it is brought back: its model has no
+    // defeated motion of its own unless a sequence gives it one. (An enemy goes as its Collapse Effect says: only
+    // Corpse leaves it lying, as far over as its sprite is, `liePose`.)
+    P.FALL_FRAMES=18;
+    P.fallPose=function(room,key,battler){
+        const record=room.models.get(key);if(!record?.object)return;
+        const dead=typeof battler.isDead==='function'&&battler.isDead();
+        const was=record.fall||0;
+        record.fall=dead?Math.min(P.FALL_FRAMES,was+1):Math.max(0,was-2);
+        if(!record.fall)return;
+        const t=record.fall/P.FALL_FRAMES;
+        P.liePose(room,key,t*t*(3-2*t));
+    };
+    /** A room model `amount` of the way down (0 standing, 1 flat). Asked after `room.place`, which stands it up each frame. */
+    P.liePose=function(room,key,amount){
+        const record=room.models.get(key);if(!record?.object||!(amount>0))return;
+        // As on the map (Reactor3D's lying pose): over backward about its own side.
+        record.object.rotateX(-Math.min(1,amount)*Math.PI/2);
+    };
+    /** Where a flat picture is drawn in a room when it lies `amount` of the way down: turned onto its side, resting on the floor it stood on. */
+    P.lieBillboard=function(position,frame,tall,amount){
+        const lie=Math.max(0,Math.min(1,amount||0)),turn=(position.rotateZ||0),wide=tall*frame.width/Math.max(1,frame.height);
+        return {...position,rotateZ:turn-(root.Sprite_Enemy?.CORPSE_TURN??-1)*90*lie,z:(position.z||0)-lie*(tall-wide)/2};
     };
     P.updateRoom=function(ss){
         const room=ss._reactorRoom;if(room.disposed)return;
@@ -954,15 +1009,26 @@
             const p=sprite._reactorRoomPosition;
             const spec=actor?Reactor3D.actorSlotSpec(battler.actorId(),'battler'):Reactor3D.databaseModelSpec('enemies',battler.enemyId());
             const main=sprite._mainSprite||sprite;
-            if(spec){if(room.billboards.has(key))room.remove(key);room.addModel(key,spec,p);room.place(key,p);}
+            if(spec){if(room.billboards.has(key))room.remove(key);room.addModel(key,spec,p);room.place(key,p);if(actor)P.fallPose(room,key,battler);else P.liePose(room,key,sprite._corpse);}
             else {if(room.models.has(key))room.remove(key);}
-            if(!spec&&main.bitmap?.isReady())room.billboard(key,main.bitmap.canvas,main._frame,{...p,flipX:actor?p.facing>0:p.facing<0},Math.max(.5,main._frame.height/48));
+            if(!spec&&main.bitmap?.isReady()){const tall=Math.max(.5,main._frame.height/48);room.billboard(key,main.bitmap.canvas,main._frame,{...P.lieBillboard(p,main._frame,tall,actor?0:sprite._corpse),flipX:actor?p.facing>0:p.facing<0},tall);}
             const record=room.models.get(key)||room.billboards.get(key);
             if(record?.object)P.mirrorSpriteLook(sprite,battler,record);
             const projected=P.roomScreenPosition(sprite);if(projected){sprite.x=projected.x;sprite.y=projected.y;}
             if(main.texture)main.texture=PIXI.Texture.EMPTY;
         }
         for(const key of [...room.models.keys(),...room.billboards.keys()])if(!key.startsWith('prop:')&&!key.startsWith('event:')&&!key.startsWith('extra:')&&!live.has(key))room.remove(key);
-        P.updateRoomEvents?.(room);room.render();for(const sprite of ss.battlerSprites())if(sprite._reactorRoomKey)P.publishRoomBounds(sprite,room,sprite._reactorRoomKey);const bitmap=ss._reactorRoomSprite.bitmap;bitmap.context.drawImage(room.renderer.domElement,0,0);bitmap.baseTexture.update();
+        P.updateRoomEvents?.(room);
+        // Drawn once for the frame shown (a tick catching up updates several times), else at once.
+        ss._reactorRoomDirty=true;if(!(typeof Graphics!=='undefined'&&Graphics._reactorBeforeRender))P.flushRoom(ss);
     };
+    /** The room's picture for the frame: rendered, its battlers' bounds published, copied onto the battle's sprite. */
+    P.flushRoom=function(ss){
+        const room=ss._reactorRoom;if(!room||room.disposed||!ss._reactorRoomDirty||!ss._reactorRoomSprite)return;ss._reactorRoomDirty=false;
+        room.render();for(const sprite of ss.battlerSprites())if(sprite._reactorRoomKey)P.publishRoomBounds(sprite,room,sprite._reactorRoomKey);
+        const sprite=ss._reactorRoomSprite;
+        if(room.texture){if(sprite.texture!==room.texture)sprite.texture=room.texture;return;}
+        const bitmap=sprite.bitmap;bitmap.context.drawImage(room.renderer.domElement,0,0);bitmap.baseTexture.update();
+    };
+    if(typeof Graphics!=='undefined'&&Graphics._reactorBeforeRender)Graphics._reactorBeforeRender.add(()=>{const ss=typeof SceneManager!=='undefined'&&SceneManager._scene?SceneManager._scene._spriteset:null;if(ss&&ss._reactorRoom)P.flushRoom(ss);});
 })(globalThis);

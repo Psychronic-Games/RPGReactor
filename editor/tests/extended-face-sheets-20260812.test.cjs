@@ -37,7 +37,8 @@ test('face consumers use loaded image height instead of fixed two-row limits', (
     assert.match(database, /RRFaceSheet\.sourceRect\(entry\.faceIndex \|\| 0, faceImg\)/);
     assert.doesNotMatch(database, /isFaceSheet \? 2/);
     assert.match(message, /for \(let i = 0; i < sheet\.count; i\+\+\)/);
-    assert.match(message, /RRFaceSheet\.sourceRect\(this\.faceIndex, faceSheet\)/);
+    // The face box draws a picture chosen by hand or the speaker's own face file: the index of whichever it shows.
+    assert.match(message, /RRFaceSheet\.sourceRect\(faceIndex, faceSheet\)/);
     assert.doesNotMatch(message, /for \(let i = 0; i < 8; i\+\+\)/);
     assert.match(actorImages, /RRFaceSheet\.metrics\(image\)\.count - 1/);
     assert.doesNotMatch(actorImages, /faceIdxInput\.max = 7/);

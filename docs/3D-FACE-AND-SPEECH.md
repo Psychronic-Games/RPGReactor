@@ -1,8 +1,7 @@
 # Model face points, speech and prop playback
 
-Updated in development runtime **20260906.3**. Restart the editor/playtest to
-load updated scripts; existing projects receive runtime updates through the
-normal project runtime sync.
+Existing projects receive runtime updates through the normal project runtime
+sync.
 
 ## First-person characters
 
@@ -13,34 +12,43 @@ the standard character eye-height fallback. The player's 3D body and followers
 remain visible; looking down reveals the body.
 
 In **Database → 3D Models**, select a model and click the **eye icon** for
-**Face points**. The compact right-hand card uses the same placement conventions
-as model transforms and effects. Choose Eyes / camera, Mouth, Upper lip or
-Lower lip. Drag the selected marker freely, drag its colored axis arrows to
-move along one viewport axis, or use the X/Y/Z sliders and numeric steppers
-(0.001 increments). Numeric positions use model coordinates; controls and markers
-update together. Double-click a slider to restore that coordinate to its value
-when face editing began. **Follow** chooses the bone or part it follows.
-Click **Save face points** to save all four markers. Editing uses the rest pose and
-preserves existing skeleton, weights, carved parts and other sidecar fields.
-Imported rigs and carved models both support these markers.
+**Face points**. Choose **Eyes / camera** or **Mouth**. **Follow** chooses the
+bone or part the point follows. **Save face points** saves both. Editing uses
+the rest pose and preserves the skeleton, weights, carved parts and other
+sidecar fields.
 
-Mouth and lip targets also show **Mouth interior**, its color, and a **Preview
-mouth** slider. Scrub the preview to check closed/open positions before saving.
-Moving a marker or changing its interior resets the preview to the rest pose.
-The lip dots are smaller than the mouth/eye dots, with a larger invisible hit
-area retained for dragging. The preview uses the same speech geometry as the
-game and never writes generated meshes into the source GLB.
+Eyes is one marker: drag it, drag its axis arrows, or open **Advanced** for
+X/Y/Z.
+
+Mouth is a ring of eight markers around the lips, with the lip line drawn
+across it. Drag a marker onto the lip edge; it lands on the model's surface.
+The left and right sides mirror; hold **Alt** to move one side alone. Drag the
+middle dot to move the whole mouth. **Shift**-drag a marker to resize the ring.
+Only what lies inside the ring moves, so the ring sets the mouth's size: the
+lower markers set how far down the lower lip can travel. **Mouth opening**
+scales how far it opens. **Mouth interior** and its color fill the opening.
+**Preview mouth** shows the result with the same geometry the game uses.
+
+A model saved before outlines shows a ring worked out from its three points.
+It is not saved until **Save face points**.
 
 The optional top-level `model.json` field uses bone/part-local coordinates:
 
 ```json
 "landmarks": {
   "eyes": { "part": "Head", "offset": [0, 0.1, 0.08] },
-  "mouth": { "part": "Head", "offset": [0, 0, 0.1], "interior": "dark", "interiorColor": "#080808" },
+  "mouth": { "part": "Head", "offset": [0, 0, 0.1], "interior": "dark", "interiorColor": "#080808", "open": 1,
+    "outline": { "cornerL": [0.03, 0, 0.09], "upperL": [0.015, 0.008, 0.1], "upperM": [0, 0.01, 0.1], "upperR": [-0.015, 0.008, 0.1],
+                 "cornerR": [-0.03, 0, 0.09], "lowerR": [-0.015, -0.008, 0.1], "lowerM": [0, -0.01, 0.1], "lowerL": [0.015, -0.008, 0.1] } },
   "upperLip": { "part": "Head", "offset": [0, 0.01, 0.1] },
   "lowerLip": { "part": "Head", "offset": [0, -0.01, 0.1] }
 }
 ```
+
+`outline` is in the mouth part's coordinates; left and right are the
+character's own. `open` is 0 to 2 and may be omitted. `offset`, `upperLip` and
+`lowerLip` are written from the ring. A model with no `outline` uses the three
+points.
 
 Those numbers are examples, not defaults for every model. Bone coordinate
 units differ between imported assets. Missing named bones are ignored rather
@@ -63,17 +71,15 @@ command is edited and accepted. Move any previously embedded dialogue into
 Show Text. Existing project event data is not rewritten automatically.
 
 Speech prefers an existing `mouthOpen`, `jawOpen` or `viseme_a`/`viseme_aa` morph,
-then a Jaw/LowerJaw bone. Otherwise, designated mouth/lip points generate a
-local lip morph on that model instance. All three mouth/lip points allow the
-fallback to split triangles along the lip line and open a real seam. A dark,
-inset lining fills that opening; **None** leaves it unfilled. The geometry,
-interpolated skin weights and morph are generated once per instance. Shared
-geometry and the source model stay unchanged. A mouth point alone retains the
-older deformation-only fallback.
+then a Jaw/LowerJaw bone. Otherwise the mouth outline generates a lip morph on
+that model instance: triangles are split along the lip line, the lower lip
+drops and the upper lip rises a quarter as far, and nothing outside the ring
+moves. A dark, inset lining fills the opening; **None** leaves it unfilled.
+The morph is generated once per instance; the source model stays unchanged. A
+model with three points and no outline uses the older fallback.
 
-Put **Mouth** on the closed lip seam, **Upper lip** just above it and **Lower
-lip** just below it. Their separation sizes the local deformation. Preview the
-result: a point on the chin opens the chin, and a point in empty space cannot
+Preview the
+result: a ring on the chin opens the chin, and a point in empty space cannot
 find a mouth surface. The generated opening is a stylized fallback for ordinary
 front-facing character meshes, not an anatomical reconstruction. It does not
 generate teeth or a tongue, infer the intended gum line from a texture, or
@@ -109,7 +115,7 @@ return. Playback pauses across reconstruction; completed one-shot animations
 and explicit stops stay stopped. The 2D model sprites use the same action,
 repeat and timed-effect driver as the 3D scene.
 
-The map's **Props** panel includes **Animation speed (%)**: 100 is normal,
+A placed model's **Playback** card (Build bar › Models) includes **Speed (%)**: 100 is normal,
 50 is half speed, 200 is double. Values range from 1 to 1000. Speed belongs to
 the placement, so it does not change the model's shared animation definition.
 Use **Set Model Animation Speed** to select a map prop and change its speed

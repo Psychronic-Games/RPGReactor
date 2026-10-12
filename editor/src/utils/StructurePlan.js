@@ -30,6 +30,10 @@
  * around the outside. "outside" as a door's other room is the outer wall.
  * `validate` walks the built plan with the engine's own passability from
  * outside the front door and says which rooms it reached.
+ *
+ * The roof is a gable unless `roof.style` says `"flat"` (a parapet round a
+ * flat top) or `"shed"` (one slope, `pitch` levels up to the side `high`
+ * names: north, south, east or west).
  */
 (function(root) {
     'use strict';
@@ -169,6 +173,56 @@
         return wall.filter(c => chosen.has(alongX ? c[0] : c[1]));
     }
 
+    /** A door entry's own settings: its last element when that is an object (`false` there: no door, an open doorway). */
+    function doorOptions(door) {
+        const last = door[door.length - 1];
+        return last === false || (last && typeof last === 'object' && !Array.isArray(last)) ? last : null;
+    }
+
+    /**
+     * The door that hangs in a door's cells: a `door` piece on the first cell
+     * along its front's across (as the runtime reads a door's `width`), facing
+     * the outside (or the second room), one row of the wall's thickness (the
+     * outer row of an outside wall). Null for an open doorway.
+     */
+    function doorPiece(rooms, size, door, defaults) {
+        const own = doorOptions(door);
+        if (own === false || defaults === false) return null;
+        const found = doorWall(rooms, size, door);
+        const cells = doorCells(rooms, size, door);
+        if (!found || !cells.length) return null;
+        const outside = door[0] === 'outside' || door[1] === 'outside';
+        const inner = door[0] === 'outside' ? door[1] : door[0], other = door[0] === 'outside' ? door[0] : door[1];
+        const rows = Array.from(new Set(cells.map(c => (found.alongX ? c[1] : c[0])))).sort((a, b) => a - b);
+        // Which side is the front: the open ground for an outside door, else the second room.
+        const sideOf = (row, sign) => {
+            const probe = cells.filter(c => (found.alongX ? c[1] : c[0]) === row).map(([x, y]) => (found.alongX ? [x, y + sign] : [x + sign, y]));
+            if (outside) return probe.some(([x, y]) => x < 0 || y < 0 || x >= size[0] || y >= size[1] || (!roomAt(rooms, x, y) && !isWallCell(rooms, size, x, y)));
+            return probe.some(([x, y]) => roomAt(rooms, x, y) === other);
+        };
+        let sign = 1, row = rows[rows.length - 1];
+        if (sideOf(rows[0], -1)) { sign = -1; row = rows[0]; } else if (!sideOf(rows[rows.length - 1], 1)) row = rows[Math.floor(rows.length / 2)];
+        if (!outside) row = rows[Math.floor(rows.length / 2)];
+        const rot = found.alongX ? (sign > 0 ? 0 : 2) : (sign > 0 ? 3 : 1);
+        const run = cells.filter(c => (found.alongX ? c[1] : c[0]) === row).sort((a, b) => (found.alongX ? a[0] - b[0] : a[1] - b[1]));
+        // The first cell along the door's across: east for a south face, south for a west face, west for north, north for east.
+        const anchor = rot === 0 || rot === 1 ? run[0] : run[run.length - 1];
+        const fields = Object.assign({ style: outside ? 'plank' : 'panelled', opens: 'auto' }, defaults || {}, own || {});
+        const piece = { x: anchor[0], y: anchor[1], rot, width: run.length };
+        for (const key of ['style', 'hinge', 'swing', 'opens', 'lock', 'message', 'sound', 'tag']) if (fields[key] !== undefined) piece[key] = fields[key];
+        void inner;
+        return piece;
+    }
+
+    /** The way a window looks out: the side of its cell with open ground, as a quarter turn (0 south, 1 west, 2 north, 3 east). */
+    function windowRot(rooms, size, x, y) {
+        for (const [name, [dx, dy, rot]] of Object.entries(DIRS)) {
+            const nx = x + dx, ny = y + dy;
+            if (nx < 0 || ny < 0 || nx >= size[0] || ny >= size[1] || (!roomAt(rooms, nx, ny) && !isWallCell(rooms, size, nx, ny))) { void name; return rot; }
+        }
+        return 0;
+    }
+
     /**
      * A plan may be made of other plans: `parts: [{ plan, at: [x, y], rot }]`
      * name sibling files, so a hamlet is three cottages and an inn on one
@@ -193,7 +247,7 @@
         for (const part of plan.parts || []) {
             const inner = typeof resolve === 'function' ? resolve(part.plan) : null;
             if (!inner) continue;
-            const shaped = transform(inner, part.rot || 0, part.scale || 1);
+            const shaped = transform(inner, part.rot || 0, part.scale || 1, resolve);
             // A part wears what it is told: its own materials over the plan's, so one
             // cottage plan stands as stone here and timber there.
             if (part.materials && typeof part.materials === 'object') shaped.materials = Object.assign({}, shaped.materials || {}, part.materials);
@@ -210,7 +264,7 @@
         for (const part of plan.parts || []) {
             const inner = typeof resolve === 'function' ? resolve(part.plan) : null;
             if (!inner) continue;
-            const shaped = transform(inner, part.rot || 0, part.scale || 1);
+            const shaped = transform(inner, part.rot || 0, part.scale || 1, resolve);
             const prefix = part.name ? part.name + '.' : '';
             const own = spots(shaped, X0 + (part.at ? part.at[0] : 0), Y0 + (part.at ? part.at[1] : 0), resolve, {});
             for (const [name, at] of Object.entries(own)) out[prefix + name] = at;
@@ -235,7 +289,7 @@
         for (const part of plan.parts || []) {
             const inner = typeof resolve === 'function' ? resolve(part.plan) : null;
             if (!inner) continue;
-            eventsOf(transform(inner, part.rot || 0, part.scale || 1), X0 + (part.at ? part.at[0] : 0), Y0 + (part.at ? part.at[1] : 0), resolve, prefix + (part.name ? part.name + '.' : ''), out);
+            eventsOf(transform(inner, part.rot || 0, part.scale || 1, resolve), X0 + (part.at ? part.at[0] : 0), Y0 + (part.at ? part.at[1] : 0), resolve, prefix + (part.name ? part.name + '.' : ''), out);
         }
         return out;
     }
@@ -252,6 +306,9 @@
         // A built structure's lights and screens, as the map had them, moved to the stamp.
         for (const row of plan.lights || []) if (row) out.push({ type: 'mapLight', row, key: prefix + 'light', at: [X0 + Math.floor(Number(row.x) || 0), Y0 + Math.floor(Number(row.y) || 0)], shift: [X0, Y0] });
         for (const row of plan.surfaces || []) if (row) out.push({ type: 'mapSurface', row, key: prefix + 'screen', at: [X0 + Math.floor(Number(row.x) || 0), Y0 + Math.floor(Number(row.y) || 0)], shift: [X0, Y0] });
+        // Its placed models (cell coordinates, as the map's props) and the water standing in it (a sheet's box and mask, its level above the pad).
+        for (const row of plan.props || []) if (row && row.name) out.push({ type: 'mapProp', row, key: prefix + 'prop', at: [X0 + Math.round(Number(row.x) || 0), Y0 + Math.round(Number(row.y) || 0)], shift: [X0, Y0] });
+        for (const row of plan.water || []) if (row) out.push({ type: 'mapWater', row, key: prefix + 'water', at: [X0 + (Math.floor(Number(row.x0)) || 0), Y0 + (Math.floor(Number(row.y0)) || 0)], shift: [X0, Y0] });
         for (const fx of plan.effects || []) {
             if (!fx || !Array.isArray(fx.at)) continue;
             out.push(Object.assign({}, fx, { key: prefix + (fx.name || 'effect'), at: [X0 + fx.at[0], Y0 + fx.at[1]] }));
@@ -259,7 +316,7 @@
         for (const part of plan.parts || []) {
             const inner = typeof resolve === 'function' ? resolve(part.plan) : null;
             if (!inner) continue;
-            effectsOf(transform(inner, part.rot || 0, part.scale || 1), X0 + (part.at ? part.at[0] : 0), Y0 + (part.at ? part.at[1] : 0), resolve, prefix + (part.name ? part.name + '.' : ''), out);
+            effectsOf(transform(inner, part.rot || 0, part.scale || 1, resolve), X0 + (part.at ? part.at[0] : 0), Y0 + (part.at ? part.at[1] : 0), resolve, prefix + (part.name ? part.name + '.' : ''), out);
         }
         return out;
     }
@@ -272,12 +329,22 @@
      * for `placeEvents`, each a parallel event that shows its animation on
      * itself again and again.
      */
+    /**
+     * Whether a light is a stamped building's: marked with the group's number (`structure`), or, on a map
+     * stamped before lights carried that mark, tagged with it. The tag is the author's to change.
+     */
+    const STRUCTURE_TAG = /^structure:\d+$/;
+    function ownsLight(light, group) {
+        return !!light && (Number(light.structure) === group || light.tag === 'structure:' + group);
+    }
+
     function placeEffects(mapData, group, wanted) {
         if (!mapData) return [];
         const sidecar = mapData.reactor3d || (mapData.reactor3d = { version: 1 });
-        const tag = 'structure:' + group;
         sidecar.mediaSurfaces = (Array.isArray(sidecar.mediaSurfaces) ? sidecar.mediaSurfaces : []).filter(row => !(row && row.structure === group));
-        sidecar.lights = (Array.isArray(sidecar.lights) ? sidecar.lights : []).filter(light => !(light && light.tag === tag));
+        sidecar.lights = (Array.isArray(sidecar.lights) ? sidecar.lights : []).filter(light => !ownsLight(light, group));
+        if (Array.isArray(sidecar.props)) sidecar.props = sidecar.props.filter(prop => !(prop && Number(prop.structure) === group));
+        if (Array.isArray(sidecar.water)) sidecar.water = sidecar.water.filter(sheet => !(sheet && Number(sheet.structure) === group));
         return addEffects(mapData, wanted, group);
     }
 
@@ -293,7 +360,10 @@
         const tag = group ? 'structure:' + group : '';
         const surfaces = Array.isArray(sidecar.mediaSurfaces) ? sidecar.mediaSurfaces : [];
         const lights = Array.isArray(sidecar.lights) ? sidecar.lights : [];
+        const props = Array.isArray(sidecar.props) ? sidecar.props : [];
+        const water = Array.isArray(sidecar.water) ? sidecar.water : [];
         const events = [];
+        let nextProp = props.reduce((m, row) => Math.max(m, Number(row && row.id) || 0), 0) + 1;
         let nextSurface = surfaces.reduce((m, row) => Math.max(m, Number(row && row.id) || 0), 0) + 1;
         let nextLight = lights.length + 1;
         for (const fx of wanted) {
@@ -306,9 +376,26 @@
                 surfaces.push(row);
                 continue;
             }
+            if (fx.type === 'mapProp') {
+                const row = Object.assign(JSON.parse(JSON.stringify(fx.row)), { id: nextProp++, x: Number(fx.row.x) + fx.shift[0], y: Number(fx.row.y) + fx.shift[1] });
+                if (group) row.structure = group; else delete row.structure;
+                props.push(row);
+                continue;
+            }
+            if (fx.type === 'mapWater') {
+                // The sheet's level is above the pad it was saved on: `base` is the pad's height where it is stamped.
+                const base = Number(fx.base) || 0, [sx, sy] = fx.shift, from = fx.row;
+                const row = Object.assign(JSON.parse(JSON.stringify(from)), { x0: Number(from.x0) + sx, y0: Number(from.y0) + sy, x1: Number(from.x1) + sx, y1: Number(from.y1) + sy, level: Math.round(((Number(from.level) || 0) + base) * 100) / 100 });
+                if (Array.isArray(from.path)) row.path = from.path.map(p => [Number(p[0]) + sx, Number(p[1]) + sy, Math.round(((Number(p[2]) || 0) + base) * 100) / 100]);
+                if (group) row.structure = group; else delete row.structure;
+                water.push(row);
+                continue;
+            }
             if (fx.type === 'mapLight') {
                 while (lights.some(l => l && l.id === 'light' + nextLight)) nextLight++;
-                lights.push(Object.assign(JSON.parse(JSON.stringify(fx.row)), { id: 'light' + nextLight++, x: Number(fx.row.x) + fx.shift[0], y: Number(fx.row.y) + fx.shift[1], tag }));
+                // A tag the plan's light was given is its own; without one it answers to the building's.
+                const own = fx.row.tag && !STRUCTURE_TAG.test(String(fx.row.tag)) ? String(fx.row.tag) : tag;
+                lights.push(Object.assign(JSON.parse(JSON.stringify(fx.row)), { id: 'light' + nextLight++, x: Number(fx.row.x) + fx.shift[0], y: Number(fx.row.y) + fx.shift[1], tag: own }, group ? { structure: group } : {}));
                 continue;
             }
             if (fx.type === 'screen') {
@@ -321,15 +408,17 @@
                 surfaces.push(row);
             } else if (fx.type === 'light') {
                 while (lights.some(l => l && l.id === 'light' + nextLight)) nextLight++;
-                lights.push({ id: 'light' + nextLight++, type: 'point', x: x + 0.5, y: y + 0.5, height: Math.round(z * 48), yaw: 0, pitch: 0,
+                lights.push({ id: 'light' + nextLight++, type: 'point', x: x + 0.5, y: y + 0.5, height: Math.round(z * 100) / 100, yaw: 0, pitch: 0,
                     radius: Number(fx.radius) > 0 ? Number(fx.radius) : 6, angle: 70, width: 0.08, color: String(fx.color || '#9fd8ff'), intensity: Number.isFinite(Number(fx.intensity)) ? Number(fx.intensity) : 1.2,
-                    occlude: true, shadow: false, on: true, body: false, tag, attach: null, flicker: 0, pulse: null });
+                    occlude: true, shadow: false, on: true, body: false, tag, attach: null, flicker: 0, pulse: null, ...(group ? { structure: group } : {}) });
             } else if (fx.type === 'animation' && Number(fx.animation) > 0) {
                 events.push({ key: fx.key, name: fx.name || 'effect', template: '', direction: 2, at: [x, y], animation: Math.floor(Number(fx.animation)) });
             }
         }
         if (surfaces.length) sidecar.mediaSurfaces = surfaces; else delete sidecar.mediaSurfaces;
         if (lights.length) sidecar.lights = lights; else delete sidecar.lights;
+        if (props.length) sidecar.props = props; else delete sidecar.props;
+        if (water.length) sidecar.water = water; else delete sidecar.water;
         return events;
     }
 
@@ -337,10 +426,16 @@
     function removeGroupEffects(mapData, group) {
         const sidecar = mapData && mapData.reactor3d;
         if (!sidecar) return false;
-        const tag = 'structure:' + group;
         let changed = false;
         if (Array.isArray(sidecar.mediaSurfaces)) { const kept = sidecar.mediaSurfaces.filter(row => !(row && row.structure === group)); changed = kept.length !== sidecar.mediaSurfaces.length; if (kept.length) sidecar.mediaSurfaces = kept; else delete sidecar.mediaSurfaces; }
-        if (Array.isArray(sidecar.lights)) { const kept = sidecar.lights.filter(light => !(light && light.tag === tag)); changed = changed || kept.length !== sidecar.lights.length; if (kept.length) sidecar.lights = kept; else delete sidecar.lights; }
+        if (Array.isArray(sidecar.lights)) { const kept = sidecar.lights.filter(light => !ownsLight(light, group)); changed = changed || kept.length !== sidecar.lights.length; if (kept.length) sidecar.lights = kept; else delete sidecar.lights; }
+        // Its placed models and water, marked with the group's number.
+        for (const key of ['props', 'water']) {
+            if (!Array.isArray(sidecar[key])) continue;
+            const kept = sidecar[key].filter(row => !(row && Number(row.structure) === group));
+            changed = changed || kept.length !== sidecar[key].length;
+            if (kept.length) sidecar[key] = kept; else delete sidecar[key];
+        }
         return changed;
     }
 
@@ -456,6 +551,19 @@
             }
         }
         const windows = plan.windows === false ? null : Object.assign({ every: 6, width: 2 }, plan.windows || {});
+        // Windows wear a frame unless the plan says not (`windows.frame: false`): its style, shutters and,
+        // on the ground floor (or every floor with "all"), a flower box. Doors hang in every doorway
+        // unless `doors: false`; `door: { ... }` gives them all their settings, a door entry's own object its own.
+        const frameOf = index => {
+            if (!windows || windows.frame === false) return null;
+            const frame = { style: typeof windows.frame === 'string' ? windows.frame : (windows.frame && windows.frame.style) || 'cottage' };
+            if (M.frame) frame.material = M.frame;
+            if (windows.shutters) frame.shutters = windows.shutters === true ? '#3f5f3a' : windows.shutters;
+            if (windows.shutters && windows.closed) frame.closed = true;
+            if (windows.flowerBox === 'all' || (windows.flowerBox && index === 0)) frame.flowerBox = true;
+            return frame;
+        };
+        const doorDefaults = plan.doors === false ? false : (plan.door && typeof plan.door === 'object' ? plan.door : null);
         floors.forEach((level, index) => {
             const z = index * S;
             const rooms = level.rooms || {};
@@ -518,9 +626,17 @@
                 // and its edge shows on the face as a line the height of the storey.
                 if (windowCells.has(key)) {
                     const across = roomAt(rooms, x - 1, y) || roomAt(rooms, x + 1, y) ? 1 : 0;
-                    put('window', x, y, z, 0, M.wall); put('glass', x, y, z, across, M.glass || 'Glass'); continue;
+                    const frame = frameOf(index);
+                    put('window', x, y, z, frame ? windowRot(rooms, plan.size, x, y) : 0, M.wall, frame ? { frame } : null);
+                    put('glass', x, y, z, across, M.glass || 'Glass'); continue;
                 }
                 put('wall', x, y, z, 0, wallMaterial);
+            }
+            for (const door of level.doors || []) {
+                const hung = doorPiece(rooms, plan.size, door, doorDefaults);
+                if (!hung) continue;
+                const { x, y, rot, ...fields } = hung;
+                put('door', x, y, z, rot, M.door || 'Wood', Object.assign(fields, M.frame ? { frame: M.frame } : {}));
             }
         });
         for (const c of stairCells) put('stair', c.x, c.y, c.z, c.rot, M.stair);
@@ -542,7 +658,11 @@
                 if (x === bx0 || x === bx1 || y === by0 || y === by1) put('block', x, y, roofZ, 0, M.wall);
             }
         }
-        if (roof.pitch !== null && roof.style !== 'flat') for (const [bx0, by0, bx1, by1] of buildingBoxes(top ? top.rooms : {}, plan.size)) {
+        // A slanted roof: one slope from a low eave up to the high side.
+        if (roof.pitch !== null && roof.style === 'shed') for (const [bx0, by0, bx1, by1] of buildingBoxes(top ? top.rooms : {}, plan.size)) {
+            shedRoof(roof, bx0, by0, bx1, by1, roofZ, M, put);
+        }
+        if (roof.pitch !== null && roof.style !== 'flat' && roof.style !== 'shed') for (const [bx0, by0, bx1, by1] of buildingBoxes(top ? top.rooms : {}, plan.size)) {
             const bh = by1 - by0 + 1;
             const pitch = Math.max(0, Math.min(Math.floor((bh - 1) / 2), Math.floor(roof.pitch)));
             for (let x = bx0; x <= bx1; x++) {
@@ -554,8 +674,93 @@
                 const height = Math.min(y - by0, by1 - y, pitch);
                 for (let z = roofZ; z < roofZ + height; z++) put('block', gx, y, z, 0, M.wall);
             }
+            if (pitch > 0) overhang(roof, bx0, by0, bx1, by1, pitch, roofZ, M.roof, put);
         }
         return pieces;
+    }
+
+    /** How far eaves and verges reach past the walls, in tiles (`roof.overhang`, 0 to 1; 0 is flush). */
+    const ROOF_OVERHANG = 1;
+    const ROOF_SLAB = 0.25;
+
+    /**
+     * Eaves and verges: the roof's slopes carried past the walls as thin slabs of roof, so a house reads
+     * as roofed rather than a box with a lid. The slopes rise a level a cell (the ramps' 45°); each slab's
+     * top lies a hair over that plane, its thickness shows as the fascia and its underside as the soffit.
+     * A slab's middle must stay within its cell, so it reaches back one cell over the roof.
+     */
+    function overhang(roof, bx0, by0, bx1, by1, pitch, roofZ, material, put) {
+        const raw = Number(roof.overhang);
+        const o = Math.max(0, Math.min(1, Number.isFinite(raw) ? raw : ROOF_OVERHANG));
+        if (!(o > 0)) return;
+        const T = ROOF_SLAB, LIFT = 0.04, R2 = Math.SQRT2, two = v => Math.round(v * 100) / 100;
+        // A slab stands on a cell of the building: a middle on a cell's edge takes the cell toward the house.
+        const midX = (bx0 + bx1 + 1) / 2, midY = (by0 + by1 + 1) / 2;
+        const cell = (c, mid) => (Math.abs(c - Math.round(c)) < 1e-9 && c > mid ? Math.round(c) - 1 : Math.floor(c + 1e-9));
+        const box = (cx, cz, z, size, extra) => {
+            const ax = cell(cx, midX), ay = cell(cz, midY);
+            put('box', ax, ay, z, 0, material, Object.assign({ size: size.map(two), angle: 0, offset: [two(cx - ax - 0.5), two(cz - ay - 0.5)] }, extra || {}));
+        };
+        // A slab in the slope that rises toward `dir` (+1 south, -1 north) from row edge `yLow` at height `zLow`, `run` cells.
+        const slope = (xa, xb, yLow, dir, zLow, run) => {
+            if (!(run > 0)) return;
+            const lowest = zLow + LIFT - T / R2;
+            const z = Math.ceil(lowest * 4 - 1e-9) / 4;
+            // Raised to the quarter level the slab stands on, and slid up the slope as far, so it stays in the plane.
+            const cz = yLow + dir * run / 2 + dir * T / (2 * R2) + dir * (z - lowest);
+            box((xa + xb) / 2, cz, z, [xb - xa, T, run * R2], { tilt: (360 - dir * 45) % 360 });
+        };
+        const W0 = bx0 - o, W1 = bx1 + 1 + o;
+        // Eaves along both long sides, from the overhang's edge to a cell over the wall.
+        slope(W0, W1, by0 - o, 1, roofZ - o, o + 1);
+        slope(W0, W1, by1 + 1 + o, -1, roofZ - o, o + 1);
+        // Verges past both gables, up each slope and along the flat top between.
+        const flat0 = by0 + pitch, flat1 = by1 + 1 - pitch;
+        for (const [xa, xb] of [[bx0 - o, bx0 + 1], [bx1, bx1 + 1 + o]]) {
+            slope(xa, xb, by0 + 1, 1, roofZ + 1, pitch - 1);
+            slope(xa, xb, by1, -1, roofZ + 1, pitch - 1);
+            if (flat1 > flat0) box((xa + xb) / 2, (flat0 + flat1) / 2, roofZ + pitch - 0.25, [xb - xa, 0.25 + 0.1 + LIFT, flat1 - flat0]);
+        }
+    }
+
+    /** The turn that points a wedge's rise at each side of a building. */
+    const SHED_ANGLE = { south: 0, west: 90, north: 180, east: 270 };
+
+    /**
+     * A slanted roof over a building's box: one slope from a low eave up to the high side (`roof.high`,
+     * north unless said), `roof.pitch` levels up over the building's depth. A wedge in the wall's
+     * material closes the two ends and the high side; a slab of roof lies on it with eaves all round.
+     * A shape's tilt is whole degrees and its height a quarter level, so the slope is the nearest whole
+     * degree, the wedge rises to match it, and the low eave reaches out to where the slab's lowest
+     * corner meets a quarter level.
+     */
+    function shedRoof(roof, bx0, by0, bx1, by1, roofZ, M, put) {
+        const high = SHED_ANGLE[roof.high] === undefined ? 'north' : roof.high;
+        const alongY = high === 'north' || high === 'south';
+        const run = alongY ? by1 - by0 + 1 : bx1 - bx0 + 1, across = alongY ? bx1 - bx0 + 1 : by1 - by0 + 1;
+        const wanted = Math.max(1, Math.min(run, Math.floor(Number(roof.pitch)) || 1));
+        const degrees = Math.max(1, Math.min(60, Math.round(Math.atan2(wanted, run) * 180 / Math.PI)));
+        const t = degrees * Math.PI / 180, tan = Math.tan(t), cos = Math.cos(t), sin = Math.sin(t);
+        const two = v => Math.round(v * 100) / 100;
+        const raw = Number(roof.overhang);
+        const o = Math.max(0, Math.min(1, Number.isFinite(raw) ? raw : ROOF_OVERHANG));
+        const T = ROOF_SLAB, LIFT = 0.04;
+        // A shape stood `s` tiles up the run from the low edge, on the building's middle line, turned to rise toward the high side.
+        const place = (kind, s, z, size, material, extra) => {
+            const cx = high === 'east' ? bx0 + s : high === 'west' ? bx1 + 1 - s : (bx0 + bx1 + 1) / 2;
+            const cy = high === 'south' ? by0 + s : high === 'north' ? by1 + 1 - s : (by0 + by1 + 1) / 2;
+            const ax = Math.max(bx0, Math.min(bx1, Math.floor(cx))), ay = Math.max(by0, Math.min(by1, Math.floor(cy)));
+            put(kind, ax, ay, z, 0, material, Object.assign({ size: size.map(two), angle: SHED_ANGLE[high], offset: [two(cx - ax - 0.5), two(cy - ay - 0.5)] }, extra || {}));
+        };
+        place('wedge', run / 2, roofZ, [across, run * tan, run], M.wall);
+        // The low eave: the reach nearest the overhang asked for at which the slab's lowest corner stands on a quarter level.
+        let drop = 0, low = LIFT * cos / tan;
+        for (let m = 1; m <= 8; m++) {
+            const reach = (LIFT * cos + m * 0.25) / tan;
+            if (Math.abs(reach - o) < Math.abs(low - o)) { drop = m; low = reach; }
+        }
+        const middle = (run + o - low) / 2 - (LIFT + T / 2) * sin;
+        place('box', middle, roofZ - drop * 0.25, [across + 2 * o, T, (run + o + low) / cos], M.roof || M.wall, { tilt: 360 - degrees });
     }
 
     /**
@@ -564,7 +769,41 @@
      * are between rooms and follow; windows keep their spacing per cell.
      * Walls stay one cell between rooms, so at scale 2 they are two thick.
      */
-    function transform(plan, rot = 0, scale = 1) {
+    /** A prop's facing a quarter turn clockwise: down to left, left to up, up to right, right to down. */
+    const PROP_TURN = { 2: 4, 4: 8, 8: 6, 6: 2 };
+
+    /** A water sheet turned a quarter clockwise in a plan `H` cells deep: its box, its mask and a river's path. */
+    function turnWater(sheet, H) {
+        const out = Object.assign({}, sheet);
+        const x0 = Number(sheet.x0), y0 = Number(sheet.y0), x1 = Number(sheet.x1), y1 = Number(sheet.y1);
+        const w = x1 - x0 + 1, h = y1 - y0 + 1;
+        Object.assign(out, { x0: H - 1 - y1, x1: H - 1 - y0, y0: x0, y1: x1 });
+        if (typeof sheet.mask === 'string' && sheet.mask.length === w * h) {
+            // The new box is h wide and w deep; cell (i, j) of the old box lands at (h - 1 - j, i).
+            const cells = new Array(w * h);
+            for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) cells[i * h + (h - 1 - j)] = sheet.mask[j * w + i];
+            out.mask = cells.join('');
+        }
+        if (Array.isArray(sheet.path)) out.path = sheet.path.map(p => [H - Number(p[1]), Number(p[0]), p[2]]);
+        return out;
+    }
+
+    /** A water sheet grown k times: its box, each mask cell k × k, its level and a river's path. */
+    function growWater(sheet, k) {
+        const out = Object.assign({}, sheet);
+        const x0 = Number(sheet.x0), y0 = Number(sheet.y0), x1 = Number(sheet.x1), y1 = Number(sheet.y1);
+        const w = x1 - x0 + 1, h = y1 - y0 + 1;
+        Object.assign(out, { x0: x0 * k, y0: y0 * k, x1: (x1 + 1) * k - 1, y1: (y1 + 1) * k - 1, level: (Number(sheet.level) || 0) * k });
+        if (typeof sheet.mask === 'string' && sheet.mask.length === w * h) {
+            let mask = '';
+            for (let j = 0; j < h * k; j++) for (let i = 0; i < w * k; i++) mask += sheet.mask[Math.floor(j / k) * w + Math.floor(i / k)];
+            out.mask = mask;
+        }
+        if (Array.isArray(sheet.path)) out.path = sheet.path.map(p => [Number(p[0]) * k, Number(p[1]) * k, (Number(p[2]) || 0) * k]);
+        return out;
+    }
+
+    function transform(plan, rot = 0, scale = 1, resolve = null) {
         const turns = ((Math.floor(rot) || 0) % 4 + 4) % 4;
         const k = Math.max(1, Math.min(4, Math.floor(scale) || 1));
         let out = JSON.parse(JSON.stringify(plan));
@@ -578,9 +817,11 @@
             for (const level of out.floors || []) {
                 for (const name of Object.keys(level.rooms || {})) level.rooms[name] = grow(level.rooms[name]);
                 level.doors = (level.doors || []).map(d => {
-                    // Width and anchor grow; the side, if the door names one, stays.
+                    // Width and anchor grow; the side, if the door names one, stays; so do the door's own settings.
+                    const own = doorOptions(d);
                     const grown = d.length > 3 && Number.isFinite(Number(d[3])) ? [d[0], d[1], (Number(d[2]) || 2) * k, Number(d[3]) * k + Math.floor((k - 1) / 2)] : [d[0], d[1], (Number(d[2]) || 2) * k];
-                    if (grown.length > 3 && d.length > 4) grown.push(d[4]);
+                    if (grown.length > 3 && typeof d[4] === 'string') grown.push(d[4]);
+                    if (own !== null) grown.push(own);
                     return grown;
                 });
                 level.windows = (level.windows || []).map(([x, y]) => [x * k, y * k]);
@@ -604,10 +845,21 @@
             });
             for (const light of out.lights || []) { light.x *= k; light.y *= k; light.height = (Number(light.height) || 0) * k; light.radius = (Number(light.radius) || 0) * k; }
             for (const row of out.surfaces || []) { row.x *= k; row.y *= k; row.z = (Number(row.z) || 0) * k; row.width *= k; row.height *= k; }
-            if (out.windows && out.windows !== false) out.windows = { every: (out.windows.every || 6) * k, width: (out.windows.width || 2) * k };
+            for (const prop of out.props || []) { prop.x = Number(prop.x) * k + Math.floor((k - 1) / 2); prop.y = Number(prop.y) * k + Math.floor((k - 1) / 2); prop.z = (Number(prop.z) || 0) * k; prop.size = (Number(prop.size) || 2) * k; }
+            out.water = (out.water || []).map(sheet => growWater(sheet, k));
+            if (out.windows && out.windows !== false) out.windows = Object.assign({}, out.windows, { every: (out.windows.every || 6) * k, width: (out.windows.width || 2) * k });
             if (out.roof) out.roof = Object.assign({}, out.roof, { pitch: (Number(out.roof.pitch) || 6) * k });
         }
         const DIR_CW = { north: 'east', east: 'south', south: 'west', west: 'north' };
+        // A part's footprint in this plan (its own plan's size, grown by its scale, turned by its turn): its
+        // corner moves with the whole footprint when the plan turns, not with its top-left cell alone.
+        if (turns) for (const part of out.parts || []) {
+            const inner = typeof resolve === 'function' && part.plan ? resolve(part.plan) : null;
+            if (!inner || !Array.isArray(inner.size)) continue;
+            const k2 = Math.max(1, Math.min(4, Math.floor(part.scale || 1) || 1));
+            const own = [inner.size[0] * k2, inner.size[1] * k2];
+            part._size = (((Math.floor(part.rot) || 0) % 4 + 4) % 4) % 2 ? [own[1], own[0]] : own;
+        }
         for (let t = 0; t < turns; t++) {
             const [W, H] = out.size;
             const point = (x, y) => [H - 1 - y, x];
@@ -616,10 +868,16 @@
                 // A door's anchor is a position along its wall: a row's x becomes the
                 // turned column's y unchanged; a column's y becomes H-1-y, the new x.
                 level.doors = (level.doors || []).map(d => {
-                    if (d.length < 4 || !Number.isFinite(Number(d[3]))) return d;
+                    const own = doorOptions(d);
+                    if (d.length < 4 || !Number.isFinite(Number(d[3]))) {
+                        // A named side turns with the plan even when the door has no anchor.
+                        if (typeof d[4] === 'string') { const turned = d.slice(); turned[4] = DIR_CW[d[4]] || d[4]; return turned; }
+                        return d;
+                    }
                     const found = doorWall(level.rooms || {}, [W, H], d);
                     const turned = [d[0], d[1], d[2], found && !found.alongX ? H - 1 - Number(d[3]) : Number(d[3])];
-                    if (d.length > 4) turned.push(DIR_CW[d[4]] || d[4]);
+                    if (typeof d[4] === 'string') turned.push(DIR_CW[d[4]] || d[4]);
+                    if (own !== null) turned.push(own);
                     return turned;
                 });
                 level.windows = (level.windows || []).map(([x, y]) => point(x, y));
@@ -643,9 +901,14 @@
             // Lights and screens stand anywhere in the plot, not in cells: (x, y) turns about the plot, a screen's facing with it.
             for (const light of out.lights || []) { [light.x, light.y] = [H - light.y, light.x]; if (Number(light.yaw)) light.yaw = ((Number(light.yaw) || 0) + 270) % 360; }
             for (const row of out.surfaces || []) { [row.x, row.y] = [H - row.y, row.x]; row.rotationY = ((Number(row.rotationY) || 0) + 270) % 360; }
+            // Models stand on cells (the event's cell) and face one of four ways: the cell turns and the facing with it.
+            for (const prop of out.props || []) { [prop.x, prop.y] = [H - 1 - Number(prop.y), Number(prop.x)]; prop.direction = PROP_TURN[Number(prop.direction)] || 4; }
+            out.water = (out.water || []).map(sheet => turnWater(sheet, H));
             for (const name of Object.keys(out.spots || {})) out.spots[name] = point(out.spots[name][0], out.spots[name][1]);
             for (const fx of out.effects || []) { fx.at = point(fx.at[0], fx.at[1]); if (fx.facing) fx.facing = DIR_CW[fx.facing] || fx.facing; }
             out.paths = (out.paths || []).map(strip => rect(strip).concat(strip.slice(4)));
+            // A slanted roof's high side turns with the building.
+            if (out.roof && DIR_CW[out.roof.high]) out.roof = Object.assign({}, out.roof, { high: DIR_CW[out.roof.high] });
             // A part turns about the whole: its own turn adds one, and its corner moves with its footprint.
             for (const part of out.parts || []) {
                 const inner = part._size || [1, 1];
@@ -690,7 +953,7 @@
         if (!door && plan.spots && plan.spots.start) door = { door: plan.spots.start, outside: plan.spots.start };
         if (!door && (plan.parts || []).length && typeof resolve === 'function') {
             const part = plan.parts[0], inner = resolve(part.plan);
-            const shaped = inner ? transform(inner, part.rot || 0, part.scale || 1) : null;
+            const shaped = inner ? transform(inner, part.rot || 0, part.scale || 1, resolve) : null;
             const innerDoor = shaped ? entrance(shaped) : null;
             if (innerDoor) door = { door: innerDoor.door, outside: [innerDoor.outside[0] + (part.at ? part.at[0] : 0), innerDoor.outside[1] + (part.at ? part.at[1] : 0)] };
         }
@@ -739,14 +1002,14 @@
             for (const part of target.parts || []) {
                 const inner = typeof resolve === 'function' ? resolve(part.plan) : null;
                 if (!inner) continue;
-                rooms(transform(inner, part.rot || 0, part.scale || 1), ox + (part.at ? part.at[0] : 0), oy + (part.at ? part.at[1] : 0), prefix + (part.name || part.plan.replace(/\.json$/i, '')) + '.');
+                rooms(transform(inner, part.rot || 0, part.scale || 1, resolve), ox + (part.at ? part.at[0] : 0), oy + (part.at ? part.at[1] : 0), prefix + (part.name || part.plan.replace(/\.json$/i, '')) + '.');
             }
         };
         rooms(plan, 0, 0, '');
         return { start, report, states: seen.size };
     }
 
-    const api = { build, buildOwn, spots, eventsOf, effectsOf, placeEffects, addEffects, removeGroupEffects, placeEvents, removeGroupEvents, eventTag, EVENT_TAG, transform, validate, entrance, doorCells, doorWall, sharedWall, isWallCell, isOuterWallCell, canWindow, buildingBox, buildingBoxes, DIRS };
+    const api = { shedRoof, SHED_ANGLE, doorPiece, doorOptions, windowRot, turnWater, growWater, PROP_TURN, build, buildOwn, spots, eventsOf, effectsOf, placeEffects, addEffects, removeGroupEffects, placeEvents, removeGroupEvents, eventTag, EVENT_TAG, transform, validate, entrance, doorCells, doorWall, sharedWall, isWallCell, isOuterWallCell, canWindow, buildingBox, buildingBoxes, DIRS };
     root.RRStructurePlan = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof globalThis !== 'undefined' ? globalThis : window);

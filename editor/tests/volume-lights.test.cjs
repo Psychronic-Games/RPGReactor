@@ -414,3 +414,47 @@ test('a beam stops where it lands and leaves a dot there: the march, the models,
     assert.match(editor, /_skinnedBounds\(mesh, box\)/, 'a rig is bounded by its bones, never re-skinned per cast');
     assert.match(editor, /now - live\.landing\.at < this\.BEAM_LANDING_INTERVAL/, 'and a moving beam re-asks a few times a second, not every frame');
 });
+
+test('a three material is lit after its discards, a Glow skips the loop, and a flash blends over the lit colour', () => {
+    const material = {};
+    Reactor3D.litMaterial(material);
+    const shader = {
+        uniforms: {},
+        vertexShader: 'void main() {\n#include <begin_vertex>\n#include <project_vertex>\n}',
+        fragmentShader: 'void main() {\n\tvec4 diffuseColor = vec4( diffuse, opacity );\n#include <map_fragment>\n#include <color_fragment>\n#include <alphatest_fragment>\n#include <alphahash_fragment>\n#include <opaque_fragment>\n}'
+    };
+    material.onBeforeCompile(shader, null);
+    const fs = shader.fragmentShader;
+    assert.match(fs, /vec4 diffuseColor = vec4\( diffuse, opacity \);/, 'the colour starts unlit');
+    const lit = fs.indexOf('diffuseColor.rgb *= mix(rrLight(vRRWorldPos), vec3(1.0), rrSelfLit);');
+    assert.ok(lit > fs.indexOf('#include <alphatest_fragment>') && lit > fs.indexOf('#include <alphahash_fragment>'), 'the loop runs after every discard');
+    assert.match(fs, /if \(rrSelfLit < 1\.0\) diffuseColor\.rgb \*= /, 'a Glow (self-lit 1) never enters the loop');
+    const blend = fs.indexOf('diffuseColor.rgb = mix(diffuseColor.rgb, rrBlendRgb, rrBlend.a);');
+    assert.ok(blend > lit, 'the flash blends over the lit colour, so it stays unlit');
+    assert.match(fs, /rrBlendRgb \*= vColor\.rgb;/, 'and takes the vertex colour, as it did when mixed before it');
+    assert.equal(fs.indexOf('#include <map_fragment>\n\tdiffuseColor.rgb = mix('), -1, 'not blended a second time at the map');
+
+    Reactor3D.lateLighting = false;
+    try {
+        const early = {}; Reactor3D.litMaterial(early);
+        const old = { uniforms: {}, vertexShader: shader.vertexShader.replace(/varying[^\n]*\n/, ''), fragmentShader: 'void main() {\n\tvec4 diffuseColor = vec4( diffuse, opacity );\n#include <map_fragment>\n#include <alphahash_fragment>\n}' };
+        early.onBeforeCompile(old, null);
+        assert.match(old.fragmentShader, /vec4 diffuseColor = vec4\( diffuse \* rrLightTerm, opacity \);/, 'the kill switch lights where the colour is set');
+    } finally { Reactor3D.lateLighting = true; }
+});
+
+test('outside the grid a fragment loops over only the lights that reach out of it: spills, suns', () => {
+    const G = Reactor3D.LightGrid, origin = [0, -8, 0], top = -8 + G.size[1] * G.step;
+    const pos = new Float32Array([10, 2, 10, 5, 40, 4, 40, 8]), color = new Float32Array([1, 1, 1, 0, 1, 1, 1, 1]);
+    assert.equal(G.spill(origin, 2, pos, color), 0, 'every reach inside: nothing lights outside');
+    assert.equal(G.spill(origin, 2, new Float32Array([10, 2, 10, 5, 62, 4, 40, 8]), color), 2, 'a reach past the far edge');
+    assert.equal(G.spill(origin, 2, new Float32Array([10, top - 3, 10, 5, 40, 4, 40, 8]), color), 1, 'a reach above the grid');
+    assert.equal(G.spill(origin, 2, pos, new Float32Array([1, 1, 1, 0, 1, 1, 1, 3])), 2, 'a sun lights whole columns');
+    assert.ok(top - 8 >= 25 + 16, 'the grid reaches past a 25-high room ceiling');
+    G.spillEnabled = false;
+    try { assert.equal(G.spill(origin, 2, pos, color), 3, 'the kill switch spills every light'); } finally { G.spillEnabled = true; }
+    const glsl = G.glsl(Reactor3D.LIGHT_GLSL);
+    assert.match(glsl, /uniform uint rrLightGridSpill;/);
+    assert.match(glsl, /if \(!grid && rrLightGridEnabled != 0\) \{ grid = true; mask = rrLightGridSpill; \}/);
+    assert.match(glsl, new RegExp('lessThan\\(cell, ivec3\\(' + G.size.join(', ') + '\\)\\)'), 'the shader tests the grid it is given');
+});

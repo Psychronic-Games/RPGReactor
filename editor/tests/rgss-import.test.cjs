@@ -2,6 +2,7 @@
 // reader, the Ace → MZ conversion, and (when the local corpus is present) a
 // whole-game import of The Seventh Warrior.
 const assert = require('node:assert/strict');
+const { runtimeSource } = require('./helpers/runtime-source.cjs');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -216,7 +217,7 @@ test('The Seventh Warrior (VX Ace, packed) imports whole', { skip: !fs.existsSyn
 test('the runtime rules for imported games stay off in MV and MZ data', () => {
     const vm = require('node:vm');
     const read = (file) => fs.readFileSync(path.resolve(__dirname, '..', '..', 'runtime', file), 'utf8');
-    const objects = read('reactor_objects.js');
+    const objects = runtimeSource('reactor_objects.js');
     const block = objects.slice(objects.indexOf('Game_CharacterBase.rrFramesOf = function'));
     const make = (dataSystem) => {
         function Game_CharacterBase() {}
@@ -237,7 +238,7 @@ test('the runtime rules for imported games stay off in MV and MZ data', () => {
     assert.equal(c.maxPattern(), 8); assert.equal(c.pattern(), 5); c.resetPattern(); assert.equal(c._pattern, 0);
     const sprites = read('reactor_sprites.js');
     assert.match(sprites, /const w = \(\$dataSystem && Number\(\$dataSystem\.rrBalloonSize\)\) \|\| 48;/);
-    assert.match(sprites, /\$dataMap && Array\.isArray\(\$dataMap\.rrImageLayers\)/);
+    assert.match(read('reactor_image_layers.js'), /\$dataMap && Array\.isArray\(\$dataMap\.rrImageLayers\)/);
     const windows = read('reactor_windows.js');
     assert.match(windows, /if \(typeof step !== "number"\) return _reactorMakeFontBigger\.call\(this\);/);
     assert.match(windows, /if \(code !== "RRFACE"\) return _reactorMessageEscape\.call\(this, code, textState\);/);
@@ -411,7 +412,7 @@ test('file names a zip tool mangled read back as the game named them; MIDI loop 
 });
 
 test('the runtime reads plain PCM WAV the browser refuses, and nothing else', () => {
-    const src = fs.readFileSync(path.resolve(__dirname, '..', '..', 'runtime', 'reactor_core.js'), 'utf8');
+    const src = runtimeSource('reactor_core.js');
     const start = src.indexOf('WebAudio._decodePcmWav = function');
     const body = src.slice(start, src.indexOf('\n};\n', start) + 3);
     const WebAudio = { _context: { createBuffer: (channels, frames, rate) => { const data = Array.from({ length: channels }, () => new Float32Array(frames)); return { channels, frames, rate, getChannelData: (c) => data[c] }; } } };
@@ -432,11 +433,11 @@ test('the runtime reads plain PCM WAV the browser refuses, and nothing else', ()
 });
 
 const xpCorpus = path.resolve(__dirname, '..', '..', 'template', 'Nocturne English');
-test('Nocturne: Rebirth (XP, packed) imports whole', { skip: !fs.existsSync(path.join(xpCorpus, 'Game.rgssad')) && 'corpus not present' }, () => {
+test('Nocturne: Rebirth (XP, packed) imports whole', { skip: !fs.existsSync(path.join(xpCorpus, 'Game.rgssad')) && 'corpus not present' }, async () => {
     assert.equal(I.probe(xpCorpus).kind, 'xp');
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rr-xp-'));
     try {
-        const summary = I.importProject(xpCorpus, path.join(dir, 'game'), {});
+        const summary = await I.importProject(xpCorpus, path.join(dir, 'game'), {});
         assert.equal(summary.engine, 'RPG Maker XP');
         assert.equal(summary.maps, 204);
         assert.ok(summary.plugins.includes('RR_XpCompat'));

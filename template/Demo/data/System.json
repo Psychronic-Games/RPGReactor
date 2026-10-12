@@ -1,7 +1,7 @@
 {
   "advanced": {"gameId":45388004,"screenWidth":1920,"screenHeight":1080,"uiAreaWidth":1920,"uiAreaHeight":1080,"numberFontFilename":"_decterm.ttf","fallbackFonts":"Verdana, sans-serif","fontSize":26,"mainFontFilename":"_decterm.ttf","screenScale":1,"windowOpacity":192,"picturesUpperLimit":100,"pixelatedRendering":false},
   "airship": {"bgm":{"name":"Psychronic - Harmonic Nebula","pan":0,"pitch":100,"volume":90},"characterIndex":3,"characterName":"Vehicle","startMapId":0,"startX":0,"startY":0},
-  "armorTypes": ["","General Armor","Magic Armor","Light Armor","Heavy Armor","Small Shield","Large Shield"],
+  "armorTypes": ["","General Armor","Magic Armor","Light Armor","Heavy Armor","Small Shield","Large Shield","","","",""],
   "attackMotions": [
     {"type":0,"weaponImageId":0},
     {"type":1,"weaponImageId":1},
@@ -28,7 +28,7 @@
   "defeatMe": {"name":"","pan":0,"pitch":100,"volume":90},
   "editMapId": 1,
   "elements": ["","Physical","Fire","Ice","Thunder","Water","Earth","Wind","Light","Darkness"],
-  "equipTypes": ["","Weapon","Shield","Head","Body","Accessory"],
+  "equipTypes": ["","Weapon","Shield","Head","Body","Accessory","Wheels","Engine"],
   "gameTitle": "Reactor One",
   "gameoverMe": {"name":"Psychronic - In Time, All Hope Was Lost","pan":0,"pitch":100,"volume":90},
   "itemCategories": [true,true,true,true],
@@ -45,7 +45,7 @@
   "optSideView": true,
   "optSlipDeath": false,
   "optTransparent": false,
-  "partyMembers": [1,2,3],
+  "partyMembers": [1,2,3,4,5],
   "ship": {"bgm":{"name":"Psychronic - Cybertech Flight","pan":0,"pitch":100,"volume":90},"characterIndex":1,"characterName":"Vehicle","startMapId":0,"startX":0,"startY":0},
   "skillTypes": ["","Magic","\\i[578] SPECIAL"],
   "sounds": [
@@ -77,7 +77,7 @@
   "startMapId": 1,
   "startX": 24,
   "startY": 49,
-  "switches": ["","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","",""],
+  "switches": ["","Raid on North Haven","North Haven defended","Militia gear issued","Skirmish running","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","",""],
   "terms": {"basic":["Level","Lv","HP","HP","MP","MP","TP","TP","EXP","EXP"],"commands":["Fight","\\i[544] ESCAPE","\\i[588] ATTACK","\\i[591] DEFEND","\\i[595] ITEMS","\\i[496] SKILLS","\\i[604] EQUIPMENT","\\i[144] STATUS","\\i[160] CREW","\\i[523] SAVE GAME","\\i[575] EXIT GAME","\\i[554] OPTIONS","\\i[207] WEAPONS","\\i[204] ARMOR","\\i[216] KEY ITEMS","\\i[210] Equip","\\i[644] Optimize","\\i[209] Clear","NEW GAME","\\i[184] LOAD GAME","Exit Game","\\i[644] MAIN MENU","\\i[575] CANCEL",null,"\\i[149] BUY","\\i[150] SELL"],"params":["Max HP","Max MP","Attack","Defense","M.Attack","M.Defense","Agility","Luck","Hit","Evasion"],"messages":{"alwaysDash":"Always Dash","commandRemember":"Command Remember","touchUI":"Touch UI","bgmVolume":"BGM Volume","bgsVolume":"BGS Volume","meVolume":"ME Volume","seVolume":"SE Volume","possession":"Possession","expTotal":"Current %1","expNext":"To Next %1","saveMessage":"Which file would you like to save to?","loadMessage":"Which file would you like to load?","file":"File","autosave":"Autosave","partyName":"%1’s Party","emerge":"%1 emerged!","preemptive":"%1 got the upper hand!","surprise":"%1 was surprised!","escapeStart":"%1 has started to escape!","escapeFailure":"However, it was unable to escape!","victory":"%1 was victorious!","defeat":"%1 was defeated.","obtainExp":"%1 %2 received!","obtainGold":"%1\\G found!","obtainItem":"%1 found!","levelUp":"%1 is now %2 %3!","obtainSkill":"%1 learned!","useItem":"%1 uses %2!","criticalToEnemy":"An excellent hit!!","criticalToActor":"A painful blow!!","actorDamage":"%1 took %2 damage!","actorRecovery":"%1 recovered %2 %3!","actorGain":"%1 gained %2 %3!","actorLoss":"%1 lost %2 %3!","actorDrain":"%1 was drained of %2 %3!","actorNoDamage":"%1 took no damage!","actorNoHit":"Miss! %1 took no damage!","enemyDamage":"%1 took %2 damage!","enemyRecovery":"%1 recovered %2 %3!","enemyGain":"%1 gained %2 %3!","enemyLoss":"%1 lost %2 %3!","enemyDrain":"%1 was drained of %2 %3!","enemyNoDamage":"%1 took no damage!","enemyNoHit":"Miss! %1 took no damage!","evasion":"%1 evaded the attack!","magicEvasion":"%1 nullified the magic!","magicReflection":"%1 reflected the magic!","counterAttack":"%1 made a counterattack!","substitute":"%1 protected %2!","buffAdd":"%1’s %2 went up!","debuffAdd":"%1’s %2 went down!","buffRemove":"%1’s %2 returned to normal!","actionFailure":"There was no effect on %1!"}},
   "testBattlers": [
     {"actorId":1,"level":20,"equips":[1,1,2,3,0]},
@@ -89,10 +89,10 @@
   "title2Name": "",
   "titleBgm": {"name":"Psychronic - Forest Trek","pan":0,"pitch":100,"volume":90},
   "titleCommandWindow": {"background":0,"offsetX":0,"offsetY":0},
-  "variables": ["","","","","","","","","","","","","","","","","","","","",""],
-  "versionId": 65140344,
+  "variables": ["","Battle result","","","","","","","","","","","","","","","","","","",""],
+  "versionId": 78799050,
   "victoryMe": {"name":"Victory1","pan":0,"pitch":100,"volume":90},
-  "weaponTypes": ["","Dagger","Sword","Flail","Axe","Whip","Staff","Bow","Crossbow","Gun","Claw","Glove","Spear"],
+  "weaponTypes": ["","Dagger","Sword","Flail","Axe","Whip","Staff","Bow","Crossbow","Gun","Claw","Glove","Spear","Pistol","Rifle","Shotgun","Cannon"],
   "windowTone": [0,0,0,0],
   "tileSize": 48,
   "editor": {"messageWidth1":60,"messageWidth2":47,"jsonFormatLevel":1},
@@ -105,5 +105,8 @@
   "reactorMenuInterfaceId": 2,
   "reactorBattleInterfaceId": 8,
   "reactorControls": {"keys":{"9":"tab","13":"ok","16":"shift","17":"control","18":"control","27":"escape","33":"pageup","34":"pagedown","37":"left","38":"up","39":"right","40":"down","45":"escape","81":"pageup","87":"pagedown","88":"escape","90":"ok","96":"escape","98":"down","100":"left","102":"right","104":"up","120":"debug"},"gamepad":{"0":"ok","1":"cancel","2":"shift","3":"menu","4":"pageup","5":"pagedown","12":"up","13":"down","14":"left","15":"right"},"jump":true,"jumpKeys":[32],"jumpButtons":[2]},
-  "reactorPhysics": {"gravity":1,"jumpHeight":1.25,"fallDamage":true,"fallFrom":6,"fallPercent":10,"fallCommonEvent":0,"swim":true,"swimDepth":2.2,"splashSe":null,"hardLandSe":{"name":"Bone-Crack-01","volume":90,"pitch":100,"pan":0}}
+  "reactorPhysics": {"gravity":1,"jumpHeight":1.25,"fallDamage":true,"fallFrom":6,"fallPercent":10,"fallCommonEvent":0,"swim":true,"swimDepth":2.2,"splashSe":{"name":"Splash-01","volume":100,"pitch":100,"pan":0},"landSe":null,"hardLandSe":{"name":"Bone-Crack-01","volume":90,"pitch":100,"pan":0},"ragdoll":true,"mantle":true,"mantleReach":3,"stepUp":true,"stepUpReach":1.5},
+  "reactorBattle": {"mode":"classic","turns":"initiative"},
+  "reactorVictoryInterfaceId": 9,
+  "reactorParty": {"formation":"scattered","spacing":2,"straggle":20}
 }

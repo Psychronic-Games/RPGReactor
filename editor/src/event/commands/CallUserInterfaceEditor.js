@@ -40,7 +40,7 @@ class CallUserInterfaceEditor {
         const selected = current || (options.length ? options[0][0] : '');
 
         const modal = document.createElement('div');
-        modal.className = 'rr-modal-overlay';
+        modal.className = 'rr-modal-overlay rr-command-editor-modal';
         modal.style.zIndex = '21000';
         const escape = value => String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
         modal.innerHTML = `

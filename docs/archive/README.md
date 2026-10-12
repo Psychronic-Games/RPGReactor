@@ -4,7 +4,7 @@ Dated material moved out of `docs/` on 2026-09-21. Each file records what was tr
 
 | Folder | Holds |
 | --- | --- |
-| [handoff/](handoff/) | Older handoff cycles: [2026-09-02 to 09-13](handoff/2026-09-02-to-13.md) (0.98.5 and 0.98.6) and [2026-08 and earlier](handoff/2026-08-and-earlier.md) (0.97 to 0.98.4). The live file is [../HANDOFF.md](../HANDOFF.md). |
+| [handoff/](handoff/) | Older handoff cycles: [2026-09-14 to 09-21](handoff/2026-09-14-to-21.md) (0.98.7), [2026-09-02 to 09-13](handoff/2026-09-02-to-13.md) (0.98.5 and 0.98.6) and [2026-08 and earlier](handoff/2026-08-and-earlier.md) (0.97 to 0.98.4). The live file is [../HANDOFF.md](../HANDOFF.md). |
 | [audits/](audits/) | Deep audits and their JSON matrices: the July backlogs, the 2026-09-04 editor and database-state audits, the 2026-09-06 app, 2D-compatibility and UX/localization audits, the September keyboard, navigation, interaction-order and UI-quality audits. |
 | [sessions/](sessions/) | Session closeouts (2026-09-04, 2026-09-11) and the 2026-09-11/12 feature reports: held items and throws, action-sequence expansion, keyboard menus and dialogs, camera and large faces, tile sizes, sidebar and states, event lighting and icons, model previews and light theme, the touch-button fix. |
 | [pr-integration/](pr-integration/) | One note per merged community PR or batch, 2026-09-05 to 2026-09-20 (PRs #44 through #67): what came in, what was corrected, how it was validated. |

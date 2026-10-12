@@ -99,7 +99,21 @@ test('projected error tightens with camera approach and respects shear; mutable 
     uv.needsUpdate = true; assert.equal(R.GeometryDetail.fresh(uvState), false);
     const state = { source: g, signature: R.GeometryDetail.signature(g), dead: false };
     g.attributes.position.needsUpdate = true; assert.equal(R.GeometryDetail.fresh(state), false);
-    mesh.isSkinnedMesh = true; assert.equal(R.GeometryDetail.eligible(mesh), false); mesh.isSkinnedMesh = false;
+    // A skinned body qualifies (index only; its weights guide the simplifier)
+    // unless switched off or opted out; with no placed instance to measure it
+    // from, it is drawn at full detail.
+    mesh.isSkinnedMesh = true;
+    g.setAttribute('skinIndex', new T.BufferAttribute(new Uint16Array(12), 4)); g.setAttribute('skinWeight', new T.Float32BufferAttribute(new Float32Array(12), 4));
+    assert.equal(R.GeometryDetail.eligible(mesh), true);
+    R.GeometryDetail.skinned = false; assert.equal(R.GeometryDetail.eligible(mesh), false); R.GeometryDetail.skinned = true;
+    mesh.userData.rrNoDetail = true; assert.equal(R.GeometryDetail.eligible(mesh), false); delete mesh.userData.rrNoDetail;
+    assert.equal(R.GeometryDetail.pixelsPerUnit(mesh, c, 1080), Infinity);
+    const holder = new T.Group(); holder.userData.glbSize = { x: 1, y: 2, z: 1 }; holder.add(mesh); holder.position.z = -20; holder.updateMatrixWorld(true);
+    c.position.set(0, 1, 0); c.updateMatrixWorld();
+    const far = R.GeometryDetail.pixelsPerUnit(mesh, c, 1080); holder.position.z = -5; holder.updateMatrixWorld(true);
+    assert.ok(Number.isFinite(far) && R.GeometryDetail.pixelsPerUnit(mesh, c, 1080) > far * 3, 'measured from where the instance stands');
+    holder.userData.rrNoCull = true; assert.equal(R.GeometryDetail.pixelsPerUnit(mesh, c, 1080), Infinity, 'a ragdoll keeps full detail');
+    holder.remove(mesh); mesh.isSkinnedMesh = false; g.deleteAttribute('skinIndex'); g.deleteAttribute('skinWeight'); c.position.set(0, 0, 0); mesh.updateMatrixWorld(true);
     c.position.z = 100; c.updateMatrixWorld(); const distant = R.GeometryDetail.pixelsPerUnit(mesh, c, 1080);
     c.position.z = 10; c.updateMatrixWorld(); assert.ok(R.GeometryDetail.pixelsPerUnit(mesh, c, 1080) > distant * 9);
     const matrix = new T.Matrix4().makeShear(2, 3, -1, .5, -.2, 1.3);
@@ -168,4 +182,147 @@ test('all shadow passes, including rigid dynamic casters, see original geometry'
         assert.throws(() => R.Shadows._flush(), /shadow interrupted/);
         assert.equal(mesh.geometry, reduced);
     } finally { D._active = active; }
+});
+test('a shadow face draws each caster at the coarsest level under half a texel from the light, and gives it back', () => {
+    const D = R.GeometryDetail;
+    const g = new T.BufferGeometry(); g.setAttribute('position', new T.Float32BufferAttribute([0,0,0,1,0,0,0,1,0], 3));
+    g.setIndex(new T.BufferAttribute(new Uint32Array(100002), 1)); g.computeBoundingSphere();
+    const m = new T.MeshBasicMaterial(); m.__reactorModel = true;
+    const mesh = new T.Mesh(g, m), root = new T.Group(); root.add(mesh);
+    const fine = new T.BufferGeometry(), coarse = new T.BufferGeometry();
+    const state = { source: g, signature: D.signature(g), levels: [{ geometry: fine, error: 0.001 }, { geometry: coarse, error: 0.01 }], id: 1, dead: false };
+    const saved = D._states.get(g); D._states.set(g, state);
+    const savedWorker = global.Worker; global.Worker = global.Worker || function () {};
+    try {
+        root.position.set(0, 0, 0); root.updateMatrixWorld(true);
+        const near = D.forShadow([root], new T.Vector3(0, 0, 2), 256, 0.05);
+        assert.equal(mesh.geometry, fine, 'close to the light: only the finer level is under half a texel');
+        D.end(near); assert.equal(mesh.geometry, g, 'given back after the face');
+        const far = D.forShadow([root], new T.Vector3(0, 0, 400), 256, 0.05);
+        assert.equal(mesh.geometry, coarse, 'far from the light: the coarsest');
+        D.end(far);
+        const touching = D.forShadow([root], new T.Vector3(0, 0, 0.2), 256, 0.05);
+        assert.equal(mesh.geometry, g, 'too close for either: full detail');
+        D.end(touching);
+        D.SHADOW_TEXEL_ERROR = 0; assert.deepEqual(D.forShadow([root], new T.Vector3(0, 0, 400), 256, 0.05), [], 'the kill switch');
+    } finally { D.SHADOW_TEXEL_ERROR = 0.5; if (saved) D._states.set(g, saved); else D._states.delete(g); global.Worker = savedWorker; }
+});
+
+test('geometries over the same buffers share one set of detail levels, kept for the next instance, and a body is measured at its joints', () => {
+    const D = R.GeometryDetail, THREE = T;
+    const posted = [];
+    const queue = D._queue, busy = D._busy, failed = D._failed, dispatch = D.dispatch;
+    D._queue = []; D._busy = null; D._failed = false;
+    // The worker is stood in for: a job is noted, and answered by hand.
+    D.dispatch = function() { if (this._busy || !this._queue.length) return; this._busy = this._queue.shift(); posted.push(this._busy); };
+    try {
+        const position = new THREE.BufferAttribute(new Float32Array(9 * 4), 3), index = new THREE.BufferAttribute(new Uint32Array(12), 1);
+        const twin = () => { const g = new THREE.BufferGeometry(); g.setAttribute('position', position); g.setIndex(index); return g; };
+        const a = twin(), b = twin();
+        const first = D.state(a), second = D.state(b);
+        assert.equal(first, second, 'two geometries over the same buffers: one state');
+        assert.equal(posted.length, 1, 'and one job for the worker');
+        D.receive({ id: first.id, levels: [{ indices: new Uint32Array(6), error: 0.001 }, { indices: new Uint32Array(3), error: 0.01 }] });
+        assert.equal(first.levels.length, 2);
+        assert.equal(first.levels[0].geometry.attributes.position, position, 'a level draws from the shared vertex buffer');
+        // An instance leaves (releaseModelInstance takes its geometry apart, then disposes it): the other keeps the levels.
+        a.index = null; a.dispose();
+        assert.equal(D.state(b), first);
+        assert.equal(first.levels.length, 2);
+        assert.equal(first.source, b, 'the state reads the buffers through a geometry that still has them');
+        // The last one leaves: the levels are freed, their index lists kept.
+        b.dispose();
+        assert.equal(first.dead, true);
+        assert.equal(first.levels.length, 0);
+        const c = twin(), again = D.state(c);
+        assert.notEqual(again, first);
+        assert.equal(again.levels.length, 2, 'the next instance has its levels at once');
+        assert.equal(posted.length, 1, 'with no second job');
+        // Other buffers are another state and another job.
+        const other = new THREE.BufferGeometry(); other.setAttribute('position', position); other.setIndex(new THREE.BufferAttribute(new Uint32Array(12), 1));
+        assert.notEqual(D.state(other), again);
+        assert.equal(posted.length, 2);
+        c.dispose(); other.dispose();
+    } finally { D.dispatch = dispatch; D._queue = queue; D._busy = busy; D._failed = failed; }
+    // The nearest a body comes to the camera is its nearest joint less its flesh; with no skeleton, a whole span off its middle.
+    const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 100); camera.position.set(0, 0, 10); camera.updateMatrixWorld(); camera.matrixWorldInverse.copy(camera.matrixWorld).invert();
+    const bone = z => { const o = new THREE.Object3D(); o.position.set(0, 1, z); o.updateMatrixWorld(); return o; };
+    const body = { skeleton: { bones: [bone(0), bone(1.5), bone(-0.5)] } };
+    assert.ok(Math.abs(D.skinnedDepth(body, camera, 10, 3) - (8.5 - 3 * D.SKINNED_FLESH)) < 1e-6);
+    assert.equal(D.skinnedDepth({}, camera, 10, 3), 7);
+});
+
+test('opaque pieces are laid into depth first on a weak GPU, in their own sides, and the colour draw is the one there was', t => {
+    const D = R.DepthFirst, THREE = T;
+    const tier = R.tier, covered = R.CoveredFloor.draw;
+    let tierNow = 'weak';
+    R.tier = () => tierNow;
+    const calls = [];
+    R.CoveredFloor.draw = (renderer, scene, camera) => { calls.push({ pass: 'colour', autoClear: renderer.autoClear, materials: meshes.map(m => m.material), visible: all.map(o => o.visible) }); return 'drawn'; };
+    t.after(() => { R.tier = tier; R.CoveredFloor.draw = covered; });
+    const piece = (side, extra) => { const m = new THREE.MeshBasicMaterial(Object.assign({ side }, extra)); m.__reactorPieces = true; return new THREE.Mesh(new THREE.BufferGeometry(), m); };
+    const scene = new THREE.Scene();
+    const meshes = [];
+    for (let i = 0; i < 8; i++) meshes.push(piece(i % 2 ? THREE.DoubleSide : THREE.FrontSide));
+    const glass = piece(THREE.DoubleSide, { transparent: true, depthWrite: false });
+    const ghost = piece(THREE.FrontSide); ghost.material.__reactorGhost = true;
+    const model = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial());
+    const cutout = piece(THREE.FrontSide, { alphaTest: 0.5 });
+    const skinned = piece(THREE.FrontSide); skinned.isSkinnedMesh = true;
+    const all = meshes.concat([glass, ghost, model, cutout, skinned]);
+    for (const o of all) scene.add(o);
+    const own = meshes.map(m => m.material);
+    const renderer = { autoClear: true, domElement: { width: 1440, height: 810 }, getRenderTarget: () => null,
+        render(s, c) { calls.push({ pass: 'depth', autoClear: this.autoClear, materials: meshes.map(m => m.material), visible: all.map(o => o.visible) }); } };
+    for (const o of [glass, ghost, model, cutout, skinned]) assert.equal(D.eligible(o), false);
+    assert.equal(D.eligible(meshes[0]), true);
+    // The room's floor is laid too (it makes no cuts of its own).
+    const floor = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial()); floor.material.__reactorGroundSlope = {};
+    assert.equal(D.eligible(floor), true);
+    assert.equal(D.draw(renderer, scene, {}), 'drawn');
+    assert.deepEqual(calls.map(c => c.pass), ['depth', 'colour']);
+    // The depth draw: each piece in a depth-only material of its own side, everything else out of the picture, the target cleared.
+    assert.equal(calls[0].autoClear, true);
+    calls[0].materials.forEach((m, i) => { assert.equal(m.colorWrite, false); assert.equal(m.side, own[i].side); assert.equal(m.polygonOffset, true); });
+    assert.deepEqual(calls[0].visible, all.map((o, i) => i < 8));
+    // The colour draw: every material and visibility as it was, and nothing cleared.
+    assert.equal(calls[1].autoClear, false);
+    assert.deepEqual(calls[1].materials, own);
+    assert.ok(calls[1].visible.every(Boolean));
+    assert.equal(renderer.autoClear, true);
+    assert.deepEqual({ ...D.last }, { laid: 8, hidden: 5 });
+    // The depth material makes the pieces' cuts and is never laid itself.
+    assert.equal(D.material(THREE.FrontSide).__reactorPieces, true);
+    assert.equal(D.eligible(new THREE.Mesh(new THREE.BufferGeometry(), D.material(THREE.FrontSide))), false);
+    // Not on a full GPU, under an override material, into a small target, with little to lay, or switched off: the plain draw.
+    const plain = setup => { calls.length = 0; setup(); D.draw(renderer, scene, {}); return calls.map(c => c.pass).join(); };
+    assert.equal(plain(() => { tierNow = 'full'; }), 'colour'); tierNow = 'weak';
+    assert.equal(plain(() => { scene.overrideMaterial = new THREE.MeshBasicMaterial(); }), 'colour'); scene.overrideMaterial = null;
+    assert.equal(plain(() => { renderer.domElement = { width: 360, height: 203 }; }), 'colour'); renderer.domElement = { width: 1440, height: 810 };
+    assert.equal(plain(() => { meshes[0].visible = false; }), 'colour'); meshes[0].visible = true;
+    assert.ok(all.every(o => o.visible), 'what waited out of an abandoned depth draw is back');
+    assert.equal(plain(() => { D.enabled = false; }), 'colour'); D.enabled = true;
+    // A depth draw that throws leaves the scene as it found it.
+    renderer.render = () => { throw new Error('lost'); };
+    assert.throws(() => D.draw(renderer, scene, {}), /lost/);
+    assert.deepEqual(meshes.map(m => m.material), own);
+    assert.ok(all.every(o => o.visible));
+    assert.equal(renderer.autoClear, true);
+    assert.equal(D._drawing, false);
+});
+
+test('a skinned model drawn without perspective (a flat map\'s model sprite) takes a detail level by its size in the picture', () => {
+    const D = R.GeometryDetail, THREE = T;
+    const instanceSpan = R.instanceSpan;
+    R.instanceSpan = root => 3;
+    try {
+        const root = new THREE.Group(); root.userData.glbSize = { x: 1, y: 3, z: 1 };
+        const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 1, 0, 0, 0, 1, 0], 3)); g.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 0.75);
+        const mesh = new THREE.Mesh(g, new THREE.MeshBasicMaterial()); mesh.isSkinnedMesh = true; root.add(mesh); root.updateMatrixWorld(true);
+        // Four world units of height in a 360-pixel picture: 90 pixels a unit; the geometry's unit is two world units here.
+        const flat = new THREE.OrthographicCamera(-2, 2, 2, -2, 0.1, 100); flat.updateProjectionMatrix(); flat.updateMatrixWorld();
+        assert.ok(Math.abs(D.pixelsPerUnit(mesh, flat, 360) - 180) < 1e-6);
+        // And never a level for a view that is neither.
+        assert.equal(D.skinnedPixelsPerUnit(mesh, { isPerspectiveCamera: false, projectionMatrix: flat.projectionMatrix, matrixWorldInverse: flat.matrixWorldInverse }, 360), Infinity);
+    } finally { R.instanceSpan = instanceSpan; }
 });

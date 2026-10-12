@@ -11,6 +11,8 @@
     const WAIT_MODE = "reactorVideoSurface";
     const MAX_ID = 999999;
     const DEG = Math.PI / 180;
+    /** Screen pixels past the edge a video still uploads its frames within. */
+    const VIDEO_UPLOAD_MARGIN = 96;
     const DESCRIPTOR_VERSION = 1;
 
     function own(object, key) {
@@ -191,7 +193,23 @@
             "y3", "bottomLeftY", "corner3Y"]).present;
     }
 
-    function normalizeShowArgs(raw, interpreter) {
+    // Whether a stored descriptor still holds the exact fields it was validated
+// with (its time may advance); see MediaSurfaceManager.storedDescriptor.
+function descriptorMatches(node) {
+    const value = node.value;
+    if (Object.keys(value).length !== node.keys.length) return false;
+    for (let i = 0; i < node.keys.length; i++) {
+        const key = node.keys[i];
+        if (node.time && key === "currentTime") {
+            const time = value[key];
+            if (typeof time !== "number" || !Number.isFinite(time) || time < 0 || time > Number.MAX_SAFE_INTEGER) return false;
+        } else if (value[key] !== node.values[i]) return false;
+    }
+    for (const child of node.children) if (!descriptorMatches(child)) return false;
+    return true;
+}
+
+function normalizeShowArgs(raw, interpreter) {
         const args = commandArgs(raw);
         const idField = field(args, ["id", "surfaceId", "videoId"]);
         const id = idField.present ? integer(idField.value, 1, MAX_ID) : null;
@@ -445,8 +463,42 @@
         if (geometry && typeof geometry.destroy === "function") geometry.destroy();
     }
 
+    /** Unhook a PIXI video source from its element without touching the element. */
+    function releasePixiVideo(source) {
+        const video = source.resource;
+        if (video && video.removeEventListener) {
+            for (const [type, handler, capture] of [["play", "_onPlayStart"], ["pause", "_onPlayStop"], ["seeked", "_onSeeked"],
+                ["canplay", "_onCanPlay"], ["canplaythrough", "_onCanPlayThrough"], ["loadedmetadata", "_onLoadedMetadata"], ["error", "_onError", true]]) {
+                if (typeof source[handler] === "function") video.removeEventListener(type, source[handler], !!capture);
+            }
+        }
+        try { source.resource = null; } catch (error) { /* a read-only resource keeps it */ }
+    }
+
     function dispose(object) {
         if (object && typeof object.dispose === "function") object.dispose();
+    }
+
+    /*
+     * A placed plane's turn, set only when it changes. Setting an Euler
+     * rebuilds the quaternion (six trig calls) even to the value it holds,
+     * and a map's posters were turned to the same angles every tick. The
+     * write is skipped only while the angles and the quaternion are exactly
+     * what the last write here left, so the result is the write's own.
+     * `RPGReactorMediaSurfaces.turnCache.enabled = false` writes every time.
+     */
+    const turnCache = { enabled: true };
+    const secondPlacement = { enabled: true };
+    function setMeshTurn(mesh, rx, ry, rz) {
+        const r = mesh.rotation, q = mesh.quaternion;
+        const memo = mesh.userData.rrTurnMemo;
+        if (memo && turnCache.enabled && memo[0] === rx && memo[1] === ry && memo[2] === rz
+            && r._x === rx && r._y === ry && r._z === rz && r._order === memo[3]
+            && q._x === memo[4] && q._y === memo[5] && q._z === memo[6] && q._w === memo[7]) return;
+        r.set(rx, ry, rz);
+        const note = memo || (mesh.userData.rrTurnMemo = [0, 0, 0, "", 0, 0, 0, 1]);
+        note[0] = rx; note[1] = ry; note[2] = rz; note[3] = r._order;
+        note[4] = q._x; note[5] = q._y; note[6] = q._z; note[7] = q._w;
     }
 
     // PlaneGeometry orders its vertices TL, TR, BL, BR; saved quads use
@@ -493,8 +545,20 @@
 
         createVideo() {
             if (typeof document === "undefined" || !document.createElement) return;
+            // A muted surface playing a file another muted surface already
+            // plays, the same way, shows that one's picture: one decoder, and
+            // on a 3D map one texture uploaded once a frame, however many
+            // screens show it. The Demo's start map had six of one video.
+            const shared = this.manager.joinVideo ? this.manager.joinVideo(this) : null;
+            if (shared) {
+                this.shared = shared;
+                this.video = shared.video;
+                this.listenVideo(shared.video);
+                return;
+            }
             const video = document.createElement("video");
             this.video = video;
+            this.shared = this.manager.shareVideo ? this.manager.shareVideo(this, video) : null;
             video.preload = "auto";
             video.playsInline = true;
             video.setAttribute("playsinline", "");
@@ -504,6 +568,11 @@
             video.defaultMuted = this.descriptor.muted;
             video.playbackRate = this.descriptor.playbackRate;
             video.src = movieUrl(this.descriptor.file);
+            this.listenVideo(video);
+            this.updateAudio();
+        }
+
+        listenVideo(video) {
             this.listen(video, "ended", () => {
                 if (this.current()) this.manager.ended(this.id, this.generation);
             });
@@ -513,7 +582,6 @@
             this.listen(video, "abort", event => {
                 if (this.current() && !this.cleaned) this.manager.failed(this.id, this.generation, event);
             });
-            this.updateAudio();
         }
 
         createImage() {
@@ -545,9 +613,9 @@
             return !!(image && image.complete && image.naturalWidth > 0);
         }
 
-        /** The decoded pixels, for a texture that takes any image-like. */
+        /** The picture as loaded, for a texture that takes any image-like: no canvas copy is made of it. */
         imageSource() {
-            if (this.bitmap) return this.bitmap.canvas || this.bitmap.image || null;
+            if (this.bitmap) return this.bitmap.image || this.bitmap.canvas || null;
             return this.image || null;
         }
 
@@ -606,6 +674,8 @@
         }
 
         needsRecreate(descriptor) {
+            // Muted, loop, speed or file changed under a shared video: this surface needs its own.
+            if (this.shared && this.manager.videoShareKey(descriptor) !== this.shared.key) return true;
             return !!this.backend && this.attachmentKey !== this.attachmentKeyFor(descriptor);
         }
 
@@ -622,6 +692,10 @@
             }
             if (this.started || !this.video) return;
             this.started = true;
+            // A shared video someone already started keeps its place: loading
+            // it again would restart every screen showing it.
+            const joined = !!(this.shared && this.shared.started);
+            if (this.shared) this.shared.started = true;
             if (this.videoSource && this.videoSource.load) {
                 // The element began loading when its src was set. PIXI's
                 // load() restarts that load unless the metadata is already
@@ -639,9 +713,11 @@
                     if (this.current()) loadSource();
                 }, { once: true });
             } else {
-                try { this.video.load(); } catch (error) {
-                    this.manager.failed(this.id, this.generation, error);
-                    return;
+                if (!joined) {
+                    try { this.video.load(); } catch (error) {
+                        this.manager.failed(this.id, this.generation, error);
+                        return;
+                    }
                 }
                 if (this.video.readyState >= 1) this.restoreAndPlay();
                 else this.listen(this.video, "loadedmetadata", () => {
@@ -653,7 +729,8 @@
         restoreAndPlay() {
             if (!this.video || this.cleaned) return;
             const time = finiteNumber(this.descriptor.currentTime, 0, Number.MAX_SAFE_INTEGER) || 0;
-            if (time > 0) {
+            // Only the surface that opened a shared video places it.
+            if (time > 0 && !(this.shared && this.shared.owner !== this)) {
                 try {
                     const duration = Number(this.video.duration);
                     this.video.currentTime = Number.isFinite(duration) && duration > 0
@@ -764,8 +841,11 @@
         }
 
         attachThree(state) {
+            // A picture shares its source with every other surface showing that file (one upload).
+            const pictures = typeof Reactor3D !== "undefined" && Reactor3D && Reactor3D.ScenePictures;
             const texture = this.isImage
-                ? new THREE.CanvasTexture(this.imageSource())
+                ? (pictures ? pictures.texture(this.imageSource(), true) : new THREE.CanvasTexture(this.imageSource()))
+                : this.shared ? this.manager.sharedThreeTexture(this.shared, this)
                 : new THREE.VideoTexture(this.video);
             if (this.isImage) texture.needsUpdate = true;
             texture.generateMipmaps = false;
@@ -820,10 +900,19 @@
         }
 
         worldSize() {
+            return { width: this.worldWidth(), height: this.worldHeight() };
+        }
+
+        // The two halves of worldSize, for the per-tick placement, which
+        // made a record of them twice a frame per surface to read two numbers.
+        worldWidth() {
             const map = currentMap();
-            const tw = map && map.tileWidth ? map.tileWidth() : 48;
-            const th = map && map.tileHeight ? map.tileHeight() : 48;
-            return { width: this.descriptor.width / tw, height: this.descriptor.height / th };
+            return this.descriptor.width / (map && map.tileWidth ? map.tileWidth() : 48);
+        }
+
+        worldHeight() {
+            const map = currentMap();
+            return this.descriptor.height / (map && map.tileHeight ? map.tileHeight() : 48);
         }
 
         makeThreeGeometry() {
@@ -926,25 +1015,37 @@
         }
 
         transformedCorners() {
+            const turn = this.cornerTurn();
+            return this.descriptor.corners.map(corner => this.transformCorner(corner, turn, {}));
+        }
+
+        /** The descriptor's turn and perspective, for transformCorner; one record, refilled. */
+        cornerTurn() {
+            const turn = this._cornerTurn || (this._cornerTurn = {});
             const rx = this.descriptor.rotationX * DEG;
             const ry = this.descriptor.rotationY * DEG;
             const rz = this.descriptor.rotationZ * DEG;
-            const sx = Math.sin(rx), cx = Math.cos(rx);
-            const sy = Math.sin(ry), cy = Math.cos(ry);
-            const sz = Math.sin(rz), cz = Math.cos(rz);
-            const distance = Math.max(this.descriptor.width, this.descriptor.height, 1) * 4;
-            return this.descriptor.corners.map(corner => {
-                let x = corner.x * this.descriptor.scaleX;
-                let y = corner.y * this.descriptor.scaleY * cx;
-                let z = corner.y * this.descriptor.scaleY * sx;
-                const nx = x * cy + z * sy;
-                z = -x * sy + z * cy;
-                x = nx;
-                const px = x * cz - y * sz;
-                const py = x * sz + y * cz;
-                const scale = distance / Math.max(distance * 0.1, distance + z);
-                return { x: px * scale, y: py * scale };
-            });
+            turn.sx = Math.sin(rx); turn.cx = Math.cos(rx);
+            turn.sy = Math.sin(ry); turn.cy = Math.cos(ry);
+            turn.sz = Math.sin(rz); turn.cz = Math.cos(rz);
+            turn.distance = Math.max(this.descriptor.width, this.descriptor.height, 1) * 4;
+            return turn;
+        }
+
+        /** One corner of the flat quad, turned and foreshortened, into `out`. */
+        transformCorner(corner, turn, out) {
+            let x = corner.x * this.descriptor.scaleX;
+            let y = corner.y * this.descriptor.scaleY * turn.cx;
+            let z = corner.y * this.descriptor.scaleY * turn.sx;
+            const nx = x * turn.cy + z * turn.sy;
+            z = -x * turn.sy + z * turn.cy;
+            x = nx;
+            const px = x * turn.cz - y * turn.sz;
+            const py = x * turn.sz + y * turn.cz;
+            const scale = turn.distance / Math.max(turn.distance * 0.1, turn.distance + z);
+            out.x = px * scale;
+            out.y = py * scale;
+            return out;
         }
 
         setPixiCorners(mesh, corners) {
@@ -1035,12 +1136,52 @@
             this.pixiContainer.position.set(x, y);
             const graphics = currentGraphics();
             const margin = descriptor.cullDistance;
-            const corners = this.transformedCorners();
-            const xs = corners.map(item => item.x + x);
-            const ys = corners.map(item => item.y + y);
-            this.pixiContainer.visible = margin <= 0 || !(Math.max(...xs) < -margin
-                || Math.min(...xs) > graphics.width + margin || Math.max(...ys) < -margin
-                || Math.min(...ys) > graphics.height + margin);
+            // The quad's extent, one corner at a time through a kept point:
+            // this runs every tick and only the bounds are wanted.
+            const turn = this.cornerTurn();
+            const corner = this._cornerPoint || (this._cornerPoint = { x: 0, y: 0 });
+            let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+            for (const source of descriptor.corners) {
+                this.transformCorner(source, turn, corner);
+                if (corner.x < minX) minX = corner.x;
+                if (corner.x > maxX) maxX = corner.x;
+                if (corner.y < minY) minY = corner.y;
+                if (corner.y > maxY) maxY = corner.y;
+            }
+            minX += x; maxX += x; minY += y; maxY += y;
+            this.pixiContainer.visible = margin <= 0 || !(maxX < -margin
+                || minX > graphics.width + margin || maxY < -margin
+                || minY > graphics.height + margin);
+            this.syncVideoUploads(minX, minY, maxX, maxY, graphics);
+        }
+
+        /**
+         * A playing video uploads every decoded frame to the GPU whether its
+         * quad is drawn or not: a flat map with a row of screens off to the
+         * side spent more on those uploads than on the whole map. Off screen
+         * (judged through the parent's last rendered transform, with a margin
+         * for that frame of lag) the uploads wait, and the frame showing now
+         * goes up the moment the quad comes back. Playback itself carries on.
+         */
+        syncVideoUploads(minX, minY, maxX, maxY, graphics) {
+            const source = this.videoSource;
+            if (!source || typeof source.autoUpdate !== "boolean") return;
+            let shown = this.pixiContainer.visible !== false;
+            const parent = this.pixiContainer.parent;
+            const m = parent && parent.worldTransform;
+            if (shown && m && Number.isFinite(m.a)) {
+                const x1 = m.a * minX, x2 = m.a * maxX, y1 = m.c * minY, y2 = m.c * maxY;
+                const u1 = m.b * minX, u2 = m.b * maxX, v1 = m.d * minY, v2 = m.d * maxY;
+                const left = Math.min(x1, x2) + Math.min(y1, y2) + m.tx;
+                const right = Math.max(x1, x2) + Math.max(y1, y2) + m.tx;
+                const top = Math.min(u1, u2) + Math.min(v1, v2) + m.ty;
+                const bottom = Math.max(u1, u2) + Math.max(v1, v2) + m.ty;
+                const pad = VIDEO_UPLOAD_MARGIN;
+                shown = !(right < -pad || left > graphics.width + pad || bottom < -pad || top > graphics.height + pad);
+            }
+            if (source.autoUpdate === shown) return;
+            source.autoUpdate = shown;
+            if (shown && typeof source.updateFrame === "function") source.updateFrame();
         }
 
         updateThreePosition() {
@@ -1059,7 +1200,6 @@
                 const frame = Reactor3D.effectAnchorTransform
                     ? (this._anchorFrame = Reactor3D.effectAnchorTransform(holder.object, descriptor, this._anchorFrame)) : null;
                 const world = frame ? frame.world : Reactor3D.effectAnchorWorld(holder.object, descriptor, new THREE.Vector3());
-                const meshes = [this.threeMesh, this.threeScanMesh].filter(Boolean);
                 const turn = (this._anchorTurn || (this._anchorTurn = new THREE.Quaternion())).setFromEuler(
                     (this._anchorEuler || (this._anchorEuler = new THREE.Euler())).set(
                         descriptor.rotationX * DEG, descriptor.rotationY * DEG, descriptor.rotationZ * DEG, "YXZ"));
@@ -1072,13 +1212,17 @@
                 let sx = descriptor.scaleX, sy = descriptor.scaleY;
                 if (descriptor.anchor.size) {
                     const worldScale = frame ? frame.scale : holder.object.getWorldScale(new THREE.Vector3());
-                    const size = this.worldSize();
-                    if (size.width > 0 && size.height > 0) {
-                        sx = descriptor.anchor.size[0] * worldScale.x / size.width * descriptor.scaleX;
-                        sy = descriptor.anchor.size[1] * worldScale.y / size.height * descriptor.scaleY;
+                    const width = this.worldWidth(), height = this.worldHeight();
+                    if (width > 0 && height > 0) {
+                        sx = descriptor.anchor.size[0] * worldScale.x / width * descriptor.scaleX;
+                        sy = descriptor.anchor.size[1] * worldScale.y / height * descriptor.scaleY;
                     }
                 }
-                for (const mesh of meshes) {
+                // The plane and its scanlines, if any: two named meshes, not
+                // an array filtered out of them every tick.
+                for (let m = 0; m < 2; m++) {
+                    const mesh = m === 0 ? this.threeMesh : this.threeScanMesh;
+                    if (!mesh) continue;
                     mesh.position.copy(world);
                     mesh.quaternion.copy(modelTurn).multiply(turn);
                     if (poseTurn) mesh.quaternion.premultiply(poseTurn);
@@ -1112,28 +1256,29 @@
                 if (this.threeScanMesh) this.threeScanMesh.visible = false;
                 return;
             }
-            const size = this.worldSize();
-            y += size.height * Math.abs(descriptor.scaleY) / 2;
+            const width = this.worldWidth(), height = this.worldHeight();
+            y += height * Math.abs(descriptor.scaleY) / 2;
             // Depth is the 3D forward/back control: tiles toward the camera.
             // The 2D placement (feet row) is the reference and stays put.
             z += descriptor.depth;
-            const meshes = [this.threeMesh, this.threeScanMesh].filter(Boolean);
-            for (const mesh of meshes) {
-                mesh.position.set(x, y, z);
-                mesh.rotation.set(descriptor.rotationX * DEG, descriptor.rotationY * DEG,
-                    descriptor.rotationZ * DEG);
-                mesh.scale.set(descriptor.scaleX, descriptor.scaleY, 1);
-            }
+            const rx = descriptor.rotationX * DEG, ry = descriptor.rotationY * DEG, rz = descriptor.rotationZ * DEG;
             let visible = true;
             if (descriptor.cullDistance > 0 && camera && camera.position) {
                 const dx = camera.position.x - x;
                 const dy = camera.position.y - y;
                 const dz = camera.position.z - z;
-                const radius = Math.hypot(size.width * descriptor.scaleX,
-                    size.height * descriptor.scaleY) / 2;
+                const radius = Math.hypot(width * descriptor.scaleX,
+                    height * descriptor.scaleY) / 2;
                 visible = Math.hypot(dx, dy, dz) <= descriptor.cullDistance + radius;
             }
-            for (const mesh of meshes) mesh.visible = visible;
+            for (let m = 0; m < 2; m++) {
+                const mesh = m === 0 ? this.threeMesh : this.threeScanMesh;
+                if (!mesh) continue;
+                mesh.position.set(x, y, z);
+                setMeshTurn(mesh, rx, ry, rz);
+                mesh.scale.set(descriptor.scaleX, descriptor.scaleY, 1);
+                mesh.visible = visible;
+            }
         }
 
         update() {
@@ -1170,6 +1315,9 @@
             this.pixiMesh = null;
             destroyPixiObject(this.pixiContainer);
             this.pixiContainer = null;
+            // PIXI's video source stops and empties its element when destroyed;
+            // one other screens still show is let go of first.
+            if (this.shared && this.shared.users.size > 1 && this.videoSource) releasePixiVideo(this.videoSource);
             if (this.pixiTexture && this.pixiTexture.destroy) this.pixiTexture.destroy(true);
             this.pixiTexture = null;
             this.videoSource = null;
@@ -1181,7 +1329,8 @@
             if (this.threeMesh && this.threeMesh.parent) this.threeMesh.parent.remove(this.threeMesh);
             dispose(this.threeGeometry);
             dispose(this.threeMaterial);
-            dispose(this.threeTexture);
+            if (this.shared) this.manager.releaseThreeTexture(this.shared, this);
+            else dispose(this.threeTexture);
             this.threeMesh = null;
             this.threeGeometry = null;
             this.threeMaterial = null;
@@ -1196,6 +1345,9 @@
             this.audioSourceNode = null;
             this.gainNode = null;
 
+            // A shared video stops only with the last surface showing it.
+            if (this.shared && !this.manager.leaveVideo(this.shared, this)) this.video = null;
+            this.shared = null;
             if (this.video) {
                 try { this.video.pause(); } catch (error) { /* media already gone */ }
                 try {
@@ -1214,6 +1366,61 @@
             this._owners = new Map();
             this._waiters = new Map();
             this._spriteset = null;
+            this._sharedVideos = new Map();
+            // The kill switch: false opens a video per surface, as before.
+            this.shareVideos = true;
+        }
+
+        /** What must match for two surfaces to show one video: muted, the same file, loop and speed. */
+        videoShareKey(descriptor) {
+            if (!this.shareVideos || !descriptor || !descriptor.muted || isImageFile(descriptor.file)) return null;
+            return descriptor.file + "|" + (descriptor.loop ? 1 : 0) + "|" + descriptor.playbackRate;
+        }
+
+        /** A playing video this surface can show instead of opening its own, or null. */
+        joinVideo(owner) {
+            const key = this.videoShareKey(owner.descriptor), entry = key && this._sharedVideos.get(key);
+            if (!entry || !entry.video) return null;
+            // A surface asked to start somewhere other than where the shared one stands keeps its own.
+            const want = finiteNumber(owner.descriptor.currentTime, 0, Number.MAX_SAFE_INTEGER) || 0;
+            const at = Number(entry.video.currentTime) || 0;
+            if (want > 0 && Math.abs(want - at) > 0.5) return null;
+            entry.users.add(owner);
+            return entry;
+        }
+
+        /** Offer a freshly opened video to later surfaces that play it the same way. */
+        shareVideo(owner, video) {
+            const key = this.videoShareKey(owner.descriptor);
+            if (!key || this._sharedVideos.has(key)) return null;
+            const entry = { key, video, owner, users: new Set([owner]), started: false, texture: null, textureUsers: new Set() };
+            this._sharedVideos.set(key, entry);
+            return entry;
+        }
+
+        /** False while other surfaces still show the video (the leaver must not stop it). */
+        leaveVideo(entry, owner) {
+            entry.users.delete(owner);
+            if (entry.users.size) {
+                if (entry.owner === owner) entry.owner = entry.users.values().next().value;
+                return false;
+            }
+            if (this._sharedVideos.get(entry.key) === entry) this._sharedVideos.delete(entry.key);
+            return true;
+        }
+
+        /** One three texture per shared video: a new frame is uploaded once, not once per screen. */
+        sharedThreeTexture(entry, owner) {
+            if (!entry.texture) entry.texture = new THREE.VideoTexture(entry.video);
+            entry.textureUsers.add(owner);
+            return entry.texture;
+        }
+
+        releaseThreeTexture(entry, owner) {
+            entry.textureUsers.delete(owner);
+            if (entry.textureUsers.size || !entry.texture) return;
+            dispose(entry.texture);
+            entry.texture = null;
         }
 
         store(map, create) {
@@ -1419,23 +1626,15 @@
         // exact field snapshot so ordinary playback avoids rebuilding all of
         // the alias lists, corners and anchor arrays. In-place edits still
         // pass through the full parser, including malformed restored data.
+        //
+        // The spriteset asks twice a tick (before and after its own update);
+        // a record that matched earlier in the same frame is not walked again.
         storedDescriptor(raw) {
             const cache = this._validatedDescriptors || (this._validatedDescriptors = new WeakMap());
             const record = raw && typeof raw === "object" ? cache.get(raw) : null;
-            const matches = node => {
-                const value = node.value;
-                if (Object.keys(value).length !== node.keys.length) return false;
-                for (let i = 0; i < node.keys.length; i++) {
-                    const key = node.keys[i];
-                    if (node.time && key === "currentTime") {
-                        const time = value[key];
-                        if (typeof time !== "number" || !Number.isFinite(time) || time < 0 || time > Number.MAX_SAFE_INTEGER) return false;
-                    } else if (value[key] !== node.values[i]) return false;
-                }
-                for (const child of node.children) if (!matches(child)) return false;
-                return true;
-            };
-            if (record && matches(record)) return raw;
+            const frame = typeof Graphics !== "undefined" && Number.isFinite(Graphics.frameCount) ? Graphics.frameCount : null;
+            if (record && frame !== null && record.checkedFrame === frame) return raw;
+            if (record && descriptorMatches(record)) { record.checkedFrame = frame; return raw; }
             const descriptor = normalizeShowArgs(raw, null);
             if (!descriptor) return null;
             const snapshot = (value, time) => {
@@ -1446,7 +1645,16 @@
             return descriptor;
         }
 
-        updateSpriteset(spriteset) {
+        /*
+         * Runs twice a frame: before the spriteset updates, so this frame's
+         * surfaces exist and are placed when the 3D pass draws them, and
+         * after (`settled`), for the ones the frame started or changed and
+         * for the flat ones PIXI draws later. A 3D plane the pass has
+         * already drawn is not placed a second time: nothing draws or reads
+         * it again before the next frame's first pass places it afresh from
+         * the same state. `secondPlacement.enabled = false` places it anyway.
+         */
+        updateSpriteset(spriteset, settled) {
             if (!spriteset) return;
             if (this._spriteset && this._spriteset !== spriteset) this.teardownRuntime("suspend");
             this._spriteset = spriteset;
@@ -1474,13 +1682,19 @@
                         owner.cleanup("recreate");
                         this._owners.delete(descriptor.id);
                         owner = this.createOwner(descriptor);
+                    } else if (settled && secondPlacement.enabled && owner.backend === "three"
+                        && owner.placedDescriptor === descriptor && owner.descriptor === descriptor) {
+                        // Placed by this frame's first pass; only the clock moves on.
+                        owner.captureCurrentTime(descriptor);
                     } else {
                         owner.descriptor = descriptor;
                         owner.update();
+                        owner.placedDescriptor = owner.backend === "three" ? descriptor : null;
                     }
                 }
             }
-            for (const [id, owner] of Array.from(this._owners.entries())) {
+            // A Map may lose the entry being visited: the walk goes on to the next.
+            for (const [id, owner] of this._owners) {
                 if (!store.surfaces[String(id)]) {
                     owner.cleanup("stop");
                     this._owners.delete(id);
@@ -1569,7 +1783,7 @@
             Spriteset_Map.prototype.update = function() {
                 manager.updateSpriteset(this);
                 const result = baseUpdate.apply(this, arguments);
-                manager.updateSpriteset(this);
+                manager.updateSpriteset(this, true);
                 return result;
             };
             Spriteset_Map.prototype.update.__reactorVideoSurfaces = true;
@@ -1626,6 +1840,8 @@
         normalizeTransformArgs: normalizeTransformArgs,
         normalizeStopArgs: normalizeStopArgs,
         applyWorldCorners: applyWorldCorners,
+        turnCache: turnCache,
+        secondPlacement: secondPlacement,
         MediaSurfaceOwner: MediaSurfaceOwner,
         MediaSurfaceManager: MediaSurfaceManager,
         // Legacy API names refer to the same classes and manager.

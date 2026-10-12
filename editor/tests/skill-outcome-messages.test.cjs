@@ -11,6 +11,7 @@
  * rather than in a playtest.
  */
 const assert = require('node:assert/strict');
+const { runtimeSource } = require('./helpers/runtime-source.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
@@ -23,8 +24,7 @@ const windowsSource = fs.readFileSync(
     path.join(workspaceRoot, 'runtime', 'reactor_windows.js'), 'utf8');
 const managerSource = fs.readFileSync(
     path.join(workspaceRoot, 'runtime', 'reactor_managers.js'), 'utf8');
-const coreSource = fs.readFileSync(
-    path.join(workspaceRoot, 'runtime', 'reactor_core.js'), 'utf8');
+const coreSource = runtimeSource('reactor_core.js');
 
 // A primitive string carries no realm of its own: `fmt.format(...)` resolves
 // against the String.prototype of whichever realm *reads* the property, and

@@ -7,8 +7,8 @@
  * than to a product. Those are the things an author actually has to know, and
  * until now the only place they were written down was the engine source.
  *
- * Every sentence here describes what `runtime/reactor_objects.js` really does,
- * checked against it rather than against RPG Maker's documentation - the two
+ * Every sentence here describes what `runtime/reactor_objects*.js` really do,
+ * checked against them rather than against RPG Maker's documentation - the two
  * disagree in a few places, and the runtime wins.
  *
  * Rows carry their sentence as hover help (see utils/HoverHelp.js). Dropdown
@@ -43,7 +43,7 @@ class TraitHelp {
             54: 'Empties the slot and stops anything being equipped in it.',
             55: 'Changes what the equipment slots of this battler are.',
             61: 'A chance of one extra action this turn. Each trait is rolled on its own, so several can stack.',
-            62: 'Switches on one fixed battler behaviour.',
+            62: 'Switches on one fixed battler behavior.',
             63: 'Changes the animation played on defeat. Enemies only - actors ignore it.',
             64: 'A party-wide effect, active while this battler is in the party.'
         };
@@ -104,7 +104,7 @@ class TraitHelp {
         return flagHelp;
     }
 
-    /** The four Collapse Effects, in stored dataId order. */
+    /** The Collapse Effects, in stored dataId order. */
     static collapseEffects() {
         const tt = text => (window.I18n ? window.I18n.tText(text) : text);
         const collapseHelp = [
@@ -115,7 +115,8 @@ class TraitHelp {
             'The sprite breaks into drifting motes and blows away.',
             'The sprite burns away into rising embers and sparks.',
             'The sprite unravels into slow green motes that drift upward and glow.',
-            'The sprite breaks like glass: shards burst outward from the middle and fall.'
+            'The sprite breaks like glass: shards burst outward from the middle and fall.',
+            'The battler falls and stays on the ground. It can be revived.'
         ].map(tt);
         return collapseHelp;
     }

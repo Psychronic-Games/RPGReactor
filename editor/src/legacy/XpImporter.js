@@ -32,7 +32,7 @@ const CONVERTED = new Set(['characters', 'tilesets', 'autotiles', 'icons', 'wind
 
 function gameIni(src) {
     const b = src.read('Game.ini');
-    const text = b ? b.toString('latin1') : '';
+    const text = R.iniText(b);   // a Japanese game's title is Shift_JIS
     const get = (k) => { const m = new RegExp(`^[ \\t]*${k}[ \\t]*=[ \\t]*(.*)$`, 'mi').exec(text); return m ? m[1].trim() : ''; };
     return { title: get('Title'), rtp: [get('RTP1'), get('RTP2'), get('RTP3')].filter(Boolean) };
 }
@@ -55,6 +55,8 @@ function open(folder, destination, options) {
     });
     const mainAt = scripts.findIndex(s => s.name.trim() === 'Main');
     const active = mainAt >= 0 ? scripts.slice(0, mainAt) : scripts;
+    // Settings the game makes before its first scene (screen size, default font) can be in Main itself.
+    const settingsScripts = (mainAt >= 0 ? scripts.slice(0, mainAt + 1) : scripts).map(s => s.text);
     const custom = active.filter(s => s.text.trim() && !STOCK_SCRIPTS.has(s.name.trim()));
     const mapIds = (infos instanceof Map ? Array.from(infos.keys()) : Object.keys(infos)).map(Number).filter(n => n > 0).sort((a, b) => a - b);
     const ini = gameIni(src);
@@ -70,15 +72,19 @@ function open(folder, destination, options) {
         };
     }
 
-    function importProject() {
+    async function importProject() {
         const { PNG } = require('pngjs');
+        // The worker shares the editor's process: synchronous PNG loops keep their memory until the
+        // event loop turns, so the image passes breathe.
+        const breathe = () => new Promise(resolve => setImmediate(resolve));
+        let sinceBreath = 0;
+        const maybeBreathe = async () => { if (++sinceBreath >= 16) { sinceBreath = 0; await breathe(); } };
         const log = typeof options.log === 'function' ? options.log : () => {};
         const report = typeof options.progress === 'function' ? options.progress : () => {};
         const span = (from, to) => (done, total, status) => report(from + (to - from) * (total ? Math.min(1, done / total) : 1), status);
-        const repo = path.resolve(__dirname, '..', '..', '..');
-        const editorPackage = JSON.parse(fs.readFileSync(path.join(repo, 'editor', 'package.json'), 'utf8'));
-        const skeleton = path.join(repo, 'template', 'Barebones');
-        const runtime = path.join(repo, 'runtime');
+        const EditorPaths = require('./EditorPaths.js');
+        const editorPackage = EditorPaths.editorPackage();
+        const runtime = EditorPaths.runtime();
         const dest = path.resolve(destination);
         const mkdir = (p) => fs.mkdirSync(p, { recursive: true });
         const writeJson = (p, v) => fs.writeFileSync(p, JSON.stringify(v));
@@ -101,17 +107,16 @@ function open(folder, destination, options) {
 
         log('Copying the project skeleton and runtime…', 'stage');
         report(0, 'Copying the project skeleton and runtime…');
-        const copyTree = (from, to, skip = () => false) => {
+        const copyTree = (from, to) => {
             for (const entry of fs.readdirSync(from, { withFileTypes: true })) {
                 const s = path.join(from, entry.name), d = path.join(to, entry.name);
-                if (skip(path.relative(skeleton, s).replace(/\\/g, '/'))) continue;
-                if (entry.isDirectory()) { mkdir(d); copyTree(s, d, skip); } else { mkdir(path.dirname(d)); fs.copyFileSync(s, d); }
+                if (entry.isDirectory()) { mkdir(d); copyTree(s, d); } else { mkdir(path.dirname(d)); fs.copyFileSync(s, d); }
             }
         };
-        copyTree(skeleton, dest, r => (r === 'img' || r === 'img/system' || r.startsWith('img/system/')) ? false : r.startsWith('img/') || r.startsWith('audio/') || r.startsWith('js/'));
+        EditorPaths.copySkeleton(dest, r => r.startsWith('js/'));
         mkdir(path.join(dest, 'js'));
         copyTree(runtime, path.join(dest, 'js'));
-        if (fs.existsSync(path.join(skeleton, 'js', 'reactor_plugins.js'))) fs.copyFileSync(path.join(skeleton, 'js', 'reactor_plugins.js'), path.join(dest, 'js', 'reactor_plugins.js'));
+        fs.copyFileSync(EditorPaths.skeletonFile('js/reactor_plugins.js'), path.join(dest, 'js', 'reactor_plugins.js'));
         for (const f of [...Object.values(GRAPHICS), ...Object.values(R.AUDIO), 'img/characters', 'img/tilesets', 'img/faces', 'img/sv_actors', 'img/sv_enemies', 'img/battlebacks2', 'img/titles2', 'movies']) mkdir(path.join(dest, f));
 
         // ---- the database ------------------------------------------------------
@@ -129,13 +134,14 @@ function open(folder, destination, options) {
         if (iconFiles.length) {
             const perRow = 16, size = 24;
             const sheet = X.blank(perRow * size, Math.ceil((iconFiles.length + 1) / perRow) * size);
-            iconFiles.forEach((f, i) => {
+            for (const [i, f] of iconFiles.entries()) {
+                await maybeBreathe();
                 const img = readPng('Graphics/Icons/' + f);
-                if (!img) return;
+                if (!img) continue;
                 const index = i + 1;
                 X.blit(sheet, img, 0, 0, size, size, (index % perRow) * size, Math.floor(index / perRow) * size);
                 iconNames.set(f.replace(/\.png$/i, '').toLowerCase(), index);
-            });
+            }
             writePng(path.join(dest, 'img', 'system', 'IconSet.png'), sheet);
             add(images, 'Icons', iconFiles.length);
         }
@@ -151,7 +157,8 @@ function open(folder, destination, options) {
         const bases = [];
         const cutSheets = new Map();
         const tilesetList = xp.tilesets.filter(Boolean);
-        tilesetList.forEach((ts, index) => {
+        for (const [index, ts] of tilesetList.entries()) {
+            await breathe();
             tilesetProgress(index, tilesetList.length, `Tileset ${ts.id}: ${ts.name || ''}`);
             const image = ts.tileset_name ? findGraphic('Tilesets', ts.tileset_name) : null;
             if (ts.tileset_name && !image) skipped.push(`Graphics/Tilesets/${ts.tileset_name}: not shipped (RTP?)`);
@@ -176,7 +183,7 @@ function open(folder, destination, options) {
                 add(images, 'Tilesets');
             }
             tilesets[ts.id] = X.tilesetRecord(ts, names, X.tilesetFlags(ts, b));
-        });
+        }
         for (let i = 1; i < tilesets.length; i++) if (tilesets[i] === undefined) tilesets[i] = null;
 
         // Music a script of the game's plays in place of what its events name.
@@ -185,15 +192,15 @@ function open(folder, destination, options) {
         aliased(troops); aliased(commonEvents);
         const files = { Actors: db.actors, Classes: db.classes, Skills: db.skills, Items: db.items, Weapons: db.weapons, Armors: db.armors, Enemies: db.enemies, Troops: troops, States: db.states, Animations: db.animations, CommonEvents: commonEvents, Tilesets: tilesets };
         for (const [file, records] of Object.entries(files)) writeJson(path.join(dest, 'data', `${file}.json`), records);
-        const base = JSON.parse(fs.readFileSync(path.join(skeleton, 'data', 'System.json'), 'utf8'));
+        const base = JSON.parse(fs.readFileSync(EditorPaths.skeletonFile('data/System.json'), 'utf8'));
         const sys = aliased(D.system(base, system, title, notes));
         sys.rrGuardSkillId = db.guardSkillId;
         // Every XP character sheet is one character, four frames a row ($name[f4]).
         sys.rrMultiFrames = true;
         sys.rrBalloonSize = 32;
-        const fontSettings = C.fontDefaults(active.map(s => s.text), constants);
+        const fontSettings = C.fontDefaults(settingsScripts, constants);
         if (typeof fontSettings.size === 'number') sys.advanced.fontSize = fontSettings.size;
-        const screen = C.screenSize(active.map(s => s.text), constants);
+        const screen = C.screenSize(settingsScripts, constants);
         if (screen) Object.assign(sys.advanced, { screenWidth: screen[0], screenHeight: screen[1], uiAreaWidth: screen[0], uiAreaHeight: screen[1] });
         if (system.windowskin_name) sys.rrWindowskin = String(system.windowskin_name);
         // XP's own message codes take one number; lists belong to the game's message script, which is not here.
@@ -208,26 +215,33 @@ function open(folder, destination, options) {
         sys.rrChoicesInMessage = true;   // choices are listed inside the message window, after the text
         sys.rrNoItemBackgrounds = true;   // the old engines draw no bar behind each item of a list, only the cursor
         Object.assign(sys, { rrRgssWindows: true, rrMapNameStays: true, rrTouchUiOff: true, rrRgssKeys: true });   // rows one line tall, the map name through messages, no touch buttons, A/S/D as the X/Y/Z buttons
+        // RGSS shows its screen 1:1 and zooms sprites without smoothing: open at a whole-number scale and enlarge
+        // with hard pixel edges, so text and window frames stay sharp.
+        sys.advanced.screenScale = C.windowScale(sys.advanced.screenWidth, sys.advanced.screenHeight);
+        sys.advanced.pixelatedRendering = true;
         writeJson(path.join(dest, 'data', 'System.json'), sys);
 
         // ---- maps --------------------------------------------------------------
         log(`Writing ${mapIds.length} maps and their events…`, 'stage');
         const mapProgress = span(0.2, 0.45);
         const mapInfos = C.mapInfos(infos);
-        mapIds.forEach((id, index) => {
+        for (const [index, id] of mapIds.entries()) {
+            await maybeBreathe();
             mapProgress(index, mapIds.length, `Map ${index + 1} of ${mapIds.length}: ${(mapInfos[id] && mapInfos[id].name) || ''}`.trim());
             const file = `Map${String(id).padStart(3, '0')}`;
             const raw = data(file);
-            if (!raw) { skipped.push(`Data/${file}.rxdata: missing`); return; }
+            if (!raw) { skipped.push(`Data/${file}.rxdata: missing`); continue; }
             const ts = xp.tilesets[raw.tileset_id] || null;
             const json = aliased(X.map(raw, ts, bases[raw.tileset_id] || [], notes, ruby));
             // XP names a map in MapInfos only; MZ shows displayName on entry, which XP never did.
             writeJson(path.join(dest, 'data', `${file}.json`), json);
-        });
+        }
         writeJson(path.join(dest, 'data', 'MapInfos.json'), mapInfos);
 
         // ---- graphics, audio ---------------------------------------------------
         log('Copying graphics and audio…', 'stage');
+        // The engine asks for name + ".png" / ".ogg"; an upper-case extension (wait1.PNG) is written lower-case.
+        const lowerExt = (f) => f.replace(/\.[A-Za-z0-9]+$/, (e) => e.toLowerCase());
         const plan = [];
         for (const folderName of src.folders('Graphics')) {
             const lower = folderName.toLowerCase();
@@ -235,29 +249,29 @@ function open(folder, destination, options) {
             const key = Object.keys(GRAPHICS).find(k => k.toLowerCase() === lower);
             const target = key ? GRAPHICS[key] : 'img/' + folderName;
             if (!key) add(notes, 'scriptGraphicsFolder');
-            for (const f of graphicFiles(folderName)) plan.push(['Graphics/' + folderName + '/' + f, path.join(target, f), folderName]);
+            for (const f of graphicFiles(folderName)) plan.push(['Graphics/' + folderName + '/' + f, path.join(target, lowerExt(f)), folderName]);
         }
         for (const f of graphicFiles('Characters')) plan.push(['Graphics/Characters/' + f, path.join('img/characters', path.dirname(f), X.characterName(path.basename(f).replace(/\.png$/i, '')) + '.png'), 'Characters']);
-        for (const [folderName, target] of Object.entries(R.AUDIO)) for (const f of src.files('Audio/' + folderName)) plan.push(['Audio/' + folderName + '/' + f, path.join(target, f), folderName]);
+        for (const [folderName, target] of Object.entries(R.AUDIO)) for (const f of src.files('Audio/' + folderName)) plan.push(['Audio/' + folderName + '/' + f, path.join(target, lowerExt(f)), folderName]);
         const assetProgress = span(0.45, 0.95);
-        plan.forEach(([from, to, bucket], index) => {
-            if (index % 10 === 0) assetProgress(index, plan.length, `${bucket}: ${path.basename(from)}`);
-            if (/\.(txt|rtf|db|ini)$/i.test(from)) return;
+        for (const [index, [from, to, bucket]] of plan.entries()) {
+            if (index % 10 === 0) { assetProgress(index, plan.length, `${bucket}: ${path.basename(from)}`); await breathe(); }
+            if (/\.(txt|rtf|db|ini)$/i.test(from)) continue;
             const bytes = src.read(from);
-            if (!bytes) return;
+            if (!bytes) continue;
             // Zero-byte files are placeholders a script plays something else for (see audioAliases).
-            if (!bytes.length) { add(notes, 'emptyPlaceholder'); return; }
+            if (!bytes.length) { add(notes, 'emptyPlaceholder'); continue; }
             const out = R.systemTwin(path.join(dest, R.repairPath(to.replace(/\\/g, '/'))));
             mkdir(path.dirname(out));
             fs.writeFileSync(out, bytes);
             add(images, bucket);
-        });
+        }
         // XP's game-over image is MZ's img/system/GameOver.png.
         const gameover = findGraphic('Gameovers', system.gameover_name);
         if (gameover) fs.writeFileSync(path.join(dest, 'img', 'system', 'GameOver.png'), src.read('Graphics/Gameovers/' + gameover));
         // Window skins: each converted into MZ's layout under img/windowskins (Change Windowskin picks
         // among them); the game's own becomes img/system/Window.png.
-        const baseSkinFile = path.join(skeleton, 'img', 'system', 'Window.png');
+        const baseSkinFile = EditorPaths.skeletonFile('img/system/Window.png');
         const baseSkin = fs.existsSync(baseSkinFile) ? rgba(PNG.sync.read(fs.readFileSync(baseSkinFile))) : null;
         // A game whose system data names no skin sets one from an event: the skin events pick most.
         const skinCounts = notes.windowskinNames || {};
@@ -266,6 +280,7 @@ function open(folder, destination, options) {
             .filter(n => { const f = findGraphic('Windowskins', n); const img = f && readPng('Graphics/Windowskins/' + f); return img && img.width === 192 && img.height === 128; });
         const defaultSkin = String(system.windowskin_name || '') || Object.keys(skinCounts).sort((a, b) => skinCounts[b] - skinCounts[a])[0] || scriptSkins[0] || '';
         for (const f of graphicFiles('Windowskins').filter(n => /\.png$/i.test(n))) {
+            await maybeBreathe();
             const skin = readPng('Graphics/Windowskins/' + f);
             if (!skin) continue;
             // Only full skins (192×128) convert; the rest are images scripts draw themselves.
@@ -300,10 +315,10 @@ function open(folder, destination, options) {
 
         // ---- identity ----------------------------------------------------------
         const pkg = JSON.parse(fs.readFileSync(path.join(dest, 'package.json'), 'utf8'));
-        pkg.name = 'rr-' + title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+        pkg.name = require('./ProjectFiles.js').packageName(title);
         pkg.version = editorPackage.version;
         const [sw, sh] = [sys.advanced.screenWidth, sys.advanced.screenHeight];
-        const [ww, wh] = [Math.round(sw * 1.5), Math.round(sh * 1.5)];
+        const [ww, wh] = [sw * sys.advanced.screenScale, sh * sys.advanced.screenScale];
         pkg.window = Object.assign({}, pkg.window, { title, width: ww, height: wh, min_width: sw, min_height: sh });
         pkg['chromium-args'] = `--force-color-profile=srgb --window-size=${ww},${wh}`;
         writeJson(path.join(dest, 'package.json'), pkg);

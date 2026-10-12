@@ -117,6 +117,154 @@
     "178": {
       "mode": "sequence",
       "sequenceId": 23
+    },
+    "237": {
+      "mode": "sequence",
+      "sequenceId": 18
+    },
+    "238": {
+      "mode": "sequence",
+      "sequenceId": 18
+    },
+    "239": {
+      "mode": "sequence",
+      "sequenceId": 29
+    },
+    "240": {
+      "mode": "sequence",
+      "sequenceId": 21
+    },
+    "241": {
+      "mode": "sequence",
+      "sequenceId": 23
+    },
+    "243": {
+      "mode": "sequence",
+      "sequenceId": 36
+    },
+    "244": {
+      "mode": "sequence",
+      "sequenceId": 36
+    },
+    "245": {
+      "mode": "sequence",
+      "sequenceId": 38
+    },
+    "247": {
+      "mode": "sequence",
+      "sequenceId": 29
+    },
+    "249": {
+      "mode": "sequence",
+      "sequenceId": 35
+    },
+    "250": {
+      "mode": "sequence",
+      "sequenceId": 29
+    },
+    "251": {
+      "mode": "sequence",
+      "sequenceId": 35
+    },
+    "252": {
+      "mode": "sequence",
+      "sequenceId": 29
+    },
+    "253": {
+      "mode": "sequence",
+      "sequenceId": 26
+    },
+    "254": {
+      "mode": "sequence",
+      "sequenceId": 2
+    },
+    "255": {
+      "mode": "sequence",
+      "sequenceId": 26
+    },
+    "256": {
+      "mode": "sequence",
+      "sequenceId": 38
+    },
+    "257": {
+      "mode": "sequence",
+      "sequenceId": 38
+    },
+    "258": {
+      "mode": "sequence",
+      "sequenceId": 38
+    },
+    "260": {
+      "mode": "sequence",
+      "sequenceId": 39
+    },
+    "261": {
+      "mode": "sequence",
+      "sequenceId": 38
+    },
+    "262": {
+      "mode": "sequence",
+      "sequenceId": 2
+    },
+    "263": {
+      "mode": "sequence",
+      "sequenceId": 39
+    },
+    "264": {
+      "mode": "sequence",
+      "sequenceId": 39
+    },
+    "265": {
+      "mode": "sequence",
+      "sequenceId": 38
+    },
+    "266": {
+      "mode": "sequence",
+      "sequenceId": 39
+    },
+    "267": {
+      "mode": "sequence",
+      "sequenceId": 39
+    },
+    "268": {
+      "mode": "sequence",
+      "sequenceId": 36
+    },
+    "269": {
+      "mode": "sequence",
+      "sequenceId": 19
+    },
+    "270": {
+      "mode": "sequence",
+      "sequenceId": 35
+    },
+    "271": {
+      "mode": "sequence",
+      "sequenceId": 37
+    },
+    "272": {
+      "mode": "sequence",
+      "sequenceId": 40
+    },
+    "273": {
+      "mode": "sequence",
+      "sequenceId": 40
+    },
+    "274": {
+      "mode": "sequence",
+      "sequenceId": 38
+    },
+    "275": {
+      "mode": "sequence",
+      "sequenceId": 39
+    },
+    "276": {
+      "mode": "sequence",
+      "sequenceId": 2
+    },
+    "277": {
+      "mode": "sequence",
+      "sequenceId": 23
     }
   },
   "items": {
@@ -171,6 +319,50 @@
     "22": {
       "mode": "sequence",
       "sequenceId": 34
+    },
+    "31": {
+      "mode": "sequence",
+      "sequenceId": 28
+    },
+    "32": {
+      "mode": "sequence",
+      "sequenceId": 28
+    },
+    "33": {
+      "mode": "sequence",
+      "sequenceId": 38
+    },
+    "34": {
+      "mode": "sequence",
+      "sequenceId": 28
+    },
+    "35": {
+      "mode": "sequence",
+      "sequenceId": 28
+    },
+    "36": {
+      "mode": "sequence",
+      "sequenceId": 28
+    },
+    "37": {
+      "mode": "sequence",
+      "sequenceId": 28
+    },
+    "38": {
+      "mode": "sequence",
+      "sequenceId": 40
+    },
+    "39": {
+      "mode": "sequence",
+      "sequenceId": 40
+    },
+    "40": {
+      "mode": "sequence",
+      "sequenceId": 40
+    },
+    "41": {
+      "mode": "sequence",
+      "sequenceId": 40
     }
   },
   "weapons": {
@@ -185,6 +377,62 @@
     "50": {
       "mode": "sequence",
       "sequenceId": 24
+    },
+    "51": {
+      "mode": "sequence",
+      "sequenceId": 18
+    },
+    "52": {
+      "mode": "sequence",
+      "sequenceId": 22
+    },
+    "53": {
+      "mode": "sequence",
+      "sequenceId": 20
+    },
+    "54": {
+      "mode": "sequence",
+      "sequenceId": 21
+    },
+    "55": {
+      "mode": "sequence",
+      "sequenceId": 19
+    },
+    "56": {
+      "mode": "sequence",
+      "sequenceId": 19
+    },
+    "57": {
+      "mode": "sequence",
+      "sequenceId": 19
+    },
+    "58": {
+      "mode": "sequence",
+      "sequenceId": 19
+    },
+    "59": {
+      "mode": "sequence",
+      "sequenceId": 19
+    },
+    "60": {
+      "mode": "sequence",
+      "sequenceId": 36
+    },
+    "61": {
+      "mode": "sequence",
+      "sequenceId": 24
+    },
+    "62": {
+      "mode": "sequence",
+      "sequenceId": 35
+    },
+    "63": {
+      "mode": "sequence",
+      "sequenceId": 37
+    },
+    "64": {
+      "mode": "sequence",
+      "sequenceId": 26
     }
   },
   "actors": {

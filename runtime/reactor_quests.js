@@ -933,6 +933,8 @@
         this._category = category;
         this.refresh();
         this.scrollTo(0, 0);
+        // A quest selected in the old category (one the log opened on) is not a row of this one.
+        if (this.index() >= 0) this.deselect();
     };
 
     Window_QuestList.prototype.setDetailWindow = function(detailWindow) {
@@ -1199,7 +1201,38 @@
         const quest = this.quest();
         if (!quest) return "";
         if (this._settingsSeen !== this.settings()) return "settings";
-        return quest.id + "|" + $gameSystem.quests().revision() + "|" + Graphics.boxWidth + "x" + Graphics.boxHeight;
+        const base = quest.id + "|" + $gameSystem.quests().revision() + "|" + Graphics.boxWidth + "x" + Graphics.boxHeight;
+        const codes = this.textCodes(quest);
+        if (!codes.length) return base;
+        let values = base;
+        for (const code of codes) {
+            const actor = code.actor && $gameActors.actor(code.id);
+            values += "|" + (code.actor ? (actor ? actor.name() : "") : $gameVariables.value(code.id));
+        }
+        return values;
+    };
+
+    /**
+     * The variables (\V[n]) and actor names (\N[n]) the quest's name and
+     * objectives show: their values are part of what the tracker draws, and
+     * no quest change happens when only they change.
+     */
+    Window_QuestTracker.prototype.textCodes = function(quest) {
+        if (!this._textCodes) this._textCodes = new WeakMap();
+        let codes = this._textCodes.get(quest);
+        if (!codes) {
+            const text = [quest.name].concat((quest.objectives || []).map(objective => objective && objective.text)).join("\n");
+            codes = [];
+            const seen = new Set();
+            for (const match of String(text).matchAll(/\\([VN])\[(\d+)\]/gi)) {
+                const key = match[1].toUpperCase() + match[2];
+                if (seen.has(key)) continue;
+                seen.add(key);
+                codes.push({ actor: key[0] === "N", id: Number(match[2]) });
+            }
+            this._textCodes.set(quest, codes);
+        }
+        return codes;
     };
 
     /**

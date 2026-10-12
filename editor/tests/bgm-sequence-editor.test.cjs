@@ -106,6 +106,8 @@ function controllerFor(mapData, sequence, extraContext = {}) {
     const alerts = [];
     const context = {
         console, process, require, nw: {}, alert: m => alerts.push(m),
+        // Map Properties tells through the editor's themed dialog.
+        RRDialog: { alert: async m => { alerts.push(m); } },
         document: { getElementById: id => values[id] || null },
         RR_LIMITS: { MAP_WIDTH: 512, MAP_HEIGHT: 512 },
         rrIsMapSizeSupported: (w, h) => w >= 1 && w <= 512 && h >= 1 && h <= 512,

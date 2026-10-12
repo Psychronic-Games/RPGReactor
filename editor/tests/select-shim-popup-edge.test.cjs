@@ -29,3 +29,11 @@ test('a popup with room to its right stays anchored at its trigger', () => {
     assert.notEqual(popup.style.left, '8px');
     assert.match(popup.style.cssText, /left: 0px;/, 'the trigger’s own left');
 });
+
+test('a select hidden by its form takes its themed trigger with it', () => {
+    // The shim wraps the select and draws the trigger beside it, so a `hidden` select alone
+    // left a live-looking dropdown behind (the weapon-range source on Weapons and Items).
+    const theme = fs.readFileSync(path.join(__dirname, '../css/theme.css'), 'utf8');
+    assert.match(theme, /\.rr-shim-wrapper:has\(> select\[hidden\]\)\s*\{\s*display:\s*none\s*!important;\s*\}/);
+    assert.match(shim, /wrapper\.className = 'rr-shim-wrapper'/);
+});

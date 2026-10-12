@@ -447,7 +447,12 @@
                 }
                 if (source) {
                     const gl = renderer.gl || (renderer.context && renderer.context.gl);
-                    const max = gl && gl.getParameter ? gl.getParameter(gl.MAX_TEXTURE_SIZE) : 16384;
+                    // A lost context answers every query with null, and a null
+                    // limit made every canvas look oversized: the guard shrank
+                    // it to 1x1 and wiped it. Nothing uploads until the context
+                    // is back, and PIXI uploads every source again then.
+                    if (gl && typeof gl.isContextLost === "function" && gl.isContextLost()) return;
+                    const max = (gl && gl.getParameter && gl.getParameter(gl.MAX_TEXTURE_SIZE)) || 16384;
                     const pw = Number(source.pixelWidth);
                     const ph = Number(source.pixelHeight);
                     const invalid = !isFinite(pw) || !isFinite(ph) || pw < 1 || ph < 1 || pw > max || ph > max;
@@ -671,6 +676,22 @@
                     }
                 };
                 replaceRefs(instance, 0);
+                // v8 also wires change observers as object literals whose
+                // arrow functions captured `this` = tmp (Sprite/Text/
+                // NineSlice `_anchor`, TilingSprite `_anchor` and
+                // `_tileTransform`). The walk above cannot see a closure, so
+                // those observers kept re-flagging tmp: a plugin's
+                // TilingSprite subclass (GALV_LayerGraphics) drew its first
+                // tilePosition forever while its origin scrolled.
+                const rebind = (holder, field) => {
+                    const observer = holder && holder[field];
+                    if (observer && observer !== instance && observer.constructor === Object &&
+                            typeof observer._onUpdate === "function") {
+                        holder[field] = { _onUpdate: () => instance.onViewUpdate() };
+                    }
+                };
+                rebind(instance._anchor, "_observer");
+                rebind(instance._tileTransform, "observer");
                 return instance;
             }
         }
@@ -1374,13 +1395,19 @@
             setter.__rrNumeric = true;
             Object.defineProperty(PIXI.Container.prototype, "blendMode", { get: containerDescriptor.get, set: setter, configurable: true });
         }
-        // filter.blendMode = 32  (v8 filters hold a plain field, set after construction)
-        if (PIXI.Filter && PIXI.Filter.prototype && !Object.getOwnPropertyDescriptor(PIXI.Filter.prototype, "blendMode")) {
+        // filter.blendMode = 32: early v8 filters hold a plain field; later ones (8.20) an accessor of their own,
+        // whose setter takes names only, so a number is translated before it.
+        const filterDescriptor = PIXI.Filter && PIXI.Filter.prototype && Object.getOwnPropertyDescriptor(PIXI.Filter.prototype, "blendMode");
+        if (PIXI.Filter && PIXI.Filter.prototype && !filterDescriptor) {
             Object.defineProperty(PIXI.Filter.prototype, "blendMode", {
                 get: function() { return this.__rrBlendMode === undefined ? "normal" : this.__rrBlendMode; },
                 set: function(value) { this.__rrBlendMode = translate(value); },
                 configurable: true
             });
+        } else if (filterDescriptor && filterDescriptor.set && !filterDescriptor.set.__rrNumeric) {
+            const setter = function(value) { return filterDescriptor.set.call(this, translate(value)); };
+            setter.__rrNumeric = true;
+            Object.defineProperty(PIXI.Filter.prototype, "blendMode", { get: filterDescriptor.get, set: setter, configurable: true });
         }
     })();
 
@@ -3021,6 +3048,9 @@
             if (typeof cls !== "function" || !cls.prototype) continue;
             if (seen.has(cls)) continue;
             seen.add(cls);
+            // An ES6 class (a plugin's `class X extends Sprite`) builds itself through super(), which already
+            // reaches the wrapped MZ base; wrapping it would call it without `new`, which a class cannot take.
+            try { if (/^class\b/.test(Function.prototype.toString.call(cls))) continue; } catch (e) {}
             const pixiBase = findPixiAncestor(cls);
             if (!pixiBase) continue;
             try {

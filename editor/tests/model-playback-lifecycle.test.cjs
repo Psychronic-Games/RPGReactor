@@ -1,4 +1,5 @@
 const test = require('node:test');
+const { runtimeSource } = require('./helpers/runtime-source.cjs');
 const assert = require('node:assert/strict');
 require('../../runtime/libs/three.js');
 const R = require('../../runtime/reactor_3d.js');
@@ -173,7 +174,7 @@ test('raised monitor props sort in front of a ground-level vehicle instead of so
     const motorcycle={eventId:()=>24,screenY:()=>25*48,_reactorLift:0};
     assert.ok(R.flatModelSortY(monitor)>monitor.screenY()+9*48, 'lift contributes to depth even without a 3D tile-prop registry');
     assert.ok(R.flatModelSortY(monitor)>R.flatModelSortY(motorcycle));
-    const fs=require('fs'),vm=require('vm'),source=fs.readFileSync(require('path').join(__dirname,'../../runtime/reactor_core.js'),'utf8');
+    const fs=require('fs'),vm=require('vm'),source=runtimeSource('reactor_core.js');
     const compare=vm.runInNewContext('('+source.match(/Tilemap.prototype._compareChildOrder = (function\(a, b\) \{[\s\S]*?\n\});/)[1]+')');
     const a={z:3,y:(27.96-9.56)*48,_reactorSortY:R.flatModelSortY(monitor)},b={z:3,y:25*48,_reactorSortY:R.flatModelSortY(motorcycle)};
     assert.ok(compare(a,b)>0);assert.ok(compare({z:5,y:0},a)>0,'explicit tile/event priority still wins');

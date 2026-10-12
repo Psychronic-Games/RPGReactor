@@ -161,6 +161,8 @@ class NwVersionPicker {
 
     _onKeyDown(event) {
         if (event.key === 'Escape') {
+            // The open list takes the key; the dialog around it closes on the next one.
+            if (!this.menu.hidden) event.preventDefault();
             this.close();
             return;
         }

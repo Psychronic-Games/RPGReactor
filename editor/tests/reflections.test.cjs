@@ -95,9 +95,9 @@ test('a water sheet\'s look survives both the runtime\'s and the editor\'s readi
 
 test('the capture is taken after the shadow maps, in the game and in the editor', () => {
     const core = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
-    assert.match(core, /Reactor3D\.prepareWorldFrame\(this\._renderer, mapScene, scene, this\._camera\);/, 'the map\'s frame step');
-    assert.match(core, /if \(shadows !== false && mapScene\.renderShadows\) mapScene\.renderShadows\([^\n]+\n\s*Reactor3D\.prepareReflections\(renderer, mapScene, scene, camera\);/, 'the capture and the mirrors after the shadow maps');
-    assert.match(core, /Reactor3D\.prepareReflections = function[\s\S]{0,900}renderer\.resetState\(\);/, 'three forgets the texture units PIXI unbound before the capture and the mirrors draw');
+    assert.match(core, /Reactor3D\.prepareWorldFrame\(this\._renderer, mapScene, scene, this\._camera, undefined, this\.upscaled\(\) \? this\._scale : 1\);/, 'the map\'s frame step');
+    assert.match(core, /if \(shadows !== false && mapScene\.renderShadows\) mapScene\.renderShadows\([^\n]+\n\s*Reactor3D\.prepareReflections\(renderer, mapScene, scene, camera, scale\);/, 'the capture and the mirrors after the shadow maps');
+    assert.match(core, /Reactor3D\.prepareReflections = function[\s\S]{0,1100}renderer\.resetState\(\);/, 'three forgets the texture units PIXI unbound before the capture and the mirrors draw');
     assert.match(core, /const probe = mapScene\.reflectionProbe \? mapScene\.reflectionProbe\(camera\) : null;\n\s*if \(probe\) Reactor3D\.Reflections\.update\(renderer, scene, probe\.position, probe\.hidden, probe\.toward, probe\.radius, probe\.reach\);/);
     const editor = fs.readFileSync(path.join(repoRoot, 'editor', 'src', 'MapEditor3D.js'), 'utf8');
     assert.match(editor, /Reactor3D\.Reflections\.update\(this\.renderer, scene, this\.camera\.position, this\.mapScene\.reflectionHidden\?\.\(\)\)/);
@@ -211,8 +211,8 @@ test('a capture sees no underwater wash, the ground at the feet is never cut, an
 test('the battle room reflects and casts through the map\'s own frame step, its props and lead actor included', () => {
     const main = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
     const battle = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_battle_room.js'), 'utf8');
-    assert.match(main, /Reactor3D\.prepareWorldFrame\(this\._renderer, mapScene, scene, this\._camera\);/, 'the map viewport');
-    assert.match(battle, /R\.prepareWorldFrame\(this\.renderer,this\.world,this\.scene,this\.camera,shadowed\?\{mapData:this\.map,lights:this\.uniforms,focus\}:false\);\s*this\.renderer\.render\(this\.scene,this\.camera\);/, 'the battle room, right before its draw');
+    assert.match(main, /Reactor3D\.prepareWorldFrame\(this\._renderer, mapScene, scene, this\._camera, undefined, this\.upscaled\(\) \? this\._scale : 1\);/, 'the map viewport');
+    assert.match(battle, /R\.prepareWorldFrame\(this\.renderer,this\.world,this\.scene,this\.camera,shadowed\?\{mapData:this\.map,lights:this\.uniforms,focus\}:false\);\s*(this\.renderer\.setRenderTarget\(this\.target\);\s*)?R\.cacheUniformArrays\?\.\(this\.renderer\);\s*this\.renderer\.render\(this\.scene,this\.camera\);/, 'the battle room, right before its draw');
     assert.match(battle, /this\.world\.guestModels = \(\) => this\.models\.values\(\);/);
     const scene = Object.create(Reactor3D.MapScene.prototype);
     const tank = { object: { position: { distanceTo: () => 3 } } }, lead = { object: { position: {} } };
@@ -288,14 +288,100 @@ test('a lake seen from a rooftop: the sky is never clipped out of a mirror, noth
     const core = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
     assert.match(core, /gl_Position\.z = gl_Position\.w \* 0\.99999;/, 'the sky dome is drawn at infinity: an oblique mirror frustum cut it to a disc');
     const world = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d_world.js'), 'utf8');
-    assert.match(world, /vec3 rrWaveN = normalize\(mix\(vRRWaveNormal, vec3\(0\.0, 1\.0, 0\.0\), smoothstep\(30\.0, 90\.0, distance\(cameraPosition, vRRWorldPos\)\)\)\);/, 'far waves lie flat');
-    assert.match(world, /float rrGlint = pow\(max\(dot\(rrWaveN, rrHalf\), 0\.0\), 400\.0\);/, 'the glint is the sun\'s, not a wash over a lake seen from above');
+    // Water's shading is RIVER_SHADE_GLSL, ponds and rivers alike.
+    assert.match(world, /float rrFar = smoothstep\(25\.0, 80\.0, distance\(cameraPosition, vRRWorldPos\)\);/);
+    assert.match(world, /vec3 rrWaveN = normalize\(mix\(vRRWaveNormal \+ .*, vec3\(0\.0, 1\.0, 0\.0\), rrFar\)\);/, 'far waves lie flat');
+    assert.match(world, /float rrGlint = pow\(rrNdotH, 500\.0\) \* 1\.4 \+ pow\(rrNdotH, 60\.0\) \* 0\.12;/, 'the glint is the sun\'s, not a wash over a lake seen from above');
+    // A low sun: straight down, the broad glint term is all but nothing.
+    const L = [0.12, 0.55, -0.83], n = Math.hypot(...L), h = [L[0] / n, L[1] / n + 1, L[2] / n], hn = Math.hypot(...h);
+    assert.ok(Math.pow(h[1] / hn, 60) * 0.12 < 0.001, 'no glint wash on a lake seen from above');
 });
 
 test('a mirror earns a picture by how much of the screen it covers, not a distance guess', () => {
     const lighting = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d_lighting.js'), 'utf8');
     assert.match(lighting, /const cover = box => \{[\s\S]{0,900}return w > 0 && h > 0 \? \(w \* h\) \/ 4 : 0;/, 'the projected box, clipped to the view');
-    assert.match(lighting, /score: shows \* 1e6 \+ \(inView \? 1e3 : 0\) \+ 1000 \* cover\(worldBox\) \* facing/);
-    assert.match(lighting, /if \(p\.primary && !known\(p\) && p\.score % 1e6 - 1e3 >= 5\) planes\.push\(p\);/, 'past the first two, half a percent of the screen');
+    assert.match(lighting, /const share = 1000 \* cover\(worldBox\) \* facing;\s*scored\.push\(\{ normal, point, d: normal\.dot\(point\), score: shows \* 1e6 \+ \(inView \? 1e3 : 0\) \+ share, share: inView \? share : 0,/);
+    assert.match(lighting, /if \(p\.primary && !known\(p\) && p\.share >= 5\) planes\.push\(p\);/, 'past the first two, half a percent of the screen');
     assert.doesNotMatch(lighting, /far \* far \/ 400/, 'the distance falloff that left a plain wall 150 tiles off to the capture is gone');
+});
+
+test('a mirror kept from last frame still needs its share of the screen for an extra slot', () => {
+    // Two facing mirrors (the house of mirrors) and a speck far off in view that held a slot last frame.
+    const chunk = (w, h, x, y, z) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.2)); m.position.set(x, y, z); m.userData.pieceChunk = 0; m.updateMatrixWorld(true); return m; };
+    const front = chunk(10, 6, 0, 2, -5), back = chunk(10, 6, 0, 2, 20), speck = chunk(0.2, 0.2, -3, 5, -40);
+    const camera = new THREE.PerspectiveCamera(60, 16 / 9, 0.1, 500); camera.position.set(0, 2, 10); camera.lookAt(0, 2, 0); camera.updateMatrixWorld(true);
+    const renderer = { getRenderTarget: () => null, setRenderTarget() {}, render() {}, getDrawingBufferSize: v => v.set(640, 360) };
+    const M = Reactor3D.Mirrors, weak = Reactor3D.isWeakGpu, tier = Reactor3D.tier;
+    Reactor3D.isWeakGpu = () => false; Reactor3D.tier = () => 'full';
+    const plane = (object, z, d) => ({ plane: { object, normal: new THREE.Vector3(0, 0, z), d } });
+    try {
+        M._live = [plane(front, 1, -4.9), plane(back, -1, -19.9), plane(speck, 1, -39.9)];
+        M.update(renderer, new THREE.Scene(), camera, [front, back, speck], null, null);
+        assert.deepEqual(M._live.map(entry => entry.plane.object), [front, back], 'the speck covers nothing: its 1.5x for being kept last frame is no share of the screen');
+        M.update(renderer, new THREE.Scene(), camera, [], null, null);
+        assert.equal(M._live, null, 'with nothing to mirror, no earlier plane (or map) is held on to');
+        assert.equal(M.active, false);
+    } finally { Reactor3D.isWeakGpu = weak; Reactor3D.tier = tier; M.reset(); }
+});
+
+test('a new map lets the mirror pictures go; a battle preview hands the map its reflections back', () => {
+    const M = Reactor3D.Mirrors;
+    let disposed = 0;
+    const target = M.target(0, 2, 32, 32);
+    target.addEventListener('dispose', () => disposed++);
+    M._live = [{ slot: 0, plane: {}, texture: target.texture, matrix: new THREE.Matrix4() }];
+    M.active = true;
+    Reactor3D.Reflections.reset();
+    assert.equal(disposed, 1, 'its render target is released');
+    assert.equal(M._targets.size, 0);
+    assert.equal(M._live, null);
+    assert.equal(M.active, false);
+    assert.equal(M.uniforms().rrMirrorOn0.value, 0);
+    const battle = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_battle_room.js'), 'utf8');
+    assert.match(battle, /this\.hostReflections = !!R\.Reflections\?\.wanted;\s*try \{\s*this\.world = new R\.MapScene/, 'read before the room\'s MapScene switches them off');
+    assert.match(battle, /if\(this\.hostReflections&&root\.Reactor3D\?\.Reflections\)root\.Reactor3D\.Reflections\.wanted=true;/, 'and put back when the room goes');
+    const core = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+    assert.match(core, /if \(!this\._mirrorList\.list\.length\) return \[\];/, 'a map without mirrors skips the frustum every frame');
+});
+
+test('the reflection capture waits while nothing shiny is on screen, and goes on the frame something is', () => {
+    global.self = global; global.window = global;
+    require(path.resolve(__dirname, '..', '..', 'runtime/libs/three.js'));
+    const R = require(path.resolve(__dirname, '..', '..', 'runtime/reactor_3d.js'));
+    const F = R.Reflections;
+    F.reset();
+    F._frame++;
+    assert.equal(F.idle(), false, 'a cube not yet whole is always taken');
+    F._ready = true;
+    F._frame++;
+    assert.equal(F.idle(), true, 'whole, and nothing shiny drawn: the capture waits');
+    F._capturing = true; F.bind({}); F._capturing = false;
+    F._frame++;
+    assert.equal(F.idle(), true, 'a capture\'s own draw does not count as shown');
+    F.bind({});
+    F._frame++;
+    assert.equal(F.idle(), false, 'something shiny drew last frame: the capture goes on');
+    F._frame++;
+    assert.equal(F.idle(), true);
+    const core = require('./helpers/runtime-3d-source.cjs').source3D();
+    assert.match(core, /if \(reflections\) Reactor3D\.Reflections\._frame\+\+;\n\s+const capture = reflections && !Reactor3D\.Reflections\.idle\(\);\n\s+if \(capture \|\| mirrors\.length\) renderer\.resetState\(\);/);
+    F.reset();
+});
+
+test('reflection pictures are written as the main passes are (sRGB) and decoded where read; glass draws in one pass', () => {
+    global.self = global; global.window = global;
+    require(path.resolve(__dirname, '..', '..', 'runtime/libs/three.js'));
+    const R = require(path.resolve(__dirname, '..', '..', 'runtime/reactor_3d.js'));
+    const target = R.sharePassOutput(new THREE.WebGLRenderTarget(4, 4));
+    assert.equal(target.isXRRenderTarget, true, 'output colour space follows the target, as the main passes');
+    assert.equal(target.texture.colorSpace, THREE.SRGBColorSpace);
+    assert.equal(target.texture.internalFormat, 'RGBA8', 'stored as bytes, decoded by the shader');
+    const src = require('./helpers/runtime-3d-source.cjs').source3D();
+    assert.match(src, /generateMipmaps: true, minFilter: THREE\.LinearMipmapLinearFilter, magFilter: THREE\.LinearFilter\n\s+\}\);\n\s+Reactor3D\.sharePassOutput\(this\._target\);/, 'the reflection cube');
+    assert.match(src, /generateMipmaps: false \}\);\n\s+Reactor3D\.sharePassOutput\(target\);/, 'a mirror picture');
+    assert.match(src, /= rrSRGBToLinear\(textureLod\(rrMirrorMap" \+ slot \+ ", rrMU, 0\.0\)\.rgb\) \* " \+ scale/, 'mirror pictures decoded');
+    assert.match(src, /"\\tif \(rrEnvFlip > 0\.0\) rrEnv = rrSRGBToLinear\(rrEnv\);"/, 'a live capture decoded on shiny surfaces (the studio cube is decoded by the GPU)');
+    assert.equal((src.match(/if \(rrEnvFlip > 0\.0\) rr(Under|EnvC) = rrSRGBToLinear\(rr(Under|EnvC)\);/g) || []).length, 2, 'and on water, above and below');
+    assert.match(R.mirrorUniformDeclarations(), /#ifndef RR_SRGB_DECODE[\s\S]*vec3 rrSRGBToLinear\(vec3 c\)/);
+    assert.match(src, /if \(look\.glass\) material\.forceSinglePass = true;/, 'glass is one draw, not a back pass and a front pass that change the material between them');
 });

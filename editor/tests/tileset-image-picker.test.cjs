@@ -48,12 +48,12 @@ test('its dependencies load before it', () => {
     assert.ok(assets < editor, 'AssetFiles.js loads first');
 });
 
-test('selection paths all route through one confirm', () => {
+test('selection paths all route through one accept', () => {
     const body = pickerBody();
     // Double-click a row, double-click the preview, or press the footer button.
     assert.match(body, /browser\.list\.addEventListener\('dblclick'/);
-    assert.match(body, /image\.addEventListener\('dblclick', confirm\)/);
-    assert.match(body, /selectButton\.addEventListener\('click', confirm\)/);
+    assert.match(body, /image\.addEventListener\('dblclick', accept\)/);
+    assert.match(body, /selectButton\.addEventListener\('click', accept\)/);
     const assigns = body.match(/this\.assignTilesetToLayer\(/g) || [];
     assert.equal(assigns.length, 1, 'assignment happens in exactly one place');
 });

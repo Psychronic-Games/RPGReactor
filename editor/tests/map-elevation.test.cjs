@@ -7,6 +7,7 @@
  * stays an ordinary RPG Maker map.
  */
 const { source3D } = require('./helpers/runtime-3d-source.cjs');
+const { runtimeSource } = require('./helpers/runtime-source.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -185,10 +186,6 @@ function editorWithMap(width, height) {
     editor.undoStack = [];
     editor.redoStack = [];
     editor.maxUndoSteps = 50;
-    editor.heightMode = true;
-    editor.heightLevel = 1;
-    editor.heightAction = 'set';
-    editor.heightBrush = 1;
     editor.activeElevationState = null;
     editor.onElevationChanged = null;
     editor.notifyUndoStateChange = () => {};
@@ -410,7 +407,7 @@ test('asking whether 3D is supported does not cost a WebGL context each time', (
 test('the corescript WebGL probe is answered once as well', () => {
     // MV compat exposes this as Graphics.hasWebGL(), which MV plugins call
     // freely and some call every frame — the same leak by another route.
-    const core = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_core.js'), 'utf8');
+    const core = runtimeSource('reactor_core.js');
     const at = core.indexOf('Utils.canUseWebGL = function');
     const body = core.slice(at, core.indexOf('\n};', at));
     assert.match(body, /Utils\._canUseWebGL !== undefined/, 'remembered');
@@ -483,30 +480,27 @@ test('a parallax does not cover the 3D ground', () => {
         'and it comes back if the 3D build fails');
 });
 
-test('the game canvas has an alpha channel to become transparent with', () => {
+test('the game canvas is opaque at the compositor level: nothing draws beneath it any more', () => {
     // PIXI decides whether the drawing buffer has an alpha channel *once*, at
-    // init, from `background.alpha < 1` — and never again. Left at the default
-    // the context is created with `alpha: false` and the canvas is opaque at
-    // the compositor level whatever the clear colour says afterwards. A 3D map
-    // draws underneath it, so the ground rendered perfectly and was composited
-    // away: meshes, textures, camera and canvas all correct, and a black screen.
+    // init, from `background.alpha < 1`. A 3D map once drew on a canvas
+    // underneath the game canvas and needed the channel; it draws into the
+    // scene now (next test), and a canvas with alpha only made the browser
+    // blend it over the page every frame, which at 144 Hz on an integrated
+    // GPU pushed most frames past the refresh.
     const pixi = fs.readFileSync(path.join(repoRoot, 'runtime', 'libs', 'pixi.js'), 'utf8');
     assert.match(pixi, /const alpha = this\._renderer\.background\.alpha < 1;/,
-        'this is the line the workaround exists for');
+        'this is the line that decides it');
 
-    const core = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_core.js'), 'utf8');
+    const core = runtimeSource('reactor_core.js');
     const at = core.indexOf('Graphics._createPixiApp = async function');
     const body = core.slice(at, core.indexOf('\n};', at));
 
-    assert.match(body, /backgroundAlpha: 0/, 'the channel is requested at init');
-    assert.match(body, /app\.renderer\.background\.alpha = 1;/,
-        'and the opaque default restored, so a 2D map is unchanged');
+    assert.match(body, /backgroundAlpha: 1/, 'no channel is requested at init');
+    assert.doesNotMatch(body, /backgroundAlpha: 0/);
+    assert.match(body, /app\.renderer\.background\.alpha = 1;/);
     // v5-v7 take it from `transparent`, decided at the same moment.
-    assert.match(body, /transparent: true/);
+    assert.match(body, /transparent: false/);
     assert.match(body, /app\.renderer\.backgroundAlpha = 1;/);
-
-    // Ordering matters: asking after init would be too late.
-    assert.ok(body.indexOf('backgroundAlpha: 0') < body.indexOf('background.alpha = 1'));
 });
 
 test('a 3D map no longer depends on anything being transparent', () => {
@@ -533,7 +527,7 @@ test('the 3D canvas follows the game canvas when the window changes', () => {
     // elements, so every rescale missed it: going fullscreen scaled the game
     // canvas up and left the 3D one at its old size, drawing the world as a
     // small rectangle in the middle of a black screen.
-    const core = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_core.js'), 'utf8');
+    const core = runtimeSource('reactor_core.js');
     const at = core.indexOf('Graphics._updateAllElements = function');
     const body = core.slice(at, core.indexOf('\n};', at));
     assert.match(body, /this\._updateReactor3DCanvas\(\);/,

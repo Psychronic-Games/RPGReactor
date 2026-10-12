@@ -33,4 +33,17 @@ function writeWebFileIndex(root) {
     return files.length;
 }
 
-module.exports = { INDEX_PATH, listFiles, writeWebFileIndex };
+/**
+ * A browser-game storefront's upload rules (itch: 1000 files, 500 MB extracted) as warning
+ * lines for a web build under root; none when it fits. Warn, never block.
+ */
+function storefrontWarnings(root) {
+    const files = listFiles(root).concat(fs.existsSync(path.join(root, ...INDEX_PATH.split('/'))) ? [INDEX_PATH] : []);
+    const megabytes = files.reduce((sum, file) => sum + fs.statSync(path.join(root, ...file.split('/'))).size, 0) / 1048576;
+    const warnings = [];
+    if (files.length > 1000) warnings.push(`Warning: ${files.length} files — some browser-game storefronts reject uploads over 1000 files.`);
+    if (megabytes > 500) warnings.push(`Warning: ${megabytes.toFixed(0)} MB extracted — some browser-game storefronts reject uploads over 500 MB extracted.`);
+    return warnings;
+}
+
+module.exports = { INDEX_PATH, listFiles, writeWebFileIndex, storefrontWarnings };

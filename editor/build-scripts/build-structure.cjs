@@ -39,12 +39,14 @@ if (X0 < 0 || Y0 < 0 || X0 + W > map.width || Y0 + H > map.height) {
     process.exit(1);
 }
 // Level the pad: every terrain corner under the footprint to the footprint's mean.
+let pad = 0;
 if (E.hasTerrain(map)) {
     const grid = E.terrain(map), stride = map.width + 1;
     let sum = 0, n = 0;
     for (let y = Y0; y <= Y0 + H; y++) for (let x = X0; x <= X0 + W; x++) { sum += Number(grid[y * stride + x]) || 0; n++; }
     const mean = Math.round((sum / n) * 1000) / 1000;
     for (let y = Y0; y <= Y0 + H; y++) for (let x = X0; x <= X0 + W; x++) grid[y * stride + x] = mean;
+    pad = mean;
     console.log(`terrain pad levelled at ${mean}`);
 }
 // Replace whatever stood on the footprint, keep everything else.
@@ -56,16 +58,25 @@ const built = SP.build(plan, X0, Y0, firstId, group, resolve);
 const all = kept.concat(built);
 E.restorePieces(map, all);
 E.setStructure(map, { group, plan: path.basename(planFile), x: X0, y: Y0, rot: 0, scale: 1, spots: SP.spots(plan, X0, Y0, resolve) });
-const movedProps = E.relocatePropsOff(map, X0, Y0, W, H);
+const movedProps = E.relocatePropsOff(map, X0, Y0, W, H, group);
 if (movedProps) console.log(`${movedProps} placed model(s) moved off the footprint`);
+// What grew where its pieces now stand goes: grass under its floors, bushes through its walls.
+const clearedFoliage = require(path.join(repo, 'editor/src/utils/MapFoliage.js')).clearUnderPieces(map, piece => piece.group === group);
+if (clearedFoliage) console.log(`foliage cleared from ${new Set(clearedFoliage.layers.flatMap(layer => layer.cells.map(([i]) => i))).size} cell(s), ${clearedFoliage.bushes.length} bush(es) taken out`);
+// Its lights, screens, placed models and water (a saved structure's), its animations as events.
+const effects = SP.effectsOf(plan, X0, Y0, resolve);
+for (const fx of effects) if (fx.type === 'mapWater') fx.base = pad;
+const effectEvents = effects.length ? SP.placeEffects(map, group, effects) : [];
+if (effects.length) console.log(`${effects.length} light(s), screen(s), model(s) and water placed with it`);
 const report = SP.validate(plan, E.pieces(map), X0, Y0, map.width, map.height, Reactor3D, resolve);
-const rooms = Object.entries(report.report);
-console.log(`${plan.name || path.basename(planFile)}: ${built.length} pieces at (${X0}, ${Y0}); ${kept.length} kept; front door outside at (${report.start.x}, ${report.start.y})`);
+// A plan with neither a door nor a `start` spot has nowhere to walk from: its rooms are not checked.
+const rooms = report ? Object.entries(report.report) : [];
+console.log(`${plan.name || path.basename(planFile)}: ${built.length} pieces at (${X0}, ${Y0}); ${kept.length} kept; ` + (report ? `front door outside at (${report.start.x}, ${report.start.y})` : 'no entrance (no door and no `start` spot): rooms not checked'));
 for (const [name, r] of rooms) console.log(`  ${r.reached ? 'ok  ' : 'MISS'} ${name}${r.reached ? ` (${r.steps} steps)` : ''}`);
 for (const [name, at] of Object.entries(SP.spots(plan, X0, Y0, resolve))) console.log(`  spot ${name} at (${at[0]}, ${at[1]})`);
 if (check) process.exit(rooms.every(([, r]) => r.reached) ? 0 : 1);
 const loadTemplate = name => { const file = path.join(path.dirname(planFile), 'events', /\.json$/i.test(name) ? name : name + '.json'); return fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : null; };
-const placedEvents = SP.placeEvents(map, group, SP.eventsOf(plan, X0, Y0, resolve), loadTemplate);
+const placedEvents = SP.placeEvents(map, group, SP.eventsOf(plan, X0, Y0, resolve).concat(effectEvents), loadTemplate);
 if (placedEvents.length) {
     const data = Object.assign({}, map); delete data.id; delete data.reactor3d;
     fs.writeFileSync(stem + '.json', JSON.stringify(data, null, 2));

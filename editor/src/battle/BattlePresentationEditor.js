@@ -322,7 +322,7 @@ class BattlePresentationEditor {
         draw();
     }
     stateGraphic(container,record){
-        const settings=this.settings(),{panel,body}=this.section('Battler Motion Override');
+        const settings=this.settings(),{panel,body}=this.section('Battler Motion Override');body.classList.add('rr-state-motion-fields');
         const get=()=>settings.states?.[record.id]?.graphicMotion||{};
         const set=patch=>{settings.states||={};settings.states[record.id]={...settings.states[record.id],graphicMotion:{...get(),...patch}};this.changed();};
         // A state's own reaction sequence: what the battler does while afflicted (poison, sleep, a custom state).
@@ -392,6 +392,7 @@ class BattlePresentationEditor {
         editor.projectController={getCurrentProject:()=>project,mapEditor3D:pc.mapEditor3D};
         return {
             tileSize:this.db.getSystem()?.tileSize||48,screenHeight:this.db.getSystem()?.advanced?.screenHeight||624,
+            materials:map=>pc.mapEditor3D.loadMaterials(map),materialSettings:name=>pc.mapEditor3D.materialSettings?.[name]||null,
             muteMedia:true,mediaUrl:file=>{const image=/\.(png|jpe?g|webp)$/i.test(file),absolute=path.join(project.path,image?'img/pictures':'movies',file);return fs.existsSync(absolute)?RRAssetFiles.toUrl(absolute):'';},
             animation:id=>this.db.data.animations[id],effectUrl:name=>'file://'+path.join(project.path,'effects',name+'.efkefc'),
             image:(kind,name)=>new Promise((resolve,reject)=>{const img=new Image();img.onload=()=>resolve({image:img,width:img.naturalWidth,height:img.naturalHeight,isReady:()=>true,addLoadListener:fn=>fn()});img.onerror=()=>reject(Error('Missing '+kind+'/'+name));img.src=RRAssetFiles.imageUrlFor(path.join(project.path,'img',kind),name);}),
@@ -494,6 +495,11 @@ class BattlePresentationEditor {
             for(const [type,fn] of [['pointerdown',down],['pointermove',move],['pointerup',up],['pointercancel',up],['lostpointercapture',up]])canvas.addEventListener(type,fn);
             stopPlacement=()=>{for(const [type,fn] of [['pointerdown',down],['pointermove',move],['pointerup',up],['pointercancel',up],['lostpointercapture',up]])canvas.removeEventListener(type,fn);canvas.style.cursor='';};
             const clock={};
+            // The canvas's CSS width sets the marker size; it is read when the
+            // canvas reports a resize, not every frame (a forced layout each time).
+            let cssWidth=Math.max(1,canvas.clientWidth);
+            const sizeObserver=typeof ResizeObserver!=='undefined'?new ResizeObserver(()=>{cssWidth=Math.max(1,canvas.clientWidth);}):null;
+            sizeObserver?.observe(canvas);const stopMarkers=stopPlacement;stopPlacement=()=>{sizeObserver?.disconnect();stopMarkers();};
             const draw=(now=performance.now())=>{if(!current()){cleanup();return;}
                 const steps=this.roomFrameSteps(clock,now);
                 // The setup dialog owns the visible renderer while open.
@@ -504,7 +510,7 @@ class BattlePresentationEditor {
                     ctx.clearRect(0,0,canvas.width,canvas.height);ctx.drawImage(view.renderer.domElement,0,0,canvas.width,canvas.height);
                     for(let i=0;i<troopEditor.currentTroop.members.length;i++){
                         const p=view.project(ReactorBattleData.position(settings,'enemies',i));if(!p.visible)continue;
-                        const scale=canvas.width/Math.max(1,canvas.clientWidth);ctx.fillStyle=i===troopEditor.selectedMemberIndex?'#ffcc33':'#ff6680';ctx.beginPath();ctx.arc(p.x,p.y,5*scale,0,Math.PI*2);ctx.fill();ctx.font=(12*scale)+'px sans-serif';ctx.fillText('E'+(i+1),p.x+9*scale,p.y+4*scale);
+                        const scale=canvas.width/(sizeObserver?cssWidth:Math.max(1,canvas.clientWidth));ctx.fillStyle=i===troopEditor.selectedMemberIndex?'#ffcc33':'#ff6680';ctx.beginPath();ctx.arc(p.x,p.y,5*scale,0,Math.PI*2);ctx.fill();ctx.font=(12*scale)+'px sans-serif';ctx.fillText('E'+(i+1),p.x+9*scale,p.y+4*scale);
                     }
                     if(troopEditor.showBattleUI){const setup=troopEditor.battleUISetup||troopEditor.refreshBattleUISetup();if(setup)troopEditor.drawBattleUIOverlay(ctx,setup);}
                 }
@@ -565,9 +571,9 @@ class BattlePresentationEditor {
                 const effective=view.cameraState();
                 if(draft.cameraSource==='map')inspector.append(this.element('p','rr-battle-help',this.message('Map camera: {mode}. Third/first person follows party slot 1.',{mode:this.text(this.cameraLabel(effective.mode))})));
                 else this.field(inspector,'Mode',this.select([...Object.keys(Reactor3D.Camera.MODES).map(m=>[m,this.cameraLabel(m)]),['cinematic','Cinematic Cuts']],draft.camera.mode||'fixed',mode=>{const defaults=Reactor3D.Camera.MODES[mode]||{yaw:45,pitch:35,fov:40,distance:24};Object.assign(draft.camera,{mode,yaw:defaults.yaw,pitch:defaults.pitch,fov:defaults.fov,distance:defaults.distance||24});drawInspector();}));
-                if(draft.cameraSource==='custom'&&draft.camera.mode==='cinematic')inspector.append(this.element('p','rr-battle-help','Sweeps toward the acting battler, then the target at impact. Eases back to this overview after the action.'));
+                if(draft.cameraSource==='custom'&&draft.camera.mode==='cinematic')inspector.append(this.element('p','rr-battle-help','Cuts to the acting battler, then to the target as the hit lands, and back to this overview after the action.'));
                 for(const key of ['x','y','z','yaw','pitch','distance','fov']){
-                    const input=this.number(inspector,({yaw:'Yaw',pitch:'Pitch',distance:'Distance',fov:'Field of View'})[key]||key.toUpperCase(),draft.cameraSource==='map'?effective[key]:draft.camera[key]??effective[key],value=>draft.camera[key]=key==='distance'?Math.max(.5,value):key==='fov'?Math.max(5,Math.min(150,value)):key==='pitch'?Math.max(-89,Math.min(89,value)):value);
+                    const input=this.number(inspector,({yaw:'Yaw',pitch:'Pitch',distance:'Distance',fov:'Field of View'})[key]||key.toUpperCase(),Math.round((draft.cameraSource==='map'?effective[key]:draft.camera[key]??effective[key])*1000)/1000,value=>draft.camera[key]=key==='distance'?Math.max(.5,value):key==='fov'?Math.max(5,Math.min(150,value)):key==='pitch'?Math.max(-89,Math.min(89,value)):value);
                     input.dataset.cameraField=key;input.disabled=draft.cameraSource==='map'&&['yaw','pitch','distance','fov'].includes(key);
                 }
                 inspector.append(this.button('Reset Formation',()=>{draft.actors=[];draft.enemies=[];materializeFormation();drawInspector();}));
@@ -616,10 +622,15 @@ class BattlePresentationEditor {
             const endDrag=()=>{cameraDrag=null;if(!dragging)return;dragging=false;view.cameraFollowFrozen=false;view.cameraFollowResume=true;drawInspector();};
             overlay.onpointerup=endDrag;overlay.onpointercancel=endDrag;overlay.onlostpointercapture=endDrag;
             const clock={};
+            // The stage is measured when it reports a resize rather than every frame.
+            let stageSize=null;
+            const stageObserver=typeof ResizeObserver!=='undefined'?new ResizeObserver(()=>{stageSize=null;}):null;
+            stageObserver?.observe(stage);const stopDialogNavigation=stopNavigation;stopNavigation=()=>{stageObserver?.disconnect();stopDialogNavigation();};
             const draw=(now=performance.now())=>{if(!modal.isConnected){cleanup();return;}
                 const steps=this.roomFrameSteps(clock,now);
                 if(!steps){raf=requestAnimationFrame(draw);return;}
-                const width=Math.max(1,stage.clientWidth),height=Math.max(1,stage.clientHeight);
+                if(!stageSize||!stageObserver)stageSize={width:Math.max(1,stage.clientWidth),height:Math.max(1,stage.clientHeight)};
+                const {width,height}=stageSize;
                 if(view.width!==width||view.height!==height){view.resize(width,height);overlay.width=width;overlay.height=height;}
                 navigation.stepFly(now);this.drawRoomCast(view,draft,cast);
                 for(let step=0;step<steps;step++)view.render();

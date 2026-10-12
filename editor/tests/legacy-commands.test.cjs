@@ -4,6 +4,7 @@
 // returns them; Deep 8's 33,000 command lists are checked for MZ structure
 // when the project is present.
 const assert = require('node:assert/strict');
+const { runtimeSource } = require('./helpers/runtime-source.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
@@ -220,7 +221,7 @@ test('skills and items get MZ formulas, scopes and effects that reproduce the 20
     const notes = {};
     const out = D.convert(withIds(db), { start: {} }, notes);
     assert.equal(out.skills[1].damage.formula, 'Math.max(0, Math.floor(40 + a.mat * 10 / 40 - b.mdf * 10 / 80))');
-    assert.deepEqual([out.skills[1].scope, out.skills[1].occasion, out.skills[1].damage.type, out.skills[1].damage.elementId, out.skills[1].damage.variance, out.skills[1].successRate, out.skills[1].mpCost, out.skills[1].hitType, out.skills[1].message1], [2, 1, 1, 1, 40, 95, 6, 2, ' casts Fire']);
+    assert.deepEqual([out.skills[1].scope, out.skills[1].occasion, out.skills[1].damage.type, out.skills[1].damage.elementId, out.skills[1].damage.variance, out.skills[1].successRate, out.skills[1].mpCost, out.skills[1].hitType, out.skills[1].message1], [2, 1, 1, 1, 40, 95, 6, 2, '%1 casts Fire']);
     assert.deepEqual([out.skills[2].scope, out.skills[2].damage.type, out.skills[2].damage.formula], [7, 3, 'Math.max(0, Math.floor(60 + a.mat * 5 / 40))']);
     assert.deepEqual(out.skills[2].effects, [{ code: 22, dataId: 2, value1: 1, value2: 0 }]);
     assert.deepEqual(out.skills[3].effects, [{ code: 44, dataId: 2, value1: 0, value2: 0 }], 'a switch skill calls a generated common event');
@@ -255,7 +256,7 @@ test('actors own a class each, 2003 classes follow, ranks become rate traits, st
     assert.equal(out.classes[1].expTable[2], 60);
     assert.deepEqual(out.classes[1].learnings, [{ level: 5, skillId: 9, note: '' }]);
     assert.equal(out.classes[2].name, 'Mage'); assert.equal(out.ctx.classOffset, 1);
-    assert.deepEqual([out.states[2].restriction, out.states[2].removeAtBattleEnd, out.states[2].autoRemovalTiming, out.states[2].minTurns, out.states[2].removeByDamage, out.states[2].message1], [4, true, 2, 3, true, 'sleeps']);
+    assert.deepEqual([out.states[2].restriction, out.states[2].removeAtBattleEnd, out.states[2].autoRemovalTiming, out.states[2].minTurns, out.states[2].removeByDamage, out.states[2].message1], [4, true, 2, 3, true, '%1 sleeps']);
     assert.deepEqual(out.enemies[1].params, [30, 0, 8, 4, 2, 2, 5, 50]);
     assert.deepEqual(out.enemies[1].dropItems, [{ kind: 1, dataId: 1, denominator: 4 }]);
     assert.deepEqual(out.enemies[1].actions, [{ skillId: 1, rating: 9, conditionType: 0, conditionParam1: 0, conditionParam2: 0 }, { skillId: 4, rating: 5, conditionType: 1, conditionParam1: 2, conditionParam2: 4 }]);
@@ -357,7 +358,7 @@ test('2003 common event triggers map to MZ\'s: call stays a call, and a conditio
     const db = withIds({ commonevents: [null, { name: 'call', trigger: 5, event_commands: [cmd(0)] }, { name: 'auto', trigger: 3, switch_flag: true, switch_id: 7, event_commands: [cmd(0)] }, { name: 'par', trigger: 4, event_commands: [cmd(0)] }, { name: 'par sw', trigger: 4, switch_flag: true, switch_id: 9, event_commands: [cmd(0)] }] });
     const out = D.commonEvents(db, ctx(), { list: [] });
     assert.deepEqual([1, 2, 3, 4].map(i => [out[i].trigger, out[i].switchId]), [[0, 1], [1, 7], [2, 0], [2, 9]]);
-    const objects = fs.readFileSync(path.join(__dirname, '..', '..', 'runtime', 'reactor_objects.js'), 'utf8');
+    const objects = runtimeSource('reactor_objects.js');
     assert.match(objects, /event\.trigger === 2 && \(event\.switchId === 0 \|\| \$gameSwitches\.value\(event\.switchId\)\)/);
     assert.match(objects, /if \(commonEvent\.switchId === 0 \|\| \$gameSwitches\.value\(commonEvent\.switchId\)\)/);
 });
@@ -370,7 +371,7 @@ test('passage is decided the old engine\'s way: tile 0 defers, wall tops pass, a
     assert.equal(flags[2816 + 20] & 0x0f, 0, 'a wall block\'s top edge (shape 20) passes');
     assert.equal(flags[2816 + 0] & 0x0f, 0x0f, 'the rest of the wall blocks');
     assert.equal(flags[1], 0x10, 'a starred lower tile keeps passable bits');
-    const objects = fs.readFileSync(path.join(__dirname, '..', '..', 'runtime', 'reactor_objects.js'), 'utf8');
+    const objects = runtimeSource('reactor_objects.js');
     assert.match(objects, /if \(!\$dataSystem \|\| !\$dataSystem\.rrLegacyPassage \|\| \(bit & ~0x0f\)\) return _checkPassage/);
     assert.match(objects, /const lower = this\.tileId\(x, y, 1\) \|\| this\.tileId\(x, y, 0\);/);
     assert.match(fs.readFileSync(path.join(__dirname, '..', 'src', 'legacy', 'LegacyConvert.js'), 'utf8'), /out\.rrLegacyPassage = true;/);
@@ -381,7 +382,7 @@ test('panning: lock holds the camera, pans run at the old engine\'s speed, a ret
     assert.deepEqual(scripts([2, 1, 5, 3, 1])[0].parameters, [6, 5, 4, true], 'speed 3 pans as MZ speed 4');
     assert.equal(scripts([3, 0, 0, 4, 1])[0].parameters[0], 'this.rrPanReset(5, true)');
     assert.equal(scripts([0])[0].parameters[0], '$gameMap._rrPanLocked = true');
-    const objects = fs.readFileSync(path.join(__dirname, '..', '..', 'runtime', 'reactor_objects.js'), 'utf8');
+    const objects = runtimeSource('reactor_objects.js');
     assert.match(objects, /if \(\$gameMap\._rrPanLocked \|\| \$gameMap\._rrPanReturn\) return;/);
     assert.match(objects, /if \(this\._waitMode === "rrPan"\)/);
 });
@@ -399,13 +400,13 @@ test('a 2003 1.12 spritesheet picture shows one frame, by number or variable, or
 });
 
 test('an import updates parallel common events before map events, as the old engine does', () => {
-    const objects = fs.readFileSync(path.join(__dirname, '..', '..', 'runtime', 'reactor_objects.js'), 'utf8');
+    const objects = runtimeSource('reactor_objects.js');
     assert.match(objects, /const commonFirst = \$dataSystem && \$dataSystem\.rrLegacyEventOrder;/);
     assert.match(fs.readFileSync(path.join(__dirname, '..', 'src', 'legacy', 'LegacyConvert.js'), 'utf8'), /out\.rrLegacyEventOrder = true;/);
 });
 
 test('characters stand at their engine\'s height: 0 for 2000/2003 and XP, 4 for VX and VX Ace', () => {
-    const objects = fs.readFileSync(path.join(__dirname, '..', '..', 'runtime', 'reactor_objects.js'), 'utf8');
+    const objects = runtimeSource('reactor_objects.js');
     assert.match(objects, /const own = \$dataSystem && \$dataSystem\.rrCharacterShiftY;\s*return typeof own === "number" \? own : 6;/);
     const src = (f) => fs.readFileSync(path.join(__dirname, '..', 'src', 'legacy', f), 'utf8');
     assert.match(src('LegacyConvert.js'), /out\.rrCharacterShiftY = 0;/);
@@ -419,7 +420,7 @@ test('a character position operand reads MZ game data 5 (a character), not 6 (a 
     assert.deepEqual(list[0].parameters, [7, 7, 0, 3, 5, -1, 0], 'the player\'s map X');
     assert.deepEqual(list[1].parameters, [8, 8, 0, 3, 5, 12, 4], 'event 12\'s screen Y');
     assert.deepEqual([list[3].parameters, list[4].parameters], [[2, 2, 0, 3, 5, -1, 0], [3, 3, 0, 3, 5, -1, 1]], 'Memorize Location');
-    const objects = fs.readFileSync(path.join(__dirname, '..', '..', 'runtime', 'reactor_objects.js'), 'utf8');
+    const objects = runtimeSource('reactor_objects.js');
     assert.match(objects, /case 5: \/\/ Character/);
 });
 
@@ -432,9 +433,9 @@ test('event pages keep tile graphics, translucency and spin; panoramas scroll th
     assert.deepEqual([K.parallaxSpeed(0), K.parallaxSpeed(3), K.parallaxSpeed(-3), K.parallaxSpeed(8)], [0, -1, 1, -32], 'a positive speed drifts right: negative in MZ, 2^|speed| / 8');
     assert.deepEqual(C.convertList([cmd(11720, [1, 0, 1, 4, 0, 0], 'Sky'), cmd(0)], ctx()).list[0].parameters, ['Sky', true, false, -2, 0]);
     assert.deepEqual(C.convertRoute([{ code: 34, parameter_string: '', parameter_a: 5 }], ctx()).list[0], { code: 45, parameters: ['this.setTileImage(261)'] });
-    const objects = fs.readFileSync(path.join(__dirname, '..', '..', 'runtime', 'reactor_objects.js'), 'utf8');
+    const objects = runtimeSource('reactor_objects.js');
     assert.match(objects, /this\._rrTransp = page\.rrTranslucent \? 3 : 0;/);
-    assert.match(objects, /const limit = \[24, 16, 12, 8, 6, 4\]/);
+    assert.match(objects, /const SPIN_FRAMES = \[24, 16, 12, 8, 6, 4\]/);
 });
 
 test('a panorama that neither scrolls nor loops moves with the camera in proportion, as in the old engine', () => {
@@ -474,7 +475,7 @@ test('message options and the face are the system\'s, set at run time', () => {
     const list = C.convertList([cmd(10120, [1, 0]), cmd(10130, [2], 'Hero.png'), cmd(0)], ctx()).list;
     assert.equal(list[0].parameters[0], 'this.rrMessageOptions(2, 0)');
     assert.equal(list[1].parameters[0], 'this.rrMessageFace("Hero", 2)');
-    const objects = fs.readFileSync(path.join(__dirname, '..', '..', 'runtime', 'reactor_objects.js'), 'utf8');
+    const objects = runtimeSource('reactor_objects.js');
     assert.match(objects, /if \(legacy\) params = \[legacy\.faceName, legacy\.faceIndex, legacy\.background, legacy\.position, params\[4\]\];/);
 });
 
@@ -492,7 +493,7 @@ test('imports list choices inside the message window, and the text plugin knows 
 
 test('Tile Substitution and the old engine\'s walking and jumping pace', () => {
     assert.equal(C.convertList([cmd(11750, [1, 12, 30]), cmd(0)], ctx()).list[0].parameters[0], '$gameMap.rrTileSubstitute(1, 12, 30)');
-    const objects = fs.readFileSync(path.join(__dirname, '..', '..', 'runtime', 'reactor_objects.js'), 'utf8');
+    const objects = runtimeSource('reactor_objects.js');
     assert.match(objects, /for \(let i = 0; i < table\.length; i\+\+\) if \(table\[i\] === Number\(oldId\)\) table\[i\] = Number\(newId\);/);
     assert.match(objects, /if \(lo >= 1 && lo <= 144\) data\[n \+ i\] = 1 \+ subs\.lower\[lo - 1\];/);
     assert.match(objects, /return _realMoveSpeed\.call\(this\) \+ \(legacyMotion\(\) \? 1 : 0\);/);
@@ -515,11 +516,11 @@ test('2003 1.12 picture layers, dotted names, animation cells and route timing f
     // animation cells: chunk 1 valid, 2 cell, 3 x, 4 y, 5 zoom … 10 transparency (Deep 8's pointer: cell 9, 50 px up)
     const schema = fs.readFileSync(path.join(__dirname, '..', 'src', 'legacy', 'LcfReader.js'), 'utf8');
     assert.match(schema, /AnimationCellData: \{ 1: \['valid', 'bool'\], 2: \['cell_id', 'int'\], 3: \['x', 'int'\], 4: \['y', 'int'\], 5: \['zoom', 'int'\],/);
-    const objects = fs.readFileSync(path.join(__dirname, '..', '..', 'runtime', 'reactor_objects.js'), 'utf8');
+    const objects = runtimeSource('reactor_objects.js');
     // a route's instant commands run in one frame, and its turns ignore a fixed facing
     assert.match(objects, /if \(!command \|\| \(command\.code > 0 && command\.code <= 26\)\) return;/);
     assert.match(objects, /command\.code < 16 \|\| command\.code > 26 \|\| !this\._directionFix/);
-    const core = fs.readFileSync(path.join(__dirname, '..', '..', 'runtime', 'reactor_core.js'), 'utf8');
+    const core = runtimeSource('reactor_core.js');
     assert.match(core, /context\.fillText\(text, tx \+ 1, ty \+ 1, maxWidth\);/, '2000/2003 text casts a 1 px shadow');
 });
 
@@ -533,7 +534,7 @@ test('imported games: texts ride with their picture, the top layer stays in its 
     assert.match(fs.readFileSync(path.join(__dirname, '..', 'src', 'legacy', 'LegacyConvert.js'), 'utf8'), /out\.rrSkipMissingAudio = true;/);
     assert.match(managers, /if \(this\.skipsMissingImages\(\)\) \{[\s\S]*?bitmap\._loadingState = "none";\s*bitmap\._createCanvas\(1, 1\);\s*bitmap\._callLoadListeners\(\);\s*return;/, 'Deep 8\'s missing "Aktionsanzeige Eleganter Kick" draws nothing instead of the Retry screen');
     assert.match(fs.readFileSync(path.join(__dirname, '..', 'src', 'legacy', 'LegacyConvert.js'), 'utf8'), /out\.rrSkipMissingImages = true;/);
-    const core = fs.readFileSync(path.join(__dirname, '..', '..', 'runtime', 'reactor_core.js'), 'utf8');
+    const core = runtimeSource('reactor_core.js');
     assert.match(core, /this\._loadingState = "error";\s*\/\/ An imported[^\n]*\n\s*if \(typeof ImageManager !== "undefined" && ImageManager\.skipsMissingImages && ImageManager\.skipsMissingImages\(\)\) \{\s*ImageManager\.throwLoadError\(this\);/, 'skipped on the first failure, not after the watchdog\'s retries');
     assert.ok(K.systemJson);
 });
@@ -546,7 +547,7 @@ test('an event-erased screen shows again when the map hands over to another scen
 });
 
 test('imported games keep parallel common events through a teleport, list choices a line apart, and move sprite axes apart', () => {
-    const objects = fs.readFileSync(path.join(__dirname, '..', '..', 'runtime', 'reactor_objects.js'), 'utf8');
+    const objects = runtimeSource('reactor_objects.js');
     assert.match(objects, /this\._commonEvents\.push\(\(keep && keep\.get\(commonEvent\.id\)\) \|\| new Game_CommonEvent\(commonEvent\.id\)\);/, 'Deep 8\'s victory event would otherwise restart on the world map');
     const windows = fs.readFileSync(path.join(__dirname, '..', '..', 'runtime', 'reactor_windows.js'), 'utf8');
     assert.match(windows, /Window_ChoiceList\.prototype\.itemHeight = function\(\) \{\s*return inMessage\(\) \? this\.lineHeight\(\)/);
@@ -561,7 +562,7 @@ test('pixel-art pictures land on whole pixels, so an odd-sized centred picture s
 });
 
 test('an imported parallel common event pauses while its switch is off and resumes where it stopped', () => {
-    const objects = fs.readFileSync(path.join(__dirname, '..', '..', 'runtime', 'reactor_objects.js'), 'utf8');
+    const objects = runtimeSource('reactor_objects.js');
     assert.match(objects, /\} else if \(!\(\$dataSystem && \$dataSystem\.rrLegacyEventOrder\)\) \{\s*this\._interpreter = null;/, 'Deep 8\'s menu cursor bob (+4 / -4) must not restart halfway');
     assert.match(objects, /Game_CommonEvent\.prototype\.update = function\(\) \{\s*if \(this\._interpreter && this\.isActive\(\)\) \{/);
 });

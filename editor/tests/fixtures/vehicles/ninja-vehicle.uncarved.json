@@ -1,0 +1,17 @@
+{
+  "forward": "-x",
+  "stand": { "lean": 10, "side": "left" },
+  "wheels": [ { "part": "Mesh_0009.rip", "with": ["Mesh_0006.rip", "Mesh_0014.rip"] }, { "part": "Mesh_0010.rip", "with": ["Mesh_0007.rip"] } ],
+  "controls": [
+    { "input": "steer", "shape": "bars", "part": "",
+      "at": [-0.644, 0.873, 0], "axis": [0.41, 0.91, 0], "degrees": 30, "degreesAtSpeed": 7 }
+  ],
+  "seats": [
+    { "posture": "astride",
+      "seat":  { "at": [0.335, 1.019, 0] },
+      "handL": { "at": [-0.465, 1.037, 0.377],  "along": [0.453, -0.324, 0.831] },
+      "handR": { "at": [-0.481, 1.050, -0.348], "along": [0.441, -0.383, -0.812] },
+      "footL": { "at": [0.320, 0.496, 0.295] },
+      "footR": { "at": [0.320, 0.496, -0.295] } }
+  ]
+}

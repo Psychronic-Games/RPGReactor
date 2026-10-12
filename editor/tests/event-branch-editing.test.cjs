@@ -823,7 +823,9 @@ test('right-click selects a continuation row through its parent', () => {
     const fs = require('node:fs');
     const source = fs.readFileSync(
         path.join(editorRoot, 'src', 'event', 'EventCommandList.js'), 'utf8');
-    // The contextmenu handler remaps 401/408/657 to the authored parent the
+    // The contextmenu handler remaps a row to the command it belongs to the
     // same way click and dblclick do, so Edit lands on a real editor.
-    assert.match(source, /addEventListener\('contextmenu'[^]{0,600}findParentCommandIndex/);
+    assert.match(source, /addEventListener\('contextmenu'[^]{0,600}ownerIndex/);
+    const list = [{ code: 101 }, { code: 401 }, { code: 357 }, { code: 657 }, { code: 108 }, { code: 408 }, { code: 0 }];
+    assert.deepEqual([1, 3, 5].map(index => EventCommandList.ownerIndex(list, index)), [0, 2, 4]);
 });

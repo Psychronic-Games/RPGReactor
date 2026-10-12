@@ -1,7 +1,10 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-const CALL_PATTERN = /(?:\b(?:window\.)?I18n(?:\?\.|\.)tText|(?:\bthis\.)?(_tt|tt|_tx|_t)|(?:\bthis\.)?_(?:createDialog|btn|checkbox|labeledInput|labeledSelect|labeledRange))\s*\(/g;
+// `t` and `text` count only where the file defines them over tText, and never
+// after a member dot (I18n.t('key') is keyed, ui.text(...) is a widget).
+const CALL_PATTERN = /(?:\b(?:window\.)?I18n(?:\?\.|\.)tText|(?:\bthis\.)?(_tt|tt|_tx|_t)|(?:(?<![\w$.])|\bthis\.)(t|text)|(?:\bthis\.)?_(?:createDialog|btn|checkbox|labeledInput|labeledSelect|labeledRange))\s*\(/g;
+const TEXT_ALIASES = ['tt', '_tt', '_tx', '_t', 't', 'text'];
 const CATALOG_PROPERTIES = ['label', 'title', 'hint', 'name', 'description'];
 
 function skipSpaceAndComments(source, start) {
@@ -144,7 +147,7 @@ function aliasMapsToText(source, alias) {
 }
 
 function enabledAliases(source) {
-    return new Set(['tt', '_tt', '_tx', '_t'].filter(alias => aliasMapsToText(source, alias)));
+    return new Set(TEXT_ALIASES.filter(alias => aliasMapsToText(source, alias)));
 }
 
 function compareText(left, right) {
@@ -222,8 +225,12 @@ function addNamedObjectCatalogs(inventory, source, sourcePath, aliases) {
 }
 
 function isCatalogSource(sourcePath) {
-    return sourcePath.startsWith('src/database/') ||
+    // Any editor file that translates `x.label` (or title, hint …) holds its
+    // catalog of those properties; the importer's own data is not UI text.
+    return (sourcePath.startsWith('src/') && !sourcePath.startsWith('src/legacy/')) ||
+        sourcePath.startsWith('src/database/') ||
         sourcePath === 'src/DatabaseEditorUI.js' ||
+        sourcePath === 'src/ResourceManager.js' ||
         sourcePath === 'src/forge/SoundEffectGenerator/SoundEffectGenerator.js';
 }
 
@@ -257,7 +264,48 @@ function pathCatalogProperties(sourcePath) {
     return [];
 }
 
+// Labels a file translates through its own helper at render time: the
+// Resource Manager's folder labels (image('id', 'Label', …)) and the fixed
+// labels it localizes on show (data-rr-text / data-rr-aria).
+const PATH_LABEL_PATTERNS = {
+    'src/ResourceManager.js': [
+        /\bimage\(\s*'[^']*'\s*,\s*/g, /\bdata-rr-(?:text|aria)="/g, /\bemptyNote\(\s*/g,
+        /\[(?=\s*'[A-Z][A-Za-z ]+',\s*(?:record\.|ResourceManager\.|dimensions\]))\s*/g
+    ]
+};
+
+// countText(count, 'one …', 'many …') phrases: both forms are text.
+function addCountTextCalls(inventory, source, sourcePath) {
+    const calls = /\bcountText\s*\(/g;
+    let match;
+    while ((match = calls.exec(source)) !== null) {
+        const args = callArguments(source, calls.lastIndex);
+        for (const arg of args.slice(1, 3)) {
+            const literal = readStaticLiteral(source, arg[0]);
+            if (literal) addOccurrence(inventory, literal.value, sourcePath, source, literal.start);
+        }
+    }
+}
+
+function addPathLabelPatterns(inventory, source, sourcePath) {
+    for (const pattern of PATH_LABEL_PATTERNS[sourcePath] || []) {
+        pattern.lastIndex = 0;
+        let match;
+        while ((match = pattern.exec(source)) !== null) {
+            if (match[0].endsWith('"')) {
+                const end = source.indexOf('"', pattern.lastIndex);
+                if (end !== -1) addOccurrence(inventory, source.slice(pattern.lastIndex, end), sourcePath, source, pattern.lastIndex);
+                continue;
+            }
+            const literal = readStaticLiteral(source, pattern.lastIndex);
+            if (literal) addOccurrence(inventory, literal.value, sourcePath, source, literal.start);
+        }
+    }
+}
+
 function addPathPropertyCatalogs(inventory, source, sourcePath) {
+    addPathLabelPatterns(inventory, source, sourcePath);
+    addCountTextCalls(inventory, source, sourcePath);
     const properties = pathCatalogProperties(sourcePath);
     if (properties.length === 0) return;
     const property = new RegExp(`(?:^|[,{]\\s*)(${properties.join('|')})\\s*:\\s*`, 'gm');
@@ -307,17 +355,69 @@ function addBattleWidgets(inventory, source, sourcePath) {
     }
 }
 
+// Helpers that hand one of their own parameters to a text alias
+// (`_field(parent, label) { … this._t(label) … }`): a literal passed in that
+// position is translated text. Returns Map(name -> Set(argument index)).
+function forwardingHelpers(source, aliases) {
+    const helpers = new Map();
+    if (!aliases.size) return helpers;
+    const aliasCall = aliasCallExpression(aliases);
+    const definition = /(?:^|[\s;{}(,])(?:(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:function\s*)?\(([^()]*)\)\s*(?:=>\s*)?\{|(?:static\s+|async\s+)?([A-Za-z_$][\w$]*)\s*\(([^()]*)\)\s*\{)/g;
+    let match;
+    while ((match = definition.exec(source)) !== null) {
+        const name = match[1] || match[3];
+        if (!name || ['if', 'for', 'while', 'switch', 'catch', 'function', 'return', 'with'].includes(name) || aliases.has(name)) continue;
+        const params = (match[2] ?? match[4]).split(',').map(param => param.trim().replace(/\s*=.*$/, '')).filter(Boolean);
+        if (!params.length || params.some(param => !/^[A-Za-z_$][\w$]*$/.test(param))) continue;
+        const open = definition.lastIndex - 1;
+        const close = findMatchingBracket(source, open, '{', '}');
+        if (close === -1) continue;
+        const body = source.slice(open + 1, close);
+        params.forEach((param, index) => {
+            if (new RegExp(`${aliasCall}\\(\\s*${param.replace(/\$/g, '\\$')}\\s*[),|?]`).test(body)) {
+                if (!helpers.has(name)) helpers.set(name, new Set());
+                helpers.get(name).add(index);
+            }
+        });
+    }
+    return helpers;
+}
+
+function addForwardedLiterals(inventory, source, sourcePath, helpers) {
+    for (const [name, indexes] of helpers) {
+        const call = new RegExp(`(?:(?<![\\w$.])|\\bthis\\.)${name.replace(/\$/g, '\\$')}\\s*\\(`, 'g');
+        let match;
+        while ((match = call.exec(source)) !== null) {
+            // Skip the definition itself: `name(a, b) {`.
+            const args = callArguments(source, call.lastIndex);
+            const after = args.length ? source.slice(args[args.length - 1][1] + 1, args[args.length - 1][1] + 12) : '';
+            if (/^\s*(?:\{|=>)/.test(after)) continue;
+            for (const index of indexes) {
+                if (!args[index]) continue;
+                const literal = readStaticLiteral(source, args[index][0]);
+                // A lone camelCase word is a key passed to a same-named static helper, not text.
+                if (literal && /^[a-z][A-Za-z0-9]*$/.test(literal.value)) continue;
+                if (literal && literal.end <= args[index][1] + 1 && /^\s*$/.test(source.slice(literal.end, args[index][1]))) {
+                    addOccurrence(inventory, literal.value, sourcePath, source, literal.start);
+                }
+            }
+        }
+    }
+}
+
 function inventoryLocalizationSource(source, sourcePath = '<source>', inheritedAliases = []) {
     const inventory = new Map();
     const aliases = new Set([...enabledAliases(source), ...inheritedAliases]);
     let match;
     CALL_PATTERN.lastIndex = 0;
     while ((match = CALL_PATTERN.exec(source)) !== null) {
-        if (match[1] && !aliases.has(match[1])) continue;
+        const alias = match[1] || match[2];
+        if (alias && !aliases.has(alias)) continue;
         const literal = readStaticLiteral(source, CALL_PATTERN.lastIndex);
         if (literal) addOccurrence(inventory, literal.value, sourcePath, source, literal.start);
     }
     addBattleWidgets(inventory, source, sourcePath);
+    addForwardedLiterals(inventory, source, sourcePath, forwardingHelpers(source, aliases));
     addNamedArrayCatalogs(inventory, source, sourcePath, aliases);
     addNamedObjectCatalogs(inventory, source, sourcePath, aliases);
     addConsumedPropertyCatalogs(inventory, source, sourcePath, aliases);
@@ -379,6 +479,17 @@ function inventoryEditorLocalization(editorRoot) {
             addLiteralsInRange(inventory,source,sourcePath,start,end);
         }
         for(const match of source.matchAll(/errors\.push\(\s*/g)){const value=readStaticLiteral(source,match.index+match[0].length);if(value)addOccurrence(inventory,value.value,sourcePath,source,value.start);}
+        // Step field labels, command names, phases, the priority chain and
+        // battler states are shown through the battle widgets' text helper.
+        for(const match of source.matchAll(/\b(?:n|text|pick|script|field)\('[^']*',\s*(?='[^']+')/g)){const value=readStaticLiteral(source,match.index+match[0].length);if(value)addOccurrence(inventory,value.value,sourcePath,source,value.start);}
+        for(const match of source.matchAll(/\blabel:\s*(?=')/g)){const value=readStaticLiteral(source,match.index+match[0].length);if(value)addOccurrence(inventory,value.value,sourcePath,source,value.start);}
+        for(const match of source.matchAll(/B\.(?:actionPhases|priorityChain|battlerStates)\s*=\s*\[/g)){
+            const start=match.index+match[0].length-1,end=findMatchingBracket(source,start);
+            for(const tuple of source.slice(start+1,end).matchAll(/\[\s*'[^']*'\s*,/g)){
+                let at=start+1+tuple.index+tuple[0].length;
+                for(let literal=readStaticLiteral(source,at);literal;literal=/^\s*,/.test(source.slice(literal.end))?readStaticLiteral(source,literal.end+source.slice(literal.end).indexOf(',')+1):null)addOccurrence(inventory,literal.value,sourcePath,source,literal.start);
+            }
+        }
         const unsupported=source.match(/return \['Unsupported action sequence format\.'/);
         if(unsupported)addOccurrence(inventory,'Unsupported action sequence format.',sourcePath,source,unsupported.index);
     }

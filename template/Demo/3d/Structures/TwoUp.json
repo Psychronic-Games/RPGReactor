@@ -1,0 +1,16 @@
+{
+  "name": "Two-Up House",
+  "size": [14,12],
+  "storey": 5,
+  "materials": {"wall":"Stone","inner":"Plaster","floor":"Wood","wet":"Stone","roof":"RoofTile","stair":"Wood"},
+  "floors": [
+    {"rooms":{"parlour":[1,1,7,10],"kitchen":[9,1,12,10]},"doors":[["parlour","outside",3,4,"south"],["parlour","kitchen",2]],"wet":["kitchen"]},
+    {"rooms":{"bedroom":[1,1,7,10],"loft":[9,1,12,10]},"doors":[["bedroom","loft",2]]}
+  ],
+  "stairs": [
+    {"floor":0,"from":[11,9],"dir":"north","width":1}
+  ],
+  "roof": {"pitch":5},
+  "windows": {"every":5,"width":2,"shutters":"#7a3b2e","flowerBox":true},
+  "spots": {"table":[4,5],"bed":[3,3]}
+}

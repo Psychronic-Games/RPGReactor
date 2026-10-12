@@ -18,14 +18,15 @@ const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
+const { runtimeSource, runtimeParts } = require('./helpers/runtime-source.cjs');
 
 const repoRoot = path.resolve(__dirname, '..', '..');
 const runtimeDir = path.join(repoRoot, 'runtime');
 const read = file => fs.readFileSync(file, 'utf8');
 
-const coreSource = read(path.join(runtimeDir, 'reactor_core.js'));
+const coreSource = runtimeSource('reactor_core.js');
 const managersSource = read(path.join(runtimeDir, 'reactor_managers.js'));
-const objectsSource = read(path.join(runtimeDir, 'reactor_objects.js'));
+const objectsSource = runtimeSource('reactor_objects.js');
 const docSource = read(path.join(repoRoot, 'docs', 'RUNTIME-EVENTS.md'));
 
 /**
@@ -51,6 +52,34 @@ const EXPECTED_EMITS = {
     battlerRevived: 1,
     stateAdded: 1,
     stateRemoved: 1,
+    doorOpened: 1,
+    doorClosed: 1,
+    mapBattleStart: 1,
+    // Once from the turn queue, once from an action battle's four-second turn (reactor_fight_action.js).
+    mapBattleTurnStart: 2,
+    unitDefeated: 1,
+    mapBattleEnd: 1,
+    // Tactical battles (reactor_fight_tactical.js; fightImpact from reactor_fight.js in every on-map mode).
+    fightTeamTurn: 1,
+    fightUnitTurn: 1,
+    // The second and third sites are an army's units moving and acting side by side (reactor_fight_tactical.js).
+    fightMoveStart: 2,
+    fightMoveEnd: 2,
+    fightAim: 3,
+    fightFire: 3,
+    fightImpact: 1,
+    fightActionEnd: 3,
+    fightUnitSpawned: 1,
+    // A unit on watch (overwatch) and its reaction shot: a second emit site for aim, fire and action end.
+    fightOverwatch: 1,
+    // Action and First Person battles (reactor_fight_action.js): a shot at once or one that flies, an alert by sight or by a blow taken.
+    fightShot: 2,
+    fightSwing: 1,
+    fightReload: 1,
+    fightDodge: 1,
+    fightAlert: 2,
+    fightWindup: 1,
+    fightGuard: 1,
 };
 
 // --- runtime harness ------------------------------------------------------
@@ -302,7 +331,7 @@ test('battlerDied is the last thing die does, after states and buffs are cleared
 // --- the bundled copies -----------------------------------------------------
 
 test('the bundled Demo carries the same runtime as runtime/ for every file that emits', () => {
-    for (const file of ['reactor_core.js', 'reactor_managers.js', 'reactor_objects.js']) {
+    for (const file of [...runtimeParts('reactor_core.js'), 'reactor_managers.js', ...runtimeParts('reactor_objects.js')]) {
         const canonical = read(path.join(runtimeDir, file));
         const bundled = read(path.join(repoRoot, 'template', 'Demo', 'js', file));
         assert.equal(bundled, canonical,

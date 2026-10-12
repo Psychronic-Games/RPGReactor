@@ -59,6 +59,28 @@ under BSD-3-Clause.
 - Author: Moghunter
 - Project: <https://mogplugins.wordpress.com/>
 
+## Poly Haven Textures
+
+- Components: the Demo's Rock, Stone, Wood, Plaster, RoofTile, Thatch, Sand and
+  Cobble materials (image, `_normal` and `_rough` maps), resized and colour-matched
+  from the Poly Haven textures rock_face_03, stone_wall, weathered_brown_planks,
+  plastered_wall, clay_roof_tiles_02, reed_roof_04, dirt_floor and
+  cobblestone_floor_01
+- Bundled files: `template/Demo/img/materials/{Rock,Stone,Wood,Plaster,RoofTile,Thatch,Sand,Cobble}*.png`
+- Source: <https://polyhaven.com/textures>
+- License: CC0 1.0 Universal (public domain dedication),
+  <https://creativecommons.org/publicdomain/zero/1.0/>
+
+## Kenney RPG Audio
+
+- Components: the Demo's door and gate sounds, renamed from Kenney's RPG Audio
+  doorOpen_1, doorOpen_2, doorClose_1, doorClose_4 and creak1; the locked rattle
+  is metalLatch and metalClick mixed together
+- Bundled files: `template/Demo/audio/se/{door-open-01,door-open-02,door-close-01,door-close-02,door-locked-01,gate-open-01}.ogg`
+- Source: <https://kenney.nl/assets/rpg-audio>
+- License: CC0 1.0 Universal (public domain dedication),
+  <https://creativecommons.org/publicdomain/zero/1.0/>
+
 ## Ultra Mode 7
 
 - Component: Ultra Mode 7 2.2.0

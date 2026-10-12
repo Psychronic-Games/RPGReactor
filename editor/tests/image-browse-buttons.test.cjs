@@ -96,13 +96,16 @@ test('browseImageFolder lists extension-aware image names and reports empty fold
     assert.equal(pickerCall[3]('custom/Crew/Guard'), `asset://${folder}/custom/Crew/Guard`);
 
     global.RRAssetFiles.listImageReferences = () => [];
-    global.alert = message => { global.alert.message = message; };
+    // An empty folder is said through the editor's themed dialog, titled like the picker that was asked for.
+    const told = [];
+    global.RRDialog = { alert: async (message, options) => { told.push([options.title, message]); } };
     pickerCall = null;
     assert.equal(ui.browseImageFolder({
         projectPath: '/game', folder: 'faces', title: 'Select Face', onPick() {}
     }), false);
     assert.equal(pickerCall, null);
-    assert.equal(global.alert.message, 'No files found in: img/faces');
+    assert.deepEqual(told, [['Select Face', 'No files found in: img/faces']]);
+    delete global.RRDialog;
 });
 
 test('browse buttons use the live field value and update sheet indices through input events', () => {

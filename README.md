@@ -4,17 +4,18 @@ RPG Reactor is an open-source, cross-platform RPG game editor and runtime for RP
 
 Use RPG Reactor to create, edit, playtest, and package 2D RPGs with familiar RPG Maker-style maps, events, database records, plugins, and deployment workflows, without depending on the original RPG Maker runtime or editor.
 
-Pre-built download binaries are available at <https://psychronic.itch.io/rpg-reactor>. The latest tagged source release is [0.98.8](https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.98.8).
+Pre-built download binaries are available at <https://psychronic.itch.io/rpg-reactor>. The latest tagged source release is [0.99.0](https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.99.0).
 
-## What's new in 0.98.8
+## What's new in 0.99.0
 
-- **Import older games:** File › Import Project turns an RPG Maker 2000, 2003, XP, VX or VX Ace game into a new Reactor project, the original untouched: maps, events, database, graphics, audio and fonts, each engine's rules, Ruby script calls and formulas translated, and over 110 published scripts ported as plugins.
-- **Your own screens:** Items, Skills, Equipment, Shop and Name Input as screens you design, a battle HUD of your own (faces, meters, states, sliding windows, a target cursor), custom battle commands and Text Input fields.
-- **Move in 3D:** jump, gravity and fall damage you set, swimming and diving, ladders, ragdoll falls, rigged characters that walk, jump, swim and climb on their own, and a Controls page for every key and button.
-- **Build and place:** structures built on their own plot and stamped anywhere, floor plans, flat roofs, 3D models in the Build bar with all handles at once, right-click Copy/Paste/Duplicate, resizable stairs and ladders, events of any size, and liquids from water to lava.
-- **Chrome and mirrors:** reflective surfaces for models and built pieces, sharp mirrors that show the party near or far, mirror water, and battles that reflect and cast shadows like the map.
+- **Battles on the map:** Tactical, Action and First Person battles play on the map itself, beside the Classic battle screen: range, flanking, cover and height, overwatch, a cinematic camera, a HUD per mode that you can restyle, and your Action Sequences on 2D and 3D maps alike.
+- **Vehicles:** author vehicles in the Database, ride them between maps with your party riding behind, and fight from them. Vehicles take damage, can be wrecked and revived, and sink in deep water.
+- **One seamless world:** maps join at their borders with no fade or loading screen, neighboring maps stand on the horizon, and the Demo adds the five-map Open Road.
+- **Landscapes:** rocks that stack into cliffs, rivers and waterfalls, foliage, painted ground, dunes and biomes, doors that open, materials with relief, and night.
+- **Models and movement:** model variants, hands that grip their weapons, weapons and vehicle seats you rig with a few markers, and characters that climb ledges and roofs.
+- **Faster, lighter, further:** games keep their speed and frame rate on weak hardware, the editor uses less memory, more RPG Maker 2000 to VX Ace games import with their own systems, and web builds can pack their files into a few archives.
 
-Read the [0.98.8 release notes](docs/posts/release-notes-0.98.8.md) for details. Everything here is opt-in; a 2D project stays a 2D project until a map is switched to 3D. Earlier updates remain in the [changelog](CHANGELOG.md) and [devlog archive](docs/README.md).
+Read the [0.99.0 release notes](docs/posts/release-notes-0.99.0.md) for details. Everything here is opt-in; a 2D project stays a 2D project until a map is switched to 3D. Earlier updates remain in the [changelog](CHANGELOG.md) and [devlog archive](docs/README.md).
 
 ## Repository Layout
 
@@ -33,17 +34,19 @@ RPGReactor/
 ## Documentation
 
 - [Editor README](editor/README.md): detailed feature list, source launch steps, project structure, shortcuts, and technical notes.
-- [Latest release notes](docs/posts/release-notes-0.98.8.md): features, fixes, and compatibility limits for 0.98.8.
+- [Latest release notes](docs/posts/release-notes-0.99.0.md): features, fixes, and compatibility limits for 0.99.0.
 - [Changelog](CHANGELOG.md): upcoming development and previous releases.
 - [Current status](docs/STATUS.md): the verified state of the tree, runtime defaults, test results, and open work.
 - [Authoring a world](docs/AUTHORING.md): where every part of a 3D map lives, which tool edits it by hand, what a generator writes, and what checks it.
+- [Vehicle authoring guide](docs/AUTHORING.md#authoring-vehicles): vehicle types, event setup, classes and equipment, map travel and sound.
 - [Battle authoring guide](docs/BATTLE-PRESENTATION.md): Battle Rooms, formations, action steps, and supported plugin behavior.
+- [Battle modes](docs/BATTLE-MODES.md): Tactical, Action and First Person battles on the map, Battle Setup, units, goals and the Tactical HUD.
 - [Rigging a 3D model](docs/RIGGING-MODELS.md): templates, hand markers, and what the runtime reads.
 - [Media surface guide](docs/MEDIA-SURFACES.md): image/video placement, transforms, proportions, and legacy command support.
 - [Custom user interfaces design](docs/DESIGN-USER-INTERFACES.md): the User Interfaces database section, its runtime, how it stays invisible to RPG Maker, twelve opt-in stock-scene replacements, the Battle HUD, and what stays stock.
 - [3D worlds design](docs/DESIGN-3D-WORLDS.md): the tileset-class and facing model behind HD-2D maps, with its phasing table marked to what shipped.
 - [3D objects on the map](docs/devlogs/2026-08-02-3d-objects-on-the-map.md): how painted object groupings and tileset 3D classes build the HD-2D world.
-- [Importing an RPG Maker 2000/2003 project](docs/IMPORTING-LEGACY-PROJECTS.md): File › Import Project… makes a new Reactor project from an old one; what converts and what the format cannot hold.
+- [Importing older RPG Maker projects](docs/IMPORTING-LEGACY-PROJECTS.md): File › Import Project… makes a new Reactor project from a 2000, 2003, XP, VX or VX Ace game; what converts and what the format cannot hold.
 - [Handoff notes](docs/HANDOFF.md): dated engineering notes for the current and last cycle; older cycles are archived.
 - [Documentation index](docs/README.md): every guide, the release history, and the archive of dated audits and reports.
 - [Release checklist](docs/RELEASE-CHECKLIST.md): exact maintainer commands for source publication, signed release candidates, GitHub attachments, and optional itch.io publication.
@@ -55,17 +58,20 @@ RPGReactor/
 - **Native Media Surfaces**: place images and videos through the map toolbar or Show, Transform, and Stop Media Surface event commands. Attach them to the screen, map, player, events, or model parts; edit position, elevation, rotation, scale, corners, opacity, scanlines, and playback settings. Visual arrows, rings, sliders, and source-proportion controls support placement in 2D and 3D. Existing Video Surface commands remain supported. See the [media surface guide](docs/MEDIA-SURFACES.md) for rendering and preview behavior.
 - **Modern PIXI 8 + Three.js runtime**: the game runtime (`runtime/`) is a fully migrated PIXI v8 corescript. Tilemaps, UltraMode7, Effekseer particle effects, video, and shaders all run on current PixiJS instead of the legacy renderer RPG Maker ships, and 3D maps, models, rooms, cameras and in-scene effects are drawn by Three.js (r185) sharing the same canvas.
 - **Authorable HD-2D maps and a 3D world builder**: maps can opt into a perspective 3D presentation while retaining RPG Maker's grid, passability, events, and data format. Map Properties carries the 3D switch, a room (parallax floor, walls, ceiling, sky) and the camera. A **Build** bar over the 3D view lays walls, floors, doors, windows, stairs, roofs, shapes and saved buildings with a snapping ghost, terrain brushes shape rolling ground, water is poured into hollows, and the party walks inside: roofs cut away, walls between the camera and the party go see-through, and stairs lead to a second floor. Buildings are plans in `3d/Structures`, readable JSON that an editor page, a validator and a shell command all understand.
-- **Model optimization**: GLB import can cap textures at 2K, pack skin weights, reduce geometry, and reorder triangles for the GPU vertex cache. The 3D database also offers Optimize for existing models and reports geometry, materials, textures, and rig costs. Both presets can change geometry; aggressive reduction targets fewer triangles. Separate distance-level file generation is disabled in both presets, while the runtime still supports existing authored LOD files. World rendering defaults to game resolution with nearest enlargement and no MSAA; adaptive resolution is opt-in.
-- **Quests and BGM sequences**: author quests in the database, import VisuStella/Yanfly/GS definitions, and manage objectives through events. Quest progress saves with the game, rewards can give gold, items, EXP or a common event, and the tracked quest shows on the map. Map BGM sequences repeat ordered track, silence, and palette entries; palette layers choose tracks from random pools with timing and fade controls. Native track loop points are ignored inside a sequence.
+- **Battles on the map**: beside the Classic battle screen, a game, map or troop can fight in Tactical (turn-based on the grid, with range, flanking, cover, height, line of sight, overwatch and a forecast), Action (real time, in third person or from above) or First Person, on 2D and 3D maps. Events become units through Battle Setup, map events keep running during the fight, Action Sequences play on the map, a cinematic camera films Tactical battles, and each mode has its own HUD as an ordinary User Interfaces record. See the [battle modes guide](docs/BATTLE-MODES.md).
+- **Vehicles**: Database vehicles with a sprite or 3D model, starting positions, engine sound, an optional class for stats, skills and equipment, and a rider's seat marked on the model. The party rides its own vehicles behind the leader, vehicles travel between maps and are saved where they are parked, and in Tactical and Classic battles a mounted unit fights with the vehicle's range, weapon and skills while the vehicle takes its own damage.
+- **Seamless neighboring maps**: each side of a map can name the map that lies past it. Neighbors stand on the horizon two maps out and are entered with no fade or loading, on foot or riding, on 3D and 2D maps; only the maps around the party are in memory.
+- **Model optimization**: GLB import can cap textures at 2K, pack skin weights, reduce geometry, and reorder triangles for the GPU vertex cache. The 3D database also offers Optimize for existing models and reports geometry, materials, textures, and rig costs. Both presets can change geometry; aggressive reduction targets fewer triangles. Separate distance-level file generation is disabled in both presets, while the runtime still supports existing authored LOD files. The 3D world is drawn at three quarters of game resolution and enlarged with a sharpening filter, without MSAA; lighting and light haze are worked out at a quarter size and filtered up by surface, and dense models are drawn at simplified distance levels in shadows, and in the view on weak GPUs. Adaptive resolution is opt-in.
+- **Quests and BGM sequences**: author quests in the database, import VisuStella/Yanfly/GS definitions, and manage objectives through events. Quest progress saves with the game, rewards can give gold, items, EXP or a common event, and the tracked quest shows on the map. Music sequences, kept in a database library or on a map and playable in battle, repeat ordered track, silence, and palette entries; palette layers choose tracks from random pools with timing and fade controls. Native track loop points are ignored inside a sequence.
 - **Custom user interfaces**: a User Interfaces database section lays out menus, dialogs, panels, and HUDs with Box, Image, Text, Button, Gauge, Text Input, and typed List nodes. The canvas-first editor uses explicit Back -> Front Layers with subtree reorder/reparent, a compact searchable Use As control, responsive Inspector placement, and an optional Game Reference tray whose imports are always explicit. Named List contexts and actor bindings drive actor identity, profile, resources, EXP, parameters, equipment, states, inventory, Options, and save data. Twelve stock screens (Title, Main Menu, Status, Game End, Options, Save, Load, Items, Skills, Equipment, Shop, Name Input) and a Battle HUD have generated baselines and a Stock Layout starting point, and each is replaced only when a project opts in; invalid records fall back to stock. Lists chain through contexts (a category list filters the items, a slot list the equipment candidates), a Text Input field takes typed passwords or commands for in-game terminals, and a Battle HUD dresses every battle the way MOG's battle HUD does: a party panel with face reactions, ATB and a turn marker, the stock battle windows placed and following the active actor, and a target cursor. A standalone RPG Maker MZ plugin is not shipped and is explicitly deferred; custom interfaces currently run through RPG Reactor. See the [design](docs/DESIGN-USER-INTERFACES.md) for behavior and boundaries.
 - **MZ + MV plugin compatibility**: complementary MZ and MV compatibility layers let existing RPG Maker plugins run unmodified on the new runtime, including mixing plugins from both engines in a single project. Stock MV/YEP LZString saves, MOG interfaces, video parallaxes, and custom local/browser save keys are supported. Validated against a large commercial MV game running a 168-plugin stack (Yanfly, Victor Engine, MOG, SRD, and the LeTBS tactical battle system), and against a commercial MZ project running 143 active plugins including 41 VisuStella ones, an event-driven title scene, and third-party tilemap and billboard plugins that add layers of their own.
 - **Resilient resource loading**: the runtime watchdogs every database, image, and audio load from its own frame tick. Silently-dying requests (slow disks, cloud-synced folders) retry automatically, and genuinely missing files degrade gracefully with a clear console error instead of hanging the game on a black screen. Converted image consumers can load PNG/APNG, JPG/JPEG, WebP, safe SVG, or GIF; explicit modern extensions are preserved, extensionless RPG Maker names still resolve as PNG, legacy `<name>.<ext>.png` fallbacks remain readable, encrypted MIME types stay correct, and animated GIF textures refresh while visible. Format-sensitive tilesets, plugin-parameter image fields, database actor/list thumbnails, Reactor UI character/face/party-face/System/Title/Icon sources, balloon sheets, and other fixed system sheets such as IconSet retain their PNG-oriented contracts.
 - **The Forge, in-editor asset generators**:
-  - **Animation Generator**: 76 procedural 2D animations across four categories, including Portal, with layered composition, per-layer keyframe timelines, a 3D shape pipeline, custom textures, and export to bake-ready sprite sheets or animated GIFs.
+  - **Animation Generator**: 76 procedural 2D animations across eight categories, including Portal, with layered composition, per-layer keyframe timelines, a 3D shape pipeline, custom textures, and export to bake-ready sprite sheets or animated GIFs.
   - **Effekseer Animation Generator**: create native Effekseer particle effects (`.efkefc`) from 106 recipes across nine categories without the external Effekseer editor: 21 sci-fi interface instruments with user-typed text, physical battle hits, 15 energy recipes, elements, a custom-effect Composer, and more; wireframe or solid-textured rendering with custom texture upload; layers, keyframes with texture cross-fades, live in-editor preview through the game's own Effekseer runtime, and one-click export. The tracked suite validates generated format/model round trips, every recipe at default/extreme/swept values, composition, and real-WASM playback.
   - **Character Generator**: bundled Psychronic and Looseleaf styles plus procedural Outfit Forge and Hair Forge tools that generate RPG Maker-style walking-sheet parts, with live 4-direction walk previews, multiple hair styles, palette systems, and save-to-library output. Psychronic remains the default style.
-  - **Sound Effect Generator**: procedural sfxr-style sound design on Web Audio, baked to 16-bit WAV in the project's `audio/se/`. 29 archetypes across RPG SFX and tuned instruments, six waveforms including a physically modelled Karplus-Strong pluck, 27 parameters, live waveform/envelope/pitch visualizers, and a 16-step sequencer for jingles and stingers.
-- **Build & deploy**: one-click isolated playtests; cross-platform game packaging for Windows, macOS, Linux, and Web; optional Linux AppImages for games and the editor; configurable NW.js releases and runtime locales; optional staged PNG/audio optimization; and an editor distribution builder with SHA-256 checksums. Eligible full desktop packages default to an exact-NW.js-version H.264/AAC codec overlay verified by a trusted archive hash plus extracted-binary validation; users can disable it, and Web/Minimal packages never include it. Every overlay carries machine-readable provenance, recorded archive/binary hashes, the complete LGPL text, corresponding-source/build references, and a patent notice.
+  - **Sound Effect Generator**: procedural sfxr-style sound design on Web Audio, baked to WAV, OGG or MP3 in the project's `audio/se/`. 29 archetypes across RPG SFX and tuned instruments, six waveforms including a physically modelled Karplus-Strong pluck, 27 parameters, live waveform/envelope/pitch visualizers, and a 16-step sequencer for jingles and stingers.
+- **Build & deploy**: one-click isolated playtests; cross-platform game packaging for Windows, macOS, Linux, and Web, where a Web build can pack its files into a few zip archives read on demand, for hosts that limit file count and size; optional Linux AppImages for games and the editor; configurable NW.js releases and runtime locales; optional staged PNG/audio optimization; and an editor distribution builder with SHA-256 checksums. Eligible full desktop packages default to an exact-NW.js-version H.264/AAC codec overlay verified by a trusted archive hash plus extracted-binary validation; users can disable it, and Web/Minimal packages never include it. Every overlay carries machine-readable provenance, recorded archive/binary hashes, the complete LGPL text, corresponding-source/build references, and a patent notice.
 - **Source-audited 18-language localization** across editor-generated interface text, with locale-key and placeholder validation, Arabic right-to-left direction, and project-authored game content deliberately left untouched; plus a theme system with multiple color palettes in light and dark modes.
 
 ## Development Launchers
@@ -91,7 +97,7 @@ git clone https://github.com/Psychronic-Games/RPGReactor.git
 cd RPGReactor
 ```
 
-2. Install the editor dependency:
+2. Install the editor dependencies:
 
 ```bash
 cd editor
@@ -143,7 +149,7 @@ cd editor
 npm test
 ```
 
-GitHub Actions runs syntax checks, the full Node suite, dependency audit, patch hygiene, and clean-checkout checks. The suite covers editor data round trips, runtime compatibility, rendering contracts, save safety, localization, generators, deployment, and release infrastructure. On 2026-09-04, local working-tree validation completed with **3885 passing tests**, zero failures or skips. This was not a clean release run. Separate CI GUI smokes cover Web persistence and NW.js saves; the UI-layout smoke is an additional local gate. See [current status](docs/STATUS.md) for verification limits and [the release checklist](docs/RELEASE-CHECKLIST.md) for checks still required on release hardware.
+GitHub Actions runs syntax checks, the full Node suite, dependency audit, patch hygiene, and clean-checkout checks. The suite covers editor data round trips, runtime compatibility, rendering contracts, save safety, localization, generators, deployment, and release infrastructure. On 2026-09-29, local working-tree validation completed with **7000 passing tests**, zero failures or skips. This was not a clean release run. A separate CI GUI job runs the Web persistence smoke and five NW.js smokes (save, interaction order, keyboard, menus, event double-click); the other smokes in `editor/tests/smoke` are local gates. See [current status](docs/STATUS.md) for verification limits and [the release checklist](docs/RELEASE-CHECKLIST.md) for checks still required on release hardware.
 
 ## Trusted Projects
 
@@ -151,7 +157,7 @@ Treat an RPG project like source code. Project plugins and project-local Charact
 
 ## Bundled Demo Limitations
 
-Reactor One is a starter and compatibility showcase, not a content-complete game. Original replacement art is still being authored for several actors and every enemy battler, so some records name character and side-view sheets that are not shipped; every sound the Demo names exists on disk. The maintained inventory is in [`docs/demo-missing-se.md`](docs/demo-missing-se.md); these gaps do not indicate missing editor/runtime files.
+Reactor One is a starter and compatibility showcase, not a content-complete game. It is a 3D project: its party and the enemies it fights are 3D models, so it ships no 2D battler sheets. Some unused leftover records (actors 6–8, enemies 3–5) have no art. Every sound the Demo names exists on disk. The maintained inventory is in [`docs/demo-missing-se.md`](docs/demo-missing-se.md).
 
 ## Runtime
 
@@ -167,17 +173,17 @@ for third-party files or user/project content.
 ## Cutting a Source Release
 
 `cut-release.cjs` is the canonical source-release path. Run it from a clean
-`main` worktree after all 0.98.8 changes have been committed:
+`main` worktree after all 0.99.0 changes have been committed:
 
 ```bash
-node editor/build-scripts/cut-release.cjs 0.98.8 --dry-run
-node editor/build-scripts/cut-release.cjs 0.98.8
+node editor/build-scripts/cut-release.cjs 0.99.0 --dry-run
+node editor/build-scripts/cut-release.cjs 0.99.0
 ```
 
 The command runs the complete editor test suite, finalizes both changelog
 headings with the release date, updates `editor/package.json`, the root README
 release link and its recognized validation-count sentence, creates a release
-commit when those surfaces changed, creates an annotated `v0.98.8` tag, and pushes the branch and tag. The tag push starts
+commit when those surfaces changed, creates an annotated `v0.99.0` tag, and pushes the branch and tag. The tag push starts
 `publish-release.yml`, which creates or updates the GitHub source release using
 that version's root changelog section. `--no-push` stops after creating the tag.
 Other version prose, validation dates, the editor README, and the status summary

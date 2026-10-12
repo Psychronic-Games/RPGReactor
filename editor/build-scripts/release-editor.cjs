@@ -73,6 +73,8 @@ async function main(argv = process.argv.slice(2)) {
     fs.mkdirSync(outputDir, { recursive: true });
 
     const workerData = release.createWorkerData({ editorRoot, target, mode, outputDir });
+    // `--pack-web true`: the web build's project goes into a few archives (web-pack.cjs), for hosts with file limits.
+    if (target === 'web' && options['pack-web'] === 'true') workerData.packWebFiles = true;
     await runWorker(path.join(editorRoot, 'build-scripts', 'dist-editor-worker.js'), workerData);
 
     const sumsPath = path.join(outputDir, 'SHA256SUMS.txt');

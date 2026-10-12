@@ -224,7 +224,7 @@ class AudioCommandEditor {
             ? this.projectController.getCurrentProject()
             : this.projectController.currentProject;
         if (!currentProject || !currentProject.path) {
-            alert(tt('No project loaded'));
+            RRDialog.alert(tt('No project loaded'), { title: tt(this.commandType.name), kind: 'warning' });
             return;
         }
 
@@ -645,7 +645,7 @@ class AudioCommandEditor {
         trackList.style.cssText = 'background: var(--color-bg-surface); flex: 1; overflow-y: auto; padding: 0;';
 
         if (files.length === 0) {
-            trackList.innerHTML = `<p style="color: var(--color-text-muted); padding: 20px; text-align: center;">${tt('No')} ${this.commandType.folder.toUpperCase()} ${tt('files found')}</p>`;
+            trackList.innerHTML = `<p style="color: var(--color-text-muted); padding: 20px; text-align: center;">${tt('No {folder} files found').replace('{folder}', this.commandType.folder.toUpperCase())}</p>`;
             browser.appendChild(tabBar);
             browser.appendChild(trackList);
             return browser;
@@ -1138,7 +1138,7 @@ class AudioCommandEditor {
             this.projectController.currentProject;
 
         if (!currentProject || !currentProject.path) {
-            alert(tt('No project loaded'));
+            RRDialog.alert(tt('No project loaded'), { title: tt(this.commandType.name), kind: 'warning' });
             return;
         }
 
@@ -1148,14 +1148,14 @@ class AudioCommandEditor {
 
         // Check if folder exists
         if (!fs.existsSync(audioFolder)) {
-            alert(tt('Audio folder not found:') + ' ' + audioFolder);
+            RRDialog.alert(tt('Audio folder not found:') + ' ' + audioFolder, { title: tt(this.commandType.name), kind: 'warning' });
             return;
         }
 
         const files = RRAssetFiles.listUnique(audioFolder, RRAssetFiles.AUDIO_EXTENSIONS);
 
         if (files.length === 0) {
-            alert(tt('No audio files found in folder'));
+            RRDialog.alert(tt('No audio files found in folder'), { title: tt(this.commandType.name) });
             return;
         }
 
@@ -1244,7 +1244,7 @@ class AudioCommandEditor {
         if (filename) {
             this.loadAudioFile(filename);
         } else {
-            alert(tt('Please select an audio file first'));
+            RRDialog.alert(tt('Please select an audio file first'), { title: tt(this.commandType.name) });
         }
     }
 

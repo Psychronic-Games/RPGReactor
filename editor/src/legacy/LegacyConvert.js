@@ -84,6 +84,10 @@
     // MZ draws tile id 0 as nothing, so the 144 lower tiles take B slots 1-144 and the three animated tiles 145-147.
     const LOWER_B_OFFSET = 1;
     const ANIMATED_B_INDEX = LOWER_B_OFFSET + 144;
+    // Their other three frames follow, three slots per tile: tile t's frame f (1-3) at 148 + t * 3 + f - 1.
+    const ANIMATED_FRAMES_B = ANIMATED_B_INDEX + 3;
+    /** The B slots an animated tile shows in turn: frame 0 where the map names it, then frames 1-3. */
+    const animatedFrames = (t) => [ANIMATED_B_INDEX + t, ...[0, 1, 2].map(f => ANIMATED_FRAMES_B + t * 3 + f)];
 
     /**
      * Build one MZ 2×3 water block at tile (bx, by) of `a1` from frame `f`
@@ -154,7 +158,7 @@
         }
         for (let k = 0; k < 12; k++) { terrainBlock(A2, chip, k, ...kindPos(k), false); terrainBlock(A2, chip, k, ...kindPos(CORNER_KIND_OFFSET + k), true); }
         for (let n = 0; n < 144; n++) { const [sc, sr] = lowerPos(n), [dc, dr] = bcPos(LOWER_B_OFFSET + n); tile(B, chip, sc, sr, dc, dr); }
-        for (let t = 0; t < 3; t++) { const [dc, dr] = bcPos(ANIMATED_B_INDEX + t); tile(B, chip, 3 + t, 4, dc, dr); }
+        for (let t = 0; t < 3; t++) animatedFrames(t).forEach((slot, f) => { const [dc, dr] = bcPos(slot); tile(B, chip, 3 + t, 4 + f, dc, dr); });
         for (let n = 0; n < 144; n++) { const [sc, sr] = upperPos(n), [dc, dr] = bcPos(n); tile(C, chip, sc, sr, dc, dr); }
         return { A1, A2, B, C };
     }
@@ -241,7 +245,7 @@
             flags[TILE_ID_A2 + k * 48 + s] = flags[TILE_ID_A2 + (CORNER_KIND_OFFSET + k) * 48 + s] = wallTop ? lowerFlag(6 + k) & ~0x0f : lowerFlag(6 + k);
         }
         for (let n = 0; n < 144; n++) flags[LOWER_B_OFFSET + n] = lowerFlag(18 + n);
-        for (let t = 0; t < 3; t++) flags[ANIMATED_B_INDEX + t] = lowerFlag(3 + t);
+        for (let t = 0; t < 3; t++) for (const slot of animatedFrames(t)) flags[slot] = lowerFlag(3 + t);
         for (let n = 0; n < 144; n++) flags[TILE_ID_C + n] = mzFlag(upper[n] ?? 0x0f, null);
         flags[TILE_ID_C] = 0x10; // upper tile 0 is empty: never blocks, never covers
         flags[0] = 0x10;         // MZ's tile 0 is nothing: an empty layer must defer to the tiles under it
@@ -469,8 +473,15 @@
     }
 
     /** Tilesets.json entry for one chipset. */
+    /**
+     * Tilesets.json entry for one chipset. The old engines' tile animation rides along for the runtime: each
+     * animated tile's four frames, a frame every 6 game frames (rrTileFrames), and the water's step, 12 or 24
+     * frames, in the order 1-2-3-2 or 1-2-3 (rrWater).
+     */
     function tilesetJson(chipset, terrains, names) {
-        return { id: chipset.id, flags: tilesetFlags(chipset, terrains), mode: 1, name: chipset.name || `Chipset ${chipset.id}`, note: '', tilesetNames: [names.A1, names.A2, '', '', '', names.B, names.C, '', ''] };
+        const rrTileFrames = Object.fromEntries([0, 1, 2].map(t => [ANIMATED_B_INDEX + t, animatedFrames(t)]));
+        const rrWater = { step: chipset.animation_speed ? 12 : 24, cycle: chipset.animation_type ? 3 : 4 };
+        return { id: chipset.id, flags: tilesetFlags(chipset, terrains), mode: 1, name: chipset.name || `Chipset ${chipset.id}`, note: '', tilesetNames: [names.A1, names.A2, '', '', '', names.B, names.C, '', ''], rrTileFrames, rrWater };
     }
 
     const SOUND_SLOTS = { cursor_se: 0, decision_se: 1, cancel_se: 2, buzzer_se: 3, battle_se: 7, escape_se: 8, enemy_attack_se: 9, enemy_damaged_se: 10, enemy_death_se: 11, actor_damaged_se: 13, dodge_se: 16, item_se: 21 };
@@ -500,7 +511,7 @@
         // So does an image it names but never shipped: it draws nothing.
         out.rrSkipMissingImages = true;
         // Variables are whole numbers within the engine's limit; dividing by zero leaves one as it was.
-        out.rrLegacyVariableLimit = db.engine === 'RPG Maker 2000' ? 999999 : 9999999;
+        out.rrLegacyVariableLimit = (db.runtime || db.engine) === 'RPG Maker 2000' ? 999999 : 9999999;
         // Erase Screen holds through teleports but not through the save screen or the menu.
         out.rrLegacyEraseScreen = true;
         // Passage is decided the old engine's way: upper tile first, then the lower tile by its own bits.
@@ -520,7 +531,15 @@
         out.rrLegacyMotion = true;
         out.titleBgm = audio(sys.title_music); out.battleBgm = audio(sys.battle_music);
         out.victoryMe = audio(sys.battle_end_music); out.gameoverMe = audio(sys.gameover_music);
-        out.optSideView = false; out.optDrawTitle = true; out.optTransparent = false;
+        out.optSideView = false; out.optTransparent = false;
+        // The title is the game's own picture with New Game, Continue and the exit command under it; no drawn game title.
+        out.optDrawTitle = false;
+        out.rrLegacyTitle = true;
+        // The old engines' windows: no box margin, one-line rows, a four-line message across the screen; menus and
+        // battles laid out as the runtime the game shipped with drew them.
+        out.rrLegacyWindows = (db.runtime || db.engine) === 'RPG Maker 2003' ? 2003 : 2000;
+        // The old engines had no touch UI: the menu button stays off until the player turns it on in Options.
+        out.rrTouchUiOff = true;
         out.editMapId = out.startMapId;
         if (Array.isArray(out.sounds)) for (const [field, slot] of Object.entries(SOUND_SLOTS)) if (sys[field] && sys[field].name && out.sounds[slot]) out.sounds[slot] = audio(sys[field]);
         out.switches = ['', ...(db.switches || []).slice(1).map(s => (s && s.name) || '')];
@@ -528,7 +547,7 @@
         return out;
     }
 
-    const api = { parallaxSpeed, TILE_ID_C, T, CORNER_KIND_OFFSET, LOWER_B_OFFSET, blank, blit, tile, quad, keyColour, chipsetToSheets, lowerPos, upperPos, blockPos, bcPos, ANIMATED_B_INDEX, shapeOf, lowerTile, upperTile, mapData, mzFlag, tilesetFlags, reorderCharset, charsetName, DIRECTION, audio, mapInfos, mapMusic, eventPage, mapJson, tilesetJson, systemJson, stripExt, terrainMap, mapBattleback, scaleNearest, windowSkin };
+    const api = { parallaxSpeed, TILE_ID_C, T, CORNER_KIND_OFFSET, LOWER_B_OFFSET, blank, blit, tile, quad, keyColour, chipsetToSheets, lowerPos, upperPos, blockPos, bcPos, ANIMATED_B_INDEX, animatedFrames, shapeOf, lowerTile, upperTile, mapData, mzFlag, tilesetFlags, reorderCharset, charsetName, DIRECTION, audio, mapInfos, mapMusic, eventPage, mapJson, tilesetJson, systemJson, stripExt, terrainMap, mapBattleback, scaleNearest, windowSkin };
     root.RRLegacyConvert = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof globalThis !== 'undefined' ? globalThis : window);

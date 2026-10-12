@@ -38,6 +38,8 @@
         if (!equipTypes) return [1, 2, 3, 4, 5];
 
         const actorClass = databaseManager.getClass(actor?.classId);
+        // The class's own list is the whole answer: a type as many times as it has slots of it.
+        if (actorClass && Array.isArray(actorClass.rrEquipSlots)) return actorClass.rrEquipSlots.slice();
         const customSlots = parseClassSlots(actorClass?.note, equipTypes);
         const slots = customSlots.length > 0 ? customSlots : defaultSlots(equipTypes);
 
@@ -57,7 +59,78 @@
         return slots.map((etypeId, slotIndex) => ({ etypeId, slotIndex }));
     };
 
-    const api = { parseClassSlots, resolve, resolveInitialBindings };
+    // A class's equipment slots: its own list, `rrEquipSlots` (the equipment type of each slot, in order; a type
+    // twice is two slots of it). A class with no list has one slot per equipment type, as stock data expects.
+    /** The named equipment types. */
+    const named = system => (system && system.equipTypes || []).map((name, id) => ({ name, id })).filter(type => type.id > 0 && String(type.name || '').trim()).map(type => type.id);
+    /** The slots a new class starts with: the first five types a new project comes with (Weapon, Shield, Head, Body, Accessory), where still named. */
+    const standard = system => named(system).filter(id => id <= 5);
+    /** A class's own list of slots, or null. */
+    const classSlots = classEntry => (classEntry && Array.isArray(classEntry.rrEquipSlots) ? classEntry.rrEquipSlots : null);
+    const isDualWield = (record, classEntry) => [record, classEntry].some(owner => (owner && owner.traits || []).some(trait => trait && trait.code === 55 && trait.dataId === 1));
+    /**
+     * Starting equipment carried from one list of slots to another: each new slot takes the first thing
+     * not yet placed that sat in a slot of its type. What no new slot has room for is left out.
+     */
+    const remapEquips = (from, to, equips) => {
+        const held = (equips || []).map((id, i) => ({ id: Number(id) || 0, type: from[i] }));
+        return to.map(type => {
+            const at = held.findIndex(entry => entry && entry.id > 0 && entry.type === type);
+            if (at < 0) return 0;
+            const id = held[at].id;
+            held[at] = null;
+            return id;
+        });
+    };
+    /** A list with the slot at `from` moved to stand at `to`; the same list back when nothing moves. */
+    const moveSlot = (slots, from, to) => {
+        const count = slots.length;
+        if (!(from >= 0 && from < count)) return slots;
+        const place = Math.max(0, Math.min(count - 1, to));
+        if (place === from) return slots;
+        const next = slots.slice(), [moved] = next.splice(from, 1);
+        next.splice(place, 0, moved);
+        return next;
+    };
+    /**
+     * Give a class its slots. The starting equipment of every actor and vehicle of the class moves with its
+     * slot's type (their `equips` is one entry per slot). `slotsOf(record)` answers a record's slots as they are now.
+     */
+    const setClassSlots = (data, classEntry, slots, slotsOf) => {
+        const members = [];
+        for (const list of [data.actors, data.vehicles]) for (const record of list || []) if (record && record.classId === classEntry.id && Array.isArray(record.equips)) members.push([record, slotsOf(record)]);
+        classEntry.rrEquipSlots = slots.slice();
+        for (const [record, was] of members) record.equips = remapEquips(was, slots, record.equips);
+        return classEntry.rrEquipSlots;
+    };
+    /**
+     * Before a save: a type named since the last one (`known`: the types named then) is a slot of no
+     * class until it is added there. Every class still without a list is given its slots as they were, as
+     * its own: one per type known before (a second weapon in place of the second under Dual Wield). Left as
+     * it is: a class whose slots a note tag gives, and one where an actor has Dual Wield of its own.
+     * Returns the types named now.
+     */
+    const settle = (data, known) => {
+        const now = named(data.system), before = new Set(known || []);
+        if (!known || now.every(id => before.has(id))) return now;
+        const equipTypes = data.system.equipTypes || [], stock = [];
+        for (let id = 1; id < equipTypes.length; id++) stock.push(id);
+        for (const classEntry of data.classes || []) {
+            if (!classEntry || classSlots(classEntry) || parseClassSlots(classEntry.note, equipTypes).length) continue;
+            const members = [];
+            for (const list of [data.actors, data.vehicles]) for (const record of list || []) if (record && record.classId === classEntry.id) members.push(record);
+            const twoWeapons = isDualWield(null, classEntry);
+            if (!twoWeapons && members.some(record => isDualWield(record, null))) continue;
+            const was = stock.slice();
+            if (twoWeapons && was.length >= 2) was[1] = 1;
+            const slots = was.filter((id, index) => (index === 1 && twoWeapons) || before.has(id));
+            classEntry.rrEquipSlots = slots;
+            for (const record of members) if (Array.isArray(record.equips)) record.equips = remapEquips(was, slots, record.equips);
+        }
+        return now;
+    };
+
+    const api = { parseClassSlots, resolve, resolveInitialBindings, named, standard, classSlots, isDualWield, remapEquips, moveSlot, setClassSlots, settle };
     root.RREquipSlots = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof globalThis !== 'undefined' ? globalThis : window);

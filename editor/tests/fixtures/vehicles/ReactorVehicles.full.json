@@ -1,0 +1,15 @@
+[null,
+  { "id": 1, "name": "Courier", "note": "<fast>", "kind": "motorcycle", "prompt": "Saddle up",
+    "model": { "name": "Vehicles/kawashaki_ninja_h2", "file": "kawashaki_ninja_h2", "ext": ".glb", "size": 3.4, "scale": 1, "variant": "red", "offset": [0, 0, 0] },
+    "sheet": { "characterName": "Vehicle", "characterIndex": 2 },
+    "rider": "seat", "encounters": "half",
+    "handling": { "speed": 24, "toTopSpeed": 2.5, "turnCircle": 4, "jump": 1, "brake": 0.5, "coast": 3, "reverse": 2, "lean": 35,
+      "step": 0.5, "wade": 0.3, "turnInPlace": 0, "grip": 30, "turnRate": 140 },
+    "body": { "height": 2.4, "radius": 0.5 },
+    "sounds": { "engine": { "name": "engine-a", "volume": 80, "pitch": 110 }, "engineRate": [0.7, 1.4],
+      "start": { "name": "start-a", "volume": 90, "pitch": 100 }, "stop": null,
+      "bump": { "name": "bump-a", "volume": 90, "pitch": 100 }, "land": { "name": "land-a", "volume": 90, "pitch": 100 },
+      "scrape": { "name": "scrape-a", "volume": 70, "pitch": 100 }, "skid": { "name": "skid-a", "volume": 70, "pitch": 100 } },
+    "bgm": { "name": "Ride", "volume": 80, "pitch": 100, "pan": 0 },
+    "camera": { "speedDistance": 40, "speedFov": 9, "lookAhead": 2, "minDistance": 0 } }
+]

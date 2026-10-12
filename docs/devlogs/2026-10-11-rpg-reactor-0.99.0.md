@@ -1,0 +1,104 @@
+# RPG Reactor 0.99.0: Fight on the Map, Ride Out of Town
+
+Battles no longer have to leave the map. 0.99.0 adds Tactical, Action and First Person battles that play right where your party stands, vehicles you ride and fight from, maps that join into one seamless world, and a 3D builder full of rocks, rivers, grass and doors that open.
+
+RPG Reactor is a free, open-source RPG editor and runtime for RPG Maker MV and MZ projects. Same data files, same plugins, no conversion. Everything here is optional: a 2D project stays a 2D project until you switch a map to 3D, and Classic battles play exactly as they did.
+
+## BATTLES ON THE MAP
+
+Pick how your game fights: for the whole game, one map, one troop, or with a single event command.
+
+- Tactical battles: pick a unit, see where it can move, and attack with range, flanking, cover, height and line of sight, with a forecast before you confirm.
+- Action battles in real time: aim and fire, chain blade combos, dodge, guard, lock on and swap weapons, with your party fighting beside you.
+- First Person battles look through the leader's eyes with the weapon in view.
+- Your Action Sequences play on the map as they do on the battle screen. No sequences yet? Built-in ones cover melee, ranged, magic and items.
+- A cinematic camera films the fight: over the shoulder on an aim, a cut on the hit, slow motion on a kill.
+- Overwatch, high ground, rooftops, big units that fill their footprint, armies with no unit cap and an Auto command.
+- Each mode has its own HUD, and every HUD is yours to restyle.
+- Battle Setup places units by clicking tiles, with goals from defeating everyone to surviving five turns.
+- The fallen stay on the field until someone revives them, and a new Corpse collapse leaves enemies where they dropped.
+- Map events keep running during the fight, so the story can happen mid-battle.
+
+## VEHICLES YOU RIDE AND FIGHT FROM
+
+Give your party wheels.
+
+- Author vehicles in the Database: a sprite or a 3D model, a starting map and tile, engine sounds, even a class with stats and skills.
+- Any event can be a vehicle, and you can place several of the same one.
+- Park a row of motorcycles and your followers take the others and ride behind you.
+- Vehicles travel between maps with you and stay where you park them.
+- Ride into a Tactical or Classic battle and fight from the saddle, with the vehicle's own weapon and skills.
+- Vehicles take damage, can be wrecked and revived, and a pilot inside is shielded until the vehicle goes down.
+- Ride into deep water and the vehicle sinks. Walk it out along the bottom to get it back.
+
+## ONE SEAMLESS WORLD
+
+No more loading screen at the edge of the map.
+
+- Choose the map that lies past each border and walk or ride straight into it, with no fade.
+- Neighboring maps stand on the horizon, so the mountains ahead are the real ones.
+- Choose what lies beyond the last map: rolling land, ocean, mountains, a plateau's drop or a floating island.
+- The demo adds the Open Road: five joined maps from a forest road to a high lake.
+
+## BUILD A LANDSCAPE
+
+Shape the land, then dress it.
+
+- Stack rocks like bricks and they melt into cliffs with ledges and cracks.
+- Lay a river and it carves its channel, flows downhill and pours over a drop as a waterfall.
+- Paint grass, flowers, ferns, reeds and bushes that sway in the wind and part around the player.
+- Paint the ground with sand, dirt, snow, mud or alien crust, raise dunes, and set a whole biome in one click.
+- Hang doors that open as people walk up or stay locked until a switch or an item, and frame windows with shutters and flower boxes.
+- Materials with real relief and sheen, roofs with eaves, and a night that looks like night.
+- Save any building as a structure and stamp it anywhere.
+
+## CLIMB
+
+Your characters use the world you built.
+
+- Jump at a ledge and the character grabs the edge and pulls up, roofs included, and the party follows.
+- An Edges view shows what a character can do at each tile edge: walk, hop, mantle, climb or drop.
+
+## 3D MODELS WITH MORE LIFE
+
+One model, many looks.
+
+- Variants recolor a model, swap its texture or make it shiny, each with its own effects.
+- Hands grip their weapons: fingers wrap a sword's handle and a rifle is shouldered properly.
+- Rig a weapon with a few markers and every hand holds it the right way.
+- Mark the seat, grips and footrests on a vehicle model and riders sit there.
+- A mouth drawn as a ring of markers opens cleanly between the lips.
+
+## A SMOOTHER EDITOR
+
+Less fighting the tool, more making the game.
+
+- Drag event commands to reorder them, with undo and redo in the command list.
+- One undo history for the whole map, whatever tool is in hand.
+- Equipment slots per class: two Heads, four Weapons, whatever your game needs.
+- User Interfaces fit any screen, with a preview from small windows to ultrawide.
+- Pick a spot on a 3D map in 3D.
+- Show Text previews custom message fonts the way the game draws them.
+- An Eraser in every Build group and a clearer Ground tool.
+
+## FASTER ON EVERY COMPUTER
+
+Your players do not all own gaming rigs.
+
+- Games keep their real speed on slow computers instead of running in slow motion.
+- 3D maps watch their own frame rate and ease off detail only when a machine needs it, with Auto, High, Medium and Low in Options.
+- 3D maps, battles and the editor run smoother and use less memory.
+
+## BRING MORE OLD GAMES
+
+- RPG Maker 2000 and 2003 imports find their RTP on their own, or download it for you.
+- VX and VX Ace games import with their own systems, grid tactics battles included.
+- Old titles, menus and battles look like the original.
+
+## SHIP IT ON THE WEB
+
+- Pack a web build into a few archives, for hosts that limit how many files a game may have.
+
+## TRY IT
+
+Download free at https://psychronic.itch.io/rpg-reactor or try the browser editor on the page. Source at https://github.com/Psychronic-Games/RPGReactor. Open the demo, talk to Rhea Voss in North Haven to try every battle mode, then take a motorcycle out the east lane and keep riding. Found a bug or have an idea? Open an issue on GitHub.

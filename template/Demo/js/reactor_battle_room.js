@@ -14,14 +14,21 @@
             const room = R.roomFor(this.map);
             if (room) for (const value of [room.floor, room.walls, room.ceiling]) if (typeof value === 'string') names.add(value);
             await Promise.all([...names].filter(Boolean).map(async name => parallaxes.set(name, await this.assets.image('parallaxes', name))));
+            // The material images of the map's ground and pieces: the game reads them itself; the editor, which has no
+            // image manager, hands them over (without them a painted road and a built wall stood bare).
+            const materials = typeof this.assets.materials === 'function' ? await this.assets.materials(this.map) : null;
             if (this.disposed) return false;
             // Geometry's published map caches are legacy lookup accelerators.
             // Preserve them while building our own scene, whose data stays local.
             const keys = ['_surface','_facade','_eventProps','BILLBOARD_TILT'];
             const saved = keys.map(key => R[key]);
+            // A new MapScene switches reflections off until something in it shines; a view that
+            // keeps drawing behind the room (the editor's map) has its switch back on dispose.
+            this.hostReflections = !!R.Reflections?.wanted;
             try {
                 this.world = new R.MapScene(this.map, sheets, { flags: this.tileset.flags, tilesetId: this.tileset.id,
-                    tileSize: this.assets.tileSize || 48, loadParallax: name => parallaxes.get(name) });
+                    tileSize: this.assets.tileSize || 48, loadParallax: name => parallaxes.get(name),
+                    ...(materials ? { loadMaterial: name => materials[name] || null, loadMaterialSettings: name => this.assets.materialSettings?.(name) || null } : {}) });
             } finally { keys.forEach((key, i) => R[key] = saved[i]); }
             this.world.setPass('all'); this.scene = this.world.scene();
             // Reflections see the battle's props and battlers, the lead actor first in a mirror.
@@ -29,8 +36,14 @@
             this.world.guestSubject = () => this.models.get('actor:0') || this.billboards.get('actor:0') || null;
             this.scene.background = new T.Color(0x171a21);
             this.camera = this.settings.projection === '2d' ? new T.OrthographicCamera(-12,12,7,-7,.1,2000) : R.createCamera({ fov: 40 });
-            this.renderer = new T.WebGLRenderer({ antialias: true, alpha: false, preserveDrawingBuffer: true });
-            this.renderer.setPixelRatio(1); this.resize(960, 540);
+            // On the game's own WebGL context when the map's viewport shares it: the room draws into
+            // a target PIXI samples, and nothing is copied. Else its own canvas (no MSAA: the map's
+            // passes draw without it), copied onto the battle's sprite each frame.
+            const viewport = R.battleRoomShared !== false && R.sharedContextAvailable?.() ? R.acquireViewport?.() : null;
+            this.view = viewport && viewport.isShared?.() ? viewport : null;
+            if (this.view) this.renderer = this.view.renderer();
+            else { this.renderer = new T.WebGLRenderer({ antialias: false, alpha: false, preserveDrawingBuffer: true }); this.renderer.setPixelRatio(1); }
+            this.resize(960, 540);
             this.uniforms = {
                 rrLightCount: {value:0}, rrAmbient:{value:new Float32Array([1,1,1])},
                 rrLightPos:{value:new Float32Array(R.SHADER_LIGHTS*4)}, rrLightColor:{value:new Float32Array(R.SHADER_LIGHTS*4)},
@@ -99,23 +112,28 @@
         }
         async addModel(key, spec, position) {
             const R = root.Reactor3D;
-            if(this.disposed)return;const existing=this.models.get(key);if(existing){if(['name','ext','file','texture','size','scale'].every(k=>existing.spec[k]===spec[k]))return;this.remove(key);}
+            if(this.disposed)return;const existing=this.models.get(key);if(existing){if(['name','ext','file','texture','size','scale','variant'].every(k=>existing.spec[k]===spec[k]))return;this.remove(key);}
             const record = { spec, position: {...position}, object:null };
             this.models.set(key, record);
             try {
                 const {template, sidecar} = await this.assets.model(spec);
                 if (this.disposed || this.models.get(key) !== record || !template) return;
                 const object = R.cloneModelTemplate(template);
-                R.applyModelTransform(object, R.readModelTransform(sidecar));
+                record.template = template;
+                R.applyModelTransform(object, R.readModelTransform(sidecar, spec));
                 const rig = R.readModelRig(sidecar);
                 if (rig) R.applyModelRig(object, rig);
                 else { R.carveModelParts(object, R.readModelParts(sidecar)); R.applyPivotOverrides(object, R.readModelPivots(sidecar)); }
+                // A thing made to be held says where its grip, tip, barrel and trigger are (a Blade or Gun rig).
+                const heldRig = R.readHeldRig?.(sidecar); if (heldRig) object.userData.__heldRig = heldRig;
                 const e = template.userData.glbSize || {x:1,y:1,z:1};
                 record.extent = e;
                 record.scale = (spec.size || 2) * (spec.scale || 1) / Math.max(e.x,e.y,e.z,.001);
                 object.scale.setScalar(record.scale);
                 record.object = object; record.binding = R.prepareModelInstance(object, object.__reactorClips);
-                record.rules = R.readModelAnimationRules(sidecar); record.effects = R.readModelEffects(sidecar);
+                record.rules = R.readModelAnimationRules(sidecar); record.effects = R.readModelEffects(sidecar, spec);
+                // A vehicle's seat and grips ride its parts, for the actor who sits on it.
+                const points = R.readModelLandmarks?.(sidecar); if (points?.__rrVehicle) R.bindModelLandmarks(object, points);
                 record.chosenEffects=new Set(R.propEffectList(spec));record.media=new Map();
                 if(key.startsWith('prop:')){record.sequence=R.propAnimationList(spec);record.sequenceIndex=0;record.animationStart=this.frame;record.animationFrame=this.frame;}
                 if (!key.startsWith('prop:') && !key.startsWith('event:')) BattleRoomView.prepareMotions(record);
@@ -154,24 +172,8 @@
                     record.object.scale.set(...stretch.map(axis => axis * record.scale));
                 } else if (!record.billboard) {
                     if(p.frame){
-                        // In a hand: the model's long axis lies along the forearm with its tip forward and its bulk hanging down, the handle end (pivotY of the way along) in the fist; Tilt, Turn and Roll then adjust that in the hand's frame, and it all rides the hand.
-                        const T=root.THREE,R=root.Reactor3D,shape=R.heldShape(record.object),hand=p.frame.quaternion;
-                        const forward=p.frame.forearm?p.frame.forearm.clone():new T.Vector3(0,0,1).applyQuaternion(hand);
-                        let up=new T.Vector3(0,1,0);up.sub(forward.clone().multiplyScalar(up.dot(forward)));if(up.lengthSq()<1e-6)up.set(0,0,1);up.normalize();
-                        const right=new T.Vector3().crossVectors(forward,up);
-                        const la=new T.Vector3().fromArray(shape?shape.axis:[0,1,0]);let lu=new T.Vector3().fromArray(shape?shape.up:[0,0,1]);lu.sub(la.clone().multiplyScalar(lu.dot(la)));if(lu.lengthSq()<1e-6)lu.set(0,0,1);lu.normalize();const lr=new T.Vector3().crossVectors(la,lu);
-                        const world=new T.Matrix4().makeBasis(forward,up,right),local=new T.Matrix4().makeBasis(la,lu,lr);
-                        const base=new T.Quaternion().setFromRotationMatrix(world.multiply(local.transpose()));
-                        const adjust=new T.Quaternion().setFromEuler(new T.Euler((p.rotateX||0)*Math.PI/180,(p.rotateY||0)*Math.PI/180,(p.rotateZ||0)*Math.PI/180,'XYZ'));
-                        // The adjustment turns about the hand's own axes.
-                        record.object.quaternion.copy(hand).multiply(adjust).multiply(hand.clone().invert()).multiply(base);
-                        record.object.scale.set(...['scaleX','scaleY','scaleZ'].map((axis,i)=>record.scale*(p.scale??1)*(p[axis]??1)*(record.spec.stretch?.[i]??1)));
-                        if(shape){
-                            // The point pivotY of the way from the handle end to the tip sits in the hand.
-                            // Held By 0 (the base) is the model's own grip; any other value is that fraction of the way from the handle end to the tip.
-                            const along=p.pivotY?Math.max(0,Math.min(1,p.pivotY)):shape.grip,gripPoint=new T.Vector3().fromArray(shape.base).add(new T.Vector3().fromArray(shape.axis).multiplyScalar(shape.length*along));
-                            record.object.position.sub(gripPoint.multiplyScalar(record.object.scale.x).applyQuaternion(record.object.quaternion));
-                        }
+                        // In a hand: turned in the hand's frame about its grip (Reactor3D.Held.orient, reactor_3d_models.js, which the map's held things use too).
+                        root.Reactor3D.Held.orient(record,p);
                         return;
                     }
                     root.Reactor3D.applyEventModelPose(record.object,
@@ -291,22 +293,7 @@
          * already move, after them, for this frame.
          */
         reachArm(key, side, target, {down=.5}={}) {
-            const record=this.models.get(key),T=root.THREE;if(!record?.object||!target)return false;
-            BattleRoomView.attachmentWorld(record,side+'Hand','');const hand=record.attachmentBones?.get(side+'Hand'),fore=hand?.parent,upper=fore?.parent;if(!upper?.parent)return false;
-            upper.updateMatrixWorld(true);
-            const S=upper.getWorldPosition(new T.Vector3()),E=fore.getWorldPosition(new T.Vector3()),H=hand.getWorldPosition(new T.Vector3());
-            const a=S.distanceTo(E),b=E.distanceTo(H);if(a<1e-4||b<1e-4)return false;
-            const goal=target.clone();let d=S.distanceTo(goal);if(d<1e-4)return false;d=Math.max(Math.abs(a-b)+1e-3,Math.min(a+b-1e-3,d));
-            const dir=goal.clone().sub(S).normalize();
-            let pole=E.clone().sub(S);pole.sub(dir.clone().multiplyScalar(pole.dot(dir)));if(pole.lengthSq()<1e-6)pole.set(0,-1,0);pole.normalize();
-            pole.lerp(new T.Vector3(0,-1,0),down);pole.sub(dir.clone().multiplyScalar(pole.dot(dir)));if(pole.lengthSq()<1e-6)pole.set(0,-1,0);pole.normalize();
-            const cosA=Math.max(-1,Math.min(1,(a*a+d*d-b*b)/(2*a*d))),angA=Math.acos(cosA);
-            const elbow=S.clone().add(dir.clone().multiplyScalar(Math.cos(angA)*a)).add(pole.clone().multiplyScalar(Math.sin(angA)*a));
-            const turn=(bone,from,to)=>{const q=new T.Quaternion().setFromUnitVectors(from.normalize(),to.normalize()),parentQ=bone.parent.getWorldQuaternion(new T.Quaternion());bone.quaternion.premultiply(parentQ.clone().invert().multiply(q).multiply(parentQ));bone.updateMatrixWorld(true);};
-            turn(upper,E.clone().sub(S),elbow.clone().sub(S));
-            const E2=fore.getWorldPosition(new T.Vector3()),H2=hand.getWorldPosition(new T.Vector3());
-            turn(fore,H2.clone().sub(E2),goal.clone().sub(E2));
-            return true;
+            return root.Reactor3D.Held.reachArm(this.models.get(key),side,target,down);
         }
         /**
          * Holds a shown weapon the way its step asks: aimed, the shooting arm
@@ -315,17 +302,8 @@
          * answer is the hand frame to place the item with.
          */
         holdAim(ownerKey, heldKey, step, at) {
-            const T=root.THREE,R=root.Reactor3D,side=step.attachment==='leftHand'?'left':'right';
-            const frame=this.attachmentFrame(ownerKey,step);if(!frame||step.aim!=='target'||!at)return frame;
-            const owner=this.models.get(ownerKey),held=this.models.get(heldKey);
-            BattleRoomView.attachmentWorld(owner,side+'Hand','');const hand=owner.attachmentBones?.get(side+'Hand'),upper=hand?.parent?.parent;if(!upper)return frame;
-            const S=upper.getWorldPosition(new T.Vector3()),goal=new T.Vector3(at.x+.5,(at.z||0)+(at.height??1.2),at.y+.5),dir=goal.clone().sub(S);if(dir.lengthSq()<1e-6)return frame;dir.normalize();
-            const shape=held?.object?R.heldShape(held.object):null,gripLength=shape?shape.grip*shape.length*(held.scale||1):.3,itemLength=shape?shape.length*(held.scale||1):0;
-            // A long gun is shouldered (the stock ends by the shoulder); a short one is held out at arm's length.
-            const fore=hand.parent,E=fore.getWorldPosition(new T.Vector3()),H=hand.getWorldPosition(new T.Vector3()),reach=S.distanceTo(E)+E.distanceTo(H);
-            const distance=itemLength>1.2?Math.max(.35,gripLength+.12):reach*.86;
-            this.reachArm(ownerKey,side,S.clone().add(dir.clone().multiplyScalar(distance)),{down:.65});
-            const after=this.attachmentFrame(ownerKey,step)||frame;after.forearm=dir;return after;
+            const goal=at?new root.THREE.Vector3(at.x+.5,(at.z||0)+(at.height??1.2),at.y+.5):null;
+            return root.Reactor3D.Held.aim(this.models.get(ownerKey),this.models.get(heldKey),step,goal,this);
         }
         /**
          * Holds a shown weapon for this frame, in order: the aiming arm reaches
@@ -334,10 +312,12 @@
          * it. Returns the hand point in room tiles.
          */
         holdHeld(ownerKey, heldKey, step, ownerPose, at, placement) {
-            const frame=this.holdAim(ownerKey,heldKey,step,at);
-            const p=this.attachmentPoint(ownerKey,step,ownerPose);if(!p)return null;
+            // The order and the hand's part of it are Reactor3D.Held's (reactor_3d_models.js); the room places the thing between the two halves.
+            const H=root.Reactor3D.Held,owner=this.models.get(ownerKey),held=this.models.get(heldKey);
+            const goal=at?new root.THREE.Vector3(at.x+.5,(at.z||0)+(at.height??1.2),at.y+.5):null,{frame,fist}=H.begin(owner,held,step,goal,placement,this);
+            const p=fist?{x:fist.position.x-.5,y:fist.position.z-.5,z:fist.position.y}:this.attachmentPoint(ownerKey,step,ownerPose);if(!p)return null;
             this.place(heldKey,{...placement,x:p.x,y:p.y,z:p.z,frame});
-            if(placement.visible!==false)this.holdBoth(ownerKey,heldKey,step);
+            H.finish(owner,held,step,frame,fist,placement.visible!==false,this);
             return p;
         }
         /** Where a held model's tip (a muzzle, a blade point) is, in room tiles, or null. */
@@ -349,13 +329,7 @@
         }
         /** The other hand takes the held thing a little way out along it, as far as an arm reaches. */
         holdBoth(ownerKey, heldKey, step) {
-            const T=root.THREE,R=root.Reactor3D;if(step.hands!=='both')return;
-            const held=this.models.get(heldKey);if(!held?.object)return;const shape=R.heldShape(held.object);if(!shape)return;
-            const other=step.attachment==='leftHand'?'right':'left';
-            held.object.updateMatrixWorld(true);
-            const grip=new T.Vector3().fromArray(shape.base).add(new T.Vector3().fromArray(shape.axis).multiplyScalar(shape.length*shape.grip)),tip=new T.Vector3().fromArray(shape.base).add(new T.Vector3().fromArray(shape.axis).multiplyScalar(shape.length));
-            const point=grip.lerp(tip,.3).applyMatrix4(held.object.matrixWorld);
-            this.reachArm(ownerKey,other,point,{down:.7});
+            root.Reactor3D.Held.both(this.models.get(ownerKey),this.models.get(heldKey),step,this);
         }
         attachmentPoint(key, step, pose) {
             const record=this.models.get(key)||this.billboards.get(key),p=pose||record?.position||{x:0,y:0,z:0},world=BattleRoomView.attachmentWorld(record,step.attachment,step.bone,step.type==='projectile'?'end':undefined);
@@ -814,17 +788,57 @@
             if(r.shadow){r.shadow.removeFromParent();r.shadow.geometry.dispose();r.shadow.material.dispose();r.shadow=null;}
             r.object?.removeFromParent();r.binding?.mixer?.stopAllAction?.();
             r.object?.traverse(node => {for(const m of [node.material].flat().filter(Boolean))m.dispose();});
+            // The room may draw on the map's own renderer, which lives on: its carved parts and bone textures go too.
+            if(r.object&&r.template)root.Reactor3D.releaseModelInstance?.(r.object,r.template);
             if(r.billboard){r.object.geometry.dispose();r.texture.dispose();}
         }
-        resize(width,height) { this.width=width;this.height=height;this.renderer?.setSize(width,height,false); if(this.camera){this.camera.aspect=width/height;this.camera.updateProjectionMatrix();} }
+        resize(width,height) { this.width=width;this.height=height;if(this.view)this.shareTarget(width,height);else this.renderer?.setSize(width,height,false); if(this.camera){this.camera.aspect=width/height;this.camera.updateProjectionMatrix();} }
+        /** On the shared context: the target the room draws into, and the PIXI texture that shows it (`texture`). */
+        shareTarget(width,height) {
+            if(this.target&&this.target.width===width&&this.target.height===height)return;
+            this.releaseTarget();
+            const R=root.Reactor3D,view=this.view;
+            this.target=view.createTarget(width,height,1,{samples:0});
+            const source=new PIXI.TextureSource({width,height,resolution:1,scaleMode:'nearest',alphaMode:'premultiplied-alpha',autoGarbageCollect:false,label:'reactor3d-battle-room'});
+            R.adoptGlTexture(view.pixi(),source,view.targetHandle(this.target));
+            this.textureSource=source;
+            // Flipped: a framebuffer's first row is its bottom.
+            this.texture=new PIXI.Texture({source,rotate:PIXI.groupD8.MIRROR_VERTICAL,label:'reactor3d-battle-room'});
+        }
+        releaseTarget() {
+            if(!this.target)return;
+            const target=this.target,texture=this.texture,source=this.textureSource,pixi=this.view?.pixi();
+            this.target=this.texture=this.textureSource=null;
+            // As the viewport's own passes: PIXI never made this GL texture and must not delete it, and a
+            // sprite may still draw the old texture this frame, so it goes two frames from now.
+            const reap=()=>{try{target.dispose();}catch(e){}if(source&&pixi&&source._gpuData)delete source._gpuData[pixi.uid];try{texture.destroy(true);}catch(e){}};
+            if(typeof requestAnimationFrame==='function')requestAnimationFrame(()=>requestAnimationFrame(reap));else reap();
+        }
+        /** three has driven the context: it forgets, and on the shared context PIXI does too. */
+        releaseContext() { this.renderer.resetState(); if(this.view)this.view._resetPixi(); }
         cinematicEnabled(){return this.settings.cameraSource==='custom'&&this.settings.camera?.mode==='cinematic';}
         beginCinematicAction(user,targets){
             if(!this.cinematicEnabled()||!user){this.cinematicShot=null;this.cinematicTransition=null;return;}
             const position=key=>(this.models.get(key)||this.billboards.get(key))?.position;
             const a=position(user),b=position(targets[0]);if(!a)return;
-            this.cinematicTransition={from:this.cameraState(),start:this.frame,duration:36};this.cinematicTrack=null;
+            this.cinematicCut();this.cinematicLinger=null;
             this.cinematicShot={phase:'actor',start:this.frame,user,targets:[...new Set(targets)],yaw:b?root.ReactorBattleData.facingToward(a,b):a.facing||0};
         }
+        /**
+         * The next shot begins as a cut: the picture changes on this frame and the glide starts over at the new shot.
+         * A cut made moments after another (an action that hits as it begins, one battler acting straight after the
+         * last) is a short ease from the shot before instead, so three pictures never flash by in a row.
+         */
+        cinematicCut(){
+            const soon=this.cinematicCutFrame!==undefined&&this.frame>=this.cinematicCutFrame&&this.frame-this.cinematicCutFrame<BattleRoomView.CUT_APART;
+            this.cinematicTransition=soon?{from:this.cameraState(),start:this.frame,duration:BattleRoomView.CUT_EASE}:null;
+            this.cinematicTrack=null;this.cinematicCutFrame=this.frame;
+        }
+        /** Frames a shot is held before another cut may follow it; a nearer one eases over `CUT_EASE` frames. */
+        static get CUT_APART(){return 20;}
+        static get CUT_EASE(){return 14;}
+        /** Frames the last shot of an action stays up after the action ends, before the cut back to the overview. */
+        static get CUT_LINGER(){return 24;}
         /**
          * Where the action is this frame, told by the running sequence: points
          * in room tiles with a weight (a projectile in flight counts double, so
@@ -879,8 +893,10 @@
          * the model's own forward; both are taken from the live object, so
          * the answer holds whatever way the battler faces or the file leans.
          */
-        aimTurn(key,partName,at){
-            const record=this.models.get(key),T=root.THREE;if(!record?.object||!record.binding||!at)return 0;
+        aimTurn(key,partName,at){return BattleRoomView.aimTurnOf(this.models.get(key),partName,at);}
+        /** The turn, in degrees about its up axis, that points a model's part at a place (tiles); a map unit's model is measured the same way (reactor_fight_stage.js). */
+        static aimTurnOf(record,partName,at){
+            const T=root.THREE;if(!record?.object||!record.binding||!at)return 0;
             const wanted=String(partName).toLowerCase(),entries=record.binding.meshes.filter(e=>e.parts.some(p=>String(p.name).toLowerCase()===wanted));if(!entries.length)return 0;
             const pivotOf=name=>{for(const e of record.binding.meshes){const i=e.parts.findIndex(p=>String(p.name).toLowerCase()===name);if(i>=0&&e.parts[i].pivot)return {pivot:e.parts[i].pivot,entry:e};}return null;};
             const own=pivotOf(wanted);if(!own)return 0;
@@ -925,15 +941,35 @@
         /** How tall a battler's model stands in the room, in tiles (a tank's size is its length, not its height). */
         modelHeight(key){const r=this.models.get(key)||this.billboards.get(key);if(!r)return 2;if(r.billboard)return r.height||2;const e=r.extent;return e&&r.scale?Math.max(.5,e.y*r.scale*(r.position?.scale||1)*(r.position?.scaleY||1)):this.focusHeight(r);}
         focusHeight(record){return record?.spec?(record.spec.size||2)*(record.spec.scale||1)*(record.position?.scale||1)*(record.position?.scaleY||1):record?.height||2;}
-        cinematicImpact(){
-            if(!this.cinematicShot||this.cinematicShot.phase==='impact')return;
-            this.cinematicTransition={from:this.cameraState(),start:this.frame,duration:30};
-            this.cinematicShot.phase='impact';this.cinematicShot.start=this.frame;
+        /**
+         * What a shot of a battler has to hold: how tall it stands and how much floor it covers, in tiles, from the
+         * model as it is posed. (Its size in the database is its longest side: a tank's length, which framed a tank
+         * as though it were as tall as it is long, from under the ceiling.)
+         */
+        focusSize(record){
+            const fallback={height:record?this.focusHeight(record):2,width:1};
+            if(!record?.object||!root.THREE)return fallback;
+            const box=this.boxOf(record);if(box.isEmpty())return fallback;
+            return {height:Math.max(.5,box.max.y-Math.max(0,box.min.y)),width:Math.max(box.max.x-box.min.x,box.max.z-box.min.z)};
         }
+        cinematicImpact(){
+            const shot=this.cinematicShot;if(!shot)return;
+            if(shot.phase==='impact'){
+                // A later hit of the same action: the shot stays as it is, or comes back if it had been let go.
+                if(shot.released){shot.released=false;this.cinematicCut();shot.start=this.frame;}
+                shot.hit=this.frame;return;
+            }
+            this.cinematicCut();
+            shot.phase='impact';shot.start=shot.hit=this.frame;
+        }
+        /** Frames the hit shot stays after the last hit landed; the rest of the action (the walk home) is watched from the overview. */
+        static get HIT_HOLD(){return 75;}
         endCinematicAction(){
             if(!this.cinematicShot)return;
-            this.cinematicTransition=this.cinematicEnabled()?{from:this.cameraState(),start:this.frame,duration:42}:null;
-            this.cinematicShot=null;this.cinematicTrack=null;
+            // The shot the action ended on stays a moment, then the cut back to the overview; an action that follows at once goes straight to its own shot.
+            const last=this.cinematicEnabled()?this.cameraState():null;
+            this.cinematicLinger=last?{target:last,until:this.frame+BattleRoomView.CUT_LINGER}:null;
+            this.cinematicTransition=null;this.cinematicShot=null;this.cinematicTrack=null;
         }
         cinematicBlend(target){
             const transition=this.cinematicTransition;if(!transition)return target;
@@ -947,36 +983,51 @@
             return result;
         }
         cinematicCamera(base){
-            if(!this.cinematicEnabled()){this.cinematicTransition=null;return base;}
-            const shot=this.cinematicShot;if(!shot)return this.cinematicBlend(base);
+            if(!this.cinematicEnabled()){this.cinematicTransition=null;this.cinematicLinger=null;return base;}
+            const shot=this.cinematicShot;
+            if(!shot){
+                const linger=this.cinematicLinger;
+                if(linger){if(this.frame<linger.until&&this.frame>=linger.until-BattleRoomView.CUT_LINGER)return {...linger.target};this.cinematicLinger=null;this.cinematicCutFrame=this.frame;}
+                return this.cinematicBlend(base);
+            }
             const record=key=>this.models.get(key)||this.billboards.get(key),user=record(shot.user);
             const told=shot.focus&&shot.focus.expires>=this.frame?shot.focus:null;
             // Yaw is where the eye sits: 180-yaw(user→target) is straight behind
             // the user looking at the target, and an offset swings the eye round
             // from there, so every shot sits on the user's side whatever way the
             // room faces. Camera.place puts the eye at (-sin yaw, cos yaw)·d.
-            let points,heights,yawOffset=shot.phase==='impact'?70:45;
+            const impact=shot.phase==='impact';
+            if(impact&&this.frame-(shot.hit??shot.start)>=BattleRoomView.HIT_HOLD){
+                if(!shot.released){shot.released=true;this.cinematicCut();}
+                return this.cinematicBlend(base);
+            }
+            let points,sizes,yawOffset=impact?70:45;
             if(told){
                 // The sequence said where the action is: a flying projectile
                 // and its target, the runner and who it runs at, the hit.
-                points=told.points;heights=told.points.map(p=>p.key?this.focusHeight(record(p.key)):(p.height||1));if(told.yawOffset!==undefined)yawOffset=told.yawOffset;
+                points=told.points;sizes=told.points.map(p=>p.key?this.focusSize(record(p.key)):{height:p.height||1,width:0});if(told.yawOffset!==undefined)yawOffset=told.yawOffset;
             }else{
-                const targets=shot.targets.map(record).filter(r=>r?.position&&r.object?.visible!==false),focus=shot.phase==='impact'&&targets.length?targets:[user];
+                const targets=shot.targets.map(record).filter(r=>r?.position&&r.object?.visible!==false),focus=impact&&targets.length?targets:[user];
                 if(!focus[0]?.position)return this.cinematicBlend(base);
                 // Frame the whole affected group for area attacks; repeated hits
                 // don't flick through a different camera once per resolver call.
-                points=focus.map(r=>r.position);heights=focus.map(r=>this.focusHeight(r));
+                points=focus.map(r=>r.position);sizes=focus.map(r=>this.focusSize(r));
             }
             const weight=points.reduce((n,p)=>n+(p.weight||1),0),x=points.reduce((n,p)=>n+p.x*(p.weight||1),0)/weight,y=points.reduce((n,p)=>n+p.y*(p.weight||1),0)/weight;
             // A told shot rides with the action: it widens only so far for a far
             // target, which enters the frame as the shot nears it.
             const span=Math.min(told?told.spanCap??4:Infinity,Math.max(0,...points.map(p=>Math.hypot(p.x-x,p.y-y)*2)));
-            const height=Math.max(2,...heights);
-            const aspect=Math.max(.4,this.width/this.height),distance=Math.max(told?6:5,(height+span/Math.min(1,aspect))/(2*Math.tan(base.fov*Math.PI/360))*1.3);
+            const height=Math.max(2,...sizes.map(size=>size.height));
+            // What the shot holds side to side: the spread of its subjects and the floor the widest covers (a tank's length).
+            const aspect=Math.max(.4,this.width/this.height),across=span+Math.max(0,...sizes.map(size=>size.width))*.85;
+            const age=Math.max(0,this.frame-shot.start);
+            // The hit is seen nearer than the wind-up, from lower, and the shot creeps in while it holds.
+            const fill=impact?1.15*(1-.1*(1-Math.exp(-age/45))):1.3;
+            const distance=Math.max(told?6:5,Math.max(height+Math.min(span,across)/Math.min(1,aspect),across/aspect)/(2*Math.tan(base.fov*Math.PI/360))*fill);
             // A restrained orbit keeps both shots on the same side of the action.
             // Bound the sweep so a long-running action cannot circle the room.
-            const age=Math.max(0,this.frame-shot.start),sweep=18*(1-Math.exp(-age/120));
-            let target={...base,mode:'fixed',x,y,z:points.reduce((n,p)=>n+(p.z||0)*(p.weight||1),0)/weight+height*.5,yaw:180-shot.yaw+yawOffset+sweep,pitch:20,distance};
+            const sweep=18*(1-Math.exp(-age/120));
+            let target={...base,mode:'fixed',x,y,z:points.reduce((n,p)=>n+(p.z||0)*(p.weight||1),0)/weight+height*.5,yaw:180-shot.yaw+yawOffset+sweep,pitch:impact?15:20,distance};
             const wanted=target.distance;target.distance=this.distanceInsideRoom(target);
             // A wall behind a big subject (the tank against the west wall) can leave the eye inside it: try the other side of the line, then the far side.
             const radius=height*.55;
@@ -1045,9 +1096,25 @@
             const p=new root.THREE.Vector3(position.x+.5,position.z||0,position.y+.5).project(this.camera);
             return {x:(p.x+1)*this.width/2,y:(1-p.y)*this.height/2,visible:p.z>=-1&&p.z<=1};
         }
+        /**
+         * A battler's box in the room. A skinned model's is measured from the pose it stands in, a few times a second, and
+         * carried with the model between: its rest geometry lies wherever its file left it (a point at the feet for a rig
+         * scaled by its armature), which put a target cursor and a window that follows the actor at the feet.
+         */
+        boxOf(record) {
+            const T=root.THREE,R=root.Reactor3D,object=record.object;
+            if(!R?.measureSkinnedBox)return new T.Box3().setFromObject(object);
+            let kept=record.poseBox;
+            if(!kept||this.frame-kept.frame>=20||this.frame<kept.frame){
+                let skinned=false;object.traverse(node=>{if(node.isSkinnedMesh)skinned=true;});
+                const posed=skinned?R.measureSkinnedBox(object):null;
+                kept=record.poseBox={frame:this.frame,box:posed&&!posed.isEmpty()?posed.applyMatrix4(new T.Matrix4().copy(object.matrixWorld).invert()):null};
+            }
+            return kept.box?kept.box.clone().applyMatrix4(object.matrixWorld):new T.Box3().setFromObject(object);
+        }
         bounds(key) {
             const record=this.models.get(key)||this.billboards.get(key),object=record?.object,T=root.THREE;if(!object)return null;
-            const box=new T.Box3().setFromObject(object);if(box.isEmpty())return null;
+            const box=this.boxOf(record);if(box.isEmpty())return null;
             let left=Infinity,top=Infinity,right=-Infinity,bottom=-Infinity;
             for(const x of [box.min.x,box.max.x])for(const y of [box.min.y,box.max.y])for(const z of [box.min.z,box.max.z]){
                 const p=new T.Vector3(x,y,z).project(this.camera);if(p.z< -1||p.z>1)return null;
@@ -1099,11 +1166,25 @@
             const lead=this.models.get('actor:0')||this.billboards.get('actor:0');
             const focus=lead?.object?lead.object.getWorldPosition(new T.Vector3()):null;
             const cast=shadowed?{candidates:[],focus}:null;
-            R.packLightUniforms(lights,{intensity:a.ambient??1,colour:R.parseColour(a.ambientColour??'#ffffff')},this.uniforms,cast);
+            R.packLightUniforms(lights,this.roomAmbient(),this.uniforms,cast);
             if(cast)R.Shadows.setCandidates(cast.candidates);
             this.updateEffects();
             for(const update of this.sequenceVisualUpdates||[])update();
+            // Hands close on, and let go of, what they hold (Reactor3D.HandGrip), once the held things are placed for this frame.
+            R.HandGrip?.update();
+            if(this.view){
+                // PIXI has drawn since: three forgets what it thought was bound before it draws anything.
+                this.renderer.resetState();
+                try{
+                    R.prepareWorldFrame(this.renderer,this.world,this.scene,this.camera,shadowed?{mapData:this.map,lights:this.uniforms,focus}:false);
+                    this.renderer.setRenderTarget(this.target);
+                    R.cacheUniformArrays?.(this.renderer);
+                    this.renderer.render(this.scene,this.camera);
+                }finally{this.renderer.setRenderTarget(null);this.view._resetPixi();}
+                return;
+            }
             R.prepareWorldFrame(this.renderer,this.world,this.scene,this.camera,shadowed?{mapData:this.map,lights:this.uniforms,focus}:false);
+            R.cacheUniformArrays?.(this.renderer);
             this.renderer.render(this.scene,this.camera);
         }
         /** A rule's timed effects (a muzzle flash at the cannon, a sound) fire once each as the action clock passes them. */
@@ -1153,12 +1234,19 @@
             }
             return shadowed;
         }
+        // The map's ambient as the map shows it now: an AmbientLight command's ease included.
+        roomAmbient() {
+            const R=root.Reactor3D,a=this.map.reactor3d?.lighting||{};
+            const live=R.ambientFor&&typeof $dataMap!=='undefined'&&$dataMap===this.map&&(a.ambient!==undefined||(typeof $gameMap!=='undefined'&&$gameMap&&$gameMap._reactorAmbientOverride));
+            return live?R.ambientFor(this.map):{intensity:a.ambient??1,colour:R.parseColour(a.ambientColour??'#ffffff')};
+        }
         roomLights() {
             const R=root.Reactor3D;
             return R.readMapLights(this.map).flatMap((light,index)=>{
                 if(light.on===false||this.assets.lightIsOn&&!this.assets.lightIsOn(light))return [];
                 const animated=R.animateLight(light,this.frame,index,light.radius,light.intensity);
-                const result={...light,...animated,colour:light.color,yaw:-light.yaw,id:'room:'+index};// its own id: a shadow row follows it by id, and names repeat
+                const result={...light,...animated,colour:light.color,yaw:-light.yaw,id:'room:'+index};
+                if(light.type===R.LIGHT_SUN&&light.daylight!=='fixed'&&R.sunAtDaylight){const sun=R.sunAtDaylight(light,result.colour,result.intensity,R.daylight(this.roomAmbient()),{});result.colour=sun.colour;result.intensity=sun.intensity;}// the room's sun at the map's time of day// its own id: a shadow row follows it by id, and names repeat
                 if(light.attach){
                     const record=light.attach.player?(this.models.get('actor:0')||this.billboards.get('actor:0')):(this.models.get('event:'+light.attach.event)||this.billboards.get('event:'+light.attach.event));
                     if(!record)return [];result.x+=record.position.x+.5;result.y+=record.position.y+.5;result.height+=(record.position.z||0);
@@ -1318,18 +1406,19 @@
                     if(target){G.bindQuad(play.quad,target);const u=play.quad.material.uniforms;u.resolution.value.set(this.width,this.height);u.rectMin.value.set(0,0);u.rectSize.value.set(1,1);R.EffekseerScene.standQuad(play.quad.mesh,play.world,this.camera);play.quad.mesh.visible=true;}
                     entry.context._makeContextCurrent();
                 }
-            } finally { G.restoreDefault();this.renderer.resetState(); }
+            } finally { G.restoreDefault();this.releaseContext(); }
         }
         queueEffect(id,owner,effect,transient=false) {
             const R=root.Reactor3D,G=R.GpuEffects,animation=this.assets.animation?.(effect.animation);
             if(!root.effekseer||!animation?.effectName||this.effectPlays.size>=16)return false;
-            this.effectContext ||= G.create(this.renderer,0);const entry=this.effectContext;if(!entry)return false;
+            // On the shared context the effects run on the viewport's own effect context, shared with the map.
+            this.effectContext ||= this.view?G.forViewport(this.view):G.create(this.renderer,0);const entry=this.effectContext;if(!entry)return false;
             const play={id,owner,effect,animation,world:new THREE.Vector3(),pending:true,transient,createdAt:Date.now(),age:0};this.effectPlays.set(id,play);entry.loading++;
             try {
                 entry.context._makeContextCurrent();
                 play.native=entry.context.loadEffect(this.assets.effectUrl(animation.effectName),1,()=>{play.pending=false;G.loaded(entry);},()=>{play.failed=true;play.pending=false;G.loaded(entry);this.assets.warn?.('Missing room effect: '+animation.effectName);});
             }catch(error){play.failed=true;G.loaded(entry);this.assets.warn?.(error);}
-            finally{G.restoreDefault();this.renderer.resetState();}
+            finally{G.restoreDefault();this.releaseContext();}
             return true;
         }
         playAnimation(key,animationId,transform={}) {
@@ -1348,7 +1437,7 @@
             play._gpuEffectTarget?.dispose();play._gpuColourTarget?.dispose();
         }
         dispose() {
-            if(this.disposed)return;this.disposed=true;this.cinematicShot=null;this.cinematicTransition=null;
+            if(this.disposed)return;this.disposed=true;this.cinematicShot=null;this.cinematicTransition=null;this.cinematicLinger=null;
             for(const interpreter of this.interpreters||[])interpreter.terminate();
             if(root.$gameTroop?._interpreter?._reactorRoom===this)delete root.$gameTroop._interpreter._reactorRoom;
             for(const sprite of this.eventSprites?.values()||[]){sprite.removeFromParent();sprite.destroy();}
@@ -1357,8 +1446,10 @@
             if(this.mapMedia){for(const media of this.mapMedia.media.values())this.stopMedia(media);this.mapMedia.object.removeFromParent();this.mapMedia=null;}
             for(const key of [...this.models.keys(),...this.billboards.keys()])this.remove(key);
             for(const play of this.effectPlays.values())this.stopEffect(play);this.effectPlays.clear();
-            root.Reactor3D.GpuEffects.release(this.effectContext);
-            this.world?.destroy();this.renderer?.dispose();this.renderer?.forceContextLoss();
+            // The shared context, its renderer and its effect context belong to the viewport and live on.
+            if(this.view){this.releaseTarget();this.world?.destroy();this.view._resetPixi();}
+            else{root.Reactor3D.GpuEffects.release(this.effectContext);this.world?.destroy();this.renderer?.dispose();this.renderer?.forceContextLoss();}
+            if(this.hostReflections&&root.Reactor3D?.Reflections)root.Reactor3D.Reflections.wanted=true;
         }
     }
     root.ReactorBattleRoomView=BattleRoomView;

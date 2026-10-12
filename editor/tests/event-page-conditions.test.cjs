@@ -1,4 +1,5 @@
 const assert = require('node:assert/strict');
+const { runtimeSource } = require('./helpers/runtime-source.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
@@ -8,7 +9,7 @@ const repoRoot = path.resolve(__dirname, '..', '..');
 const editorRoot = path.resolve(__dirname, '..');
 const editorPath = path.join(editorRoot, 'src', 'event', 'EventPageEditor.js');
 const editorSource = fs.readFileSync(editorPath, 'utf8');
-const objectsSource = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_objects.js'), 'utf8');
+const objectsSource = runtimeSource('reactor_objects.js');
 
 const EventPageEditor = vm.runInNewContext(`${editorSource}\nEventPageEditor;`, {
     console, process, require, window: {}, rrEscapeHtml: value => String(value ?? ''),

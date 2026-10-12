@@ -4,14 +4,15 @@ What the bundled Demo (`template/Demo`) references but does not ship, kept curre
 
 **Sounds: none missing.** Every sound, track and jingle the Demo names exists on disk with that exact spelling, held by `editor/tests/demo-template-completeness.test.cjs` since 2026-09-13. The replacement map is recorded below.
 
-**Art: still missing** (checked 2026-09-23 against `data/Actors.json`, `data/Enemies.json` and `img/`).
+**Art: nothing reachable is missing** (checked 2026-09-29 against `data/`, `data/Database.r3d.json` and `img/`).
 
 ## Character and battler art
 
-- `img/enemies` is empty and `img/sv_enemies` does not exist, so none of the five enemies (Psychronic and Tank name `Goblin`, then Crow, Treant, Hi_monster) has 2D battler art.
-- Katie, Elija and Rosanna (actors 6–8) name no character or battler art. Every face named in `Actors.json` exists.
+The Demo is 3D: its characters and battlers are models bound in `data/Database.r3d.json`, so `img/enemies`, `img/sv_enemies` and `img/sv_actors` are empty by design. A record with a model binding needs no 2D sheet.
 
-Actors 1–5 are bound to 3D models (character and battler slots in `Database.r3d.json`) and name no walking sheet or side-view battler (cleared 2026-09-23). Binding a slot to a model in the editor clears the 2D name it replaces.
+- **Actors 1–5** play and battle as models (character and battler slots) and name no walking sheet or side-view battler. The starting party is actors 1–3; no event adds another. Every face named in `Actors.json` exists.
+- **Enemies 1–2** (Psychronic, Tank) battle as models (Psychronic-Mascot, the Consul). They make up troop 1, the only troop a map or event reaches (Map001 event 3).
+- **Unused records:** actors 6–8 (Katie, Elija, Rosanna) and enemies 3–5 (Crow, Treant, Hi_monster, troops 2–5) are leftover data. They have neither a model nor 2D art; nothing in the Demo reaches them.
 
 ## Animation sounds
 

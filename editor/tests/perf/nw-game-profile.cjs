@@ -48,7 +48,9 @@ async function main() {
                 args: [`nwapp=${projectRoot}`, `user-data-dir=${path.join(tempRoot, "profile")}`, "no-first-run", "no-default-browser-check",
                     // An occluded window stops getting animation frames, and the owner's editor is usually in front of this one.
                     "disable-backgrounding-occluded-windows", "disable-renderer-backgrounding", "disable-background-timer-throttling",
-                    ...(RENDER_NODE ? ["render-node-override=" + RENDER_NODE] : [])],
+                    ...(RENDER_NODE ? ["render-node-override=" + RENDER_NODE] : []),
+                    // RR_PERF_MUTE=1: no sound from a harness window on a machine someone is working at.
+                    ...(process.env.RR_PERF_MUTE ? ["mute-audio"] : [])],
             },
         });
         await driver.setScriptTimeout(120000);

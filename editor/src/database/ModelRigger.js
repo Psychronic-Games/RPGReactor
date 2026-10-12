@@ -259,11 +259,82 @@
                 add('RearRightWheel', 'Body', m.wheelRearR, m.wheelRearR);
                 return bones;
             }
+        },
+        // Where a rider sits on a vehicle, and what its hands and feet rest on. Markers only, and not a rig: they
+        // are the first seat of the model's `vehicle` block (model.json > vehicle > seats), which the game seats a
+        // rider by, so a vehicle keeps its carved parts (the wheels, the handlebars). Left and right mirror across
+        // the vehicle's own middle, whichever way its file faces.
+        rider: {
+            label: 'Vehicle rider',
+            markersOnly: true,
+            vehicle: true,
+            markers: [
+                { key: 'seat', label: 'Seat', surface: true },
+                { key: 'handL', label: 'Left grip', mirror: 'handR', surface: true },
+                { key: 'handR', label: 'Right grip', mirror: 'handL', surface: true },
+                { key: 'footL', label: 'Left footrest', mirror: 'footR', surface: true },
+                { key: 'footR', label: 'Right footrest', mirror: 'footL', surface: true }
+            ],
+            // (The editor starts from where the game itself would seat a rider on this model; these stand in
+            // when the game's own guess cannot be read: a saddle two thirds up, grips ahead, rests below.)
+            defaults(h, halfW, halfD) {
+                const alongX = halfW >= halfD, long = alongX ? halfW : halfD, wide = alongX ? halfD : halfW;
+                const at = (ahead, up, side) => (alongX ? [long * ahead, h * up, wide * side] : [wide * side, h * up, long * ahead]);
+                return { seat: at(-0.15, 0.7, 0), handL: at(0.45, 0.85, 0.6), handR: at(0.45, 0.85, -0.6), footL: at(0, 0.3, 0.55), footR: at(0, 0.3, -0.55) };
+            },
+            bones() { return []; }
+        },
+        // Things held in a hand carry markers only: they say which part is which (the grip, the tip, the
+        // barrel), and a hand reads them. Nothing is bound: no bones, no weights. `surface` markers snap
+        // onto the surface under the pointer; the rest into the middle of the model there (a muzzle picked on
+        // the barrel's side would sit half its thickness off the bore, and skew the aim line).
+        blade: {
+            label: 'Blade or tool',
+            markersOnly: true,
+            markers: [
+                { key: 'gripTop', label: 'Grip top' },
+                { key: 'gripBottom', label: 'Grip bottom' },
+                { key: 'tip', label: 'Tip', surface: true },
+                { key: 'edge', label: 'Edge', surface: true }
+            ],
+            defaults(h, halfW, halfD) {
+                const at = heldLine(h, halfW, halfD);
+                return { gripBottom: at(0.03, 0), gripTop: at(0.2, 0), tip: at(1, 0), edge: at(0.6, 0.5) };
+            },
+            bones() { return []; }
+        },
+        gun: {
+            label: 'Gun',
+            markersOnly: true,
+            markers: [
+                { key: 'gripTop', label: 'Grip top' },
+                { key: 'gripBottom', label: 'Grip bottom' },
+                { key: 'trigger', label: 'Trigger finger', surface: true },
+                { key: 'muzzle', label: 'Muzzle' },
+                { key: 'rear', label: 'Rear' },
+                { key: 'foreGrip', label: 'Fore grip' },
+                { key: 'stock', label: 'Stock' }
+            ],
+            defaults(h, halfW, halfD) {
+                const at = heldLine(h, halfW, halfD);
+                return { gripTop: at(0.15, -0.2), gripBottom: at(0.12, -0.9), trigger: at(0.25, -0.2), muzzle: at(1, 0.4), rear: at(0, 0.4), foreGrip: at(0.5, 0), stock: at(0, 0.4) };
+            },
+            bones() { return []; }
         }
     };
 
+    /**
+     * Points along a held thing's longest side when only its size is known: `along` 0 to 1 from one end, `off`
+     * -1 to 1 across its second longest side. The editor starts from the thing's own shape instead when it can.
+     */
+    function heldLine(h, halfW, halfD) {
+        const half = [halfW, h / 2, halfD], centre = [0, h / 2, 0];
+        const long = half.indexOf(Math.max(...half)), rest = [0, 1, 2].filter(i => i !== long), wide = half[rest[0]] >= half[rest[1]] ? rest[0] : rest[1];
+        return (along, off) => { const p = centre.slice(); p[long] += half[long] * (along * 2 - 1); p[wide] += half[wide] * off; return p; };
+    }
+
     function templates() {
-        return Object.keys(TEMPLATES).map(id => ({ id, label: TEMPLATES[id].label }));
+        return Object.keys(TEMPLATES).map(id => ({ id, label: TEMPLATES[id].label, bones: !TEMPLATES[id].markersOnly, vehicle: !!TEMPLATES[id].vehicle }));
     }
 
     function markersFor(template) {
@@ -344,6 +415,24 @@
                 links.push([m.hips, m['rearLeg' + side]], [m['rearLeg' + side], m['rearKnee' + side]], [m['rearKnee' + side], m['rearAnkle' + side]]);
             }
             return links;
+        },
+        // A held thing's skeleton: the handle, then out to the tip; a gun's grip and its barrel line.
+        blade(m) {
+            const links = [[m.gripBottom, m.gripTop], [m.gripTop, m.tip]];
+            // The edge stands off the blade: a spur from the nearest point of the grip-to-tip line.
+            if (m.edge && m.gripTop && m.tip) {
+                const line = [0, 1, 2].map(i => m.tip[i] - m.gripTop[i]), size = line[0] * line[0] + line[1] * line[1] + line[2] * line[2];
+                const t = size > 1e-12 ? Math.max(0, Math.min(1, [0, 1, 2].reduce((sum, i) => sum + (m.edge[i] - m.gripTop[i]) * line[i], 0) / size)) : 0;
+                links.push([lerp3(m.gripTop, m.tip, t), m.edge]);
+            }
+            return links;
+        },
+        gun(m) {
+            return [[m.gripBottom, m.gripTop], [m.rear, m.muzzle], [m.stock, m.rear]];
+        },
+        // A rider as a stick figure: from the seat to each hand and each foot.
+        rider(m) {
+            return [[m.seat, m.handL], [m.seat, m.handR], [m.seat, m.footL], [m.seat, m.footR]];
         }
     };
     function previewLinks(markers, template) {

@@ -1,0 +1,10 @@
+{
+  "about": "A test carve of the Demo motorcycle made of whole meshes (carve index: every triangle of it). Front wheel is the tire, rim and disc; Steering is those with the yoke fittings and the fork lowers. Front wheel is the smaller selection, so it is the child.",
+  "glb": "3d/Vehicles/kawashaki_ninja_h2/source/kawashaki_ninja_h2.glb",
+  "parts": [
+    { "name": "Steering", "pivot": [-0.644, 0.873, 0],
+      "meshes": { "9": [[0, 720]], "13": [[0, 2432]], "15": [[0, 4484]], "22": [[0, 278]], "23": [[0, 1375]], "24": [[0, 128]], "25": [[0, 32]], "29": [[0, 986]] } },
+    { "name": "Front wheel", "pivot": [-0.912, 0.383, 0],
+      "meshes": { "9": [[0, 720]], "13": [[0, 2432]], "15": [[0, 4484]] } }
+  ]
+}

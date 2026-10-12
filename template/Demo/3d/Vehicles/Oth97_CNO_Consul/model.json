@@ -9,7 +9,11 @@
   ],
   "pivots": {"Full-Turret":[-2.263933882207813,2.138503769121598,0.025748653064354695],"Canon Shaft":[0.5869342512174126,1.259704926076757,-0.000045693107514961274]},
   "effects": [
-    {"name":"effect","animation":123,"anchor":{"part":"Canon Shaft","offset":[5.5,1.722,0]},"scale":1,"loop":false,"rotate":[0,0,0],"video":{"file":"","width":0.3,"height":0.2,"loop":true,"audio":false,"volume":100}}
+    {"name":"effect","animation":123,"anchor":{"part":"Canon Shaft","offset":[5.5,1.722,0]},"scale":1,"loop":false,"rotate":[0,0,0],"video":{"file":"","width":0.3,"height":0.2,"loop":true,"audio":false,"volume":100}},
+    {"name":"ESA Flag","animation":0,"anchor":{"part":"1_hull_nc_batch_0","offset":[-0.802,0.861,-1.683]},"scale":0.14,"loop":false,"rotate":[0,180,0],"video":{"file":"ESA-Flag.png","width":0.3,"height":0.2,"loop":true,"audio":false,"volume":100},"type":"video"}
   ],
-  "surface": {"reflect":1,"gloss":1,"metal":1,"tint":"#ffffff","texture":0}
+  "variants": [
+    {"name":"Variant","color":{"mode":"adjust","hue":-4,"saturation":2,"brightness":0.4},"surface":{"reflect":0.8,"gloss":0.45,"metal":1,"tint":"#696969","texture":0.69},"media":{"ESA Flag":{"file":"ESA-Flag.png"}}}
+  ],
+  "vehicle": {"seats":[{"seat":{"at":[-0.287,1.923,0.004]},"handL":{"at":[0.765,1.779,0.157]},"handR":{"at":[0.765,1.779,-0.157]},"footL":{"at":[-0.095,1.194,0.488]},"footR":{"at":[-0.095,1.194,-0.488]}}]}
 }

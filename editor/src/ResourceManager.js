@@ -947,8 +947,22 @@ class ResourceManager {
         this.build();
     }
 
-    text(value) {
-        return typeof window !== 'undefined' && window.I18n ? window.I18n.tText(value) : value;
+    text(value, params = null) {
+        const text = typeof window !== 'undefined' && window.I18n ? window.I18n.tText(value) : value;
+        return params ? text.replace(/\{(\w+)\}/g, (token, key) => Object.hasOwn(params, key) ? String(params[key]) : token) : text;
+    }
+
+    /** One phrase for one and another for many: '1 file' / '{count} files'. */
+    countText(count, one, many, params = {}) {
+        return count === 1 ? this.text(one, params) : this.text(many, { ...params, count });
+    }
+
+    /** The dialog's fixed labels, in the language now chosen (a switch while it was closed included). */
+    localize() {
+        if (!this.overlay) return;
+        this.overlay.querySelectorAll('[data-rr-text]').forEach(element => { element.textContent = this.text(element.dataset.rrText); });
+        this.overlay.querySelectorAll('[data-rr-aria]').forEach(element => element.setAttribute('aria-label', this.text(element.dataset.rrAria)));
+        this.renderFolders();
     }
 
     project() {
@@ -969,29 +983,29 @@ class ResourceManager {
             <section class="rr-modal rr-resource-modal" role="dialog" aria-modal="true" aria-labelledby="rr-resource-title">
                 <header class="rr-modal-header">
                     <h2 id="rr-resource-title" class="rr-modal-title" data-i18n="menu.resourceManager">Resource Manager</h2>
-                    <button type="button" class="rr-modal-close rr-resource-close" aria-label="Close">&times;</button>
+                    <button type="button" class="rr-modal-close rr-resource-close" data-rr-aria="Close">&times;</button>
                 </header>
                 <div class="rr-resource-body">
-                    <nav class="rr-resource-folders rr-accent-scrollbar" aria-label="Resource folders"></nav>
+                    <nav class="rr-resource-folders rr-accent-scrollbar" data-rr-aria="Resource folders"></nav>
                     <div class="rr-resource-browser-host"></div>
-                    <aside class="rr-resource-preview" aria-label="Preview">
+                    <aside class="rr-resource-preview" data-rr-aria="Preview">
                         <div class="rr-resource-preview-stage"></div>
                         <dl class="rr-resource-metadata"></dl>
                     </aside>
                 </div>
                 <div class="rr-resource-destination-row">
-                    <label for="rr-resource-destination">Import destination:</label>
+                    <label for="rr-resource-destination" data-rr-text="Import destination:"></label>
                     <select id="rr-resource-destination"></select>
                 </div>
                 <footer class="rr-modal-footer rr-resource-footer">
                     <div class="rr-resource-status" role="status" aria-live="polite"></div>
                     <div class="rr-resource-actions">
-                        <button type="button" class="rr-btn-secondary rr-resource-refresh">Refresh</button>
-                        <button type="button" class="rr-btn-secondary rr-resource-open">Open Folder</button>
-                        <button type="button" class="rr-btn-secondary rr-resource-import">Import...</button>
-                        <button type="button" class="rr-btn-secondary rr-resource-export">Export...</button>
-                        <button type="button" class="rr-button-danger rr-resource-delete">Delete</button>
-                        <button type="button" class="rr-button-primary rr-resource-done">Close</button>
+                        <button type="button" class="rr-btn-secondary rr-resource-refresh" data-rr-text="Refresh"></button>
+                        <button type="button" class="rr-btn-secondary rr-resource-open" data-rr-text="Open Folder"></button>
+                        <button type="button" class="rr-btn-secondary rr-resource-import" data-rr-text="Import…"></button>
+                        <button type="button" class="rr-btn-secondary rr-resource-export" data-rr-text="Export…"></button>
+                        <button type="button" class="rr-button-danger rr-resource-delete" data-rr-text="Delete"></button>
+                        <button type="button" class="rr-button-primary rr-resource-done" data-rr-text="Close"></button>
                     </div>
                 </footer>
             </section>`;
@@ -1013,7 +1027,7 @@ class ResourceManager {
         this.exportButton.addEventListener('click', () => this.exportSelected());
         this.deleteButton.addEventListener('click', () => this.deleteSelected());
         // A click on the backdrop no longer closes the dialog: close deliberately.
-        this.renderFolders();
+        this.localize();
     }
 
     renderFolders() {
@@ -1052,6 +1066,7 @@ class ResourceManager {
             return;
         }
         this.previousFocus = document.activeElement;
+        this.localize();
         this.overlay.style.display = 'flex';
         document.addEventListener('keydown', this._handleKeyDown, true);
         this.refresh();
@@ -1124,7 +1139,9 @@ class ResourceManager {
         this.selectedNames.clear();
         this.selectionAnchor = null;
         this.showEmptyPreview();
-        this.setStatus(`${this.records.length} file${this.records.length === 1 ? '' : 's'} in ${this.folder.path}. Ctrl/Cmd-click or Shift-click to select multiple for export.`);
+        this.setStatus(this.countText(this.records.length,
+            '1 file in {path}. Ctrl/Cmd-click or Shift-click to select multiple for export.',
+            '{count} files in {path}. Ctrl/Cmd-click or Shift-click to select multiple for export.', { path: this.folder.path }));
         this.syncActions();
     }
 
@@ -1149,7 +1166,7 @@ class ResourceManager {
         this.destination.innerHTML = '';
         const root = document.createElement('option');
         root.value = '';
-        root.textContent = '(Folder root)';
+        root.textContent = this.text('(Folder root)');
         this.destination.appendChild(root);
         for (const folder of folders) {
             const option = document.createElement('option');
@@ -1195,7 +1212,7 @@ class ResourceManager {
             if (Array.from(this.destination.options).some(option => option.value === parent)) this.destination.value = parent;
         }
         const count = this.selectedNames.size;
-        this.setStatus(`${count} resource${count === 1 ? '' : 's'} selected.`);
+        this.setStatus(this.countText(count, '1 resource selected.', '{count} resources selected.'));
         this.syncActions();
     }
 
@@ -1212,7 +1229,8 @@ class ResourceManager {
     }
 
     showEmptyPreview() {
-        this.previewStage.innerHTML = '<div class="rr-resource-empty">Select a resource to preview.</div>';
+        this.previewStage.innerHTML = '';
+        this.previewStage.appendChild(this.emptyNote('Select a resource to preview.'));
         this.metadata.innerHTML = '';
     }
 
@@ -1255,7 +1273,7 @@ class ResourceManager {
         const generation = this.previewGeneration;
         this.renderMetadata(record);
         if (this.folder.preview === 'none') {
-            this.previewStage.innerHTML = '<div class="rr-resource-empty">Preview is not available for this resource type.</div>';
+            this.previewStage.appendChild(this.emptyNote('Preview is not available for this resource type.'));
             return;
         }
         if (this.folder.preview === 'model') {
@@ -1301,7 +1319,7 @@ class ResourceManager {
                     readBytes: filePath => this.encryptedAssets.readAssetBytesAsync(filePath),
                     onError: error => {
                         if (generation !== this.previewGeneration) return;
-                        loading.textContent = error?.message || 'Preview could not be loaded.';
+                        loading.textContent = error?.message || this.text('Preview could not be loaded.');
                         loading.classList.add('error');
                     }
                 });
@@ -1314,7 +1332,7 @@ class ResourceManager {
                 if (generation === this.previewGeneration && loaded) loading.remove();
             } catch (error) {
                 if (generation === this.previewGeneration) {
-                    loading.textContent = error?.message || 'Preview could not be loaded.';
+                    loading.textContent = error?.message || this.text('Preview could not be loaded.');
                     loading.classList.add('error');
                 }
             }
@@ -1376,7 +1394,15 @@ class ResourceManager {
     }
 
     previewError() {
-        this.previewStage.innerHTML = '<div class="rr-resource-empty">Preview could not be loaded.</div>';
+        this.previewStage.innerHTML = '';
+        this.previewStage.appendChild(this.emptyNote('Preview could not be loaded.'));
+    }
+
+    emptyNote(source) {
+        const note = document.createElement('div');
+        note.className = 'rr-resource-empty';
+        note.textContent = this.text(source);
+        return note;
     }
 
     renderMetadata(record, dimensions = '') {
@@ -1384,13 +1410,13 @@ class ResourceManager {
             ['Name', record.relativePath],
             ['Stored as', record.physicalRelativePath],
             ['Size', ResourceManager.formatBytes(record.size)],
-            ['Type', record.encrypted ? `${record.extension} (encrypted)` : record.extension]
+            ['Type', record.encrypted ? this.text('{type} (encrypted)', { type: record.extension }) : record.extension]
         ];
         if (dimensions) rows.push(['Dimensions', dimensions]);
         this.metadata.innerHTML = '';
         for (const [label, value] of rows) {
             const term = document.createElement('dt');
-            term.textContent = label;
+            term.textContent = this.text(label);
             const description = document.createElement('dd');
             description.textContent = value;
             this.metadata.append(term, description);
@@ -1415,9 +1441,9 @@ class ResourceManager {
         this.openButton.disabled = this.isWeb();
         const reason = this.folder.readOnly
             ? this.folder.allowImport
-                ? 'New 3D model folders can be imported, but existing 3D resources cannot be deleted.'
-                : '3D resources are browse and export only in this version.'
-            : this.isWeb() ? 'Import and delete require the desktop editor.' : '';
+                ? this.text('New 3D model folders can be imported, but existing 3D resources cannot be deleted.')
+                : this.text('3D resources are browse and export only in this version.')
+            : this.isWeb() ? this.text('Import and delete require the desktop editor.') : '';
         this.importButton.title = canImport ? '' : reason;
         this.deleteButton.title = reason;
     }
@@ -1489,13 +1515,15 @@ class ResourceManager {
                 const file = files[0];
                 try {
                     const defaultName = file.name.slice(0, -this.path.extname(file.name).length);
-                    const modelName = window.prompt(this.text('Model folder name:'), defaultName);
-                    if (modelName === null) return;
+                    const modelName = await RRDialog.prompt(this.text('Model folder name:'), {
+                        title: this.text('Import 3D Model'), value: defaultName, ok: this.text('Import')
+                    });
+                    if (modelName === null || generation !== this.operationGeneration) return;
                     this.projectController.verifyProjectOwnership(ownership, { requireWrite: true });
                     const bytes = this.readImportFile(file.path);
                     const map3d = this.projectController.mapEditor3D;
                     if (!await map3d?.ensureLibraries?.() || !window.Reactor3D) {
-                        throw new Error(map3d?.lastError || 'The 3D model validator is unavailable.');
+                        throw new Error(map3d?.lastError || this.text('The 3D model validator is unavailable.'));
                     }
                     if (generation !== this.operationGeneration) return;
                     // GLBs get an optional shrink before they land in the
@@ -1535,7 +1563,7 @@ class ResourceManager {
                                 // distance, without a second copy on disk.
                                 if ((window.RRGlbOptimizer.PRESETS[mode] || {}).buildLods
                                     && typeof window.RRGlbOptimizer.lods === 'function') {
-                                    this.setStatus(`Building distance levels for ${file.name}…`);
+                                    this.setStatus(this.text('Building distance levels for {name}…', { name: file.name }));
                                     const levels = await (window.RRGlbOptimizer.lodsAsync || window.RRGlbOptimizer.lods)(importBytes);
                                     if (generation !== this.operationGeneration) return;
                                     const stem = file.name.replace(/\.glb$/i, '');
@@ -1544,7 +1572,7 @@ class ResourceManager {
                                     }
                                     if (extraSourceFiles.length) {
                                         sidecar = { lods: extraSourceFiles.map(extra => extra.name) };
-                                        shrunkNote += ` + ${extraSourceFiles.length} distance level${extraSourceFiles.length === 1 ? '' : 's'}`;
+                                        shrunkNote += ' ' + this.countText(extraSourceFiles.length, '+ 1 distance level', '+ {count} distance levels');
                                     }
                                 }
                             }
@@ -1566,7 +1594,7 @@ class ResourceManager {
                     });
                     if (generation === this.operationGeneration) {
                         this.refresh();
-                        this.setStatus(`Imported model ${result.modelName}${shrunkNote}.`);
+                        this.setStatus(this.text('Imported model {name}{note}.', { name: result.modelName, note: shrunkNote }));
                     }
                 } catch (error) {
                     if (generation === this.operationGeneration) {
@@ -1596,14 +1624,14 @@ class ResourceManager {
                     if (result.collision) {
                         const names = result.existing.map(item => item.physicalRelativePath).join(', ');
                         const replace = await this.uiManager.showConfirm(
-                            'Replace resource?',
-                            `${file.name} has the same project name as ${names}. Replace the existing resource?`,
-                            'Replace', 'Cancel');
+                            this.text('Replace resource?'),
+                            this.text('{file} has the same project name as {names}. Replace the existing resource?', { file: file.name, names }),
+                            this.text('Replace'), this.text('Cancel'), { danger: true });
                         if (!replace) continue;
                         if (generation !== this.operationGeneration) return;
                         this.projectController.verifyProjectOwnership(ownership, { requireWrite: true });
                         result = ResourceManager.importBytes({ ...options, replaceRecords: result.existing });
-                        if (result.collision) throw new Error('The colliding resources changed; review them and retry the import.');
+                        if (result.collision) throw new Error(this.text('The colliding resources changed; review them and retry the import.'));
                     }
                     imported++;
                     if (result.cleanupErrors?.length) errors.push(...result.cleanupErrors);
@@ -1614,8 +1642,8 @@ class ResourceManager {
             if (generation === this.operationGeneration) {
                 this.refresh();
                 this.setStatus(errors.length
-                    ? `${imported} imported; ${errors.length} problem(s): ${errors.join(' | ')}`
-                    : `${imported} resource${imported === 1 ? '' : 's'} imported.`, errors.length > 0);
+                    ? this.text('{imported} imported; {count} problem(s): {errors}', { imported, count: errors.length, errors: errors.join(' | ') })
+                    : this.countText(imported, '1 resource imported.', '{count} resources imported.'), errors.length > 0);
             }
         });
         document.body.appendChild(input);
@@ -1633,7 +1661,7 @@ class ResourceManager {
                 const bytes = await this.encryptedAssets.readPhysicalAssetBytesAsync(
                     records[index].physicalAbsolutePath, records[index].encrypted, records[index]);
                 this.projectController.verifyProjectOwnership(ownership);
-                if (!bytes) throw new Error(`${records[index].relativePath} could not be read.`);
+                if (!bytes) throw new Error(this.text('{path} could not be read.', { path: records[index].relativePath }));
                 files.push({ path: paths[index], data: bytes });
             }
             if (records.length > 1) {
@@ -1649,7 +1677,7 @@ class ResourceManager {
                     suggestedName,
                     beforeWrite: () => this.projectController.verifyProjectOwnership(ownership)
                 });
-                if (result) this.setStatus(`Exported ${record.relativePath}.`);
+                if (result) this.setStatus(this.text('Exported {path}.', { path: record.relativePath }));
                 return;
             }
             const picker = document.createElement('input');
@@ -1664,7 +1692,7 @@ class ResourceManager {
                 try {
                     this.projectController.verifyProjectOwnership(ownership);
                     window.RRWriteFileAtomicSync(this.fs, output, Buffer.from(bytes));
-                    this.setStatus(`Exported to ${output}.`);
+                    this.setStatus(this.text('Exported to {path}.', { path: output }));
                 } catch (error) {
                     this.setStatus(error.message, true);
                 }
@@ -1681,17 +1709,10 @@ class ResourceManager {
             const result = await window.RPGReactorHost.saveFiles({
                 files,
                 suggestedDirectoryName: `${this.project().name || 'RPG Reactor'} Resources`,
-                confirmOverwrite: paths => {
-                    const examples = paths.slice(0, 3).join(', ');
-                    const suffix = paths.length > 3 ? ` and ${paths.length - 3} more` : '';
-                    return this.uiManager.showConfirm(
-                        'Replace exported files?',
-                        `${paths.length} destination file${paths.length === 1 ? '' : 's'} already exist: ${examples}${suffix}. Replace them?`,
-                        'Replace', 'Cancel');
-                },
+                confirmOverwrite: paths => this.confirmReplaceExports(paths),
                 beforeWrite: () => this.projectController.verifyProjectOwnership(ownership)
             });
-            if (result) this.setStatus(`Exported ${files.length} resources.`);
+            if (result) this.setStatus(this.countText(files.length, 'Exported 1 resource.', 'Exported {count} resources.'));
             return;
         }
         const picker = document.createElement('input');
@@ -1707,20 +1728,15 @@ class ResourceManager {
                 this.projectController.verifyProjectOwnership(ownership);
                 const inspection = ResourceManager.inspectExportTargets(this.fs, this.path, chosenRoot, files);
                 if (inspection.existing.length) {
-                    const examples = inspection.existing.slice(0, 3).map(item => item.relativePath).join(', ');
-                    const suffix = inspection.existing.length > 3 ? ` and ${inspection.existing.length - 3} more` : '';
-                    const overwrite = await this.uiManager.showConfirm(
-                        'Replace exported files?',
-                        `${inspection.existing.length} destination file${inspection.existing.length === 1 ? '' : 's'} already exist: ${examples}${suffix}. Replace them?`,
-                        'Replace', 'Cancel');
+                    const overwrite = await this.confirmReplaceExports(inspection.existing.map(item => item.relativePath));
                     if (!overwrite) return;
                 }
                 this.projectController.verifyProjectOwnership(ownership);
                 const cleanupErrors = ResourceManager.writeExportTargetsAtomic(
                     this.fs, this.path, inspection, window.RRWriteFileAtomicSync);
                 this.setStatus(cleanupErrors.length
-                    ? `Exported ${files.length} resources, but ${cleanupErrors.length} backup file(s) could not be removed.`
-                    : `Exported ${files.length} resources to ${inspection.root}.`, cleanupErrors.length > 0);
+                    ? this.text('Exported {count} resources, but {failed} backup file(s) could not be removed.', { count: files.length, failed: cleanupErrors.length })
+                    : this.text('Exported {count} resources to {path}.', { count: files.length, path: inspection.root }), cleanupErrors.length > 0);
             } catch (error) {
                 this.setStatus(error.message, true);
             }
@@ -1729,20 +1745,31 @@ class ResourceManager {
         picker.click();
     }
 
+    confirmReplaceExports(paths) {
+        const examples = paths.slice(0, 3).join(', ');
+        const more = paths.length > 3 ? ' ' + this.text('and {count} more', { count: paths.length - 3 }) : '';
+        return this.uiManager.showConfirm(
+            this.text('Replace exported files?'),
+            this.countText(paths.length,
+                '1 destination file already exists: {examples}. Replace it?',
+                '{count} destination files already exist: {examples}. Replace them?', { examples: examples + more }),
+            this.text('Replace'), this.text('Cancel'), { danger: true });
+    }
+
     async deleteSelected() {
         const record = this.selected;
         if (!record || this.deleteButton.disabled) return;
         const ownership = this.projectController.captureProjectOwnership();
         const folder = this.folder;
         const confirmed = await this.uiManager.showConfirm(
-            'Delete resource?',
-            `${record.relativePath} will be removed permanently. References are not checked and may break.`,
-            'Delete', 'Cancel');
+            this.text('Delete resource?'),
+            this.text('{path} will be removed permanently. References are not checked and may break.', { path: record.relativePath }),
+            this.text('Delete'), this.text('Cancel'), { danger: true });
         if (!confirmed) return;
         try {
             this.projectController.verifyProjectOwnership(ownership, { requireWrite: true });
             if (this.folder !== folder || !this.records.includes(record)) {
-                throw new Error('The selected resource changed while deletion was being confirmed.');
+                throw new Error(this.text('The selected resource changed while deletion was being confirmed.'));
             }
             ResourceManager.deleteRecord({
                 fs: this.fs, path: this.path, projectRoot: ownership.projectPath,
@@ -1750,7 +1777,7 @@ class ResourceManager {
                 verifyOwnership: () => this.projectController.verifyProjectOwnership(ownership, { requireWrite: true })
             });
             this.refresh();
-            this.setStatus(`Deleted ${record.relativePath}.`);
+            this.setStatus(this.text('Deleted {path}.', { path: record.relativePath }));
         } catch (error) {
             this.setStatus(error.message, true);
         }

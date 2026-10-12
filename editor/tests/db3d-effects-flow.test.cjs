@@ -17,7 +17,7 @@ test('a selected video effect shows its movie, smoothly, and keeps its card', ()
     // with a whole-object part, every click was a dismissal.
     const at = editor.indexOf('_pickPart(event) {');
     const pick = editor.slice(at, editor.indexOf('_updateHover()', at));
-    assert.match(pick, /if \(this\._cardMode === 'effect'\) return;/);
+    assert.match(pick, /if \(this\._cardMode === 'effect' \|\| this\._cardMode === 'look'\) return;/, 'an effect\'s card and a look\'s both stay up');
 });
 
 test('a video anchored to a part turns with the part', () => {
@@ -47,7 +47,7 @@ test('placing an anchor binds it to the part under the click', () => {
 
 test('renaming a part carries its rules AND its effect anchors', () => {
     const at = editor.indexOf("Rules aimed at the old name follow the rename");
-    const rename = editor.slice(at, editor.indexOf('r3d-part-reselect', at));
+    const rename = editor.slice(at, editor.indexOf('\n    }\n', at));
     assert.match(rename, /raw\.anchor\.part === oldName\) raw\.anchor\.part = name;/, 'anchors follow');
     assert.match(rename, /this\._effectWork\.anchor\.part = name;/, 'the open card follows too');
     assert.match(rename, /renderEffectForm\(\);/, 'and the effect form redraws');
@@ -82,11 +82,16 @@ test('a light is an effect type: the form edits it, the list names it, the previ
     assert.match(editor, /<option value="light"\$\{isLight \? ' selected' : ''\}>\$\{escape\(this\._k\('r3dfx\.typeLight'\)\)\}<\/option>/);
     assert.match(editor, /isLight \? this\._lightRowsHtml\(light, work, row, control, escape\)/);
     const rows = editor.slice(editor.indexOf('_lightRowsHtml(light, work, row, control, escape) {'), editor.indexOf('_bindLightRows(form, work, light) {'));
-    for (const key of ['lit.type', 'lit.color', 'lit.intensity', 'lit.radius', 'lit.angle', 'lit.width', 'lit.yaw', 'lit.pitch', 'lit.flicker', 'lit.occlude', 'lit.shadow', 'r3dfx.lightDuration', 'r3dfx.lightBody']) {
+    // What the light is sits on the card's Effect tab; its aim and its reach are the card's Rotate and Light tabs, where their handles are.
+    for (const key of ['lit.type', 'lit.color', 'lit.flicker', 'lit.occlude', 'lit.shadow', 'r3dfx.lightDuration', 'r3dfx.lightBody']) {
         assert.ok(rows.includes(`this._k('${key}')`), key + ' is a row');
     }
-    assert.match(rows, /light\.type === 'spot' \? slider\('angle'/, 'the cone angle is a spot row');
-    assert.match(rows, /light\.type === 'beam' \? slider\('width'/, 'the beam width is a beam row');
+    const tabs = editor.slice(editor.indexOf('_lightCardSlidersHtml(work, tab) {'), editor.indexOf('get LIGHT_PREVIEW_AMBIENT()'));
+    for (const key of ['lit.yaw', 'lit.pitch', 'lit.radius', 'lit.intensity', 'lit.angle', 'lit.width']) {
+        assert.ok(tabs.includes(`this._k('${key}')`), key + ' is a row of the card');
+    }
+    assert.match(tabs, /light\.type === 'spot' \? \[\{ key: 'angle'/, 'the cone angle is a spot row');
+    assert.match(tabs, /light\.type === 'beam' \? \[\{ key: 'width'/, 'the beam width is a beam row');
     assert.match(rows, /\(work\.trigger \|\| 'action'\) === 'action'\s*\? row\(this\._k\('r3dfx\.lightDuration'\)/, 'duration only for a fired light');
     const bind = editor.slice(editor.indexOf('_bindLightRows(form, work, light) {'), editor.indexOf('_playLightPreview(raw) {'));
     assert.match(bind, /RRColourPopover\.swatch\(light\.color,/, 'the colour is the themed picker');
@@ -123,7 +128,8 @@ test('placed models light the map view through their light effects', () => {
     assert.match(lighting, /const modelLights = Array\.isArray\(Reactor3D\._editorEffectLights\) \? Reactor3D\._editorEffectLights : \[\];/);
     assert.match(lighting, /\}\)\)\.concat\(modelLights\)\);/, 'the feed carries them with the map lights');
     assert.match(lighting, /if \(!this\.lights\(\)\.length && !modelLights\.length && ambient\.ambient === undefined\) \{/, 'a map lit only by its models still feeds');
-    assert.match(lighting, /Reactor3D\._editorEffectLights\.length\) return true;/, 'and keeps the view drawing');
+    // A carried light that flickers or pulses keeps the view drawing; a steady one is drawn on change.
+    assert.match(map3d, /const light = play\.light && play\.effect && play\.effect\.light;\s*if \(light && \(light\.flicker \|\| light\.pulse\)\) return true;/, 'and keeps the view drawing while it moves');
     const i18n = fs.readFileSync(path.join(editorRoot, 'src', 'I18nManager.js'), 'utf8');
     for (const key of ['r3dfx.typeLight', 'r3dfx.lightDuration', 'r3dfx.lightBody']) {
         assert.equal((i18n.match(new RegExp('"' + key.replace('.', '\\.') + '": "', 'g')) || []).length, 18, key + ' in every locale');
@@ -161,11 +167,11 @@ test('a light effect wears the prop gizmo in the database preview, and every con
     // Rings and arrows on the anchor, picked before the anchor marker, dragged through the preview's own pointer path.
     assert.match(editor, /this\._fxGizmo = \{ rings, arrows \};/);
     assert.match(editor, /rings\.roll\.group\.visible = false;/, 'nothing rolls');
-    assert.match(editor, /RRPoseRings3D\.sync\(gizmo\.rings, at, light\.yaw, -light\.pitch, light\.type !== 'point'\);/, 'a point light has no aim ring');
-    const down = editor.slice(editor.indexOf("// A light's rings and arrows come first"), editor.indexOf('// The effect anchor drags in the camera plane'));
+    assert.match(editor, /RRPoseRings3D\.sync\(gizmo\.rings, here, aim\.yaw, -aim\.pitch, tool === 'turn' && aim\.type !== 'point'\);/, 'a point light has no aim ring');
+    const down = editor.slice(editor.indexOf("// An effect's handles come first"), editor.indexOf('// The effect itself (its dot, or a media surface anywhere on it) slides over the model.'));
     assert.match(down, /mode = 'fxgizmo';/);
-    assert.match(editor, /else if \(mode === 'fxgizmo' && this\._fxGizmoHold\) \{\s*this\._dragLightGizmo/);
-    assert.match(editor, /else if \(mode === 'fxgizmo'\) \{\s*this\._endLightGizmoDrag\(\);/);
+    assert.match(editor, /else if \(mode === 'fxgizmo' && this\._fxGizmoHold\) \{\s*this\._dragEffectGizmo/);
+    assert.match(editor, /else if \(mode === 'fxgizmo'\) \{\s*this\._endEffectGizmoDrag\(\);/);
     // An arrow writes the anchor offset in the anchor's own frame; a ring writes the light's own yaw or pitch.
     assert.match(editor, /const local = frame\.worldToLocal\(world\);\s*work\.anchor\.offset = \[local\.x, local\.y, local\.z\]/);
     assert.match(editor, /light\.pitch = Math\.max\(-90, Math\.min\(90, Math\.round\(hold\.startPitch - delta\)\)\);/);
@@ -174,7 +180,7 @@ test('a light effect wears the prop gizmo in the database preview, and every con
     assert.match(editor, /_lightCardSlidersHtml\(work, this\._fxTab\)/);
     assert.match(editor, /class="r3d-fxcard-lslider" data-key="\$\{row\.key\}"/);
     assert.match(editor, /_syncLightControls\(\) \{/);
-    assert.match(editor, /this\._disposeLightGizmo\(\);\s*this\._lightPreviewLit\(false\);/, 'the gizmo goes with the preview');
+    assert.match(editor, /this\._disposeEffectGizmo\(\);\s*this\._lightPreviewLit\(false\);/, 'the gizmo goes with the preview');
 });
 
 test('a click on a rigged model binds the anchor to a bone, and a beam body survives an edge-on view', () => {

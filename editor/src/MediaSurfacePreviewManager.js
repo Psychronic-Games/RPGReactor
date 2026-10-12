@@ -1002,7 +1002,8 @@ class MediaSurfacePreviewManager {
         owner.handles = specs.map(spec => {
             const handle = document.createElement('button');
             handle.type = 'button';
-            handle.title = spec.label;
+            handle.title = typeof window !== 'undefined' && window.I18n ? window.I18n.tText(spec.label) : spec.label;
+            handle.setAttribute('aria-label', handle.title);
             handle.style.cssText = `position:absolute;z-index:2;width:${spec.edge ? 14 : 16}px;height:${spec.edge ? 10 : 16}px;margin:${spec.edge ? '-5px -7px' : '-8px'};padding:0;border:2px solid #fff;border-radius:${spec.edge ? 3 : 50}%;background:${spec.edge ? '#9c4dff' : '#3faee8'};pointer-events:auto;cursor:${spec.edge ? 'move' : 'crosshair'};`;
             const down = event => this._startDomDrag(event, owner, spec);
             handle.addEventListener('pointerdown', down);

@@ -3,7 +3,7 @@
  * how often, by mirroring the runtime's own selection code.
  *
  * The rule that surprises people is the rating window. `selectAllActions`
- * (runtime/reactor_objects.js) takes the highest rating among the actions that
+ * (runtime/reactor_objects_battlers.js) takes the highest rating among the actions that
  * are valid *at that moment* and discards everything below a threshold measured
  * down from it. A rating is therefore never meaningful on its own: an action
  * dies whenever some better-rated action is valid alongside it, and it revives
@@ -185,7 +185,7 @@
      *
      * The runtime reads a Target State condition off the skill's own scope:
      * `meetsTargetStateCondition` asks `actionTargetCandidates`
-     * (runtime/reactor_objects.js), and a skill whose scope reaches nobody
+     * (runtime/reactor_objects_battlers.js), and a skill whose scope reaches nobody
      * hands it an empty list. `.some()` over nothing is false, so the
      * condition can never hold however the battle goes.
      *

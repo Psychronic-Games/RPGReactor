@@ -1,4 +1,5 @@
 const assert = require('node:assert/strict');
+const { runtimeSource } = require('./helpers/runtime-source.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
@@ -6,7 +7,7 @@ const test = require('node:test');
 const repoRoot = path.resolve(__dirname, '..', '..');
 const editorRoot = path.resolve(__dirname, '..');
 const commandsDir = path.join(editorRoot, 'src', 'event', 'commands');
-const objectsSource = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_objects.js'), 'utf8');
+const objectsSource = runtimeSource('reactor_objects.js');
 const authored = require(path.join(__dirname, 'helpers', 'authored-data-shapes.json'));
 
 // Commands whose actor slot accepts 0 = the whole party.
@@ -103,7 +104,7 @@ test('Fadeout BGM and BGS are written in seconds, as the engine reads them', () 
     assert.doesNotMatch(source, /parameters\[0\] \|\| 60\) \/ 60/, 'the load no longer scales');
     assert.match(source, /parameters: \[1\]/);
 
-    const core = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_core.js'), 'utf8');
+    const core = runtimeSource('reactor_core.js');
     assert.match(core, /linearRampToValueAtTime\(0, currentTime \+ duration\)/,
         'the unit is Web Audio seconds');
 
