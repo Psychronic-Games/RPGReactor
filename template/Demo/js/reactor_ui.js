@@ -7578,6 +7578,9 @@
     const _Scene_Boot_start = Scene_Boot.prototype.start;
     Scene_Boot.prototype.start = function() {
         ReactorUI.installSceneRouting();
+        // Both branches below skip the stock start, and a preview can still
+        // use an item or open a battle. Installing twice is a no-op.
+        if (typeof Game_Action === "function") Game_Action.installMultiElementShim();
         const request = ReactorUI.captureRequest();
         if (request && !DataManager.isBattleTest() && !DataManager.isEventTest()) {
             Scene_Base.prototype.start.call(this);

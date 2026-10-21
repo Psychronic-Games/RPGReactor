@@ -101,6 +101,23 @@ test('the element plugin shim feeds the list to its reader once, and is inert wi
     assert.match(read('runtime/reactor_scenes.js'), /Scene_Base\.prototype\.start\.call\(this\);\n[\s\S]{0,200}?Game_Action\.installMultiElementShim\(\);/, 'installed once the plugins have loaded');
 });
 
+test('every boot that replaces the stock Scene_Boot start installs the shim itself', () => {
+    // A wrapper that calls Scene_Base's start directly has a path that never
+    // reaches the stock start: the start-at-position playtest, the interface
+    // preview and UI capture. Each must install the shim on its own.
+    const replacing = [];
+    for (const name of fs.readdirSync(path.join(repoRoot, 'runtime')).filter(file => /^reactor_.*\.js$/.test(file))) {
+        const source = read(`runtime/${name}`);
+        for (const match of source.matchAll(/^([ \t]*)Scene_Boot\.prototype\.start = function\(\) \{\n/gm)) {
+            const body = source.slice(match.index, source.indexOf(`\n${match[1]}};`, match.index));
+            if (!body.includes('Scene_Base.prototype.start.call(this)')) continue;
+            replacing.push(name);
+            assert.match(body, /Game_Action\.installMultiElementShim\(\)/, `${name}: a Scene_Boot start that skips the stock one installs the shim`);
+        }
+    }
+    assert.deepEqual(replacing.sort(), ['reactor_fight_flow.js', 'reactor_scenes.js', 'reactor_ui.js'], 'the scan found every boot path');
+});
+
 test('writing a list keeps elementId first, and the list only for two or more', () => {
     const ActionElements = loadActionElements();
     const damage = { type: 1, elementId: 2, formula: 'a.atk', variance: 20, critical: false };
