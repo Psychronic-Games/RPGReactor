@@ -1,4 +1,5 @@
 const assert = require('node:assert/strict');
+const { runtimeSource } = require('./helpers/runtime-source.cjs');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -252,7 +253,7 @@ test('the decrypting resolver is installed before every asset consumer', () => {
 });
 
 test('the runtime corrects asset filename case against the disk', () => {
-    const coreSource = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_core.js'), 'utf8');
+    const coreSource = runtimeSource('reactor_core.js');
     const at = coreSource.indexOf('Utils.correctFileCase = function(url) {');
     assert.ok(at >= 0, 'correctFileCase is present in the runtime');
     const end = coreSource.indexOf('\n};', at);
@@ -276,7 +277,7 @@ test('the runtime corrects asset filename case against the disk', () => {
 });
 
 test('bitmap and audio error paths retry with corrected casing once', () => {
-    const coreSource = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_core.js'), 'utf8');
+    const coreSource = runtimeSource('reactor_core.js');
     for (const owner of ['Bitmap', 'WebAudio']) {
         const at = coreSource.indexOf(`${owner}.prototype._onError = function() {`);
         assert.ok(at >= 0, `${owner}._onError exists`);
@@ -291,7 +292,7 @@ test('casing resolves before the request so plugin error handlers cannot preempt
     // CGMZ_Fallback replaces Bitmap._onError without calling the original,
     // so a mere case mismatch became its fallback image forever. Every
     // request point must consult the on-disk casing up front instead.
-    const coreSource = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_core.js'), 'utf8');
+    const coreSource = runtimeSource('reactor_core.js');
     const decrypting = coreSource.slice(
         coreSource.indexOf('Bitmap.prototype._startDecrypting'),
         coreSource.indexOf('Bitmap.prototype._onXhrLoad'));

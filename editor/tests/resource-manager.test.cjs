@@ -643,7 +643,7 @@ test('the application shell loads and dispatches the Resource Manager', () => {
     assert.match(webHost, /function safeRelativePath\(value\)/);
     assert.match(webHost, /An export target changed before it could be written/);
     assert.match(webHost, /for \(const item of written\.reverse\(\)\)/);
-    assert.match(webHost, /window\.confirm\(tt\('\{count\} destination file\(s\) already exist/);
+    assert.match(webHost, /await RRDialog\.confirm\(tt\('\{count\} destination file\(s\) already exist/);
     assert.match(css, /\.rr-resource-body[\s\S]*grid-template-columns/);
     assert.match(css, /@media \(max-width: 900px\)[\s\S]*\.rr-resource-preview/);
 

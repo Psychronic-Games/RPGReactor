@@ -77,7 +77,7 @@ class QuestCommandEditor {
         }
 
         const modal = document.createElement('div');
-        modal.className = 'rr-modal-overlay';
+        modal.className = 'rr-modal-overlay rr-command-editor-modal';
         modal.style.zIndex = '21000';
         const title = window.I18n && window.I18n.tEventCommandName
             ? window.I18n.tEventCommandName(QuestCommandEditor.LABELS[name]) : QuestCommandEditor.LABELS[name];

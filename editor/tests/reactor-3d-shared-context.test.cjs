@@ -165,8 +165,99 @@ test('the passes render at an adaptive scale: drop fast when the game cannot hol
     }
     const viewport = r3d.slice(r3d.indexOf('Reactor3D.Viewport.prototype._trackFrame'), r3d.indexOf('Reactor3D.Viewport.prototype._disposeTargets'));
     assert.match(viewport, /if \(next < this\._scale \|\| \(next > this\._scale && stats\.since >= 300\)\)/, 'climbing back needs five calm seconds');
-    assert.match(r3d, /Reactor3D\.Viewport\.prototype\.render = function\(slot\) \{[\s\S]*?this\._trackFrame\(\);\s*this\.renderInto/);
+    assert.match(r3d, /Reactor3D\.Viewport\.prototype\.render = function\(slot\) \{[\s\S]*?this\._trackFrame\(\);\s*if \(this\.upscaled\(\)\) return this\._renderUpscaled\(slot \|\| "below"\);\s*return this\.renderInto/);
     assert.match(r3d, /const pixels = Math\.max\(16, Math\.round\(state\.size \* scale\)\);[\s\S]*?state\.target = viewport\.createTarget\(pixels, pixels, scale, state\.flat \? \{ samples: 4 \} : undefined\);/, 'battler targets follow the scale');
     const warm = r3d.slice(r3d.indexOf('Reactor3D.warmLoadedTemplates = function'), r3d.indexOf('Templates live outside any scene'));
     assert.ok(warm.indexOf('if (!pending.length) return;') < warm.indexOf('new THREE.Scene()'), 'the per-frame warm scan allocates nothing on the steady state');
+});
+
+// A renderer that outlives battles and map scenes frees nothing on its own:
+// what a model copy made for itself must be let go of by whoever drops it.
+function fakeNode(extra) {
+    const node = Object.assign({ children: [], userData: {} }, extra);
+    node.traverse = fn => { fn(node); for (const child of node.children) child.traverse(fn); };
+    return node;
+}
+function fakeGeometry(attributes, index) {
+    return { attributes, index, disposedWith: null, dispose() { this.disposedWith = { attributes: Object.keys(this.attributes), index: this.index }; } };
+}
+function fakeSkeleton() { return { disposed: false, dispose() { this.disposed = true; } }; }
+
+function modelCopy() {
+    const position = { name: 'position' }, normal = { name: 'normal' }, shared = { name: 'index' };
+    const whole = fakeGeometry({ position, normal }, shared);
+    const templateSkeleton = fakeSkeleton();
+    const template = fakeNode({ children: [fakeNode({ geometry: whole, skeleton: templateSkeleton })] });
+    const ownIndex = { name: 'own index' };
+    const carved = fakeGeometry({ position, normal }, ownIndex);
+    const copySkeleton = fakeSkeleton();
+    const copy = fakeNode({ children: [fakeNode({ geometry: whole, skeleton: copySkeleton }), fakeNode({ geometry: carved })] });
+    return { template, copy, whole, carved, ownIndex, templateSkeleton, copySkeleton };
+}
+
+test('a dropped model copy frees its carved parts\' own index and its bone textures, never the template\'s buffers', () => {
+    const m = modelCopy();
+    Reactor3D.releaseModelInstance(m.copy, m.template);
+    assert.equal(m.whole.disposedWith, null, 'the template geometry every copy draws stays');
+    assert.deepEqual(m.carved.disposedWith, { attributes: [], index: m.ownIndex }, 'the carved part goes without taking the shared vertex buffers');
+    assert.equal(m.copySkeleton.disposed, true);
+    assert.equal(m.templateSkeleton.disposed, false);
+    const unknown = modelCopy();
+    Reactor3D.releaseModelInstance(unknown.copy, null);
+    assert.equal(unknown.carved.disposedWith, null, 'without its template nothing can be told apart, so nothing goes');
+});
+
+test('a battler state takes its model copy with it, except while its target is only being resized', () => {
+    const m = modelCopy();
+    const target = { disposed: 0, dispose() { this.disposed++; } };
+    const state = { object: m.copy, template: m.template, target };
+    Reactor3D.releaseBattlerState(state, true);
+    assert.equal(target.disposed, 1);
+    assert.equal(m.carved.disposedWith, null, 'a resize keeps the model it redraws');
+    state.target = target;
+    Reactor3D.releaseBattlerState(state);
+    assert.ok(m.carved.disposedWith, 'let go for good: its parts go');
+    assert.equal(m.copySkeleton.disposed, true);
+    const models = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d_models.js'), 'utf8');
+    assert.equal((models.match(/state\.object = object;\n\s+state\.template = template;/g) || []).length, 3, 'every battler and model sprite keeps its template');
+    assert.match(models, /this\.releaseBattlerState\(state, true\);\n\s+const previous = state\.bitmap;/);
+});
+
+test('map scenes and battle rooms release their model copies, and a rebuilt map its water sheets', () => {
+    const m = modelCopy();
+    Reactor3D._glbCache['Test/Model.glb:Model'] = { template: m.template };
+    try {
+        const holder = { spec: 'Test/Model.glb:Model', object: m.copy };
+        const scene = { _modelInstances: new Map([['e1', holder]]), _meshes: [], _materials: [], _textures: [], _pools: {},
+            _clearCharacterBillboards() {} };
+        const water = { parent: null, geometry: fakeGeometry({}, null) };
+        scene._waterMeshes = [water];
+        Reactor3D.MapScene.prototype.clear.call(scene);
+        assert.ok(m.carved.disposedWith, 'a map scene\'s character copies');
+        assert.ok(water.geometry.disposedWith, 'the water sheet geometry is not in _meshes');
+        assert.deepEqual(scene._waterMeshes, []);
+    } finally {
+        delete Reactor3D._glbCache['Test/Model.glb:Model'];
+    }
+    const room = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_battle_room.js'), 'utf8');
+    assert.match(room, /const object = R\.cloneModelTemplate\(template\);\n\s+record\.template = template;/);
+    assert.match(room, /if\(r\.object&&r\.template\)root\.Reactor3D\.releaseModelInstance\?\.\(r\.object,r\.template\);/);
+});
+
+test('an empty pass says so, and its full-screen sprite is not composited', () => {
+    const R = require('../../runtime/reactor_3d.js');
+    const E = R.EmptyPass, target = { addEventListener() {} };
+    const renderer = { autoClear: true, autoClearColor: true, autoClearDepth: true, autoClearStencil: true, getClearAlpha: () => 0 };
+    const viewport = { _renderer: renderer, _shared: true };
+    const savedWork = E.hasWork; let draws = 0;
+    try {
+        E.hasWork = () => false;
+        assert.equal(E.render(viewport, target, {}, {}, () => draws++), true, 'cleared once, empty');
+        assert.equal(E.render(viewport, target, {}, {}, () => draws++), true, 'still empty, not drawn again');
+        assert.equal(draws, 1);
+        E.hasWork = () => true;
+        assert.equal(E.render(viewport, target, {}, {}, () => draws++), false, 'something to draw');
+    } finally { E.hasWork = savedWork; }
+    const sprites = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', '..', 'runtime', 'reactor_sprites.js'), 'utf8');
+    assert.match(sprites, /const aboveEmpty = state\.viewport\.renderPass\([\s\S]{0,400}sprite\.renderable = !aboveEmpty;/);
 });

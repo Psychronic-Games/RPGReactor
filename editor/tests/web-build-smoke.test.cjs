@@ -56,10 +56,20 @@ test('web deployment packages a generated project without development saves or b
         fs.mkdirSync(path.join(projectPath, 'img', 'save'));
         fs.writeFileSync(path.join(projectPath, 'img', 'save', 'keep.txt'), 'legitimate nested asset');
 
+        // The Demo's skill tree plugin reads a file with Node while the page loads; every project made
+        // from the Demo carries it, and a browser stopped at boot on it.
+        const skillTrees = path.join(projectPath, 'js', 'plugins', 'PSYCHRONIC_MegaSkillTreesMZ.js');
+        const skillTreesSource = "(() => {\n    let skillTreesData = [];\n    function loadSkillTreesData() {\n        const fs = require('fs');\n        skillTreesData = [];\n    }\n    loadSkillTreesData();\n})();\n";
+        fs.writeFileSync(skillTrees, skillTreesSource);
+
         const result = await runWebBuild(projectPath, outputDir, 'Web Smoke');
 
         assert.equal(result.success, true);
         const webRoot = path.join(outputDir, 'Web Smoke-web');
+        const builtSkillTrees = fs.readFileSync(path.join(webRoot, 'js', 'plugins', 'PSYCHRONIC_MegaSkillTreesMZ.js'), 'utf8');
+        assert.match(builtSkillTrees, /function loadSkillTreesData\(\) \{\n {8}if \(typeof require !== 'function'\) \{\n {12}skillTreesData = \[\];\n {12}return;/, 'the web copy does not reach for Node at load');
+        assert.doesNotThrow(() => new Function(builtSkillTrees)(), 'and loads where require does not exist');
+        assert.equal(fs.readFileSync(skillTrees, 'utf8'), skillTreesSource, 'the project\'s own plugin is not touched');
         const required = [
             'index.html',
             'data/System.json',

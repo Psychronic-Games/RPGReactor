@@ -11,6 +11,7 @@
  * resource is judged by its own type.
  */
 const assert = require('node:assert/strict');
+const { runtimeSource } = require('./helpers/runtime-source.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
@@ -45,7 +46,7 @@ const ACTION_METHODS = [
 ];
 
 function loadRuntime() {
-    const objects = read('runtime/reactor_objects.js');
+    const objects = runtimeSource('reactor_objects.js');
     const context = {
         Game_Action: function () {},
         Game_ActionResult: function () { this.initialize(); },

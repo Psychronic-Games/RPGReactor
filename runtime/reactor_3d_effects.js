@@ -35,19 +35,32 @@
 // muzzle or the screen it was placed on rather than on the character's feet.
 //-----------------------------------------------------------------------------
 
-Reactor3D.readModelEffects = function(json) {
+Reactor3D.readModelEffects = function(json, spec) {
     const list = json && Array.isArray(json.effects) ? json.effects : [];
     const effects = [];
     const seen = new Set();
+    // A use that wears a variant shows that variant's media: another picture
+    // or movie on a media surface, or the surface left off.
+    const variant = spec && spec.variant && this.modelVariant ? this.modelVariant(json, spec.variant) : null;
+    const media = variant && variant.media ? variant.media : null;
+    // An effect may name the variants that wear it (`variants`, "" being the
+    // model's own look); with no list every one wears it. A use (a spec)
+    // gets the effects of the look it wears; a reader with no spec gets all.
+    const wearing = spec ? (variant ? variant.name : "") : null;
     for (const raw of list) {
         if (!raw || typeof raw !== "object" || !raw.name) continue;
         const name = String(raw.name);
         if (seen.has(name)) continue;
         seen.add(name);
+        if (wearing !== null && Array.isArray(raw.variants) && raw.variants.length && raw.variants.indexOf(wearing) < 0) continue;
         const anchorRaw = raw.anchor && typeof raw.anchor === "object" ? raw.anchor : {};
         const offsetRaw = Array.isArray(anchorRaw.offset) ? anchorRaw.offset : [];
         const triggers = ["action", "always", "moving", "walking", "dashing", "jumping", "swimming", "treading", "climbing", "idle"];
-        const videoRaw = raw.video && typeof raw.video === "object" ? raw.video : null;
+        let videoRaw = raw.video && typeof raw.video === "object" ? raw.video : null;
+        if (media && raw.type === "video" && Object.prototype.hasOwnProperty.call(media, name)) {
+            if (media[name] === false) continue;
+            videoRaw = Object.assign({}, videoRaw, { file: media[name].file });
+        }
         const effect = {
             // What it shows: a database animation, or a video surface on a
             // plane at the anchor — an animated screen on a console.
@@ -314,6 +327,13 @@ Reactor3D.effectAnchorWorld = function(object, effect, out) {
     return (part || object).localToWorld(target);
 };
 
+/**
+ * The mouth's outline: a closed ring of eight points round the lips, named as a rig names its
+ * markers, in order round the ring. Left and right are the character's own. With all eight the
+ * speech fallback opens exactly the mouth they draw (reactor_3d_speech.js).
+ */
+Reactor3D.MOUTH_OUTLINE_KEYS = ["cornerL", "upperL", "upperM", "upperR", "cornerR", "lowerR", "lowerM", "lowerL"];
+
 /** Optional semantic points, authored in the same bone/part frame as effects. */
 Reactor3D.readModelLandmarks = function(json) {
     const source = json && json.landmarks;
@@ -326,6 +346,14 @@ Reactor3D.readModelLandmarks = function(json) {
         if (name === "mouth") {
             if (point.interior === "none" || point.interior === "dark") points[name].interior = point.interior;
             if (typeof point.interiorColor === "string" && /^#[0-9a-f]{6}$/i.test(point.interiorColor)) points[name].interiorColor = point.interiorColor;
+            // The ring is all eight points or none: a partial one is ignored and the three points stand.
+            const ring = point.outline && typeof point.outline === "object" ? point.outline : null;
+            const finite = value => Array.isArray(value) && value.length === 3 && value.every(n => typeof n === "number" && Number.isFinite(n));
+            if (ring && this.MOUTH_OUTLINE_KEYS.every(key => finite(ring[key]))) {
+                points[name].outline = Object.fromEntries(this.MOUTH_OUTLINE_KEYS.map(key => [key, ring[key].slice()]));
+            }
+            // How far the mouth opens, as a share of the ring's own room: 1 unless said, 0 to 2.
+            if (typeof point.open === "number" && Number.isFinite(point.open) && point.open !== 1) points[name].open = Math.max(0, Math.min(2, point.open));
         }
     }
     return points;
@@ -354,6 +382,7 @@ Reactor3D.bindModelLandmarks = function(object, points) {
         // A removed/renamed bone must not reinterpret its local offset at the feet.
         if (point.part && !node) continue;
         bound[name] = { node: node || object, offset: point.offset.slice() };
+        if (name === "mouth" && point.outline) bound[name].outline = point.outline;
     }
     // Rest-space landmarks and mesh transforms are captured once for optional
     // procedural lip morphs; animated vertices are never scanned per frame.
@@ -366,9 +395,21 @@ Reactor3D.bindModelLandmarks = function(object, points) {
     // its old inverse until the first render and speech samples the wrong size.
     object.updateMatrixWorld(true);
     const inverse = new THREE.Matrix4().copy(object.matrixWorld).invert();
+    // A model stood on its idle clip (groundAnimatedTemplate) has its body
+    // moved by the clip's lowest point, and the meshes are captured below
+    // where they stand moved. A point on a part moved with the part; a point
+    // on the whole model is moved here, or the mouth would open where the
+    // lips were before.
+    const ground = Number(object.userData && object.userData.reactorClipGround) || 0;
+    const settle = (name, point) => { if (ground && !points[name].part) point.y -= ground; return point; };
     for (const name of Object.keys(bound)) {
         const point = this.modelLandmarkWorld(object, name, new THREE.Vector3());
-        rest.points[name] = point.applyMatrix4(inverse);
+        rest.points[name] = settle(name, point.applyMatrix4(inverse));
+    }
+    // The mouth's ring, in the same rest space, in ring order.
+    if (bound.mouth && bound.mouth.outline) {
+        rest.outline = this.MOUTH_OUTLINE_KEYS.map(key => settle("mouth", bound.mouth.node.localToWorld(new THREE.Vector3().fromArray(bound.mouth.outline[key])).applyMatrix4(inverse)));
+        rest.open = typeof points.mouth.open === "number" ? points.mouth.open : 1;
     }
     if (bound.mouth) object.traverse(mesh => {
         if (mesh.isMesh && !mesh.userData.__reactorOverlay) {
@@ -430,11 +471,39 @@ Reactor3D.modelAnimationsBusy = function(character) {
 /** The wait modes that hold a script in the background: the world never freezes for these. */
 Reactor3D.BACKGROUND_WAIT_MODES = ["reactorScopedWait", "reactorModelAnimation"];
 
+/**
+ * Give a wait its character. The interpreter holding the wait is saved, so
+ * the character rides along unsaved (an event's own parallel interpreter
+ * holding that event made the save circular, "Object too deep") and is
+ * found again by id after a load.
+ */
+Reactor3D.holdWaitCharacter = function(wait, character) {
+    Object.defineProperty(wait, "character", { value: character || null, writable: true, configurable: true, enumerable: false });
+    const player = typeof $gamePlayer !== "undefined" ? $gamePlayer : null;
+    const line = player && player.followers ? player.followers()._data || [] : [];
+    wait.characterId = !character ? 0 : character === player ? -1
+        : line.indexOf(character) >= 0 ? -2 - line.indexOf(character)
+        : typeof character.eventId === "function" ? character.eventId() : 0;
+    return wait;
+};
+
+/** The character a wait watches: the one it was given, or after a load the one its id names. */
+Reactor3D.waitCharacter = function(wait) {
+    if (!wait) return null;
+    if (wait.character) return wait.character;
+    const id = Number(wait.characterId) || 0;
+    if (id === -1) return typeof $gamePlayer !== "undefined" ? $gamePlayer : null;
+    if (id < -1) return typeof $gamePlayer !== "undefined" && $gamePlayer ? $gamePlayer.followers().follower(-id - 2) || null : null;
+    if (id > 0) return typeof $gameMap !== "undefined" && $gameMap ? $gameMap.event(id) || null : null;
+    return null;
+};
+
 /** Whether a scoped wait still holds, whatever it watches. */
 Reactor3D.scopedWaitHolding = function(wait) {
     if (!wait) return false;
     const frame = typeof Graphics !== "undefined" ? Graphics.frameCount : 0;
-    if (frame >= wait.deadline) return false;
+    // No deadline is Infinity in play and null once saved: a switch wait loaded from a save still holds.
+    if (Number.isFinite(wait.deadline) && frame >= wait.deadline) return false;
     if (wait.mode === "duration") return frame < wait.until;
     if (wait.mode === "switch") {
         return typeof $gameSwitches !== "undefined" && $gameSwitches
@@ -453,7 +522,7 @@ Reactor3D.scopedWaitHolding = function(wait) {
             default: return !(current >= value);
         }
     }
-    return this.scopedActionsBusy(wait.character);
+    return this.scopedActionsBusy(this.waitCharacter(wait));
 };
 
 /** What a scoped wait watches: the animation queue, and for one character a forced route too. */
@@ -465,13 +534,14 @@ Reactor3D.scopedActionsBusy = function(character) {
 
 /** Whether a Play Model Animation wait is still holding. */
 Reactor3D.modelAnimationWaiting = function(wait) {
-    if (!wait || !wait.character || !wait.name) return false;
+    const character = this.waitCharacter(wait);
+    if (!character || !wait.name) return false;
     const frame = typeof Graphics !== "undefined" ? Graphics.frameCount : 0;
     if (frame >= wait.deadline) return false;
-    const key = this.modelInstanceKey(wait.character);
+    const key = this.modelInstanceKey(character);
     const pending = this._modelActions && this._modelActions[key];
     if (Array.isArray(pending) && pending.some(entry => entry && entry.name === wait.name)) return true;
-    const holder = this.modelHolderFor ? this.modelHolderFor(wait.character) : null;
+    const holder = this.modelHolderFor ? this.modelHolderFor(character) : null;
     const action = holder && holder.action;
     if (action && action.name === wait.name) {
         if (!wait.started) {
@@ -903,21 +973,32 @@ Reactor3D.GpuEffects = {
         try { entry.context._makeContextCurrent(); effekseer.releaseContext(entry.context); }
         finally { this.restoreDefault(); entry.renderer.resetState(); }
     },
+    /**
+     * A play's target, at least `width` x `height`. The effect's box on
+     * screen changes size nearly every frame, and resizing a three target
+     * frees its texture, framebuffer and multisample buffer for the next
+     * render to allocate again: GPU allocations every frame, per effect. The
+     * target grows in steps of 64 and only shrinks when it is more than twice
+     * too large; the drawn corner is `_rrUsed`, which the quad samples.
+     */
     target(entry, holder, width, height, colour = false) {
         const key = colour ? '_gpuColourTarget' : '_gpuEffectTarget';
+        const step = v => Math.max(64, Math.ceil(v / 64) * 64);
+        const W = step(width), H = step(height);
         let target = holder[key];
         if (!target) {
-            target = holder[key] = new THREE.WebGLRenderTarget(width, height, {
+            target = holder[key] = new THREE.WebGLRenderTarget(W, H, {
                 minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, depthBuffer: !colour,
                 stencilBuffer: false, generateMipmaps: false, samples: colour ? 0 : entry.samples
             });
             if (colour) target.texture.colorSpace = THREE.SRGBColorSpace;
             entry.targets.add(target);
             target.addEventListener('dispose', () => entry.targets.delete(target));
-        } else if (target.width !== width || target.height !== height) {
-            target.setSize(width, height);
+        } else if (target.width < width || target.height < height || target.width > W * 2 || target.height > H * 2) {
+            target.setSize(W, H);
             entry.targets.add(target);
         }
+        target._rrUsed = [width, height];
         return target;
     },
     draw(entry, holder, width, height, box, projection, view, handle, premultiplied = false) {
@@ -949,6 +1030,7 @@ Reactor3D.GpuEffects = {
     convert(entry, holder, source, premultiplied) {
         const renderer = entry.renderer;
         const target = this.target(entry, holder, source.width, source.height, true);
+        target._rrUsed = source._rrUsed || [source.width, source.height];
         if (!entry.colourMaterial) {
             entry.colourMaterial = new THREE.ShaderMaterial({
                 uniforms: { map: { value: null }, premultiplied: { value: 0 } },
@@ -973,6 +1055,8 @@ Reactor3D.GpuEffects = {
         return target;
     },
     bindQuad(quad, target) {
+        const used = target._rrUsed, scale = quad.material.uniforms.uvScale;
+        if (scale) scale.value.set(used ? used[0] / target.width : 1, used ? used[1] / target.height : 1);
         if (quad.texture === target.texture) return;
         quad.texture.dispose(); quad.texture = target.texture;
         quad.material.uniforms.map.value = target.texture;
@@ -981,7 +1065,8 @@ Reactor3D.GpuEffects = {
     /** Never wait on the GPU on the main thread, including timeout and context-loss paths. */
     read(entry, target, callback) {
         if (entry.disposed || entry.gl.isContextLost() || this._reads.size >= 4) return false;
-        const gl = entry.gl, width = target.width, height = target.height;
+        // Only the drawn corner of a target that grows in steps (see `target`).
+        const gl = entry.gl, width = target._rrUsed ? target._rrUsed[0] : target.width, height = target._rrUsed ? target._rrUsed[1] : target.height;
         const previous = gl.getParameter(gl.READ_FRAMEBUFFER_BINDING), pack = gl.getParameter(gl.PIXEL_PACK_BUFFER_BINDING);
         const buffer = gl.createBuffer(); let fence, timer, finished = false;
         const read = { entry, cancel: () => finish(null) };
@@ -1223,6 +1308,7 @@ Reactor3D.EffekseerScene = {
             uniforms.depth.value = uniforms.flip.value = 0;
             uniforms.rectMin.value.set(0, 0);
             uniforms.rectSize.value.set(1, 1);
+            uniforms.uvScale.value.set(1, 1);
             reused.mesh.visible = false;
             return reused;
         }
@@ -1232,7 +1318,9 @@ Reactor3D.EffekseerScene = {
             // `rectMin`/`rectSize`: the part of the screen the texture covers,
             // in screen fractions (the whole screen by default).
             uniforms: { map: { value: texture }, resolution: { value: new THREE.Vector2(1, 1) }, depth: { value: 0 }, flip: { value: 0 },
-                rectMin: { value: new THREE.Vector2(0, 0) }, rectSize: { value: new THREE.Vector2(1, 1) } },
+                rectMin: { value: new THREE.Vector2(0, 0) }, rectSize: { value: new THREE.Vector2(1, 1) },
+                // The drawn part of a target larger than its picture (GpuEffects.target).
+                uvScale: { value: new THREE.Vector2(1, 1) } },
             // A big vertical plane standing on the anchor, turned to face the
             // camera: its depth follows real height, so the part of a tall
             // effect near the floor is judged against what stands at the
@@ -1247,11 +1335,12 @@ Reactor3D.EffekseerScene = {
                 "uniform float flip;",
                 "uniform vec2 rectMin;",
                 "uniform vec2 rectSize;",
+                "uniform vec2 uvScale;",
                 "void main() {",
                 "    vec2 uv = (gl_FragCoord.xy / resolution - rectMin) / rectSize;",
                 "    if (uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0) discard;",
                 "    if (flip > 0.5) uv.y = 1.0 - uv.y;",
-                "    vec4 c = texture2D(map, uv);",
+                "    vec4 c = texture2D(map, uv * uvScale);",
                 "    if (c.a <= 0.002) discard;",
                 "    gl_FragColor = c;",
                 "}"
@@ -1705,6 +1794,8 @@ Reactor3D.EffekseerScene = {
                     }
                 } else {
                     efx._makeContextCurrent?.();
+                    // Drawn on the overlay's own buffer: the frame's overlay pass clears it.
+                    Graphics._effekseerOverlayDirty = true;
                     gl.viewport(0, 0, Math.round(screenW * s), Math.round(screenH * s));
                     gl.enable(gl.SCISSOR_TEST);
                     gl.scissor(drawX, drawY, drawW, drawH);
@@ -2052,10 +2143,10 @@ Reactor3D.registerPluginCommands = function() {
             // action is still pending the wait holds, once it starts it holds
             // until the action ends — and a repeating action releases after
             // its first full cycle (the restart bumps the action's frame).
-            this._reactorAnimWait = {
-                character, name, started: false, startedFrame: null,
+            this._reactorAnimWait = Reactor3D.holdWaitCharacter({
+                name, started: false, startedFrame: null,
                 deadline: (typeof Graphics !== "undefined" ? Graphics.frameCount : 0) + 1800
-            };
+            }, character);
             this.setWaitMode("reactorModelAnimation");
         }
     });
@@ -2094,8 +2185,7 @@ Reactor3D.registerPluginCommands = function() {
         const duration = Math.max(0, Math.round(Number(args && args.duration) || 0));
         const modes = ["actions", "duration", "switch", "variable"];
         const mode = modes.indexOf(String(args && args.mode)) >= 0 ? String(args.mode) : "actions";
-        this._reactorScopedWait = {
-            character,
+        this._reactorScopedWait = Reactor3D.holdWaitCharacter({
             mode,
             until: frame + duration,
             // A switch or variable wait is "resume when it happens": it may
@@ -2107,7 +2197,7 @@ Reactor3D.registerPluginCommands = function() {
             variableId: Math.max(1, Math.round(Number(args && args.variableId) || 1)),
             op: String((args && args.op) || ">="),
             value: Number(args && args.value) || 0
-        };
+        }, character);
         this.setWaitMode("reactorScopedWait");
         // The waiting event can let go of itself — resume its own route
         // instead of standing at attention while the wait holds. On by

@@ -2,7 +2,8 @@
 class ActionSequencePreview {
     constructor(editor) {
         this.editor=editor;this.mode='step';this.selection='user';this.tool='move';this.placements={};this.distance=14;this.hold=null;
-        this.observer=new ResizeObserver(()=>this.resize());this.observer.observe(editor.canvas);
+        // A resize clears the canvas, and a paused preview is painted only on request.
+        this.observer=new ResizeObserver(()=>{this.resize();this.editor.invalidatePreview?.();});this.observer.observe(editor.canvas);
         this.bindPointer();
     }
     disposeGizmos(){if(this.rings)RRPoseRings3D.dispose(this.rings);if(this.arrows)RRAxisArrows3D.dispose(this.arrows);this.rings=this.arrows=null;this.hold=null;}
@@ -17,7 +18,7 @@ class ActionSequencePreview {
         this.modeSelect=U.select([['step','Edit Step'],['formation','Arrange Preview']],this.mode,v=>{this.mode=v;e.stepPlayback=null;e.playing=false;if(v==='formation')e.frame=0;e.drawInspector();});row.append(this.modeSelect);
         this.selectionSelect=U.select([],this.selection,v=>{this.selection=v;e.playing=false;if(this.mode==='step'){const s=e.sequence.steps[e.selected];if(s&&(s.role!=='allTargets'||v==='user')){e.edit(()=>{s.role=v==='user'?'user':'target';s.targetIndex=v==='user'?undefined:Number(v.slice(6));});}}e.drawInspector();});row.append(this.selectionSelect);this.targetsChanged();
         this.toolSelect=U.select([['move','Move'],['rotate','Rotate']],this.tool,v=>this.setTool(v));row.append(this.toolSelect);
-        row.append(U.button('Zoom In',()=>this.zoom(.8)),U.button('Zoom Out',()=>this.zoom(1.25)),U.button('Reset View',()=>this.resetView()));
+        row.append(U.button('Reset View',()=>this.resetView()));
         // Zoomed in, the room's centre is not where the work is: following keeps the edited battler in frame.
         const follow=U.button('Frame Battler',()=>{this.follow=!this.follow;follow.setAttribute('aria-pressed',String(this.follow));e.savePrefs?.();});follow.setAttribute('aria-pressed',String(!!this.follow));follow.title=U.text('Keep the selected battler in the middle of the view');row.append(follow);this.followButton=follow;
     }
@@ -143,10 +144,11 @@ class ActionSequencePreview {
         return null;}
     /** The part under a click on the model: a carved part's mesh, or the rig bone whose limb the hit lies on. */
     partAt(key,event){const e=this.editor,view=e.preview,record=view?.models.get(key);if(!record?.object)return null;const rect=e.canvas.getBoundingClientRect(),ray=new THREE.Raycaster();ray.setFromCamera(new THREE.Vector2((event.clientX-rect.left)/rect.width*2-1,1-(event.clientY-rect.top)/rect.height*2),view.camera);
-        // A skinned mesh's preset sphere describes its rest geometry, not where the bones put the
-        // vertices, so it turns the ray away; a sphere that cannot miss lets three test the skinned triangles.
-        const skinned=[];record.object.traverse(o=>{if(o.isSkinnedMesh)skinned.push([o,o.boundingSphere]);});for(const [o] of skinned)o.boundingSphere=new THREE.Sphere(new THREE.Vector3(),1e6);
-        let hit;try{hit=ray.intersectObject(record.object,true)[0];}finally{for(const [o,sphere] of skinned)o.boundingSphere=sphere;}
+        // A skinned mesh's preset sphere and box describe its rest geometry, not where the bones put the
+        // vertices, so they turn the ray away (the box is there as soon as anything has measured the
+        // model); a sphere that cannot miss and no box let three test the skinned triangles.
+        const skinned=[];record.object.traverse(o=>{if(o.isSkinnedMesh)skinned.push([o,o.boundingSphere,o.boundingBox]);});for(const [o] of skinned){o.boundingSphere=new THREE.Sphere(new THREE.Vector3(),1e6);o.boundingBox=null;}
+        let hit;try{hit=ray.intersectObject(record.object,true)[0];}finally{for(const [o,sphere,box] of skinned){o.boundingSphere=sphere;o.boundingBox=box;}}
         if(!hit)return null;
         for(let node=hit.object;node&&node!==record.object;node=node.parent)if(node.userData?.parts?.length&&!Reactor3D.isRigJoint(node))return node.userData.parts[0].name;
         // A bone's limb runs from its origin to each child bone; the hit belongs to the limb it lies closest to.
@@ -159,6 +161,10 @@ class ActionSequencePreview {
             // A child wins a tie with its parent: the point where a limb meets the next belongs to the next.
             if(d<gap-1e-6||Math.abs(d-gap)<=1e-6&&best&&entry.mesh.parent&&record.binding.meshes.some(e=>e.mesh===entry.mesh.parent&&e.parts[0]?.name===best)){gap=d;best=entry.parts[0]?.name||null;}}
         return best;}
+    /** Whether a press lands on the thing the battler holds (its 3D model, or near its hand point for an icon). */
+    heldAt(key,event){const e=this.editor,view=e.preview,record=view?.models.get('extra:held:'+key),rect=e.canvas.getBoundingClientRect();
+        if(record?.object&&record.object.visible!==false){const ray=new THREE.Raycaster();ray.setFromCamera(new THREE.Vector2((event.clientX-rect.left)/rect.width*2-1,1-(event.clientY-rect.top)/rect.height*2),view.camera);if(ray.intersectObject(record.object,true).length)return true;}
+        return false;}
     /** A weapon step that shows or moves something: its gizmos sit on the held thing. */
     heldStep(s){return !!s&&s.type==='weapon'&&ReactorBattleData.weaponMode(s)!=='hide';}
     /** Where the held thing is at this step: a Move step keeps the Show step's hand and grip and only changes the pose keys. */
@@ -209,7 +215,7 @@ class ActionSequencePreview {
     bindPointer(){const e=this.editor,c=e.canvas,U=e.ui;
         c.onwheel=event=>{event.preventDefault();this.zoom(Math.exp(event.deltaY*.001));};
         c.oncontextmenu=event=>event.preventDefault();
-        c.title=U.text('Left-drag the gizmos or a battler. Right-drag orbits, middle-drag or Shift + right-drag pans, scroll zooms.');
+        c.title=U.text('Drag empty space to turn the view; drag a gizmo or a battler to move it. Shift-drag or middle-drag pans, scroll zooms.');
         c.onpointerdown=event=>{if((event.button===2||event.button===1)&&e.preview){if(this.startCameraDrag(event)){c.setPointerCapture(event.pointerId);event.preventDefault();}return;}
             if(event.button!==0||!e.preview)return;e.playing=false;
             const rect=c.getBoundingClientRect(),s=e.sequence.steps[e.selected],key=this.activeKey();let p=this.poses()[key];
@@ -222,8 +228,12 @@ class ActionSequencePreview {
             const ring=this.tool==='move'&&arrowHit?null:ringHit,arrow=ring?null:arrowHit;
             // A click on a rigged part of the model picks that part; the gizmos then move it. On a
             // Motion step that still plays a clip, this turns the step into a pose of that part.
-            if(this.mode==='step'&&s?.type==='motion'&&!ring&&!arrow){const part=this.partAt(key,event);if(part){e.pickPosePart(part);return;}if(posing)return;}
-            const hit=ring||arrow?key:this.pickBattler(event);if(!hit)return;
+            // A press on nothing (no gizmo, no part, no battler) turns the view: drag to orbit, Shift-drag to pan.
+            const turnView=()=>{if(this.startCameraDrag(event)){c.setPointerCapture(event.pointerId);event.preventDefault();}};
+            if(this.mode==='step'&&s?.type==='motion'&&!ring&&!arrow&&this.heldAt(key,event)&&e.editPoseWeapon()){return;}
+            if(this.mode==='step'&&s?.type==='motion'&&!ring&&!arrow){const part=this.partAt(key,event);if(part){e.pickPosePart(part);return;}if(posing){turnView();return;}}
+            if(this.mode==='step'&&heldNow&&s.withStep&&!ring&&!arrow&&!this.heldAt(key,event)){const part=this.partAt(key,event);if(part&&e.editPoseOfWeapon(part))return;}
+            const hit=ring||arrow?key:this.pickBattler(event);if(!hit){turnView();return;}
             if(hit!==key){this.selection=hit;if(this.mode==='step'&&s&&(s.role!=='allTargets'||hit==='user')){e.edit(()=>{s.role=hit==='user'?'user':'target';s.targetIndex=hit==='user'?undefined:Number(hit.slice(6));});}e.drawInspector();}
             if(!this.editable())return;
             if(this.mode==='step'){if(s.type==='motion')this.showTransformPose(s);else if(flying)e.showFlightFrame(s);else {e.stepPlayback=null;e.playing=false;e.asOfStep=true;e.frame=ReactorBattleData.timeline(e.sequence)[e.selected].end;}e.paint();}

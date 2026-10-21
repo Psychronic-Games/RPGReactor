@@ -35,7 +35,7 @@ class DatabaseArmorEditor {
         const generalSection = document.createElement('div');
         generalSection.className = 'database-section';
         generalSection.innerHTML = `
-            <div class="database-section-header">${tt('General')}</div>
+            <div class="database-section-header" data-section-key="general">${tt('General')}</div>
             <div class="database-section-content"><div class="db-general-grid">
                 <div style="display: flex; flex-direction: column; align-items: center; gap: 6px;">
                     <label style="font-size: 11px; color: var(--color-text-muted); font-weight: 600;">${tt('Icon')}</label>
@@ -111,7 +111,7 @@ class DatabaseArmorEditor {
         const paramsSection = document.createElement('div');
         paramsSection.className = 'database-section';
         paramsSection.innerHTML = `
-            <div class="database-section-header">${tt('Parameters')}</div>
+            <div class="database-section-header" data-section-key="parameters">${tt('Parameters')}</div>
             <div class="database-section-content">
                 <table class="traits-table">
                     <thead>
@@ -147,7 +147,7 @@ class DatabaseArmorEditor {
         traitsSection.setAttribute('tabindex', '0');
         traitsSection.style.outline = 'none';
         traitsSection.innerHTML = `
-            <div class="database-section-header">${tt('Traits')}</div>
+            <div class="database-section-header" data-section-key="traits">${tt('Traits')}</div>
             <div class="database-section-content">
                 <table class="traits-table" id="armor-traits-table-${armor.id}">
                     <thead>
@@ -198,11 +198,15 @@ class DatabaseArmorEditor {
         });
         if (passiveSection) gridWrapper.appendChild(passiveSection);
 
+        // Combat settings grouped by shared rules, Tactical movement and Action attacks.
+        const tacticsSection = window.RRTactics?.createSection({ kind: 'armor', record: armor, databaseManager: this.databaseManager });
+        if (tacticsSection) gridWrapper.appendChild(tacticsSection);
+
         // Note Section
         const noteSection = document.createElement('div');
         noteSection.className = 'database-section';
         noteSection.innerHTML = `
-            <div class="database-section-header">${tt('Note')}</div>
+            <div class="database-section-header" data-section-key="note">${tt('Note')}</div>
             <div class="database-section-content">
                 <textarea class="database-field-value" rows="4" style="width: 100%;" data-field="note" data-armor-id="${armor.id}">${rrEscapeHtml(armor.note)}</textarea>
             </div>

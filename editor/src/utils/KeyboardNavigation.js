@@ -16,7 +16,9 @@
  * focus that enters on open, Tab/Shift+Tab that stay inside, and Escape that
  * returns focus to whatever opened it. The listener lives on the overlay, so a
  * nested dialog appended later in <body> owns its own Escape and its parent
- * never sees it.
+ * never sees it. A dialog that redraws the control holding the focus leaves the
+ * focus on <body>, where the overlay hears nothing: one listener on the document
+ * hands such a key to the dialog on top (Escape closes it, Tab goes back inside).
  */
 (function (root) {
     'use strict';
@@ -193,6 +195,7 @@
         function dispose() {
             if (disposed) return;
             disposed = true;
+            openMenus.delete(controller);
             closeChild();
             doc.removeEventListener('keydown', onKeyDown, true);
             element.removeEventListener('mousemove', onPointerMove);
@@ -219,6 +222,7 @@
             restoreOpenerFocus: () => restoreFocus(opener, element)
         };
         element._rrMenuKeys = controller;
+        openMenus.add(controller);
 
         doc.addEventListener('keydown', onKeyDown, true);
         element.addEventListener('mousemove', onPointerMove);
@@ -229,6 +233,101 @@
         }
         if (options.activateFirst) move(1);
         return controller;
+    }
+
+    // Open menus own the keys; every installed dialog, so a key that reaches nobody finds the one on top.
+    const openMenus = new Set();
+    const modals = new Set();
+    let modalSerial = 0;
+    let modalsListening = false;
+
+    /** The overlays still in the page (one removed without dispose() is forgotten). */
+    function liveModals() {
+        for (const trap of Array.from(modals)) if (!connected(trap.overlay)) modals.delete(trap);
+        return Array.from(modals).filter(trap => visible(trap.overlay));
+    }
+
+    /**
+     * The dialog on top: the one under the middle of the window, where the page can say; else the one
+     * entered last. Null when something that is not one of these dialogs lies on top.
+     */
+    function topModal() {
+        const open = liveModals();
+        if (!open.length) return null;
+        const doc = root.document;
+        if (typeof doc.elementFromPoint === 'function' && root.innerWidth > 0) {
+            const hit = doc.elementFromPoint(root.innerWidth / 2, root.innerHeight / 2);
+            if (hit) return open.filter(trap => trap.overlay.contains(hit)).sort((a, b) => b.serial - a.serial)[0] || null;
+        }
+        return open.sort((a, b) => b.serial - a.serial)[0];
+    }
+
+    /** A key whose target is no control at all: the page itself, or an element a redraw took away. */
+    function strayKey(event, top) {
+        const doc = root.document, target = event.target;
+        if (!target || target === doc || target === doc.body || target === doc.documentElement || !connected(target)) return true;
+        // Focus left behind in a dialog under the one on top.
+        for (const trap of modals) if (trap !== top && trap.overlay.contains(target)) return true;
+        return false;
+    }
+
+    /** Hand the key to the element as if it had been pressed there, for an owner listening on its dialog. */
+    function replayKey(element, event) {
+        const Key = root.KeyboardEvent;
+        if (typeof Key !== 'function' || typeof element.dispatchEvent !== 'function') return false;
+        const copy = new Key('keydown', { key: event.key, code: event.code, shiftKey: !!event.shiftKey, bubbles: true, cancelable: true });
+        element.dispatchEvent(copy);
+        return copy.defaultPrevented;
+    }
+
+    /**
+     * An event command's dialog with no keyboard of its own lying on top (a layer in <body> classed
+     * `…-editor-modal`, with a `.rr-modal-close` button): Escape presses that button, wherever the focus
+     * was left (in it, on the page, on the command list underneath). Returns whether it did. The editors
+     * those dialogs open from are not such layers: Escape never closes one of them from here.
+     */
+    function closeUnkeyedDialog(event) {
+        const doc = root.document;
+        if (typeof doc.elementFromPoint !== 'function' || !(root.innerWidth > 0)) return false;
+        let layer = doc.elementFromPoint(root.innerWidth / 2, root.innerHeight / 2);
+        while (layer && layer.parentElement && layer.parentElement !== doc.body) layer = layer.parentElement;
+        if (!layer || layer.parentElement !== doc.body) return false;
+        if (!String(layer.className || '').split(/\s+/).some(name => /-editor-modal$/.test(name))) return false;
+        for (const trap of modals) if (trap.overlay === layer) return false;
+        const close = Array.from(layer.querySelectorAll('.rr-modal-close')).find(visible);
+        if (!close) return false;
+        // A key pressed in a control that has since gone was somebody else's, and they have answered it.
+        const target = event.target;
+        const page = !target || target === doc || target === doc.body || target === doc.documentElement;
+        if (!page && (!connected(target) || !visible(target))) return false;
+        close.click();
+        return true;
+    }
+
+    // Always listening, since such a dialog registers nothing, and on the window: a menu, a popup, a dialog
+    // with keys of its own and every owner listening on the document have had the key first.
+    function onUnkeyedEscape(event) {
+        if (event.key !== 'Escape' || event.defaultPrevented || event.altKey || event.metaKey || event.ctrlKey || event.shiftKey) return;
+        for (const controller of Array.from(openMenus)) if (!connected(controller.element)) openMenus.delete(controller);
+        if (openMenus.size || topModal()) return;
+        if (closeUnkeyedDialog(event)) event.preventDefault();
+    }
+    if (typeof root.addEventListener === 'function') root.addEventListener('keydown', onUnkeyedEscape);
+
+    // Bubble phase: a menu, a popup or an owner listening on the document has had the key first, and
+    // one that took it (preventDefault, or stopPropagation while capturing) is left to it.
+    function onStrayModalKey(event) {
+        if (event.defaultPrevented || (event.key !== 'Escape' && event.key !== 'Tab')) return;
+        if (event.altKey || event.metaKey || event.ctrlKey) return;
+        for (const controller of Array.from(openMenus)) if (!connected(controller.element)) openMenus.delete(controller);
+        if (openMenus.size) return;
+        const top = topModal();
+        if (!top || top.overlay.contains(event.target) || !strayKey(event, top)) return;
+        if (event.key === 'Escape' && !top.options.onEscape) {
+            if (replayKey(top.container(), event)) event.preventDefault();
+            return;
+        }
+        top.onKeyDown(event);
     }
 
     /** The visible controls Tab can reach inside `container`, in DOM order. */
@@ -248,12 +347,13 @@
         if (!overlay) return null;
         if (overlay._rrModalKeys) {
             overlay._rrModalKeys.options = { ...overlay._rrModalKeys.options, ...options };
+            overlay._rrModalKeys.register();
             return overlay._rrModalKeys;
         }
         const doc = root.document;
         const state = { options, opener: null };
 
-        const container = () => options.container?.() || overlay;
+        const container = () => state.options.container?.() || overlay;
         const onKeyDown = event => {
             if (event.key === 'Escape' && state.options.onEscape) {
                 if (event.defaultPrevented) return;
@@ -276,6 +376,14 @@
             }
         };
         overlay.addEventListener('keydown', onKeyDown);
+        const entry = { overlay, serial: ++modalSerial, onKeyDown, container, get options() { return state.options; } };
+        const register = () => {
+            liveModals();
+            entry.serial = ++modalSerial;
+            modals.add(entry);
+            if (!modalsListening) { doc.addEventListener('keydown', onStrayModalKey); modalsListening = true; }
+        };
+        register();
 
         const resolveInitial = () => {
             const wanted = state.options.initialFocus;
@@ -294,6 +402,7 @@
             set options(value) { state.options = value; },
             /** Remember the opener and move focus into the dialog. */
             enter(initial) {
+                register();
                 const active = doc.activeElement;
                 if (active && !overlay.contains(active)) state.opener = active;
                 const target = initial || resolveInitial();
@@ -308,9 +417,13 @@
                 if (opener) restoreFocus(opener, overlay);
             },
             get opener() { return state.opener; },
+            /** Shown again, or put back in the page: on top of the dialogs entered before it. */
+            register,
             dispose() {
                 overlay.removeEventListener('keydown', onKeyDown);
                 delete overlay._rrModalKeys;
+                modals.delete(entry);
+                if (!modals.size && modalsListening) { doc.removeEventListener('keydown', onStrayModalKey); modalsListening = false; }
             }
         };
         overlay._rrModalKeys = trap;

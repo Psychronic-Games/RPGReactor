@@ -203,7 +203,8 @@ class RRBgmSequenceEditor {
         this.pickTrack = options.pickTrack || (() => Promise.resolve(null));
         this.onEdit = options.onEdit || null;
         this.listTracks = options.listTracks || (() => []);
-        this.confirm = options.confirm || (message => (typeof confirm === 'function' ? confirm(message) : true));
+        // May answer at once (a host's own) or with a promise (the editor's dialog).
+        this.confirm = options.confirm || (message => RRDialog.confirm(message, { title: this.tt('Replace Entries'), ok: this.tt('Replace'), danger: true }));
         this.projectPath = options.projectPath || (() => null);
         this.preview = options.preview || (typeof RRSequencePreview !== 'undefined' ? RRSequencePreview : null);
         this.previewMessage = '';
@@ -362,15 +363,22 @@ class RRBgmSequenceEditor {
     applyStarter(id) {
         const entries = RRBgmSequenceEditor.starter(id, this.listTracks());
         const replacing = this.sequence.entries.length > 0;
-        if (entries && (!replacing || this.confirm(this.tt('Replace the entries in this list with the starter?')))) {
-            this.sequence.entries = entries;
+        const sequence = this.sequence;
+        const settle = yes => {
+            // The answer is for the list that was showing when it was asked.
+            if (yes && this.sequence === sequence) {
+                this.sequence.entries = entries;
+                this.render();
+                this.edited();
+                return true;
+            }
+            // Declined: redraw so the dropdown reads Starters… again.
             this.render();
-            this.edited();
-            return true;
-        }
-        // Declined: redraw so the dropdown reads Starters… again.
-        this.render();
-        return false;
+            return false;
+        };
+        if (!entries || !replacing) return settle(!!entries);
+        const answer = this.confirm(this.tt('Replace the entries in this list with the starter?'));
+        return answer && typeof answer.then === 'function' ? answer.then(settle) : settle(!!answer);
     }
 
     smallButton(action, path, label, title) {

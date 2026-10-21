@@ -255,7 +255,9 @@
     B.commandDefaults = type => Object.fromEntries([...(B.commands[type]?.fields||[]),...(B.extraFields[type]||[])].map(f=>[f.key,f.value]));
     const attachments=[pick('attachment','Attach To',['offset','rightHand','leftHand','center']),text('bone','Bone Name (blank = the hand)'),n('gripX','Grip X (0 left – 1 right)',.5),n('gripY','Grip Y (0 base – 1 top)',.5)];
     B.extraFields.weapon.unshift(pick('mode','Weapon',['show','move','hide']));
-    B.extraFields.weapon.push(...attachments,n('equipIndex','Equipment Slot (1 based)',1),pick('hands','Held With',['one','both']),pick('aim','Aim',['none','target']));
+    B.extraFields.weapon.push(...attachments,n('equipIndex','Equipment Slot (1 based)',1),pick('hands','Held With',['one','both']),pick('aim','Aim',['none','target']),
+        // How a hand holds a 3D model: 'hand' lays it along the forearm (steps saved before 2026-10-03 have no value and keep this); 'fist' closes the hand on its handle, in the hand's own frame.
+        pick('hold','Held By',['hand','fist']));
     // A weapon step shows the held thing, moves it (offset, rotation and
     // scale tween over the step's frames from where it was), or hides it.
     B.weaponMode=step=>step.visible===false?'hide':(step.mode||'show');
@@ -327,7 +329,7 @@
     // holder faces (an authored front face turns to it; a model without one
     // keeps the +90 long-axis assumption), tipped by the step's Tilt, turned
     // and rolled by Turn and Roll, held at the grip fraction of its height.
-    B.heldPlacement=(point,facing,step,spec)=>({x:point.x,y:point.y,z:point.z,facing:(facing||0)+(spec?.faces?.front?0:90),rotateX:-(step.rotation||0),rotateY:step.rotateY||0,rotateZ:step.rotateZ||0,scale:step.scale??1,pivotY:step.gripY??.5});
+    B.heldPlacement=(point,facing,step,spec)=>({x:point.x,y:point.y,z:point.z,facing:(facing||0)+(spec?.faces?.front?0:90),rotateX:-(step.rotation||0),rotateY:step.rotateY||0,rotateZ:step.rotateZ||0,scale:step.scale??1,pivotY:step.gripY??.5,offsetX:step.x||0,offsetY:step.y||0,offsetZ:step.z||0});
     B.extraFields.projectile=[pick('iconSource','Projectile Graphic',['color','action','weapon','icon','picture','model','animation']),n('iconIndex','Icon Index'),text('name','Picture File'),
         pick('destination','Destination',['target','allTargets','user','subject']),pick('sourceRole','Graphic Owner',['battler','user']),...attachments,n('equipIndex','Equipment Slot (1 based)',1),
         n('startHeight','Launch Height (tiles)',1),n('endHeight','Arrival Height (tiles)',1),n('arc','Arc Height (tiles)'),n('spin','Spin (degrees/frame)'),n('rotation','Rotation (degrees)'),n('scale','Scale',1),pick('flight','Flight',['oneWay','return'])];
@@ -380,7 +382,9 @@
     B.roles = B.targetGroups;
     B.templates = ['Unarmed Punch', 'Melee Strike', 'Projectile Shot', 'Cast on Target', 'Heal', 'Self Buff', 'Use Item', 'Throw Item', 'Throw Weapon', 'Boomerang', 'Item Toss', 'Sword Slash', 'Railgun Shot'];
     B.step = (type, extra = {}) => Object.assign({ id: 'step-' + Math.random().toString(36).slice(2), type,
-        duration: ['impact','sound','animation'].includes(type)||B.commands[type]&&!['jump','leap','float','fall','opacity','flash','tint','shake','whiten','picture','plane'].includes(type) ? 0 : 20, role: 'user', anchor: 'home', x: 0, y: 0, z: 0, easing: 'smooth' }, B.commandDefaults(type), extra);
+        duration: ['impact','sound','animation'].includes(type)||B.commands[type]&&!['jump','leap','float','fall','opacity','flash','tint','shake','whiten','picture','plane'].includes(type) ? 0 : 20, role: 'user', anchor: 'home', x: 0, y: 0, z: 0, easing: 'smooth' }, B.commandDefaults(type),
+        // A new Show step holds its weapon in the fist, by its own grip.
+        type === 'weapon' && (extra.mode || 'show') === 'show' && extra.visible !== false ? { hold: 'fist', gripY: 0 } : null, extra);
     B.basicSteps = ['Run to Target', 'Punch', 'Return Home'];
     B.basic = name => name === 'Run to Target' ? [
         B.step('motion', {motion:'run',duration:0}),
@@ -431,7 +435,7 @@
                 B.step('motion',{motion:'walk',duration:0}),
                 B.step('move',{anchor:'approach',x:-.3,duration:12,easing:'linear',face:'movement'}),
                 B.step('motion',{motion:'idle',duration:0}),
-                B.step('weapon',{mode:'show',iconSource:'weapon',attachment:'rightHand',x:.7,y:0,z:.35,rotation:160,gripY:0,duration:0}),
+                B.step('weapon',{mode:'show',iconSource:'weapon',attachment:'rightHand',x:.7,y:0,z:.35,rotation:160,gripY:0,duration:0,hold:'hand'}),
                 B.step('wait',{duration:30}),
                 swing(.2,1.65,70,3),swing(-.2,.7,-30,3),
                 B.step('animation',{animationSource:'action',role:'allTargets',animationId:0,duration:0}),
@@ -451,7 +455,7 @@
                 B.step('motion',{motion:'walk',duration:0}),
                 B.step('move',{anchor:'home',x:1,duration:8,easing:'smooth',face:'target'}),
                 B.step('motion',{motion:'missile',duration:0}),
-                B.step('weapon',{mode:'show',iconSource:'weapon',attachment:'rightHand',x:0,y:0,z:0,rotation:-30,duration:0}),
+                B.step('weapon',{mode:'show',iconSource:'weapon',attachment:'rightHand',x:0,y:0,z:0,rotation:-30,duration:0,hold:'hand'}),
                 aim(0,6),
                 B.step('wait',{duration:4}),
                 B.step('projectile',{iconSource:'color',color:'#9fe0ff',size:6,destination:'allTargets',attachment:'rightHand',arc:0,spin:0,duration:8}),

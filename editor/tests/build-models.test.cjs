@@ -68,7 +68,7 @@ test('Build\'s Select turns to Models with the model under the pointer', () => {
     assert.equal(props.tool, 'select');
     assert.equal(props.selectedId, 2);
     const view = read('editor/src/MapEditor3D.js');
-    assert.match(view, /const propHit = held \? null : this\.propAt\(event\.clientX, event\.clientY, true\);/, 'the pick checks models first, by their triangles');
+    assert.match(view, /const propHit = held \|\| water \? null : this\.propAt\(event\.clientX, event\.clientY, true\);/, 'the pick checks models by their triangles (water nearest under the pointer is left for the release, which turns to Terrain)');
     assert.match(view, /if \(hitId && manager\.tool === 'erase'\) \{\s*manager\.remove\(hitId\);/, 'the hammer removes in 3D');
     assert.match(view, /if \(point && manager\.placing\(\)\) \{/, 'the ground takes a model only while one is in hand');
     assert.match(read('editor/src/ModelPropsManager.js'), /if \(hit && this\.tool === 'erase'\) \{ this\.remove\(hit\.id\); return; \}/, 'and on the flat map');

@@ -38,7 +38,17 @@
     ReactorUI.MIN_FONT_SIZE = 8;
     // A disabled control or row left at the default opacity dims as stock windows do (translucentOpacity).
     ReactorUI.DISABLED_OPACITY = 160;
-    ReactorUI.NODE_TYPES = ["box", "image", "text", "button", "list", "gauge", "input", "battleWindow", "battleCursor"];
+    ReactorUI.NODE_TYPES = ["box", "image", "text", "button", "list", "gauge", "input", "battleWindow", "battleCursor",
+        "fightUnit", "fightTurnOrder", "fightInfo", "fightWindow",
+        "actionCrosshair", "actionVitals", "actionWeapon", "actionHotbar", "actionTarget", "actionBars", "actionDamage", "actionInfo",
+        "victoryParty", "victoryLevels", "victoryRewards", "victoryText"];
+    /** The Victory interface's shared half (reactor_ui_victory.js): node settings, pages, the fill and drawing. */
+    const VictoryHud = () => window.ReactorVictoryHud || null;
+    /** The Action and First Person battle HUD's shared half (reactor_ui_action.js). */
+    const ActionHud = () => window.ReactorActionHud || null;
+    /** The Tactical battle HUD's shared half (reactor_ui_fight.js): node settings, layout and drawing. */
+    const FightHud = () => window.ReactorFightHud || null;
+    ReactorUI.TACTICAL_FIELD = "reactorTacticalInterfaceId";
     /** The stock battle windows a Battle Window node places, by scene property. */
     ReactorUI.BATTLE_WINDOWS = {
         partyCommand: "_partyCommandWindow", actorCommand: "_actorCommandWindow", help: "_helpWindow",
@@ -97,12 +107,15 @@
     };
 
     /** Converts a physical rectangle to coordinates local to the scene's WindowLayer. */
-    ReactorUI.windowRect = function(rect, scene) {
+    ReactorUI.windowRect = function(rect, scene, fit) {
         const owner = scene && scene._mapScene || scene;
         const layer = owner && owner._windowLayer;
         const metrics = this.screenMetrics();
         const x = layer && Number.isFinite(Number(layer.x)) ? Number(layer.x) : metrics.boxX;
         const y = layer && Number.isFinite(Number(layer.y)) ? Number(layer.y) : metrics.boxY;
+        // A fitted record's rectangles are in its own units: the place is on the screen, the size stays the
+        // window's own (it is shown at fit.scale).
+        if (fit) return new Rectangle(Math.round(rect.x * fit.scale) - x, Math.round(rect.y * fit.scale) - y, rect.width, rect.height);
         return new Rectangle(rect.x - x, rect.y - y, rect.width, rect.height);
     };
     ReactorUI.SCENES = {
@@ -139,6 +152,14 @@
         SceneManager.exit();
     };
 
+    ReactorUI.TEST_DATA_URL = "data/Test_UserInterfaces.json";
+
+    /** The files to read, first found wins: a battle test reads the Test_ copy the editor wrote from its unsaved database, when it wrote one. */
+    ReactorUI.dataUrls = function() {
+        const testing = typeof DataManager !== "undefined" && typeof DataManager.isBattleTest === "function" && DataManager.isBattleTest();
+        return testing ? [this.TEST_DATA_URL, this.DATA_URL] : [this.DATA_URL];
+    };
+
     /** Loads the interfaces file once; missing or malformed means none. */
     ReactorUI.load = function() {
         if (this._state) return;
@@ -147,34 +168,46 @@
             window.$dataUserInterfaces = Array.isArray(parsed) ? parsed : [];
             this._state = "done";
         };
+        const urls = this.dataUrls();
         try {
             if (typeof Utils !== "undefined" && Utils.isNwjs()) {
                 const fs = require("fs");
                 const path = require("path");
-                const full = path.join(path.dirname(process.mainModule.filename), this.DATA_URL);
-                if (!fs.existsSync(full)) return finish(null);
-                return finish(JSON.parse(fs.readFileSync(full, "utf8")));
+                for (const url of urls) {
+                    const full = path.join(path.dirname(process.mainModule.filename), url);
+                    if (!fs.existsSync(full)) continue;
+                    try {
+                        return finish(JSON.parse(fs.readFileSync(full, "utf8")));
+                    } catch (error) {
+                        console.warn("ReactorUI: could not read " + url, error);
+                    }
+                }
+                return finish(null);
             }
         } catch (error) {
             console.warn("ReactorUI: could not read " + this.DATA_URL, error);
             return finish(null);
         }
-        try {
-            const xhr = new XMLHttpRequest();
-            xhr.open("GET", this.DATA_URL);
-            xhr.overrideMimeType("application/json");
-            xhr.onload = () => {
-                let parsed = null;
-                if (xhr.status < 400) {
-                    try { parsed = JSON.parse(xhr.responseText); } catch (error) { parsed = null; }
-                }
-                finish(parsed);
-            };
-            xhr.onerror = () => finish(null);
-            xhr.send();
-        } catch (error) {
-            finish(null);
-        }
+        const request = index => {
+            if (index >= urls.length) return finish(null);
+            try {
+                const xhr = new XMLHttpRequest();
+                xhr.open("GET", urls[index]);
+                xhr.overrideMimeType("application/json");
+                xhr.onload = () => {
+                    let parsed = null;
+                    if (xhr.status < 400) {
+                        try { parsed = JSON.parse(xhr.responseText); } catch (error) { parsed = null; }
+                    }
+                    if (parsed === null && index + 1 < urls.length) request(index + 1); else finish(parsed);
+                };
+                xhr.onerror = () => request(index + 1);
+                xhr.send();
+            } catch (error) {
+                request(index + 1);
+            }
+        };
+        request(0);
     };
 
     ReactorUI.isReady = function() {
@@ -488,7 +521,8 @@
             opacity: clamp(Math.round(finite(source.opacity, 255)), 0, 255),
             visible: this.normalizeCondition(source.visible),
             // Box / button surface
-            fill: oneOf(source.fill, ["window", "color", "gradient", "none"], type === "text" || type === "image" || type === "gauge" ? "none" : "window"),
+            fill: oneOf(source.fill, ["window", "color", "gradient", "none"], type === "text" || type === "image" || type === "gauge" || type === "fightTurnOrder" || type === "fightInfo"
+                || (type.startsWith("action") && type !== "actionVitals" && type !== "actionWeapon") || type.startsWith("victory") ? "none" : "window"),
             color: isHexColor(source.color) ? source.color : "#000000",
             color2: isHexColor(source.color2) ? source.color2 : "#000000",
             fillOpacity: clamp(Math.round(finite(source.fillOpacity, 160)), 0, 255),
@@ -530,6 +564,8 @@
             battleWindow: oneOf(source.battleWindow, Object.keys(this.BATTLE_WINDOWS), "actorCommand"),
             hideWindow: !!source.hideWindow,
             followActor: !!source.followActor,
+            // What a following window follows: the actor's row in the party panel ("slot"), or the actor as it stands in the battle ("model").
+            followTarget: source.followTarget === "model" ? "model" : "slot",
             slideX: clamp(Math.round(finite(source.slideX, 0)), -2000, 2000),
             slideY: clamp(Math.round(finite(source.slideY, 0)), -2000, 2000),
             slideDuration: clamp(Math.round(finite(source.slideDuration, 12)), 1, 120),
@@ -630,6 +666,16 @@
             se: this.normalizeSe(source.se)
         };
         if(node.rowLayout==='actorPanel' && (source.actorLayoutVersion || 0)<3 && !node.actorFields.includes('states')) node.actorFields.push('states');
+        const fightHud = FightHud();
+        if (fightHud && fightHud.isFightNode(type)) Object.assign(node, fightHud.normalizeProps(source, type));
+        const actionHud = ActionHud();
+        if (actionHud && actionHud.isActionNode(type)) Object.assign(node, actionHud.normalizeProps(source, type));
+        const victoryHud = VictoryHud();
+        if (victoryHud) {
+            // In a Victory record any node may belong to one page; the victory nodes carry their own settings too.
+            node.victoryPage = victoryHud.normalizePage(source.victoryPage);
+            if (victoryHud.isVictoryNode(type)) Object.assign(node, victoryHud.normalizeProps(source, type));
+        }
         return node;
     };
 
@@ -673,10 +719,11 @@
             unique.push(node);
         }
         if (source.coordinateSpace !== "screen") this.migrateLegacyCoordinates(unique);
-        return {
+        return this.fitRecord({
             id: Math.max(0, Math.floor(finite(source.id, 0))),
+            design: this.normalizeDesign(source.design),
             name: text(source.name, ""),
-            mode: oneOf(source.mode, ["scene", "overlay", "battle"], "scene"),
+            mode: oneOf(source.mode === "fight" ? "tactical" : source.mode, ["scene", "overlay", "battle", "tactical", "action", "firstPerson", "victory"], "scene"),
             hideStatusWindow: source.hideStatusWindow !== false,
             background: oneOf(source.background, ["blur", "dim", "none"], "blur"),
             visible: this.normalizeCondition(source.visible),
@@ -692,7 +739,7 @@
             menuCommandVersion: 2,
             roles: Array.from(new Set((Array.isArray(source.roles) ? source.roles : source.stock ? [source.stock] : [])
                 .filter(role => Object.prototype.hasOwnProperty.call(this.REPLACEMENTS || {}, role))))
-        };
+        });
     };
 
     //-------------------------------------------------------------------------
@@ -735,6 +782,142 @@
         // nothing authored silently disappears.
         for (const node of nodes) if (!ordered.includes(node)) ordered.push(node);
         return ordered;
+    };
+
+    // <interface-fit>
+    // The same text stands in editor/src/utils/InterfaceFit.js (a test pins the two), so the editor's canvas
+    // previews a record at another screen size exactly as the game lays it out.
+    /**
+     * A record designed for one screen, laid out for another. Returns null when the sizes are the same (nothing
+     * changes), else { scale, width, height, nodes }: `scale` is the one factor everything is shown at (the
+     * smaller of the two ratios, so nothing leaves the screen), `width` x `height` is the screen in the record's
+     * own units (the design frame, wider or taller where the screen's shape differs), and `nodes` are the nodes
+     * placed in that frame. Sizes are not stretched: in a scene the design frame stands in the middle of the
+     * screen; in a HUD each node keeps to the edge or the middle it stood at. A node that covers its frame from
+     * side to side keeps covering it.
+     */
+    function fitInterfaceNodes(nodes, design, screen, mode, anchors, mainFontSize) {
+        const dw = Math.round(Number(design && design.width) || 0), dh = Math.round(Number(design && design.height) || 0);
+        const sw = Math.round(Number(screen && screen.width) || 0), sh = Math.round(Number(screen && screen.height) || 0);
+        if (!(dw > 0 && dh > 0 && sw > 0 && sh > 0) || (dw === sw && dh === sh)) return null;
+        const base = Math.min(sw / dw, sh / dh);
+        const SPAN = 0.05, NEAR = 0.02;
+        const list = Array.isArray(nodes) ? nodes : [];
+        const byId = new Map(list.map(node => [node.id, node]));
+        // Text that would show smaller than is easy to read (12 px on a screen 480 high, 14 px from 720 up) is
+        // shown at that size instead, when every layer still stands on the screen clear of its neighbours.
+        const main = Number(mainFontSize) > 0 ? Number(mainFontSize) : 0;
+        const sizes = main ? list.filter(node => node && !["box", "image", "battleCursor"].includes(node.type)).map(node => Number(node.fontSize) > 0 ? Number(node.fontSize) : main) : [];
+        const floor = Math.max(12, Math.min(14, 12 + (sh - 480) / 120));
+        const larger = sizes.length ? [floor / Math.min(...sizes), floor / main].map(f => Math.min(1, f)).filter((f, i, all) => f > base + 0.001 && all.indexOf(f) === i).sort((p, q) => q - p) : [];
+        for (const scale of larger) {
+            const fit = layoutAt(scale, Math.round(sw / scale), Math.round(sh / scale), true);
+            if (fit) return fit;
+        }
+        return layoutAt(base, Math.max(dw, Math.round(sw / base)), Math.max(dh, Math.round(sh / base)), false);
+
+      function layoutAt(scale, width, height, strict) {
+        const before = new Map(), after = new Map();
+        const designFrame = { x: 0, y: 0, width: dw, height: dh }, screenFrame = { x: 0, y: 0, width, height };
+        const spans = (m0, m1, size, frame) => size > 0 && frame > 0 && Math.abs(m0) <= frame * SPAN && Math.abs(m1) <= frame * SPAN;
+        // One axis of one node: where it starts and how long it is in the new frame.
+        const place = (p0, size, f0, fsize, F0, Fsize, framed) => {
+            const m0 = p0 - f0, m1 = f0 + fsize - (p0 + size);
+            if (framed) return [F0 + (Fsize - fsize) / 2 + m0, size];
+            if (!(fsize > 0)) return [F0 + m0, size];
+            if (spans(m0, m1, size, fsize)) return [F0 + m0, Math.max(0, Fsize - m0 - m1)];
+            if (Math.abs(m0 - m1) <= Math.max(2, fsize * NEAR)) return [F0 + (Fsize - size) / 2 + (m0 - m1) / 2, size];
+            return m0 <= m1 ? [F0 + m0, size] : [F0 + Fsize - m1 - size, size];
+        };
+        const solve = (node, trail) => {
+            if (after.has(node.id)) return;
+            const parent = byId.get(node.parent);
+            let from = designFrame, to = screenFrame, root = true;
+            if (parent && parent !== node && !trail.has(node.id)) {
+                trail.add(node.id);
+                solve(parent, trail);
+                from = before.get(parent.id); to = after.get(parent.id); root = false;
+            }
+            const a = anchors[node.anchor] || [0, 0];
+            const w = Math.max(0, Number(node.width) || 0), h = Math.max(0, Number(node.height) || 0);
+            const rect = { x: from.x + from.width * a[0] - w * a[0] + (Number(node.x) || 0), y: from.y + from.height * a[1] - h * a[1] + (Number(node.y) || 0), width: w, height: h };
+            before.set(node.id, rect);
+            // An offset from something that moves (the acting actor's row, a battler) is not a place on the screen.
+            if (node.type === "battleCursor" || (node.type === "battleWindow" && node.followActor)) {
+                after.set(node.id, { x: to.x + rect.x - from.x, y: to.y + rect.y - from.y, width: w, height: h, keep: true });
+                return;
+            }
+            const wide = spans(rect.x - from.x, from.x + from.width - rect.x - w, w, from.width);
+            const tall = spans(rect.y - from.y, from.y + from.height - rect.y - h, h, from.height);
+            const framed = root && mode === "scene" && !(wide && tall);
+            const [x, fw] = place(rect.x, w, from.x, from.width, to.x, to.width, framed);
+            const [y, fh] = place(rect.y, h, from.y, from.height, to.y, to.height, framed);
+            after.set(node.id, { x, y, width: fw, height: fh, to, a });
+        };
+        for (const node of list) solve(node, new Set());
+        if (strict) {
+            // Nothing that stood inside its parent leaves it, and no two neighbours that stood apart now touch.
+            const inside = (r, f) => r.x >= f.x - 1 && r.y >= f.y - 1 && r.x + r.width <= f.x + f.width + 1 && r.y + r.height <= f.y + f.height + 1;
+            const apart = (p, q) => p.x + p.width <= q.x + 1 || q.x + q.width <= p.x + 1 || p.y + p.height <= q.y + 1 || q.y + q.height <= p.y + 1;
+            const frameOf = (node, map, whole) => { const parent = byId.get(node.parent); return parent && parent !== node && map.has(parent.id) ? map.get(parent.id) : whole; };
+            for (let i = 0; i < list.length; i++) {
+                const node = list[i], was = before.get(node.id), now = after.get(node.id);
+                if (!now || now.keep) continue;
+                if (inside(was, frameOf(node, before, designFrame)) && !inside(now, frameOf(node, after, screenFrame))) return null;
+                for (let j = i + 1; j < list.length; j++) {
+                    const other = list[j], then = after.get(other.id);
+                    if (!then || then.keep || (other.parent || 0) !== (node.parent || 0)) continue;
+                    if (apart(was, before.get(other.id)) && !apart(now, then)) return null;
+                }
+            }
+        }
+        const fitted = list.map(node => {
+            const rect = after.get(node.id);
+            if (!rect || rect.keep) return node;
+            const w = node.width > 0 ? Math.round(rect.width) : 0, h = node.height > 0 ? Math.round(rect.height) : 0;
+            return Object.assign({}, node, {
+                x: Math.round(rect.x - (rect.to.x + rect.to.width * rect.a[0] - rect.width * rect.a[0])),
+                y: Math.round(rect.y - (rect.to.y + rect.to.height * rect.a[1] - rect.height * rect.a[1])),
+                width: w, height: h
+            });
+        });
+        return { scale, width, height, nodes: fitted };
+      }
+    }
+    // </interface-fit>
+
+    ReactorUI.fitInterfaceNodes = fitInterfaceNodes;
+
+    /** The size a record was designed for: { width, height }, or null when it does not say. */
+    ReactorUI.normalizeDesign = function(raw) {
+        const width = Math.round(Number(raw && raw.width) || 0), height = Math.round(Number(raw && raw.height) || 0);
+        return width >= 160 && height >= 120 && width <= 16384 && height <= 16384 ? { width, height } : null;
+    };
+
+    /**
+     * Fits a normalized record to the screen it runs on (or to `screen`, for a preview). A record that names no
+     * design size, or whose design size is the screen's, is returned as it is: `fit` stays null and nothing in
+     * its layout changes. Otherwise its nodes are placed in the screen's frame in the record's own units and
+     * `fit` says how large to show them: every window is made at its designed size and shown at `fit.scale`,
+     * so text, padding and line height shrink or grow together.
+     */
+    ReactorUI.fitRecord = function(record, screen) {
+        record.fit = null;
+        if (!record.design) return record;
+        const target = screen || (typeof Graphics !== "undefined" && Number(Graphics.width) > 0 && Number(Graphics.height) > 0
+            ? { width: Graphics.width, height: Graphics.height } : null);
+        const font = typeof $dataSystem !== "undefined" && $dataSystem && $dataSystem.advanced ? Number($dataSystem.advanced.fontSize) || 26 : 26;
+        // A Victory record keeps its layers together in the middle of the screen, as a scene does.
+        const fit = target ? fitInterfaceNodes(record.nodes, record.design, target, record.mode === "victory" ? "scene" : record.mode, this.ANCHORS, font) : null;
+        if (!fit) return record;
+        record.nodes = fit.nodes;
+        record.fit = { scale: fit.scale, width: fit.width, height: fit.height };
+        return record;
+    };
+
+    /** How large a node window is shown: 1 unless its record was fitted to another screen. */
+    ReactorUI.shownScale = function(window) {
+        return window && window._uiFitScale > 0 ? window._uiFitScale : 1;
     };
 
     /** Screen-space rectangle of a node given its parent's rectangle. */
@@ -1540,11 +1723,14 @@
             return false;
         }
         let depth = 0;
-        for (const scene of SceneManager._stack) if (scene === Scene_ReactorUI) depth++;
+        for (const scene of SceneManager._stack) if (this.isInterfaceClass(scene)) depth++;
         if (depth >= this.MAX_NESTING) {
             console.warn("ReactorUI: interface nesting limit reached");
             return false;
         }
+        // Called over an open interface (by its action, a plugin or a script), that one comes back when this closes.
+        const current = SceneManager._scene;
+        if (current instanceof Scene_ReactorUI && !current._closing) current.rememberForPush();
         SceneManager.push(Scene_ReactorUI);
         SceneManager.prepareNextScene(Number(id));
         return true;
@@ -2355,7 +2541,8 @@
             else if (event.key === "Escape") { event.preventDefault(); this._uiScene.cancelInput(this); }
         };
         dom.addEventListener("keydown", keydown);
-        dom.addEventListener("keyup", event => { if (!(this._uiScene._characterGrid && gridKeys.includes(event.key))) event.stopPropagation(); });
+        // Key releases go on to the game: a movement key held as the field opened and let go
+        // while typing stayed down for the 3D camera, and the player walked on by itself after.
         dom.addEventListener("input", () => this.setDraft(dom.value));
         // Clicking the game canvas takes focus away; typing should still land here.
         dom.addEventListener("blur", () => setTimeout(() => { if (this._uiDom === dom) dom.focus(); }, 0));
@@ -3363,6 +3550,15 @@
     Scene_ReactorUI.prototype = Object.create(Scene_MenuBase.prototype);
     Scene_ReactorUI.prototype.constructor = Scene_ReactorUI;
 
+    /**
+     * Whether a class on SceneManager's stack is this scene. pixi_compat wraps
+     * the global after this file loads, so the stack holds the wrapper, which
+     * shares this prototype.
+     */
+    ReactorUI.isInterfaceClass = function(sceneClass) {
+        return !!sceneClass && sceneClass.prototype === Scene_ReactorUI.prototype;
+    };
+
     Scene_ReactorUI.prototype.initialize = function() {
         Scene_MenuBase.prototype.initialize.call(this);
         this._interfaceId = 0;
@@ -3493,8 +3689,18 @@
         if (focus >= 0) this.setFocus(focus);
     };
 
+    /** Keeps this interface's state for when the scene pushed over it pops back; once per push. */
     Scene_ReactorUI.prototype.rememberForPush = function() {
+        if (this._pushRemembered) return;
         ReactorUI._resumeStates.push(this.resumeState());
+        this._pushRemembered = true;
+    };
+
+    /** Takes back the state rememberForPush kept, when the push it was for did not happen. */
+    Scene_ReactorUI.prototype.forgetPush = function() {
+        if (!this._pushRemembered) return;
+        ReactorUI._resumeStates.pop();
+        this._pushRemembered = false;
     };
 
     Scene_ReactorUI.prototype.create = function() {
@@ -3509,7 +3715,8 @@
         this._interface = ReactorUI.interface(this._interfaceId);
         if (this._interface && this._interface.openTransition !== "none") this._transitionPhase = "opening";
         Scene_MenuBase.prototype.create.call(this);
-        if (this._interface) {
+        // A Victory record is drawn by the Victory interface itself, over this scene (Playtest Interface).
+        if (this._interface && this._interface.mode !== "victory") {
             this.createNodes();
             if (this._resumeState) this.restoreResumeState(this._resumeState);
             this.applyInterfaceTransition(this._transitionPhase === "opening" ? 0 : 1);
@@ -3548,7 +3755,10 @@
 
     Scene_ReactorUI.prototype.createNodes = function() {
         if (this.prepareActorContexts) this.prepareActorContexts();
-        const root = new Rectangle(0, 0, Graphics.width, Graphics.height);
+        // A record fitted to another screen is laid out in its own units and shown at fit.scale.
+        const fit = this._interface.fit || null;
+        const root = fit ? new Rectangle(0, 0, fit.width, fit.height) : new Rectangle(0, 0, Graphics.width, Graphics.height);
+        const onScreen = rect => fit ? new Rectangle(Math.round(rect.x * fit.scale), Math.round(rect.y * fit.scale), Math.round(rect.width * fit.scale), Math.round(rect.height * fit.scale)) : rect;
         const rects = new Map();
         const byId = new Map();
         for (const node of this._interface.nodes) byId.set(node.id, node);
@@ -3591,9 +3801,30 @@
                 (this._battleNodes || (this._battleNodes = [])).push({ node, rect });
                 continue;
             }
+            // Tactical nodes exist in a Tactical Battle HUD alone: in any other record (a Classic Battle HUD, a scene) they are nothing.
+            const tacticalNode = node.type === "fightUnit" || node.type === "fightTurnOrder" || node.type === "fightInfo" || node.type === "fightWindow";
+            if (tacticalNode && this._interface.mode !== "tactical") continue;
+            // And the Action nodes in an Action or First Person Battle HUD alone. Three of them are sprites, not windows.
+            const actionNode = node.type.startsWith("action") && ReactorUI.NODE_TYPES.includes(node.type);
+            if (actionNode && this._interface.mode !== "action" && this._interface.mode !== "firstPerson") continue;
+            if (node.type === "actionCrosshair" || node.type === "actionBars" || node.type === "actionDamage") {
+                (this._actionNodes || (this._actionNodes = [])).push({ node, rect: onScreen(rect) });
+                continue;
+            }
+            // A Tactical Window node places a stock tactical window the same way.
+            if (node.type === "fightWindow") {
+                (this._fightNodes || (this._fightNodes = [])).push({ node, rect });
+                continue;
+            }
+            // The Victory nodes exist in a Victory record alone.
+            const victoryNode = node.type.startsWith("victory") && ReactorUI.NODE_TYPES.includes(node.type);
+            if (victoryNode && this._interface.mode !== "victory") continue;
             if (rect.width <= 0 || rect.height <= 0) continue;
-            const WindowClass = node.type === "list" ? Window_ReactorUIList : Window_ReactorUINode;
-            const window = new WindowClass(ReactorUI.windowRect(rect, this), this, node);
+            const WindowClass = node.type === "list" ? Window_ReactorUIList
+                : node.type === "fightUnit" || node.type === "fightTurnOrder" || node.type === "fightInfo" ? Window_ReactorUIFight
+                : actionNode ? Window_ReactorUIAction : victoryNode ? Window_ReactorUIVictory : Window_ReactorUINode;
+            const window = new WindowClass(ReactorUI.windowRect(rect, this, fit), this, node);
+            if (fit && window.scale) { window.scale.set(fit.scale, fit.scale); window._uiFitScale = fit.scale; }
             window._uiPhysicalRect = rect;
             window._uiLayoutX = window.x;
             window._uiLayoutY = window.y;
@@ -3612,7 +3843,8 @@
     /** Re-measures auto-sized text and repositions it and anchored descendants. */
     Scene_ReactorUI.prototype.refreshNodeLayouts = function() {
         if (!this._interface) return;
-        const root = new Rectangle(0, 0, Graphics.width, Graphics.height);
+        const fit = this._interface.fit || null;
+        const root = fit ? new Rectangle(0, 0, fit.width, fit.height) : new Rectangle(0, 0, Graphics.width, Graphics.height);
         const rects = new Map();
         const byId = new Map(this._interface.nodes.map(node => [node.id, node]));
         const resolve = (node, trail) => {
@@ -3630,7 +3862,7 @@
         };
         for (const window of this._nodeWindows) {
             const rect = resolve(window.node(), new Set());
-            const local = ReactorUI.windowRect(rect, this);
+            const local = ReactorUI.windowRect(rect, this, fit);
             const resized = window.width !== local.width || window.height !== local.height;
             if (window.x !== local.x || window.y !== local.y || resized) window.move(local.x, local.y, local.width, local.height);
             if (resized && window.createContents) window.createContents();
@@ -3657,6 +3889,10 @@
             console.warn("ReactorUI: user interface " + this._interfaceId + " does not exist");
             if (this._role) ReactorUI.gotoStockRole(this._role);
             else this.popScene();
+            return;
+        }
+        if (this._interface.mode === "victory") {
+            Victory.preview(this);
             return;
         }
         if (this._role === "title") {
@@ -3780,18 +4016,36 @@
         return true;
     };
 
+    /** Undoes a close whose next interface could not open: this one shows again and takes input. */
+    Scene_ReactorUI.prototype.cancelClose = function() {
+        this._closing = false;
+        this._transitionPhase = "opening";
+        this.applyInterfaceTransition(1);
+        this._transitionPhase = "idle";
+        const focused = this.focusedWindow();
+        if (focused && focused.node().type === "list") focused.activate();
+    };
+
     Scene_ReactorUI.prototype.updateConditions = function() {
-        const authored = new Map(this._interface.nodes.map(node => [node.id, node]));
-        const shown = (node, trail) => {
-            if (!node || trail.has(node.id) || !ReactorUI.evaluateCondition(node.visible, this)) return false;
-            const parent = authored.get(node.parent);
-            if (!parent || parent === node) return true;
-            trail.add(node.id);
-            return shown(parent, trail);
+        // Runs every frame: the node table is kept per interface, and a parent chain longer than the
+        // node count is a cycle (shown as hidden).
+        if (this._authoredFor !== this._interface) {
+            this._authoredFor = this._interface;
+            this._authoredNodes = new Map(this._interface.nodes.map(node => [node.id, node]));
+        }
+        const authored = this._authoredNodes;
+        const shown = node => {
+            for (let depth = 0; node && depth <= authored.size; depth++) {
+                if (!ReactorUI.evaluateCondition(node.visible, this)) return false;
+                const parent = authored.get(node.parent);
+                if (!parent || parent === node) return true;
+                node = parent;
+            }
+            return false;
         };
         for (const window of this._nodeWindows) {
             const node = window.node();
-            window.visible = shown(node, new Set());
+            window.visible = shown(node);
             if (node.type === "button" || node.type === "list") window.setEnabled(ReactorUI.evaluateCondition(node.enabled, this));
         }
         const focused = this.focusedWindow();
@@ -3803,7 +4057,7 @@
     Scene_ReactorUI.prototype.update = function() {
         this._inputHandled = false;
         Scene_MenuBase.prototype.update.call(this);
-        if (!this._interface) return;
+        if (!this._interface || this._interface.mode === "victory") return;
         this.updateInterfaceTransition();
         if (!this.acceptsInput()) return;
         // A field marked to start typing does so once the interface is up (Name Input, a terminal prompt).
@@ -3995,7 +4249,7 @@
     Scene_ReactorUI.prototype.closeAll = function() {
         this.beginCloseTransition(() => {
             const stack = SceneManager._stack;
-            while (stack.length > 0 && stack[stack.length - 1] === Scene_ReactorUI) {
+            while (stack.length > 0 && ReactorUI.isInterfaceClass(stack[stack.length - 1])) {
                 stack.pop();
                 ReactorUI._resumeStates.pop();
             }
@@ -4007,8 +4261,19 @@
     Scene_ReactorUI.prototype.pushScene = function(sceneClass, args = []) {
         this.beginCloseTransition(() => {
             this.rememberForPush();
-            SceneManager.push(sceneClass);
-            if(args.length) SceneManager.prepareNextScene(...args);
+            const depth = SceneManager._stack.length;
+            try {
+                SceneManager.push(sceneClass);
+                if(args.length) SceneManager.prepareNextScene(...args);
+            } catch (error) {
+                // A scene that throws while being made leaves this interface open and taking input.
+                console.error("ReactorUI: scene failed to open", error);
+                SceneManager._stack.length = depth;
+                SceneManager._nextScene = null;
+                this.forgetPush();
+                SoundManager.playBuzzer();
+                this.cancelClose();
+            }
         });
     };
 
@@ -4173,8 +4438,9 @@
                 this.beginCloseTransition(() => {
                     this.rememberForPush();
                     if (!ReactorUI.call(action.id)) {
-                        ReactorUI._resumeStates.pop();
+                        this.forgetPush();
                         SoundManager.playBuzzer();
+                        this.cancelClose();
                     }
                 });
                 break;
@@ -4422,7 +4688,19 @@
         };
         const height = this.calcWindowHeight(9, true);
         const width = Math.min(Graphics.boxWidth, 624);
-        const y = Math.min(field.y + field.height + 8, Graphics.boxHeight - height);
+        // Under the box the field stands in (its face and frame), not under the field alone: the grid covered
+        // the lower part of the Name box on every screen size.
+        let under = field.y + field.height * ReactorUI.shownScale(field);
+        // (A record whose parents name each other is walked once round.)
+        const walked = new Set([node.id]);
+        for (let id = node.parent; id && !walked.has(id); ) {
+            walked.add(id);
+            const holder = (this._nodeWindows || []).find(candidate => candidate.node().id === id);
+            if (!holder) break;
+            under = Math.max(under, holder.y + holder.height * ReactorUI.shownScale(holder));
+            id = holder.node().parent;
+        }
+        const y = Math.min(under + 8, Graphics.boxHeight - height);
         const grid = new Window_NameInput(new Rectangle(Math.floor((Graphics.boxWidth - width) / 2), Math.max(0, y), width, height));
         grid.setEditWindow(edit);
         grid.setHandler("ok", () => this.commitInput(field, true));
@@ -4639,6 +4917,1662 @@
     }
 
     //-------------------------------------------------------------------------
+    // Tactical battle HUD: a Tactical Battle HUD record over Scene_Map while
+    // a Tactical battle runs on the map. It is its own thing: a Classic
+    // battle (Scene_Battle, its Battle HUD record, its stock windows) never
+    // reads any of it, and the other map modes (Action, First Person) show
+    // none of it. Unit Panels, the Turn Order strip and Battle Text lines draw
+    // the battle's own values (reactor_ui_fight.js draws them, the same on
+    // the editor's canvas); Tactical Window nodes place the stock tactical
+    // command, skill and item windows. A node redraws only when the battle
+    // says something it shows has changed. A project that binds no record
+    // gets the stock layout, sized for its screen.
+
+    function Window_ReactorUIFight() {
+        this.initialize(...arguments);
+    }
+
+    window.Window_ReactorUIFight = Window_ReactorUIFight;
+    Window_ReactorUIFight.prototype = Object.create(Window_ReactorUINode.prototype);
+    Window_ReactorUIFight.prototype.constructor = Window_ReactorUIFight;
+
+    Window_ReactorUIFight.prototype.initialize = function(rect, scene, node) {
+        const hud = FightHud();
+        this._fightReader = null;
+        this._fightRevision = NaN;
+        this._fightShown = false;
+        this._fightAlpha = 1;
+        this._fightAwaited = false;
+        this._fightUnit = null;
+        this._fightView = hud ? hud.newUnitView() : null;
+        this._fightText = "";
+        this._fightTeam = "";
+        this._fightPortraits = 0;
+        this._fightViewKey = NaN;
+        this._fightHold = 0;
+        this._fightCycle = 0;
+        this._fightCycleFrame = 0;
+        this._fightArea = {};
+        this._fightMenuKey = 0;
+        this._fightMenu = { kind: "", symbol: "", enabled: true, item: null };
+        this._banner = hud ? hud.bannerState() : null;
+        this._bannerHold = false;
+        this._turnLayout = { size: 0, big: 0, top: 0, count: 0, marker: 0, ids: [], xs: [], sizes: [], entries: [] };
+        this._turnBefore = [];
+        this._turnTileSize = 0;
+        this._turnSlides = [];
+        this._turnHp = {};
+        this._turnSprites = new Map();
+        this._turnPool = [];
+        this._turnMoving = false;
+        this._turnStamp = 0;
+        this._turnMore = [];
+        Window_ReactorUINode.prototype.initialize.call(this, rect, scene, node);
+    };
+
+    Window_ReactorUIFight.prototype.usesSkin = function() {
+        return this._uiNode.fill === "window";
+    };
+
+    /** Room between a painted panel's edge and its parts (a skinned one has the window's own padding). */
+    Window_ReactorUIFight.prototype.fightInset = function() {
+        const node = this._uiNode;
+        return node.type === "fightUnit" && (node.fill === "color" || node.fill === "gradient") ? 8 : 0;
+    };
+
+    Window_ReactorUIFight.prototype.refresh = function() {
+        if (!this.contents) return;
+        this.contents.clear();
+        if (this.contentsBack) this.contentsBack.clear();
+        this.drawSurface();
+        this.drawFight();
+        this.syncVisualState();
+    };
+
+    Window_ReactorUIFight.prototype.drawFight = function() {
+        const hud = FightHud();
+        const node = this._uiNode;
+        this._fightAwaited = false;
+        if (!hud || !this._fightReader) return;
+        const theme = ReactorUI.fightTheme();
+        const context = this.contents.context;
+        const inset = this.fightInset();
+        const width = this.contentsWidth() - inset * 2, height = this.contentsHeight() - inset * 2;
+        let ready = true;
+        context.save();
+        context.translate(inset, inset);
+        if (node.type === "fightUnit") {
+            if (this._fightUnit) ready = hud.drawUnit(context, width, height, node, this._fightView, theme);
+        } else if (node.type === "fightInfo") {
+            hud.drawInfo(context, width, height, node, this._fightText, theme, this._fightTeam);
+        }
+        context.restore();
+        this._fightAwaited = !ready;
+        touch(this.contents);
+    };
+
+    /** Once a frame while the battle runs: redraw what changed, and say whether the node shows at all. */
+    Window_ReactorUIFight.prototype.updateFight = function(reader) {
+        const hud = FightHud();
+        const node = this._uiNode;
+        if (!hud || !reader) { this._fightShown = false; return; }
+        this._fightReader = reader;
+        const revision = reader.tacticalRevision();
+        // A picture that was still loading is drawn on the frame it arrives; a model's portrait on the frame it is made.
+        const portraits = ReactorUI.FightPortraits.version;
+        const pictured = portraits !== this._fightPortraits;
+        let changed = revision !== this._fightRevision || pictured || (this._fightAwaited && ReactorUI.fightTheme().settled());
+        this._fightPortraits = portraits;
+        // An army's units act together and the battle changes many times a second: its unit panels and turn strip
+        // follow a few times a second then, the last change always shown. The player's own turn is followed at once.
+        if (node.type !== "fightInfo") {
+            if (this._fightHold > 0) this._fightHold--;
+            if (changed && this._fightHold > 0 && !pictured && reader.overlaps && reader.overlaps() && !reader.awaitsPlayer()) changed = false;
+            else if (changed) this._fightHold = ReactorUI.FIGHT_ARMY_FRAMES;
+        }
+        if (node.type === "fightUnit") {
+            // An action that lands on several units: the focused panel steps through them, a couple of seconds each.
+            if (node.fightUnit === "focused") {
+                if (revision !== this._fightRevision) { this._fightCycle = 0; this._fightCycleFrame = 0; }
+                else if (this._fightView.area && ++this._fightCycleFrame >= ReactorUI.FIGHT_CYCLE_FRAMES) {
+                    this._fightCycleFrame = 0;
+                    this._fightCycle++;
+                    changed = true;
+                }
+            }
+            if (changed) {
+                this._fightRevision = revision;
+                const unit = hud.panelUnit(node, reader, this._fightCycle);
+                this._fightUnit = unit;
+                if (unit) {
+                    const before = this._fightView.id === unit.id ? (this._fightView.hpShown >= 0 ? this._fightView.hpShown : this._fightView.hp) : -1;
+                    // The forecast is for a unit the aimed action would land on: never the acting unit under its own cursor.
+                    const view = hud.fillUnitView(this._fightView, reader, unit, typeof $dataSystem === "undefined" || !$dataSystem || $dataSystem.optDisplayTp !== false,
+                        node.fightUnit === "focused" ? hud.previewFor(reader, unit) : null);
+                    // The same unit with other HP: the bar runs to it over the next frames. Another unit: its bar as it is.
+                    view.hpShown = before >= 0 && before !== view.hp ? before : -1;
+                    if (!view.model) view.model = ReactorUI.fightModelOf(unit);
+                    if (view.preview) view.area = hud.areaSummary(reader, unit, this._fightArea);
+                }
+                // The battle says something changed many times a second while an army acts; this panel is drawn again
+                // only when what it shows did (another unit, other numbers, a picture that arrived).
+                const key = unit ? hud.viewKey(this._fightView) : 0;
+                if (key !== this._fightViewKey || pictured || this._fightAwaited || this._fightView.hpShown >= 0) {
+                    this._fightViewKey = key;
+                    this.refresh();
+                }
+            }
+            else if (this._fightUnit && this._fightView.hpShown >= 0) {
+                const view = this._fightView, gap = view.hp - view.hpShown;
+                view.hpShown = Math.abs(gap) <= Math.max(1, view.mhp * 0.004) ? -1 : view.hpShown + gap * 0.16;
+                this.refresh();
+            }
+            this._fightShown = !!this._fightUnit;
+        } else if (node.type === "fightTurnOrder") {
+            if (changed) {
+                this._fightRevision = revision;
+                this.layoutTurnOrder(hud, reader, pictured);
+            }
+            if (this._turnMoving) this.moveTurnSprites();
+            this._fightShown = this._turnLayout.count > 0;
+        } else if (node.fightInfo === "phase") {
+            // The banner plays the phase's words each time the turn passes to a side, and after them what the
+            // battle announces (a new goal): `bannerStep` keeps their order. Behind the battle menu it waits.
+            const banner = this._banner || (this._banner = hud.bannerState());
+            let team = banner.team, phase = "", notice = banner.notice;
+            if (changed) {
+                this._fightRevision = revision;
+                team = reader.currentTeam ? reader.currentTeam() : "any";
+                phase = hud.phaseText(node, reader);
+                notice = hud.bannerNotice(reader);
+            }
+            if (hud.bannerStep(banner, node.bannerFrames, changed, team, phase, notice, this._bannerHold)) {
+                this._fightText = banner.text;
+                this._fightTeam = banner.team;
+                this.refresh();
+            }
+            this._fightAlpha = banner.alpha;
+            this._fightShown = banner.alpha > 0;
+        } else {
+            // The hint also follows the highlighted row of the menu that is up (why it cannot be chosen).
+            let menu = null;
+            if (node.fightInfo === "hint") {
+                menu = ReactorUI.fightMenuRow(this._fightMenu);
+                const key = menu ? menu.key : 0;
+                if (key !== this._fightMenuKey) { this._fightMenuKey = key; changed = true; }
+            }
+            if (changed) {
+                this._fightRevision = revision;
+                let value = hud.infoText(node, reader, menu, ReactorUI.fightTheme().terms);
+                // An army rests for a frame or two between its units' acts: the line stays up rather than blink.
+                if (!value && node.fightInfo === "hint" && this._fightText && reader.tacticalState() === "idle"
+                    && reader.overlaps && reader.overlaps() && !reader.awaitsPlayer()) value = this._fightText;
+                const team = reader.currentTeam ? reader.currentTeam() : "any";
+                if (value !== this._fightText || team !== this._fightTeam) {
+                    this._fightText = value;
+                    this._fightTeam = team;
+                    this.refresh();
+                }
+            }
+            this._fightShown = this._fightText !== "";
+        }
+    };
+
+    /**
+     * One sprite per turn tile: a tile is redrawn when what it shows changes (its side, whether it acts or has
+     * acted, its size, its HP line), and moves when its place does. Tiles that keep their order slide together; a
+     * tile that would cross others on its way (it acted and goes behind them, the sides changed places), a new
+     * one and a count box come up at their place once whatever is sliding has left it: no two ever overlap.
+     */
+    Window_ReactorUIFight.prototype.layoutTurnOrder = function(hud, reader, redraw) {
+        const node = this._uiNode;
+        const layout = hud.turnLayout(node, this.contentsWidth(), this.contentsHeight(), reader.turnOrder() || [], this._turnLayout);
+        const theme = ReactorUI.fightTheme();
+        const stamp = ++this._turnStamp;
+        // Every tile's picture is as large as the acting unit's: a unit whose turn begins grows in the picture it has.
+        const cellWidth = layout.big, cellHeight = layout.big + layout.marker + 2;
+        const before = this._turnBefore;
+        for (let i = 0; i < layout.count; i++) {
+            const known = this._turnSprites.get(layout.ids[i]);
+            before[i] = known && !known._turnArrives ? known.x : NaN;
+        }
+        // Tiles that grew (units fell and the rest have more room) would stand on their neighbors at their old places:
+        // that layout is taken at once, with no sliding.
+        const grew = this._turnTileSize > 0 && layout.size > this._turnTileSize;
+        this._turnTileSize = layout.size;
+        const animate = node.turnAnimate && !grew;
+        const slides = animate ? hud.turnSliders(before, layout.count, this._turnSlides) : null;
+        let awaited = false;
+        for (let i = 0; i < layout.count; i++) {
+            const id = layout.ids[i], entry = layout.entries[i], size = layout.sizes[i];
+            let sprite = this._turnSprites.get(id);
+            const fresh = !sprite;
+            if (fresh) {
+                sprite = this._turnPool.pop() || new Sprite(ReactorUI.hudBitmap(cellWidth, cellHeight));
+                sprite._turnKey = -1;
+                sprite.visible = true;
+                sprite._turnArrives = false;
+                this._turnSprites.set(id, sprite);
+                if (!sprite.parent) {
+                    if (this.addInnerChild) this.addInnerChild(sprite); else this.addChild(sprite);
+                }
+            }
+            if (sprite.bitmap.width !== cellWidth || sprite.bitmap.height !== cellHeight) {
+                const old = sprite.bitmap;
+                sprite.bitmap = ReactorUI.hudBitmap(cellWidth, cellHeight);
+                if (old && old._rrHud && old.destroy) { old._rrHud = false; old.destroy(); }
+                sprite._turnKey = -1;
+            }
+            sprite._turnStamp = stamp;
+            sprite._turnX = layout.xs[i];
+            sprite._turnSize = size;
+            sprite.y = entry.active ? 0 : layout.top;
+            // The acting tile reaches a little past its place on both sides: one that begins (or ends) acting on its
+            // way keeps the place it is at, and grows (or shrinks) around it.
+            const over = entry.active ? layout.top : 0;
+            if (!fresh) sprite.x += (sprite._turnOver || 0) - over;
+            sprite._turnOver = over;
+            if (!animate) { sprite.x = sprite._turnX; sprite.alpha = 1; sprite._turnArrives = false; }
+            else if (fresh || !slides[i]) {
+                // One already coming up at this very place goes on coming up; any other starts unseen at its new place.
+                if (fresh || !sprite._turnArrives || Math.abs(sprite._turnX - sprite.x) > 0.5) { sprite.x = sprite._turnX; sprite.alpha = 0; sprite._turnArrives = true; }
+            }
+            const unit = reader.unit ? reader.unit(id) : null;
+            // Only the battler is needed to know whether the tile changed: the unit's full details are read when it is drawn.
+            const battler = !unit ? null : typeof reader.battler === "function" ? reader.battler(unit) : (reader.unitInfo(unit) || {}).battler;
+            // The HP line as it will be drawn: its filled pixels, and whether it is in the warning color.
+            const hp = battler && battler.mhp > 0
+                ? hud.turnHpFill(hud.turnHpRect(size, entry.active ? 3 : 2, this._turnHp).width, battler.hp, battler.mhp) + (battler.hp / battler.mhp < 0.25 ? 512 : 0) : -1;
+            const key = (entry.active ? 1 : 0) + (entry.acted ? 2 : 0) + (entry.team === "enemy" ? 4 : entry.team === "neutral" ? 8 : 0) + size * 16 + (entry.watch ? 8192 : 0) + (hp + 1) * 16384;
+            if (key !== sprite._turnKey || sprite._turnAwaited || redraw) {
+                sprite.bitmap.clear();
+                if (unit) {
+                    const view = hud.fillUnitView(this._fightView, reader, unit, false, null);
+                    if (!view.model) view.model = ReactorUI.fightModelOf(unit);
+                    sprite._turnAwaited = !hud.drawTurnCell(sprite.bitmap.context, size, layout.marker, node, entry, this._fightView, theme);
+                }
+                sprite._turnKey = key;
+                touch(sprite.bitmap);
+            }
+            awaited = awaited || !!sprite._turnAwaited;
+        }
+        for (const [id, sprite] of this._turnSprites) {
+            if (sprite._turnStamp === stamp) continue;
+            sprite.visible = false;
+            this._turnSprites.delete(id);
+            this._turnPool.push(sprite);
+        }
+        // The units the strip has no room for: a box with their count at the end of each side (two at most), redrawn
+        // only when its count or its side changes.
+        for (let i = 0; i < layout.chipCount; i++) {
+            const chip = layout.chips[i];
+            let more = this._turnMore[i];
+            if (!more || more.bitmap.width !== layout.size) {
+                if (more && more.parent) more.parent.removeChild(more);
+                if (more && more.bitmap && more.bitmap._rrHud && more.bitmap.destroy) { more.bitmap._rrHud = false; more.bitmap.destroy(); }
+                more = this._turnMore[i] = new Sprite(ReactorUI.hudBitmap(layout.size, layout.size));
+                more._moreKey = "";
+                more.visible = false;
+                if (this.addInnerChild) this.addInnerChild(more); else this.addChild(more);
+            }
+            if (!animate) { more.alpha = 1; more._turnArrives = false; }
+            else if (!more.visible || more.x !== chip.x) { more.alpha = 0; more._turnArrives = true; }
+            more.visible = true;
+            more.x = more._turnX = chip.x;
+            more.y = layout.top;
+            more._turnSize = layout.size;
+            const key = chip.count * 4 + (chip.team === "enemy" ? 1 : chip.team === "ally" ? 2 : chip.team ? 3 : 0);
+            if (key !== more._moreKey) {
+                more._moreKey = key;
+                more.bitmap.clear();
+                hud.drawTurnMore(more.bitmap.context, layout.size, chip.count, theme, chip.team ? hud.teamColor(node, chip.team) : "");
+                touch(more.bitmap);
+            }
+        }
+        for (let i = layout.chipCount; i < this._turnMore.length; i++) this._turnMore[i].visible = false;
+        // Whatever stands still (a tile coming up, a count box) and now lies on a sliding tile's way goes out of
+        // sight until the way is clear.
+        if (animate) {
+            for (const sprite of this._turnSprites.values()) if (sprite._turnArrives && sprite.alpha > 0 && this.turnPlaceCrossed(sprite)) sprite.alpha = 0;
+            for (const more of this._turnMore) if (more.visible && more.alpha > 0 && this.turnPlaceCrossed(more)) { more.alpha = 0; more._turnArrives = true; }
+        }
+        this._fightAwaited = awaited;
+        this._turnMoving = true;
+    };
+
+    /** Whether a sliding tile stands on a still one's place now or has yet to pass over it. */
+    Window_ReactorUIFight.prototype.turnPlaceCrossed = function(sprite) {
+        const left = sprite.x, right = sprite.x + sprite._turnSize;
+        for (const other of this._turnSprites.values()) {
+            if (other === sprite || other._turnArrives) continue;
+            if (Math.min(other.x, other._turnX) < right && left < Math.max(other.x, other._turnX) + other._turnSize) return true;
+        }
+        return false;
+    };
+
+    Window_ReactorUIFight.prototype.moveTurnSprites = function() {
+        let moving = false;
+        for (const sprite of this._turnSprites.values()) {
+            if (sprite._turnArrives) continue;
+            const distance = sprite._turnX - sprite.x;
+            if (Math.abs(distance) > 0.5) { sprite.x += distance * 0.25; moving = true; } else sprite.x = sprite._turnX;
+        }
+        for (const sprite of this._turnSprites.values()) if (sprite._turnArrives && this.arriveTurnSprite(sprite)) moving = true;
+        for (const more of this._turnMore) if (more.visible && more._turnArrives && this.arriveTurnSprite(more)) moving = true;
+        this._turnMoving = moving;
+    };
+
+    /**
+     * A tile coming up at its place, a step more visible; it waits, unseen, while a sliding tile stands on its
+     * place or has yet to pass over it. Returns whether it is still on its way.
+     */
+    Window_ReactorUIFight.prototype.arriveTurnSprite = function(sprite) {
+        if (sprite.alpha <= 0 && this.turnPlaceCrossed(sprite)) return true;
+        sprite.alpha = Math.min(1, sprite.alpha + 0.125);
+        if (sprite.alpha < 1) return true;
+        sprite._turnArrives = false;
+        return false;
+    };
+
+    /**
+     * The unit whose turn tile is under a point of the screen, or 0: the Tactical HUD's strip can be clicked to
+     * look at a unit (the battle asks this of a press before it reads the press for the map under the strip).
+     */
+    ReactorUI.fightStripUnit = function(x, y) {
+        const scene = typeof SceneManager !== "undefined" ? SceneManager._scene : null;
+        const hud = scene && scene._reactorFightHud;
+        if (!hud || !hud._nodeWindows || !(hud._visibilityAlpha === undefined || hud._visibilityAlpha > 0)) return 0;
+        const layer = scene._windowLayer;
+        const ox = layer ? Number(layer.x) || 0 : 0, oy = layer ? Number(layer.y) || 0 : 0;
+        for (const window of hud._nodeWindows) {
+            if (!window._turnSprites || !window.visible || !window._fightShown) continue;
+            // A record fitted to another screen is shown at its fit's scale; its tiles are laid out in its own units.
+            const scale = window._uiFitScale > 0 ? window._uiFitScale : 1, padding = Number(window.padding) || 0;
+            const px = (x - ox - window.x) / scale - padding, py = (y - oy - window.y) / scale - padding;
+            for (const [id, sprite] of window._turnSprites) {
+                if (!sprite.visible || !(sprite.alpha > 0)) continue;
+                if (px >= sprite.x && py >= sprite.y && px < sprite.x + sprite._turnSize && py < sprite.y + sprite._turnSize) return id;
+            }
+        }
+        return 0;
+    };
+
+    /**
+     * Whether a point of the screen is on one of the HUD's unit panels that can be seen. A panel covers the map:
+     * what lies behind it is not pointed at through it.
+     */
+    ReactorUI.fightPanelAt = function(x, y) {
+        const scene = typeof SceneManager !== "undefined" ? SceneManager._scene : null;
+        const hud = scene && scene._reactorFightHud;
+        if (!hud || !hud._nodeWindows || !(hud._visibilityAlpha === undefined || hud._visibilityAlpha > 0)) return false;
+        const layer = scene._windowLayer;
+        const px = x - (layer ? Number(layer.x) || 0 : 0), py = y - (layer ? Number(layer.y) || 0 : 0);
+        for (const window of hud._nodeWindows) {
+            const node = window._uiNode;
+            if (!node || node.type !== "fightUnit" || !window.visible || !window._fightShown) continue;
+            // A record fitted to another screen is shown at its fit's scale.
+            const scale = window._uiFitScale > 0 ? window._uiFitScale : 1;
+            if (px >= window.x && py >= window.y && px < window.x + window.width * scale && py < window.y + window.height * scale) return true;
+        }
+        return false;
+    };
+
+    /** Fonts, colors, terms and pictures as the game has them, for the shared drawing. */
+    ReactorUI.fightTheme = function() {
+        if (this._fightTheme) return this._fightTheme;
+        const face = $gameSystem.mainFontFace();
+        const theme = {
+            _pending: null,
+            font: (size, bold) => (bold ? "bold " : "") + size + "px " + face,
+            textColor: ColorManager.normalColor(), systemColor: ColorManager.systemColor(),
+            outlineColor: ColorManager.outlineColor(), outlineWidth: 3,
+            crisisColor: ColorManager.crisisColor(), deathColor: ColorManager.deathColor(),
+            gauge: {
+                hp: [ColorManager.hpGaugeColor1(), ColorManager.hpGaugeColor2()],
+                mp: [ColorManager.mpGaugeColor1(), ColorManager.mpGaugeColor2()],
+                tp: [ColorManager.tpGaugeColor1(), ColorManager.tpGaugeColor2()],
+                back: ColorManager.gaugeBackColor()
+            },
+            terms: { level: TextManager.levelA, hp: TextManager.hpA, mp: TextManager.mpA, tp: TextManager.tpA },
+            paletteColor: index => ColorManager.textColor(index),
+            iconSize: ImageManager.iconWidth || 32,
+            faceSize: ImageManager.faceWidth || 144,
+            // A picture as something a canvas draws: null while it loads, false when there is none.
+            picture(bitmap) {
+                if (!bitmap || (bitmap.isError && bitmap.isError())) return false;
+                if (!bitmap.isReady()) { this._pending = bitmap; return null; }
+                return bitmap._canvas || bitmap._image || bitmap.canvas || false;
+            },
+            face(name) { return this.picture(ImageManager.loadFace(name)); },
+            character(name) { return this.picture(ImageManager.loadCharacter(name)); },
+            // Outside the image cache: a map battle may never have shown this picture, and a missing one must not stop the game.
+            enemy(name) { return this.picture(ReactorUI.softImage(($gameSystem.isSideView() ? "sv_enemies/" : "enemies/") + name)); },
+            icons() { return this.picture(ImageManager.loadSystem("IconSet")); },
+            // A model's portrait: a canvas, null while it is being made, false when there is none to be had.
+            thumbnail(model) { return ReactorUI.fightThumbnail(model); },
+            /** Whether the picture a drawing last waited for has arrived (or failed). */
+            settled() {
+                const bitmap = this._pending;
+                if (bitmap && !bitmap.isReady() && !(bitmap.isError && bitmap.isError())) return false;
+                this._pending = null;
+                return true;
+            }
+        };
+        this._fightTheme = theme;
+        return theme;
+    };
+
+    //-------------------------------------------------------------------------
+    // Model portraits. A unit shown by a 3D model has its portrait made
+    // from the model itself: a copy of the model, lit from beside the camera,
+    // drawn once into a small target on the map's own renderer and read back
+    // into a canvas the HUD draws like any picture. A rigged humanoid is
+    // framed on its head and shoulders (the rig's head-top and chin markers),
+    // anything else whole, from the front quarter. One portrait is worked on
+    // per frame at most and never while a unit walks or an action plays; a
+    // model's pictures and shaders arrive late, so it is drawn again until
+    // two drawings agree. The picture is fetched from the graphics card
+    // without waiting for it (a fetch that waits costs a whole frame's work
+    // each time), and a finished portrait is kept by model and variant for the
+    // session, so the next battle makes none again. Nothing here runs without
+    // the 3D runtime.
+
+    ReactorUI.FIGHT_CYCLE_FRAMES = 110;
+    // Frames between two redraws of a unit panel or the turn strip while an army acts by itself.
+    ReactorUI.FIGHT_ARMY_FRAMES = 10;
+
+    ReactorUI.FightPortraits = {
+        SIZE: 128,
+        // Drawn at twice the size it is kept at: the model is found in the picture and cut out to fill the portrait.
+        DRAWN: 256,
+        // The target holds linear light; a picture holds sRGB bytes.
+        encode: true,
+        // Frames between drawings of one portrait, and how many drawings at most.
+        WAIT: 24,
+        TRIES: 8,
+        CONTEXT: { willReadFrequently: true },
+        // Finished portraits kept across battles, at most.
+        KEEP: 96,
+        version: 0,
+        entries: new Map(),
+        queue: [],
+        // The portrait whose picture is on its way back from the graphics card.
+        pending: null,
+        target: null,
+        targetGeneration: -1,
+        pixels: null,
+        scratch: null,
+        lut: null,
+
+        available() {
+            return typeof Reactor3D !== "undefined" && typeof THREE !== "undefined" && !!Reactor3D.isLoaded && Reactor3D.isLoaded()
+                && !!Reactor3D.loadModel && !!Reactor3D.cloneModelTemplate && !!Reactor3D.acquireViewport;
+        },
+
+        keyOf(model) {
+            return model && model.name ? [model.name, model.file || "", model.ext || "", model.variant || "", model.texture || ""].join("|") : "";
+        },
+
+        /** The portrait of a model if it has been made already; nothing is started. */
+        peek(model) {
+            const entry = this.entries.get(this.keyOf(model));
+            return entry && !entry.failed && entry.canvas ? entry.canvas : false;
+        },
+
+        /** The portrait of a model: a canvas, null while it is being made, false when there is none to be had. */
+        get(model) {
+            const key = this.keyOf(model);
+            if (!key) return false;
+            let entry = this.entries.get(key);
+            if (!entry) {
+                if (!this.available()) return false;
+                entry = { key, model, canvas: null, failed: false, scene: null, camera: null, object: null, template: null, tries: 0, wait: 0, coverage: -1, loading: true };
+                this.entries.set(key, entry);
+                this.queue.push(entry);
+                this.load(entry);
+            }
+            return entry.failed ? false : entry.canvas;
+        },
+
+        fail(entry) {
+            entry.failed = true;
+            entry.loading = false;
+            this.release(entry);
+            this.version++;
+        },
+
+        load(entry) {
+            const R = Reactor3D, spec = entry.model;
+            Promise.all([R.loadModel(spec.name, spec.ext, spec.file, spec.texture), R.loadModelSidecar ? R.loadModelSidecar(spec.name) : null]).then(([template, sidecar]) => {
+                if (this.entries.get(entry.key) !== entry) return;
+                if (!template) { this.fail(entry); return; }
+                if (R.groundAnimatedTemplate) R.groundAnimatedTemplate(template, sidecar);
+                const object = R.cloneModelTemplate(template);
+                if (R.applyModelTransform && R.readModelTransform) R.applyModelTransform(object, R.readModelTransform(sidecar, spec));
+                const rig = R.readModelRig ? R.readModelRig(sidecar) : null;
+                if (rig && R.applyModelRig) R.applyModelRig(object, rig);
+                else {
+                    if (R.carveModelParts && R.readModelParts) R.carveModelParts(object, R.readModelParts(sidecar));
+                    if (R.applyPivotOverrides && R.readModelPivots) R.applyPivotOverrides(object, R.readModelPivots(sidecar));
+                }
+                // The variant this unit wears: its surface, color adjustment and texture.
+                if (R.applyModelSurface && R.variantSurface) R.applyModelSurface(object, R.variantSurface(sidecar, spec));
+                if (R.applyModelLook && R.modelLook) R.applyModelLook(object, R.modelLook(sidecar, spec));
+                const extent = template.userData.glbSize || { x: 1, y: 1, z: 1 };
+                object.scale.setScalar(1.6 / Math.max(extent.x, extent.y, extent.z, 0.0001));
+                if (R.applyEventModelPose) R.applyEventModelPose(object, { pitch: spec.pitch, yaw: spec.yaw, roll: spec.roll, faces: spec.faces }, 2, { preview: true, faceYaw: 0 });
+                // A posed, skinned mesh is not where its resting bounds say: in a close-up it would be culled away.
+                object.traverse(child => { if (child.isMesh) child.frustumCulled = false; });
+                const scene = new THREE.Scene();
+                scene.add(object);
+                scene.add(new THREE.HemisphereLight(0xffffff, 0x8a94a6, 1.7));
+                const camera = new THREE.PerspectiveCamera(30, 1, 0.05, 50);
+                const sun = new THREE.DirectionalLight(0xffffff, 1.8);
+                scene.add(sun);
+                entry.head = this.frame(object, rig, sidecar, extent, camera, sun);
+                Object.assign(entry, { scene, camera, object, template, loading: false, wait: 0 });
+            }).catch(error => {
+                console.warn("ReactorUI: no portrait for " + spec.name, error);
+                this.fail(entry);
+            });
+        },
+
+        /**
+         * Aim the camera: at the head and shoulders of a rigged humanoid (the
+         * rig's head-top and chin markers, where they fall inside the model,
+         * else its top seventh), else at the whole model from the front quarter.
+         */
+        frame(object, rig, sidecar, extent, camera, sun) {
+            object.updateMatrixWorld(true);
+            // The model's resting size, standing on the ground about its middle (a skinned mesh has no box worth
+            // measuring until it has been drawn once).
+            const half = new THREE.Vector3(extent.x, extent.y, extent.z).multiplyScalar(object.scale.x / 2);
+            const box = new THREE.Box3(new THREE.Vector3(-half.x, 0, -half.z), new THREE.Vector3(half.x, half.y * 2, half.z));
+            const size = box.getSize(new THREE.Vector3()), center = box.getCenter(new THREE.Vector3());
+            const fov = camera.fov * Math.PI / 180;
+            const markers = rig && rig.markers ? rig.markers : null;
+            let head = null;
+            if (markers && markers.headTop && markers.chin) {
+                const top = object.localToWorld(new THREE.Vector3(...markers.headTop)), chin = object.localToWorld(new THREE.Vector3(...markers.chin));
+                const grown = box.clone().expandByScalar(Math.max(size.x, size.y, size.z) * 0.08);
+                if (grown.containsPoint(top) && grown.containsPoint(chin) && top.y > chin.y) head = { top, chin };
+            }
+            // A humanoid whose markers do not sit in this copy: the top seventh of it is its head.
+            if (!head && sidecar && sidecar.rig && sidecar.rig.template === "humanoid") {
+                head = { top: new THREE.Vector3(center.x, box.max.y, center.z), chin: new THREE.Vector3(center.x, box.max.y - size.y * 0.14, center.z) };
+            }
+            if (head) {
+                const span = (head.top.y - head.chin.y) * 2.15;
+                const middle = new THREE.Vector3((head.top.x + head.chin.x) / 2, head.top.y - span * 0.4, (head.top.z + head.chin.z) / 2);
+                const distance = Math.max(0.2, (span / 2) / Math.tan(fov / 2));
+                camera.position.set(middle.x + distance * 0.22, middle.y + distance * 0.05, middle.z + distance);
+                camera.lookAt(middle);
+            } else {
+                // From the front quarter, as close as keeps every corner of its box in the picture.
+                const yaw = 0.6, pitch = 0.32, tan = Math.tan(fov / 2);
+                const back = new THREE.Vector3(Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), Math.cos(yaw) * Math.cos(pitch));
+                const right = new THREE.Vector3(0, 1, 0).cross(back).normalize(), up = back.clone().cross(right).normalize();
+                const corner = new THREE.Vector3();
+                let distance = 0.1;
+                for (let i = 0; i < 8; i++) {
+                    corner.set(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z).sub(center);
+                    distance = Math.max(distance, corner.dot(back) + Math.max(Math.abs(corner.dot(right)), Math.abs(corner.dot(up))) / tan);
+                }
+                camera.position.copy(center).addScaledVector(back, distance * 1.04);
+                camera.lookAt(center);
+            }
+            camera.updateProjectionMatrix();
+            // A close-up lights from beside the camera, not from overhead.
+            sun.position.copy(camera.position).add(new THREE.Vector3(0.6, 0.9, 0.4));
+            sun.target.position.copy(head ? head.chin : center);
+            if (!sun.target.parent && object.parent) object.parent.add(sun.target);
+            return !!head;
+        },
+
+        /**
+         * One drawing of one portrait. Returns how much of the picture it filled (0 to 1), -1 when it could not draw,
+         * or a promise of that share when the picture is fetched without waiting for the graphics card.
+         */
+        paint(entry) {
+            const R = Reactor3D, size = this.SIZE, drawn = this.DRAWN;
+            const viewport = R.acquireViewport();
+            if (!viewport || !viewport.createTarget || !viewport.renderer || (viewport.isShared && !viewport.isShared())) return -1;
+            const renderer = viewport.renderer();
+            if (!this.target || this.targetGeneration !== R.contextGeneration) {
+                if (this.target) { try { this.target.dispose(); } catch (e) { /* already gone */ } }
+                renderer.resetState();
+                if (R.clearUnpackState && viewport.pixi) R.clearUnpackState(viewport.pixi().gl);
+                this.target = viewport.createTarget(drawn, drawn, 1, { samples: 4 });
+                this.targetGeneration = R.contextGeneration;
+            }
+            if (!this.pixels) this.pixels = new Uint8Array(drawn * drawn * 4);
+            const pixels = this.pixels;
+            // Drawn outright, shaders and pictures made ready on the spot: the frame it costs is spent while the
+            // battle rests, and a portrait that waited for them would show a model with half its parts.
+            const color = renderer.getClearColor(this.clearColor || (this.clearColor = new THREE.Color())), alpha = renderer.getClearAlpha();
+            let fetched = null;
+            try {
+                renderer.resetState();
+                renderer.setRenderTarget(this.target);
+                renderer.setClearColor(0x000000, 0);
+                renderer.clear();
+                if (R._renderScene) R._renderScene(renderer, entry.scene, entry.camera); else renderer.render(entry.scene, entry.camera);
+                // Leaving the target resolves its samples; the picture is read from what is left.
+                renderer.setRenderTarget(null);
+                if (this.wait !== true && renderer.readRenderTargetPixelsAsync) {
+                    // Fetched when the graphics card has it ready: reading it back at once waits for everything the
+                    // card still has to draw, 25 to 35 ms a portrait on a weak one.
+                    fetched = renderer.readRenderTargetPixelsAsync(this.target, 0, 0, drawn, drawn, pixels);
+                    // three leaves its pack buffer bound while it waits; nothing else may read pixels with it bound.
+                    const gl = renderer.getContext();
+                    gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
+                } else {
+                    renderer.readRenderTargetPixels(this.target, 0, 0, drawn, drawn, pixels);
+                }
+            } finally {
+                renderer.setClearColor(color, alpha);
+                renderer.setRenderTarget(null);
+                if (viewport._resetPixi) viewport._resetPixi();
+            }
+            if (fetched) return fetched.then(() => this.develop(entry, pixels));
+            return this.develop(entry, pixels);
+        },
+
+        /** The picture read back, made into the portrait's canvas. Returns how much of the picture was filled. */
+        develop(entry, pixels) {
+            const size = this.SIZE, drawn = this.DRAWN;
+            if (!this.scratch) {
+                this.scratch = document.createElement("canvas");
+                this.scratch.width = this.scratch.height = drawn;
+                this.lut = new Uint8Array(256);
+                for (let i = 0; i < 256; i++) { const c = i / 255; this.lut[i] = Math.round(255 * (c <= 0.0031308 ? 12.92 * c : 1.055 * Math.pow(c, 1 / 2.4) - 0.055)); }
+            }
+            // Both canvases are kept in memory (willReadFrequently): a picture the graphics card holds would have to be
+            // fetched back, a frame's wait each time, by every panel and turn box drawn from it.
+            const scratch = this.scratch.getContext("2d", this.CONTEXT);
+            const image = scratch.createImageData(drawn, drawn);
+            const data = image.data, lut = this.lut, encode = this.encode;
+            let filled = 0, left = drawn, top = drawn, right = -1, bottom = -1;
+            // The target's first row is its bottom; its color is multiplied by its alpha.
+            for (let y = 0; y < drawn; y++) {
+                let from = (drawn - 1 - y) * drawn * 4, to = y * drawn * 4;
+                for (let x = 0; x < drawn; x++, from += 4, to += 4) {
+                    const a = pixels[from + 3];
+                    if (a === 0) continue;
+                    const r = Math.min(255, Math.round(pixels[from] * 255 / a)), g = Math.min(255, Math.round(pixels[from + 1] * 255 / a)), b = Math.min(255, Math.round(pixels[from + 2] * 255 / a));
+                    data[to] = encode ? lut[r] : r; data[to + 1] = encode ? lut[g] : g; data[to + 2] = encode ? lut[b] : b; data[to + 3] = a;
+                    if (a > 24) {
+                        filled++;
+                        if (x < left) left = x; if (x > right) right = x; if (y < top) top = y; if (y > bottom) bottom = y;
+                    }
+                }
+            }
+            scratch.putImageData(image, 0, 0);
+            if (!entry.canvas && !entry.staged) {
+                entry.staged = document.createElement("canvas");
+                entry.staged.width = entry.staged.height = size;
+            }
+            const context = (entry.canvas || entry.staged).getContext("2d", this.CONTEXT);
+            context.clearRect(0, 0, size, size);
+            if (right < left) return 0;
+            if (entry.head) {
+                // Head and shoulders: the picture as it was aimed.
+                context.drawImage(this.scratch, 0, 0, drawn, drawn, 0, 0, size, size);
+            } else {
+                // The whole model: the square round what was drawn, with a little air.
+                const side = Math.min(drawn, Math.ceil(Math.max(right - left + 1, bottom - top + 1) * 1.08));
+                const sx = Math.round((left + right + 1 - side) / 2), sy = Math.round((top + bottom + 1 - side) / 2);
+                context.drawImage(this.scratch, sx, sy, side, side, 0, 0, size, size);
+            }
+            return filled / (drawn * drawn);
+        },
+
+        release(entry) {
+            if (entry.object && entry.template && typeof Reactor3D !== "undefined" && Reactor3D.releaseModelInstance) {
+                try { Reactor3D.releaseModelInstance(entry.object, entry.template); } catch (e) { /* the model is already gone */ }
+            }
+            entry.scene = entry.camera = entry.object = entry.template = null;
+        },
+
+        /** Once a frame: the pauses run down, and with the battle at rest the first portrait that is due is drawn. */
+        update(busy) {
+            const queue = this.queue;
+            let due = null;
+            for (let i = 0; i < queue.length; i++) {
+                const entry = queue[i];
+                if (entry.failed) { queue.splice(i--, 1); continue; }
+                if (entry.loading) continue;
+                if (entry.wait > 0) entry.wait--;
+                else if (!due) due = entry;
+            }
+            // One picture at a time: they share the target and the buffer it is read into.
+            if (!due || busy || this.pending) return;
+            const entry = due;
+            let coverage = -1;
+            try { coverage = this.paint(entry); } catch (error) {
+                console.warn("ReactorUI: portrait drawing failed for " + entry.model.name, error);
+                coverage = -2;
+            }
+            if (coverage && typeof coverage.then === "function") {
+                const generation = typeof Reactor3D !== "undefined" ? Reactor3D.contextGeneration : 0;
+                this.pending = entry;
+                coverage.then(share => share, error => { console.warn("ReactorUI: portrait drawing failed for " + entry.model.name, error); return -2; }).then(share => {
+                    if (this.pending === entry) this.pending = null;
+                    // The battle ended, or the context was lost, while the picture was on its way.
+                    if (this.entries.get(entry.key) !== entry || !entry.scene) return;
+                    this.settle(entry, typeof Reactor3D !== "undefined" && Reactor3D.contextGeneration !== generation ? -1 : share);
+                });
+                return;
+            }
+            this.settle(entry, coverage);
+        },
+
+        /** What a drawing showed: the portrait is put up once something is in it, and is done when two drawings agree. */
+        settle(entry, coverage) {
+            const queue = this.queue;
+            entry.tries++;
+            // Shown once something is in the picture; done when two drawings in a row fill the same share of it.
+            const settled = coverage > 0.02 && Math.abs(coverage - entry.coverage) < 0.004;
+            if (coverage > 0.02) {
+                if (!entry.canvas) entry.canvas = entry.staged;
+                this.version++;
+            }
+            entry.coverage = coverage;
+            if (settled || coverage === -2 || entry.tries >= this.TRIES) {
+                const at = queue.indexOf(entry);
+                if (at >= 0) queue.splice(at, 1);
+                if (entry.canvas) this.release(entry); else this.fail(entry);
+            } else {
+                entry.wait = this.WAIT;
+            }
+        },
+
+        /**
+         * The battle is over: what made the portraits goes (the models' copies, the target), and so does a portrait
+         * still being made. A finished portrait is a small picture in memory and is kept for the next battle.
+         */
+        clear() {
+            for (const [key, entry] of this.entries) {
+                const done = !!entry.canvas && !entry.failed && !entry.scene && !entry.loading && this.queue.indexOf(entry) < 0;
+                this.release(entry);
+                if (!done) this.entries.delete(key);
+            }
+            // The oldest go first when a long game has met more models than are worth keeping.
+            for (const key of this.entries.keys()) { if (this.entries.size <= this.KEEP) break; this.entries.delete(key); }
+            this.queue.length = 0;
+            this.pending = null;
+            if (this.target) { try { this.target.dispose(); } catch (e) { /* already gone */ } }
+            this.target = null;
+            this.version++;
+        },
+
+        /** Every portrait goes, kept ones too (another project's models, a test). */
+        forget() {
+            this.clear();
+            this.entries.clear();
+            this.version++;
+        }
+    };
+
+    /** A model's portrait for the HUD: a canvas, null while it is being made, false when there is none. */
+    ReactorUI.fightThumbnail = function(model) {
+        return this.FightPortraits.get(model);
+    };
+
+    /** The model a unit is shown by on this map (a flat map draws models too), or null. */
+    ReactorUI.fightModelOf = function(unit) {
+        if (typeof Reactor3D === "undefined" || !Reactor3D.characterModelSpec || !Reactor3D.isLoaded || !Reactor3D.isLoaded()) return null;
+        const fight = typeof $gameFight !== "undefined" ? $gameFight : null;
+        const character = fight && fight.character ? fight.character(unit) : null;
+        try { return character ? Reactor3D.characterModelSpec(character) || null : null; } catch (error) { return null; }
+    };
+
+    /**
+     * The highlighted row of the map battle menu that is up, written into
+     * `out` (`kind`, `symbol`, `enabled`, `item`, and `key`, a number that
+     * changes when the row does), or null with no menu up.
+     */
+    ReactorUI.fightMenuRow = function(out) {
+        const shared = FightHud();
+        const scene = typeof SceneManager !== "undefined" ? SceneManager._scene : null;
+        if (!shared || !scene) return null;
+        const kinds = ReactorUI.FIGHT_MENU_KINDS;
+        for (let i = 0; i < kinds.length; i++) {
+            const win = scene[shared.WINDOWS[kinds[i]]];
+            if (!win || !win.active || !(win.openness > 0) || !win.index) continue;
+            const index = win.index();
+            if (index < 0) continue;
+            out.kind = kinds[i];
+            if (kinds[i] === "command") {
+                out.symbol = win.commandSymbol ? win.commandSymbol(index) : "";
+                out.enabled = win.isCommandEnabled ? win.isCommandEnabled(index) : true;
+                out.item = null;
+            } else {
+                out.symbol = "";
+                out.item = win.item ? win.item() : null;
+                out.enabled = !out.item || !win.isEnabled || win.isEnabled(out.item);
+            }
+            out.key = (i + 1) * 100000 + index * 2 + (out.enabled ? 0 : 1);
+            return out;
+        }
+        return null;
+    };
+    ReactorUI.FIGHT_MENU_KINDS = ["command", "skill", "item"];
+
+    /** Whether the project's icon sheet has a picture at an index (an empty cell has none). */
+    ReactorUI.fightIconExists = function(index) {
+        const known = this._fightIcons || (this._fightIcons = new Map());
+        if (known.has(index)) return known.get(index);
+        const bitmap = ImageManager.loadSystem("IconSet");
+        if (!bitmap || !bitmap.isReady()) return true;
+        const size = ImageManager.iconWidth || 32;
+        const source = bitmap._image || bitmap._canvas || bitmap.canvas;
+        let exists = index >= 0 && Math.floor(index / 16) * size < bitmap.height;
+        if (exists && source) {
+            try {
+                const probe = this._fightIconProbe || (this._fightIconProbe = document.createElement("canvas"));
+                probe.width = probe.height = size;
+                const context = probe.getContext("2d", { willReadFrequently: true });
+                context.clearRect(0, 0, size, size);
+                context.drawImage(source, (index % 16) * size, Math.floor(index / 16) * size, size, size, 0, 0, size, size);
+                const data = context.getImageData(0, 0, size, size).data;
+                exists = false;
+                for (let i = 3; i < data.length; i += 4) if (data[i] > 0) { exists = true; break; }
+            } catch (error) { /* a sheet that cannot be read is taken at its word */ }
+        }
+        known.set(index, exists);
+        return exists;
+    };
+
+    /**
+     * The battle's own commands (Mount, Dismount, Overwatch, Wait, End Turn) on the stock
+     * command window, written the way the project writes Attack, Skill and
+     * Item so the window draws all its rows alike: the node's word, else the
+     * project's (System.json `reactorBattle.terms`), else the stock word in
+     * the case of those three; and, where those carry icons, an icon from the
+     * project's sheet as the same icon code (the HUD's own drawing only where
+     * the sheet has no picture there). The rows share one alignment.
+     */
+    ReactorUI.styleFightCommands = function(win, node) {
+        const shared = FightHud();
+        if (!shared || !win.commandSymbol || !win.commandName) return;
+        const style = shared.commandStyle([TextManager.attack, TextManager.skill, TextManager.item]);
+        const own = typeof $dataSystem !== "undefined" && $dataSystem && $dataSystem.reactorBattle && $dataSystem.reactorBattle.terms || {};
+        const texts = {}, glyphs = {}, words = {};
+        for (const key of shared.WINDOW_LABELS) {
+            texts[key] = shared.commandText(node, key, own[key], style, index => ReactorUI.fightIconExists(index));
+            glyphs[key] = shared.commandGlyph(node, key, texts[key], style);
+            words[key] = shared.commandLabel(node, key, own[key], style);
+        }
+        const commandName = win.commandName, drawItem = win.drawItem;
+        win.commandName = function(index) {
+            const symbol = this.commandSymbol(index);
+            return texts[symbol] !== undefined ? texts[symbol] : commandName.call(this, index);
+        };
+        win.itemTextAlign = () => node.commandAlign;
+        win._fightTextWidth = function(index) {
+            const symbol = this.commandSymbol(index);
+            if (glyphs[symbol]) return (ImageManager.iconWidth || 32) + 4 + this.textWidth(" " + words[symbol]);
+            return this.textSizeEx ? this.textSizeEx(this.commandName(index)).width : this.textWidth(this.commandName(index));
+        };
+        win.drawItem = function(index) {
+            const symbol = this.commandSymbol(index);
+            if (!glyphs[symbol]) { drawItem.call(this, index); return; }
+            drawGlyphRow(shared, this, index, symbol, words[symbol]);
+        };
+    };
+
+    // A command row with an icon the HUD draws itself, as a command with an icon code draws: the icon in its 36 pixels, a space, the word.
+    function drawGlyphRow(shared, win, index, symbol, name) {
+        const rect = win.itemLineRect(index), align = win.itemTextAlign();
+        const word = " " + name;
+        win.resetFontSettings();
+        win.changePaintOpacity(win.isCommandEnabled(index));
+        const icon = ImageManager.iconWidth || 32, wordWidth = win.textWidth(word), width = icon + 4 + wordWidth;
+        const x = align === "center" ? rect.x + Math.floor((rect.width - width) / 2) : align === "right" ? rect.x + rect.width - width : rect.x;
+        const context = win.contents.context;
+        context.save();
+        context.globalAlpha = win.contents.paintOpacity / 255;
+        shared.drawGlyph(context, symbol, x + 2, rect.y + Math.floor((rect.height - icon) / 2), icon, ColorManager.normalColor());
+        context.restore();
+        // (A word longer than its row is drawn narrower, as a command's is.)
+        win.drawText(word, x + icon + 4, rect.y, Math.min(wordWidth + 4, Math.max(8, rect.x + rect.width - (x + icon + 4))), "left");
+        touch(win.contents);
+    }
+
+    /**
+     * A list window sized to what it lists, inside its node's rectangle and
+     * against the edges its anchor names: the command window as wide as its
+     * widest row and as tall as its rows (squeezed to keep the node's height
+     * where they allow, so it stands as tall as the panel beside it); the
+     * skill and item lists cut to whole rows.
+     */
+    ReactorUI.fitFightWindow = function(scene, entry, win) {
+        const shared = FightHud(), node = entry.node, state = entry.state;
+        // A record fitted to another screen: the window keeps its own size and is shown at the fit's scale.
+        const shown = entry.fit ? entry.fit.scale : 1;
+        const rect = this.windowRect(entry.rect, scene, entry.fit);
+        if (entry.fit && win.scale) win.scale.set(shown, shown);
+        let width = rect.width, height = rect.height;
+        if (!(width > 0 && height > 0)) return;
+        if (node.fightWindow === "command" && node.fitCommands && win._fightTextWidth && win.maxItems) {
+            const count = win.maxItems();
+            const widths = state.widths || (state.widths = []);
+            widths.length = 0;
+            for (let i = 0; i < count; i++) widths.push(win._fightTextWidth(i));
+            const fit = shared.fitCommands(rect.height, widths, { padding: win.padding, lineHeight: win.lineHeight(), itemPadding: win.itemPadding(),
+                colSpacing: win.colSpacing(), iconSize: ImageManager.iconWidth || 32 }, state.fit || (state.fit = {}));
+            const itemHeight = fit.itemHeight;
+            win.itemHeight = () => itemHeight;
+            width = Math.min(Math.max(fit.width, 96), Math.max(rect.width, fit.width));
+            height = fit.height;
+        } else if (win.itemHeight && win.padding >= 0) {
+            const row = win.itemHeight();
+            if (row > 0) height = Math.max(1, Math.floor((rect.height - win.padding * 2) / row)) * row + win.padding * 2;
+        }
+        const ax = (this.ANCHORS[node.anchor] || [0, 0])[0], ay = (this.ANCHORS[node.anchor] || [0, 0])[1];
+        const x = Math.round(rect.x + (rect.width - width) * ax * shown), y = Math.round(rect.y + (rect.height - height) * ay * shown);
+        if (win.x !== x || win.y !== y || win.width !== width || win.height !== height || state.rows !== (win.maxItems ? win.maxItems() : 0)) {
+            win.move(x, y, width, height);
+            if (win.createContents) win.createContents();
+            try { if (win.refresh) win.refresh(); } catch (error) { console.warn("ReactorUI: " + node.fightWindow + " window refresh", error); }
+            state.rows = win.maxItems ? win.maxItems() : 0;
+        }
+        state.x = x;
+        state.y = y;
+    };
+
+    /** The Tactical battle running on the map the party stands on, or null (no battle, another map, another mode). */
+    ReactorUI.fightNow = function() {
+        const shared = FightHud();
+        const fight = typeof $gameFight !== "undefined" ? $gameFight : null;
+        if (!shared || !fight || typeof fight.isActive !== "function" || !fight.isActive()) return null;
+        if (typeof fight.mode === "function" && fight.mode() !== shared.BATTLE_MODE) return null;
+        return typeof fight.isHere !== "function" || fight.isHere() ? fight : null;
+    };
+
+    /**
+     * The Tactical battle HUD record: the one System binds as Tactical Battle
+     * (`reactorTacticalInterfaceId`, a Tactical Battle HUD), else the stock
+     * layout sized for this screen.
+     */
+    ReactorUI.fightInterface = function() {
+        const hud = FightHud();
+        if (!hud || typeof $dataSystem === "undefined" || !$dataSystem) return null;
+        const id = hud.boundId($dataSystem);
+        const list = window.$dataUserInterfaces;
+        const raw = id > 0 && Array.isArray(list) ? list[id] : null;
+        if (raw && typeof raw === "object") {
+            const record = this.normalizeInterface(raw);
+            if (record.id === id && record.mode === hud.MODE) return record;
+        }
+        const lineHeight = typeof Window_Base !== "undefined" && Window_Base.prototype.lineHeight ? Window_Base.prototype.lineHeight.call({}) : 36;
+        return this.normalizeInterface(hud.stockRecord({ width: Graphics.width, height: Graphics.height,
+            itemHeight: (Number(lineHeight) || 36) + 8, padding: $gameSystem.windowPadding() }));
+    };
+
+    /**
+     * A picture a map battle HUD draws into (a turn box, the crosshair, a bar). It is marked as the HUD's own, so
+     * the HUD can let it go when the battle ends: a sprite's destruction frees its texture but not the picture
+     * behind it, and one battle after another would leave them all with the graphics card's texture list.
+     */
+    ReactorUI.hudBitmap = function(width, height) {
+        const bitmap = new Bitmap(width, height);
+        bitmap._rrHud = true;
+        return bitmap;
+    };
+
+    /** Let go of every picture the HUD made under a window or layer (see hudBitmap). Returns how many. */
+    ReactorUI.releaseHudBitmaps = function(container) {
+        let freed = 0;
+        const visit = object => {
+            if (!object) return;
+            const bitmap = object._bitmap || null;
+            if (bitmap && bitmap._rrHud && bitmap.destroy) { bitmap._rrHud = false; try { bitmap.destroy(); freed++; } catch (error) { /* already gone */ } }
+            const children = object.children;
+            if (children) for (let i = 0; i < children.length; i++) visit(children[i]);
+        };
+        visit(container);
+        // Pooled sprites wait outside the tree.
+        for (const key of ["_turnPool", "_turnMore"]) if (container && Array.isArray(container[key])) for (const sprite of container[key]) visit(sprite);
+        if (container && container._turnSprites && container._turnSprites.values) for (const sprite of container._turnSprites.values()) visit(sprite);
+        return freed;
+    };
+
+    ReactorUI.createFightHud = function(scene, record) {
+        let insert = 0;
+        const layer = scene._windowLayer;
+        this._fightTheme = null;
+        // Under the stock windows, so the command menu and messages draw over the panels.
+        const hud = this.createOverlay(scene, record, { addWindow: window => layer.addChildAt(window, Math.min(insert++, layer.children.length)) });
+        hud._fightNodes = hud._fightNodes || [];
+        if (record.openTransition !== "none") hud._visibilityAlpha = 0;
+        return hud;
+    };
+
+    ReactorUI.destroyFightHud = function(scene, hud) {
+        for (const window of hud._nodeWindows) {
+            if (window.parent) window.parent.removeChild(window);
+            this.releaseHudBitmaps(window);
+            if (window.destroy) window.destroy();
+        }
+        hud._nodeWindows.length = 0;
+        if (hud._measureWindow && hud._measureWindow.destroy) hud._measureWindow.destroy();
+        this.FightPortraits.clear();
+    };
+
+    ReactorUI.updateFightHud = function(scene, hud, fight) {
+        const shared = FightHud();
+        const reader = shared ? shared.reader(fight) : null;
+        // A camera director's shot fades the unit panels and the menus (0 to 1); the strip and the text lines stay.
+        const director = typeof ReactorFight !== "undefined" && ReactorFight.Director && ReactorFight.Director.presentation ? ReactorFight.Director.presentation() : null;
+        const shot = director && director.hud >= 0 && director.hud < 1 ? director.hud : 1;
+        hud._shotAlpha = shot;
+        // The battle menu is up: the lines that speak to the player (the hint, the phase banner) stand down behind it.
+        const windows = typeof ReactorFight !== "undefined" && ReactorFight.Windows ? ReactorFight.Windows : null;
+        const paused = !!(windows && windows.isMenuOpen && windows.isMenuOpen());
+        for (const window of hud._nodeWindows) {
+            if (!window.updateFight) continue;
+            window._bannerHold = paused;
+            window.updateFight(reader);
+            const info = paused && window.node().type === "fightInfo" ? window.node().fightInfo : "";
+            if (!window._fightShown || info === "hint" || info === "phase") window.visible = false;
+            else {
+                if (window._fightAlpha < 1) window.alpha *= window._fightAlpha;
+                if (shot < 1 && window.node().type === "fightUnit") window.alpha *= shot;
+            }
+        }
+        for (const entry of hud._fightNodes) this.placeFightWindow(scene, hud, entry);
+        // Portraits are made while the battle is at rest: never as a unit walks or an action plays.
+        if (reader && this.FightPortraits.queue.length) {
+            const state = reader.tacticalState();
+            this.FightPortraits.update(state === "acting" || state === "moving" || state === "ending");
+        }
+    };
+
+    /** A stock map battle window, moved and sized to its node; it slides in each time it opens. */
+    ReactorUI.placeFightWindow = function(scene, hud, entry) {
+        const shared = FightHud();
+        const node = entry.node;
+        const win = shared ? scene[shared.WINDOWS[node.fightWindow]] : null;
+        if (!win) return;
+        const state = entry.state || (entry.state = {});
+        if (state.window !== win) {
+            state.window = win;
+            entry.fit = hud._interface && hud._interface.fit || null;
+            const rect = this.windowRect(entry.rect, scene, entry.fit);
+            if (node.windowColumns > 0) win.maxCols = () => node.windowColumns;
+            if (node.fightWindow === "command") this.styleFightCommands(win, node);
+            state.x = rect.x;
+            state.y = rect.y;
+            this.fitFightWindow(scene, entry, win);
+            state.shown = false;
+            state.slide = 0;
+        }
+        const shown = win.visible && win.openness > 0;
+        // Each time it opens its list may be another (a unit with Overwatch, a longer skill list): fitted again. So is
+        // a command list that changes while it is up (a unit got on or off a vehicle).
+        if (shown && !state.shown) {
+            this.fitFightWindow(scene, entry, win);
+            state.slide = node.slideDuration;
+        } else if (shown && node.fightWindow === "command" && win.maxItems && state.rows !== win.maxItems()) this.fitFightWindow(scene, entry, win);
+        state.shown = shown;
+        let x = state.x, y = state.y;
+        if (state.slide > 0) {
+            const t = state.slide / node.slideDuration;
+            const shown = entry.fit ? entry.fit.scale : 1;
+            x += Math.round(node.slideX * t * shown);
+            y += Math.round(node.slideY * t * shown);
+            state.slide--;
+        }
+        win.x = x;
+        win.y = y;
+        if (node.fill === "none") win.opacity = 0;
+        const visible = !node.hideWindow && this.evaluateCondition(node.visible, scene) && hud._visibilityAlpha > 0;
+        win.alpha = visible ? node.opacity / 255 * (hud._shotAlpha >= 0 ? hud._shotAlpha : 1) : 0;
+    };
+
+    /**
+     * The HUD a battle on this map would open, made ahead on a quiet map frame and kept out of sight, so the battle's
+     * first frame has only to show it (its windows were the longest thing on that frame). Made only where the map
+     * names a unit or spawns one; `scene._reactorFightHudReady` is it, or false where there is nothing to ready.
+     */
+    ReactorUI.readyFightHud = function(scene) {
+        scene._reactorFightHudReady = false;
+        const Stage = globalThis.ReactorFight ? globalThis.ReactorFight.Stage : null;
+        if (!scene._windowLayer || !FightHud() || !Stage || !Stage.mapRecords || typeof $dataMap === "undefined" || !$dataMap) return null;
+        try {
+            if (!Stage.mapRecords($dataMap).length) return null;
+            const record = this.fightInterface();
+            if (!record) return null;
+            const hud = this.createFightHud(scene, record);
+            for (const window of hud._nodeWindows) window.visible = false;
+            scene._reactorFightHudReady = { hud, source: JSON.stringify(record) };
+        } catch (error) { scene._reactorFightHudReady = false; }
+        return scene._reactorFightHudReady || null;
+    };
+
+    /** The HUD for a battle that begins: the one made ahead when it was made from this same record, else a new one. */
+    ReactorUI.takeFightHud = function(scene, record) {
+        const ready = scene._reactorFightHudReady;
+        scene._reactorFightHudReady = undefined;
+        if (ready && ready.source === JSON.stringify(record)) { this._fightTheme = null; return ready.hud; }
+        // The record was edited, or the screen resized, since: what was made ahead is let go.
+        if (ready) this.destroyFightHud(scene, ready.hud);
+        return this.createFightHud(scene, record);
+    };
+
+    /** Once a frame on the map: the HUD exists exactly while a battle runs here. */
+    ReactorUI.updateFightScene = function(scene) {
+        const fight = this.fightNow();
+        let hud = scene._reactorFightHud;
+        if (!fight) {
+            // A battle just over: the next one's HUD is made again once the map has had a second to itself.
+            if (hud) { this.destroyFightHud(scene, hud); scene._reactorFightHudWait = 60; }
+            scene._reactorFightHud = null;
+            if (scene._reactorFightHudWait > 0) scene._reactorFightHudWait--;
+            else if (scene._reactorFightHudReady === undefined) this.readyFightHud(scene);
+            return;
+        }
+        if (hud === null || hud === undefined) {
+            if (!scene._windowLayer) return;
+            const record = this.fightInterface();
+            scene._reactorFightHud = hud = record ? this.takeFightHud(scene, record) : false;
+            // Made on this frame, drawn from the next: the two together are the longest thing the HUD ever does.
+            if (hud) { for (const window of hud._nodeWindows) window.visible = false; return; }
+        }
+        if (hud) {
+            // A HUD that fails must never stop the map: it is taken down and the battle plays on without it.
+            try {
+                hud.update();
+                this.updateFightHud(scene, hud, fight);
+            } catch (error) {
+                console.error("ReactorUI: the map battle HUD failed and was closed", error);
+                this.destroyFightHud(scene, hud);
+                scene._reactorFightHud = false;
+            }
+        }
+    };
+
+    if (typeof _Scene_Map_update === "function") {
+        const _Scene_Map_update_overlays = Scene_Map.prototype.update;
+        Scene_Map.prototype.update = function() {
+            _Scene_Map_update_overlays.apply(this, arguments);
+            ReactorUI.updateFightScene(this);
+        };
+    }
+
+    //-------------------------------------------------------------------------
+    // Action and First Person battle HUDs: an Action Battle HUD or a First
+    // Person Battle HUD record over Scene_Map while a battle of that mode runs
+    // on the map. They are their own thing, as the Tactical HUD is: a Classic
+    // battle and a Tactical battle read none of it, and it reads none of
+    // theirs. The battle hands over one HUD object (`$gameFight.actionHud()`,
+    // refreshed in place every frame); each node is redrawn only when the
+    // whole numbers it shows change (a cooldown's shade in 24 steps, a reload
+    // in 40), the crosshair, the world bars and the damage marks are sprites
+    // that only move, and nothing is allocated or measured per frame.
+
+    function Window_ReactorUIAction() {
+        this.initialize(...arguments);
+    }
+
+    window.Window_ReactorUIAction = Window_ReactorUIAction;
+    Window_ReactorUIAction.prototype = Object.create(Window_ReactorUINode.prototype);
+    Window_ReactorUIAction.prototype.constructor = Window_ReactorUIAction;
+
+    Window_ReactorUIAction.prototype.initialize = function(rect, scene, node) {
+        this._actionKey = NaN;
+        this._actionShown = false;
+        this._actionAwaited = false;
+        this._actionHud = null;
+        this._actionState = null;
+        this._flash = null;
+        Window_ReactorUINode.prototype.initialize.call(this, rect, scene, node);
+    };
+
+    Window_ReactorUIAction.prototype.usesSkin = function() {
+        return this._uiNode.fill === "window";
+    };
+
+    Window_ReactorUIAction.prototype.refresh = function() {
+        if (!this.contents) return;
+        this.contents.clear();
+        if (this.contentsBack) this.contentsBack.clear();
+        this.drawSurface();
+        const shared = ActionHud(), hud = this._actionHud, state = this._actionState, node = this._uiNode;
+        if (shared && hud && state) {
+            const theme = ReactorUI.fightTheme(), context = this.contents.context;
+            const width = this.contentsWidth(), height = this.contentsHeight();
+            let ready = true;
+            if (node.type === "actionVitals") ready = shared.drawVitals(context, width, height, node, hud, state.unit, theme);
+            else if (node.type === "actionWeapon") ready = shared.drawWeapon(context, width, height, node, hud, theme, state.extra);
+            else if (node.type === "actionHotbar") ready = shared.drawHotbar(context, width, height, node, hud, theme, state.extra);
+            else if (node.type === "actionTarget") shared.drawTarget(context, width, height, node, hud, theme);
+            else if (node.type === "actionInfo") shared.drawInfo(context, width, height, node, hud, theme, state.feed);
+            this._actionAwaited = !ready;
+            touch(this.contents);
+        }
+        this.syncVisualState();
+    };
+
+    /** What the node shows now, as one number; a drawing is made only when it changes. */
+    Window_ReactorUIAction.prototype.actionKey = function(shared, hud, state) {
+        const node = this._uiNode, mix = shared.mix;
+        let key = 17;
+        if (node.type === "actionVitals") {
+            key = mix(mix(mix(mix(mix(key, hud.hp), hud.mhp), hud.mp), hud.mmp), hud.tp);
+            key = mix(mix(key, state.iconsKey), state.unitKey);
+        } else if (node.type === "actionWeapon") {
+            const weapon = hud.weapon, ammo = hud.ammo;
+            key = mix(mix(mix(mix(key, weapon.id), weapon.index), weapon.count), ammo.magazine);
+            key = mix(mix(mix(mix(key, ammo.capacity), hud.combo), Math.round(ammo.reload * 40)), state.extra.switching ? 1 : 0);
+            key = mix(mix(key, state.extra.steps), state.extra.picture ? 1 : 0);
+        } else if (node.type === "actionHotbar") {
+            const slots = hud.hotbar;
+            for (let i = 0; i < slots.length; i++) key = mix(mix(mix(key, slots[i].id), slots[i].usable ? 1 : 0), Math.ceil(slots[i].cooldown * 24));
+            key = mix(key, state.revision);
+        } else if (node.type === "actionTarget") {
+            const target = hud.target;
+            key = target ? mix(mix(mix(mix(key, target.unitId), target.hp), target.mhp), target.locked ? 1 : 0) : 0;
+        } else if (node.type === "actionInfo") {
+            key = node.actionInfo === "feed" ? mix(key, state.feedVersion) : mix(key, state.objectiveVersion);
+        }
+        return key;
+    };
+
+    Window_ReactorUIAction.prototype.updateAction = function(shared, hud, state) {
+        const node = this._uiNode;
+        this._actionHud = hud;
+        this._actionState = state;
+        const key = this.actionKey(shared, hud, state);
+        if (key !== this._actionKey || (this._actionAwaited && ReactorUI.fightTheme().settled()) || state.pictured) {
+            this._actionKey = key;
+            this.refresh();
+        }
+        this._actionShown = node.type === "actionTarget" ? !!hud.target : node.type === "actionHotbar" ? hud.hotbar.length > 0
+            : node.type === "actionInfo" ? (node.actionInfo === "feed" ? state.feed.length > 0 : !!hud.objective) : true;
+        // Hurt: the vitals flash, as a sprite over them that only fades.
+        if (node.type === "actionVitals" && node.damageFlash) {
+            const pulse = hud.damage.pulse;
+            if (pulse > 0 && !this._flash) {
+                this._flash = new Sprite(ReactorUI.hudBitmap(8, 8));
+                this._flash.bitmap.fillAll("#d82828");
+                this._flash.scale.set(this.width / 8, this.height / 8);
+                this.addChild(this._flash);
+            }
+            if (this._flash) this._flash.opacity = pulse > 0 ? Math.round(pulse * 110) : 0;
+        }
+    };
+
+    /** The battle of a real-time mode (Action, First Person) running on the map the party stands on, or null. */
+    ReactorUI.actionNow = function() {
+        const shared = ActionHud();
+        const fight = typeof $gameFight !== "undefined" ? $gameFight : null;
+        if (!shared || !fight || typeof fight.isActive !== "function" || !fight.isActive() || typeof fight.actionHud !== "function") return null;
+        if (typeof fight.mode !== "function" || !shared.isMode(fight.mode())) return null;
+        return typeof fight.isHere !== "function" || fight.isHere() ? fight : null;
+    };
+
+    /**
+     * A real-time mode's HUD record: the one System binds for that mode
+     * (`reactorActionInterfaceId` / `reactorFirstPersonInterfaceId`, a record
+     * presented as that mode's HUD), else the mode's stock layout.
+     */
+    ReactorUI.actionInterface = function(mode) {
+        const shared = ActionHud();
+        if (!shared || !shared.isMode(mode) || typeof $dataSystem === "undefined" || !$dataSystem) return null;
+        const id = shared.boundId($dataSystem, mode);
+        const list = window.$dataUserInterfaces;
+        const raw = id > 0 && Array.isArray(list) ? list[id] : null;
+        if (raw && typeof raw === "object") {
+            const record = this.normalizeInterface(raw);
+            if (record.id === id && record.mode === mode) return record;
+        }
+        return this.normalizeInterface(shared.stockRecord(mode, { width: Graphics.width, height: Graphics.height }));
+    };
+
+    ReactorUI.createActionHud = function(scene, record, mode) {
+        let insert = 0;
+        const layer = scene._windowLayer, shared = ActionHud(), fightHud = FightHud();
+        this._fightTheme = null;
+        const hud = this.createOverlay(scene, record, { addWindow: window => layer.addChildAt(window, Math.min(insert++, layer.children.length)) });
+        hud._actionMode = mode;
+        hud._actionNodes = hud._actionNodes || [];
+        if (record.openTransition !== "none") hud._visibilityAlpha = 0;
+        // The crosshair, the world bars and the damage marks: sprites under the windows, over the map.
+        const sprites = hud._actionLayer = new Sprite();
+        if (scene.addChildAt && scene.children) scene.addChildAt(sprites, Math.max(0, scene.children.indexOf(layer)));
+        const unit = fightHud ? fightHud.newUnitView() : { icons: [] };
+        unit.team = "ally";
+        hud._actionState = {
+            revision: NaN, unitId: 0, unit, unitKey: 0, iconsKey: 0, iconsFrame: 0, pictured: false, portraits: this.FightPortraits.version,
+            extra: { steps: 0, picture: null, carried: [], switching: false, keys: [], costs: [], costColors: [] },
+            weaponId: -1, weaponIndex: -1, switchFrames: 0, objective: "", objectiveVersion: 0, feed: [], feedVersion: 0, feedPool: [],
+            cross: { gap: 0, onTarget: 0, hit: 0, kill: 0, aiming: 0, reload: 0, sprinting: 0, ranged: 0 }, crossKey: -1, crossSprite: null,
+            bars: [], seen: new Map(), lockSprite: null, arcSprite: null, vignetteSprite: null, frame: 0
+        };
+        // Notices: who fell. Heard only while this HUD is up.
+        hud._onDefeated = payload => {
+            const state = hud._actionState, node = hud._nodeWindows.map(window => window.node()).find(entry => entry.type === "actionInfo" && entry.actionInfo === "feed");
+            if (!node || !payload || !payload.battler || !payload.battler.name) return;
+            const line = state.feedPool.pop() || {};
+            line.text = shared.label(node, "defeated").replace("%1", payload.battler.name());
+            line.color = payload.team === "ally" ? ColorManager.deathColor() : "";
+            line.frames = node.feedFrames;
+            state.feed.unshift(line);
+            if (state.feed.length > node.feedLines) state.feedPool.push(state.feed.pop());
+            state.feedVersion++;
+        };
+        if (typeof ReactorEvents !== "undefined" && ReactorEvents.on) ReactorEvents.on("unitDefeated", hud._onDefeated);
+        // The battle's own small HUD stands down while this one is up.
+        if (typeof ReactorFight !== "undefined") { hud._stockWas = ReactorFight.stockActionHud; ReactorFight.stockActionHud = false; }
+        return hud;
+    };
+
+    ReactorUI.destroyActionHud = function(scene, hud) {
+        for (const window of hud._nodeWindows) {
+            if (window.parent) window.parent.removeChild(window);
+            this.releaseHudBitmaps(window);
+            if (window.destroy) window.destroy();
+        }
+        hud._nodeWindows.length = 0;
+        if (hud._measureWindow && hud._measureWindow.destroy) hud._measureWindow.destroy();
+        if (hud._actionLayer) {
+            this.releaseHudBitmaps(hud._actionLayer);
+            if (hud._actionLayer.parent) hud._actionLayer.parent.removeChild(hud._actionLayer);
+            if (hud._actionLayer.destroy) hud._actionLayer.destroy({ children: true });
+        }
+        if (hud._onDefeated && typeof ReactorEvents !== "undefined" && ReactorEvents.off) ReactorEvents.off("unitDefeated", hud._onDefeated);
+        if (typeof ReactorFight !== "undefined" && ReactorFight.stockActionHud === false) ReactorFight.stockActionHud = hud._stockWas === false ? false : true;
+        this.FightPortraits.clear();
+    };
+
+    /** What changes only when the battle says so: the player's unit, the weapon's picture and steps, the keys and costs. */
+    ReactorUI.refreshActionState = function(fight, hud, data, state) {
+        const shared = ActionHud();
+        const unit = fight.unit ? fight.unit(data.unitId) : null, battler = unit ? fight.battler(unit) : null;
+        const view = state.unit, actor = battler && battler.isActor && battler.isActor();
+        view.id = data.unitId; view.name = data.name;
+        view.faceName = actor && battler.faceName ? battler.faceName() : "";
+        view.faceIndex = actor && battler.faceIndex ? battler.faceIndex() : 0;
+        const character = unit && fight.character ? fight.character(unit) : null;
+        view.characterName = character && character.characterName ? character.characterName() : "";
+        view.characterIndex = character && character.characterIndex ? character.characterIndex() : 0;
+        view.model = unit ? this.fightModelOf(unit) : null;
+        state.unitKey = data.unitId * 31 + view.faceIndex;
+        const extra = state.extra, driver = typeof ReactorFight !== "undefined" ? ReactorFight.Action : null;
+        extra.steps = 0;
+        if (driver && driver.profile && battler) { try { extra.steps = Number(driver.profile(battler).combo) || 0; } catch (error) { extra.steps = 0; } }
+        extra.carried.length = 0;
+        const models = typeof Reactor3D !== "undefined" && Reactor3D.databaseModelSpec && Reactor3D.isLoaded && Reactor3D.isLoaded();
+        if (driver && driver.weaponsOf && actor) {
+            for (const weapon of driver.weaponsOf(battler)) {
+                extra.carried.push(weapon.iconIndex || 0);
+                // As the battle opens: the portraits of everything carried, so a switch later costs nothing.
+                const spec = models && state.frame <= this.ACTION_WARMUP_FRAMES ? Reactor3D.databaseModelSpec("weapons", weapon.id) : null;
+                if (spec) this.FightPortraits.get(spec);
+            }
+        }
+        state.weaponSpec = models && data.weapon.id > 0 ? Reactor3D.databaseModelSpec("weapons", data.weapon.id) : null;
+        shared.hotbarKeys(typeof Input !== "undefined" ? Input.keyMapper : null, data.hotbar.length, extra.keys);
+        extra.costs.length = extra.costColors.length = 0;
+        for (const slot of data.hotbar) {
+            let cost = "", color = "";
+            const skill = slot.kind === "skill" && typeof $dataSkills !== "undefined" ? $dataSkills[slot.id] : null;
+            if (skill && battler) {
+                const tp = battler.skillTpCost ? battler.skillTpCost(skill) : skill.tpCost, mp = battler.skillMpCost ? battler.skillMpCost(skill) : skill.mpCost;
+                if (tp > 0) { cost = String(tp); color = ColorManager.tpCostColor(); } else if (mp > 0) { cost = String(mp); color = ColorManager.mpCostColor(); }
+            } else if (slot.kind === "item" && typeof $gameParty !== "undefined" && typeof $dataItems !== "undefined" && $dataItems[slot.id]) {
+                cost = "x" + $gameParty.numItems($dataItems[slot.id]);
+            }
+            extra.costs.push(cost);
+            extra.costColors.push(color);
+        }
+        if (data.objective !== state.objective) { state.objective = data.objective; state.objectiveVersion++; }
+    };
+
+    ReactorUI.ACTION_SWITCH_FRAMES = 90;
+    ReactorUI.ACTION_WARMUP_FRAMES = 240;
+    ReactorUI.ACTION_ICON_FRAMES = 20;
+
+    ReactorUI.updateActionHud = function(scene, hud, fight) {
+        const shared = ActionHud(), state = hud._actionState;
+        const data = fight.actionHud();
+        if (!shared || !data || !data.unitId) return;
+        state.frame++;
+        const revision = fight.actionRevision ? fight.actionRevision() : state.frame;
+        if (revision !== state.revision || data.unitId !== state.unitId) {
+            state.revision = revision;
+            state.unitId = data.unitId;
+            this.refreshActionState(fight, hud, data, state);
+        }
+        // States come and go without the battle saying so: looked at a few times a second.
+        if (state.frame - state.iconsFrame >= this.ACTION_ICON_FRAMES || state.frame === 1) {
+            state.iconsFrame = state.frame;
+            const unit = fight.unit ? fight.unit(data.unitId) : null, battler = unit ? fight.battler(unit) : null;
+            const icons = battler && battler.allIcons ? battler.allIcons() : null;
+            let key = 0;
+            state.unit.icons.length = 0;
+            if (icons) for (let i = 0; i < icons.length; i++) { state.unit.icons.push(icons[i]); key = shared.mix(key, icons[i]); }
+            state.iconsKey = key;
+        }
+        // A weapon change shows what is carried for a moment.
+        if (data.weapon.id !== state.weaponId || data.weapon.index !== state.weaponIndex) {
+            if (state.weaponId >= 0) state.switchFrames = this.ACTION_SWITCH_FRAMES;
+            state.weaponId = data.weapon.id; state.weaponIndex = data.weapon.index;
+        }
+        if (state.switchFrames > 0) state.switchFrames--;
+        state.extra.switching = state.switchFrames > 0;
+        // The weapon's own model as its picture. A portrait costs a long frame to make, so every carried weapon's is
+        // made as the battle opens; one that turns up later keeps its icon.
+        const picture = state.weaponSpec ? (state.frame <= this.ACTION_WARMUP_FRAMES ? this.FightPortraits.get(state.weaponSpec) : this.FightPortraits.peek(state.weaponSpec)) : false;
+        state.extra.picture = picture || null;
+        if (this.FightPortraits.queue.length) this.FightPortraits.update(false);
+        state.pictured = this.FightPortraits.version !== state.portraits;
+        state.portraits = this.FightPortraits.version;
+        // Notices run out.
+        for (let i = state.feed.length - 1; i >= 0; i--) {
+            if (--state.feed[i].frames > 0) continue;
+            state.feedPool.push(state.feed[i]);
+            state.feed.splice(i, 1);
+            state.feedVersion++;
+        }
+        for (const window of hud._nodeWindows) {
+            if (!window.updateAction) continue;
+            window.updateAction(shared, data, state);
+            if (!window._actionShown) window.visible = false;
+        }
+        for (const entry of hud._actionNodes) {
+            const shown = this.evaluateCondition(entry.node.visible, scene) && hud._visibilityAlpha > 0;
+            if (entry.node.type === "actionCrosshair") this.updateActionCrosshair(hud, entry, data, state, shown);
+            else if (entry.node.type === "actionBars") this.updateActionBars(hud, entry, data, state, shown);
+            else this.updateActionDamage(hud, entry, data, state, shown);
+        }
+    };
+
+    /** The crosshair: one sprite at the battle's aim point, redrawn when its whole-number state changes. */
+    ReactorUI.updateActionCrosshair = function(hud, entry, data, state, shown) {
+        const shared = ActionHud(), node = entry.node;
+        let sprite = state.crossSprite;
+        if (!sprite) {
+            const size = Math.max(128, Math.max(entry.rect.width, entry.rect.height));
+            sprite = state.crossSprite = new Sprite(ReactorUI.hudBitmap(size, size));
+            sprite.anchor.set(0.5, 0.5);
+            hud._actionLayer.addChild(sprite);
+        }
+        const cross = shared.crossState(data, typeof $gamePlayer !== "undefined" && $gamePlayer.isDashing && $gamePlayer.isDashing() && $gamePlayer.isMoving(), state.cross);
+        // Where the camera does not look down the aim (isometric, top-down, 2D) the battle draws its own mark on the
+        // ground: here only the hit and kill markers show.
+        const driver = typeof ReactorFight !== "undefined" ? ReactorFight.Action : null;
+        const relative = !driver || !driver.relative || driver.relative();
+        sprite.visible = shown && (relative || cross.hit > 0 || cross.kill > 0);
+        if (!sprite.visible) return;
+        sprite.x = Math.round(data.crosshair.x);
+        sprite.y = Math.round(data.crosshair.y);
+        const key = shared.crossKey(cross);
+        if (key !== state.crossKey) {
+            state.crossKey = key;
+            sprite.bitmap.clear();
+            shared.drawCrosshair(sprite.bitmap.context, sprite.bitmap.width, node, cross);
+            touch(sprite.bitmap);
+        }
+    };
+
+    /** Bars over opponents that were hit a moment ago or are aimed at, from a pool; and the mark on the locked one. */
+    ReactorUI.updateActionBars = function(hud, entry, data, state, shown) {
+        const shared = ActionHud(), node = entry.node, enemies = data.enemies, bars = state.bars;
+        const width = node.barWidth, height = node.barHeight, target = data.target;
+        let used = 0, locked = null;
+        for (let i = 0; shown && i < enemies.length; i++) {
+            const enemy = enemies[i];
+            let seen = state.seen.get(enemy.unitId);
+            if (!seen) state.seen.set(enemy.unitId, seen = { hp: enemy.hp, timer: 0 });
+            if (enemy.hp < seen.hp) seen.timer = node.barFrames;
+            seen.hp = enemy.hp;
+            if (seen.timer > 0) seen.timer--;
+            const aimed = !!target && target.unitId === enemy.unitId;
+            if (aimed && target.locked) locked = enemy;
+            if (!enemy.visible || !(seen.timer > 0 || aimed)) continue;
+            let sprite = bars[used];
+            if (!sprite) {
+                sprite = bars[used] = new Sprite(ReactorUI.hudBitmap(width, height));
+                sprite._barKey = -1;
+                hud._actionLayer.addChild(sprite);
+            }
+            used++;
+            sprite.visible = true;
+            sprite.x = Math.round(enemy.x - width / 2);
+            sprite.y = Math.round(enemy.y - height);
+            const key = (enemy.mhp > 0 ? Math.round(width * enemy.hp / enemy.mhp) : 0) + (enemy.alerted ? 100000 : 0);
+            if (key !== sprite._barKey) {
+                sprite._barKey = key;
+                sprite.bitmap.clear();
+                shared.drawWorldBar(sprite.bitmap.context, width, height, node, enemy.mhp > 0 ? enemy.hp / enemy.mhp : 0, enemy.alerted);
+                touch(sprite.bitmap);
+            }
+        }
+        for (let i = used; i < bars.length; i++) bars[i].visible = false;
+        state.barsShown = used;
+        if (node.lockMarker) {
+            let marker = state.lockSprite;
+            if (locked && locked.visible && !marker) {
+                const size = Math.max(40, Math.round(width * 0.9));
+                marker = state.lockSprite = new Sprite(ReactorUI.hudBitmap(size, size));
+                marker.anchor.set(0.5, 0);
+                shared.drawLockMarker(marker.bitmap.context, size, ColorManager.crisisColor());
+                touch(marker.bitmap);
+                hud._actionLayer.addChild(marker);
+            }
+            if (marker) {
+                marker.visible = !!locked && locked.visible;
+                if (marker.visible) { marker.x = Math.round(locked.x); marker.y = Math.round(locked.y + height); }
+            }
+        }
+    };
+
+    /** Where a hit came from (an arc that turns toward it and fades) and the low-HP edge (one small picture, stretched). */
+    ReactorUI.updateActionDamage = function(hud, entry, data, state, shown) {
+        const shared = ActionHud(), node = entry.node, damage = data.damage;
+        if (node.showDirection) {
+            let arc = state.arcSprite;
+            const on = shown && damage.pulse > 0 && damage.angle !== null && damage.angle !== undefined;
+            if (on && !arc) {
+                const size = Math.round(Math.min(Graphics.height * 0.46, 440));
+                arc = state.arcSprite = new Sprite(ReactorUI.hudBitmap(size, size));
+                arc.anchor.set(0.5, 0.5);
+                shared.drawDamageArc(arc.bitmap.context, size, node.enemyColor);
+                touch(arc.bitmap);
+                hud._actionLayer.addChildAt(arc, 0);
+            }
+            if (arc) {
+                arc.visible = on;
+                if (on) {
+                    arc.x = Graphics.width / 2; arc.y = Graphics.height / 2;
+                    arc.rotation = damage.angle * Math.PI / 180;
+                    arc.opacity = Math.round(Math.min(1, damage.pulse * 1.2) * 255);
+                }
+            }
+        }
+        if (node.showVignette) {
+            const alpha = shown ? shared.vignetteAlpha(node, data.hp, data.mhp) : 0;
+            let edge = state.vignetteSprite;
+            if (alpha > 0 && !edge) {
+                edge = state.vignetteSprite = new Sprite(ReactorUI.hudBitmap(160, 90));
+                shared.drawVignette(edge.bitmap.context, 160, 90, node.enemyColor);
+                touch(edge.bitmap);
+                edge.scale.set(Graphics.width / 160, Graphics.height / 90);
+                hud._actionLayer.addChildAt(edge, 0);
+            }
+            if (edge) {
+                edge.visible = alpha > 0;
+                // A slow beat, so the edge reads as a warning and not as a tint.
+                if (alpha > 0) edge.opacity = Math.round(255 * alpha * (0.82 + 0.18 * Math.sin(state.frame * 0.1)));
+            }
+        }
+    };
+
+    /** Once a frame on the map: the HUD of a real-time mode exists exactly while a battle of that mode runs here. */
+    ReactorUI.updateActionScene = function(scene) {
+        const fight = this.actionNow();
+        let hud = scene._reactorActionHud;
+        if (hud && (!fight || hud._actionMode !== fight.mode())) {
+            this.destroyActionHud(scene, hud);
+            hud = scene._reactorActionHud = null;
+        }
+        if (!fight) { scene._reactorActionHud = null; return; }
+        if (hud === null || hud === undefined) {
+            if (!scene._windowLayer) return;
+            const record = this.actionInterface(fight.mode());
+            scene._reactorActionHud = hud = record ? this.createActionHud(scene, record, fight.mode()) : false;
+            // Made on this frame, drawn from the next (as the Tactical HUD is).
+            if (hud) { for (const window of hud._nodeWindows) window.visible = false; return; }
+        }
+        if (hud) {
+            // A HUD that fails must never stop the map: it is taken down and the battle's own small one comes back.
+            try {
+                hud.update();
+                this.updateActionHud(scene, hud, fight);
+            } catch (error) {
+                console.error("ReactorUI: the action battle HUD failed and was closed", error);
+                this.destroyActionHud(scene, hud);
+                scene._reactorActionHud = false;
+            }
+        }
+    };
+
+    if (typeof _Scene_Map_update === "function") {
+        const _Scene_Map_update_fight = Scene_Map.prototype.update;
+        Scene_Map.prototype.update = function() {
+            _Scene_Map_update_fight.apply(this, arguments);
+            ReactorUI.updateActionScene(this);
+        };
+    }
+
+    /**
+     * A map scene's battle HUDs are let go with it. A scene that ends under a battle (the menu, a transfer, a load,
+     * Game Over) never sees the frame on which the battle is over, and what its HUD holds outside the scene would
+     * stay for good: the pictures it made, the listener of its feed, the built-in HUD's stand-down.
+     */
+    ReactorUI.releaseMapHuds = function(scene) {
+        const ready = scene._reactorFightHudReady;
+        if (ready && ready.hud) this.destroyFightHud(scene, ready.hud);
+        scene._reactorFightHudReady = false;
+        if (scene._reactorFightHud) this.destroyFightHud(scene, scene._reactorFightHud);
+        scene._reactorFightHud = null;
+        if (scene._reactorActionHud) this.destroyActionHud(scene, scene._reactorActionHud);
+        scene._reactorActionHud = null;
+    };
+
+    // As the scene is destroyed, not as it ends: the picture it leaves on screen while the next scene loads keeps its HUD.
+    // (The scene's own destroy is its parent's, asked for when called.)
+    Scene_Map.prototype.destroy = function() {
+        try { ReactorUI.releaseMapHuds(this); } catch (error) { console.warn("ReactorUI: a map battle HUD could not be let go", error); }
+        const parent = Object.getPrototypeOf(Scene_Map.prototype);
+        if (parent && typeof parent.destroy === "function") return parent.destroy.apply(this, arguments);
+    };
+
+    //-------------------------------------------------------------------------
     // Battle HUD: a Battle HUD record over Scene_Battle. Its nodes draw
     // under the stock battle windows; Battle Window nodes place, size and
     // skin those windows (the battle's own flow stays stock, so battle
@@ -4677,8 +6611,8 @@
             if (node.type !== "list" || node.dataSource !== "party" || !window.visible) continue;
             const index = window._uiRows.findIndex(row => row.data === actor);
             if (index < 0) continue;
-            const rect = window.itemRect(index);
-            return { x: window.x + window.padding + rect.x, y: window.y + window.padding + rect.y, width: rect.width, height: rect.height };
+            const rect = window.itemRect(index), shown = ReactorUI.shownScale(window);
+            return { x: window.x + (window.padding + rect.x) * shown, y: window.y + (window.padding + rect.y) * shown, width: rect.width * shown, height: rect.height * shown };
         }
         return null;
     };
@@ -4710,7 +6644,10 @@
         const state = entry.state || (entry.state = {});
         if (!state.ready) {
             state.ready = true;
-            const rect = this.windowRect(entry.rect, scene);
+            const fit = hud._interface && hud._interface.fit || null;
+            const rect = this.windowRect(entry.rect, scene, fit);
+            state.scale = fit ? fit.scale : 1;
+            if (fit && win.scale) win.scale.set(fit.scale, fit.scale);
             if (node.windowColumns > 0) win.maxCols = () => node.windowColumns;
             // A target window the HUD hides is picked on the battlefield: its order is the
             // battlers' on screen and the arrows step round them (Window_BattleEnemy.visualPick).
@@ -4734,17 +6671,38 @@
         let x = state.x, y = state.y;
         if (node.followActor) {
             // Between actors (target selection, a turn resolving) it stays where it last followed.
-            const slot = hud.slotRect(typeof BattleManager !== "undefined" ? BattleManager.actor() : null);
-            if (slot) state.follow = { x: slot.x + node.x, y: slot.y + node.y };
-            if (state.follow) { x = state.follow.x; y = state.follow.y; }
+            const actor = typeof BattleManager !== "undefined" ? BattleManager.actor() : null;
+            let followed = false;
+            if (node.followTarget === "model" && actor) {
+                // Over the actor as it stands in the battle (its model in a Battle Room, else its sprite): the window is
+                // centered on it, its bottom edge at the top of the figure, and X and Y are offsets from there.
+                const sprites = scene._spriteset && scene._spriteset._actorSprites;
+                const sprite = sprites ? sprites.find(other => other._battler === actor) : null;
+                if (sprite) {
+                    const top = this.battlerTop(scene, sprite), layer = scene._windowLayer;
+                    state.follow = { x: Math.round(top.x - (layer ? layer.x : 0) - win.width * state.scale / 2 + node.x * state.scale),
+                        y: Math.round(top.y - (layer ? layer.y : 0) - win.height * state.scale + node.y * state.scale) };
+                    followed = true;
+                }
+            }
+            const slot = followed ? null : hud.slotRect(actor);
+            if (slot) state.follow = { x: slot.x + Math.round(node.x * state.scale), y: slot.y + Math.round(node.y * state.scale) };
+            // Kept on the screen: on a small game (640x480) the slot's offset would stand it above the top edge.
+            if (state.follow) {
+                x = state.follow.x; y = state.follow.y;
+                if (typeof Graphics !== "undefined" && Graphics.width > 0 && Graphics.height > 0) {
+                    x = Math.max(0, Math.min(x, Graphics.width - Math.round(win.width * state.scale)));
+                    y = Math.max(0, Math.min(y, Graphics.height - Math.round(win.height * state.scale)));
+                }
+            }
         }
         const shown = win.visible && win.openness > 0;
         if (shown && !state.shown) state.slide = node.slideDuration;
         state.shown = shown;
         if (state.slide > 0) {
             const t = state.slide / node.slideDuration;
-            x += Math.round(node.slideX * t);
-            y += Math.round(node.slideY * t);
+            x += Math.round(node.slideX * t * state.scale);
+            y += Math.round(node.slideY * t * state.scale);
             state.slide--;
         }
         win.x = x;
@@ -4786,7 +6744,10 @@
             if (!actor) return;
             for (const command of commands) {
                 switch (command.kind) {
-                    case "attack": this.addCommand(label(command, TextManager.attack), "attack", actor.canAttack()); break;
+                    case "attack":
+                        // (One who rides a vehicle that can attack may attack with it: reactor_vehicles_mount.js.)
+                        this.addCommand(label(command, TextManager.attack), "attack", this.canChooseAttack ? this.canChooseAttack() : actor.canAttack());
+                        break;
                     case "skillTypes": this.addSkillCommands(); break;
                     case "skillType":
                         if (!command.knownOnly || actor.skillTypes().includes(command.id)) {
@@ -4842,7 +6803,15 @@
         running.interpreter.update();
         if (running.interpreter.isRunning()) return true;
         scene._rrCommandEvent = null;
-        const actor = BattleManager.actor();
+        let actor = BattleManager.actor();
+        if (actor && !$gameParty.battleMembers().includes(actor)) {
+            // The event took the choosing actor out of the party: nobody is choosing now. With time progress
+            // the next ready member opens through the usual check; turn-based input goes back to the party.
+            BattleManager.cancelActorInput();
+            BattleManager._currentActor = null;
+            if (BattleManager.isTpb()) BattleManager._inputting = false;
+            actor = null;
+        }
         if (running.party && BattleManager.isInputting() && !actor) scene.startPartyCommandSelection();
         else if (actor && actor.canInput()) scene.startActorCommandSelection();
         else scene.changeInputWindow();
@@ -4992,6 +6961,509 @@
         Scene_Battle.prototype.needsInputWindowChange = function() {
             return this._rrCommandEvent ? false : _needsInputWindowChange.apply(this, arguments);
         };
+        // Cancelling the target of a Use a Skill command goes back to the command window, as Attack does.
+        const _onEnemyCancel = Scene_Battle.prototype.onEnemyCancel;
+        Scene_Battle.prototype.onEnemyCancel = function() {
+            _onEnemyCancel.apply(this, arguments);
+            if (this._actorCommandWindow && this._actorCommandWindow.currentSymbol() === "rrSkill") {
+                this._statusWindow.show();
+                this._actorCommandWindow.activate();
+            }
+        };
+        const _onActorCancel = Scene_Battle.prototype.onActorCancel;
+        Scene_Battle.prototype.onActorCancel = function() {
+            _onActorCancel.apply(this, arguments);
+            if (this._actorCommandWindow && this._actorCommandWindow.currentSymbol() === "rrSkill") this._actorCommandWindow.activate();
+        };
+    }
+
+    //-------------------------------------------------------------------------
+    // Victory: a Victory record (bound as Victory in System 2 or Use As,
+    // `reactorVictoryInterfaceId`) shown after a won battle, over the battle
+    // scene of a Classic battle or over the map of a battle fought on it.
+    // The game's own functions give the rewards; each actor is read before
+    // and after, so what is shown is what was given. Party Experience, Level
+    // Up, Rewards and Victory Text nodes draw the result
+    // (reactor_ui_victory.js draws them, the same on the editor's canvas).
+    // A project that binds no record keeps the game's message lines. A plugin
+    // that replaced the whole victory step never reaches the engine's own, so
+    // it keeps the victory; one that words the rewards its own way
+    // (BattleManager.displayRewards is no longer the engine's function) keeps
+    // its lines. A plugin that only wraps the step and calls on is left to.
+
+    function Window_ReactorUIVictory() {
+        this.initialize(...arguments);
+    }
+
+    window.Window_ReactorUIVictory = Window_ReactorUIVictory;
+    Window_ReactorUIVictory.prototype = Object.create(Window_ReactorUINode.prototype);
+    Window_ReactorUIVictory.prototype.constructor = Window_ReactorUIVictory;
+
+    Window_ReactorUIVictory.prototype.initialize = function(rect, scene, node) {
+        this._victoryRun = null;
+        this._victoryIndex = -1;
+        this._victoryMoved = false;
+        this._victoryFilling = false;
+        this._victoryAwaited = false;
+        this._victoryPortraits = 0;
+        this._victoryText = "";
+        this._victorySize = { width: 0, height: 0 };
+        Window_ReactorUINode.prototype.initialize.call(this, rect, scene, node);
+    };
+
+    Window_ReactorUIVictory.prototype.usesSkin = function() {
+        return this._uiNode.fill === "window";
+    };
+
+    /** Room between a painted panel's edge and its parts (a skinned one has the window's own padding). */
+    Window_ReactorUIVictory.prototype.victoryInset = function() {
+        const node = this._uiNode;
+        return node.type !== "victoryText" && (node.fill === "color" || node.fill === "gradient") ? 8 : 0;
+    };
+
+    /** The room the node's parts are laid out in; the pages are worked out from it. */
+    Window_ReactorUIVictory.prototype.victorySize = function() {
+        const inset = this.victoryInset(), size = this._victorySize;
+        size.width = Math.max(0, this.contentsWidth() - inset * 2);
+        size.height = Math.max(0, this.contentsHeight() - inset * 2);
+        return size;
+    };
+
+    Window_ReactorUIVictory.prototype.refresh = function() {
+        if (!this.contents) return;
+        this.contents.clear();
+        if (this.contentsBack) this.contentsBack.clear();
+        this.drawSurface();
+        this.drawVictory(true);
+        this.syncVisualState();
+    };
+
+    /** Draws the node for the run's page: everything, or only what a frame of the fill changes. */
+    Window_ReactorUIVictory.prototype.drawVictory = function(whole) {
+        const hud = VictoryHud(), run = this._victoryRun, node = this._uiNode;
+        // Only a whole drawing asks for the pictures, so only it says whether one is still awaited.
+        if (whole) this._victoryAwaited = false;
+        if (!hud || !run) return;
+        const theme = ReactorUI.victoryTheme();
+        const page = hud.page(run);
+        const inset = this.victoryInset(), size = this.victorySize();
+        const front = this.contents.context, back = (this.contentsBack || this.contents).context;
+        let ready = true;
+        front.save();
+        front.translate(inset, inset);
+        if (node.type === "victoryParty") {
+            if (page.kind === "exp") {
+                // The cards, pictures and names stay; the bars and numbers are drawn over them each frame of the fill.
+                if (whole) {
+                    back.save();
+                    back.translate(inset, inset);
+                    ready = hud.drawParty(back, size.width, size.height, node, run, page, theme, "static");
+                    back.restore();
+                }
+                hud.drawParty(front, size.width, size.height, node, run, page, theme, "moving");
+            }
+        } else if (node.type === "victoryLevels") {
+            if (page.kind === "levelUp") ready = hud.drawLevels(front, size.width, size.height, node, run.summary, page, theme);
+        } else if (node.type === "victoryRewards") {
+            if (page.kind === "rewards") ready = hud.drawRewards(front, size.width, size.height, node, run.summary, page, theme);
+        } else {
+            this._victoryText = hud.textOf(node, run, theme);
+            hud.drawText(front, size.width, size.height, node, this._victoryText, theme);
+        }
+        front.restore();
+        // A picture file still loading is asked after once a frame; a model's portrait announces itself
+        // (FightPortraits.version), so waiting for one draws nothing again until it is made.
+        if (whole) this._victoryAwaited = !ready && !!theme._pending;
+        touch(this.contents);
+        if (whole && this.contentsBack) touch(this.contentsBack);
+    };
+
+    /** Once a frame while the interface is up: the node is drawn again only when what it shows has changed. */
+    Window_ReactorUIVictory.prototype.updateVictory = function(run) {
+        const hud = VictoryHud(), node = this._uiNode;
+        if (!hud || !run) return;
+        const first = this._victoryRun !== run;
+        this._victoryRun = run;
+        const portraits = ReactorUI.FightPortraits.version;
+        // A picture that was still loading is drawn on the frame it arrives; a model's portrait on the frame it is made.
+        const pictured = portraits !== this._victoryPortraits || (this._victoryAwaited && ReactorUI.victoryTheme().settled());
+        this._victoryPortraits = portraits;
+        if (first || run.index !== this._victoryIndex || pictured) {
+            this._victoryIndex = run.index;
+            this._victoryMoved = hud.isAnimating(run);
+            this._victoryFilling = hud.isFilling(run);
+            this.refresh();
+            return;
+        }
+        if (node.type === "victoryParty") {
+            // While the bars fill, and once more as they come to rest.
+            const moving = hud.isAnimating(run);
+            if (moving || this._victoryMoved) {
+                this.contents.clear();
+                if (node.fill === "window" && node.borderWidth > 0) this.drawBorder(this.contents);
+                this.drawVictory(false);
+            }
+            this._victoryMoved = moving;
+        } else if (node.type === "victoryText") {
+            // On one page its words change only as the fill ends (the hint appears): nothing is worked out on other frames.
+            const filling = hud.isFilling(run);
+            if (filling !== this._victoryFilling) {
+                this._victoryFilling = filling;
+                if (hud.textOf(node, run, ReactorUI.victoryTheme()) !== this._victoryText) this.refresh();
+            }
+        }
+    };
+
+    /** Fonts, colors, pictures and the game's own words, for the shared drawing. */
+    ReactorUI.victoryTheme = function() {
+        if (this._victoryTheme) return this._victoryTheme;
+        const base = this.fightTheme();
+        const theme = Object.create(base);
+        theme._pending = null;
+        const params = [];
+        for (let id = 0; id < 8; id++) params.push(TextManager.param(id));
+        theme.terms = Object.assign({}, base.terms, {
+            exp: TextManager.expA, expName: TextManager.exp, currency: TextManager.currencyUnit, params,
+            obtainExp: TextManager.obtainExp, obtainGold: TextManager.obtainGold
+        });
+        theme.own = typeof $dataSystem !== "undefined" && $dataSystem && $dataSystem.reactorBattle && $dataSystem.reactorBattle.terms || {};
+        this._victoryTheme = theme;
+        return theme;
+    };
+
+    const Victory = ReactorUI.Victory = {
+        FIELD: "reactorVictoryInterfaceId",
+        // Frames the interface takes to fade away once closed (the game has its control back at once).
+        CLOSE_FRAMES: 10,
+        // The least frames between two level-up sounds, so several members leveling together do not stack them.
+        SOUND_FRAMES: 10,
+        // Frames a won battle waits for a scene to open the interface before it ends without it.
+        OPEN_FRAMES: 60,
+        _session: null,
+        _giving: false,
+        // True while the scene under the interface is ending: nothing could show another one then.
+        _ending: false,
+        _input: { ok: false, cancel: false, held: false },
+        // A mouse button that went down while the interface is up (see the listener below).
+        _clicked: false,
+        // The engine's own wording of the rewards, as it stood before any plugin loaded.
+        _engine: typeof BattleManager !== "undefined" ? { displayRewards: BattleManager.displayRewards } : null,
+
+        /** The stored record System binds as Victory (System 2), or null. Nothing is built: it may be asked every frame. */
+        bound() {
+            const hud = VictoryHud();
+            if (!hud || typeof $dataSystem === "undefined" || !$dataSystem) return null;
+            const id = hud.boundId($dataSystem);
+            const list = window.$dataUserInterfaces;
+            const raw = id > 0 && Array.isArray(list) ? list[id] : null;
+            if (!raw || typeof raw !== "object") return null;
+            return Math.floor(Number(raw.id) || 0) === id && raw.mode === hud.MODE ? raw : null;
+        },
+
+        /** The project's Victory record laid out for this screen, or null. Built anew on each call: once a victory. */
+        record() {
+            const raw = this.bound();
+            return raw ? ReactorUI.normalizeInterface(raw) : null;
+        },
+
+        /** Whether the project has put a Victory interface to use. */
+        isInUse() {
+            return !!this.bound();
+        },
+
+        /** Whether a plugin words a Classic battle's rewards its own way: its lines play then, and the interface stands down. */
+        standsDown() {
+            const engine = this._engine;
+            return !!engine && typeof BattleManager !== "undefined" && BattleManager.displayRewards !== engine.displayRewards;
+        },
+
+        /** True while the rewards are being given: a level gained then is shown by the interface, not by a message. */
+        isGiving() {
+            return this._giving;
+        },
+
+        /** True from the rewards being given until the player closes the interface. */
+        isRunning() {
+            return !!this._session && !this._session.closed;
+        },
+
+        modelOf(actor) {
+            if (typeof Reactor3D === "undefined" || !Reactor3D.actorSlotSpec) return null;
+            const id = actor.actorId();
+            try { return Reactor3D.actorSlotSpec(id, "face") || Reactor3D.actorSlotSpec(id, "character") || Reactor3D.actorSlotSpec(id, "battler") || null; }
+            catch (error) { return null; }
+        },
+
+        /** What an actor is now: its level, EXP, parameters and skills. */
+        snapshot(actor) {
+            const params = [];
+            for (let id = 0; id < 8; id++) params.push(actor.param(id));
+            return {
+                actorId: actor.actorId(), name: actor.name(), level: actor.level, exp: actor.currentExp(), params,
+                skills: actor.skills(), dead: actor.isDead(), reserve: !actor.isBattleMember(),
+                faceName: actor.faceName(), faceIndex: actor.faceIndex(), characterName: actor.characterName(), characterIndex: actor.characterIndex(),
+                model: this.modelOf(actor)
+            };
+        },
+
+        /** The rewards as the game gives them when the caller names no way of its own. */
+        give(rewards) {
+            if (rewards.gold > 0) $gameParty.gainGold(rewards.gold);
+            for (const item of rewards.items || []) $gameParty.gainItem(item, 1);
+            for (const actor of $gameParty.allMembers()) actor.gainExp(rewards.exp || 0);
+        },
+
+        /**
+         * Gives a won battle's rewards and shows them. `rewards` is `{ exp,
+         * gold, items }` as the battle made it. `options.give(rewards)` gives
+         * them (the default gives gold, items and each member's EXP through
+         * the game's own functions); `options.onClose()` is called once, when
+         * the player closes the interface; `options.record` shows that record
+         * in place of the bound one. Returns false, having done
+         * nothing, when the project has no Victory interface in use, one is
+         * still being read (`isRunning()`), or the scene under one is ending
+         * at this moment: the caller then gives and words the rewards itself.
+         * One the player has closed gives way at once, so the next may be
+         * started from its `onClose`.
+         */
+        run(rewards, options) {
+            const hud = VictoryHud();
+            options = options || {};
+            const record = hud && !this.isRunning() && !this._ending ? options.record || this.record() : null;
+            if (!record) return false;
+            // The one before is only fading away: it is taken down now.
+            if (this._session) { this.destroy(this._session); this._session = null; }
+            rewards = rewards || {};
+            const actors = $gameParty.allMembers();
+            const before = actors.map(actor => this.snapshot(actor));
+            this._giving = true;
+            try { (options.give || this.give).call(this, rewards); } finally { this._giving = false; }
+            const members = actors.map((actor, index) => hud.member(before[index], this.snapshot(actor), level => actor.expForLevel(level), actor.isMaxLevel()));
+            const summary = { exp: Math.max(0, Number(rewards.exp) || 0), gold: Math.max(0, Number(rewards.gold) || 0), members, items: hud.groupItems(rewards.items) };
+            this._session = { summary, record, overlay: null, run: null, scene: null, battle: false, onClose: options.onClose || null, closed: false, fade: 0, sound: 0, frame: 0, waited: 0 };
+            return true;
+        },
+
+        /**
+         * Playtest Interface on a Victory record: a won battle made up from
+         * the database (the leader gains a level), shown over the preview's
+         * black screen. In a running game the record is not a scene to call.
+         */
+        preview(scene) {
+            const leader = ReactorUI.isPreview() ? $gameParty.leader() : null;
+            if (!leader) { scene.popScene(); return; }
+            const named = list => (list || []).filter(entry => entry && entry.name);
+            const item = named($dataItems)[0], weapon = named($dataWeapons)[0], armor = named($dataArmors)[0];
+            const items = [item, item, weapon, armor].filter(Boolean);
+            const next = leader.nextLevelExp();
+            const exp = Math.max(1, next - leader.currentExp() + Math.round((leader.expForLevel(leader.level + 2) - next) * 0.3));
+            if (!this.run({ exp, gold: 120, items }, { record: scene._interface, onClose: () => scene.performClose() })) scene.popScene();
+        },
+
+        /** A Classic battle's victory: false where the game's own message lines are to play. */
+        classic(manager) {
+            if (this.standsDown()) return false;
+            if (!this.run(manager._rewards, { give: () => manager.gainRewards() })) return false;
+            this._session.battle = true;
+            return true;
+        },
+
+        /**
+         * Asked once a frame by a won battle that waits on the interface:
+         * true when no scene has opened it within a second (a plugin's battle
+         * scene that never reaches the engine's update), so the battle ends
+         * without it. The rewards have been given already.
+         */
+        unopened() {
+            const session = this._session;
+            if (!session || session.closed || session.overlay) return false;
+            if (++session.waited < this.OPEN_FRAMES) return false;
+            console.warn("ReactorUI: no scene opened the Victory interface; the battle ends without it");
+            this._session = null;
+            this.finish(session);
+            return true;
+        },
+
+        /**
+         * A Classic battle's own windows from the moment the result opens
+         * until the battle scene is gone: its HUD interface is hidden and its
+         * status window closed, as the game's victory messages close it.
+         */
+        standDown(scene) {
+            const battleHud = scene._reactorBattleHud;
+            if (battleHud) for (const window of battleHud._nodeWindows) window.visible = false;
+            const status = scene._statusWindow;
+            if (status && typeof status.close === "function") status.close();
+        },
+
+        open(scene, session) {
+            const hud = VictoryHud();
+            const layer = scene._windowLayer;
+            ReactorUI._fightTheme = null;
+            ReactorUI._victoryTheme = null;
+            // Over everything else on the screen's window layer.
+            const overlay = ReactorUI.createOverlay(scene, session.record, { addWindow: window => layer.addChild(window) });
+            if (session.record.openTransition !== "none") overlay._visibilityAlpha = 0;
+            const sizes = new Map();
+            for (const window of overlay._nodeWindows) if (window.victorySize) sizes.set(window.node().id, window.victorySize());
+            const nodes = session.record.nodes;
+            const pages = hud.pages(nodes, session.summary, node => sizes.get(node.id) || { width: node.width, height: node.height });
+            session.run = hud.newRun(session.summary, pages, nodes.find(node => node.type === "victoryParty") || null);
+            session.party = nodes.find(node => node.type === "victoryParty") || null;
+            session.overlay = overlay;
+            session.scene = scene;
+            if (session.battle) scene._reactorVictoryStood = true;
+            Input.clear();
+            TouchInput.clear();
+            this._clicked = false;
+        },
+
+        playLevelUp(session) {
+            const node = session.party;
+            if (node && !node.levelUpSound) return;
+            if (session.sound > 0) return;
+            session.sound = this.SOUND_FRAMES;
+            if (node && node.se) AudioManager.playSe(node.se);
+            else SoundManager.playUseItem();
+        },
+
+        destroy(session) {
+            const overlay = session.overlay;
+            session.overlay = null;
+            if (!overlay) return;
+            for (const window of overlay._nodeWindows) {
+                if (window.parent) window.parent.removeChild(window);
+                if (window.destroy) window.destroy();
+            }
+            overlay._nodeWindows.length = 0;
+            if (overlay._measureWindow && overlay._measureWindow.destroy) overlay._measureWindow.destroy();
+        },
+
+        /** The player closed it (or its scene ended under it): whoever waits is told, once. */
+        finish(session) {
+            if (session.closed) return;
+            session.closed = true;
+            const done = session.onClose;
+            session.onClose = null;
+            if (done) {
+                try { done(); } catch (error) { console.error("ReactorUI: the Victory interface's onClose failed", error); }
+            }
+        },
+
+        /** Once a frame from the scene the interface stands over. */
+        updateScene(scene) {
+            if (scene._reactorVictoryStood) this.standDown(scene);
+            const session = this._session;
+            if (!session) return;
+            if (session.scene && session.scene !== scene) return;
+            // An interface that fails must never hold the game: it is taken down and the wait ends.
+            try {
+                if (!session.overlay && !session.closed) {
+                    if (!scene._windowLayer) return;
+                    this.open(scene, session);
+                    if (session.battle) this.standDown(scene);
+                }
+                this.updateSession(session);
+            } catch (error) {
+                console.error("ReactorUI: the Victory interface failed and was closed", error);
+                this.destroy(session);
+                // Whoever is told may start the next one: this one is let go of first.
+                if (this._session === session) this._session = null;
+                this.finish(session);
+            }
+        },
+
+        updateSession(session) {
+            const hud = VictoryHud(), overlay = session.overlay, run = session.run;
+            if (session.closed) {
+                // Fading away while the game goes on.
+                if (++session.fade >= this.CLOSE_FRAMES) { this.destroy(session); this._session = null; return; }
+            } else {
+                const input = this._input;
+                // A click heard by the listener and the same click as TouchInput reports it a frame later are one
+                // step: the first is followed by the moment in which no press is heard (ReactorVictoryHud.LOCK_FRAMES).
+                input.ok = Input.isTriggered("ok") || this._clicked || TouchInput.isTriggered();
+                this._clicked = false;
+                input.cancel = Input.isTriggered("cancel") || TouchInput.isCancelled();
+                input.held = Input.isLongPressed("ok") || TouchInput.isLongPressed();
+                const events = hud.step(run, input);
+                if (session.sound > 0) session.sound--;
+                if (events & hud.EVENT_LEVEL) this.playLevelUp(session);
+                if (events & hud.EVENT_CLOSE) SoundManager.playOk();
+                else if (events & (hud.EVENT_PAGE | hud.EVENT_SKIP)) SoundManager.playCursor();
+                // Whoever is told may start the next one, which takes this one down: nothing more is done with it this frame.
+                if (run.closed) { this.finish(session); return; }
+            }
+            session.frame++;
+            overlay.update();
+            const kind = hud.page(run).kind;
+            const out = session.closed ? 1 - session.fade / this.CLOSE_FRAMES : 1;
+            for (const window of overlay._nodeWindows) {
+                const node = window.node();
+                const page = hud.pageOf(node);
+                if (page && page !== kind) { window.visible = false; continue; }
+                if (!window.visible) continue;
+                if (window.updateVictory) window.updateVictory(run);
+                if (out < 1) window.alpha *= out;
+                // The hint breathes, so it reads as waiting for a key.
+                else if (node.type === "victoryText" && node.victoryText === "hint") window.alpha *= 0.7 + 0.3 * Math.abs(Math.sin(session.frame / 22));
+            }
+            if (ReactorUI.FightPortraits.queue.length) ReactorUI.FightPortraits.update(false);
+        },
+
+        /** The scene under the interface is ending: nothing is left waiting on it. */
+        sceneEnds(scene) {
+            const session = this._session;
+            if (!session || (session.scene && session.scene !== scene)) return;
+            this.destroy(session);
+            this._session = null;
+            this._ending = true;
+            try { this.finish(session); } finally { this._ending = false; }
+        }
+    };
+    window.ReactorVictory = Victory;
+
+    // On a 3D map a click also takes the mouse for the look, and taking it clears TouchInput before the frame
+    // that would have read the click: the button is heard here, so one click is always one step.
+    if (typeof document !== "undefined" && document.addEventListener) {
+        document.addEventListener("mousedown", event => {
+            if (event.button === 0 && Victory._session && Victory._session.overlay && !Victory._session.closed) Victory._clicked = true;
+        });
+    }
+
+    if (typeof BattleManager !== "undefined") {
+        // A won battle ends when the player closes the Victory interface.
+        const _updateBattleEnd = BattleManager.updateBattleEnd;
+        BattleManager.updateBattleEnd = function() {
+            if (Victory.isRunning() && !Victory.unopened()) return;
+            _updateBattleEnd.apply(this, arguments);
+        };
+    }
+    for (const sceneClass of [typeof Scene_Battle !== "undefined" ? Scene_Battle : null, typeof Scene_Map !== "undefined" ? Scene_Map : null, Scene_ReactorUI]) {
+        if (!sceneClass || typeof sceneClass.prototype.update !== "function") continue;
+        const _update = sceneClass.prototype.update;
+        sceneClass.prototype.update = function() {
+            _update.apply(this, arguments);
+            Victory.updateScene(this);
+        };
+        const _terminate = sceneClass.prototype.terminate;
+        sceneClass.prototype.terminate = function() {
+            Victory.sceneEnds(this);
+            if (_terminate) _terminate.apply(this, arguments);
+        };
+    }
+    // On the map the party stands still and the menu stays shut while the result is read.
+    if (typeof Game_Player !== "undefined" && typeof Game_Player.prototype.canMove === "function") {
+        const _canMove = Game_Player.prototype.canMove;
+        Game_Player.prototype.canMove = function() {
+            return !Victory.isRunning() && _canMove.apply(this, arguments);
+        };
+    }
+    if (typeof Scene_Map !== "undefined" && typeof Scene_Map.prototype.isMenuEnabled === "function") {
+        const _isMenuEnabled = Scene_Map.prototype.isMenuEnabled;
+        Scene_Map.prototype.isMenuEnabled = function() {
+            return !Victory.isRunning() && _isMenuEnabled.apply(this, arguments);
+        };
     }
 
     ReactorUI.REPLACEMENTS = {
@@ -5106,9 +7578,14 @@
     const _Scene_Boot_start = Scene_Boot.prototype.start;
     Scene_Boot.prototype.start = function() {
         ReactorUI.installSceneRouting();
+        // Both branches below skip the stock start, and a preview can still
+        // use an item or open a battle. Installing twice is a no-op.
+        if (typeof Game_Action === "function") Game_Action.installMultiElementShim();
         const request = ReactorUI.captureRequest();
         if (request && !DataManager.isBattleTest() && !DataManager.isEventTest()) {
             Scene_Base.prototype.start.call(this);
+            // A capture can open Scene_Battle; the stock start that installs the gate is skipped.
+            if (typeof Game_Battler === "function") Game_Battler.installBuffRateGate();
             SoundManager.preloadImportantSounds();
             if (ReactorUI.beginCapture(request)) {
                 this.resizeScreen();
@@ -5121,6 +7598,8 @@
             return _Scene_Boot_start.apply(this, arguments);
         }
         Scene_Base.prototype.start.call(this);
+        // The preview can use an Add Buff item on the party.
+        if (typeof Game_Battler === "function") Game_Battler.installBuffRateGate();
         SoundManager.preloadImportantSounds();
         DataManager.setupNewGame();
         ReactorUI._preview = true;

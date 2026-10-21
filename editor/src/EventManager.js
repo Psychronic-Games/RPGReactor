@@ -135,19 +135,33 @@ class EventManager {
         return sizes ? JSON.parse(JSON.stringify(sizes)) : null;
     }
 
+    /** The footprints measured from events' models (`reactor3d.eventSizeAuto`), for an undo step. */
+    _eventAutoSizesSnapshot() {
+        const sizes = this.currentMap?.reactor3d?.eventSizeAuto;
+        return sizes ? JSON.parse(JSON.stringify(sizes)) : null;
+    }
+
     _restoreEventSizes(snapshot) {
         if (!snapshot || !Object.prototype.hasOwnProperty.call(snapshot, 'sizes')) return;
         const map = this.currentMap;
+        if (Object.prototype.hasOwnProperty.call(snapshot, 'autoSizes')) {
+            if (snapshot.autoSizes && Object.keys(snapshot.autoSizes).length) {
+                map.reactor3d ||= { version: 1 };
+                map.reactor3d.eventSizeAuto = JSON.parse(JSON.stringify(snapshot.autoSizes));
+            } else if (map.reactor3d) delete map.reactor3d.eventSizeAuto;
+        }
         if (snapshot.sizes && Object.keys(snapshot.sizes).length) {
             map.reactor3d ||= { version: 1 };
             map.reactor3d.eventSize = JSON.parse(JSON.stringify(snapshot.sizes));
         } else if (map.reactor3d) delete map.reactor3d.eventSize;
+        if (map.reactor3d && typeof RRMapElevation !== 'undefined' && RRMapElevation.markEventSizes) RRMapElevation.markEventSizes(map);
     }
 
     _eventPlacement(eventId) {
         const sidecar = this.currentMap?.reactor3d;
         const size = sidecar?.eventSize?.[eventId];
-        return { height: Number(sidecar?.eventZ?.[eventId]) || 0, preview: sidecar?.eventPreviews?.[eventId] ?? null, size: Array.isArray(size) ? size.slice() : null };
+        const auto = sidecar?.eventSizeAuto?.[eventId];
+        return { height: Number(sidecar?.eventZ?.[eventId]) || 0, preview: sidecar?.eventPreviews?.[eventId] ?? null, size: Array.isArray(size) ? size.slice() : null, auto: Array.isArray(auto) ? auto.slice() : null };
     }
 
     _setEventPlacement(eventId, placement) {
@@ -155,6 +169,7 @@ class EventManager {
         if (!map) return;
         // A copied event keeps its footprint; a removed one takes it with it.
         if (typeof RRMapElevation !== 'undefined' && RRMapElevation.setEventSize) RRMapElevation.setEventSize(map, eventId, placement?.size || [1, 1]);
+        if (typeof RRMapElevation !== 'undefined' && RRMapElevation.setEventSizeAuto) RRMapElevation.setEventSizeAuto(map, eventId, placement?.auto || null);
         for (const [field, value] of [['eventZ', placement?.height], ['eventPreviews', placement?.preview]]) {
             const present = field === 'eventZ' ? Number.isFinite(value) && value > 0 : Number.isInteger(value) && value >= 0;
             if (present) {
@@ -199,6 +214,7 @@ class EventManager {
             models: this._eventModelsSnapshot(),
             heights: this._eventHeightsSnapshot(),
             sizes: this._eventSizesSnapshot(),
+            autoSizes: this._eventAutoSizesSnapshot(),
             previews: this._eventPreviewsSnapshot()
         };
         this.undoStack.push(eventsData);
@@ -224,6 +240,7 @@ class EventManager {
             models: this._eventModelsSnapshot(),
             heights: this._eventHeightsSnapshot(),
             sizes: this._eventSizesSnapshot(),
+            autoSizes: this._eventAutoSizesSnapshot(),
             previews: this._eventPreviewsSnapshot()
         });
 
@@ -257,6 +274,7 @@ class EventManager {
             models: this._eventModelsSnapshot(),
             heights: this._eventHeightsSnapshot(),
             sizes: this._eventSizesSnapshot(),
+            autoSizes: this._eventAutoSizesSnapshot(),
             previews: this._eventPreviewsSnapshot()
         });
 
@@ -410,6 +428,7 @@ class EventManager {
             else this.projectController?.mediaSurfaceManager?.close();
         }
         this.eventMode = enabled;
+        if (typeof window !== 'undefined') window.RRBattleSetup?.sync(this);
         this.projectController?.mediaSurfacePreviewManager?.syncToolInteraction?.();
         console.debug(`Event mode: ${enabled ? 'enabled' : 'disabled'}`);
 
@@ -425,6 +444,8 @@ class EventManager {
             }
         } else {
             this.removeEventInteraction();
+            // What was picked up goes with the tool: an event left selected kept its model card and its arrows over the map.
+            if (this.selectedEvent || Number.isInteger(this.selectedTileX)) this.selectEvent(null);
             // Hide starting positions when leaving event mode
             if (this.startingPositionContainer) {
                 this.startingPositionContainer.visible = false;
@@ -598,6 +619,12 @@ class EventManager {
             return;
         }
 
+        // Battle Setup has a unit or the battle start picked: the click stands it on an empty tile.
+        if (typeof window !== 'undefined' && window.RRBattleSetup?.placeAt(this, tileX, tileY)) {
+            this.resetMapClickTracking();
+            return;
+        }
+
         const currentTime = Date.now();
         const isDoubleClick = this.isMapDoubleClick(
             tileX, tileY, event.data.originalEvent, currentTime);
@@ -653,7 +680,11 @@ class EventManager {
 
         const eventAtPos = this.getEventAt(tileX, tileY);
         if (eventAtPos) this.editEvent(eventAtPos);
-        else this.createNewEvent(tileX, tileY);
+        else {
+            const vehicle = EventManager.startingVehicles(this.currentMap).find(entry => entry.x === tileX && entry.y === tileY);
+            if (vehicle) EventManager.openVehicle(vehicle);
+            else this.createNewEvent(tileX, tileY);
+        }
         return true;
     }
 
@@ -676,6 +707,11 @@ class EventManager {
         const pos = pointerEvent.data.getLocalPosition(container);
         const tileX = Math.floor(pos.x / this.tilemapManager.TILE_WIDTH);
         const tileY = Math.floor(pos.y / this.tilemapManager.TILE_HEIGHT);
+        // Battle Setup: a faint copy of what a click would place, on the tile it would land on.
+        if (typeof window !== 'undefined' && window.RRBattleSetup) {
+            const inside = tileX >= 0 && tileX < this.currentMap.width && tileY >= 0 && tileY < this.currentMap.height;
+            window.RRBattleSetup.hover2D(this, inside ? { x: tileX, y: tileY } : null);
+        }
         if (tileX < 0 || tileX >= this.currentMap.width ||
             tileY < 0 || tileY >= this.currentMap.height ||
             (tileX === this.selectedTileX && tileY === this.selectedTileY)) {
@@ -685,11 +721,21 @@ class EventManager {
 
         const tileWidth = this.tilemapManager.TILE_WIDTH;
         const tileHeight = this.tilemapManager.TILE_HEIGHT;
+        // Every pointer move lands here, and most stay on the tile they were
+        // on. Rebuilding the outline regardless re-tessellated it and
+        // re-uploaded its geometry each time for an identical picture.
+        // Over a sized event the whole footprint lights: any tile of it picks the event.
+        const hovered = this.getEventAt(tileX, tileY);
+        const [firstX, firstY, spanX, spanY] = hovered ? this._eventRect(hovered) : [tileX, tileY, 1, 1];
+        const sized = spanX > 1 || spanY > 1;
+        const key = `${tileX},${tileY},${tileWidth},${tileHeight}` + (sized ? `,${firstX},${firstY},${spanX},${spanY}` : '');
+        if (this.hoverHighlight.visible && this.hoverHighlight._rrHoverKey === key) return;
         const color = 0xFFD700;
         this.hoverHighlight.clear();
-        this.hoverHighlight.rect(tileX * tileWidth, tileY * tileHeight, tileWidth, tileHeight);
+        this.hoverHighlight.rect((sized ? firstX : tileX) * tileWidth, (sized ? firstY : tileY) * tileHeight, spanX * tileWidth, spanY * tileHeight);
         this.hoverHighlight.stroke({ color, width: 2, alpha: 0.9 });
         this.hoverHighlight.visible = true;
+        this.hoverHighlight._rrHoverKey = key;
     }
 
     hideHoverHighlight() {
@@ -763,22 +809,17 @@ class EventManager {
         const color = 0xFFD700;
         const alpha = eventAtPos ? 0.35 : 0.3;
 
+        // A sized event is selected whole: every tile of its footprint.
+        const [firstX, firstY, spanX, spanY] = eventAtPos ? this._eventRect(eventAtPos) : [this.selectedTileX, this.selectedTileY, 1, 1];
+        const left = (spanX > 1 || spanY > 1 ? firstX : this.selectedTileX) * tileWidth;
+        const top = (spanX > 1 || spanY > 1 ? firstY : this.selectedTileY) * tileHeight;
+
         // PIXI v8 API - draw filled rectangle
-        this.selectionHighlight.rect(
-            this.selectedTileX * tileWidth,
-            this.selectedTileY * tileHeight,
-            tileWidth,
-            tileHeight
-        );
+        this.selectionHighlight.rect(left, top, spanX * tileWidth, spanY * tileHeight);
         this.selectionHighlight.fill({ color: color, alpha: alpha });
 
         // Border (thicker for selection) - PIXI v8 API
-        this.selectionHighlight.rect(
-            this.selectedTileX * tileWidth,
-            this.selectedTileY * tileHeight,
-            tileWidth,
-            tileHeight
-        );
+        this.selectionHighlight.rect(left, top, spanX * tileWidth, spanY * tileHeight);
         this.selectionHighlight.stroke({ color: color, width: 3, alpha: 1.0 });
 
         this.selectionHighlight.visible = true;
@@ -788,6 +829,8 @@ class EventManager {
     showContextMenu(x, y, tileX, tileY, eventAtPos) {
         // Remove existing context menu if any
         this.hideContextMenu();
+        // Battle Setup with something picked: a right-click takes a unit off the map.
+        if (typeof window !== 'undefined' && window.RRBattleSetup?.removeAt(this, eventAtPos)) return;
 
         // Create context menu
         this.contextMenu = document.createElement('div');
@@ -829,6 +872,9 @@ class EventManager {
             }
             // Fall back to regular event creation
             this.createNewEvent(tileX, tileY);
+            // Asked for on a deck, a bridge or an upper floor in the 3D view: it stands there.
+            const pick = this.projectController?.mapEditor3D?.lastPick;
+            if (pick && pick.x === tileX && pick.y === tileY && typeof window !== 'undefined') window.RRBattleSetup?.standNewEvent?.(this, pick);
         };
 
         // Menu items
@@ -843,8 +889,10 @@ class EventManager {
                 { label: this._t('quickEvent.transfer'), action: () => this.showQuickEventDialog('transfer', tileX, tileY) },
                 { label: this._t('quickEvent.door'), action: () => this.showQuickEventDialog('door', tileX, tileY) },
                 { label: this._t('quickEvent.treasure'), action: () => this.showQuickEventDialog('treasure', tileX, tileY) },
-                { label: this._t('quickEvent.inn'), action: () => this.showQuickEventDialog('inn', tileX, tileY) }
+                { label: this._t('quickEvent.inn'), action: () => this.showQuickEventDialog('inn', tileX, tileY) },
+                { label: this._t('quickEvent.battleStart'), action: () => this.showQuickEventDialog('battleStart', tileX, tileY) }
             ] },
+            { label: this._t('battleSetup.title'), action: () => window.RRBattleSetup?.open(this), enabled: typeof window !== 'undefined' && !!window.RRBattleSetup },
             { separator: true },
             { label: this._t('eventCtx.cutEvent'), shortcut: `${shortcutPrefix}+X`, action: () => this.cutEvent(eventAtPos), enabled: !!eventAtPos },
             { label: this._t('eventCtx.copyEvent'), shortcut: `${shortcutPrefix}+C`, action: () => this.copyEvent(eventAtPos), enabled: !!eventAtPos },
@@ -1054,9 +1102,47 @@ class EventManager {
     getEventAt(x, y) {
         if (!this.currentMap || !this.currentMap.events) return null;
 
+        // An event on the cell, else a sized event whose footprint covers it (the 3D view's box answers there too).
         return this.currentMap.events.find(event =>
             event && event.x === x && event.y === y
-        );
+        ) || this.currentMap.events.find(event => {
+            if (!event) return false;
+            const [x0, y0, w, h] = this._eventRect(event);
+            return (w > 1 || h > 1) && x >= x0 && x < x0 + w && y >= y0 && y < y0 + h;
+        });
+    }
+
+    /**
+     * An event's footprint on the map, `[x0, y0, w, h]`: centred on the event's own tile (a model's
+     * measured one lies round the model). `at` asks about a tile it is not on yet, `size` a size it
+     * does not have yet.
+     */
+    _eventRect(event, at = null, size = null) {
+        const E = typeof RRMapElevation !== 'undefined' ? RRMapElevation : null;
+        const [w, h] = size || this._eventFootprint(event.id);
+        const [ox, oy] = E && E.eventFootprintOrigin && this.currentMap ? E.eventFootprintOrigin(this.currentMap, event.id, size) : [0, 0];
+        return [(at ? at.x : event.x) + ox, (at ? at.y : event.y) + oy, w, h];
+    }
+
+    _eventFootprint(eventId) {
+        const E = typeof RRMapElevation !== 'undefined' ? RRMapElevation : null;
+        return E && E.eventSize && this.currentMap ? E.eventSize(this.currentMap, eventId) : [1, 1];
+    }
+
+    /** How far, in tiles, an event's own square stands from its tile: the middle of its footprint. */
+    _eventMarkerOffset(eventId) {
+        const E = typeof RRMapElevation !== 'undefined' ? RRMapElevation : null;
+        return E && E.eventMarkerOffset && this.currentMap ? E.eventMarkerOffset(this.currentMap, eventId) : [0, 0];
+    }
+
+    /** Whether `event` can stand at (x, y): no other event on any cell of its footprint. */
+    canPlaceEvent(event, x, y, size = null) {
+        const [x0, y0, w, h] = this._eventRect(event, { x, y }, size);
+        return !(this.currentMap?.events || []).some(other => {
+            if (!other || other.id === event.id) return false;
+            const [ox, oy, ow, oh] = this._eventRect(other);
+            return ox < x0 + w && ox + ow > x0 && oy < y0 + h && oy + oh > y0;
+        });
     }
 
     // Select an event
@@ -1092,22 +1178,19 @@ class EventManager {
     // Update just the border color on an event sprite (green=selected, white=normal)
     updateEventSpriteBorder(eventId, isSelected) {
         const sprite = this.eventSprites.get(eventId);
-        if (!sprite || !sprite.children || sprite.children.length === 0) return;
-
-        // The first child is the Graphics object with background + border
-        const graphics = sprite.children[0];
-        if (!(graphics instanceof PIXI.Graphics)) return;
-
-        const tileWidth = this.tilemapManager.TILE_WIDTH;
-        const tileHeight = this.tilemapManager.TILE_HEIGHT;
-        const borderColor = isSelected ? 0x00ff00 : 0xffffff;
-
-        // Rebuild graphics (background + border)
-        graphics.clear();
-        graphics.rect(0, 0, tileWidth, tileHeight);
-        graphics.fill({ color: 0x000000, alpha: 0.75 });
-        graphics.rect(0, 0, tileWidth, tileHeight);
-        graphics.stroke({ width: 1, color: borderColor });
+        if (!sprite) return;
+        // A sized event's footprint takes the tone with its square.
+        if (sprite._rrArea) this._drawEventFootprint(sprite._rrArea, this._eventFootprint(eventId), isSelected);
+        if (sprite._rrSquare) this._drawEventSquare(sprite._rrSquare, isSelected);
+        // Its outline over a preview follows too.
+        const outline = this.eventOutlines?.get(eventId);
+        const event = outline && (this.currentMap?.events || []).find(e => e && e.id === eventId);
+        if (outline && event) {
+            const next = this.createEventOutline(event);
+            const index = outline.parent ? outline.parent.getChildIndex(outline) : -1;
+            if (index >= 0) { outline.parent.addChildAt(next, index); outline.parent.removeChild(outline); outline.destroy(); this.eventOutlines.set(eventId, next); }
+            else next.destroy();
+        }
     }
 
     // Select an event by ID
@@ -1125,12 +1208,29 @@ class EventManager {
         }));
     }
 
-    selectEventById(eventId) {
+    /** Event mode as the toolbar's event tool turns it on; nothing where it is on already. */
+    enterEventMode() {
+        if (this.eventMode) return;
+        const app = typeof window !== 'undefined' ? window.reactor : null;
+        if (app && app.eventManager === this && typeof app.toggleEventMode === 'function') app.toggleEventMode();
+        else this.setEventMode(true);
+    }
+
+    /** A row of the Events list: the map goes to Event mode with that event selected and in view. */
+    selectEventFromList(eventId) {
+        if (!this.currentMap?.events?.some(entry => entry && entry.id === eventId)) return;
+        this.enterEventMode();
+        this.selectEventById(eventId, { reveal: true });
+    }
+
+    /** Selects an event of this map by its number; with `reveal`, the map view in use is brought to it as well (a row of the Events list). */
+    selectEventById(eventId, { reveal = false } = {}) {
         if (!this.currentMap || !this.currentMap.events) return;
 
         const event = this.currentMap.events.find(e => e && e.id === eventId);
         if (event) {
             this.selectEvent(event);
+            if (reveal) this.centerOnEvent(event);
         }
     }
 
@@ -1179,9 +1279,8 @@ class EventManager {
             if (newTileX >= 0 && newTileX < this.currentMap.width &&
                 newTileY >= 0 && newTileY < this.currentMap.height) {
 
-                // Check if there's another event at the target position (but not the dragged one)
-                const existingEvent = this.getEventAt(newTileX, newTileY);
-                if (!existingEvent || existingEvent.id === this.draggedEvent.id) {
+                // No other event on any cell the dragged one's footprint would cover
+                if (this.canPlaceEvent(this.draggedEvent, newTileX, newTileY)) {
                     // First real movement: capture the pre-drag state for
                     // undo (the event still holds its original position here)
                     if (!this._dragStateSaved) {
@@ -1204,6 +1303,10 @@ class EventManager {
                     if (sprite) {
                         sprite.x = newTileX * this.tilemapManager.TILE_WIDTH;
                         sprite.y = newTileY * this.tilemapManager.TILE_HEIGHT;
+                        const outline = this.eventOutlines?.get(this.draggedEvent.id);
+                        if (outline) { outline.x = sprite.x; outline.y = sprite.y; }
+                        // What is drawn of the event at real size (its picture or model, its name, its ring) goes with it.
+                        this.movePreviewWith(this.draggedEvent);
                         this.updateSelectionHighlight();
                     } else {
                         this.renderEvents();
@@ -1451,6 +1554,9 @@ class EventManager {
         const events = targetMap.events || (targetMap.events = []);
         if (events[event.id] || events.some(entry => entry && entry.id === event.id)) return false;
         this.saveState();
+        // An id is used again once its event is gone: what the map's 3D sidecar kept under it goes first.
+        this._setEventModels(event.id, null);
+        this._setEventPlacement(event.id, null);
         events[event.id] = event;
         this.renderEvents();
         this.selectEvent(event);
@@ -1479,6 +1585,13 @@ class EventManager {
 
     showQuickEventDialog(kind, x, y) {
         if (!this.currentMap || this.getEventAt(x, y)) return;
+        // A battle start asks nothing: Start Battle on Map as its dialog writes a new one, on Player Touch, once.
+        if (kind === 'battleStart') {
+            const made = typeof window !== 'undefined' ? window.RRBattleSetup?.battleStartEvent?.(this, x, y) : null;
+            // Made on a deck, a bridge or an upper floor in the 3D view: it stands there.
+            if (made && this.commitQuickEvent(made)) window.RRBattleSetup?.standEvent?.(this, made, this.projectController?.mapEditor3D?.lastPick);
+            return;
+        }
         const tt = (text, replacements = {}) => {
             const translated = window.I18n ? window.I18n.tText(text) : text;
             return Object.entries(replacements).reduce((result, [key, value]) => (
@@ -1648,7 +1761,7 @@ class EventManager {
         overlay.addEventListener('keydown', event => { if (event.key === 'Escape') close(); });
         dialog.querySelector('.quick-event-create').addEventListener('click', () => {
             if ((kind === 'door' || kind === 'treasure') && !config.characterName) {
-                alert(tt('Choose a character graphic.'));
+                RRDialog.alert(tt('Choose a character graphic.'), { title: this._t('quickEvent.title'), kind: 'warning' });
                 return;
             }
             const event = this.buildQuickEvent(kind, x, y, config);
@@ -1945,13 +2058,14 @@ class EventManager {
         if (this.currentMap !== targetMap) return;
 
         if (!eventData) {
-            alert(tt('No event in clipboard to paste.'));
+            RRDialog.alert(tt('No event in clipboard to paste.'), { title: this._t('eventCtx.pasteEvent'), kind: 'warning' });
             return;
         }
 
-        // Check if there's already an event at this position
-        if (this.getEventAt(x, y)) {
-            alert(tt('There is already an event at this position.'));
+        // Check if there's already an event at this position, or under the pasted one's footprint
+        const pastedSize = Array.isArray(eventPlacement?.size) ? eventPlacement.size : [1, 1];
+        if (!this.canPlaceEvent({ id: null }, x, y, pastedSize)) {
+            RRDialog.alert(tt('There is already an event at this position.'), { title: this._t('eventCtx.pasteEvent'), kind: 'warning' });
             return;
         }
 
@@ -1966,7 +2080,9 @@ class EventManager {
         newEvent.id = nextId;
         newEvent.x = x;
         newEvent.y = y;
-        newEvent.name = `EV${String(nextId).padStart(3, '0')}`;
+        // A named event keeps its name; one still wearing its default name takes the default for its new id.
+        const defaultName = id => `EV${String(id).padStart(3, '0')}`;
+        if (!newEvent.name || newEvent.name === defaultName(eventData.id)) newEvent.name = defaultName(nextId);
 
         // Add to map
         this.currentMap.events[nextId] = newEvent;
@@ -2014,7 +2130,7 @@ class EventManager {
 
     // Show find dialog
     _t(key, params) {
-        return window.I18n ? window.I18n.t(key, params) : key;
+        return (typeof window !== 'undefined' && window.I18n) ? window.I18n.t(key, params) : key;
     }
 
     showFindDialog() {
@@ -2116,7 +2232,7 @@ class EventManager {
             console.debug(`Found ${this.currentSearchResults.length} events matching "${query}"`);
         } else {
             const tt = (text) => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
-            alert(`${tt('No events found matching')} "${query}"`);
+            RRDialog.alert(`${tt('No events found matching')} "${query}"`, { title: tt('Find Event') });
         }
     }
 
@@ -2140,25 +2256,35 @@ class EventManager {
         this.centerOnEvent(event);
     }
 
-    // Center view on event
+    /**
+     * Brings an event into the map view in use: the 3D view turns its
+     * target to it and comes in until a tile is a working size; the 2D view
+     * puts the event's tile in its middle, at the zoom it has.
+     */
     centerOnEvent(event) {
         if (!event || !this.tilemapManager) return;
-
-        const canvasContainer = document.getElementById('canvas-container');
-        if (!canvasContainer) return;
-
-        const eventPixelX = event.x * this.tilemapManager.TILE_WIDTH;
-        const eventPixelY = event.y * this.tilemapManager.TILE_HEIGHT;
-
-        // Center the view on the event
-        const centerX = canvasContainer.clientWidth / 2;
-        const centerY = canvasContainer.clientHeight / 2;
-
-        canvasContainer.scrollLeft = eventPixelX - centerX;
-        canvasContainer.scrollTop = eventPixelY - centerY;
+        const view = this.projectController && this.projectController.mapEditor3D;
+        if (!(view && typeof view.frameEvent === 'function' && view.isEnabled?.() && view.frameEvent(event.id))) {
+            this.centerOnTile(event.x, event.y);
+        }
 
         // Update selection to this tile
         this.selectTile(event.x, event.y);
+    }
+
+    /** Puts the middle of a tile in the middle of the 2D map view (as near as the map's edges allow), at the zoom it has. */
+    centerOnTile(x, y) {
+        const tilemap = this.tilemapManager, container = tilemap && tilemap.container;
+        if (!container || typeof tilemap.setViewportTransform !== 'function') return false;
+        const size = typeof tilemap.viewportSize === 'function' ? tilemap.viewportSize() : null;
+        if (!size || !(size.width > 0) || !(size.height > 0)) return false;
+        const scale = (container.scale && container.scale.x) || 1;
+        tilemap.setViewportTransform(
+            size.width / 2 - (x + 0.5) * tilemap.TILE_WIDTH * scale,
+            size.height / 2 - (y + 0.5) * tilemap.TILE_HEIGHT * scale,
+            scale);
+        tilemap.updateScrollbars?.();
+        return true;
     }
 
     // Set starting position
@@ -2180,7 +2306,7 @@ class EventManager {
             await this.databaseManager.saveJSON(currentProject.path, 'System.json', systemData);
         } catch (error) {
             console.error('Error saving System.json:', error);
-            alert(tt('Error saving starting position. Check console for details.'));
+            RRDialog.alert(tt('Error saving starting position. Check console for details.'), { title: this._t('eventCtx.setStart'), kind: 'error' });
         }
         this.renderStartingPositions();
     }
@@ -2210,7 +2336,7 @@ class EventManager {
                 systemData.startX = x;
                 systemData.startY = y;
                 console.debug(`Player starting position set to (${x}, ${y}) on map ${mapId}`);
-                alert(`${tt('Player')} ${tt('starting position set to')} (${x}, ${y}) ${tt('on Map')} ${mapId}`);
+                RRDialog.alert(`${tt('Player')} ${tt('starting position set to')} (${x}, ${y}) ${tt('on Map')} ${mapId}`, { title: this._t('eventCtx.setStart') });
                 break;
             case 'boat':
                 if (!systemData.boat) {
@@ -2227,7 +2353,7 @@ class EventManager {
                 systemData.boat.startX = x;
                 systemData.boat.startY = y;
                 console.debug(`Boat starting position set to (${x}, ${y}) on map ${mapId}`);
-                alert(`${tt('Boat')} ${tt('starting position set to')} (${x}, ${y}) ${tt('on Map')} ${mapId}`);
+                RRDialog.alert(`${tt('Boat')} ${tt('starting position set to')} (${x}, ${y}) ${tt('on Map')} ${mapId}`, { title: this._t('eventCtx.setStart') });
                 break;
             case 'ship':
                 if (!systemData.ship) {
@@ -2244,7 +2370,7 @@ class EventManager {
                 systemData.ship.startX = x;
                 systemData.ship.startY = y;
                 console.debug(`Ship starting position set to (${x}, ${y}) on map ${mapId}`);
-                alert(`${tt('Ship')} ${tt('starting position set to')} (${x}, ${y}) ${tt('on Map')} ${mapId}`);
+                RRDialog.alert(`${tt('Ship')} ${tt('starting position set to')} (${x}, ${y}) ${tt('on Map')} ${mapId}`, { title: this._t('eventCtx.setStart') });
                 break;
             case 'airship':
                 if (!systemData.airship) {
@@ -2261,7 +2387,7 @@ class EventManager {
                 systemData.airship.startX = x;
                 systemData.airship.startY = y;
                 console.debug(`Airship starting position set to (${x}, ${y}) on map ${mapId}`);
-                alert(`${tt('Airship')} ${tt('starting position set to')} (${x}, ${y}) ${tt('on Map')} ${mapId}`);
+                RRDialog.alert(`${tt('Airship')} ${tt('starting position set to')} (${x}, ${y}) ${tt('on Map')} ${mapId}`, { title: this._t('eventCtx.setStart') });
                 break;
         }
 
@@ -2272,7 +2398,7 @@ class EventManager {
             console.debug('System.json saved with new starting position');
         } catch (error) {
             console.error('Error saving System.json:', error);
-            alert(tt('Error saving starting position. Check console for details.'));
+            RRDialog.alert(tt('Error saving starting position. Check console for details.'), { title: this._t('eventCtx.setStart'), kind: 'error' });
         }
 
         // Re-render starting position markers for the current map
@@ -2310,7 +2436,8 @@ class EventManager {
      */
     _eventPreviewMenu(event) {
         if (!event) return [{ label: this._t('eventCtx.hidePreview'), action: () => {} }];
-        const current = this.getEventPreviewPage(event);
+        // The page chosen here: a battle unit is drawn without one, and has nothing to hide.
+        const current = EventManager.chosenPreviewPage(this.currentMap, event);
         const pages = (event.pages || []).map((page, index) => ({
             label: `${current === index ? '\u2713 ' : ''}${this._t('eventCtx.previewPage', { n: index + 1 })}`,
             action: () => this.setEventPreview(event, index)
@@ -2319,10 +2446,522 @@ class EventManager {
         return pages;
     }
 
+    //-------------------------------------------------------------------------
+    // Units on the map
+    //
+    // A battle unit is drawn as what it is in both map views, by the game's
+    // look rule (ReactorFightLook): the event's own picture or model, else
+    // its record's model, its character sheet or its battler picture, else a
+    // plain figure in its side's color. The 3D view asks the same functions.
+
+    // The sides' colors where the look rule is not loaded (the rule's own otherwise).
+    static SIDE_COLORS = { ally: '#4aa8ff', enemy: '#ff5a4a', neutral: '#e6d15a' };
+    // How long what the Database says of the units' looks is kept, in milliseconds.
+    static LOOK_SOURCES_MS = 1000;
+    // The longest side of a battler picture kept for drawing, and the width of the plain figure's picture, in pixels.
+    static LOOK_ART_MAX = 512;
+    static LOOK_FIGURE_WIDE = 256;
+    // A ring's radius, as a part of the tiles its unit takes.
+    static RING_REACH = 0.44;
+    // How far over its tile's lower edge a character stands on the 2D map, in pixels.
+    static CHARACTER_LIFT = 6;
+    static _units = new WeakMap();
+    static _lookSources = null;
+    static _lookArts = new Map();
+    static _databaseWatch = null;
+
+    /** A side's color (`ally`, `enemy`, `neutral`), as the game draws it. */
+    static sideColor(team) {
+        const rule = typeof ReactorFightLook !== 'undefined' ? ReactorFightLook : null;
+        return rule && typeof rule.color === 'function' ? rule.color(team) : EventManager.SIDE_COLORS[team] || EventManager.SIDE_COLORS.neutral;
+    }
+
+    /** The page of an event Preview Event chose; null when none is chosen. */
+    static chosenPreviewPage(map, event) {
+        const previews = map && map.reactor3d ? map.reactor3d.eventPreviews : null;
+        const page = previews && event ? previews[String(event.id)] : undefined;
+        return Number.isInteger(page) && event.pages && event.pages[page] ? page : null;
+    }
+
+    /**
+     * The page of an event the map draws at real size: the one Preview Event
+     * chose, else, for a battle unit, the page it is a unit on (its first
+     * page for a row or a Note tag). Null: the event is its square alone.
+     */
+    static previewPage(map, event) {
+        const chosen = EventManager.chosenPreviewPage(map, event);
+        if (chosen !== null) return chosen;
+        const unit = EventManager.unitOf(event);
+        if (!unit || !event.pages) {
+            return typeof RRVehicles !== 'undefined' && RRVehicles.vehicleOf(event) && event.pages?.[0] ? 0 : null;
+        }
+        const index = unit.page > 0 ? unit.page - 1 : 0;
+        return event.pages[index] ? index : null;
+    }
+
+    /**
+     * The unit an event is, as the game reads it: its In battle row, a
+     * `<unit: …>` tag in its Note, or a `<unit: …>` or PTBS comment on a
+     * page. `{ team, record, id, page }`, `page` counted from 1 for a
+     * comment and 0 otherwise; null for any other event. Kept beside the
+     * event until its row, its Note or its pages change: every redraw of
+     * the map asks for every event.
+     */
+    static unitOf(event) {
+        if (!event || typeof event !== 'object') return null;
+        const kept = EventManager._units.get(event), row = event.rrUnit || null, pages = event.pages || null;
+        let commands = 0;
+        if (!row && pages) for (const page of pages) commands += page && page.list ? page.list.length : 0;
+        if (kept && kept.row === row && kept.note === event.note && kept.pages === pages && kept.commands === commands
+            && (!row || (kept.team === row.team && kept.record === row.record && kept.id === row.id))) return kept.unit;
+        const check = typeof RRBattleCheck !== 'undefined' ? RRBattleCheck : null;
+        const forms = typeof FightCommandEditor !== 'undefined' ? FightCommandEditor : null;
+        const setup = typeof RRBattleSetup !== 'undefined' ? RRBattleSetup : null;
+        const reader = check && typeof check.unitOf === 'function' ? check : forms && typeof forms.unitOf === 'function' ? forms
+            : setup && typeof setup.unitOf === 'function' ? setup : null;
+        let unit = null;
+        try { unit = reader ? reader.unitOf(event) || null : null; } catch (error) { unit = null; }
+        if (unit && !(unit.page > 0)) unit.page = 0;
+        EventManager._units.set(event, { row, note: event.note, pages, commands, team: row && row.team, record: row && row.record, id: row && row.id, unit });
+        return unit;
+    }
+
+    /**
+     * What the look rule is told of the open project: the Database's actors
+     * and enemies, its model bindings, the battle presentation's choice of
+     * an enemy's graphic, side view, and whether a picture file is there.
+     * Kept for a moment: every unit on the map asks on each redraw.
+     */
+    static lookSources() {
+        const app = typeof window !== 'undefined' ? window.reactor : null;
+        const controller = app && app.projectController;
+        const project = controller ? (controller.getCurrentProject ? controller.getCurrentProject() : controller.currentProject) : null;
+        const projectPath = (project && project.path) || '';
+        const now = Date.now(), kept = EventManager._lookSources;
+        if (kept && kept.projectPath === projectPath && now >= kept.at && now - kept.at < EventManager.LOOK_SOURCES_MS) return kept;
+        // Another project's pictures can share a name: none of them is kept.
+        if (kept && kept.projectPath !== projectPath) EventManager.forgetLookArts();
+        const database = app && app.databaseManager;
+        const data = (database && database.data) || {};
+        let bindings = null;
+        try {
+            if (projectPath && typeof RRDatabase3DBindings !== 'undefined' && RRDatabase3DBindings.read) bindings = RRDatabase3DBindings.read(projectPath);
+        } catch (error) { bindings = null; }
+        const files = new Map();
+        const exists = (folder, name) => {
+            const key = folder + '/' + name;
+            if (!files.has(key)) {
+                let there = true;
+                try {
+                    if (projectPath && typeof RRAssetFiles !== 'undefined' && RRAssetFiles.findImage) there = !!RRAssetFiles.findImage(require('path').join(projectPath, 'img', folder), name);
+                } catch (error) { there = true; }
+                files.set(key, there);
+            }
+            return files.get(key);
+        };
+        const sources = {
+            at: now, projectPath,
+            actors: (database && database.getActors ? database.getActors() : data.actors) || [],
+            enemies: (database && database.getEnemies ? database.getEnemies() : data.enemies) || [],
+            system: (database && database.getSystem ? database.getSystem() : data.system) || null,
+            bindings, presentation: data.battlePresentation || null, exists
+        };
+        EventManager._lookSources = sources;
+        return sources;
+    }
+
+    /** The model the Database gives a unit's record, as the game resolves it: an actor's character slot, an enemy's entry or the graphic its battle presentation names. */
+    static boundModel(unit, sources) {
+        if (!unit || !unit.record || !(unit.id > 0) || !sources) return null;
+        const actor = unit.record === 'actor';
+        const section = sources.bindings && sources.bindings[actor ? 'actors' : 'enemies'];
+        let entry = (section && section[String(unit.id)]) || null;
+        if (actor) {
+            if (entry && !entry.name) entry = entry.character || null;
+        } else {
+            const settings = sources.presentation && sources.presentation.enemies && sources.presentation.enemies[unit.id];
+            const graphic = settings && settings.graphic;
+            if (graphic && graphic.mode && graphic.mode !== 'auto') entry = graphic.mode === 'model' ? graphic.model || entry : null;
+        }
+        return entry && entry.name ? entry : null;
+    }
+
+    /**
+     * What an event stands as on the page the map draws of it; null when it
+     * is no unit there. `{ kind: 'own' | 'model' | 'character' | 'picture' |
+     * 'figure', team, color, page, unit }` and, by kind, `spec`,
+     * `characterName` and `characterIndex`, or `folder`, `name` and `hue`.
+     * Battle Setup's `lookOf` gives the answer when it is loaded, so the
+     * map and the card's tiles cannot differ.
+     */
+    static unitLook(event, map, sources = null) {
+        const unit = EventManager.unitOf(event);
+        if (!unit) return null;
+        const page = EventManager.previewPage(map, event);
+        // A unit made by a comment is one on that page only.
+        if (page === null || (unit.page > 0 && unit.page - 1 !== page)) return null;
+        const from = sources || EventManager.lookSources();
+        const rule = typeof ReactorFightLook !== 'undefined' ? ReactorFightLook : null;
+        const image = event.pages[page] && event.pages[page].image;
+        const models = map && map.reactor3d && map.reactor3d.events ? map.reactor3d.events[String(event.id)] : null;
+        const model = (models && models[String(page)]) || null;
+        const noted = /<\s*r3d\b/i.test(String(event.note || ''));
+        const own = noted || (rule ? rule.hasOwn(image, model) : !!((image && (image.tileId > 0 || image.characterName)) || (model && model.name)));
+        const list = unit.record === 'actor' ? from.actors : unit.record === 'enemy' ? from.enemies : null;
+        const record = (list && unit.id > 0 && (list[unit.id] && Number(list[unit.id].id) === unit.id ? list[unit.id] : list.find(entry => entry && Number(entry.id) === unit.id))) || null;
+        const given = { own, record, model: own ? null : EventManager.boundModel(unit, from), sideView: !!(from.system && from.system.optSideView) };
+        if (typeof from.exists === 'function') given.exists = from.exists;
+        const setup = typeof RRBattleSetup !== 'undefined' ? RRBattleSetup : null;
+        let look = null;
+        try { look = setup && typeof setup.lookOf === 'function' ? setup.lookOf(unit, event, given) : null; } catch (error) { look = null; }
+        if (!look || !look.kind) {
+            look = rule ? rule.resolve(unit, given) : { kind: own ? 'own' : given.model ? 'model' : 'figure', team: unit.team, color: EventManager.sideColor(unit.team), spec: given.model };
+        }
+        return Object.assign({}, look, { page, unit });
+    }
+
+    /** A look as one line of text: two looks draw the same exactly when theirs are equal. */
+    static lookKey(look) {
+        if (!look) return '';
+        return [look.kind, look.team, look.color, look.page, look.spec ? JSON.stringify(look.spec) : '', look.characterName || '', look.characterIndex || 0,
+            look.folder || '', look.name || '', look.hue || 0].join('|');
+    }
+
+    /**
+     * The side an event fights on, whatever page the map draws of it:
+     * `{ team, color }`, the color its look carries where it has one. Null
+     * for an event that is no unit. Its ring, its outline and its mark in
+     * the Events list come from this; only its picture depends on the page.
+     */
+    static unitSide(event, map, sources = null) {
+        const unit = EventManager.unitOf(event);
+        if (!unit) return null;
+        const look = EventManager.unitLook(event, map, sources);
+        return { team: unit.team, color: look && look.color ? look.color : EventManager.sideColor(unit.team) };
+    }
+
+    /**
+     * What the units stand as was said anew outside the map (a record's
+     * picture or sheet in the Database, a file in the project's folders):
+     * this map's units are drawn again from what is said now, in both views.
+     */
+    static looksChanged() {
+        EventManager._lookSources = null;
+        const app = typeof window !== 'undefined' ? window.reactor : null;
+        const manager = app && app.eventManager;
+        if (!manager || !manager.currentMap || !manager.eventContainer || typeof manager.renderEvents !== 'function') return false;
+        manager.renderEvents();
+        return true;
+    }
+
+    /**
+     * The Database window lies over the map while a record is edited: when
+     * it closes, the units are drawn again (`looksChanged`). One watch for
+     * the editor, set when a map's events are first drawn; true once set.
+     */
+    static watchDatabase() {
+        if (EventManager._databaseWatch) return true;
+        if (typeof document === 'undefined' || typeof MutationObserver === 'undefined') return false;
+        const viewer = document.getElementById('database-viewer');
+        if (!viewer || !viewer.classList) return false;
+        let open = viewer.classList.contains('active');
+        const watch = new MutationObserver(() => {
+            const now = viewer.classList.contains('active');
+            if (open && !now) EventManager.looksChanged();
+            open = now;
+        });
+        watch.observe(viewer, { attributes: true, attributeFilter: ['class'] });
+        EventManager._databaseWatch = watch;
+        return true;
+    }
+
+    /** An image file under the project's img folder, decoded where its pixels can be read; null when it is not there. */
+    static async readPicture(projectPath, folder, name) {
+        if (!projectPath || typeof RRAssetFiles === 'undefined' || !RRAssetFiles.findImage) return null;
+        const found = RRAssetFiles.findImage(require('path').join(projectPath, 'img', folder), name);
+        if (!found || !found.absolutePath) return null;
+        const reader = typeof RREncryptedAssets !== 'undefined' && RREncryptedAssets.readAssetBytesAsync ? RREncryptedAssets.readAssetBytesAsync : null;
+        const bytes = reader ? await reader(found.absolutePath) : require('fs').readFileSync(found.absolutePath);
+        if (!bytes) return null;
+        // Through a blob: a canvas that drew a file's own address cannot be read back.
+        const url = URL.createObjectURL(new Blob([new Uint8Array(bytes)], { type: 'image/png' }));
+        try {
+            return await new Promise(resolve => {
+                const image = new Image();
+                image.onload = () => resolve(image);
+                image.onerror = () => resolve(null);
+                image.src = url;
+            });
+        } finally {
+            URL.revokeObjectURL(url);
+        }
+    }
+
+    /**
+     * The picture a `picture` or `figure` look is drawn from, as the game
+     * cuts it: a battler picture's art without its margin, its hue turned,
+     * no side over LOOK_ART_MAX pixels; or the plain figure. `{ ready,
+     * canvas, figure, color }`. A picture still being read has no canvas
+     * yet: `onReady` is called once when it has (one that cannot be read
+     * becomes the figure).
+     */
+    static lookArt(look, sources, onReady) {
+        const rule = typeof ReactorFightLook !== 'undefined' ? ReactorFightLook : null;
+        if (!rule || !look || typeof document === 'undefined') return null;
+        const from = sources || EventManager.lookSources();
+        const picture = look.kind === 'picture';
+        const key = [from.projectPath || '', picture ? `${look.folder}/${look.name}:${look.hue || 0}` : 'figure', look.color].join('|');
+        let art = EventManager._lookArts.get(key);
+        if (!art) {
+            art = { key, ready: false, canvas: null, figure: !picture, color: look.color, waiting: [], flats: new Map(), texture3D: null };
+            EventManager._lookArts.set(key, art);
+            const done = canvas => {
+                art.canvas = canvas;
+                art.ready = true;
+                for (const call of art.waiting.splice(0)) { try { call(art); } catch (error) { console.warn('A unit\'s picture could not be drawn:', error); } }
+            };
+            const figure = () => {
+                const wide = EventManager.LOOK_FIGURE_WIDE, tall = Math.round(wide * rule.TILES_TALL / rule.TILES_WIDE);
+                const canvas = document.createElement('canvas');
+                canvas.width = wide; canvas.height = tall;
+                rule.drawFigure(canvas.getContext('2d'), 0, 0, wide, tall, look.color);
+                art.figure = true;
+                done(canvas);
+            };
+            if (!picture) figure();
+            else {
+                EventManager.readPicture(from.projectPath, look.folder, look.name).then(image => {
+                    const width = image ? image.naturalWidth || image.width : 0, height = image ? image.naturalHeight || image.height : 0;
+                    if (!(width > 0 && height > 0)) { figure(); return; }
+                    const whole = document.createElement('canvas');
+                    whole.width = width; whole.height = height;
+                    const context = whole.getContext('2d', { willReadFrequently: true });
+                    context.drawImage(image, 0, 0);
+                    const pixels = context.getImageData(0, 0, width, height);
+                    const box = rule.trim(pixels.data, width, height);
+                    if (!box) { figure(); return; }
+                    if (look.hue) { rule.rotateHue(pixels.data, look.hue); context.putImageData(pixels, 0, 0); }
+                    const scale = Math.min(1, EventManager.LOOK_ART_MAX / Math.max(box.width, box.height));
+                    const canvas = document.createElement('canvas');
+                    canvas.width = Math.max(1, Math.round(box.width * scale)); canvas.height = Math.max(1, Math.round(box.height * scale));
+                    const target = canvas.getContext('2d');
+                    target.imageSmoothingEnabled = true;
+                    target.imageSmoothingQuality = 'high';
+                    target.drawImage(whole, box.x, box.y, box.width, box.height, 0, 0, canvas.width, canvas.height);
+                    done(canvas);
+                }).catch(() => figure());
+            }
+        }
+        if (!art.ready && typeof onReady === 'function' && !art.waiting.includes(onReady)) art.waiting.push(onReady);
+        return art;
+    }
+
+    /** The pictures kept for the units' looks are dropped, and the one each look's billboards in the 3D view share is given back to the graphics card. */
+    static forgetLookArts() {
+        for (const art of EventManager._lookArts.values()) {
+            const card = art.texture3D;
+            if (card && card.texture && typeof card.texture.dispose === 'function') card.texture.dispose();
+        }
+        EventManager._lookArts.clear();
+    }
+
+    /** A look's picture at `width` by `height` pixels: what its sprite on the 2D map shows. `{ canvas, texture }`. */
+    static lookArtFlat(art, width, height) {
+        const key = width * 8192 + height;
+        let flat = art.flats.get(key);
+        if (!flat) {
+            const canvas = document.createElement('canvas');
+            canvas.width = width; canvas.height = height;
+            const context = canvas.getContext('2d');
+            if (art.figure) ReactorFightLook.drawFigure(context, 0, 0, width, height, art.color);
+            else {
+                context.imageSmoothingEnabled = true;
+                context.imageSmoothingQuality = 'high';
+                context.drawImage(art.canvas, 0, 0, art.canvas.width, art.canvas.height, 0, 0, width, height);
+            }
+            flat = { canvas, texture: null };
+            art.flats.set(key, flat);
+        }
+        return flat;
+    }
+
+    /** What this map's event stands as (`EventManager.unitLook`); null when it is no unit on the page drawn. */
+    unitLook(event) {
+        return EventManager.unitLook(event, this.currentMap);
+    }
+
+    /** The side this map's event fights on (`EventManager.unitSide`); null when it is no unit. */
+    unitSide(event) {
+        return EventManager.unitSide(event, this.currentMap);
+    }
+
+    // Event mode is switched from several places (the toolbar, another map
+    // tool taking the map): the units' rings follow the value itself.
+    get eventMode() {
+        return this._eventMode === true;
+    }
+
+    set eventMode(on) {
+        const next = !!on;
+        if (this._eventMode === next) return;
+        this._eventMode = next;
+        this.syncUnitRings();
+    }
+
+    /** Whether the units' rings are drawn: Event mode is on, or Battle Setup is open. */
+    unitRingsShown() {
+        if (this.eventMode) return true;
+        const setup = typeof RRBattleSetup !== 'undefined' ? RRBattleSetup : null;
+        return !!(setup && typeof setup.isOpen === 'function' && setup.isOpen());
+    }
+
+    /** The rings appear and go where they stand, in both map views, without anything else being drawn again. */
+    syncUnitRings() {
+        this.renderUnitRings();
+        const view = this.projectController && this.projectController.mapEditor3D;
+        if (view && typeof view.syncUnitRings === 'function') view.syncUnitRings();
+    }
+
+    /** A layer of this manager's own on the 2D map (`unitRingLayer`, `unitLookLayer`, `eventNameLayer`): made with `make` when first asked for, and again on another map view. */
+    _unitLayer(field, label, make) {
+        const parent = this.tilemapManager && this.tilemapManager.container;
+        if (!parent || typeof PIXI === 'undefined') return null;
+        let layer = this[field];
+        if (layer && (layer.destroyed || layer.parent !== parent)) {
+            if (!layer.destroyed) { layer.parent?.removeChild(layer); layer.destroy({ children: true }); }
+            layer = this[field] = null;
+        }
+        if (!layer && make) {
+            layer = this[field] = make();
+            layer.label = label;
+            layer.eventMode = 'none';
+            parent.addChild(layer);
+            this._placeUnitLayers();
+        }
+        return layer || null;
+    }
+
+    /**
+     * Where the units' layers lie among the map's: the rings directly over
+     * the events' squares, the units' pictures directly over the placed
+     * models (over the events' squares on a map with none), so a unit that
+     * stands as a picture is seen over what is built there, as one that
+     * stands as a model is.
+     */
+    _placeUnitLayers() {
+        const parent = this.tilemapManager && this.tilemapManager.container;
+        if (!parent) return;
+        const inParent = layer => !!layer && !layer.destroyed && layer.parent === parent;
+        const after = (layer, reference) => {
+            if (!inParent(layer) || !inParent(reference)) return;
+            if (parent.getChildIndex(layer) === parent.getChildIndex(reference) + 1) return;
+            parent.removeChild(layer);
+            parent.addChildAt(layer, parent.getChildIndex(reference) + 1);
+        };
+        const rings = this.unitRingLayer, looks = this.unitLookLayer;
+        after(rings, this.eventContainer);
+        const models = parent.children.find(child => child && child.label === 'model props') || null;
+        after(looks, models || (inParent(rings) ? rings : this.eventContainer));
+    }
+
+    /**
+     * A ring in its side's color under every unit on the 2D map, with a
+     * notch the way it faces: over the events' squares and under what
+     * stands on them. Drawn while Event mode is on or Battle Setup is open.
+     */
+    renderUnitRings() {
+        const shown = this.unitRingsShown() && !!this.currentMap;
+        const layer = this._unitLayer('unitRingLayer', 'unit rings', shown ? () => new PIXI.Graphics() : null);
+        if (!layer) return;
+        layer.clear();
+        layer.visible = shown;
+        if (shown) {
+            const tw = this.tilemapManager.TILE_WIDTH, th = this.tilemapManager.TILE_HEIGHT;
+            for (const event of this.currentMap.events || []) {
+                // A unit has its ring on whatever page of it is drawn; the notch is that page's facing.
+                const side = event ? this.unitSide(event) : null;
+                if (!side) continue;
+                const [firstX, firstY, w, h] = this._eventRect(event);
+                const page = event.pages && event.pages[this.getEventPreviewPage(event) ?? 0];
+                const facing = Number(page && page.image && page.image.direction) || 2;
+                EventManager.drawUnitRing(layer, (firstX + w / 2) * tw, (firstY + h / 2) * th, tw * w * EventManager.RING_REACH, th * h * EventManager.RING_REACH,
+                    EventManager.colorNumber(side.color, 0xe6d15a), facing);
+            }
+        }
+        this.tilemapManager.requestRender?.();
+    }
+
+    /** One ring: a faint disc, its edge, and an arrowhead on the edge the way `direction` points (2 down, 4 left, 6 right, 8 up). */
+    static drawUnitRing(graphics, cx, cy, rx, ry, color, direction) {
+        graphics.ellipse(cx, cy, rx, ry);
+        graphics.fill({ color, alpha: 0.16 });
+        graphics.ellipse(cx, cy, rx, ry);
+        graphics.stroke({ width: 3, color, alpha: 0.95 });
+        const [dx, dy] = EventManager.facingStep(direction);
+        const tipX = cx + dx * (rx + 7), tipY = cy + dy * (ry + 7), baseX = cx + dx * (rx - 2), baseY = cy + dy * (ry - 2), half = 7;
+        graphics.poly([tipX, tipY, baseX - dy * half, baseY - dx * half, baseX + dy * half, baseY + dx * half]);
+        graphics.fill({ color, alpha: 1 });
+    }
+
+    /** One tile the way a facing points: `[dx, dy]`, down for anything that is no facing. */
+    static facingStep(direction) {
+        return direction === 4 ? [-1, 0] : direction === 6 ? [1, 0] : direction === 8 ? [0, -1] : [0, 1];
+    }
+
+    /** A unit's battler picture or plain figure on the 2D map: fit to the tiles a unit's picture takes, its feet where a character's stand. Null while the picture is read. */
+    createUnitPictureSprite(event, look) {
+        if (typeof ReactorFightLook === 'undefined' || typeof PIXI === 'undefined') return null;
+        if (!this._onLookArt) this._onLookArt = () => this.renderEventPreviews();
+        const art = EventManager.lookArt(look, null, this._onLookArt);
+        if (!art || !art.ready) return null;
+        const tw = this.tilemapManager?.TILE_WIDTH || 48, th = this.tilemapManager?.TILE_HEIGHT || tw;
+        const fit = ReactorFightLook.fit(art.canvas.width, art.canvas.height, tw, th, this._eventFootprint(event.id)[0]);
+        const flat = EventManager.lookArtFlat(art, fit.width, fit.height);
+        if (!flat.texture || flat.texture.destroyed) flat.texture = PIXI.Texture.from(flat.canvas);
+        const sprite = new PIXI.Sprite(flat.texture);
+        const [offsetX, offsetY] = this._eventMarkerOffset(event.id);
+        sprite.anchor.set(0.5, 1);
+        sprite.x = (event.x + offsetX + 0.5) * tw;
+        sprite.y = (event.y + offsetY + 1) * th - EventManager.CHARACTER_LIFT;
+        return sprite;
+    }
+
     getEventPreviewPage(event) {
-        const previews = this.currentMap?.reactor3d?.eventPreviews;
-        const page = previews ? previews[String(event?.id)] : undefined;
-        return Number.isInteger(page) && event?.pages?.[page] ? page : null;
+        return EventManager.previewPage(this.currentMap, event);
+    }
+
+    /** Read-only vehicle placements. Their IDs cannot collide with authored events. */
+    static startingVehicles(map) {
+        const app = typeof window !== 'undefined' ? window.reactor : null;
+        const types = app?.databaseManager?.data?.vehicles;
+        if (!map || !types) return [];
+        const rules = typeof DatabaseVehicleEditor !== 'undefined' && app.projectManager
+            ? DatabaseVehicleEditor.rules(app.projectManager) : typeof Reactor3D !== 'undefined' ? Reactor3D.Vehicles : null;
+        return (rules?.startingEvents?.(types, Number(map.id)) || []).filter(event => event.x < map.width && event.y < map.height)
+            .map(event => ({...event, id:-1000000-Number(String(event._rrVehicleIdentity).split(':')[1] || event._rrDatabaseVehicle)}));
+    }
+
+    static mapPreviewEvents(map) {
+        return [...(map?.events || []), ...EventManager.startingVehicles(map)];
+    }
+
+    static openVehicle(event) {
+        const app = typeof window !== 'undefined' ? window.reactor : null;
+        const id = event?._rrDatabaseVehicle;
+        if (!id || !app?.openDatabase) return false;
+        app.eventManager?.selectEvent?.(null);
+        app.openDatabase('vehicles');
+        app.databaseEditorUI?.navigateToDatabaseEntry?.('vehicles', id);
+        return true;
+    }
+
+    /** The model a previewed page inherits from its database record. */
+    previewModelRaw(event, pageIndex) {
+        const own = this.currentMap?.reactor3d?.events?.[String(event?.id)]?.[String(pageIndex)];
+        if (own?.name) return own;
+        if (event?._rrDatabaseVehicle && typeof RRVehicles !== 'undefined') return RRVehicles.modelOf(event, window.reactor?.databaseManager?.data?.vehicles);
+        const look = this.unitLook(event);
+        return look && look.kind === 'model' && look.page === pageIndex && look.spec && look.spec.name ? look.spec : null;
     }
 
     setEventPreview(event, pageIndex) {
@@ -2349,40 +2988,87 @@ class EventManager {
     modelPreviewProps() {
         const map = this.currentMap;
         const previews = [];
-        for (const event of map?.events || []) {
+        for (const event of EventManager.mapPreviewEvents(map)) {
             if (!event) continue;
             const pageIndex = this.getEventPreviewPage(event);
             if (pageIndex === null) continue;
-            const spec = map.reactor3d?.events?.[String(event.id)]?.[String(pageIndex)];
+            const spec = this.previewModelRaw(event, pageIndex);
             if (!spec?.name) continue;
-            previews.push({ ...spec, id: -event.id, x: event.x, y: event.y,
+            previews.push({ ...spec, id: event._rrDatabaseVehicle ? event.id : -event.id, x: event.x, y: event.y,
                 size: Number(spec.size) > 0 ? Number(spec.size) : 2,
                 scale: Number(spec.scale) > 0 ? Number(spec.scale) : 1,
                 z: Number(map.reactor3d?.eventZ?.[event.id]) || 0,
                 direction: event.pages[pageIndex].image?.direction || 2 });
         }
+        // Battle Setup: the unit a click would place, on the tile under the pointer.
+        const setup = typeof window !== 'undefined' ? window.RRBattleSetup : null;
+        const ghost = setup && typeof setup.ghostProp === 'function' ? setup.ghostProp() : null;
+        if (ghost) previews.push(ghost);
         return previews;
     }
 
     renderEventPreviews() {
         const container = this.eventPreviewContainer;
         if (!container || !this.currentMap) return;
+        EventManager.watchDatabase();
         for (const child of container.removeChildren()) child.destroy({ children: true });
+        // A unit stands over its event's square, where it is seen whole; a previewed page of any other event is drawn under it.
+        const units = this._unitLayer('unitLookLayer', 'unit looks', () => new PIXI.Container());
+        if (units) for (const child of units.removeChildren()) child.destroy({ children: true });
         this._previewAnimations = [];
-        for (const event of this.currentMap.events || []) {
+        // Each preview with where it stands from its event's tile, for a drag (`movePreviewWith`).
+        this._previewSprites = new Map();
+        const tw = this.tilemapManager?.TILE_WIDTH || 48, th = this.tilemapManager?.TILE_HEIGHT || tw;
+        for (const event of EventManager.mapPreviewEvents(this.currentMap)) {
             if (!event) continue;
             const pageIndex = this.getEventPreviewPage(event);
             if (pageIndex === null) continue;
             try {
                 const sprite = this.createEventPreviewSprite(event, event.pages[pageIndex], pageIndex);
-                if (sprite) container.addChild(sprite);
+                if (!sprite) continue;
+                (units && EventManager.unitOf(event) ? units : container).addChild(sprite);
+                this._previewSprites.set(event.id, { sprite, dx: sprite.x - event.x * tw, dy: sprite.y - event.y * th });
             } catch (error) {
                 console.warn(`Could not preview event ${event.id}:`, error);
             }
         }
+        // Keep placements visible even when no sprite or model was selected.
+        // The small marker opens the database entry, never an Event Editor.
+        for (const vehicle of EventManager.startingVehicles(this.currentMap)) {
+            const marker = new PIXI.Graphics();
+            marker.rect(vehicle.x*tw, vehicle.y*th, tw, th).stroke({color:0xf0a040,width:2});
+            marker.eventMode = 'static'; marker.cursor = 'pointer';
+            marker.on('pointertap', () => { if (this.eventMode) EventManager.openVehicle(vehicle); });
+            container.addChild(marker);
+        }
         this._syncPreviewTicker();
+        this.renderUnitRings();
         const props = this.projectController?.modelPropsManager;
         if (props?.currentMap === this.currentMap) props.render();
+        // The models' layer is made by its first drawing: the units' layers take their places by it now.
+        this._placeUnitLayers();
+        this.renderEventOutlines();
+    }
+
+    /**
+     * A dragged event's preview goes with it from tile to tile: its picture
+     * or its model, its name over them, and its ring. Only what belongs to
+     * that event moves; the whole map is drawn again when it is dropped.
+     */
+    movePreviewWith(event) {
+        if (!event || !this.currentMap || !this.tilemapManager) return;
+        const tw = this.tilemapManager.TILE_WIDTH, th = this.tilemapManager.TILE_HEIGHT;
+        for (const kept of [this._previewSprites && this._previewSprites.get(event.id), this.eventNames && this.eventNames.get(event.id)]) {
+            if (!kept || kept.sprite.destroyed) continue;
+            kept.sprite.x = event.x * tw + kept.dx;
+            kept.sprite.y = event.y * th + kept.dy;
+        }
+        // A model stands on the placed models' layer, which draws it where the event is now.
+        const pageIndex = this.getEventPreviewPage(event);
+        const props = this.projectController?.modelPropsManager;
+        if (pageIndex !== null && props?.currentMap === this.currentMap && this.previewModelRaw(event, pageIndex)?.name) props.render();
+        if (EventManager.unitOf(event)) this.renderUnitRings();
+        else this.tilemapManager.requestRender?.();
     }
 
     /** Stepping animation runs at the game's cadence: (9 - move speed) * 3 frames per pattern. */
@@ -2414,15 +3100,26 @@ class EventManager {
     }
 
     createEventPreviewSprite(event, page, pageIndex = 0) {
-        const image = page?.image;
+        let image = page?.image;
         if (!image) return null;
+        // Vehicles inherit their database sprite without changing the event page.
+        if (!image.tileId && !image.characterName) {
+            const row = typeof RRVehicles !== 'undefined' && RRVehicles.vehicleOf(event);
+            const sheet = row && window.reactor?.databaseManager?.data?.vehicles?.[row.type]?.sheet;
+            if (sheet?.characterName) image = {...image, ...sheet};
+        }
+        // A unit with no picture of its own on this page stands as its record gives it.
+        const look = image.tileId > 0 || image.characterName ? null : this.unitLook(event);
+        if (look && look.page === pageIndex) {
+            if (look.kind === 'picture' || look.kind === 'figure') return this.createUnitPictureSprite(event, look);
+            if (look.kind === 'character') image = Object.assign({}, image, { characterName: look.characterName, characterIndex: look.characterIndex });
+        }
         const tw = this.tilemapManager?.TILE_WIDTH || 48;
         const th = this.tilemapManager?.TILE_HEIGHT || tw;
         // Live model previews are drawn with placed props above the floor
         // lighting; their textures already include ambient and surface lights.
         const props = this.projectController?.modelPropsManager;
-        if (props?.currentMap === this.currentMap &&
-            this.currentMap?.reactor3d?.events?.[String(event.id)]?.[String(pageIndex)]?.name) return null;
+        if (props?.currentMap === this.currentMap && this.previewModelRaw(event, pageIndex)?.name) return null;
         const modelSprite = this.createModelPreviewSprite(event, page, pageIndex);
         if (modelSprite) return modelSprite;
         if (image.tileId > 0) {
@@ -2457,8 +3154,12 @@ class EventManager {
      * model at its footprint size, standing on the tile.
      */
     createModelPreviewSprite(event, page, pageIndex) {
+        return this.modelSpriteAt(this.previewModelRaw(event, pageIndex), page?.image?.direction || 2, event.x, event.y);
+    }
+
+    /** A model drawn flat on the 2D map, its ground origin on the middle of tile (x, y); null while it loads. */
+    modelSpriteAt(raw, direction, x, y) {
         if (typeof RREventPreviewModels === 'undefined') return null;
-        const raw = this.currentMap?.reactor3d?.events?.[String(event.id)]?.[String(pageIndex)];
         if (!raw?.name) return null;
         // three.js and Reactor3D only load with the 3D view; a model preview
         // on the 2D canvas asks for them once and redraws when they arrive.
@@ -2477,8 +3178,7 @@ class EventManager {
         const tw = this.tilemapManager?.TILE_WIDTH || 48;
         const th = this.tilemapManager?.TILE_HEIGHT || tw;
         const pixels = Math.round((spec.size > 0 ? spec.size : 2) * (spec.scale > 0 ? spec.scale : 1) * tw);
-        const direction = page?.image?.direction || 2;
-        const key = `${spec.name}|${spec.ext || ''}|${spec.file || ''}@${pixels}:${direction}`;
+        const key = `${spec.name}|${spec.ext || ''}|${spec.file || ''}|${spec.variant || ''}@${pixels}:${direction}`;
         if (!this._modelPreviewTextures) this._modelPreviewTextures = new Map();
         let texture = this._modelPreviewTextures.get(key);
         if (texture === undefined) {
@@ -2503,8 +3203,8 @@ class EventManager {
         const sprite = new PIXI.Sprite(texture.texture);
         // Ground origin on the tile centre, as the game places it.
         sprite.anchor.set(texture.anchorX, texture.anchorY);
-        sprite.x = (event.x + 0.5) * tw;
-        sprite.y = (event.y + 0.5) * th;
+        sprite.x = (x + 0.5) * tw;
+        sprite.y = (y + 0.5) * th;
         return sprite;
     }
 
@@ -2606,7 +3306,7 @@ class EventManager {
             RRPickerIndex.bindListNavigation(eventsListEl, {
                 items: () => eventsListEl.querySelectorAll('.event-list-item'),
                 isSelected: item => Number(item.dataset.eventId) === this.selectedEvent?.id,
-                select: item => this.selectEventById(Number(item.dataset.eventId))
+                select: item => this.selectEventFromList(Number(item.dataset.eventId))
             });
         }
         eventsListEl.onkeydown = event => {
@@ -2645,16 +3345,23 @@ class EventManager {
             item.className = 'tree-item event-list-item';
             item.dataset.eventId = event.id;
             item.textContent = `${String(event.id).padStart(3, '0')}: ${event.name || tt('Unnamed Event')}`;
+            // A battle unit's row carries a dot in its side's color (the stylesheet draws it).
+            const side = this.unitSide(event);
+            if (side) {
+                item.dataset.side = side.team;
+                item.style.setProperty('--rr-unit-side', side.color);
+                item.title = tt(side.team === 'ally' ? 'Ally' : side.team === 'enemy' ? 'Enemy' : 'Bystander');
+            }
             item.style.padding = '6px 8px';
             item.style.cursor = 'pointer';
             item.style.fontSize = '14px';
             item.style.borderRadius = '3px';
             item.style.margin = '2px 0';
 
-            // Click handler - select event on map
+            // Click handler - Event mode, with the event selected and brought into view
             item.addEventListener('click', (e) => {
                 e.stopPropagation();
-                this.selectEventById(event.id);
+                this.selectEventFromList(event.id);
             });
 
             // Double-click handler - open event editor
@@ -2821,6 +3528,7 @@ class EventManager {
         };
         visit(this.eventContainer);
         visit(this.startingPositionContainer);
+        visit(this.eventNameLayer);
     }
 
     // Create sprite for an event
@@ -2832,33 +3540,32 @@ class EventManager {
         const isDragging = this.isDragging && this.draggedEvent && this.draggedEvent.id === event.id;
         const isSelected = this.selectedEvent && this.selectedEvent.id === event.id;
 
-        // Always draw the black background box with white border (RPG Maker style)
-        const graphics = new PIXI.Graphics();
-
         // A sized event: its whole footprint, faint, behind its own square.
-        const footprint = typeof RRMapElevation !== 'undefined' && RRMapElevation.eventSize ? RRMapElevation.eventSize(this.currentMap, event.id) : [1, 1];
+        const footprint = this._eventFootprint(event.id);
         if (footprint[0] > 1 || footprint[1] > 1) {
             const area = new PIXI.Graphics();
-            const fw = footprint[0] * this.tilemapManager.TILE_WIDTH, fh = footprint[1] * this.tilemapManager.TILE_HEIGHT;
-            const tone = isSelected ? 0x00ff00 : 0xffffff;
-            area.rect(0, 0, fw, fh);
-            area.fill({ color: tone, alpha: 0.12 });
-            area.rect(0.5, 0.5, fw - 1, fh - 1);
-            area.stroke({ width: 1, color: tone, alpha: 0.7 });
+            // Centred on the event's tile: it starts left of and above it.
+            const [firstX, firstY] = this._eventRect(event);
+            area.x = (firstX - event.x) * this.tilemapManager.TILE_WIDTH;
+            area.y = (firstY - event.y) * this.tilemapManager.TILE_HEIGHT;
+            this._drawEventFootprint(area, footprint, isSelected);
             container.addChild(area);
+            container._rrArea = area;
         }
 
-        // Black background - more opaque - PIXI v8 API
-        const bgAlpha = isDragging ? 0.9 : 0.75;
-        graphics.rect(0, 0, this.tilemapManager.TILE_WIDTH, this.tilemapManager.TILE_HEIGHT);
-        graphics.fill({ color: 0x000000, alpha: bgAlpha });
+        // The event's own square (graphic, name) stands in the middle of its footprint.
+        const marker = new PIXI.Container();
+        const [offsetX, offsetY] = this._eventMarkerOffset(event.id);
+        marker.x = offsetX * this.tilemapManager.TILE_WIDTH;
+        marker.y = offsetY * this.tilemapManager.TILE_HEIGHT;
+        container.addChild(marker);
+        container._rrMarker = marker;
 
-        // White border (or green if selected) - narrow border - PIXI v8 API
-        const borderColor = isSelected ? 0x00ff00 : 0xffffff;
-        graphics.rect(0, 0, this.tilemapManager.TILE_WIDTH, this.tilemapManager.TILE_HEIGHT);
-        graphics.stroke({ width: 1, color: borderColor });
-
-        container.addChild(graphics);
+        // Always draw the black background box with white border (RPG Maker style)
+        const graphics = new PIXI.Graphics();
+        this._drawEventSquare(graphics, isSelected, isDragging ? 0.9 : 0.75);
+        marker.addChild(graphics);
+        container._rrSquare = graphics;
 
         // Check if event has a tileset graphic
         const tileId = event.pages && event.pages[0] && event.pages[0].image ? event.pages[0].image.tileId : 0;
@@ -2876,7 +3583,7 @@ class EventManager {
                 // project's tile size; only the inset has to be taken off.
                 const scale = maxSize / this.tilemapManager.TILE_WIDTH;
                 tileSprite.scale.set(scale);
-                container.addChild(tileSprite);
+                marker.addChild(tileSprite);
                 hasGraphic = true;
             }
         }
@@ -2890,7 +3597,7 @@ class EventManager {
                     // Character sprite is already positioned and scaled, just add inset
                     characterSprite.x += 2;
                     characterSprite.y += 2;
-                    container.addChild(characterSprite);
+                    marker.addChild(characterSprite);
                     hasGraphic = true;
                 }
             }
@@ -2910,9 +3617,157 @@ class EventManager {
         text.x = this.tilemapManager.TILE_WIDTH / 2;
         text.y = this.tilemapManager.TILE_HEIGHT - 6; // Position near bottom
         text.anchor.set(0.5);
-        container.addChild(text);
+        marker.addChild(text);
 
         return container;
+    }
+
+    /** The colour an event is drawn in: the theme's accent when it is the selected one, white otherwise. */
+    _eventTone(isSelected) {
+        return isSelected ? EventManager.selectedTone() : 0xffffff;
+    }
+
+    /**
+     * The selected event's colour in both map views: the theme's accent, lightened when it is a dark
+     * one (a light theme's), since it is drawn over the map, which is as dark as its scene.
+     */
+    static selectedTone() {
+        const css = typeof ThemeColors !== 'undefined' && ThemeColors.resolve ? ThemeColors.resolve('--color-accent') : null;
+        return EventManager.readableTone(EventManager.colorNumber(css, 0xFFD700));
+    }
+
+    /** A colour bright enough to read over a dark picture: mixed toward white until it is. */
+    static readableTone(color) {
+        let r = (color >> 16) & 255, g = (color >> 8) & 255, b = color & 255;
+        const luminance = () => (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+        for (let i = 0; i < 6 && luminance() < 0.4; i++) { r = Math.round(r + (255 - r) * 0.3); g = Math.round(g + (255 - g) * 0.3); b = Math.round(b + (255 - b) * 0.3); }
+        return (r << 16) | (g << 8) | b;
+    }
+
+    /** A CSS colour (`#rgb`, `#rrggbb`, `rgb(r, g, b)`) as a number, or the fallback. */
+    static colorNumber(css, fallback) {
+        const text = String(css || '').trim();
+        let match = /^#([0-9a-f]{6})$/i.exec(text);
+        if (match) return parseInt(match[1], 16);
+        match = /^#([0-9a-f])([0-9a-f])([0-9a-f])$/i.exec(text);
+        if (match) return parseInt(match[1] + match[1] + match[2] + match[2] + match[3] + match[3], 16);
+        match = /^rgba?\(\s*(\d+)[\s,]+(\d+)[\s,]+(\d+)/i.exec(text);
+        if (match) return (Math.min(255, Number(match[1])) << 16) | (Math.min(255, Number(match[2])) << 8) | Math.min(255, Number(match[3]));
+        return fallback;
+    }
+
+    /** A sized event's footprint: every tile it triggers and blocks on (the caller stands it round the event's tile). */
+    _drawEventFootprint(area, footprint, isSelected) {
+        const fw = footprint[0] * this.tilemapManager.TILE_WIDTH, fh = footprint[1] * this.tilemapManager.TILE_HEIGHT;
+        const tone = this._eventTone(isSelected);
+        area.clear();
+        area.rect(0, 0, fw, fh);
+        area.fill({ color: tone, alpha: 0.12 });
+        area.rect(0.5, 0.5, fw - 1, fh - 1);
+        area.stroke({ width: 1, color: tone, alpha: 0.7 });
+    }
+
+    /** An event's own square: dark behind its graphic, bordered in its tone. */
+    _drawEventSquare(graphics, isSelected, alpha = 0.75) {
+        const tileWidth = this.tilemapManager.TILE_WIDTH, tileHeight = this.tilemapManager.TILE_HEIGHT;
+        graphics.clear();
+        graphics.rect(0, 0, tileWidth, tileHeight);
+        graphics.fill({ color: 0x000000, alpha });
+        graphics.rect(0, 0, tileWidth, tileHeight);
+        graphics.stroke({ width: 1, color: this._eventTone(isSelected) });
+    }
+
+    /**
+     * An event's outline over whatever is drawn on it: its footprint and its own square, edges only,
+     * dark under light so they read on any picture. Returned at the event's own tile.
+     */
+    createEventOutline(event) {
+        const tw = this.tilemapManager.TILE_WIDTH, th = this.tilemapManager.TILE_HEIGHT;
+        const isSelected = !!(this.selectedEvent && this.selectedEvent.id === event.id);
+        const [w, h] = this._eventFootprint(event.id);
+        const [offsetX, offsetY] = this._eventMarkerOffset(event.id);
+        // A unit's outline is its side's color (the selected one keeps the accent).
+        const side = isSelected ? null : this.unitSide(event);
+        const tone = side ? EventManager.colorNumber(side.color, 0xffffff) : this._eventTone(isSelected);
+        const outline = new PIXI.Graphics();
+        const edge = (x, y, width, height) => {
+            outline.rect(x + 0.5, y + 0.5, width - 1, height - 1);
+            outline.stroke({ width: 3, color: 0x000000, alpha: 0.55 });
+            outline.rect(x + 0.5, y + 0.5, width - 1, height - 1);
+            outline.stroke({ width: 1, color: tone, alpha: 1 });
+        };
+        const [firstX, firstY] = this._eventRect(event);
+        if (w > 1 || h > 1) edge((firstX - event.x) * tw, (firstY - event.y) * th, w * tw, h * th);
+        edge(offsetX * tw, offsetY * th, tw, th);
+        outline.x = event.x * tw;
+        outline.y = event.y * th;
+        outline.eventMode = 'none';
+        return outline;
+    }
+
+    /**
+     * Outlines for the events whose preview is drawn (a page's graphic or its model at real size can
+     * cover the event's square entirely), kept above the model layer so what is selected stays seen.
+     */
+    renderEventOutlines() {
+        const parent = this.tilemapManager?.container;
+        if (!parent || !this.currentMap || typeof PIXI === 'undefined') return;
+        if (this.eventOutlineContainer && this.eventOutlineContainer.parent !== parent) {
+            this.eventOutlineContainer.parent?.removeChild(this.eventOutlineContainer);
+            if (!this.eventOutlineContainer.destroyed) this.eventOutlineContainer.destroy({ children: true });
+            this.eventOutlineContainer = null;
+        }
+        if (!this.eventOutlineContainer) {
+            this.eventOutlineContainer = new PIXI.Container();
+            this.eventOutlineContainer.label = 'event outlines';
+            this.eventOutlineContainer.eventMode = 'none';
+        }
+        const container = this.eventOutlineContainer;
+        for (const child of container.removeChildren()) child.destroy();
+        this.eventOutlines = new Map();
+        // What is drawn on an outlined event (a unit's picture and ring, a model) covers the name in its square: the name is written again over it.
+        const names = this._unitLayer('eventNameLayer', 'event names', () => new PIXI.Container());
+        if (names) for (const child of names.removeChildren()) child.destroy();
+        this.eventNames = new Map();
+        const tw = this.tilemapManager.TILE_WIDTH, th = this.tilemapManager.TILE_HEIGHT;
+        for (const event of this.currentMap.events || []) {
+            if (!event || this.getEventPreviewPage(event) === null) continue;
+            const outline = this.createEventOutline(event);
+            container.addChild(outline);
+            this.eventOutlines.set(event.id, outline);
+            if (!names || !event.name) continue;
+            const name = this.createEventName(event);
+            names.addChild(name);
+            this.eventNames.set(event.id, { sprite: name, dx: name.x - event.x * tw, dy: name.y - event.y * th });
+        }
+        // Above the placed models, the previewed ones drawn with them and the units' pictures; under the editor's own overlays.
+        if (container.parent === parent) parent.removeChild(container);
+        const models = parent.children.find(child => child && child.label === 'model props');
+        const looks = this.unitLookLayer && !this.unitLookLayer.destroyed && this.unitLookLayer.parent === parent ? this.unitLookLayer : null;
+        const under = looks && (!models || parent.getChildIndex(looks) > parent.getChildIndex(models)) ? looks : models || this.eventContainer;
+        const index = under && under.parent === parent ? parent.getChildIndex(under) + 1 : parent.children.length;
+        parent.addChildAt(container, Math.min(index, parent.children.length));
+        // The names directly over the outlines.
+        if (names && names.parent === parent) {
+            parent.removeChild(names);
+            parent.addChildAt(names, parent.getChildIndex(container) + 1);
+        }
+    }
+
+    /** An event's name where and as its square writes it (`createEventSprite`: the middle of the lower edge of its own tile), for the layer over what stands on the event. */
+    createEventName(event) {
+        const tw = this.tilemapManager.TILE_WIDTH, th = this.tilemapManager.TILE_HEIGHT;
+        const [offsetX, offsetY] = this._eventMarkerOffset(event.id);
+        const text = new PIXI.Text({
+            text: event.name,
+            resolution: this.labelResolution(),
+            style: { fontSize: 8, fill: 0xffffff, align: 'center', stroke: { color: 0x000000, width: 2 } }
+        });
+        text.anchor.set(0.5);
+        text.x = (event.x + offsetX) * tw + tw / 2;
+        text.y = (event.y + offsetY) * th + th - 6;
+        text.eventMode = 'none';
+        return text;
     }
 
     // Create a PIXI sprite from a tileId

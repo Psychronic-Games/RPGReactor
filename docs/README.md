@@ -10,15 +10,18 @@ Guides for authoring with the engine, the current verified state, and maintainer
 
 ## Guides
 
+- [Battle modes](BATTLE-MODES.md): Classic and the battles on the map (Tactical, Action, First Person): choosing the mode, units, commands, hooks. Its design and phases: [DESIGN-BATTLE-MODES.md](DESIGN-BATTLE-MODES.md).
 - [Battle Rooms and Action Sequences](BATTLE-PRESENTATION.md): rooms, cameras, formations, visual sequences, assignment, plugin compatibility and current limits.
+- [Vehicles](AUTHORING.md#authoring-vehicles): database types, event setup, classes and equipment, map travel and engine sound; [ride the Demo motorcycle](AUTHORING.md#riding-the-demo-motorcycle).
 - [Rigging a 3D model](RIGGING-MODELS.md): templates, hand markers, placing markers precisely, what the runtime reads.
 - [Model face points and speech](3D-FACE-AND-SPEECH.md): eye placement, mouth and lip authoring, spoken dialogue, per-prop animation speed.
 - [Media surfaces](MEDIA-SURFACES.md): image and video placement on maps, models and the screen; transforms and proportions.
 - [Custom user interfaces](DESIGN-USER-INTERFACES.md): the User Interfaces database section, its node set, actor bindings, opt-in stock-scene replacement and explicit boundaries.
 - [Building 3D worlds from 2D tilesets](DESIGN-3D-WORLDS.md): the tileset-class, facing and per-face model behind HD-2D maps, with the phasing table marked to what shipped.
+- [Reactor plugin API](DESIGN-PLUGIN-API.md): proposal for `@target Reactor` headers, named and ordered hooks in place of raw aliasing, and a plugin reference generated from the runtime. Not built yet.
 - [Runtime events](RUNTIME-EVENTS.md): the `ReactorEvents` feed a plugin can observe instead of wrapping battle methods; the test holds the page to the source.
 - [Performance checks](PERFORMANCE.md): reproducible CPU/GPU profiling and image comparisons, with measured results per pass.
-- [Importing an RPG Maker 2000/2003 project](IMPORTING-LEGACY-PROJECTS.md): the report, the import, what converts exactly, what the MZ format cannot hold, and what is still to come.
+- [Importing older RPG Maker projects](IMPORTING-LEGACY-PROJECTS.md): RPG Maker 2000, 2003, XP, VX and VX Ace games into a new project; the report, the import, what converts exactly, what the MZ format cannot hold, and what is still to come.
 - [Demo: assets not on disk](demo-missing-se.md): art the bundled Demo references but does not ship, kept current while originals are authored.
 
 ## Maintainers
@@ -29,7 +32,7 @@ Guides for authoring with the engine, the current verified state, and maintainer
 ## Release history
 
 - [posts/](posts/): release notes and itch devlogs per release, 0.98.5 onward.
-- [devlogs/](devlogs/): the longer story of each release, 0.94.1 onward, plus mid-cycle notes such as [3D objects on the map](devlogs/2026-08-02-3d-objects-on-the-map.md) and [Build in the world](devlogs/2026-09-20-build-in-the-world.md).
+- [devlogs/](devlogs/): longer release stories, 0.94.1 onward, plus mid-cycle notes such as [3D objects on the map](devlogs/2026-08-02-3d-objects-on-the-map.md) and [Build in the world](devlogs/2026-09-20-build-in-the-world.md).
 
 Devlogs, posts and released changelog sections describe their named release and keep their historical counts; use the status and guide pages for current defaults.
 

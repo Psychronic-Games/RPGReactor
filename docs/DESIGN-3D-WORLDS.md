@@ -1,6 +1,6 @@
 # Building 3D worlds from 2D tilesets
 
-Written 2026-08-01; implementation status reviewed 2026-09-21. Everything the
+Written 2026-08-01; implementation status reviewed 2026-09-29. Everything the
 phasing table lists has shipped, in a different shape from the proposal: the
 Block primitive became the Build bar's **pieces and shapes**, "structures:
 draw once, stamp anywhere" became **blueprints** (`3d/Structures/*.json`,
@@ -183,12 +183,13 @@ model bindings, and poses primarily live in sidecars:
 Tilesets.r3d.json     tile classes, materials, and tileset object definitions
 Map###.r3d.json       room, camera, lights, props, event poses, and map 3D data
 Database.r3d.json     actor/enemy/weapon/armor/item model bindings
+3d/Structures/*.json  blueprints (buildings and plans), stamped onto maps
 3d/<folder>/model.json      model parts, animations, and named effects
 3d/<folder>/model.rig.bin   authored rig data when present
 ```
 
-Reusable structure stamping is a proposal; the schema sketch in the original
-plan is not an implemented structure library. New sidecars do not imply that
+Reusable structures are the blueprints in `3d/Structures`, described in
+[AUTHORING.md](AUTHORING.md). New sidecars do not imply that
 all stock JSON is byte-identical: the editor can store a `<3d>` note marker and
 `System.json.startDirection`, and other Reactor features have optional stock-data
 extensions. Saving a project again in RPG Maker may discard extensions it does
@@ -204,7 +205,7 @@ not preserve.
 - Named effects can be animations, video/image surfaces, or lights, anchored to
   a model part or bone. In-world animation/video surfaces use scene depth and
   model-relative placement. They are not merely sprites over the finished frame.
-- Rooms use floor, wall, and ceiling images; walls and ceiling face inward.
+- Rooms use floor, wall, and ceiling images and an optional sky; walls and ceiling face inward.
 - Stock RPG Maker ignores the sidecars and cannot reproduce Reactor's 3D
   behavior. Ordinary map data remains readable.
 - PIXI still owns ordinary game windows, pictures, and plugin sprites. The
@@ -224,11 +225,11 @@ Ordered by payoff per unit of work, not by dependency. Each step is shippable.
 | 2 | **Per-face material + A4 roof pairing** | Wall tops stop wearing their own face art. Closes handoff limitation 1. | **Done** |
 | 3 | **Panel shape with thickness and derived facing** | Gates, doors and signs stop chasing the camera. Closes the reported bug. | **Done** |
 | 4 | ~~Height brush in the map editor~~ | Built, then removed: nothing on a real 3D map used it, because the massing comes from the tileset's 3D classes. | Dropped |
-| 5 | **Block shape** | Crates, plinths, furniture — the small stuff. | **Done** as pieces and seventeen shapes in the Build bar (0.98.7); furniture pieces are queued |
+| 5 | **Block shape** | Crates, plinths, furniture — the small stuff. | **Done** as pieces and seventeen shapes in the Build bar (0.98.7), plus rocks (0.98.9); furniture pieces are queued |
 | 6 | **Structures: define, stamp, place** | Building a world becomes fast rather than possible. See *Where one structure ends* below. | **Done** as blueprints (`3d/Structures`, Database › Structures, Blueprint slot), plans of plans included (0.98.7) |
 | 7 | **Direct manipulation in the 3D view** | Select, box-select, drag, turn, paint and a specs panel for placed pieces; gizmos on models and events. | **Done** (0.98.7) |
 | 8 | **Lights as 3D lights** | A lantern becomes a sphere, a torch a cone. | **Done** |
-| — | **Event and database meshes** (sidecar, not a tileset class) | An event, actor, enemy, weapon, armor, or item can carry a GLB/OBJ/… from `3d/<folder>/source`. Pose and facing live in `Map###.r3d.json` / `Database.r3d.json`; parts, pivots, rigs, and animations in the model's own `model.json`. Footprint collision, turn sweeps, and per-pixel character depth are done. Weapon/armor/item bindings are stored but not rendered as equipment. | **Implemented; equipment rendering open** |
+| — | **Event and database meshes** (sidecar, not a tileset class) | An event, actor, enemy, weapon, armor, or item can carry a GLB/OBJ/… from `3d/<folder>/source`. Pose and facing live in `Map###.r3d.json` / `Database.r3d.json`; parts, pivots, rigs, and animations in the model's own `model.json`. Footprint collision, turn sweeps, and per-pixel character depth are done. Weapon and item bindings are drawn in the hand by Action Sequence steps in Battle Rooms; armor bindings, and equipment on map characters, are not rendered. | **Implemented; armor and map equipment open** |
 
 Steps 1–3 are corrections to what exists and touch the runtime almost
 exclusively. Steps 4–7 are new authoring surface and are mostly editor work.
@@ -292,14 +293,14 @@ defect, and a gap that holds is not.
 The original implementation drew flat light pools. The default volume path now
 packs up to 32 volume lights (`SHADER_LIGHTS`) into shared shader uniforms. `litMaterial` patches
 basic materials to evaluate `rrLight(worldPosition)` from distance, color,
-intensity, and point/spot/beam shape. Tiles, room surfaces, models, and character
+intensity, and point/spot/beam/sun shape. Tiles, room surfaces, models, and character
 surfaces receive this field. Surface normals and normal maps do not contribute
 an N·L lighting term. The old flat path remains an explicit alternative.
 
 Native map lights, supported plugin adapters (MV Nova Lighting and RaveLighting),
 and model-attached light effects supply the field. `Reactor3D.setLights(lights)`
 accepts a transient external list; it does not save or author map-sidecar lights.
-The current implementation and normalization are in `runtime/reactor_3d.js`;
+The current implementation and normalization are in `runtime/reactor_3d_lighting.js`;
 use the native Lighting tool and effect editor for persistent authored lights.
 
 Shadows use one static and one dynamic depth atlas. Each assigned light gets
@@ -327,10 +328,13 @@ volume shader or atlas shadows.
 ## What this does not attempt
 
 - **Sloped or curved terrain from tile primitives.** Tile-derived terrain uses
-  boxes and quads; imported models can have arbitrary geometry. This proposal
-  does not add a general terrain modeller.
-- **3D battles.** The battle scene stays 2D. A bound enemy or actor renders as
-  a live 3D battler on its sprite (0.98.3), but there is no 3D battlefield.
+  boxes and quads; rolling ground is the terrain brushes' corner heights, rock
+  pieces make cliffs, and imported models can have arbitrary geometry. This
+  proposal does not add a general terrain modeller.
+- **3D battles from tiles.** A bound enemy or actor renders as a live 3D
+  battler on its sprite (0.98.3); 3D battlefields are Battle Rooms, described
+  in [BATTLE-PRESENTATION.md](BATTLE-PRESENTATION.md), not built from the
+  tileset.
 - **Per-vertex authored meshes from tiles.** If a project needs a genuine model,
   the answer is a model — now supported through the event and database
   bindings above — not a tileset.
@@ -358,7 +362,7 @@ advances east. WASD follows the same mapping. Fixed and top-down controls keep
 their existing behavior.
 
 Models are placed from the Build bar's Models group: Select, Remove (the
-hammer), the Library (the model picker), then the models chosen this session
+Eraser), the Library (the model picker), then the models chosen this session
 and those already on the map as picture slots. Build › Select on a placed model
 turns the bar to Models with it picked up. The side panel holds the prop's
 cards (model selection, Placement, Transform, Playback), Transform open first;

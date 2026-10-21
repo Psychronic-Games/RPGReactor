@@ -6,6 +6,7 @@
  * and model textures are capped at load.
  */
 const { source3D } = require('./helpers/runtime-3d-source.cjs');
+const { runtimeSource } = require('./helpers/runtime-source.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -14,7 +15,7 @@ const test = require('node:test');
 const repoRoot = path.resolve(__dirname, '..', '..');
 const Reactor3D = require(path.join(repoRoot, 'runtime', 'reactor_3d.js'));
 const r3d = source3D();
-const core = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_core.js'), 'utf8');
+const core = runtimeSource('reactor_core.js');
 
 test('a billboard frame is two uniforms on a shared sheet, mirrored by a negative repeat', () => {
     global.self = global; global.window = global;

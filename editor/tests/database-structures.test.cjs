@@ -29,11 +29,24 @@ test('a plan file survives a round trip through the form untouched', () => {
     // Normalizing fills every field the form reads; trimming leaves out what
     // says nothing. A file the owner wrote by hand comes back byte for byte.
     const { DatabaseStructureEditor: E } = loadEditor();
-    for (const name of ['Cottage', 'Manor', 'Hamlet']) {
+    // Croft, Lodge, Longhouse and TwoUp wear window frames, shutters and flower boxes.
+    for (const name of ['Cottage', 'Manor', 'Hamlet', 'Croft', 'Lodge', 'Longhouse', 'TwoUp']) {
         const original = JSON.parse(read(`template/Demo/3d/Structures/${name}.json`));
         const back = E.trimPlan(E.normalizePlan(JSON.parse(JSON.stringify(original))));
         assert.equal(JSON.stringify(back), JSON.stringify(original), `${name}.json is written back as it was read, keys in the same order`);
     }
+    // A door entry's own settings, an open doorway, every door's settings, no doors, a roof's overhang: all kept.
+    const plan = { name: 'Doors', size: [12, 10], storey: 5, materials: { wall: 'Stone', door: 'Wood', frame: 'Wood' }, door: { opens: 'action' },
+        floors: [{ rooms: { a: [1, 1, 4, 8], b: [6, 1, 10, 8] }, doors: [['a', 'outside', 2, 2, 'south', { style: 'arched', lock: { switch: 3 }, opens: 'locked' }], ['a', 'b', 2, 4, false]] }],
+        roof: { pitch: 2, overhang: 0.5 }, windows: { every: 4, width: 2, frame: 'two', shutters: '#112233', closed: true, flowerBox: 'all' } };
+    const back = E.trimPlan(E.normalizePlan(JSON.parse(JSON.stringify(plan))));
+    // (vm-realm values: compared as JSON, memory feedback_vm_realm_deepequal)
+    const same = (a, b) => assert.equal(JSON.stringify(a), JSON.stringify(b));
+    same(back.floors[0].doors, plan.floors[0].doors);
+    same(back.door, plan.door);
+    same(back.roof, plan.roof);
+    same(back.windows, plan.windows);
+    assert.equal(E.trimPlan(E.normalizePlan(Object.assign({}, plan, { doors: false }))).doors, false);
 });
 
 test('normalizing fills defaults and clamps, and trimming drops what is default', () => {
@@ -123,8 +136,13 @@ test('the database manager reads plans as records and writes records back as pla
         assert.deepEqual(fs.readdirSync(folder).sort(), ['Cottage-copy.json', 'Cottage.json', 'Tower.json', 'notes.json'], 'the new one is named after its plan, the pasted one after its own name since its file was taken');
         assert.equal(manager.data.structures[2].file, 'Tower.json');
         assert.equal(manager.data.structures[3].file, 'Cottage-copy.json');
-        // A cleared record takes its file with it.
+        // A name being retyped is not a deletion: the file stays and keeps its name.
         cottage.name = '';
+        assert.equal(await manager.saveStructures(root), true);
+        assert.ok(fs.existsSync(path.join(folder, 'Cottage.json')));
+        assert.equal(JSON.parse(fs.readFileSync(path.join(folder, 'Cottage.json'), 'utf8')).name, 'Cottage');
+        // A cleared record (Delete leaves no name and no file) takes its file with it.
+        cottage.file = '';
         assert.equal(await manager.saveStructures(root), true);
         assert.deepEqual(fs.readdirSync(folder).sort(), ['Cottage-copy.json', 'Tower.json', 'notes.json'], 'the cleared plan\'s file went; the file that is not a plan stays');
         assert.equal(JSON.parse(fs.readFileSync(path.join(folder, 'Tower.json'), 'utf8')).name, 'Tower');
@@ -470,7 +488,7 @@ test('screens, lights and animations on a plan: kept in the file, drawn on the p
     assert.equal(row.movie, 'Starfield.webm'); assert.equal(row.target, 'map'); assert.equal(row.structure, 3);
     assert.ok(Math.abs(row.x - 13.5) < 1e-9 && Math.abs(row.y - (6.5 + 0.52)) < 1e-9, 'stood just in front of its wall, toward the room');
     assert.equal(row.width, 8 * 48); assert.equal(row.rotationY, 0, 'facing south');
-    assert.equal(map.reactor3d.lights.length, 1); assert.equal(map.reactor3d.lights[0].tag, 'structure:3'); assert.equal(map.reactor3d.lights[0].height, 8 * 48); assert.equal(map.reactor3d.lights[0].body, false);
+    assert.equal(map.reactor3d.lights.length, 1); assert.equal(map.reactor3d.lights[0].tag, 'structure:3'); assert.equal(map.reactor3d.lights[0].height, 8, 'its height in tiles, as map lights have it'); assert.equal(map.reactor3d.lights[0].body, false);
     assert.equal(requests.length, 1); assert.equal(requests[0].animation, 41);
     SP.placeEvents(map, 3, requests, null);
     const event = map.events.find(Boolean);
@@ -505,4 +523,17 @@ test('screens, lights and animations on a plan: kept in the file, drawn on the p
     editor.undo(); assert.equal(plan.effects.length, 5, 'undo brings it back');
     assert.equal(editor.effectName('screen').length > 0, true);
     assert.ok(E.shapeOutline('tube', { sweep: 230 }).solid[0].length > 40, 'a swept tube draws an annular sector on the plan');
+});
+
+test('the plot never shrinks past what is built on it', () => {
+    const { DatabaseStructureEditor: E } = loadEditor();
+    const plan = E.normalizePlan({ name: 'Yard', size: [40, 30], pieces: [{ kind: 'floor', x: 12, y: 3 }, { kind: 'wall', x: 2, y: 9 }],
+        lights: [{ x: 17.5, y: 6.5 }], spots: { door: [3, 20] }, shapes: [{ kind: 'box', at: [25, 1] }] });
+    assert.deepEqual([...E.builtExtent(plan)], [26, 21]);
+    assert.deepEqual([...E.builtExtent(E.newPlan('Empty'))], [0, 0]);
+    const described = E.normalizePlan({ name: 'Cottage', size: [16, 12], floors: [{ rooms: { room: [1, 1, 9, 10], kitchen: [11, 1, 14, 10] } }] });
+    assert.deepEqual([...E.builtExtent(described)], [15, 11], 'a described cottage keeps the plot its rooms need');
+    const source = read('editor/src/database/DatabaseStructureEditor.js');
+    assert.match(source, /const least = \(\) => Math\.max\(DatabaseStructureEditor\.SIZE_MIN, DatabaseStructureEditor\.builtExtent\(plan\)\[Number\(input\.dataset\.i\)\]\);/);
+    assert.match(source, /const size = Math\.max\(least\(\), Math\.min\(DatabaseStructureEditor\.SIZE_MAX,/);
 });

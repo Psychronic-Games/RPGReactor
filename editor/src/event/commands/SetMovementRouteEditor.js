@@ -252,6 +252,12 @@ class SetMovementRouteEditor {
         select.appendChild(this._option('-1', 'Player', this.characterId === -1, true));
         select.appendChild(this._option('0', 'This Event', this.characterId === 0, true));
 
+        // The party's followers, as many as the game's party has; one the command names beyond that is kept and marked.
+        const followers = this._followerTargets();
+        followers.forEach(target => {
+            select.appendChild(this._option(String(target.value), target.label, this.characterId === target.value, false));
+        });
+
         const events = this._getEventOptions();
         events.forEach(ev => {
             select.appendChild(this._option(
@@ -262,13 +268,39 @@ class SetMovementRouteEditor {
             ));
         });
 
+        // What a route does to a follower, in one line, while one is chosen.
+        const followerHint = document.createElement('div');
+        followerHint.className = 'movement-route-follower-hint';
+        followerHint.style.cssText = 'color: var(--color-text-muted); font-size: 11px; margin: -4px 0 0 80px;';
+        followerHint.textContent = this._t('A follower leaves the line for the route and stays where it ends until told to follow.');
+        const showHint = () => {
+            followerHint.style.display = followers.some(target => target.value === this.characterId) ? '' : 'none';
+            // The closed list cuts a long target short: its whole text is the tooltip.
+            const chosen = select.options[select.selectedIndex];
+            select.title = chosen ? chosen.textContent : '';
+        };
+        showHint();
+
         select.addEventListener('change', (e) => {
             this.characterId = parseInt(e.target.value);
+            showHint();
         });
 
         row.appendChild(label);
         row.appendChild(select);
         parent.appendChild(row);
+        parent.appendChild(followerHint);
+    }
+
+    /** The followers a route can be given to, as `{ value, label }`: Follower 1 to the last the game's party has. */
+    _followerTargets() {
+        if (typeof FollowerCommandEditor === 'undefined') return [];
+        let system = null, plugins = [];
+        try {
+            system = this.databaseManager.getSystem();
+            plugins = this.databaseManager.getPluginManifest ? this.databaseManager.getPluginManifest() : [];
+        } catch (e) { /* no project open */ }
+        return FollowerCommandEditor.routeTargets(FollowerCommandEditor.followerCount(system, plugins), this.characterId);
     }
 
     renderCommandListSection(parent) {
@@ -515,6 +547,8 @@ class SetMovementRouteEditor {
                 this._dlgHeight(null, (z) => this._addCommand(45, SetMovementRouteEditor.routeCommand('height', z).parameters));
             } else if (btn.reactor === 'rotate') {
                 this._dlgRotate(null, (deg) => this._addCommand(45, SetMovementRouteEditor.routeCommand('rotate', deg).parameters));
+            } else if (btn.reactor === 'moveto') {
+                this._dlgMoveTo(null, (tile) => this._addCommand(45, SetMovementRouteEditor.routeCommand('moveto', tile).parameters));
             } else {
                 this._addCommand(45, SetMovementRouteEditor.routeCommand(btn.reactor, 1).parameters);
             }
@@ -543,13 +577,23 @@ class SetMovementRouteEditor {
         if (op === 'faceground') return 'if (typeof this.reactorFacePose === "function") this.reactorFacePose(-1);';
         if (op === 'standup') return 'if (typeof this.reactorFacePose === "function") this.reactorFacePose(0);';
         if (op === 'rotate') return `if (typeof this.reactorRotate === "function") this.reactorRotate(${Number(data.n) || 0});`;
+        // Move to Tile: the character walks there by path finding, and the route waits on this step until it stands there.
+        if (op === 'moveto') return `if (typeof this.reactorMoveToTile === "function") this.reactorMoveToTile(${Math.floor(Number(data.x) || 0)}, ${Math.floor(Number(data.y) || 0)});`;
         return '';
+    }
+
+    /** A Reactor route step: `n` its number, or for Move to Tile the tile as `{ x, y }`. */
+    /** A Move to Tile step in a list: "Move to (14, 9)". */
+    static moveToText(step, translate) {
+        return `${translate ? translate('Move to') : 'Move to'} (${step.x}, ${step.y})`;
     }
 
     static routeCommand(op, n) {
         const codec = typeof ReactorEventCommandCodec !== 'undefined' ? ReactorEventCommandCodec
             : (typeof require === 'function' ? require('./ReactorEventCommandCodec.js') : null);
-        const data = { op, n: Math.round((Number(n) || (op === 'height' ? 0 : 1)) * 100) / 100 };
+        const data = op === 'moveto'
+            ? { op, x: Math.max(0, Math.floor(Number(n && n.x) || 0)), y: Math.max(0, Math.floor(Number(n && n.y) || 0)) }
+            : { op, n: Math.round((Number(n) || (op === 'height' ? 0 : 1)) * 100) / 100 };
         return { code: 45, parameters: [codec.createText('route', data, SetMovementRouteEditor.routeBody(data))] };
     }
 
@@ -562,7 +606,7 @@ class SetMovementRouteEditor {
         let parsed = null;
         try { parsed = codec.parseText(String(cmd.parameters[0] || ''), 'route'); } catch (_) { return null; }
         if (!parsed || !parsed.data
-            || !['rise', 'descend', 'height', 'faceceiling', 'faceground', 'standup', 'rotate'].includes(parsed.data.op)) return null;
+            || !['rise', 'descend', 'height', 'faceceiling', 'faceground', 'standup', 'rotate', 'moveto'].includes(parsed.data.op)) return null;
         if (parsed.body !== SetMovementRouteEditor.routeBody(parsed.data)) return null;
         return parsed.data;
     }
@@ -584,6 +628,97 @@ class SetMovementRouteEditor {
         okBtn.addEventListener('click', () => { callback(Number(input.value) || 0); });
         cancelBtn.addEventListener('click', () => {});
         setTimeout(() => input.focus(), 0);
+    }
+
+    /**
+     * Move to Tile: the tile's X and Y, typed or picked on the open map's
+     * picture (the picker Transfer Player uses, kept to this map).
+     */
+    _dlgMoveTo(existing, callback) {
+        const { content, okBtn, cancelBtn } = this._createDialog('Move to Tile', 360);
+        const grid = document.createElement('div');
+        grid.style.cssText = 'display: grid; grid-template-columns: max-content 1fr; gap: 8px 10px; align-items: center;';
+        const field = (text, value, id) => {
+            const label = document.createElement('label');
+            label.textContent = this._t(text);
+            label.htmlFor = id;
+            label.style.cssText = 'color: var(--color-text); font-size: 12px;';
+            const input = document.createElement('input');
+            input.type = 'number';
+            input.id = id;
+            input.min = '0';
+            input.max = '9999';
+            input.step = '1';
+            input.value = String(value);
+            input.style.cssText = 'width: 100%; box-sizing: border-box; padding: 5px 6px; background: var(--color-bg-input); color: var(--color-text); border: 1px solid var(--color-border-input); border-radius: 3px; font-size: 12px;';
+            grid.appendChild(label);
+            grid.appendChild(input);
+            return input;
+        };
+        const from = existing && existing.x != null && existing.y != null ? existing : this._moveToStart();
+        const xInput = field('X:', from.x, 'dlg-moveto-x');
+        const yInput = field('Y:', from.y, 'dlg-moveto-y');
+        const spacer = document.createElement('span');
+        const pickBtn = document.createElement('button');
+        pickBtn.type = 'button';
+        pickBtn.className = 'rr-btn-secondary dlg-moveto-pick';
+        pickBtn.textContent = this._t('Pick on the Map...');
+        pickBtn.style.justifySelf = 'start';
+        grid.appendChild(spacer);
+        grid.appendChild(pickBtn);
+        content.appendChild(grid);
+        const hint = document.createElement('div');
+        hint.style.cssText = 'color: var(--color-text-muted); font-size: 11px;';
+        hint.textContent = this._t('Walks there by the shortest open way. The route waits until it arrives.');
+        content.appendChild(hint);
+        const mapId = this._currentMapId();
+        pickBtn.disabled = !(mapId > 0) || typeof TransferPlayerEditor === 'undefined';
+        pickBtn.addEventListener('click', () => {
+            new TransferPlayerEditor(this.databaseManager, this.projectController).showMapPicker({
+                mapId, x: Number(xInput.value) || 0, y: Number(yInput.value) || 0,
+                title: this._t('Pick a tile'), thisMapOnly: true,
+                onConfirm: location => { xInput.value = String(location.x); yInput.value = String(location.y); }
+            });
+        });
+        okBtn.addEventListener('click', () => {
+            const tile = { x: Math.max(0, Math.floor(Number(xInput.value) || 0)), y: Math.max(0, Math.floor(Number(yInput.value) || 0)) };
+            this._closeDialog();
+            callback(tile);
+        });
+        cancelBtn.addEventListener('click', () => this._closeDialog());
+        setTimeout(() => xInput.focus(), 0);
+    }
+
+    /**
+     * The tile a new Move to Tile opens on: the route's last Move to Tile,
+     * else the tile of the map event being edited, else (0, 0).
+     */
+    _moveToStart() {
+        const list = (this.moveRoute && this.moveRoute.list) || [];
+        for (let i = list.length - 1; i >= 0; i--) {
+            const step = SetMovementRouteEditor.parseRouteCommand(list[i]);
+            if (step && step.op === 'moveto') return { x: step.x, y: step.y };
+        }
+        try {
+            const editor = this.projectController.eventManager.eventEditor;
+            const modal = typeof document !== 'undefined' ? document.getElementById('event-editor-modal') : null;
+            const event = editor && editor.currentEvent;
+            if (event && modal && modal.getClientRects().length && Number.isFinite(event.x) && Number.isFinite(event.y)) {
+                return { x: Math.max(0, event.x), y: Math.max(0, event.y) };
+            }
+        } catch (e) { /* no map event is open (a common event) */ }
+        return { x: 0, y: 0 };
+    }
+
+    /** The id of the map the route is written on, or 0 where there is none (a common event). */
+    _currentMapId() {
+        try {
+            const controller = this.projectController;
+            const map = controller.eventManager && controller.eventManager.currentMap;
+            return Number(map && map.id) || Number(controller.tilemapManager && controller.tilemapManager.currentMapId) || 0;
+        } catch (e) {
+            return 0;
+        }
     }
 
     _dlgRotate(existing, callback) {
@@ -754,6 +889,15 @@ class SetMovementRouteEditor {
     editCommand(index) {
         const cmd = this.moveRoute.list[index];
         if (!cmd || !this._needsParams(cmd.code)) return;
+
+        const step = SetMovementRouteEditor.parseRouteCommand(cmd);
+        if (step && step.op === 'moveto') {
+            this._dlgMoveTo(step, (tile) => {
+                this.moveRoute.list[index].parameters = SetMovementRouteEditor.routeCommand('moveto', tile).parameters;
+                this.refreshCommandList();
+            });
+            return;
+        }
 
         this._openParamDialog(cmd.code, cmd.parameters, (params) => {
             this.moveRoute.list[index].parameters = params;
@@ -1121,6 +1265,7 @@ class SetMovementRouteEditor {
                     if (step.op === 'faceground') return this._t('Face Ground');
                     if (step.op === 'standup') return this._t('Stand Up');
                     if (step.op === 'rotate') return `${this._t('Rotate')}: ${step.n}°`;
+                    if (step.op === 'moveto') return SetMovementRouteEditor.moveToText(step, text => this._t(text));
                     return `${this._t('Set Height')}: ${step.n}`;
                 }
                 const src = String(p[0] || '');
@@ -1155,6 +1300,7 @@ class SetMovementRouteEditor {
                 { code: 45, reactor: 'rise', label: 'Rise' },
                 { code: 45, reactor: 'descend', label: 'Descend' },
                 { code: 45, reactor: 'height', label: 'Set Height...' },
+                { code: 45, reactor: 'moveto', label: 'Move to Tile...' },
             ],
             column2: [
                 { code: 16, label: 'Turn Down' },

@@ -24,11 +24,19 @@
 
     const SHOW_TEXT = 101;
     const TEXT_LINE = 401;
+    /**
+     * A Show Text command's own choice for a message with no face picture:
+     * "auto" (the speaker's face) or "none". It sits beside code, indent and
+     * parameters, so the five parameters stay RPG Maker's; a command without
+     * it follows the project (System.json reactorSpeakerFace). The game reads
+     * it in runtime/reactor_speaker_face.js.
+     */
+    const FACE_FIELD = 'reactorFace';
 
     /** A header's parameters, defaulted the way the runtime reads them. */
     function readHeader(command) {
         const parameters = (command && command.parameters) || [];
-        return {
+        const header = {
             faceName: parameters[0] || '',
             faceIndex: parameters[1] || 0,
             background: parameters[2] || 0,
@@ -37,6 +45,16 @@
             positionType: parameters[3] ?? 2,
             speakerName: parameters[4] || ''
         };
+        // Carried as it is written, so a box nobody changed is written back the same.
+        if (command && typeof command[FACE_FIELD] === 'string') header.faceMode = command[FACE_FIELD];
+        return header;
+    }
+
+    /** The 101 command of a header: the five parameters, and the message's own face choice when it has one. */
+    function headerCommand(header, indent) {
+        const command = { code: SHOW_TEXT, indent: indent || 0, parameters: headerParameters(header) };
+        if (typeof header.faceMode === 'string' && header.faceMode) command[FACE_FIELD] = header.faceMode;
+        return command;
     }
 
     function headerParameters(header) {
@@ -54,7 +72,8 @@
             && a.faceIndex === b.faceIndex
             && a.background === b.background
             && a.positionType === b.positionType
-            && a.speakerName === b.speakerName;
+            && a.speakerName === b.speakerName
+            && (a.faceMode || '') === (b.faceMode || '');
     }
 
     /**
@@ -153,7 +172,7 @@
 
         for (const box of boxes) {
             if (untouched(box)) {
-                commands.push({ code: SHOW_TEXT, indent: baseIndent, parameters: headerParameters(box.header) });
+                commands.push(headerCommand(box.header, baseIndent));
                 for (const line of box.source) {
                     commands.push({ code: TEXT_LINE, indent: baseIndent, parameters: [line] });
                 }
@@ -161,11 +180,7 @@
             }
             const chunks = rows ? splitLines(box.lines, rows) : [box.lines];
             for (const chunk of chunks) {
-                commands.push({
-                    code: SHOW_TEXT,
-                    indent: baseIndent,
-                    parameters: headerParameters(box.header)
-                });
+                commands.push(headerCommand(box.header, baseIndent));
 
                 let last = -1;
                 for (let i = 0; i < chunk.length; i++) {
@@ -205,8 +220,10 @@
     const api = {
         SHOW_TEXT,
         TEXT_LINE,
+        FACE_FIELD,
         readHeader,
         headerParameters,
+        headerCommand,
         sameHeader,
         collectRun,
         collectOne,

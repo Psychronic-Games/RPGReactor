@@ -16,6 +16,15 @@ const { workerData, parentPort } = require('worker_threads');
 // without one and the importer throws, so the menu import failed at once.
 if (typeof TextDecoder === 'undefined') globalThis.TextDecoder = require('node:util').TextDecoder;
 
+// A cancelled import: terminating the worker alone leaves FFmpeg and FluidSynth running.
+parentPort.on('message', (msg) => {
+    if (!msg || msg.type !== 'cancel') return;
+    try { require(path.join(__dirname, '..', 'src', 'legacy', 'LegacyMedia.js')).stopAll(); } catch (_) { /* nothing started */ }
+    parentPort.postMessage({ type: 'cancelled' });
+});
+// Listening must not keep the worker alive once the import is done.
+parentPort.unref();
+
 (async function run() {
     try {
         const I = require(path.join(__dirname, '..', 'src', 'legacy', 'LegacyImporter.js'));

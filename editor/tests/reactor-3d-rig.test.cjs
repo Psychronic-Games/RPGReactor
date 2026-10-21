@@ -586,6 +586,16 @@ test('in deep water a swimmer swims while moving and treads while still; idle is
     assert.ok(P.defaultRules('humanoid', [{ trigger: 'swimming', type: 'pose' }]).some(rule => rule.trigger === 'treading'));
 });
 
+test('a quadruped with its own walk gets the default walk only while dashing, not on top of its own', () => {
+    const P = require(path.join(repoRoot, 'editor', 'src', 'database', 'RigMotionPresets.js'));
+    const triggers = rules => [...new Set(rules.filter(rule => rule.name === 'Walk').map(rule => rule.trigger))];
+    assert.deepEqual(triggers(P.defaultRules('quadruped', [])), ['moving']);
+    assert.deepEqual(triggers(P.defaultRules('quadruped', [{ name: 'Trot', trigger: 'walking', type: 'pose' }])), ['dashing']);
+    assert.deepEqual(triggers(P.defaultRules('quadruped', [{ name: 'Gallop', trigger: 'dashing', type: 'pose' }])), ['walking']);
+    assert.deepEqual(triggers(P.defaultRules('quadruped', [{ name: 'Go', trigger: 'moving', type: 'pose' }])), []);
+    assert.equal(P.defaultRules('quadruped', [{ trigger: 'walking' }]).filter(rule => rule.name === 'Walk').length, P.byId('quad-walk').rules.length);
+});
+
 test('a windmill that ends a whole turn on runs through its loop without pausing', () => {
     const P = require(path.join(repoRoot, 'editor', 'src', 'database', 'RigMotionPresets.js'));
     const rule = Reactor3D.readModelAnimationRules({ animations: P.byId('swim').rules }).find(r => r.part === 'RightUpperArm');

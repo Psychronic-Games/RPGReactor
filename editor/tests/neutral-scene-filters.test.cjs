@@ -1,5 +1,6 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
-const core=fs.readFileSync(path.join(__dirname,'../../runtime/reactor_core.js'),'utf8');
+const { runtimeSource } = require('./helpers/runtime-source.cjs');
+const core=runtimeSource('reactor_core.js');
 function fixture(){
  const start=core.indexOf('function ColorFilter() {'),tail=core.indexOf('ColorFilter.prototype._rebuildColorMatrix = function',start),end=core.indexOf('\n};\n',tail)+4;
  class ColorMatrixFilter{constructor(){this.resources={};Object.assign(this,{enabled:true,alpha:1,blendMode:'normal',resolution:1,antialias:'off',padding:0,blendRequired:false,glProgram:{},gpuProgram:{}});}get matrix(){return this._m;}set matrix(m){this._m=m;} _loadMatrix(m){this._m=m;}}

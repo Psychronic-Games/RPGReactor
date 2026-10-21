@@ -1,0 +1,778 @@
+{
+ "about": "Shared by the editor (src/database/TacticsSection.js) and the runtime (reactor_fight_tactical.js): the same notes must read as the same tags, the same shapes as the same cells. `tags` lists only what the note says (a missing key is null in the runtime). `cells` are [x, y] pairs sorted by y, then x.",
+ "notes": [
+  {
+   "note": "",
+   "tags": null
+  },
+  {
+   "note": "Skill #1 corresponds to the Attack command.",
+   "tags": null
+  },
+  {
+   "note": "<range: 3>",
+   "tags": {
+    "range": {
+     "min": 1,
+     "max": 3
+    }
+   }
+  },
+  {
+   "note": "<range: 0>",
+   "tags": {
+    "range": {
+     "min": 0,
+     "max": 0
+    }
+   }
+  },
+  {
+   "note": "<range: 2-6>",
+   "tags": {
+    "range": {
+     "min": 2,
+     "max": 6
+    }
+   }
+  },
+  {
+   "note": "<Range:0-3>",
+   "tags": {
+    "range": {
+     "min": 0,
+     "max": 3
+    }
+   }
+  },
+  {
+   "note": "<range: 6-2>",
+   "tags": {
+    "range": {
+     "min": 2,
+     "max": 6
+    }
+   }
+  },
+  {
+   "note": "<area: self>",
+   "tags": {
+    "area": {
+     "shape": "self",
+     "size": 0
+    }
+   }
+  },
+  {
+   "note": "<area: single>",
+   "tags": {
+    "area": {
+     "shape": "single",
+     "size": 0
+    }
+   }
+  },
+  {
+   "note": "<area: all>",
+   "tags": {
+    "area": {
+     "shape": "all",
+     "size": 0
+    }
+   }
+  },
+  {
+   "note": "<AREA: Circle 2>",
+   "tags": {
+    "area": {
+     "shape": "circle",
+     "size": 2
+    }
+   }
+  },
+  {
+   "note": "<area: square 1>",
+   "tags": {
+    "area": {
+     "shape": "square",
+     "size": 1
+    }
+   }
+  },
+  {
+   "note": "<area: line 4>",
+   "tags": {
+    "area": {
+     "shape": "line",
+     "size": 4
+    }
+   }
+  },
+  {
+   "note": "<area: cone 3>",
+   "tags": {
+    "area": {
+     "shape": "cone",
+     "size": 3
+    }
+   }
+  },
+  {
+   "note": "<area: cross 2>",
+   "tags": {
+    "area": {
+     "shape": "cross",
+     "size": 2
+    }
+   }
+  },
+  {
+   "note": "<area: circle>",
+   "tags": {
+    "area": {
+     "shape": "circle",
+     "size": 1
+    }
+   }
+  },
+  {
+   "note": "<los: no>",
+   "tags": {
+    "los": false
+   }
+  },
+  {
+   "note": "<move: 5>",
+   "tags": {
+    "move": 5
+   }
+  },
+  {
+   "note": "<move: -1>\n<jump: +2>",
+   "tags": {
+    "move": -1,
+    "jump": 2
+   }
+  },
+  {
+   "note": "<ai: ranged>",
+   "tags": {
+    "ai": "ranged"
+   }
+  },
+  {
+   "note": "A sniper's shot.\n<range: 3-9> <area: single>\n<los: no>\nKeep this line.",
+   "tags": {
+    "range": {
+     "min": 3,
+     "max": 9
+    },
+    "area": {
+     "shape": "single",
+     "size": 0
+    },
+    "los": false
+   }
+  },
+  {
+   "note": "<PTBS>\nscope: circle(3,0)\naoe: circle(2,0)\n</PTBS>",
+   "tags": {
+    "range": {
+     "min": 0,
+     "max": 3
+    },
+    "area": {
+     "shape": "circle",
+     "size": 2
+    }
+   }
+  },
+  {
+   "note": "<PTBS>\nscope: circle(1,1)\naoe: circle(0,0)\n</PTBS>",
+   "tags": {
+    "range": {
+     "min": 1,
+     "max": 1
+    },
+    "area": {
+     "shape": "single",
+     "size": 0
+    }
+   }
+  },
+  {
+   "note": "<PTBS>\nscope: line(4,1)\nscope_select: enemy\n</PTBS>",
+   "tags": {
+    "range": {
+     "min": 1,
+     "max": 4
+    },
+    "area": {
+     "shape": "line",
+     "size": 4
+    }
+   }
+  },
+  {
+   "note": "<PTBS>\nmove_points: 6\n</PTBS>",
+   "tags": {
+    "move": 6
+   }
+  },
+  {
+   "note": "<PTBS>\nscope: circle(3,0)\naoe: square(1,0)\n</PTBS>\n<range: 2-5>",
+   "tags": {
+    "range": {
+     "min": 2,
+     "max": 5
+    },
+    "area": {
+     "shape": "square",
+     "size": 1
+    }
+   }
+  }
+ ],
+ "areas": [
+  {
+   "shape": "self",
+   "size": 0,
+   "user": {
+    "x": 10,
+    "y": 10
+   },
+   "target": {
+    "x": 13,
+    "y": 10
+   },
+   "cells": [
+    [
+     10,
+     10
+    ]
+   ]
+  },
+  {
+   "shape": "single",
+   "size": 0,
+   "user": {
+    "x": 10,
+    "y": 10
+   },
+   "target": {
+    "x": 13,
+    "y": 10
+   },
+   "cells": [
+    [
+     13,
+     10
+    ]
+   ]
+  },
+  {
+   "shape": "circle",
+   "size": 1,
+   "user": {
+    "x": 10,
+    "y": 10
+   },
+   "target": {
+    "x": 13,
+    "y": 10
+   },
+   "cells": [
+    [
+     13,
+     9
+    ],
+    [
+     12,
+     10
+    ],
+    [
+     13,
+     10
+    ],
+    [
+     14,
+     10
+    ],
+    [
+     13,
+     11
+    ]
+   ]
+  },
+  {
+   "shape": "circle",
+   "size": 2,
+   "user": {
+    "x": 10,
+    "y": 10
+   },
+   "target": {
+    "x": 10,
+    "y": 7
+   },
+   "cells": [
+    [
+     10,
+     5
+    ],
+    [
+     9,
+     6
+    ],
+    [
+     10,
+     6
+    ],
+    [
+     11,
+     6
+    ],
+    [
+     8,
+     7
+    ],
+    [
+     9,
+     7
+    ],
+    [
+     10,
+     7
+    ],
+    [
+     11,
+     7
+    ],
+    [
+     12,
+     7
+    ],
+    [
+     9,
+     8
+    ],
+    [
+     10,
+     8
+    ],
+    [
+     11,
+     8
+    ],
+    [
+     10,
+     9
+    ]
+   ]
+  },
+  {
+   "shape": "square",
+   "size": 1,
+   "user": {
+    "x": 10,
+    "y": 10
+   },
+   "target": {
+    "x": 12,
+    "y": 11
+   },
+   "cells": [
+    [
+     11,
+     10
+    ],
+    [
+     12,
+     10
+    ],
+    [
+     13,
+     10
+    ],
+    [
+     11,
+     11
+    ],
+    [
+     12,
+     11
+    ],
+    [
+     13,
+     11
+    ],
+    [
+     11,
+     12
+    ],
+    [
+     12,
+     12
+    ],
+    [
+     13,
+     12
+    ]
+   ]
+  },
+  {
+   "shape": "cross",
+   "size": 2,
+   "user": {
+    "x": 10,
+    "y": 10
+   },
+   "target": {
+    "x": 8,
+    "y": 10
+   },
+   "cells": [
+    [
+     8,
+     8
+    ],
+    [
+     8,
+     9
+    ],
+    [
+     6,
+     10
+    ],
+    [
+     7,
+     10
+    ],
+    [
+     8,
+     10
+    ],
+    [
+     9,
+     10
+    ],
+    [
+     10,
+     10
+    ],
+    [
+     8,
+     11
+    ],
+    [
+     8,
+     12
+    ]
+   ]
+  },
+  {
+   "shape": "line",
+   "size": 4,
+   "user": {
+    "x": 10,
+    "y": 10
+   },
+   "target": {
+    "x": 12,
+    "y": 10
+   },
+   "cells": [
+    [
+     11,
+     10
+    ],
+    [
+     12,
+     10
+    ],
+    [
+     13,
+     10
+    ],
+    [
+     14,
+     10
+    ]
+   ]
+  },
+  {
+   "shape": "line",
+   "size": 3,
+   "user": {
+    "x": 10,
+    "y": 10
+   },
+   "target": {
+    "x": 10,
+    "y": 7
+   },
+   "cells": [
+    [
+     10,
+     7
+    ],
+    [
+     10,
+     8
+    ],
+    [
+     10,
+     9
+    ]
+   ]
+  },
+  {
+   "shape": "line",
+   "size": 3,
+   "user": {
+    "x": 10,
+    "y": 10
+   },
+   "target": {
+    "x": 9,
+    "y": 13
+   },
+   "cells": [
+    [
+     10,
+     11
+    ],
+    [
+     10,
+     12
+    ],
+    [
+     10,
+     13
+    ]
+   ]
+  },
+  {
+   "shape": "line",
+   "size": 2,
+   "user": {
+    "x": 10,
+    "y": 10
+   },
+   "target": {
+    "x": 12,
+    "y": 12
+   },
+   "cells": [
+    [
+     10,
+     11
+    ],
+    [
+     10,
+     12
+    ]
+   ]
+  },
+  {
+   "shape": "line",
+   "size": 2,
+   "user": {
+    "x": 10,
+    "y": 10
+   },
+   "target": {
+    "x": 8,
+    "y": 8
+   },
+   "cells": [
+    [
+     10,
+     8
+    ],
+    [
+     10,
+     9
+    ]
+   ]
+  },
+  {
+   "shape": "cone",
+   "size": 1,
+   "user": {
+    "x": 10,
+    "y": 10
+   },
+   "target": {
+    "x": 11,
+    "y": 10
+   },
+   "cells": [
+    [
+     11,
+     10
+    ]
+   ]
+  },
+  {
+   "shape": "cone",
+   "size": 3,
+   "user": {
+    "x": 10,
+    "y": 10
+   },
+   "target": {
+    "x": 12,
+    "y": 10
+   },
+   "cells": [
+    [
+     13,
+     8
+    ],
+    [
+     12,
+     9
+    ],
+    [
+     13,
+     9
+    ],
+    [
+     11,
+     10
+    ],
+    [
+     12,
+     10
+    ],
+    [
+     13,
+     10
+    ],
+    [
+     12,
+     11
+    ],
+    [
+     13,
+     11
+    ],
+    [
+     13,
+     12
+    ]
+   ]
+  },
+  {
+   "shape": "cone",
+   "size": 3,
+   "user": {
+    "x": 10,
+    "y": 10
+   },
+   "target": {
+    "x": 10,
+    "y": 14
+   },
+   "cells": [
+    [
+     10,
+     11
+    ],
+    [
+     9,
+     12
+    ],
+    [
+     10,
+     12
+    ],
+    [
+     11,
+     12
+    ],
+    [
+     8,
+     13
+    ],
+    [
+     9,
+     13
+    ],
+    [
+     10,
+     13
+    ],
+    [
+     11,
+     13
+    ],
+    [
+     12,
+     13
+    ]
+   ]
+  },
+  {
+   "shape": "cone",
+   "size": 2,
+   "user": {
+    "x": 10,
+    "y": 10
+   },
+   "target": {
+    "x": 7,
+    "y": 9
+   },
+   "cells": [
+    [
+     8,
+     9
+    ],
+    [
+     8,
+     10
+    ],
+    [
+     9,
+     10
+    ],
+    [
+     8,
+     11
+    ]
+   ]
+  },
+  {
+   "shape": "cone",
+   "size": 2,
+   "user": {
+    "x": 10,
+    "y": 10
+   },
+   "target": {
+    "x": 11,
+    "y": 9
+   },
+   "cells": [
+    [
+     9,
+     8
+    ],
+    [
+     10,
+     8
+    ],
+    [
+     11,
+     8
+    ],
+    [
+     10,
+     9
+    ]
+   ]
+  }
+ ]
+}

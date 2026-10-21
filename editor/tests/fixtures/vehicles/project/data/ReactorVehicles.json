@@ -1,0 +1,11 @@
+[null,
+  { "id": 1, "name": "Motorcycle", "kind": "motorcycle",
+    "model": { "name": "Vehicles/kawashaki_ninja_h2", "file": "kawashaki_ninja_h2", "size": 3.5 },
+    "sounds": {
+      "engine": { "name": "drone-01", "volume": 90, "pitch": 100 },
+      "start": { "name": "powerup-01", "volume": 90, "pitch": 100 },
+      "stop": { "name": "equip-01", "volume": 90, "pitch": 100 },
+      "bump": { "name": "hit-01", "volume": 90, "pitch": 100 },
+      "land": { "name": "hit-02", "volume": 90, "pitch": 100 }
+    } }
+]

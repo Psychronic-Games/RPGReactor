@@ -1,6 +1,6 @@
 # Runtime events: `ReactorEvents`
 
-The runtime emits synchronous notifications at fixed points of a battle. This
+The runtime emits synchronous notifications at fixed points of a battle, of a battle on the map, and when a door on a 3D map opens or shuts. This
 feed is intended for read-only observers, so a plugin that tracks combat can
 subscribe to it instead of wrapping prototype methods it never meant to change.
 
@@ -298,6 +298,242 @@ they emit.
 Does **not** fire for `clearStates()` (death, `recoverAll`, `escape`), nor for
 a direct `eraseState` — those bypass `removeState` by design in the engine, and
 the feed reports what the engine does rather than second-guessing it.
+
+### `doorOpened`
+
+Emitted in `reactor_3d_doors.js` when a door of a 3D map starts to open: for
+someone walking up to an automatic door, the OK button at an action door, or a
+script (`Reactor3D.Doors.open`).
+
+| Field | |
+|---|---|
+| `mapId` | `number` |
+| `id` | `number` — the door piece's id in the map's sidecar |
+| `tag` | `string` — the door's `tag`, or `""` |
+| `by` | `Game_Character` or `null` — who opened it; `null` for a script |
+
+### `doorClosed`
+
+Emitted when a door's leaves come to rest shut, with the same fields; `by` is
+whoever last opened it.
+
+### `mapBattleStart`
+
+Emitted in `reactor_fight.js` when a battle starts on the map (Tactical,
+Action or First Person), after every unit has had `onBattleStart`.
+
+| Field | |
+|---|---|
+| `serial` | `number` — this fight's number; `$gameFight.resultOf(serial)` gives its result once it ends |
+| `mode` | `string` — `"tactical"`, `"action"` or `"firstPerson"` |
+| `mapId` | `number` |
+
+### `mapBattleTurnStart`
+
+Emitted when an on-map battle's round begins.
+
+| Field | |
+|---|---|
+| `turn` | `number` — the round that is starting, from 1 |
+
+### `unitDefeated`
+
+Emitted when a unit of an on-map battle falls.
+
+| Field | |
+|---|---|
+| `unitId` | `number` — the unit's id in `$gameFight` |
+| `eventId` | `number` — its event, or `0` for a party member |
+| `team` | `string` — `"ally"` or `"enemy"` |
+| `battler` | `Game_Battler` — the engine's own instance |
+
+### `mapBattleEnd`
+
+Emitted when an on-map battle has ended and its rewards (or defeat) are done.
+
+| Field | |
+|---|---|
+| `serial` | `number` |
+| `result` | `0` victory, `1` escape, `2` defeat — as Battle Processing's branches |
+
+### `fightTeamTurn`
+
+Emitted when a side's turn begins (team turns).
+
+| Field | |
+|---|---|
+| `team` | `string` — `"ally"` or `"enemy"` |
+| `turn` | `number` |
+
+### `fightUnitTurn`
+
+Emitted when a unit becomes the active unit.
+
+| Field | |
+|---|---|
+| `unitId` | `number` |
+| `team` | `string` |
+| `player` | `boolean` — the player orders it |
+
+### `fightMoveStart`
+
+Emitted when a unit starts walking.
+
+| Field | |
+|---|---|
+| `unitId` | `number` |
+| `path` | `[{x, y}]` — without its own cell |
+| `long` | `boolean` — 5 cells or more |
+
+### `fightMoveEnd`
+
+Emitted when it arrived.
+
+| Field | |
+|---|---|
+| `unitId` | `number` |
+| `x` | `number` |
+| `y` | `number` |
+
+### `fightAim`
+
+Emitted when an action is confirmed and about to play.
+
+| Field | |
+|---|---|
+| `unitId` | `number` |
+| `kind` | `string` — `"skill"` or `"item"` |
+| `itemId` | `number` |
+| `targetIds` | `number[]` |
+| `cell` | `{x, y}` |
+| `ranged` | `boolean` — a reach of 2 or more |
+| `quick` | `boolean` — a quick action (an army's unit acting without a full sequence) |
+| `side` | `boolean` — an action played beside others; `fightFire` and `fightActionEnd` carry it too |
+
+### `fightFire`
+
+Emitted when the action's playback begins, after any hold.
+
+| Field | |
+|---|---|
+| `unitId` | `number` |
+| `kind` | `string` |
+| `itemId` | `number` |
+| `targetIds` | `number[]` |
+| `cell` | `{x, y}` |
+
+### `fightImpact`
+
+Emitted when a result lands on a target, in every on-map mode.
+
+| Field | |
+|---|---|
+| `unitId` | `number` |
+| `targetId` | `number` |
+| `damage` | `number` |
+| `critical` | `boolean` |
+| `missed` | `boolean` |
+| `evaded` | `boolean` |
+| `defeated` | `boolean` |
+| `heal` | `boolean` |
+| `hit` | `number` — the first hit landed by this call, from 1 |
+| `hits` | `number` — the action's total |
+
+### `fightOverwatch`
+
+Emitted when a unit ends its turn on watch. The reaction shot's `fightAim`, `fightFire`, `fightImpact` and `fightActionEnd` carry `overwatch: true`; `fightImpact` always has the field.
+
+| Field | |
+|---|---|
+| `unitId` | `number` |
+| `team` | `string` |
+
+### `fightActionEnd`
+
+Emitted when the playback ended.
+
+| Field | |
+|---|---|
+| `unitId` | `number` |
+
+### `fightUnitSpawned`
+
+Emitted when a unit joined by Spawn Unit or as a troop member.
+
+| Field | |
+|---|---|
+| `unitId` | `number` |
+| `eventId` | `number` |
+| `team` | `string` |
+
+### `fightShot`
+
+Emitted when a shot leaves a weapon in an Action battle.
+
+| Field | |
+|---|---|
+| `unitId` | `number` |
+| `weaponId` | `number` |
+| `projectile` | `string` |
+| `from` | `{x, y, z}` |
+| `to` | `{x, y, z}` |
+| `targetId` | `number` — 0 when it struck nothing or still flies |
+
+### `fightSwing`
+
+Emitted when a melee swing begins.
+
+| Field | |
+|---|---|
+| `unitId` | `number` |
+| `step` | `number` |
+| `steps` | `number` |
+
+### `fightReload`
+
+Emitted when a reload begins.
+
+| Field | |
+|---|---|
+| `unitId` | `number` |
+| `frames` | `number` |
+
+### `fightDodge`
+
+Emitted when a dodge begins.
+
+| Field | |
+|---|---|
+| `unitId` | `number` |
+
+### `fightGuard`
+
+Emitted when a blow is turned aside by a guard raised just in time.
+
+| Field | |
+|---|---|
+| `unitId` | `number` |
+| `attackerId` | `number` |
+| `perfect` | `boolean` |
+
+### `fightAlert`
+
+Emitted when a unit notices an opponent, by sight or by a blow taken.
+
+| Field | |
+|---|---|
+| `unitId` | `number` |
+| `targetId` | `number` |
+
+### `fightWindup`
+
+Emitted when a unit other than the player winds up an attack.
+
+| Field | |
+|---|---|
+| `unitId` | `number` |
+| `targetId` | `number` |
+| `frames` | `number` |
 
 ## Migrating an observer
 

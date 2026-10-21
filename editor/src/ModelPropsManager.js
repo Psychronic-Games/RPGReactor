@@ -61,7 +61,7 @@ class ModelPropsManager {
     /** The models the Build bar offers: chosen this session, then the ones on this map. */
     libraryModels(limit = 8) {
         const out = [];
-        const add = entry => { if (entry && entry.name && out.length < limit && !out.some(m => m.name === entry.name)) out.push({ name: entry.name, ext: entry.ext, file: entry.file, texture: entry.texture || '' }); };
+        const add = entry => { if (entry && entry.name && out.length < limit && !out.some(m => m.name === entry.name)) out.push({ name: entry.name, ext: entry.ext, file: entry.file, texture: entry.texture || '', variant: entry.variant || '' }); };
         this.recent.forEach(add);
         this.props().forEach(add);
         return out;
@@ -96,6 +96,12 @@ class ModelPropsManager {
         }
         this._syncPanel();
         if (this.active) this._bindPointer();
+    }
+
+    /** Another project: the models chosen so far (the Build bar's slots, the one in hand) were the last project's files. */
+    onProjectChanged() {
+        this.recent = [];
+        this.model = null;
     }
 
     _ensureContainer() {
@@ -217,6 +223,7 @@ class ModelPropsManager {
     static specOf(prop) {
         return {
             name: prop.name, ext: prop.ext, file: prop.file, texture: prop.texture,
+            ...(prop.variant ? { variant: prop.variant } : null),
             size: prop.size, scale: prop.scale, stretch: prop.stretch, yaw: prop.yaw, pitch: prop.pitch, roll: prop.roll
         };
     }
@@ -350,7 +357,7 @@ class ModelPropsManager {
         if (!elevation || !this.currentMap || !this.model) return 0;
         this.pushUndo();
         const id = elevation.addProp(this.currentMap, {
-            name: this.model.name, ext: this.model.ext, file: this.model.file, texture: this.model.texture,
+            name: this.model.name, ext: this.model.ext, file: this.model.file, texture: this.model.texture, variant: this.model.variant || '',
             x, y, z: this.fields.z, direction: this.fields.direction,
             yaw: this.fields.yaw, pitch: this.fields.pitch, roll: this.fields.roll,
             size: this.fields.size, scale: this.fields.scale, passable: this.fields.passable,
@@ -396,7 +403,7 @@ class ModelPropsManager {
                 yaw: prop.yaw, pitch: prop.pitch, roll: prop.roll,
                 animations: (prop.animations || (prop.animation ? [prop.animation] : [])).slice(), repeat: !!prop.repeat, animationSpeed: prop.animationSpeed ?? 100,
                 effects: (prop.effects || (prop.effect ? [prop.effect] : [])).slice() };
-            this.model = { name: prop.name, ext: prop.ext, file: prop.file, texture: prop.texture };
+            this.model = { name: prop.name, ext: prop.ext, file: prop.file, texture: prop.texture, variant: prop.variant || '' };
         }
         this.render();
         this._syncPanel();
@@ -712,7 +719,7 @@ class ModelPropsManager {
             this.fields.yaw = Number(spec.yaw) || 0;
             this.fields.pitch = Number(spec.pitch) || 0;
             this.fields.roll = Number(spec.roll) || 0;
-            const model = { name: spec.name, ext: spec.ext, file: spec.file, texture: spec.texture || '' };
+            const model = { name: spec.name, ext: spec.ext, file: spec.file, texture: spec.texture || '', variant: spec.variant || '' };
             if (this.selectedId) {
                 this.model = model;
                 this.update(this.selectedId, Object.assign({}, model, {
@@ -947,7 +954,7 @@ class ModelPropsManager {
         this._syncCard();
         if (byId('model-props-deselect')) byId('model-props-deselect').disabled = !shown;
         this._fillChoiceSelects();
-        this._syncPreview(shown ? ModelPropsManager.specOf(shown) : (this.model ? { name: this.model.name, ext: this.model.ext, file: this.model.file, texture: this.model.texture, size: 1, scale: 1, yaw: this.fields.yaw, pitch: this.fields.pitch, roll: this.fields.roll } : null), shown ? shown.direction : this.fields.direction);
+        this._syncPreview(shown ? ModelPropsManager.specOf(shown) : (this.model ? { name: this.model.name, ext: this.model.ext, file: this.model.file, texture: this.model.texture, variant: this.model.variant || '', size: 1, scale: 1, yaw: this.fields.yaw, pitch: this.fields.pitch, roll: this.fields.roll } : null), shown ? shown.direction : this.fields.direction);
     }
 
     //-------------------------------------------------------------------------
@@ -1091,11 +1098,11 @@ class ModelPropsManager {
         if (!this.model || typeof Reactor3D === 'undefined' || !Reactor3D.normalizeModelSpec) return null;
         // Asked on every pointer move: the same spec object comes back until a field changes.
         const f = this.fields;
-        const key = `${this.model.name}|${this.model.ext}|${this.model.file}|${this.model.texture}|${f.size}|${f.scale}|${(f.stretch || []).join(',')}|${f.yaw}|${f.pitch}|${f.roll}`;
+        const key = `${this.model.name}|${this.model.ext}|${this.model.file}|${this.model.texture}|${this.model.variant || ''}|${f.size}|${f.scale}|${(f.stretch || []).join(',')}|${f.yaw}|${f.pitch}|${f.roll}`;
         if (this._placementSpecKey === key && this._placementSpecValue) return this._placementSpecValue;
         this._placementSpecKey = key;
         this._placementSpecValue = Reactor3D.normalizeModelSpec(ModelPropsManager.specOf({
-            name: this.model.name, ext: this.model.ext, file: this.model.file, texture: this.model.texture,
+            name: this.model.name, ext: this.model.ext, file: this.model.file, texture: this.model.texture, variant: this.model.variant || '',
             size: f.size, scale: f.scale, stretch: f.stretch, yaw: f.yaw, pitch: f.pitch, roll: f.roll
         }));
         return this._placementSpecValue;
@@ -1107,10 +1114,10 @@ class ModelPropsManager {
         if (!container || !this.model) return;
         const tw = this.tilemapManager?.TILE_WIDTH || 48;
         const th = this.tilemapManager?.TILE_HEIGHT || tw;
-        const fake = { id: 0, name: this.model.name, ext: this.model.ext, file: this.model.file, texture: this.model.texture,
+        const fake = { id: 0, name: this.model.name, ext: this.model.ext, file: this.model.file, texture: this.model.texture, variant: this.model.variant || '',
             x, y, z: this.fields.z, direction: this.fields.direction, yaw: this.fields.yaw, pitch: this.fields.pitch, roll: this.fields.roll,
             size: this.fields.size, scale: this.fields.scale, stretch: this.fields.stretch };
-        if (this._ghost && (this._ghost.parent !== container || this._ghostKey !== `${this.model.name}|${fake.size}|${fake.scale}|${fake.direction}`)) {
+        if (this._ghost && (this._ghost.parent !== container || this._ghostKey !== `${this.model.name}|${fake.variant}|${fake.size}|${fake.scale}|${fake.direction}`)) {
             this._ghost.parent?.removeChild(this._ghost);
             this._ghost = null;
         }
@@ -1121,7 +1128,7 @@ class ModelPropsManager {
             sprite.eventMode = 'none';
             container.addChild(sprite);
             this._ghost = sprite;
-            this._ghostKey = `${this.model.name}|${fake.size}|${fake.scale}|${fake.direction}`;
+            this._ghostKey = `${this.model.name}|${fake.variant}|${fake.size}|${fake.scale}|${fake.direction}`;
         }
         this._ghost.visible = true;
         this._ghost.x = (x + 0.5) * tw;

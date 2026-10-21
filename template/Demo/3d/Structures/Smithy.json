@@ -1,0 +1,24 @@
+{
+  "name": "Smithy",
+  "size": [14,12],
+  "storey": 5,
+  "materials": {"wall":"Stone","inner":"Stone","floor":"Stone","wet":"Stone","roof":"Thatch","stair":"Stone"},
+  "floors": [
+    {"rooms":{"forge":[1,1,12,10]},"doors":[["forge","outside",8,7,"south",false]]}
+  ],
+  "stairs": [],
+  "roof": {"pitch":4},
+  "windows": {"every":4,"width":2},
+  "shapes": [
+    {"kind":"box","at":[3,2],"size":[3,1.5,2.6],"material":"Stone"},
+    {"kind":"box","at":[3,2],"z":1.5,"size":[2.2,0.15,1.8],"material":"Sand"},
+    {"kind":"box","at":[3,1],"size":[2,11.5,1.6],"offset":[0,-0.3],"material":"Stone"},
+    {"kind":"cylinder","at":[7,5],"size":[1,0.8,1],"material":"Wood"},
+    {"kind":"box","at":[7,5],"z":0.75,"size":[1.5,0.5,0.6],"material":"Steel"},
+    {"kind":"box","at":[11,8],"size":[1,0.8,2.2],"material":"Wood"}
+  ],
+  "spots": {"smith":[8,6]},
+  "events": [
+    {"spot":"smith","name":"Brannoc the Smith","template":"smith","direction":2}
+  ]
+}

@@ -105,9 +105,14 @@ test('the shadow variant of the light shader reads two atlases, however many lig
     }
     // A tap never leaves its face, and the row is picked by the slot.
     assert.match(soft, /clamp\(uv \+ rrShadowTap\(i, phi\) \* info\.w, pad, 1\.0 - pad\)/);
-    assert.match(soft, /vec2 base = vec2\(face \* rrShadowGrid\.x, row \* rowScale\);/);
-    // The darker of the static and the dynamic row wins.
-    assert.match(soft, /float s = rrAtlasShadow\(rrShadowAtlas, rrShadowGrid\.y, float\(slot\), d, info\);\n\tif \(info\.z >= 0\.0\) s = min\(s, rrAtlasShadow\(rrShadowDynAtlas, rrShadowGrid\.z, info\.z, d, info\)\);/);
+    assert.match(soft, /vec2 base = vec2\(face \* rrShadowGrid\.x, float\(slot\) \* rrShadowGrid\.y\);/);
+    assert.match(soft, /vec2 dynBase = vec2\(face \* rrShadowGrid\.x, info\.z \* rrShadowGrid\.z\);/);
+    // The darker of the static and the dynamic row wins; the face and its
+    // projection are worked out once for both (one copy in the light loop).
+    assert.match(soft, /s \+= texture\(rrShadowAtlas, vec3\(base \+ q \* scale, dp\)\);\n\t\tif \(dynamic\) sd \+= texture\(rrShadowDynAtlas, vec3\(dynBase \+ q \* dynScale, dp\)\);/);
+    assert.match(soft, /return dynamic \? min\(s \* 0\.2, sd \* 0\.2\) : s \* 0\.2;/);
+    assert.match(Reactor3D.lightGlsl(true, 1), /float s = texture\(rrShadowAtlas, vec3\(base \+ q \* scale, dp\)\);\n\tif \(dynamic\) s = min\(s, texture\(rrShadowDynAtlas, vec3\(dynBase \+ q \* dynScale, dp\)\)\);/);
+    assert.equal((soft.match(/face = d\.x > 0\.0/g) || []).length, 1, 'one face selection, not one per atlas');
     // Sampled inside the light loop, before the light adds in.
     assert.match(soft, /float sh = rrLightShadow\[i\];\n\t\tif \(sh >= 0\.0\) fall \*= rrShadowAt\(int\(sh \+ 0\.5\), p\);\n\t\tsum \+= lc\.rgb \* fall;/);
     // Each row measures from where it was rendered, not from the light.
@@ -292,7 +297,7 @@ test('marking a caster puts its meshes on the static or the dynamic layer, and e
     }
 });
 
-test('the static rows re-render when a prop moves, hides, arrives, or swaps its level, and not otherwise', () => {
+test('the static rows re-render when a prop moves, hides or arrives, and not for a distance-level swap', () => {
     const shadows = Reactor3D.Shadows;
     const prop = at => ({ parent: {}, visible: true, userData: {}, matrixWorld: { elements: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, at, 0, 0, 1] } });
     const a = prop(1);
@@ -310,7 +315,12 @@ test('the static rows re-render when a prop moves, hides, arrives, or swaps its 
     assert.equal(shadows._staticChanged(), true, 'arrived');
     assert.equal(shadows._staticChanged(), false);
     Reactor3D._lodSwaps++;
-    assert.equal(shadows._staticChanged(), true, 'a level swap changes the silhouette');
+    assert.equal(shadows._staticChanged(), false, 'a level swap in the view is not a change: static rows draw the coarsest level');
+    shadows.lodSwapsDirtyStatic = true;
+    try {
+        Reactor3D._lodSwaps++;
+        assert.equal(shadows._staticChanged(), true, 'the kill switch counts swaps again');
+    } finally { shadows.lodSwapsDirtyStatic = false; }
     shadows.invalidate();
     assert.equal(shadows._staticChanged(), true, 'asked outright');
     shadows._static.clear();
@@ -473,7 +483,7 @@ test('the dynamic budget is measured from the player, and a party of two reduced
 
 test('both viewports render the maps once a frame before the first pass, and the game marks its casters', () => {
     const three = source3D();
-    assert.match(three, /scene\.updateMatrixWorld\(\);\n\s*\/\/ The shadow maps, while every group is still visible, then the reflections\.\n\s*Reactor3D\.prepareWorldFrame\(this\._renderer, mapScene, scene, this\._camera\);/);
+    assert.match(three, /scene\.updateMatrixWorld\(\);\n\s*\/\/ The shadow maps, while every group is still visible, then the reflections\.\n\s*Reactor3D\.prepareWorldFrame\(this\._renderer, mapScene, scene, this\._camera, undefined, this\.upscaled\(\) \? this\._scale : 1\);/);
     assert.match(three, /if \(shadows !== false && mapScene\.renderShadows\) mapScene\.renderShadows\(renderer, \(shadows && shadows\.mapData\) \|\| null, shadows \|\| undefined\);/);
     assert.match(three, /group\.add\(object\);\n\s*\/\/ A prop never moves; its map is cached\. An event walks\.\n\s*Reactor3D\.Shadows\.markCaster\(object, !\(typeof character\.eventId === "function"\n\s*&& character\.eventId\(\) >= Reactor3D\.PROP_EVENT_BASE\)\);/);
     // The depth passes run from the sentinel's hook, inside the pass.
@@ -499,10 +509,11 @@ test('both viewports render the maps once a frame before the first pass, and the
     const face = three.slice(three.indexOf('_renderFaces(renderer, scene, target, size, row, origin, camera, mask) {'), three.indexOf('\n    },', three.indexOf('_renderFaces(renderer, scene, target, size, row, origin, camera, mask) {')));
     assert.ok(face.indexOf('renderer.clear(false, true, false);') < face.indexOf('for (let face = 0;'), 'all faces are cleared before selective drawing');
     assert.match(face, /camera\.up\.set\(spec\.up\[0\], spec\.up\[1\], spec\.up\[2\]\);\s*camera\.lookAt\(origin\.x \+ spec\.dir\[0\], origin\.y \+ spec\.dir\[1\], origin\.z \+ spec\.dir\[2\]\);/);
-    assert.match(face, /renderer\.render\(scene, camera\);/);
+    assert.match(face, /Reactor3D\.Shadows\.renderFace\(renderer, scene, camera\);/);
+    assert.match(three, /renderFace\(renderer, scene, camera\) \{\s*const cull = Reactor3D\.InstanceCull, hidden = cull \? cull\.hide\(scene, camera\) : null;\s*try \{ renderer\.render\(scene, camera\); \} finally \{ if \(hidden\) cull\.show\(hidden\); \}/, 'a face skins only the characters it can see');
 
     const editor = read('editor/src/MapEditor3D.js');
-    assert.match(editor, /lightingManager\?\.feed3D\?\.\(\);\n[\s\S]{0,400}?this\.mapScene\.renderShadows\?\.\(this\.renderer, this\.currentMap\(\)\);\n\s*const scene = this\.mapScene\.scene\(\);/);
+    assert.match(editor, /lightingManager\?\.feed3D\?\.\(\);\n[\s\S]{0,400}?this\.mapScene\.renderShadows\?\.\(this\.renderer, this\.currentMap\(\)\);\n[\s\S]{0,300}?Reactor3D\.LightVolume\.frame\(this\.renderer, this\.mapScene, this\.currentMap\(\)\);\n\s*const scene = this\.mapScene\.scene\(\);/);
     assert.match(editor, /if \(sprite && Reactor3D\.Shadows\) Reactor3D\.Shadows\.markCaster\(mesh, false\);/);
     // Marked once the animation is prepared (a rig can replace the meshes),
     // and a model that moves by its rules alone is a moving caster too.

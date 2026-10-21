@@ -31,9 +31,12 @@
         return (plan.pieces || []).filter(piece => (Number(piece.z) || 0) >= z0 && (Number(piece.z) || 0) < z0 + S);
     }
 
-    /** Whether a plan is still described (rooms, doors) rather than built (pieces). */
+    /**
+     * Whether a plan still describes its building (rooms, doors, stairs) rather than holding it as pieces.
+     * A described plan may carry pieces of its own beside the rooms (a lot's fence and garden).
+     */
     function isDescribed(plan) {
-        return !(plan.pieces || []).length && (plan.floors || []).some(floor => Object.keys(floor.rooms || {}).length);
+        return (plan.floors || []).some(floor => Object.keys(floor.rooms || {}).length) || (plan.stairs || []).length > 0;
     }
 
     /**
@@ -44,17 +47,21 @@
     function buildOut(plan, SP, resolve) {
         if (!isDescribed(plan) || !SP) return false;
         const floors = plan.floors.length;
-        plan.pieces = SP.build(plan, 0, 0, 1, 0, resolve).map(piece => { const out = Object.assign({}, piece); delete out.id; delete out.group; return out; });
-        const effects = SP.effectsOf(plan, 0, 0, resolve).filter(fx => fx.type === 'light' || fx.type === 'screen');
+        // Its own rooms, shapes and pieces; parts and paths are other plans and paving, and stay as they are.
+        const build = SP.buildOwn || SP.build;
+        plan.pieces = build(plan, 0, 0, 1, 0, resolve).map(piece => { const out = Object.assign({}, piece); delete out.id; delete out.group; return out; });
+        const own = Object.assign({}, plan, { parts: [], lights: [], surfaces: [], props: [], water: [] });
+        const effects = SP.effectsOf(own, 0, 0, resolve).filter(fx => fx.type === 'light' || fx.type === 'screen');
         if (effects.length) {
             const scratch = { width: plan.size[0], height: plan.size[1], reactor3d: { version: 1 } };
             SP.addEffects(scratch, effects, 0);
-            plan.lights = (scratch.reactor3d.lights || []).map(row => { const out = Object.assign({}, row); delete out.tag; return out; });
-            plan.surfaces = scratch.reactor3d.mediaSurfaces || [];
+            plan.lights = (plan.lights || []).concat((scratch.reactor3d.lights || []).map(row => { const out = Object.assign({}, row); if (!out.tag || /^structure:\d+$/.test(String(out.tag))) delete out.tag; delete out.structure; return out; }));
+            plan.surfaces = (plan.surfaces || []).concat(scratch.reactor3d.mediaSurfaces || []);
         }
-        plan.floors = []; plan.stairs = []; plan.shapes = []; plan.parts = []; plan.paths = []; plan.effects = [];
+        plan.floors = []; plan.stairs = []; plan.shapes = [];
+        plan.effects = (plan.effects || []).filter(fx => fx && fx.type !== 'light' && fx.type !== 'screen');
         if (plan.roof) plan.roof.pitch = null;
-        plan.height = Math.max(1, floors);
+        plan.height = Math.max(1, floors, occupiedFloors(plan));
         return true;
     }
 
@@ -365,6 +372,7 @@
      * ceiling, ramps up from the long sides' eaves for `pitch` rows, a flat
      * ridge between them and gables of blocks at the ends, the way a plan's
      * roof is built. For a roof squashed flat, or one to raise or re-pitch.
+     * A slanted roof (`style: "shed"`) is one slope up to `high`, as StructurePlan lays it.
      */
     function rebuildRoof(plan, options = {}) {
         const S = storeyOf(plan), floors = floorsOf(plan), roofZ = floors * S;
@@ -378,7 +386,8 @@
         // for a tower or a block), from the option, else the plan's own, else gable.
         const style = options.style || (plan.roof && plan.roof.style) || 'gable';
         // A built plan's roof.pitch is null (its roof is in its pieces): a rebuild lays the standard one.
-        const pitchWanted = Number.isFinite(Number(options.pitch)) ? Math.max(0, Math.floor(Number(options.pitch))) : (plan.roof && plan.roof.pitch !== null && Number.isFinite(Number(plan.roof.pitch)) ? Number(plan.roof.pitch) : 6);
+        const pitchWanted = Number.isFinite(Number(options.pitch)) ? Math.max(0, Math.floor(Number(options.pitch))) : (plan.roof && plan.roof.pitch !== null && Number.isFinite(Number(plan.roof.pitch)) ? Number(plan.roof.pitch) : (style === 'shed' ? 3 : 6));
+        const SP = options.plan || root.RRStructurePlan || null;
         plan.pieces = (plan.pieces || []).filter(p => (Number(p.z) || 0) < roofZ);
         // The top floor's footprint: every cell it has a piece in, grouped where cells touch.
         const cells = new Set(top.map(p => p.x + ',' + p.y));
@@ -398,7 +407,7 @@
             boxes.push(box);
         }
         let laid = 0;
-        const put = (kind, x, y, z, rot, material) => { add(plan, Object.assign({ kind, x, y, z, material: material || '' }, rot ? { rot } : {})); laid++; };
+        const put = (kind, x, y, z, rot, material, extra) => { add(plan, Object.assign({ kind, x, y, z, material: material || '' }, rot ? { rot } : {}, extra || {})); laid++; };
         for (const [bx0, by0, bx1, by1] of boxes) {
             // A flat roof's top is outside, in the walls' material; a gable's is the ceiling under it.
             for (let x = bx0; x <= bx1; x++) for (let y = by0; y <= by1; y++) if (cells.has(x + ',' + y)) put('floor', x, y, roofZ, 0, style === 'flat' ? wall : ceiling);
@@ -409,6 +418,10 @@
                     const edge = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => !cells.has((x + dx) + ',' + (y + dy)));
                     if (edge) put('block', x, y, roofZ, 0, wall);
                 }
+                continue;
+            }
+            if (style === 'shed' && SP && SP.shedRoof) {
+                SP.shedRoof(Object.assign({}, plan.roof || {}, { pitch: Math.max(1, pitchWanted), high: options.high || (plan.roof && plan.roof.high) }), bx0, by0, bx1, by1, roofZ, { wall, roof: roofMaterial }, put);
                 continue;
             }
             const pitch = Math.max(0, Math.min(Math.floor((by1 - by0) / 2), pitchWanted));
@@ -423,6 +436,51 @@
             }
         }
         return laid;
+    }
+
+    // ---- Materials -----------------------------------------------------------
+
+    const WALL_KINDS = WALLISH.filter(kind => kind !== 'glass').concat(['block', 'pillar', 'ramp', 'wedge']);
+
+    /** Where the roof starts: the level above the top floor. */
+    function roofLevel(plan) {
+        return Math.max(1, (plan.floors || []).length, floorsOf(plan)) * storeyOf(plan);
+    }
+
+    /** Whether a piece is of a role: a wall (and what is built like one), a floor slab below the roof, or the roof over the top floor. */
+    function inRole(plan, role, piece) {
+        const z = Number(piece.z) || 0, roofZ = roofLevel(plan);
+        if (role === 'roof') return z >= roofZ - 1.5 && piece.kind !== 'glass';
+        if (role === 'floor') return piece.kind === 'floor' && z < roofZ;
+        return WALL_KINDS.includes(piece.kind);
+    }
+
+    /** The material most of a role's pieces wear, or null when the plan has none of them. */
+    function roleMaterial(plan, role, pieces) {
+        const own = (pieces || plan.pieces || []).filter(piece => inRole(plan, role, piece) && (role !== 'roof' || piece.kind === 'ramp' || piece.kind === 'box' || piece.kind === 'roof'));
+        return own.length ? commonMaterial(own) : null;
+    }
+
+    /**
+     * Dress a role (`wall`, `floor` or `roof`) in a material: the plan's own material for it, and every
+     * piece of the role that wears `from`, so plaster inside stays when the stone outside becomes timber.
+     * `only` dresses just those pieces, whatever they wore. Returns what it changed, for `undress`.
+     */
+    function dress(plan, role, from, to, only) {
+        const changes = [];
+        const set = (object, key, value) => { if (object[key] !== value) { changes.push([object, key, object[key]]); object[key] = value; } };
+        if (only && only.length) {
+            for (const piece of only) if (role === 'wall' ? piece.kind !== 'floor' && piece.kind !== 'glass' : inRole(plan, role, piece)) set(piece, 'material', to || '');
+            return changes;
+        }
+        if (plan.materials && typeof plan.materials === 'object') set(plan.materials, role, to || '');
+        for (const piece of plan.pieces || []) if ((piece.material || '') === (from || '') && inRole(plan, role, piece)) set(piece, 'material', to || '');
+        return changes;
+    }
+
+    /** Take back what `dress` changed. */
+    function undress(changes) {
+        for (let i = changes.length - 1; i >= 0; i--) changes[i][0][changes[i][1]] = changes[i][2];
     }
 
     /** Cells of a dragged rectangle, or of a straight line (the longer axis wins). */
@@ -442,7 +500,7 @@
         return rectCells(x0, y0, x1, y1).filter(([x, y]) => x === Math.min(x0, x1) || x === Math.max(x0, x1) || y === Math.min(y0, y1) || y === Math.max(y0, y1));
     }
 
-    const api = { DIRS, WALLISH, rebuildRoof, selectAt, selectCells, flightOf, movePieces, removePieces, turnStairs, storeyOf, floorsOf, occupiedFloors, band, isDescribed, buildOut, setFloors, hasPieces, paintFloor, paintWall, placeDoor, placeWindow, placeStairs, erase, cellKind, rectCells, lineCells, outlineCells };
+    const api = { DIRS, WALLISH, dress, undress, roleMaterial, roofLevel, rebuildRoof, selectAt, selectCells, flightOf, movePieces, removePieces, turnStairs, storeyOf, floorsOf, occupiedFloors, band, isDescribed, buildOut, setFloors, hasPieces, paintFloor, paintWall, placeDoor, placeWindow, placeStairs, erase, cellKind, rectCells, lineCells, outlineCells };
     root.RRStructureFloors = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

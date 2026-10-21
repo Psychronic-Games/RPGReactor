@@ -5,6 +5,12 @@ The **Media Surfaces** toolbar tool manages map-owned surfaces. Event commands
 are displayed as **Show Media Surface**, **Transform Media Surface**, and
 **Stop Media Surface**.
 
+A model's media surface can show a different picture or movie per variant, or be off: Database › 3D Models › Variants, the variant's Effects tab.
+
+Effects are placed on the model once; each variant chooses which it wears. On an effect's card, **Shown in** is All variants or the chosen ones. On a variant's card, the **Effects** tab lists every effect: tick to show it in this variant, pick the picture or movie this variant shows on a media surface, press **Place** to move it on the model with the variant still worn, press **+** to add a media surface only this variant wears. In `model.json` an effect's `variants` lists the variants that wear it (`""` is the model's own look); with no list every variant wears it. A media surface shows on its own only when Play when is not On demand.
+
+Select an effect's row under Effects and its card opens at the preview's upper right with four tabs. Effect: type, media, what it follows, when it plays, sound. Offset: drag an arrow, or drag the surface itself across the model. Rotate: drag a ring. Scale: drag an edge for width or height, a corner for both; a light shows its reach as a ring; an animation has one handle. Each drag is one undo step. **Save effect** writes it.
+
 Drag a corner freely to reshape/resize a surface; hold Shift to preserve its
 proportions. Shift can be pressed or released during the drag. In the 3D panel,
 **Keep Proportions** links width/height and scale controls independently of
@@ -61,10 +67,8 @@ existing rectangle and does not reinterpret legacy 2D `corners`. Sparse
 transforms preserve it; setting it to null resets the 3D shape. The runtime
 validates the quad and copies it independently when applying transforms.
 
-The current runtime revision is **20260906.19**. It is synced
-to all 13 templates without replacing their plugin lists. Validation: all
-**2,892 automated tests pass**, including legacy import/API/command contracts, stationary unselected corners,
-quad persistence and geometry checks. Native media toolbar tests pass creation, Shift resizing, live preview,
-save, duplication, undo, tool switching, ceiling placement and battle media
-using disposable Demo data. Logs: `/tmp/rr-independent-corners-full-final.log` and
-`/tmp/rr-independent-corners-native-final.log`.
+The Node suite covers the legacy import/API/command contracts, stationary
+unselected corners, quad persistence and geometry
+(`editor/tests/video-surface-*.test.cjs`, `map-media-surfaces.test.cjs`,
+`media-surface-proportions.test.cjs`); `editor/tests/smoke/nw-media-surface-toolbar.cjs`
+drives the toolbar in NW.js.

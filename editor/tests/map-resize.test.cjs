@@ -209,6 +209,17 @@ test('player and vehicle start positions on this map move with it', () => {
     assert.equal(controllerInstance.collectSystemStartReferences(null, 7).length, 0);
 });
 
+test('database vehicle starting positions follow anchored map resize offsets', () => {
+    const instance=controller();
+    const bike={id:1,name:'Motorcycle',startMapId:7,startX:10,startY:11};
+    const boat={id:2,name:'Boat',startMapId:9,startX:1,startY:2};
+    instance.databaseManager={data:{vehicles:[null,bike,boat]}};
+    const refs=instance.collectSystemStartReferences({},7);
+    assert.equal(refs.length,1);instance.applyMapReferenceOffsets(refs,-1,4);
+    assert.deepEqual([bike.startX,bike.startY],[9,15]);
+    assert.deepEqual([boat.startX,boat.startY],[1,2]);
+});
+
 test('a resize refits and writes the 3D sidecar before the map reloads from disk', () => {
     const elevationSource = fs.readFileSync(path.join(editorRoot, 'src', 'utils', 'MapElevation.js'), 'utf8');
     const context = {}; context.window = context;

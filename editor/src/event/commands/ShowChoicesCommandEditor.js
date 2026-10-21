@@ -375,7 +375,7 @@ class ShowChoicesCommandEditor {
         });
         if (filteredChoices.length < 2) {
             const tt = text => window.I18n ? window.I18n.tText(text) : text;
-            alert(tt('You must have at least 2 choices.'));
+            RRDialog.alert(tt('You must have at least 2 choices.'), { title: tt('Show Choices'), kind: 'warning' });
             return null;
         }
 

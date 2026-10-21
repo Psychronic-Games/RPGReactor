@@ -194,10 +194,12 @@
      * The advance of each glyph. RPG Maker's fonts store every glyph in one
      * wide cell and the engine draws half-width characters 6 px apart and
      * full-width ones 12 px apart; a font with real per-glyph widths keeps them.
+     * A cell wider than a full-width glyph is not a width (one copy of RM2000.fon
+     * gives 'B' and 'e' 15 px cells), so such a font is drawn at the engine's pitch.
      */
     function advances(font, pitch) {
         const widths = new Set(Array.from(font.glyphs.values(), g => g.width));
-        const fixedCell = widths.size === 1;
+        const fixedCell = widths.size === 1 || Math.max(...widths) > pitch * 2;
         const out = new Map();
         for (const [code, g] of font.glyphs) {
             let ink = 0;

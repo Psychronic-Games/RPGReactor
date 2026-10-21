@@ -23,13 +23,14 @@
  * under a plugin that reimplements _updateFilterArea.
  */
 const assert = require('node:assert/strict');
+const { runtimeSource } = require('./helpers/runtime-source.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
 
 const repoRoot = path.resolve(__dirname, '..', '..');
-const core = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_core.js'), 'utf8');
+const core = runtimeSource('reactor_core.js');
 
 /** A named `Window.prototype.<method> = function ... };` lifted out of the corescript. */
 function windowMethod(name, context) {

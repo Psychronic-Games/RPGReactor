@@ -37,6 +37,17 @@ class PieceBuilderManager {
         // A ladder reaches a storey unless told otherwise.
         this.ladderHeight = 5;
         this.ladderWidth = 1;
+        // Rocks laid by hand each vary a little (size, turn, roughness) unless told not to; the next
+        // one's variation is fixed ahead by its seed, so the ghost is the rock the click lays. The top
+        // and tint the next rock wears.
+        this.rockVary = true;
+        this.rockSeed = 1;
+        this.rockCap = '';
+        this.rockTint = '';
+        // The next door's settings (its width and facing come from the doorway it is hung in), and
+        // the frame the next window wears.
+        this.door = { style: 'plank', hinge: 'left', swing: 'away', opens: 'auto', width: 2 };
+        this.windowFrame = { style: 'cottage' };
         this.selected = 0;
         this.selectedIds = [];
         this.gizmoMode = 'all';          // every handle at once: arrows, rings and size cubes
@@ -47,6 +58,209 @@ class PieceBuilderManager {
     /** Every selected piece's id: the box's pieces, else the one piece. */
     selectionIds() { return this.selectedIds.length ? this.selectedIds.slice() : (this.selected ? [this.selected] : []); }
     selectionPieces() { const ids = new Set(this.selectionIds()); const map = this.currentMap(); return map ? (this.elevation()?.pieces(map) || []).filter(piece => ids.has(piece.id)) : []; }
+
+    // ---- The parts of a building: a material and a finish each ---------------
+
+    /** Every part a selection can hold, in the order they are listed. */
+    static PART_ORDER = ['wall', 'inner', 'floor', 'ceiling', 'roof', 'stair', 'ramp', 'ladder', 'pillar', 'door', 'frame', 'glass', 'fence', 'path', 'block', 'shape', 'rock'];
+    /** What a framed window's frame wears when it names no material (the runtime's own default). */
+    static FRAME_MATERIAL = 'Wood';
+
+    /**
+     * Pieces sorted into the parts of the buildings they make: `[{ key, ids, at, count, material, mixed,
+     * materials }]` in PART_ORDER, only the parts present. `at` are the pieces' places in the list given;
+     * `material` is the part's one material ('' is plain), or null when its pieces differ (`mixed`), and
+     * `materials` every one it holds. `shapes` names the shape kinds, `storey` a wall's height.
+     *
+     * A part is what a piece is in its building, which its kind alone does not say (a house's roof is
+     * ramps, slabs and thin boxes; its gables are blocks):
+     *  - wall: walls, doorways and windows with open ground on one of their four sides; the blocks stacked
+     *    on a wall (a gable's steps, a parapet) and the ramps and slabs lying on those blocks.
+     *  - inner: walls and doorways with the building on all four sides, and what is stacked on them.
+     *  - floor: a slab with something over it that is the lowest in its cell or has walls standing at its
+     *    level; an open slab on top of something low, or alone between walls on all four sides.
+     *  - ceiling: a covered slab a storey or more above the foot of its cell, no wall standing at its level.
+     *  - roof: `roof` pieces; a ramp or slab with nothing over it, a storey or more above the foot of its
+     *    cell; the ramps up and down the same slope; a thin box that is tilted two levels up or higher, or
+     *    lies on a roof's or a gable's top slab (eaves, verges, an awning).
+     *  - path: an open slab alone in its cell, not walled in.
+     *  - stair, ramp, ladder, pillar, door, glass, fence, rock: the kind. block: a block on no wall.
+     *    shape: every other shape.
+     *  - frame: the frames that windows wear (`frame.material`); such a window is in its wall part too.
+     */
+    static buildingParts(pieces, { shapes = [], storey = 5 } = {}) {
+        const S = storey, shapeKinds = new Set(shapes);
+        const SOLID = new Set(['floor', 'wall', 'doorway', 'window', 'glass', 'block', 'ramp', 'roof', 'stair', 'pillar']);
+        const WALLS = new Set(['wall', 'doorway', 'window']);
+        const RISE = [[0, 1], [-1, 0], [0, -1], [1, 0]];
+        const NONE = [];
+        const cellKey = (x, y) => y * 65536 + x;
+        // Every solid cell piece by its cell, lowest first; the levels walls stand at per building; how far the walls of a level reach along each row and column.
+        const cells = new Map(), wallLevels = new Map(), rows = new Map(), cols = new Map();
+        const widen = (spans, key, at) => { const span = spans.get(key); if (!span) spans.set(key, [at, at]); else { if (at < span[0]) span[0] = at; if (at > span[1]) span[1] = at; } };
+        for (const piece of pieces) {
+            if (!SOLID.has(piece.kind)) continue;
+            const key = cellKey(piece.x, piece.y);
+            const list = cells.get(key);
+            if (list) list.push(piece); else cells.set(key, [piece]);
+            if (!WALLS.has(piece.kind)) continue;
+            const levels = wallLevels.get(piece.group || 0);
+            if (levels) levels.add(piece.z); else wallLevels.set(piece.group || 0, new Set([piece.z]));
+            widen(rows, piece.z * 65536 + piece.y, piece.x); widen(cols, piece.z * 65536 + piece.x, piece.y);
+        }
+        for (const list of cells.values()) if (list.length > 1) list.sort((a, b) => a.z - b.z);
+        const at = (x, y) => cells.get(cellKey(x, y)) || NONE;
+        const part = new Map();
+        // The building reaches a cell at a level when a wall stands there or anything lies over it.
+        const inside = (x, y, z) => { for (const q of at(x, y)) if (q.z > z || (q.z === z && WALLS.has(q.kind))) return true; return false; };
+        const walled = role => role === 'wall' || role === 'inner';
+        // The part of the wall a piece stands directly on, or of the block carried up from a wall; null on neither.
+        const onWall = piece => { for (const q of at(piece.x, piece.y)) { if (q.z >= piece.z) break; if (WALLS.has(q.kind) && q.z + S === piece.z) return part.get(q); } return null; };
+        const onBlock = piece => { for (const q of at(piece.x, piece.y)) { if (q.z >= piece.z) break; if (q.kind === 'block' && q.z + 1 === piece.z && walled(part.get(q))) return part.get(q); } return null; };
+        // Nothing over it, and nothing but a slab standing at its own level.
+        const open = piece => { for (const q of at(piece.x, piece.y)) if (q !== piece && (q.z > piece.z || (q.z === piece.z && q.kind !== 'floor'))) return false; return true; };
+        const foot = piece => at(piece.x, piece.y)[0].z;
+        // The next ramp of the same slope, a level up (1) or down (-1).
+        const slopeMate = (piece, up) => { const [ax, ay] = RISE[piece.rot || 0]; return at(piece.x + ax * up, piece.y + ay * up).find(q => q.kind === 'ramp' && q.z === piece.z + up && (q.rot || 0) === (piece.rot || 0)) || null; };
+        const inWalls = piece => {
+            const row = rows.get(piece.z * 65536 + piece.y), col = cols.get(piece.z * 65536 + piece.x);
+            return !!row && !!col && row[0] < piece.x && row[1] > piece.x && col[0] < piece.y && col[1] > piece.y;
+        };
+        for (const piece of pieces) {
+            if (!WALLS.has(piece.kind)) continue;
+            const { x, y, z } = piece;
+            part.set(piece, inside(x - 1, y, z) && inside(x + 1, y, z) && inside(x, y - 1, z) && inside(x, y + 1, z) ? 'inner' : 'wall');
+        }
+        // Blocks from the lowest up, so a stack is carried up from the wall under it.
+        for (const list of cells.values()) for (const piece of list) if (piece.kind === 'block') part.set(piece, onWall(piece) || onBlock(piece) || 'block');
+        // Ramps from the highest down: a gable's lowest ramp lies on the wall itself and follows the one above it.
+        const ramps = pieces.filter(piece => piece.kind === 'ramp').sort((a, b) => b.z - a.z);
+        for (const piece of ramps) {
+            const above = slopeMate(piece, 1);
+            const gable = onBlock(piece) || (onWall(piece) && above && walled(part.get(above)) ? part.get(above) : null);
+            if (gable) part.set(piece, gable);
+            else if (open(piece) && piece.z - foot(piece) >= S) part.set(piece, 'roof');
+        }
+        // The rest of each slope: a ramp next to a roof's ramp, up or down the slope, is roof too (an eave past the wall).
+        for (const piece of ramps) if (!part.has(piece) && part.get(slopeMate(piece, 1)) === 'roof') part.set(piece, 'roof');
+        for (let i = ramps.length - 1; i >= 0; i--) if (!part.has(ramps[i]) && part.get(slopeMate(ramps[i], -1)) === 'roof') part.set(ramps[i], 'roof');
+        for (const piece of pieces) {
+            const kind = piece.kind;
+            if (part.has(piece) || shapeKinds.has(kind)) continue;
+            if (kind !== 'floor') { part.set(piece, kind); continue; }
+            const cap = onBlock(piece);
+            if (cap) part.set(piece, cap);
+            else if (open(piece)) part.set(piece, piece.z - foot(piece) >= S ? 'roof' : at(piece.x, piece.y).length > 1 || inWalls(piece) ? 'floor' : 'path');
+            else part.set(piece, piece.z - foot(piece) >= S && !wallLevels.get(piece.group || 0)?.has(piece.z) ? 'ceiling' : 'floor');
+        }
+        // Shapes last: an eave or a verge is a thin box, tilted off the level or lying on a roof's or a gable's top slab.
+        for (const piece of pieces) {
+            const kind = piece.kind;
+            if (!shapeKinds.has(kind)) continue;
+            const size = piece.size || [1, 1, 1];
+            const thin = kind === 'box' && Math.min(size[0], size[1], size[2]) <= 0.5;
+            const tilted = thin && !!(piece.tilt || piece.roll) && piece.z >= 2;
+            const lying = thin && !tilted && at(piece.x, piece.y).some(q => q.kind === 'floor' && q.z >= piece.z - 0.5 && q.z <= piece.z + size[1] + 0.5 && (walled(part.get(q)) || part.get(q) === 'roof'));
+            part.set(piece, kind === 'rock' ? 'rock' : tilted || lying ? 'roof' : 'shape');
+        }
+        const lists = new Map();
+        const add = (key, piece, index, material) => {
+            let entry = lists.get(key);
+            if (!entry) lists.set(key, entry = { key, ids: [], at: [], count: 0, material, mixed: false, materials: [] });
+            entry.ids.push(piece.id); entry.at.push(index); entry.count++;
+            if (!entry.materials.includes(material)) entry.materials.push(material);
+        };
+        pieces.forEach((piece, index) => {
+            const key = part.get(piece);
+            if (PieceBuilderManager.PART_ORDER.includes(key)) add(key, piece, index, piece.material || '');
+            if (piece.kind === 'window' && piece.frame) add('frame', piece, index, piece.frame.material || PieceBuilderManager.FRAME_MATERIAL);
+        });
+        const out = [];
+        for (const key of PieceBuilderManager.PART_ORDER) {
+            const entry = lists.get(key);
+            if (!entry) continue;
+            entry.mixed = entry.materials.length > 1;
+            if (entry.mixed) entry.material = null;
+            out.push(entry);
+        }
+        return out;
+    }
+
+    /** The selection's parts (buildingParts), worked out once for a selection and kept until it or the map's pieces change. */
+    selectionParts() {
+        const map = this.currentMap(), elevation = this.elevation();
+        if (!map || !elevation) return [];
+        const raw = map.reactor3d ? map.reactor3d.pieces : null;
+        const memo = this._partsMemo;
+        if (memo && memo.map === map && memo.raw === raw && memo.ids === this.selectedIds && memo.one === this.selected) return memo.parts;
+        const storey = (typeof Reactor3D !== 'undefined' && Reactor3D.PIECE_STOREY) || 5;
+        const parts = PieceBuilderManager.buildingParts(this.selectionPieces(), { shapes: elevation.SHAPE_KINDS || [], storey });
+        this._partsMemo = { map, raw, ids: this.selectedIds, one: this.selected, parts };
+        return parts;
+    }
+
+    /**
+     * Change some of the selected pieces (a part of the building) and leave the selection whole:
+     * `ids` theirs, `patch` a record, or a function of the piece giving one (null leaves that piece
+     * as it is). One undo step. Nothing is recorded or drawn again when no piece ends up different.
+     */
+    updateSelectionPart(ids, patch, record = true) {
+        const selected = new Set(this.selectionIds()), wanted = new Set();
+        for (const id of ids || []) if (selected.has(id)) wanted.add(id);
+        const map = this.currentMap(), elevation = this.elevation();
+        if (!wanted.size || !map || !elevation) return false;
+        const before = elevation.pieces(map), list = before.slice();
+        for (let i = 0; i < list.length; i++) {
+            if (!wanted.has(list[i].id)) continue;
+            const change = typeof patch === 'function' ? patch(list[i]) : patch;
+            if (change) list[i] = Object.assign({}, list[i], change);
+        }
+        const changed = this._changedPieces(map, before, list, wanted);
+        if (!changed.length) return false;
+        if (record) { this.undoStack.push(this._snapshot(map)); if (this.undoStack.length > 50) this.undoStack.shift(); this.redoStack.length = 0; }
+        elevation.restorePieces(map, list);
+        this._detach(map, changed);
+        let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+        for (const piece of changed) { x0 = Math.min(x0, piece.x); y0 = Math.min(y0, piece.y); x1 = Math.max(x1, piece.x); y1 = Math.max(y1, piece.y); }
+        this.announce(false, { x0: x0 - 4, y0: y0 - 4, x1: x1 + 4, y1: y1 + 4 });
+        this._syncPanel(); this._ghostChanged();
+        return true;
+    }
+
+    /**
+     * A material for one part of the selection (a `key` of selectionParts()): that part's pieces only,
+     * one undo step. A window's frame keeps its material in the frame, so its wall is left as it is.
+     */
+    paintSelectionPart(key, material) {
+        const part = this.selectionParts().find(entry => entry.key === key);
+        if (!part) return false;
+        const name = typeof material === 'string' ? material.trim() : '';
+        if (key === 'frame') return this.updateSelectionPart(part.ids, piece => (piece.frame ? { frame: Object.assign({}, piece.frame, { material: name }) } : null));
+        return this.updateSelectionPart(part.ids, { material: name });
+    }
+
+    /**
+     * A hand edit to a stamped building's pieces: the building stops following
+     * its plan, as for a piece laid or hammered in it (a move or turn builds
+     * it again from the plan, which would lose the edit).
+     */
+    _detach(map, pieces) {
+        const elevation = this.elevation();
+        if (!pieces.some(piece => piece && piece.group)) return false;
+        let detached = false;
+        for (const group of new Set(pieces.map(piece => piece && piece.group).filter(Boolean))) {
+            if (elevation.structureOf(map, group)) { elevation.removeStructure(map, group); detached = true; }
+        }
+        if (detached) this._flash('pieces.detached');
+        return detached;
+    }
+
+    /** The pieces of `after` (by id) that differ from how they stood in `before`, as saved. */
+    _changedPieces(map, before, after, ids) {
+        const elevation = this.elevation(), was = new Map(before.map(piece => [piece.id, piece]));
+        const saved = piece => JSON.stringify(elevation.normalizePiece ? elevation.normalizePiece(piece, map) : piece);
+        return after.filter(piece => ids.has(piece.id) && (!was.has(piece.id) || saved(piece) !== saved(was.get(piece.id))));
+    }
 
     /** Select every piece whose cell lies in the box (cells inclusive), at any level; a shape by the cell it stands on. */
     selectInBox(x0, y0, x1, y1) {
@@ -60,6 +274,134 @@ class PieceBuilderManager {
         return ids.length;
     }
 
+    // ---- Whole buildings: select one, keep a selection as a structure -------
+
+    /**
+     * Select everything belonging with a piece: its building's whole group when it was stamped
+     * or grouped, else every loose piece touching it (a wall run, the floor under it, its roof).
+     * `target` a cell target (as a click gives), else the selected piece. How many were selected.
+     */
+    selectConnectedAt(target) {
+        const piece = target ? this.pieceAtTarget(target) : this.selectedPiece();
+        const map = this.currentMap(), elevation = this.elevation();
+        if (!piece || !map || !elevation || typeof RRStructureCapture === 'undefined') return 0;
+        const ids = RRStructureCapture.connected(elevation.pieces(map), piece.id);
+        this.selectedIds = ids.length > 1 ? ids : [];
+        this.selected = piece.id;
+        this._syncPanel(); this.refreshStatus(); this._ghostChanged();
+        return ids.length;
+    }
+
+    /** The selection as a structure, nothing written: `{ plan, templates, box, counts }` (RRStructureCapture.capture). */
+    captureSelection(options = {}) {
+        const map = this.currentMap(), elevation = this.elevation();
+        if (!map || !elevation || typeof RRStructureCapture === 'undefined') return null;
+        return RRStructureCapture.capture(map, this._copiedPieces().map(piece => piece.id), Object.assign({ E: elevation }, options));
+    }
+
+    /** How many events stand in the box the selection covers. */
+    eventsInSelection() {
+        const map = this.currentMap(), elevation = this.elevation();
+        if (!map || !elevation || typeof RRStructureCapture === 'undefined') return 0;
+        return RRStructureCapture.eventsInBox(map, this._copiedPieces().map(piece => piece.id), elevation);
+    }
+
+    database() { return this.projectController?.databaseManager || window.reactor?.databaseManager || null; }
+
+    /** The structure already saved under a name or file, or null. */
+    structureNamed(name) {
+        const wanted = String(name || '').trim().toLowerCase();
+        if (!wanted) return null;
+        const stem = typeof RRStructureCapture !== 'undefined' ? RRStructureCapture.fileStem(name).toLowerCase() + '.json' : '';
+        const records = (this.database()?.data?.structures || []).filter(entry => entry && entry.plan);
+        return records.find(entry => String(entry.name || '').trim().toLowerCase() === wanted || String(entry.file || '').toLowerCase() === stem)
+            || (this.structures(true).find(entry => String(entry.name || '').toLowerCase() === wanted || entry.file.toLowerCase() === stem) || null);
+    }
+
+    /**
+     * Keep the selection as a structure: its file under 3d/Structures (and its people's templates
+     * under events/), a record on Database › Structures, a choice in the Blueprint slot. With
+     * `replace`, the selection becomes a stamp of it (one undo step). `overwrite` lets an existing
+     * structure of that name take the new contents. Returns { file, record, counts } or null.
+     */
+    saveSelectionAsStructure({ name, description = '', events = false, replace = false, overwrite = false } = {}) {
+        const map = this.currentMap(), elevation = this.elevation(), db = this.database(), projectPath = this.projectPath();
+        name = String(name || '').trim();
+        if (!name || !map || !elevation || !projectPath || typeof require !== 'function' || typeof RRStructureCapture === 'undefined') return null;
+        const existing = this.structureNamed(name);
+        if (existing && !overwrite) return null;
+        const result = this.captureSelection({ name, description, events });
+        if (!result) return null;
+        const fs = require('fs'), path = require('path');
+        const normalize = plan => typeof DatabaseStructureEditor !== 'undefined' ? DatabaseStructureEditor.normalizePlan(JSON.parse(JSON.stringify(plan))) : plan;
+        const trim = plan => typeof DatabaseStructureEditor !== 'undefined' ? DatabaseStructureEditor.trimPlan(plan) : plan;
+        const records = db?.data?.structures || null;
+        const taken = new Set((records || []).filter(Boolean).map(entry => entry.file).filter(Boolean).concat([...(db?._structureFiles || [])]));
+        const file = existing ? existing.file : (typeof DatabaseManager !== 'undefined' && DatabaseManager.structureFileName ? DatabaseManager.structureFileName(name, taken) : RRStructureCapture.fileStem(name) + '.json');
+        const normalized = normalize(result.plan);
+        try {
+            RRStructureCapture.write(projectPath, Object.assign({}, result, { plan: normalized }), { fs, path, file, stringify: plan => (elevation.stringifySidecar ? elevation.stringifySidecar(trim(plan)) : JSON.stringify(trim(plan), null, 2)) });
+        } catch (error) {
+            console.error('Could not save the structure:', error);
+            window.alert?.(window.I18n ? window.I18n.tText('The structure could not be saved.') : 'The structure could not be saved.');
+            return null;
+        }
+        // The Database's Structures list takes it as saved (a later Database save writes it unchanged).
+        let record = null;
+        if (records) {
+            record = records.find(entry => entry && entry.file === file) || null;
+            if (record) { record.name = name; record.plan = normalized; }
+            else { record = { id: records.length, name, file, plan: normalized }; records.push(record); }
+            db._structureFiles?.add?.(file);
+            const workshop = window.reactor?.structureWorkshop || this.projectController?.structureWorkshop;
+            if (workshop?.markSaved) workshop.markSaved(db, record);
+        }
+        this.structures(true);
+        if (replace) this._replaceWithStructure(map, file, result);
+        this._syncPanel();
+        return { file, record, counts: result.counts };
+    }
+
+    /** The selection (and what was saved with it) taken off and laid again as a stamp of the structure just saved. */
+    _replaceWithStructure(map, file, result) {
+        const elevation = this.elevation(), SP = typeof RRStructurePlan !== 'undefined' ? RRStructurePlan : null;
+        const plan = this.resolvePlan(file);
+        if (!plan || !SP) return false;
+        const saved = this._snapshot(map, { ground: true, effects: true, events: true, props: true, allEvents: true });
+        const { x0, y0, x1, y1 } = result.box;
+        const inArea = (x, y) => x >= x0 && x < x1 + 1 && y >= y0 && y < y1 + 1, inCells = (x, y) => x >= x0 && x <= x1 && y >= y0 && y <= y1;
+        const ids = new Set(this._copiedPieces().map(piece => piece.id));
+        const gone = elevation.pieces(map).filter(piece => ids.has(piece.id));
+        this._detach(map, gone);
+        elevation.restorePieces(map, elevation.pieces(map).filter(piece => !ids.has(piece.id)));
+        const sidecar = map.reactor3d || (map.reactor3d = { version: 1 });
+        // What the structure brings again: lights, screens, models and water in the box (as captured).
+        if (result.counts.lights) sidecar.lights = (sidecar.lights || []).filter(light => !(light && light.type !== 'sun' && !light.attach && inArea(Number(light.x), Number(light.y))));
+        if (result.counts.surfaces) sidecar.mediaSurfaces = (sidecar.mediaSurfaces || []).filter(row => !(row && (!row.target || row.target === 'map') && inArea(Number(row.x), Number(row.y))));
+        if (result.counts.props) sidecar.props = (sidecar.props || []).filter(prop => !(prop && inCells(Math.round(Number(prop.x)), Math.round(Number(prop.y)))));
+        if (result.counts.water) sidecar.water = (sidecar.water || []).filter(sheet => !(sheet && sheet.x0 >= x0 && sheet.x1 <= x1 && sheet.y0 >= y0 && sheet.y1 <= y1));
+        for (const key of ['lights', 'mediaSurfaces', 'props', 'water']) if (Array.isArray(sidecar[key]) && !sidecar[key].length) delete sidecar[key];
+        const group = elevation.nextPieceGroup(map);
+        // Its people stay the events they were: tagged as the building's, the stamp moves them to their spots instead of making new ones.
+        if (result.counts.events && Array.isArray(map.events)) {
+            const spots = new Map((result.plan.events || []).map(entry => [entry.template, entry.spot]));
+            for (const template of result.templates) {
+                const spot = spots.get(template.name);
+                const at = result.plan.spots && result.plan.spots[spot];
+                const event = at && map.events.find(e => e && e.x === x0 + at[0] && e.y === y0 + at[1] && (e.name || '') === (template.event.name || ''));
+                if (event) event.note = (String(event.note || '').replace(SP.EVENT_TAG, '').trim() + ' ' + SP.eventTag(group, spot)).trim();
+            }
+        }
+        if (!this._lay(map, plan, { group, plan: file, x: x0, y: y0, rot: 0, scale: 1 })) { this.undoStack.push(saved); this.undo(); return false; }
+        saved.foliage = this._clearFoliage(map, piece => piece.group === group);
+        this.undoStack.push(saved); if (this.undoStack.length > 50) this.undoStack.shift(); this.redoStack.length = 0;
+        this.selectedIds = []; this.selected = 0;
+        this._eventsChanged = true;
+        this._effectsChanged?.();
+        this.announce(true); this.refreshStatus(); this._ghostChanged();
+        return true;
+    }
+
     /** Change every selected piece: `patch` a record, or a function of the piece giving one. */
     updateSelection(patch, record = true) {
         const ids = new Set(this.selectionIds());
@@ -67,7 +409,7 @@ class PieceBuilderManager {
         const map = this.currentMap(), elevation = this.elevation();
         if (!map || !elevation) return false;
         if (record) { this.undoStack.push(this._snapshot(map)); if (this.undoStack.length > 50) this.undoStack.shift(); this.redoStack.length = 0; }
-        const list = elevation.pieces(map);
+        const list = elevation.pieces(map), before = list.slice();
         let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
         for (let i = 0; i < list.length; i++) {
             if (!ids.has(list[i].id)) continue;
@@ -76,6 +418,7 @@ class PieceBuilderManager {
             for (const q of [before, list[i]]) { x0 = Math.min(x0, q.x); y0 = Math.min(y0, q.y); x1 = Math.max(x1, q.x); y1 = Math.max(y1, q.y); }
         }
         elevation.restorePieces(map, list);
+        this._detach(map, this._changedPieces(map, before, list, ids));
         this.announce(false, { x0: x0 - 4, y0: y0 - 4, x1: x1 + 4, y1: y1 + 4 });
         this._syncPanel(); this._ghostChanged();
         return true;
@@ -95,15 +438,20 @@ class PieceBuilderManager {
 
     /** The whole selection a quarter turn clockwise about its box: each piece turned and carried round. */
     turnSelection(steps = 1) {
+        this._settleCarry();
         const pieces = this.selectionPieces();
         if (pieces.length <= 1) return this.turnSelected(steps);
         const x0 = Math.min(...pieces.map(p => p.x)), y0 = Math.min(...pieces.map(p => p.y)), x1 = Math.max(...pieces.map(p => p.x)), y1 = Math.max(...pieces.map(p => p.y));
         const map = this.currentMap();
         const n = ((steps % 4) + 4) % 4;
+        // The turned box slides back inside the map at an edge (clamping each piece stacked a row on one cell).
+        const [W, H] = n % 2 ? [y1 - y0, x1 - x0] : [x1 - x0, y1 - y0];
+        if (W >= map.width || H >= map.height) return false;
+        const bx = Math.min(x0, map.width - 1 - W), by = Math.min(y0, map.height - 1 - H);
         return this.updateSelection(piece => {
             let x = piece.x - x0, y = piece.y - y0, w = x1 - x0, h = y1 - y0, offset = piece.offset ? piece.offset.slice() : null;
             for (let i = 0; i < n; i++) { const nx = h - y; y = x; x = nx; const t = w; w = h; h = t; if (offset) offset = [-offset[1], offset[0]]; }
-            const out = { x: Math.max(0, Math.min(map.width - 1, x0 + x)), y: Math.max(0, Math.min(map.height - 1, y0 + y)) };
+            const out = { x: bx + x, y: by + y };
             if (this.isShape(piece.kind)) { out.angle = (((piece.angle || 0) + 90 * n) % 360 + 360) % 360; if (offset) out.offset = offset; }
             else out.rot = ((piece.rot + n) % 4 + 4) % 4;
             return out;
@@ -111,6 +459,7 @@ class PieceBuilderManager {
     }
 
     removeSelection() {
+        this._settleCarry();
         const ids = new Set(this.selectionIds());
         if (ids.size <= 1) return this.removeSelected();
         const map = this.currentMap(), elevation = this.elevation();
@@ -118,6 +467,7 @@ class PieceBuilderManager {
         this.undoStack.push(this._snapshot(map)); if (this.undoStack.length > 50) this.undoStack.shift(); this.redoStack.length = 0;
         const gone = elevation.pieces(map).filter(piece => ids.has(piece.id));
         elevation.restorePieces(map, elevation.pieces(map).filter(piece => !ids.has(piece.id)));
+        this._detach(map, gone);
         this.selectedIds = []; this.selected = 0;
         this.announce(false, { x0: Math.min(...gone.map(p => p.x)) - 4, y0: Math.min(...gone.map(p => p.y)) - 4, x1: Math.max(...gone.map(p => p.x)) + 4, y1: Math.max(...gone.map(p => p.y)) + 4 });
         this._syncPanel(); this.refreshStatus(); this._ghostChanged();
@@ -134,6 +484,16 @@ class PieceBuilderManager {
     pieceAtTarget(target) {
         const map = this.currentMap(), elevation = this.elevation();
         if (!map || !elevation || !target) return null;
+        // A door hangs across its doorway: a click on its leaf picks the door, not the doorway or the slab.
+        if (target.door) { const door = this.pieceById(target.door); if (door) return door; }
+        const R0 = typeof Reactor3D !== 'undefined' ? Reactor3D : null;
+        const reach = Number.isFinite(target.height) ? target.height : target.z;
+        const hung = R0 && R0.piecesAt ? (R0.piecesAt(map, target.x, target.y) || []).find(entry => entry.kind === 'door'
+            && reach >= entry.z - 0.05 && reach <= entry.z + (R0.doorLeafHeight ? R0.doorLeafHeight(entry) : 3.6) + 0.05) : null;
+        if (hung) {
+            const door = this.pieceById(hung.id);
+            if (door) return door;
+        }
         const exact = elevation.pieceAt(map, target.x, target.y, target.z);
         if (exact) return exact;
         const R = typeof Reactor3D !== 'undefined' ? Reactor3D : null;
@@ -161,6 +521,15 @@ class PieceBuilderManager {
     }
 
     clearSelection() { if (!this.selected && !this.selectedIds.length) return; this.selected = 0; this.selectedIds = []; this._syncPanel(); this._ghostChanged(); }
+
+    /** Selected pieces that are gone (taken off, undone) let go: a piece laid later may be given the same id. */
+    _pruneSelection() {
+        if (!this.selected && !this.selectedIds.length) return;
+        const live = new Set((this.elevation()?.pieces(this.currentMap()) || []).map(piece => piece.id));
+        const ids = this.selectedIds.filter(id => live.has(id));
+        if (!live.has(this.selected)) this.selected = ids[0] || 0;
+        this.selectedIds = ids.length > 1 ? ids : [];
+    }
 
     /** Change the selected piece in place (a material, a turn, a size, a move); the list keeps its ids. */
     /** A placed ladder is a stack of one-level pieces: every ladder level joined to this one on its cell. */
@@ -190,6 +559,7 @@ class PieceBuilderManager {
         let id = list.reduce((max, p) => Math.max(max, p.id || 0), 0);
         for (let z = foot.z + stack.length; z < foot.z + target; z++) list.push(Object.assign({}, foot, { id: ++id, z }));
         elevation.restorePieces(map, list);
+        this._detach(map, stack);
         // The selection stays on the ladder: its foot, which every height keeps.
         this.selected = foot.id;
         this.announce(false, { x0: foot.x - 1, y0: foot.y - 1, x1: foot.x + 1, y1: foot.y + 1 });
@@ -197,17 +567,43 @@ class PieceBuilderManager {
         return true;
     }
 
+    /** The selected pieces, a ladder whole (every level and column), as it is turned, moved and deleted whole. */
+    _copiedPieces() {
+        const list = this.selectionPieces(), ids = new Set(list.map(p => p.id));
+        for (const piece of list.slice()) {
+            if (piece.kind !== 'ladder') continue;
+            for (const p of this.ladderFlight(piece)?.pieces || []) if (!ids.has(p.id)) { ids.add(p.id); list.push(p); }
+        }
+        return list;
+    }
+
     /** Copy the selected pieces (relative to their lowest corner) for Paste. */
     copySelection() {
-        const list = this.selectionPieces();
+        const list = this._copiedPieces();
         if (!list.length) return false;
         const x0 = Math.min(...list.map(p => p.x)), y0 = Math.min(...list.map(p => p.y)), z0 = Math.min(...list.map(p => p.z));
         PieceBuilderManager.clipboard = list.map(p => { const c = Object.assign({}, p, { x: p.x - x0, y: p.y - y0, z: p.z - z0 }); delete c.id; delete c.group; return c; });
         return true;
     }
 
+    /**
+     * Pieces put down by a paste or a carry take their slots, as laying one there would: a cell piece
+     * on the same cell and level (a slab only by a slab) goes. Shapes stand anywhere and overlap freely.
+     */
+    _takeSlots(map, ids) {
+        const elevation = this.elevation(), list = elevation.pieces(map);
+        const slot = piece => this.isShape(piece.kind) ? null : piece.x + ',' + piece.y + ',' + piece.z + (piece.kind === 'floor' ? 'f' : '');
+        const taken = new Set(list.filter(piece => ids.has(piece.id)).map(slot).filter(Boolean));
+        const kept = list.filter(piece => ids.has(piece.id) || !taken.has(slot(piece)));
+        if (kept.length === list.length) return false;
+        elevation.restorePieces(map, kept);
+        this._detach(map, list.filter(piece => !kept.includes(piece)));
+        return true;
+    }
+
     /** Lay the copied pieces with their lowest corner at `target` (a cell and level); they come selected, one undo step. */
     pasteAt(target) {
+        this._settleCarry();
         const clip = PieceBuilderManager.clipboard, map = this.currentMap(), elevation = this.elevation();
         if (!clip || !clip.length || !target || !map || !elevation) return false;
         const list = elevation.pieces(map);
@@ -217,6 +613,7 @@ class PieceBuilderManager {
         if (!added.length) return false;
         this.undoStack.push(this._snapshot(map)); if (this.undoStack.length > 50) this.undoStack.shift(); this.redoStack.length = 0;
         elevation.restorePieces(map, list.concat(added));
+        this._takeSlots(map, new Set(added.map(p => p.id)));
         this.mode = 'select';
         this.selectedIds = added.map(p => p.id);
         this.selected = added[0].id;
@@ -228,10 +625,14 @@ class PieceBuilderManager {
 
     /** A copy of the selection laid just east of it. */
     duplicateSelection() {
-        const list = this.selectionPieces();
+        this._settleCarry();
+        const list = this._copiedPieces();
         if (!list.length || !this.copySelection()) return false;
-        const x1 = Math.max(...list.map(p => p.x));
-        return this.pasteAt({ x: x1 + 1, y: Math.min(...list.map(p => p.y)), z: Math.min(...list.map(p => p.z)) });
+        // Beside it, clear of it: a shape (a rock, a dome) covers cells beyond the one it stands on.
+        const R = typeof Reactor3D !== 'undefined' && Reactor3D.pieceFootprint ? Reactor3D : null;
+        const across = p => R && this.isShape(p.kind) ? R.pieceFootprint(p).map(cell => cell[0]) : [p.x];
+        const width = Math.max(...list.flatMap(across)) - Math.min(...list.flatMap(across)) + 1;
+        return this.pasteAt({ x: Math.min(...list.map(p => p.x)) + width, y: Math.min(...list.map(p => p.y)), z: Math.min(...list.map(p => p.z)) });
     }
 
     /**
@@ -284,6 +685,7 @@ class PieceBuilderManager {
             list.push(next);
         }
         elevation.restorePieces(map, list);
+        this._detach(map, flight.pieces);
         this.selected = footId;
         const reach = Math.max(steps, width, flight.steps, flight.width) + 1;
         this.announce(false, { x0: flight.foot.x - reach, y0: flight.foot.y - reach, x1: flight.foot.x + reach, y1: flight.foot.y + reach });
@@ -295,14 +697,34 @@ class PieceBuilderManager {
         const map = this.currentMap(), elevation = this.elevation();
         const piece = this.selectedPiece();
         if (!map || !elevation || !piece) return false;
-        // A ladder turns, changes material and moves whole, not one level of it.
+        // A ladder turns, changes material and moves whole, not one level or one column of it.
         if (piece.kind === 'ladder') {
-            const ids = new Set(this.ladderStack(piece).map(p => p.id));
+            const flight = this.ladderFlight(piece);
+            const ids = new Set((flight ? flight.pieces : this.ladderStack(piece)).map(p => p.id));
             const dx = 'x' in patch ? patch.x - piece.x : 0, dy = 'y' in patch ? patch.y - piece.y : 0, dz = 'z' in patch ? patch.z - piece.z : 0;
             const rest = Object.assign({}, patch); delete rest.x; delete rest.y; delete rest.z;
             if (record) { this.undoStack.push(this._snapshot(map)); if (this.undoStack.length > 50) this.undoStack.shift(); this.redoStack.length = 0; }
-            elevation.restorePieces(map, elevation.pieces(map).map(p => ids.has(p.id) ? Object.assign({}, p, rest, { x: p.x + dx, y: p.y + dy, z: p.z + dz }) : p));
-            this.announce(false, { x0: Math.min(piece.x, piece.x + dx) - 1, y0: Math.min(piece.y, piece.y + dy) - 1, x1: Math.max(piece.x, piece.x + dx) + 1, y1: Math.max(piece.y, piece.y + dy) + 1 });
+            if (flight && flight.columns > 1 && 'rot' in rest && rest.rot !== piece.rot) {
+                // A wide ladder turned is laid again from its foot, its columns across the new way.
+                const list = elevation.pieces(map).filter(p => !ids.has(p.id));
+                let id = list.reduce((max, p) => Math.max(max, p.id || 0), 0), footId = 0;
+                const from = Object.assign({}, flight.foot, rest, { x: flight.foot.x + dx, y: flight.foot.y + dy, z: flight.foot.z + dz });
+                for (const { piece: next } of this._layLadder(from, flight.width, flight.height, flight.middle)) {
+                    if (next.x < 0 || next.y < 0 || next.x >= map.width || next.y >= map.height) continue;
+                    next.id = ++id;
+                    if (!footId) footId = next.id;
+                    list.push(next);
+                }
+                elevation.restorePieces(map, list);
+                if (footId) this.selected = footId;
+                this._detach(map, flight.pieces);
+            } else {
+                const before = elevation.pieces(map), after = before.map(p => ids.has(p.id) ? Object.assign({}, p, rest, { x: p.x + dx, y: p.y + dy, z: p.z + dz }) : p);
+                elevation.restorePieces(map, after);
+                this._detach(map, this._changedPieces(map, before, after, ids));
+            }
+            const reach = (flight ? flight.columns : 1) + 1;
+            this.announce(false, { x0: Math.min(piece.x, piece.x + dx) - reach, y0: Math.min(piece.y, piece.y + dy) - reach, x1: Math.max(piece.x, piece.x + dx) + reach, y1: Math.max(piece.y, piece.y + dy) + reach });
             this._syncPanel(); this._ghostChanged();
             return true;
         }
@@ -314,6 +736,7 @@ class PieceBuilderManager {
         const next = Object.assign({}, before, patch);
         list[index] = next;
         elevation.restorePieces(map, list);
+        this._detach(map, this._changedPieces(map, [before], [next], new Set([before.id])));
         const reach = this.isShape(next.kind) ? Math.ceil(Math.max(...(next.size || [1, 1, 1])) / 2) + 1 : 1;
         this.announce(false, { x0: Math.min(before.x, next.x) - reach, y0: Math.min(before.y, next.y) - reach, x1: Math.max(before.x, next.x) + reach, y1: Math.max(before.y, next.y) + reach });
         this._syncPanel(); this._ghostChanged();
@@ -347,11 +770,13 @@ class PieceBuilderManager {
         const map = this.currentMap(), elevation = this.elevation(), piece = this.selectedPiece();
         if (!map || !elevation || !piece) return false;
         this.undoStack.push(this._snapshot(map)); if (this.undoStack.length > 50) this.undoStack.shift(); this.redoStack.length = 0;
-        // A ladder goes whole.
-        const gone = new Set(piece.kind === 'ladder' ? this.ladderStack(piece).map(p => p.id) : [piece.id]);
+        // A ladder goes whole, every column of a wide one.
+        const flight = piece.kind === 'ladder' ? this.ladderFlight(piece) : null;
+        const gone = new Set(piece.kind === 'ladder' ? (flight ? flight.pieces : this.ladderStack(piece)).map(p => p.id) : [piece.id]);
         elevation.restorePieces(map, elevation.pieces(map).filter(entry => !gone.has(entry.id)));
+        this._detach(map, [piece]);
         this.selected = 0;
-        const reach = this.isShape(piece.kind) ? Math.ceil(Math.max(...(piece.size || [1, 1, 1])) / 2) + 1 : 1;
+        const reach = this.isShape(piece.kind) ? Math.ceil(Math.max(...(piece.size || [1, 1, 1])) / 2) + 1 : (flight ? flight.columns + 1 : 1);
         this.announce(false, { x0: piece.x - reach, y0: piece.y - reach, x1: piece.x + reach, y1: piece.y + reach });
         this._syncPanel(); this.refreshStatus(); this._ghostChanged();
         return true;
@@ -365,6 +790,9 @@ class PieceBuilderManager {
     }
     setSize(kind, size) { this.sizes[kind] = size.map(v => Math.max(0.25, Math.min(60, Math.round(v * 4) / 4))); this._syncPanel(); this._ghostChanged(); }
     /** The way a piece's own +v points for its turn: the direction a stair climbs, a ramp rises. */
+    /** The tag a stamped building's events carry in their note (StructurePlan's eventTag). */
+    static STRUCTURE_EVENT = /<structure:\d+>\s*<spot:[^>]+>/;
+
     static stepOf(rot) { return [[0, 1], [-1, 0], [0, -1], [1, 0]][((rot % 4) + 4) % 4]; }
 
     /** A shape's size for the next placement: its kind's own, scaled. */
@@ -408,14 +836,15 @@ class PieceBuilderManager {
 
     /** The images under img/materials, each once, as {name, url}. */
     materials(refresh = false) {
-        if (this._materialsCache && !refresh) return this._materialsCache;
         const projectPath = this.projectPath();
+        // The list is one project's: another project open reads its own.
+        if (this._materialsCache && !refresh && this._materialsProject === projectPath) return this._materialsCache;
         let list = [];
         try {
             if (projectPath && typeof RRAssetFiles !== 'undefined' && typeof require === 'function') {
                 const path = require('path');
                 const directory = path.join(projectPath, 'img', 'materials');
-                list = RRAssetFiles.listImages(directory).map(record => ({
+                list = RRAssetFiles.listMaterials(directory).map(record => ({
                     name: record.imageReference || record.name,
                     url: RRAssetFiles.imageUrlFor(directory, record.imageReference || record.name)
                 }));
@@ -425,11 +854,12 @@ class PieceBuilderManager {
             list = [];
         }
         this._materialsCache = list;
+        this._materialsProject = projectPath;
         return list;
     }
 
     /** The colour a kind shows in the flat map's overlay. */
-    static OVERLAY_COLOURS = { wall: 0x9a9a9a, block: 0x8c8c8c, floor: 0xc99a5b, pillar: 0xdcdcdc, stair: 0xa87b4a, ramp: 0xb05a4a, roof: 0xc1443c, doorway: 0x3fa34d, window: 0x5b9fe8, fence: 0xb8864b, glass: 0x9fd8ff, dome: 0xb07a9a, cylinder: 0x8f8fa8, cone: 0xb8a04b, box: 0x8c8c8c, wedge: 0xb05a4a, pyramid: 0xb8a04b, prism: 0xc1443c, tube: 0x8f8fa8, sphere: 0xb07a9a, arch: 0x3fa34d, tunnel: 0x3fa34d, ring: 0xb07a9a, hull: 0x8f8fa8, spike: 0xb8a04b, capsule: 0x8f8fa8, dish: 0x8fa8a8, fin: 0xa88f8f };
+    static OVERLAY_COLOURS = { wall: 0x9a9a9a, block: 0x8c8c8c, floor: 0xc99a5b, pillar: 0xdcdcdc, stair: 0xa87b4a, ramp: 0xb05a4a, roof: 0xc1443c, doorway: 0x3fa34d, door: 0x8a5a2b, window: 0x5b9fe8, fence: 0xb8864b, glass: 0x9fd8ff, dome: 0xb07a9a, cylinder: 0x8f8fa8, cone: 0xb8a04b, box: 0x8c8c8c, wedge: 0xb05a4a, pyramid: 0xb8a04b, prism: 0xc1443c, tube: 0x8f8fa8, sphere: 0xb07a9a, arch: 0x3fa34d, tunnel: 0x3fa34d, ring: 0xb07a9a, hull: 0x8f8fa8, spike: 0xb8a04b, capsule: 0x8f8fa8, dish: 0x8fa8a8, fin: 0xa88f8f };
 
     /**
      * What each cell shows in the flat map: its topmost piece's kind and
@@ -456,6 +886,9 @@ class PieceBuilderManager {
     setMap(mapData, tilemapManager) {
         this.tilemapManager = tilemapManager || this.tilemapManager;
         this.selectedGroup = 0;
+        // Ids are per map: a selection kept across the switch names another map's pieces (and Delete would take them).
+        this.selected = 0; this.selectedIds = [];
+        this._stroke = null;
         this.undoStack = []; this.redoStack = [];
         this.render2D();
         if (this.panel) { this.renderStructures(true); this.refreshStatus(); this._syncPanel(); }
@@ -513,6 +946,7 @@ class PieceBuilderManager {
         ramp: 'M3 19h18V7z M3 19v2h18v-2',
         roof: 'M3 14l9-9 9 9 M5 14v6h14v-6 M9 20v-4h6v4',
         doorway: 'M5 20V5h14v15 M9 20v-9h6v9',
+        door: 'M6 21V4h12v17 M4 21h16 M15 12h.5 M9 7h6v4H9z M9 14h6v4H9z',
         window: 'M4 4h16v16H4z M9 8h6v6H9z M12 8v6 M9 11h6',
         fence: 'M5 21V9l2-3 2 3v12 M15 21V9l2-3 2 3v12 M9 12h6 M9 17h6',
         glass: 'M5 3h14v18H5z M8 6l-2 2 M12 6l-6 6 M16 6l-8 8',
@@ -532,7 +966,8 @@ class PieceBuilderManager {
         spike: 'M12 2l4 17H8z M8 19a4 1.5 0 0 0 8 0',
         capsule: 'M8 8a4 4 0 0 1 8 0v8a4 4 0 0 1-8 0z M8 9h8 M8 15h8',
         dish: 'M3 8a9 9 0 0 0 18 0 M3 8h18 M12 14v6 M9 20h6',
-        fin: 'M4 20h16v-9L13 3H4z M4 11h9'
+        fin: 'M4 20h16v-9L13 3H4z M4 11h9',
+        rock: 'M3 19l2.5-6 4-4 3.5 2 3-4 5 6.5V19z M9.5 9l1 5 3-3 M16 7l.5 5'
     };
 
     initializeUI(container) {
@@ -608,9 +1043,10 @@ class PieceBuilderManager {
 
     /** The swatches: a plain one, then every image in img/materials. */
     renderMaterials(refresh = false) {
+        // Read first: the Build bar lists them too, with no panel of this tool on the page.
+        const materials = this.materials(refresh);
         const holder = this.panel?.querySelector('.rr-pieces-materials');
         if (!holder) return;
-        const materials = this.materials(refresh);
         if (materials.length && !materials.some(entry => entry.name === this.material)) this.material = this.material || '';
         // An <img>, not a CSS background: the editor page cannot load a
         // project file as a stylesheet image, while an image element can.
@@ -624,10 +1060,10 @@ class PieceBuilderManager {
 
     /** The plans under 3d/Structures, by name. */
     structures(refresh = false) {
-        if (this._structuresCache && !refresh) return this._structuresCache;
+        const projectPath = this.projectPath();
+        if (this._structuresCache && !refresh && this._structuresProject === projectPath) return this._structuresCache;
         let list = [];
         try {
-            const projectPath = this.projectPath();
             if (projectPath && typeof require === 'function') {
                 const fs = require('fs'), path = require('path');
                 const directory = path.join(projectPath, '3d', 'Structures');
@@ -642,13 +1078,15 @@ class PieceBuilderManager {
             }
         } catch (error) { list = []; }
         this._structuresCache = list;
+        this._structuresProject = projectPath;
         return list;
     }
 
     renderStructures(refresh = false) {
+        // Read first, as the materials are: stamped buildings are built again from these plans.
+        const list = this.structures(refresh);
         const select = this.panel?.querySelector('.rr-pieces-structure');
         if (!select) return;
-        const list = this.structures(refresh);
         select.innerHTML = `<option value="">${this._t(list.length ? 'pieces.structureNone' : 'pieces.noStructures')}</option>`
             + list.map(entry => `<option value="${entry.file.replace(/"/g, '&quot;')}">${entry.name.replace(/</g, '&lt;')} (${entry.plan.size[0]}×${entry.plan.size[1]})</option>`).join('');
         select.value = list.some(entry => entry.file === this.structure) ? this.structure : '';
@@ -669,7 +1107,7 @@ class PieceBuilderManager {
     ghostGeometryFor(plan, rot = 0, scale = 1) {
         const SP = typeof RRStructurePlan !== 'undefined' ? RRStructurePlan : null;
         if (!SP || typeof Reactor3D === 'undefined' || !plan) return null;
-        const shaped = SP.transform(plan, rot, scale);
+        const shaped = SP.transform(plan, rot, scale, name => this.resolvePlan(name));
         const pieces = SP.build(shaped, 0, 0, 1, 0, name => this.resolvePlan(name));
         return Reactor3D.pieceGeometry(pieces, null);
     }
@@ -685,9 +1123,12 @@ class PieceBuilderManager {
         if (!map || !elevation || !plan || !SP) return false;
         // The turn in hand (R/Q/E) turns the building before it goes down;
         // _lay levels the pad and clamps the footprint to the map.
-        const saved = this._snapshot(map);
+        const saved = this._snapshot(map, { ground: true, effects: true, events: true, props: this._bringsProps(plan) });
+        const places = this._propPlaces(map);
         const group = elevation.nextPieceGroup(map);
-        if (!this._lay(map, plan, { group, plan: this.structure, x: Math.floor(x), y: Math.floor(y), rot: this.rot || 0, scale: 1 })) return false;
+        if (!this._lay(map, plan, { group, plan: this.structure, x: Math.floor(x), y: Math.floor(y), rot: this.rot || 0, scale: 1 })) return this._tooBig(map, plan, this.rot || 0, 1);
+        saved.propMoves = this._propMoves(map, places);
+        saved.foliage = this._clearFoliage(map, piece => piece.group === group);
         this.undoStack.push(saved);
         if (this.undoStack.length > 50) this.undoStack.shift();
         this.redoStack.length = 0;
@@ -700,19 +1141,13 @@ class PieceBuilderManager {
     _lay(map, plan, record) {
         const elevation = this.elevation(), SP = typeof RRStructurePlan !== 'undefined' ? RRStructurePlan : null;
         if (!elevation || !SP) return false;
-        const shaped = SP.transform(plan, record.rot, record.scale);
+        const shaped = SP.transform(plan, record.rot, record.scale, name => this.resolvePlan(name));
         const [W, H] = shaped.size;
         const X0 = Math.max(0, Math.min(map.width - W, record.x)), Y0 = Math.max(0, Math.min(map.height - H, record.y));
         if (W > map.width || H > map.height) return false;
         record.x = X0; record.y = Y0;
-        if (elevation.hasTerrain(map)) {
-            const grid = elevation.terrain(map), stride = map.width + 1;
-            let sum = 0, n = 0;
-            for (let yy = Y0; yy <= Y0 + H; yy++) for (let xx = X0; xx <= X0 + W; xx++) { sum += Number(grid[yy * stride + xx]) || 0; n++; }
-            const mean = Math.round((sum / n) * 1000) / 1000;
-            for (let yy = Y0; yy <= Y0 + H; yy++) for (let xx = X0; xx <= X0 + W; xx++) grid[yy * stride + xx] = mean;
-        }
-        elevation.relocatePropsOff(map, X0, Y0, W, H);
+        this._levelPad(map, X0, Y0, W, H);
+        elevation.relocatePropsOff(map, X0, Y0, W, H, record.group);
         const kept = elevation.pieces(map).filter(piece => piece.group !== record.group && !(piece.x >= X0 && piece.x < X0 + W && piece.y >= Y0 && piece.y < Y0 + H));
         const firstId = kept.reduce((max, piece) => Math.max(max, piece.id), 0) + 1;
         elevation.restorePieces(map, kept.concat(SP.build(shaped, X0, Y0, firstId, record.group, name => this.resolvePlan(name))));
@@ -722,6 +1157,9 @@ class PieceBuilderManager {
         const wanted = SP.eventsOf(shaped, X0, Y0, name => this.resolvePlan(name));
         // Its screens, lights and animations: surfaces and lights on the map, animations as events.
         const effects = SP.effectsOf(shaped, X0, Y0, name => this.resolvePlan(name));
+        // Water the plan brings stands at its height above the pad, which is now level at the corner.
+        const pad = elevation.hasTerrain(map) ? Number(elevation.terrain(map)[Y0 * (map.width + 1) + X0]) || 0 : 0;
+        for (const fx of effects) if (fx.type === 'mapWater') fx.base = pad;
         if (effects.length || SP.removeGroupEffects(map, record.group)) {
             for (const request of SP.placeEffects(map, record.group, effects)) wanted.push(request);
             window.reactor?.lightingManager?.render?.();
@@ -733,6 +1171,26 @@ class PieceBuilderManager {
         }
         window.reactor?.modelPropsManager?.render?.();
         return true;
+    }
+
+    /** Whether a plan (or a part of it) lays models of its own. */
+    _bringsProps(plan, depth = 0) {
+        if (!plan || depth > 8) return false;
+        if (Array.isArray(plan.props) && plan.props.length) return true;
+        return (plan.parts || []).some(part => this._bringsProps(this.resolvePlan(part.plan), depth + 1));
+    }
+
+    /** A plan that does not fit the map is said so, not ignored. Always false: nothing was laid. */
+    _tooBig(map, plan, rot, scale) {
+        const SP = typeof RRStructurePlan !== 'undefined' ? RRStructurePlan : null;
+        const size = SP ? SP.transform(plan, rot, scale, name => this.resolvePlan(name)).size : plan.size;
+        if (size && (size[0] > map.width || size[1] > map.height)) {
+            const text = window.I18n ? window.I18n.tText('This plan is larger than the map.') : 'This plan is larger than the map.';
+            const status = this.panel?.querySelector('.rr-pieces-status');
+            if (status) status.textContent = text;
+            window.reactor?.buildHotbar?.flash?.(text);
+        }
+        return false;
     }
 
     /** An event template under 3d/Structures/events, by name. */
@@ -753,8 +1211,11 @@ class PieceBuilderManager {
         if (!record) return false;
         const plan = this.structures().find(entry => entry.file === record.plan)?.plan;
         if (!plan) return false;
-        const saved = this._snapshot(map);
-        if (!this._lay(map, plan, Object.assign(record, change))) return false;
+        const saved = this._snapshot(map, { ground: true, effects: true, events: true, props: this._bringsProps(plan) });
+        const places = this._propPlaces(map);
+        if (!this._lay(map, plan, Object.assign(record, change))) return this._tooBig(map, plan, record.rot, record.scale);
+        saved.propMoves = this._propMoves(map, places);
+        saved.foliage = this._clearFoliage(map, piece => piece.group === record.group);
         this.undoStack.push(saved); if (this.undoStack.length > 50) this.undoStack.shift(); this.redoStack.length = 0;
         this.announce(true); this.refreshStatus(); this._ghostChanged();
         return true;
@@ -832,43 +1293,145 @@ class PieceBuilderManager {
         if (elevation.structureOf(map, this.selectedGroup)) return this._restamp(map, { x: Math.floor(x), y: Math.floor(y) });
         const W = bounds.x1 - bounds.x0 + 1, H = bounds.y1 - bounds.y0 + 1;
         const X0 = Math.max(0, Math.min(map.width - W, Math.floor(x))), Y0 = Math.max(0, Math.min(map.height - H, Math.floor(y)));
-        const saved = this._snapshot(map);
+        const saved = this._snapshot(map, { ground: true });
+        const places = this._propPlaces(map);
         if (!elevation.movePieceGroup(map, this.selectedGroup, X0, Y0)) return false;
         elevation.relocatePropsOff(map, X0, Y0, W, H);
+        saved.propMoves = this._propMoves(map, places);
+        // What grew where it now stands goes; where it stood stays bare (nothing regrows).
+        const moved = this.selectedGroup;
+        saved.foliage = this._clearFoliage(map, piece => piece.group === moved);
         this.undoStack.push(saved);
         if (this.undoStack.length > 50) this.undoStack.shift();
         this.redoStack.length = 0;
-        if (elevation.hasTerrain(map)) {
-            const grid = elevation.terrain(map), stride = map.width + 1;
-            let sum = 0, n = 0;
-            for (let yy = Y0; yy <= Y0 + H; yy++) for (let xx = X0; xx <= X0 + W; xx++) { sum += Number(grid[yy * stride + xx]) || 0; n++; }
-            const mean = Math.round((sum / n) * 1000) / 1000;
-            for (let yy = Y0; yy <= Y0 + H; yy++) for (let xx = X0; xx <= X0 + W; xx++) grid[yy * stride + xx] = mean;
-        }
+        this._levelPad(map, X0, Y0, W, H);
         this.announce(true);
         this.refreshStatus();
         this._ghostChanged();
         return true;
     }
 
-    /** Everything a building edit can touch: pieces, the ground, the building records. */
-    _snapshot(map) {
+    /** Where each model stands, and the models an edit then pushed off its footprint as `{ id, from, to }` (an undo puts them back). */
+    _propPlaces(map) { return new Map((this.elevation().props?.(map) || []).map(prop => [prop.id, [prop.x, prop.y]])); }
+    _propMoves(map, places) {
+        return (this.elevation().props?.(map) || []).filter(prop => places.has(prop.id) && (places.get(prop.id)[0] !== prop.x || places.get(prop.id)[1] !== prop.y))
+            .map(prop => ({ id: prop.id, from: places.get(prop.id), to: [prop.x, prop.y] }));
+    }
+
+    /**
+     * What a building edit can touch: pieces and the building records, and
+     * the ground or the lights and screens only for an edit that changes
+     * them (they have tools and undo of their own, which an undo here must
+     * not roll back).
+     */
+    /**
+     * What grew under the pieces a step laid on the ground (those `accept` takes) goes with that step, as a record
+     * its undo grows back (`_swap`); null when nothing grew there.
+     */
+    _clearFoliage(map, accept) {
+        const F = (typeof RRMapFoliage !== 'undefined' && RRMapFoliage) || (typeof window !== 'undefined' && window.RRMapFoliage) || null;
+        if (!F || !F.clearUnderPieces || !map || !F.hasFoliage(map)) return null;
+        const record = F.clearUnderPieces(map, accept);
+        if (record && typeof window !== 'undefined') window.reactor?.terrainManager?.announceFoliage?.(F.clearedRegion(map, record));
+        return record;
+    }
+
+    _snapshot(map, { ground = false, effects = false, events = false, props = false, allEvents = false } = {}) {
         const elevation = this.elevation();
-        const sidecar = map.reactor3d || {};
-        return { pieces: elevation.piecesSnapshot(map), terrain: elevation.terrainSnapshot(map), structures: elevation.structures(map),
-            surfaces: JSON.stringify(sidecar.mediaSurfaces || null), lights: JSON.stringify(sidecar.lights || null) };
+        const out = { pieces: elevation.piecesSnapshot(map), structures: elevation.structures(map) };
+        if (ground) out.terrain = elevation.terrainSnapshot(map);
+        // Levelled ground and pieces refit the ponds (announce): a pond under a footprint or a wall shrinks or goes.
+        if (elevation.waterSnapshot && (ground || elevation.hasWater?.(map))) out.water = JSON.stringify(elevation.waterSnapshot(map));
+        if (effects) {
+            const sidecar = map.reactor3d || {};
+            out.surfaces = JSON.stringify(sidecar.mediaSurfaces || null);
+            out.lights = JSON.stringify(sidecar.lights || null);
+        }
+        // A step that lays a saved structure's own models keeps every model (the Models tool's edits otherwise keep their own undo).
+        if (props) out.props = JSON.stringify((map.reactor3d && map.reactor3d.props) || null);
+        // A step that turns loose events into a building's people keeps every event as it was.
+        if (allEvents) out.allEvents = JSON.stringify(Array.isArray(map.events) ? map.events : []);
+        // A building's people come and go with it (placeEvents, removeGroupEvents): only the steps that
+        // place or take them keep them, so undoing another step never rolls back an event edited since.
+        if (events) out.events = JSON.stringify(this._structureEvents(map));
+        return out;
+    }
+
+    /** The events a stamped building placed (`<structure:n><spot:…>` in the note), as [index, event]. */
+    _structureEvents(map) {
+        return (Array.isArray(map.events) ? map.events : []).map((event, index) => [index, event])
+            .filter(([, event]) => event && typeof event.note === 'string' && PieceBuilderManager.STRUCTURE_EVENT.test(event.note));
+    }
+
+    /** Put a snapshot's building events back in place of the ones there now; a slot taken since by another event gives a new id. */
+    _restoreStructureEvents(map, saved) {
+        if (!Array.isArray(map.events)) return;
+        for (const [index] of this._structureEvents(map)) map.events[index] = null;
+        for (const [index, event] of saved) {
+            let id = index;
+            if (map.events[id]) id = map.events.reduce((max, e) => Math.max(max, e && e.id ? e.id : 0), 0) + 1;
+            while (map.events.length <= id) map.events.push(null);
+            map.events[id] = Object.assign(event, { id });
+        }
+        while (map.events.length > 1 && map.events[map.events.length - 1] == null) map.events.pop();
+        this._eventsChanged = true;
+    }
+
+    /**
+     * The ponds as they were before a step, keeping what was done to them since: a sheet the step
+     * refitted gets its old cells back (its look as it is now), one the step dried up whole comes
+     * back unless it was drained since, and a sheet poured since stays.
+     */
+    static mergeWater(current, before, after) {
+        const key = sheet => [sheet.x0, sheet.y0, sheet.x1, sheet.y1, sheet.level].join(',');
+        if (!Array.isArray(after)) return before.slice();
+        const was = new Map(before.map(sheet => [key(sheet), sheet]));
+        const left = new Set(after.map(key)), now = new Set(current.map(key));
+        const out = current.map(sheet => {
+            const old = was.get(key(sheet));
+            if (!old) return sheet;
+            const merged = Object.assign({}, sheet);
+            if (old.mask) merged.mask = old.mask; else delete merged.mask;
+            return merged;
+        });
+        // A sheet that comes back takes its old place among the ones it stood between.
+        let cursor = 0;
+        for (const [k, sheet] of was) {
+            if (now.has(k)) cursor = out.findIndex(other => key(other) === k) + 1;
+            else if (!left.has(k)) out.splice(cursor++, 0, sheet);
+        }
+        return out;
+    }
+
+    /**
+     * Level a footprint's ground to one height for a building: the mean of its corners, or the
+     * surface of a pond it stands in, so it is built on the water rather than sunk to the pond's floor.
+     */
+    _levelPad(map, X0, Y0, W, H) {
+        const elevation = this.elevation();
+        if (!elevation.hasTerrain(map)) return;
+        const grid = elevation.terrain(map), stride = map.width + 1;
+        let sum = 0, n = 0;
+        for (let yy = Y0; yy <= Y0 + H; yy++) for (let xx = X0; xx <= X0 + W; xx++) { sum += Number(grid[yy * stride + xx]) || 0; n++; }
+        let level = Math.round((sum / n) * 1000) / 1000;
+        for (const sheet of elevation.water ? elevation.water(map) : []) {
+            if (sheet.level <= level) continue;
+            for (let yy = Y0; yy < Y0 + H && sheet.level > level; yy++) for (let xx = X0; xx < X0 + W; xx++) if (elevation.waterCovers(sheet, xx, yy)) { level = sheet.level; break; }
+        }
+        for (let yy = Y0; yy <= Y0 + H; yy++) for (let xx = X0; xx <= X0 + W; xx++) grid[yy * stride + xx] = level;
     }
 
     removeSelectedGroup() {
         const map = this.currentMap(), elevation = this.elevation();
         if (!map || !elevation || !this.selectedGroup) return false;
-        const saved = this._snapshot(map);
+        const ownProps = (elevation.props?.(map) || []).some(prop => prop.structure === this.selectedGroup);
+        const saved = this._snapshot(map, { effects: true, events: true, props: ownProps });
         if (typeof RRStructurePlan !== 'undefined' && RRStructurePlan.removeGroupEvents(map, this.selectedGroup)) this._eventsChanged = true;
         if (typeof RRStructurePlan !== 'undefined' && RRStructurePlan.removeGroupEffects(map, this.selectedGroup)) { window.reactor?.lightingManager?.render?.(); window.reactor?.mediaSurfaceManager?.render?.(); }
         if (!elevation.removePieceGroup(map, this.selectedGroup)) return false;
         this.undoStack.push(saved); this.redoStack.length = 0;
         this.selectedGroup = 0;
-        this.announce(); this.refreshStatus(); this._ghostChanged();
+        this.announce(); this.refreshStatus(); this._syncPanel(); this._ghostChanged();
         return true;
     }
 
@@ -998,10 +1561,73 @@ class PieceBuilderManager {
         return leaning.includes(this.rot) ? this.rot : leaning[0];
     }
 
+    /**
+     * The doorway a door clicked onto hangs in: its run of doorway cells at
+     * the level (along the wall it opens through), the run's first cell
+     * along the door's across, and the facing nearest the one in hand.
+     * Null when the cell holds no doorway.
+     */
+    doorwayRun(target) {
+        const map = this.currentMap(), E = this.elevation();
+        if (!map || !E || !target) return null;
+        const list = E.pieces(map);
+        const kindAt = (x, y) => { const here = list.filter(piece => piece.x === x && piece.y === y && piece.z === target.z); return here.map(piece => piece.kind); };
+        const isDoorway = (x, y) => kindAt(x, y).includes('doorway');
+        if (!isDoorway(target.x, target.y)) return null;
+        const wallish = (x, y) => kindAt(x, y).some(kind => kind === 'wall' || kind === 'window' || kind === 'doorway');
+        // Along x when the doorway runs or is walled east and west, else along y.
+        const alongX = isDoorway(target.x - 1, target.y) || isDoorway(target.x + 1, target.y)
+            || (!isDoorway(target.x, target.y - 1) && !isDoorway(target.x, target.y + 1) && (wallish(target.x - 1, target.y) || wallish(target.x + 1, target.y)));
+        const [dx, dy] = alongX ? [1, 0] : [0, 1];
+        let x0 = target.x, y0 = target.y;
+        while (isDoorway(x0 - dx, y0 - dy)) { x0 -= dx; y0 -= dy; }
+        let width = 0;
+        while (width < 6 && isDoorway(x0 + dx * width, y0 + dy * width)) width++;
+        // Facing: 0 or 2 for a wall along x, 1 or 3 along y; the one in hand when it fits.
+        const rot = alongX ? (this.rot === 2 ? 2 : 0) : (this.rot === 1 ? 1 : 3);
+        // The first cell along the across: rot 0 runs east, 1 south, 2 west, 3 north.
+        const anchor = rot === 0 || rot === 1 ? [x0, y0] : [x0 + dx * (width - 1), y0 + dy * (width - 1)];
+        return { x: anchor[0], y: anchor[1], rot, width };
+    }
+
+    /** The framed windows framed as one with this one: side by side at its level and turn, with its frame. */
+    windowRun(piece) {
+        const map = this.currentMap(), E = this.elevation();
+        if (!map || !E || !piece || piece.kind !== 'window') return piece ? [piece] : [];
+        const list = E.pieces(map).filter(p => p.kind === 'window' && p.z === piece.z && p.rot === piece.rot);
+        const look = JSON.stringify(piece.frame || null);
+        const [dx, dy] = PieceBuilderManager.acrossOf(piece.rot);
+        const at = (x, y) => list.find(p => p.x === x && p.y === y && JSON.stringify(p.frame || null) === look);
+        const run = [piece];
+        for (const sign of [-1, 1]) for (let k = 1, next = at(piece.x + dx * sign, piece.y + dy * sign); next && k < 12; k++, next = at(piece.x + dx * sign * k, piece.y + dy * sign * k)) run.push(next);
+        return run;
+    }
+
+    /** A turn's across, as a door's or a window's runs along it: rot 0 east, 1 south, 2 west, 3 north. */
+    static acrossOf(rot) { return [[1, 0], [0, 1], [-1, 0], [0, -1]][((rot % 4) + 4) % 4]; }
+
     pieceFor(target) {
         const piece = { kind: this.kind, x: target.x, y: target.y, z: target.z, rot: this.rot, material: this.material };
         if (this.finish) piece.finish = this.finish;
         if (this.surface) piece.surface = Object.assign({}, this.surface);
+        if (this.kind === 'door') {
+            Object.assign(piece, JSON.parse(JSON.stringify(this.door)));
+            if (!piece.material) piece.material = 'Wood';
+            // The doorway clicked: the cell aimed at, else the one whose face was struck, else the one under the hit
+            // (a click on a doorway's reveal or on the floor just through it).
+            const candidates = [target, target.faceCell, target.point ? { x: Math.floor(target.point.x), y: Math.floor(target.point.z) } : null];
+            // Through the opening the pointer lands on the floor beyond: the doorway beside it, nearest first.
+            const px = target.point ? target.point.x : target.x + 0.5, py = target.point ? target.point.z : target.y + 0.5;
+            const around = [];
+            for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (dx || dy) around.push({ x: target.x + dx, y: target.y + dy });
+            around.sort((a, b) => Math.hypot(a.x + 0.5 - px, a.y + 0.5 - py) - Math.hypot(b.x + 0.5 - px, b.y + 0.5 - py));
+            candidates.push(...around);
+            for (const cell of candidates) {
+                const run = cell ? this.doorwayRun({ x: cell.x, y: cell.y, z: target.z }) : null;
+                if (run) { Object.assign(piece, run); break; }
+            }
+        }
+        if (this.kind === 'window' && this.windowFrame) piece.frame = Object.assign({}, this.windowFrame);
         if (this.kind === 'ladder') { const rot = this.ladderRotFor(target); if (rot !== null) piece.rot = rot; }
         const E = this.elevation();
         if (E && E.SHAPE_KINDS && E.SHAPE_KINDS.includes(this.kind)) {
@@ -1010,7 +1636,31 @@ class PieceBuilderManager {
             const off = this.shapeOffsetFor(target);
             if (off && (off[0] || off[1])) piece.offset = off;
         }
+        if (this.kind === 'rock') {
+            if (this.rockCap) piece.cap = this.rockCap;
+            if (this.rockTint) piece.tint = this.rockTint;
+            if (this.rockVary) {
+                const v = PieceBuilderManager.rockVariation(Number.isFinite(target.seed) ? target.seed : this.rockSeed);
+                const quarter = n => Math.max(0.5, Math.round(n * 4) / 4);
+                piece.size = [quarter(piece.size[0] * v.w), quarter(piece.size[1] * v.h), quarter(piece.size[2] * v.d)];
+                piece.angle = ((v.angle % 360) + 360) % 360;
+                const rough = Number.isFinite(piece.rough) ? piece.rough : 0.5;
+                piece.rough = Math.max(0, Math.min(1, Math.round((rough + v.rough) * 100) / 100));
+            }
+        }
         return piece;
+    }
+
+    /** How a rock laid by hand differs from the size in hand, fixed by a seed: sizes scaled, a slight turn, roughness nudged. */
+    static rockVariation(seed) {
+        const r = n => { const v = Math.sin(seed * 12.9898 + n * 78.233) * 43758.5453; return v - Math.floor(v); };
+        return { w: 0.8 + 0.45 * r(1), h: 0.75 + 0.55 * r(2), d: 0.8 + 0.45 * r(3), angle: Math.round((r(4) - 0.5) * 50), rough: Math.round((r(5) - 0.5) * 20) / 100 };
+    }
+
+    /** Where rocks go apart in a drag or a filled rectangle: most of a rock's width, so they meet and melt together. */
+    rockSpacing() {
+        const size = this.sizeFor('rock');
+        return [Math.max(1, Math.round(size[0] * 0.75)), Math.max(1, Math.round(size[2] * 0.75))];
     }
 
     /** Where in its cell a shape goes: under the pointer, to the quarter tile (a cell piece fills its cell). */
@@ -1034,11 +1684,12 @@ class PieceBuilderManager {
     beginStroke(target, mode = this.mode, options = {}) {
         const map = this.currentMap(), elevation = this.elevation();
         if (!map || !elevation || !target) return false;
-        const snapshot = elevation.piecesSnapshot(map);
-        this.undoStack.push(snapshot);
+        // The building records too (an edit inside a stamped building detaches it), and what the hammer may take: a light or a screen.
+        const saved = this._snapshot(map, { effects: mode === 'erase' });
+        this.undoStack.push(saved);
         if (this.undoStack.length > 50) this.undoStack.shift();
         this.redoStack.length = 0;
-        this._stroke = { mode, moved: false, last: null, anchor: { x: target.x, y: target.y, z: target.z }, snapshot, rectangle: !!options.rectangle };
+        this._stroke = { mode, moved: false, last: null, anchor: { x: target.x, y: target.y, z: target.z }, snapshot: saved.pieces, entry: saved, rectangle: !!options.rectangle, seed: this.rockSeed };
         return this.dab(target);
     }
 
@@ -1060,6 +1711,13 @@ class PieceBuilderManager {
         const y0 = Math.min(a.y, target.y), y1 = Math.max(a.y, target.y);
         const fill = this._stroke.mode === 'erase' || PieceBuilderManager.fillsRectangle(this.kind);
         const cells = [];
+        // Rocks fill it on a grid of their spacing, each its own (seeded by its place, so the
+        // rectangle keeps its rocks while it is dragged bigger).
+        if (this.kind === 'rock' && this._stroke.mode !== 'erase') {
+            const [sx, sy] = this.rockSpacing();
+            for (let y = y0; y <= y1; y += sy) for (let x = x0; x <= x1; x += sx) cells.push({ x, y, z: a.z, seed: this._stroke.seed + x * 7919 + y * 104729 });
+            return { cells, x0, y0, x1, y1 };
+        }
         for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
             if (fill || x === x0 || x === x1 || y === y0 || y === y1) cells.push({ x, y, z: a.z });
         }
@@ -1099,6 +1757,12 @@ class PieceBuilderManager {
         const map = this.currentMap(), elevation = this.elevation();
         if (!map || !elevation || !target || !this._stroke) return false;
         this._stroke.last = { x: target.x, y: target.y, z: target.z };
+        // A drag of rocks lays one each spacing along the way, not one per cell.
+        const rock = this.kind === 'rock' && this._stroke.mode !== 'erase';
+        if (rock && this._stroke.lastRock) {
+            const [sx, sy] = this.rockSpacing();
+            if (Math.hypot((target.x - this._stroke.lastRock.x) / sx, (target.y - this._stroke.lastRock.y) / sy) < 1) return false;
+        }
         // A hand edit inside a building: the new piece joins the building,
         // and the building stops following its plan (it would be built
         // again from the plan on the next move and lose the edit), while it
@@ -1115,6 +1779,8 @@ class PieceBuilderManager {
                 if (elevation.setPiece(map, step) && this._changedSince(map)) changed = true;
             }
         } else changed = !!elevation.setPiece(map, piece) && this._changedSince(map);
+        // The rock laid: the next one is another rock (its own variation; the ghost follows).
+        if (rock && changed) { this._stroke.lastRock = { x: target.x, y: target.y }; this.rockSeed++; this._ghostChanged(); }
         if (changed && group && elevation.structureOf(map, group)) {
             elevation.removeStructure(map, group);
             this._flash('pieces.detached');
@@ -1244,6 +1910,7 @@ class PieceBuilderManager {
             list.push(next);
         }
         elevation.restorePieces(map, list);
+        this._detach(map, flight.pieces);
         this.selected = footId;
         reach += 1;
         this.announce(false, { x0: flight.foot.x - reach, y0: flight.foot.y - reach, x1: flight.foot.x + reach, y1: flight.foot.y + reach });
@@ -1262,15 +1929,37 @@ class PieceBuilderManager {
     /** Take the piece at the level, else the top piece on the cell. */
     eraseAt(map, target) {
         const elevation = this.elevation();
+        // A door struck goes before the doorway it hangs in (the doorway is the wall's opening).
+        const door = this.pieceAtTarget(target);
+        if (door && door.kind === 'door') return elevation.restorePieces(map, elevation.pieces(map).filter(piece => piece.id !== door.id));
         if (elevation.removePiece(map, target.x, target.y, target.z)) return true;
+        // What the strike landed in by its height, a shape standing over the cell included: a rock over a floor goes, not the floor under it.
+        const struck = typeof Reactor3D !== 'undefined' && Reactor3D.piecesAt ? this.pieceAtTarget(target) : null;
+        if (struck) return elevation.restorePieces(map, elevation.pieces(map).filter(piece => piece.id !== struck.id));
         const stack = elevation.pieces(map).filter(piece => piece.x === target.x && piece.y === target.y);
-        if (!stack.length) return this.removeEffectAt(map, target);
+        if (!stack.length) {
+            // A shape (a rock, a dome) stands on cells beyond its own: the hammer takes it wherever it is struck.
+            const R = typeof Reactor3D !== 'undefined' ? Reactor3D : null;
+            const wanted = Number.isFinite(target.height) ? target.height : target.z;
+            const covering = (R && R.piecesAt ? R.piecesAt(map, target.x, target.y) || [] : [])
+                .filter(entry => entry.standIn && wanted >= entry.z - 0.05 && wanted <= R.pieceTop(entry, 0.5, 0.5) + 0.05)
+                .reduce((best, entry) => (!best || entry.z >= best.z ? entry : best), null);
+            if (covering) return elevation.restorePieces(map, elevation.pieces(map).filter(piece => piece.id !== covering.id));
+            return this.removeEffectAt(map, target);
+        }
         const top = stack.reduce((best, piece) => (piece.z > best.z ? piece : best), stack[0]);
         return elevation.removePiece(map, top.x, top.y, top.z);
     }
 
     endStroke() {
         if (this._stroke && !this._stroke.moved) this.undoStack.pop();
+        // What grew under the pieces the stroke laid on the ground goes with the stroke's own step.
+        else if (this._stroke && this._stroke.mode !== 'erase' && this.undoStack[this.undoStack.length - 1] === this._stroke.entry) {
+            const map = this.currentMap(), had = new Set((this._stroke.snapshot || []).map(piece => piece.id));
+            if (map) this._stroke.entry.foliage = this._clearFoliage(map, piece => !had.has(piece.id));
+        }
+        // A rectangle of rocks used seeds from its start: the next rocks take new ones.
+        if (this._stroke && this._stroke.rectangle && this.kind === 'rock') { this.rockSeed += 1000003; this._ghostChanged(); }
         this._stroke = null;
         if (this._flashed) this._flashed = false; else this.refreshStatus();
     }
@@ -1279,10 +1968,11 @@ class PieceBuilderManager {
     removeAt(target) {
         const map = this.currentMap(), elevation = this.elevation();
         if (!map || !elevation || !target) return false;
-        const saved = elevation.piecesSnapshot(map);
+        const saved = this._snapshot(map, { effects: true });
         if (!this.eraseAt(map, target)) return false;
         this.undoStack.push(saved);
         this.redoStack.length = 0;
+        this._pruneSelection();
         this.announce(false, { x0: target.x - 1, y0: target.y - 1, x1: target.x + 1, y1: target.y + 1 });
         this.refreshStatus();
         return true;
@@ -1315,12 +2005,25 @@ class PieceBuilderManager {
             this.nudgeSelected(key === 'arrowleft' ? -step : key === 'arrowright' ? step : 0, key === 'arrowup' ? -step : key === 'arrowdown' ? step : 0);
         }
         else if ((key === 'delete' || key === 'backspace') && this.mode === 'move' && this.selectedGroup) { event.preventDefault(); this.removeSelectedGroup(); }
-        else if (key === 'escape' && this.mode === 'move' && this.selectedGroup) { event.preventDefault(); this.selectedGroup = 0; this.refreshStatus(); this._ghostChanged(); }
+        else if (key === 'escape' && this.mode === 'move' && this.selectedGroup) { event.preventDefault(); this.selectedGroup = 0; this.refreshStatus(); this._syncPanel(); this._ghostChanged(); }
         else if (key === 'escape' && this.mode !== 'place') { event.preventDefault(); this.setMode('place'); }
     }
 
-    undo() { this._swap(this.undoStack, this.redoStack); this.syncHistoryButtons(); }
-    redo() { this._swap(this.redoStack, this.undoStack); this.syncHistoryButtons(); }
+    undo() { this._endGesture(); this._swap(this.undoStack, this.redoStack); this.syncHistoryButtons(); }
+    redo() { this._endGesture(); this._swap(this.redoStack, this.undoStack); this.syncHistoryButtons(); }
+
+    /**
+     * Ctrl+Z or Ctrl+Y in the middle of a drag (a stroke, a Ctrl-rectangle, a piece or a handle
+     * carried): the drag ends there as its own undo step, so the undo takes back the drag and
+     * not the edit before it, and the rest of the drag does nothing.
+     */
+    _endGesture() {
+        if (this._stroke) this.endStroke();
+        else window.reactor?.mapEditor3D?.endPieceDrag?.();
+    }
+
+    /** An edit made while pieces are carried (R, Delete, a paste): the carry so far becomes its own step first, so the steps stay in order. */
+    _settleCarry() { window.reactor?.mapEditor3D?.endPieceDrag?.(undefined, { carryOn: true }); }
     canUndo() { return this.undoStack.length > 0; }
     canRedo() { return this.redoStack.length > 0; }
     /** The toolbar's Undo and Redo follow the builder's history while it is up, the map editor's otherwise. */
@@ -1335,34 +2038,76 @@ class PieceBuilderManager {
         if (!map || !elevation || !from.length) return;
         const entry = from.pop();
         const whole = entry && !Array.isArray(entry) && entry.pieces;
-        to.push(whole ? this._snapshot(map) : elevation.piecesSnapshot(map));
+        const ground = !!whole && 'terrain' in entry, effects = !!whole && entry.surfaces !== undefined, events = !!whole && entry.events !== undefined;
+        const props = !!whole && entry.props !== undefined, allEvents = !!whole && entry.allEvents !== undefined;
+        const back = whole ? this._snapshot(map, { ground, effects, events, props, allEvents }) : elevation.piecesSnapshot(map);
+        // A step that knows the ground it left moves only the corners it levelled: terrain shaped since stays.
+        const sealed = ground && entry.terrainAfter !== undefined;
+        if (sealed) { back.terrain = entry.terrainAfter; back.terrainAfter = entry.terrain; }
+        let water = null;
+        if (whole && entry.water !== undefined && elevation.restoreWater) {
+            water = PieceBuilderManager.mergeWater(elevation.waterSnapshot(map), JSON.parse(entry.water), entry.waterAfter !== undefined ? JSON.parse(entry.waterAfter) : undefined);
+            back.waterAfter = JSON.stringify(water);
+        }
+        // The foliage a step cleared grows back on its undo and goes again on its redo.
+        const F = (typeof RRMapFoliage !== 'undefined' && RRMapFoliage) || (typeof window !== 'undefined' && window.RRMapFoliage) || null;
+        let foliageRegion;
+        if (whole && F && entry.foliage) { F.uncover(map, entry.foliage); back.foliageRedo = entry.foliage; foliageRegion = F.clearedRegion(map, entry.foliage); }
+        else if (whole && F && entry.foliageRedo) { F.recover(map, entry.foliageRedo); back.foliage = entry.foliageRedo; foliageRegion = F.clearedRegion(map, entry.foliageRedo); }
+        to.push(back);
         elevation.restorePieces(map, whole ? entry.pieces : entry);
+        // Models the edit pushed aside go back where they stood (unless moved since), and aside again on a redo;
+        // a step that kept every model puts them all back as they were.
+        if (whole && entry.props !== undefined) {
+            const sidecar = map.reactor3d || (map.reactor3d = { version: 1 });
+            const props = JSON.parse(entry.props);
+            if (props) sidecar.props = props; else delete sidecar.props;
+            window.reactor?.modelPropsManager?.render?.();
+        } else if (whole && entry.propMoves?.length) {
+            for (const move of entry.propMoves) {
+                const prop = elevation.propById(map, move.id);
+                if (prop && prop.x === move.to[0] && prop.y === move.to[1]) elevation.updateProp(map, move.id, { x: move.from[0], y: move.from[1] });
+            }
+            back.propMoves = entry.propMoves.map(move => ({ id: move.id, from: move.to, to: move.from }));
+            window.reactor?.modelPropsManager?.render?.();
+        }
         if (whole) {
-            if (entry.terrain) elevation.restoreTerrain(map, entry.terrain); else elevation.clearTerrain(map);
+            if (sealed) elevation.restoreTerrainChanges(map, entry.terrainAfter, entry.terrain);
+            else if (ground) { if (entry.terrain) elevation.restoreTerrain(map, entry.terrain); else elevation.clearTerrain(map); }
+            if (water) elevation.restoreWater(map, water);
             elevation.restoreStructures(map, entry.structures);
-            if (entry.surfaces !== undefined) {
+            if (effects) {
                 const sidecar = map.reactor3d || (map.reactor3d = { version: 1 });
                 const surfaces = JSON.parse(entry.surfaces), lights = JSON.parse(entry.lights);
                 if (surfaces) sidecar.mediaSurfaces = surfaces; else delete sidecar.mediaSurfaces;
                 if (lights) sidecar.lights = lights; else delete sidecar.lights;
                 this._effectsChanged();
             }
+            if (allEvents) { map.events = JSON.parse(entry.allEvents); this._eventsChanged = true; }
+            else if (events) this._restoreStructureEvents(map, JSON.parse(entry.events));
         }
-        this.announce(!!whole); this.refreshStatus(); this._syncPanel();
+        this._pruneSelection();
+        this.announce(ground); this.refreshStatus(); this._syncPanel();
+        if (foliageRegion !== undefined && typeof window !== 'undefined') window.reactor?.terrainManager?.announceFoliage?.(foliageRegion);
     }
 
     clear() {
         const map = this.currentMap(), elevation = this.elevation();
         if (!map || !elevation || !elevation.hasPieces(map)) return;
-        this.undoStack.push(elevation.piecesSnapshot(map)); this.redoStack.length = 0;
+        // The building records go with the last piece: the undo brings them back too.
+        this.undoStack.push(this._snapshot(map)); this.redoStack.length = 0;
         elevation.clearPieces(map);
-        this.announce(); this.refreshStatus();
+        this._pruneSelection();
+        this.announce(); this.refreshStatus(); this._syncPanel();
     }
 
     /** The pieces changed: the 3D view lays them down again in place, and the map is dirty. */
     announce(terrainToo = false, region = null) {
         this.render2D();
         this.syncHistoryButtons();
+        // A step that levelled ground keeps the ground it left, for its undo (_swap).
+        const top = terrainToo && this.undoStack[this.undoStack.length - 1];
+        if (top && 'terrain' in top && top.terrainAfter === undefined) top.terrainAfter = this.elevation()?.terrainSnapshot(this.currentMap()) ?? null;
         const mapEditor = window.reactor?.mapEditor;
         if (typeof mapEditor?.onElevationChanged === 'function') mapEditor.onElevationChanged(this.currentMap());
         if (typeof document === 'undefined' || typeof CustomEvent !== 'function') return;
@@ -1370,6 +2115,10 @@ class PieceBuilderManager {
         // place, the whole map), then the pieces are laid on it. `region`
         // is the cells an edit touched, so only their chunks are relaid.
         if (terrainToo) document.dispatchEvent(new CustomEvent('rr-map-edited', { detail: { mapId: this.currentMap()?.id, terrain: true, region: null } }));
+        // Ponds follow levelled ground as they follow a terrain stroke, and the pieces that hold them back.
+        window.reactor?.terrainManager?.piecesChanged?.(terrainToo ? null : region);
+        // And the ponds it left, so its undo gives back only what it took from them.
+        if (top && 'water' in top && top.waterAfter === undefined) top.waterAfter = JSON.stringify(this.elevation()?.waterSnapshot?.(this.currentMap()) || []);
         document.dispatchEvent(new CustomEvent('rr-map-edited', { detail: { mapId: this.currentMap()?.id, pieces: true, region: region || null } }));
         // Events came or went with a building: the event tool and the 3D
         // view's markers are redrawn (a plain edit notice rebuilds the view).

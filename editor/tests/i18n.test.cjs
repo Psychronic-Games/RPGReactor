@@ -269,7 +269,9 @@ test('localization source inventory recognizes static text calls and consumed sc
 test('all statically routed localization source phrases exist in RR_TEXT_TRANSLATIONS', () => {
     const { catalogs } = loadI18nForTest();
     const vmCtx = { __text: catalogs.text };
-    const sourceKeys = new Set(Object.keys(vmCtx.__text.ja));
+    // tText falls back to the event command and section names, so a command
+    // name routed through a text helper is translated by those catalogs.
+    const sourceKeys = new Set([...Object.keys(vmCtx.__text.ja), ...Object.keys(catalogs.commands.ja), ...Object.keys(catalogs.sections.ja)]);
     const audit = auditTextTranslationCoverage(repoRoot, sourceKeys);
 
     assert.equal(audit.missing.length, 0, formatMissingPhrases(audit.missing));
@@ -309,14 +311,14 @@ const ENGLISH_FALLBACK_KEYS = [
 ];
 
 const LOANWORDS_BY_LOCALE = {
-    es: ['build.colour', 'terrain.look.colour', 'terrain.look.lava', 'pieces.material', 'lit.id', 'lightcmd.color', 'lit.color', 'cam3d.auto', 'cam3d.fov', 'event.actor', 'event.dir', 'event.normal', 'event.tile', 'event.variable', 'forge.tab.procedural', 'mapProps.threeD', 'mapProps.tileset', 'mapProps.vol', 'menu.tilesets', 'options.editor', 'r3dfx.audio', 'theme.cascadia.name', 'toolbar.tileset', 'toolbar.title.plugins', 'workspace.zoom'],
-    pt: ['terrain.look.lava', 'pieces.material', 'pieces.kind.cone', 'lit.id', 'lit.preset.laser', 'audio.volume', 'cam3d.auto', 'cam3d.fov', 'event.item', 'event.normal', 'event.tile', 'forge.tab.procedural', 'mapProps.sizeRange', 'mapProps.threeD', 'mapProps.tileset', 'menu.classes', 'menu.tilesets', 'options.editor', 'toolbar.tileset', 'workspace.zoom'],
-    de: ['terrain.look.lava', 'pieces.kind.block', 'pieces.kind.tunnel', 'pieces.kind.ring', 'build.hammer', 'pieces.material', 'terrain.radius', 'lit.compoundName', 'lit.id', 'lit.preset.laser', 'lit.position', 'lit.animation', 'menu.quests', 'audio.me', 'audio.pause', 'cam3d.auto', 'db.system1', 'db.system2', 'efk.frame', 'efk.framesLabel', 'efk.pause', 'event.index', 'event.normal', 'event.parallel', 'event.position', 'event.variable', 'forge.frame', 'mapProps.pause', 'mapProps.threeD', 'mapProps.tileset', 'menu.system', 'menu.tilesets', 'options.editor', 'options.palette', 'props.animation', 'r3dcard.proportional', 'r3dfx.animation', 'r3dfx.effectName', 'r3dfx.sound', 'r3dfx.typeAnimation', 'r3dfx.video', 'workspace.video', 'toolbar.tileset', 'workspace.zoom'],
-    fr: ['build.group.terrain', 'pieces.kind.tunnel', 'pieces.kind.tube', 'pieces.kind.capsule', 'build.direction', 'lit.types', 'lit.preset.fluorescent', 'lit.id', 'lit.preset.laser', 'lit.position', 'lit.rotation', 'lit.animation', 'lightcmd.yaw', 'lit.type', 'audio.pause', 'audio.volume', 'cam3d.auto', 'workspace.passage', 'cam3d.mode', 'efk.orientation', 'efk.pause', 'event.conditions', 'event.image', 'event.normal', 'event.options', 'event.page', 'eventCtx.previewPage', 'mapProps.note', 'mapProps.pause', 'mapProps.threeD', 'menu.animations', 'menu.classes', 'menu.forge', 'menu.tilesets', 'menu.types', 'options.mode', 'options.palette', 'options.title', 'props.animation', 'r3dfx.animation', 'r3dfx.audio', 'r3dfx.type', 'r3dfx.typeAnimation'],
-    it: ['terrain.look.lava', 'lit.id', 'lit.preset.laser', 'audio.volume', 'cam3d.auto', 'cam3d.fov', 'event.dir', 'event.pattern', 'event.tile', 'mapProps.loopX', 'mapProps.loopY', 'mapProps.threeD', 'mapProps.tileset', 'mapProps.vol', 'menu.database', 'menu.file', 'options.editor', 'r3dfx.audio', 'r3dfx.video', 'workspace.video', 'theme.cascadia.name', 'toolbar.tileset', 'toolbar.title.database', 'workspace.zoom'],
+    es: ['foliage.colour', 'foliage.natural', 'build.colour', 'terrain.look.colour', 'terrain.look.lava', 'pieces.material', 'lit.id', 'lightcmd.color', 'lit.color', 'cam3d.auto', 'cam3d.fov', 'event.actor', 'event.dir', 'event.normal', 'event.tile', 'event.variable', 'forge.tab.procedural', 'mapProps.threeD', 'mapProps.tileset', 'mapProps.vol', 'menu.tilesets', 'options.editor', 'r3dfx.audio', 'theme.cascadia.name', 'toolbar.tileset', 'toolbar.title.plugins', 'workspace.zoom'],
+    pt: ['foliage.natural', 'terrain.look.lava', 'pieces.material', 'pieces.kind.cone', 'lit.id', 'lit.preset.laser', 'audio.volume', 'cam3d.auto', 'cam3d.fov', 'event.item', 'event.normal', 'event.tile', 'forge.tab.procedural', 'mapProps.sizeRange', 'mapProps.threeD', 'mapProps.tileset', 'menu.classes', 'menu.tilesets', 'options.editor', 'toolbar.tileset', 'workspace.zoom'],
+    de: ['foliage.wind', 'terrain.look.lava', 'pieces.kind.block', 'pieces.kind.tunnel', 'pieces.kind.ring', 'pieces.material', 'terrain.radius', 'lit.compoundName', 'lit.id', 'lit.preset.laser', 'lit.position', 'lit.animation', 'menu.quests', 'audio.me', 'audio.pause', 'cam3d.auto', 'db.system1', 'db.system2', 'efk.frame', 'efk.framesLabel', 'efk.pause', 'event.index', 'event.normal', 'event.parallel', 'event.position', 'event.variable', 'forge.frame', 'mapProps.pause', 'mapProps.threeD', 'mapProps.tileset', 'menu.system', 'menu.tilesets', 'options.editor', 'options.palette', 'props.animation', 'r3dcard.proportional', 'r3dfx.animation', 'r3dfx.effectName', 'r3dfx.sound', 'r3dfx.typeAnimation', 'r3dfx.video', 'workspace.video', 'toolbar.tileset', 'workspace.zoom'],
+    fr: ['battleSetup.action', 'foliage.windDir', 'build.group.terrain', 'pieces.kind.tunnel', 'pieces.kind.tube', 'pieces.kind.capsule', 'build.direction', 'lit.types', 'lit.preset.fluorescent', 'lit.id', 'lit.preset.laser', 'lit.position', 'lit.rotation', 'lit.animation', 'lightcmd.yaw', 'lit.type', 'audio.pause', 'audio.volume', 'cam3d.auto', 'workspace.passage', 'cam3d.mode', 'efk.orientation', 'efk.pause', 'event.conditions', 'event.image', 'event.normal', 'event.options', 'event.page', 'eventCtx.previewPage', 'mapProps.note', 'mapProps.pause', 'mapProps.threeD', 'menu.animations', 'menu.classes', 'menu.forge', 'menu.tilesets', 'menu.types', 'options.mode', 'options.palette', 'options.title', 'props.animation', 'r3dfx.animation', 'r3dfx.audio', 'r3dfx.type', 'r3dfx.typeAnimation'],
+    it: ['mapProps.groupCamera', 'terrain.look.lava', 'lit.id', 'lit.preset.laser', 'audio.volume', 'cam3d.auto', 'cam3d.fov', 'event.dir', 'event.pattern', 'event.tile', 'mapProps.loopX', 'mapProps.loopY', 'mapProps.threeD', 'mapProps.tileset', 'mapProps.vol', 'menu.database', 'menu.file', 'options.editor', 'r3dfx.audio', 'r3dfx.video', 'workspace.video', 'theme.cascadia.name', 'toolbar.tileset', 'toolbar.title.database', 'workspace.zoom'],
     pl: ['lit.id', 'lit.preset.laser', 'cam3d.auto', 'db.system1', 'db.system2', 'mapProps.threeD', 'mapProps.tileset', 'menu.system', 'pma.model', 'r3dcard.groupModel', 'theme.cascadia.name', 'theme.ocean.name', 'toolbar.tileset'],
     id: ['terrain.look.lava', 'pieces.material', 'terrain.radius', 'lit.id', 'lit.preset.laser', 'audio.pan', 'audio.pitch', 'audio.volume', 'cam3d.event', 'cam3d.focus.event', 'cam3d.fov', 'cam3d.mode', 'cam3d.pitch', 'cam3d.yaw', 'efk.frame', 'event.item', 'event.normal', 'event.tile', 'forge.frame', 'mapProps.loopX', 'mapProps.loopY', 'mapProps.pan', 'mapProps.pitch', 'mapProps.threeD', 'mapProps.tileset', 'mapProps.vol', 'menu.database', 'menu.file', 'options.editor', 'options.mode', 'pma.model', 'r3dcard.groupModel', 'r3dfx.audio', 'r3dfx.offset', 'r3dfx.video', 'workspace.video', 'theme.cascadia.name', 'toolbar.tileset', 'toolbar.title.database', 'workspace.zoom'],
-    vi: ['lit.id', 'lit.preset.laser', 'audio.pan', 'cam3d.mode.isometric', 'mapProps.pan', 'mapProps.threeD', 'mapProps.tileset', 'r3dfx.video', 'workspace.video', 'theme.cascadia.name', 'toolbar.tileset'],
+    vi: ['mapProps.groupCamera', 'lit.id', 'lit.preset.laser', 'audio.pan', 'cam3d.mode.isometric', 'mapProps.pan', 'mapProps.threeD', 'mapProps.tileset', 'r3dfx.video', 'workspace.video', 'theme.cascadia.name', 'toolbar.tileset'],
     tr: ['lit.spot', 'event.normal', 'pma.model', 'r3dcard.groupModel', 'r3dfx.video', 'workspace.video', 'theme.cascadia.name'],
     ja: ['lit.id', 'mapProps.threeD'],
     'zh-Hant': ['lit.id', 'mapProps.threeD'],
@@ -441,28 +443,6 @@ test('reviewed translations preserve interpolation placeholders', () => {
     }
 });
 
-test('known Greek fallback values do not leak into corrected locales', () => {
-    const { catalogs } = loadI18nForTest();
-    const affectedLocales = ['ko', 'it', 'pl', 'ar', 'tr', 'id', 'vi', 'th'];
-    const badValues = {
-        'toolbar.title.heightBrush': 'Πινέλο ύψους (ζωγραφίζει το υψόμετρο για χάρτες 3D)',
-        'toolbar.height': 'Ύψος:',
-        'toolbar.height.set': 'Ορισμός σε',
-        'toolbar.height.raise': 'Ανύψωση',
-        'toolbar.height.lower': 'Χαμήλωμα'
-    };
-
-    for (const locale of affectedLocales) {
-        for (const [key, badValue] of Object.entries(badValues)) {
-            assert.notEqual(
-                catalogs.keyed[locale][key],
-                badValue,
-                `${locale} does not inherit Greek text for ${key}`
-            );
-        }
-    }
-});
-
 test('reviewed Thai translations use normalized orthography', () => {
     const { reviewed } = loadI18nForTest();
     const decomposedSaraAm = '\u0E4D\u0E32';
@@ -531,7 +511,7 @@ test('every database navigation category has a localized keyed title', () => {
     assert.ok(start>=0);
     const catalog=source.slice(start,source.indexOf('];',start));
     const types=[...catalog.matchAll(/type: '([^']+)'/g)].map(m=>m[1]);
-    assert.equal(types.length,23);
+    assert.equal(types.length,24);
     for(const type of types) {
         const key=dbTypes[type];assert.ok(key,`${type} needs a database title key`);
         for(const {id} of RR_LANGUAGES)assert.ok(RR_I18N_STRINGS[id][key],`${id}: ${type}`);

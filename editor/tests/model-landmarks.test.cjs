@@ -31,7 +31,10 @@ test('first-person eyes scale with tall/short models, lift and movement before m
     t.mock.method(R, 'modelHolderFor', () => holder);
     R.bindModelLandmarks(object, {});
     object.position.set(3.5, 1, 5.5); object.scale.setScalar(2);
-    assert.deepEqual(R.Camera.playerEyes(character, 2).toArray(), [4.5, 5.68, 6.95]);
+    // The model gives the height and how far out its eyes stand (0.45 here); over the ground the eye stands that
+    // far and a little ahead of the cell's middle along the look.
+    R.Camera.look.yaw = 0;
+    R.Camera.playerEyes(character, 2).toArray().forEach((v, i) => assert.ok(Math.abs(v - [4.5, 5.68, 6.5 - 0.45 - R.Camera.EYE.lead][i]) < 1e-9, 'axis ' + i));
     object.scale.setScalar(0.25);
     assert.equal(R.Camera.playerEyes(character, 2).y, 2.46);
     R.bindModelLandmarks(object, { eyes: { part: '', offset: [0.1, 1.2, 0.3] } });
@@ -54,6 +57,35 @@ test('first person keeps party models and follower billboards visible while resp
     assert.equal(R.characterHiddenByCamera(follower, true), false);
     global.$gameMap._reactorCamera3d.mode = 'thirdPerson';
     assert.equal(R.characterHiddenByCamera(player), false);
+});
+
+test('in first person a follower inside the eye\'s room is out of sight, and back once it has stepped clear', t => {
+    const oldPlayer = global.$gamePlayer, oldMap = global.$gameMap, oldFollower = global.Game_Follower;
+    global.Game_Follower = class Game_Follower { constructor(x, y) { this._realX = x; this._realY = y; } };
+    const player = { _realX: 10, _realY: 10 }, near = new global.Game_Follower(10, 11), far = new global.Game_Follower(10, 12);
+    const event = { _realX: 10, _realY: 10.5 };
+    let mode = 'firstPerson';
+    t.mock.method(R.Camera, 'currentState', () => ({ mode }));
+    global.$gamePlayer = player; global.$gameMap = { _reactorCamera3d: { mode: 'firstPerson' } };
+    t.after(() => { global.$gamePlayer = oldPlayer; global.$gameMap = oldMap; global.Game_Follower = oldFollower; });
+    assert.deepEqual([R.EYE_ROOM, R.EYE_ROOM_CLEAR], [1.2, 1.7]);
+    for (const model of [true, false]) {
+        assert.equal(R.characterHiddenByCamera(near, model), true, 'a step behind the eye');
+        assert.equal(R.characterHiddenByCamera(far, model), false, 'two steps off is seen');
+        assert.equal(R.characterHiddenByCamera(event, model), false, 'an event is never hidden: it is who the player talks to');
+    }
+    // Hidden, it stays so until it is past the wider ring; seen, it stays so until it is inside the room.
+    near._realY = 11.5;
+    assert.equal(R.characterHiddenByCamera(near, true), true, 'at the edge it does not flicker');
+    far._realY = 11.5;
+    assert.equal(R.characterHiddenByCamera(far, true), false);
+    near._realY = 11.8;
+    assert.equal(R.characterHiddenByCamera(near, true), false, 'clear of the room');
+    near._realY = 11.5;
+    assert.equal(R.characterHiddenByCamera(near, true), false);
+    // From behind the player nothing is hidden for the eye's sake.
+    near._realY = 11; mode = 'thirdPerson'; global.$gameMap._reactorCamera3d.mode = 'thirdPerson';
+    assert.equal(R.characterHiddenByCamera(near, true), false);
 });
 
 test('face points save and reopen without changing an imported/custom rig or carved parts', t => {

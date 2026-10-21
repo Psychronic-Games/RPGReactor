@@ -73,6 +73,7 @@
        they are neutral, and Dark is the default. */
     --color-model-preview-bg:     #1a1a1e;
     --color-asset-preview-bg:     #24272d;
+    --color-tileset-checker-primary: #808080; /* the palette's own grey in every theme: the code-comment color is green in the light ones */
     --color-tileset-checker-secondary: var(--color-text-muted);
     --color-preview-backdrop:     #c8c8c8;
 
@@ -1825,6 +1826,10 @@ input[type="number"]::-webkit-outer-spin-button {
 .rr-number-stepper-auto:has(> input[hidden], > input[style*="display: none"], > input[style*="display:none"]) {
     display: none;
 }
+/* The same for a themed dropdown: hiding the select hides its trigger. */
+.rr-shim-wrapper:has(> select[hidden]) {
+    display: none !important;
+}
 .rr-number-stepper-auto .rr-number-stepper-input {
     padding: 4px 6px;
     font-size: inherit;
@@ -3167,95 +3172,209 @@ input[type="number"]::-webkit-outer-spin-button {
     display: none;
     z-index: 10600;
 }
+/* The switch and variable window: a short list to pick from. Its backdrop is light, so the dialog or the
+ * panel it was opened from stays readable behind it; its head, field, rows and scrollbars are the ones the
+ * editor's other pickers and docked panels wear. */
+.switch-variable-picker-modal {
+    background: rgba(0, 0, 0, 0.5);
+}
 .rr-switch-variable-picker {
-    width: min(700px, calc(100vw - 32px));
-    height: min(650px, 82vh);
+    width: min(440px, calc(100vw - 32px));
+    height: min(580px, 84vh);
     overflow: hidden;
+    background: var(--color-bg-surface);
+}
+.rr-switch-variable-picker .rr-modal-header {
+    flex: 0 0 auto;
+    padding: 8px 12px;
+}
+.rr-switch-variable-picker .rr-modal-title {
+    font-size: var(--font-size-base);
+}
+.rr-switch-variable-picker .rr-modal-close:focus-visible,
+.rr-switch-variable-picker .rr-modal-footer button:focus-visible {
+    outline: 2px solid var(--color-accent-bright);
+    outline-offset: 2px;
+}
+.rr-switch-variable-picker .rr-modal-footer {
+    flex: 0 0 auto;
+    align-items: center;
+    padding: 8px 12px;
+}
+.rr-picker-find {
+    position: relative;
+    flex: 0 0 auto;
+    margin: 8px 10px;
+}
+.rr-switch-variable-picker .rr-picker-find-input {
+    width: 100%;
+    height: 28px;
+    box-sizing: border-box;
+    padding: 0 30px 0 10px;
+    color: var(--color-text-strong);
+    background: var(--color-bg-input);
+    border: 1px solid var(--color-border-input);
+    border-radius: var(--radius-md);
+    font: inherit;
+    font-size: var(--font-size-base);
+    outline: 0;
+    transition: border-color var(--ease-base), box-shadow var(--ease-base);
+}
+.rr-switch-variable-picker .rr-picker-find-input:focus {
+    border-color: var(--color-accent-border-strong);
+    box-shadow: 0 0 0 1px var(--color-accent-tint-25);
+}
+.rr-switch-variable-picker .rr-picker-find-input::placeholder {
+    color: var(--color-text-dim);
+}
+.rr-picker-find-clear {
+    position: absolute;
+    top: 50%;
+    right: 4px;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    transform: translateY(-50%);
+    color: var(--color-text-muted);
+    background: none;
+    border: 0;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 16px;
+    line-height: 1;
+}
+.rr-picker-find-clear:hover,
+.rr-picker-find-clear:focus-visible {
+    color: var(--color-accent-bright);
+    outline: none;
+}
+.rr-picker-find-clear[hidden] {
+    display: none;
 }
 .rr-picker-workspace {
     display: grid;
-    grid-template-columns: 112px minmax(0, 1fr);
+    grid-template-columns: 76px minmax(0, 1fr);
     flex: 1;
     min-height: 0;
     background: var(--color-bg-surface);
+    border-top: 1px solid var(--color-border);
+}
+/* One range is the whole list: no rail. */
+.rr-picker-workspace.is-single-range {
+    grid-template-columns: minmax(0, 1fr);
+}
+.rr-picker-workspace.is-single-range > .rr-picker-tabs {
+    display: none;
+}
+/* Ranges of four digits a side ("1201-1250") need a wider rail to stand on one line each. */
+.rr-picker-workspace.is-wide {
+    grid-template-columns: 94px minmax(0, 1fr);
 }
 .rr-picker-tabs {
     display: flex;
     flex-direction: column;
-    gap: 3px;
+    gap: 2px;
     min-height: 0;
-    padding: 8px;
+    padding: 4px;
     overflow-y: auto;
-    background: var(--color-bg-panel);
+    background: var(--color-bg-list-item);
     border-right: 1px solid var(--color-border);
 }
 .rr-picker-range-tab {
-    min-height: 31px;
-    padding: 5px 8px;
+    flex: 0 0 auto;
+    min-height: 24px;
+    padding: 3px 4px;
     color: var(--color-text-muted);
-    background: var(--color-bg-deep);
-    border: 1px solid var(--color-border-subtle);
-    border-radius: var(--radius-sm);
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--radius-md);
     cursor: pointer;
+    font: inherit;
     font-size: var(--font-size-sm);
     font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+    white-space: nowrap;
 }
 .rr-picker-range-tab:hover {
-    color: var(--color-accent-bright);
-    border-color: var(--color-accent-border);
+    color: var(--color-text-strong);
+    background: color-mix(in srgb, var(--color-bg-hover) 45%, var(--color-bg-list-item));
 }
 .rr-picker-range-tab.is-active {
-    color: var(--color-accent-on);
-    background: var(--color-accent);
+    color: var(--color-text-strong);
+    background: var(--color-bg-selected);
     border-color: var(--color-accent);
+}
+.rr-picker-range-tab:focus-visible {
+    outline: 2px solid var(--color-accent-bright);
+    outline-offset: -2px;
 }
 .rr-picker-list {
     min-height: 0;
-    padding: 8px;
+    padding: 4px;
     overflow-y: auto;
-    background: var(--color-bg-base);
+    background: var(--color-bg-surface);
 }
+/* Every row is one height: the range in view is worked out from the scroll. */
 .rr-picker-item {
     display: grid;
-    grid-template-columns: 62px minmax(0, 1fr);
+    grid-template-columns: 38px minmax(0, 1fr);
     gap: 10px;
     align-items: center;
-    min-height: 31px;
-    padding: 4px 10px;
-    color: var(--color-text);
-    background: var(--color-bg-list-item);
-    border: 0;
-    border-left: 3px solid transparent;
-    cursor: pointer;
-    font-family: inherit;
-    font-size: var(--font-size-base);
-    text-align: left;
     width: 100%;
+    height: 26px;
+    box-sizing: border-box;
+    padding: 0 8px;
+    color: var(--color-text);
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    font: inherit;
+    font-size: var(--font-size-base);
+    text-align: start;
 }
-.rr-picker-item:nth-child(even) {
-    background: var(--color-bg-list-item-alt);
+.rr-picker-item[hidden] {
+    display: none;
 }
+/* The row under the pointer is a quiet tone, well apart from the chosen row's in a light theme as in a dark one. */
 .rr-picker-item:hover {
     color: var(--color-text-strong);
-    background: var(--color-accent-tint-10);
+    background: color-mix(in srgb, var(--color-bg-hover) 45%, var(--color-bg-surface));
 }
 .rr-picker-item.is-selected {
     color: var(--color-text-strong);
-    background: var(--color-accent-tint-15);
-    border-left-color: var(--color-accent-bright);
+    background: var(--color-bg-selected);
+    border-color: var(--color-accent);
+}
+.rr-picker-item:focus-visible {
+    outline: 2px solid var(--color-accent-bright);
+    outline-offset: -2px;
 }
 .rr-picker-id {
-    color: var(--color-text-muted);
-    font-family: var(--font-mono);
+    color: inherit;
     font-size: var(--font-size-sm);
     font-weight: 600;
-    text-align: right;
+    font-variant-numeric: tabular-nums;
+    opacity: 0.62;
 }
-.rr-picker-item > span:last-child {
+.rr-picker-item.is-selected > .rr-picker-id {
+    opacity: 0.85;
+}
+.rr-picker-name {
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+.rr-picker-empty {
+    padding: 14px 10px;
+    color: var(--color-text-muted);
+    font-size: var(--font-size-base);
+    text-align: center;
+}
+.rr-picker-empty[hidden] {
+    display: none;
 }
 .rr-picker-footer-status {
     margin-right: auto;
@@ -3277,7 +3396,10 @@ input[type="number"]::-webkit-outer-spin-button {
         grid-template-columns: minmax(0, 1fr);
     }
     .rr-picker-workspace {
-        grid-template-columns: 92px minmax(0, 1fr);
+        grid-template-columns: 64px minmax(0, 1fr);
+    }
+    .rr-picker-workspace.is-wide {
+        grid-template-columns: 86px minmax(0, 1fr);
     }
 }
 @media (max-width: 480px) {

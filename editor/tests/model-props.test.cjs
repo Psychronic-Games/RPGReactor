@@ -271,3 +271,37 @@ test('a right-click or Escape lets go of the selected model, in 3D and on the fl
     assert.equal((i18n.match(/'props\.hintPlace': '/g) || []).length, 18);
     assert.match(i18n, /'props\.hintPlace': 'Click the map to place it\. Click a placed model to select it, drag to move, Delete to remove, right-click or Esc to deselect\.'/);
 });
+
+test('a model grows under the pointer while its size handle is dragged', () => {
+    const view = fs.readFileSync(path.join(editorRoot, 'src', 'MapEditor3D.js'), 'utf8');
+    const source = view.match(/\n    dragPropSize\(state, clientX, clientY\) \{[\s\S]*?\n    \}\n/);
+    assert.ok(source, 'dragPropSize is in MapEditor3D.js');
+    const drag = new Function('return function ' + source[0].trim())();
+    const prop = { id: 7, size: 2, scale: 1.5 };
+    const calls = [];
+    const editor = {
+        propSizeHandle: { userData: { reach: 1.54 } },
+        propsManager: () => ({
+            currentMap: {},
+            elevation: () => ({ updateProp: (map, id, patch) => Object.assign(prop, patch) }),
+            prop: () => prop,
+            _syncCard: () => calls.push('card')
+        }),
+        propObject: () => ({ name: 'model' }),
+        poseProp(object, posed) { calls.push(['pose', posed.size, posed.scale]); },
+        placeProp() { calls.push('place'); },
+        syncPropRings() { calls.push('rings'); },
+        requestRender() { calls.push('render'); }
+    };
+    // Pulled out by half the handle's reach: half as large again.
+    drag.call(editor, { id: 7, startSize: 3, start: 0, reach: 2, travel: () => 1 }, 0, 0);
+    assert.deepEqual(calls[0], ['pose', 4.5, 1], 'the model is scaled, not only placed');
+    assert.ok(!calls.includes('place'), 'placing alone would leave it its old size until the drag ends');
+    assert.ok(calls.includes('rings') && calls.includes('render') && calls.includes('card'));
+    assert.ok(Math.abs(editor.propSizeHandle.userData.reach - (4.5 * 0.6 + 0.2) * 1.1) < 1e-9, 'the handle stays on the corner of the grown model');
+    assert.equal(editor._propMoved, true);
+    // A pointer that left the handle's line changes nothing.
+    calls.length = 0;
+    drag.call(editor, { id: 7, startSize: 3, start: 0, reach: 2, travel: () => null }, 0, 0);
+    assert.deepEqual(calls, []);
+});

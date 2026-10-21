@@ -21,6 +21,7 @@ const zlib = require('node:zlib');
 const A = require('./RgssArchive.js');
 const M = require('./RubyMarshal.js');
 const C = require('./RgssConvert.js');
+const KL = require('./KeyedLocalization.js');
 
 /** The script sections every VX Ace project starts with; anything else is the game's own. */
 const STOCK_SCRIPTS = new Set(['Vocab', 'Sound', 'Cache', 'DataManager', 'SceneManager', 'BattleManager', 'Game_Temp', 'Game_System', 'Game_Timer', 'Game_Message', 'Game_Switches', 'Game_Variables', 'Game_SelfSwitches', 'Game_Screen', 'Game_Picture', 'Game_Pictures', 'Game_BaseItem', 'Game_Action', 'Game_ActionResult', 'Game_BattlerBase', 'Game_Battler', 'Game_Actor', 'Game_Enemy', 'Game_Actors', 'Game_Unit', 'Game_Party', 'Game_Troop', 'Game_Map', 'Game_CommonEvent', 'Game_CharacterBase', 'Game_Character', 'Game_Player', 'Game_Follower', 'Game_Followers', 'Game_Vehicle', 'Game_Event', 'Game_Interpreter', 'Sprite_Base', 'Sprite_Character', 'Sprite_Battler', 'Sprite_Picture', 'Sprite_Timer', 'Spriteset_Weather', 'Spriteset_Map', 'Spriteset_Battle', 'Window_Base', 'Window_Selectable', 'Window_Command', 'Window_HorzCommand', 'Window_Help', 'Window_Gold', 'Window_MenuCommand', 'Window_MenuStatus', 'Window_MenuActor', 'Window_ItemCategory', 'Window_ItemList', 'Window_SkillCommand', 'Window_SkillStatus', 'Window_SkillList', 'Window_EquipStatus', 'Window_EquipCommand', 'Window_EquipSlot', 'Window_EquipItem', 'Window_Status', 'Window_SaveFile', 'Window_ShopCommand', 'Window_ShopBuy', 'Window_ShopSell', 'Window_ShopNumber', 'Window_ShopStatus', 'Window_NameEdit', 'Window_NameInput', 'Window_ChoiceList', 'Window_NumberInput', 'Window_KeyItem', 'Window_Message', 'Window_ScrollText', 'Window_MapName', 'Window_BattleLog', 'Window_PartyCommand', 'Window_ActorCommand', 'Window_BattleStatus', 'Window_BattleActor', 'Window_BattleEnemy', 'Window_BattleSkill', 'Window_BattleItem', 'Window_TitleCommand', 'Window_GameEnd', 'Window_DebugLeft', 'Window_DebugRight', 'Scene_Base', 'Scene_Title', 'Scene_Map', 'Scene_MenuBase', 'Scene_Menu', 'Scene_ItemBase', 'Scene_Item', 'Scene_Skill', 'Scene_Equip', 'Scene_Status', 'Scene_File', 'Scene_Save', 'Scene_Load', 'Scene_End', 'Scene_Shop', 'Scene_Name', 'Scene_Debug', 'Scene_Battle', 'Scene_Gameover', 'Main']);
@@ -59,6 +60,21 @@ function repairName(name) {
     return kana >= 3 || (kana >= 1 && (telltale || paired)) || (kana >= 2 && alternating) ? decoded : name;
 }
 const repairPath = (rel) => rel.split('/').map(repairName).join('/');
+
+/**
+ * Game.ini's text. The editor wrote it in the Windows code page it ran under: UTF-8 when the
+ * bytes are valid UTF-8, Shift_JIS when they read as Japanese, Windows-1252 otherwise.
+ */
+function iniText(bytes) {
+    if (!bytes || !bytes.length) return '';
+    const decode = (name) => { try { return new TextDecoder(name, { fatal: true }).decode(bytes); } catch (_) { return null; } };
+    if (!bytes.some(b => b >= 0x80)) return Buffer.from(bytes).toString('latin1');
+    const utf8 = decode('utf-8');
+    if (utf8 !== null) return utf8;
+    const sjis = decode('shift_jis');
+    if (sjis !== null && !/[^\x00-\x7f\u3000-\u30ff\u3400-\u9fff\uff00-\uffef]/.test(sjis) && (sjis.match(/[\u3040-\u30ff\u3400-\u9fff]/g) || []).length >= 2) return sjis;
+    return new TextDecoder('windows-1252').decode(bytes);
+}
 
 /** A game folder and its archive, read as one tree; the archive wins, as in the engine. */
 function source(folder) {
@@ -109,7 +125,7 @@ function source(folder) {
  * from the scripts' own settings. `read(relativePath)` hands a settings reader
  * a file the game shipped (bytes, or null). Returns the installed entries.
  */
-function installPlugins(dest, families, constants, scriptTexts, skipped, log, read = () => null) {
+function installPlugins(dest, families, constants, scriptTexts, skipped, log, read = () => null, list = () => []) {
     const mkdir = (p) => fs.mkdirSync(p, { recursive: true });
     const installed = [];
     const wanted = [];
@@ -141,7 +157,7 @@ function installPlugins(dest, families, constants, scriptTexts, skipped, log, re
         const extractor = path.join(__dirname, 'plugins', family.name + '.params.js');
         let parameters = family.parameters ? family.parameters(constants) : {};
         if (fs.existsSync(extractor)) {
-            try { parameters = Object.assign(parameters, require(extractor).extract({ scripts: scriptTexts, constants, read })); }
+            try { parameters = Object.assign(parameters, require(extractor).extract({ scripts: scriptTexts, constants, read, list })); }
             catch (error) { skipped.push(`${family.name}: settings could not be read from the game's script (${error.message}); defaults used`); }
         }
         installed.push({ name: family.name, status: true, description, parameters });
@@ -312,6 +328,8 @@ function open(folder, destination, options) {
     // Main starts the game loop and never returns, so the sections after it never run.
     const mainAt = scripts.findIndex(s => s.name.trim() === 'Main');
     const active = mainAt >= 0 ? scripts.slice(0, mainAt) : scripts;
+    // Settings the game makes before its first scene (screen size, default font) can be in Main itself.
+    const settingsScripts = (mainAt >= 0 ? scripts.slice(0, mainAt + 1) : scripts).map(s => s.text);
     const custom = active.filter(s => s.text.trim() && !STOCK_SCRIPTS.has(s.name));
     const mapIds = (infos instanceof Map ? Array.from(infos.keys()) : Object.keys(infos)).map(Number).filter(n => n > 0).sort((a, b) => a - b);
     const title = String(system.game_title || '') || path.basename(folder);
@@ -332,10 +350,9 @@ function open(folder, destination, options) {
         const log = typeof options.log === 'function' ? options.log : () => {};
         const report = typeof options.progress === 'function' ? options.progress : () => {};
         const span = (from, to) => (done, total, status) => report(from + (to - from) * (total ? Math.min(1, done / total) : 1), status);
-        const repo = path.resolve(__dirname, '..', '..', '..');
-        const editorPackage = JSON.parse(fs.readFileSync(path.join(repo, 'editor', 'package.json'), 'utf8'));
-        const skeleton = path.join(repo, 'template', 'Barebones');
-        const runtime = path.join(repo, 'runtime');
+        const EditorPaths = require('./EditorPaths.js');
+        const editorPackage = EditorPaths.editorPackage();
+        const runtime = EditorPaths.runtime();
         const dest = path.resolve(destination);
         const mkdir = (p) => fs.mkdirSync(p, { recursive: true });
         const writeJson = (p, v) => fs.writeFileSync(p, JSON.stringify(v));
@@ -349,22 +366,23 @@ function open(folder, destination, options) {
 
         log('Copying the project skeleton and runtime…', 'stage');
         report(0, 'Copying the project skeleton and runtime…');
-        const copyTree = (from, to, skip = () => false) => {
+        const copyTree = (from, to) => {
             for (const entry of fs.readdirSync(from, { withFileTypes: true })) {
                 const s = path.join(from, entry.name), d = path.join(to, entry.name);
-                if (skip(path.relative(skeleton, s).replace(/\\/g, '/'))) continue;
-                if (entry.isDirectory()) { mkdir(d); copyTree(s, d, skip); } else { mkdir(path.dirname(d)); fs.copyFileSync(s, d); }
+                if (entry.isDirectory()) { mkdir(d); copyTree(s, d); } else { mkdir(path.dirname(d)); fs.copyFileSync(s, d); }
             }
         };
-        copyTree(skeleton, dest, r => (r === 'img' || r === 'img/system' || r.startsWith('img/system/')) ? false : r.startsWith('img/') || r.startsWith('audio/') || r.startsWith('js/'));
+        EditorPaths.copySkeleton(dest, r => r.startsWith('js/'));
         mkdir(path.join(dest, 'js'));
         copyTree(runtime, path.join(dest, 'js'));
-        if (fs.existsSync(path.join(skeleton, 'js', 'reactor_plugins.js'))) fs.copyFileSync(path.join(skeleton, 'js', 'reactor_plugins.js'), path.join(dest, 'js', 'reactor_plugins.js'));
+        fs.copyFileSync(EditorPaths.skeletonFile('js/reactor_plugins.js'), path.join(dest, 'js', 'reactor_plugins.js'));
         for (const f of [...Object.values(GRAPHICS), ...Object.values(AUDIO), 'img/sv_actors', 'img/sv_enemies', 'movies']) mkdir(path.join(dest, f));
 
         log('Converting the database…', 'stage');
         report(0.05, 'Converting the database…');
-        const constants = C.scriptConstants(custom.map(s => s.text));
+        // Constants and families from every section: a game may carry its own code inside a stock one.
+        const familyTexts = active.map(s => s.text);
+        const constants = C.scriptConstants(familyTexts);
         // What the game's message scripts add, so their text codes convert (see RgssConvert.messageText).
         const scriptText = custom.map(s => s.text).join('\n');
         const messageCodes = {
@@ -373,7 +391,7 @@ function open(folder, destination, options) {
             messageFace: /Message Face Control|message_face_control/i.test(scriptText)
         };
         const nameTable = (records) => { const out = []; for (const r of records || []) if (r && r.id) out[r.id] = { name: String(r.name || ''), icon: Number(r.icon_index) || 0 }; return out; };
-        const families = C.scriptFamilies(custom.map(s => s.text));
+        const families = C.scriptFamilies(familyTexts);
         // VX Ace's own window layouts and drawing, which the script ports build on: installed first.
         // The buff icons' first numbers, where the game's own Game_BattlerBase moved them.
         const baseText = (active.find(x => x.name === 'Game_BattlerBase') || {}).text || '';
@@ -389,7 +407,7 @@ function open(folder, destination, options) {
         { const n = applyLargeTroops(db, scriptText); if (n) add(notes, 'largeTroops', n); }
         const files = { Actors: db.actors, Classes: db.classes, Skills: db.skills, Items: db.items, Weapons: db.weapons, Armors: db.armors, Enemies: db.enemies, Troops: db.troops, States: db.states, Animations: db.animations, CommonEvents: db.commonEvents, Tilesets: db.tilesets };
         for (const [file, records] of Object.entries(files)) writeJson(path.join(dest, 'data', `${file}.json`), records);
-        const base = JSON.parse(fs.readFileSync(path.join(skeleton, 'data', 'System.json'), 'utf8'));
+        const base = JSON.parse(fs.readFileSync(EditorPaths.skeletonFile('data/System.json'), 'utf8'));
         const sys = aliased(C.system(base, system, notes));
         const vocab = scripts.find(s => s.name === 'Vocab');
         if (vocab) Object.assign(sys.terms.messages, C.vocabMessages(vocab.text));
@@ -397,7 +415,7 @@ function open(folder, destination, options) {
         // would find: a shipped file, or a Windows font every player had (Arial), drawn by that CSS family.
         // Ace's own default is VL Gothic.
         const fonts = src.files('Fonts').filter(f => /\.(ttf|otf|woff2?)$/i.test(f));
-        const fontSettings = C.fontDefaults(active.map(s => s.text), constants);
+        const fontSettings = C.fontDefaults(settingsScripts, constants);
         const chosen = C.chooseFont(fontSettings.name, fonts) || C.chooseFont(['VL Gothic'], fonts);
         if (fonts.length) {
             mkdir(path.join(dest, 'fonts'));
@@ -432,7 +450,7 @@ function open(folder, destination, options) {
 
         if (custom.some(s => /\$imported\[:ve_multi_frames\]/.test(s.text))) { sys.rrMultiFrames = true; add(notes, 'multiFrames'); }
         // The screen the game's scripts resized to (most Ace games run at 640×480 through one).
-        const screen = C.screenSize(active.map(s => s.text), constants) || [544, 416];
+        const screen = C.screenSize(settingsScripts, constants) || [544, 416];
         Object.assign(sys.advanced, { screenWidth: screen[0], screenHeight: screen[1], uiAreaWidth: screen[0], uiAreaHeight: screen[1] });
         if (fontSettings.outline === false) sys.advanced.textOutlineWidth = 0;
         // Shadowed text without an outline (Font.default_shadow): the runtime's 1 px drop shadow stands in for the outline.
@@ -448,6 +466,10 @@ function open(folder, destination, options) {
         // Theo's Skip Missing Resources: a file the game names but lacks is skipped instead of stopping the game.
         if (/\[:Theo_SkipResource\]/.test(scriptText)) Object.assign(sys, { rrSkipMissingAudio: true, rrSkipMissingImages: true });   // rows one line tall, the map name through messages, no touch buttons, A/S/D as the X/Y/Z buttons
         sys.rrRgssFades = true;   // Ace's 30-frame fades, and the black held 15 frames on a transfer
+        // RGSS shows its screen 1:1 and zooms sprites without smoothing: open at a whole-number scale and enlarge
+        // with hard pixel edges, so text and window frames stay sharp.
+        sys.advanced.screenScale = C.windowScale(sys.advanced.screenWidth, sys.advanced.screenHeight);
+        sys.advanced.pixelatedRendering = true;
         writeJson(path.join(dest, 'data', 'System.json'), sys);
 
         log(`Writing ${mapIds.length} maps and their events…`, 'stage');
@@ -486,13 +508,17 @@ function open(folder, destination, options) {
         log('Copying graphics, audio and movies…', 'stage');
         const graphicsFolders = src.folders('Graphics');
         const plan = [];
+        // The engine asks for name + ".png" / ".ogg"; an upper-case extension (wait1.PNG) only loads on a
+        // case-insensitive disk, so it is written lower-case.
+        const lowerExt = (f) => f.replace(/\.[A-Za-z0-9]+$/, (e) => e.toLowerCase());
+        const rgssFrames = [];   // skins whose frame cell was kept (RGSS frames repeat their edges)
         for (const folderName of graphicsFolders) {
             const target = GRAPHICS[Object.keys(GRAPHICS).find(k => k.toLowerCase() === folderName.toLowerCase())] || ('img/' + folderName);
             if (!GRAPHICS[folderName]) add(notes, 'scriptGraphicsFolder');
-            for (const f of src.files('Graphics/' + folderName)) plan.push(['Graphics/' + folderName + '/' + f, path.join(target, f), folderName]);
+            for (const f of src.files('Graphics/' + folderName)) plan.push(['Graphics/' + folderName + '/' + f, path.join(target, lowerExt(f)), folderName]);
         }
-        for (const [folderName, target] of Object.entries(AUDIO)) for (const f of src.files('Audio/' + folderName)) plan.push(['Audio/' + folderName + '/' + f, path.join(target, f), folderName]);
-        for (const f of src.files('Movies')) plan.push(['Movies/' + f, path.join('movies', f), 'Movies']);
+        for (const [folderName, target] of Object.entries(AUDIO)) for (const f of src.files('Audio/' + folderName)) plan.push(['Audio/' + folderName + '/' + f, path.join(target, lowerExt(f)), folderName]);
+        for (const f of src.files('Movies')) plan.push(['Movies/' + f, path.join('movies', lowerExt(f)), 'Movies']);
         const assetProgress = span(0.4, 1);
         plan.forEach(([from, to, bucket], index) => {
             if (index % 10 === 0) assetProgress(index, plan.length, `${bucket}: ${path.basename(from)}`);
@@ -504,30 +530,50 @@ function open(folder, destination, options) {
             let out = path.join(dest, repairPath(to.replace(/\\/g, '/')));
             mkdir(path.dirname(out));
             out = systemTwin(out, () => add(notes, 'systemFileCase'));
-            if (/^Graphics\/System\/Window\.png$/i.test(from)) {
+            // Ace's skins (Window.png and the others a game's scripts switch to, any 128 × 128 Window… in System)
+            // in MZ's layout, each with its frame cell beside it for RGSS's repeating edges.
+            if (/^Graphics\/System\/Window[^/]*\.png$/i.test(from)) {
                 try {
-                    const skin = PNG.sync.read(bytes), baseFile = path.join(skeleton, 'img', 'system', 'Window.png');
+                    const skin = PNG.sync.read(bytes), baseFile = EditorPaths.skeletonFile('img/system/Window.png');
+                    if (skin.width !== 128 || skin.height !== 128) throw Object.assign(new Error('not a skin'), { notSkin: true });
                     const baseImg = fs.existsSync(baseFile) ? PNG.sync.read(fs.readFileSync(baseFile)) : null;
                     const rgba = (png) => ({ width: png.width, height: png.height, data: new Uint8Array(png.data.buffer, png.data.byteOffset, png.data.length) });
-                    const converted = C.windowSkin(rgba(skin), baseImg ? rgba(baseImg) : null);
-                    const png = new PNG({ width: converted.width, height: converted.height });
-                    png.data = Buffer.from(converted.data.buffer, converted.data.byteOffset, converted.data.length);
-                    fs.writeFileSync(out, PNG.sync.write(png));
+                    const write = (file, img) => { const png = new PNG({ width: img.width, height: img.height }); png.data = Buffer.from(img.data.buffer, img.data.byteOffset, img.data.length); fs.writeFileSync(file, PNG.sync.write(png)); };
+                    write(out, C.windowSkin(rgba(skin), baseImg ? rgba(baseImg) : null));
+                    write(out.replace(/\.png$/i, '_frame.png'), C.frameCell(rgba(skin), 64));
+                    rgssFrames.push(path.basename(out).replace(/\.png$/i, ''));
                     add(images, bucket);
                     return;
-                } catch (error) { skipped.push(`${from}: window skin ${error.message}`); }
+                } catch (error) { if (!error.notSkin) skipped.push(`${from}: window skin ${error.message}`); }
             }
             fs.writeFileSync(out, bytes);
             add(images, bucket);
         });
 
+        if (rgssFrames.length) {
+            const sysFile = path.join(dest, 'data', 'System.json');
+            const sysNow = JSON.parse(fs.readFileSync(sysFile, 'utf8'));
+            sysNow.rrRgssFrames = rgssFrames;
+            writeJson(sysFile, sysNow);
+        }
         copyAliasedAudio(dest, aliases);
         { const n = require('./ProjectFiles.js').copyAcrossAudio(dest); if (n) add(notes, 'audioCopiedAcross', n); }
         { const n = matchFileCase(dest); if (n) add(notes, 'fileNameCase', n); }
         { const n = require('./ProjectFiles.js').raisePictureLimit(dest); if (n) add(notes, 'pictureLimitRaised', n); }
         { const n = require('./ProjectFiles.js').clearMissingSystemFiles(dest); if (n) add(notes, 'systemFileCleared', n); }
         { const n = writeFamilyQuests(dest, families, custom.map(s => s.text), constants); if (n) add(notes, 'questsImported', n); }
-        const installed = installPlugins(dest, families, constants, custom.map(s => s.text), skipped, log, (rel) => src.read(rel));
+        // A game that keeps its text in Local/<Language>.csv files under keys: the chosen language goes into the data.
+        if (KL.usedBy(familyTexts)) {
+            const langs = KL.languages((dir) => src.files(dir));
+            if (langs.length) {
+                const language = langs.find(l => l.toLowerCase() === String(options.language || '').toLowerCase()) || KL.shippedLanguage((rel) => src.read(rel), M, langs, familyTexts);
+                log(`Writing the ${language} text into the data…`, 'stage');
+                const n = KL.bakeProject(dest, KL.load(language, (rel) => src.read(rel), (dir) => src.files(dir)), fs);
+                add(notes, 'keyedTextResolved', n);
+                families.extraPlugins = (families.extraPlugins || []).concat([{ name: 'RR_KeyedLocalization', parameters: () => ({ language }) }]);
+            }
+        }
+        const installed = installPlugins(dest, families, constants, familyTexts, skipped, log, (rel) => src.read(rel), (dir) => src.files(dir));
 
         // The game's own Ruby, kept beside the project for whoever ports it by hand.
         if (custom.length) {
@@ -538,10 +584,10 @@ function open(folder, destination, options) {
 
         // Identity.
         const pkg = JSON.parse(fs.readFileSync(path.join(dest, 'package.json'), 'utf8'));
-        pkg.name = 'rr-' + title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+        pkg.name = require('./ProjectFiles.js').packageName(title);
         pkg.version = editorPackage.version;
         const [sw, sh] = [sys.advanced.screenWidth, sys.advanced.screenHeight];
-        const [ww, wh] = [Math.round(sw * 1.5), Math.round(sh * 1.5)];
+        const [ww, wh] = [sw * sys.advanced.screenScale, sh * sys.advanced.screenScale];
         pkg.window = Object.assign({}, pkg.window, { title, width: ww, height: wh, min_width: sw, min_height: sh });
         pkg['chromium-args'] = `--force-color-profile=srgb --window-size=${ww},${wh}`;
         writeJson(path.join(dest, 'package.json'), pkg);
@@ -576,4 +622,4 @@ function open(folder, destination, options) {
 function report(folder, options) { return open(folder, null, options).inventory(); }
 function importProject(folder, destination, options) { return open(folder, destination, options).importProject(); }
 
-module.exports = { open, report, importProject, source, installPlugins, applyParamTables, applyLargeTroops, systemTwin, writeFamilyQuests, copyAliasedAudio, matchFileCase, repairName, repairPath, STOCK_SCRIPTS, GRAPHICS, AUDIO };
+module.exports = { open, report, importProject, source, installPlugins, applyParamTables, applyLargeTroops, systemTwin, writeFamilyQuests, copyAliasedAudio, matchFileCase, repairName, repairPath, iniText, STOCK_SCRIPTS, GRAPHICS, AUDIO };

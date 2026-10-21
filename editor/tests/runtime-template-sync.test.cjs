@@ -41,7 +41,15 @@ function bundledProjects() {
     return fs.readdirSync(templateRoot, { withFileTypes: true })
         .filter(entry => entry.isDirectory())
         .map(entry => entry.name)
-        .filter(name => fs.existsSync(path.join(templateRoot, name, 'js')));
+        .filter(name => fs.existsSync(path.join(templateRoot, name, 'js')))
+        // As sync-runtime: a project still booting RPG Maker's corescript keeps its own js/.
+        .filter(name => {
+            try {
+                return /js\/reactor_main\.js/.test(fs.readFileSync(path.join(templateRoot, name, 'index.html'), 'utf8'));
+            } catch (error) {
+                return fs.existsSync(path.join(templateRoot, name, 'js', 'reactor_main.js'));
+            }
+        });
 }
 
 test('every bundled project carries the current runtime', () => {

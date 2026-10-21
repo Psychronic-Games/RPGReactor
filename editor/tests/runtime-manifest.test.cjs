@@ -73,6 +73,64 @@ test('MV compatibility loads before the plugin configuration', () => {
     assert.ok(compatIndex < pluginsIndex, 'MV compatibility loads before plugin setup');
 });
 
+test('the vehicle files boot where each must: the 3D pair with the 3D runtime, the five game files after every file they wrap', () => {
+    const { scripts } = readRuntimeManifest(path.join(runtimeRoot, 'reactor_main.js'));
+    const at = name => scripts.indexOf('js/' + name);
+
+    // The two 3D extensions follow the last 3D file before them, in the order the core names them: the
+    // vehicle file wraps the model readers, and the rider's pass runs outside the vehicle's.
+    assert.equal(at('reactor_3d_vehicles.js'), at('reactor_3d_surround.js') + 1, 'reactor_3d_vehicles.js boots straight after reactor_3d_surround.js');
+    assert.equal(at('reactor_3d_rider.js'), at('reactor_3d_vehicles.js') + 1, 'reactor_3d_rider.js boots straight after reactor_3d_vehicles.js');
+
+    // The four game files boot back to back, in this order, and no file reads a later one at load time.
+    const first = at('reactor_vehicles.js');
+    assert.ok(first >= 0, 'reactor_vehicles.js is in the manifest');
+    assert.deepEqual(scripts.slice(first, first + 5),
+        ['js/reactor_vehicles.js', 'js/reactor_vehicles_drive.js', 'js/reactor_vehicles_feel.js', 'js/reactor_vehicles_hints.js', 'js/reactor_vehicles_mount.js']);
+    // After everything they wrap: the map's objects and the followers, the physics, every battle file
+    // (a battle's start is wrapped outermost, and the ride's camera is laid over the battle drivers').
+    const battle = scripts.filter(url => /^js\/reactor_fight(_[a-z]+)?\.js$/.test(url));
+    assert.ok(battle.length >= 8, 'the battle files are in the manifest');
+    for (const wrapped of battle.map(url => url.slice(3)).concat(['reactor_objects_map.js', 'reactor_objects_interpreter.js', 'reactor_objects_followers.js',
+        'reactor_scenes.js', 'reactor_sprites.js', 'reactor_physics.js', 'reactor_controls.js', 'reactor_battle_presentation.js'])) {
+        assert.ok(at(wrapped) >= 0 && at(wrapped) < first, `${wrapped} boots before the vehicle files`);
+    }
+    // They are the last engine files: nothing stands between them and the plugin list. The speaker's
+    // face boots before them; its boot hook stays the outermost of the engine's because no vehicle
+    // file wraps the boot scene's start, the Show Text command, the interpreter's setup or the face
+    // loaders (speaker-face.test.cjs reads every engine file listed after it for exactly those).
+    assert.deepEqual(scripts.slice(first + 5, at('reactor_plugins.js')), [], 'the five vehicle files are the last entries before reactor_plugins.js');
+    assert.equal(at('reactor_plugins.js'), scripts.length - 1, 'and the plugin list is the last script');
+    assert.ok(at('reactor_speaker_face.js') >= 0 && at('reactor_speaker_face.js') < first, 'reactor_speaker_face.js boots before the vehicle files');
+    for (const name of ['reactor_vehicles.js', 'reactor_vehicles_drive.js', 'reactor_vehicles_feel.js', 'reactor_vehicles_hints.js', 'reactor_vehicles_mount.js']) {
+        const code = fs.readFileSync(path.join(runtimeRoot, name), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+        assert.doesNotMatch(code, /Scene_Boot\.prototype\.start\s*=|command101|Game_Interpreter\.prototype\.setup\s*=|ImageManager\.(loadFace|loadBitmap)\s*=/,
+            `${name} leaves alone what the speaker's face hooks`);
+    }
+});
+
+test('the six vehicle files load cleanly where the tests load them: the 3D pair by the core\'s own list, the four game files in boot order', () => {
+    // The 3D runtime in Node: one require of the core brings every extension it names, the two vehicle files among them.
+    const Reactor3D = require(path.join(runtimeRoot, 'reactor_3d.js'));
+    assert.deepEqual(Reactor3D.EXTENSIONS.slice(-2).map(extension => [extension.file, extension.namespace]),
+        [['reactor_3d_vehicles.js', 'Vehicles'], ['reactor_3d_rider.js', 'Rider']]);
+    assert.ok(Reactor3D.Vehicles && Reactor3D.Rider, 'each has set its namespace');
+    assert.equal(Reactor3D.extensionsLoaded(), true);
+
+    // The battle tests' world loads the four game files after every battle file, in the manifest's order.
+    const { fightWorld, VEHICLE_FILES } = require('./helpers/fight-world.cjs');
+    const { scripts } = readRuntimeManifest(path.join(runtimeRoot, 'reactor_main.js'));
+    assert.deepEqual(scripts.filter(url => /^js\/reactor_vehicles(_[a-z]+)?\.js$/.test(url)), VEHICLE_FILES.map(name => 'js/' + name));
+    const plain = fightWorld({ tactical: true, action: true, classic: true });
+    assert.equal(typeof plain.ReactorVehicles, 'undefined', 'not loaded unless a test asks');
+    const world = fightWorld({ tactical: true, action: true, classic: true, vehicles: true });
+    assert.equal(typeof world.ReactorVehicles, 'object');
+    for (const part of ['Drive', 'Feel', 'Hints']) assert.equal(typeof world.ReactorVehicles[part], 'object', `ReactorVehicles.${part}`);
+    // A project with no vehicle plays on: the map runs with all four loaded.
+    assert.doesNotThrow(() => world.run(30));
+    assert.equal(world.$gamePlayer.isInVehicle(), false);
+});
+
 test('MV LZString decoder loads before the compatibility layer', () => {
     const { scripts } = readRuntimeManifest(path.join(runtimeRoot, 'reactor_main.js'));
     const decoderIndex = scripts.indexOf('js/libs/lz-string.js');
@@ -161,6 +219,9 @@ test('the revision the updater compares and the revision the game reports are th
     for (const name of fs.readdirSync(templates)) {
         const copy = path.join(templates, name, 'js', 'reactor_main.js');
         if (!fs.existsSync(copy)) continue;
+        // Only projects that boot the runtime carry it (an imported MZ project may hold a stray copy).
+        const page = path.join(templates, name, 'index.html');
+        if (fs.existsSync(page) && !/js\/reactor_main\.js/.test(fs.readFileSync(page, 'utf8'))) continue;
         const source = fs.readFileSync(copy, 'utf8');
         if (source.match(/RPG Reactor runtime revision:\s*([\w.-]+)/)?.[1] !== stated) behind.push(name);
     }

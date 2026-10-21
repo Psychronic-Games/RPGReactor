@@ -447,28 +447,39 @@ Sprite_Character.prototype.reactorSortedZ = function() {
     const scene = typeof SceneManager !== "undefined" ? SceneManager._scene : null;
     const sorted = scene && scene._spriteset && scene._spriteset._reactorSortedAbove;
     if (!sorted || !sorted.length) return base;
-    // Frame sizes, not PIXI's bounds getters: mid-update those read from a
-    // half-applied transform (and null for a width) and lie about overlap.
-    const drawnWidth = sprite => ((sprite._frame && sprite._frame.width) || sprite.width || 48)
-        * Math.abs((sprite.scale && sprite.scale.x) || 1);
-    const drawnHeight = sprite => ((sprite._frame && sprite._frame.height) || sprite.height || 48)
-        * Math.abs((sprite.scale && sprite.scale.y) || 1);
-    const anchorY = sprite => (sprite.anchor ? sprite.anchor.y : 1);
     const cx = this.x, cy = this.y;
-    const cw = drawnWidth(this), ch = drawnHeight(this);
-    const top = cy - ch * anchorY(this);
-    for (const other of sorted) {
+    const cw = reactorDrawnWidth(this), ch = reactorDrawnHeight(this);
+    const top = cy - ch * reactorAnchorY(this);
+    for (let i = 0; i < sorted.length; i++) {
+        const other = sorted[i];
         if (other === this || !other._character) continue;
         const oy = other.y;
         if (cy <= oy) continue;                                  // behind it
-        const ow = drawnWidth(other), oh = drawnHeight(other);
+        const ow = reactorDrawnWidth(other), oh = reactorDrawnHeight(other);
         if (Math.abs(cx - other.x) >= (cw + ow) / 2) continue;   // beside it
-        const bottom = oy + oh * (1 - anchorY(other));
+        const bottom = oy + oh * (1 - reactorAnchorY(other));
         if (top >= bottom) continue;                             // clear below it
         return 5;
     }
     return base;
 };
+
+// Frame sizes, not PIXI's bounds getters: mid-update those read from a
+// half-applied transform (and null for a width) and lie about overlap.
+// Module functions, as reactorSortedZ runs twice per character a frame.
+function reactorDrawnWidth(sprite) {
+    return ((sprite._frame && sprite._frame.width) || sprite.width || 48)
+        * Math.abs((sprite.scale && sprite.scale.x) || 1);
+}
+
+function reactorDrawnHeight(sprite) {
+    return ((sprite._frame && sprite._frame.height) || sprite.height || 48)
+        * Math.abs((sprite.scale && sprite.scale.y) || 1);
+}
+
+function reactorAnchorY(sprite) {
+    return sprite.anchor ? sprite.anchor.y : 1;
+}
 
 /**
  * Place the sprite by projecting its grid cell through the 3D camera.
@@ -637,7 +648,10 @@ Sprite_Character.prototype.update = function() {
         const posePitch = this._character._reactorPosePitch || 0;
         const poseSpin = this._character._reactorSpin || 0;
         if (posePitch || poseSpin || this._reactorPoseTurned) {
-            this.rotation = ((posePitch ? posePitch * 90 : 0) + poseSpin) * Math.PI / 180;
+            // (One felled by a blow from its right goes over to the left.)
+            const fallYaw = posePitch > 0 ? this._character._reactorFallYaw : null;
+            const side = typeof fallYaw === "number" && Math.sin(fallYaw) < -0.01 ? -1 : 1;
+            this.rotation = ((posePitch ? side * posePitch * 90 : 0) + poseSpin) * Math.PI / 180;
             this._reactorPoseTurned = !!(posePitch || poseSpin);
         }
     }
@@ -977,8 +991,25 @@ Sprite_Actor.prototype.moveToStartPosition = function() {
     this.startMove(300, 0, 0);
 };
 
+/**
+ * The party's line is written for the default battle field (808 x 616). On any other field the same line
+ * stands at the same place across the whole field, not in its top-left corner: places move, sprites keep
+ * their size. Troop positions are the project's own and are used as written.
+ * `Sprite_Battler.FIELD_FIT = false` turns it off.
+ */
+Sprite_Battler.FIELD_FIT = true;
+Sprite_Battler.FIELD_WIDTH = 808;
+Sprite_Battler.FIELD_HEIGHT = 616;
+Sprite_Battler.fieldPoint = function(x, y) {
+    const width = typeof Graphics !== "undefined" ? Number(Graphics.boxWidth) || 0 : 0;
+    const height = typeof Graphics !== "undefined" ? Number(Graphics.boxHeight) || 0 : 0;
+    if (!this.FIELD_FIT || !(width > 0 && height > 0) || (width === this.FIELD_WIDTH && height === this.FIELD_HEIGHT)) return [x, y];
+    return [Math.round(x * width / this.FIELD_WIDTH), Math.round(y * height / this.FIELD_HEIGHT)];
+};
+
 Sprite_Actor.prototype.setActorHome = function(index) {
-    this.setHome(600 + index * 32, 280 + index * 48);
+    const [x, y] = Sprite_Battler.fieldPoint(600 + index * 32, 280 + index * 48);
+    this.setHome(x, y);
 };
 
 Sprite_Actor.prototype.update = function() {
@@ -1183,6 +1214,7 @@ Sprite_Enemy.prototype.initMembers = function() {
     this._effectType = null;
     this._effectDuration = 0;
     this._shake = 0;
+    this._corpse = 0;
     this.createStateIconSprite();
 };
 
@@ -1248,6 +1280,13 @@ Sprite_Enemy.prototype.updateFrame = function() {
 Sprite_Enemy.prototype.updatePosition = function() {
     Sprite_Battler.prototype.updatePosition.call(this);
     this.x += this._shake;
+    // A body lies along the ground line it stood on, centered where it stood: the picture turns about its feet,
+    // which would carry its middle half its height to one side and leave half its width under the line.
+    if (this._corpse > 0) {
+        const lie = this._corpse;
+        this.x -= Sprite_Enemy.CORPSE_TURN * lie * this.height / 2;
+        this.y -= lie * this.width / 2;
+    }
 };
 
 Sprite_Enemy.prototype.updateStateSprite = function() {
@@ -1259,7 +1298,11 @@ Sprite_Enemy.prototype.updateStateSprite = function() {
 
 Sprite_Enemy.prototype.initVisibility = function() {
     this._appeared = this._enemy.isAlive();
-    if (!this._appeared) {
+    this.layCorpse(0);
+    // One that is a body already (the battle's sprites were made again) lies as it was left.
+    if (!this._appeared && this._enemy.isDead() && this._enemy.collapseType() === Game_BattlerBase.COLLAPSE_CORPSE) {
+        this.layCorpse(1);
+    } else if (!this._appeared) {
         this.opacity = 0;
     }
 };
@@ -1278,6 +1321,10 @@ Sprite_Enemy.prototype.setupEffect = function() {
 
 Sprite_Enemy.prototype.startEffect = function(effectType) {
     this.destroyParticleCollapse();
+    // A body that is alive again gets up rather than fading in.
+    if (effectType === "appear" && this._corpse > 0) {
+        effectType = "corpseRise";
+    }
     this._effectType = effectType;
     switch (this._effectType) {
         case "appear":
@@ -1312,6 +1359,12 @@ Sprite_Enemy.prototype.startEffect = function(effectType) {
             break;
         case "shatterCollapse":
             this.startParticleCollapse("shatter");
+            break;
+        case "corpseCollapse":
+            this.startCorpseCollapse();
+            break;
+        case "corpseRise":
+            this.startCorpseRise();
             break;
     }
     this.revertToNormal();
@@ -1350,6 +1403,16 @@ Sprite_Enemy.prototype.startInstantCollapse = function() {
     this._appeared = false;
 };
 
+Sprite_Enemy.prototype.startCorpseCollapse = function() {
+    this._effectDuration = Sprite_Enemy.CORPSE_FRAMES;
+    this._appeared = false;
+};
+
+Sprite_Enemy.prototype.startCorpseRise = function() {
+    this._effectDuration = Sprite_Enemy.CORPSE_RISE;
+    this._appeared = true;
+};
+
 Sprite_Enemy.prototype.updateEffect = function() {
     this.setupEffect();
     if (this._effectDuration > 0) {
@@ -1382,10 +1445,20 @@ Sprite_Enemy.prototype.updateEffect = function() {
             case "wispCollapse":
                 this.updateParticleCollapse();
                 break;
+            case "corpseCollapse":
+                this.updateCorpseCollapse();
+                break;
+            case "corpseRise":
+                this.updateCorpseRise();
+                break;
         }
         if (this._effectDuration === 0) {
             this._effectType = null;
         }
+    }
+    // A body is dimmed while nothing else is playing on it (every effect starts from a clean sprite).
+    if (this._corpse > 0 && !this._effectType) {
+        this.setBlendColor(Sprite_Enemy.CORPSE_SHADE);
     }
 };
 
@@ -1435,6 +1508,41 @@ Sprite_Enemy.prototype.updateBossCollapse = function() {
 
 Sprite_Enemy.prototype.updateInstantCollapse = function() {
     this.opacity = 0;
+};
+
+//-----------------------------------------------------------------------------
+// Corpse -- Collapse Effect trait value 8.
+//
+// The battler goes over and stays: the picture turns onto its side about the
+// ground it stood on and is dimmed. It is still there to be revived, and one
+// that is gets up again.
+
+Sprite_Enemy.CORPSE_FRAMES = 24;
+Sprite_Enemy.CORPSE_RISE = 16;
+// Which way the picture turns: -1 puts its head to the left, away from the party.
+Sprite_Enemy.CORPSE_TURN = -1;
+Sprite_Enemy.CORPSE_SHADE = [0, 0, 0, 96];
+
+/** Lays the sprite `amount` of the way down: 0 standing, 1 flat. */
+Sprite_Enemy.prototype.layCorpse = function(amount) {
+    this._corpse = Math.max(0, Math.min(1, amount));
+    this.rotation = Sprite_Enemy.CORPSE_TURN * this._corpse * Math.PI / 2;
+    if (this._stateIconSprite) {
+        this._stateIconSprite.visible = this._corpse === 0;
+    }
+};
+
+Sprite_Enemy.prototype.updateCorpseCollapse = function() {
+    // It tips slowly and lands fast, as a thing falling does.
+    const t = 1 - this._effectDuration / Sprite_Enemy.CORPSE_FRAMES;
+    this.layCorpse(t * t);
+    const shade = Sprite_Enemy.CORPSE_SHADE;
+    this.setBlendColor([shade[0], shade[1], shade[2], shade[3] * t]);
+};
+
+Sprite_Enemy.prototype.updateCorpseRise = function() {
+    const t = this._effectDuration / Sprite_Enemy.CORPSE_RISE;
+    this.layCorpse(t * t * (3 - 2 * t));
 };
 
 //-----------------------------------------------------------------------------
@@ -2642,20 +2750,27 @@ Sprite_Animation.renderActive = function(renderer) {
     // last-frame pixels of a finished animation stay on the overlay and block
     // view of the game canvas underneath -- hiding MOG_BattleCursor and
     // anything else PIXI draws into the game canvas in those areas.
+    //
+    // ...but only when something drew there since the last clear. Clearing a
+    // WebGL canvas is a new picture of it: the compositor then blends a
+    // full-screen transparent layer over the game every frame, for nothing,
+    // which on an integrated GPU is a frame's worth of bandwidth. While the
+    // overlay holds nothing it is also hidden, so the compositor skips it.
     const efxGL = Graphics._effekseerGL;
-    if (efxGL && Graphics._effekseerCanvas) {
-        efxGL.viewport(0, 0,
-            Graphics._effekseerCanvas.width,
-            Graphics._effekseerCanvas.height);
-        efxGL.clearColor(0, 0, 0, 0);
-        efxGL.clear(efxGL.COLOR_BUFFER_BIT | efxGL.DEPTH_BUFFER_BIT);
-    }
+    const overlay = Graphics._effekseerCanvas;
     const list = Sprite_Animation._pendingRenders;
     // Ownership can change after a v8 onRender callback queued this sprite.
     // Drop scene-owned effects before deciding whether to copy the full scene.
     let kept = 0;
     for (const inst of list) if (!inst._reactorInScene) list[kept++] = inst;
     list.length = kept;
+    if (efxGL && overlay && (Graphics._effekseerOverlayDirty !== false || list.length)) {
+        efxGL.viewport(0, 0, overlay.width, overlay.height);
+        efxGL.clearColor(0, 0, 0, 0);
+        efxGL.clear(efxGL.COLOR_BUFFER_BIT | efxGL.DEPTH_BUFFER_BIT);
+        Graphics._effekseerOverlayDirty = list.length > 0;
+    }
+    if (Graphics.showEffekseerOverlay) Graphics.showEffekseerOverlay(list.length > 0);
     if (list.length === 0) return;
     // While effects play, the overlay carries a copy of the whole rendered
     // scene and the effects draw ON that copy — the same shared-framebuffer
@@ -5259,12 +5374,40 @@ Spriteset_Map.prototype._rrWindowDormant = function(child, minX, maxX, minY, max
 // change.
 Spriteset_Map.prototype.destroy = function(options) {
     this.removeAllBalloons();
+    this.releaseReactor3D(true);
+    this.destroyReactorLighting2D();
+    if (this._rrCullHolder) {
+        for (const child of this._rrCullHolder.children.slice()) {
+            this.addChild(child);
+        }
+        this._rrCullHolder.destroy();
+        this._rrCullHolder = null;
+    }
+    Spriteset_Base.prototype.destroy.call(this, options);
+};
+
+/**
+ * Give back the map's 3D world. With the spriteset, and earlier when another
+ * map is loading: the scene left behind is not drawn again, and holding its
+ * world through the next map's load put two maps in memory at once.
+ */
+Spriteset_Map.prototype.releaseReactor3D = function(now) {
     // Geometry, materials and textures are GPU allocations the collector cannot
     // reclaim; leaving them behind leaks a whole map's worth per transfer. The
     // viewport itself outlives the map and is only hidden.
+    // Asked early while a border is being crossed: the world past the border is in this scene still, and
+    // the map entered takes it (and this one) as its spriteset is made. Let go with the spriteset instead.
+    if (!now && this._reactor3d && Reactor3D.Neighbors && Reactor3D.Neighbors.crossing) return;
     if (this._reactor3d) {
-        this._reactor3d.scene.destroy();
-        this._reactor3d.viewport.setVisible(false);
+        // A world left over a border stands on past it in the map entered (Reactor3D.Neighbors): it is that map's to let go.
+        const kept = !!this._reactor3d.scene._neighborKept;
+        if (!kept) {
+            const bodies = this._reactor3d.scene._neighborBodies;
+            if (bodies && Reactor3D.Neighbors) for (const side of Object.keys(bodies)) Reactor3D.Neighbors.removeBody(this._reactor3d.scene, side);
+            this._reactor3d.scene.destroy();
+        }
+        if (Reactor3D.Neighbors && Reactor3D.Neighbors.live === this._reactor3d) Reactor3D.Neighbors.live = null;
+        if (!(kept && Reactor3D.Neighbors && Reactor3D.Neighbors.crossing)) this._reactor3d.viewport.setVisible(false);
         this._reactor3d = null;
         this.destroyReactor3DSprite();
         // Whatever this map borrowed from the lighting plugin is given back.
@@ -5275,15 +5418,6 @@ Spriteset_Map.prototype.destroy = function(options) {
             this._reactor3dLit = false;
         }
     }
-    this.destroyReactorLighting2D();
-    if (this._rrCullHolder) {
-        for (const child of this._rrCullHolder.children.slice()) {
-            this.addChild(child);
-        }
-        this._rrCullHolder.destroy();
-        this._rrCullHolder = null;
-    }
-    Spriteset_Base.prototype.destroy.call(this, options);
 };
 
 Spriteset_Map.prototype.hideCharacters = function() {
@@ -5378,13 +5512,18 @@ Spriteset_Map.prototype.createReactor3D = function() {
     // each time until the browser began evicting live ones. 3D is a view of the
     // map; it can fail, and the map still has to draw.
     try {
-        const scene = new Reactor3D.MapScene($dataMap, this._tilemap.bitmaps);
+        // Crossed into over a border: the world that stood past it is this map's, as it stands.
+        const scene = (Reactor3D.Neighbors && Reactor3D.Neighbors.adopt($gameMap.mapId())) || new Reactor3D.MapScene($dataMap, this._tilemap.bitmaps);
         const settings = ($dataMap.reactor3d && $dataMap.reactor3d.camera) || {};
         const camera = Reactor3D.createCamera(settings);
         viewport.setScene(scene.scene(), camera);
         viewport.setVisible(true);
 
         this._reactor3d = { viewport, scene, camera, settings };
+        // Entered over a border: the view goes on turning from where it was, in this map's own tiles.
+        const neighbors = Reactor3D.Neighbors, cross = neighbors && neighbors.crossing;
+        const view = cross && scene._neighborBodies && neighbors.live ? neighbors.live.cameraCurrent : null;
+        if (view) this._reactor3d.cameraCurrent = Object.assign({}, view, { x: view.x - cross.offset.x, z: view.z - cross.offset.z });
         this._tilemap.lowerLayerVisible = false;
         if (this._tilemap._lowerLayer) this._tilemap._lowerLayer.visible = false;
         if (this._tilemap._upperLayer) this._tilemap._upperLayer.visible = false;
@@ -5397,7 +5536,7 @@ Spriteset_Map.prototype.createReactor3D = function() {
         // 3D view has several causes that look identical on screen and none
         // of them throw. `bounds` against `camera` is what tells "nothing was
         // built" from "nothing is in view".
-        console.debug("Reactor3D: 3D scene built.", Object.assign(scene.report(), {
+        if (!scene._neighborBodies) console.debug("Reactor3D: 3D scene built.", Object.assign(scene.report(), {
             bounds: scene.extent ? scene.extent() : "n/a",
             camera: [camera.position.x, camera.position.y, camera.position.z]
                 .map(n => Math.round(n * 10) / 10).join(", ")
@@ -5599,13 +5738,30 @@ Spriteset_Map.prototype.updateReactor3D = function() {
         && !SceneManager.isFinalUpdateOfFrame()) {
         return;
     }
+    // The quality levels count this frame, and at the last level have the
+    // world drawn on every other one (the passes keep the picture between).
+    const quality = Reactor3D.Quality;
+    quality.mapOpened($gameMap.mapId());
+    if (!quality.worldTick(performance.now())) return;
+    // The Options window offers the setting once a 3D map has been drawn on this machine.
+    if (!ConfigManager.reactor3dSeen) { ConfigManager.reactor3dSeen = true; ConfigManager.save(); }
 
     // _realX/_realY interpolate between cells, so the camera glides rather than
     // stepping a whole tile at a time.
     this.updateReactor3DCamera();
+    // The maps past the borders the player is near: read, built beside this one, let go when left behind.
+    if (Reactor3D.Neighbors) Reactor3D.Neighbors.update(state, this._tilemap.bitmaps);
     if (state.scene.updateSky) state.scene.updateSky(state.viewport.camera ? state.viewport.camera() : null, Graphics.frameCount);
     if (state.scene.updateWater) state.scene.updateWater(Graphics.frameCount);
-    if (state.scene.updateRipples) state.scene.updateRipples(Graphics.frameCount, [$gamePlayer].concat($gamePlayer.followers().visibleFollowers(), $gameMap.events()));
+    if (state.scene.updateRipples) {
+        // One list kept and refilled: the ripples only walk it, this frame.
+        const walkers = this._reactor3dRippleWalkers || (this._reactor3dRippleWalkers = []);
+        walkers.length = 0;
+        walkers.push($gamePlayer);
+        for (const follower of $gamePlayer.followers().visibleFollowers()) walkers.push(follower);
+        for (const event of $gameMap.events()) walkers.push(event);
+        state.scene.updateRipples(Graphics.frameCount, walkers);
+    }
     // Inside a built house the roof and any wall in the way are cut around the player.
     if (state.scene.updateCutaway) state.scene.updateCutaway(state.viewport.camera ? state.viewport.camera() : null, $dataMap, $gamePlayer, this.reactor3DCompany());
     this.updateReactor3DLights(state);
@@ -5617,7 +5773,10 @@ Spriteset_Map.prototype.updateReactor3D = function() {
         // The player and visible followers ride the same instance pool as
         // events: an actor bound to a model in the database sidecar walks
         // the map as that model.
-        const characters = $gameMap.events().filter(Boolean);
+        // Refilled in place each frame; the sync only walks it.
+        const characters = this._reactor3dModelWalkers || (this._reactor3dModelWalkers = []);
+        characters.length = 0;
+        for (const event of $gameMap.events()) if (event) characters.push(event);
         if (typeof $gamePlayer !== "undefined" && $gamePlayer) {
             characters.push($gamePlayer);
             const followers = $gamePlayer.followers && $gamePlayer.followers();
@@ -5664,8 +5823,12 @@ Spriteset_Map.prototype.updateReactor3D = function() {
         modelsInWorld ? "world" : (split ? "below" : "all"), "below");
     this.updateReactor3DTexture(this._reactor3dBelow, canvas);
     if (this._reactor3dAbove) {
-        state.viewport.renderPass(state.scene, modelsInWorld ? "overlay" : "above", "above");
+        const aboveEmpty = state.viewport.renderPass(state.scene, modelsInWorld ? "overlay" : "above", "above");
         this.updateReactor3DTexture(this._reactor3dAbove, canvas);
+        // A pass that drew nothing is a full-screen transparent picture:
+        // not composited, rather than blended over the frame for nothing.
+        const sprite = this._reactor3dAbove.sprite;
+        if (sprite && Reactor3D.EmptyPass.hideEmpty) sprite.renderable = !aboveEmpty;
     }
     if (this._reactor3dLights) {
         state.viewport.renderPass(state.scene, "lights", "lights");
@@ -5951,12 +6114,18 @@ Spriteset_Map.prototype.keepReactor3DLightsOnTop = function() {
  */
 Spriteset_Map.prototype.reactor3DCompany = function() {
     const list = [];
+    // Through the player's own eyes nobody is shown through a wall: the corridor opened for
+    // someone behind it was a see-through band across the wall in front of the face.
+    if (typeof Reactor3D !== "undefined" && Reactor3D.Camera && Reactor3D.Camera.currentState && Reactor3D.Camera.currentState().mode === "firstPerson") return list;
     if ($gamePlayer.followers) for (const follower of $gamePlayer.followers().visibleFollowers()) list.push(follower);
     const px = $gamePlayer.x, py = $gamePlayer.y, reach = Reactor3D.CUTAWAY_COMPANY_REACH;
     const events = [];
     for (const event of $gameMap.events()) {
         if (event.isTransparent() || (!event.characterName() && !event.tileId())) continue;
         const d = Math.abs(event.x - px) + Math.abs(event.y - py);
+        // Someone a floor or more below (in the house whose roof the player stands on) is not shown through it.
+        if (Number.isFinite(event._reactorGround) && Number.isFinite($gamePlayer._reactorGround)
+            && $gamePlayer._reactorGround - event._reactorGround > Reactor3D.CUTAWAY_COMPANY_BELOW) continue;
         if (d <= reach) events.push([d, event]);
     }
     events.sort((a, b) => a[0] - b[0]);
@@ -6046,6 +6215,7 @@ Spriteset_Map.prototype.loadTileset = function() {
         }
         this._tilemap.setBitmaps(bitmaps);
         this._tilemap.flags = $gameMap.tilesetFlags();
+        if (this._tilemap.setTileAnimation) this._tilemap.setTileAnimation(this._tileset.rrTileFrames, this._tileset.rrWater);
     }
 };
 
@@ -6348,6 +6518,7 @@ Sprite_Character.prototype.updateBitmap = function() {
             return;
         }
         if (Reactor3D.characterModelSpec(this._character)) {
+            if (this._rrLook) this.clearReactorLook();
             this._tilesetId = $gameMap.tilesetId();
             this._tileId = 0;
             this._characterName = this._character.characterName();
@@ -6356,6 +6527,8 @@ Sprite_Character.prototype.updateBitmap = function() {
             return;
         }
     }
+    // A battle unit with no picture or model of its own shows its record's look (below).
+    if (this.updateReactorLook()) return;
     _reactorSpriteCharacterUpdateBitmap.call(this);
 };
 
@@ -6436,13 +6609,14 @@ Spriteset_Map.prototype.update = function() {
         return;
     }
     // The sorted-above events, looked up by every character sprite this frame.
+    // One list for the spriteset's life, refilled in place.
     const sprites = this._characterSprites || [];
-    const sorted = [];
-    for (const sprite of sprites) {
-        const character = sprite._character;
-        if (character && character.isSortedAbovePriority && character.isSortedAbovePriority()) sorted.push(sprite);
+    const sorted = this._reactorSortedAbove || (this._reactorSortedAbove = []);
+    sorted.length = 0;
+    for (let i = 0; i < sprites.length; i++) {
+        const character = sprites[i]._character;
+        if (character && character.isSortedAbovePriority && character.isSortedAbovePriority()) sorted.push(sprites[i]);
     }
-    this._reactorSortedAbove = sorted;
     _reactorSpritesetMapStaleUpdate.apply(this, arguments);
 };
 
@@ -6453,7 +6627,9 @@ Spriteset_Map.prototype.update = function() {
 
 (function() {
     if (typeof Sprite_Battler === "undefined") return;
-    const _destroy = Sprite_Battler.prototype.destroy;
+    // Sprite_Battler has no destroy of its own: its parent's is asked for when called, so a plugin that
+    // replaces Sprite.prototype.destroy after this file loads still runs for battlers.
+    const _destroy = function() { return Object.getPrototypeOf(Sprite_Battler.prototype).destroy.apply(this, arguments); };
     Sprite_Battler.prototype.destroy = function() {
         if (typeof Reactor3D !== "undefined" && Reactor3D.releaseBattlerState) {
             Reactor3D.releaseBattlerState(this._reactorBattler);
@@ -6485,67 +6661,6 @@ Spriteset_Map.prototype.update = function() {
 })();
 
 //-----------------------------------------------------------------------------
-// Map image layers: pictures painted for a whole map and locked to it, the way
-// parallax-mapped games draw their ground over the tiles and their light or
-// canopy over everything. `$dataMap.rrImageLayers` lists them:
-//   { name, layer: 'ground' | 'over', variable?, switch?, opacity?, blendMode? }
-// 'ground' sits above the lower tiles and under every character; 'over' above
-// characters and the upper tiles. `variable` picks a variant: a non-zero value
-// n turns "43_Ground" into "43-1_Ground" style names via `variantName`.
-// Imports write this (the VX Ace GDS Ultimate Parallax script's layers).
-//-----------------------------------------------------------------------------
-
-Spriteset_Map.RR_IMAGE_LAYER_Z = { ground: 0.5, over: 9 };
-
-Spriteset_Map.rrImageLayerName = function(spec) {
-    const value = spec.variable ? $gameVariables.value(spec.variable) : 0;
-    if (!value) return spec.name;
-    if (spec.variantName) return String(spec.variantName).replace("%1", value);
-    return spec.name;
-};
-
-const _rrImageLayersCreateTilemap = Spriteset_Map.prototype.createTilemap;
-Spriteset_Map.prototype.createTilemap = function() {
-    _rrImageLayersCreateTilemap.call(this);
-    this._rrImageLayers = [];
-    const specs = ($dataMap && Array.isArray($dataMap.rrImageLayers)) ? $dataMap.rrImageLayers : [];
-    for (const spec of specs) {
-        if (!spec || !spec.name) continue;
-        const sprite = new Sprite();
-        sprite.z = Spriteset_Map.RR_IMAGE_LAYER_Z[spec.layer] ?? Spriteset_Map.RR_IMAGE_LAYER_Z.ground;
-        sprite.opacity = spec.opacity ?? 255;
-        sprite.blendMode = spec.blendMode || 0;
-        sprite._rrSpec = spec;
-        sprite._rrName = null;
-        this._tilemap.addChild(sprite);
-        this._rrImageLayers.push(sprite);
-    }
-    this.updateRrImageLayers();
-};
-
-Spriteset_Map.prototype.updateRrImageLayers = function() {
-    if (!this._rrImageLayers || !this._rrImageLayers.length) return;
-    const tw = $gameMap.tileWidth(), th = $gameMap.tileHeight();
-    for (const sprite of this._rrImageLayers) {
-        const spec = sprite._rrSpec;
-        const name = Spriteset_Map.rrImageLayerName(spec);
-        if (name !== sprite._rrName) {
-            sprite._rrName = name;
-            sprite.bitmap = ImageManager.loadParallax(name);
-        }
-        sprite.visible = !spec.switch || $gameSwitches.value(spec.switch);
-        sprite.x = Math.round(-$gameMap.displayX() * tw);
-        sprite.y = Math.round(-$gameMap.displayY() * th);
-    }
-};
-
-const _rrImageLayersUpdate = Spriteset_Map.prototype.update;
-Spriteset_Map.prototype.update = function() {
-    _rrImageLayersUpdate.call(this);
-    this.updateRrImageLayers();
-};
-
-//-----------------------------------------------------------------------------
 // Character sheets with their own frame count, named "Name[f8]" (the VX Ace
 // Victor Engine Multi Frames convention). Only when System.json sets
 // rrMultiFrames, which an import from such a game writes: an MV or MZ project
@@ -6567,4 +6682,286 @@ Sprite_Character.prototype.characterBlockX = function() {
     return this._isBigCharacter ? 0 : (this._character.characterIndex() % 4) * n;
 };
 
+//-----------------------------------------------------------------------------
+// The look of a battle unit with no picture of its own. Such an event is
+// never invisible (ReactorFight.eventLook, by the rule in
+// reactor_fight_look.js): it stands as its record's character sheet, as an
+// enemy's battler picture, or as a plain figure in its side's color. A sheet
+// is cut and walked like an event's own. A picture or a figure is one frame,
+// its art trimmed and fit to the tiles a unit's picture takes and drawn once
+// into a bitmap of that size; a 3D scene's billboard reads the larger copy
+// kept beside it. These pictures are held apart from ImageManager's cache: a
+// picture whose file is missing makes its unit a plain figure, never a load
+// error.
+//-----------------------------------------------------------------------------
 
+const ReactorLookPictures = {
+    // The longest side of the copy a 3D scene's billboard is drawn from, in pixels.
+    FULL_MAX: 512,
+    // The width of a plain figure's larger copy, in pixels.
+    FIGURE_WIDE: 256,
+    _entries: new Map(),
+    _byLook: new WeakMap(),
+
+    /** The pictures of a look of kind "picture" or "figure": { state: "loading" | "ready" | "failed", full, ... }. */
+    of(look) {
+        let entry = this._byLook.get(look);
+        if (entry && this._entries.get(entry.key) === entry) return entry;
+        entry = look.kind === "picture" ? this.picture(look.folder, look.name, look.hue) : this.figure(look.color);
+        this._byLook.set(look, entry);
+        return entry;
+    },
+
+    /** A plain figure in a color: ready at once. */
+    figure(color) {
+        const key = "figure:" + color;
+        let entry = this._entries.get(key);
+        if (!entry) {
+            const rule = ReactorFightLook, wide = this.FIGURE_WIDE, tall = Math.round(wide * rule.TILES_TALL / rule.TILES_WIDE);
+            const full = new Bitmap(wide, tall);
+            rule.drawFigure(full.context, 0, 0, wide, tall, color);
+            full._baseTexture.update();
+            entry = { key, state: "ready", figure: true, color, hue: 0, source: null, full, flats: new Map() };
+            this._entries.set(key, entry);
+        }
+        return entry;
+    },
+
+    /** A battler picture from img/<folder>, its hue turned: loading until its file has been read. */
+    picture(folder, name, hue) {
+        const key = folder + "/" + name + ":" + hue;
+        let entry = this._entries.get(key);
+        if (!entry) {
+            const encoded = "img/" + folder + "/" + Utils.encodeURI(name);
+            const explicit = (ImageManager._imageExtensions || []).some(extension => encoded.toLowerCase().endsWith(extension));
+            const url = explicit ? encoded : encoded + ".png";
+            entry = { key, state: "loading", figure: false, color: "", hue, source: Bitmap.load(url, explicit ? [url + ".png"] : []), full: null, flats: new Map() };
+            this._entries.set(key, entry);
+        }
+        return entry;
+    },
+
+    /** Whether an entry's pictures can be drawn; a loading one is looked at again. */
+    ready(entry) {
+        if (entry.state !== "loading") return entry.state === "ready";
+        const source = entry.source;
+        if (source.isError() || source._degradedToBlank) this.fail(entry);
+        else if (source.isReady()) this.bake(entry);
+        return entry.state === "ready";
+    },
+
+    fail(entry) {
+        const source = entry.source, watched = Bitmap._loadWatchList;
+        entry.state = "failed";
+        entry.source = null;
+        if (!source) return;
+        // Nothing waits for it any more: it is not tried again, and it is nobody's load error.
+        const at = watched ? watched.indexOf(source) : -1;
+        if (at >= 0) watched.splice(at, 1);
+        source.destroy();
+    },
+
+    /** The loaded file becomes the picture a unit stands as: its margin cut off, its hue turned, no larger than FULL_MAX. */
+    bake(entry) {
+        const source = entry.source, rule = ReactorFightLook;
+        try {
+            const width = source.width, height = source.height, context = source.context;
+            const pixels = context.getImageData(0, 0, width, height);
+            const box = rule.trim(pixels.data, width, height);
+            if (!box) { this.fail(entry); return; }
+            if (entry.hue) { rule.rotateHue(pixels.data, entry.hue); context.putImageData(pixels, 0, 0); }
+            const scale = Math.min(1, this.FULL_MAX / Math.max(box.width, box.height));
+            const full = new Bitmap(Math.max(1, Math.round(box.width * scale)), Math.max(1, Math.round(box.height * scale)));
+            const target = full.context;
+            target.imageSmoothingEnabled = true;
+            target.imageSmoothingQuality = "high";
+            target.drawImage(source.canvas, box.x, box.y, box.width, box.height, 0, 0, full.width, full.height);
+            full._baseTexture.update();
+            entry.full = full;
+            entry.state = "ready";
+            entry.source = null;
+            source.destroy();
+        } catch (error) {
+            console.warn("A unit's battler picture could not be read; it stands as a plain figure.", error);
+            this.fail(entry);
+        }
+    },
+
+    /** The picture at `width` by `height` pixels: what the sprite of a unit shows on the map. */
+    flat(entry, width, height) {
+        const key = width * 8192 + height;
+        let bitmap = entry.flats.get(key);
+        if (!bitmap) {
+            bitmap = new Bitmap(width, height);
+            const context = bitmap.context;
+            if (entry.figure) {
+                ReactorFightLook.drawFigure(context, 0, 0, width, height, entry.color);
+            } else {
+                context.imageSmoothingEnabled = true;
+                context.imageSmoothingQuality = "high";
+                context.drawImage(entry.full.canvas, 0, 0, entry.full.width, entry.full.height, 0, 0, width, height);
+            }
+            bitmap._baseTexture.update();
+            entry.flats.set(key, bitmap);
+        }
+        return bitmap;
+    },
+
+    /** Every picture goes, with the 3D scene's copy of it: when the game drops its images (a new map). */
+    clear() {
+        const sheets = typeof Reactor3D !== "undefined" && Reactor3D ? Reactor3D._sheetTextures : null;
+        for (const entry of this._entries.values()) {
+            if (entry.source) this.fail(entry);
+            if (entry.full) {
+                const sheet = sheets ? sheets.get(entry.full) : null;
+                if (sheet && sheet.texture && sheet.texture.dispose) sheet.texture.dispose();
+                entry.full.destroy();
+            }
+            for (const flat of entry.flats.values()) flat.destroy();
+            entry.flats.clear();
+            entry.full = null;
+            entry.state = "failed";
+        }
+        this._entries.clear();
+    }
+};
+
+const _reactorLookImageClear = ImageManager.clear;
+ImageManager.clear = function() {
+    _reactorLookImageClear.call(this);
+    ReactorLookPictures.clear();
+};
+
+/**
+ * Shows a battle unit that has no picture of its own as its record's look.
+ * True when the look is this sprite's picture: the event's own (empty) sheet
+ * is then not asked for.
+ */
+Sprite_Character.prototype.updateReactorLook = function() {
+    const character = this._character;
+    const fight = typeof ReactorFight !== "undefined" ? ReactorFight : null;
+    const look = fight && fight.eventLook && character && typeof character.event === "function" && !character.tileId() && !character.characterName()
+        ? fight.eventLook(character) : null;
+    const kind = look ? look.kind : "";
+    if (kind !== "character" && kind !== "picture" && kind !== "figure") {
+        if (this._rrLook) this.clearReactorLook();
+        return false;
+    }
+    const state = this._rrLook || (this._rrLook = {
+        look: null, sheet: false, shown: false, entry: null, full: null, frame: { x: 0, y: 0, width: 0, height: 0 }, wide: 0, tall: 0, tileWidth: 0, tileHeight: 0
+    });
+    if (kind === "character") {
+        if (state.look !== look) {
+            state.look = look; state.sheet = true; state.shown = true; state.entry = null; state.full = null;
+            this._tileId = 0;
+            this._characterName = look.characterName;
+            this._characterIndex = look.characterIndex;
+            // The stock step loads the sheet by that name, with whatever a plugin keeps per sheet (its frame count).
+            this.setCharacterBitmap();
+        }
+        return true;
+    }
+    const pictures = ReactorLookPictures;
+    let entry = pictures.of(look);
+    // A picture whose file is not there: the plain figure.
+    if (!pictures.ready(entry) && entry.state === "failed") entry = pictures.figure(look.color);
+    const shown = entry.state === "ready";
+    const tileWidth = $gameMap.tileWidth(), tileHeight = $gameMap.tileHeight();
+    if (state.look === look && state.entry === entry && state.shown === shown && state.tileWidth === tileWidth && state.tileHeight === tileHeight && this.bitmap) return true;
+    state.look = look; state.sheet = false; state.entry = entry; state.shown = shown; state.tileWidth = tileWidth; state.tileHeight = tileHeight;
+    this._tileId = 0;
+    this._characterName = "";
+    this._characterIndex = 0;
+    // The stock step for an event with no sheet first: what a plugin keeps per sheet is then set, and the bitmap is the empty one.
+    this.setCharacterBitmap();
+    if (!shown) {
+        // Still being read: nothing to show for these frames.
+        state.full = null;
+        return true;
+    }
+    // A typed size makes the picture that many tiles wide.
+    const sized = typeof Reactor3D !== "undefined" && Reactor3D.eventSizeAt && typeof $dataMap !== "undefined" && $dataMap ? Reactor3D.eventSizeAt($dataMap, character.eventId()) : null;
+    const fit = ReactorFightLook.fit(entry.full.width, entry.full.height, tileWidth, tileHeight, sized ? sized[0] : 1);
+    state.full = entry.full;
+    state.frame.width = entry.full.width; state.frame.height = entry.full.height;
+    state.wide = fit.width / tileWidth; state.tall = fit.height / tileHeight;
+    this.bitmap = pictures.flat(entry, fit.width, fit.height);
+    return true;
+};
+
+/** The event shows its own picture again (it changed page, was given a picture, or is no unit any more). */
+Sprite_Character.prototype.clearReactorLook = function() {
+    this._rrLook = null;
+    // The stock path reads the event's picture afresh.
+    this._tilesetId = -1;
+};
+
+// A unit's look is cut as its kind asks. A picture or a figure is one frame, whole, set here and not through the
+// sheet's own frame functions: a plugin that replaces those (its own frame counts) has no say in a picture that is
+// no sheet. A record's sheet is cut by the stock step and whatever wraps or replaces its parts, once, from the
+// record's block of the sheet.
+const _rrLookIsEmpty = Sprite_Character.prototype.isEmptyCharacter;
+Sprite_Character.prototype.isEmptyCharacter = function() {
+    const look = this._rrLook;
+    return look ? !look.shown : _rrLookIsEmpty.call(this);
+};
+
+const _rrLookPatternWidth = Sprite_Character.prototype.patternWidth;
+Sprite_Character.prototype.patternWidth = function() {
+    const look = this._rrLook;
+    return look && !look.sheet ? this.bitmap.width : _rrLookPatternWidth.call(this);
+};
+
+const _rrLookPatternHeight = Sprite_Character.prototype.patternHeight;
+Sprite_Character.prototype.patternHeight = function() {
+    const look = this._rrLook;
+    return look && !look.sheet ? this.bitmap.height : _rrLookPatternHeight.call(this);
+};
+
+const _rrLookUpdateFrame = Sprite_Character.prototype.updateFrame;
+Sprite_Character.prototype.updateFrame = function() {
+    const look = this._rrLook;
+    if (!look) { _rrLookUpdateFrame.call(this); return; }
+    if (!look.sheet) {
+        const width = this.bitmap.width, height = this.bitmap.height;
+        const depth = this._bushDepth > 0 ? Math.min(this._bushDepth, height) : 0;
+        this.updateHalfBodySprites();
+        if (depth > 0 && this._upperBody && this._lowerBody) {
+            this._upperBody.setFrame(0, 0, width, height - depth);
+            this._lowerBody.setFrame(0, height - depth, width, depth);
+            this.setFrame(0, 0, 0, height);
+        } else {
+            this.setFrame(0, 0, width, height);
+        }
+        return;
+    }
+    // The step cuts the block the character's index names. The event has no picture, so its own index names
+    // nothing: for the length of the step it is the record's, and the frame (with its halves in a bush) is cut
+    // once, where it belongs. A sheet of one character has no blocks, and the step asks for none.
+    const character = this._character, own = character._characterIndex, index = look.look.characterIndex;
+    if (own === index) { _rrLookUpdateFrame.call(this); return; }
+    character._characterIndex = index;
+    try {
+        _rrLookUpdateFrame.call(this);
+    } finally {
+        character._characterIndex = own;
+    }
+};
+
+// A sprite parked off screen skips its bitmap step, and a 3D scene still stands its billboard up wherever the
+// camera sees it. A unit's look is kept up for a parked sprite too: a picture that was still being read when the
+// sprite was parked is shown when it arrives, a side that changes repaints the figure, and a unit that falls or
+// is given a picture of its own stops standing as its record. A parked sprite with no look is asked on the look's
+// beat, each event on its own frame of it, whether its event has become a unit (a page turned by a switch).
+const _rrLookUpdate = Sprite_Character.prototype.update;
+Sprite_Character.prototype.update = function() {
+    if (this._rrCulled && (this._rrLook || this.isReactorLookBeat())) this.updateReactorLook();
+    _rrLookUpdate.call(this);
+};
+
+/** Whether this is the frame of the look's beat on which this sprite's event is asked what it stands as. */
+Sprite_Character.prototype.isReactorLookBeat = function() {
+    const character = this._character;
+    if (!character || typeof character.eventId !== "function" || typeof ReactorFight === "undefined" || !ReactorFight) return false;
+    return (Graphics.frameCount + character.eventId()) % (ReactorFight.LOOK_BEAT || 12) === 0;
+};

@@ -102,7 +102,7 @@ test('the screen-features runtime file is loaded after the picture extensions an
     assert.deepEqual(toneOf(50, 100, 100, 100), [-127, 0, 0, 0]);
     assert.deepEqual(toneOf(0, 0, 0, 0), [-255, -255, -255, 255]);
     // particle colours are 0-255 multipliers of the texture, not percent: Deep 8's spore cloud (20 -> 100) is near-black in the shipped player
-    assert.match(fx, /const tint = \(v\) => Math\.round\(clamp\(v, 0, 255\)\);/);
+    assert.match(fx, /const r = Math\.round\(clamp\(Math\.round\(c0\[0\] \+ \(c1\[0\] - c0\[0\]\) \* t\), 0, 255\)\);/);
     assert.match(fx, /uWavelength = 32 \* Math\.abs\(this\.scale\.y \|\| 1\)/);
     assert.match(fx, /const shift = t\.align === "center" \? Math\.round\(this\.bitmap\.width \/ 2\)/);
     assert.match(fx, /measure\.fontFace = fontFace/);

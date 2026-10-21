@@ -59,7 +59,7 @@ class WaitForModel3DEditor {
         const rowStyle = 'display:grid;grid-template-columns:120px 1fr;gap:8px;align-items:center;';
         const radioCell = 'display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--color-text);';
         const modal = document.createElement('div');
-        modal.className = 'rr-modal-overlay';
+        modal.className = 'rr-modal-overlay rr-command-editor-modal';
         modal.style.zIndex = '21000';
         modal.innerHTML = `
             <div class="rr-modal" style="width:min(460px,92vw);display:flex;flex-direction:column;">

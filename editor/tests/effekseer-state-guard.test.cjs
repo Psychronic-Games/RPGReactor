@@ -1,4 +1,5 @@
 const { source3D } = require('./helpers/runtime-3d-source.cjs');
+const { runtimeSource } = require('./helpers/runtime-source.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -97,7 +98,7 @@ test('every Effekseer context the editor owns outright is guarded, and the share
 });
 
 test('the game overlay context follows the same policy through Graphics', () => {
-    const core = read('runtime/reactor_core.js');
+    const core = runtimeSource('reactor_core.js');
     assert.match(core, /this\._effekseer\.init\(efxGL\);\s*\n(?:\s*\/\/.*\n)*\s*this\.rearmEffekseerState\(\);\s*\n\s*this\._listenEffekseerStateResets\(\);/);
     assert.match(core, /Graphics\.settleEffekseerState = function\(\) \{\s*\n\s*if \(!this\._effekseerRestorePending \|\| !this\._effekseer\) return;/);
     assert.match(core, /window\.addEventListener\("focus", \(\) => this\.rearmEffekseerState\(\)\);/);

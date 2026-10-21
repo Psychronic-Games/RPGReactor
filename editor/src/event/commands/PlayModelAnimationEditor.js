@@ -163,15 +163,15 @@ class PlayModelAnimationEditor {
         const escape = text => String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
 
         const modal = document.createElement('div');
-        modal.className = 'rr-modal-overlay';
+        modal.className = 'rr-modal-overlay rr-command-editor-modal';
         modal.style.zIndex = '21000';
-        const events = this.mapEvents().concat((this.currentMap()?.reactor3d?.props || []).map(prop => ({ id: 10000 + prop.id, name: `Prop ${prop.id}: ${prop.name}` })));
+        const events = this.mapEvents().concat((this.currentMap()?.reactor3d?.props || []).map(prop => ({ id: 10000 + prop.id, name: this._t('Prop {id}: {name}').replace('{id}', prop.id).replace('{name}', prop.name) })));
         const targetOptions = [
             ['0', this._t('This Event')],
             ['-1', this._t('Player')]
         ].concat(events.map(event => [String(event.id),
             String(event.id).padStart(3, '0') + (event.name ? ': ' + event.name : '')]));
-        if (!targetOptions.some(([id]) => id === target)) targetOptions.push([target, `Target ${target}`]);
+        if (!targetOptions.some(([id]) => id === target)) targetOptions.push([target, this._t('Target {id}').replace('{id}', target)]);
         const control = 'flex:1;min-width:0;padding:4px 6px;background:var(--color-bg-surface);color:var(--color-text);border:1px solid var(--color-border-input);';
         modal.innerHTML = `
             <div class="rr-modal" style="width:min(440px,90vw);display:flex;flex-direction:column;">

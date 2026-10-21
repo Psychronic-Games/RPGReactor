@@ -1,0 +1,13 @@
+{
+  "name": "Longhouse",
+  "size": [18,10],
+  "storey": 5,
+  "materials": {"wall":"Wood","inner":"Wood","floor":"Wood","wet":"Stone","roof":"Thatch","stair":"Wood"},
+  "floors": [
+    {"rooms":{"hall":[1,1,11,8],"byre":[13,1,16,8]},"doors":[["hall","outside",3,6,"south"],["hall","byre",3]],"wet":["byre"]}
+  ],
+  "stairs": [],
+  "roof": {"pitch":4},
+  "windows": {"every":6,"width":2,"frame":"two"},
+  "spots": {"hearth":[9,2],"table":[5,5]}
+}

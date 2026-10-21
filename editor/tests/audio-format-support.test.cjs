@@ -1,4 +1,5 @@
 const assert = require('node:assert/strict');
+const { runtimeSource } = require('./helpers/runtime-source.cjs');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -8,7 +9,7 @@ const vm = require('node:vm');
 const workspaceRoot = path.resolve(__dirname, '..', '..');
 
 function loadAudioRuntime(overrides = {}) {
-    const source = fs.readFileSync(path.join(workspaceRoot, 'runtime', 'reactor_core.js'), 'utf8');
+    const source = runtimeSource('reactor_core.js');
     const utilsStart = source.indexOf('function Utils()');
     const utilsEnd = source.indexOf('function Graphics()');
     const webAudioStart = source.indexOf('function WebAudio()');

@@ -1,0 +1,77 @@
+{
+  "rig": {
+    "template": "blade",
+    "markers": {
+      "gripBottom": [
+        0.0007580313877187522,
+        0.9103922342116212,
+        0.000012564122116170973
+      ],
+      "gripTop": [
+        0.0031026012051762336,
+        0.7357072973642522,
+        0.000051424599365190726
+      ],
+      "tip": [
+        -0.037986303309578494,
+        0.0008835146050424625,
+        0.0017099028839995603
+      ],
+      "edge": [
+        0.035142527260665496,
+        0.38597349190678076,
+        -0.0003328231063081527
+      ]
+    }
+  },
+  "variants": [
+    {
+      "name": "Arc Saber",
+      "color": {
+        "mode": "colorize",
+        "color": "#39c8ff",
+        "strength": 0.65,
+        "lightness": 0.1
+      },
+      "surface": {
+        "reflect": 0.7,
+        "gloss": 0.9,
+        "metal": 0.9,
+        "tint": "#ffffff",
+        "texture": 0.5
+      }
+    },
+    {
+      "name": "Ember Blade",
+      "color": {
+        "mode": "colorize",
+        "color": "#ff6a1e",
+        "strength": 0.7,
+        "lightness": 0.05
+      },
+      "surface": {
+        "reflect": 0.7,
+        "gloss": 0.9,
+        "metal": 0.9,
+        "tint": "#ffffff",
+        "texture": 0.5
+      }
+    },
+    {
+      "name": "Combat Knife",
+      "color": {
+        "mode": "colorize",
+        "color": "#1c1f24",
+        "strength": 0.9,
+        "lightness": -0.25
+      },
+      "surface": {
+        "reflect": 0.05,
+        "gloss": 0.15,
+        "metal": 0.2,
+        "tint": "#ffffff",
+        "texture": 1
+      }
+    }
+  ]
+}

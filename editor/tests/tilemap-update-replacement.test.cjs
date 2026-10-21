@@ -1,10 +1,11 @@
 const assert = require('node:assert/strict');
+const { runtimeSource } = require('./helpers/runtime-source.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 
 const repoRoot = path.resolve(__dirname, '..', '..');
-const coreSource = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_core.js'), 'utf8');
+const coreSource = runtimeSource('reactor_core.js');
 
 // MultiTweaks' animation-speed option replaces Tilemap.prototype.update with a
 // copy of the stock MZ body. On PIXI v5 that was harmless because PIXI itself

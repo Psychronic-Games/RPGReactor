@@ -1,7 +1,7 @@
 /* Built-in sequence authoring: steps and timeline are views of the same data. */
 class DatabaseActionSequenceEditor {
     constructor(parent) {this.parent=parent;this.ui=parent.battlePresentationEditor;this.db=parent.databaseManager;}
-    dispose(){this.clearPreviewMedia();this.audioContext?.close().catch(()=>{});this.audioContext=null;if(this.stepLanguageChanged)window.removeEventListener('rr-language-changed',this.stepLanguageChanged);this.stepLanguageChanged=null;this.endStepDrag();if(this.stepMenu&&this.parent._databaseActionMenu===this.stepMenu)this.parent.closeDatabaseActionMenu();this.stepMenu=null;this.controls?.dispose();this.controls=null;cancelAnimationFrame(this.raf);this.raf=0;this.playing=false;this.grid?.geometry.dispose();this.grid?.material.dispose();this.grid=null;this.preview?.dispose();this.preview=null;for(const audio of this.sounds||[])audio.pause();this.sounds=[];this.generation=(this.generation||0)+1;}
+    dispose(){this.stopPreviewInput();this.clearPreviewMedia();this.audioContext?.close().catch(()=>{});this.audioContext=null;if(this.stepLanguageChanged)window.removeEventListener('rr-language-changed',this.stepLanguageChanged);this.stepLanguageChanged=null;this.endStepDrag();if(this.stepMenu&&this.parent._databaseActionMenu===this.stepMenu)this.parent.closeDatabaseActionMenu();this.stepMenu=null;this.controls?.dispose();this.controls=null;cancelAnimationFrame(this.raf);this.raf=0;this.playing=false;this.grid?.geometry.dispose();this.grid?.material.dispose();this.grid=null;this.preview?.dispose();this.preview=null;for(const audio of this.sounds||[])audio.pause();this.sounds=[];this.generation=(this.generation||0)+1;}
     show(container,sequence){
         this.dispose();this.stepPlayback=null;this.sequence=sequence;this.selected=0;this.frame=0;this.undo=[];this.redo=[];this.disclosures=new Map();this.cast={user:1,target:1};this.castKinds={user:'actors',target:'enemies'};this.mirrored=false;this.images={};this.targetCount=1;this.sampleWeapon=0;
         const prefs=this.loadPrefs();
@@ -23,16 +23,21 @@ class DatabaseActionSequenceEditor {
         if(!this.sampleWeapon&&!this.sampleWeaponChosen){const assignedWeapon=B.references(this.ui.settings(),sequence.id,this.db.data.actionSequences).find(r=>r.kind==='weapons'&&this.db.getWeapon(r.id));if(assignedWeapon)this.sampleWeapon=assignedWeapon.id;}
         const workspace=U.element('div','rr-battle-workspace');this.host.append(workspace);const center=U.element('div','rr-sequence-center');workspace.append(center);center.append(toolbar);const inspectorCard=U.section('Battler Motion');inspectorCard.panel.classList.add('rr-sequence-inspector-card');this.inspectorHeader=inspectorCard.panel.querySelector('.database-section-header');this.inspector=inspectorCard.body;this.inspector.classList.add('rr-battle-inspector');workspace.append(inspectorCard.panel);
         // One grid for the preview's cast and stand-ins: two aligned rows of four, not three toolbars.
-        const cast=U.element('div','rr-sequence-preview-grid rr-sequence-cast');cast.dataset.sequenceCast='';center.append(cast);
+        // Folded by default: what the preview stands in for is chosen once, and the stage gets the room.
+        const castFold=U.element('details','rr-sequence-disclosure rr-sequence-cast-fold');castFold.dataset.sequenceCastFold='';castFold.open=!!prefs.castOpen;this.castOpen=castFold.open;
+        const castSummary=U.element('summary','rr-sequence-cast-summary'),castNames=U.element('span','rr-sequence-cast-names','',true);castNames.setAttribute('data-rr-i18n-skip','1');castSummary.append(U.element('span','','Preview'),castNames);castFold.append(castSummary);center.append(castFold);
+        castFold.ontoggle=()=>{if(!castFold.isConnected)return;this.castOpen=castFold.open;this.savePrefs();};
+        this.castSummarize=()=>{const who=role=>(this.castKinds[role]==='actors'?this.db.getActor(this.cast[role]):this.db.getEnemy(this.cast[role]))?.name||'';const weapon=this.sampleWeapon?this.db.getWeapon(this.sampleWeapon)?.name:'';castNames.textContent=[who('user'),'→',who('target'),weapon?'· '+weapon:''].filter(Boolean).join(' ');};
+        const cast=U.element('div','rr-sequence-preview-grid rr-sequence-cast');cast.dataset.sequenceCast='';castFold.append(cast);
         const actors=this.db.getActors(),enemies=this.db.getEnemies();
         // The remembered cast stands only while those records still exist.
         const exists=role=>this.castKinds[role]==='actors'?this.db.getActor(this.cast[role]):this.db.getEnemy(this.cast[role]);
         if(!exists('user')){this.castKinds.user='actors';this.cast.user=actors[0]?.id;}if(!exists('target')){this.castKinds.target='enemies';this.cast.target=enemies[0]?.id;}
         const choices=actors.map(a=>['actors:'+a.id,U.message('Actor: {name}',{name:a.name})]).concat(enemies.map(e=>['enemies:'+e.id,U.message('Enemy: {name}',{name:e.name})]));
         const castHint=U.text('Preview cast only. In battle, whichever battler uses this sequence plays it.');
-        for(const role of ['user','target']){const select=U.field(cast,role==='user'?'User':'Target',U.select(choices,this.castKinds[role]+':'+this.cast[role],value=>{const [kind,id]=value.split(':');this.castKinds[role]=kind;this.cast[role]=Number(id);this.savePrefs();this.loadCast();}));select.title=castHint;select.parentElement.title=castHint;}
+        for(const role of ['user','target']){const select=U.field(cast,role==='user'?'User':'Target',U.select(choices,this.castKinds[role]+':'+this.cast[role],value=>{const [kind,id]=value.split(':');this.castKinds[role]=kind;this.cast[role]=Number(id);this.savePrefs();this.castSummarize();this.loadCast();}));select.title=castHint;select.parentElement.title=castHint;}
         U.field(cast,'Skill / Item',U.select(sampleActions,this.sampleAction,value=>{this.clearPreviewMedia();this.sampleAction=value;this.frame=0;this.playing=false;this.savePrefs();}));
-        U.field(cast,'Weapon in Hand',U.select(weaponChoices,this.sampleWeapon||'',value=>{this.sampleWeapon=Number(value)||0;this.sampleWeaponChosen=true;this.weaponModels={};this.savePrefs();this.drawInspector();this.paint();}));
+        U.field(cast,'Weapon in Hand',U.select(weaponChoices,this.sampleWeapon||'',value=>{this.sampleWeapon=Number(value)||0;this.sampleWeaponChosen=true;this.weaponModels={};this.savePrefs();this.castSummarize();this.drawInspector();this.paint();}));
         U.field(cast,'Targets',U.select([[1,'1'],[2,'2'],[3,'3'],[4,'4']],this.targetCount,value=>{this.targetCount=Number(value);this.savePrefs();this.controls.targetsChanged();this.drawInspector();}));
         const mirror=U.element('input');mirror.type='checkbox';mirror.checked=!!this.mirrored;mirror.onchange=()=>{this.mirrored=mirror.checked;this.savePrefs();};U.field(cast,'Swap Sides',mirror).parentElement.classList.add('rr-sequence-preview-check');
         // Scene is the backdrop: an empty grid, the project's battleback pair, or a Battle Room from Troops. Every choice is listed; one the project cannot offer is greyed and says why.
@@ -55,7 +60,7 @@ class DatabaseActionSequenceEditor {
         U.field(backdrop,'Floor',U.select([['','None'],...floors.map(f=>[f,f,true])],this.scene.floor||'',value=>{this.scene.floor=value;this.savePrefs();this.loadCast();}));
         U.field(backdrop,'Wall',U.select([['','None'],...walls.map(f=>[f,f,true])],this.scene.wall||'',value=>{this.scene.wall=value;this.savePrefs();this.loadCast();}));
         if(!floors.length&&!walls.length)backdrop.append(U.element('span','rr-battle-help','No battlebacks in this project.'));showRows();
-        const castHelp=U.element('p','rr-battle-help rr-sequence-cast-help','Preview only, remembered per sequence. In battle, whichever battler uses this sequence plays it.');cast.append(castHelp);
+        const castHelp=U.element('p','rr-battle-help rr-sequence-cast-help','Preview only, remembered per sequence. In battle, whichever battler uses this sequence plays it.');cast.append(castHelp);this.castSummarize();
         this.stage=U.element('div','rr-sequence-stage');
         this.canvas=U.element('canvas','rr-sequence-preview');this.canvas.width=720;this.canvas.height=340;this.stage.append(this.canvas);
         this.controls=new ActionSequencePreview(this);if(prefs.distance>0)this.controls.distance=prefs.distance;this.controls.follow=!!prefs.follow;this.controls.orbit=prefs.orbit;this.controls.pan=prefs.pan||{x:0,y:0};this.controls.toolbar(center);center.append(this.stage);
@@ -79,13 +84,24 @@ class DatabaseActionSequenceEditor {
         const kind=U.field(footer,'Used As',U.select(B.kinds,['motion','routine'].includes(B.purpose(sequence))?B.purpose(sequence):'action',value=>{this.edit(()=>{sequence.purpose=value;if(value==='action')B.migratePhases(sequence);});this.updateReferences();this.drawSteps();this.drawInspector();this.phasesButton.hidden=value!=='action';}));kind.title=U.text('Used As');
         this.references=U.element('p','rr-battle-help');footer.append(this.references);this.updateReferences();this.phasesButton.hidden=B.purpose(sequence)!=='action';
         this.refresh();this.loadCast();let last=performance.now();
-        const tick=now=>{if(!this.host.isConnected)return;
+        // Painted while playing, and otherwise only when something changed: a
+        // paused sequence used to be drawn in full every frame. Any input in
+        // the window (the step list, the inspector, a menu or picker over it,
+        // the canvas gizmos) asks for a second of frames, as do a language
+        // switch and whatever the preview finishes loading on its own.
+        this.previewDirty=true;this.previewInputListener=()=>this.invalidatePreview();
+        for(const type of DatabaseActionSequenceEditor.PREVIEW_INPUT_EVENTS)document.addEventListener(type,this.previewInputListener,true);
+        // Moving the pointer matters over the canvas only (gizmo hovers and drags, which capture it there).
+        this.canvas.addEventListener('pointermove',this.previewInputListener);
+        this.previewLanguageListener=()=>this.invalidatePreview();window.addEventListener('rr-language-changed',this.previewLanguageListener);
+        const tick=now=>{if(!this.host.isConnected){this.stopPreviewInput();return;}
             const dt=Math.min(100,now-last);last=now;
             for(const audio of this.sounds){if(!this.playing&&!audio.paused)audio.pause();else if(this.playing&&audio.paused&&!audio.ended)audio.play().catch(()=>{});}
             for(const entry of this.animationLayers||[]){entry.layer.paused=!this.playing;entry.layer.speed=this.speed;}
             if(this.playing)this.advancePreview(dt/1000*60*this.speed);
             if(this.preview)this.preview.effectsDelta=dt/1000*60*this.speed;
-            this.paint();this.raf=requestAnimationFrame(tick);
+            if(this.playing||this.previewNeedsPaint(now)){this.previewDirty=false;this.paint();}
+            this.raf=requestAnimationFrame(tick);
         };this.raf=requestAnimationFrame(tick);
 
     }
@@ -101,11 +117,11 @@ class DatabaseActionSequenceEditor {
         if([1,2,3,4].includes(mine.targetCount))this.targetCount=mine.targetCount;
         this.mirrored=!!mine.mirrored;this.sampleWeaponChosen=false;if(mine.sampleWeapon==='equipped')this.sampleWeaponChosen=true;else if(Number(mine.sampleWeapon)>0&&this.db.getWeapon(Number(mine.sampleWeapon))){this.sampleWeapon=Number(mine.sampleWeapon);this.sampleWeaponChosen=true;}
         const orbit=shared.orbit&&Number.isFinite(shared.orbit.yaw)&&Number.isFinite(shared.orbit.pitch)?{yaw:shared.orbit.yaw,pitch:shared.orbit.pitch}:null,pan=shared.pan&&Number.isFinite(shared.pan.x)&&Number.isFinite(shared.pan.y)?{x:shared.pan.x,y:shared.pan.y}:null;
-        return {sampleAction:typeof mine.sampleAction==='string'?mine.sampleAction:null,distance:Number(shared.distance)||0,follow:!!shared.follow,orbit,pan};
+        return {sampleAction:typeof mine.sampleAction==='string'?mine.sampleAction:null,distance:Number(shared.distance)||0,follow:!!shared.follow,orbit,pan,castOpen:!!shared.castOpen};
     }
     savePrefs(){
         const key=this.prefsKey();if(!key||!this.sequence)return;const all=this.readPrefs();
-        all.shared={projection:this.previewProjection,scene:this.scene,distance:this.controls?.distance,follow:!!this.controls?.follow,orbit:this.controls?.orbit||null,pan:this.controls?.pan||null};
+        all.shared={projection:this.previewProjection,scene:this.scene,distance:this.controls?.distance,follow:!!this.controls?.follow,orbit:this.controls?.orbit||null,pan:this.controls?.pan||null,castOpen:!!this.castOpen};
         (all.sequences||={})[this.sequence.id]={castKinds:{...this.castKinds},cast:{...this.cast},targetCount:this.targetCount,mirrored:!!this.mirrored,sampleWeapon:this.sampleWeapon||(this.sampleWeaponChosen?'equipped':0),sampleAction:this.sampleAction};
         try{localStorage.setItem(key,JSON.stringify(all));}catch(error){/* storage refused: the choices still stand for this session */}
     }
@@ -138,6 +154,8 @@ class DatabaseActionSequenceEditor {
             this.validation.textContent=errors.map(error=>this.ui.text(error)).join(' ')||ready;}
         this.updateStepDescriptions();}
     refresh(){this.drawSteps();this.drawInspector();this.validate();}
+    /** A stage narrower than 3:2 (a small window, the inspector beside it) stands the camera back so both battlers stay in view; a wide stage is as it was. */
+    stageFit(view){if(!view||view.camera?.isOrthographicCamera)return 1;const aspect=(view.width||960)/Math.max(1,view.height||540);return Math.max(1,Math.min(4,1.5/Math.max(.1,aspect)));}
     previewSequence(){
         let index=this.stepPlayback?.index??this.previewWaitIndex;
         const selected=this.sequence.steps[this.selected];
@@ -145,8 +163,40 @@ class DatabaseActionSequenceEditor {
         // same frame but comes later in the list has happened yet, so a
         // weapon shown by the next step is not already in the hand.
         if(index===undefined&&!this.playing&&selected&&(this.asOfStep||this.controls?.transformPose===selected||ReactorBattleData.hasPose(selected))&&this.frame===ReactorBattleData.timeline(this.sequence)[this.selected].end)index=this.selected;
+        // The weapon riding a pose is shown with that pose reached: the two run over the same frames.
+        if(index===this.selected&&selected?.withStep&&this.sequence.steps[index+1]?.id===selected.withStep)index++;
         const sequence=index===undefined?this.sequence:{...this.sequence,steps:this.sequence.steps.slice(0,index+1)};
         if(sequence.steps.some(s=>['action','branch'].includes(s.type)))try{return ReactorBattleData.previewPlan(sequence,this.db.data.actionSequences);}catch(error){return sequence;}return sequence;
+    }
+    /** Input anywhere in the document that can change what the paused preview shows. */
+    static PREVIEW_INPUT_EVENTS=['pointerdown','pointerup','wheel','input','change','click','keydown','keyup','drop'];
+    /** Ask for a second of frames: an edit can settle over a few (a picture loading, an inspector redraw). */
+    invalidatePreview(){this.previewDirty=true;this.previewLiveUntil=performance.now()+1000;}
+    stopPreviewInput(){
+        if(this.previewInputListener)for(const type of DatabaseActionSequenceEditor.PREVIEW_INPUT_EVENTS)document.removeEventListener(type,this.previewInputListener,true);
+        if(this.previewLanguageListener)window.removeEventListener('rr-language-changed',this.previewLanguageListener);
+        this.previewInputListener=this.previewLanguageListener=null;
+    }
+    /**
+     * Whether a paused preview has to be drawn this frame. Besides an explicit
+     * change, the room view finishes things on its own time: a model or an
+     * effect loading, a texture decoding after the model is in. Those are
+     * read off a small signature — counts and texture versions, a handful of
+     * numbers — rather than by painting to find out. A movie surface plays
+     * in real time and keeps the preview live.
+     */
+    previewNeedsPaint(now){
+        if(this.previewDirty||now<(this.previewLiveUntil||0))return true;
+        const view=this.preview;if(view!==this.previewSeenView){this.previewSeenView=view;this.previewSignature=null;this.previewTextures=[];return true;}
+        if(!view)return false;
+        let loaded=0,media=!!view.mapMedia;for(const record of view.models.values()){if(record.object)loaded++;if(record.media?.size)media=true;}
+        if(media)return true;
+        let pending=0;for(const play of view.effectPlays?.values?.()||[])if(play.pending)pending++;
+        const shape=view.models.size+'|'+loaded+'|'+view.billboards.size+'|'+pending;
+        if(shape!==this.previewShape){this.previewShape=shape;this.previewTextures=typeof ModelPreview3D!=='undefined'&&ModelPreview3D.collectTextures?ModelPreview3D.collectTextures(...[...view.models.values()].map(record=>record.object)):[];this.previewSignature=null;return true;}
+        const signature=typeof ModelPreview3D!=='undefined'&&ModelPreview3D.textureVersionSum?ModelPreview3D.textureVersionSum(this.previewTextures):0;
+        if(signature!==this.previewSignature){const first=this.previewSignature===null;this.previewSignature=signature;return !first;}
+        return false;
     }
     playStep(){
         const cue=ReactorBattleData.timeline(this.sequence)[this.selected];if(!cue)return;
@@ -172,7 +222,7 @@ class DatabaseActionSequenceEditor {
         const copies=JSON.parse(JSON.stringify(records)).map(step=>({...step,id:ReactorBattleData.step(step.type).id}));index=Math.max(0,Math.min(this.sequence.steps.length,index));
         this.edit(()=>this.sequence.steps.splice(index,0,...copies));this.selected=index;this.refresh();this.selectStep(index);this.revealStep();return true;
     }
-    deleteStep(index=this.selected){if(!this.sequence.steps[index])return false;this.edit(()=>this.sequence.steps.splice(index,1));this.selected=Math.min(Math.max(0,index-1),this.sequence.steps.length-1);this.refresh();this.selectStep(this.selected);this.revealStep();return true;}
+    deleteStep(index=this.selected){if(!this.sequence.steps[index])return false;const rider=this.poseWeaponStep(this.sequence.steps[index]);this.edit(()=>{this.sequence.steps.splice(index,1);if(rider)this.sequence.steps.splice(index-1,1);});if(rider)index--;this.selected=Math.min(Math.max(0,index-1),this.sequence.steps.length-1);this.refresh();this.selectStep(this.selected);this.revealStep();return true;}
     queueStepClipboard(action){this.stepClipboardQueue=(this.stepClipboardQueue||Promise.resolve()).catch(()=>false).then(action).catch(error=>{console.warn('Action step clipboard:',error);return false;});return this.stepClipboardQueue;}
     copyStep(cut=false){
         const sequence=this.sequence,host=this.host,step=sequence.steps[this.selected];if(!step)return Promise.resolve(false);
@@ -313,8 +363,10 @@ class DatabaseActionSequenceEditor {
     phaseHead(phase,count,continued=false){const U=this.ui,B=ReactorBattleData,[,label,help]=B.actionPhases.find(([id])=>id===phase),head=U.element('div','rr-sequence-phase-head'+(continued?' rr-sequence-phase-continued':''));head.dataset.phaseHead=phase;head.title=continued?U.text(U.message('{phase} carries on here after the phase it called; these steps are still part of it.',{phase:U.text(label)})):U.text(help);
         head.append(U.element('span','rr-sequence-phase-number',String(B.phaseIds().indexOf(phase)+1),true),U.element('span','rr-sequence-phase-label',continued?U.message('{phase} (continued)',{phase:U.text(label)}):label));
         const tag=U.element('span','rr-sequence-phase-count',continued?'':count?U.message('{n} steps',{n:count}):'No steps');if(!continued)head.append(tag);
-        const add=U.button('+',()=>this.showStepPicker({phase,index:this.phaseInsertIndex(phase)}),true);add.classList.add('rr-sequence-phase-add');add.title=U.text('Add a step to this phase');add.setAttribute('aria-label',U.text('Add a step to this phase'));head.append(add);
-        if(!count){const inherit=U.button('Remove',()=>this.inheritPhase(phase));inherit.classList.add('rr-sequence-phase-inherit');inherit.title=U.text('Remove this empty phase; it then comes from the next level down, or the built-in action');head.append(inherit);}
+        const add=U.button('+',()=>this.showStepPicker({phase,index:this.phaseInsertIndex(phase)}),true);add.classList.add('rr-sequence-phase-add');add.title=U.text('Add a step to this phase');add.setAttribute('aria-label',U.text('Add a step to this phase'));
+        // The buttons wrap together under a long phase name, never one of them alone.
+        const actions=U.element('span','rr-sequence-phase-actions');actions.append(add);head.append(actions);
+        if(!count){const inherit=U.button('Remove',()=>this.inheritPhase(phase));inherit.classList.add('rr-sequence-phase-inherit');inherit.title=U.text('Remove this empty phase; it then comes from the next level down, or the built-in action');actions.append(inherit);}
         return head;}
     drawSteps(){const U=this.ui,B=ReactorBattleData,top=this.steps.scrollTop,focused=this.steps.contains(document.activeElement)?document.activeElement.dataset.stepId:null;this.steps.replaceChildren();
         const phased=B.purpose(this.sequence)==='action',counts={};if(phased)for(const step of this.sequence.steps)counts[B.stepPhase(step)]=(counts[B.stepPhase(step)]||0)+1;
@@ -474,21 +526,21 @@ class DatabaseActionSequenceEditor {
     }
     setInspectorTitle(title){this.inspectorHeader.setAttribute('data-i18n-text-source',title);this.inspectorHeader.textContent=this.ui.text(title);}
     drawInspector(){if(this.controls?.mode==='formation'){this.controls.inspectFormation();return;}const U=this.ui,step=this.sequence.steps[this.selected];for(const details of this.inspector.querySelectorAll('[data-disclosure-key]'))this.disclosures.set(details.dataset.disclosureKey,details.open);this.inspector.replaceChildren();this.setInspectorTitle(step?this.label(step.type):'Action Steps');if(!step)return;
-        const change=(key,value)=>{this.edit(()=>step[key]=value);if(['name','weaponImageId','weaponGraphic'].includes(key))this.loadSequenceImages();};
+        const change=(key,value)=>{this.edit(()=>{step[key]=value;if(key==='duration'){const rider=this.poseWeaponStep(step);if(rider)rider.duration=value;}});if(['name','weaponImageId','weaponGraphic'].includes(key))this.loadSequenceImages();};
         U.number(this.inspector,['sound','animation'].includes(step.type)?'Wait (frames)':'Duration (frames)',step.duration,v=>change('duration',Math.max(0,Math.min(3600,Math.round(v)))),1);
         U.field(this.inspector,'Battler',U.select([['user','User'],['target','Current Target'],['allTargets','All Targets'],...ReactorBattleData.targetGroups.filter(v=>!['user','target','allTargets'].includes(v)).map(v=>[v,ReactorBattleData.optionLabel(v)]),...Array.from({length:Math.max(this.targetCount,(step.targetIndex??0)+1)},(_,i)=>['target'+i,U.message('Target {n}',{n:i+1})])],ReactorBattleData.roleKey(step),v=>{this.edit(()=>{step.role=v.startsWith('target')&&v!=='target'?'target':v;step.targetIndex=v.startsWith('target')&&v!=='target'?Number(v.slice(6)):undefined;});this.drawInspector();}));
         const B=ReactorBattleData,advanced=this.inspectorFold('Advanced','advanced');const advancedDetails=advanced.parentElement;advancedDetails.remove();
         // A concurrent step lets the next one start on the same frame while it plays on: a jump riding a move, two battlers acting at once.
         {const concurrent=U.element('input');concurrent.type='checkbox';concurrent.checked=!!step.concurrent;concurrent.dataset.sequenceConcurrent='';concurrent.onchange=()=>change('concurrent',concurrent.checked||undefined);const row=U.field(advanced,'Concurrent',concurrent);if(row?.title!==undefined)row.title=U.text('The next step starts on the same frame instead of after this one.');}
         // Changing a step's phase moves it into that section, after the section's last step.
-        if(B.purpose(this.sequence)==='action')U.field(this.inspector,'Phase',U.select(B.actionPhases.map(([id,label])=>[id,label]),B.stepPhase(step),v=>{if(v===B.stepPhase(step))return;this.edit(()=>{const steps=this.sequence.steps,from=steps.indexOf(step);steps.splice(from,1);step.phase=v;const to=this.phaseInsertIndex(v);steps.splice(to,0,step);this.selected=to;});this.refresh();this.selectStep(this.selected);this.revealStep();}));
+        if(B.purpose(this.sequence)==='action')U.field(advanced,'Phase',U.select(B.actionPhases.map(([id,label])=>[id,label]),B.stepPhase(step),v=>{if(v===B.stepPhase(step))return;this.edit(()=>{const steps=this.sequence.steps,from=steps.indexOf(step);steps.splice(from,1);step.phase=v;const to=this.phaseInsertIndex(v);steps.splice(to,0,step);this.selected=to;});this.refresh();this.selectStep(this.selected);this.revealStep();}));
         if(!['user','target','allTargets','subject'].includes(step.role)){
             U.field(advanced,'Target Filter',U.select(B.targetFilters.map(v=>[v,B.optionLabel(v)]),step.filter||'all',value=>change('filter',value)));
             U.number(advanced,'Group Member (0 = all)',step.memberIndex===undefined?0:step.memberIndex+1,value=>change('memberIndex',value>0?Math.floor(value)-1:undefined),1);
         }
         for(const field of [...(B.commands[step.type]?.fields||[]),...(B.extraFields[step.type]||[])]){
             const value=step[field.key]??field.value;
-            const secondary=((B.extraFields[step.type]||[]).includes(field)&&!['weaponGraphic','attachment','iconSource','destination','arc','flight',...(step.type==='weapon'?['layer']:[])].includes(field.key))||[...(['picture','icon','plane'].includes(step.type)?[]:['index']),'angle','spin','scale',...(step.type==='weapon'?[]:['layer']),'space',...(step.type==='opacity'?[]:['opacity']),'volume','pitch','pan','show','equipIndex','scrollX','scrollY'].includes(field.key);
+            const secondary=((B.extraFields[step.type]||[]).includes(field)&&(step.type==='weapon'||!['weaponGraphic','attachment','iconSource','destination','arc','flight'].includes(field.key)))||[...(['picture','icon','plane'].includes(step.type)?[]:['index']),'angle','spin','scale',...(step.type==='weapon'?[]:['layer']),'space',...(step.type==='opacity'?[]:['opacity']),'volume','pitch','pan','show','equipIndex','scrollX','scrollY'].includes(field.key);
             const fieldHost=secondary?advanced:this.inspector;
             // An operation only exposes the fields it actually consumes.
             const operation=step.operation||B.commandDefaults(step.type).operation;
@@ -499,7 +551,7 @@ class DatabaseActionSequenceEditor {
             if(['picture','plane','icon'].includes(step.type)&&operation==='clear'&&!['operation','index'].includes(field.key))continue;
             if(step.type==='pose'&&operation==='clear'&&field.key!=='operation')continue;
             if(step.type==='battlelog'&&operation!=='text'&&field.key==='text')continue;
-            if(step.type==='weapon'&&(field.key==='mode'||step.weaponGraphic!=='sheet'&&['weaponImageId','weaponFrame'].includes(field.key)))continue;
+            if(step.type==='weapon'&&(field.key==='mode'||field.key==='hold'||step.weaponGraphic!=='sheet'&&['weaponImageId','weaponFrame'].includes(field.key)))continue;
             if(step.type==='weapon'&&ReactorBattleData.weaponMode(step)!=='show'&&['weaponGraphic','attachment','bone','gripX','gripY','equipIndex','layer'].includes(field.key))continue;
             // The Held By choice above stands in for a model's grip; the raw number stays for icons.
             if(step.type==='weapon'&&field.key==='gripY'&&this.weaponModelSpec(step,B.roleKey(step).startsWith('target')?'target0':'user'))continue;
@@ -543,7 +595,7 @@ class DatabaseActionSequenceEditor {
                 get:key=>key==='x'&&approach()?-(step.x||0):key==='scale'?step.scale??1:step[key]||0,
                 set:(key,value)=>{if(this.sequence.steps[this.selected]!==step)return;step[key]=key==='x'&&approach()?-value:key==='scale'?Math.max(.01,Math.min(100,value)):value;U.changed();this.validate();},
                 reset:tab=>{for(const key of tab==='offset'?['x','y','z']:tab==='rotate'?['rotateX','rotateY','rotateZ']:['scale'])step[key]=key==='scale'?1:0;U.changed();this.validate();},
-                hint:tab=>tab==='offset'?'Drag the arrows in the preview, or slide.':tab==='rotate'?'Turns run over this step’s frames with its easing, from the previous pose. Backflip: raise Z and turn X by −360 in one step; 2D sprites only turn on Z.':'Scales the battler over this step’s frames.'
+                hint:tab=>tab==='offset'?(step.type==='camera'?"Drag the arrows in the preview, or slide. In a battle on the map the battle's camera takes this step.":"Drag the arrows in the preview, or slide. In a battle on the map a tile here is half a tile, and a move to the target stops at its cell."):tab==='rotate'?'Turns run over this step’s frames with its easing, from the previous pose. Backflip: raise Z and turn X by −360 in one step; 2D sprites only turn on Z.':'Scales the battler over this step’s frames.'
             });
             U.field(this.inspector,'Easing',U.select([['smooth','Smooth'],['linear','Linear']],step.easing,v=>change('easing',v)));
             if(step.type==='move')U.field(advanced,'Facing',U.select([['','Keep Facing'],['movement','Direction of Travel'],['target','Target'],['home','Home Facing']],step.face||'',v=>change('face',v||undefined)));
@@ -558,9 +610,10 @@ class DatabaseActionSequenceEditor {
             addGroup('Sprite Motions',Object.entries(this.motionLabels()).filter(([id])=>!modelSet.has(id.toLowerCase())));
             if(step.motion&&step.motion!==B.POSE_MOTION&&!known.has(step.motion)&&!modelSet.has(step.motion.toLowerCase()))addGroup('Other',[[step.motion,step.motion,true]]);
             select.value=step.motion||'idle';select.onchange=()=>{this.edit(()=>{step.motion=select.value;if(select.value===B.POSE_MOTION)step.parts||=[];else {delete step.parts;delete step.resetPose;}});this.drawInspector();if(select.value===B.POSE_MOTION)this.openFold(step.id+':pose');this.showPoseFrame();this.paint();};U.field(this.inspector,'Motion',select);
-            if(spec){const edit=U.button('Edit Model Poses…',()=>this.openModelPoses(spec));edit.classList.add('rr-sequence-edit-poses');this.inspector.append(edit);
-                this.inspector.append(U.element('p','rr-battle-help','Poses and clips are rigged per part in Database › 3D Models and play here by name over this step’s frames.'));
-                this.drawPoseParts(step,role,this.inspectorFold('Pose Parts','pose',B.hasPose(step)));}
+            if(spec){const edit=U.button('Edit Model Poses…',()=>this.openModelPoses(spec));edit.classList.add('rr-sequence-edit-poses');advanced.append(edit);
+                advanced.append(U.element('p','rr-battle-help','Poses and clips are rigged per part in Database › 3D Models and play here by name over this step’s frames.'));
+                this.drawPoseParts(step,role,this.inspectorFold('Pose Parts','pose',B.hasPose(step)),advanced);
+                this.drawPoseWeapon(step);}
             else this.inspector.append(U.element('p','rr-battle-help','Sprite motions pick a row of the battler sheet. Give the battler a 3D model to pose its parts.'));
             const transform=this.inspectorFold('Whole Model','transform',!!step.transform);this.controls.transformFields(step,change,transform);
         }
@@ -589,14 +642,15 @@ class DatabaseActionSequenceEditor {
             const mode=B.weaponMode(step);
             U.field(this.inspector,'Weapon',U.select([['show','Show'],['move','Move'],['hide','Hide']],mode,v=>{this.edit(()=>{step.mode=v;delete step.visible;});this.drawInspector();}));
             if(mode==='show'){
-                if(step.weaponGraphic!=='sheet')U.field(this.inspector,'Graphic',U.select([['weapon','Equipped Weapon (icon or 3D model)'],['action','Skill / Item'],['icon','Choose Icon']],step.iconSource||'weapon',v=>{change('iconSource',v);this.drawInspector();}));
-                if(step.weaponGraphic!=='sheet'&&step.iconSource==='icon')this.inspector.append(U.button('Choose Icon…',()=>this.parent.showIconPicker(step.iconIndex||0,id=>change('iconIndex',id),require('path').join(this.parent.currentProject.path,'img','system','IconSet.png'))));
+                if(step.weaponGraphic!=='sheet')U.field(advanced,'Graphic',U.select([['weapon','Equipped Weapon (icon or 3D model)'],['action','Skill / Item'],['icon','Choose Icon']],step.iconSource||'weapon',v=>{change('iconSource',v);this.drawInspector();}));
+                if(step.weaponGraphic!=='sheet'&&step.iconSource==='icon')advanced.append(U.button('Choose Icon…',()=>this.parent.showIconPicker(step.iconIndex||0,id=>change('iconIndex',id),require('path').join(this.parent.currentProject.path,'img','system','IconSet.png'))));
             }
             if(mode!=='hide'){
                 const showPose=()=>{this.stepPlayback=null;this.playing=false;this.asOfStep=true;this.frame=ReactorBattleData.timeline(this.sequence)[this.selected].end;};
                 const spec=this.weaponModelSpec(step,B.roleKey(step).startsWith('target')?'target0':'user');
                 // A model is held by its middle, its base (a sword's grip) or its top.
-                if(spec&&mode==='show'){U.field(this.inspector,'Held By',U.select([['0','Its grip'],['0.5','Middle'],['1','Top']],String(step.gripY??0),v=>{change('gripY',Number(v));showPose();this.paint();}));
+                // In the fist is the natural grip: choosing it clears the step's own offset and turns, which were for the older hold.
+                if(spec&&mode==='show'){U.field(this.inspector,'Held By',U.select([['fist','In the fist'],['0','Its grip'],['0.5','Middle'],['1','Top']],step.hold==='fist'?'fist':String(step.gripY??0),v=>{this.edit(()=>{if(v==='fist')Object.assign(step,{hold:'fist',x:0,y:0,z:0,rotation:0,rotateY:0,rotateZ:0,gripY:0});else Object.assign(step,{hold:'hand',gripY:Number(v)});});showPose();this.drawInspector();this.paint();}));
                     U.field(this.inspector,'Held With',U.select([['one','One hand'],['both','Both hands']],step.hands||'one',v=>{change('hands',v);showPose();this.paint();}));
                     U.field(this.inspector,'Aim',U.select([['none','No aim'],['target','At the target']],step.aim||'none',v=>{change('aim',v);showPose();this.paint();}));}
                 const row=(key,axis,label,min,max,stepSize,reset)=>({key,axis,label,min,max,step:stepSize,reset});
@@ -802,10 +856,10 @@ class DatabaseActionSequenceEditor {
         });
     }
     /** The Pose Parts section of a rigged Motion step: pick a part (click it on the model, or choose it here), then bend, slide or resize it on a card or by dragging its gizmos in the preview. Picking a part on a step that plays a clip turns the step into a pose. */
-    drawPoseParts(step,role,host){const U=this.ui,B=ReactorBattleData;host.classList.add('rr-pose-parts');
+    drawPoseParts(step,role,host,advanced=host){const U=this.ui,B=ReactorBattleData;host.classList.add('rr-pose-parts');
         const parts=this.modelParts(role),posed=step.parts||[],posing=B.hasPose(step);
         if(!posed.some(p=>p.part===this.posePartName))this.posePartName=posed[0]?.part||null;
-        host.append(U.element('p','rr-battle-help',posing?'Click a part on the model, or pick one below. Drag its rings to bend it, or slide. The pose is reached over this step’s frames and kept until a later step moves that part.':'Click a part on the model in the preview, or choose one here, to bend, slide or resize just that part. This step then holds that pose instead of playing a motion.'));
+        if(!posed.length)host.append(U.element('p','rr-battle-help',posing?'Click a part on the model, or pick one below. Drag its rings to bend it, or slide. The pose is reached over this step’s frames and kept until a later step moves that part.':'Click a part on the model in the preview, or choose one here, to bend, slide or resize just that part. This step then holds that pose instead of playing a motion.'));
         const picker=U.element('div','rr-pose-part-picker'),choices=parts.filter(p=>!posed.some(x=>x.part===p.name));
         const select=U.select([['',U.text('Choose a part…')],...choices.map(p=>[p.name,p.label,!B.humanoidJoints[p.name]])],'',()=>{});select.setAttribute('aria-label',U.text('Part'));
         const add=U.button('Add Part',()=>{if(select.value)this.pickPosePart(select.value);});picker.append(select,add);host.append(picker);
@@ -814,9 +868,9 @@ class DatabaseActionSequenceEditor {
         for(const entry of posed){const row=U.element('div','rr-pose-part-row'+(entry.part===this.posePartName?' selected':''));const pick=U.button(B.partLabel(entry.part),()=>{this.posePartName=entry.part;this.controls.setTool('rotate');this.drawInspector();this.showPoseFrame();this.paint();},true);pick.classList.add('rr-pose-part-name');pick.setAttribute('aria-pressed',String(entry.part===this.posePartName));
             const remove=U.button('×',()=>{this.edit(()=>step.parts=step.parts.filter(p=>p!==entry));if(this.posePartName===entry.part)this.posePartName=null;this.drawInspector();this.showPoseFrame();this.paint();},true);remove.classList.add('rr-pose-part-remove');remove.title=U.text('Remove');remove.setAttribute('aria-label',U.text('Remove'));row.append(pick,remove);list.append(row);}
         if(!posing){const keep=U.element('input');keep.type='checkbox';keep.checked=!!step.keepPose;keep.onchange=()=>{this.edit(()=>step.keepPose=keep.checked||undefined);this._poseRulesKey=null;this.paint();};const keepField=U.field(host,'Keep posed parts',keep);keepField.title=U.text('Plays this motion without bringing posed parts home: a turret stays aimed while its gun fires.');return;}
-        const reset=U.element('input');reset.type='checkbox';reset.checked=!!step.resetPose;reset.onchange=()=>{this.edit(()=>step.resetPose=reset.checked||undefined);this.showPoseFrame();this.paint();};U.field(host,'Start from rest',reset);
+        const reset=U.element('input');reset.type='checkbox';reset.checked=!!step.resetPose;reset.onchange=()=>{this.edit(()=>step.resetPose=reset.checked||undefined);this.showPoseFrame();this.paint();};U.field(advanced,'Start from rest',reset);
         const entry=posed.find(p=>p.part===this.posePartName);if(!entry)return;
-        const aim=U.element('input');aim.type='checkbox';aim.checked=!!entry.aim;aim.onchange=()=>{this.edit(()=>{const live=this.posePartEntry(entry.part);if(!live)return;if(aim.checked)live.aim='target';else delete live.aim;});this._poseRulesKey=null;this.drawInspector();this.showPoseFrame();this.paint();};const aimField=U.field(host,'Aim at target',aim);aimField.title=U.text('Turns this part to face the target when the step plays, from wherever the model stands. A turret needs no authored turn.');
+        const aim=U.element('input');aim.type='checkbox';aim.checked=!!entry.aim;aim.onchange=()=>{this.edit(()=>{const live=this.posePartEntry(entry.part);if(!live)return;if(aim.checked)live.aim='target';else delete live.aim;});this._poseRulesKey=null;this.drawInspector();this.showPoseFrame();this.paint();};const aimField=U.field(advanced,'Aim at target',aim);aimField.title=U.text('Turns this part to face the target when the step plays, from wherever the model stands. A turret needs no authored turn.');
         if(entry.aim){host.append(U.element('p','rr-battle-help','This part turns to face the target on its own; Offset and Scale still apply.'));}
         const info=parts.find(p=>p.name===entry.part),hinge=info?.hinge??null,axes=['X','Y','Z'];
         const row=(key,axis,label,min,max,stepSize,reset)=>({key,axis,label,min,max,step:stepSize,reset});
@@ -860,6 +914,46 @@ class DatabaseActionSequenceEditor {
     /** The Show step a held-item step builds on: itself for a Show, else the last Show for the same battler before it. */
     heldBase(step){const B=ReactorBattleData,steps=this.sequence.steps,index=steps.indexOf(step);if(!step||step.type!=='weapon')return null;if(B.weaponMode(step)==='show')return step;const role=B.roleKey(step);let base=null;for(let i=0;i<index;i++){const s=steps[i];if(s.type==='weapon'&&B.roleKey(s)===role&&B.weaponMode(s)==='show')base=s;}return base;}
     posePartEntry(name){const step=this.sequence.steps[this.selected];return (step?.parts||[]).find(p=>p.part===name)||null;}
+    /** What a battler has in hand as a step begins: the Show step's settings with every Move since laid over them; null with nothing in hand. */
+    heldStateBefore(index,roleKey){const B=ReactorBattleData;let state=null;
+        for(let i=0;i<index;i++){const s=this.sequence.steps[i];if(s.type!=='weapon'||B.roleKey(s)!==roleKey)continue;const mode=B.weaponMode(s);
+            if(mode==='hide')state=null;else if(mode==='show')state={...B.commandDefaults('weapon'),...s};else if(state)state={...state,...B.heldPose(state,s,1)};}
+        return state;}
+    /**
+     * The weapon Move that rides a pose: a concurrent weapon step just before the motion step, made
+     * for it (`withStep`), so the held thing shifts and turns over the same frames as the limbs.
+     * Ordinary steps: the game needs nothing new to play them.
+     */
+    poseWeaponStep(motion){const steps=this.sequence.steps,i=steps.indexOf(motion),prev=i>0?steps[i-1]:null;return motion?.type==='motion'&&prev&&prev.type==='weapon'&&prev.withStep===motion.id&&ReactorBattleData.weaponMode(prev)==='move'?prev:null;}
+    ensurePoseWeaponStep(motion){let rider=this.poseWeaponStep(motion);if(rider)return rider;const B=ReactorBattleData,steps=this.sequence.steps,i=steps.indexOf(motion);if(i<0||motion.type!=='motion')return null;
+        const state=this.heldStateBefore(i,B.roleKey(motion));if(!state)return null;
+        // It starts as the weapon already is, so making it changes nothing until it is moved.
+        rider=B.step('weapon',{mode:'move',role:motion.role,targetIndex:motion.targetIndex,phase:motion.phase,concurrent:true,duration:motion.duration,easing:'smooth',withStep:motion.id,...B.heldPose(state,state,1)});
+        if(rider.targetIndex===undefined)delete rider.targetIndex;if(rider.phase===undefined)delete rider.phase;
+        steps.splice(i,0,rider);if(this.selected>=i)this.selected++;return rider;}
+    /** From a pose step to the weapon riding it (made on the way, one undo step), where the arrows and rings stand on the weapon. */
+    editPoseWeapon(){const motion=this.sequence.steps[this.selected];if(motion?.type!=='motion')return false;
+        if(!this.poseWeaponStep(motion)){if(!this.heldStateBefore(this.selected,ReactorBattleData.roleKey(motion)))return false;this.edit(()=>this.ensurePoseWeaponStep(motion));}
+        const index=this.sequence.steps.indexOf(this.poseWeaponStep(motion));if(index<0)return false;this.refresh();this.selectStep(index);this.drawInspector();this.updateStepSelection();this.revealStep();this.paint();return true;}
+    /** From the weapon riding a pose back to the pose, on the part that was clicked. */
+    editPoseOfWeapon(part){const rider=this.sequence.steps[this.selected],index=this.sequence.steps.findIndex(s=>s.type==='motion'&&s.id===rider?.withStep);if(index<0)return false;
+        this.selectStep(index);this.drawInspector();this.updateStepSelection();if(part)this.pickPosePart(part);else this.paint();return true;}
+    /** The Weapon in Hand card on a pose step: the held thing's offset and turn over this pose's frames. */
+    drawPoseWeapon(step){const U=this.ui,B=ReactorBattleData,index=this.sequence.steps.indexOf(step),state=this.heldStateBefore(index,B.roleKey(step));if(!state)return;
+        const host=this.inspectorFold('Weapon in Hand','poseheld',!!this.poseWeaponStep(step));host.classList.add('rr-pose-weapon');
+        const row=(key,axis,label,min,max,stepSize,reset)=>({key,axis,label,min,max,step:stepSize,reset});
+        const now=()=>this.poseWeaponStep(step)||state;
+        this.controls.transformCard(host,{id:'poseheld',
+            tabs:[{id:'offset',label:'Offset'},{id:'rotate',label:'Rotate'}],
+            shown:()=>this.showPoseFrame(),
+            rows:tab=>tab==='offset'?['x','y','z'].map(k=>row(k,k.toUpperCase(),U.message('{axis} (tiles)',{axis:k.toUpperCase()}),-2,2,.01,0))
+                :[row('rotation','X','Tilt (degrees)',-180,180,1,0),row('rotateY','Y','Turn (degrees)',-180,180,1,0),row('rotateZ','Z','Roll (degrees)',-180,180,1,0)],
+            get:key=>now()[key]??0,
+            set:(key,value)=>{if(this.sequence.steps[this.selected]!==step)return;const made=!this.poseWeaponStep(step),rider=this.ensurePoseWeaponStep(step);if(!rider)return;rider[key]=Math.round(value*100)/100;U.changed();if(made)this.drawSteps();this.validate();},
+            // Reset lets the weapon ride the hand as it was: the riding step goes.
+            reset:()=>{const rider=this.poseWeaponStep(step);if(!rider)return;const at=this.sequence.steps.indexOf(rider);this.sequence.steps.splice(at,1);if(this.selected>at)this.selected--;U.changed();this.drawSteps();this.validate();},
+            hint:()=>'Moves the weapon in the hand while this pose is reached. Click the weapon in the preview to drag it.'
+        });}
     showPoseFrame(){this.stepPlayback=null;this.playing=false;this.asOfStep=true;this.frame=ReactorBattleData.timeline(this.sequence)[this.selected].end;}
     /** A part chosen by clicking the model joins the pose if it is new, and becomes the one the gizmos move. */
     pickPosePart(name){const B=ReactorBattleData,step=this.sequence.steps[this.selected];if(!step||step.type!=='motion')return;if(!this.posePartEntry(name))this.edit(()=>{if(!B.hasPose(step))step.motion=B.POSE_MOTION;step.parts||=[];step.parts.push({part:name,...B.poseRest()});});this.posePartName=name;this.drawInspector();this.openFold(step.id+':pose');this.showPoseFrame();this.paint();}
@@ -940,7 +1034,7 @@ class DatabaseActionSequenceEditor {
         const view=this.preview;
         if(view){
             const lift=this.liftPose(view);
-            const camera=this.controls.cameraPose(poses);Object.assign(view.settings.camera,camera,{z:(camera.z||0)+1,distance:this.controls.distance});
+            const camera=this.controls.cameraPose(poses);Object.assign(view.settings.camera,camera,{z:(camera.z||0)+1,distance:this.controls.distance*this.stageFit(view)});
             this.ensurePoseRules(view);
             for(const key of ['user','target0','target1','target2','target3']){
                 const role=key==='user'?'user':'target',p=poses[key],image=this.images[role],motion=this.controls.mode==='formation'?{name:'idle',start:0}:this.motionFor(key);

@@ -1,4 +1,5 @@
 const assert = require('node:assert/strict');
+const { runtimeSource } = require('./helpers/runtime-source.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
@@ -102,7 +103,8 @@ test('types editor exposes dense panels, clipboard actions, and destructive shri
     assert.match(source, /showDatabaseActionMenu\(event\.clientX, event\.clientY/);
     assert.match(source, /requestGeneration !== pasteGeneration \|\| mutationGeneration !== expectedMutation/);
     assert.match(source, /viewer\?\.classList\.contains\('active'\)[\s\S]*detail\?\.contains\(workspace\)/);
-    assert.match(source, /newMax < currentMax && !confirm/);
+    assert.match(source, /if \(newMax < currentMax\) \{[\s\S]{0,400}?await RRDialog\.confirm\(this\.describeRemovedEntries\(newMax, currentMax\), \{[\s\S]{0,160}?danger: true/,
+        'a smaller maximum is a danger question through the themed dialog');
     assert.match(source, /resizeTypeArray\(system, category, newMax\)/);
 });
 
@@ -130,9 +132,8 @@ test('database maximum UI displays caps and lazy-loads continuous large lists', 
     const animations = fs.readFileSync(path.join(repoRoot, 'src', 'database', 'DatabaseAnimationEditor.js'), 'utf8');
 
     assert.match(source, /const batchSize = 250;/);
-    assert.match(source, /input\.max = String\(maximum\)/);
-    assert.match(source, /input\.className = 'rr-database-maximum-input'/);
-    assert.match(theme, /\.rr-database-maximum-input::\-webkit-inner-spin-button,[\s\S]*\-webkit-appearance: none;/);
+    // Change Maximum asks in the themed prompt, which refuses a number past the section's cap.
+    assert.match(source, /value >= 1 && value <= maximum \? '' : tt\('Enter a whole number from 1 to \{max\}\.'\)/);
     assert.match(source, /tt\('Max:'\).*maximum/);
     assert.match(source, /filteredData\.slice\(renderedCount, end\)/);
     assert.match(source, /type === 'animations'[\s\S]*?filteredData\.length/,
@@ -367,7 +368,7 @@ test('level 999 extrapolates finite class parameters without expanding class dat
     assert.match(battleSource, /RREquipSlots\.resolveInitialBindings/);
     assert.doesNotMatch(battleSource, /emptyHint\.textContent = this\._t\('\(no compatible items\)'\)/);
 
-    const runtime = fs.readFileSync(path.resolve(repoRoot, '..', 'runtime', 'reactor_objects.js'), 'utf8');
+    const runtime = runtimeSource('reactor_objects.js');
     assert.match(runtime, /Game_Actor\.prototype\.classParamAtLevel/);
     assert.match(runtime, /Math\.min\(100, Math\.floor\(Number\(repeats\)/);
     assert.match(fs.readFileSync(path.join(repoRoot, 'index.html'), 'utf8'), /src\/utils\/DataLimits\.js/);
@@ -400,7 +401,7 @@ test('Terms editor uses a full-width compact workspace with native text actions'
 
     assert.match(source, /prepareDatabaseSection\('terms',[\s\S]*showListPanel: false/);
     assert.match(source, /class="rr-terms-workspace"/);
-    assert.match(source, /class="rr-terms-fields rr-terms-fields-four"/);
+    assert.match(source, /class="database-section-content rr-terms-fields rr-terms-fields-four"/);
     assert.match(source, /class="rr-terms-message-columns"/);
     assert.match(source, /attachTextFieldContextMenu\(input\)/);
     assert.match(styles, /\.rr-terms-workspace\s*\{[^}]*grid-template-columns:/s);
@@ -623,4 +624,34 @@ test('actor equipment hides unsupported slots and trait pickers preserve sparse 
     assert.deepEqual(fixtureSlots, [1, 2, 2, 3, 4]);
     assert.deepEqual(fixtureBindings, fixtureSlots.map((etypeId, slotIndex) => ({ etypeId, slotIndex })));
     assert.match(fs.readFileSync(path.join(repoRoot, 'index.html'), 'utf8'), /src\/utils\/EquipSlots\.js/);
+});
+
+test('New opens the record it adds, so the detail matches the list selection', () => {
+    const source = fs.readFileSync(path.join(repoRoot, 'src', 'DatabaseEditorUI.js'), 'utf8');
+    const handler = source.slice(source.indexOf('addBtn.onclick = () => {'), source.indexOf('const deleteBtn = document.createElement'));
+    assert.match(handler, /refreshList\(\);\n\s*\/\/[^\n]*\n\s*this\.showDatabaseDetail\(this\.databaseManager\.data\[type\]\?\.\[newEntry\.id\] \|\| newEntry, type, \{ reuse: true \}\);/);
+});
+
+test('opening a record that fills in its defaults is not an edit: Cancel\'s baseline and the saved state take the filled-in record', () => {
+    const DatabaseEditorUI = loadBrowserClass(path.join(repoRoot, 'src', 'DatabaseEditorUI.js'), 'DatabaseEditorUI');
+    const ui = Object.create(DatabaseEditorUI.prototype);
+    const data = { userInterfaces: [null, { id: 1, name: 'Title' }, { id: 2, name: 'Menu' }], actors: [null] };
+    const manager = {
+        data, savedState: {},
+        serialize: value => JSON.stringify(value),
+        captureSavedState(key) { this.savedState[key] = this.serialize(this.data[key]); }
+    };
+    manager.captureSavedState('userInterfaces');
+    ui.databaseManager = manager;
+    ui._dataSnapshot = JSON.stringify(data);
+    const fill = record => { record.mode = record.mode || 'scene'; return record; };
+    assert.equal(ui.normalizeOnView('userInterfaces', data.userInterfaces[1], fill), data.userInterfaces[1]);
+    assert.equal(ui._dataSnapshot, JSON.stringify(data), 'nothing to discard');
+    assert.equal(manager.savedState.userInterfaces, JSON.stringify(data.userInterfaces), 'nothing to save');
+    // A real edit elsewhere stays an edit, and the saved state is left alone while the file has one.
+    data.userInterfaces[2].name = 'Main Menu';
+    ui.normalizeOnView('userInterfaces', data.userInterfaces[2], fill);
+    assert.equal(JSON.parse(ui._dataSnapshot).userInterfaces[2].name, 'Menu');
+    assert.equal(JSON.parse(ui._dataSnapshot).userInterfaces[2].mode, undefined, 'an edited record keeps its baseline');
+    assert.notEqual(manager.savedState.userInterfaces, JSON.stringify(data.userInterfaces));
 });

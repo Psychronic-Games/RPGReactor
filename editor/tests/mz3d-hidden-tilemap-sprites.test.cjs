@@ -1,4 +1,5 @@
 const assert = require('node:assert/strict');
+const { runtimeSource } = require('./helpers/runtime-source.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
@@ -6,7 +7,7 @@ const test = require('node:test');
 const repoRoot = path.resolve(__dirname, '..', '..');
 const compat = fs.readFileSync(path.join(repoRoot, 'runtime', 'libs', 'pixi_compat.js'), 'utf8');
 const sprites = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_sprites.js'), 'utf8');
-const core = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_core.js'), 'utf8');
+const core = runtimeSource('reactor_core.js');
 
 test('MZ3D character/model fixes live in pixi_compat, not corescript', () => {
     assert.match(compat, /window\.installMz3dCompat = function/);

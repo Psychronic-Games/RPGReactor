@@ -27,7 +27,7 @@ const TILE_SHEETS = ['TileA1', 'TileA2', 'TileA3', 'TileA4', 'TileA5', 'TileB', 
 
 function gameIni(src) {
     const b = src.read('Game.ini');
-    const text = b ? b.toString('latin1') : '';
+    const text = R.iniText(b);   // a Japanese game's title is Shift_JIS
     const get = (k) => { const m = new RegExp(`^[ \\t]*${k}[ \\t]*=[ \\t]*(.*)$`, 'mi').exec(text); return m ? m[1].trim() : ''; };
     return { title: get('Title'), rtp: get('RTP') };
 }
@@ -52,6 +52,8 @@ function open(folder, destination, options) {
     });
     const mainAt = scripts.findIndex(s => s.name.trim() === 'Main');
     const active = mainAt >= 0 ? scripts.slice(0, mainAt) : scripts;
+    // Settings the game makes before its first scene (screen size, default font) can be in Main itself.
+    const settingsScripts = (mainAt >= 0 ? scripts.slice(0, mainAt + 1) : scripts).map(s => s.text);
     const custom = active.filter(s => s.text.trim() && !STOCK_SCRIPTS.has(s.name.trim()));
     const mapIds = (infos instanceof Map ? Array.from(infos.keys()) : Object.keys(infos)).map(Number).filter(n => n > 0).sort((a, b) => a - b);
     const ini = gameIni(src);
@@ -72,10 +74,9 @@ function open(folder, destination, options) {
         const log = typeof options.log === 'function' ? options.log : () => {};
         const report = typeof options.progress === 'function' ? options.progress : () => {};
         const span = (from, to) => (done, total, status) => report(from + (to - from) * (total ? Math.min(1, done / total) : 1), status);
-        const repo = path.resolve(__dirname, '..', '..', '..');
-        const editorPackage = JSON.parse(fs.readFileSync(path.join(repo, 'editor', 'package.json'), 'utf8'));
-        const skeleton = path.join(repo, 'template', 'Barebones');
-        const runtime = path.join(repo, 'runtime');
+        const EditorPaths = require('./EditorPaths.js');
+        const editorPackage = EditorPaths.editorPackage();
+        const runtime = EditorPaths.runtime();
         const dest = path.resolve(destination);
         const mkdir = (p) => fs.mkdirSync(p, { recursive: true });
         const writeJson = (p, v) => fs.writeFileSync(p, JSON.stringify(v));
@@ -88,32 +89,35 @@ function open(folder, destination, options) {
 
         log('Copying the project skeleton and runtime…', 'stage');
         report(0, 'Copying the project skeleton and runtime…');
-        const copyTree = (from, to, skip = () => false) => {
+        const copyTree = (from, to) => {
             for (const entry of fs.readdirSync(from, { withFileTypes: true })) {
                 const s = path.join(from, entry.name), d = path.join(to, entry.name);
-                if (skip(path.relative(skeleton, s).replace(/\\/g, '/'))) continue;
-                if (entry.isDirectory()) { mkdir(d); copyTree(s, d, skip); } else { mkdir(path.dirname(d)); fs.copyFileSync(s, d); }
+                if (entry.isDirectory()) { mkdir(d); copyTree(s, d); } else { mkdir(path.dirname(d)); fs.copyFileSync(s, d); }
             }
         };
-        copyTree(skeleton, dest, r => (r === 'img' || r === 'img/system' || r.startsWith('img/system/')) ? false : r.startsWith('img/') || r.startsWith('audio/') || r.startsWith('js/'));
+        EditorPaths.copySkeleton(dest, r => r.startsWith('js/'));
         mkdir(path.join(dest, 'js'));
         copyTree(runtime, path.join(dest, 'js'));
-        if (fs.existsSync(path.join(skeleton, 'js', 'reactor_plugins.js'))) fs.copyFileSync(path.join(skeleton, 'js', 'reactor_plugins.js'), path.join(dest, 'js', 'reactor_plugins.js'));
+        fs.copyFileSync(EditorPaths.skeletonFile('js/reactor_plugins.js'), path.join(dest, 'js', 'reactor_plugins.js'));
         for (const f of [...Object.values(GRAPHICS), ...Object.values(R.AUDIO), 'img/tilesets', 'img/titles1', 'img/titles2', 'img/battlebacks1', 'img/battlebacks2', 'img/sv_actors', 'img/sv_enemies', 'movies']) mkdir(path.join(dest, f));
 
         // ---- the database ------------------------------------------------------
         log('Converting the database…', 'stage');
         report(0.05, 'Converting the database…');
         const scriptTexts = custom.map(s => s.text);
-        const constants = C.scriptConstants(scriptTexts);
+        // Constants from every section, stock ones too: events read Vocab::Emerge and the like.
+        const constants = C.scriptConstants(active.map(s => s.text));
         const scriptText = scriptTexts.join('\n');
         const messageCodes = {
+            vxGold: true,
             nameBox: /\\\\N[CR]?<|\bname_window\b/i.test(scriptText) && /YEA-MessageSystem|name_window/i.test(scriptText),
             yeaIcons: /YEA-MessageSystem/.test(scriptText),
             messageFace: /Message Face Control|message_face_control/i.test(scriptText)
         };
         const nameTable = (records) => { const out = []; for (const r of records || []) if (r && r.id) out[r.id] = { name: String(r.name || ''), icon: Number(r.icon_index) || 0 }; return out; };
-        const families = C.scriptFamilies(scriptTexts);
+        // Families are found in every section: a game may carry its own code inside a stock one (Thrall's Game_Temp).
+        const familyTexts = active.map(s => s.text);
+        const families = C.scriptFamilies(familyTexts);
         C.setContext({ constants, messageCodes, families, names: { items: nameTable(vx.items), weapons: nameTable(vx.weapons), armors: nameTable(vx.armors), skills: nameTable(vx.skills) } });
         const db = V.database(vx, notes);
         const ids = { attack: db.attackSkillId, guard: db.guardSkillId, escape: db.escapeSkillId };
@@ -135,23 +139,33 @@ function open(folder, destination, options) {
         }];
         const files = { Actors: db.actors, Classes: db.classes, Skills: db.skills, Items: db.items, Weapons: db.weapons, Armors: db.armors, Enemies: db.enemies, Troops: ace.troops, States: db.states, Animations: ace.animations, CommonEvents: ace.commonEvents, Tilesets: tilesets };
         for (const [file, records] of Object.entries(files)) writeJson(path.join(dest, 'data', `${file}.json`), records);
-        const base = JSON.parse(fs.readFileSync(path.join(skeleton, 'data', 'System.json'), 'utf8'));
+        const base = JSON.parse(fs.readFileSync(EditorPaths.skeletonFile('data/System.json'), 'utf8'));
         const sys = aliased(V.system(base, system, db, notes));
         const vocab = scripts.find(s => s.name === 'Vocab');
         if (vocab) Object.assign(sys.terms.messages, C.vocabMessages(vocab.text));
-        // RGSS sizes a font by its cell (see RgssConvert.rgssFontScale); VX's default is UmePlus Gothic 20.
-        const fontSettings = C.fontDefaults(active.map(s => s.text), constants);
+        // RGSS sizes a font by its cell (see RgssConvert.rgssFontScale); VX's default is UmePlus Gothic 20. The main
+        // font is the first the scripts name (Font.default_name) that RGSS would find: a shipped file or a Windows font.
+        const fontSettings = C.fontDefaults(settingsScripts, constants);
         const fonts = src.files('Fonts').filter(f => /\.(ttf|otf|woff2?)$/i.test(f));
+        const chosen = C.chooseFont(fontSettings.name, fonts);
         if (fonts.length) {
             mkdir(path.join(dest, 'fonts'));
             for (const f of fonts) fs.writeFileSync(path.join(dest, 'fonts', path.basename(f)), src.read('Fonts/' + f));
-            sys.advanced.mainFontFilename = path.basename(fonts[0]);
+            sys.advanced.mainFontFilename = path.basename((chosen && chosen.file) || fonts[0]);
         }
-        const mainFont = sys.advanced.mainFontFilename && fonts.find(f => path.basename(f) === sys.advanced.mainFontFilename);
-        const scale = (mainFont && C.rgssFontScale(src.read('Fonts/' + mainFont))) || 0.787;
+        let scale = 0.787;
+        if (chosen && chosen.family) {
+            sys.advanced.mainFontFilename = '';
+            const quote = (n) => (/^[A-Za-z-]+$/.test(n) ? n : `"${n}"`);
+            sys.advanced.fallbackFonts = [chosen.family, ...chosen.fallbacks].map(quote).concat(['sans-serif']).join(', ');
+            scale = chosen.scale;
+        } else {
+            const mainFont = sys.advanced.mainFontFilename && fonts.find(f => path.basename(f) === sys.advanced.mainFontFilename);
+            scale = (mainFont && C.rgssFontScale(src.read('Fonts/' + mainFont))) || scale;
+        }
         sys.advanced.fontSize = Math.round((typeof fontSettings.size === 'number' ? fontSettings.size : 20) * scale * 10) / 10;
         sys.advanced.fontSizeStep = Math.round(8 * scale * 10) / 10;
-        const screen = C.screenSize(active.map(s => s.text), constants);
+        const screen = C.screenSize(settingsScripts, constants);
         if (screen) Object.assign(sys.advanced, { screenWidth: screen[0], screenHeight: screen[1], uiAreaWidth: screen[0], uiAreaHeight: screen[1] });
         if (!sheetFiles.has('title')) { sys.title1Name = ''; skipped.push('Graphics/System/Title: not shipped'); }
         if (/\$imported\[:ve_multi_frames\]|\[f\d+\]/i.test(scriptText) && custom.some(s => /multi.?frame/i.test(s.name + s.text.slice(0, 400)))) sys.rrMultiFrames = true;
@@ -161,6 +175,10 @@ function open(folder, destination, options) {
         sys.rrChoicesInMessage = true;   // choices are listed inside the message window, after the text
         sys.rrNoItemBackgrounds = true;   // the old engines draw no bar behind each item of a list, only the cursor
         Object.assign(sys, { rrRgssWindows: true, rrMapNameStays: true, rrTouchUiOff: true, rrRgssKeys: true });   // rows one line tall, the map name through messages, no touch buttons, A/S/D as the X/Y/Z buttons
+        // RGSS shows its screen 1:1 and zooms sprites without smoothing: open at a whole-number scale and enlarge
+        // with hard pixel edges, so text and window frames stay sharp.
+        sys.advanced.screenScale = C.windowScale(sys.advanced.screenWidth, sys.advanced.screenHeight);
+        sys.advanced.pixelatedRendering = true;
         writeJson(path.join(dest, 'data', 'System.json'), sys);
 
         // A per-map battleback table in the game's scripts (DerVVulf's BATTLEBACK_LIST and its kin): map settings, images from its folder.
@@ -186,7 +204,10 @@ function open(folder, destination, options) {
 
         // ---- graphics, audio ---------------------------------------------------
         log('Copying graphics and audio…', 'stage');
+        // The engine asks for name + ".png" / ".ogg"; an upper-case extension (wait1.PNG) is written lower-case.
+        const lowerExt = (f) => f.replace(/\.[A-Za-z0-9]+$/, (e) => e.toLowerCase());
         const plan = [];
+        const rgssFrames = [];   // skins whose frame cell was kept (RGSS frames repeat their edges)
         for (const folderName of src.folders('Graphics')) {
             const key = Object.keys(GRAPHICS).find(k => k.toLowerCase() === folderName.toLowerCase());
             if (folderName.toLowerCase() === 'system') {
@@ -194,16 +215,21 @@ function open(folder, destination, options) {
                     const stem = f.replace(/\.[^.]+$/, '');
                     const target = TILE_SHEETS.some(n => n.toLowerCase() === stem.toLowerCase()) ? 'img/tilesets'
                         : stem.toLowerCase() === 'title' ? 'img/titles1' : 'img/system';
-                    plan.push(['Graphics/System/' + f, path.join(target, f), 'System']);
+                    plan.push(['Graphics/System/' + f, path.join(target, lowerExt(f)), 'System']);
                 }
                 continue;
             }
             const target = key ? GRAPHICS[key] : 'img/' + folderName;
             if (!key) add(notes, 'scriptGraphicsFolder');
-            for (const f of src.files('Graphics/' + folderName)) plan.push(['Graphics/' + folderName + '/' + f, path.join(target, f), folderName]);
+            for (const f of src.files('Graphics/' + folderName)) plan.push(['Graphics/' + folderName + '/' + f, path.join(target, lowerExt(f)), folderName]);
         }
-        for (const [folderName, target] of Object.entries(R.AUDIO)) for (const f of src.files('Audio/' + folderName)) plan.push(['Audio/' + folderName + '/' + f, path.join(target, f), folderName]);
-        for (const f of src.files('Movies')) plan.push(['Movies/' + f, path.join('movies', f), 'Movies']);
+        for (const [folderName, target] of Object.entries(R.AUDIO)) for (const f of src.files('Audio/' + folderName)) plan.push(['Audio/' + folderName + '/' + f, path.join(target, lowerExt(f)), folderName]);
+        for (const f of src.files('Movies')) plan.push(['Movies/' + f, path.join('movies', lowerExt(f)), 'Movies']);
+        // Image folders a script loads from the game's root (Cache.load_bitmap("Overlays/", …)) go to img/<folder>.
+        for (const dir of new Set(Array.from(active.map(x => x.text).join('\n').matchAll(/load_bitmap\(\s*["']([A-Za-z0-9_ -]+)\/["']/g), m => m[1]))) {
+            if (/^(graphics|audio|data|fonts|movies)$/i.test(dir)) continue;
+            for (const f of src.files(dir)) if (/\.(png|jpe?g|bmp)$/i.test(f)) plan.push([dir + '/' + f, path.join('img', dir.toLowerCase(), lowerExt(f)), dir]);
+        }
         const assetProgress = span(0.4, 0.95);
         plan.forEach(([from, to, bucket], index) => {
             if (index % 10 === 0) assetProgress(index, plan.length, `${bucket}: ${path.basename(from)}`);
@@ -213,18 +239,22 @@ function open(folder, destination, options) {
             if (!bytes.length) { add(notes, 'emptyPlaceholder'); return; }
             const out = R.systemTwin(path.join(dest, R.repairPath(to.replace(/\\/g, '/'))));
             mkdir(path.dirname(out));
-            // VX's Window.png has Ace's layout.
-            if (/^Graphics\/System\/Window\.png$/i.test(from)) {
+            // VX's Window.png has Ace's layout; so do the other skins a game's scripts switch to (Window2, WindowP …),
+            // any 128 × 128 image in System named Window….
+            if (/^Graphics\/System\/Window[^/]*\.png$/i.test(from)) {
                 try {
-                    const baseFile = path.join(skeleton, 'img', 'system', 'Window.png');
+                    const skin = rgba(PNG.sync.read(bytes));
+                    if (skin.width !== 128 || skin.height !== 128) throw Object.assign(new Error('not a skin'), { notSkin: true });
+                    const baseFile = EditorPaths.skeletonFile('img/system/Window.png');
                     const baseImg = fs.existsSync(baseFile) ? rgba(PNG.sync.read(fs.readFileSync(baseFile))) : null;
-                    const converted = C.windowSkin(rgba(PNG.sync.read(bytes)), baseImg);
-                    const png = new PNG({ width: converted.width, height: converted.height });
-                    png.data = Buffer.from(converted.data.buffer, converted.data.byteOffset, converted.data.length);
-                    fs.writeFileSync(out, PNG.sync.write(png));
+                    const converted = C.windowSkin(skin, baseImg);
+                    const write = (file, img) => { const png = new PNG({ width: img.width, height: img.height }); png.data = Buffer.from(img.data.buffer, img.data.byteOffset, img.data.length); fs.writeFileSync(file, PNG.sync.write(png)); };
+                    write(out, converted);
+                    write(out.replace(/\.png$/i, '_frame.png'), C.frameCell(skin, 64));
+                    rgssFrames.push(path.basename(out).replace(/\.png$/i, ''));
                     add(images, bucket);
                     return;
-                } catch (error) { skipped.push(`${from}: window skin ${error.message}`); }
+                } catch (error) { if (!error.notSkin) skipped.push(`${from}: window skin ${error.message}`); }
             }
             fs.writeFileSync(out, bytes);
             add(images, bucket);
@@ -244,13 +274,20 @@ function open(folder, destination, options) {
         }
 
         // ---- plugins -----------------------------------------------------------
+        if (rgssFrames.length) {
+            const sysFile = path.join(dest, 'data', 'System.json');
+            const sysNow = JSON.parse(fs.readFileSync(sysFile, 'utf8'));
+            sysNow.rrRgssFrames = rgssFrames;
+            writeJson(sysFile, sysNow);
+        }
         R.copyAliasedAudio(dest, aliases);
         { const n = require('./ProjectFiles.js').copyAcrossAudio(dest); if (n) add(notes, 'audioCopiedAcross', n); }
         { const n = R.matchFileCase(dest); if (n) add(notes, 'fileNameCase', n); }
         { const n = require('./ProjectFiles.js').clearMissingSystemFiles(dest); if (n) add(notes, 'systemFileCleared', n); }
-        families.extraPlugins = ['RR_VxCompat'];
+        // RR_VxCompat is every VX game's base: its window rules and rrVx drawing come before the ports that replace them.
+        families.basePlugins = ['RR_VxCompat'];
         { const n = R.writeFamilyQuests(dest, families, custom.map(s => s.text), constants); if (n) add(notes, 'questsImported', n); }
-        const installed = R.installPlugins(dest, families, constants, scriptTexts, skipped, log);
+        const installed = R.installPlugins(dest, families, constants, familyTexts, skipped, log, (rel) => src.read(rel), (dir) => src.files(dir));
 
         if (custom.length) {
             const dir = path.join(dest, 'legacy', 'Scripts');
@@ -261,10 +298,10 @@ function open(folder, destination, options) {
 
         // ---- identity ----------------------------------------------------------
         const pkg = JSON.parse(fs.readFileSync(path.join(dest, 'package.json'), 'utf8'));
-        pkg.name = 'rr-' + title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+        pkg.name = require('./ProjectFiles.js').packageName(title);
         pkg.version = editorPackage.version;
         const [sw, sh] = [sys.advanced.screenWidth, sys.advanced.screenHeight];
-        const [ww, wh] = [Math.round(sw * 1.5), Math.round(sh * 1.5)];
+        const [ww, wh] = [sw * sys.advanced.screenScale, sh * sys.advanced.screenScale];
         pkg.window = Object.assign({}, pkg.window, { title, width: ww, height: wh, min_width: sw, min_height: sh });
         pkg['chromium-args'] = `--force-color-profile=srgb --window-size=${ww},${wh}`;
         writeJson(path.join(dest, 'package.json'), pkg);

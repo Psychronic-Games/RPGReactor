@@ -1,7 +1,8 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),os=require('node:os'),vm=require('node:vm');
+const { runtimeSource } = require('./helpers/runtime-source.cjs');
 const root=path.resolve(__dirname,'../..');
 function audio(dir){
- const core=fs.readFileSync(path.join(root,'runtime/reactor_core.js'),'utf8'),managers=fs.readFileSync(path.join(root,'runtime/reactor_managers.js'),'utf8'),warnings=[],created=[];
+ const core=runtimeSource('reactor_core.js'),managers=fs.readFileSync(path.join(root,'runtime/reactor_managers.js'),'utf8'),warnings=[],created=[];
  const context={require,process:{mainModule:{filename:path.join(dir,'index.html')}},console:{warn:m=>warnings.push(m)},window:{},navigator:{userAgent:''},Graphics:{frameCount:1}};
  vm.runInNewContext(core.slice(core.indexOf('function Utils()'),core.indexOf('function Graphics()')),context);
  context.Utils.isNwjs=()=>true;context.Utils.hasEncryptedAudio=()=>false;

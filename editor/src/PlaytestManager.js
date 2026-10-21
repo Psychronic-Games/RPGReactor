@@ -12,6 +12,24 @@ class PlaytestManager {
         this.lastLaunchError = null;
     }
 
+    /** Whether a playtest window is open. */
+    isRunning() {
+        return !!this.playtestProcess;
+    }
+
+    /**
+     * Whether the playtest has the machine: open, and the editor window not
+     * focused. The editor's map views stop drawing meanwhile (MapEditor3D's
+     * loop, the 2D map's render scheduler) and pick up again the moment the
+     * editor is clicked back into: on an integrated GPU the game and the
+     * editor shared it, and the game's frame rate paid for a view nobody was
+     * looking at.
+     */
+    ownsGpu() {
+        if (!this.isRunning()) return false;
+        return !(typeof document !== 'undefined' && typeof document.hasFocus === 'function' && document.hasFocus());
+    }
+
     playtest(projectPath) {
         if (!projectPath) {
             console.error('No project loaded');
@@ -52,6 +70,80 @@ class PlaytestManager {
         }
         console.error('NW.js not available - cannot launch playtest window');
         return false;
+    }
+
+    /**
+     * Plays a battle on the map at once: `fight` starts a tactical battle on
+     * the first map scene (the map's own units, or the test troop round the
+     * party; a map that starts its own battle keeps it), and `fightat` puts
+     * a new game on that map and cell with the title skipped.
+     */
+    playtestFight(projectPath, at) {
+        if (!projectPath) return false;
+        const mode = PlaytestManager.fightMode(at);
+        if (typeof window !== 'undefined' && window.RPGReactorHost?.mode === 'web') {
+            window.RPGReactorHost.openPlaytest(mode);
+            return true;
+        }
+        if (typeof nw !== 'undefined') {
+            return this.launchPlaytestWindow(projectPath, mode);
+        }
+        console.error('NW.js not available - cannot launch playtest window');
+        return false;
+    }
+
+    static fightMode(at) {
+        const whole = value => Math.max(0, Math.floor(Number(value) || 0));
+        return at && whole(at.mapId) > 0 ? `test&fight&fightat=${whole(at.mapId)},${whole(at.x)},${whole(at.y)}` : 'test&fight';
+    }
+
+    /**
+     * Battle Setup's Play this battle: a new game on a map with the title
+     * skipped, the party on a tile and facing a way (`at`: `{ mapId, x, y,
+     * direction }`). No battle is asked for: the game starts one when the
+     * map's own start rule fires.
+     */
+    playtestAt(projectPath, at, options = {}) {
+        if (!projectPath) return false;
+        const mode = PlaytestManager.playMode(at, options);
+        if (typeof window !== 'undefined' && window.RPGReactorHost?.mode === 'web') {
+            window.RPGReactorHost.openPlaytest(mode);
+            return true;
+        }
+        if (typeof nw !== 'undefined') {
+            return this.launchPlaytestWindow(projectPath, mode);
+        }
+        console.error('NW.js not available - cannot launch playtest window');
+        return false;
+    }
+
+    /**
+     * The launch line of Play this battle: `test&playat=<mapId>,<x>,<y>,<direction>`
+     * and nothing else. For a game whose runtime does not read `playat`
+     * (`options.playat` false) it is the Test battle line instead, with
+     * the on-map mode in force named (`options.mode`), so the button still
+     * opens a battle there.
+     */
+    static playMode(at, options = {}) {
+        const whole = value => Math.max(0, Math.floor(Number(value) || 0));
+        if (!at || !(whole(at.mapId) > 0)) return 'test';
+        if (options.playat === false) {
+            const named = ['tactical', 'action', 'firstPerson'].includes(options.mode) ? `&fightmode=${options.mode}` : '';
+            return PlaytestManager.fightMode(at) + named;
+        }
+        const direction = [2, 4, 6, 8].includes(Number(at.direction)) ? Number(at.direction) : 2;
+        return `test&playat=${whole(at.mapId)},${whole(at.x)},${whole(at.y)},${direction}`;
+    }
+
+    /**
+     * What of a launch line names the playtest's profile folder (on
+     * Windows, where the game reads its flags from that folder's name):
+     * its flags (`test`, `btest`, `fight`). A token with a value
+     * (`playat=5,80,60,4`) is read from the launch line itself, so every
+     * tile played from shares one profile.
+     */
+    static profileToken(mode) {
+        return String(mode || '').split('&').filter(token => token && !token.includes('=')).join('&');
     }
 
     /**
@@ -109,8 +201,8 @@ class PlaytestManager {
             if (!packageResult.ok) {
                 this.lastLaunchError = packageResult.error;
                 console.error('Cannot start playtest:', packageResult.error);
-                if (typeof window !== 'undefined' && typeof window.alert === 'function') {
-                    window.alert(`${tt('Cannot start playtest.')}\n\n${packageResult.error}`);
+                if (typeof RRDialog !== 'undefined') {
+                    RRDialog.alert(`${tt('Cannot start playtest.')}\n\n${packageResult.error}`, { title: tt('Playtest'), kind: 'error' });
                 }
                 return false;
             }
@@ -204,7 +296,9 @@ class PlaytestManager {
         const projectId = crypto.createHash('sha256').update(canonicalProjectPath).digest('hex').slice(0, 16);
         // A mode may carry several options (`test&btest`); the ampersand is
         // what the runtime splits on, so it must survive into the profile name.
-        const optionToken = String(options.optionToken || '').replace(/[^A-Za-z0-9_&-]/g, '')
+        // Its flags alone name the profile: a token with a value is read from
+        // the launch line itself.
+        const optionToken = PlaytestManager.profileToken(options.optionToken).replace(/[^A-Za-z0-9_&-]/g, '')
             .split('&').filter(Boolean).join('&');
         const profileName = optionToken ? `${projectId}&${optionToken}` : projectId;
         const userDataDir = path.join(baseDir, 'RPGReactor', 'PlaytestProfile', versionDir, profileName);

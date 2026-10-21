@@ -1,4 +1,5 @@
 const test=require('node:test'),assert=require('node:assert/strict');
+const { runtimeSource } = require('./helpers/runtime-source.cjs');
 const B=require('../../runtime/reactor_battle_data.js');
 test('starter sequences have exactly one effect cue and stable finite timing',()=>{for(const name of B.templates){const s=B.template(name);assert.deepEqual(B.validateSequence(s),[]);assert.ok(B.duration(s)>0);}});
 test('sequence lookup respects explicit existing behavior and leaves absent bindings alone',()=>{
@@ -216,19 +217,28 @@ test('runtime motion transforms restore room proportions and numbered targets ig
  adapter.cleanup();assert.equal(actor._reactorRoomPosition.x,1);assert.equal(actor._reactorRoomPosition.scaleY,undefined);assert.equal(actor._reactorRoomPosition.scaleZ,undefined);
 });
 
-test('cinematic camera eases between sweeping actor/group shots and the saved overview',()=>{
+test('cinematic camera cuts to the actor, to the targets as the hit lands, and back to the saved overview',()=>{
  const R=require('../../runtime/reactor_3d.js'),View=require('../../runtime/reactor_battle_room.js'),previousR=global.Reactor3D,previousB=global.ReactorBattleData;global.Reactor3D=R;global.ReactorBattleData=B;
  try{
   const settings=B.room({id:1,width:50,height:50});settings.cameraSource='custom';settings.camera.mode='cinematic';settings.camera.fov=40;
   const view=new View({reactor3d:{camera:{mode:'isometric'}}},{},settings,{});view.camera={isOrthographicCamera:false};view.width=960;view.height=540;
   view.models.set('user',{position:{x:30,y:20,z:0},spec:{size:2}});view.models.set('target0',{position:{x:20,y:18,z:0},spec:{size:2}});view.models.set('target1',{position:{x:20,y:22,z:0},spec:{size:2}});
-  const saved=JSON.stringify(settings),overview=view.cameraState();view.beginCinematicAction('user',['target0','target0','target1']);assert.deepEqual(view.cameraState(),overview,'Action start does not jump');assert.equal(view.cinematicShot.targets.length,2);
-  view.frame=15;const halfway=view.cameraState();assert.ok(halfway.x>Math.min(overview.x,30)&&halfway.x<Math.max(overview.x,30));assert.deepEqual(view.cameraState(),halfway,'Reading the camera does not advance time');
+  const saved=JSON.stringify(settings),overview=view.cameraState();
   const settle=to=>{let c;for(let f=view.frame;f<=to;f++){view.frame=f;c=view.cameraState();}return c;};
-  const actor=settle(90);assert.ok(Math.abs(actor.x-30)<.05,'the actor shot settles on the user: '+actor.x);const sweep=settle(130);assert.ok(sweep.yaw>actor.yaw&&sweep.yaw-actor.yaw<6,'the sweep keeps turning: '+(sweep.yaw-actor.yaw));
-  view.cinematicImpact();assert.deepEqual(view.cameraState(),sweep,'Impact starts at the current shot');const impactHalf=settle(view.frame+16);assert.ok(impactHalf.x>20&&impactHalf.x<30,'half way to the targets: '+impactHalf.x);const start=view.cinematicShot.start;view.cinematicImpact();assert.equal(view.cinematicShot.start,start,'Repeated hits do not restart the transition');
-  const impact=settle(view.frame+120);assert.ok(Math.abs(impact.x-20)<.05&&Math.abs(impact.y-20)<.05,'the impact shot settles on the targets: '+impact.x+','+impact.y);assert.notEqual(actor.yaw,impact.yaw);
-  view.endCinematicAction();assert.deepEqual(view.cameraState(),impact,'Return starts at the current shot');const mid=settle(view.frame+20);assert.notDeepEqual(mid,overview);view.endCinematicAction();const back=settle(view.frame+60);assert.deepEqual(back,overview,'Returns exactly to the saved overview');assert.equal(JSON.stringify(settings),saved);
+  view.frame=100;view.beginCinematicAction('user',['target0','target0','target1']);assert.equal(view.cinematicShot.targets.length,2);
+  const opened=view.cameraState();assert.ok(Math.abs(opened.x-30)<.05&&Math.abs(opened.y-20)<.05,'the action opens on a cut to the user: '+opened.x);assert.deepEqual(view.cameraState(),opened,'Reading the camera does not advance time');
+  const actor=settle(190);assert.ok(Math.abs(actor.x-30)<.05,'the actor shot stays on the user: '+actor.x);const sweep=settle(230);assert.ok(sweep.yaw>actor.yaw&&sweep.yaw-actor.yaw<6,'the sweep keeps turning: '+(sweep.yaw-actor.yaw));
+  view.cinematicImpact();const hit=view.cameraState();assert.ok(Math.abs(hit.x-20)<.05&&Math.abs(hit.y-20)<.05,'the hit is a cut to the targets: '+hit.x+','+hit.y);assert.notEqual(actor.yaw,hit.yaw);assert.ok(hit.pitch<actor.pitch,'seen from lower');
+  const start=view.cinematicShot.start;view.frame+=10;view.cinematicImpact();assert.equal(view.cinematicShot.start,start,'Repeated hits do not restart the shot');
+  const held=settle(view.frame+40);assert.ok(held.distance<hit.distance,'the hit shot creeps in while it holds');assert.ok(Math.abs(held.x-20)<.05);
+  // Held a moment after the last hit, then the overview while the action finishes; a later hit brings the shot back.
+  const released=settle(view.frame+View.HIT_HOLD);assert.deepEqual(released,overview,'the walk home is watched from the overview');
+  view.cinematicImpact();assert.ok(Math.abs(view.cameraState().x-20)<.05,'a later hit cuts back to the targets');
+  view.endCinematicAction();assert.ok(Math.abs(view.cameraState().x-20)<.05,'the last shot stays a moment');
+  const back=settle(view.frame+View.CUT_LINGER);assert.deepEqual(back,overview,'Returns exactly to the saved overview');assert.equal(JSON.stringify(settings),saved);
+  // An action that begins as the overview has only just come back eases into its shot: three pictures never flash by in a row.
+  view.frame+=2;view.beginCinematicAction('user',['target0']);assert.deepEqual(view.cameraState(),overview,'no second cut at once');
+  const eased=settle(view.frame+View.CUT_EASE);assert.ok(Math.abs(eased.x-30)<.05,'eased onto the user: '+eased.x);view.endCinematicAction();settle(view.frame+View.CUT_LINGER+1);
   view.beginCinematicAction('user',['target0']);view.frame+=10;settings.camera.mode='fixed';assert.deepEqual(view.cameraState(),overview,'Manual camera bypasses the cinematic transition');
   settings.cameraSource='map';const inherited=view.cameraState();view.beginCinematicAction('user',['target0']);assert.equal(view.cinematicShot,null);assert.deepEqual(view.cameraState(),inherited);
   // Shortest-arc interpolation near the wrap point avoids a full revolution.
@@ -466,7 +476,7 @@ test('a room model dissolves for Ash and Ember: shards off its surface in its co
 test('Shatter is wired end to end: the trait, both emitters, and a mesh of triangles in a flat battle', () => {
     const fs = require('node:fs'), path = require('node:path');
     const read = file => fs.readFileSync(path.join(__dirname, '../../runtime', file), 'utf8');
-    const objects = read('reactor_objects.js'), sprites = read('reactor_sprites.js');
+    const objects = runtimeSource('reactor_objects.js'), sprites = read('reactor_sprites.js');
     // The trait's eighth value reaches the sprite, which reaches the preset.
     assert.match(objects, /case 7:\s*\n\s*this\.requestEffect\("shatterCollapse"\)/, 'Collapse Effect 7 asks for the shatter');
     assert.match(sprites, /case "shatterCollapse":\s*\n\s*this\.startParticleCollapse\("shatter"\)/, 'and the sprite starts that preset');
@@ -488,7 +498,7 @@ test('Shatter is wired end to end: the trait, both emitters, and a mesh of trian
 test("an enemy can carry its own collapse sound, chosen beside the effect and stored with its presentation settings", () => {
     const fs = require('node:fs'), path = require('node:path'), vm = require('node:vm');
     const editorRoot = path.resolve(__dirname, '..');
-    const objects = fs.readFileSync(path.join(editorRoot, '../runtime/reactor_objects.js'), 'utf8');
+    const objects = runtimeSource('reactor_objects.js');
     // Every collapse kind asks for the enemy's own sound before the engine's.
     assert.match(objects, /Game_Enemy\.prototype\.playCollapseSe = function/);
     for (const kind of ['collapse', 'bossCollapse', 'ashCollapse', 'emberCollapse', 'wispCollapse', 'shatterCollapse']) {

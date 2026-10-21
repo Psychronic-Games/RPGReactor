@@ -55,7 +55,7 @@ test('turning 3D off gives the 2D view its full size back', () => {
 test('clicking a previewed model selects its event and breaks nothing', () => {
     const map3d = read('MapEditor3D.js');
     assert.match(map3d, /if \(!child\.userData\.modelPreview \|\| !child\.userData\.event \|\| !child\.userData\.pickBox\) continue;/, 'preview models are picked by their box');
-    assert.match(map3d, /if \(mesh\.userData\.modelPreview\) return;/, 'highlight leaves material-less roots alone');
+    assert.match(map3d, /if \(mesh\.userData\.modelPreview\) \{\s*const marker = this\.eventMarker\(mesh\.userData\.event\);\s*if \(marker\) this\.highlightEventBox\(marker, on\);\s*return;\s*\}\s*const scale/, 'highlight leaves material-less roots alone (their event\'s box lights instead)');
     assert.match(map3d, /if \(!mesh\.material\) return;/, 'and cannot crash on anything else either');
 });
 

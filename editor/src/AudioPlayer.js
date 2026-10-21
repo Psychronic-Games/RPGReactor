@@ -241,6 +241,11 @@ class AudioPlayer {
         }
 
         modal.style.display = 'flex';
+        // Tab stays inside, Escape closes as the cross does, and the focus goes back to what opened the player.
+        window.RRKeyboardNavigation?.modal(modal, {
+            onEscape: () => { modal.style.display = 'none'; modal._rrModalKeys?.leave(); },
+            container: () => modal.querySelector('.modal-content') || modal
+        })?.enter();
 
         // Ensure audio player is initialized
         this.initializeAudioPlayer();

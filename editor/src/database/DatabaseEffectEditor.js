@@ -201,7 +201,11 @@ class DatabaseEffectEditor {
         });
         footer.querySelector('.ok-btn').addEventListener('click', () => {
             if (!isCurrent() || modalGeneration !== this._modalGeneration || !overlay.isConnected) return;
-            if (this.saveEffect(effect)) closeModal();
+            // What is stored is the row selected on the tab in view. None there: an effect being edited
+            // stays as it was, and a new one is not added.
+            const inView = tabContent.querySelector('input[type="radio"][name="effect-type"]:checked');
+            if (!inView && effectIndex >= 0) { closeModal(); return; }
+            if (this.saveEffect(inView ? effect : null)) closeModal();
         });
         // A click on the backdrop no longer closes the dialog: close deliberately.
 
@@ -617,6 +621,17 @@ class DatabaseEffectEditor {
 
     setupEffectRadioInputs(container, effect) {
         const radios = container.querySelectorAll('input[type="radio"]');
+        // A row is selected by its radio or its name; only then do its dropdown and numbers answer.
+        // Every other row's are greyed and inert (DatabaseTraitEditor.syncRows, shared with the Traits dialog).
+        const sync = () => { if (typeof DatabaseTraitEditor !== 'undefined') DatabaseTraitEditor.syncRows(container, 'effect-type'); };
+        container.querySelectorAll('.effect-option').forEach(row => {
+            const radio = row.querySelector('input[type="radio"][name="effect-type"]');
+            if (!radio) return;
+            row.querySelector('.rr-trait-label')?.addEventListener('click', () => { if (!radio.checked) radio.click(); });
+        });
+        // (On the way up from a radio, so after the radio's own listeners have run.)
+        container.addEventListener?.('click', event => { if (event.target && event.target.name === 'effect-type') sync(); });
+        sync();
         let lastChecked = null;
         radios.forEach(r => { if (r.checked) lastChecked = r; });
 
@@ -689,8 +704,9 @@ class DatabaseEffectEditor {
     }
 
     saveEffect(effect) {
-        if (!effect.code) {
-            alert(window.I18n ? window.I18n.tText('Please select an effect type before saving.') : 'Please select an effect type before saving.');
+        if (!effect || !effect.code) {
+            RRDialog.alert(window.I18n ? window.I18n.tText('Please select an effect type before saving.') : 'Please select an effect type before saving.',
+                { title: window.I18n ? window.I18n.tText('Effects') : 'Effects', kind: 'warning' });
             return false;
         }
 

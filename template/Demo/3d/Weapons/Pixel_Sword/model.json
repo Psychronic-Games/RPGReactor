@@ -1,0 +1,25 @@
+{
+  "animations": [],
+  "surface": {"reflect":0.95,"gloss":1,"metal":0.84,"tint":"#ffffff","texture":0.42},
+  "effects": [
+    {"name":"effect","animation":0,"anchor":{"part":"","offset":[0,0,0]},"scale":1,"loop":false}
+  ],
+  "variants": [
+    {
+      "name": "Breaker",
+      "color": {
+        "mode": "colorize",
+        "color": "#5b6470",
+        "strength": 0.7,
+        "lightness": -0.15
+      },
+      "surface": {
+        "reflect": 0.05,
+        "gloss": 0.15,
+        "metal": 0.2,
+        "tint": "#ffffff",
+        "texture": 1
+      }
+    }
+  ]
+}

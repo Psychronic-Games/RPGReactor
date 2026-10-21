@@ -3,6 +3,7 @@
  * scope of their own inside the editor, and the list's Preview / Stop / Skip.
  */
 const assert = require('node:assert/strict');
+const { runtimeSource } = require('./helpers/runtime-source.cjs');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -55,13 +56,13 @@ const SEQUENCE = {
 };
 
 test('the preview runs the runtime’s own WebAudio and AudioManager, each sliced whole', () => {
-    const web = Preview.slice(runtime('reactor_core.js'), Preview.SECTIONS.webAudio);
+    const web = Preview.slice(runtime('reactor_core_io.js'), Preview.SECTIONS.webAudio);
     assert.ok(web.startsWith('function WebAudio() {'));
     assert.ok(!web.includes('function Video() {'));
     const audio = Preview.slice(runtime('reactor_managers.js'), Preview.SECTIONS.audioManager);
     assert.match(audio, /AudioManager\.updateBgmSequence = function/);
     assert.ok(!audio.includes('function SoundManager() {'));
-    assert.throws(() => Preview.slice('nothing here', Preview.SECTIONS.webAudio), /reactor_core\.js/);
+    assert.throws(() => Preview.slice('nothing here', Preview.SECTIONS.webAudio), /reactor_core_io\.js/);
 });
 
 test('the runtime runs in a scope of its own', () => {
@@ -126,13 +127,17 @@ test('the project’s runtime plays the preview, unless it predates the music li
     try {
         const managers = runtime('reactor_managers.js');
         fs.mkdirSync(path.join(root, 'js'));
-        fs.writeFileSync(path.join(root, 'js', 'reactor_core.js'), runtime('reactor_core.js'));
+        // A copy from before the core was split holds WebAudio in reactor_core.js.
+        fs.writeFileSync(path.join(root, 'js', 'reactor_core.js'), runtimeSource('reactor_core.js'));
         fs.writeFileSync(path.join(root, 'js', 'reactor_managers.js'), managers.replace(/AudioManager\.librarySequenceData/g, 'AudioManager.somethingOlder'));
         const older = Preview.runtimeSources(root);
         assert.ok(older, 'a runtime was found');
         assert.equal(path.basename(older.dir), 'runtime', 'an older copy falls back to the editor’s runtime');
         fs.writeFileSync(path.join(root, 'js', 'reactor_managers.js'), managers);
         assert.equal(Preview.runtimeSources(root).dir, path.join(root, 'js'), 'the copy the game plays is the one previewed');
+        fs.writeFileSync(path.join(root, 'js', 'reactor_core.js'), runtime('reactor_core.js'));
+        fs.writeFileSync(path.join(root, 'js', 'reactor_core_io.js'), runtime('reactor_core_io.js'));
+        assert.equal(Preview.runtimeSources(root).dir, path.join(root, 'js'), 'a split copy is previewed too');
     } finally {
         fs.rmSync(root, { recursive: true, force: true });
     }

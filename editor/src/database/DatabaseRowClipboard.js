@@ -174,6 +174,6 @@ class DatabaseRowClipboard {
                 : key === 'db.clipboardWriteFailed'
                     ? 'Could not write the trait or effect to the clipboard.'
                     : 'No compatible trait or effect in the clipboard.';
-        alert(message);
+        RRDialog.alert(message, { kind: key === 'db.clipboardWriteFailed' ? 'error' : 'warning' });
     }
 }

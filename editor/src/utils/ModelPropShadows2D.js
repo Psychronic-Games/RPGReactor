@@ -154,6 +154,8 @@ class ModelPropShadows2D {
             }
             viewport.renderInto(state.target, state.scene, state.camera);
             state.draws = (state.draws || 0) + 1;
+            // The glow sprites sample this texture; the map draws on demand.
+            this.preview.app?.requestRender?.();
         } finally {
             for (const record of restore) {
                 record.parent.add(record.object); record.object.position.copy(record.position);

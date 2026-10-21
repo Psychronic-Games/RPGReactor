@@ -2956,11 +2956,6 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "options.databaseListLabelsGameFirst": "ゲーム内名を優先",
       "options.databaseListLabelsGameOnly": "ゲーム内名のみ",
       "options.databaseListLabelsNote": "データベース一覧に表示する名前を選択します。一覧の順序は変わりません。",
-      "toolbar.title.heightBrush": "高さブラシ（3Dマップの高低差を描く）",
-      "toolbar.height": "高さ:",
-      "toolbar.height.set": "設定値",
-      "toolbar.height.raise": "上げる",
-      "toolbar.height.lower": "下げる",
       "mapProps.pan": "パン:",
       "workspace.grid": "グリッド",
       "mapProps.anchorTopLeft": "左上",
@@ -2984,11 +2979,6 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "options.databaseListLabelsGameFirst": "遊戲名稱優先",
       "options.databaseListLabelsGameOnly": "僅遊戲名稱",
       "options.databaseListLabelsNote": "選擇資料庫清單中顯示的名稱。清單順序不會改變。",
-      "toolbar.title.heightBrush": "高度筆刷（繪製 3D 地圖的高度）",
-      "toolbar.height": "高度:",
-      "toolbar.height.set": "設定為",
-      "toolbar.height.raise": "提高",
-      "toolbar.height.lower": "降低",
       "mapProps.pan": "聲像:",
       "pluginCtx.pastePlugin": "貼上外掛",
       "pluginCtx.removePlugin": "移除外掛",
@@ -3016,11 +3006,6 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "options.databaseListLabelsGameFirst": "游戏名称优先",
       "options.databaseListLabelsGameOnly": "仅游戏名称",
       "options.databaseListLabelsNote": "选择数据库列表中显示的名称。列表顺序不会改变。",
-      "toolbar.title.heightBrush": "高度画笔（绘制 3D 地图高程）",
-      "toolbar.height": "高度:",
-      "toolbar.height.set": "设置为",
-      "toolbar.height.raise": "升高",
-      "toolbar.height.lower": "降低",
       "mapProps.pan": "声像:",
       "menu.armors": "防具",
       "menu.tilesets": "图块组",
@@ -3048,11 +3033,6 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "options.databaseListLabelsGameFirst": "게임 이름 우선",
       "options.databaseListLabelsGameOnly": "게임 이름만",
       "options.databaseListLabelsNote": "데이터베이스 목록에 표시할 이름을 선택합니다. 목록 순서는 변경되지 않습니다.",
-      "toolbar.title.heightBrush": "높이 브러시 (3D 맵의 고도 칠하기)",
-      "toolbar.height": "높이:",
-      "toolbar.height.set": "다음으로 설정",
-      "toolbar.height.raise": "높이기",
-      "toolbar.height.lower": "낮추기",
       "workspace.grid": "그리드",
       "mapProps.anchorTopLeft": "왼쪽 위",
       "mapProps.anchorTop": "위",
@@ -3075,11 +3055,6 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "options.databaseListLabelsGameFirst": "Nombre del juego primero",
       "options.databaseListLabelsGameOnly": "Solo el nombre del juego",
       "options.databaseListLabelsNote": "Elige qué nombres aparecen en las listas de la base de datos. El orden de las listas no cambia.",
-      "toolbar.title.heightBrush": "Pincel de altura (pinta la elevación para mapas 3D)",
-      "toolbar.height": "Altura:",
-      "toolbar.height.set": "Fijar en",
-      "toolbar.height.raise": "Subir",
-      "toolbar.height.lower": "Bajar",
       "workspace.grid": "Cuadrícula",
       "mapProps.anchorTopLeft": "Arriba a la izquierda",
       "mapProps.anchorTop": "Arriba",
@@ -3102,11 +3077,6 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "options.databaseListLabelsGameFirst": "Nome do jogo primeiro",
       "options.databaseListLabelsGameOnly": "Somente o nome do jogo",
       "options.databaseListLabelsNote": "Escolha quais nomes aparecem nas listas do banco de dados. A ordem das listas não muda.",
-      "toolbar.title.heightBrush": "Pincel de altura (pinta a elevação em mapas 3D)",
-      "toolbar.height": "Altura:",
-      "toolbar.height.set": "Definir como",
-      "toolbar.height.raise": "Elevar",
-      "toolbar.height.lower": "Abaixar",
       "workspace.grid": "Grade",
       "mapProps.anchorTopLeft": "Superior esquerdo",
       "mapProps.anchorTop": "Superior",
@@ -3129,11 +3099,6 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "options.databaseListLabelsGameFirst": "Nom du jeu en premier",
       "options.databaseListLabelsGameOnly": "Nom du jeu uniquement",
       "options.databaseListLabelsNote": "Choisissez les noms affichés dans les listes de la base de données. L’ordre des listes ne change pas.",
-      "toolbar.title.heightBrush": "Pinceau de hauteur (peint l’élévation des cartes 3D)",
-      "toolbar.height": "Hauteur :",
-      "toolbar.height.set": "Définir sur",
-      "toolbar.height.raise": "Élever",
-      "toolbar.height.lower": "Abaisser",
       "workspace.grid": "Grille",
       "mapProps.anchorTopLeft": "En haut à gauche",
       "mapProps.anchorTop": "En haut",
@@ -3156,11 +3121,6 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "options.databaseListLabelsGameFirst": "Prima il nome del gioco",
       "options.databaseListLabelsGameOnly": "Solo il nome del gioco",
       "options.databaseListLabelsNote": "Scegli quali nomi mostrare negli elenchi del database. L’ordine degli elenchi non cambia.",
-      "toolbar.title.heightBrush": "Pennello altezza (dipinge l’elevazione per le mappe 3D)",
-      "toolbar.height": "Altezza:",
-      "toolbar.height.set": "Imposta su",
-      "toolbar.height.raise": "Alza",
-      "toolbar.height.lower": "Abbassa",
       "menu.build": "Compilazione",
       "toolbar.title.playtest": "Test del gioco",
       "workspace.grid": "Griglia",
@@ -3185,11 +3145,6 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "options.databaseListLabelsGameFirst": "Spielname zuerst",
       "options.databaseListLabelsGameOnly": "Nur Spielname",
       "options.databaseListLabelsNote": "Wählen Sie, welche Namen in Datenbanklisten angezeigt werden. Die Reihenfolge der Liste ändert sich nicht.",
-      "toolbar.title.heightBrush": "Höhenpinsel (Höhen für 3D-Karten malen)",
-      "toolbar.height": "Höhe:",
-      "toolbar.height.set": "Festlegen auf",
-      "toolbar.height.raise": "Erhöhen",
-      "toolbar.height.lower": "Verringern",
       "app.loading": "Wird geladen...",
       "menu.commonEvents": "Allgemeine Ereignisse",
       "workspace.grid": "Raster",
@@ -3214,11 +3169,6 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "options.databaseListLabelsGameFirst": "Сначала имя в игре",
       "options.databaseListLabelsGameOnly": "Только имя в игре",
       "options.databaseListLabelsNote": "Выберите, какие имена отображаются в списках базы данных. Порядок списка не изменяется.",
-      "toolbar.title.heightBrush": "Кисть высоты (рисует высоту для 3D-карт)",
-      "toolbar.height": "Высота:",
-      "toolbar.height.set": "Установить",
-      "toolbar.height.raise": "Повысить",
-      "toolbar.height.lower": "Понизить",
       "workspace.grid": "Сетка",
       "mapProps.anchorTopLeft": "Слева сверху",
       "mapProps.anchorTop": "Сверху",
@@ -3241,11 +3191,6 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "options.databaseListLabelsGameFirst": "Najpierw nazwa w grze",
       "options.databaseListLabelsGameOnly": "Tylko nazwa w grze",
       "options.databaseListLabelsNote": "Wybierz nazwy wyświetlane na listach bazy danych. Kolejność listy nie ulegnie zmianie.",
-      "toolbar.title.heightBrush": "Pędzel wysokości (maluje wysokość dla map 3D)",
-      "toolbar.height": "Wysokość:",
-      "toolbar.height.set": "Ustaw na",
-      "toolbar.height.raise": "Podnieś",
-      "toolbar.height.lower": "Obniż",
       "workspace.grid": "Siatka",
       "mapProps.anchorTopLeft": "Lewy górny",
       "mapProps.anchorTop": "Górny",
@@ -3268,11 +3213,6 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "options.databaseListLabelsGameFirst": "Πρώτα το όνομα παιχνιδιού",
       "options.databaseListLabelsGameOnly": "Μόνο το όνομα παιχνιδιού",
       "options.databaseListLabelsNote": "Επιλέξτε ποια ονόματα εμφανίζονται στις λίστες βάσης δεδομένων. Η σειρά της λίστας δεν αλλάζει.",
-      "toolbar.title.heightBrush": "Πινέλο ύψους (σχεδιάζει υψόμετρο για χάρτες 3D)",
-      "toolbar.height": "Ύψος:",
-      "toolbar.height.set": "Ορισμός σε",
-      "toolbar.height.raise": "Αύξηση",
-      "toolbar.height.lower": "Μείωση",
       "menu.actors": "Ήρωες",
       "menu.animations": "Κινήσεις",
       "modal.eventEditor": "Επεξεργαστής συμβάντων",
@@ -3309,11 +3249,6 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "event.none": "لا شيء",
       "event.noneAvailable": "لا تتوفر خيارات",
       "db.entryCut": "تم قص الإدخال ونقله إلى الحافظة",
-      "toolbar.title.heightBrush": "فرشاة الارتفاع (لرسم ارتفاع خرائط 3D)",
-      "toolbar.height": "الارتفاع:",
-      "toolbar.height.set": "تعيين إلى",
-      "toolbar.height.raise": "رفع",
-      "toolbar.height.lower": "خفض",
       "mapProps.resizeAnchor": "إبقاء المحتوى الحالي مثبتًا عند:",
       "mapResize.contentMovesBy": "يتحرك المحتوى الحالي بمقدار {x}، {y} بلاطة.",
       "mapResize.tilesRemoved": "أُزيلت {count} بلاطة",
@@ -3351,11 +3286,6 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "forge.tab.hair": "Saç Atölyesi",
       "efk.kfHint": "Anahtar kare durumu düzenleniyor: boyut ve opaklık, aralık boyunca KF1'den son KF'ye geçiş yapar.",
       "about.compatibility": "Windows, Mac ve Linux'ta çalışan profesyonel bir editörle harika RPG oyunları oluşturun. Çoğu durumda RPG Maker MZ ve MV projeleriyle uyumludur; çalışma zamanı uyumluluğu öncelikle projenin çekirdek betiklerine ve eklentilerine bağlıdır.",
-      "toolbar.title.heightBrush": "Yükseklik fırçası (3D haritaların yüksekliğini boyar)",
-      "toolbar.height": "Yükseklik:",
-      "toolbar.height.set": "Şuna ayarla",
-      "toolbar.height.raise": "Yükselt",
-      "toolbar.height.lower": "Alçalt",
       "options.databaseListLabels": "Veritabanı listesi etiketleri",
       "options.databaseListLabelsEditorFirst": "Önce editör adı",
       "options.databaseListLabelsGameFirst": "Önce oyun adı",
@@ -3378,11 +3308,6 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
     "id": {
       "menu.projectTools": "Alat Proyek",
       "forge.projectTools.description": "Jalankan alat HTML bawaan proyek Anda dalam sandbox.",
-      "toolbar.title.heightBrush": "Kuas Ketinggian (lukis elevasi untuk peta 3D)",
-      "toolbar.height": "Ketinggian:",
-      "toolbar.height.set": "Atur ke",
-      "toolbar.height.raise": "Naikkan",
-      "toolbar.height.lower": "Turunkan",
       "options.databaseListLabels": "Label Daftar Basis Data",
       "options.databaseListLabelsEditorFirst": "Nama Editor Terlebih Dahulu",
       "options.databaseListLabelsGameFirst": "Nama Game Terlebih Dahulu",
@@ -3405,11 +3330,6 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
     "vi": {
       "menu.projectTools": "Công cụ dự án",
       "forge.projectTools.description": "Chạy các công cụ HTML đi kèm dự án của bạn trong môi trường cách ly.",
-      "toolbar.title.heightBrush": "Cọ độ cao (vẽ cao độ cho bản đồ 3D)",
-      "toolbar.height": "Độ cao:",
-      "toolbar.height.set": "Đặt thành",
-      "toolbar.height.raise": "Nâng",
-      "toolbar.height.lower": "Hạ",
       "options.databaseListLabels": "Nhãn danh sách cơ sở dữ liệu",
       "options.databaseListLabelsEditorFirst": "Tên trong trình chỉnh sửa trước",
       "options.databaseListLabelsGameFirst": "Tên trong trò chơi trước",
@@ -3435,11 +3355,6 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
     "th": {
       "menu.projectTools": "เครื่องมือของโปรเจกต์",
       "forge.projectTools.description": "เรียกใช้เครื่องมือ HTML ที่มากับโปรเจกต์ของคุณในแซนด์บ็อกซ์",
-      "toolbar.title.heightBrush": "แปรงปรับความสูง (ระบายระดับความสูงสำหรับแผนที่ 3D)",
-      "toolbar.height": "ความสูง:",
-      "toolbar.height.set": "ตั้งเป็น",
-      "toolbar.height.raise": "เพิ่ม",
-      "toolbar.height.lower": "ลด",
       "options.databaseListLabels": "ป้ายชื่อรายการฐานข้อมูล",
       "options.databaseListLabelsEditorFirst": "ชื่อในตัวแก้ไขก่อน",
       "options.databaseListLabelsGameFirst": "ชื่อในเกมก่อน",
@@ -5102,25 +5017,25 @@ for(const [locale,text] of Object.entries({
 
 // Sequence insertion/playback and the battle-room cinematic camera preset.
 {
- const keys=['Play Step','Cinematic Cuts','Drag into the step list, or click to add below the selected step.','Sweeps toward the acting battler, then the target at impact. Eases back to this overview after the action.'];
+ const keys=['Play Step','Cinematic Cuts','Drag into the step list, or click to add below the selected step.','Cuts to the acting battler, then to the target as the hit lands, and back to this overview after the action.'];
  const rows={
- ja:['ステップを再生','シネマティックカット','ステップ一覧へドラッグするか、クリックして選択中のステップの下に追加します。','行動する戦闘キャラへ滑らかに回り込み、命中時に対象へ移動します。行動後はこの全景へ滑らかに戻ります。'],
- 'zh-Hant':['播放步驟','電影式切鏡','拖曳到步驟清單，或按一下以新增到所選步驟下方。','平滑環繞行動角色，命中時轉向目標，行動結束後平滑返回此全景。'],
- 'zh-Hans':['播放步骤','电影式切镜','拖到步骤列表，或单击以添加到所选步骤下方。','平滑环绕行动角色，命中时转向目标，行动结束后平滑返回此全景。'],
- ko:['단계 재생','시네마틱 컷','단계 목록으로 끌거나 클릭하여 선택한 단계 아래에 추가합니다.','행동하는 캐릭터 주위를 부드럽게 돌며 비추고, 타격 시 대상으로 이동한 뒤 이 전체 화면으로 부드럽게 돌아옵니다.'],
- es:['Reproducir paso','Cortes cinematográficos','Arrastra a la lista o haz clic para añadir debajo del paso seleccionado.','Gira suavemente hacia el combatiente activo y después hacia el objetivo al impactar. Vuelve suavemente a esta vista general al terminar.'],
- pt:['Reproduzir etapa','Cortes cinematográficos','Arraste para a lista ou clique para adicionar abaixo da etapa selecionada.','Gira suavemente até o combatente ativo e depois até o alvo no impacto. Retorna suavemente a esta visão geral após a ação.'],
- fr:['Lire l’étape','Coupes cinématiques','Glissez dans la liste ou cliquez pour ajouter sous l’étape sélectionnée.','Pivote en douceur vers le combattant actif, puis vers la cible à l’impact. Revient progressivement à cette vue d’ensemble après l’action.'],
- it:['Riproduci passo','Stacchi cinematografici','Trascina nell’elenco o fai clic per aggiungere sotto il passo selezionato.','Ruota dolcemente verso il combattente attivo, poi verso il bersaglio all’impatto. Torna gradualmente a questa panoramica dopo l’azione.'],
- de:['Schritt abspielen','Filmische Schnitte','In die Schrittliste ziehen oder klicken, um unter dem ausgewählten Schritt einzufügen.','Schwenkt sanft zum handelnden Kämpfer und beim Treffer zum Ziel. Kehrt nach der Aktion sanft zu dieser Übersicht zurück.'],
- ru:['Воспроизвести шаг','Кинематографические склейки','Перетащите в список или нажмите, чтобы добавить под выбранным шагом.','Плавно обходит действующего бойца, затем переводит камеру на цель при ударе. После действия плавно возвращается к этому общему плану.'],
- pl:['Odtwórz krok','Filmowe cięcia','Przeciągnij na listę lub kliknij, aby dodać poniżej wybranego kroku.','Płynnie obraca kamerę ku działającemu wojownikowi, a przy trafieniu ku celowi. Po akcji łagodnie wraca do tego widoku ogólnego.'],
- el:['Αναπαραγωγή βήματος','Κινηματογραφικές εναλλαγές','Σύρετε στη λίστα ή κάντε κλικ για προσθήκη κάτω από το επιλεγμένο βήμα.','Περιστρέφεται ομαλά προς τον ενεργό μαχητή και έπειτα προς τον στόχο στο χτύπημα. Επιστρέφει ομαλά στη γενική προβολή μετά την ενέργεια.'],
- ar:['تشغيل الخطوة','لقطات سينمائية','اسحب إلى قائمة الخطوات أو انقر للإضافة أسفل الخطوة المحددة.','تدور الكاميرا بسلاسة نحو المقاتل النشط، ثم نحو الهدف عند الإصابة، وتعود برفق إلى هذه النظرة العامة بعد الحركة.'],
- tr:['Adımı Oynat','Sinematik Kesimler','Adım listesine sürükleyin veya seçili adımın altına eklemek için tıklayın.','Eylemi yapan savaşçıya, ardından vuruşta hedefe doğru yumuşakça döner. Eylemden sonra bu genel görünüme yumuşakça döner.'],
- id:['Putar Langkah','Potongan Sinematik','Seret ke daftar atau klik untuk menambahkan di bawah langkah terpilih.','Berputar halus menuju petarung yang beraksi, lalu target saat benturan. Kembali perlahan ke tampilan umum setelah aksi.'],
- vi:['Phát bước','Chuyển cảnh điện ảnh','Kéo vào danh sách hoặc nhấp để thêm bên dưới bước đã chọn.','Lướt nhẹ quanh nhân vật đang hành động, rồi hướng đến mục tiêu lúc va chạm. Trở về góc nhìn tổng thể một cách mượt mà sau hành động.'],
- th:['เล่นขั้นตอน','ตัดมุมกล้องแบบภาพยนตร์','ลากลงในรายการขั้นตอน หรือคลิกเพื่อเพิ่มใต้ขั้นตอนที่เลือก','กล้องหมุนอย่างนุ่มนวลไปยังตัวละครที่กำลังทำท่า แล้วเคลื่อนไปยังเป้าหมายเมื่อปะทะ ก่อนกลับมุมมองรวมอย่างนุ่มนวลเมื่อจบการกระทำ']
+ ja:['ステップを再生','シネマティックカット','ステップ一覧へドラッグするか、クリックして選択中のステップの下に追加します。','行動する戦闘キャラへカットし、命中の瞬間に対象へカットします。行動後はこの全景に戻ります。'],
+ 'zh-Hant':['播放步驟','電影式切鏡','拖曳到步驟清單，或按一下以新增到所選步驟下方。','切到行動中的角色，命中的瞬間切到目標，行動結束後切回此全景。'],
+ 'zh-Hans':['播放步骤','电影式切镜','拖到步骤列表，或单击以添加到所选步骤下方。','切到行动中的角色，命中的瞬间切到目标，行动结束后切回此全景。'],
+ ko:['단계 재생','시네마틱 컷','단계 목록으로 끌거나 클릭하여 선택한 단계 아래에 추가합니다.','행동하는 캐릭터로 컷하고, 타격이 들어가는 순간 대상으로 컷한 뒤, 행동이 끝나면 이 전체 화면으로 돌아옵니다.'],
+ es:['Reproducir paso','Cortes cinematográficos','Arrastra a la lista o haz clic para añadir debajo del paso seleccionado.','Corta al combatiente que actúa, después al objetivo cuando llega el golpe, y vuelve a esta vista general al terminar la acción.'],
+ pt:['Reproduzir etapa','Cortes cinematográficos','Arraste para a lista ou clique para adicionar abaixo da etapa selecionada.','Corta para o combatente que age, depois para o alvo quando o golpe acerta, e volta a esta visão geral após a ação.'],
+ fr:['Lire l’étape','Coupes cinématiques','Glissez dans la liste ou cliquez pour ajouter sous l’étape sélectionnée.','Coupe sur le combattant qui agit, puis sur la cible au moment où le coup porte, et revient à cette vue d’ensemble après l’action.'],
+ it:['Riproduci passo','Stacchi cinematografici','Trascina nell’elenco o fai clic per aggiungere sotto il passo selezionato.','Stacca sul combattente che agisce, poi sul bersaglio quando il colpo va a segno, e torna a questa panoramica dopo l’azione.'],
+ de:['Schritt abspielen','Filmische Schnitte','In die Schrittliste ziehen oder klicken, um unter dem ausgewählten Schritt einzufügen.','Schneidet auf den handelnden Kämpfer, beim Treffer auf das Ziel und nach der Aktion zurück auf diese Übersicht.'],
+ ru:['Воспроизвести шаг','Кинематографические склейки','Перетащите в список или нажмите, чтобы добавить под выбранным шагом.','Склейка на действующего бойца, затем на цель в момент удара, а после действия обратно на этот общий план.'],
+ pl:['Odtwórz krok','Filmowe cięcia','Przeciągnij na listę lub kliknij, aby dodać poniżej wybranego kroku.','Cięcie na działającego wojownika, potem na cel w chwili trafienia, a po akcji z powrotem na ten widok ogólny.'],
+ el:['Αναπαραγωγή βήματος','Κινηματογραφικές εναλλαγές','Σύρετε στη λίστα ή κάντε κλικ για προσθήκη κάτω από το επιλεγμένο βήμα.','Κάνει κοπή στον μαχητή που ενεργεί, έπειτα στον στόχο τη στιγμή του χτυπήματος, και μετά την ενέργεια πίσω σε αυτή τη γενική προβολή.'],
+ ar:['تشغيل الخطوة','لقطات سينمائية','اسحب إلى قائمة الخطوات أو انقر للإضافة أسفل الخطوة المحددة.','تقطع الكاميرا إلى المقاتل الذي ينفّذ الحركة، ثم إلى الهدف لحظة الإصابة، وتعود إلى هذه النظرة العامة بعد الحركة.'],
+ tr:['Adımı Oynat','Sinematik Kesimler','Adım listesine sürükleyin veya seçili adımın altına eklemek için tıklayın.','Eylemi yapan savaşçıya, ardından vuruş anında hedefe keser; eylemden sonra bu genel görünüme döner.'],
+ id:['Putar Langkah','Potongan Sinematik','Seret ke daftar atau klik untuk menambahkan di bawah langkah terpilih.','Memotong ke petarung yang beraksi, lalu ke target saat pukulan mengenai, dan kembali ke tampilan umum ini setelah aksi.'],
+ vi:['Phát bước','Chuyển cảnh điện ảnh','Kéo vào danh sách hoặc nhấp để thêm bên dưới bước đã chọn.','Cắt cảnh sang nhân vật đang hành động, rồi sang mục tiêu khi đòn đánh trúng, và trở về góc nhìn tổng thể này sau hành động.'],
+ th:['เล่นขั้นตอน','ตัดมุมกล้องแบบภาพยนตร์','ลากลงในรายการขั้นตอน หรือคลิกเพื่อเพิ่มใต้ขั้นตอนที่เลือก','ตัดไปที่ตัวละครที่กำลังลงมือ แล้วตัดไปที่เป้าหมายในจังหวะที่โจมตีโดน ก่อนกลับสู่มุมมองรวมนี้เมื่อจบการกระทำ']
  };
  for(const [locale,values] of Object.entries(rows))keys.forEach((key,i)=>globalThis.RR_REVIEWED_TRANSLATIONS.text[locale][key]=values[i]);
 }
@@ -5525,9 +5440,9 @@ for(const [locale,values] of Object.entries({
 Object.assign(globalThis.RR_REVIEWED_TRANSLATIONS.text.ar, {Motion:'الحركة', Redo:'إعادة التنفيذ'});
 Object.assign(globalThis.RR_REVIEWED_TRANSLATIONS.text.ja, {Motion:'モーション'});
 
-// Behaviour forecast panel under the enemy Action Patterns table.
+// Behavior forecast panel under the enemy Action Patterns table.
 {
- const keys=["Behaviour forecast", "{n} of {total} unreachable", "Every action can fire", "Too many combinations to check.", "Rating ceiling", "Never fires", "No action can be chosen here.", "Only the highest valid rating is ever chosen.", "Only ratings within {n} of the highest valid rating are ever chosen.", "Battle AI picks at random, ignoring ratings.", "Battle AI uses gambit order: the first valid action wins.", "The skill no longer exists.", "This skill cannot be used in battle.", "The cost is higher than this enemy can hold.", "These conditions can never hold together.", "Outranked whenever it is usable: the ceiling never drops below {n}.", "Plugins can add conditions this panel cannot see."];
+ const keys=["Behavior forecast", "{n} of {total} unreachable", "Every action can fire", "Too many combinations to check.", "Rating ceiling", "Never fires", "No action can be chosen here.", "Only the highest valid rating is ever chosen.", "Only ratings within {n} of the highest valid rating are ever chosen.", "Battle AI picks at random, ignoring ratings.", "Battle AI uses gambit order: the first valid action wins.", "The skill no longer exists.", "This skill cannot be used in battle.", "The cost is higher than this enemy can hold.", "These conditions can never hold together.", "Outranked whenever it is usable: the ceiling never drops below {n}.", "Plugins can add conditions this panel cannot see."];
  const rows={
   "ja": "行動予測|{total} 件中 {n} 件が到達不能|すべての行動が発動可能|組み合わせが多すぎて確認できません。|レーティング上限|発動しない行動|この状況では行動を選択できません。|有効な行動のうち最高レーティングのみが選ばれます。|最高レーティングから {n} 以内の行動のみが選ばれます。|バトルAIはレーティングを無視してランダムに選びます。|バトルAIはガンビット順で、最初に条件を満たした行動を選びます。|スキルが存在しません。|このスキルは戦闘中に使用できません。|コストがこの敵の最大値を超えています。|これらの条件は同時に成立しません。|使用可能なときは常に上位に負けます: レーティング上限が {n} を下回りません。|プラグインが追加した条件はこのパネルでは判定できません。",
   "es": "Previsión de comportamiento|{n} de {total} inalcanzables|Todas las acciones pueden usarse|Demasiadas combinaciones para comprobar.|Techo de rating|Nunca se usa|Aquí no puede elegirse ninguna acción.|Solo se elige el rating válido más alto.|Solo se eligen los ratings dentro de {n} del rating válido más alto.|La IA de combate elige al azar, ignorando el rating.|La IA de combate usa orden de gambito: gana la primera acción válida.|La habilidad ya no existe.|Esta habilidad no puede usarse en combate.|El coste supera lo que este enemigo puede tener.|Estas condiciones nunca se cumplen a la vez.|Superada siempre que es usable: el techo nunca baja de {n}.|Los plugins pueden añadir condiciones que este panel no ve.",
@@ -7786,7 +7701,7 @@ Object.assign(globalThis.RR_REVIEWED_TRANSLATIONS.keyed['zh-Hans'], {
   "toolbar.tools": "工具：",
   "toolbar.title.undo": "撤销（Ctrl+Z）",
   "toolbar.title.redo": "重做（Ctrl+Y）",
-  "toolbar.title.showPassage": "显示通行性：X 表示不可通行，红色边缘表示某方向不可通行，红色表示有 3D 模型",
+  "toolbar.title.showPassage": "显示角色能去的地方。平面地图：X 表示不可通行，红色边缘表示某方向不可通行，红色表示 3D 模型下方。3D 视图：每个位置的各边标示为跳一下、攀上、梯子、落差或无法通行，并在指针下显示文字",
   "toolbar.title.forgeLauncher": "Forge - 开发工具套件",
   "welcome.tagline": "用开源跨平台引擎创作出色的 RPG 游戏",
   "welcome.gettingStarted": "快速上手",
@@ -7987,4 +7902,187 @@ for (const [locale, labels] of Object.entries({
   ["2D Camera Zoom", "2D Camera Offset X (px)", "2D Camera Offset Y (px)"].forEach((key, i) => {
     globalThis.RR_REVIEWED_TRANSLATIONS.text[locale][key] = labels[i];
   });
+}
+
+// Reactor vehicle commands share the existing event command catalogs.
+Object.assign(globalThis.RR_REVIEWED_TRANSLATIONS.commands.pl, {
+    'Get On Reactor Vehicle': 'Wsiądź do pojazdu Reactor',
+    'Get Off Reactor Vehicle': 'Wysiądź z pojazdu Reactor'
+});
+globalThis.RR_REVIEWED_TRANSLATIONS.sections.pl.Vehicles = 'Pojazdy';
+
+// The map picker's 3D view.
+{
+ const key='Click a place to choose it. Drag to turn, right-drag to move, scroll to zoom.';
+ const rows={
+ ja:'場所をクリックして選びます。ドラッグで回転、右ドラッグで移動、スクロールでズームします。',
+ 'zh-Hant':'按一下位置即可選取。拖曳可旋轉，按右鍵拖曳可移動，捲動可縮放。',
+ 'zh-Hans':'单击位置即可选取。拖动可旋转，按右键拖动可移动，滚动可缩放。',
+ ko:'위치를 클릭해 선택합니다. 드래그하면 회전, 오른쪽 버튼으로 드래그하면 이동, 스크롤하면 확대·축소됩니다.',
+ es:'Haz clic en un lugar para elegirlo. Arrastra para girar, arrastra con el botón derecho para mover y usa la rueda para acercar.',
+ pt:'Clique em um lugar para escolhê-lo. Arraste para girar, arraste com o botão direito para mover e role para aplicar zoom.',
+ fr:'Cliquez sur un endroit pour le choisir. Faites glisser pour tourner, glisser avec le bouton droit pour déplacer, la molette pour zoomer.',
+ it:'Fai clic su un punto per sceglierlo. Trascina per ruotare, trascina con il tasto destro per spostare, usa la rotellina per lo zoom.',
+ de:'Klicke auf eine Stelle, um sie zu wählen. Ziehen dreht, Ziehen mit der rechten Taste verschiebt, das Mausrad zoomt.',
+ ru:'Щёлкните по месту, чтобы выбрать его. Перетаскивание поворачивает, перетаскивание правой кнопкой сдвигает, колесо меняет масштаб.',
+ pl:'Kliknij miejsce, aby je wybrać. Przeciągnij, aby obrócić, przeciągnij prawym przyciskiem, aby przesunąć, przewiń, aby powiększyć.',
+ el:'Κάντε κλικ σε ένα σημείο για να το επιλέξετε. Σύρετε για περιστροφή, σύρετε με το δεξί κουμπί για μετακίνηση, κυλήστε για ζουμ.',
+ ar:'انقر على مكان لاختياره. اسحب للتدوير، واسحب بالزر الأيمن للتحريك، ومرّر للتكبير والتصغير.',
+ tr:'Seçmek için bir yere tıklayın. Döndürmek için sürükleyin, taşımak için sağ tuşla sürükleyin, yakınlaştırmak için kaydırın.',
+ id:'Klik sebuah tempat untuk memilihnya. Seret untuk memutar, seret dengan tombol kanan untuk menggeser, gulir untuk memperbesar.',
+ vi:'Nhấp vào một vị trí để chọn. Kéo để xoay, kéo bằng nút phải để di chuyển, cuộn để thu phóng.',
+ th:'คลิกตำแหน่งเพื่อเลือก ลากเพื่อหมุน ลากด้วยปุ่มขวาเพื่อเลื่อน และเลื่อนล้อเมาส์เพื่อซูม'
+ };
+ for(const [locale,value] of Object.entries(rows))globalThis.RR_REVIEWED_TRANSLATIONS.text[locale][key]=value;
+}
+
+// The Rig tool on a vehicle: where a rider sits, holds on and rests its feet.
+{
+ const keys=['Vehicle rider','Seat','Left grip','Right grip','Left footrest','Right footrest','Rider saved.','Save rider',
+  'Saves where a rider sits, holds on and rests its feet to the model.','Drag the dots to where a rider sits, holds on and rests its feet; sides mirror.'];
+ const rows={
+ ja:['乗り物の乗り手','座席','左グリップ','右グリップ','左フットレスト','右フットレスト','乗り手を保存しました。','乗り手を保存','乗り手が座る位置、握る位置、足を置く位置をモデルに保存します。','乗り手が座る位置、握る位置、足を置く位置へ点をドラッグします。左右は連動します。'],
+ 'zh-Hant':['載具騎乘者','座位','左握把','右握把','左腳踏','右腳踏','已儲存騎乘者。','儲存騎乘者','將騎乘者的座位、握持處與踏腳處儲存到模型。','把圓點拖到騎乘者坐下、握住和踏腳的位置；左右會對稱移動。'],
+ 'zh-Hans':['载具骑乘者','座位','左握把','右握把','左脚踏','右脚踏','已保存骑乘者。','保存骑乘者','将骑乘者的座位、握持处和踏脚处保存到模型。','把圆点拖到骑乘者坐下、握住和踏脚的位置；左右会对称移动。'],
+ ko:['탈것 탑승자','좌석','왼쪽 손잡이','오른쪽 손잡이','왼쪽 발판','오른쪽 발판','탑승자를 저장했습니다.','탑승자 저장','탑승자가 앉는 곳, 잡는 곳, 발을 두는 곳을 모델에 저장합니다.','탑승자가 앉고, 잡고, 발을 두는 곳으로 점을 끌어 놓습니다. 좌우는 함께 움직입니다.'],
+ es:['Piloto del vehículo','Asiento','Empuñadura izquierda','Empuñadura derecha','Reposapiés izquierdo','Reposapiés derecho','Piloto guardado.','Guardar piloto','Guarda en el modelo dónde se sienta el piloto, dónde se agarra y dónde apoya los pies.','Arrastra los puntos a donde el piloto se sienta, se agarra y apoya los pies; los lados se reflejan.'],
+ pt:['Piloto do veículo','Assento','Manopla esquerda','Manopla direita','Pedaleira esquerda','Pedaleira direita','Piloto salvo.','Salvar piloto','Salva no modelo onde o piloto senta, onde segura e onde apoia os pés.','Arraste os pontos para onde o piloto senta, segura e apoia os pés; os lados se espelham.'],
+ fr:['Pilote du véhicule','Siège','Poignée gauche','Poignée droite','Repose-pied gauche','Repose-pied droit','Pilote enregistré.','Enregistrer le pilote','Enregistre dans le modèle où le pilote s’assoit, se tient et pose les pieds.','Faites glisser les points là où le pilote s’assoit, se tient et pose les pieds ; les côtés sont symétriques.'],
+ it:['Pilota del veicolo','Sella','Manopola sinistra','Manopola destra','Pedana sinistra','Pedana destra','Pilota salvato.','Salva pilota','Salva nel modello dove il pilota siede, si tiene e appoggia i piedi.','Trascina i punti dove il pilota siede, si tiene e appoggia i piedi; i lati si specchiano.'],
+ de:['Fahrer des Fahrzeugs','Sitz','Linker Griff','Rechter Griff','Linke Fußraste','Rechte Fußraste','Fahrer gespeichert.','Fahrer speichern','Speichert im Modell, wo der Fahrer sitzt, sich festhält und die Füße abstellt.','Ziehe die Punkte dorthin, wo der Fahrer sitzt, sich festhält und die Füße abstellt; die Seiten spiegeln sich.'],
+ ru:['Седок транспорта','Сиденье','Левая рукоятка','Правая рукоятка','Левая подножка','Правая подножка','Седок сохранён.','Сохранить седока','Сохраняет в модели, где седок сидит, за что держится и куда ставит ноги.','Перетащите точки туда, где седок сидит, держится и ставит ноги; стороны зеркальны.'],
+ pl:['Kierowca pojazdu','Siedzenie','Lewy uchwyt','Prawy uchwyt','Lewy podnóżek','Prawy podnóżek','Zapisano kierowcę.','Zapisz kierowcę','Zapisuje w modelu, gdzie kierowca siedzi, za co trzyma i gdzie opiera stopy.','Przeciągnij punkty tam, gdzie kierowca siedzi, trzyma się i opiera stopy; strony są lustrzane.'],
+ el:['Αναβάτης οχήματος','Κάθισμα','Αριστερή λαβή','Δεξιά λαβή','Αριστερό υποπόδιο','Δεξί υποπόδιο','Ο αναβάτης αποθηκεύτηκε.','Αποθήκευση αναβάτη','Αποθηκεύει στο μοντέλο πού κάθεται ο αναβάτης, πού κρατιέται και πού ακουμπά τα πόδια.','Σύρετε τις κουκκίδες εκεί όπου ο αναβάτης κάθεται, κρατιέται και ακουμπά τα πόδια· οι πλευρές καθρεφτίζονται.'],
+ ar:['راكب المركبة','المقعد','المقبض الأيسر','المقبض الأيمن','مسند القدم الأيسر','مسند القدم الأيمن','تم حفظ الراكب.','حفظ الراكب','يحفظ في النموذج مكان جلوس الراكب وما يمسك به ومكان وضع قدميه.','اسحب النقاط إلى حيث يجلس الراكب ويمسك ويضع قدميه؛ الجانبان متناظران.'],
+ tr:['Araç sürücüsü','Koltuk','Sol tutamak','Sağ tutamak','Sol ayaklık','Sağ ayaklık','Sürücü kaydedildi.','Sürücüyü kaydet','Sürücünün oturduğu, tutunduğu ve ayaklarını koyduğu yerleri modele kaydeder.','Noktaları sürücünün oturduğu, tutunduğu ve ayaklarını koyduğu yerlere sürükleyin; iki yan birbirini yansıtır.'],
+ id:['Pengendara kendaraan','Jok','Pegangan kiri','Pegangan kanan','Pijakan kaki kiri','Pijakan kaki kanan','Pengendara disimpan.','Simpan pengendara','Menyimpan ke model tempat pengendara duduk, berpegangan, dan menaruh kaki.','Seret titik ke tempat pengendara duduk, berpegangan, dan menaruh kaki; kedua sisi saling mencerminkan.'],
+ vi:['Người lái phương tiện','Yên','Tay nắm trái','Tay nắm phải','Gác chân trái','Gác chân phải','Đã lưu người lái.','Lưu người lái','Lưu vào mô hình vị trí người lái ngồi, nắm tay và đặt chân.','Kéo các chấm đến nơi người lái ngồi, nắm tay và đặt chân; hai bên đối xứng nhau.'],
+ th:['ผู้ขี่ยานพาหนะ','เบาะนั่ง','มือจับซ้าย','มือจับขวา','ที่พักเท้าซ้าย','ที่พักเท้าขวา','บันทึกผู้ขี่แล้ว','บันทึกผู้ขี่','บันทึกตำแหน่งที่ผู้ขี่นั่ง จับ และวางเท้าลงในโมเดล','ลากจุดไปยังตำแหน่งที่ผู้ขี่นั่ง จับ และวางเท้า ทั้งสองข้างจะสะท้อนกัน']
+ };
+ for(const [locale,values] of Object.entries(rows))keys.forEach((key,i)=>globalThis.RR_REVIEWED_TRANSLATIONS.text[locale][key]=values[i]);
+}
+
+// The Rig tool: a skeleton chosen for a model that has carved parts.
+{
+ const key='This rig type binds a skeleton, which a model with carved parts cannot take. Remove its parts first, or choose a type that only places markers.';
+ const rows={
+ ja:'このリグタイプはスケルトンをバインドしますが、切り分けたパーツを持つモデルには使えません。先にパーツを削除するか、マーカーを置くだけのタイプを選んでください。',
+ 'zh-Hant':'此骨架類型會綁定骨骼，已切分部件的模型無法使用。請先移除部件，或選擇只放置標記的類型。',
+ 'zh-Hans':'此骨架类型会绑定骨骼，已切分部件的模型无法使用。请先移除部件，或选择只放置标记的类型。',
+ ko:'이 리그 유형은 스켈레톤을 바인딩하므로 잘라 낸 파트가 있는 모델에는 쓸 수 없습니다. 먼저 파트를 제거하거나 마커만 놓는 유형을 고르세요.',
+ es:'Este tipo de rig vincula un esqueleto, y un modelo con partes recortadas no lo admite. Quita primero sus partes o elige un tipo que solo coloque marcadores.',
+ pt:'Este tipo de rig vincula um esqueleto, o que um modelo com partes recortadas não aceita. Remova as partes primeiro ou escolha um tipo que apenas posicione marcadores.',
+ fr:'Ce type de rig lie un squelette, ce qu’un modèle aux parties découpées n’accepte pas. Retirez d’abord ses parties ou choisissez un type qui ne place que des marqueurs.',
+ it:'Questo tipo di rig vincola uno scheletro, che un modello con parti ritagliate non può avere. Rimuovi prima le parti o scegli un tipo che posiziona solo marcatori.',
+ de:'Dieser Rig-Typ bindet ein Skelett, was ein Modell mit ausgeschnittenen Teilen nicht zulässt. Entferne zuerst seine Teile oder wähle einen Typ, der nur Markierungen setzt.',
+ ru:'Этот тип рига привязывает скелет, а модель с вырезанными частями этого не допускает. Сначала удалите части или выберите тип, который только ставит маркеры.',
+ pl:'Ten typ rigu wiąże szkielet, czego model z wyciętymi częściami nie przyjmie. Najpierw usuń części albo wybierz typ, który tylko ustawia znaczniki.',
+ el:'Αυτός ο τύπος rig δένει σκελετό, κάτι που ένα μοντέλο με αποκομμένα μέρη δεν δέχεται. Αφαιρέστε πρώτα τα μέρη ή επιλέξτε τύπο που τοποθετεί μόνο δείκτες.',
+ ar:'هذا النوع من الهيكلة يربط هيكلاً عظمياً، ولا يقبله نموذج له أجزاء مقتطعة. أزل أجزاءه أولاً أو اختر نوعاً يضع علامات فقط.',
+ tr:'Bu rig türü bir iskelet bağlar; oyulmuş parçaları olan bir model bunu alamaz. Önce parçalarını kaldırın ya da yalnızca işaretçi yerleştiren bir tür seçin.',
+ id:'Jenis rig ini mengikat kerangka, yang tidak bisa dipakai model dengan bagian yang dipotong. Hapus bagiannya dulu atau pilih jenis yang hanya menempatkan penanda.',
+ vi:'Loại rig này gắn một bộ xương, điều mà mô hình có các phần đã tách không nhận được. Hãy gỡ các phần trước hoặc chọn loại chỉ đặt điểm đánh dấu.',
+ th:'ริกชนิดนี้ผูกโครงกระดูก ซึ่งโมเดลที่มีชิ้นส่วนที่ตัดแยกไว้ใช้ไม่ได้ ให้ลบชิ้นส่วนออกก่อน หรือเลือกชนิดที่วางเฉพาะมาร์กเกอร์'
+ };
+ for(const [locale,value] of Object.entries(rows))globalThis.RR_REVIEWED_TRANSLATIONS.text[locale][key]=value;
+}
+
+// The Tactical HUD's command window: the icons of Mount and Dismount.
+{
+ const keys=['Mount','Dismount'];
+ const rows={
+ ja:['乗る','降りる'],
+ 'zh-Hant':['上車','下車'],
+ 'zh-Hans':['上车','下车'],
+ ko:['탑승','하차'],
+ es:['Montar','Desmontar'],
+ pt:['Montar','Desmontar'],
+ fr:['Monter','Descendre'],
+ it:['Monta','Smonta'],
+ de:['Aufsteigen','Absteigen'],
+ ru:['Сесть','Сойти'],
+ pl:['Wsiądź','Zsiądź'],
+ el:['Επιβίβαση','Αποβίβαση'],
+ ar:['ركوب','نزول'],
+ tr:['Bin','İn'],
+ id:['Naik','Turun'],
+ vi:['Lên xe','Xuống xe'],
+ th:['ขึ้นขี่','ลงจากพาหนะ']
+ };
+ for(const [locale,values] of Object.entries(rows))keys.forEach((key,i)=>globalThis.RR_REVIEWED_TRANSLATIONS.text[locale][key]=values[i]);
+}
+
+// Database › Vehicles: whether the rider is drawn on the seat or kept inside.
+{
+ const keys=['Rider','On the seat','Inside the vehicle'];
+ const rows={
+ ja:['乗り手','座席に表示','乗り物の中'],
+ 'zh-Hant':['乘坐者','顯示在座位上','在載具內'],
+ 'zh-Hans':['乘坐者','显示在座位上','在载具内'],
+ ko:['탑승자','좌석에 표시','탈것 안'],
+ es:['Piloto','En el asiento','Dentro del vehículo'],
+ pt:['Piloto','No assento','Dentro do veículo'],
+ fr:['Pilote','Sur le siège','À l’intérieur du véhicule'],
+ it:['Pilota','Sul sedile','Dentro il veicolo'],
+ de:['Fahrer','Auf dem Sitz','Im Fahrzeug'],
+ ru:['Седок','На сиденье','Внутри транспорта'],
+ pl:['Kierowca','Na siedzeniu','Wewnątrz pojazdu'],
+ el:['Αναβάτης','Στο κάθισμα','Μέσα στο όχημα'],
+ ar:['الراكب','على المقعد','داخل المركبة'],
+ tr:['Sürücü','Koltukta','Aracın içinde'],
+ id:['Pengendara','Di jok','Di dalam kendaraan'],
+ vi:['Người lái','Trên yên','Bên trong phương tiện'],
+ th:['ผู้ขี่','บนเบาะนั่ง','อยู่ในยานพาหนะ']
+ };
+ for(const [locale,values] of Object.entries(rows))keys.forEach((key,i)=>globalThis.RR_REVIEWED_TRANSLATIONS.text[locale][key]=values[i]);
+}
+
+// The Build bar: the Ground panel's sections and the erasers of the Terrain and Foliage groups.
+{
+ const keys=['Paint with','Edit this ground','Changes every place this ground is painted.','Whole map',"Erase painted ground under the brush: back to the map's own ground.",'Erase every plant under the brush.'];
+ const rows={
+ ja:['塗る地面','この地面を編集','この地面を塗ったすべての場所が変わります。','マップ全体','ブラシの下の塗った地面を消し、マップ本来の地面に戻します。','ブラシの下の植物をすべて消します。'],
+ 'zh-Hant':['塗刷用的地面','編輯此地面','所有塗了此地面的地方都會改變。','整張地圖','擦除筆刷下塗過的地面，恢復為地圖原本的地面。','擦除筆刷下的所有植物。'],
+ 'zh-Hans':['涂刷用的地面','编辑此地面','所有涂了此地面的地方都会改变。','整张地图','擦除笔刷下涂过的地面，恢复为地图原本的地面。','擦除笔刷下的所有植物。'],
+ ko:['칠할 지면','이 지면 편집','이 지면을 칠한 모든 곳이 바뀝니다.','맵 전체','브러시 아래에 칠한 지면을 지워 맵 본래의 지면으로 되돌립니다.','브러시 아래의 식물을 모두 지웁니다.'],
+ es:['Pintar con','Editar este suelo','Cambia todos los lugares pintados con este suelo.','Todo el mapa','Borra el suelo pintado bajo el pincel: vuelve al suelo propio del mapa.','Borra todas las plantas bajo el pincel.'],
+ pt:['Pintar com','Editar este solo','Altera todos os lugares pintados com este solo.','Mapa inteiro','Apaga o solo pintado sob o pincel: volta ao solo próprio do mapa.','Apaga todas as plantas sob o pincel.'],
+ fr:['Peindre avec','Modifier ce sol','Modifie tous les endroits peints avec ce sol.','Toute la carte','Efface le sol peint sous le pinceau : retour au sol propre à la carte.','Efface toutes les plantes sous le pinceau.'],
+ it:['Dipingi con','Modifica questo terreno','Cambia ogni punto dipinto con questo terreno.','Tutta la mappa','Cancella il terreno dipinto sotto il pennello: torna al terreno proprio della mappa.','Cancella tutte le piante sotto il pennello.'],
+ de:['Malen mit','Diesen Boden bearbeiten','Ändert jede Stelle, die mit diesem Boden bemalt ist.','Ganze Karte','Löscht den gemalten Boden unter dem Pinsel: zurück zum eigenen Boden der Karte.','Löscht alle Pflanzen unter dem Pinsel.'],
+ ru:['Чем рисовать','Изменить этот грунт','Меняет все места, закрашенные этим грунтом.','Вся карта','Стирает нарисованный грунт под кистью: возвращает собственный грунт карты.','Стирает все растения под кистью.'],
+ pl:['Maluj czym','Edytuj to podłoże','Zmienia każde miejsce pomalowane tym podłożem.','Cała mapa','Wymazuje namalowane podłoże pod pędzlem: wraca własne podłoże mapy.','Wymazuje wszystkie rośliny pod pędzlem.'],
+ el:['Βαφή με','Επεξεργασία αυτού του εδάφους','Αλλάζει κάθε σημείο βαμμένο με αυτό το έδαφος.','Όλος ο χάρτης','Σβήνει το βαμμένο έδαφος κάτω από το πινέλο: επιστρέφει στο έδαφος του χάρτη.','Σβήνει όλα τα φυτά κάτω από το πινέλο.'],
+ ar:['الطلاء بـ','تعديل هذه الأرضية','يغيّر كل موضع مطلي بهذه الأرضية.','الخريطة كلها','يمحو الأرضية المطلية تحت الفرشاة: تعود إلى أرضية الخريطة نفسها.','يمحو كل النباتات تحت الفرشاة.'],
+ tr:['Şununla boya','Bu zemini düzenle','Bu zeminle boyanmış her yeri değiştirir.','Tüm harita','Fırçanın altındaki boyalı zemini siler: haritanın kendi zeminine döner.','Fırçanın altındaki tüm bitkileri siler.'],
+ id:['Lukis dengan','Ubah tanah ini','Mengubah setiap tempat yang dilukis dengan tanah ini.','Seluruh peta','Menghapus tanah yang dilukis di bawah kuas: kembali ke tanah asli peta.','Menghapus semua tanaman di bawah kuas.'],
+ vi:['Tô bằng','Sửa nền này','Thay đổi mọi nơi đã tô bằng nền này.','Toàn bản đồ','Xóa nền đã tô dưới cọ: trở về nền gốc của bản đồ.','Xóa mọi cây cỏ dưới cọ.'],
+ th:['ระบายด้วย','แก้ไขพื้นนี้','เปลี่ยนทุกจุดที่ระบายด้วยพื้นนี้','ทั้งแผนที่','ลบพื้นที่ระบายไว้ใต้แปรง กลับเป็นพื้นของแผนที่เอง','ลบพืชทั้งหมดใต้แปรง']
+ };
+ for(const [locale,values] of Object.entries(rows))keys.forEach((key,i)=>globalThis.RR_REVIEWED_TRANSLATIONS.text[locale][key]=values[i]);
+}
+
+// Web builds: files in pack archives.
+{
+ const keys=["Pack files into archives", "A few zip archives in place of many files, for web hosts with file limits.", "this window blocks service workers, which read the project. Open a normal (not private) window with site data allowed."];
+ const rows={
+ "ja":["ファイルをアーカイブにまとめる", "多数のファイルを少数の zip アーカイブにまとめます。ファイル数に制限のある Web ホスト向けです。", "このウィンドウではプロジェクトを読み込むサービスワーカーがブロックされています。サイトデータを許可した通常の（プライベートではない）ウィンドウで開いてください。"],
+ "zh-Hant":["將檔案打包成壓縮檔", "以少數 zip 壓縮檔取代大量檔案，適用於有檔案數量限制的網頁主機。", "此視窗封鎖了讀取專案所需的 Service Worker。請在允許網站資料的一般（非私密）視窗中開啟。"],
+ "zh-Hans":["将文件打包成压缩包", "用少量 zip 压缩包代替大量文件，适用于有文件数量限制的网页主机。", "此窗口阻止了读取项目所需的 Service Worker。请在允许网站数据的普通（非隐私）窗口中打开。"],
+ "ko":["파일을 아카이브로 묶기", "많은 파일 대신 몇 개의 zip 아카이브로 묶습니다. 파일 수 제한이 있는 웹 호스트용입니다.", "이 창은 프로젝트를 읽는 서비스 워커를 차단합니다. 사이트 데이터를 허용한 일반(시크릿이 아닌) 창에서 여세요."],
+ "es":["Empaquetar archivos en paquetes", "Unos pocos archivos zip en lugar de muchos archivos, para alojamientos web con límite de archivos.", "esta ventana bloquea los service workers, que leen el proyecto. Abre una ventana normal (no privada) con los datos del sitio permitidos."],
+ "pt":["Empacotar arquivos em pacotes", "Alguns arquivos zip no lugar de muitos arquivos, para hospedagens web com limite de arquivos.", "esta janela bloqueia os service workers, que leem o projeto. Abra uma janela normal (não privada) com os dados do site permitidos."],
+ "fr":["Regrouper les fichiers en archives", "Quelques archives zip à la place de nombreux fichiers, pour les hébergeurs web qui limitent le nombre de fichiers.", "cette fenêtre bloque les service workers, qui lisent le projet. Ouvrez une fenêtre normale (non privée) où les données du site sont autorisées."],
+ "de":["Dateien in Archive packen", "Wenige Zip-Archive statt vieler Dateien, für Webhoster mit Dateilimits.", "dieses Fenster blockiert Service Worker, die das Projekt lesen. Öffne ein normales (nicht privates) Fenster, in dem Websitedaten erlaubt sind."],
+ "it":["Raggruppa i file in archivi", "Pochi archivi zip al posto di molti file, per gli host web con limiti sul numero di file.", "questa finestra blocca i service worker, che leggono il progetto. Apri una finestra normale (non privata) con i dati del sito consentiti."],
+ "ru":["Упаковать файлы в архивы", "Несколько zip-архивов вместо множества файлов, для веб-хостингов с ограничением на число файлов.", "это окно блокирует сервис-воркеры, которые читают проект. Откройте обычное (не приватное) окно, где разрешены данные сайта."],
+ "pl":["Spakuj pliki do archiwów", "Kilka archiwów zip zamiast wielu plików, dla hostingów z limitem liczby plików.", "to okno blokuje service workery, które odczytują projekt. Otwórz zwykłe (nie prywatne) okno z dozwolonymi danymi witryny."],
+ "el":["Συσκευασία αρχείων σε αρχειοθήκες", "Λίγα αρχεία zip στη θέση πολλών αρχείων, για φιλοξενία ιστού με όριο αρχείων.", "αυτό το παράθυρο αποκλείει τους service workers, που διαβάζουν το έργο. Ανοίξτε ένα κανονικό (όχι ιδιωτικό) παράθυρο όπου επιτρέπονται τα δεδομένα ιστότοπου."],
+ "ar":["حزم الملفات في أرشيفات", "بضعة أرشيفات zip بدلًا من ملفات كثيرة، لمواقع الاستضافة التي تحدّ عدد الملفات.", "هذه النافذة تحظر عمّال الخدمة (service workers) الذين يقرؤون المشروع. افتح نافذة عادية (غير خاصة) تسمح ببيانات الموقع."],
+ "tr":["Dosyaları arşivlere paketle", "Çok sayıda dosya yerine birkaç zip arşivi; dosya sınırı olan web barındırıcıları için.", "bu pencere projeyi okuyan service worker'ları engelliyor. Site verilerine izin verilen normal (gizli olmayan) bir pencere aç."],
+ "id":["Kemas berkas ke dalam arsip", "Beberapa arsip zip sebagai pengganti banyak berkas, untuk hosting web yang membatasi jumlah berkas.", "jendela ini memblokir service worker yang membaca proyek. Buka jendela biasa (bukan privat) yang mengizinkan data situs."],
+ "vi":["Đóng gói tệp vào kho lưu trữ", "Vài tệp zip thay cho nhiều tệp, dành cho máy chủ web giới hạn số tệp.", "cửa sổ này chặn service worker, thứ dùng để đọc dự án. Hãy mở một cửa sổ thường (không riêng tư) cho phép dữ liệu trang web."],
+ "th":["รวมไฟล์เป็นไฟล์เก็บถาวร", "ไฟล์ zip ไม่กี่ไฟล์แทนไฟล์จำนวนมาก สำหรับโฮสต์เว็บที่จำกัดจำนวนไฟล์", "หน้าต่างนี้บล็อก service worker ซึ่งใช้อ่านโปรเจกต์ โปรดเปิดในหน้าต่างปกติ (ไม่ใช่แบบส่วนตัว) ที่อนุญาตข้อมูลไซต์"]
+ };
+ for(const [locale,values] of Object.entries(rows))keys.forEach((key,i)=>globalThis.RR_REVIEWED_TRANSLATIONS.text[locale][key]=values[i]);
 }

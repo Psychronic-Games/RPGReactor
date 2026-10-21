@@ -66,6 +66,9 @@ test('pixels become rectangles and a fixed-cell font advances 6 px per half-widt
     // a font with real per-glyph widths keeps them
     const varying = new Map([[65, { width: 5, rows: A.map(r => Uint8Array.from(r.slice(0, 5), c => (c === '#' ? 1 : 0))) }], [66, { width: 4, rows: A.map(() => new Uint8Array(4)) }]]);
     assert.deepEqual([F.advances({ glyphs: varying }, 6).get(65), F.advances({ glyphs: varying }, 6).get(66)], [5, 4]);
+    // cells wider than a full-width glyph are not widths: the engine's pitch applies
+    const padded = new Map([[65, { width: 15, rows: A.map(r => Uint8Array.from(r.slice(0, 5), c => (c === '#' ? 1 : 0))) }], [66, { width: 4, rows: A.map(() => new Uint8Array(4)) }]]);
+    assert.deepEqual([F.advances({ glyphs: padded }, 6).get(65), F.advances({ glyphs: padded }, 6).get(66)], [6, 6]);
 });
 
 test('the TrueType file has every required table, a valid checksum and a cmap that finds the glyphs', () => {

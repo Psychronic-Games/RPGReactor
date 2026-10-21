@@ -146,10 +146,18 @@
                 period: number(raw.pulse.period, 90, 2, 100000)
             } : null
         };
+        // Written only when set, as the runtime's schema reads them: an attached cone that keeps a bearing,
+        // and whether the source is drawn as a glowing body (the runtime's default depends on attach).
+        if (raw.followFacing === false) light.followFacing = false;
+        // A sun that keeps its authored light whatever the map's time of day.
+        if (raw.daylight === 'fixed') light.daylight = 'fixed';
+        if (raw.body !== undefined) light.body = !!raw.body;
         if (raw.compoundId && ID_PATTERN.test(String(raw.compoundId))) {
             light.compoundId = String(raw.compoundId);
             light.compoundName = String(raw.compoundName || '').slice(0, 80);
         }
+        // A light a stamped building placed: the building's number, so the light's tag stays the author's.
+        if (Number(raw.structure) > 0) light.structure = Math.floor(Number(raw.structure));
         if (!light.attach) light.attach = null;
         return light;
     };
@@ -359,7 +367,8 @@
         const sidecar = mapData && mapData.reactor3d;
         return JSON.stringify({
             lights: (sidecar && sidecar.lights) || [],
-            lighting: (sidecar && sidecar.lighting) || null
+            lighting: (sidecar && sidecar.lighting) || null,
+            keys: sidecar ? Object.keys(sidecar) : []
         });
     };
 
@@ -372,13 +381,18 @@
         }
         const sidecar = ensure(mapData);
         if (!sidecar) return false;
-        if (Array.isArray(parsed.lights) && parsed.lights.length) {
-            sidecar.lights = parsed.lights.map((entry, i) => normalize(entry, 'light' + (i + 1)));
-        } else {
-            delete sidecar.lights;
-        }
+        // The lights go back as they were written, and in the place they held in the file.
+        if (Array.isArray(parsed.lights) && parsed.lights.length) sidecar.lights = parsed.lights;
+        else delete sidecar.lights;
         if (parsed.lighting) sidecar.lighting = parsed.lighting;
         else delete sidecar.lighting;
+        const order = Array.isArray(parsed.keys) ? parsed.keys.filter(key => key in sidecar) : [];
+        const now = Object.keys(sidecar), want = order.concat(now.filter(key => !order.includes(key)));
+        if (want.some((key, i) => key !== now[i])) {
+            const held = {};
+            for (const key of now) { held[key] = sidecar[key]; delete sidecar[key]; }
+            for (const key of want) sidecar[key] = held[key];
+        }
         return true;
     };
 

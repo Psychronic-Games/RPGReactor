@@ -1,4 +1,5 @@
 const test = require('node:test');
+const { runtimeSource } = require('./helpers/runtime-source.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -7,7 +8,7 @@ const zlib = require('node:zlib');
 
 const repoRoot = path.resolve(__dirname, '..', '..');
 const editorRoot = path.resolve(__dirname, '..');
-const coreSource = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_core.js'), 'utf8');
+const coreSource = runtimeSource('reactor_core.js');
 const ResourceManager = require(path.join(editorRoot, 'src', 'ResourceManager.js'));
 const assetOptimizer = require(path.join(editorRoot, 'build-scripts', 'asset-optimizer.js'));
 

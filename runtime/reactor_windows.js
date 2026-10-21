@@ -1532,9 +1532,17 @@ Window_Command.prototype.selectExt = function(ext) {
 Window_Command.prototype.drawItem = function(index) {
     const rect = this.itemLineRect(index);
     const align = this.itemTextAlign();
+    const name = this.commandName(index);
     this.resetTextColor();
     this.changePaintOpacity(this.isCommandEnabled(index));
-    this.drawText(this.commandName(index), rect.x, rect.y, rect.width, align);
+    // A name with text codes (an icon before the word, a color) is drawn as message text is, aligned as the row is.
+    if (typeof name === "string" && name.includes("\\")) {
+        const width = this.textSizeEx(name).width;
+        const x = align === "center" ? rect.x + Math.max(0, Math.floor((rect.width - width) / 2)) : align === "right" ? rect.x + Math.max(0, rect.width - width) : rect.x;
+        this.drawTextEx(name, x, rect.y, rect.width);
+        return;
+    }
+    this.drawText(name, rect.x, rect.y, rect.width, align);
 };
 
 Window_Command.prototype.itemTextAlign = function() {
@@ -3005,6 +3013,30 @@ Window_Options.prototype.addGeneralOptions = function() {
     this.addCommand(TextManager.alwaysDash, "alwaysDash");
     this.addCommand(TextManager.commandRemember, "commandRemember");
     this.addCommand(TextManager.touchUI, "touchUI");
+    this.addGraphicsOption();
+};
+
+/**
+ * How the 3D world is drawn: Auto keeps the frame rate by itself, the rest
+ * hold a level (reactor_3d.js, `Reactor3D.Quality`). Offered once this
+ * machine has drawn a 3D map: a 2D game has nothing for it to change.
+ * The words are `Window_Options.GRAPHICS_TEXT`, for a game in another language.
+ */
+Window_Options.GRAPHICS_VALUES = ["auto", "high", "medium", "low"];
+Window_Options.GRAPHICS_TEXT = { name: "Graphics", auto: "Auto", high: "High", medium: "Medium", low: "Low" };
+Window_Options.prototype.addGraphicsOption = function() {
+    if (typeof Reactor3D === "undefined" || !Reactor3D.Quality || !ConfigManager.reactor3dSeen) return;
+    this.addCommand(Window_Options.GRAPHICS_TEXT.name, "graphicsQuality");
+};
+
+Window_Options.prototype.changeGraphicsQuality = function(forward, wrap) {
+    const values = Window_Options.GRAPHICS_VALUES;
+    const at = Math.max(0, values.indexOf(ConfigManager.graphicsQuality));
+    const next = wrap ? (at + (forward ? 1 : values.length - 1)) % values.length : Math.max(0, Math.min(values.length - 1, at + (forward ? 1 : -1)));
+    if (next === at) return;
+    this.changeValue("graphicsQuality", values[next]);
+    // Auto chosen again starts from the full picture.
+    if (values[next] === "auto" && typeof Reactor3D !== "undefined" && Reactor3D.Quality) Reactor3D.Quality.reset();
 };
 
 Window_Options.prototype.addVolumeOptions = function() {
@@ -3033,7 +3065,9 @@ Window_Options.prototype.statusWidth = function() {
 Window_Options.prototype.statusText = function(index) {
     const symbol = this.commandSymbol(index);
     const value = this.getConfigValue(symbol);
-    if (this.isVolumeSymbol(symbol)) {
+    if (symbol === "graphicsQuality") {
+        return Window_Options.GRAPHICS_TEXT[value] || Window_Options.GRAPHICS_TEXT.auto;
+    } else if (this.isVolumeSymbol(symbol)) {
         return this.volumeStatusText(value);
     } else {
         return this.booleanStatusText(value);
@@ -3055,7 +3089,9 @@ Window_Options.prototype.volumeStatusText = function(value) {
 Window_Options.prototype.processOk = function() {
     const index = this.index();
     const symbol = this.commandSymbol(index);
-    if (this.isVolumeSymbol(symbol)) {
+    if (symbol === "graphicsQuality") {
+        this.changeGraphicsQuality(true, true);
+    } else if (this.isVolumeSymbol(symbol)) {
         this.changeVolume(symbol, true, true);
     } else {
         this.changeValue(symbol, !this.getConfigValue(symbol));
@@ -3065,7 +3101,9 @@ Window_Options.prototype.processOk = function() {
 Window_Options.prototype.cursorRight = function() {
     const index = this.index();
     const symbol = this.commandSymbol(index);
-    if (this.isVolumeSymbol(symbol)) {
+    if (symbol === "graphicsQuality") {
+        this.changeGraphicsQuality(true, false);
+    } else if (this.isVolumeSymbol(symbol)) {
         this.changeVolume(symbol, true, false);
     } else {
         this.changeValue(symbol, true);
@@ -3075,7 +3113,9 @@ Window_Options.prototype.cursorRight = function() {
 Window_Options.prototype.cursorLeft = function() {
     const index = this.index();
     const symbol = this.commandSymbol(index);
-    if (this.isVolumeSymbol(symbol)) {
+    if (symbol === "graphicsQuality") {
+        this.changeGraphicsQuality(false, false);
+    } else if (this.isVolumeSymbol(symbol)) {
         this.changeVolume(symbol, false, false);
     } else {
         this.changeValue(symbol, false);
@@ -6980,19 +7020,19 @@ Window_NameBox.prototype.updateBackground = function() {
     };
     // a choice takes one text line, as the message's own lines do (MZ adds 8 px a row)
     const inMessage = () => !!($dataSystem && $dataSystem.rrChoicesInMessage);
-    const _itemHeight = Window_ChoiceList.prototype.itemHeight;
+    // The stock rules are looked up when called, not captured here: the MV layer installs MV row
+    // metrics on Window_Selectable after this file loads, and a captured copy would keep MZ's.
+    const base = Object.getPrototypeOf(Window_ChoiceList.prototype);
     Window_ChoiceList.prototype.itemHeight = function() {
-        return inMessage() ? this.lineHeight() : _itemHeight.call(this);
+        return inMessage() ? this.lineHeight() : base.itemHeight.call(this);
     };
-    const _rowSpacing = Window_ChoiceList.prototype.rowSpacing;
     Window_ChoiceList.prototype.rowSpacing = function() {
-        return inMessage() ? 0 : _rowSpacing.call(this);
+        return inMessage() ? 0 : base.rowSpacing.call(this);
     };
     // the old engines draw no bar behind each choice, only the cursor
-    const _drawItemBackground = Window_ChoiceList.prototype.drawItemBackground;
     Window_ChoiceList.prototype.drawItemBackground = function(index) {
         if ($dataSystem && $dataSystem.rrChoicesInMessage) return;
-        _drawItemBackground.call(this, index);
+        base.drawItemBackground.call(this, index);
     };
     const _updateBackground = Window_ChoiceList.prototype.updateBackground;
     Window_ChoiceList.prototype.updateBackground = function() {
@@ -7078,13 +7118,14 @@ Window_NameBox.prototype.updateBackground = function() {
         const rows = Math.max(1, Math.floor((Graphics.height - top - BAND) / SLOT_HEIGHT));
         return screenRect(0, top, Graphics.width, rows * SLOT_HEIGHT);
     };
-    const _needsCancelButton = Scene_File.prototype.needsCancelButton;
+    // What these classes inherit is asked for when it is called, never kept: a plugin that replaces the parent's
+    // method after this file loads (a menu background, a list's row backing) must still reach the save screens.
+    const parentOf = Class => Object.getPrototypeOf(Class.prototype);
     Scene_File.prototype.needsCancelButton = function() {
-        return legacy() ? false : _needsCancelButton.call(this);
+        return legacy() ? false : parentOf(Scene_File).needsCancelButton.call(this);
     };
-    const _createBackground = Scene_File.prototype.createBackground;
     Scene_File.prototype.createBackground = function() {
-        if (!legacy()) return _createBackground.call(this);
+        if (!legacy()) return parentOf(Scene_File).createBackground.call(this);
         this._backgroundSprite = new Sprite(new Bitmap(Graphics.width, Graphics.height));
         this._backgroundSprite.bitmap.fillAll(legacy().background || "#000000");
         this.addChild(this._backgroundSprite);
@@ -7120,9 +7161,8 @@ Window_NameBox.prototype.updateBackground = function() {
             slot.setSlot(index < list.maxItems() ? list.indexToSavefileId(index) : null, list.active && index === list.index());
         });
     };
-    const _updateList = Window_SavefileList.prototype.update;
     Window_SavefileList.prototype.update = function() {
-        _updateList.call(this);
+        parentOf(Window_SavefileList).update.call(this);
         if (this._rrOnUpdate) this._rrOnUpdate();
     };
     // Save lists no autosave row: the old engine had none, and it can't be saved to
@@ -7131,9 +7171,8 @@ Window_NameBox.prototype.updateBackground = function() {
         _setMode.call(this, mode, legacy() && mode === "save" ? false : autosave);
     };
 
-    const _updatePadding = Window_SavefileList.prototype.updatePadding;
     Window_SavefileList.prototype.updatePadding = function() {
-        if (this._rrLegacySlots) this.padding = 0; else _updatePadding.call(this);
+        if (this._rrLegacySlots) this.padding = 0; else parentOf(Window_SavefileList).updatePadding.call(this);
     };
     const _numVisibleRows = Window_SavefileList.prototype.numVisibleRows;
     Window_SavefileList.prototype.numVisibleRows = function() {
@@ -7143,14 +7182,12 @@ Window_NameBox.prototype.updateBackground = function() {
     Window_SavefileList.prototype.drawItem = function(index) {
         if (!this._rrLegacySlots) _drawItem.call(this, index);
     };
-    const _drawItemBackground = Window_SavefileList.prototype.drawItemBackground;
     Window_SavefileList.prototype.drawItemBackground = function(index) {
-        if (!this._rrLegacySlots) _drawItemBackground.call(this, index);
+        if (!this._rrLegacySlots) parentOf(Window_SavefileList).drawItemBackground.call(this, index);
     };
     // the scroll arrows sit in the bands above and below the slots, as the old engine drew them
-    const _refreshArrows = Window_SavefileList.prototype._refreshArrows;
     Window_SavefileList.prototype._refreshArrows = function() {
-        _refreshArrows.call(this);
+        parentOf(Window_SavefileList)._refreshArrows.call(this);
         if (!this._rrLegacySlots) return;
         this._upArrowSprite.move(this._width / 2, -BAND / 2);
         this._downArrowSprite.move(this._width / 2, this._height + BAND / 2);
@@ -7175,6 +7212,547 @@ Window_NameBox.prototype.updateBackground = function() {
     };
 })();
 
+// The RPG Maker 2000/2003 title (System.json rrLegacyTitle, as an import has it): New Game, Continue
+// and the exit command, one line each and flush left, in a window as wide as its widest command,
+// centred with its bottom at 53/60 of the screen height; no Options. EasyRPG's Scene_Title and
+// Window_Command. The window's other rules are looked up when called, so later layers still apply.
+(function() {
+    const legacy = () => !!($dataSystem && $dataSystem.rrLegacyTitle);
+    const base = Object.getPrototypeOf(Window_TitleCommand.prototype);
+    const _makeCommandList = Window_TitleCommand.prototype.makeCommandList;
+    Window_TitleCommand.prototype.makeCommandList = function() {
+        _makeCommandList.call(this);
+        if (legacy()) this._list = this._list.filter(command => command.symbol !== "options");
+    };
+    for (const [name, value] of [["itemHeight", w => w.lineHeight()], ["rowSpacing", () => 0], ["itemPadding", () => ($dataSystem.rrLegacyWindows ? 4 : 0)], ["itemTextAlign", () => "left"]]) {
+        const own = Object.prototype.hasOwnProperty.call(Window_TitleCommand.prototype, name) ? Window_TitleCommand.prototype[name] : null;
+        Window_TitleCommand.prototype[name] = function() {
+            return legacy() ? value(this) : (own || base[name]).call(this);
+        };
+    }
+    const _createCommandWindow = Scene_Title.prototype.createCommandWindow;
+    Scene_Title.prototype.createCommandWindow = function() {
+        _createCommandWindow.call(this);
+        if (!legacy()) return;
+        const w = this._commandWindow;
+        const widest = Math.max(0, ...w._list.map(command => w.textWidth(command.name)));
+        const width = Math.ceil(widest) + w.padding * 2;
+        const height = w.fittingHeight(w._list.length);
+        // Measured on the whole screen, as the old engines had no box margin; the window layer sits inside it.
+        const offset = $dataSystem.titleCommandWindow || {};
+        const layerX = (Graphics.width - Graphics.boxWidth) / 2, layerY = (Graphics.height - Graphics.boxHeight) / 2;
+        const x = Math.floor((Graphics.width - width) / 2) - layerX + (offset.offsetX || 0);
+        const y = Math.floor(Graphics.height * 53 / 60) - height - layerY + (offset.offsetY || 0);
+        w.move(x, y, width, height);
+        w.createContents();
+        w.refresh();
+    };
+})();
+
+// RPG Maker 2000/2003 menus and battles (System.json rrLegacyWindows: 2000 or 2003, the runtime an import
+// shipped with), measured against EasyRPG Player:
+// - command lists flush left with no inner padding, nothing behind a menu but black, the system text colors
+//   where the old engines had them (1 system, 4 critical, 5 knocked out);
+// - the main menu: commands in an 88 px column at the top left, gold in an 88 x 32 window at the bottom left,
+//   the party on the rest, a 48 px face and three lines per member, 58 px apart. 2000 lists Item, Skill,
+//   Equipment, Save and Quit; 2003 the game's own list (rrMenuCommands), Item alone when it has none;
+// - battle: one 80 px row at the bottom, a member per line with no gauges. 2000 slides a strip of party
+//   commands (76), status (244) and actor commands (76) left while an actor is commanded, and shows battle
+//   messages four lines at a time in the bottom row. 2003 keeps the enemy list (104) beside the status, the
+//   actor commands over the list's right edge, and shows one message line at the top.
+(function() {
+    const legacy = () => !!($dataSystem && $dataSystem.rrLegacyWindows);
+    const is2003 = () => !!($dataSystem && $dataSystem.rrLegacyWindows === 2003);
+    const override = (proto, name, fn) => {
+        const own = Object.prototype.hasOwnProperty.call(proto, name) ? proto[name] : null;
+        const base = Object.getPrototypeOf(proto);
+        proto[name] = function(...args) { return legacy() ? fn.apply(this, args) : (own || base[name]).apply(this, args); };
+    };
+    // Lists: a row is the window's width over its columns less 16, text at the row's left edge, the cursor
+    // 4 px wider on each side (EasyRPG's Window_Selectable).
+    override(Window_Selectable.prototype, "itemRect", function(index) {
+        const cols = this.maxCols(), cell = Math.floor(this.width / cols), height = this.itemHeight();
+        return new Rectangle((index % cols) * cell - 4, Math.floor(index / cols) * height - this.scrollBaseY(), cell - 8, height);
+    });
+    override(Window_Selectable.prototype, "itemPadding", () => 4);
+    override(Window_Command.prototype, "itemTextAlign", () => "left");
+    // An item or skill without an icon (an import has none) is named from the row's edge.
+    const _drawItemName = Window_Base.prototype.drawItemName;
+    Window_Base.prototype.drawItemName = function(item, x, y, width) {
+        if (!legacy() || !item || item.iconIndex) return _drawItemName.call(this, item, x, y, width);
+        this.resetTextColor();
+        this.drawText(item.name, x, y, width);
+    };
+    /** ":  3" or "- 12": a separator and a three-digit number in the last 24 px of a row. */
+    const drawCount = (w, separator, value, rect) => {
+        w.drawText(separator, rect.x + rect.width - 24, rect.y, 6);
+        w.drawText(String(value), rect.x + rect.width - 18, rect.y, 18, "right");
+    };
+    for (const [name, index] of [["systemColor", 1], ["crisisColor", 4], ["deathColor", 5]]) {
+        const original = ColorManager[name];
+        ColorManager[name] = function() { return legacy() ? this.textColor(index) : original.call(this); };
+    }
+    /** A value's color: knocked out at 0 (when it can be), critical at a quarter or less. */
+    const valueColor = (have, max, knockout) => knockout && have === 0 ? ColorManager.deathColor()
+        : max > 0 && have <= Math.floor(max / 4) ? ColorManager.crisisColor() : ColorManager.normalColor();
+    /** "HP 40/ 40": the label, then current and maximum right-aligned in `digits` 6 px cells around a slash. */
+    Window_Base.prototype.drawLegacyValue = function(label, value, max, x, y, digits, knockout, showMax) {
+        this.changeTextColor(ColorManager.systemColor());
+        this.drawText(label, x, y, 12);
+        this.changeTextColor(valueColor(value, max, knockout));
+        this.drawText(String(value), x + 12, y, digits * 6, "right");
+        this.resetTextColor();
+        if (showMax === false) return;
+        this.drawText("/", x + 12 + digits * 6, y, 6);
+        this.drawText(String(max), x + 18 + digits * 6, y, digits * 6, "right");
+    };
+    /** The state that shows, in its own color, or the Normal term. */
+    Window_Base.prototype.drawLegacyState = function(actor, x, y, width) {
+        const top = actor.states()[0];
+        this.changeTextColor(top ? ColorManager.textColor(top.rrColor ?? 6) : ColorManager.normalColor());
+        this.drawText(top ? top.name : ($dataSystem.rrNormalStatus || "Normal"), x, y, width);
+        this.resetTextColor();
+    };
+
+    const _createBackground = Scene_MenuBase.prototype.createBackground;
+    Scene_MenuBase.prototype.createBackground = function() {
+        _createBackground.call(this);
+        if (legacy() && this._backgroundSprite) this._backgroundSprite.visible = false;
+    };
+
+    // ---- Main menu ----
+    const MENU_2003 = { 1: "item", 2: "skill", 3: "equip", 4: "save", 5: "status", 7: "formation" };
+    /** The main menu's commands before Quit. */
+    const menuSymbols = () => {
+        const symbols = is2003()
+            ? ($dataSystem.rrMenuCommands || []).map(n => MENU_2003[n]).filter(Boolean)
+            : ["item", "skill", "equip", "save"];
+        return symbols.length ? symbols : ["item"];
+    };
+    const COMMAND_WIDTH = 88, GOLD_HEIGHT = 32;
+    override(Scene_Menu.prototype, "commandWindowRect", function() {
+        return new Rectangle(0, 0, COMMAND_WIDTH, this.calcWindowHeight(menuSymbols().length + 1, true));
+    });
+    override(Scene_Menu.prototype, "goldWindowRect", function() {
+        return new Rectangle(0, Graphics.boxHeight - GOLD_HEIGHT, COMMAND_WIDTH, GOLD_HEIGHT);
+    });
+    override(Scene_Menu.prototype, "statusWindowRect", function() {
+        return new Rectangle(COMMAND_WIDTH, 0, Graphics.boxWidth - COMMAND_WIDTH, Graphics.boxHeight);
+    });
+    override(Window_MenuCommand.prototype, "makeCommandList", function() {
+        const names = { item: TextManager.item, skill: TextManager.skill, equip: TextManager.equip, save: TextManager.save, status: TextManager.status, formation: TextManager.formation };
+        for (const symbol of menuSymbols()) {
+            const enabled = symbol === "save" ? this.isSaveEnabled() : symbol === "formation" ? this.isFormationEnabled() : this.areMainCommandsEnabled();
+            this.addCommand(names[symbol], symbol, enabled);
+        }
+        this.addCommand(TextManager.gameEnd, "gameEnd", this.isGameEndEnabled());
+    });
+
+    // 2003 narrows the window's left border by 4 px and moves the contents 4 px right, which cancels out.
+    const ROW = 58, FACE = 48;
+    override(Window_MenuStatus.prototype, "itemHeight", () => ROW);
+    override(Window_MenuStatus.prototype, "numVisibleRows", function() { return Math.max(1, Math.floor(this.innerHeight / ROW)); });
+    override(Window_MenuStatus.prototype, "itemRect", function(index) {
+        return new Rectangle(0, index * ROW - this.scrollBaseY(), this.innerWidth, FACE);
+    });
+    override(Window_MenuStatus.prototype, "drawItem", function(index) {
+        const actor = this.actor(index);
+        if (!actor) return;
+        const rect = this.itemRect(index);
+        this.drawPendingItemBackground(index);
+        this.changePaintOpacity(actor.isBattleMember());
+        this.drawActorFace(actor, rect.x, rect.y, FACE, FACE);
+        this.changePaintOpacity(true);
+        const x = rect.x + FACE + 8, y = rect.y, line = 16;
+        this.resetTextColor();
+        this.drawText(actor.name(), x, y, 88);
+        this.drawText(actor.nickname(), x + 88, y, this.innerWidth - x - 88);
+        this.changeTextColor(ColorManager.systemColor());
+        this.drawText(TextManager.levelA, x, y + line, 12);
+        this.resetTextColor();
+        this.drawText(String(actor.level), x, y + line, 24, "right");
+        this.drawLegacyState(actor, x + 42, y + line, 64);
+        // EXP as the old engines print it, current and next in fixed columns: six characters after the term
+        // in 2000, seven and no term in 2003 (its experience runs to 9,999,999).
+        const columns = is2003() ? 7 : 6;
+        const exp = String(actor.currentExp()), next = actor.isMaxLevel() ? "-".repeat(columns) : String(actor.nextLevelExp());
+        if (!is2003()) {
+            this.changeTextColor(ColorManager.systemColor());
+            this.drawText(TextManager.expA, x, y + line * 2, 12);
+            this.resetTextColor();
+        }
+        const ex = x + (is2003() ? 0 : 12), cell = columns * 6;
+        this.drawText(exp, ex, y + line * 2, cell, "right");
+        this.drawText("/", ex + cell, y + line * 2, 6);
+        this.drawText(next, ex + cell + 6, y + line * 2, cell, "right");
+        const digits = (actor.mhp >= 1000 || actor.mmp >= 1000) ? 4 : 3;
+        const vx = x + 106 - (digits === 3 ? 0 : 12);
+        this.drawLegacyValue(TextManager.hpA, actor.hp, actor.mhp, vx, y + line, digits, true);
+        this.drawLegacyValue(TextManager.mpA, actor.mp, actor.mmp, vx, y + line * 2, digits, false);
+    });
+    override(Window_MenuStatus.prototype, "refreshCursor", function() {
+        if (this.index() < 0) { this.setCursorRect(0, 0, 0, 0); return; }
+        const rect = this.itemRect(this.index());
+        this.setCursorRect(FACE + 4, rect.y, 168, FACE);
+    });
+
+    // ---- Item, Skill, Equipment, targets and Quit ----
+    const HELP = 32;
+    override(Scene_MenuBase.prototype, "helpAreaHeight", () => HELP);
+    override(Scene_MenuBase.prototype, "helpAreaTop", () => 0);
+    override(Scene_MenuBase.prototype, "mainAreaTop", () => HELP);
+    override(Window_Help.prototype, "baseTextRect", function() { return new Rectangle(0, 0, this.innerWidth, this.innerHeight); });
+    // Item lists every item, weapon and armor in one list; there are no categories.
+    override(Window_ItemCategory.prototype, "needsSelection", () => false);
+    const _includes = Window_ItemList.prototype.includes;
+    Window_ItemList.prototype.includes = function(item) {
+        if (legacy() && this.constructor === Window_ItemList) return !!item;
+        return _includes.call(this, item);
+    };
+    override(Scene_Item.prototype, "itemWindowRect", () => new Rectangle(0, HELP, Graphics.boxWidth, Graphics.boxHeight - HELP));
+    const _createItemWindow = Scene_Item.prototype.createItemWindow;
+    Scene_Item.prototype.createItemWindow = function() {
+        _createItemWindow.call(this);
+        if (!legacy()) return;
+        // Placed again: MZ lifts the list over its hidden category row.
+        const rect = this.itemWindowRect();
+        this._itemWindow.move(rect.x, rect.y, rect.width, rect.height);
+        this._itemWindow.createContents();
+        this._itemWindow.refresh();
+    };
+    override(Window_ItemList.prototype, "drawItem", function(index) {
+        const item = this.itemAt(index);
+        if (!item) return;
+        const rect = this.itemLineRect(index);
+        this.changePaintOpacity(this.isEnabled(item));
+        this.drawItemName(item, rect.x, rect.y, rect.width - 24);
+        if (this.needsNumber()) drawCount(this, ":", $gameParty.numItems(item), rect);
+        this.changePaintOpacity(1);
+    });
+    override(Window_SkillList.prototype, "drawItem", function(index) {
+        const skill = this.itemAt(index);
+        if (!skill) return;
+        const rect = this.itemLineRect(index);
+        this.changePaintOpacity(this.isEnabled(skill));
+        this.drawItemName(skill, rect.x, rect.y, rect.width - 24);
+        drawCount(this, "-", this._actor.skillMpCost(skill), rect);
+        this.changePaintOpacity(1);
+    });
+
+    // Skill: the actor on one line under the help, the list below, no skill types.
+    override(Scene_Skill.prototype, "statusWindowRect", () => new Rectangle(0, HELP, Graphics.boxWidth, 32));
+    override(Scene_Skill.prototype, "itemWindowRect", () => new Rectangle(0, HELP + 32, Graphics.boxWidth, Graphics.boxHeight - HELP - 32));
+    const skillList = (scene) => {
+        scene._skillTypeWindow.hide();
+        scene._skillTypeWindow.deactivate();
+        scene._itemWindow.setStypeId(scene._skillTypeWindow.currentExt());
+        scene._itemWindow.activate();
+        scene._itemWindow.selectLast();
+    };
+    const _skillStart = Scene_Skill.prototype.start;
+    Scene_Skill.prototype.start = function() {
+        _skillStart.call(this);
+        if (legacy()) skillList(this);
+    };
+    override(Scene_Skill.prototype, "onItemCancel", function() { this.popScene(); });
+    const _skillActorChange = Scene_Skill.prototype.onActorChange;
+    Scene_Skill.prototype.onActorChange = function() {
+        _skillActorChange.call(this);
+        if (legacy()) skillList(this);
+    };
+    override(Window_SkillStatus.prototype, "refresh", function() {
+        Window_StatusBase.prototype.refresh.call(this);
+        const actor = this._actor;
+        if (!actor) return;
+        const hp = actor.mhp >= 1000 ? 4 : 3, sp = actor.mmp >= 1000 ? 4 : 3;
+        this.drawText(actor.name(), 0, 0, 80);
+        this.drawLegacyLevel(actor, 80, 0);
+        this.drawLegacyState(actor, 124, 0, 60);
+        const hx = 124 + 96 - hp * 6 - sp * 6;
+        this.drawLegacyValue(TextManager.hpA, actor.hp, actor.mhp, hx, 0, hp, true);
+        this.drawLegacyValue(TextManager.mpA, actor.mp, actor.mmp, hx + 66 + hp * 6 - sp * 6, 0, sp, false);
+    });
+    /** "L  1": the level term and the level right-aligned in the next 24 px. */
+    Window_Base.prototype.drawLegacyLevel = function(actor, x, y) {
+        this.changeTextColor(ColorManager.systemColor());
+        this.drawText(TextManager.levelA, x, y, 12);
+        this.resetTextColor();
+        this.drawText(String(actor.level), x, y, 24, "right");
+    };
+
+    // Equipment: the actor's attack, defense, spirit and agility (124 px), the five slots beside it, the
+    // candidates for a slot below; no Equip / Optimize / Clear commands.
+    const EQUIP_STATUS = 124, EQUIP_HEIGHT = 96;
+    override(Scene_Equip.prototype, "statusWindowRect", () => new Rectangle(0, HELP, EQUIP_STATUS, EQUIP_HEIGHT));
+    override(Scene_Equip.prototype, "slotWindowRect", () => new Rectangle(EQUIP_STATUS, HELP, Graphics.boxWidth - EQUIP_STATUS, EQUIP_HEIGHT));
+    override(Scene_Equip.prototype, "itemWindowRect", () => new Rectangle(0, HELP + EQUIP_HEIGHT, Graphics.boxWidth, Graphics.boxHeight - HELP - EQUIP_HEIGHT));
+    const slots = (scene) => {
+        scene._commandWindow.hide();
+        scene._commandWindow.deactivate();
+        scene._itemWindow.show();
+        scene._slotWindow.activate();
+        if (scene._slotWindow.index() < 0) scene._slotWindow.select(0);
+    };
+    const _equipCreate = Scene_Equip.prototype.create;
+    Scene_Equip.prototype.create = function() {
+        _equipCreate.call(this);
+        if (!legacy()) return;
+        this._slotWindow.setHandler("pagedown", this.nextActor.bind(this));
+        this._slotWindow.setHandler("pageup", this.previousActor.bind(this));
+        slots(this);
+    };
+    override(Scene_Equip.prototype, "onSlotCancel", function() { this.popScene(); });
+    override(Scene_Equip.prototype, "onSlotOk", function() {
+        this._itemWindow.activate();
+        this._itemWindow.select(0);
+    });
+    override(Scene_Equip.prototype, "hideItemWindow", function() {
+        this._itemWindow.deselect();
+        this._itemWindow.deactivate();
+        this._slotWindow.activate();
+    });
+    const _equipActorChange = Scene_Equip.prototype.onActorChange;
+    Scene_Equip.prototype.onActorChange = function() {
+        _equipActorChange.call(this);
+        if (legacy()) slots(this);
+    };
+    override(Window_EquipItem.prototype, "maxCols", () => 2);
+    override(Window_EquipStatus.prototype, "refresh", function() {
+        this.contents.clear();
+        const actor = this._actor;
+        if (!actor) return;
+        this.resetTextColor();
+        this.drawText(actor.name(), 0, 0, this.innerWidth);
+        const value = is2003() ? 72 : 78, cells = is2003() ? 4 : 3;
+        [2, 3, 4, 6].forEach((paramId, i) => {
+            const y = 16 + 16 * i;
+            this.changeTextColor(ColorManager.systemColor());
+            this.drawText(TextManager.param(paramId), 0, y, value - cells * 6);
+            this.resetTextColor();
+            this.drawText(String(actor.param(paramId)), 0, y, value, "right");
+            if (!this._tempActor) return;
+            this.changeTextColor(ColorManager.systemColor());
+            this.drawText(">", value + 3, y, 6);
+            const next = this._tempActor.param(paramId), old = actor.param(paramId);
+            this.changeTextColor(ColorManager.textColor(next === old ? 0 : next > old ? 2 : 3));
+            this.drawText(String(next), value, y, 12 + cells * 6, "right");
+            this.resetTextColor();
+        });
+    });
+    override(Window_EquipSlot.prototype, "drawItem", function(index) {
+        if (!this._actor) return;
+        const rect = this.itemLineRect(index);
+        this.changePaintOpacity(this.isEnabled(index));
+        this.changeTextColor(ColorManager.systemColor());
+        this.drawText(this.actorSlotName(this._actor, index), rect.x, rect.y, 60);
+        this.drawItemName(this.itemAt(index), rect.x + 60, rect.y, rect.width - 60);
+        this.changePaintOpacity(true);
+    });
+
+    // A use target: the party on the right (184 px), a 48 px face and three lines each.
+    override(Scene_ItemBase.prototype, "actorWindowRect", () => new Rectangle(Graphics.boxWidth - 184, 0, 184, Graphics.boxHeight));
+    Window_MenuActor.prototype.drawItem = function(index) {
+        if (!legacy()) return Window_MenuStatus.prototype.drawItem.call(this, index);
+        const actor = this.actor(index);
+        if (!actor) return;
+        const rect = this.itemRect(index), x = FACE + 8, y = rect.y;
+        this.drawActorFace(actor, 0, y, FACE, FACE);
+        this.resetTextColor();
+        this.drawText(actor.name(), x, y, this.innerWidth - x);
+        this.drawLegacyLevel(actor, x, y + 16);
+        this.drawLegacyState(actor, x, y + 32, 46);
+        const digits = (actor.mhp >= 1000 || actor.mmp >= 1000) ? 4 : 3;
+        const vx = x + 46 + (digits === 3 ? 12 : 0);
+        this.drawLegacyValue(TextManager.hpA, actor.hp, actor.mhp, vx, y + 16, digits, true);
+        this.drawLegacyValue(TextManager.mpA, actor.mp, actor.mmp, vx, y + 32, digits, false);
+    };
+    Window_MenuActor.prototype.refreshCursor = function() {
+        if (!legacy()) return Window_MenuStatus.prototype.refreshCursor.call(this);
+        if (this._cursorAll) {
+            this.setCursorRect(FACE + 4, 0, 120, this.maxItems() * ROW - 10);
+        } else if (this.index() >= 0) {
+            this.setCursorRect(FACE + 4, this.itemRect(this.index()).y, 120, FACE);
+        } else {
+            this.setCursorRect(0, 0, 0, 0);
+        }
+    };
+
+    // Quit: the game's question in a window sized to it, Yes and No centered below, No first.
+    override(Window_GameEnd.prototype, "makeCommandList", function() {
+        this.addCommand($dataSystem.rrYes || "Yes", "toTitle");
+        this.addCommand($dataSystem.rrNo || "No", "cancel");
+    });
+    const _gameEndCreate = Scene_GameEnd.prototype.create;
+    Scene_GameEnd.prototype.create = function() {
+        _gameEndCreate.call(this);
+        if (!legacy()) return;
+        const w = this._commandWindow;
+        const width = Math.ceil(Math.max(...w._list.map(c => w.textWidth(c.name)))) + 16;
+        w.move(Math.floor((Graphics.boxWidth - width) / 2), 120, width, w.fittingHeight(2));
+        w.createContents();
+        w.refresh();
+        w.select(1);
+        const question = $dataSystem.rrQuitMessage || "Do you really want to quit?";
+        const help = new Window_Help(new Rectangle(0, 72, 32, HELP));
+        const helpWidth = Math.ceil(help.textWidth(question)) + 16;
+        help.move(Math.floor((Graphics.boxWidth - helpWidth) / 2), 72, helpWidth, HELP);
+        help.createContents();
+        help.setText(question);
+        this.addWindow(help);
+        this._legacyQuestion = help;
+    };
+    const _gameEndStop = Scene_GameEnd.prototype.stop;
+    Scene_GameEnd.prototype.stop = function() {
+        _gameEndStop.call(this);
+        if (this._legacyQuestion) this._legacyQuestion.close();
+    };
+
+    // ---- Battle ----
+    const BAR = 80, COMMANDS = 76, ENEMIES_2003 = 104, ENEMIES_2000 = 136;
+    const bottom = (x, width) => new Rectangle(x, Graphics.boxHeight - BAR, width, BAR);
+    override(Scene_Battle.prototype, "statusWindowRect", function() {
+        const x = is2003() ? ENEMIES_2003 : COMMANDS;
+        return bottom(x, Graphics.boxWidth - x);
+    });
+    override(Scene_Battle.prototype, "partyCommandWindowRect", () => bottom(0, COMMANDS));
+    override(Scene_Battle.prototype, "actorCommandWindowRect", () => bottom(is2003() ? ENEMIES_2003 - COMMANDS : Graphics.boxWidth, COMMANDS));
+    override(Scene_Battle.prototype, "skillWindowRect", () => bottom(0, Graphics.boxWidth));
+    override(Scene_Battle.prototype, "helpWindowRect", function() { return new Rectangle(0, 0, Graphics.boxWidth, this.calcWindowHeight(1, false)); });
+    override(Scene_Battle.prototype, "enemyWindowRect", () => bottom(0, is2003() ? ENEMIES_2003 : ENEMIES_2000));
+    override(Scene_Battle.prototype, "logWindowRect", function() {
+        return is2003() ? new Rectangle(0, 0, Graphics.boxWidth, this.calcWindowHeight(1, false)) : bottom(0, Graphics.boxWidth);
+    });
+
+    // Commands and the enemy list over the status row, the 2000 message row over all three; messages stay on top.
+    const _createAllWindows = Scene_Battle.prototype.createAllWindows;
+    Scene_Battle.prototype.createAllWindows = function() {
+        _createAllWindows.call(this);
+        if (!legacy()) return;
+        const layer = this._windowLayer;
+        const raise = (w) => {
+            if (!w || w.parent !== layer) return;
+            layer.removeChild(w);
+            const before = this._messageWindow && this._messageWindow.parent === layer ? layer.children.indexOf(this._messageWindow) : -1;
+            before >= 0 ? layer.addChildAt(w, before) : layer.addChild(w);
+        };
+        for (const w of [this._enemyWindow, this._partyCommandWindow, this._actorCommandWindow, this._skillWindow, this._itemWindow, this._helpWindow, this._logWindow]) raise(w);
+        this._legacyStrip = 0;
+    };
+
+    const _startEnemySelection = Scene_Battle.prototype.startEnemySelection;
+    Scene_Battle.prototype.startEnemySelection = function() {
+        _startEnemySelection.call(this);
+        if (legacy()) this._statusWindow.show();
+    };
+
+    /** Whether the living enemies or their names differ from what the 2003 list drew; every frame, so no lists are made. */
+    const legacyEnemyListChanged = (list) => {
+        const drawn = list._legacyNames;
+        if (!drawn) return true;
+        let alive = 0;
+        for (const enemy of $gameTroop.members()) {
+            if (!enemy.isAlive()) continue;
+            if (alive >= drawn.length || list._enemies[alive] !== enemy || drawn[alive] !== enemy.name()) return true;
+            alive++;
+        }
+        return alive !== drawn.length;
+    };
+    override(Scene_Battle.prototype, "updateStatusWindowPosition", function() {
+        const status = this._statusWindow;
+        if (is2003()) {
+            status.x = ENEMIES_2003;
+            // The enemy list stays up beside the status row, without a cursor until a target is picked.
+            const list = this._enemyWindow;
+            if (!list.active) {
+                const show = status.visible && status.isOpen() && !this._skillWindow.visible && !this._itemWindow.visible;
+                if (show && (!list.visible || legacyEnemyListChanged(list))) {
+                    // No action is being aimed, so the list is simply the living enemies.
+                    list._enemies = $gameTroop.aliveMembers();
+                    Window_Selectable.prototype.refresh.call(list);
+                    list._legacyNames = list._enemies.map(e => e.name());
+                }
+                if (list.index() >= 0) Window_Selectable.prototype.select.call(list, -1);
+                list.visible = show;
+            }
+            this._actorCommandWindow.visible = !list.active;
+        } else {
+            // The strip slides 76 px in 8 frames: party commands out, actor commands in.
+            const target = this._actorCommandWindow.active || this._actorCommandWindow.isOpening() ? -COMMANDS
+                : this._partyCommandWindow.active ? 0 : this._legacyStrip;
+            const step = COMMANDS / 8;
+            this._legacyStrip = this._legacyStrip < target ? Math.min(target, this._legacyStrip + step) : Math.max(target, this._legacyStrip - step);
+            const x = Math.round(this._legacyStrip);
+            this._partyCommandWindow.x = x;
+            status.x = x + COMMANDS;
+            this._actorCommandWindow.x = x + COMMANDS + status.width;
+        }
+        this._actorWindow.x = status.x;
+    });
+
+    const _statusInitialize = Window_BattleStatus.prototype.initialize;
+    Window_BattleStatus.prototype.initialize = function(rect) {
+        _statusInitialize.call(this, rect);
+        if (legacy()) this.frameVisible = true;
+    };
+    override(Window_BattleStatus.prototype, "maxCols", () => 1);
+    override(Window_BattleStatus.prototype, "itemHeight", function() { return this.lineHeight(); });
+    override(Window_BattleStatus.prototype, "drawItem", function(index) {
+        const actor = this.actor(index);
+        if (!actor) return;
+        const y = this.itemRect(index).y;
+        this.resetTextColor();
+        this.drawText(actor.name(), 0, y, 76);
+        if (is2003()) {
+            this.drawLegacyState(actor, 80, y, 52);
+            this.changeTextColor(valueColor(actor.hp, actor.mhp, true));
+            this.drawText(String(actor.hp), 132, y, 24, "right");
+            this.resetTextColor();
+        } else {
+            const hp = actor.mhp >= 1000 ? 4 : 3, sp = actor.mmp >= 1000 ? 4 : 3;
+            this.drawLegacyState(actor, hp < 4 && sp < 4 ? 82 : 76, y, 52);
+            this.drawLegacyValue(TextManager.hpA, actor.hp, actor.mhp, 174 - hp * 6 - sp * 6, y, hp, true);
+            this.drawLegacyValue(TextManager.mpA, actor.mp, actor.mmp, 216 - sp * 6, y, sp, false, false);
+        }
+    });
+    override(Window_BattleEnemy.prototype, "maxCols", () => 1);
+
+    // 2003 announces an action by its skill or item name alone (a plain attack or guard by nothing) and
+    // prints no result lines; damage shows as numbers over the battlers. Nor does it list who appeared.
+    const _displayAction = Window_BattleLog.prototype.displayAction;
+    Window_BattleLog.prototype.displayAction = function(subject, item) {
+        if (!is2003()) return _displayAction.call(this, subject, item);
+        const plain = DataManager.isSkill(item) && (item.id === subject.attackSkillId() || item.id === subject.guardSkillId());
+        this.push(plain ? "wait" : "addNotice", item.name);
+    };
+    Window_BattleLog.prototype.addNotice = function(text) {
+        this._lines = [text];
+        this.refresh();
+        this.wait();
+    };
+    const _addText = Window_BattleLog.prototype.addText;
+    Window_BattleLog.prototype.addText = function(text) {
+        if (is2003()) this.wait();
+        else _addText.call(this, text);
+    };
+    const _displayStartMessages = BattleManager.displayStartMessages;
+    BattleManager.displayStartMessages = function() {
+        if (!is2003()) return _displayStartMessages.call(this);
+        if (this._preemptive) $gameMessage.add(TextManager.preemptive.format($gameParty.name()));
+        else if (this._surprise) $gameMessage.add(TextManager.surprise.format($gameParty.name()));
+    };
+
+    // Battle messages: the latest lines in a framed window, nothing while there are none.
+    override(Window_BattleLog.prototype, "refresh", function() {
+        this.contentsBack.clear();
+        this.contents.clear();
+        const lines = is2003() ? 1 : 4, from = Math.max(0, this._lines.length - lines);
+        for (let i = from; i < this._lines.length; i++) {
+            this.drawTextEx(this._lines[i], 0, (i - from) * this.lineHeight(), this.innerWidth);
+        }
+        this.opacity = this._lines.length ? 255 : 0;
+    });
+})();
+
 // The older engines draw no bar behind each item of a list, only the cursor
 // (System.json rrNoItemBackgrounds, as an imported game has it).
 (function() {
@@ -7186,11 +7764,11 @@ Window_NameBox.prototype.updateBackground = function() {
 })();
 
 // RPG Maker XP, VX and VX Ace window metrics (System.json rrRgssWindows, as an
-// imported game has it): a list row is one line tall with no gap between rows
+// imported game has it; 2000 and 2003's rrLegacyWindows too): a list row is one line tall with no gap between rows
 // (a window that sets its own row height keeps it), and the message window is
 // exactly four lines tall (reactor_scenes.js).
 (function() {
-    const compact = () => !!($dataSystem && $dataSystem.rrRgssWindows);
+    const compact = () => !!($dataSystem && ($dataSystem.rrRgssWindows || $dataSystem.rrLegacyWindows));
     const _itemHeight = Window_Selectable.prototype.itemHeight;
     Window_Selectable.prototype.itemHeight = function() {
         return compact() ? this.lineHeight() : _itemHeight.call(this);
@@ -7198,6 +7776,22 @@ Window_NameBox.prototype.updateBackground = function() {
     const _rowSpacing = Window_Selectable.prototype.rowSpacing;
     Window_Selectable.prototype.rowSpacing = function() {
         return compact() ? 0 : _rowSpacing.call(this);
+    };
+})();
+
+// VX and VX Ace windows (System.json rrRgssWindows) open and close 48 openness a frame (Window_Base#update_open),
+// MZ's 32.
+(function() {
+    const rgss = () => !!($dataSystem && $dataSystem.rrRgssWindows);
+    const _updateOpen = Window_Base.prototype.updateOpen;
+    Window_Base.prototype.updateOpen = function() {
+        if (rgss() && this._opening) this.openness += 16;
+        _updateOpen.call(this);
+    };
+    const _updateClose = Window_Base.prototype.updateClose;
+    Window_Base.prototype.updateClose = function() {
+        if (rgss() && this._closing) this.openness -= 16;
+        _updateClose.call(this);
     };
 })();
 

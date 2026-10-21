@@ -1004,12 +1004,26 @@ class SoundEffectGenerator {
         return window.I18n ? window.I18n.tText(text) : text;
     }
 
+    /** The title this tool's dialogs carry. */
+    _dialogTitle() {
+        return window.I18n ? window.I18n.t('menu.soundEffectGenerator') : 'Sound Effect Generator';
+    }
+
     renderInto(containerEl, projectController) {
         this.projectController = projectController;
         this.root = containerEl;
         if (!this._syncProjectPath()) {
             this.root.innerHTML = `<div style="padding: 40px; text-align: center; color: var(--color-text-muted); font-size: 12px;">${this._t('Open a project to use Forge tools.')}</div>`;
             return;
+        }
+        // Another project starts from the defaults: a project without a config (or an older one missing
+        // fields) kept the previous project's sound, which the next change saved into it.
+        if (this._loadedProjectPath !== this.projectPath) {
+            const fresh = new SoundEffectGenerator();
+            for (const key of ['activeArchetypeId', 'params', 'mode', 'pattern', 'bpm', 'jitterStrength', 'saveFormat', 'saveQuality']) {
+                this[key] = fresh[key];
+            }
+            this._loadedProjectPath = this.projectPath;
         }
         this._ensureFolders();
         this._loadConfig();
@@ -1030,7 +1044,7 @@ class SoundEffectGenerator {
     _requireProjectPath() {
         const p = this._syncProjectPath();
         if (!p) {
-            alert(this._t('Open a project to use Forge tools.'));
+            RRDialog.alert(this._t('Open a project to use Forge tools.'), { title: this._dialogTitle(), kind: 'warning' });
             return null;
         }
         return p;
@@ -1688,7 +1702,7 @@ class SoundEffectGenerator {
         if (!projectPath && !webHost && !this._requireProjectPath()) return;
         const nameInput = this.root.querySelector('.rr-sfx-name');
         const rawName = (nameInput.value || '').trim().replace(/\.(wav|ogg|mp3)$/i, '');
-        if (!rawName) { alert(this._t('Enter a name for the sound effect.')); return; }
+        if (!rawName) { RRDialog.alert(this._t('Enter a name for the sound effect.'), { title: this._dialogTitle(), kind: 'warning' }); return; }
 
         let buffer;
         try {
@@ -1697,7 +1711,7 @@ class SoundEffectGenerator {
                 : await this.synth.renderOffline(this.params);
         } catch (e) {
             console.error('SoundEffectGenerator render:', e);
-            alert(`${this._t('Failed to render:')} ${e.message}`);
+            RRDialog.alert(`${this._t('Failed to render:')} ${e.message}`, { title: this._dialogTitle(), kind: 'error' });
             return;
         }
         // The chosen format: WAV as is, MP3 through lamejs, OGG through the browser's Opus encoder.
@@ -1709,7 +1723,7 @@ class SoundEffectGenerator {
             wav = exporter ? await exporter.encode(buffer, format.id, this.saveQuality, lame) : audioBufferToWav(buffer);
         } catch (e) {
             console.error('SoundEffectGenerator encode:', e);
-            alert(`${this._t('Failed to encode:')} ${e.message}`);
+            RRDialog.alert(`${this._t('Failed to encode:')} ${e.message}`, { title: this._dialogTitle(), kind: 'error' });
             return;
         }
         const extension = format.extension;
@@ -1729,7 +1743,7 @@ class SoundEffectGenerator {
                     : `${this._t('Saved:')} ${result.path}`);
             } catch (err) {
                 console.error('SoundEffectGenerator save:', err);
-                alert(`${this._t('Failed to save:')} ${err.message}`);
+                RRDialog.alert(`${this._t('Failed to save:')} ${err.message}`, { title: this._dialogTitle(), kind: 'error' });
             }
             return;
         }
@@ -1751,11 +1765,13 @@ class SoundEffectGenerator {
                 this._showSaveStatus(`${this._t('Saved:')} ${file.path}`);
             } catch (err) {
                 console.error('SoundEffectGenerator save:', err);
-                alert(`${this._t('Failed to save:')} ${err.message}`);
+                RRDialog.alert(`${this._t('Failed to save:')} ${err.message}`, { title: this._dialogTitle(), kind: 'error' });
             } finally {
                 picker.remove();
             }
         });
+        // Dismissing the dialog fires `cancel`, not `change`.
+        picker.addEventListener('cancel', () => picker.remove());
         document.body.appendChild(picker);
         picker.click();
     }

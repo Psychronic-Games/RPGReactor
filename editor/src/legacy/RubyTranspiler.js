@@ -29,7 +29,7 @@
 
     // ---- tokens -----------------------------------------------------------------
 
-    const KEYWORDS = new Set(['if', 'unless', 'elsif', 'else', 'end', 'then', 'while', 'until', 'do', 'case', 'when', 'and', 'or', 'not', 'true', 'false', 'nil', 'self', 'return', 'break', 'next', 'in', 'loop', 'begin', 'rescue', 'def', 'class', 'module', 'yield']);
+    const KEYWORDS = new Set(['if', 'unless', 'elsif', 'else', 'end', 'then', 'while', 'until', 'do', 'case', 'when', 'and', 'or', 'not', 'true', 'false', 'nil', 'self', 'return', 'break', 'next', 'in', 'for', 'loop', 'begin', 'rescue', 'def', 'class', 'module', 'yield']);
     const OPERATORS = ['**=', '<=>', '===', '...', '&&=', '||=', '<<=', '>>=', '**', '==', '!=', '>=', '<=', '&&', '||', '<<', '>>', '+=', '-=', '*=', '/=', '%=', '|=', '&=', '=~', '..', '::', '=>', '+', '-', '*', '/', '%', '=', '<', '>', '!', '&', '|', '^', '~', '?', ':', '.', ',', '(', ')', '[', ']', '{', '}', ';'];
 
     function tokenize(src) {
@@ -84,6 +84,15 @@
                 if (/[?!]$/.test(w) && /^[ \t]/.test(src[i + w.length] || '') && !/^[a-z_]/.test(w)) w = w.slice(0, -1);
                 const type = w[0] === '$' ? 'gvar' : w[0] === '@' ? 'ivar' : /^[A-Z]/.test(w) ? 'const' : KEYWORDS.has(w) ? 'kw' : 'id';
                 push(type, w); i += w.length; continue;
+            }
+            // A regexp literal: a / where an operand is expected (after an operator, a keyword, a line start or `(`).
+            const prev = out[out.length - 1];
+            if (c === '/' && (!prev || prev.type === 'nl' || prev.type === 'kw' || (prev.type === 'op' && ![')', ']', '}'].includes(prev.value)) || (prev.type === 'id' && spaceBefore && src[i + 1] !== ' ' && src[i + 1] !== '='))) {
+                let j = i + 1, body = '';
+                while (j < src.length && src[j] !== '/' && src[j] !== '\n') { if (src[j] === '\\') { body += src[j] + (src[j + 1] || ''); j += 2; continue; } body += src[j++]; }
+                if (src[j] !== '/') fail('unterminated regexp');
+                const flags = (/^[imx]*/.exec(src.slice(j + 1)) || [''])[0];
+                push('regex', { body, flags: flags.replace(/[x]/g, '') }); i = j + 1 + flags.length; continue;
             }
             const op = OPERATORS.find(o => src.startsWith(o, i));
             if (!op) fail('unexpected ' + c);
@@ -145,6 +154,17 @@
                 let cond = expression(); if (negate) cond = { t: 'not', e: cond };
                 if (isKw('do')) next();
                 const node = { t: 'while', cond, body: body('end') };
+                expect('kw', 'end');
+                return node;
+            }
+            if (isKw('for')) {
+                // `for x in collection [do] … end`: the variable stays in scope after the loop, as Ruby's does.
+                next();
+                const name = expect('id').value;
+                expect('kw', 'in');
+                const iter = expression();
+                if (isKw('do')) next();
+                const node = { t: 'for', name, iter, body: body('end') };
                 expect('kw', 'end');
                 return node;
             }
@@ -324,6 +344,7 @@
                 case 'num': return { t: 'num', v: tok.value, float: !!tok.float };
                 case 'str': return typeof tok.value === 'string' ? { t: 'str', v: tok.value } : { t: 'interp', parts: tok.value.map(x => (typeof x === 'string' ? x : parse(x.code))) };
                 case 'sym': return { t: 'sym', v: tok.value };
+                case 'regex': return { t: 'regex', body: tok.value.body, flags: tok.value.flags };
                 case 'gvar': return { t: 'gvar', name: tok.value };
                 case 'ivar': return { t: 'ivar', name: tok.value.replace(/^@+/, '') };
                 case 'const': return { t: 'const', name: tok.value };
@@ -385,7 +406,9 @@
         sample: (r) => `((a) => a[Math.randomInt(a.length)])(${r})`, shuffle: (r) => `((a) => a.slice().sort(() => Math.random() - 0.5))(${r})`,
         downcase: (r) => `String(${r}).toLowerCase()`, upcase: (r) => `String(${r}).toUpperCase()`, strip: (r) => `String(${r}).trim()`, 'start_with?': (r, a) => `String(${r}).startsWith(${a[0]})`, 'end_with?': (r, a) => `String(${r}).endsWith(${a[0]})`,
         max: (r) => `Math.max(...${r})`, min: (r) => `Math.min(...${r})`, sum: (r) => `${r}.reduce((s, x) => s + x, 0)`, reverse: (r) => `${r}.slice().reverse()`, sort: (r) => `${r}.slice().sort((a, b) => a - b)`,
-        uniq: (r) => `[...new Set(${r})]`, compact: (r) => `${r}.filter(x => x != null)`, index: (r, a) => `${r}.indexOf(${a[0]})`, push: (r, a) => `${r}.push(${a.join(', ')})`, join: (r, a) => `${r}.join(${a.length ? a[0] : "''"})`,
+        uniq: (r) => `[...new Set(${r})]`, compact: (r) => `${r}.filter(x => x != null)`, index: (r, a) => `${r}.indexOf(${a[0]})`, push: (r, a) => `${r}.push(${a.join(', ')})`,
+        // Ruby's split with no argument or " " splits on runs of whitespace, ignoring the ends.
+        split: (r, a) => (!a.length || a[0] === '" "' ? `String(${r}).trim().split(/\\s+/)` : `String(${r}).split(${a[0]})`), join: (r, a) => `${r}.join(${a.length ? a[0] : "''"})`,
         'odd?': (r) => `(${r} % 2 !== 0)`, 'even?': (r) => `(${r} % 2 === 0)`, clone: (r) => `(Array.isArray(${r}) ? ${r}.slice() : ${r})`, dup: (r) => `(Array.isArray(${r}) ? ${r}.slice() : ${r})`
     };
     const BLOCK_METHODS = { each: 'forEach', map: 'map', collect: 'map', select: 'filter', 'find_all': 'filter', reject: '!filter', 'any?': 'some', 'all?': 'every', 'none?': '!some', find: 'find', detect: 'find', each_with_index: 'forEach', times: 'times', upto: 'upto', 'sort_by': 'sortBy', 'count': 'count', 'max_by': 'maxBy', 'min_by': 'minBy', 'sum': 'sumBy' };
@@ -394,43 +417,83 @@
     const OBJECTS = {
         party: { members: '$.members()', battle_members: '$.battleMembers()', leader: '$.leader()', gold: '$.gold()', steps: '$.steps()', size: '$.size()', gain_gold: '$.gainGold(%0)', lose_gold: '$.loseGold(%0)',
             gain_item: '$.gainItem(%0, %1, %2)', lose_item: '$.loseItem(%0, %1, %2)', item_number: '$.numItems(%0)', 'has_item?': '$.hasItem(%0, %1)', add_actor: '$.addActor(%0)', remove_actor: '$.removeActor(%0)',
-            items: '$.items()', weapons: '$.weapons()', armors: '$.armors()', 'include?': '$.members().includes(%0)', highest_level: '$.highestLevel()', 'all_dead?': '$.isAllDead()', actors: '$._actors' },
+            items: '$.items()', weapons: '$.weapons()', armors: '$.armors()', 'include?': '$.members().includes(%0)', highest_level: '$.highestLevel()', 'all_dead?': '$.isAllDead()', actors: '$._actors', enemy_names: '$.enemyNames()', make_unique_names: '$.makeUniqueNames()' },
         actor: { hp: '$.hp', mp: '$.mp', tp: '$.tp', mhp: '$.mhp', mmp: '$.mmp', level: '$.level', exp: '$.currentExp()', name: '$.name()', nickname: '$.nickname()', id: '$.actorId()', actor_id: '$.actorId()', class_id: '$._classId',
             'state?': '$.isStateAffected(%0)', add_state: '$.addState(%0)', remove_state: '$.removeState(%0)', 'dead?': '$.isDead()', 'alive?': '$.isAlive()', weapons: '$.weapons()', armors: '$.armors()', equips: '$.equips()',
             'skill_learn?': '$.isLearnedSkill(%0.id)', learn_skill: '$.learnSkill(%0)', forget_skill: '$.forgetSkill(%0)', recover_all: '$.recoverAll()', change_level: '$.changeLevel(%0, %1)', gain_exp: '$.gainExp(%0)',
             atk: '$.atk', def: '$.def', mat: '$.mat', mdf: '$.mdf', agi: '$.agi', luk: '$.luk', character_name: '$.characterName()', face_name: '$.faceName()', set_graphic: '$.setCharacterImage(%0, %1); $.setFaceImage(%2, %3)',
+            // VX and XP names for the same values: maxhp/maxmp (maxsp), spi; base_* before states.
+            maxhp: '$.mhp', maxmp: '$.mmp', maxsp: '$.mmp', spi: '$.mat', base_maxhp: '($.paramBase(0) + $.paramPlus(0))', base_maxmp: '($.paramBase(1) + $.paramPlus(1))',
+            base_atk: '($.paramBase(2) + $.paramPlus(2))', base_def: '($.paramBase(3) + $.paramPlus(3))', base_spi: '($.paramBase(4) + $.paramPlus(4))', base_agi: '($.paramBase(6) + $.paramPlus(6))',
+            change_exp: '$.changeExp(%0, %1)', skills: '$.skills()', added_skills: '$.addedSkills()', transform: '$.transform(%0)', perform_collapse: '$.performCollapse()', immortal: '!!$._rrImmortal',
             'actor?': '$.isActor()', 'enemy?': '$.isEnemy()', state_turns: '($._stateTurns[%0] || 0)', die: '$.die()', result: '$.result()', mtp: '$.maxTp()', hit: '$.hit', eva: '$.eva', cri: '$.cri' },
         result: { critical: '$.critical', 'hit?': '$.isHit()', missed: '$.missed', evaded: '$.evaded', hp_damage: '$.hpDamage', mp_damage: '$.mpDamage' },
         character: { x: '$.x', y: '$.y', real_x: '$._realX', real_y: '$._realY', direction: '$.direction()', 'moving?': '$.isMoving()', erase: '$.erase()', moveto: '$.locate(%0, %1)', id: '$.eventId()',
             screen_x: '$.screenX()', screen_y: '$.screenY()', opacity: '$.opacity()', transparent: '$.isTransparent()', turn_toward_player: '$.turnTowardPlayer()', 'dash?': '$.isDashing()', refresh: '$.refresh()',
-            animation_id: '$._animationId', character_name: '$.characterName()', 'through': '$.isThrough()', start: '$.start()', followers: '$.followers()', 'normal_walk?': '$.isNormal()' },
+            animation_id: '$._animationId', character_name: '$.characterName()', 'through': '$.isThrough()', start: '$.start()', followers: '$.followers()', 'normal_walk?': '$.isNormal()',
+            'collide_with_characters?': '$.isCollidedWithCharacters(%0, %1)', 'passable?': '$.canPass(%0, %1, %2)', set_graphic: '$.setImage(%0, %1)', set_direction: '$.setDirection(%0)',
+            move_straight: '$.moveStraight(%0)', move_diagonal: '$.moveDiagonally(%0, %1)', jump: '$.jump(%0, %1)', turn_toward_character: '$.turnTowardCharacter(%0)', character_index: '$.characterIndex()',
+            'moving?': '$.isMoving()', 'jumping?': '$.isJumping()', pattern: '$.pattern()', region_id: '$.regionId()', terrain_tag: '$.terrainTag()',
+            // Ace keeps the transfer's fade on $game_temp.fade_type (black when never set).
+            reserve_transfer: '$.reserveTransfer(%0, %1, %2, (%3 ?? 2), ($gameTemp._rrFadeType ?? 0))', 'transfer?': '$.isTransferring()' },
         map: { map_id: '$.mapId()', width: '$.width()', height: '$.height()', display_x: '$.displayX()', display_y: '$.displayY()', region_id: '$.regionId(%0, %1)', terrain_tag: '$.terrainTag(%0, %1)',
             'passable?': '$.isPassable(%0, %1, %2)', autoplay: '$.autoplay()', refresh: '$.requestRefresh()', need_refresh: '$._needsRefresh', event_id_xy: '$.eventIdXy(%0, %1)', events_xy: '$.eventsXy(%0, %1)', name_display: '$._nameDisplay',
-            display_name: '$.displayName()', 'scrolling?': '$.isScrolling()', start_scroll: '$.startScroll(%0, %1, %2)', parallax_name: '$._parallaxName', tileset_id: '$.tilesetId()' },
+            display_name: '$.displayName()', x_with_direction: '$.roundXWithDirection(%0, %1)', y_with_direction: '$.roundYWithDirection(%0, %1)', 'scrolling?': '$.isScrolling()', start_scroll: '$.startScroll(%0, %1, %2)', parallax_name: '$._parallaxName', tileset_id: '$.tilesetId()' },
         system: { save_disabled: '!$.isSaveEnabled()', menu_disabled: '!$.isMenuEnabled()', encounter_disabled: '!$.isEncounterEnabled()', playtime: '$.playtime()', save_count: '$.saveCount()', battle_count: '$.battleCount()',
-            playtime_s: '$.playtimeText()', battle_bgm: '$.battleBgm()' },
+            playtime_s: '$.playtimeText()', battle_bgm: '$.battleBgm()', timer: '$gameTimer._frames', timer_working: '$gameTimer.isWorking()' },
         followers: { visible: '$.isVisible()', 'visible?': '$.isVisible()', gather: '$.gather()', 'gather?': '$.areGathering()' },
         timer: { sec: '$.seconds()', start: '$.start(%0 * 60)', stop: '$.stop()', 'working?': '$.isWorking()' },
-        screen: { start_tone_change: '$.startTint(%0, %1)', start_flash: '$.startFlash(%0, %1)', start_shake: '$.startShake(%0, %1, %2)', pictures: '$._pictures', weather: '$.changeWeather(%0, %1, %2)' },
-        message: { 'busy?': '$.isBusy()', add: '$.add(%0)', face_name: '$._faceName', background: '$._background', position: '$._positionType' }
+        screen: { start_fadeout: '$.startFadeOut(%0)', start_fadein: '$.startFadeIn(%0)', start_tone_change: '$.startTint(%0, %1)', start_flash: '$.startFlash(%0, %1)', start_shake: '$.startShake(%0, %1, %2)', pictures: '$._pictures', weather: '$.changeWeather(%0, %1, %2)' },
+        temp: { reserve_common_event: '$.reserveCommonEvent(%0)', 'common_event_reserved?': '$.isCommonEventReserved()', fade_type: '($._rrFadeType ?? 0)' },
+        message: { 'busy?': '$.isBusy()', add: '$.add(%0)', texts: '$._texts', face_name: '$._faceName', background: '$._background', position: '$._positionType' }
     };
     /** Globals and what kind of object each is. */
     const GLOBALS = { $game_party: ['$gameParty', 'party'], $game_player: ['$gamePlayer', 'character'], $game_map: ['$gameMap', 'map'], $game_system: ['$gameSystem', 'system'], $game_timer: ['$gameTimer', 'timer'], $game_troop: ['$gameTroop', 'party'], $game_message: ['$gameMessage', 'message'], $game_temp: ['$gameTemp', 'temp'], $game_screen: ['$gameScreen', 'screen'] };
 
+    /**
+     * Whether a wait sits inside a loop (a chase `while … wait(30)`). A Script command's JS runs to its end in one
+     * frame, so such a command becomes a generator the interpreter steps (rrRunScript): each wait a `yield`.
+     */
+    function waitsInLoop(program) {
+        const LOOPS = new Set(['times', 'each', 'each_with_index', 'loop', 'upto']);
+        const visit = (node, inLoop) => {
+            if (Array.isArray(node)) return node.some(x => visit(x, inLoop));
+            if (!node || typeof node !== 'object') return false;
+            if (node.t === 'call' && !node.recv && node.name === 'wait' && inLoop) return true;
+            const loop = node.t === 'while' || node.t === 'for' || (node.t === 'call' && node.block && LOOPS.has(node.name));
+            return Object.values(node).some(v => visit(v, inLoop || loop));
+        };
+        return visit(program, false);
+    }
+
     function generate(program, options) {
         const self = options.self || 'interpreter';
+        const fiber = waitsInLoop(program);
+        if (fiber && (self !== 'interpreter' || options.noFiber)) fail('wait inside a loop');
         const constants = options.constants || {};
         const calls = options.calls || {};
         const locals = new Set();
         const blockParamsKinds = new Map();
+        // What a `break` / `next` is inside: a JS loop ('loop') or a block's callback ('fn').
+        const scope = [];
+        const within = (kind, f) => { scope.push(kind); try { return f(); } finally { scope.pop(); } };
         // Locals first assigned inside an expression ((w = a.equips[0]) ? …) are declared at the top.
         const hoisted = new Set();
         let statementAssign = null;
         // A damage formula runs with the user (a), the target (b) and the variables' array (v) in scope.
         if (self === 'formula') for (const [name, kind] of [['a', 'actor'], ['b', 'actor'], ['v', 'rawvars']]) { locals.add(name); blockParamsKinds.set(name, kind); }
+        // Locals an earlier part of the same Script command declared (options.locals, name → kind); the ones this
+        // part declares go back through options.declared.
+        for (const [name, kind] of Object.entries(options.locals || {})) { locals.add(name); blockParamsKinds.set(name, kind); }
+        const declare = (name) => { if (options.declared) options.declared[name] = blockParamsKinds.get(name) || 'any'; };
+        // The code a local was last set to, for call rules that need the value itself (a condition built with sprintf).
+        const localCode = new Map();
 
         const gen = (n) => expr(n).code;
         const js = (code, kind = 'any') => ({ code, kind });
+        // Ruby counts only nil and false as false: a number (0 too), a string ("" too) or an array always passes.
+        const alwaysTrue = (kind) => kind === 'number' || kind === 'float' || kind === 'string' || String(kind || '').startsWith('array');
+        const test = (n) => { const e = expr(n); return alwaysTrue(e.kind) ? `(${e.code}, true)` : e.code; };
         const fill = (template, recv, a) => template.replace(/\$(?![A-Za-z_])/g, recv).replace(/%(\d)/g, (m, i) => (a[Number(i)] !== undefined ? a[Number(i)] : 'undefined')).replace(/, undefined\)/g, ')').replace(/\(undefined\)/g, '()').replace(/%\*/g, a.join(', '));
 
         function literal(v) { return JSON.stringify(v); }
@@ -445,11 +508,12 @@
                 case 'nil': return js('null', 'nil');
                 case 'self': return self === 'character' ? js('this', 'character') : fail('self in an interpreter');
                 case 'array': return js('[' + n.items.map(gen).join(', ') + ']', 'array');
+                case 'regex': return js(`new RegExp(${JSON.stringify(n.body)}, ${JSON.stringify(n.flags)})`, 'regex');
                 case 'hash': return js('{ ' + n.pairs.map(([k, v]) => `[${gen(k)}]: ${gen(v)}`).join(', ') + ' }', 'any');
                 case 'range': { const a = gen(n.from), b = gen(n.to); return js(`Array.from({ length: (${b}) - (${a})${n.exclusive ? '' : ' + 1'} }, (_, i) => (${a}) + i)`, 'array'); }
-                case 'not': return js('!(' + gen(n.e) + ')', 'bool');
+                case 'not': return js('!(' + test(n.e) + ')', 'bool');
                 case 'neg': return js('-(' + gen(n.e) + ')', 'number');
-                case 'cond': return js(`(${gen(n.cond)} ? ${gen(n.a)} : ${gen(n.b)})`);
+                case 'cond': return js(`(${test(n.cond)} ? ${gen(n.a)} : ${gen(n.b)})`);
                 case 'seq': return js('(' + n.body.map(gen).join(', ') + ')');
                 case 'bin': {
                     if (n.op === '=~') fail('regexp');
@@ -463,10 +527,27 @@
                         if (l.kind === 'number' && r.kind === 'number') return js(`Math.floor(${l.code} / ${r.code})`, 'number');
                         return js(`((x, y) => (Number.isInteger(x) && Number.isInteger(y) ? Math.floor(x / y) : x / y))(${l.code}, ${r.code})`, 'number');
                     }
+                    // Arrays add up and take away as lists in Ruby; JS's + would join them into a string.
+                    const listy = (k) => k.startsWith('array');
+                    // Ruby's == compares arrays element by element ([x, y] != [px, py]).
+                    if ((n.op === '==' || n.op === '!=') && (listy(l.kind) || listy(r.kind))) {
+                        return js(`${n.op === '!=' ? '!' : ''}((a, b) => { const eq = (x, y) => (Array.isArray(x) && Array.isArray(y) ? x.length === y.length && x.every((v, i) => eq(v, y[i])) : x === y); return eq(a, b); })(${l.code}, ${r.code})`, 'bool');
+                    }
+                    if (n.op === '+' && (listy(l.kind) || listy(r.kind))) return js(`[...${l.code}, ...${r.code}]`, listy(l.kind) ? l.kind : r.kind);
+                    if (n.op === '-' && (listy(l.kind) || listy(r.kind))) return js(`((a, b) => a.filter((v) => !b.includes(v)))(${l.code}, ${r.code})`, listy(l.kind) ? l.kind : r.kind);
+                    if (n.op === '+' && l.kind === 'any' && r.kind === 'any') return js(`((a, b) => (Array.isArray(a) ? a.concat(b) : a + b))(${l.code}, ${r.code})`);
+                    // "%03d" % n formats a string; JS's % would make NaN of it.
+                    if (n.op === '%' && l.kind === 'string') fail('string format');
+                    // Ruby's % takes the divisor's sign (-7 % 3 is 2).
+                    if (n.op === '%') return js(`((x, y) => x - y * Math.floor(x / y))(${l.code}, ${r.code})`, float ? 'float' : 'number');
+                    // A value that is never false in Ruby decides || and && by itself (0 || 5 is 0).
+                    if (n.op === '||' && alwaysTrue(l.kind)) return js(`(${l.code})`, l.kind);
+                    if (n.op === '&&' && alwaysTrue(l.kind)) return js(`(${l.code}, ${r.code})`, r.kind);
                     const logical = ['==', '!=', '<', '>', '<=', '>=', '&&', '||'].includes(n.op);
                     return js(`(${l.code} ${loose ? n.op : op} ${r.code})`, logical ? 'bool' : float ? 'float' : 'number');
                 }
                 case 'const': {
+                    if (Object.prototype.hasOwnProperty.call(constants, n.name) && Array.isArray(constants[n.name])) return js(JSON.stringify(constants[n.name]), 'array');
                     if (Object.prototype.hasOwnProperty.call(constants, n.name) && typeof constants[n.name] !== 'object') return js(literal(constants[n.name]));
                     const last = n.name.split('::').pop();
                     if (Object.prototype.hasOwnProperty.call(constants, last) && typeof constants[last] !== 'object') return js(literal(constants[last]));
@@ -520,14 +601,17 @@
             if (recv.kind === 'events') return js(`$gameMap.event(${a[0]})`, 'character');
             if (recv.kind === 'table') return js(`${recv.code}[${a[0]}]`, 'record');
             if (recv.kind === 'pictures') return js(`$gameScreen.picture(${a[0]})`, 'picture');
+            if (recv.kind === 'mapdata' && a.length === 3) return js(`$gameMap.tileId(${a[0]}, ${a[1]}, ${a[2]})`, 'number');
             if ((recv.kind.startsWith('array') || ['any', 'string'].includes(recv.kind)) && a.length === 1) return js(`${recv.code}[${a[0]}]`, recv.kind.startsWith('array:') ? recv.kind.slice(6) : 'any');
+            // a[start, length]: the slice (Ruby counts a negative start from the end).
+            if ((recv.kind.startsWith('array') || ['any', 'string'].includes(recv.kind)) && a.length === 2) return js(`((v, s, n) => v.slice(s, s < 0 && s + n >= 0 ? undefined : s + n))(${recv.code}, ${a[0]}, ${a[1]})`, recv.kind === 'string' ? 'string' : recv.kind.startsWith('array') ? recv.kind : 'any');
             return fail('index on ' + recv.kind);
         }
 
         function blockFn(b, arity = 1, elementKind = null) {
             const params = b.params.length ? b.params : ['_'];
             params.forEach((p, i) => { locals.add(p); if (i === 0 && elementKind) blockParamsKinds.set(p, elementKind); });
-            const statements = b.body.map(stmt);
+            const statements = within('fn', () => b.body.map(stmt));
             const last = statements.length ? b.body[b.body.length - 1] : null;
             const lastIsExpr = last && !['if', 'while', 'case', 'assign', 'break', 'continue', 'return'].includes(last.t);
             const text = lastIsExpr && statements.length === 1 ? statements[0].replace(/;$/, '') : null;
@@ -535,13 +619,19 @@
         }
 
         function callNode(n) {
+            // x.is_a?(Array) and the other value classes.
+            if (n.recv && (n.name === 'is_a?' || n.name === 'kind_of?') && n.args.length === 1 && n.args[0].t === 'const') {
+                const r = gen(n.recv);
+                const test = { Array: `Array.isArray(${r})`, String: `(typeof ${r} === "string")`, Integer: `Number.isInteger(${r})`, Numeric: `(typeof ${r} === "number")`, Float: `(typeof ${r} === "number")`, Hash: `(${r} !== null && typeof ${r} === "object" && !Array.isArray(${r}))` }[n.args[0].name];
+                if (test) return js(test, 'bool');
+            }
             const a = n.args.map(gen);
             // A method the game's scripts define (a family), called on self.
             if (!n.recv && calls[n.name] !== undefined) {
                 const entry = calls[n.name];
                 const t = Array.isArray(entry) ? entry[0] : entry;
                 const kind = Array.isArray(entry) ? entry[1] : 'any';
-                return js(typeof t === 'function' ? t(a, options) : t.replace('%*', a.join(', ')).replace('%r', a.slice(1).join(', ')).replace(/%(\d)/g, (m, i) => (a[Number(i)] !== undefined ? a[Number(i)] : 'undefined')).replace(/, undefined\)/g, ')').replace(/\(undefined\)/g, '()'), kind);
+                return js(typeof t === 'function' ? t(a, Object.assign({}, options, { localCode })) : t.replace('%*', a.join(', ')).replace('%r', a.slice(1).join(', ')).replace(/%(\d)/g, (m, i) => (a[Number(i)] !== undefined ? a[Number(i)] : 'undefined')).replace(/, undefined\)/g, ')').replace(/\(undefined\)/g, '()'), kind);
             }
             if (!n.recv) return bareCall(n, a);
             const recv = expr(n.recv);
@@ -550,7 +640,12 @@
                 const how = BLOCK_METHODS[n.name];
                 const element = recv.kind.startsWith('array:') ? recv.kind.slice(6) : null;
                 const blockFnOf = (b) => blockFn(b, 1, element);
-                if (how === 'times') return js(`for (let ${n.block.params[0] || '_i'} = 0; ${n.block.params[0] || '_i'} < ${recv.code}; ${n.block.params[0] || '_i'}++) (${blockFnOf(n.block)})(${n.block.params[0] || '_i'})`);
+                // n.times is a plain loop, so break and next inside it work.
+                if (how === 'times') {
+                    const i = n.block.params[0] || '_i';
+                    locals.add(i); blockParamsKinds.set(i, 'number');
+                    return js(`for (let ${i} = 0; ${i} < ${recv.code}; ${i}++) { ${within('loop', () => n.block.body.map(stmt)).join(' ')} }`);
+                }
                 if (how.startsWith('!')) return js(`!${recv.code}.${how.slice(1)}(${blockFnOf(n.block)})`, 'bool');
                 if (how === 'count') return js(`${recv.code}.filter(${blockFnOf(n.block)}).length`, 'number');
                 if (how === 'sortBy') return js(`${recv.code}.slice().sort((a, b) => ((f) => f(a) - f(b))(${blockFnOf(n.block)}))`, 'array');
@@ -569,10 +664,29 @@
             if (table && table[n.name]) return js(fill(table[n.name], recv.code, a), kindOf(recv.kind, n.name));
             if (recv.kind === 'map' && n.name === 'events') return js('$gameMap', 'events');
             if (recv.kind === 'map' && n.name === 'screen') return js('$gameScreen', 'screen');
+            if (recv.kind === 'map' && n.name === 'data' && !a.length) return js('$gameMap', 'mapdata');
             if (recv.kind === 'screen' && n.name === 'pictures') return js('$gameScreen', 'pictures');
+            // A value whose kind is unknown (an element of an array kept in a variable): a database record's
+            // field, or a battler's (a party list); name and id work for both.
+            if (recv.kind === 'any') {
+                if (!a.length && n.name === 'name') return js(`((o) => (typeof o.name === "function" ? o.name() : o.name))(${recv.code})`, 'string');
+                if (!a.length && n.name === 'id') return js(`((o) => (typeof o.actorId === "function" ? o.actorId() : o.id))(${recv.code})`, 'number');
+                const fields = { icon_index: 'iconIndex', price: 'price', description: 'description', stype_id: 'stypeId', itype_id: 'itypeId', etype_id: 'etypeId', skill_id: 'skillId', level: 'level', class_id: '_classId' };
+                if (!a.length && fields[n.name]) return js(n.name === 'class_id' ? `((o) => o._classId ?? o.classId)(${recv.code})` : `${recv.code}.${fields[n.name]}`);
+                const member = options.members && options.members['actor.' + n.name];
+                if (member) return js(fill(member[0], recv.code, a), member[1] || 'any');
+                if (OBJECTS.actor[n.name] && !['name', 'id'].includes(n.name)) return js(fill(OBJECTS.actor[n.name], recv.code, a), kindOf('actor', n.name));
+            }
             if (recv.kind === 'record') {
-                const fields = { id: 'id', name: 'name', icon_index: 'iconIndex', price: 'price', description: 'description', note: 'note' };
+                const fields = { id: 'id', name: 'name', icon_index: 'iconIndex', price: 'price', description: 'description', note: 'note', stype_id: 'stypeId', learnings: 'learnings', mp_cost: 'mpCost', tp_cost: 'tpCost' };
                 if (fields[n.name] && !a.length) return js(`${recv.code}.${fields[n.name]}`);
+            }
+            if (recv.kind === 'picture' || recv.kind === 'pictureId') {
+                // A picture by number: shown, erased or read whether or not it is showing.
+                const id = recv.kind === 'pictureId' ? recv.code : (/^\$gameScreen\.picture\(([\s\S]*)\)$/.exec(recv.code) || [])[1];
+                if (id !== undefined && n.name === 'show') return js(`$gameScreen.showPicture(${id}, ${[0, 1, 2, 3, 4, 5, 6, 7].map(i => a[i] !== undefined ? a[i] : ['""', 0, 0, 0, 100, 100, 255, 0][i]).join(', ')})`);
+                if (id !== undefined && n.name === 'erase') return js(`$gameScreen.erasePicture(${id})`);
+                if (id !== undefined && recv.kind === 'pictureId') return js(fill({ x: '($gameScreen.picture($)?.x() ?? 0)', y: '($gameScreen.picture($)?.y() ?? 0)', opacity: '($gameScreen.picture($)?.opacity() ?? 0)', name: '($gameScreen.picture($)?.name() ?? "")' }[n.name] || fail('picture ' + n.name), id, a));
             }
             if (recv.kind === 'picture') {
                 const pics = { x: '$.x()', y: '$.y()', opacity: '$.opacity()', name: '$.name()', erase: '$.erase()', zoom_x: '$.scaleX()', zoom_y: '$.scaleY()', angle: '$.angle()' };
@@ -592,9 +706,12 @@
             if (kind === 'party' && ['items', 'weapons', 'armors'].includes(name)) return 'array:record';
             if (kind === 'actor' && ['weapons', 'armors', 'equips'].includes(name)) return 'array:record';
             if (kind === 'party' && name === 'leader') return 'actor';
+            if ((kind === 'party' && name === 'enemy_names') || (kind === 'message' && name === 'texts')) return 'array';
+            if (kind === 'actor' && name === 'skills') return 'array:record';
+            if (kind === 'screen' && name === 'pictures') return 'pictures';
             if (kind === 'actor' && name === 'result') return 'result';
             if (kind === 'character' && name === 'followers') return 'followers';
-            if (['hp', 'mp', 'level', 'gold', 'x', 'y', 'map_id', 'direction', 'steps', 'mhp', 'mmp', 'atk', 'def', 'mat', 'mdf', 'agi', 'luk'].includes(name)) return 'number';
+            if (['hp', 'mp', 'level', 'gold', 'x', 'y', 'map_id', 'direction', 'steps', 'mhp', 'mmp', 'atk', 'def', 'mat', 'mdf', 'agi', 'luk', 'maxhp', 'maxmp', 'maxsp', 'spi', 'base_atk', 'base_def', 'base_spi', 'base_agi', 'base_maxhp', 'base_maxmp'].includes(name)) return 'number';
             return 'any';
         }
 
@@ -632,6 +749,8 @@
                 if (n.name === 'exit') return js('SceneManager.exit()');
             }
             if (mod === 'Graphics' && ['width', 'height', 'frame_count'].includes(n.name)) return js(`Graphics.${camel(n.name)}`, 'number');
+            if (mod === 'Graphics' && n.name === 'frame_rate') return js('60', 'number');
+            if (mod === 'Graphics' && (n.name === 'fadeout' || n.name === 'fadein')) return js(`$gameScreen.${n.name === 'fadeout' ? 'startFadeOut' : 'startFadeIn'}(${a[0] || 30})`);
             if ((mod === 'Color' || mod === 'Tone') && n.name === 'new') return js('[' + [a[0], a[1], a[2], a[3] !== undefined ? a[3] : (mod === 'Color' ? 255 : 0)].join(', ') + ']', 'array');
             if (/^RPG::(SE|ME|BGM|BGS)$/.test(mod) && n.name === 'new') return js(`{ name: ${a[0] || '""'}, volume: ${a[1] || 100}, pitch: ${a[2] || 100}, pan: 0 }`, 'audio');
             if (mod === 'DataManager' && n.name === 'save_file_exists?') return js('DataManager.isAnySavefileExists()', 'bool');
@@ -642,13 +761,23 @@
         function bareCall(n, a) {
             const name = n.name;
             if (name === 'rand') return js(a.length ? `Math.randomInt(${a[0]})` : 'Math.random()', 'number');
+            // Debug output (p, puts, print) goes to the console.
+            if (['p', 'puts', 'print'].includes(name)) return js(`console.log(${a.join(', ')})`);
+            // sprintf / format with %s and %d, the conversions events use.
+            if ((name === 'sprintf' || name === 'format') && a.length) return js(`((f, ...v) => { let i = 0; return String(f).replace(/%[sd]/g, (m) => (m === '%d' ? Math.trunc(Number(v[i++])) : String(v[i++]))); })(${a.join(', ')})`, 'string');
             if (name === 'p' || name === 'print' || name === 'puts' || name === 'msgbox') return js(`console.log(${a.join(', ')})`);
             if (name === 'loop' && n.block) return js(`while (true) (${blockFn(n.block)})()`);
             if (self === 'interpreter') {
                 const interp = {
                     get_character: `this.character(%0)`, wait: `this.wait(%0)`, map_id: '$gameMap.mapId()', event_id: 'this._eventId', 'screen': '$gameScreen',
-                    get_actor: `$gameActors.actor(%0)`, set_self_switch: `$gameSelfSwitches.setValue([$gameMap.mapId(), this._eventId, %0], %1)`
+                    get_actor: `$gameActors.actor(%0)`, set_self_switch: `$gameSelfSwitches.setValue([$gameMap.mapId(), this._eventId, %0], %1)`,
+                    // A choice list a script builds: [choices, cancel type] with RGSS's cancel numbering.
+                    setup_choices: 'this.setupChoices(((p) => [p[0], p[1] === 0 ? -1 : p[1] > p[0].length ? -2 : p[1] - 1, 0, 2, 0])(%0))'
                 };
+                if (name === 'wait' && fiber) {
+                    if (scope.includes('fn')) fail('wait inside a block');
+                    return js(`(yield ${a[0] ?? 1})`);
+                }
                 if (interp[name] !== undefined) return js(fill(interp[name], '', a), name === 'get_character' ? 'character' : name === 'screen' ? 'screen' : 'any');
             } else if (self === 'character') {
                 const own = {
@@ -680,23 +809,37 @@
             const value = valueNode.code;
             const t = n.target;
             const op = n.op;
-            const combine = (current) => (op === '=' ? value : op === '||=' ? `(${current} || ${value})` : op === '&&=' ? `(${current} && ${value})` : `${current} ${op.slice(0, -1)} (${value})`);
+            // Ruby divides two integers to an integer, as `/` does (see 'bin').
+            // Arrays add and take away as lists (flags += ["x"]).
+            const listy = (k) => String(k || '').startsWith('array');
+            const combine = (current, kind = 'any') => (op === '=' ? value
+                : op === '||=' ? (alwaysTrue(kind) ? current : `(${current} || ${value})`) : op === '&&=' ? (alwaysTrue(kind) ? value : `(${current} && ${value})`)
+                : op === '/=' ? `((x, y) => (Number.isInteger(x) && Number.isInteger(y) ? Math.floor(x / y) : x / y))(${current}, ${value})`
+                : op === '%=' ? `((x, y) => x - y * Math.floor(x / y))(${current}, ${value})`
+                : op === '+=' && (listy(kind) || listy(valueNode.kind)) ? `[...${current}, ...${value}]`
+                : op === '-=' && (listy(kind) || listy(valueNode.kind)) ? `((a, b) => a.filter((v) => !b.includes(v)))(${current}, ${value})`
+                : `${current} ${op.slice(0, -1)} (${value})`);
             if (t.t === 'index') {
                 const recv = expr(t.recv), a = t.args.map(gen);
-                if (recv.kind === '$game_variables') return js(`$gameVariables.setValue(${a[0]}, ${combine(`$gameVariables.value(${a[0]})`)})`);
+                // Variable 0 is a scratch slot scripts use; MZ's setValue skips it.
+                if ((recv.kind === '$game_variables' || recv.kind === 'rawvars') && a[0] === '0') return js(`($gameVariables._data[0] = ${combine('$gameVariables.value(0)', 'number')})`);
+                if (recv.kind === '$game_variables' || recv.kind === 'rawvars') return js(`$gameVariables.setValue(${a[0]}, ${combine(`$gameVariables.value(${a[0]})`, 'number')})`);
                 if (recv.kind === '$game_switches') return js(`$gameSwitches.setValue(${a[0]}, ${combine(`$gameSwitches.value(${a[0]})`)})`);
                 if (recv.kind === '$game_self_switches') return js(`$gameSelfSwitches.setValue(${a[0]}, ${combine(`$gameSelfSwitches.value(${a[0]})`)})`);
-                if (options.setters && options.setters[recv.kind + '.[]']) return js(options.setters[recv.kind + '.[]'].replace(/\$(?![A-Za-z_])/g, recv.code).replace('%k', a[0]).replace('%v', value));
+                // A compound assignment (+=, -=, …) reads the current value through the same index first.
+                if (options.setters && options.setters[recv.kind + '.[]']) return js(options.setters[recv.kind + '.[]'].replace(/\$(?![A-Za-z_])/g, recv.code).replace('%k', a[0]).replace('%v', op === '=' ? value : (() => { const c = expr({ t: 'index', recv: t.recv, args: t.args }); return combine(c.code, c.kind); })()));
                 if (recv.kind.startsWith('array') || recv.kind === 'any') return js(`${recv.code}[${a[0]}] = ${combine(`${recv.code}[${a[0]}]`)}`);
                 return fail('assignment into ' + recv.kind);
             }
             // A game script's own global ($skill_shop = [...]), where a family says where it lives now.
             if (t.t === 'gvar' && options.setters && options.setters[t.name] && op === '=') return js(options.setters[t.name].replace('%v', value));
             if (t.t === 'var') {
-                if (locals.has(t.name)) return js(`${t.name} = ${combine(t.name)}`);
+                if (op === '=') localCode.set(t.name, value); else localCode.delete(t.name);
+                if (locals.has(t.name)) return js(`${t.name} = ${combine(t.name, blockParamsKinds.get(t.name))}`);
                 if (op !== '=') fail('compound assignment to an undeclared local');
                 locals.add(t.name);
                 if (valueNode.kind !== 'any') blockParamsKinds.set(t.name, valueNode.kind);
+                declare(t.name);
                 if (n !== statementAssign) { hoisted.add(t.name); return js(`(${t.name} = ${value})`, valueNode.kind); }
                 return js(`var ${t.name} = ${value}`);
             }
@@ -720,6 +863,17 @@
                 const recv = expr(t.recv);
                 if (recv.kind === 'map' && t.name === 'name_display') return js(`$gameMap._nameDisplay = ${value}`);
                 if (recv.kind === 'map' && t.name === 'need_refresh') return js(`if (${value}) $gameMap.requestRefresh()`);
+                if (recv.kind === 'temp' && t.name === 'fade_type') return js(`($gameTemp._rrFadeType = ${value})`);
+                // The message's settings a script sets before its own text (Show Text's own parameters).
+                const messageFields = { position: '_positionType', background: '_background', face_name: '_faceName', face_index: '_faceIndex' };
+                if (recv.kind === 'message' && messageFields[t.name]) return js(`($gameMessage.${messageFields[t.name]} = ${value})`);
+                // RGSS numbers the cancel choice from 1 (0 none, one past the last a branch of its own).
+                if (recv.kind === 'message' && t.name === 'choice_cancel_type') return js(`($gameMessage._choiceCancelType = ((t, n) => (t === 0 ? -1 : t > n ? -2 : t - 1))(${value}, $gameMessage._choices.length))`);
+                // VX's timer lives on Game_System, in frames: set the count, then switch it on.
+                if (recv.kind === 'system' && t.name === 'timer') return js(`($gameTimer._frames = ${combine('$gameTimer._frames')})`);
+                if (recv.kind === 'system' && t.name === 'timer_working') return js(`(${value} ? ($gameTimer._working = true) : $gameTimer.stop())`);
+                // VX's immortal flag: the battler stays at 0 HP without dying while it is set.
+                if (recv.kind === 'actor' && t.name === 'immortal') return js(`(${recv.code}._rrImmortal = ${value})`);
                 if (recv.kind === 'system' && ['save_disabled', 'menu_disabled', 'encounter_disabled'].includes(t.name)) {
                     const which = { save_disabled: 'Save', menu_disabled: 'Menu', encounter_disabled: 'Encounter' }[t.name];
                     return js(`(${value} ? $gameSystem.disable${which}() : $gameSystem.enable${which}())`);
@@ -733,7 +887,13 @@
                 if (recv.kind === 'result' && ['critical', 'missed', 'evaded'].includes(t.name)) return js(`(${recv.code}.${t.name} = ${combine(`${recv.code}.${t.name}`)})`);
                 if (recv.kind === 'actor' && t.name === 'name') return js(`${recv.code}.setName(${value})`);
                 if (recv.kind === 'party' && t.name === 'gold') return js(`$gameParty.gainGold((${value}) - $gameParty.gold())`);
-                if (options.setters && options.setters[recv.kind + '.' + t.name]) return js(options.setters[recv.kind + '.' + t.name].replace(/\$(?![A-Za-z_])/g, recv.code).replace('%v', value));
+                // A family's setter takes the new value: for +=, -= … that is the current value (read through the
+                // family's getter) combined with the right-hand side.
+                if (options.setters && options.setters[recv.kind + '.' + t.name]) {
+                    const cur = op === '=' ? null : expr({ t: 'call', recv: t.recv, name: t.name, args: [], block: null });
+                    const v = op === '=' ? value : combine(cur.code, cur.kind);
+                    return js(options.setters[recv.kind + '.' + t.name].replace(/\$(?![A-Za-z_])/g, recv.code).replace('%v', v));
+                }
                 return fail(`assignment to ${recv.kind}.${t.name}`);
             }
             return fail('assignment target');
@@ -741,15 +901,23 @@
 
         function stmt(n) {
             switch (n.t) {
-                case 'if': return `if (${gen(n.cond)}) { ${n.then.map(stmt).join(' ')} }${n.else.length ? ` else { ${n.else.map(stmt).join(' ')} }` : ''}`;
-                case 'while': return `while (${gen(n.cond)}) { ${n.body.map(stmt).join(' ')} }`;
+                case 'if': return `if (${test(n.cond)}) { ${n.then.map(stmt).join(' ')} }${n.else.length ? ` else { ${n.else.map(stmt).join(' ')} }` : ''}`;
+                case 'while': return `while (${test(n.cond)}) { ${within('loop', () => n.body.map(stmt)).join(' ')} }`;
+                case 'for': {
+                    let iter = expr(n.iter);
+                    if (iter.kind === 'pictures') iter = js('[null, ...Array.from({ length: 20 }, (_, i) => i + 1)]', 'array:pictureId');
+                    locals.add(n.name);
+                    if (iter.kind.startsWith('array:')) blockParamsKinds.set(n.name, iter.kind.slice(6));
+                    return `for (var ${n.name} of ${iter.code}) { ${within('loop', () => n.body.map(stmt)).join(' ')} }`;
+                }
                 case 'case': {
                     const subject = gen(n.subject);
                     const branches = n.whens.map(w => `(${w.values.map(v => (v.t === 'range' ? `((v) => v >= ${gen(v.from)} && v <${v.exclusive ? '' : '='} ${gen(v.to)})(_c)` : `_c === ${gen(v)}`)).join(' || ')}) { ${w.body.map(stmt).join(' ')} }`);
                     return `{ const _c = ${subject}; if ${branches.join(' else if ')}${n.otherwise.length ? ` else { ${n.otherwise.map(stmt).join(' ')} }` : ''} }`;
                 }
-                case 'break': return 'break;';
-                case 'continue': return 'continue;';
+                // In a block's callback, next returns from it; break has no JS form there.
+                case 'break': if (scope[scope.length - 1] === 'fn') fail('break inside a block'); return 'break;';
+                case 'continue': return scope[scope.length - 1] === 'fn' ? 'return;' : 'continue;';
                 case 'return': return n.e ? `return ${gen(n.e)};` : 'return;';
                 case 'massign': {
                     // One value spreads over the targets as Ruby spreads an array; several are listed.
@@ -765,7 +933,8 @@
         }
 
         const body = program.map(stmt).join('\n');
-        return hoisted.size ? `var ${[...hoisted].join(', ')};\n${body}` : body;
+        const code = hoisted.size ? `var ${[...hoisted].join(', ')};\n${body}` : body;
+        return fiber ? `this.rrRunScript(function* () {\n${code}\n}.call(this));` : code;
     }
 
     /** Ruby → JS, or null when any part of it is not in the table. */
@@ -788,7 +957,7 @@
         try {
             const program = parse(String(source || ''));
             if (program.length !== 1 || ['if', 'while', 'case', 'break', 'continue', 'return'].includes(program[0].t)) return null;
-            const code = generate(program, options).replace(/;$/, '');
+            const code = generate(program, Object.assign({}, options, { noFiber: true })).replace(/;$/, '');
             // eslint-disable-next-line no-new, no-new-func
             new Function('return (' + code + ')');
             return code;
@@ -806,7 +975,7 @@
         try {
             const program = parse(String(source || ''));
             if (!program.length) return null;
-            const code = generate(program, Object.assign({}, options, { self: 'formula' })).replace(/;$/, '');
+            const code = generate(program, Object.assign({}, options, { self: 'formula', noFiber: true })).replace(/;$/, '');
             // eslint-disable-next-line no-new, no-new-func
             new Function('a', 'b', 'v', code);
             return code;

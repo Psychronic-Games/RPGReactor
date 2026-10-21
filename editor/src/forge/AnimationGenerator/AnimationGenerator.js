@@ -103,6 +103,11 @@ class AnimationGenerator {
         return window.I18n && window.I18n.tText ? window.I18n.tText(label) : label;
     }
 
+    /** The title this tool's dialogs carry. */
+    _dialogTitle() {
+        return window.I18n && window.I18n.t ? window.I18n.t('menu.animationGenerator') : 'Animation Generator';
+    }
+
     _escapeHtml(value) {
         if (typeof globalThis.rrEscapeHtml === 'function') return globalThis.rrEscapeHtml(value);
         return require('../../utils/HtmlEscape.js')(value);
@@ -112,9 +117,17 @@ class AnimationGenerator {
         this.projectController = projectController;
         this.root = containerEl;
 
+        // A re-mount (language change) reloads the config from disk: write the pending save first.
+        this._flushPendingSave();
         if (!this._syncProjectPath()) {
             this.root.innerHTML = `<div style="padding: 40px; text-align: center; color: var(--color-text-muted); font-size: 12px;">${this._tx('Open a project to use Forge tools.')}</div>`;
             return;
+        }
+        // Another project starts from the defaults, not the previous project's layers, which the next save
+        // would otherwise write into it (a project without a config keeps whatever was loaded).
+        if (this._loadedProjectPath !== this.projectPath) {
+            this._resetProjectState();
+            this._loadedProjectPath = this.projectPath;
         }
         this._ensureFolders();
         this._loadConfig();
@@ -137,7 +150,7 @@ class AnimationGenerator {
     _requireProjectPath() {
         const p = this._syncProjectPath();
         if (!p) {
-            alert(this._tx('Open a project to use Forge tools.'));
+            RRDialog.alert(this._tx('Open a project to use Forge tools.'), { title: this._dialogTitle(), kind: 'warning' });
             return null;
         }
         return p;
@@ -146,11 +159,30 @@ class AnimationGenerator {
     detach() {
         if (this._rafHandle) { cancelAnimationFrame(this._rafHandle); this._rafHandle = null; }
         if (this._playTimer) { clearInterval(this._playTimer); this._playTimer = null; }
-        // A pending debounced save resolves its destination at fire time —
-        // if the project switches before it fires, the old project's layers
-        // would overwrite the new project's config.
-        if (this._saveTimer) { clearTimeout(this._saveTimer); this._saveTimer = null; }
-        this.playing = false;
+        if (this._sheetUpdateTimer) { clearTimeout(this._sheetUpdateTimer); this._sheetUpdateTimer = null; }
+        this._sheetRenderGen = (this._sheetRenderGen || 0) + 1;   // stops an async sheet render in flight
+        // Closing the Forge writes the last tweaks; after a project switch they belong to the
+        // previous project and are dropped. Play/pause is the user's and survives a close.
+        this._flushPendingSave();
+    }
+
+    /** Write a debounced save now, if it is still for the open project; otherwise drop it. */
+    _flushPendingSave() {
+        if (!this._saveTimer) return;
+        clearTimeout(this._saveTimer);
+        this._saveTimer = null;
+        const target = this._pendingSavePath;
+        this._pendingSavePath = null;
+        if (target && target === this._configPath()) this._saveConfig(target);
+    }
+
+    /** The per-project state, back to what a fresh tool starts with. */
+    _resetProjectState() {
+        const fresh = new AnimationGenerator();
+        for (const key of ['frameWidth', 'frameHeight', 'frameCount', 'layers', 'activeLayerId',
+            'previewMode', 'previewSingle', 'previewFrame', 'interpolation']) {
+            this[key] = fresh[key];
+        }
     }
 
     // -- Filesystem -----------------------------------------------------------
@@ -298,7 +330,8 @@ class AnimationGenerator {
         } catch (e) { /* first run */ }
     }
 
-    _saveConfig() {
+    _saveConfig(configPath = this._configPath()) {
+        if (!configPath) return;
         const fs = require('fs');
         try {
             // Strip the live `params` reference from each layer — it's
@@ -320,7 +353,7 @@ class AnimationGenerator {
                 previewMode: this.previewMode,
                 previewSingle: this.previewSingle
             };
-            fs.writeFileSync(this._configPath(), JSON.stringify(cfg, null, 2));
+            fs.writeFileSync(configPath, JSON.stringify(cfg, null, 2));
         } catch (e) { console.error('AnimationGenerator: save config:', e); }
     }
 
@@ -381,9 +414,13 @@ class AnimationGenerator {
      */
     _scheduleSaveConfig() {
         if (this._saveTimer) clearTimeout(this._saveTimer);
+        // The destination is the project open now, not whichever is open when the timer fires.
+        this._pendingSavePath = this._configPath();
         this._saveTimer = setTimeout(() => {
             this._saveTimer = null;
-            this._saveConfig();
+            const target = this._pendingSavePath;
+            this._pendingSavePath = null;
+            if (target && target === this._configPath()) this._saveConfig(target);
         }, 600);
     }
 
@@ -1740,6 +1777,26 @@ class AnimationGenerator {
      * textures/ and the relative filename stored in the active animation's
      * param values so the project is portable.
      */
+    /**
+     * The name a picked file takes in textures/: its own, or the copy already there with the same
+     * bytes; a different file of the same name becomes name-2, name-3… so the layers using the
+     * first keep it.
+     */
+    static textureFileName(destDir, srcPath) {
+        const fs = require('fs');
+        const path = require('path');
+        const ext = path.extname(srcPath);
+        const stem = path.basename(srcPath, ext);
+        let bytes = null;
+        for (let n = 1; ; n++) {
+            const name = n === 1 ? stem + ext : `${stem}-${n}${ext}`;
+            const candidate = path.join(destDir, name);
+            if (!fs.existsSync(candidate) || path.resolve(candidate) === path.resolve(srcPath)) return name;
+            if (!bytes) bytes = fs.readFileSync(srcPath);
+            if (bytes.equals(fs.readFileSync(candidate))) return name;
+        }
+    }
+
     _pickTexture(key) {
         const input = document.createElement('input');
         input.type = 'file';
@@ -1751,10 +1808,10 @@ class AnimationGenerator {
             const srcPath = file.path;
             const fs = require('fs');
             const path = require('path');
-            const baseName = path.basename(srcPath);
             const destDir = this._texturesDir();
             try {
                 fs.mkdirSync(destDir, { recursive: true });
+                const baseName = AnimationGenerator.textureFileName(destDir, srcPath);
                 const destPath = path.join(destDir, baseName);
                 if (path.resolve(srcPath) !== path.resolve(destPath)) {
                     fs.copyFileSync(srcPath, destPath);
@@ -1770,7 +1827,7 @@ class AnimationGenerator {
                 this._render();
             } catch (err) {
                 console.error('Texture pick failed:', err);
-                alert(this._tx('Failed to import texture:') + ' ' + err.message);
+                RRDialog.alert(this._tx('Failed to import texture:') + ' ' + err.message, { title: this._dialogTitle(), kind: 'error' });
             }
         });
         input.click();
@@ -2196,7 +2253,7 @@ class AnimationGenerator {
     async _saveSheet() {
         const input = this.root.querySelector('.rr-ag-name');
         let name = (input.value || '').trim();
-        if (!name) { alert(this._tx('Enter a name for the animation sheet.')); return; }
+        if (!name) { RRDialog.alert(this._tx('Enter a name for the animation sheet.'), { title: this._dialogTitle(), kind: 'warning' }); return; }
         name = name.replace(/\.png$/i, '');
 
         // Re-bake the sheet synchronously so toDataURL() sees the full image.
@@ -2217,12 +2274,12 @@ class AnimationGenerator {
                     suggestedName: `${name}.png`,
                     mimeType: 'image/png',
                 });
-                if (result) alert(result.project
+                if (result) RRDialog.alert(result.project
                     ? this._tx('Saved {file} to {path}').replace('{file}', `${name}.png`).replace('{path}', 'img/animations/')
-                    : this._tx('Saved → {path}').replace('{path}', result.path));
+                    : this._tx('Saved → {path}').replace('{path}', result.path), { title: this._dialogTitle() });
             } catch (err) {
                 console.error('AnimationGenerator save:', err);
-                alert(this._tx('Failed to save:') + ' ' + err.message);
+                RRDialog.alert(this._tx('Failed to save:') + ' ' + err.message, { title: this._dialogTitle(), kind: 'error' });
             }
             return;
         }
@@ -2248,10 +2305,10 @@ class AnimationGenerator {
             if (!file || !file.path) { picker.remove(); return; } // user cancelled
             try {
                 fs.writeFileSync(file.path, pngBuf);
-                alert(this._tx('Saved → {path}').replace('{path}', file.path));
+                RRDialog.alert(this._tx('Saved → {path}').replace('{path}', file.path), { title: this._dialogTitle() });
             } catch (err) {
                 console.error('AnimationGenerator save:', err);
-                alert(this._tx('Failed to save:') + ' ' + err.message);
+                RRDialog.alert(this._tx('Failed to save:') + ' ' + err.message, { title: this._dialogTitle(), kind: 'error' });
             } finally {
                 picker.remove();
             }
@@ -2273,7 +2330,7 @@ class AnimationGenerator {
      */
     _saveAnimatedGif(btn) {
         if (typeof GIF !== 'function') {
-            alert(this._tx('GIF encoder (gif.js) is not loaded.'));
+            RRDialog.alert(this._tx('GIF encoder (gif.js) is not loaded.'), { title: this._dialogTitle(), kind: 'error' });
             return;
         }
         const webHost = window.RPGReactorHost?.mode === 'web' ? window.RPGReactorHost : null;
@@ -2364,12 +2421,12 @@ class AnimationGenerator {
                         suggestedName: `${name}.gif`,
                         mimeType: 'image/gif',
                     });
-                    if (result) alert(result.project
+                    if (result) RRDialog.alert(result.project
                         ? this._tx('Saved {file} to {path}').replace('{file}', `${name}.gif`).replace('{path}', 'img/animations/')
-                        : this._tx('Saved → {path}').replace('{path}', result.path));
+                        : this._tx('Saved → {path}').replace('{path}', result.path), { title: this._dialogTitle() });
                 } catch (err) {
                     console.error('GIF save:', err);
-                    alert(this._tx('Failed to save:') + ' ' + err.message);
+                    RRDialog.alert(this._tx('Failed to save:') + ' ' + err.message, { title: this._dialogTitle(), kind: 'error' });
                 } finally {
                     if (btn) { btn.disabled = false; setLabel(originalText); }
                 }
@@ -2395,10 +2452,10 @@ class AnimationGenerator {
                     }
                     try {
                         fs.writeFileSync(file.path, gifBuf);
-                        alert(this._tx('Saved → {path}').replace('{path}', file.path));
+                        RRDialog.alert(this._tx('Saved → {path}').replace('{path}', file.path), { title: this._dialogTitle() });
                     } catch (err) {
                         console.error('GIF save:', err);
-                        alert(this._tx('Failed to save:') + ' ' + err.message);
+                        RRDialog.alert(this._tx('Failed to save:') + ' ' + err.message, { title: this._dialogTitle(), kind: 'error' });
                     } finally {
                         picker.remove();
                         if (btn) { btn.disabled = false; setLabel(originalText); }

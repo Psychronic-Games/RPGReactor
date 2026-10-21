@@ -523,3 +523,101 @@ test('3D media geometry pins UV corners to their own vertices and leaves legacy 
     runtime.applyWorldCorners(geometry,[{x:-.7,y:-.8},{x:.5,y:-.5},{x:.5,y:.5},{x:-.5,y:.5}],4,2);
     assert.deepEqual(points,[[-2.8,1.6,0],[2,1,0],[-2,-1,0],[2,-1,0]]);assert.equal(position.needsUpdate,true);assert.deepEqual(calls,['normals','box','sphere']);
 });
+
+test('a video off screen stops uploading frames and uploads the current one when it returns', () => {
+    const descriptor = runtime.normalizeShowArgs({ id: 3, file: 'panel.mp4', target: 'screen', x: 100, y: 100, width: 100, height: 50 });
+    const owner = Object.create(runtime.VideoSurfaceOwner.prototype);
+    owner.descriptor = descriptor;
+    let frames = 0;
+    owner.videoSource = { autoUpdate: true, updateFrame: () => frames++ };
+    const parent = { worldTransform: { a: 1, b: 0, c: 0, d: 1, tx: 0, ty: 0 } };
+    let position;
+    owner.pixiContainer = { visible: true, parent, position: { set: (x, y) => { position = [x, y]; } } };
+    owner.updatePixiPosition();
+    assert.deepEqual(position, [100, 100]);
+    assert.equal(owner.videoSource.autoUpdate, true, 'on screen keeps uploading');
+    assert.equal(frames, 0);
+    parent.worldTransform.tx = -5000;
+    owner.updatePixiPosition();
+    assert.equal(owner.videoSource.autoUpdate, false, 'off screen waits');
+    assert.equal(owner.pixiContainer.visible, true, 'visibility is untouched without a cull distance');
+    parent.worldTransform.tx = -150;
+    owner.updatePixiPosition();
+    assert.equal(owner.videoSource.autoUpdate, true, 'within the margin uploads again');
+    assert.equal(frames, 1, 'the frame showing now goes up at once');
+    // A zoomed-out parent brings a far surface into view.
+    descriptor.x = 3000;
+    parent.worldTransform = { a: 0.25, b: 0, c: 0, d: 0.25, tx: 0, ty: 0 };
+    owner.updatePixiPosition();
+    assert.equal(owner.videoSource.autoUpdate, true);
+    parent.worldTransform = { a: 1, b: 0, c: 0, d: 1, tx: 0, ty: 0 };
+    owner.updatePixiPosition();
+    assert.equal(owner.videoSource.autoUpdate, false);
+    // A container culled by its own distance never uploads; an image surface has no video source.
+    descriptor.x = -5000;
+    descriptor.cullDistance = 1;
+    parent.worldTransform = { a: 0.01, b: 0, c: 0, d: 0.01, tx: 0, ty: 0 };
+    owner.updatePixiPosition();
+    assert.equal(owner.pixiContainer.visible, false);
+    assert.equal(owner.videoSource.autoUpdate, false);
+    owner.videoSource = null;
+    assert.doesNotThrow(() => owner.updatePixiPosition());
+});
+
+test('muted surfaces playing one file the same way share one video and one 3D texture; the last to leave stops it', () => {
+    const manager = new runtime.MediaSurfaceManager();
+    const descriptor = (id, extra = {}) => ({ id, file: 'screens/static.webm', muted: true, loop: true, playbackRate: 1, currentTime: 0, ...extra });
+    const owner = d => ({ descriptor: d });
+    const video = { currentTime: 3 };
+    const a = owner(descriptor(1)), b = owner(descriptor(2)), c = owner(descriptor(3));
+    const entry = manager.shareVideo(a, video);
+    assert.ok(entry && entry.video === video && entry.owner === a);
+    assert.equal(manager.shareVideo(owner(descriptor(9)), {}), null, 'one entry per key');
+    assert.equal(manager.joinVideo(b), entry);
+    assert.equal(manager.joinVideo(c), entry);
+    assert.equal(manager.joinVideo(owner(descriptor(4, { muted: false }))), null, 'a surface with sound keeps its own (volumes differ)');
+    assert.equal(manager.joinVideo(owner(descriptor(5, { loop: false }))), null, 'another loop setting');
+    assert.equal(manager.joinVideo(owner(descriptor(6, { playbackRate: 2 }))), null, 'another speed');
+    assert.equal(manager.joinVideo(owner(descriptor(7, { file: 'other.webm' }))), null, 'another file');
+    assert.equal(manager.joinVideo(owner(descriptor(8, { currentTime: 40 }))), null, 'asked to start elsewhere');
+    assert.equal(manager.joinVideo(owner(descriptor(10, { currentTime: 3.2 }))), entry, 'a save of the shared time rejoins it');
+    entry.users.delete(manager.joinVideo(owner(descriptor(11))) && [...entry.users].pop());
+
+    let made = 0, disposed = 0;
+    const savedThree = global.THREE;
+    global.THREE = { VideoTexture: class { constructor(v) { this.image = v; made++; } dispose() { disposed++; } } };
+    try {
+        const t1 = manager.sharedThreeTexture(entry, a), t2 = manager.sharedThreeTexture(entry, b);
+        assert.equal(t1, t2); assert.equal(made, 1, 'one texture, one upload a frame');
+        manager.releaseThreeTexture(entry, a); assert.equal(disposed, 0);
+        manager.releaseThreeTexture(entry, b); assert.equal(disposed, 1, 'released with its last screen');
+    } finally { global.THREE = savedThree; }
+
+    for (const user of [...entry.users]) if (user !== a && user !== b && user !== c) entry.users.delete(user);
+    assert.equal(manager.leaveVideo(entry, a), false, 'others still show it');
+    assert.ok(entry.owner !== a, 'another surface takes it over');
+    assert.equal(manager.leaveVideo(entry, b), false);
+    assert.equal(manager.leaveVideo(entry, c), true, 'the last one stops it');
+    assert.equal(manager.joinVideo(owner(descriptor(12))), null, 'and it is no longer offered');
+    manager.shareVideos = false;
+    assert.equal(manager.shareVideo(a, video), null, 'the kill switch');
+});
+
+test('a surface leaving a shared video does not stop it for the others', () => {
+    const calls = [];
+    const video = { pause: () => calls.push('pause'), removeAttribute() {}, load: () => calls.push('load'), set src(v) { calls.push('src'); }, removeEventListener() {} };
+    const manager = new runtime.MediaSurfaceManager();
+    Object.assign(manager, { descriptor: () => null, releaseWaiters() {} });
+    const make = id => Object.assign(Object.create(runtime.VideoSurfaceOwner.prototype), { cleaned: false, id, generation: 1, listeners: [], descriptor: { id, file: 'a.webm', muted: true, loop: true, playbackRate: 1 }, manager });
+    const first = make(1), second = make(2);
+    first.video = video; first.shared = manager.shareVideo(first, video);
+    second.video = video; second.shared = manager.joinVideo(second);
+    const pixiCalls = [];
+    first.videoSource = { resource: video, _onPlayStart() {} };
+    first.pixiTexture = { destroy: () => pixiCalls.push(first.videoSource.resource) };
+    first.cleanup('stop');
+    assert.deepEqual(calls, [], 'the element plays on');
+    assert.deepEqual(pixiCalls, [null], 'PIXI was let go of the element before its source was destroyed');
+    second.cleanup('stop');
+    assert.ok(calls.includes('pause') && calls.includes('src'), 'the last surface stops and empties it');
+});

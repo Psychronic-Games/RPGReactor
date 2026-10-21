@@ -112,6 +112,8 @@ class PluginManager {
             this._keyHandler = (e) => {
                 if (modal.style.display === 'none') return;
                 if (document.querySelector('.plugin-manager-child-modal')) return;
+                // Picking a plugin redraws its row and leaves the focus on the page: Escape still closes.
+                if (e.key === 'Escape' && !e.defaultPrevented && !modal.contains(e.target)) { e.preventDefault(); this.hide(); return; }
                 const helpSearch = this._helpSearch;
                 if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f' && helpSearch?.input?.isConnected) {
                     e.preventDefault();
@@ -522,7 +524,7 @@ class PluginManager {
                     parsedValue = textarea.value;
                     return true;
                 }
-                alert(this._tt('Invalid JSON format. Please fix the syntax errors.'));
+                RRDialog.alert(this._tt('Invalid JSON format. Please fix the syntax errors.'), { title: this._tt('Plugin Manager'), kind: 'warning' });
                 return false;
             }
         };
@@ -532,7 +534,7 @@ class PluginManager {
             if (textView.style.display !== 'none') {
                 if (!applyTextValue()) return;
                 if (!hasExpectedShape(parsedValue)) {
-                    alert(this._tt('Invalid JSON format. Please fix the syntax errors.'));
+                    RRDialog.alert(this._tt('Invalid JSON format. Please fix the syntax errors.'), { title: this._tt('Plugin Manager'), kind: 'warning' });
                     return;
                 }
                 renderStructureView();
@@ -683,7 +685,7 @@ class PluginManager {
         const isArray = String(fieldSchema.type || '').includes('[]');
         const structName = this.getStructName(fieldSchema.type);
         if (!structName && !isArray) {
-            alert(this._tt('Invalid struct type:') + ' ' + fieldSchema.type);
+            RRDialog.alert(this._tt('Invalid struct type:') + ' ' + fieldSchema.type, { title: this._tt('Plugin Manager'), kind: 'error' });
             return;
         }
 
@@ -710,7 +712,7 @@ class PluginManager {
         }
 
         if (structName && !structSchema) {
-            alert(this._tt('Could not find struct definition for:') + ' ' + structName);
+            RRDialog.alert(this._tt('Could not find struct definition for:') + ' ' + structName, { title: this._tt('Plugin Manager'), kind: 'error' });
             return;
         }
 
@@ -1066,8 +1068,13 @@ class PluginManager {
                 if (this.moveArrayElement(arrayData, index, index + 1)) refresh();
             }, index === arrayData.length - 1));
             actions.appendChild(makeAction(this._tt('Edit'), this._tt('Edit'), editElement));
-            actions.appendChild(makeAction('×', this._tt('Delete'), () => {
-                if (!confirm(this._tt('Delete this element?'))) return;
+            actions.appendChild(makeAction('×', this._tt('Delete'), async () => {
+                const element = arrayData[index];
+                const confirmed = await RRDialog.confirm(this._tt('Delete this element?'), {
+                    title: this._tt('Delete Element'), ok: this._tt('Delete'), danger: true
+                });
+                // The question was about the element in this row when it was asked.
+                if (!confirmed || arrayData[index] !== element) return;
                 arrayData.splice(index, 1);
                 refresh();
             }));
@@ -1764,12 +1771,16 @@ class PluginManager {
             cursor: pointer;
             font-size: 11px;
         `;
-        deleteBtn.addEventListener('click', () => {
-            if (confirm(this._tt('Delete this element?'))) {
-                arrayData.splice(index, 1);
-                document.body.removeChild(overlay);
-                onSave();
-            }
+        deleteBtn.addEventListener('click', async () => {
+            const element = arrayData[index];
+            const confirmed = await RRDialog.confirm(this._tt('Delete this element?'), {
+                title: this._tt('Delete Element'), ok: this._tt('Delete'), danger: true
+            });
+            // The question was about the element this editor shows; the editor may have closed meanwhile.
+            if (!confirmed || arrayData[index] !== element || overlay.parentNode !== document.body) return;
+            arrayData.splice(index, 1);
+            document.body.removeChild(overlay);
+            onSave();
         });
         header.appendChild(deleteBtn);
 
@@ -1947,7 +1958,7 @@ class PluginManager {
         // Left side - Plugin list
         const listContainer = document.createElement('div');
         listContainer.style.cssText = `
-            width: 280px;
+            width: 340px;
             min-width: 220px;
             border-right: 1px solid var(--color-border);
             display: flex;
@@ -2162,6 +2173,7 @@ class PluginManager {
      */
     async loadPlugins() {
         if (this.detailsContainer) this.renderEmptyDetails();
+        this._pluginsLoadError = null;
         try {
             const currentProject = this.projectController.getCurrentProject();
             if (!currentProject || !currentProject.path) {
@@ -2193,11 +2205,9 @@ class PluginManager {
             this.clearPluginSelection();
 
             const text = this.fs.readFileSync(pluginsPath, 'utf8');
-
-            // Extract the $plugins array
-            const pluginsMatch = text.match(/var\s+\$plugins\s*=\s*(\[[\s\S]*\]);/);
-            if (pluginsMatch) {
-                this.plugins = JSON.parse(pluginsMatch[1]);
+            const parsed = PluginManager.parsePluginsManifest(text);
+            if (parsed.length) {
+                this.plugins = parsed;
 
                 // Enrich plugins with descriptions and help from their source
                 // files (cached by mtime — edits still show up immediately,
@@ -2227,7 +2237,43 @@ class PluginManager {
             this.renderPluginList();
         } catch (err) {
             console.error('Error loading plugins:', err);
+            // Nothing from another project or a half-read file may be saved over this one.
+            this._pluginsLoadError = err;
+            this.plugins = [];
+            this.clearPluginSelection?.();
+            try { this.renderPluginList(); } catch (renderError) { /* the window may be closed */ }
         }
+    }
+
+    /**
+     * The $plugins array of a plugins.js / reactor_plugins.js. An empty or array-less file
+     * is an empty list; a file that names $plugins but cannot be read throws.
+     */
+    static parsePluginsManifest(text) {
+        const source = String(text || '');
+        const assign = /\$plugins\s*=\s*/.exec(source);
+        if (!assign) {
+            if (!source.replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, '').trim()) return [];
+            throw new Error('the file has no $plugins list');
+        }
+        const start = source.indexOf('[', assign.index + assign[0].length);
+        if (start < 0 || source.slice(assign.index + assign[0].length, start).trim()) throw new Error('$plugins is not a list');
+        // The matching bracket, skipping brackets inside strings.
+        let depth = 0;
+        let end = -1;
+        for (let i = start, inString = false; i < source.length; i++) {
+            const ch = source[i];
+            if (inString) {
+                if (ch === '\\') i++;
+                else if (ch === '"') inString = false;
+            } else if (ch === '"') inString = true;
+            else if (ch === '[') depth++;
+            else if (ch === ']' && --depth === 0) { end = i; break; }
+        }
+        if (end < 0) throw new Error('$plugins is not closed');
+        const list = JSON.parse(source.slice(start, end + 1));
+        if (!Array.isArray(list)) throw new Error('$plugins is not a list');
+        return list;
     }
 
     /**
@@ -2859,7 +2905,7 @@ class PluginManager {
 
         const clipboardPlugins = clipboard?.plugins || (clipboard?.plugin ? [clipboard.plugin] : []);
         if (clipboardPlugins.length === 0) {
-            alert(this._tt('No plugin in clipboard to paste.'));
+            await RRDialog.alert(this._tt('No plugin in clipboard to paste.'), { title: this._tt('Paste') });
             return;
         }
 
@@ -2892,14 +2938,17 @@ class PluginManager {
         this.renderSelectedPluginDetails();
     }
 
-    _removeSelectedPlugins() {
+    async _removeSelectedPlugins() {
         const selectedIndices = this.getSelectedPluginIndices();
         if (selectedIndices.length === 0) return;
 
         const label = selectedIndices.length === 1
             ? `${this._tt('Remove plugin')} "${this.plugins[selectedIndices[0]].name}"?`
             : `${this._tt('Remove')} ${selectedIndices.length} ${this._tt('selected plugins?')}`;
-        if (!confirm(label)) return;
+        const selectedPlugins = selectedIndices.map(index => this.plugins[index]);
+        const confirmed = await RRDialog.confirm(label, { title: this._tt('Remove Plugin'), ok: this._tt('Remove'), danger: true });
+        // The question named the plugins selected when it was asked.
+        if (!confirmed || selectedIndices.some((index, i) => this.plugins[index] !== selectedPlugins[i])) return;
 
         for (const index of [...selectedIndices].sort((a, b) => b - a)) {
             this.plugins.splice(index, 1);
@@ -2919,7 +2968,7 @@ class PluginManager {
         );
 
         if (unusedPlugins.length === 0) {
-            alert(this._tt('All available plugins are already added!'));
+            RRDialog.alert(this._tt('All available plugins are already added!'), { title: this._tt('Add Plugin') });
             return;
         }
 
@@ -3086,7 +3135,7 @@ class PluginManager {
             this.renderPluginList();
         } catch (err) {
             console.error('Error adding plugin:', err);
-            alert(`${this._tt('Error adding plugin:')} ${err.message}`);
+            RRDialog.alert(`${this._tt('Error adding plugin:')} ${err.message}`, { title: this._tt('Add Plugin'), kind: 'error' });
         }
     }
 
@@ -4250,8 +4299,12 @@ class PluginManager {
         try {
             const currentProject = this.projectController.getCurrentProject();
             if (!currentProject || !currentProject.path) {
-                alert(this._tt('No project loaded'));
+                await RRDialog.alert(this._tt('No project loaded'), { title: this._tt('Plugin Manager'), kind: 'warning' });
                 return;
+            }
+
+            if (this._pluginsLoadError) {
+                throw new Error(`${this._pluginsFilePath || 'plugins.js'} could not be read (${this._pluginsLoadError.message}); it was left as it is`);
             }
 
             const projectPath = currentProject.path;
@@ -4272,10 +4325,10 @@ ${JSON.stringify(pluginsToWrite, null, 4)};
 `;
 
             this._writeFileAtomic(this.fs, pluginsPath, content, 'utf8');
-            alert(this._tt('Plugins saved successfully!'));
+            await RRDialog.alert(this._tt('Plugins saved successfully!'), { title: this._tt('Plugin Manager') });
         } catch (err) {
             console.error('Error saving plugins:', err);
-            alert(`${this._tt('Error saving plugins:')} ${err.message}`);
+            await RRDialog.alert(`${this._tt('Error saving plugins:')} ${err.message}`, { title: this._tt('Plugin Manager'), kind: 'error' });
         }
     }
 

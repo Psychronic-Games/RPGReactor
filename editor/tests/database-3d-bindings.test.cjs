@@ -287,7 +287,7 @@ function bindingRowFixture(project, alerts) {
     const element = () => ({ style: {}, listeners: {}, addEventListener(type, fn) { this.listeners[type] = fn; } });
     const check = element(), name = element(), change = element();
     const row = { style: {}, querySelector(selector) { return ({ '.rr-3d-binding-check': check, '.rr-3d-binding-name': name, '.rr-3d-binding-change': change })[selector]; } };
-    const sandbox = { require, console: { error() {} }, window: {}, document: { createElement: () => row }, alert: value => alerts.push(value) };
+    const sandbox = { require, console: { error() {} }, window: {}, document: { createElement: () => row }, RRDialog: { alert: async value => { alerts.push(value); } } };
     vm.runInNewContext(fs.readFileSync(path.join(repoRoot,'editor/src/database/Database3DBindings.js'),'utf8'),sandbox);
     let changes = 0;
     const api = sandbox.RRDatabase3DBindings.attachRow({ appendChild() {} }, {
@@ -336,7 +336,8 @@ test('a rigged model plays its template default motions for the states it has no
     const own = [{ name: 'Walking', type: 'clip', clip: 'Walking', trigger: 'walking' }, { name: 'Idle', type: 'clip', clip: 'Idle', trigger: 'idle' }];
     const rules = Reactor3D.readModelAnimationRules({ animations: own, rig: { template: 'humanoid' } });
     const defaults = [...new Set(rules.filter(r => r.defaultMotion).map(r => r.name))];
-    assert.deepEqual(defaults.sort(), ['Climb', 'Jump', 'Run', 'Swim', 'Tread Water']);
+    // (Ride is the rig's stance for a seated rider: the state a vehicle puts its rider in.)
+    assert.deepEqual(defaults.sort(), ['Climb', 'Jump', 'Ride', 'Run', 'Swim', 'Tread Water']);
     assert.equal(Reactor3D.readModelAnimationRules({ animations: own, rig: { template: 'humanoid' }, defaultMotions: false }).length, 2, 'switched off');
     assert.equal(Reactor3D.readModelAnimationRules({ animations: own }).length, 2, 'no rig, no defaults');
     // A gait is walked on the ground.

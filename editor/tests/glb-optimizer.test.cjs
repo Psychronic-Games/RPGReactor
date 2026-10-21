@@ -614,7 +614,8 @@ test('analyze reports what makes a model expensive, not just its triangles', () 
     // Cached on the file's identity, so re-selecting a model costs nothing and
     // a model changed on disk is re-read.
     assert.match(editor, /\$\{filePath\}\|\$\{stat\.size\}\|\$\{stat\.mtimeMs\}/);
-    assert.match(editor, /stats: \['\.r3d-stats'\]/, 'the section folds like the others');
+    assert.match(editor, /const stats = name === 'stats' \? this\._detail\.querySelector\('\.r3d-stats'\) : null;\s*if \(stats\) stats\.style\.display = state\[name\] \? 'none' : '';/, 'the section folds like the others');
+    assert.match(editor, /this\._sectionsCollapsed = this\._sectionsCollapsed \|\| \{ stats: true \};/, 'and starts as its one line: it sits over the preview');
 });
 
 test('fromMesh builds a self-contained GLB: welded parts per material, pictures embedded, UVs flipped for glTF', () => {

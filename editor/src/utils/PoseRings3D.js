@@ -84,6 +84,13 @@
      * The ring under the pointer, or null. `current` holds the pose's yaw,
      * pitch and roll in degrees; the grab remembers where the drag started.
      */
+    /** How far a screen point lies from the segment a-b, in pixels. */
+    function segmentDistance(x, y, a, b) {
+        const dx = b[0] - a[0], dy = b[1] - a[1], length2 = dx * dx + dy * dy;
+        const t = length2 > 0 ? Math.max(0, Math.min(1, ((x - a[0]) * dx + (y - a[1]) * dy) / length2)) : 0;
+        return Math.hypot(a[0] + t * dx - x, a[1] + t * dy - y);
+    }
+
     function pick(THREE, rings, camera, rect, clientX, clientY, current) {
         if (!rings || !rings.root.visible || !camera || !rect || !rect.width) return null;
         const radius = rings.radius;
@@ -94,18 +101,19 @@
             // A ring hidden by its owner (a light has no roll) is not there to grab.
             if (!rings[key].group.visible) continue;
             const q = rings[key].group.getWorldQuaternion(new THREE.Quaternion());
-            let best = null;
-            for (let i = 0; i < 72; i++) {
+            let best = null, prev = null;
+            // The ring as screen segments: on a large ring the points alone leave gaps wider than the reach.
+            for (let i = 0; i <= 72; i++) {
                 const t = (i / 72) * Math.PI * 2;
                 const world = (key === 'yaw' ? new THREE.Vector3(radius * Math.cos(t), 0, radius * Math.sin(t))
                     : key === 'pitch' ? new THREE.Vector3(0, radius * Math.cos(t), radius * Math.sin(t))
                         : new THREE.Vector3(radius * Math.cos(t), radius * Math.sin(t), 0)).applyQuaternion(q).add(centre);
                 const v = world.clone().project(camera);
-                if (v.z > 1) continue;
-                const sx = rect.left + (v.x + 1) / 2 * rect.width;
-                const sy = rect.top + (1 - v.y) / 2 * rect.height;
-                const d = Math.hypot(sx - clientX, sy - clientY);
+                if (v.z > 1) { prev = null; continue; }
+                const point = [rect.left + (v.x + 1) / 2 * rect.width, rect.top + (1 - v.y) / 2 * rect.height];
+                const d = prev ? segmentDistance(clientX, clientY, prev, point) : Math.hypot(point[0] - clientX, point[1] - clientY);
                 if (!best || d < best.d) best = { d, camDist: world.distanceTo(camPos) };
+                prev = point;
             }
             if (best && best.d <= 12) nearest[key] = best;
         }

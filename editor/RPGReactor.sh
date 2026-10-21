@@ -59,6 +59,11 @@ fi
 # Set the window icon (Linux window managers may use this)
 export WINDOW_ICON="$APP_DIR/images/icon.png"
 
+# The sound mixer names a stream for its program. NW.js says "Chromium", so a
+# mute in the mixer was remembered for every Chromium browser too; the
+# editor and its playtests get a name of their own.
+export PULSE_PROP_OVERRIDE="${PULSE_PROP_OVERRIDE:-application.name='RPG Reactor'}"
+
 # Set the WMClass to match the .desktop file for proper icon association
 export BAMF_DESKTOP_FILE_HINT="$HOME/.local/share/applications/rpg-reactor.desktop"
 

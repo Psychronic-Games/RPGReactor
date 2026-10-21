@@ -4,6 +4,8 @@
  */
 class ModelGraphicPicker {
     static EXTS = ['.glb', '.obj', '.fbx', '.stl', '.usdz', '.3mf', '.dxf', '.blend'];
+    /** Input anywhere in the dialog that can change what the preview shows. */
+    static PREVIEW_INPUT_EVENTS = ['pointerdown', 'pointermove', 'pointerup', 'wheel', 'input', 'change', 'click', 'keydown'];
 
     constructor(projectController) {
         this.projectController = projectController;
@@ -41,8 +43,16 @@ class ModelGraphicPicker {
     static colorTextureIn(texDir) {
         const fs = require('fs');
         if (!texDir || !fs.existsSync(texDir)) return '';
+        // A variant's picture lies in the same folder and is not the model's own.
+        let worn = [];
+        try {
+            const sidecar = JSON.parse(fs.readFileSync(require('path').join(texDir, '..', 'model.json'), 'utf8'));
+            worn = (Array.isArray(sidecar.variants) ? sidecar.variants : []).map(variant => variant && variant.texture).filter(Boolean);
+        } catch (error) {
+            worn = [];
+        }
         const images = fs.readdirSync(texDir)
-            .filter(name => /\.(png|jpe?g|webp)$/i.test(name)).sort();
+            .filter(name => /\.(png|jpe?g|webp)$/i.test(name) && !worn.includes(name)).sort();
         if (!images.length) return '';
         return images.find(name => /clr|colou?r|diffuse|albedo|base/i.test(name))
             || images[0];
@@ -107,6 +117,7 @@ class ModelGraphicPicker {
         this.selectedFile = (current && current.file) || '';
         this.selectedExt = (current && current.ext) || '';
         this.selectedTexture = (current && current.texture) || '';
+        this.selectedVariant = (current && current.variant) || '';
         this.selectedYaw = Number(current && current.yaw) || 0;
         this.selectedPitch = Number(current && current.pitch) || 0;
         this.selectedRoll = Number(current && current.roll) || 0;
@@ -148,6 +159,7 @@ class ModelGraphicPicker {
                                     <button type="button" class="rr-btn-secondary model-face-clear">${this._t('Clear marks')}</button>
                                 </div>
                                 <div class="model-face-status" style="font-size:11px;color:var(--color-text-muted);"></div>
+                                <div class="model-variant-row" style="display:none;align-items:center;gap:8px;font-size:12px;color:var(--color-text);"></div>
                                 <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--color-text);">
                                     X <input type="number" class="model-angle-x" step="1" value="${Math.round(this.selectedPitch)}"
                                         style="width:64px;padding:3px 5px;background:var(--color-bg-surface);color:var(--color-text);border:1px solid var(--color-border-input);">
@@ -185,10 +197,19 @@ class ModelGraphicPicker {
         document.body.appendChild(modal);
 
         this._modal = modal;
+        // The preview is drawn only while something is changing. Any input in
+        // the dialog counts: a slider, an angle box, a ring hover, a face
+        // button — each gets the same second of full-rate frames an orbit
+        // does, then the still model is left alone.
+        for (const type of ModelGraphicPicker.PREVIEW_INPUT_EVENTS) {
+            modal.addEventListener(type, () => { this._lastInputAt = performance.now(); }, true);
+        }
         this._bindPreviewInput();
         this._initGizmo();
         this._refreshFaceButtons();
         this._loadFiles();
+        // Tab stays inside, Escape cancels, and the focus goes back to what opened the picker when it closes.
+        window.RRKeyboardNavigation?.modal(modal, { onEscape: () => this._close(), container: () => content })?.enter();
 
         content.querySelector('.model-size-input').addEventListener('input', e => {
             const value = Number(e.target.value);
@@ -266,6 +287,7 @@ class ModelGraphicPicker {
                         roll: this.selectedRoll,
                         faces: Object.assign({}, this.selectedFaces),
                         texture: this.selectedTexture || '',
+                        ...(this.selectedVariant ? { variant: this.selectedVariant } : {}),
                         // The model card over the 3D view owns the offset; a re-pick keeps it.
                         ...(this.selectedOffset.some(v => v) ? { offset: this.selectedOffset.slice() } : {}),
                         ...(this._framing
@@ -291,6 +313,9 @@ class ModelGraphicPicker {
         if (this._gizmo) this._gizmo.dispose();
         this._gizmo = null;
         this._disposePreview();
+        const keys = this._modal && this._modal._rrModalKeys;
+        keys?.leave();
+        keys?.dispose();
         if (this._modal && this._modal.parentNode) this._modal.parentNode.removeChild(this._modal);
         this._modal = null;
     }
@@ -321,6 +346,9 @@ class ModelGraphicPicker {
                 this.selectedFile = file.file;
                 this.selectedExt = file.ext;
                 this.selectedTexture = file.texture || '';
+                // Variants belong to a model: another model starts in its own look.
+                this.selectedVariant = '';
+                this._refreshVariant();
                 this._placingFace = '';
                 this._refreshFaceButtons();
                 this._refreshCursor();
@@ -340,6 +368,7 @@ class ModelGraphicPicker {
             if (!this.selectedTexture) this.selectedTexture = current.texture || '';
             browser.scrollTo(this.selectedName);
         }
+        this._refreshVariant();
         this._drawPreview();
     }
 
@@ -412,6 +441,8 @@ class ModelGraphicPicker {
                 }
                 return;
             }
+            // A drag that leaves the dialog still moves the preview.
+            this._lastInputAt = performance.now();
             const dx = e.clientX - lastX;
             const dy = e.clientY - lastY;
             lastX = e.clientX;
@@ -507,6 +538,34 @@ class ModelGraphicPicker {
     _refreshCursor() {
         const canvas = this._modal && this._modal.querySelector('.model-preview-canvas');
         if (canvas) canvas.style.cursor = this._placingFace ? 'crosshair' : 'grab';
+    }
+
+    /** The Variant choice: shown only for a model that has variants. */
+    _refreshVariant() {
+        const row = this._modal && this._modal.querySelector('.model-variant-row');
+        if (!row || typeof ModelVariantsPanel === 'undefined') return;
+        const names = ModelVariantsPanel.namesFor(this.currentProject && this.currentProject.path, this.selectedName);
+        const html = ModelVariantsPanel.selectHtml('model-variant-select', names, this.selectedVariant, this._t("Model's own"),
+            'style="max-width:200px;padding:3px 5px;background:var(--color-bg-surface);color:var(--color-text);border:1px solid var(--color-border-input);"');
+        row.style.display = html ? 'flex' : 'none';
+        row.innerHTML = html ? `<span>${this._t('Variant')}</span>${html}` : '';
+        const select = row.querySelector('select');
+        if (select) select.addEventListener('change', () => {
+            this.selectedVariant = select.value;
+            this._wearVariant();
+        });
+    }
+
+    /** The variant chosen, on the model in view. */
+    _wearVariant() {
+        const model = this._object && this._object.children[0];
+        if (!model || typeof ModelVariantsPanel === 'undefined') return;
+        ModelVariantsPanel.wear(model, this.currentProject && this.currentProject.path, this.selectedName, this.selectedVariant);
+        // Its picture loads after this: the idle loop watches for it.
+        this._previewTextures = ModelPreview3D.collectTextures(this._template, this._object);
+        this._previewTextureVersion = -1;
+        this._previewDirty = true;
+        this._lastInputAt = performance.now();
     }
 
     _refreshFaceButtons() {
@@ -884,6 +943,9 @@ class ModelGraphicPicker {
 
     _disposePreview() {
         this._disposePoseRings();
+        this._unwatchPreviewSize?.();
+        this._unwatchPreviewSize = null;
+        this._previewTextures = [];
         this._disposeModelResources();
         if (this._renderer) {
             this._renderer.dispose();
@@ -967,18 +1029,35 @@ class ModelGraphicPicker {
                 this._renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
                 this._renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
                 if (THREE.SRGBColorSpace) this._renderer.outputColorSpace = THREE.SRGBColorSpace;
+                // Measured on a reported resize, not every frame: reading the
+                // rectangle forces a layout the idle loop has no use for.
+                let sizeDirty = true;
+                this._previewDirty = true;
+                this._unwatchPreviewSize?.();
+                this._unwatchPreviewSize = ModelPreview3D.watchSize(canvas, () => { sizeDirty = true; });
                 const tick = () => {
                     if (!this._renderer || !this._modal) return;
-                    const rect = canvas.getBoundingClientRect();
-                    const width = Math.max(1, Math.round(rect.width));
-                    const height = Math.max(1, Math.round(rect.height));
-                    const pixelRatio = this._renderer.getPixelRatio();
-                    const bufferWidth = Math.floor(width * pixelRatio);
-                    const bufferHeight = Math.floor(height * pixelRatio);
-                    if (canvas.width !== bufferWidth || canvas.height !== bufferHeight) {
-                        this._renderer.setSize(width, height, false);
-                        this._camera.aspect = width / height;
-                        this._camera.updateProjectionMatrix();
+                    if (sizeDirty || !this._unwatchPreviewSize) {
+                        sizeDirty = false;
+                        const rect = canvas.getBoundingClientRect();
+                        const width = Math.max(1, Math.round(rect.width));
+                        const height = Math.max(1, Math.round(rect.height));
+                        const pixelRatio = this._renderer.getPixelRatio();
+                        const bufferWidth = Math.floor(width * pixelRatio);
+                        const bufferHeight = Math.floor(height * pixelRatio);
+                        if (canvas.width !== bufferWidth || canvas.height !== bufferHeight) {
+                            this._renderer.setSize(width, height, false);
+                            this._camera.aspect = width / height;
+                            this._camera.updateProjectionMatrix();
+                            this._previewDirty = true;
+                        }
+                    }
+                    const theme = ModelPreview3D.themeKey();
+                    if (theme !== this._previewTheme) { this._previewTheme = theme; this._previewDirty = true; }
+                    const textureVersion = ModelPreview3D.textureVersionSum(this._previewTextures);
+                    if (textureVersion !== this._previewTextureVersion) {
+                        this._previewTextureVersion = textureVersion;
+                        this._previewDirty = true;
                     }
                     {
                         const now = performance.now();
@@ -991,8 +1070,10 @@ class ModelGraphicPicker {
                     }
                     this._applyCamera();
                     {
-                        // A still preview repaints ten times a second; orbit,
-                        // zoom, and a fresh model keep the full rate.
+                        // A still preview is not drawn again; orbit, zoom,
+                        // any input in the dialog and a fresh model keep the
+                        // full rate for a second, and a late texture, a theme
+                        // switch or a resize draw one more frame.
                         const now = performance.now();
                         const goalKey = `${this._viewGoal.yaw}|${this._viewGoal.pitch}|${this._viewGoal.distance}`;
                         if (goalKey !== this._lastGoalKey) {
@@ -1003,14 +1084,15 @@ class ModelGraphicPicker {
                             || Math.abs(this._viewGoal.pitch - this._view.pitch) > 0.01
                             || Math.abs(this._viewGoal.distance - this._view.distance) > 0.001;
                         const active = easing || (Number.isFinite(this._lastInputAt) && now - this._lastInputAt < 1000);
-                        if (!active && this._lastRenderAt > 0 && now - this._lastRenderAt < 100) {
+                        if (!active && !this._previewDirty) {
                             this._raf = requestAnimationFrame(tick);
                             return;
                         }
+                        this._previewDirty = false;
                         this._lastRenderAt = now;
                     }
                     ModelPreview3D.updateBackground(this._scene);
-                    Reactor3D.renderScene(this._renderer, this._scene, this._camera);
+                    if (ModelPreview3D.render(this._renderer, this._scene, this._camera)) this._previewDirty = true;
                     this._raf = requestAnimationFrame(tick);
                 };
                 this._raf = requestAnimationFrame(tick);
@@ -1051,6 +1133,12 @@ class ModelGraphicPicker {
             this._applyModelRotation();
             this._rebuildFaceMarkers();
             this._scene.add(this._object);
+            if (this.selectedVariant) this._wearVariant();
+            // A GLB's images decode after the first draw; their version
+            // numbers tell the idle loop when one has landed.
+            this._previewTextures = ModelPreview3D.collectTextures(template, this._object);
+            this._previewTextureVersion = -1;
+            this._previewDirty = true;
             try {
                 this._renderer.compile?.(this._scene, this._camera);
                 for (const texture of template.userData?.glbTextures || []) {

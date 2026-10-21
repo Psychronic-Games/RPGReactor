@@ -1,4 +1,5 @@
 const assert = require('node:assert/strict');
+const { runtimeSource } = require('./helpers/runtime-source.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
@@ -205,7 +206,7 @@ test('all Effekseer surfaces use authored X rotation and aspect-neutral positive
     const event = read('src', 'event', 'AnimationPicker.js');
     const forge = read('src', 'forge', 'EffekseerGenerator', 'EffekseerGenerator.js');
     const sprites = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_sprites.js'), 'utf8');
-    const core = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_core.js'), 'utf8');
+    const core = runtimeSource('reactor_core.js');
 
     for (const source of [modal, database, event, forge, sprites, core]) {
         assert.doesNotMatch(source, /180\s*-\s*(?:rot|rotation|this\._animation)/);

@@ -742,7 +742,7 @@ test('the database save carries the choice, and a failure there fails the save',
     assert.equal(broken.call(self({ log: 'reactor' }), 'P'), false);
 });
 
-test('choosing VisuStella\'s log in the Quests tab brings in the quests it lacks here and keeps its start-of-game quests starting', () => {
+test('choosing VisuStella\'s log in the Quests tab brings in the quests it lacks here and keeps its start-of-game quests starting', async () => {
     const importer = {
         SOURCES: { visustella: { label: 'VS' } },
         installedSystems: () => [{ source: 'visustella', label: 'VS', enabled: true }],
@@ -757,8 +757,9 @@ test('choosing VisuStella\'s log in the Quests tab brings in the quests it lacks
     const system = {};
     const questions = [];
     const opened = [];
-    const window = { confirm: text => { questions.push(text); return true; }, alert: () => {} };
-    const context = { console, module: undefined, globalThis: undefined, window, rrEscapeHtml: v => String(v), QuestImporter: importer };
+    const window = {};
+    const RRDialog = { confirm: async text => { questions.push(text); return true; }, alert: async () => {} };
+    const context = { console, module: undefined, globalThis: undefined, window, RRDialog, rrEscapeHtml: v => String(v), QuestImporter: importer };
     context.globalThis = context;
     vm.runInNewContext(read('editor/src/database/DatabaseQuestEditor.js') + '\n;globalThis.__D = DatabaseQuestEditor;', context);
     const manager = {
@@ -773,7 +774,7 @@ test('choosing VisuStella\'s log in the Quests tab brings in the quests it lacks
     const editor = new context.__D(manager, {}, null, parent);
 
     assert.equal(plain(editor.questLogState(editor.settings())).notes[0].startsWith('VS is also enabled.'), true, 'no choice yet: the two logs are described as separate');
-    assert.equal(editor.chooseQuestLog('visustella'), true, 'an import happened, and it re-rendered');
+    assert.equal(await editor.chooseQuestLog('visustella'), true, 'an import happened, and it re-rendered');
     assert.equal(system.reactorQuests.log, 'visustella');
     assert.equal(store[1].activation.type, 'start', 'known at the start in the plugin');
     assert.equal(store[2].activation.type, 'command', 'a quest the plugin does not know stays as it was');
@@ -782,7 +783,7 @@ test('choosing VisuStella\'s log in the Quests tab brings in the quests it lacks
     assert.match(questions[0], /^Saving will replace the quests in VS with the ones here\. /);
     assert.deepEqual(opened, ['quests']);
     assert.match(plain(editor.questLogState(editor.settings())).notes[0], /^Saving writes these quests into VS and turns it on\./);
-    assert.equal(editor.chooseQuestLog('reactor'), false);
+    assert.equal(await editor.chooseQuestLog('reactor'), false);
     assert.equal(system.reactorQuests.log, 'reactor');
     assert.match(plain(editor.questLogState(editor.settings())).notes[0], /^Saving turns VS off in the Plugin Manager/);
 });
@@ -820,7 +821,7 @@ test('the Quests tab imports through one button and a source picker, not a plugi
 
 test('the Quests tab is wired like every other Reactor tab, with its own file that a project only gains once it authors one', () => {
     const manager = read('editor/src/DatabaseManager.js');
-    assert.match(manager, /\['quests', 'ReactorQuests\.json'\],\n\s*\['system', 'System\.json'\]/);
+    assert.match(manager, /\['quests', 'ReactorQuests\.json'\]/);
     assert.match(manager, /if \(!Array\.isArray\(loaded\.quests\) \|\| loaded\.quests\.length === 0\) loaded\.quests = \[null\];/);
     assert.match(manager, /if \(key === 'quests' && !this\.hasQuests\(\)\n\s*&& !this\.fs\.existsSync/);
     for (const method of ['getQuests()', 'getQuest(id)', 'hasQuests()', 'addQuest(record)', 'updateQuest(id, data)']) assert.ok(manager.includes(`    ${method} {`), method);
@@ -906,3 +907,64 @@ for (const name of ['QuestSet', 'QuestObjective', 'QuestReward', 'OpenQuestLog']
         quest.value = '1';quest.listeners.change();assert.equal(ok.disabled,false);
     });
 }
+
+test('Escape in a picker opened from a quest dialog closes the picker, not the dialog, and a detail cleanup drops the dialog\'s key listener', () => {
+    const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'database', 'DatabaseQuestEditor.js'), 'utf8');
+    const guards = source.match(/const nested = event\.target && event\.target\.closest && event\.target\.closest\('\.rr-modal-overlay'\);\n\s*if \(nested && nested !== overlay\) return;/g) || [];
+    assert.equal(guards.length, 1, 'Tracker and Labels opens a switch picker');
+    assert.equal((source.match(/registerDetailModal\(overlay, close\)/g) || []).length, 2);
+});
+
+test('a picked switch or variable stays on its button: the label the language pass first read goes with the old text', () => {
+    const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'database', 'DatabaseQuestEditor.js'), 'utf8');
+    assert.equal((source.match(/button\.textContent = /g) || []).length, 1, 'every picker button is relabelled through setPickLabel');
+    const context = { console, module: { exports: {} }, window: {} };
+    vm.runInNewContext(source + '\n;globalThis.DatabaseQuestEditor = DatabaseQuestEditor;', context);
+    const attributes = { 'data-i18n-text-source': '(none)' };
+    const button = { textContent: '(none)', removeAttribute: name => { delete attributes[name]; } };
+    context.DatabaseQuestEditor.prototype.setPickLabel(button, '#0003 Door');
+    assert.equal(button.textContent, '#0003 Door');
+    assert.equal(attributes['data-i18n-text-source'], undefined);
+});
+
+test('the tracker redraws when a variable or actor name its text shows changes, with no quest change', () => {
+    const data = [null, { id: 1, name: 'Hunt for \\N[2]', objectives: [{ text: 'Wolves: \\V[4]/5', hidden: false }, { text: 'Again \\v[4]', hidden: false }], rewards: [], activation: { type: 'command' }, completion: { type: 'command' } }];
+    const variables = { 4: 1 };
+    const { quests, context } = loadRuntime(data, { variables });
+    context.Graphics.boxHeight = 624;
+    const names = { 2: 'Reid' };
+    context.$gameActors = { actor: id => (names[id] ? { name: () => names[id] } : null) };
+    quests.discover(1);
+    const tracker = Object.create(context.Window_QuestTracker.prototype);
+    tracker._settingsSeen = tracker.settings();
+    const before = tracker.signature();
+    assert.equal(tracker.signature(), before, 'steady while nothing changes');
+    variables[4] = 2;
+    const afterVariable = tracker.signature();
+    assert.notEqual(afterVariable, before, 'a \\V[n] change alone redraws it');
+    names[2] = 'Ann';
+    assert.notEqual(tracker.signature(), afterVariable, 'a \\N[n] change alone redraws it');
+});
+
+test('switching the log\'s category drops a quest selected in the old one, so the detail never shows a quest the list does not', () => {
+    const { quests, context } = loadRuntime(DATA);
+    quests.discover(1);
+    quests.discover(4);
+    const list = Object.create(context.Window_QuestList.prototype);
+    list._category = null;
+    list._data = [];
+    let index = -1;
+    const shown = [];
+    list.index = () => index;
+    list.scrollTo = () => {};
+    context.Window_Selectable.prototype.select = function(i) { index = i; };
+    list.deselect = function() { this.select(-1); };
+    list._detailWindow = { setQuest: quest => shown.push(quest && quest.id) };
+    list.refresh();
+    list.selectQuest(4);
+    assert.equal(list.quest().id, 4);
+    list.setCategory('Side');
+    assert.equal(index, -1);
+    assert.equal(list.quest(), null);
+    assert.equal(shown[shown.length - 1], null, 'the detail empties with it');
+});

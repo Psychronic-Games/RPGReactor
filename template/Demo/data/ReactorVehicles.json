@@ -1,0 +1,13 @@
+[
+null,
+{"id":1,"name":"Motorcycle","kind":"motorcycle","model":{"name":"Vehicles/kawashaki_ninja_h2","file":"kawashaki_ninja_h2","size":4},"sounds":{"engine":null,"start":{"name":"Motorcycle-01-Start","volume":90,"pitch":100,"pan":0},"stop":{"name":"equip-01","volume":90,"pitch":100,"pan":0},"bump":{"name":"hit-01","volume":90,"pitch":100},"land":{"name":"hit-02","volume":90,"pitch":100},"accelerate":{"name":"Motorcycle-01-Speedup","volume":90,"pitch":100,"pan":0,"folder":"bgs"},"slowdown":{"name":"Motorcycle-01-Slowdown","volume":90,"pitch":100,"pan":0,"folder":"bgs"},"idle":{"name":"Motorcycle-01-Idle","volume":90,"pitch":100,"pan":0,"folder":"bgs"}},"classId":11,"traits":[{"code":52,"dataId":1,"value":0}],"equips":[null,null,null,null,null,115],"copyCount":3},
+{"name":"Tank","kind":"tank","model":{"name":"Vehicles/Oth97_CNO_Consul","file":"Oth97_CNO_Consul","ext":".glb","size":19,"scale":1,"texture":""},"sounds":{"engine":null,"start":{"name":"Motorcycle-01-Start","volume":90,"pitch":100,"pan":0},"stop":{"name":"equip-01","volume":90,"pitch":100,"pan":0},"bump":{"name":"hit-01","volume":90,"pitch":100},"land":{"name":"hit-02","volume":90,"pitch":100},"accelerate":{"name":"Motorcycle-01-Speedup","volume":90,"pitch":100,"pan":0,"folder":"bgs"},"slowdown":{"name":"Motorcycle-01-Slowdown","volume":90,"pitch":100,"pan":0,"folder":"bgs"},"idle":{"name":"Motorcycle-01-Idle","volume":90,"pitch":100,"pan":0,"folder":"bgs"}},"classId":11,"traits":[{"code":52,"dataId":1,"value":0}],"equips":[null,null,null,null,null,115],"copyCount":3,"id":2,"graphic3d":true,"rider":"seat","handling":{"turnCircle":1,"speed":18}},
+{"name":"","kind":"motorcycle","model":{"name":"","size":3.5},"id":3},
+{"name":"","kind":"motorcycle","model":{"name":"","size":3.5},"id":4},
+{"name":"","kind":"motorcycle","model":{"name":"","size":3.5},"id":5},
+{"name":"","kind":"motorcycle","model":{"name":"","size":3.5},"id":6},
+{"name":"","kind":"motorcycle","model":{"name":"","size":3.5},"id":7},
+{"name":"","kind":"motorcycle","model":{"name":"","size":3.5},"id":8},
+{"name":"","kind":"motorcycle","model":{"name":"","size":3.5},"id":9},
+{"name":"","kind":"motorcycle","model":{"name":"","size":3.5},"id":10}
+]

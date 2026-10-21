@@ -9,6 +9,7 @@
  * the command list not appearing, with nothing on screen to say why.
  */
 const assert = require('node:assert/strict');
+const { runtimeSource } = require('./helpers/runtime-source.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
@@ -58,8 +59,7 @@ test('nobody\'s WindowLayer render runs on v8', () => {
 
     // Reactor's own says the same thing in its own file, and the two must not
     // drift apart into one skipping and the other not.
-    const core = fs.readFileSync(
-        path.join(repoRoot, 'runtime', 'reactor_core.js'), 'utf8');
+    const core = runtimeSource('reactor_core.js');
     const render = core.slice(core.indexOf('WindowLayer.prototype.render = function render'));
     assert.match(render.slice(0, render.indexOf('\n};')),
         /if \(PIXI\.TextureSource\) \{\s*\n\s*return;/);
@@ -81,8 +81,7 @@ test('tilemap preparation runs once during update, never during PIXI render setu
     assert.match(hooks, /"TilingSprite"/);
     assert.match(hooks, /"Window"/);
 
-    const core = fs.readFileSync(
-        path.join(repoRoot, 'runtime', 'reactor_core.js'), 'utf8');
+    const core = runtimeSource('reactor_core.js');
     const start = core.indexOf('Tilemap.prototype.update = function()');
     const body = core.slice(start, core.indexOf('\n};', start));
     assert.ok(body.indexOf('this._prepareV8Frame();') >= 0,
@@ -129,7 +128,7 @@ test('effekseer effects sample the real scene as their background', () => {
     const fs = require('node:fs');
     const path = require('node:path');
     const repoRoot = path.resolve(__dirname, '..', '..');
-    const core = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_core.js'), 'utf8');
+    const core = runtimeSource('reactor_core.js');
     const sprites = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_sprites.js'), 'utf8');
     // Distortion and darkening layers sample a captured background; on the
     // transparent overlay canvas that background was empty, so those layers

@@ -1,4 +1,5 @@
 const assert = require('node:assert/strict');
+const { runtimeSource } = require('./helpers/runtime-source.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
@@ -6,7 +7,7 @@ const vm = require('node:vm');
 
 const repoRoot = path.resolve(__dirname, '..', '..');
 const compat = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_mv_compat.js'), 'utf8');
-const objects = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_objects.js'), 'utf8');
+const objects = runtimeSource('reactor_objects.js');
 const pixiCompat = fs.readFileSync(path.join(repoRoot, 'runtime', 'libs', 'pixi_compat.js'), 'utf8');
 
 function slice(name) {
@@ -410,6 +411,23 @@ test('numeric blend modes: a v4-style registration reaches v8 as a named mode on
     filter.blendMode = 32; assert.equal(filter.blendMode, 'multiply');
     PIXI.registerReactorBlendMode(40, 'screen');
     sprite.blendMode = 40; assert.equal(sprite.blendMode, 'screen');
+    // PIXI 8.20's Filter has an accessor of its own that takes names only: numbers are translated before it.
+    class Filter820 { get blendMode() { return this._state; } set blendMode(v) { this._state = v; } }
+    const PIXI2 = { Container: class { get blendMode() { return this._b; } set blendMode(v) { this._b = v; } }, Filter: Filter820, GlStateSystem: class {} };
+    vm.runInNewContext(pixiCompat.slice(start, end), { PIXI: PIXI2, _isV8Pixi: true, Object, Proxy, Number, String, Array, Set });
+    const tinted = new Filter820();
+    tinted.blendMode = 1; assert.equal(tinted.blendMode, 'add', 'an additive light drawn through a filter stays additive');
+    tinted.blendMode = 'multiply'; assert.equal(tinted.blendMode, 'multiply');
+});
+
+test('plugins\' ES6 classes are left out of the PIXI class upgrade, and a screen tint clamps before premultiplying', () => {
+    const at = pixiCompat.indexOf('// An ES6 class (a plugin\'s `class X extends Sprite`)');
+    assert.ok(at > 0 && /continue;/.test(pixiCompat.slice(at, at + 400)), 'skipped: wrapping would call it without new');
+    const isClass = (f) => /^class\b/.test(Function.prototype.toString.call(f));
+    assert.equal(isClass(class Sprite_X {}), true);
+    assert.equal(isClass(function Sprite_Y() {}), false);
+    const display = fs.readFileSync(path.join(__dirname, '..', '..', 'runtime', 'reactor_core_display.js'), 'utf8');
+    for (const c of ['r', 'g', 'b']) assert.ok(display.includes(`"  ${c} = a > 0.0 ? clamp(${c} / a + ${c}2, 0.0, 1.0) * a : 0.0;"`), `${c}: clamped straight, then premultiplied`);
 });
 
 test("MV's Graphics._createRenderer hook gets a base and runs once after the PIXI app exists", async () => {

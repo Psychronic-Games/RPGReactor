@@ -120,7 +120,7 @@ class ModelPropsPreview2D {
                 if (node.geometry && !sharedGeometry.has(node.geometry)) entry.ownedGeometry.add(node.geometry);
             });
             const chosen = new Set(entry.prop.effects || (entry.prop.effect ? [entry.prop.effect] : []));
-            entry.effects = Reactor3D.readModelEffects(template.userData.reactorSidecar || {})
+            entry.effects = Reactor3D.readModelEffects(template.userData.reactorSidecar || {}, spec)
                 .filter(effect => effect.trigger === 'always' || chosen.has(effect.name));
             entry.camera = new THREE.OrthographicCamera();
             const frame = Reactor3D.frameModelSprite(entry.object, entry.tw, entry.camera);
@@ -268,9 +268,72 @@ class ModelPropsPreview2D {
         entry.dirty = false;
         entry.paintedFrame = entry.driver?.previewFrame;
         entry.draws = (entry.draws || 0) + 1;
+        // New pixels in the sprite's texture, which the 2D scene graph cannot
+        // see: the map has to be drawn again to show them.
+        this.app?.requestRender?.();
     }
 
-    suspend() { for (const entry of this.entries.values()) entry.media?.suspend(); }
+    suspend() {
+        this._idleKey = null;
+        for (const entry of this.entries.values()) entry.media?.suspend();
+    }
+
+    /**
+     * Whether any prop changes from frame to frame on its own: an animation
+     * playing (or just stopped), media attached, a light it carries (lights
+     * flicker), a texture still decoding, a repaint already owed — or a map
+     * light that pulses or flickers over it.
+     */
+    isLive(mapLights) {
+        for (const entry of this.entries.values()) {
+            if (!entry.sprite) continue;
+            if (entry.dirty || !entry.decoded || entry.wasMoving || entry.driver?.action) return true;
+            if (entry.driver?.rules?.some(rule => rule.trigger === 'always' || rule.trigger === 'idle')) return true;
+            if (entry.media?.plays?.length) return true;
+            if (entry.effects?.some(effect => effect.type === 'light' || effect.light)) return true;
+        }
+        return mapLights.some(light => light.animated);
+    }
+
+    /**
+     * Everything a still prop's texture, visibility and shadow depend on,
+     * folded into one number: the view's transform and size, each prop's
+     * place, every map light, the ambient and the Lighting tool's edit
+     * count. Hashed as it goes rather than joined into a string, so an idle
+     * frame builds no strings to compare.
+     */
+    idleKey(mapLights, ambient, lightingRevision) {
+        let hash = 2166136261;
+        const mix = value => {
+            const number = typeof value === 'number' ? value : typeof value === 'boolean' ? (value ? 1 : 0) : NaN;
+            if (Number.isFinite(number)) {
+                hash = Math.imul(hash ^ Math.round(number * 4096), 16777619);
+                hash = Math.imul(hash ^ Math.round((number * 4096 - Math.round(number * 4096)) * 65536), 16777619);
+            } else {
+                const text = value == null ? '' : String(value);
+                for (let i = 0; i < text.length; i++) hash = Math.imul(hash ^ text.charCodeAt(i), 16777619);
+                hash = Math.imul(hash ^ 0xff, 16777619);
+            }
+        };
+        const transform = this.manager.container?.worldTransform;
+        if (transform) { mix(transform.a); mix(transform.d); mix(transform.tx); mix(transform.ty); }
+        mix(this.app?.screen?.width); mix(this.app?.screen?.height); mix(this.app?.renderer?.resolution);
+        mix(this.entries.size);
+        for (const entry of this.entries.values()) {
+            const prop = entry.prop || {};
+            mix(prop.id); mix(prop.x); mix(prop.y); mix(prop.z);
+            mix(entry.sprite ? entry.sprite.x : NaN); mix(entry.sprite ? entry.sprite.y : NaN);
+            mix(entry.radius); mix(!!entry.sprite);
+        }
+        for (const light of mapLights) {
+            for (const key of ['id', 'type', 'x', 'y', 'height', 'radius', 'intensity', 'angle', 'width', 'yaw', 'pitch',
+                'priorityRadius', 'colour', 'occlude', 'shadow']) mix(light[key]);
+        }
+        if (ambient) for (const key of Object.keys(ambient).sort()) { mix(key); mix(ambient[key]); }
+        // Any edit in the Lighting tool, however it arrived.
+        mix(lightingRevision);
+        return hash >>> 0;
+    }
 
     updateEffectPlays() {} // The 3D animation clock is shared; lighting is projected below.
 
@@ -290,11 +353,34 @@ class ModelPropsPreview2D {
             this.clear();
             manager.render();
         }
+        // No props on this map: nothing to pose, light or shade.
+        if (this.entries.size === 0) {
+            if (this.lights.length) this.lights = [];
+            if (this.shadows.states.size) this.shadows.clear();
+            this._idleKey = null;
+            return;
+        }
         // Model textures already present at 60 Hz. Higher-refresh displays
         // need not resolve poses, media anchors and light lists three times.
         const previewTick = Math.floor(now * 0.06);
         if (this._previewTick === previewTick) return;
         this._previewTick = previewTick;
+        const lighting = manager.projectController?.lightingManager;
+        const mapLights = lighting?.resolvedLights(now * 0.06) || [];
+        const rawAmbient = lighting?.ambient();
+        // Still props under still lights, with the view where it was, come
+        // out exactly as they did last frame. Skip the posing, projection,
+        // light packing and shadow work until one of those inputs moves.
+        if (!this.isLive(mapLights)) {
+            const key = this.idleKey(mapLights, rawAmbient, lighting?.revision);
+            if (key === this._idleKey) {
+                this._lastModelTick = now;
+                return;
+            }
+            this._idleKey = key;
+        } else {
+            this._idleKey = null;
+        }
         MapEditor3D.prototype.animateModels.call(this, now);
         const lights = [];
         const point = this._point || (this._point = typeof THREE !== 'undefined' ? new THREE.Vector3() : null);
@@ -329,9 +415,7 @@ class ModelPropsPreview2D {
                     height: 0, yaw: -light.yaw, animated: true });
             }
         }
-        const lighting = manager.projectController?.lightingManager;
-        const allLights = lights.concat(lighting?.resolvedLights(now * 0.06) || []);
-        const rawAmbient = lighting?.ambient();
+        const allLights = lights.concat(mapLights);
         const enabled = rawAmbient?.enabled !== false;
         const ambient = enabled && rawAmbient ? { intensity: rawAmbient.ambient ?? 1,
             colour: Number.parseInt((rawAmbient.ambientColour || '#ffffff').slice(1), 16) } : { intensity: 1, colour: 0xffffff };

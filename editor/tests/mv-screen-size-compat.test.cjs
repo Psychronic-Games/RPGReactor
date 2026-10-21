@@ -1,4 +1,5 @@
 const assert = require('node:assert/strict');
+const { runtimeSource } = require('./helpers/runtime-source.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
@@ -82,7 +83,7 @@ test('a plugin that defined its own FPS meter toggle keeps it', () => {
 });
 
 test('the scaling report never draws on screen', () => {
-    const core = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_core.js'), 'utf8');
+    const core = runtimeSource('reactor_core.js');
     assert.doesNotMatch(core, /_showScalingToast|rrScalingToast/);
     assert.match(core, /console\.debug\(report\)/, 'the line stays reachable at debug level');
 });

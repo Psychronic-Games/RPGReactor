@@ -95,7 +95,8 @@ Reactor3D._parseModelSpecFromNote = function(note) {
         scale: number("scale", 1),
         yaw: number("yaw", 0) * Math.PI / 180,
         pitch: number("pitch", 0) * Math.PI / 180,
-        roll: number("roll", 0) * Math.PI / 180
+        roll: number("roll", 0) * Math.PI / 180,
+        ...((body.match(/variant\s*\(\s*([^)]+?)\s*\)/i) || [])[1] ? { variant: body.match(/variant\s*\(\s*([^)]+?)\s*\)/i)[1] } : null)
     };
 };
 
@@ -141,9 +142,9 @@ Reactor3D.normalizeModelSpec = function(spec) {
     // character; the validated form is kept beside them.
     const cache = this._normalizedSpecs || (this._normalizedSpecs = new WeakMap());
     const known = cache.get(spec);
-    if (known && known.forName === spec.name && known.forExt === spec.ext) return known.value;
+    if (known && known.forName === spec.name && known.forExt === spec.ext && known.forVariant === spec.variant) return known.value;
     const value = this._normalizeModelSpecNow(spec);
-    cache.set(spec, { forName: spec.name, forExt: spec.ext, value });
+    cache.set(spec, { forName: spec.name, forExt: spec.ext, forVariant: spec.variant, value });
     return value;
 };
 
@@ -162,7 +163,11 @@ Reactor3D._normalizeModelSpecNow = function(spec) {
     const pitch = Number(spec.pitch);
     const roll = Number(spec.roll);
     const fileRef = spec.file ? this.splitModelRef(spec.file) : null;
+    // Which of the model's variants this use wears (its color, texture,
+    // surface and media): only on a use that names one.
+    const variant = typeof spec.variant === "string" && spec.variant.trim() ? { variant: spec.variant.trim() } : null;
     return {
+        ...variant,
         name: ref.name,
         file: fileRef ? fileRef.name : (spec.file ? String(spec.file) : ""),
         ext,
@@ -241,6 +246,7 @@ Reactor3D.setEventModelSpec = function(mapData, eventId, pageIndex, spec) {
     const faces = this.readModelFaces(spec.faces);
     if (faces) written.faces = faces;
     if (spec.texture) written.texture = String(spec.texture);
+    if (typeof spec.variant === "string" && spec.variant.trim()) written.variant = spec.variant.trim();
     // A model nudged off its tile keeps the nudge; one standing on it writes nothing.
     const offset = this._normalizeModelSpecNow(Object.assign({ name: ref.name }, spec)).offset;
     if (offset.some(v => v)) written.offset = offset;
@@ -274,6 +280,10 @@ Reactor3D._hasEventModelsNow = function(mapData) {
 };
 
 Reactor3D.characterModelSpec = function(character) {
+    return this.variantSpecOf(character, this._characterModelSpec(character));
+};
+
+Reactor3D._characterModelSpec = function(character) {
     if (!character) return null;
     if (typeof character.event === "function") {
         const data = character.event();
@@ -315,31 +325,41 @@ Reactor3D.loadDatabaseSidecar = function() {
         this._databaseSidecar = parsed && typeof parsed === "object" ? parsed : null;
         this._databaseSidecarState = "done";
     };
+    // A battle test reads the Test_ copy the editor wrote from its unsaved database, when it wrote one.
+    const testing = typeof DataManager !== "undefined" && typeof DataManager.isBattleTest === "function" && DataManager.isBattleTest();
+    const urls = testing ? [this.DATABASE_SIDECAR_URL.replace(/([^/]+)$/, "Test_$1"), this.DATABASE_SIDECAR_URL] : [this.DATABASE_SIDECAR_URL];
     // The absent file is the normal state for most projects; ask the disk
     // first so it never logs an unsuppressible network error.
     if (typeof Utils !== "undefined" && Utils.isNwjs()) {
         try {
             const fs = require("fs");
             const path = require("path");
-            const full = path.join(path.dirname(process.mainModule.filename), this.DATABASE_SIDECAR_URL);
-            if (!fs.existsSync(full)) return finish(null);
-            return finish(JSON.parse(fs.readFileSync(full, "utf8")));
+            for (const url of urls) {
+                const full = path.join(path.dirname(process.mainModule.filename), url);
+                if (fs.existsSync(full)) return finish(JSON.parse(fs.readFileSync(full, "utf8")));
+            }
+            return finish(null);
         } catch (error) {
             return finish(null);
         }
     }
-    const xhr = new XMLHttpRequest();
-    xhr.open("GET", this.DATABASE_SIDECAR_URL);
-    xhr.overrideMimeType("application/json");
-    xhr.onload = () => {
-        try {
-            finish(xhr.status < 400 ? JSON.parse(xhr.responseText) : null);
-        } catch (error) {
-            finish(null);
-        }
+    const request = index => {
+        const xhr = new XMLHttpRequest();
+        const next = () => (index + 1 < urls.length ? request(index + 1) : finish(null));
+        xhr.open("GET", urls[index]);
+        xhr.overrideMimeType("application/json");
+        xhr.onload = () => {
+            if (xhr.status >= 400) return next();
+            try {
+                finish(JSON.parse(xhr.responseText));
+            } catch (error) {
+                finish(null);
+            }
+        };
+        xhr.onerror = next;
+        xhr.send();
     };
-    xhr.onerror = () => finish(null);
-    xhr.send();
+    request(0);
 };
 
 // True once the sidecar has answered — instantly on NW.js, after one
@@ -425,7 +445,11 @@ Reactor3D.preloadMapModels = function(mapData) {
     if (!specs.length) return Promise.resolve([]);
     return this.ensureLoaded().then(ok => {
         if (!ok) return [];
-        return Promise.all(specs.map(spec => Promise.all([
+        // What a battle here will show, readied under the same fade (a preparation, never a reason to fail the load).
+        let battle = null;
+        try { battle = this.preloadBattleModels(mapData); } catch (error) { battle = null; }
+        const settled = battle ? battle.catch(() => null) : Promise.resolve(null);
+        return settled.then(() => Promise.all(specs.map(spec => Promise.all([
             this.loadModel(spec.name, spec.ext, spec.file, spec.texture),
             this.loadModelSidecar(spec.name)
         ]).then(loaded => {
@@ -434,9 +458,152 @@ Reactor3D.preloadMapModels = function(mapData) {
             // taken here, under the loading fade, not on the first step
             // beside it.
             try { this.modelCollisionMask(spec); } catch (error) { /* the box remains */ }
+            this.boundModelTemplate(loaded[0]);
             return loaded;
-        })));
+        }))).then(loaded => {
+            // One model at another size (a captain a fifth taller than his men) has a footprint of its own, kept per
+            // pose: taken here too, or it was walked out on the frame its event first stood on the map (a battle's first).
+            for (const spec of this.collectMapPoseSpecs(mapData)) { try { this.modelCollisionMask(spec); } catch (error) { /* the box remains */ } }
+            return loaded;
+        }));
     });
+};
+
+/** Every size and pose the map's events give their models, one spec for each (a footprint is kept per pose). */
+/**
+ * A loaded model's rest bounds, worked out while the map loads: every copy, finger skin and detail level takes them
+ * from the model's own geometry, and the first thing to ask for a missing box (the lit region, on the frame a
+ * battle's units appear) walked every vertex of it there and then.
+ */
+Reactor3D.boundModelTemplate = function(template) {
+    if (!template || typeof template.traverse !== "function") return template;
+    template.traverse(child => {
+        const geometry = child.isMesh ? child.geometry : null;
+        if (!geometry || !geometry.attributes || !geometry.attributes.position) return;
+        try {
+            if (!geometry.boundingBox) geometry.computeBoundingBox();
+            if (!geometry.boundingSphere) geometry.computeBoundingSphere();
+        } catch (error) { /* asked for when first needed, as before */ }
+    });
+    return template;
+};
+
+Reactor3D.collectMapPoseSpecs = function(mapData) {
+    const specs = [], seen = new Set();
+    const events = (mapData && mapData.reactor3d && mapData.reactor3d.events) || {};
+    for (const pages of Object.values(events)) {
+        for (const raw of Object.values(pages || {})) {
+            const spec = this.normalizeModelSpec(raw);
+            const key = spec && this.collisionKeysFor(spec).pose;
+            if (!key || seen.has(key)) continue;
+            seen.add(key);
+            specs.push(spec);
+        }
+    }
+    return specs;
+};
+
+/**
+ * The models a battle on this map will bring that the map itself does not
+ * place: the Database models of the records its unit events and Spawn Unit
+ * commands name (`units`), and the weapon models the party and those actors
+ * carry (`held`). Deduped by cache key, each list on its own.
+ */
+Reactor3D.collectBattleModelSpecs = function(mapData) {
+    const out = { units: [], held: [] }, seen = { units: new Set(), held: new Set() };
+    const add = (list, raw) => {
+        const spec = this.normalizeModelSpec(raw);
+        if (!spec) return;
+        const key = this.modelCacheKey(spec.name, spec.ext, spec.file);
+        if (seen[list].has(key)) return;
+        seen[list].add(key);
+        out[list].push(spec);
+    };
+    const carried = battler => {
+        const weapons = battler && typeof battler.weapons === "function" ? battler.weapons() : [];
+        for (const weapon of weapons || []) if (weapon) add("held", this.databaseModelSpec("weapons", weapon.id));
+    };
+    const record = (kind, id) => {
+        id = Math.floor(Number(id) || 0);
+        if (!(id > 0)) return;
+        add("units", this.databaseModelSpec(kind === "actor" ? "actors" : "enemies", id));
+        if (kind === "actor" && typeof $gameActors !== "undefined" && $gameActors) carried($gameActors.actor(id));
+    };
+    const F = globalThis.ReactorFight;
+    const worn = (mapData && mapData.reactor3d && mapData.reactor3d.events) || {};
+    for (const event of (mapData && mapData.events) || []) {
+        if (!event) continue;
+        let named = F && F.dataUnitSpec ? F.dataUnitSpec(event) : null, unit = !!named;
+        if (named && named.record) record(named.record, named.id);
+        for (const page of event.pages || []) {
+            const list = (page && page.list) || [];
+            // A unit named by a comment on a page, and the records its commands spawn.
+            named = F && F.unitSpecOf && !event.rrUnit ? F.unitSpecOf({ note: "" }, list) : null;
+            if (named) unit = true;
+            if (named && named.record) record(named.record, named.id);
+            for (const command of list) {
+                if (!command || command.code !== 357) continue;
+                const parameters = command.parameters || [];
+                if (parameters[0] === "RPGReactor" && parameters[1] === "SpawnUnit" && parameters[3]) record(parameters[3].record === "actor" ? "actor" : "enemy", parameters[3].id);
+            }
+        }
+        // A unit event's own models, on whatever page: a raider who steps out when the battle begins has not been drawn yet.
+        if (unit) for (const raw of Object.values(worn[event.id] || {})) add("units", raw);
+    }
+    if (typeof $gameParty !== "undefined" && $gameParty && typeof $gameParty.allMembers === "function") for (const actor of $gameParty.allMembers()) carried(actor);
+    return out;
+};
+
+/**
+ * Ready what a battle on this map will show, before one starts: the models
+ * loaded and built, their pictures queued for the GPU (`prewarmTextures`
+ * sends them through the warm-up's pump, a frame's budget at a time), and
+ * each weapon's held shape and surface measured (once per model for the
+ * session: `heldMeasured`). All of it stood on the first frames of a battle
+ * before: 52 ms to build a model, 22 to 40 to decode a picture, 60 to measure
+ * a weapon for the first hand that took it.
+ */
+Reactor3D.preloadBattleModels = function(mapData) {
+    const specs = this.collectBattleModelSpecs(mapData);
+    const ready = (spec, held) => Promise.all([
+        this.loadModel(spec.name, spec.ext, spec.file, spec.texture),
+        this.loadModelSidecar(spec.name)
+    ]).then(([template, sidecar]) => {
+        if (!template) return null;
+        this.boundModelTemplate(template);
+        (this._prewarmTemplates || (this._prewarmTemplates = [])).push(template);
+        // A unit's collision footprint, as the map's own models have theirs taken under the fade.
+        if (!held) { try { this.modelCollisionMask(spec, true); } catch (error) { /* the box remains */ } }
+        if (held && this.MapHeld && this.MapHeld.build) {
+            // A copy made as a hand would be given it, measured, and let go: the measures stay with the model.
+            let object = null;
+            try {
+                object = this.MapHeld.build(template, sidecar, spec);
+                object.updateMatrixWorld(true);
+                this.heldShape(object); this.heldCloud(object);
+            } catch (error) { /* measured when first held, as before */ }
+            if (object) {
+                object.traverse(child => { for (const material of [].concat(child.material || [])) if (material && material.dispose) material.dispose(); });
+                this.releaseModelInstance(object, template);
+            }
+        }
+        return template;
+    }).catch(() => null);
+    return Promise.all(specs.units.map(spec => ready(spec, false)).concat(specs.held.map(spec => ready(spec, true))));
+};
+
+/**
+ * The pictures of the models readied for a battle go to the GPU ahead of
+ * it: one model a frame is handed to the warm-up, which decodes off the
+ * main thread where it can and uploads inside its per-frame budget.
+ */
+Reactor3D.prewarmTextures = function(renderer) {
+    const pending = this._prewarmTemplates, W = this.ShaderWarmup;
+    if (!pending || !pending.length || !renderer || !W || !W.enabled || !W.supported(renderer)) return;
+    const template = pending.shift();
+    for (const texture of (template && template.userData.glbTextures) || []) {
+        if (texture && texture.isTexture && texture.image && !W.uploaded(renderer, texture)) W.request(renderer, texture);
+    }
 };
 
 /**
@@ -449,6 +616,12 @@ Reactor3D.warmLoadedTemplates = function() {
     const viewport = this._viewport;
     const renderer = viewport && viewport._renderer;
     if (!renderer || typeof THREE === "undefined") return;
+    this.prewarmTextures(renderer);
+    // Where shaders compile in parallel, each placed model warms itself where
+    // it will be drawn (ShaderWarmup): the right program variants, pictures
+    // under a per-frame budget. This throwaway-scene pass compiled other
+    // variants and uploaded every picture of a model in one frame.
+    if (this.ShaderWarmup && this.ShaderWarmup.enabled && this.ShaderWarmup.supported(renderer)) return;
     if (!this._warmedTemplates) this._warmedTemplates = new Set();
     // Runs every frame; on the steady state it must allocate nothing.
     const pending = [];
@@ -483,26 +656,41 @@ Reactor3D.warmLoadedTemplates = function() {
 Reactor3D.hasCharacterModel = function(character) {
     const spec = this.characterModelSpec(character);
     if (!spec) return false;
-    const entry = this._glbCache[this.modelCacheKey(spec.name, spec.ext, spec.file)];
+    const entry = this._glbCache[this.specCacheKey(spec)];
     return !!(entry && entry.template);
+};
+
+/**
+ * `modelCacheKey` for a spec, remembered beside it: asked per character
+ * sprite per frame, and building the string afresh made every lookup hash
+ * a new one. Checked against the three fields it is made of.
+ */
+Reactor3D.specCacheKey = function(spec) {
+    const memo = this._specKeys || (this._specKeys = new WeakMap());
+    const known = memo.get(spec);
+    if (known && known.name === spec.name && known.ext === spec.ext && known.file === spec.file) return known.key;
+    const key = this.modelCacheKey(spec.name, spec.ext, spec.file);
+    memo.set(spec, { name: spec.name, ext: spec.ext, file: spec.file, key });
+    return key;
 };
 
 Reactor3D.characterModelYaw = function(character, extra) {
     return this.dir8Yaw(this.characterModelDir8(character)) + (extra || 0);
 };
 
+// Asked for every placed model every frame; one table, not one per call.
+const DIR8_YAWS = {
+    2: 0,
+    3: Math.PI / 4,
+    6: Math.PI / 2,
+    9: 3 * Math.PI / 4,
+    8: Math.PI,
+    7: -3 * Math.PI / 4,
+    4: -Math.PI / 2,
+    1: -Math.PI / 4
+};
 Reactor3D.dir8Yaw = function(direction) {
-    const yaws = {
-        2: 0,
-        3: Math.PI / 4,
-        6: Math.PI / 2,
-        9: 3 * Math.PI / 4,
-        8: Math.PI,
-        7: -3 * Math.PI / 4,
-        4: -Math.PI / 2,
-        1: -Math.PI / 4
-    };
-    return yaws[direction] != null ? yaws[direction] : 0;
+    return DIR8_YAWS[direction] != null ? DIR8_YAWS[direction] : 0;
 };
 
 Reactor3D.characterModelDir8 = function(character) {
@@ -593,6 +781,12 @@ Reactor3D.readModelCollision = function(json) {
 };
 
 Reactor3D.COLLISION_WALK_HEIGHT = 1.2;
+/**
+ * A unit is solid as high as a character stands: a walker meets every rigid
+ * part of it up to here (a gun barrel at head height), not only what is
+ * below walking height.
+ */
+Reactor3D.COLLISION_UNIT_HEIGHT = 3;
 /** Past this many triangles a model's footprint is read from its vertices alone, this many of them. */
 Reactor3D.DENSE_TRIANGLES = 50000;
 Reactor3D.DENSE_SAMPLES = 250000;
@@ -603,6 +797,51 @@ Reactor3D.COLLISION_SUBDIV = 4;
 Reactor3D.COLLISION_BODY_RADIUS = 0.34;
 
 /**
+ * The model key and the mask's pose key for a spec. Collision asks for
+ * them for every model event several times a frame, and specs are stable
+ * objects, so both strings are kept beside the spec and rebuilt only when a
+ * field they are made from has changed.
+ */
+Reactor3D.collisionKeysFor = function(spec) {
+    const memo = this._collisionKeys || (this._collisionKeys = new WeakMap());
+    const stretch = spec.stretch || null;
+    let keys = memo.get(spec);
+    let same = !!keys && keys.name === spec.name && keys.ext === spec.ext && keys.file === spec.file
+        && keys.size === spec.size && keys.scale === spec.scale && keys.pitch === spec.pitch && keys.roll === spec.roll
+        && (stretch ? keys.stretch !== null && keys.stretch.length === stretch.length : keys.stretch === null);
+    for (let i = 0; same && stretch && i < stretch.length; i++) same = keys.stretch[i] === stretch[i];
+    if (same) return keys;
+    const model = this.modelCacheKey(spec.name, spec.ext, spec.file);
+    const pose = `${model}|${spec.size}|${spec.scale}|${(spec.stretch || []).join(",")}|${spec.pitch}|${spec.roll}`;
+    keys = {
+        name: spec.name, ext: spec.ext, file: spec.file, size: spec.size, scale: spec.scale,
+        pitch: spec.pitch, roll: spec.roll, stretch: stretch ? Array.from(stretch) : null,
+        model,
+        pose,
+        // The same pose worn by a unit (`modelCollisionMask(spec, true)`).
+        unitPose: pose + "|unit"
+    };
+    memo.set(spec, keys);
+    return keys;
+};
+
+/**
+ * Whether a model has a mesh that is drawn where it was built (a hull, a
+ * turret). A skinned mesh is drawn where its animation puts it: only its
+ * stance, below walking height, is known from the file.
+ */
+Reactor3D.modelHasRigidMesh = function(template) {
+    if (!template || typeof template.traverse !== "function") return false;
+    const data = template.userData || (template.userData = {});
+    if (data.__reactorRigid === undefined) {
+        let rigid = false;
+        template.traverse(node => { if (node.isMesh && !node.isSkinnedMesh) rigid = true; });
+        data.__reactorRigid = rigid;
+    }
+    return data.__reactorRigid;
+};
+
+/**
  * Which tiles a model's mesh actually covers, in the body's own frame.
  *
  * The triangles below walking height are projected onto the ground at the
@@ -611,24 +850,37 @@ Reactor3D.COLLISION_BODY_RADIUS = 0.34;
  * a reactor with a wide crown and a narrow stem blocks its stem, not the
  * square its crown would draw; a table blocks under its top. Computed once
  * per model and pose and kept.
+ *
+ * With `unit` it is the footprint of the model worn by a unit: its rigid
+ * meshes count up to a character's height (`COLLISION_UNIT_HEIGHT`), so a
+ * tank's barrel and the nose under it are part of its body. A model of
+ * skinned meshes alone has the one footprint.
  */
-Reactor3D.modelCollisionMask = function(spec) {
+Reactor3D.modelCollisionMask = function(spec, unit) {
     if (!spec || typeof THREE === "undefined") return null;
-    const key = this.modelCacheKey(spec.name, spec.ext, spec.file);
-    const entry = this._glbCache && this._glbCache[key];
+    const keys = this.collisionKeysFor(spec);
+    const entry = this._glbCache && this._glbCache[keys.model];
     const template = entry && entry.template;
     if (!template) return null;
-    const json = this._sidecarJson && this._sidecarJson[spec.name];
-    const poseKey = `${key}|${spec.size}|${spec.scale}|${(spec.stretch || []).join(",")}|${spec.pitch}|${spec.roll}`;
-    if (!this._collisionMasks) this._collisionMasks = {};
-    if (this._collisionMasks[poseKey] !== undefined) return this._collisionMasks[poseKey];
-    const mask = this.buildModelCollisionMask(template, json, spec);
-    this._collisionMasks[poseKey] = mask;
-    return mask;
+    const masks = this._collisionMasks || (this._collisionMasks = {});
+    let mask = masks[keys.pose];
+    if (mask === undefined) mask = masks[keys.pose] = this.buildModelCollisionMask(template, this._sidecarJson && this._sidecarJson[spec.name], spec);
+    if (!unit) return mask;
+    let tall = masks[keys.unitPose];
+    if (tall === undefined) {
+        tall = masks[keys.unitPose] = mask && this.modelHasRigidMesh(template)
+            ? this.buildModelCollisionMask(template, this._sidecarJson && this._sidecarJson[spec.name], spec, this.COLLISION_UNIT_HEIGHT)
+            : mask;
+    }
+    return tall;
 };
 
-/** The mask itself, from a loaded template and its sidecar json; the editor builds one from its own copy. */
-Reactor3D.buildModelCollisionMask = function(template, json, spec) {
+/**
+ * The mask itself, from a loaded template and its sidecar json; the editor
+ * builds one from its own copy. `height`: how high its rigid meshes count
+ * (a unit's body); without it, and for every skinned mesh, walking height.
+ */
+Reactor3D.buildModelCollisionMask = function(template, json, spec, height) {
     if (!template || !spec || typeof THREE === "undefined") return null;
     if (this.readModelCollision(json) !== "mesh") return null;
     const extent = template.userData.glbSize || { x: 1, y: 1, z: 1 };
@@ -666,13 +918,15 @@ Reactor3D.buildModelCollisionMask = function(template, json, spec) {
     };
     const mark = (x, z) => markCell(Math.floor(x * sub), Math.floor(z * sub));
     const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
-    const walk = this.COLLISION_WALK_HEIGHT;
+    const stance = this.COLLISION_WALK_HEIGHT, reach = height > stance ? height : stance;
     let dense = false;
     template.traverse(node => {
         if (!node.isMesh && !node.isSkinnedMesh) return;
         const geometry = node.geometry;
         const position = geometry && geometry.getAttribute("position");
         if (!position) return;
+        // The file holds a skinned mesh in its bind pose, arms out; above its stance it is drawn wherever it is animated.
+        const walk = node.isSkinnedMesh ? stance : reach;
         const matrix = new THREE.Matrix4().multiplyMatrices(total, node.matrixWorld);
         const index = geometry.getIndex();
         const count3 = index ? index.count : position.count;
@@ -804,16 +1058,21 @@ Reactor3D.buildModelCollisionMask = function(template, json, spec) {
  * The map tiles a placed model blocks: its mask (or, with `collision:
  * "box"`, its box) turned to its facing and laid over the tiles around
  * (`px`, `py`), by the same rule the game walks against. For the editor's
- * footprint display; the game tests tiles as it goes.
+ * footprint display; the game tests tiles as it goes. `unit`: the model is
+ * worn by a unit, whose rigid meshes block to a character's height.
  */
-Reactor3D.blockedTilesFor = function(template, json, spec, direction, px, py) {
+Reactor3D.blockedTilesFor = function(template, json, spec, direction, px, py, unit) {
     if (!template || !spec) return [];
     // Built once per pose and kept on the template: the editor asks for
     // the same footprint from its 3D view and its flat map on every edit.
     const masks = template.userData.__reactorMasks || (template.userData.__reactorMasks = {});
     const poseKey = `${spec.size}|${spec.scale}|${(spec.stretch || []).join(",")}|${spec.pitch}|${spec.roll}`;
     if (masks[poseKey] === undefined) masks[poseKey] = this.buildModelCollisionMask(template, json, spec);
-    const mask = masks[poseKey];
+    let mask = masks[poseKey];
+    if (unit && mask && this.modelHasRigidMesh(template)) {
+        if (masks[poseKey + "|unit"] === undefined) masks[poseKey + "|unit"] = this.buildModelCollisionMask(template, json, spec, this.COLLISION_UNIT_HEIGHT);
+        mask = masks[poseKey + "|unit"];
+    }
     const fake = { direction: function() { return direction || 2; }, _reactorDir8: direction || 2 };
     const yaw = this.eventModelWorldYaw(fake, spec, direction || 2);
     const extent = template.userData.glbSize || { x: 1, y: 1, z: 1 };
@@ -848,11 +1107,17 @@ Reactor3D.pointInTriangle2D = function(px, py, ax, ay, bx, by, cx, cy) {
     return !(negative && positive);
 };
 
-Reactor3D.eventModelFootprint = function(character, spec, yaw) {
+/**
+ * A model's footprint as it stands at `yaw`: its mask (or its box) and the
+ * bounds of it. `unit`: the footprint of the model as a unit's body, solid
+ * to a character's height (`modelCollisionMask(spec, true)`); `eventBody`
+ * asks for that one by itself.
+ */
+Reactor3D.eventModelFootprint = function(character, spec, yaw, unit) {
     spec = spec || this.characterModelSpec(character);
     const size = spec && spec.size > 0 ? spec.size : 2;
     const extra = spec && spec.scale > 0 ? spec.scale : 1;
-    const entry = spec ? this._glbCache[this.modelCacheKey(spec.name, spec.ext, spec.file)] : null;
+    const entry = spec ? this._glbCache[this.collisionKeysFor(spec).model] : null;
     const extent = entry && entry.template && entry.template.userData.glbSize;
     let halfX = size * extra / 2;
     let halfZ = halfX;
@@ -869,7 +1134,7 @@ Reactor3D.eventModelFootprint = function(character, spec, yaw) {
     if (yaw == null) yaw = this.eventModelWorldYaw(character, spec);
     const cos = Math.abs(Math.cos(yaw));
     const sin = Math.abs(Math.sin(yaw));
-    const mask = spec ? this.modelCollisionMask(spec) : null;
+    const mask = spec ? this.modelCollisionMask(spec, !!unit) : null;
     if (mask) {
         // The mesh's own footprint; the box stays as the quick-reject bound.
         halfX = Math.max(Math.abs(mask.minX), Math.abs(mask.maxX)) + this.COLLISION_BODY_RADIUS;
@@ -931,146 +1196,64 @@ Reactor3D.eventModelContains = function(character, foot, x, y) {
 };
 
 Reactor3D.eventModelCanFace = function(character, direction) {
-    const spec = this.characterModelSpec(character);
-    if (!spec || !character) return true;
+    if (!character) return true;
     // The mesh eases through every angle on the way to the new facing, so a
-    // turn in place must clear the disc its corners sweep, not only the
-    // destination rectangle. A half-turn sweeps it twice over.
-    const fromYaw = this.eventModelWorldYaw(character, spec);
-    const toYaw = this.eventModelWorldYaw(character, spec, direction);
-    const turning = this.dir8Yaw(direction) !== this.dir8Yaw(this.characterModelDir8(character));
-    const blockedBy = (x, y) => {
-        const foot = this.eventModelFootprint(character, spec, toYaw);
-        if (this.eventModelContains(character, foot, x, y)) return true;
-        return turning
-            && this.eventModelSweepHits(character, spec, character._x, character._y, x, y, fromYaw, toYaw);
-    };
-    if (typeof $gamePlayer !== "undefined" && $gamePlayer
-        && this.charactersOverlapVertically(character, $gamePlayer)
-        && blockedBy($gamePlayer._x, $gamePlayer._y)) {
-        return false;
+    // turn in place must clear everything its corners sweep, not only the
+    // tiles it ends on. A body of one tile turns on the spot.
+    const step = this._bodyStepOf(character, direction);
+    if (!step || !step.swept) return true;
+    const shape = step.shape, swept = step.swept, x = character._x, y = character._y;
+    const player = typeof $gamePlayer !== "undefined" ? $gamePlayer : null;
+    if (player && !(player.isThrough && player.isThrough())) {
+        if (this._bodyTurnStrikes(character, shape, swept, player)) return false;
+        const followers = player.followers ? player.followers() : null;
+        const list = followers && followers._data;
+        if (list && followers.isVisible()) {
+            for (let i = 0; i < list.length; i++) if (list[i].isVisible() && this._bodyTurnStrikes(character, shape, swept, list[i])) return false;
+        }
     }
-    const map = typeof $gameMap !== "undefined" ? $gameMap : null;
-    const events = map && map.events ? map.events() : null;
+    const now = this._bodyRead();
+    const events = now.map && now.map.events ? now.map.events() : null;
     if (!events) return true;
     for (let i = 0; i < events.length; i++) {
         const other = events[i];
-        if (!other || other === character) continue;
+        if (!other || other === character || this._bodyFar(other, x, y, swept.reach, now)) continue;
         if (other.isThrough && other.isThrough()) continue;
         if (other.isNormalPriority && !other.isNormalPriority()) continue;
+        if (!this._bodyOverlap(swept, x, y, other, now)) continue;
         // A wall light nine tiles up does not stop a tank underneath it.
-        if (!this.charactersOverlapVertically(character, other)) continue;
-        if (blockedBy(other._x, other._y)) return false;
+        if (!this._bodyHeights(character, other) || this.eventIsFallen(other)) continue;
+        // A body it already stands on (a unit placed over another) is not asked: the two may turn, and step apart.
+        if (this._bodyOverlap(shape, x, y, other, now)) continue;
+        return false;
     }
     return true;
 };
 
-/**
- * The circle a model's corners trace when it turns: the radius of its
- * unrotated footprint's diagonal. Rotation-invariant, so it is measured at
- * yaw zero — a rotated footprint's halves are axis projections and their
- * diagonal overstates the body.
- */
-Reactor3D.eventModelSweepRadius = function(character, spec) {
-    const foot = this.eventModelFootprint(character, spec, 0);
-    return Math.hypot(foot.halfX, foot.halfZ);
+/** Whether a turn in place swings the body onto a party member who is not under it already. */
+Reactor3D._bodyTurnStrikes = function(character, shape, swept, member) {
+    const dx = member._x - character._x, dy = member._y - character._y;
+    return this.bodyHas(swept, dx, dy) && !this.bodyHas(shape, dx, dy) && this._bodyHeights(character, member);
 };
 
+/**
+ * Whether a character, stepping so its own tile is (x, y) and turning as a
+ * step in `direction` turns it, would put its body on `other`'s: the two end
+ * shapes and what the turn sweeps between them, at the tile it leaves and
+ * the tile it enters (the body rule, for one pair).
+ */
 Reactor3D.eventModelWouldOverlap = function(character, x, y, other, direction) {
     if (!character || !other) return false;
-    const spec = this.characterModelSpec(character);
-    if (!spec) return false;
-    // The body sweeps through both orientations during the step: the test
-    // yaw list carries the current facing and, when the move implies a turn,
-    // the facing the glide will visually snap to. Testing only the current
-    // one let a long vehicle rotate 90 degrees mid-step straight over a
-    // standing character.
-    const yaws = [this.eventModelWorldYaw(character, spec)];
-    let turning = false;
-    if (direction) {
-        const moveYaw = this.eventModelWorldYaw(character, spec, direction);
-        if (moveYaw !== yaws[0]) {
-            yaws.push(moveYaw);
-            turning = true;
-        }
-    }
-    const ox = character._x;
-    const oy = character._y;
-    character._x = x;
-    character._y = y;
-    let hit = false;
-    for (const yaw of yaws) {
-        const foot = this.eventModelFootprint(character, spec, yaw);
-        if (this.eventModelContains(character, foot, other._x, other._y)) {
-            hit = true;
-            break;
-        }
-    }
-    character._x = ox;
-    character._y = oy;
-    // A turn does not jump between its two end rectangles — the mesh eases
-    // through every angle between them, and a long body's corners trace an
-    // arc that reaches beyond both. So a turning step must also clear the
-    // disc those corners sweep, at the tile it leaves and the tile it
-    // enters; without this a bystander standing diagonally off the car was
-    // inside neither end rectangle and still swept through.
-    if (!hit && turning) {
-        hit = this.eventModelSweepHits(character, spec, x, y, other._x, other._y, yaws[0], yaws[1])
-            || this.eventModelSweepHits(character, spec, ox, oy, other._x, other._y, yaws[0], yaws[1]);
-    }
-    return hit;
+    const step = this._bodyStepOf(character, direction);
+    const now = this._bodyRead();
+    if (!step) return this._bodyCovers(other, x, y, now);
+    return this._bodyOverlap(step.moved, x, y, other, now) > 0
+        || (!!step.swept && this._bodyOverlap(step.swept, character._x, character._y, other, now) > 0);
 };
 
-/**
- * Whether (x, y) is touched while the body turns from one yaw to the other,
- * centred at (cx, cy). The old test was a whole disc of the corner radius,
- * which stopped a long vehicle from turning anywhere near ANYTHING — a
- * nineteen-tile tank could not face down with a bystander ten tiles off its
- * bow. The body only covers what its footprint passes over, so the arc is
- * sampled and each sample asks the real footprint (mesh mask included).
- */
-Reactor3D.eventModelSweepHits = function(character, spec, cx, cy, x, y, fromYaw, toYaw) {
-    const map = typeof $gameMap !== "undefined" ? $gameMap : null;
-    const dx = map && map.deltaX ? map.deltaX(x, cx) : x - cx;
-    const dy = map && map.deltaY ? map.deltaY(y, cy) : y - cy;
-    const reach = Math.hypot(dx, dy);
-    if (reach >= this.eventModelSweepRadius(character, spec) + 0.5 - 1e-6) return false;
-    if (fromYaw == null || toYaw == null) return true;
-    // The short way round, like the drawn turn.
-    let delta = toYaw - fromYaw;
-    while (delta > Math.PI) delta -= 2 * Math.PI;
-    while (delta < -Math.PI) delta += 2 * Math.PI;
-    const steps = Math.max(2, Math.ceil(Math.abs(delta) / 0.15));
-    for (let i = 0; i <= steps; i++) {
-        const yaw = fromYaw + delta * (i / steps);
-        const foot = this.eventModelFootprint(character, spec, yaw);
-        const cos = Math.cos(yaw);
-        const sin = Math.sin(yaw);
-        const localX = dx * cos - dy * sin;
-        const localZ = dx * sin + dy * cos;
-        const hit = foot.mask
-            ? foot.mask.blocksTile(localX, localZ)
-            : Math.abs(localX) <= foot.rawX + 1e-6 && Math.abs(localZ) <= foot.rawZ + 1e-6;
-        if (hit) return true;
-    }
-    return false;
-};
-
-/** Whether moving the model event's center to (x, y) would cover another solid event. */
+/** Whether moving the model event's center to (x, y) would put its body on another solid event's (`bodyMeetsEvents`). */
 Reactor3D.eventModelWouldOverlapEvents = function(character, x, y, direction) {
-    if (!character) return false;
-    const map = typeof $gameMap !== "undefined" ? $gameMap : null;
-    const events = map && map.events ? map.events() : null;
-    if (!events) return false;
-    for (let i = 0; i < events.length; i++) {
-        const other = events[i];
-        if (!other || other === character) continue;
-        if (other.isThrough && other.isThrough()) continue;
-        if (other.isNormalPriority && !other.isNormalPriority()) continue;
-        if (!this.charactersOverlapVertically(character, other)) continue;
-        if (this.eventModelWouldOverlap(character, x, y, other, direction)) return true;
-    }
-    return false;
+    return !!character && this.bodyMeetsEvents(character, x, y, direction);
 };
 
 Reactor3D.aimCharacterBillboard = function(object, camera) {
@@ -1105,24 +1288,700 @@ Reactor3D.characterIsBehindModel = function(character, event) {
 };
 
 Reactor3D.eventModelOccupies = function(character, x, y) {
-    if (!character) return false;
-    const spec = this.characterModelSpec(character);
-    if (!spec) return character._x === x && character._y === y;
-    if (this.eventModelContains(character, this.eventModelFootprint(character, spec), x, y)) {
-        return true;
+    return !!character && this.eventBodyCovers(character, x, y);
+};
+
+//-----------------------------------------------------------------------------
+// Bodies
+//
+// One answer to "which tiles does this character's body cover", asked by map
+// collision, the Tactical grid and the Action driver alike:
+//   - an event with a typed size (`reactor3d.eventSize`) covers that
+//     rectangle, whatever it is drawn as;
+//   - an event that stands as a model, its own or the one the Database binds
+//     to a unit's record, covers the tiles under the model as it faces;
+//   - anyone else (an event drawn from a sheet of any size, the player, a
+//     follower, a vehicle) covers its own tile.
+// A body is a shape: a rectangle of tiles round the character's own tile,
+// with a mark for each tile it covers. A shape is worked out once and shared
+// (forty raiders wearing one model at one facing have one between them).
+// What a character's shape is made from is looked at once a frame, and only
+// when asked; a new shape is taken only when its page, model, facing or size
+// has changed. A collision test reads marks and measures nothing.
+
+/** The body of anyone who stands on one tile. Shared and read-only, like every shape. */
+Reactor3D.BODY_TILE = Object.freeze({ ox: 0, oy: 0, w: 1, h: 1, cells: null, count: 1, reach: 0, model: false, sweep: 0, depth: Uint8Array.of(1) });
+
+/** Whether a shape covers the tile (dx, dy) away from the character's own. */
+Reactor3D.bodyHas = function(shape, dx, dy) {
+    const i = dx - shape.ox, j = dy - shape.oy;
+    if (!(i >= 0 && j >= 0 && i < shape.w && j < shape.h)) return false;
+    return shape.cells === null || shape.cells[j * shape.w + i] === 1;
+};
+
+/** A shape kept under `key`; `null` when none is. They are few (one per model, size and facing), so the table is small. */
+Reactor3D._bodyShapeAt = function(key) {
+    const shapes = this._bodyShapes || (this._bodyShapes = new Map());
+    if (shapes.size > 4096) shapes.clear();
+    return shapes.get(key) || null;
+};
+
+/** The shape of marks on a square of `side` tiles whose middle tile is the character's own. */
+Reactor3D._bodyFromMarks = function(marks, side, sweep) {
+    const mid = (side - 1) / 2;
+    let x0 = mid, y0 = mid, x1 = mid, y1 = mid, count = 0;
+    for (let j = 0; j < side; j++) {
+        for (let i = 0; i < side; i++) {
+            if (!marks[j * side + i]) continue;
+            count++;
+            if (i < x0) x0 = i;
+            if (i > x1) x1 = i;
+            if (j < y0) y0 = j;
+            if (j > y1) y1 = j;
+        }
     }
-    // While the mesh is still easing into a new facing, the body occupies
-    // the swing arc, not just the settled rectangle — without this a
-    // character could step into the sweep during the quarter second the
-    // turn takes and be passed through.
-    if (character._reactorTurnStamp != null && typeof Graphics !== "undefined"
-        && Graphics.frameCount - character._reactorTurnStamp < this.MODEL_TURN_SWEEP_FRAMES) {
-        return this.eventModelSweepHits(character, spec, character._x, character._y, x, y)
-            || this.eventModelSweepHits(character, spec, character._realX, character._realY, x, y);
+    const w = x1 - x0 + 1, h = y1 - y0 + 1, ox = x0 - mid, oy = y0 - mid;
+    let cells = null;
+    if (count < w * h) {
+        cells = new Uint8Array(w * h);
+        for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) cells[j * w + i] = marks[(y0 + j) * side + x0 + i];
+    }
+    return { ox, oy, w, h, cells, count, reach: Math.max(-ox, -oy, ox + w - 1, oy + h - 1), model: true, sweep, depth: null };
+};
+
+/**
+ * Marks the tiles under a model's footprint turned to `yaw`, by the rule
+ * `eventModelContains` walks against: the mesh's own mask where it has one,
+ * else its box. (`fx`, `fy`) is how far off its tile's middle the model
+ * stands (a prop placed between tiles).
+ */
+Reactor3D._markModelBody = function(marks, side, foot, yaw, fx, fy) {
+    const mid = (side - 1) / 2, cos = Math.cos(yaw), sin = Math.sin(yaw);
+    for (let j = 0; j < side; j++) {
+        for (let i = 0; i < side; i++) {
+            if (marks[j * side + i]) continue;
+            const dx = i - mid - fx, dy = j - mid - fy;
+            const localX = dx * cos - dy * sin, localZ = dx * sin + dy * cos;
+            const covered = foot.mask ? foot.mask.blocksTile(localX, localZ)
+                : Math.abs(localX) <= foot.rawX + 1e-6 && Math.abs(localZ) <= foot.rawZ + 1e-6;
+            if (covered) marks[j * side + i] = 1;
+        }
+    }
+};
+
+/** The square of tiles a model can reach from its own at any facing, as a side length; and its corner radius. */
+Reactor3D._modelBodySide = function(foot) {
+    const far = Math.hypot(foot.rawX, foot.rawZ);
+    return { far, side: Math.min(this.EVENT_SIZE_MAX, Math.ceil(far) + 1) * 2 + 1 };
+};
+
+/**
+ * The shape of a model standing at `yaw`. `state` says what the footprint
+ * was read from ("m" the mesh's mask, "b" its box, "u" a model not loaded
+ * yet), so a shape taken before the model came in is not kept for it after.
+ * A unit always covers its own tile, whatever its mesh leaves open there.
+ */
+Reactor3D._modelBody = function(character, spec, pose, state, yaw, fx, fy, unit) {
+    const key = "m|" + pose + "|" + state + "|" + Math.round(yaw * 1e4) + "|" + Math.round(fx * 1e3) + "|" + Math.round(fy * 1e3) + (unit ? "|u" : "");
+    let shape = this._bodyShapeAt(key);
+    if (shape) return shape;
+    const foot = this.eventModelFootprint(character, spec, yaw, unit);
+    const { far, side } = this._modelBodySide(foot);
+    const marks = new Uint8Array(side * side);
+    this._markModelBody(marks, side, foot, yaw, fx, fy);
+    if (unit) marks[(side * side - 1) / 2] = 1;
+    shape = this._bodyFromMarks(marks, side, far);
+    this._bodyShapes.set(key, shape);
+    return shape;
+};
+
+/**
+ * Every tile a model passes over as it turns from one yaw to another the
+ * short way round, as the drawn turn goes: the two end shapes and what the
+ * corners sweep between them.
+ */
+Reactor3D._sweepBody = function(character, spec, pose, state, fromYaw, toYaw, unit) {
+    const key = "w|" + pose + "|" + state + "|" + Math.round(fromYaw * 1e4) + "|" + Math.round(toYaw * 1e4) + (unit ? "|u" : "");
+    let shape = this._bodyShapeAt(key);
+    if (shape) return shape;
+    let delta = toYaw - fromYaw;
+    while (delta > Math.PI) delta -= 2 * Math.PI;
+    while (delta < -Math.PI) delta += 2 * Math.PI;
+    const foot = this.eventModelFootprint(character, spec, fromYaw, unit);
+    const { far, side } = this._modelBodySide(foot);
+    const marks = new Uint8Array(side * side);
+    const steps = Math.max(2, Math.ceil(Math.abs(delta) / 0.15));
+    for (let i = 0; i <= steps; i++) this._markModelBody(marks, side, foot, fromYaw + delta * (i / steps), 0, 0);
+    if (unit) marks[(side * side - 1) / 2] = 1;
+    shape = this._bodyFromMarks(marks, side, far);
+    this._bodyShapes.set(key, shape);
+    return shape;
+};
+
+/** The rectangle of a typed size, centred on the event when the map says so, else counted right and down from it. */
+Reactor3D._sizeBody = function(w, h, centered) {
+    const key = "s|" + w + "|" + h + (centered ? "|c" : "");
+    let shape = this._bodyShapeAt(key);
+    if (shape) return shape;
+    const ox = centered ? 0 - Math.floor((w - 1) / 2) : 0, oy = centered ? 0 - Math.floor((h - 1) / 2) : 0;
+    shape = { ox, oy, w, h, cells: null, count: w * h, reach: Math.max(-ox, -oy, ox + w - 1, oy + h - 1), model: false, sweep: 0, depth: null };
+    this._bodyShapes.set(key, shape);
+    return shape;
+};
+
+/** Whether an event is a battle unit (`rrUnit`, or a `<unit: ...>` note). */
+Reactor3D.eventIsUnit = function(character) {
+    const F = root.ReactorFight;
+    if (!F || !F.dataUnitSpec || !character || typeof character.event !== "function") return false;
+    return !!F.dataUnitSpec(character.event());
+};
+
+/**
+ * Whether a battle sequence holds a character: it is drawn where the sequence
+ * puts it (`_realX`, `_realY`, a lift) and has not left its cell.
+ */
+Reactor3D.characterIsStaged = function(character) {
+    return !!(character && character._rrStage);
+};
+
+/**
+ * The body of a character: the tiles it covers round its own, as a shape
+ * `{ ox, oy, w, h, cells, count, reach, model, sweep }`: the rectangle's
+ * first tile from the character's own (`ox`, `oy`, zero or less), its size,
+ * and `cells[j * w + i] === 1` for each tile covered (`null`: all of them;
+ * ask `bodyHas`). `reach` is the furthest covered tile from its own, in
+ * tiles; `sweep` a model's corner radius. The shape is shared and must not
+ * be changed.
+ *
+ * What made it is kept beside the character and looked at again once a frame
+ * (and, within a frame, when the character has turned or changed page), so
+ * asking is a lookup.
+ */
+Reactor3D.eventBody = function(character) {
+    const now = this._bodyRead();
+    return this._bodyOf(character, now.frame, now.data);
+};
+
+/**
+ * What a run of body questions reads once: the frame's number, the map's
+ * data, the map, and whether it loops. One kept record, filled again by
+ * each caller: a collision test asks about every event, and none of them
+ * needs these looked up again.
+ */
+Reactor3D._bodyNow = { frame: -1, data: null, map: null, loops: false };
+Reactor3D._bodyRead = function() {
+    const now = this._bodyNow;
+    now.frame = typeof Graphics !== "undefined" && Graphics ? Graphics.frameCount : -1;
+    now.data = typeof $dataMap !== "undefined" ? $dataMap : null;
+    now.map = typeof $gameMap !== "undefined" ? $gameMap : null;
+    now.loops = !!now.map && !!now.map.isLoopHorizontal && (now.map.isLoopHorizontal() || now.map.isLoopVertical());
+    return now;
+};
+
+Reactor3D._bodyOf = function(character, frame, map) {
+    // The party and vehicles stand on one tile; so does anything that is no event.
+    if (!character || typeof character.event !== "function") return this.BODY_TILE;
+    let held = character._reactorBody;
+    // A character a battle sequence has taken (`_rrStage`) is drawn where the sequence puts it, lunging or lifted,
+    // and has not left its cell: its body stays there.
+    const staged = !!character._rrStage;
+    const offGrid = !staged && (character._realX !== character._x || character._realY !== character._y);
+    const sidecar = map && map.reactor3d;
+    const raw = sidecar && sidecar.eventSize && character._eventId > 0 ? sidecar.eventSize[character._eventId] : null;
+    // Before the first frame has been counted (and where frames are not counted at all) nothing is taken on trust.
+    if (held && held.frame === frame && frame > 0 && held.map === map && held.page === character._pageIndex
+        && held.erased === !!character._erased && held.variant === character._reactorModelVariant && held.raw === (Array.isArray(raw) ? raw : null)) {
+        if (!held.model) return held.shape;
+        // Within a frame a model can only have turned, or stopped between tiles.
+        const moving = offGrid && (typeof character.isMoving !== "function" || character.isMoving());
+        const standsOff = offGrid && !moving;
+        if (held.dir === this.characterModelDir8(character)
+            && held.fx === (standsOff ? character._realX - character._x : 0)
+            && held.fy === (standsOff ? character._realY - character._y : 0)) {
+            held.moving = moving;
+            return held.shape;
+        }
+    }
+    if (!held) {
+        held = { frame: -2, map: null, page: 0, erased: false, variant: undefined, shape: this.BODY_TILE, model: false, moving: false,
+            raw: null, sized: null, w: 1, h: 1, centered: false, spec: null, pose: "", state: "", template: null, mask: null,
+            specYaw: 0, front: null, yaw: 0, dir: 0, fx: 0, fy: 0, unit: false, turnFrom: null, turnDir: 0, turnStamp: null, swept: null, far: 0,
+            faced: null, facedYaw: null, sweeps: null };
+        // Kept on the character, where every test finds it at once, and not enumerable: a save writes a character's
+        // own listed fields and never this.
+        Object.defineProperty(character, "_reactorBody", { value: held, writable: true, configurable: true, enumerable: false });
+    }
+    held.frame = frame; held.map = map; held.page = character._pageIndex;
+    held.erased = !!character._erased; held.variant = character._reactorModelVariant;
+    // A typed size wins over what the event is drawn as.
+    held.raw = Array.isArray(raw) ? raw : null;
+    if (held.raw) {
+        const max = this.EVENT_SIZE_MAX;
+        const w = Math.max(1, Math.min(max, Math.floor(Number(raw[0])) || 1)), h = Math.max(1, Math.min(max, Math.floor(Number(raw[1])) || 1));
+        if (w > 1 || h > 1) {
+            const centered = sidecar.eventSizeAnchor === "center";
+            if (!held.sized || held.w !== w || held.h !== h || held.centered !== centered) {
+                held.w = w; held.h = h; held.centered = centered;
+                held.sized = this._sizeBody(w, h, centered);
+            }
+            held.shape = held.sized;
+            held.model = false; held.moving = false; held.spec = null;
+            held.far = held.shape.reach;
+            return held.shape;
+        }
+    }
+    const spec = this.characterModelSpec(character);
+    if (!spec) {
+        held.model = false; held.moving = false; held.spec = null;
+        held.shape = this.BODY_TILE;
+        held.far = 0;
+        return held.shape;
+    }
+    const keys = this.collisionKeysFor(spec);
+    const entry = this._glbCache ? this._glbCache[keys.model] : null;
+    const template = (entry && entry.template) || null;
+    const unit = this.eventIsUnit(character);
+    const mask = this.modelCollisionMask(spec, unit);
+    const moving = offGrid && (typeof character.isMoving !== "function" || character.isMoving());
+    const standsOff = offGrid && !moving;
+    const fx = standsOff ? character._realX - character._x : 0, fy = standsOff ? character._realY - character._y : 0;
+    const dir = this.characterModelDir8(character);
+    const front = (spec.faces && spec.faces.front) || null;
+    const sameModel = held.model && held.spec === spec && held.pose === keys.pose && held.template === template && held.mask === mask
+        && held.specYaw === (spec.yaw || 0) && held.front === front && held.fx === fx && held.fy === fy && held.unit === unit;
+    held.moving = moving;
+    if (sameModel && held.dir === dir) return held.shape;
+    if (sameModel) {
+        // The same model at a new facing has turned: where it turned from is kept for the swing (`eventBodyCovers`).
+        held.turnFrom = held.yaw; held.turnDir = held.dir;
+        held.turnStamp = character._reactorTurnStamp == null ? null : character._reactorTurnStamp;
+    } else {
+        // Another model, size or stance: what was kept by facing was the old one's.
+        held.turnFrom = null; held.turnDir = 0; held.turnStamp = null;
+        if (!held.faced) { held.faced = new Array(10).fill(null); held.facedYaw = new Float64Array(10); }
+        held.faced.fill(null); held.facedYaw.fill(NaN);
+        if (held.sweeps) held.sweeps.fill(null);
+    }
+    held.swept = null;
+    held.model = true; held.spec = spec; held.pose = keys.pose; held.template = template; held.mask = mask;
+    held.dir = dir; held.specYaw = spec.yaw || 0; held.front = front; held.fx = fx; held.fy = fy; held.unit = unit;
+    held.state = mask ? "m" : template ? "b" : "u";
+    // Each facing's shape is looked up once and kept: a unit that turns to and fro builds nothing.
+    const slot = dir >= 1 && dir <= 9 ? dir : 0;
+    if (!held.faced[slot]) {
+        held.facedYaw[slot] = this.eventModelWorldYaw(character, spec, dir);
+        held.faced[slot] = this._modelBody(character, spec, keys.pose, held.state, held.facedYaw[slot], fx, fy, unit);
+    }
+    held.yaw = held.facedYaw[slot];
+    held.shape = held.faced[slot];
+    // Whatever its facing, and while it glides or swings, no part of it is further from its own tile than this.
+    held.far = Math.ceil(held.shape.sweep) + 2;
+    return held.shape;
+};
+
+/** What a model sweeps turning from one facing to another, kept beside the character by the pair of facings. */
+Reactor3D._heldSweep = function(character, held, fromDir, fromYaw, toDir, toYaw) {
+    const at = (fromDir >= 1 && fromDir <= 9 ? fromDir : 0) * 10 + (toDir >= 1 && toDir <= 9 ? toDir : 0);
+    const sweeps = held.sweeps || (held.sweeps = new Array(100).fill(null));
+    return sweeps[at] || (sweeps[at] = this._sweepBody(character, held.spec, held.pose, held.state, fromYaw, toYaw, held.unit));
+};
+
+/**
+ * Whether a character's body is on tile (x, y). A model that is gliding
+ * between tiles is on the tiles it is going to and still on those it is
+ * leaving, and one easing into a new facing is on everything its corners
+ * swing over until the turn has played out.
+ */
+Reactor3D.eventBodyCovers = function(character, x, y) {
+    return this._bodyCovers(character, x, y, this._bodyRead());
+};
+
+Reactor3D._bodyCovers = function(character, x, y, now) {
+    const shape = this._bodyOf(character, now.frame, now.data);
+    let dx = x - character._x, dy = y - character._y;
+    if (dx > shape.reach || dx < -shape.reach || dy > shape.reach || dy < -shape.reach) {
+        // Out of its reach by plain counting, which is nearly every event asked about. What is left: the short way
+        // round a looping map, and the tiles a model trails or swings over.
+        if (now.loops) {
+            dx = now.map.deltaX(x, character._x);
+            dy = now.map.deltaY(y, character._y);
+        } else if (!shape.model) return false;
+    }
+    if (this.bodyHas(shape, dx, dy)) return true;
+    if (!shape.model) return false;
+    const held = character._reactorBody;
+    if (!held.moving && character._reactorTurnStamp == null) return false;
+    // The tile it is leaving while it glides: its own, back along the way it came.
+    let backX = 0, backY = 0;
+    if (held.moving) {
+        const lagX = character._x - character._realX, lagY = character._y - character._realY;
+        backX = lagX > 0 ? Math.ceil(lagX) : -Math.ceil(-lagX);
+        backY = lagY > 0 ? Math.ceil(lagY) : -Math.ceil(-lagY);
+        if (this.bodyHas(shape, dx + backX, dy + backY)) return true;
+    }
+    // A body of one tile turns on the spot; a larger one swings its corners over the tiles between its two facings.
+    if (shape.count <= 1 || !this._bodySwings(character, held, now)) return false;
+    if (!held.swept) held.swept = this._heldSweep(character, held, held.turnDir, held.turnFrom, held.dir, held.yaw);
+    return this.bodyHas(held.swept, dx, dy) || (held.moving && this.bodyHas(held.swept, dx + backX, dy + backY));
+};
+
+/**
+ * Whether a body is still swinging into a facing it turned to, while the
+ * drawn turn plays out. Only a turn the body was seen to make: the facing a
+ * page gives an event as the map is set up is the one its model is first
+ * drawn at, and nothing swings.
+ */
+Reactor3D._bodySwings = function(character, held, now) {
+    const stamp = character._reactorTurnStamp;
+    return stamp != null && now.frame >= 0 && now.frame - stamp < this.MODEL_TURN_SWEEP_FRAMES && held.turnStamp === stamp;
+};
+
+/** How deep inside a shape a tile is: steps to the nearest tile the shape leaves free (1 at its edge), 0 when not covered. */
+Reactor3D.bodyDepth = function(shape, dx, dy) {
+    if (!this.bodyHas(shape, dx, dy)) return 0;
+    if (!shape.depth) {
+        const w = shape.w, h = shape.h, depth = new Uint8Array(w * h);
+        const at = (i, j) => (i < 0 || j < 0 || i >= w || j >= h ? 0 : depth[j * w + i]);
+        for (let n = 0; n < w * h; n++) depth[n] = shape.cells === null || shape.cells[n] ? 255 : 0;
+        for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) if (depth[j * w + i]) depth[j * w + i] = Math.min(depth[j * w + i], at(i - 1, j) + 1, at(i, j - 1) + 1);
+        for (let j = h - 1; j >= 0; j--) for (let i = w - 1; i >= 0; i--) if (depth[j * w + i]) depth[j * w + i] = Math.min(depth[j * w + i], at(i + 1, j) + 1, at(i, j + 1) + 1);
+        shape.depth = depth;
+    }
+    return shape.depth[(dy - shape.oy) * shape.w + (dx - shape.ox)];
+};
+
+/**
+ * Whether an event is a unit that has fallen in the battle under way: it is
+ * still drawn while it fades, and stands in nobody's way.
+ */
+Reactor3D.eventIsFallen = function(event) {
+    const fight = typeof $gameFight !== "undefined" ? $gameFight : null;
+    if (!fight || !fight._active || typeof fight.unitOfEvent !== "function" || !(event._eventId > 0)) return false;
+    const unit = fight.unitOfEvent(event._eventId);
+    return !!unit && unit.team !== "neutral" && !fight.isAlive(unit);
+};
+
+/**
+ * A walker already standing inside an event's body (a unit placed or
+ * spawned over it, a battle begun where it stood) is not held there: a step
+ * that takes it nearer the body's edge is let through, one deeper in or
+ * along it is not.
+ */
+Reactor3D.bodyLetsOut = function(mover, event, x, y) {
+    const shape = this.eventBody(event);
+    const from = this.bodyDepth(shape, mover._x - event._x, mover._y - event._y);
+    return from > 0 && this.bodyDepth(shape, x - event._x, y - event._y) < from;
+};
+
+/**
+ * Whether two characters are within each other's height, as collision counts
+ * it. A battle sequence lifts a character it has taken (a leap, a float) by
+ * drawing it higher; it still stands where it stood, so that lift is left
+ * out.
+ */
+Reactor3D._bodyHeights = function(a, b, at) {
+    const stageA = a._rrStage, stageB = b._rrStage;
+    const liftA = stageA && stageA.world ? stageA.z || 0 : 0, liftB = stageB && stageB.world ? stageB.z || 0 : 0;
+    if (!liftA && !liftB) return this.charactersOverlapVertically(a, b, at);
+    const wasA = a._reactorLift, wasB = b._reactorLift;
+    if (liftA) a._reactorLift = (wasA || 0) - liftA;
+    if (liftB) b._reactorLift = (wasB || 0) - liftB;
+    const meet = this.charactersOverlapVertically(a, b, at);
+    a._reactorLift = wasA;
+    b._reactorLift = wasB;
+    return meet;
+};
+
+/**
+ * Whether an event is certainly nowhere near tile (x, y), `margin` tiles
+ * allowed for: its body was looked at this frame, it is on the same page,
+ * and the tile is further from its own than any part of it reaches. Nearly
+ * every event asked about is, and is passed over with no more than this.
+ */
+Reactor3D._bodyFar = function(event, x, y, margin, now) {
+    const held = event._reactorBody;
+    if (held === undefined || held.frame !== now.frame || !(now.frame > 0) || now.loops || held.page !== event._pageIndex || held.map !== now.data) return false;
+    const far = held.far + margin, dx = x - event._x, dy = y - event._y;
+    return dx > far || dx < -far || dy > far || dy < -far;
+};
+
+/**
+ * Whether tile (x, y) is taken, for a walker on one tile (the player, a
+ * follower, a vehicle, an event with no body of its own), by the body of an
+ * event that stands in the way: normal priority, not walked through, within
+ * the walker's height, not a fallen unit. A walker inside a body may step
+ * toward its edge (`bodyLetsOut`) unless the tile is asked about as a place
+ * to be put down (`strict`).
+ */
+Reactor3D._bodyAt = { x: 0, y: 0 };
+Reactor3D.bodyBlocksTile = function(mover, x, y, strict) {
+    const now = this._bodyRead();
+    const events = now.map && now.map.events ? now.map.events() : null;
+    if (!events) return false;
+    // The party is measured against the ground of the tile asked about; an event has no altitude of its own to compare.
+    let at = null;
+    if (typeof Game_Event === "undefined" || !(mover instanceof Game_Event)) { at = this._bodyAt; at.x = x; at.y = y; }
+    for (let i = 0; i < events.length; i++) {
+        const event = events[i];
+        if (event === mover || this._bodyFar(event, x, y, 0, now)) continue;
+        if (!event.isNormalPriority() || event.isThrough()) continue;
+        if (!this._bodyCovers(event, x, y, now)) continue;
+        if (!this._bodyHeights(mover, event, at)) continue;
+        if (this.eventIsFallen(event) || (!strict && this.bodyLetsOut(mover, event, x, y))) continue;
+        return true;
     }
     return false;
 };
 
+/** How many tiles of shape `mine`, its own tile at (mx, my), lie on another event's body. */
+Reactor3D._bodyOverlap = function(mine, mx, my, other, now) {
+    const theirs = this._bodyOf(other, now.frame, now.data);
+    const held = theirs.model ? other._reactorBody : null;
+    const loose = !!held && (held.moving || (theirs.count > 1 && this._bodySwings(other, held, now)));
+    const far = mine.reach + theirs.reach + (loose ? Math.ceil(theirs.sweep) + 2 : 0);
+    const ex = other._x, ey = other._y;
+    if (mx - ex > far || ex - mx > far || my - ey > far || ey - my > far) return 0;
+    let count = 0;
+    if (loose) {
+        // Gliding or mid-turn it is on more than its shape where it stands: each tile is asked.
+        for (let j = 0; j < mine.h; j++) {
+            for (let i = 0; i < mine.w; i++) {
+                if (mine.cells !== null && !mine.cells[j * mine.w + i]) continue;
+                if (this._bodyCovers(other, mx + mine.ox + i, my + mine.oy + j, now)) count++;
+            }
+        }
+        return count;
+    }
+    const x0 = Math.max(mx + mine.ox, ex + theirs.ox), x1 = Math.min(mx + mine.ox + mine.w, ex + theirs.ox + theirs.w);
+    const y0 = Math.max(my + mine.oy, ey + theirs.oy), y1 = Math.min(my + mine.oy + mine.h, ey + theirs.oy + theirs.h);
+    if (x0 >= x1 || y0 >= y1) return 0;
+    if (mine.cells === null && theirs.cells === null) return (x1 - x0) * (y1 - y0);
+    for (let y = y0; y < y1; y++) {
+        for (let x = x0; x < x1; x++) {
+            if (this.bodyHas(mine, x - mx, y - my) && this.bodyHas(theirs, x - ex, y - ey)) count++;
+        }
+    }
+    return count;
+};
+
+/**
+ * What a body covers as it takes a step: its shape, or, when the step turns
+ * it (a model faces the way it goes), everything the turn sweeps. Null for a
+ * body of one tile. Left in `_bodyStep` for the caller: `moved` is tested
+ * round the tile it enters, `swept` (when set) also round the tile it leaves;
+ * `ended` is its shape once the step, and its turn, are over.
+ */
+Reactor3D._bodyStep = { shape: null, moved: null, swept: null, ended: null };
+Reactor3D._bodyStepOf = function(mover, direction) {
+    const step = this._bodyStep;
+    const shape = this.eventBody(mover);
+    step.shape = shape; step.moved = shape; step.swept = null; step.ended = shape;
+    if (shape.count <= 1) return null;
+    if (shape.model && direction >= 1 && direction <= 9) {
+        const held = mover._reactorBody;
+        // NaN until this facing's yaw has been asked for.
+        let toYaw = held.facedYaw[direction];
+        if (toYaw !== toYaw) toYaw = held.facedYaw[direction] = this.eventModelWorldYaw(mover, held.spec, direction);
+        if (toYaw !== held.yaw) {
+            step.swept = this._heldSweep(mover, held, held.dir, held.yaw, direction, toYaw);
+            step.moved = step.swept;
+            step.ended = held.faced[direction] || (held.faced[direction] = this._modelBody(mover, held.spec, held.pose, held.state, toYaw, held.fx, held.fy, held.unit));
+        }
+    }
+    return step;
+};
+
+/**
+ * Whether an event, stepping so its own tile is (x, y) and turning as a step
+ * in `direction` turns it, would put its body on another event that stands
+ * in the way. A body already on another (two units placed over each other)
+ * may take a step that leaves fewer tiles shared, whatever its turn sweeps
+ * of that body on the way.
+ */
+Reactor3D.bodyMeetsEvents = function(mover, x, y, direction) {
+    return this._bodyMeetsEvents(mover, x, y, direction, false);
+};
+
+Reactor3D._bodyMeetsEvents = function(mover, x, y, direction, strict) {
+    const step = this._bodyStepOf(mover, direction);
+    if (!step) return this.bodyBlocksTile(mover, x, y, strict);
+    const shape = step.shape, moved = step.moved, swept = step.swept, ended = step.ended;
+    const now = this._bodyRead();
+    const events = now.map && now.map.events ? now.map.events() : null;
+    if (!events) return false;
+    const reach = moved.reach;
+    for (let i = 0; i < events.length; i++) {
+        const other = events[i];
+        if (other === mover) continue;
+        if (this._bodyFar(other, x, y, reach, now) && (!swept || this._bodyFar(other, mover._x, mover._y, reach, now))) continue;
+        if (!other.isNormalPriority() || other.isThrough()) continue;
+        if (!this._bodyOverlap(moved, x, y, other, now) && !(swept && this._bodyOverlap(swept, mover._x, mover._y, other, now))) continue;
+        // A wall light nine tiles up does not stop a tank underneath it.
+        if (!this._bodyHeights(mover, other) || this.eventIsFallen(other)) continue;
+        if (!strict) {
+            const under = this._bodyOverlap(shape, mover._x, mover._y, other, now);
+            if (under && this._bodyOverlap(ended, x, y, other, now) < under) continue;
+        }
+        return true;
+    }
+    return false;
+};
+
+/**
+ * The same for the player and the followers who are not walked through: a
+ * body may not step, or turn, onto one of them.
+ */
+Reactor3D.bodyMeetsParty = function(mover, x, y, direction) {
+    return this._bodyMeetsParty(mover, x, y, direction, false);
+};
+
+Reactor3D._bodyMeetsParty = function(mover, x, y, direction, strict) {
+    const player = typeof $gamePlayer !== "undefined" ? $gamePlayer : null;
+    if (!player) return false;
+    const step = this._bodyStepOf(mover, direction);
+    if (!step) {
+        if (!this._bodyHeights(mover, player)) return false;
+        return player.isCollided(x, y);
+    }
+    if (player.isThrough()) return false;
+    if (this._bodyMeetsOne(mover, step, x, y, player, strict)) return true;
+    const followers = player.followers ? player.followers() : null;
+    const list = followers && followers._data;
+    if (!list || !followers.isVisible()) return false;
+    for (let i = 0; i < list.length; i++) {
+        if (list[i].isVisible() && this._bodyMeetsOne(mover, step, x, y, list[i], strict)) return true;
+    }
+    return false;
+};
+
+/**
+ * Whether a step would put the body on one party member. A member already
+ * under it (a unit placed over the party) is in the way only of a step that
+ * leaves it there.
+ */
+Reactor3D._bodyMeetsOne = function(mover, step, x, y, member, strict) {
+    const mx = member._x, my = member._y;
+    const under = !strict && this.bodyHas(step.shape, mx - mover._x, my - mover._y);
+    const meets = under ? this.bodyHas(step.ended, mx - x, my - y)
+        : this.bodyHas(step.moved, mx - x, my - y) || (!!step.swept && this.bodyHas(step.swept, mx - mover._x, my - mover._y));
+    return meets && this._bodyHeights(mover, member);
+};
+
+/**
+ * Whether an event's body, with its own tile at (x, y), is clear of every
+ * other body, the player and the followers: where a unit can be put down.
+ * Nothing it stands on now is allowed for.
+ */
+Reactor3D.bodyFits = function(character, x, y) {
+    return !this._bodyMeetsEvents(character, x, y, 0, true) && !this._bodyMeetsParty(character, x, y, 0, true);
+};
+
+/**
+ * Whether an event touches the player with a step it was refused: its body,
+ * with its own tile at (x, y) and turned as that step turns it, would be on
+ * the player. What an Event Touch trigger asks.
+ */
+Reactor3D.bodyTouchesPlayer = function(event, x, y) {
+    const player = typeof $gamePlayer !== "undefined" ? $gamePlayer : null;
+    if (!player) return false;
+    const dx = x - event._x, dy = y - event._y;
+    const step = this._bodyStepOf(event, Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 6 : 4) : dy > 0 ? 2 : dy < 0 ? 8 : 0);
+    if (!step) return player.pos(x, y);
+    return this._bodyMeetsOne(event, step, x, y, player, false);
+};
+
+/**
+ * How far a point of the ground (tiles, as `_realX + 0.5`) is from a
+ * character's body: 0 on a tile it covers, else the distance to the nearest
+ * such tile's edge.
+ */
+Reactor3D.eventBodyGap = function(character, wx, wz) {
+    const shape = this.eventBody(character);
+    // Where it is drawn as it glides; a character a battle sequence has taken stands on its cell.
+    const staged = !!character._rrStage;
+    const bx = (staged ? character._x : character._realX) + shape.ox, bz = (staged ? character._y : character._realY) + shape.oy;
+    let best = Infinity;
+    for (let j = 0; j < shape.h; j++) {
+        for (let i = 0; i < shape.w; i++) {
+            if (shape.cells !== null && !shape.cells[j * shape.w + i]) continue;
+            const dx = wx < bx + i ? bx + i - wx : wx > bx + i + 1 ? wx - bx - i - 1 : 0;
+            const dz = wz < bz + j ? bz + j - wz : wz > bz + j + 1 ? wz - bz - j - 1 : 0;
+            if (!dx && !dz) return 0;
+            const d = Math.hypot(dx, dz);
+            if (d < best) best = d;
+        }
+    }
+    return best;
+};
+
+/**
+ * Nobody of the party is left standing inside a body bigger than a tile (a
+ * unit placed or spawned over it, a battle begun where it stood): each member
+ * under one is put on the nearest tile it can walk to that is free, of
+ * bodies, of events in the way and of the other members. Returns how many
+ * were moved.
+ */
+Reactor3D.BODY_EXIT_REACH = 24;
+Reactor3D.freePartyOfBodies = function() {
+    const player = typeof $gamePlayer !== "undefined" ? $gamePlayer : null;
+    const map = typeof $gameMap !== "undefined" ? $gameMap : null;
+    if (!player || !map || !map.events) return 0;
+    // The bodies that can be stood inside, as they stand: what a hull trails or swings over is not where it is.
+    const big = [];
+    for (const event of map.events()) {
+        if (event && event.isNormalPriority() && !event.isThrough() && this.eventBody(event).count > 1 && !this.eventIsFallen(event)) big.push(event);
+    }
+    if (!big.length) return 0;
+    const followers = player.followers ? player.followers() : null;
+    const members = [player];
+    if (followers && followers._data && followers.isVisible()) for (const follower of followers._data) if (follower.isVisible()) members.push(follower);
+    const at = this._bodyAt;
+    const covered = (member, x, y) => {
+        for (let i = 0; i < big.length; i++) {
+            const event = big[i];
+            if (!this.bodyHas(this.eventBody(event), x - event._x, y - event._y)) continue;
+            at.x = x; at.y = y;
+            if (this._bodyHeights(member, event, at)) return true;
+        }
+        return false;
+    };
+    let moved = 0;
+    for (const member of members) {
+        if (!covered(member, member._x, member._y)) continue;
+        // Outward over ground it can walk, nearest first.
+        const seen = new Set([member._x + "," + member._y]);
+        let ring = [[member._x, member._y]], spot = null;
+        for (let depth = 0; depth < this.BODY_EXIT_REACH && ring.length && !spot; depth++) {
+            const next = [];
+            for (const [cx, cy] of ring) {
+                for (const d of [2, 4, 6, 8]) {
+                    const nx = map.roundXWithDirection(cx, d), ny = map.roundYWithDirection(cy, d);
+                    const key = nx + "," + ny;
+                    if (seen.has(key) || !map.isValid(nx, ny) || !member.isMapPassable(cx, cy, d)) continue;
+                    seen.add(key);
+                    if (!covered(member, nx, ny) && !member.isCollidedWithCharacters(nx, ny)
+                        && !members.some(other => other !== member && other._x === nx && other._y === ny)) { spot = [nx, ny]; break; }
+                    next.push([nx, ny]);
+                }
+                if (spot) break;
+            }
+            ring = next;
+        }
+        if (!spot) continue;
+        Game_CharacterBase.prototype.locate.call(member, spot[0], spot[1]);
+        if (member === player && player.center) player.center(spot[0], spot[1]);
+        moved++;
+    }
+    return moved;
+};
+
+// A battle begins with the party clear of every big body: the party steps aside, the unit keeps the place the map gave
+// it. This runs before a battle mode settles its own units, which then find the party out of the way.
+if (typeof ReactorEvents !== "undefined" && ReactorEvents && typeof ReactorEvents.on === "function") {
+    ReactorEvents.on("mapBattleStart", () => Reactor3D.freePartyOfBodies());
+}
+
+const NO_FACES = Object.freeze({});
 Reactor3D.applyEventModelPose = function(object, spec, direction, options) {
     if (!object || !spec) return;
     const preview = options && typeof options === "object" && options.preview;
@@ -1134,8 +1993,11 @@ Reactor3D.applyEventModelPose = function(object, spec, direction, options) {
     object.rotation.set(pitch, yaw, roll);
     if (object.updateMatrix) object.updateMatrix();
     const dir = direction || 2;
-    const character = { direction: function() { return dir; }, _reactorDir8: dir };
-    const faces = spec.faces || {};
+    // A stand-in character facing `dir`, for characterModelYaw below; one
+    // kept and re-pointed rather than an object and a closure per call.
+    const character = this._poseFacing || (this._poseFacing = { _reactorDir8: 2, direction() { return this._reactorDir8; } });
+    character._reactorDir8 = dir;
+    const faces = spec.faces || NO_FACES;
     const used = preview
         ? (faces[this.eventModelFaceName(dir)] || faces.front || null)
         : (faces.front || this.eventModelInterpolatedMark(faces, dir));
@@ -1144,7 +2006,7 @@ Reactor3D.applyEventModelPose = function(object, spec, direction, options) {
         target -= this.eventModelFaceTurn(dir);
     }
     if (used && typeof THREE !== "undefined") {
-        const local = new THREE.Vector3(used[0], used[1], used[2]);
+        const local = (this._poseMarkScratch || (this._poseMarkScratch = new THREE.Vector3())).set(used[0], used[1], used[2]);
         local.applyQuaternion(object.quaternion);
         local.y = 0;
         if (local.lengthSq() > 1e-8) {
@@ -1184,6 +2046,181 @@ Reactor3D.readGlb = function(buffer) {
     return { json, bin };
 };
 
+/**
+ * Which loaded models the game still needs. Every `loadModel` call claims
+ * its model for the map being played; when another map opens, the models it
+ * did not claim are let go: the newest of them stay while they fit
+ * `graceBytes` (a house and the street outside it trade places freely), the
+ * rest leave the GPU and the cache. A model asked for again loads again.
+ */
+Reactor3D.ModelUse = {
+    enabled: true,
+    /** What unclaimed models may keep: geometry and pictures, both sides. */
+    graceBytes: 96 * 1024 * 1024,
+    lowMemoryGraceBytes: 32 * 1024 * 1024,
+    generation: 0,
+    mapId: 0,
+    pending: false,
+    released: 0,
+    releasedBytes: 0,
+
+    /** A map's data arrived. Returning to the map already played (a menu, a battle scene) changes nothing. */
+    begin(mapId) {
+        mapId = Number(mapId) || 0;
+        if (mapId === this.mapId) return false;
+        this.mapId = mapId;
+        this.generation++;
+        this.pending = true;
+        return true;
+    },
+
+    claim(entry, name) {
+        entry.used = this.generation;
+        if (name && !entry.name) entry.name = name;
+    },
+
+    /** Every cache key the map and a battle on it name, whatever has loaded so far. */
+    namedKeys(mapData) {
+        const R = Reactor3D, keys = new Set();
+        const note = spec => { if (spec && spec.name) keys.add(R.modelCacheKey(spec.name, spec.ext, spec.file)); };
+        try { for (const spec of R.collectMapModelSpecs(mapData)) note(spec); } catch (error) { /* claims remain */ }
+        try { const battle = R.collectBattleModelSpecs(mapData); for (const spec of battle.units.concat(battle.held)) note(spec); } catch (error) { /* claims remain */ }
+        // The party as battlers, and the troops this map's encounters bring.
+        try {
+            if (typeof $gameParty !== "undefined" && $gameParty && $gameParty.allMembers) {
+                for (const actor of $gameParty.allMembers()) if (actor) for (const slot of ["battler", "face"]) note(R.actorSlotSpec(actor.actorId(), slot));
+            }
+            const troops = typeof $dataTroops !== "undefined" && $dataTroops ? $dataTroops : [];
+            for (const encounter of (mapData && mapData.encounterList) || []) {
+                const troop = troops[encounter && encounter.troopId];
+                for (const member of (troop && troop.members) || []) note(R.databaseModelSpec("enemies", member.enemyId));
+            }
+        } catch (error) { /* claims remain */ }
+        return keys;
+    },
+
+    /** The text a model's name would appear in when an event names it by a command or a script. */
+    eventText(mapData) {
+        if (!mapData) return "";
+        if (this._textOf !== mapData) {
+            this._textOf = mapData;
+            try { this._text = JSON.stringify(mapData.events || []); } catch (error) { this._text = ""; }
+        }
+        if (this._commonText === undefined) {
+            try { this._commonText = typeof $dataCommonEvents !== "undefined" && $dataCommonEvents ? JSON.stringify($dataCommonEvents) : ""; } catch (error) { this._commonText = ""; }
+        }
+        return this._text + this._commonText;
+    },
+
+    bytesOf(key, entry) {
+        if (entry.bytes > 0) return entry.bytes;
+        const R = Reactor3D, template = entry.template, seen = new Set();
+        let bytes = 0;
+        const geometry = g => {
+            if (!g || seen.has(g)) return;
+            seen.add(g);
+            for (const name in g.attributes) { const array = g.attributes[name] && g.attributes[name].array; if (array && !seen.has(array)) { seen.add(array); bytes += array.byteLength * 2; } }
+            if (g.index && g.index.array) bytes += g.index.array.byteLength * 2;
+        };
+        template.traverse(node => geometry(node.geometry));
+        const lod = R._lodCache && R._lodCache[key];
+        for (const level of (lod && lod.levels) || []) for (const g of level) geometry(g);
+        const cap = R.textureCap ? R.textureCap() : 2048;
+        for (const texture of template.userData.glbTextures || []) {
+            const image = texture && (R.ShaderWarmup && R.ShaderWarmup.sourceImage ? R.ShaderWarmup.sourceImage(texture) : texture.image);
+            const width = Math.min(cap, image && (image.naturalWidth || image.width) || 0), height = Math.min(cap, image && (image.naturalHeight || image.height) || 0);
+            bytes += width * height * 4 * (texture.generateMipmaps === false ? 1 : 1.33);
+        }
+        return entry.bytes = Math.max(1, Math.round(bytes));
+    },
+
+    busy() {
+        try {
+            if (typeof $gameParty !== "undefined" && $gameParty && $gameParty.inBattle && $gameParty.inBattle()) return true;
+            if (typeof $gameFight !== "undefined" && $gameFight && $gameFight.isHere && $gameFight.isHere()) return true;
+            // Models waiting to join a running battle hold their templates.
+            const joins = Reactor3D.ModelJoins;
+            if (joins && joins.queue && joins.queue.length) return true;
+        } catch (error) { return true; }
+        return false;
+    },
+
+    /**
+     * Once the map's own models have been claimed and the scene before it is
+     * gone: let go of what no map names any more. Returns the keys released.
+     */
+    sweep(mapData, early) {
+        if (!this.pending || !this.enabled) return [];
+        if (this.busy()) return [];
+        // Early (the map's data has arrived, nothing of it is loaded yet): what it names stays and
+        // the rest goes before its own models come in; the sweep at its start is still owed.
+        if (!early) this.pending = false;
+        const R = Reactor3D, cache = R._glbCache, named = this.namedKeys(mapData), text = this.eventText(mapData), idle = [];
+        for (const key in cache) {
+            const entry = cache[key];
+            if (!entry.template) continue;
+            if (!(entry.used < this.generation) || named.has(key)) continue;
+            if (entry.name && text.indexOf(entry.name) >= 0) continue;
+            idle.push(key);
+        }
+        // The newest first: they stay while they fit.
+        idle.sort((a, b) => (cache[b].used || 0) - (cache[a].used || 0));
+        let room = R.lowMemory && R.lowMemory() ? this.lowMemoryGraceBytes : this.graceBytes;
+        const gone = [];
+        for (const key of idle) {
+            const bytes = this.bytesOf(key, cache[key]);
+            if (bytes <= room) { room -= bytes; continue; }
+            gone.push(key);
+        }
+        if (gone.length) this.release(gone);
+        return gone;
+    },
+
+    /** Drop these models: the GPU side now, the rest when nothing drawn holds it any more. */
+    release(keys) {
+        const R = Reactor3D, cache = R._glbCache, going = new Set(keys), kept = new Set();
+        const each = (key, entry, visit) => {
+            entry.template.traverse(node => {
+                if (node.geometry) visit(node.geometry);
+                for (const material of [].concat(node.material || [])) if (material) visit(material);
+                if (node.skeleton) visit(node.skeleton);
+            });
+            const lod = R._lodCache && R._lodCache[key];
+            for (const level of (lod && lod.levels) || []) for (const geometry of level) visit(geometry);
+            for (const texture of entry.template.userData.glbTextures || []) if (texture) visit(texture);
+        };
+        // What a model that stays shares with one that goes (a picture two variants draw from) stays.
+        for (const key in cache) if (!going.has(key) && cache[key].template) each(key, cache[key], item => kept.add(item));
+        const uuids = [];
+        for (const key of keys) {
+            const entry = cache[key];
+            if (!entry || !entry.template) continue;
+            const template = entry.template;
+            each(key, entry, item => {
+                if (kept.has(item)) return;
+                kept.add(item);
+                if (item.isBufferGeometry) uuids.push(item.uuid);
+                if (item.isTexture) {
+                    if (R.ShaderWarmup && R.ShaderWarmup.forget) R.ShaderWarmup.forget(item);
+                }
+                try { if (typeof item.dispose === "function") item.dispose(); } catch (error) { /* a renderer already gone */ }
+            });
+            this.releasedBytes += entry.bytes || 0;
+            this.released++;
+            delete cache[key];
+            if (R._lodCache) delete R._lodCache[key];
+            if (R._warmedTemplates) R._warmedTemplates.delete(key);
+            if (R._prewarmTemplates) { const at = R._prewarmTemplates.indexOf(template); if (at >= 0) R._prewarmTemplates.splice(at, 1); }
+        }
+        // A held weapon's measures are kept by the geometry they were taken from.
+        if (uuids.length && R._heldMeasures) {
+            for (const measured of Array.from(R._heldMeasures.keys())) {
+                for (const uuid of uuids) if (measured.indexOf(uuid) >= 0) { R._heldMeasures.delete(measured); break; }
+            }
+        }
+    }
+};
+
 Reactor3D.loadGlb = function(name) {
     return this.loadModel(name, ".glb");
 };
@@ -1191,8 +2228,9 @@ Reactor3D.loadGlb = function(name) {
 Reactor3D.loadModel = function(name, ext, file, texture) {
     const key = this.modelCacheKey(name, ext, file);
     const cached = this._glbCache[key];
-    if (cached) return cached.promise;
+    if (cached) { this.ModelUse.claim(cached, name); return cached.promise; }
     const entry = { promise: null, template: null, failed: false };
+    this.ModelUse.claim(entry, name);
     this._glbCache[key] = entry;
     const jobs = [];
     // The named extension first; a model converted to GLB since it was picked is still found under the others.
@@ -1248,8 +2286,8 @@ Reactor3D.loadModel = function(name, ext, file, texture) {
                     }
                 };
                 if (job.ext === ".glb") {
-                    // The container split, JSON parse, and texture decode
-                    // run off-thread; the buffer travels there and back.
+                    // The container split and JSON parse run off-thread;
+                    // the buffer travels there and back.
                     // A failed or absent worker hands the bytes back to the
                     // synchronous parser.
                     this.parseGlbAsync(xhr.response).then(parsed => {
@@ -1310,51 +2348,22 @@ function reactorSplitGlb(buffer) {
     return { json, bin };
 }
 
-function reactorDecodeGlbImages(json, buffer, binOffset) {
-    if (typeof createImageBitmap === "undefined") return Promise.resolve({});
-    const jobs = [];
-    (json.images || []).forEach((image, index) => {
-        if (image.uri || image.bufferView == null) return;
-        const view = (json.bufferViews || [])[image.bufferView];
-        if (!view) return;
-        const bytes = new Uint8Array(buffer,
-            binOffset + (view.byteOffset || 0), view.byteLength);
-        const blob = new Blob([bytes], { type: image.mimeType || "image/png" });
-        // glTF textures are unflipped and unpremultiplied; match what the
-        // synchronous TextureLoader path produces.
-        jobs.push(createImageBitmap(blob, {
-            imageOrientation: "none",
-            premultiplyAlpha: "none"
-        }).then(bitmap => Reactor3D.capBitmapSize(bitmap)).then(bitmap => [index, bitmap], () => null));
-    });
-    return Promise.all(jobs).then(pairs => {
-        const bitmaps = {};
-        for (const pair of pairs) {
-            if (pair) bitmaps[pair[0]] = pair[1];
-        }
-        return bitmaps;
-    });
-}
-
 // Exposed for tests: the worker runs exactly these functions.
-Reactor3D._workerParts = { splitGlb: reactorSplitGlb, decodeImages: reactorDecodeGlbImages };
+Reactor3D._workerParts = { splitGlb: reactorSplitGlb };
 
+// The worker splits the container and parses its JSON. A model's pictures are
+// not decoded here: each one is decoded when it is first drawn (ShaderWarmup),
+// at this machine's size, and that copy is closed once it is on the GPU.
 Reactor3D._glbWorkerSource = function() {
     return reactorSplitGlb.toString() + "\n"
-        + reactorDecodeGlbImages.toString() + "\n"
         + "self.onmessage = function(event) {\n"
         + "    var data = event.data || {};\n"
         + "    var buffer = data.buffer;\n"
         + "    Promise.resolve().then(function() {\n"
         + "        var parsed = reactorSplitGlb(buffer);\n"
-        + "        return reactorDecodeGlbImages(parsed.json, buffer, parsed.bin.offset)\n"
-        + "            .then(function(bitmaps) {\n"
-        + "                var transfers = [buffer];\n"
-        + "                for (var key in bitmaps) transfers.push(bitmaps[key]);\n"
-        + "                self.postMessage({ id: data.id, json: parsed.json,\n"
-        + "                    binOffset: parsed.bin.offset, binLength: parsed.bin.length,\n"
-        + "                    buffer: buffer, bitmaps: bitmaps }, transfers);\n"
-        + "            });\n"
+        + "        self.postMessage({ id: data.id, json: parsed.json,\n"
+        + "            binOffset: parsed.bin.offset, binLength: parsed.bin.length,\n"
+        + "            buffer: buffer }, [buffer]);\n"
         + "    }).catch(function(error) {\n"
         + "        self.postMessage({ id: data.id,\n"
         + "            error: String(error && error.message || error),\n"
@@ -1413,6 +2422,7 @@ Reactor3D.parseGlbAsync = function(buffer) {
         });
         try {
             worker.postMessage({ id, buffer }, [buffer]);
+            Reactor3D.IdleWorkers?.touch("glb", () => this._parsePending.size > 0, () => { const idle = this._parseWorker; this._parseWorker = undefined; if (idle) idle.terminate(); });
         } catch (error) {
             this._parsePending.delete(id);
             resolve(null);
@@ -1421,9 +2431,8 @@ Reactor3D.parseGlbAsync = function(buffer) {
 };
 
 /**
- * readModel with the GLB half off-thread: the worker splits, parses, and
- * decodes textures, and the template is assembled from the transferred
- * buffers. Every other format — and any worker failure — resolves through
+ * readModel with the GLB half off-thread: the worker splits and parses,
+ * and the template is assembled from the transferred buffer. Every other format — and any worker failure — resolves through
  * the synchronous reader unchanged.
  */
 // options.beforeBuild: awaited between the worker parse and the main-thread
@@ -1437,12 +2446,36 @@ Reactor3D.parseGlbAsync = function(buffer) {
  */
 Reactor3D.maxTextureSize = 2048;
 
+/**
+ * A machine with little memory keeps model textures at half that. A 2048 sheet with its mipmaps
+ * is 21 MB of video memory, which integrated graphics take from the machine's own RAM: a dozen
+ * models are a quarter of a gigabyte. `memoryTier` is "auto" (low when the browser reports 4 GB or
+ * less), "low" or "normal".
+ */
+Reactor3D.memoryTier = "auto";
+Reactor3D.lowMemoryTextureSize = 1024;
+Reactor3D.lowMemory = function() {
+    if (this.memoryTier === "low") return true;
+    if (this.memoryTier === "normal") return false;
+    const reported = typeof navigator !== "undefined" ? Number(navigator.deviceMemory) : 0;
+    return reported > 0 && reported <= 4;
+};
+/** The largest side a model texture keeps on this machine. */
+Reactor3D.textureCap = function() {
+    const cap = Math.max(64, Math.floor(this.maxTextureSize || 0));
+    return this.lowMemory() ? Math.min(cap, Math.max(64, Math.floor(this.lowMemoryTextureSize || cap))) : cap;
+};
+
 /** The main-thread twin of capBitmapSize for images decoded by the browser: a canvas at the capped size. */
 Reactor3D.capImage = function(image) {
-    const cap = Math.max(64, Math.floor(this.maxTextureSize || 0));
+    const cap = this.textureCap();
     const width = image && (image.naturalWidth || image.width);
     const height = image && (image.naturalHeight || image.height);
     if (!image || !(width > cap || height > cap) || typeof document === "undefined") return image;
+    // Under the usual cap and over a low-memory one: the game resamples it where it decodes it
+    // (ShaderWarmup's bitmap, off the main thread), so it stays an <img> here.
+    const usual = Math.max(64, Math.floor(this.maxTextureSize || 0));
+    if (cap < usual && width <= usual && height <= usual && image.tagName === "IMG" && this.ShaderWarmup && this.ShaderWarmup.decodesImages()) return image;
     const scale = cap / Math.max(width, height);
     const canvas = document.createElement("canvas");
     canvas.width = Math.max(1, Math.round(width * scale));
@@ -1455,7 +2488,7 @@ Reactor3D.capImage = function(image) {
 };
 
 Reactor3D.capBitmapSize = function(bitmap) {
-    const cap = Math.max(64, Math.floor(this.maxTextureSize || 0));
+    const cap = this.textureCap();
     if (!bitmap || !(bitmap.width > cap || bitmap.height > cap) || typeof createImageBitmap !== "function") {
         return bitmap;
     }
@@ -2082,6 +3115,7 @@ Reactor3D.buildMeshTemplate = function(mesh, baseUrl, textureFile) {
         const direct = /^(?:blob:|data:)/i.test(file || "");
         if (!mesh.uvs || !(file || embedded) || !(baseUrl || direct || embedded)) return null;
         const map = new THREE.Texture();
+        map.userData.rrModelTexture = true;
         if (THREE.SRGBColorSpace) map.colorSpace = THREE.SRGBColorSpace;
         const candidates = embedded && typeof URL !== "undefined" && typeof Blob !== "undefined" ? [URL.createObjectURL(new Blob([embedded]))]
             : direct ? [file] : [
@@ -2292,6 +3326,7 @@ Reactor3D._loadGlbTexture = function(json, bin, texInfo, baseUrl, textures, bitm
         return decoded;
     }
     const map = new THREE.Texture();
+    map.userData.rrModelTexture = true;
     map.flipY = false;
     if (THREE.SRGBColorSpace) map.colorSpace = THREE.SRGBColorSpace;
     const primary = this._glbImageUrl(json, bin, image, baseUrl);
@@ -2316,6 +3351,7 @@ Reactor3D._loadGlbTexture = function(json, bin, texInfo, baseUrl, textures, bitm
             throw error;
         }
         embedded.flipY = false;
+        embedded.userData.rrModelTexture = true;
         if (THREE.SRGBColorSpace) embedded.colorSpace = THREE.SRGBColorSpace;
         if (ownedObjectUrl && !objectUrlReleased) embedded.userData.reactorObjectUrl = primary;
         textures.push(embedded);
@@ -2839,6 +3875,276 @@ Reactor3D.buildAnimatedGlbTemplate = function(json, bin, root, nodes, textures) 
  * skinned geometry's own box is the unposed mesh, wherever the bones are.
  */
 /**
+ * The parts of a held thing that hang off its long axis on one side (a grip,
+ * a magazine, a stock's toe; on the other side a scope), read from its
+ * outline in `K` slices counted from the handle end. `points` are in the
+ * thing's frame; `o` gives the slicing (`K`, `sliceK`), the side (`side` 1
+ * for `down`, -1 for the other), `down`, the barrel's own `line` across the
+ * two axes `others`, and the `length`. Returns `{ list, drop, under, wide }`:
+ * each part as `{ from, to, centre, half, deep, wide, under }` (slices;
+ * where it is and half its depth front to back as fractions of the length;
+ * how far it hangs, half its thickness and the frame's level just ahead of
+ * it, in the thing's units), the outline itself, the barrel's own thickness
+ * and each slice's half thickness below the barrel. Null when nothing hangs.
+ */
+Reactor3D.heldLobes = function(points, o) {
+    const K = o.K, drop = new Float32Array(K), wide = new Float32Array(K), seen = new Uint8Array(K), others = o.others, down = o.down, line = o.line;
+    const d0 = down[others[0]] * o.side, d1 = down[others[1]] * o.side;
+    let deepest = 0;
+    for (const p of points) {
+        const h = (p[others[0]] - line[others[0]]) * d0 + (p[others[1]] - line[others[1]]) * d1, k = o.sliceK(p);
+        if (h > drop[k]) drop[k] = h;
+        if (h > deepest) deepest = h;
+        seen[k] = 1;
+    }
+    // A slice with no point of its own (a long flat face between its corners) is as deep as the shallower of its neighbors.
+    for (let k = 0, before = -1; k < K; k++) {
+        if (seen[k]) { before = k; continue; }
+        let after = k + 1;
+        while (after < K && !seen[after]) after++;
+        const fill = before < 0 ? (after < K ? drop[after] : 0) : after >= K ? drop[before] : Math.min(drop[before], drop[after]);
+        for (let j = k; j < after; j++) drop[j] = fill;
+        k = after - 1;
+    }
+    // The barrel's own thickness is what its tip end reaches on this side of its line.
+    let under = 0;
+    for (let k = K - 3; k < K; k++) under = Math.max(under, drop[k]);
+    // A hanging part is whatever reaches well below the barrel's own underside, however deep the deepest one
+    // is: a rifle's grip is shallower than its magazine and still the grip.
+    // (`o.hangs` gives the level instead: the other side of a part already found is read at that part's own measure.)
+    const hangs = o.hangs || Math.max(o.length * .07, under * 2.2);
+    if (!o.hangs && deepest < Math.max(o.length * .1, under * 2.2)) return null;
+    // Sideways is square to the long axis and to down; a part's thickness is what hangs below the barrel there.
+    for (const p of points) {
+        const a = p[others[0]] - line[others[0]], b = p[others[1]] - line[others[1]];
+        if (a * d0 + b * d1 <= hangs) continue;
+        const k = o.sliceK(p), w = Math.abs(a * -d1 + b * d0);
+        if (w > wide[k]) wide[k] = w;
+    }
+    const list = [];
+    // A run of hanging slices is one part, or two where the outline comes nearly all the way back up between them.
+    const split = (from, to) => {
+        let best = -1, bestGap = 0;
+        for (let k = from + 1; k < to; k++) {
+            let left = 0, right = 0;
+            for (let j = from; j < k; j++) left = Math.max(left, drop[j]);
+            for (let j = k + 1; j <= to; j++) right = Math.max(right, drop[j]);
+            const low = Math.min(left, right), gap = low - drop[k];
+            if (gap > bestGap && drop[k] - hangs < (low - hangs) * .25) { bestGap = gap; best = k; }
+        }
+        if (best >= 0) { split(from, best - 1); split(best + 1, to); return; }
+        let deep = 0;
+        for (let k = from; k <= to; k++) deep = Math.max(deep, drop[k]);
+        // Where the part is, and its depth front to back, are read where it is nearly as deep as its foot.
+        const level = hangs + (deep - hangs) * .75;
+        let first = -1, last = -1, thick = 0;
+        for (let k = from; k <= to; k++) if (drop[k] >= level) { if (first < 0) first = k; last = k; thick = Math.max(thick, wide[k]); }
+        let ahead = 0;
+        for (let k = to + 1; k <= Math.min(K - 1, to + 2); k++) ahead = Math.max(ahead, drop[k]);
+        list.push({ from, to, deep, centre: (first + last + 1) / 2 / K, half: (last - first + 1) / K / 2, wide: thick, under: Math.min(deep * .6, ahead || under) });
+    };
+    for (let k = 0; k < K; k++) {
+        if (drop[k] <= hangs) continue;
+        let to = k;
+        while (to + 1 < K && drop[to + 1] > hangs) to++;
+        split(k, to);
+        k = to;
+    }
+    return list.length ? { list, drop, under, wide, hangs } : null;
+};
+
+/**
+ * A held thing seen from its side, as filled cells: columns along its long
+ * axis from the handle end, rows from above its barrel's line to its lowest
+ * hanging point. `{ W, H, cell, lo, grid }` (`lo` the first row's height
+ * below the line, negative above it), or null. Read from its whole surface,
+ * so a hole through it (a skeleton stock, a trigger guard) shows as one.
+ */
+Reactor3D.heldSide = function(object) {
+    const shape = this.heldShape(object);
+    if (!shape) return null;
+    if (shape.side !== undefined) return shape.side;
+    shape.side = null;
+    const cloud = this.heldCloud(object);
+    if (!cloud || !cloud.count) return null;
+    const W = 120, cell = shape.length / W, P = cloud.points, a = shape.axis, d = shape.down, b = shape.base, l = shape.line;
+    let lo = Infinity, hi = -Infinity;
+    for (let i = 0; i < cloud.count; i++) { const h = (P[i * 3] - l[0]) * d[0] + (P[i * 3 + 1] - l[1]) * d[1] + (P[i * 3 + 2] - l[2]) * d[2]; if (h < lo) lo = h; if (h > hi) hi = h; }
+    const H = Math.ceil((hi - lo) / cell) + 1, grid = new Uint8Array(W * H);
+    for (let i = 0; i < cloud.count; i++) {
+        const x = P[i * 3], y = P[i * 3 + 1], z = P[i * 3 + 2];
+        const c = Math.max(0, Math.min(W - 1, Math.floor(((x - b[0]) * a[0] + (y - b[1]) * a[1] + (z - b[2]) * a[2]) / cell)));
+        grid[Math.floor(((x - l[0]) * d[0] + (y - l[1]) * d[1] + (z - l[2]) * d[2] - lo) / cell) * W + c] = 1;
+    }
+    return shape.side = { W, H, cell, lo, grid, sections: new Map() };
+};
+
+/**
+ * Where fingers `need` thick (in the thing's own units) can take a gun's
+ * grip: the rows of the grip, from just under the frame (the trigger guard)
+ * down to its foot, where there is room for a finger in front of its front
+ * strap. `{ top, foot, front, back, cell }`: the heights below the barrel's
+ * line of the highest place a finger fits and of the foot, and per row from
+ * `top` how far along the thing the front strap and the back strap are. A
+ * grip that is one side of a loop (a skeleton stock) is read as that side.
+ * Null for a thing with no hanging grip.
+ */
+Reactor3D.gripSection = function(object, need) {
+    const shape = this.heldShape(object), side = shape && shape.handle ? this.heldSide(object) : null;
+    if (!side) return null;
+    const { W, H, cell, lo, grid } = side, room = Math.max(2, Math.round(need / cell));
+    if (side.sections.has(room)) return side.sections.get(room);
+    const filled = (r, c) => c >= 0 && c < W && r >= 0 && r < H && grid[r * W + c] === 1;
+    // The grip's own run of filled cells in a row: the run that holds column `c` (or the nearest within a few
+    // cells), a one-cell gap in the surface's points bridged.
+    const run = (r, c) => {
+        if (!filled(r, c)) { let found = -1; for (let k = 1; k <= 3 && found < 0; k++) { if (filled(r, c - k)) found = c - k; else if (filled(r, c + k)) found = c + k; } if (found < 0) return null; c = found; }
+        let back = c, front = c;
+        while (filled(r, back - 1) || filled(r, back - 2)) back--;
+        while (filled(r, front + 1) || filled(r, front + 2)) front++;
+        while (!filled(r, back)) back++;
+        while (!filled(r, front)) front--;
+        return [back, front];
+    };
+    const h = shape.handle, r0 = Math.max(0, Math.min(H - 1, Math.floor((h.drop - lo) / cell))), c0 = Math.round(h.along * W);
+    const fronts = new Map(), backs = new Map();
+    let section = null;
+    const start = run(r0, c0);
+    if (start) {
+        fronts.set(r0, start[1]); backs.set(r0, start[0]);
+        // Up to the frame: the row where the front strap runs on forward (the frame, the trigger guard) or leaves no room for a finger.
+        const clear = (r, front) => { for (let k = 1; k <= room; k++) if (filled(r, front + k)) return false; return true; };
+        let top = r0, c = Math.round((start[0] + start[1]) / 2);
+        for (let r = r0 - 1; r >= 0; r--) {
+            const at = run(r, c);
+            if (!at || at[1] > fronts.get(r + 1) + Math.max(2, room) || !clear(r, at[1])) break;
+            fronts.set(r, at[1]); backs.set(r, at[0]); top = r; c = Math.round((at[0] + at[1]) / 2);
+        }
+        // Down to the foot: where the grip ends, or a bar under the hand (a loop's lower side) runs on forward from it.
+        let foot = r0; c = Math.round((start[0] + start[1]) / 2);
+        for (let r = r0 + 1; r < H; r++) {
+            const at = run(r, c);
+            if (!at || at[1] > fronts.get(r - 1) + Math.max(2, room)) break;
+            fronts.set(r, at[1]); backs.set(r, at[0]); foot = r; c = Math.round((at[0] + at[1]) / 2);
+        }
+        const front = new Float32Array(foot - top + 1), back = new Float32Array(foot - top + 1);
+        for (let r = top; r <= foot; r++) { front[r - top] = (fronts.get(r) + 1) * cell; back[r - top] = backs.get(r) * cell; }
+        section = { top: lo + top * cell, foot: lo + (foot + 1) * cell, front, back, cell };
+    }
+    side.sections.set(room, section);
+    return section;
+};
+
+/** How far below its barrel's line a held thing's underside is, `along` it (a distance from its handle end), in its own units. */
+Reactor3D.heldUnderside = function(object, along) {
+    const side = this.heldSide(object);
+    if (!side) return 0;
+    const c = Math.max(0, Math.min(side.W - 1, Math.floor(along / side.cell)));
+    for (let r = side.H - 1; r >= 0; r--) if (side.grid[r * side.W + c]) return side.lo + (r + 1) * side.cell;
+    return 0;
+};
+
+/** The rig templates for things held in a hand, and the markers each cannot do without. */
+Reactor3D.HELD_RIGS = { blade: ["gripTop", "gripBottom", "tip"], gun: ["gripTop", "gripBottom", "muzzle", "rear"] };
+
+/**
+ * A held thing's own markers: a model.json `rig` of template `blade` or
+ * `gun` (markers only, in the model's frame), or null. A blade has
+ * `gripTop`, `gripBottom`, `tip` and `edge`; a gun `gripTop`, `gripBottom`,
+ * `trigger`, `muzzle`, `rear`, `foreGrip` and `stock`.
+ */
+Reactor3D.readHeldRig = function(json) {
+    const raw = json && json.rig, need = raw && typeof raw === "object" ? this.HELD_RIGS[raw.template] : null;
+    if (!need || !raw.markers || typeof raw.markers !== "object") return null;
+    const markers = {};
+    for (const key of Object.keys(raw.markers)) {
+        const value = raw.markers[key];
+        if (Array.isArray(value) && value.length >= 3 && value.slice(0, 3).every(n => Number.isFinite(Number(n)))) markers[key] = value.slice(0, 3).map(Number);
+    }
+    return need.every(key => markers[key]) ? { template: raw.template, markers } : null;
+};
+
+/**
+ * Lay a held thing's markers over what its shape was read as; they win.
+ * A blade: the handle runs Grip bottom to Grip top and the fist takes it
+ * with the index finger at Grip top; the length is out to Tip, and Edge
+ * (off the grip-to-tip line) says which way the edge faces. A gun: the
+ * barrel's line is Rear to Muzzle, the grip hangs from Grip top to Grip
+ * bottom, and `marks` keeps Trigger, Fore grip and a Stock that lies well
+ * behind Rear (a long gun's butt, for the shoulder).
+ */
+Reactor3D.markHeldShape = function(shape, rig, cloud) {
+    const m = rig.markers, sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]], dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+    const mix = (a, b, s) => [a[0] + b[0] * s, a[1] + b[1] * s, a[2] + b[2] * s], size = a => Math.hypot(a[0], a[1], a[2]);
+    const unit = a => { const l = size(a); return l > 1e-9 ? [a[0] / l, a[1] / l, a[2] / l] : null; };
+    const square = (a, axis) => unit(mix(a, axis, -dot(a, axis)));
+    const each = visit => { if (cloud) for (let i = 0; i < cloud.count; i++) visit([cloud.points[i * 3], cloud.points[i * 3 + 1], cloud.points[i * 3 + 2]]); };
+    if (rig.template === "gun") {
+        const axis = unit(sub(m.muzzle, m.rear)), down = axis && square(sub(m.gripBottom, m.gripTop), axis);
+        if (!axis || !down) return shape;
+        const barrel = dot(sub(m.muzzle, m.rear), axis), behind = m.stock ? dot(sub(m.rear, m.stock), axis) : 0, stock = behind > barrel * .1;
+        const base = mix(m.rear, axis, stock ? -behind : 0), length = barrel + (stock ? behind : 0);
+        const mid = mix(m.gripTop, sub(m.gripBottom, m.gripTop), .5), h = p => dot(sub(p, m.rear), down), t = p => dot(sub(p, base), axis);
+        const sideways = [axis[1] * down[2] - axis[2] * down[1], axis[2] * down[0] - axis[0] * down[2], axis[0] * down[1] - axis[1] * down[0]];
+        // The grip's thickness and depth: its surface between the two markers, near the line through them.
+        const top = h(m.gripTop), foot = h(m.gripBottom), span = Math.max(1e-6, foot - top);
+        let wide = 0, front = -Infinity, back = Infinity;
+        each(p => {
+            const f = (h(p) - top) / span;
+            if (f < .25 || f > .9) return;
+            const off = t(p) - (t(m.gripTop) + (t(m.gripBottom) - t(m.gripTop)) * f);
+            if (Math.abs(off) > span * .6) return;
+            wide = Math.max(wide, Math.abs(dot(sub(p, m.rear), sideways)));
+            if (off > front) front = off;
+            if (off < back) back = off;
+        });
+        const radius = front > back ? (front - back) / 2 : span * .25;
+        Object.assign(shape, { axis, down, up: down.map(n => -n), base, length, line: m.rear.slice(), side: undefined, grip: t(mid) / length, profile: null,
+            handle: { at: mid, along: t(mid) / length, radius, side: wide || radius * .6, drop: h(mid), deep: foot, under: top },
+            marks: { template: "gun", trigger: m.trigger || null, foreGrip: m.foreGrip || null, stock: stock ? m.stock : null } });
+        return shape;
+    }
+    const axis = unit(sub(m.gripTop, m.gripBottom));
+    if (!axis) return shape;
+    const handle = size(sub(m.gripTop, m.gripBottom)), reach = dot(sub(m.tip, m.gripBottom), axis), length = reach > handle ? reach : Math.max(handle, size(sub(m.tip, m.gripBottom)));
+    let up = null;
+    if (m.edge) {
+        const line = unit(sub(m.tip, m.gripTop)) || axis, off = sub(m.edge, m.gripTop), away = mix(off, line, -dot(off, line));
+        if (size(away) > length * .01) up = square(away, axis);
+    }
+    if (!up) up = square(shape.up, axis) || square([axis[1], axis[2], axis[0]], axis);
+    let radius = 0, count = 0;
+    each(p => { const d = sub(p, m.gripBottom), a = dot(d, axis); if (a < handle * .2 || a > handle * .8) return; radius += size(mix(d, axis, -a)); count++; });
+    Object.assign(shape, { axis, up, down: up.map(n => -n), base: m.gripBottom.slice(), length, grip: handle / 2 / length, gripRadius: count ? radius / count : shape.gripRadius,
+        handle: null, profile: null, side: undefined, marks: { template: "blade", handle } });
+    return shape;
+};
+
+/**
+ * Where a held thing's markers start, read from its own shape (the model's
+ * frame): what an author then nudges. `template` is `blade` or `gun`.
+ */
+Reactor3D.heldMarkerDefaults = function(object, template) {
+    const s = object && this.HELD_RIGS[template] ? this.heldShape(object) : null;
+    if (!s) return null;
+    const off = [0, 1, 2].map(i => s.line[i] - s.base[i]), on = off[0] * s.axis[0] + off[1] * s.axis[1] + off[2] * s.axis[2];
+    const origin = [0, 1, 2].map(i => s.base[i] + off[i] - s.axis[i] * on);
+    const at = (from, along, drop) => [0, 1, 2].map(i => from[i] + s.axis[i] * s.length * along + s.down[i] * drop);
+    if (template === "blade") {
+        const wide = Math.max(s.gripRadius * 2, s.length * .03);
+        return { gripBottom: at(s.base, s.grip * .35, 0), gripTop: at(s.base, Math.min(.5, s.grip * 1.65), 0), tip: at(s.base, 1, 0), edge: at(s.base, .6, -wide) };
+    }
+    const h = s.handle;
+    if (!h) {
+        const r = s.gripRadius;
+        return { gripTop: at(origin, s.grip, r), gripBottom: at(origin, Math.max(0, s.grip - .06), r * 3), trigger: at(origin, s.grip + .08, r), muzzle: at(origin, 1, 0), rear: at(origin, s.grip, 0), foreGrip: at(origin, Math.min(.8, s.grip + .3), r), stock: at(origin, 0, r) };
+    }
+    const long = h.along * s.length > s.length * .15 && !!s.profile && h.along > .15, rear = at(origin, long ? h.along : 0, 0);
+    return { gripTop: at(origin, h.along, h.under), gripBottom: at(origin, h.along, h.deep * .97), trigger: at(origin, h.along + h.radius / s.length + .04, h.under * .9),
+        muzzle: at(origin, 1, 0), rear, foreGrip: at(origin, Math.min(.85, h.along + .3), h.under * .8), stock: long ? at(origin, 0, h.under * .5) : rear.slice() };
+};
+
+/**
  * What a held model is shaped like, in its own frame: the long axis (a
  * blade, a barrel) signed toward the thin end (the tip, the muzzle), the
  * side its bulk hangs off that axis (a grip, a magazine: "down"), and the
@@ -2849,6 +4155,8 @@ Reactor3D.heldShape = function(object) {
     if (!object) return null;
     if (object.userData.__heldShape) return object.userData.__heldShape;
     object.updateMatrixWorld(true);
+    const measured = this.heldMeasured(object);
+    if (measured && measured.shape) return object.userData.__heldShape = measured.shape;
     const toLocal = new THREE.Matrix4().copy(object.matrixWorld).invert(), points = [];
     const v = new THREE.Vector3();
     object.traverse(mesh => {
@@ -2894,9 +4202,86 @@ Reactor3D.heldShape = function(object) {
     let grip = .2, best = Infinity;
     for (let k = 1; k < N; k++) { const i = order[k]; if (i === widest) break; if (slices[i] > 0 && slices[i] < best) best = slices[i]; }
     if (best < Infinity) { let sum = 0, count = 0; for (let k = 1; k < N; k++) { const i = order[k]; if (i === widest) break; if (slices[i] > 0 && slices[i] <= best * 1.4) { sum += k; count++; } } if (count) grip = (sum / count + .5) / N; }
-    const shape = { axis: unit, up: down.map(n => -n), down, length, base, centre, grip, slices: slices.map(n => Math.round(n * 1000) / 1000), size, widest };
+    // What a fist closes on. A slim thing (a sword, a staff): its handle, as thick as its narrowest slice there.
+    // A thing with a part hanging off its long axis (a pistol, a rifle): that part, the grip. Of several hanging
+    // parts the grip is the one nearest the handle end that is not the end itself (a stock), else the only one.
+    const gripRadius = best < Infinity ? best : Math.max(length * .02, Math.min(...slices.filter(n => n > 0)));
+    // The grip hangs on one side only (a sword's guard reaches both ways and is no grip), well clear of the
+    // barrel's own thickness, over a short run of the length.
+    let handle = null, hung = down, profile = null;
+    // The thing's outline under (and over) its barrel's own line, in fine slices counted from the handle end.
+    const K = 48, sliceK = p => Math.max(0, Math.min(K - 1, Math.floor(sign * (p[axis] - base[axis]) / length * K)));
+    for (const side of [1, -1]) {
+        const lobes = this.heldLobes(points, { K, sliceK, side, down, line, others, length });
+        if (!lobes) continue;
+        // The grip is the first part that hangs ahead of the stock (a part that reaches the very end is the
+        // stock, unless it is the only one: a pistol's grip is at its rear), and it is in the rear of the thing:
+        // a part hanging further forward is a magazine or a foregrip, and the hand takes the stock's neck instead.
+        const ahead = lobes.list.filter(lobe => lobe.from > 0);
+        // (A lone part at the end is a grip when it is a good part of the thing's length deep, as a pistol's is; a rifle's stock is not.)
+        const lobe = ahead.length ? ahead[0] : lobes.list.length === 1 && lobes.list[0].deep > length * .25 ? lobes.list[0] : null;
+        if (!lobe || lobe.centre > .45) continue;
+        // A part that reaches as far the other way at the same place is a guard (a sword's), not a grip.
+        const mirror = this.heldLobes(points, { K, sliceK, side: -side, down, line, others, length, hangs: lobes.hangs * .6 });
+        if (mirror && mirror.list.some(other => { const both = Math.min(lobe.to, other.to) - Math.max(lobe.from, other.from) + 1, all = Math.max(lobe.to, other.to) - Math.min(lobe.from, other.from) + 1; return both / all > .6 && other.deep > lobe.deep * .6 && other.deep < lobe.deep * 1.6; })) continue;
+        // Of two sides with a grip (a scope over a rifle is a hanging part too), the one nearer the handle end.
+        if (handle && handle.along <= lobe.centre) continue;
+        const at = [0, 0, 0];
+        hung = down.map(n => n * side);
+        at[axis] = base[axis] + sign * length * lobe.centre;
+        for (const a of others) at[a] = line[a] + hung[a] * lobe.deep * .55;
+        // `radius` is half the grip's depth along the barrel, `side` half its thickness across, `under` how far
+        // below the barrel's line the frame is just ahead of it (where the trigger guard meets it), `deep` its foot.
+        handle = { at, along: lobe.centre, radius: Math.max(length * .015, Math.min(length * .08, lobe.half * length)), side: lobe.wide || Math.min(size[others[0]], size[others[1]]) / 2, drop: lobe.deep * .55, deep: lobe.deep, under: lobe.under };
+        profile = { K, drop: lobes.drop, under: lobes.under, wide: lobes.wide };
+    }
+    // A long gun with no grip of its own (a straight stock): the hand takes the wrist of the stock, just ahead of
+    // where the butt stops hanging, with the fingers under it. A part as deep on the other side is a pommel, not a butt.
+    if (!handle) {
+        const lobes = this.heldLobes(points, { K, sliceK, side: 1, down, line, others, length }), stock = lobes && lobes.list[0];
+        const mirror = stock && stock.from === 0 ? this.heldLobes(points, { K, sliceK, side: -1, down, line, others, length }) : null;
+        if (stock && stock.from === 0 && stock.to < K * .45 && !(mirror && mirror.list[0].from === 0 && mirror.list[0].deep > stock.deep * .6)) {
+            const k = Math.min(K - 1, stock.to + 2), drop = Math.max(lobes.drop[k], lobes.under), at = [0, 0, 0];
+            at[axis] = base[axis] + sign * length * (k + .5) / K;
+            for (const a of others) at[a] = line[a] + down[a] * drop * .5;
+            handle = { at, along: (k + .5) / K, radius: length / K, side: lobes.wide[k] || Math.min(size[others[0]], size[others[1]]) / 2, drop: drop * .5, deep: drop, under: drop, stock: true };
+            profile = { K, drop: lobes.drop, under: lobes.under, wide: lobes.wide };
+        }
+    }
+    // `hang` is how far the bulk hangs off the long axis, as a fraction of the length: nothing for a sword, a good deal for a pistol's grip.
+    const shape = { axis: unit, up: hung.map(n => -n), down: hung, length, base, centre, grip, slices: slices.map(n => Math.round(n * 1000) / 1000), size, widest, hang: hang / length, gripRadius, handle, profile, line };
+    // The model's own markers (a Blade or Gun rig) say what its shape can only guess.
+    if (object.userData.__heldRig) this.markHeldShape(shape, object.userData.__heldRig, this.heldCloud(object));
     object.userData.__heldShape = shape;
+    if (measured) measured.shape = shape;
     return shape;
+};
+
+/**
+ * Where a held model's measures are kept for the session: every copy of one
+ * model laid out the same way (the same geometries in the same places under
+ * it, the same markers) reads one shape and one surface. They were measured
+ * again for every hand that took the model: 60 ms a weapon on the frame a
+ * battle began. A copy with geometry of its own (a carved part) has its own.
+ */
+Reactor3D._heldMeasures = new Map();
+Reactor3D.heldMeasured = function(object) {
+    if (typeof THREE === "undefined") return null;
+    const inverse = this._heldInverse || (this._heldInverse = new THREE.Matrix4()), m = this._heldRelative || (this._heldRelative = new THREE.Matrix4());
+    inverse.copy(object.matrixWorld).invert();
+    let key = "";
+    object.traverse(mesh => {
+        if (!mesh.isMesh || !mesh.geometry || !mesh.geometry.attributes || !mesh.geometry.attributes.position) return;
+        const e = m.multiplyMatrices(inverse, mesh.matrixWorld).elements;
+        key += mesh.geometry.uuid;
+        for (let i = 0; i < 16; i++) key += "," + Math.round(e[i] * 1e4);
+        key += "|";
+    });
+    if (!key) return null;
+    if (object.userData.__heldRig) key += "#" + JSON.stringify(object.userData.__heldRig);
+    let entry = this._heldMeasures.get(key);
+    if (!entry) this._heldMeasures.set(key, entry = { shape: null, cloud: undefined });
+    return entry;
 };
 
 Reactor3D.measureSkinnedBox = function(root) {
@@ -3093,6 +4478,36 @@ Reactor3D.cloneModelTemplate = function(template) {
 };
 
 /**
+ * Free what an instance of `template` holds on the GPU of its own: carved
+ * part geometries and its skeletons' bone textures. On a shared renderer
+ * nothing else frees them. A carved part draws from the template's vertex
+ * buffers, which stay for every other copy; only its own index goes.
+ * Materials are the caller's.
+ */
+Reactor3D.releaseModelInstance = function(object, template) {
+    if (!object || !template) return;
+    const geometries = new Set(), buffers = new Set(), skeletons = new Set();
+    template.traverse(node => {
+        const geometry = node.geometry;
+        if (geometry) {
+            geometries.add(geometry);
+            for (const name of Object.keys(geometry.attributes)) buffers.add(geometry.attributes[name]);
+            if (geometry.index) buffers.add(geometry.index);
+        }
+        if (node.skeleton) skeletons.add(node.skeleton);
+    });
+    object.traverse(node => {
+        const geometry = node.geometry;
+        if (geometry && !geometries.has(geometry)) {
+            for (const name of Object.keys(geometry.attributes)) if (buffers.has(geometry.attributes[name])) delete geometry.attributes[name];
+            if (geometry.index && buffers.has(geometry.index)) geometry.index = null;
+            geometry.dispose();
+        }
+        if (node.skeleton && !skeletons.has(node.skeleton)) node.skeleton.dispose();
+    });
+};
+
+/**
  * Give every skinned mesh under `object` its bounds up front. three's
  * renderer wants a skinned mesh's bounding sphere before its first draw
  * (for depth sorting, culling or not), and SkinnedMesh.computeBoundingSphere
@@ -3109,6 +4524,10 @@ Reactor3D.presetSkinnedBounds = function(object) {
         const geometry = child.geometry;
         if (!geometry.boundingSphere) geometry.computeBoundingSphere();
         if (geometry.boundingSphere) child.boundingSphere = geometry.boundingSphere.clone();
+        // The box likewise: Box3.setFromObject (the beam's hit test) otherwise
+        // runs every vertex through its bones the first time it meets one.
+        if (!geometry.boundingBox) geometry.computeBoundingBox();
+        if (geometry.boundingBox && !child.boundingBox) child.boundingBox = geometry.boundingBox.clone();
         // Culling stays OFF, and the sphere above is for depth sorting only.
         //
         // It was switched on for a while, against that sphere grown by a
@@ -3223,7 +4642,9 @@ Reactor3D.flattenModelWorld = function(root) {
  *       "bob" (amount in tiles, period frames),
  *       "pose" (rotate [x,y,z] degrees and move [x,y,z] tiles: ease to
  *       that end pose while the trigger holds and back to rest when it
- *       releases; an action pose plays in and out over its period).
+ *       releases; an action pose plays in and out over its period),
+ *       "drive" (turns `degrees` times an input of the state, -1 to 1,
+ *       about `axisVector`: a steered part).
  * trigger: "always", "idle", "moving", or "action" — actions play on
  * demand by name (the Play Model Animation event command).
  * part: prefix of a named part recorded by the readers ("" = whole model);
@@ -3299,9 +4720,9 @@ Reactor3D.readModelAnimationRules = function(json) {
     for (let i = 0; i < list.length; i++) {
         const raw = list[i] || {};
         const type = raw.type === "swing" || raw.type === "bob" || raw.type === "clip"
-            || raw.type === "pose" ? raw.type : "spin";
+            || raw.type === "pose" || raw.type === "drive" ? raw.type : "spin";
         const keys = readKeys(raw.keys);
-        rules.push({
+        const rule = {
             name: String(raw.name || raw.part || type + "-" + i),
             part: String(raw.part || ""),
             clip: String(raw.clip || ""),
@@ -3309,11 +4730,13 @@ Reactor3D.readModelAnimationRules = function(json) {
             rate: Number(raw.rate) > 0 ? Number(raw.rate) : 1,
             type,
             axis: raw.axis === "x" || raw.axis === "z" ? raw.axis : "y",
-            trigger: ["idle", "moving", "walking", "dashing", "jumping", "swimming", "treading", "climbing", "action"].indexOf(raw.trigger) >= 0
+            trigger: ["idle", "moving", "walking", "dashing", "jumping", "swimming", "treading", "climbing", "riding", "action"].indexOf(raw.trigger) >= 0
                 ? raw.trigger : "always",
             speed: Number(raw.speed) > 0 ? Number(raw.speed) : 90,
             perTile: Number(raw.perTile) > 0 ? Number(raw.perTile) : 0,
-            degrees: Number(raw.degrees) > 0 ? Number(raw.degrees) : 15,
+            // A drive rule's turn at full input is signed, and may be none; every other rule's is a size.
+            degrees: type === "drive" && raw.degrees !== undefined && raw.degrees !== null && Number.isFinite(Number(raw.degrees))
+                ? Number(raw.degrees) : (Number(raw.degrees) > 0 ? Number(raw.degrees) : 15),
             amount: Number(raw.amount) > 0 ? Number(raw.amount) : 0.1,
             period: Number(raw.period) > 0 ? Number(raw.period) : 60,
             cycles: Number(raw.cycles) > 0 ? Number(raw.cycles) : 1,
@@ -3337,7 +4760,20 @@ Reactor3D.readModelAnimationRules = function(json) {
             effects: readEffects(raw.effects),
             // One of the rig's own default motions, not the model's (reactor_rig_motions.js).
             defaultMotion: !!raw.defaultMotion
-        });
+        };
+        // What a wheel and a steered part carry (a vehicle's rules), kept only on a rule that has them:
+        // `exact` reaches the part by its whole name, not by prefix; `axisVector` is the line it turns
+        // about (model space, kept at unit length) in place of `axis`; `radius` (model units) rolls a
+        // spin with the road; `input` names what a drive rule follows (only a drive rule has one).
+        if (raw.exact === true) rule.exact = true;
+        if (Array.isArray(raw.axisVector)) {
+            const x = Number(raw.axisVector[0]), y = Number(raw.axisVector[1]), z = Number(raw.axisVector[2]);
+            const length = Math.hypot(x, y, z);
+            if (Number.isFinite(length) && length > 1e-9) rule.axisVector = [x / length, y / length, z / length];
+        }
+        if (Number.isFinite(Number(raw.radius)) && Number(raw.radius) > 0) rule.radius = Number(raw.radius);
+        if (type === "drive") rule.input = String(raw.input || "");
+        rules.push(rule);
     }
     // A rigged model plays its template's default motion for every state it
     // has none of its own for: it climbs, swims and jumps before anyone
@@ -3559,6 +4995,12 @@ Reactor3D.carveModelParts = function(root, parts) {
             }
             sub.setIndex(new THREE.BufferAttribute(Uint32Array.from(ids), 1));
             if (!geometry.getAttribute("normal")) sub.computeVertexNormals();
+            // Its bounds are the whole mesh's: three measures a geometry by every vertex of its attributes,
+            // whichever its index names, so each copy of a model measured the same vertices again for each
+            // part (a detailed vehicle's fourteen, a quarter of a frame's time each time one came into view).
+            if (!geometry.boundingSphere) geometry.computeBoundingSphere();
+            sub.boundingSphere = geometry.boundingSphere.clone();
+            if (geometry.boundingBox) sub.boundingBox = geometry.boundingBox.clone();
             return sub;
         };
         // The pivot is authored in model space; the mesh may sit offset
@@ -3707,7 +5149,9 @@ Reactor3D.normalizeBoneName = function(name) {
  * keeps that skeleton: each rig bone names the file's bone that stands
  * where its head was fitted (a matching name counts for half the
  * distance, so Mixamo's inverted Spine/Spine02 still lands by place), and
- * that bone registers as the part. The clips keep driving those bones;
+ * that bone registers as the part. A rig bone whose nearest bone went to
+ * another takes the free bone of its own name, and the rig's root is a
+ * bone that carries what its children took. The clips keep driving those bones;
  * a pose bends them from wherever the clip holds them. Returns false when
  * nothing under `root` is skinned, so the rig binds its own skeleton.
  */
@@ -3727,13 +5171,15 @@ Reactor3D.mapRigToSkeleton = function(root, rig) {
     const heads = rig.bones.map(def => new THREE.Vector3().fromArray(def.head));
     const reach = new THREE.Box3().setFromPoints(heads).getSize(new THREE.Vector3());
     const span = Math.max(reach.x, reach.y, reach.z, 0.001);
+    const REACH = 0.35;
+    const aliasesOf = def => this.RIG_BONE_ALIASES[def.name] || [this.normalizeBoneName(def.name)];
+    const scoreOf = (index, j, named) => { const distance = places[j].distanceTo(heads[index]) / span; return named ? distance * 0.5 : distance; };
     const picks = rig.bones.map((def, index) => {
-        const aliases = this.RIG_BONE_ALIASES[def.name] || [this.normalizeBoneName(def.name)];
+        const aliases = aliasesOf(def);
         let bone = -1;
         let score = Infinity;
         bones.forEach((candidate, j) => {
-            const distance = places[j].distanceTo(heads[index]) / span;
-            const value = aliases.indexOf(names[j]) >= 0 ? distance * 0.5 : distance;
+            const value = scoreOf(index, j, aliases.indexOf(names[j]) >= 0);
             if (value < score) { score = value; bone = j; }
         });
         return { index, bone, score };
@@ -3742,21 +5188,62 @@ Reactor3D.mapRigToSkeleton = function(root, rig) {
     // already taken, or that stands nowhere near one, stays unmapped.
     picks.sort((a, b) => a.score - b.score);
     const taken = new Set();
-    let mapped = 0;
+    const chosen = rig.bones.map(() => -1);
     for (const pick of picks) {
-        if (pick.bone < 0 || taken.has(pick.bone) || pick.score > 0.35) continue;
+        if (pick.bone < 0 || taken.has(pick.bone) || pick.score > REACH) continue;
         taken.add(pick.bone);
-        const bone = bones[pick.bone];
-        const def = rig.bones[pick.index];
+        chosen[pick.index] = pick.bone;
+    }
+    // The nearest free bone that bears a rig bone's name, within reach; -1 for none. `fits` narrows the choice.
+    const namedFor = (index, fits) => {
+        const aliases = aliasesOf(rig.bones[index]);
+        let bone = -1;
+        let score = REACH;
+        bones.forEach((candidate, j) => {
+            if (taken.has(j) || aliases.indexOf(names[j]) < 0 || (fits && !fits(candidate))) return;
+            const value = scoreOf(index, j, true);
+            if (value <= score) { score = value; bone = j; }
+        });
+        return bone;
+    };
+    // One left without (its nearest bone went to a surer match: a thigh's to the forearm hanging beside it) takes
+    // the bone that bears its name.
+    rig.bones.forEach((def, index) => {
+        if (chosen[index] >= 0) return;
+        const bone = namedFor(index);
+        if (bone >= 0) { taken.add(bone); chosen[index] = bone; }
+    });
+    // The rig's root stands over the rest: a bone that carries none of what the root's children took (a coat's, a
+    // belt's, nearer the marker than the pelvis) gives way to the bone of its name that carries them all.
+    const isAbove = (above, bone) => { for (let node = bone; node; node = node.parent) if (node === above) return true; return false; };
+    rig.bones.forEach((def, index) => {
+        if (def.parent >= 0 || chosen[index] < 0) return;
+        const under = [];
+        rig.bones.forEach((other, j) => { if (other.parent === index && chosen[j] >= 0) under.push(bones[chosen[j]]); });
+        const carries = bone => under.every(child => isAbove(bone, child));
+        if (!under.length || carries(bones[chosen[index]])) return;
+        const bone = namedFor(index, carries);
+        if (bone < 0) return;
+        taken.delete(chosen[index]);
+        taken.add(bone);
+        chosen[index] = bone;
+    });
+    let mapped = 0;
+    chosen.forEach((j, index) => {
+        if (j < 0) return;
+        const bone = bones[j];
+        const def = rig.bones[index];
         bone.userData.parts = [{ name: def.name, pivot: [0, 0, 0] }];
         bone.userData.__reactorRigBone = true;
         bone.userData.__reactorClipBone = true;
         bone.userData.__reactorBoneTail = def.tail.slice();
         mapped++;
-    }
+    });
     root.userData.rigged = true;
     root.userData.rigMapped = mapped;
     this.attachRigHands(root, rig, bones.filter(b => b.userData && b.userData.__reactorRigBone));
+    // A file with no finger bones of its own: the new finger joints take their share of the hands' skin.
+    this.skinRigFingers(root);
     return true;
 };
 
@@ -3775,7 +5262,10 @@ Reactor3D.attachRigHands = function(root, rig, bones) {
         if (!hand) continue;
         const short = side === "Left" ? "L" : "R";
         hand.updateMatrixWorld(true);
-        const local = point => point ? hand.worldToLocal(root.localToWorld(new THREE.Vector3().fromArray(point))).toArray() : null;
+        // (A model stood on its idle clip's lowest point has been moved under its own frame by that much: the
+        // markers were placed on the model as it loads, so they go with it. Else every finger joint sits off its finger.)
+        const ground = Number(root.userData && root.userData.reactorClipGround) || 0;
+        const local = point => point ? hand.worldToLocal(root.localToWorld(new THREE.Vector3(point[0], point[1] - ground, point[2]))).toArray() : null;
         // Placed markers are points in the model's frame. Without them the
         // palm and fingertips come from the joints themselves, in the room
         // (a mapped file skeleton need not sit where the template's bones do).
@@ -3805,8 +5295,1770 @@ Reactor3D.attachRigHands = function(root, rig, bones) {
         if (palm) hand.userData.__reactorPalm = palm;
         if (knuckles) hand.userData.__reactorKnuckles = knuckles;
         if (fingers) hand.userData.__reactorFingers = fingers;
+        // The fingers themselves: joints under the hand, so it can close on what it holds.
+        this.attachRigFingers(root, hand, side, points, palm);
     }
 };
+
+/**
+ * Fingers. A rig's hand markers place each finger and thumb by a base and a
+ * tip; from those the hand gains two joints per finger (base to middle,
+ * middle to tip: RightIndex1, RightIndex2 and so on), which is what lets a
+ * hand close round a held thing. A model whose file already has finger bones
+ * uses those. The joints are plain nodes, not rig parts: they are not posed
+ * by hand and not listed anywhere; `Reactor3D.HandGrip` turns them.
+ */
+Reactor3D.RIG_FINGERS = ["thumb", "index", "middle", "ring", "pinky"];
+
+/** The finger joints a rig's markers describe, in the model's frame; none without a base and a tip. */
+Reactor3D.rigFingerDefs = function(rig) {
+    const out = [], markers = (rig && rig.markers) || {};
+    for (const side of ["Left", "Right"]) {
+        for (const finger of this.RIG_FINGERS) {
+            const base = markers[finger + "Base" + side[0]], tip = markers[finger + "Tip" + side[0]];
+            if (!Array.isArray(base) || !Array.isArray(tip)) continue;
+            if (!(Math.hypot(tip[0] - base[0], tip[1] - base[1], tip[2] - base[2]) > 1e-6)) continue;
+            const label = side + finger[0].toUpperCase() + finger.slice(1);
+            out.push({ side, finger, hand: side + "Hand", names: [label + "1", label + "2"], base: base.slice(0, 3), mid: [0, 1, 2].map(i => (base[i] + tip[i]) / 2), tip: tip.slice(0, 3) });
+        }
+    }
+    return out;
+};
+
+/** How a file's own first finger bone is named (Mixamo, VRM, Blender), as `normalizeBoneName` reads it. */
+Reactor3D.fingerBoneAliases = function(side, finger) {
+    const s = side.toLowerCase(), c = s[0];
+    const list = [s + "hand" + finger + "1", s + finger + "1", s + finger + "01", s + finger + "proximal", finger + "1" + c, finger + "01" + c,
+        "f" + finger + "01" + c, finger + "proximal" + c, c + finger + "1", s + "hand" + finger + "proximal"];
+    if (finger === "thumb") list.unshift(s + "thumbmetacarpal", "thumbmetacarpal" + c);
+    if (finger === "pinky") list.push(s + "handlittle1", s + "little1", s + "littleproximal", "little1" + c, "flittle01" + c, "fpinky01" + c);
+    return list;
+};
+
+/**
+ * How a hand's fingers are laid out and how each may turn, from points in the
+ * hand joint's own frame (`points[finger] = { base, tip }`, the wrist at the
+ * origin). Pure numbers: the palm's frame (`along` wrist to knuckles,
+ * `across` index to little finger, `normal` the way the palm faces), and for
+ * each finger its base, middle and tip, the axis it closes about (toward the
+ * palm; the thumb across it), how far it may open (straight, never behind the
+ * palm) and close, and its thickness.
+ */
+Reactor3D.handGripLayout = function(points, side, palm) {
+    const order = this.RIG_FINGERS.filter(f => points && points[f] && points[f].base && points[f].tip);
+    const four = order.filter(f => f !== "thumb");
+    if (!order.length) return null;
+    const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]], dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+    const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+    const scale = (a, s) => [a[0] * s, a[1] * s, a[2] * s], length = a => Math.hypot(a[0], a[1], a[2]);
+    const unit = a => { const l = length(a); return l > 1e-12 ? scale(a, 1 / l) : [0, 0, 0]; };
+    const bases = (four.length ? four : order).map(f => points[f].base);
+    const knuckles = bases.reduce((sum, p) => [sum[0] + p[0] / bases.length, sum[1] + p[1] / bases.length, sum[2] + p[2] / bases.length], [0, 0, 0]);
+    const along = unit(knuckles);
+    let across = four.length >= 2 ? sub(points[four[four.length - 1]].base, points[four[0]].base) : null;
+    const span = across ? length(across) : 0;
+    if (!across || span < 1e-9) {
+        // One finger alone: any direction square to the hand's length serves.
+        across = Math.abs(along[0]) < 0.9 ? cross(along, [1, 0, 0]) : cross(along, [0, 1, 0]);
+    }
+    across = unit(sub(across, scale(along, dot(across, along))));
+    // Right hand: along x across faces out of the palm; the left is its mirror.
+    const normal = unit(side === "Right" ? cross(along, across) : cross(across, along));
+    const radius = four.length >= 2 ? span / (four.length - 1) / 2 : length(sub(points[order[0]].tip, points[order[0]].base)) * 0.3;
+    const fingers = [];
+    for (const finger of order) {
+        const base = points[finger].base.slice(0, 3), tip = points[finger].tip.slice(0, 3), reach = sub(tip, base), size = length(reach), dir = unit(reach);
+        if (!(size > 1e-9)) continue;
+        const thumb = finger === "thumb";
+        let hinge;
+        if (thumb) {
+            // The thumb closes across the palm: about the hand's length, the way that brings it round to the palm's side.
+            hinge = along.slice();
+            if (dot(cross(hinge, dir), normal) < 0) hinge = scale(hinge, -1);
+            if (length(cross(hinge, dir)) < 0.2) { hinge = unit(cross(dir, normal)); }
+        } else {
+            hinge = unit(sub(across, scale(dir, dot(across, dir))));
+            if (dot(cross(hinge, dir), normal) < 0) hinge = scale(hinge, -1);
+        }
+        const rest = Math.asin(Math.max(-1, Math.min(1, dot(dir, normal))));
+        fingers.push({
+            finger, thumb, base, tip, mid: [0, 1, 2].map(i => (base[i] + tip[i]) / 2), length: size, hinge,
+            // A finger closes from where it rests and never opens past it (a relaxed hand rests a little closed).
+            open: 0,
+            max1: thumb ? 1.2 : Math.max(0.25, 1.45 - Math.max(0, rest)),
+            max2: thumb ? 1.0 : 1.65,
+            radius: thumb ? radius * 1.1 : radius
+        });
+    }
+    return { side, along, across, normal, knuckles, radius, palm: palm ? palm.slice(0, 3) : scale(knuckles, 0.7), fingers };
+};
+
+Reactor3D._handGrips = new WeakMap();
+
+/**
+ * Give a hand its finger joints: the file's own finger bones when it has
+ * them, else new joints at the marked bases and middles. `skinRigFingers`
+ * then lets the new ones carry the fingers' skin.
+ */
+Reactor3D.attachRigFingers = function(root, hand, side, points, palm) {
+    const layout = this.handGripLayout(points, side, palm);
+    if (!layout || !layout.fingers.length) return null;
+    const V = a => new THREE.Vector3().fromArray(a);
+    hand.updateMatrixWorld(true);
+    const handQuat = hand.getWorldQuaternion(new THREE.Quaternion());
+    const named = new Map();
+    hand.traverse(node => { if (node !== hand) named.set(this.normalizeBoneName(node.name), node); });
+    for (const entry of layout.fingers) {
+        const hinge = V(entry.hinge);
+        let first = null;
+        for (const alias of this.fingerBoneAliases(side, entry.finger)) { if (named.has(alias)) { first = named.get(alias); break; } }
+        if (first) {
+            // The file's own finger: its bones, down the chain, each turned about the hinge as its parent sees it.
+            const chain = [];
+            for (let node = first; node && chain.length < 3; node = node.children.find(c => c.isBone || c.children.length || c.userData.__reactorClipBone) || node.children[0]) chain.push(node);
+            entry.file = true;
+            entry.joints = chain.map(node => {
+                const parentQuat = node.parent.getWorldQuaternion(new THREE.Quaternion());
+                return { node, rest: node.quaternion.clone(), axis: hinge.clone().applyQuaternion(parentQuat.invert().multiply(handQuat)).normalize() };
+            });
+            const at = chain.map(node => hand.worldToLocal(node.getWorldPosition(new THREE.Vector3())).toArray());
+            entry.base = at[0];
+            if (at[1]) entry.mid = at[1];
+        } else {
+            const one = new THREE.Object3D(), two = new THREE.Object3D();
+            const label = side + entry.finger[0].toUpperCase() + entry.finger.slice(1);
+            one.name = label + "1"; two.name = label + "2";
+            one.userData.__reactorFinger = true; two.userData.__reactorFinger = true;
+            one.position.fromArray(entry.base);
+            two.position.set(entry.mid[0] - entry.base[0], entry.mid[1] - entry.base[1], entry.mid[2] - entry.base[2]);
+            one.add(two); hand.add(one);
+            entry.joints = [{ node: one, rest: one.quaternion.clone(), axis: hinge.clone() }, { node: two, rest: two.quaternion.clone(), axis: hinge.clone() }];
+        }
+        entry.now = [0, 0];
+        entry.goal = [0, 0];
+    }
+    hand.updateMatrixWorld(true);
+    const grip = { hand, layout, file: layout.fingers.some(f => f.file), stamp: -1, held: null, last: null, closed: false };
+    this._handGrips.set(hand, grip);
+    return grip;
+};
+
+/** The finger joints a model's hands gained that are not in its file (they need skin of their own). */
+Reactor3D.rigFingerJoints = function(root) {
+    const out = [];
+    root.traverse(node => {
+        const grip = this._handGrips.get(node);
+        if (!grip) return;
+        for (const entry of grip.layout.fingers) if (!entry.file) out.push({ hand: node, entry, one: entry.joints[0].node, two: entry.joints[1].node });
+    });
+    return out;
+};
+
+/**
+ * Share a hand's skin among its finger joints. `read(i, c)` and `weight(i, c)`
+ * give vertex i's four bone indices and weights; `toHand` maps a bind-pose
+ * vertex into the hand joint's frame. A vertex the hand carries that lies
+ * along a finger (within reach of its line, past its base) hands that share
+ * to the finger's first joint, and past its middle to the second, easing over
+ * the knuckle so the palm does not crease. Returns { index, weight } (four per
+ * vertex) and how many vertices changed.
+ */
+Reactor3D.fingerSkinWeights = function(count, position, read, weight, hands, triangles) {
+    const index = new Uint16Array(count * 4), out = new Float32Array(count * 4);
+    for (let i = 0; i < count; i++) for (let c = 0; c < 4; c++) { index[i * 4 + c] = read(i, c); out[i * 4 + c] = weight(i, c); }
+    // A file's end bone on a hand (a leaf that only marks where the hand stops) often carries the fingertips'
+    // skin. It never moves on its own, so that skin is the hand's: counted as the hand's here, it goes on to the fingers.
+    for (const hand of hands) {
+        if (!hand.ends || !hand.ends.length) continue;
+        for (let i = 0; i < count; i++) {
+            let mine = -1;
+            for (let c = 0; c < 4; c++) if (index[i * 4 + c] === hand.index && out[i * 4 + c] > 0) { mine = c; break; }
+            for (let c = 0; c < 4; c++) {
+                if (out[i * 4 + c] <= 0 || hand.ends.indexOf(index[i * 4 + c]) < 0) continue;
+                if (mine < 0) { index[i * 4 + c] = hand.index; mine = c; }
+                else { out[i * 4 + mine] += out[i * 4 + c]; out[i * 4 + c] = 0; }
+            }
+        }
+    }
+    const smooth = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+    const p = [0, 0, 0], slots = new Array(6), shares = new Float32Array(6);
+    let changed = 0;
+    for (const hand of hands) {
+        const m = hand.toHand;
+        // With the mesh's triangles in hand, each finger is the part of the surface that grows from its tip.
+        const regions = triangles !== undefined ? this.fingerRegions(count, position, triangles, hand, index, out) : null;
+        hand.mitt = !!(regions && regions.mitt);
+        hand.shared = regions ? [regions.joined || 0, regions.own || 0] : null;
+        for (let i = 0; i < count; i++) {
+            let at = -1;
+            for (let c = 0; c < 4; c++) if (index[i * 4 + c] === hand.index && out[i * 4 + c] > 0.01) { at = c; break; }
+            if (at < 0) continue;
+            const x = position.getX(i), y = position.getY(i), z = position.getZ(i);
+            p[0] = m[0] * x + m[4] * y + m[8] * z + m[12]; p[1] = m[1] * x + m[5] * y + m[9] * z + m[13]; p[2] = m[2] * x + m[6] * y + m[10] * z + m[14];
+            let best = null, bestD = Infinity, bestT = 0;
+            if (regions) {
+                const label = regions.label[i];
+                if (label < 0) continue;
+                // Fingers the mesh does not separate turn as one, on one finger's joints, measured along the hand's middle.
+                const own = hand.fingers[label];
+                best = regions.mitt && !own.thumb ? hand.fingers[regions.carrier] : own;
+                bestT = regions.t[i];
+                // One mitt bends along one line across the hand: its place along the hand's middle, not each finger's own.
+                if (regions.mitt && !own.thumb) {
+                    const line = regions.mittLine;
+                    bestT = Math.min(bestT + 0.25, ((p[0] - line.base[0]) * (line.tip[0] - line.base[0]) + (p[1] - line.base[1]) * (line.tip[1] - line.base[1]) + (p[2] - line.base[2]) * (line.tip[2] - line.base[2])) / (line.length * line.length));
+                }
+                bestD = 0;
+            } else for (const f of hand.fingers) {
+                const ux = (f.tip[0] - f.base[0]) / f.length, uy = (f.tip[1] - f.base[1]) / f.length, uz = (f.tip[2] - f.base[2]) / f.length;
+                const dx = p[0] - f.base[0], dy = p[1] - f.base[1], dz = p[2] - f.base[2];
+                const along = dx * ux + dy * uy + dz * uz, t = along / f.length;
+                if (t < -0.3 || t > 1.5) continue;
+                const d = Math.hypot(dx - ux * along, dy - uy * along, dz - uz * along) / (f.radius * 1.7);
+                if (d < 1 && d < bestD) { best = f; bestD = d; bestT = t; }
+            }
+            if (!best) continue;
+            const share = smooth(-0.25, 0.2, bestT) * (1 - smooth(0.8, 1, bestD));
+            if (share < 0.004) continue;
+            const second = smooth(0.34, 0.66, bestT), own = out[i * 4 + at];
+            let n = 0;
+            for (let c = 0; c < 4; c++) if (c !== at && out[i * 4 + c] > 0) { slots[n] = index[i * 4 + c]; shares[n++] = out[i * 4 + c]; }
+            slots[n] = hand.index; shares[n++] = own * (1 - share);
+            slots[n] = best.one; shares[n++] = own * share * (1 - second);
+            slots[n] = best.two; shares[n++] = own * share * second;
+            // The four strongest, made to sum to what they summed to.
+            let total = 0; for (let k = 0; k < n; k++) total += shares[k];
+            for (let c = 0; c < 4; c++) {
+                let top = -1;
+                for (let k = 0; k < n; k++) if (shares[k] >= 0 && (top < 0 || shares[k] > shares[top])) top = k;
+                if (top < 0 || shares[top] <= 0) { index[i * 4 + c] = 0; out[i * 4 + c] = 0; continue; }
+                index[i * 4 + c] = slots[top]; out[i * 4 + c] = shares[top]; shares[top] = -1;
+            }
+            let kept = 0; for (let c = 0; c < 4; c++) kept += out[i * 4 + c];
+            if (kept > 0) for (let c = 0; c < 4; c++) out[i * 4 + c] *= total / kept;
+            changed++;
+        }
+        // Fingers modelled touching share a triangle here and there (too few for a mitt). A triangle whose corners
+        // are different fingers' would tear when they close unequally: each of its places takes the mean of the
+        // triangle's corners instead, so that strip of skin turns with both fingers.
+        if (regions && regions.node && !hand.mitt) {
+            const node = regions.node, label = regions.label, all = triangles ? triangles.count / 3 : Math.floor(count / 3), corner = k => (triangles ? triangles.getX(k) : k);
+            const mixes = new Map();
+            for (let t = 0; t < all; t++) {
+                const tri = [corner(t * 3), corner(t * 3 + 1), corner(t * 3 + 2)];
+                if (tri.some(i => node[i] < 0) || new Set(tri.map(i => label[i]).filter(l => l >= 0)).size < 2) continue;
+                const mean = new Map();
+                for (const i of tri) for (let c = 0; c < 4; c++) if (out[i * 4 + c] > 0) mean.set(index[i * 4 + c], (mean.get(index[i * 4 + c]) || 0) + out[i * 4 + c] / 3);
+                for (const i of tri) {
+                    let mix = mixes.get(node[i]);
+                    if (!mix) mixes.set(node[i], mix = new Map());
+                    for (const [bone, w] of mean) mix.set(bone, (mix.get(bone) || 0) + w);
+                }
+            }
+            if (mixes.size) for (let i = 0; i < count; i++) {
+                const mix = node[i] >= 0 ? mixes.get(node[i]) : null;
+                if (!mix) continue;
+                let whole = 0;
+                for (let c = 0; c < 4; c++) whole += out[i * 4 + c];
+                const top = [...mix].sort((a, b) => b[1] - a[1]).slice(0, 4), kept = top.reduce((sum, e) => sum + e[1], 0);
+                for (let c = 0; c < 4; c++) { index[i * 4 + c] = top[c] ? top[c][0] : 0; out[i * 4 + c] = top[c] && kept > 0 ? top[c][1] / kept * whole : 0; }
+            }
+        }
+    }
+    return { index, weight: out, changed };
+};
+
+/**
+ * Which finger each of a hand's vertices belongs to, from the mesh itself:
+ * the surface is walked outward from each fingertip at once, across shared
+ * edges (vertices at one place count as one, so a seam does not stop it),
+ * and a vertex is the finger whose tip it is nearest along the surface, as
+ * far down as that finger's knuckle. So a finger is all of its own surface,
+ * however thick or curled, and nothing of its neighbour. Where neighbouring
+ * fingers turn out to share triangles along their length (a mitten, fingers
+ * only painted on), `mitt` says so: the four turn as one. `triangles` is the
+ * geometry's index (or null for three vertices a triangle). Returns
+ * `{ label: Int8Array (finger index or -1), mitt, carrier, mittLine }`.
+ */
+Reactor3D.fingerRegions = function(count, position, triangles, hand, skinIndex, skinWeight) {
+    const m = hand.toHand, fingers = hand.fingers, label = new Int8Array(count).fill(-1);
+    // The hand's own vertices, in the hand's frame, one node for each place.
+    const node = new Int32Array(count).fill(-1), places = new Map(), at = [];
+    let radius = 0;
+    for (const f of fingers) radius = Math.max(radius, f.radius);
+    const quantum = Math.max(radius * 0.01, 1e-9);
+    for (let i = 0; i < count; i++) {
+        let mine = false;
+        for (let c = 0; c < 4; c++) if (skinIndex[i * 4 + c] === hand.index && skinWeight[i * 4 + c] > 0.01) { mine = true; break; }
+        if (!mine) continue;
+        const x = position.getX(i), y = position.getY(i), z = position.getZ(i);
+        const px = m[0] * x + m[4] * y + m[8] * z + m[12], py = m[1] * x + m[5] * y + m[9] * z + m[13], pz = m[2] * x + m[6] * y + m[10] * z + m[14];
+        const key = Math.round(px / quantum) + "," + Math.round(py / quantum) + "," + Math.round(pz / quantum);
+        let n = places.get(key);
+        if (n === undefined) { n = at.length / 3; places.set(key, n); at.push(px, py, pz); }
+        node[i] = n;
+    }
+    const nodes = at.length / 3;
+    if (!nodes) return { label, mitt: false, carrier: -1, mittLine: null };
+    const edges = Array.from({ length: nodes }, () => []);
+    const total = triangles ? triangles.count / 3 : Math.floor(count / 3), corner = k => (triangles ? triangles.getX(k) : k);
+    const link = (a, b) => { if (a !== b && edges[a].indexOf(b) < 0) { edges[a].push(b); edges[b].push(a); } };
+    const faces = [];
+    for (let t = 0; t < total; t++) {
+        const a = node[corner(t * 3)], b = node[corner(t * 3 + 1)], c = node[corner(t * 3 + 2)];
+        if (a < 0 || b < 0 || c < 0) continue;
+        link(a, b); link(b, c); link(c, a); faces.push(a, b, c);
+    }
+    // How far along its finger a place is (0 the base, 1 the tip), by its way over the surface from the tip:
+    // a field with no seams, that fades into the palm on every side of the knuckle alike. A finger's surface
+    // from tip to base is a little longer than the straight line between its markers.
+    const reach = 1.1;
+    const owner = new Int8Array(nodes).fill(-1), far = new Float64Array(nodes).fill(Infinity);
+    const along = (f, n) => 1 - far[n] / (f.length * reach);
+    // Whose knuckle each place is nearest, over the surface: a place can only start the finger it belongs to by
+    // that measure, so a tip marker set nearer a neighbour's fingertip does not start on the neighbour.
+    const home = new Int8Array(nodes).fill(-1), walk = new Float64Array(nodes).fill(Infinity);
+    let ring = [];
+    fingers.forEach((f, fi) => {
+        let best = -1, bestD = Infinity;
+        for (let n = 0; n < nodes; n++) { const d = Math.hypot(at[n * 3] - f.base[0], at[n * 3 + 1] - f.base[1], at[n * 3 + 2] - f.base[2]); if (d < bestD) { bestD = d; best = n; } }
+        if (best >= 0 && bestD < walk[best]) { walk[best] = bestD; home[best] = fi; ring.push(best); }
+    });
+    while (ring.length) {
+        const next = [];
+        for (const a of ring) for (const b of edges[a]) {
+            const d = walk[a] + Math.hypot(at[a * 3] - at[b * 3], at[a * 3 + 1] - at[b * 3 + 1], at[a * 3 + 2] - at[b * 3 + 2]);
+            if (d >= walk[b] - 1e-12) continue;
+            walk[b] = d; home[b] = home[a]; next.push(b);
+        }
+        ring = next;
+    }
+    let front = [];
+    fingers.forEach((f, fi) => {
+        let best = -1, bestD = Infinity;
+        for (let n = 0; n < nodes; n++) { const d = Math.hypot(at[n * 3] - f.tip[0], at[n * 3 + 1] - f.tip[1], at[n * 3 + 2] - f.tip[2]); if (d < bestD) { bestD = d; best = n; } }
+        if (best < 0) return;
+        let seeded = 0;
+        const mine = n => home[n] < 0 || home[n] === fi;
+        // The start is the skin nearest the tip's marker (and whatever is as near): measured on Fleagus and
+        // Carol, starting from the whole fingertip moved the bend off the joint and stretched more.
+        const tipReach = bestD < f.radius * 3 && owner[best] < 0 && mine(best) ? bestD * 1.02 : -1;
+        for (let n = 0; n < nodes; n++) {
+            const reachHere = Math.hypot(at[n * 3] - f.tip[0], at[n * 3 + 1] - f.tip[1], at[n * 3 + 2] - f.tip[2]);
+            if (owner[n] >= 0 || reachHere > tipReach || !mine(n)) continue;
+            // Only what is nearer this tip than any other finger's: fingertips that lie close together keep their own.
+            let nearer = false;
+            for (const other of fingers) if (other !== f && Math.hypot(at[n * 3] - other.tip[0], at[n * 3 + 1] - other.tip[1], at[n * 3 + 2] - other.tip[2]) < reachHere) { nearer = true; break; }
+            if (nearer) continue;
+            // The marker stands inside the fingertip, about a finger's thickness from its skin.
+            owner[n] = fi; far[n] = Math.max(0, reachHere - f.radius); front.push(n); seeded++;
+        }
+        if (seeded) return;
+        // A tip marker placed by hand can stand off the skin, or nearer a neighbour's fingertip than its own: the
+        // finger then starts from the skin furthest out along its own line (base to tip), among the skin that lies
+        // nearer this finger's line than any other's. With no such skin past the finger's middle, it has no start.
+        const line = (g, n) => {
+            const ax = g.tip[0] - g.base[0], ay = g.tip[1] - g.base[1], az = g.tip[2] - g.base[2], px = at[n * 3] - g.base[0], py = at[n * 3 + 1] - g.base[1], pz = at[n * 3 + 2] - g.base[2];
+            const t = (px * ax + py * ay + pz * az) / (ax * ax + ay * ay + az * az), c = Math.max(0, Math.min(1.25, t));
+            return [t, Math.hypot(px - ax * c, py - ay * c, pz - az * c)];
+        };
+        let start = -1, startT = 0.5;
+        for (let n = 0; n < nodes; n++) {
+            if (owner[n] >= 0 || !mine(n)) continue;
+            const [t, d] = line(f, n);
+            if (t <= startT || t > 1.25 || d > f.radius * 3) continue;
+            let theirs = false;
+            if (home[n] < 0) for (const other of fingers) if (other !== f && line(other, n)[1] < d) { theirs = true; break; }
+            if (!theirs) { start = n; startT = t; }
+        }
+        if (start >= 0) { owner[start] = fi; far[start] = Math.max(0, (1 - Math.min(1, startT)) * f.length); front.push(start); }
+    });
+    // Every tip's surface grows at once; a place goes to the tip it is nearest along the surface.
+    while (front.length) {
+        const next = [];
+        for (const a of front) {
+            const f = fingers[owner[a]];
+            for (const b of edges[a]) {
+                const d = far[a] + Math.hypot(at[a * 3] - at[b * 3], at[a * 3 + 1] - at[b * 3 + 1], at[a * 3 + 2] - at[b * 3 + 2]);
+                if (d >= far[b] - 1e-12 || d > f.length * reach * 1.3) continue;
+                far[b] = d; owner[b] = owner[a]; next.push(b);
+            }
+        }
+        front = next;
+    }
+    // A hand built of separate pieces (armour plates, a glove's own shell): a piece no tip's walk can reach
+    // goes to the finger whose line it lies along, by its place on that line.
+    const piece = new Int32Array(nodes).fill(-1), walked = [];
+    let pieces = 0;
+    for (let n = 0; n < nodes; n++) {
+        if (piece[n] >= 0) continue;
+        let reached = false;
+        const stack = [n]; piece[n] = pieces;
+        while (stack.length) { const a = stack.pop(); if (far[a] === 0) reached = true; for (const b of edges[a]) if (piece[b] < 0) { piece[b] = pieces; stack.push(b); } }
+        walked.push(reached); pieces++;
+    }
+    const loose = new Float32Array(nodes);
+    for (let n = 0; n < nodes; n++) {
+        if (walked[piece[n]]) continue;
+        let bestD = 1;
+        fingers.forEach((f, fi) => {
+            const dx = at[n * 3] - f.base[0], dy = at[n * 3 + 1] - f.base[1], dz = at[n * 3 + 2] - f.base[2];
+            const ux = (f.tip[0] - f.base[0]) / f.length, uy = (f.tip[1] - f.base[1]) / f.length, uz = (f.tip[2] - f.base[2]) / f.length;
+            const run = dx * ux + dy * uy + dz * uz, t = run / f.length;
+            if (t < -0.3 || t > 1.5) return;
+            const d = Math.hypot(dx - ux * run, dy - uy * run, dz - uz * run) / (f.radius * 1.7);
+            if (d < bestD) { bestD = d; owner[n] = fi; loose[n] = t; far[n] = (1 - t) * f.length * reach; }
+        });
+    }
+    // Triangles that join two fingers well up their length: the mesh does not separate them.
+    let joined = 0, own = 0;
+    for (let t = 0; t < faces.length; t += 3) {
+        const a = owner[faces[t]], b = owner[faces[t + 1]], c = owner[faces[t + 2]];
+        if (a < 0 || b < 0 || c < 0 || fingers[a].thumb || fingers[b].thumb || fingers[c].thumb) continue;
+        if (Math.min(along(fingers[a], faces[t]), along(fingers[b], faces[t + 1]), along(fingers[c], faces[t + 2])) < 0.3) continue;
+        own++;
+        if (a !== b || b !== c) joined++;
+    }
+    const four = fingers.map((f, i) => i).filter(i => !fingers[i].thumb);
+    // (A few shared triangles at a web or a touching fingertip do not make a mitten.)
+    const mitt = four.length > 1 && joined > Math.max(6, own * 0.04);
+    let carrier = -1, mittLine = null;
+    if (mitt) {
+        carrier = four[Math.floor((four.length - 1) / 2)];
+        const base = [0, 0, 0], tip = [0, 0, 0];
+        for (const i of four) for (let k = 0; k < 3; k++) { base[k] += fingers[i].base[k] / four.length; tip[k] += fingers[i].tip[k] / four.length; }
+        mittLine = { base, tip, length: Math.hypot(tip[0] - base[0], tip[1] - base[1], tip[2] - base[2]) || 1 };
+    }
+    const t = new Float32Array(count);
+    for (let i = 0; i < count; i++) if (node[i] >= 0 && owner[node[i]] >= 0) { label[i] = owner[node[i]]; t[i] = along(fingers[label[i]], node[i]); }
+    return { label, t, mitt, carrier, mittLine, joined, own, node };
+};
+
+Reactor3D._fingerGeometries = new WeakMap();
+
+/**
+ * Bind new finger joints into a model's skinned meshes: each mesh keeps its
+ * bones and gains the finger joints after them, and wears a copy of its
+ * geometry that shares every attribute but the skin's. The copy is made once
+ * per geometry and shared by every instance; the file's own geometry is left
+ * as it was for whatever else draws it.
+ */
+Reactor3D.skinRigFingers = function(root) {
+    const joints = this.rigFingerJoints(root);
+    if (!joints.length) return 0;
+    const meshes = [];
+    root.traverse(child => { if (child.isSkinnedMesh && child.skeleton && child.geometry) meshes.push(child); });
+    const made = new Map();
+    let bound = 0;
+    for (const mesh of meshes) {
+        const old = mesh.skeleton;
+        let entry = made.get(old);
+        if (!entry) {
+            const bones = old.bones.slice(), inverses = old.boneInverses.map(m => m.clone()), hands = new Map();
+            for (const joint of joints) {
+                const at = old.bones.indexOf(joint.hand);
+                if (at < 0) continue;
+                const handInverse = old.boneInverses[at], e = joint.entry;
+                let hand = hands.get(joint.hand);
+                // (The hand's own end bones: leaves of the file's skeleton under it that are not fingers of ours.)
+                if (!hand) hands.set(joint.hand, hand = { index: at, inverse: handInverse, fingers: [], ends: old.bones.map((bone, i) => bone.parent === joint.hand && !bone.userData.__reactorFinger && !bone.children.some(child => child.isBone) ? i : -1).filter(i => i >= 0) });
+                const one = bones.length;
+                bones.push(joint.one); inverses.push(new THREE.Matrix4().makeTranslation(-e.base[0], -e.base[1], -e.base[2]).multiply(handInverse));
+                const two = bones.length;
+                bones.push(joint.two); inverses.push(new THREE.Matrix4().makeTranslation(-e.mid[0], -e.mid[1], -e.mid[2]).multiply(handInverse));
+                hand.fingers.push({ base: e.base, tip: e.tip, length: e.length, radius: e.radius, thumb: e.thumb, one, two });
+            }
+            entry = { hands: [...hands.values()], skeleton: hands.size ? new THREE.Skeleton(bones, inverses) : null };
+            made.set(old, entry);
+        }
+        if (!entry.skeleton) continue;
+        const geometry = this.fingerSkinnedGeometry(mesh, entry.hands);
+        if (!geometry) continue;
+        mesh.geometry = geometry;
+        mesh.bind(entry.skeleton, mesh.bindMatrix);
+        // Fingers the mesh does not separate close as one.
+        for (const joint of joints) if (geometry.userData.__reactorMitt.indexOf(old.bones.indexOf(joint.hand)) >= 0) this._handGrips.get(joint.hand).layout.mitt = true;
+        bound++;
+    }
+    return bound;
+};
+
+Reactor3D.fingerSkinnedGeometry = function(mesh, hands) {
+    const source = mesh.geometry, position = source.getAttribute("position"), skinIndex = source.getAttribute("skinIndex"), skinWeight = source.getAttribute("skinWeight");
+    if (!position || !skinIndex || !skinWeight) return null;
+    const round = v => Math.round(v * 1e4) / 1e4;
+    const signature = mesh.bindMatrix.elements.map(round).join(",") + "|" + hands.map(h => h.index + ":" + h.inverse.elements.map(round).join(",") + ":"
+        + h.fingers.map(f => [f.one, f.two, ...f.base.map(round), ...f.tip.map(round), round(f.radius)].join(",")).join(";")).join("|");
+    // The skin is worked out once per geometry and shared; the geometry that wears it is each instance's own
+    // (releaseModelInstance takes an instance's geometry apart, and leaves what it shares with the template).
+    const versions = this._fingerGeometries.get(source) || [];
+    let skin = versions.find(entry => entry.signature === signature);
+    if (!skin) {
+        const list = hands.map(h => ({ index: h.index, ends: h.ends, fingers: h.fingers, toHand: new THREE.Matrix4().multiplyMatrices(h.inverse, mesh.bindMatrix).elements }));
+        const made = this.fingerSkinWeights(position.count, position, (i, c) => skinIndex.getComponent(i, c), (i, c) => skinWeight.getComponent(i, c), list, source.index || null);
+        skin = { signature, index: new THREE.BufferAttribute(made.index, 4), weight: new THREE.BufferAttribute(made.weight, 4), changed: made.changed, mitt: list.filter(h => h.mitt).map(h => h.index), shared: list.map(h => [h.index].concat(h.shared || [])) };
+        versions.push(skin);
+        this._fingerGeometries.set(source, versions);
+    }
+    // The rest bounds are the source's, worked out once for every copy: with none to share, each new instance's
+    // geometry had its box walked out again by the first thing that asked (10 ms a unit on the frame it joined).
+    if (!source.boundingBox) source.computeBoundingBox();
+    if (!source.boundingSphere) source.computeBoundingSphere();
+    const geometry = new THREE.BufferGeometry();
+    for (const name of Object.keys(source.attributes)) if (name !== "skinIndex" && name !== "skinWeight") geometry.setAttribute(name, source.attributes[name]);
+    geometry.setAttribute("skinIndex", skin.index);
+    geometry.setAttribute("skinWeight", skin.weight);
+    geometry.setIndex(source.index);
+    geometry.morphAttributes = source.morphAttributes;
+    geometry.morphTargetsRelative = source.morphTargetsRelative;
+    for (const group of source.groups) geometry.addGroup(group.start, group.count, group.materialIndex);
+    geometry.drawRange.start = source.drawRange.start; geometry.drawRange.count = source.drawRange.count;
+    geometry.boundingBox = source.boundingBox; geometry.boundingSphere = source.boundingSphere;
+    geometry.name = source.name;
+    geometry.userData = Object.assign({}, source.userData, { __reactorFingerSkin: skin.changed, __reactorMitt: skin.mitt, __reactorShared: skin.shared });
+    return geometry;
+};
+
+Reactor3D._heldClouds = new WeakMap();
+
+/**
+ * A held model's surface as points in its own frame, one per small cell
+ * (a two-hundredth of its length), so fingers can close on it wherever its
+ * triangles are large or small. `{ points: Float32Array, count, cell }`, or
+ * null for a thing with no geometry.
+ */
+Reactor3D.heldCloud = function(object) {
+    if (!object) return null;
+    if (this._heldClouds.has(object)) return this._heldClouds.get(object);
+    object.updateMatrixWorld(true);
+    const measured = this.heldMeasured(object);
+    if (measured && measured.cloud !== undefined) { this._heldClouds.set(object, measured.cloud); return measured.cloud; }
+    const toLocal = new THREE.Matrix4().copy(object.matrixWorld).invert(), box = new THREE.Box3(), m = new THREE.Matrix4();
+    const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), p = new THREE.Vector3();
+    const meshes = [];
+    let triangles = 0;
+    object.traverse(mesh => {
+        const position = mesh.isMesh && mesh.geometry && mesh.geometry.attributes && mesh.geometry.attributes.position;
+        if (!position) return;
+        meshes.push(mesh);
+        triangles += (mesh.geometry.index ? mesh.geometry.index.count : position.count) / 3;
+        m.multiplyMatrices(toLocal, mesh.matrixWorld);
+        const stride = Math.max(1, Math.floor(position.count / 3000));
+        for (let i = 0; i < position.count; i += stride) box.expandByPoint(p.fromBufferAttribute(position, i).applyMatrix4(m));
+    });
+    let cloud = null;
+    if (meshes.length && !box.isEmpty()) {
+        const size = box.getSize(new THREE.Vector3()), cell = Math.max(size.x, size.y, size.z, 1e-6) / 200;
+        const seen = new Set(), points = [];
+        const add = v => {
+            const ix = Math.floor((v.x - box.min.x) / cell), iy = Math.floor((v.y - box.min.y) / cell), iz = Math.floor((v.z - box.min.z) / cell);
+            const key = ix + 256 * (iy + 256 * iz);
+            if (seen.has(key)) return;
+            seen.add(key); points.push(v.x, v.y, v.z);
+        };
+        const skip = Math.max(1, Math.floor(triangles / 120000));
+        for (const mesh of meshes) {
+            const position = mesh.geometry.attributes.position, index = mesh.geometry.index, count = (index ? index.count : position.count) / 3;
+            m.multiplyMatrices(toLocal, mesh.matrixWorld);
+            for (let t = 0; t < count; t += skip) {
+                const i0 = index ? index.getX(t * 3) : t * 3, i1 = index ? index.getX(t * 3 + 1) : t * 3 + 1, i2 = index ? index.getX(t * 3 + 2) : t * 3 + 2;
+                a.fromBufferAttribute(position, i0).applyMatrix4(m); b.fromBufferAttribute(position, i1).applyMatrix4(m); c.fromBufferAttribute(position, i2).applyMatrix4(m);
+                // A triangle larger than a cell is covered across, not only at its corners.
+                const n = Math.max(1, Math.min(16, Math.ceil(Math.max(a.distanceTo(b), b.distanceTo(c), c.distanceTo(a)) / cell)));
+                for (let i = 0; i <= n; i++) for (let j = 0; j <= n - i; j++) {
+                    const u = i / n, w = j / n;
+                    add(p.set(a.x + (b.x - a.x) * u + (c.x - a.x) * w, a.y + (b.y - a.y) * u + (c.y - a.y) * w, a.z + (b.z - a.z) * u + (c.z - a.z) * w));
+                }
+            }
+        }
+        cloud = { points: Float32Array.from(points), count: points.length / 3, cell };
+    }
+    this._heldClouds.set(object, cloud);
+    if (measured) measured.cloud = cloud;
+    return cloud;
+};
+
+/**
+ * How far each finger of a hand closes on what it holds. `layout` is
+ * `handGripLayout`'s; `cloud` holds `count` points of the held thing in the
+ * hand joint's frame (Float32Array, x y z each); `pad` is how far apart those
+ * points lie. Each finger starts open and closes, both joints together,
+ * until it meets the thing (a point within its own thickness); when the
+ * first segment has met it the second closes on alone, so a finger wraps
+ * round a handle. A part of a finger already against the thing when open is
+ * left out of the test (closing cannot free it). The thumb closes last, on
+ * the thing or on the fingers. With nothing to meet (`count` 0: a picture in
+ * the hand) the hand makes a loose fist. Writes two angles per finger, in
+ * radians from rest, into `out`, in the layout's finger order.
+ */
+// With `thumbStays` (a gun's grip) a thumb that lies against the thing when open stays open: closing would only sink it in.
+Reactor3D.solveGrip = function(layout, cloud, count, pad, out, thumbStays) {
+    const fingers = layout.fingers, S = this._gripScratch || (this._gripScratch = {
+        near: new Int32Array(4096), nearCount: 0, s: new Float32Array(12), extra: new Float32Array(5 * 12), extras: 0, mask: [false, false, false, false],
+        f: null, thr2: 0, v1: [0, 0, 0], v2: [0, 0, 0], cloud: null
+    });
+    if (S.near.length < count) S.near = new Int32Array(count * 2);
+    S.extras = 0; S.cloud = cloud;
+    if (!S.blocked || S.blocked.length < fingers.length) S.blocked = new Uint8Array(Math.max(8, fingers.length));
+    let blocked = 0, closed = 0, sum1 = 0, sum2 = 0;
+    const order = layout.order || (layout.order = fingers.map((f, i) => i).sort((x, y) => (fingers[x].thumb ? 1 : 0) - (fingers[y].thumb ? 1 : 0)));
+    for (const fi of order) {
+        const f = fingers[fi];
+        if (!count) {
+            // Nothing to meet: a loose fist.
+            out[fi * 2] = f.thumb ? f.max1 * 0.45 : f.open + (f.max1 - f.open) * 0.78;
+            out[fi * 2 + 1] = f.max2 * (f.thumb ? 0.4 : 0.8);
+            continue;
+        }
+        S.f = f;
+        for (let i = 0; i < 3; i++) { S.v1[i] = f.mid[i] - f.base[i]; S.v2[i] = f.tip[i] - f.mid[i]; }
+        const thr = f.radius + pad, reach = f.length + thr, reach2 = reach * reach;
+        S.thr2 = thr * thr;
+        // Only the points this finger could ever touch.
+        let near = 0;
+        for (let i = 0; i < count; i++) {
+            const dx = cloud[i * 3] - f.base[0], dy = cloud[i * 3 + 1] - f.base[1], dz = cloud[i * 3 + 2] - f.base[2];
+            if (dx * dx + dy * dy + dz * dz < reach2) S.near[near++] = i;
+        }
+        S.nearCount = near;
+        this._gripPlace(S, f.open, 0);
+        for (let k = 0; k < 4; k++) S.mask[k] = this._gripTouches(S, k);
+        const ratio = f.thumb ? 0.5 : 0.9, step = 0.09;
+        let t1 = f.open, t2 = 0, met = 0, from = f.open;
+        const stays = !!thumbStays && f.thumb && (S.mask[0] || S.mask[1] || S.mask[2] || S.mask[3]);
+        // A gun's guard (or the loop of a skeleton stock) can stand where an open finger lies: the finger closes
+        // past it to where it is clear, and on from there until it meets the grip.
+        if (thumbStays && !f.thumb && S.mask[0] && S.mask[1] && S.mask[2] && S.mask[3]) {
+            // (Clear here is the finger's own middle clear of it: a loop only just a finger wide still takes a finger.)
+            const full = S.thr2;
+            S.thr2 = f.radius * f.radius * 0.5;
+            for (let t = f.open + step; t <= f.max1 + 1e-6; t += step) {
+                this._gripPlace(S, t, Math.min(f.max2, Math.max(0, (t - f.open) * ratio)));
+                if (this._gripTouches(S, 0) || this._gripTouches(S, 1) || this._gripTouches(S, 2) || this._gripTouches(S, 3)) continue;
+                from = t; S.mask[0] = S.mask[1] = S.mask[2] = S.mask[3] = false;
+                break;
+            }
+            S.thr2 = full;
+        }
+        if (!stays && !(S.mask[0] && S.mask[1] && S.mask[2] && S.mask[3])) {
+            // Both joints close together until some part meets the thing.
+            let free = from;
+            for (let t = from + step; t <= f.max1 + 1e-6; t += step) {
+                met = this._gripMeets(S, t, Math.min(f.max2, Math.max(0, (t - f.open) * ratio)));
+                if (met) {
+                    let lo = free, hi = t;
+                    for (let k = 0; k < 3; k++) { const mid = (lo + hi) / 2; if (this._gripMeets(S, mid, Math.min(f.max2, Math.max(0, (mid - f.open) * ratio)))) hi = mid; else lo = mid; }
+                    free = lo; break;
+                }
+                free = t;
+            }
+            t1 = free; t2 = Math.min(f.max2, Math.max(0, (free - f.open) * ratio));
+            // The first segment is on it and the second is not: the second closes on alone.
+            if (met === 1) {
+                let last = t2;
+                for (let t = t2 + step; t <= f.max2 + 1e-6; t += step) {
+                    if (this._gripMeets(S, t1, t) & 2) { let lo = last, hi = t; for (let k = 0; k < 3; k++) { const mid = (lo + hi) / 2; if (this._gripMeets(S, t1, mid) & 2) hi = mid; else lo = mid; } last = lo; break; }
+                    last = t;
+                }
+                t2 = last;
+            }
+        } else met = 4;
+        out[fi * 2] = t1; out[fi * 2 + 1] = t2;
+        if (!f.thumb) { if (t1 - f.open < 0.2 && met) { S.blocked[fi] = 1; blocked++; } else { S.blocked[fi] = 0; sum1 += t1; sum2 += t2; closed++; } }
+        // Where this finger ended up, for the thumb to stop on.
+        if (!f.thumb && S.extras + 4 <= S.extra.length / 3) {
+            this._gripPlace(S, t1, t2);
+            for (let k = 0; k < 12; k++) S.extra[S.extras * 3 + k] = S.s[k];
+            S.extras += 4;
+        }
+    }
+    // A finger that touches first stops there; the rest keep closing. None is carried on through the thing.
+    return out;
+};
+
+/** The four places a finger is tested, with its joints at `t1` and `t2`: along and at the end of each segment. */
+Reactor3D._gripPlace = function(S, t1, t2) {
+    const f = S.f, hx = f.hinge[0], hy = f.hinge[1], hz = f.hinge[2], v1 = S.v1, v2 = S.v2;
+    const c1 = Math.cos(t1), s1 = Math.sin(t1), d1 = hx * v1[0] + hy * v1[1] + hz * v1[2];
+    const ax = v1[0] * c1 + (hy * v1[2] - hz * v1[1]) * s1 + hx * d1 * (1 - c1), ay = v1[1] * c1 + (hz * v1[0] - hx * v1[2]) * s1 + hy * d1 * (1 - c1), az = v1[2] * c1 + (hx * v1[1] - hy * v1[0]) * s1 + hz * d1 * (1 - c1);
+    const c2 = Math.cos(t1 + t2), s2 = Math.sin(t1 + t2), d2 = hx * v2[0] + hy * v2[1] + hz * v2[2];
+    const bx = v2[0] * c2 + (hy * v2[2] - hz * v2[1]) * s2 + hx * d2 * (1 - c2), by = v2[1] * c2 + (hz * v2[0] - hx * v2[2]) * s2 + hy * d2 * (1 - c2), bz = v2[2] * c2 + (hx * v2[1] - hy * v2[0]) * s2 + hz * d2 * (1 - c2);
+    const s = S.s, mx = f.base[0] + ax, my = f.base[1] + ay, mz = f.base[2] + az;
+    s[0] = f.base[0] + ax * 0.6; s[1] = f.base[1] + ay * 0.6; s[2] = f.base[2] + az * 0.6;
+    s[3] = mx; s[4] = my; s[5] = mz;
+    s[6] = mx + bx * 0.5; s[7] = my + by * 0.5; s[8] = mz + bz * 0.5;
+    s[9] = mx + bx; s[10] = my + by; s[11] = mz + bz;
+};
+
+/** Whether tested place `k` of the finger is against the thing (or, for the thumb, a closed finger). */
+Reactor3D._gripTouches = function(S, k) {
+    const x = S.s[k * 3], y = S.s[k * 3 + 1], z = S.s[k * 3 + 2], cloud = S.cloud, near = S.near, thr2 = S.thr2;
+    for (let j = 0; j < S.nearCount; j++) {
+        const i = near[j] * 3, dx = cloud[i] - x, dy = cloud[i + 1] - y, dz = cloud[i + 2] - z;
+        if (dx * dx + dy * dy + dz * dz < thr2) return true;
+    }
+    if (S.f.thumb) for (let j = 0; j < S.extras; j++) {
+        const dx = S.extra[j * 3] - x, dy = S.extra[j * 3 + 1] - y, dz = S.extra[j * 3 + 2] - z;
+        if (dx * dx + dy * dy + dz * dz < thr2 * 1.2) return true;
+    }
+    return false;
+};
+
+/** 1 when the first segment meets the thing at these angles, 2 when the second does, 3 both; places already against it when open do not count. */
+Reactor3D._gripMeets = function(S, t1, t2) {
+    this._gripPlace(S, t1, t2);
+    const mask = S.mask;
+    return (((!mask[0] && this._gripTouches(S, 0)) || (!mask[1] && this._gripTouches(S, 1))) ? 1 : 0)
+        | (((!mask[2] && this._gripTouches(S, 2)) || (!mask[3] && this._gripTouches(S, 3))) ? 2 : 0);
+};
+
+/**
+ * Hands closing on what they hold. The battle room says each frame which
+ * hand holds which thing (`hold`), after the thing is placed; `update`, once
+ * a frame, turns the finger joints toward where the fingers meet it, and
+ * opens a hand again a moment after it stops being held. A hand whose
+ * holding has not changed is not solved again.
+ */
+Reactor3D.HandGrip = {
+    hands: new Set(),
+    last: 0,
+    HELD_FOR: 140,
+    // How far a wrist turns to take a handle, in radians: a hand cannot close on a handle that lies along its fingers.
+    TURN_MAX: 0.8,
+    // A thing whose bulk hangs this far off its long axis (a pistol, a rifle) is held by that bulk, the grip; anything slimmer by its long axis.
+    GRIP_HANG: 0.06,
+    _m: null,
+    _cloud: new Float32Array(3 * 2048),
+    now() { return typeof performance !== "undefined" ? performance.now() : Date.now(); },
+    /**
+     * Before a held thing is placed in a hand: the wrist turns so the
+     * knuckles run along what the fingers will close on (a sword's handle,
+     * with the blade leaving the fist by the thumb; a gun's grip, with the
+     * little finger at its foot), as far as `TURN_MAX`. The turn is put on
+     * top of the hand's pose each time and taken off again first, so it
+     * never builds up. `object` is the thing as it was last placed.
+     */
+    turn(hand, object) {
+        const R = Reactor3D, grip = hand ? R._handGrips.get(hand) : null;
+        if (!grip || !hand.parent) return false;
+        const W = this._w || (this._w = { world: new THREE.Quaternion(), q: new THREE.Quaternion(), t: new THREE.Vector3(), k: new THREE.Vector3() });
+        if (!grip.turn) { grip.turn = new THREE.Quaternion(); grip.turnGoal = new THREE.Quaternion(); grip.turnBase = new THREE.Quaternion(); grip.turnOut = new THREE.Quaternion(); grip.turned = false; grip.turnAt = 0; }
+        if (grip.turned && hand.quaternion.equals(grip.turnOut)) hand.quaternion.copy(grip.turnBase);
+        grip.turnBase.copy(hand.quaternion);
+        grip.turnGoal.identity();
+        const shape = object && grip.thing === object ? R.heldShape(object) : null;
+        if (shape) {
+            const byGrip = !!shape.handle;
+            W.t.fromArray(byGrip ? shape.down : shape.axis).transformDirection(object.matrixWorld);
+            if (!byGrip) W.t.negate();
+            hand.parent.getWorldQuaternion(W.world).multiply(grip.turnBase).invert();
+            W.t.applyQuaternion(W.world).normalize();
+            W.k.fromArray(grip.layout.across);
+            grip.turnGoal.setFromUnitVectors(W.k, W.t);
+            const angle = 2 * Math.acos(Math.min(1, Math.abs(grip.turnGoal.w)));
+            if (angle > this.TURN_MAX) grip.turnGoal.copy(W.q.identity().slerp(grip.turnGoal, this.TURN_MAX / angle));
+        }
+        const now = this.now(), dt = now - grip.turnAt;
+        grip.turnAt = now;
+        grip.turn.slerp(grip.turnGoal, dt > 100 ? 1 : 1 - Math.exp(-dt / 45));
+        hand.quaternion.copy(grip.turnBase).multiply(grip.turn);
+        grip.turnOut.copy(hand.quaternion);
+        grip.turned = true;
+        hand.updateMatrixWorld(true);
+        return true;
+    },
+    /**
+     * The natural hold (a weapon step's Held By › In the fist): where a thing sits in a hand, in the
+     * hand's own frame, so it stays in the fist however the arm turns. The handle lies across the palm
+     * along the knuckles, a finger's thickness off the palm and a little back from the knuckles, where
+     * the fingers close round it. A slim thing leaves the fist on the thumb's side (a sword's blade,
+     * a hammer's head) with its broad way along the hand; a thing with a hanging grip (a gun) is held
+     * by that grip, its foot at the little finger and its long axis (the barrel) along the hand.
+     * `along` is where on a slim thing the hand is, 0 its own grip. `offset` (tiles) moves it in the
+     * hand: x toward the fingers, y toward the thumb, z out of the palm. Returns the room point for
+     * the thing's hold point, that point in the thing's frame, and where its long axis and its up go,
+     * or null for a hand without fingers.
+     */
+    fistFrame(hand, object, along, offset) {
+        const R = Reactor3D, grip = hand ? R._handGrips.get(hand) : null, shape = object ? R.heldShape(object) : null;
+        if (!grip || !shape) return null;
+        const L = grip.layout;
+        hand.updateWorldMatrix(true, false);
+        const q = hand.getWorldQuaternion(new THREE.Quaternion()), scale = hand.getWorldScale(new THREE.Vector3()).x || 1;
+        const A = new THREE.Vector3().fromArray(L.along).applyQuaternion(q), C = new THREE.Vector3().fromArray(L.across).applyQuaternion(q), N = new THREE.Vector3().fromArray(L.normal).applyQuaternion(q);
+        const byGrip = !!shape.handle, item = object.scale.x || 1;
+        const thick = (byGrip ? shape.handle.radius : shape.gripRadius) * item, finger = L.radius * scale;
+        const position = hand.localToWorld(new THREE.Vector3().fromArray(L.knuckles));
+        const K = L.knuckles, four = L.fingers.filter(f => !f.thumb);
+        const across = f => f ? ((f.base[0] - K[0]) * L.across[0] + (f.base[1] - K[1]) * L.across[1] + (f.base[2] - K[2]) * L.across[2]) * scale : 0;
+        let local = null, aim = null;
+        if (byGrip) {
+            // A gun's grip stands along the knuckle line with its side panel flat on the palm and its front strap
+            // just behind the knuckles, so the fingers close round the front of it and on to its far side. The
+            // middle finger lies right under the frame (the trigger guard, or the marked top of the grip where that
+            // is lower); the trigger finger above it. The front strap is read where those fingers lie.
+            const h = shape.handle, middle = four.find(f => f.finger === "middle") || four[Math.min(1, four.length - 1)], last = four[four.length - 1];
+            const top = (middle ? across(middle) : -finger) - finger, section = h.stock ? null : R.gripSection(object, finger * 2 / item);
+            let under = h.under || 0, front = h.along * shape.length + h.radius;
+            if (section) {
+                under = shape.marks ? Math.max(section.top, Math.min(h.under, section.foot - section.cell)) : section.top;
+                const first = Math.max(0, Math.min(section.front.length - 1, Math.round((under - section.top) / section.cell)));
+                const rows = Math.max(1, Math.round((across(last) - across(middle) + finger * 2) / item / section.cell));
+                front = 0;
+                for (let r = first; r < Math.min(section.front.length, first + rows); r++) front = Math.max(front, section.front[r]);
+            }
+            const off = [0, 1, 2].map(i => shape.line[i] - shape.base[i]), on = off[0] * shape.axis[0] + off[1] * shape.axis[1] + off[2] * shape.axis[2];
+            local = [0, 1, 2].map(i => shape.base[i] + off[i] + shape.axis[i] * (front - on) + shape.down[i] * under);
+            position.addScaledVector(N, finger + (h.side || h.radius) * item).addScaledVector(A, -finger).addScaledVector(C, top);
+            // Where the barrel's line passes the hand, for aiming: ahead of the wrist, below it (above when negative), off to the palm's side;
+            // how far the butt (a pistol's rear) is behind the fingers, and whether it goes to the shoulder.
+            const wrist = hand.getWorldPosition(new THREE.Vector3()), rel = position.clone().addScaledVector(C, -under * item).sub(wrist);
+            aim = { along: rel.dot(A), down: rel.dot(C), side: rel.dot(N), butt: front * item, shoulder: shape.marks ? !!shape.marks.stock : !!h.stock || front * item >= .2 };
+        } else {
+            position.addScaledVector(N, finger + thick).addScaledVector(A, -(finger + thick) * .9);
+            // A marked handle is taken with the index finger at its top (the guard); a handle shorter than the fist by its middle.
+            const handle = shape.marks && shape.marks.handle, half = four.length > 1 ? (across(four[four.length - 1]) - across(four[0])) / 2 + finger : finger * 4;
+            const grip = handle ? Math.max(handle / 2, handle - half / item) / shape.length : shape.grip;
+            local = [0, 1, 2].map(i => shape.base[i] + shape.axis[i] * shape.length * (along ? Math.max(0, Math.min(1, along)) : grip));
+        }
+        if (offset) position.addScaledVector(A, offset[0] || 0).addScaledVector(C, -(offset[1] || 0)).addScaledVector(N, offset[2] || 0);
+        return { position, local, forward: byGrip ? A : C.clone().negate(), up: byGrip ? C.clone().negate() : A, byGrip, hand, along: A, across: C, normal: N, aim };
+    },
+    /** Turn a hand so a gun held in its fist points along `direction` (room), its grip hanging down. */
+    aimHand(hand, direction) {
+        const grip = hand ? Reactor3D._handGrips.get(hand) : null;
+        if (!grip || !hand.parent) return false;
+        const L = grip.layout, forward = direction.clone().normalize();
+        const down = new THREE.Vector3(0, -1, 0).addScaledVector(forward, forward.y);
+        if (down.lengthSq() < 1e-6) return false;
+        down.normalize();
+        const world = new THREE.Matrix4().makeBasis(forward, down, new THREE.Vector3().crossVectors(forward, down));
+        const A = new THREE.Vector3().fromArray(L.along), C = new THREE.Vector3().fromArray(L.across);
+        C.addScaledVector(A, -C.dot(A)).normalize();
+        const local = new THREE.Matrix4().makeBasis(A, C, new THREE.Vector3().crossVectors(A, C));
+        const target = new THREE.Quaternion().setFromRotationMatrix(world.multiply(local.transpose()));
+        return this.setTurn(hand, target);
+    },
+    /**
+     * Give a hand a turn in the room for this frame (aiming, or taking a gun from below). The turn it had is kept
+     * and put back when it lets go, where its pose has not been written over since.
+     */
+    setTurn(hand, target) {
+        const grip = hand ? Reactor3D._handGrips.get(hand) : null;
+        if (!grip || !hand.parent) return false;
+        if (!grip.setBase) { grip.setBase = new THREE.Quaternion(); grip.setOut = new THREE.Quaternion(); grip.isSet = false; }
+        if (!(grip.isSet && hand.quaternion.equals(grip.setOut))) grip.setBase.copy(hand.quaternion);
+        hand.quaternion.copy(hand.parent.getWorldQuaternion(new THREE.Quaternion()).invert().multiply(target));
+        grip.setOut.copy(hand.quaternion); grip.isSet = true;
+        this.hands.add(grip);
+        hand.updateMatrixWorld(true);
+        return true;
+    },
+    /**
+     * The other hand under a long gun: palm up against its underside, fingers across it so they close up its far
+     * side. `forward` and `down` are the gun's, in the room. Returns the hand's turn and where its palm is from
+     * its wrist with that turn, so the arm reaches first and `setTurn` turns the hand after.
+     */
+    cupFrame(hand, forward, down) {
+        const grip = hand ? Reactor3D._handGrips.get(hand) : null;
+        if (!grip) return null;
+        const L = grip.layout, left = L.side !== "Right", scale = hand.getWorldScale(new THREE.Vector3()).x || 1;
+        const A = new THREE.Vector3().crossVectors(forward, down).multiplyScalar((left ? -1 : 1) * Math.cos(.6)).addScaledVector(forward, Math.sin(.6)).normalize();
+        const N = down.clone().negate(), C = left ? new THREE.Vector3().crossVectors(A, N) : new THREE.Vector3().crossVectors(N, A);
+        const a = new THREE.Vector3().fromArray(L.along), c = new THREE.Vector3().fromArray(L.across);
+        c.addScaledVector(a, -c.dot(a)).normalize();
+        const world = new THREE.Matrix4().makeBasis(A, C, new THREE.Vector3().crossVectors(A, C)), local = new THREE.Matrix4().makeBasis(a, c, new THREE.Vector3().crossVectors(a, c));
+        const quaternion = new THREE.Quaternion().setFromRotationMatrix(world.multiply(local.transpose()));
+        const palm = new THREE.Vector3().fromArray(L.palm).multiplyScalar(scale).applyQuaternion(quaternion).addScaledVector(down, -L.radius * scale);
+        return { quaternion, palm };
+    },
+    /** A hand whose fingers are one piece of mesh closes them together: as far as the one that met the thing first. */
+    asOne(grip) {
+        const fingers = grip.layout.fingers;
+        if (!grip.layout.mitt) return;
+        let one = Infinity, two = Infinity;
+        for (let i = 0; i < fingers.length; i++) if (!fingers[i].thumb) { one = Math.min(one, grip.solved[i * 2]); two = Math.min(two, grip.solved[i * 2 + 1]); }
+        for (let i = 0; i < fingers.length; i++) if (!fingers[i].thumb) { grip.solved[i * 2] = one; grip.solved[i * 2 + 1] = two; }
+    },
+    /** A hand's world orientation with the grip's turn taken off again: the hand as its pose left it. */
+    unturned(hand, quaternion) {
+        const grip = hand ? Reactor3D._handGrips.get(hand) : null;
+        if (!grip || !grip.turned) return quaternion;
+        const W = this._w;
+        return quaternion.multiply(W.q.copy(grip.turn).invert());
+    },
+    hold(hand, object, trigger) {
+        const R = Reactor3D, grip = hand ? R._handGrips.get(hand) : null;
+        if (!grip) return false;
+        // A trigger finger lies along the frame instead of wrapping the grip.
+        if (!!trigger !== !!grip.trigger) { grip.trigger = !!trigger; grip.relSet = false; }
+        const layout = grip.layout, n = layout.fingers.length;
+        if (!grip.solved) { grip.solved = new Float32Array(n * 2); grip.rel = new Float32Array(16); grip.relSet = false; }
+        grip.heldAt = this.now();
+        this.hands.add(grip);
+        const cloud = object ? R.heldCloud(object) : null;
+        if (!cloud || !cloud.count) {
+            if (grip.thing !== null || !grip.relSet) { R.solveGrip(layout, this._cloud, 0, 0, grip.solved); this.asOne(grip); grip.thing = null; grip.relSet = true; }
+            return true;
+        }
+        const M = this._m || (this._m = { a: new THREE.Matrix4(), b: new THREE.Matrix4() });
+        hand.updateWorldMatrix(true, false); object.updateMatrixWorld(true);
+        M.a.copy(hand.matrixWorld).invert().multiply(object.matrixWorld);
+        const e = M.a.elements;
+        // The same thing, held the same way: the fingers are where they were.
+        const span = Math.hypot(e[0], e[1], e[2]);
+        let same = grip.thing === object && grip.relSet;
+        if (same) { const turn = span * 0.004, slide = layout.radius * 0.08; for (let i = 0; i < 15 && same; i++) if (Math.abs(e[i] - grip.rel[i]) > (i < 12 ? turn : slide)) same = false; }
+        if (same) return true;
+        grip.rel.set(e); grip.relSet = true; grip.thing = object;
+        // The thing's points near the hand, in the hand's frame.
+        let reach = 0;
+        for (const f of layout.fingers) reach = Math.max(reach, Math.hypot(f.base[0] - layout.knuckles[0], f.base[1] - layout.knuckles[1], f.base[2] - layout.knuckles[2]) + f.length + f.radius * 2);
+        const reach2 = reach * reach, kx = layout.knuckles[0], ky = layout.knuckles[1], kz = layout.knuckles[2], points = cloud.points;
+        if (this._cloud.length < cloud.count * 3) this._cloud = new Float32Array(cloud.count * 3);
+        const local = this._cloud;
+        let count = 0;
+        for (let i = 0; i < cloud.count; i++) {
+            const x = points[i * 3], y = points[i * 3 + 1], z = points[i * 3 + 2];
+            const px = e[0] * x + e[4] * y + e[8] * z + e[12], py = e[1] * x + e[5] * y + e[9] * z + e[13], pz = e[2] * x + e[6] * y + e[10] * z + e[14];
+            const dx = px - kx, dy = py - ky, dz = pz - kz;
+            if (dx * dx + dy * dy + dz * dz > reach2) continue;
+            local[count * 3] = px; local[count * 3 + 1] = py; local[count * 3 + 2] = pz; count++;
+        }
+        R.solveGrip(layout, local, count, cloud.cell * span * 0.6, grip.solved, grip.trigger);
+        // Nothing of it within reach of the fingers: a loose fist all the same.
+        if (!count) R.solveGrip(layout, local, 0, 0, grip.solved);
+        this.asOne(grip);
+        if (grip.trigger && !layout.mitt) layout.fingers.forEach((f, i) => {
+            if (f.finger !== "index") return;
+            grip.solved[i * 2] = 0; grip.solved[i * 2 + 1] = 0;
+            // A marked trigger: the finger bends to lay its tip there.
+            const shape = R.heldShape(object), mark = shape && shape.marks && shape.marks.trigger;
+            if (!mark) return;
+            const S = R._gripScratch, x = e[0] * mark[0] + e[4] * mark[1] + e[8] * mark[2] + e[12], y = e[1] * mark[0] + e[5] * mark[1] + e[9] * mark[2] + e[13], z = e[2] * mark[0] + e[6] * mark[1] + e[10] * mark[2] + e[14];
+            S.f = f;
+            for (let k = 0; k < 3; k++) { S.v1[k] = f.mid[k] - f.base[k]; S.v2[k] = f.tip[k] - f.mid[k]; }
+            let best = Infinity;
+            for (let one = 0; one <= f.max1 * .7 + 1e-6; one += .08) for (let two = 0; two <= f.max2 * .8 + 1e-6; two += .1) {
+                R._gripPlace(S, one, two);
+                const d = Math.hypot(S.s[9] - x, S.s[10] - y, S.s[11] - z);
+                if (d < best - 1e-9) { best = d; grip.solved[i * 2] = one; grip.solved[i * 2 + 1] = two; }
+            }
+        });
+        return true;
+    },
+    update() {
+        if (!this.hands.size) return;
+        const now = this.now(), dt = now - this.last;
+        this.last = now;
+        const ease = dt > 100 || dt <= 0 ? 1 : 1 - Math.exp(-dt / 45);
+        const Q = this._q || (this._q = { q: new THREE.Quaternion() });
+        for (const grip of this.hands) {
+            // (A pinned hand holds until it is unpinned: the map's held things say so once, not every frame.)
+            const held = grip.pinned || now - grip.heldAt <= this.HELD_FOR, fingers = grip.layout.fingers;
+            let moving = false;
+            for (let i = 0; i < fingers.length; i++) {
+                const f = fingers[i];
+                let turned = grip.file;
+                for (let j = 0; j < 2; j++) {
+                    const goal = held ? grip.solved[i * 2 + j] : 0, delta = goal - f.now[j];
+                    if (Math.abs(delta) < 0.002) { if (delta !== 0) { f.now[j] = goal; turned = true; } }
+                    else { f.now[j] += delta * ease; turned = true; if (Math.abs(goal - f.now[j]) >= 0.002) moving = true; else f.now[j] = goal; }
+                }
+                if (!turned) continue;
+                for (let j = 0; j < f.joints.length; j++) {
+                    const joint = f.joints[j], angle = j === 0 ? f.now[0] : j === 1 ? f.now[1] : f.now[1] * 0.7;
+                    joint.node.quaternion.copy(Q.q.setFromAxisAngle(joint.axis, angle)).multiply(joint.rest);
+                }
+            }
+            // Let go: the wrist's turn eases off, where the hand's pose has not been written over it since.
+            if (!held && grip.turned) {
+                const untouched = grip.hand.quaternion.equals(grip.turnOut);
+                grip.turn.slerp(Q.q.identity(), ease);
+                if (Math.abs(grip.turn.w) > 0.99999) { grip.turn.identity(); grip.turned = false; } else moving = true;
+                if (untouched) { grip.hand.quaternion.copy(grip.turnBase).multiply(grip.turn); grip.turnOut.copy(grip.hand.quaternion); }
+            }
+            // A turn given for aiming is taken off again, where the pose has not replaced it.
+            if (!held && grip.isSet) { if (grip.hand.quaternion.equals(grip.setOut)) grip.hand.quaternion.copy(grip.setBase); grip.isSet = false; }
+            // Open again and still: nothing more to do for this hand until it holds something.
+            if (!held && !moving) { this.hands.delete(grip); grip.thing = undefined; grip.relSet = false; }
+        }
+    }
+};
+
+/**
+ * Holding a thing in a model's hand, for any stage that shows models (the
+ * Battle Room, the map). A model is a record `{ object, extent, scale }`
+ * (its hand joints are cached on it as `attachmentBones`); a held thing is
+ * `{ object, scale, spec }`. Points and directions are the stage's own
+ * world. In order, for one frame or one solve: `begin` (the aiming arm
+ * reaches and the fist's frame is read), the stage puts the thing at the
+ * hand's point, `orient` turns it in the hand, `finish` brings the other
+ * hand to it and closes the fingers.
+ */
+Reactor3D.Held = {
+    HANDS: ["rightHand", "leftHand"],
+    /** The hand (or named bone) an attachment names, as the Battle Room reads it: `{ quaternion, forearm, fist }` or null. */
+    frame(record, attachment, boneName) {
+        const View = globalThis.ReactorBattleRoomView;
+        if (!View || !attachment || attachment === "offset" || attachment === "center") return null;
+        return View.attachmentQuaternion(record, attachment, boneName);
+    },
+    /** The joint an attachment names on a model (`rightHand`, `leftHand`, or a bone's name), or null. */
+    joint(record, attachment, boneName) {
+        const View = globalThis.ReactorBattleRoomView;
+        if (!View || !record || !record.object) return null;
+        View.attachmentWorld(record, attachment, boneName || "");
+        return (record.attachmentBones && record.attachmentBones.get(boneName || attachment)) || null;
+    },
+    /**
+     * Bends an arm so its hand lands on a point (two-bone reach): the upper arm turns so the elbow sits on the
+     * shoulder-to-point line, off toward where it already bends and downward (`down`), then the forearm turns
+     * to the point. Works on the joints the pose rules already move, after them.
+     */
+    reachArm(record, side, target, down = .5) {
+        const T = THREE;
+        if (!record || !record.object || !target) return false;
+        const hand = this.joint(record, side + "Hand"), fore = hand && hand.parent, upper = fore && fore.parent;
+        if (!upper || !upper.parent) return false;
+        upper.updateMatrixWorld(true);
+        const S = upper.getWorldPosition(new T.Vector3()), E = fore.getWorldPosition(new T.Vector3()), H = hand.getWorldPosition(new T.Vector3());
+        const a = S.distanceTo(E), b = E.distanceTo(H);
+        if (a < 1e-4 || b < 1e-4) return false;
+        const goal = target.clone();
+        let d = S.distanceTo(goal);
+        if (d < 1e-4) return false;
+        d = Math.max(Math.abs(a - b) + 1e-3, Math.min(a + b - 1e-3, d));
+        const dir = goal.clone().sub(S).normalize();
+        let pole = E.clone().sub(S);
+        pole.sub(dir.clone().multiplyScalar(pole.dot(dir)));
+        if (pole.lengthSq() < 1e-6) pole.set(0, -1, 0);
+        pole.normalize();
+        pole.lerp(new T.Vector3(0, -1, 0), down);
+        pole.sub(dir.clone().multiplyScalar(pole.dot(dir)));
+        if (pole.lengthSq() < 1e-6) pole.set(0, -1, 0);
+        pole.normalize();
+        const cosA = Math.max(-1, Math.min(1, (a * a + d * d - b * b) / (2 * a * d))), angA = Math.acos(cosA);
+        const elbow = S.clone().add(dir.clone().multiplyScalar(Math.cos(angA) * a)).add(pole.clone().multiplyScalar(Math.sin(angA) * a));
+        const turn = (bone, from, to) => { this.turnJoint(bone, new T.Quaternion().setFromUnitVectors(from.normalize(), to.normalize())); };
+        turn(upper, E.clone().sub(S), elbow.clone().sub(S));
+        const E2 = fore.getWorldPosition(new T.Vector3()), H2 = hand.getWorldPosition(new T.Vector3());
+        turn(fore, H2.clone().sub(E2), goal.clone().sub(E2));
+        return true;
+    },
+    /** Turn a joint by a turn given in the world, on top of the pose it has. */
+    turnJoint(bone, q) {
+        const parentQ = bone.parent.getWorldQuaternion(new THREE.Quaternion());
+        bone.quaternion.premultiply(parentQ.clone().invert().multiply(q).multiply(parentQ));
+        bone.updateMatrixWorld(true);
+    },
+    /** The joint both arms hang from (the chest), and the head on it: what a stance turns. */
+    torso(record, side) {
+        const hand = this.joint(record, side + "Hand"), other = this.joint(record, (side === "right" ? "left" : "right") + "Hand");
+        const upper = hand && hand.parent && hand.parent.parent, across = other && other.parent && other.parent.parent;
+        if (!upper || !across) return null;
+        let chest = upper.parent;
+        const under = node => { for (let n = across; n; n = n.parent) if (n === node) return true; return false; };
+        while (chest && !under(chest)) chest = chest.parent;
+        if (!chest || !chest.parent || chest === record.object) return null;
+        let head = null;
+        chest.traverse(node => { if (!head && node !== chest && /head$/i.test(String(node.name).replace(/[^a-z0-9]/gi, "")) && (node.isBone || (node.userData && (node.userData.__reactorRigBone || (node.userData.parts && node.userData.parts.length))))) head = node; });
+        return { chest, head, upper, across };
+    },
+    /** How far along a gun (from its butt end, in its own units) the other hand holds: its marked Fore grip, else a way ahead of the grip. */
+    foreAlong(shape) {
+        const m = shape.marks && shape.marks.foreGrip;
+        if (!m) return shape.length * Math.min(.85, shape.handle.along + .3);
+        return (m[0] - shape.base[0]) * shape.axis[0] + (m[1] - shape.base[1]) * shape.axis[1] + (m[2] - shape.base[2]) * shape.axis[2];
+    },
+    /**
+     * A long gun held in both hands, its butt at the shoulder: when the other arm is too short to reach its
+     * fore grip with the shoulders square to the target, the chest turns the other shoulder forward (a
+     * shooter's bladed stance), as little as brings the fore grip within reach, and the head stays on the target.
+     */
+    blade(record, side, held, shape, goal) {
+        const T = THREE, torso = this.torso(record, side);
+        if (!torso) return 0;
+        const off = this.joint(record, (side === "right" ? "left" : "right") + "Hand"), item = held.object.scale.x || 1;
+        const S = torso.upper.getWorldPosition(new T.Vector3()), O = torso.across.getWorldPosition(new T.Vector3()), pivot = torso.chest.getWorldPosition(new T.Vector3());
+        const reach = O.distanceTo(off.parent.getWorldPosition(new T.Vector3())) + off.parent.getWorldPosition(new T.Vector3()).distanceTo(off.getWorldPosition(new T.Vector3()));
+        const a = .04 + this.foreAlong(shape) * item, drop = Reactor3D.heldUnderside(held.object, this.foreAlong(shape)) * item + .03, up = new T.Vector3(0, 1, 0);
+        const flat = goal.clone().sub(S).setY(0);
+        if (flat.lengthSq() < 1e-8) return 0;
+        const sign = new T.Vector3().crossVectors(up, O.clone().sub(pivot)).dot(flat) > 0 ? 1 : -1, q = new T.Quaternion(), s = new T.Vector3(), o = new T.Vector3();
+        let angle = 0;
+        for (; angle <= .96; angle += .08) {
+            q.setFromAxisAngle(up, sign * angle);
+            s.copy(S).sub(pivot).applyQuaternion(q).add(pivot); o.copy(O).sub(pivot).applyQuaternion(q).add(pivot);
+            const dir = goal.clone().sub(s).normalize();
+            if (s.addScaledVector(dir, a).distanceTo(o.setY(o.y + drop)) <= reach * .97) break;
+        }
+        angle = Math.min(.96, angle);
+        if (!angle) return 0;
+        q.setFromAxisAngle(up, sign * angle);
+        this.turnJoint(torso.chest, q);
+        if (torso.head && torso.head.parent) this.turnJoint(torso.head, q.invert());
+        return sign * angle;
+    },
+    /**
+     * Holds a shown weapon the way its step asks: aimed, the shooting arm reaches down the line to `goal` so the
+     * barrel (laid along that line) points at it and the stock sits back by the shoulder. Returns the hand frame
+     * to place the thing with. `note`, when given, is told the line (`heldAimLine`).
+     */
+    aim(owner, held, step, goal, note) {
+        const T = THREE, R = Reactor3D, side = step.attachment === "leftHand" ? "left" : "right";
+        const frame = this.frame(owner, step.attachment, step.bone);
+        if (!frame || step.aim !== "target" || !goal) return frame;
+        const hand = this.joint(owner, side + "Hand"), upper = hand && hand.parent && hand.parent.parent;
+        if (!upper) return frame;
+        const shape = held && held.object ? R.heldShape(held.object) : null, scale = held ? held.scale || 1 : 1;
+        // Held in the fist by its grip: the barrel's own line (Rear to Muzzle on a marked gun) is laid on the line from the shoulder
+        // to the target, and the wrist goes where that puts the grip. A long gun's butt sits at the shoulder; a short one is held out.
+        const gun = step.hold === "fist" && shape && shape.handle ? (R.HandGrip.fistFrame(hand, held.object, 0, null) || {}).aim || null : null;
+        if (gun && gun.shoulder && step.hands === "both") this.blade(owner, side, held, shape, goal);
+        const S = upper.getWorldPosition(new T.Vector3()), dir = goal.clone().sub(S);
+        if (dir.lengthSq() < 1e-6) return frame;
+        dir.normalize();
+        const gripLength = shape ? shape.grip * shape.length * scale : .3, itemLength = shape ? shape.length * scale : 0;
+        // A long gun is shouldered (the stock ends by the shoulder); a short one is held out at arm's length.
+        const fore = hand.parent, E = fore.getWorldPosition(new T.Vector3()), H = hand.getWorldPosition(new T.Vector3()), reach = S.distanceTo(E) + E.distanceTo(H);
+        const distance = itemLength > 1.2 ? Math.max(.35, gripLength + .12) : reach * .86;
+        if (note) note.heldAimLine = { from: S.clone(), to: goal.clone() };
+        if (gun) {
+            const down = new T.Vector3(0, -1, 0).addScaledVector(dir, dir.y);
+            if (down.lengthSq() > 1e-6) {
+                down.normalize();
+                const sideways = new T.Vector3().crossVectors(dir, down).multiplyScalar(side === "left" ? -1 : 1);
+                const out = gun.shoulder ? Math.max(reach * .3, gun.butt + .04 - gun.along) : reach * .86;
+                this.reachArm(owner, side, S.clone().addScaledVector(dir, out).addScaledVector(down, -gun.down).addScaledVector(sideways, -gun.side), .65);
+                R.HandGrip.aimHand(hand, dir);
+            }
+        } else this.reachArm(owner, side, S.clone().add(dir.clone().multiplyScalar(distance)), .65);
+        const after = this.frame(owner, step.attachment, step.bone) || frame;
+        after.forearm = dir;
+        return after;
+    },
+    /**
+     * Turn a held thing in the hand, its position already the hand's point: the model's long axis lies along the
+     * forearm with its tip forward and its bulk hanging down (or, held in the fist, where the fist's frame says),
+     * the grip point (`pivotY` of the way along, or the fist's) in the hand; Tilt, Turn and Roll (`rotateX`,
+     * `rotateY`, `rotateZ`, degrees) then adjust that about the hand's own axes.
+     */
+    orient(held, p) {
+        const T = THREE, object = held.object, shape = Reactor3D.heldShape(object), hand = p.frame.quaternion, fist = p.frame.grip || null;
+        const forward = fist ? fist.forward.clone() : p.frame.forearm ? p.frame.forearm.clone() : new T.Vector3(0, 0, 1).applyQuaternion(hand);
+        const up = fist ? fist.up.clone() : new T.Vector3(0, 1, 0);
+        up.sub(forward.clone().multiplyScalar(up.dot(forward)));
+        if (up.lengthSq() < 1e-6) up.set(0, 0, 1);
+        up.normalize();
+        const right = new T.Vector3().crossVectors(forward, up);
+        const la = new T.Vector3().fromArray(shape ? shape.axis : [0, 1, 0]), lu = new T.Vector3().fromArray(shape ? shape.up : [0, 0, 1]);
+        lu.sub(la.clone().multiplyScalar(lu.dot(la)));
+        if (lu.lengthSq() < 1e-6) lu.set(0, 0, 1);
+        lu.normalize();
+        const lr = new T.Vector3().crossVectors(la, lu);
+        const world = new T.Matrix4().makeBasis(forward, up, right), local = new T.Matrix4().makeBasis(la, lu, lr);
+        const base = new T.Quaternion().setFromRotationMatrix(world.multiply(local.transpose()));
+        const adjust = new T.Quaternion().setFromEuler(new T.Euler((p.rotateX || 0) * Math.PI / 180, (p.rotateY || 0) * Math.PI / 180, (p.rotateZ || 0) * Math.PI / 180, "XYZ"));
+        object.quaternion.copy(hand).multiply(adjust).multiply(hand.clone().invert()).multiply(base);
+        const stretch = (held.spec && held.spec.stretch) || null, size = (held.scale || 1) * (p.scale ?? 1);
+        object.scale.set(size * (p.scaleX ?? 1) * (stretch ? stretch[0] ?? 1 : 1), size * (p.scaleY ?? 1) * (stretch ? stretch[1] ?? 1 : 1), size * (p.scaleZ ?? 1) * (stretch ? stretch[2] ?? 1 : 1));
+        if (shape) {
+            // Held By 0 (the base) is the model's own grip; any other value is that fraction of the way from the handle end to the tip.
+            const along = p.pivotY ? Math.max(0, Math.min(1, p.pivotY)) : shape.grip;
+            const gripPoint = fist ? new T.Vector3().fromArray(fist.local) : new T.Vector3().fromArray(shape.base).add(new T.Vector3().fromArray(shape.axis).multiplyScalar(shape.length * along));
+            object.position.sub(gripPoint.multiplyScalar(object.scale.x).applyQuaternion(object.quaternion));
+        }
+    },
+    /** The other hand takes the held thing a little way out along it, as far as an arm reaches. `note` is told where (`heldOffHand`). */
+    both(owner, held, step, note) {
+        const T = THREE, R = Reactor3D;
+        if (step.hands !== "both" || !held || !held.object) return;
+        const shape = R.heldShape(held.object);
+        if (!shape) return;
+        const other = step.attachment === "leftHand" ? "right" : "left", m = held.object.matrixWorld;
+        held.object.updateMatrixWorld(true);
+        const handle = step.hold === "fist" ? shape.handle : null;
+        if (handle) {
+            // Where the other hand holds: the marked Fore grip, else a good way ahead of the grip, as far out as its arm reaches;
+            // there it comes up under the gun, palm on its underside, and its fingers close up the far side.
+            const hand = this.joint(owner, other + "Hand"), upper = hand && hand.parent && hand.parent.parent;
+            const axis = new T.Vector3().fromArray(shape.axis), down = new T.Vector3().fromArray(shape.down), origin = new T.Vector3().fromArray(shape.line);
+            origin.addScaledVector(axis, -origin.clone().sub(new T.Vector3().fromArray(shape.base)).dot(axis));
+            const mark = shape.marks && shape.marks.foreGrip ? this.foreAlong(shape) : null;
+            let along = mark ?? this.foreAlong(shape);
+            const forward = axis.clone().transformDirection(m), under = down.clone().transformDirection(m);
+            const at = a => origin.clone().addScaledVector(axis, a).addScaledVector(down, R.heldUnderside(held.object, a)).applyMatrix4(m);
+            if (upper && hand) {
+                const S = upper.getWorldPosition(new T.Vector3()), reach = S.distanceTo(hand.parent.getWorldPosition(new T.Vector3())) + hand.parent.getWorldPosition(new T.Vector3()).distanceTo(hand.getWorldPosition(new T.Vector3()));
+                const near = shape.length * handle.along + handle.radius * 2;
+                // (The wrist is what must be within the arm's reach: the palm lies past it, across the gun.)
+                const palm = (R.HandGrip.cupFrame(hand, forward, under) || {}).palm || new T.Vector3();
+                for (let i = 0; i < 40 && along > near && at(along).sub(palm).distanceTo(S) > reach * .98; i++) along -= shape.length * .01;
+                if (note) note.heldOffHand = { along: along / shape.length, marked: mark !== null, reached: mark === null || Math.abs(along - mark) < 1e-6 };
+            }
+            const cup = hand ? R.HandGrip.cupFrame(hand, forward, under) : null, point = at(along);
+            this.reachArm(owner, other, cup ? point.clone().sub(cup.palm) : point, .7);
+            if (cup) R.HandGrip.setTurn(hand, cup.quaternion);
+            return;
+        }
+        const grip = new T.Vector3().fromArray(shape.base).add(new T.Vector3().fromArray(shape.axis).multiplyScalar(shape.length * shape.grip)), tip = new T.Vector3().fromArray(shape.base).add(new T.Vector3().fromArray(shape.axis).multiplyScalar(shape.length));
+        this.reachArm(owner, other, grip.lerp(tip, .3).applyMatrix4(m), .7);
+    },
+    /**
+     * Before a held thing is placed: the wrist's own turn eases off, the aiming arm reaches (bending the arm), and
+     * the hand's frame is read from the bent arm; held in the fist, the fist's frame goes with it (`frame.grip`).
+     * `goal` is what an aimed step points at, or null. Returns `{ frame, fist }`.
+     */
+    begin(owner, held, step, goal, placement, note) {
+        const G = Reactor3D.HandGrip, inHand = this.HANDS.indexOf(step.attachment) >= 0 && !step.bone, thing = (held && held.object) || null;
+        // In the fist the thing goes where the hand is. The older hold leaves the hand as its pose has it and the thing where it
+        // always was: only the fingers close, as far as they meet it. A wrist turn in progress eases off.
+        if (owner && owner.object && placement.visible !== false && inHand) G.turn(this.joint(owner, step.attachment), null);
+        const frame = this.aim(owner, held, step, goal, note);
+        // The step's own Tilt, Turn and Roll stay about the hand as it was posed, not as the grip turned it.
+        if (frame && frame.quaternion) G.unturned(this.joint(owner, step.attachment, step.bone), frame.quaternion);
+        // In the fist: the hand's own frame places the thing, the step's offset moving it within the hand.
+        const fist = step.hold === "fist" && inHand && frame && thing
+            ? G.fistFrame(this.joint(owner, step.attachment), thing, placement.pivotY, [placement.offsetX || 0, placement.offsetY || 0, placement.offsetZ || 0]) : null;
+        if (fist) frame.grip = fist;
+        return { frame, fist };
+    },
+    /** After a held thing is placed: the other hand takes it when both hold it, and the fingers close on what each hand holds. */
+    finish(owner, held, step, frame, fist, visible, note) {
+        const G = Reactor3D.HandGrip, thing = (held && held.object) || null;
+        if (visible) this.both(owner, held, step, note);
+        if (!owner || !owner.attachmentBones || !frame || !visible) return;
+        G.hold(owner.attachmentBones.get(step.bone || step.attachment), thing, !!(fist && fist.byGrip));
+        if (step.hands === "both" && thing) G.hold(owner.attachmentBones.get(step.attachment === "leftHand" ? "rightHand" : "leftHand"), thing);
+    }
+};
+
+/**
+ * Things held by characters on the map: a tactical battle's weapon steps
+ * (`show`, `move`, `hide`: the Action Sequence weapon step as stored, plus
+ * `battler`, `item`, `targetCharacter`), and the weapon a unit carries
+ * between its actions (`carry`, `aim`, `drop`). A character with a 3D model
+ * holds the model bound to the weapon or item, the way the Battle Room does
+ * (`Reactor3D.Held`). The hold is worked out once, when it changes: the
+ * thing then rides the hand as its child, and the arm's joints are set to
+ * what was worked out each frame, so a held thing follows walking, turning,
+ * height and the model's own animation at no cost, and one hold eases into
+ * the next. A character without a model is left alone (every call answers
+ * false). `clear` frees everything; leaving the map does it too.
+ */
+Reactor3D.MapHeld = {
+    states: new Map(),
+    count: 0,
+    mapId: -1,
+    frame: -1,
+    // The frame a carried weapon was last worked into a hand (one unit a frame takes its weapon up).
+    carriedAt: -1,
+    // Frames a held thing takes to ease from one hold to another when the step gives none.
+    EASE: 14,
+    MOVE: ["x", "y", "z", "rotation", "rotateY", "rotateZ", "scale", "gripY", "easing"],
+    // A blade carried at the side is tilted this far in the hand (degrees; negative dips its point toward the ground ahead).
+    BLADE_TILT: -50,
+    FACING: { 1: [-1, 1], 2: [0, 1], 3: [1, 1], 4: [-1, 0], 6: [1, 0], 7: [-1, -1], 8: [0, -1], 9: [1, -1] },
+    usable(character) {
+        return typeof THREE !== "undefined" && !!character && !!Reactor3D.characterModelSpec && !!Reactor3D.characterModelSpec(character);
+    },
+    /** The model a weapon step holds: the battler's equipped weapon (`iconSource` "weapon", `equipIndex`), the action's item or skill ("action"), or `weaponId`. */
+    specFor(options) {
+        const R = Reactor3D, source = options.iconSource || "weapon", battler = options.battler;
+        if (options.weaponId) return R.databaseModelSpec("weapons", options.weaponId);
+        if (source === "weapon") {
+            const list = battler && battler.weapons ? battler.weapons() : [], weapon = list[Math.max(0, (options.equipIndex || 1) - 1)];
+            return weapon ? R.databaseModelSpec("weapons", weapon.id) : null;
+        }
+        if (source === "action" && options.item) {
+            const skill = typeof DataManager !== "undefined" && DataManager.isSkill && DataManager.isSkill(options.item);
+            return R.databaseModelSpec(skill ? "skills" : "items", options.item.id);
+        }
+        return null;
+    },
+    keyOf(spec) {
+        return Reactor3D.modelCacheKey(spec.name, spec.ext, spec.file) + "|" + (spec.variant || "") + "|" + (spec.size || 2) + "|" + (spec.scale || 1);
+    },
+    state(character, create) {
+        const map = typeof $gameMap !== "undefined" && $gameMap && $gameMap.mapId ? $gameMap.mapId() : 0;
+        if (map !== this.mapId) { this.clear(); this.mapId = map; }
+        const key = Reactor3D.modelInstanceKey(character);
+        let state = this.states.get(key);
+        if (state && state.character !== character) { this.free(state); state = null; }
+        if (!state && create) {
+            state = { key, character, battler: null, carry: null, sequence: false, step: null, target: null, spec: null, specKey: "", record: null, template: null, loading: null,
+                owner: null, shown: false, solved: true, t: 1, frames: 0, easing: "", slots: [], local: null, pinned: [], goalLocal: new THREE.Vector3(), aimed: false, idle: false, flat: false, lit: null };
+            this.states.set(key, state);
+            this.count = this.states.size;
+        }
+        return state || null;
+    },
+    /** Show a weapon step's thing in the character's hand. False when the character has no model, or nothing with a model is held. */
+    show(character, options) {
+        options = options || {};
+        if (!this.usable(character)) return false;
+        const spec = this.specFor(options);
+        if (!spec) return false;
+        const state = this.state(character, true), same = state.shown && state.specKey === this.keyOf(spec);
+        if (options.battler) state.battler = options.battler;
+        state.sequence = true;
+        state.target = options.targetCharacter || null;
+        const step = Object.assign({}, options);
+        delete step.battler; delete step.item; delete step.targetCharacter;
+        // A thing already in the hand (carried) eases into the step's hold; one that appears is there at once.
+        // (`instant`: a run rebuilt after a load, or cut short, is there at once.)
+        this.want(state, spec, step, options.instant ? 0 : Math.max(Number(options.duration) || 0, same ? 8 : 0));
+        return true;
+    },
+    /** Move the thing a step showed: where it sits in the hand and how it is turned, eased over the step's `duration`. */
+    move(character, options) {
+        options = options || {};
+        const state = character && this.usable(character) ? this.state(character, false) : null;
+        if (!state || !state.shown || !state.step) return false;
+        const step = Object.assign({}, state.step);
+        for (const field of this.MOVE) if (options[field] !== undefined) step[field] = options[field];
+        if (options.targetCharacter) state.target = options.targetCharacter;
+        this.want(state, state.spec, step, options.instant ? 0 : Math.max(0, Number(options.duration) || 0));
+        return true;
+    },
+    /** A sequence's thing leaves the hand: a unit that carries a weapon eases back to carrying it; another's fingers open and the thing is put away. */
+    hide(character, options) {
+        const state = character && typeof THREE !== "undefined" ? this.state(character, false) : null;
+        if (!state) return false;
+        state.sequence = false;
+        state.target = null;
+        if (!this.settle(state, options && options.instant ? 0 : this.EASE)) this.put(state);
+        return true;
+    },
+    /** The unit carries its battler's weapon in hand between actions (and has it ready for the first step that shows it). */
+    carry(character, options) {
+        options = options || {};
+        if (!this.usable(character)) return false;
+        const state = this.state(character, true);
+        if (options.battler) state.battler = options.battler;
+        state.carry = { battler: options.battler || state.battler, weaponId: options.weaponId || 0, aim: null };
+        if (state.sequence) return true;
+        return this.settle(state, state.shown ? this.EASE : 0);
+    },
+    /** A carrying unit takes aim at a character (a gun comes up on the line to it), or with no target lowers it again. */
+    aim(character, target) {
+        const state = character && typeof THREE !== "undefined" ? this.state(character, false) : null;
+        if (!state || !state.carry) return false;
+        state.carry.aim = target || null;
+        return state.sequence ? true : this.settle(state, 10);
+    },
+    /** The unit stops carrying: the weapon is put away (after the sequence that holds it, if one does). */
+    drop(character) {
+        const state = character && typeof THREE !== "undefined" ? this.state(character, false) : null;
+        if (!state) return false;
+        state.carry = null;
+        if (!state.sequence) this.put(state);
+        return true;
+    },
+    /** Whether the character has its thing out to use it: a sequence shows it, or it aims at somebody. Carried at the side is not. */
+    inUse(character) {
+        const state = character && typeof THREE !== "undefined" ? this.states.get(Reactor3D.modelInstanceKey(character)) : null;
+        return !!state && state.character === character && !state.idle && state.shown && (state.sequence || !!(state.carry && state.carry.aim));
+    },
+    /** Where the tip of what the character holds is (a muzzle, a blade's point), in the map's scene, or null when it holds nothing there. */
+    tipPoint(character) {
+        const state = character && typeof THREE !== "undefined" ? this.states.get(Reactor3D.modelInstanceKey(character)) : null;
+        const object = state && state.character === character && state.shown && !state.flat && state.record ? state.record.object : null;
+        if (!object || !object.parent) return null;
+        const shape = Reactor3D.heldShape(object);
+        object.updateWorldMatrix(true, false);
+        return new THREE.Vector3(shape.base[0] + shape.axis[0] * shape.length, shape.base[1] + shape.axis[1] * shape.length, shape.base[2] + shape.axis[2] * shape.length).applyMatrix4(object.matrixWorld);
+    },
+    /** Back to the carried weapon, eased over `frames`. False when nothing is carried. */
+    settle(state, frames) {
+        const carry = state.carry, spec = carry ? this.specFor({ battler: carry.battler, weaponId: carry.weaponId }) : null;
+        if (!spec) return false;
+        this.want(state, spec, { carry: true, hold: "fist", attachment: "rightHand", gripY: 0 }, frames);
+        return true;
+    },
+    want(state, spec, step, frames) {
+        const key = this.keyOf(spec);
+        if (state.specKey !== key) { this.release(state); state.spec = spec; state.specKey = key; }
+        state.step = step; state.shown = true; state.solved = false; state.frames = frames; state.easing = step.easing || ""; state.idle = false;
+        this.load(state);
+    },
+    /** The thing leaves the hand: fingers open, the arms ease back to the model's own motion. */
+    put(state) {
+        state.shown = false; state.step = null; state.solved = true; state.aimed = false;
+        this.unpin(state);
+        const object = state.record && state.record.object;
+        if (object && object.parent) object.parent.remove(object);
+        for (const slot of state.slots) { if (slot.hasFrom || slot.hasTo) { slot.from.copy(slot.cur); slot.hasFrom = true; } slot.hasTo = false; }
+        state.t = 0; state.frames = this.EASE; state.easing = ""; state.idle = false;
+    },
+    unpin(state) {
+        for (const grip of state.pinned) grip.pinned = false;
+        state.pinned.length = 0;
+    },
+    /** Put the held thing away for a climb: it leaves the picture and the arms go back to the model's own motion. */
+    stow(state) {
+        if (state.stowed) return;
+        state.stowed = true;
+        const object = state.record && state.record.object;
+        if (object) object.visible = false;
+        for (const slot of state.slots) if (slot && slot.node && slot.node.quaternion.equals(slot.out)) slot.node.quaternion.copy(slot.base);
+    },
+    /** Back in the hand after the climb: the arms ease from the model's own motion to the hold. */
+    unstow(state) {
+        state.stowed = false;
+        const object = state.record && state.record.object;
+        if (object) object.visible = true;
+        for (const slot of state.slots) if (slot && slot.node) slot.hasFrom = false;
+        if (state.shown) { state.t = 0; state.frames = this.EASE; }
+    },
+    /** A copy of a held model as a hand is given it: its transform, its rig or carved parts, its markers. */
+    build(template, sidecar, spec) {
+        const R = Reactor3D, object = R.cloneModelTemplate(template);
+        R.applyModelTransform(object, R.readModelTransform(sidecar, spec));
+        const rig = R.readModelRig(sidecar);
+        if (rig) R.applyModelRig(object, rig);
+        else { R.carveModelParts(object, R.readModelParts(sidecar)); R.applyPivotOverrides(object, R.readModelPivots(sidecar)); }
+        const marks = R.readHeldRig(sidecar);
+        if (marks) object.userData.__heldRig = marks;
+        // What is held is part of whoever holds it: in a battle the map's fades pass a body by (Reactor3D.cutawayMarkBody).
+        if (R.cutawayMarkMaterials) { object.__rrCutBody = true; R.cutawayMarkMaterials(object); }
+        return object;
+    },
+    load(state) {
+        const R = Reactor3D, spec = state.spec, key = state.specKey;
+        if (state.record || state.loading === key) return;
+        state.loading = key;
+        Promise.all([R.loadModel(spec.name, spec.ext, spec.file, spec.texture), R.loadModelSidecar(spec.name)]).then(([template, sidecar]) => {
+            if (state.loading === key) state.loading = null;
+            if (!template || state.specKey !== key || state.record || this.states.get(state.key) !== state) return;
+            const object = this.build(template, sidecar, spec);
+            const e = template.userData.glbSize || { x: 1, y: 1, z: 1 }, scale = (spec.size || 2) * (spec.scale || 1) / Math.max(e.x, e.y, e.z, .001);
+            object.scale.setScalar(scale);
+            if (spec.variant && R.refreshModelVariant) R.refreshModelVariant({ object }, spec);
+            state.record = { object, scale, spec, extent: e };
+            state.template = template; state.lit = null; state.solved = false;
+            // Its shape and surface are read here, once, so the first hold does not stall on them.
+            object.updateMatrixWorld(true);
+            R.heldShape(object); R.heldCloud(object);
+        }).catch(() => { if (state.loading === key) state.loading = null; });
+    },
+    /** The held model goes: its copy's share of the GPU with it. */
+    release(state) {
+        this.unpin(state);
+        const record = state.record;
+        if (record) {
+            if (record.object.parent) record.object.parent.remove(record.object);
+            if (state.template) Reactor3D.releaseModelInstance(record.object, state.template);
+        }
+        state.record = null; state.template = null; state.local = null; state.loading = null;
+    },
+    free(state) {
+        this.release(state);
+        for (const slot of state.slots) if (slot && slot.node && slot.node.quaternion.equals(slot.out)) slot.node.quaternion.copy(slot.base);
+        state.slots.length = 0;
+        if (this.states.get(state.key) === state) this.states.delete(state.key);
+        this.count = this.states.size;
+    },
+    /** Everything held on the map goes (a battle ends, the map is left). */
+    clear() {
+        for (const state of [...this.states.values()]) this.free(state);
+        this.states.clear();
+        this.count = 0;
+    },
+    /** A character's model is going (rebuilt, or left the view): its held thing comes off it, to be put back on the next one. */
+    detach(holder) {
+        const state = holder && holder.character ? this.states.get(Reactor3D.modelInstanceKey(holder.character)) : null;
+        if (!state || !state.owner || state.owner.object !== holder.object) return;
+        this.unbind(state);
+    },
+    unbind(state) {
+        const object = state.record && state.record.object;
+        if (object && object.parent) object.parent.remove(object);
+        state.owner = null; state.slots.length = 0; state.pinned.length = 0; state.local = null;
+        state.solved = !state.shown;
+    },
+    scratch() {
+        return this._s || (this._s = { one: new THREE.Quaternion(), q: new THREE.Quaternion(), m: new THREE.Matrix4(), goal: new THREE.Vector3(), v: new THREE.Vector3() });
+    },
+    /** What an aimed hold points at, in the model's own stage: the target character, or (a long gun at the ready) low ahead of the unit. */
+    goalOf(state, step, owner) {
+        const R = Reactor3D, S = this.scratch(), c = state.character, o = owner.object.position;
+        if (step.aim === "target" && state.target) {
+            const t = state.target, spec = R.characterModelSpec(t), tall = spec ? (spec.size > 0 ? spec.size : 2) * (spec.scale > 0 ? spec.scale : 1) : 1.5;
+            const map = typeof $dataMap !== "undefined" ? $dataMap : null;
+            const rise = state.flat || !R.characterGround ? 0 : R.characterGround(map, t) - R.characterGround(map, c);
+            return S.goal.set(o.x + (t._realX - c._realX), o.y + rise + tall * .6, o.z + (t._realY - c._realY));
+        }
+        if (step.aim === "ready") {
+            const f = this.FACING[R.characterModelDir8(c)] || this.FACING[2], n = Math.hypot(f[0], f[1]), tall = (owner.extent.y || 1) * owner.object.scale.y;
+            return S.goal.set(o.x + f[0] / n * tall * .6, o.y + tall * .42, o.z + f[1] / n * tall * .6);
+        }
+        return null;
+    },
+    /** Once a frame for each character that has a model, after its animation: true when what it holds changed the picture. */
+    update(holder, character, scene, hidden) {
+        const state = this.states.get(Reactor3D.modelInstanceKey(character));
+        if (!state || state.character !== character || state.idle || !holder.object) return false;
+        // Both hands are on the bars of what it rides (seated from the hop on to the hop off): the thing is put away, and the arms are the ride's.
+        // One who takes aim from the seat, or whose sequence shows the thing, has it out: the ride lets the arms go (`inUse`).
+        if (character._rrSeated && !this.inUse(character)) { this.stow(state); return false; }
+        // Both hands are on the ledge it climbs: the thing is put away, and the arms are the climb's.
+        if (character._reactorMantle) { this.stow(state); return false; }
+        if (state.stowed) this.unstow(state);
+        if (!state.owner || state.owner.object !== holder.object) {
+            if (state.owner) this.unbind(state);
+            state.owner = { object: holder.object, attachmentBones: new Map(), extent: holder.object.userData.glbSize || { x: 1, y: 1, z: 1 }, scale: 1 };
+            state.flat = !scene;
+        }
+        if (hidden) return false;
+        const frame = typeof Graphics !== "undefined" ? Graphics.frameCount : -1;
+        if (frame < 0 || frame !== this.frame) { this.frame = frame; this.tick = true; }
+        if (state.shown && state.record) {
+            if (!state.solved) {
+                // Units taking up their weapons together (a battle begins) do it one a frame: a hold is the arms and
+                // every finger worked out, 10 ms of it. A sequence's own step is never kept waiting.
+                const carried = !!(state.step && state.step.carry) && !state.sequence;
+                if (!carried || this.carriedAt !== this.frame) { if (carried) this.carriedAt = this.frame; this.solve(state, scene); }
+            }
+            else if (state.aimed) {
+                // An aimed hold follows what it points at: worked out again when that has moved, as seen from the unit.
+                const goal = this.goalOf(state, state.aimStep, state.owner);
+                // (And every few frames while it aims: the body under the arms sways with its own motion, and the barrel stays on the line.)
+                if (goal && (this.frame - state.solvedAt >= 6 || state.owner.object.worldToLocal(this.scratch().v.copy(goal)).distanceToSquared(state.goalLocal) > .0025)) { state.frames = 6; this.solve(state, scene); }
+            }
+        }
+        const changed = this.replay(state);
+        if (this.tick) { this.tick = false; Reactor3D.HandGrip.update(); }
+        return changed;
+    },
+    /** Work the hold out: the arms as the step poses them, the thing in the hand, the fingers on it. */
+    solve(state, scene) {
+        const R = Reactor3D, H = R.Held, G = R.HandGrip, S = this.scratch(), owner = state.owner, held = state.record, object = held.object, raw = state.step;
+        owner.object.updateMatrixWorld(true);
+        owner.scale = owner.object.scale.y;
+        const was = object.parent, local = state.local || (state.local = { fromP: new THREE.Vector3(), fromQ: new THREE.Quaternion(), fromS: new THREE.Vector3(1, 1, 1), toP: new THREE.Vector3(), toQ: new THREE.Quaternion(), toS: new THREE.Vector3(1, 1, 1), done: false });
+        if (was) { local.fromP.copy(object.position); local.fromQ.copy(object.quaternion); local.fromS.copy(object.scale); was.remove(object); }
+        object.position.set(0, 0, 0); object.quaternion.identity(); object.scale.setScalar(held.scale); object.updateMatrixWorld(true);
+        const shape = R.heldShape(object);
+        let step = raw;
+        if (raw.carry) {
+            // Carried: a blade at the side, a pistol lowered in the hand, a long gun in both hands at the ready; a gun comes up when the unit takes aim.
+            const hand = H.joint(owner, "rightHand"), gun = shape && shape.handle && hand ? (G.fistFrame(hand, object, 0, null) || {}).aim : null;
+            const long = !!(gun && gun.shoulder), aiming = !!(gun && state.carry && state.carry.aim);
+            step = { carry: true, hold: "fist", attachment: "rightHand", gripY: 0, hands: long ? "both" : "one", aim: aiming ? "target" : long ? "ready" : "none", rotation: shape && !shape.handle ? this.BLADE_TILT : 0 };
+            state.target = aiming ? state.carry.aim : null;
+        }
+        const main = H.HANDS.indexOf(step.attachment) >= 0 && !step.bone ? H.joint(owner, step.attachment) : null;
+        if (!main) { state.solved = true; state.aimed = false; return; }
+        const side = step.attachment === "leftHand" ? "left" : "right", off = H.joint(owner, (side === "right" ? "left" : "right") + "Hand"), torso = H.torso(owner, side);
+        const nodes = [main.parent && main.parent.parent, main.parent, main, off && off.parent && off.parent.parent, off && off.parent, off, torso && torso.chest, torso && torso.head];
+        // Each joint a hold can set, back at what the model's own motion gave it this frame.
+        for (let i = 0; i < nodes.length; i++) {
+            const node = nodes[i];
+            let slot = state.slots[i];
+            if (!node) { state.slots[i] = slot && slot.node ? slot : { node: null }; continue; }
+            if (!slot || slot.node !== node) slot = state.slots[i] = { node, delta: i >= 6, base: node.quaternion.clone(), out: node.quaternion.clone(), from: new THREE.Quaternion(), to: new THREE.Quaternion(), cur: node.quaternion.clone(), hasFrom: false, hasTo: false };
+            else if (node.quaternion.equals(slot.out)) node.quaternion.copy(slot.base);
+            else slot.base.copy(node.quaternion);
+            if (slot.hasFrom || slot.hasTo) { slot.from.copy(slot.cur); slot.hasFrom = true; }
+        }
+        const goal = this.goalOf(state, step, owner), now = step.aim === "ready" ? Object.assign({}, step, { aim: "target" }) : step;
+        const B = globalThis.ReactorBattleData;
+        const placement = B && B.heldPlacement ? B.heldPlacement({ x: 0, y: 0, z: 0 }, 0, step, held.spec)
+            : { rotateX: -(step.rotation || 0), rotateY: step.rotateY || 0, rotateZ: step.rotateZ || 0, scale: step.scale ?? 1, pivotY: step.gripY ?? .5, offsetX: step.x || 0, offsetY: step.y || 0, offsetZ: step.z || 0 };
+        const begun = H.begin(owner, held, now, goal, placement, state), frame = begun.frame, fist = begun.fist;
+        const point = fist ? fist.position : frame && frame.fist ? frame.fist : null;
+        if (!point) { state.solved = true; state.aimed = false; return; }
+        object.position.copy(point);
+        if (!fist) object.position.y += step.z || 0;
+        placement.frame = frame;
+        H.orient(held, placement);
+        object.updateMatrixWorld(true);
+        H.finish(owner, held, now, frame, fist, true, state);
+        // The thing rides the hand from here on: where it sits in the hand, as worked out with the hand posed.
+        main.updateWorldMatrix(true, false);
+        S.m.copy(main.matrixWorld).invert().multiply(object.matrixWorld).decompose(local.toP, local.toQ, local.toS);
+        if (was !== main) { local.fromP.copy(local.toP); local.fromQ.copy(local.toQ); local.fromS.copy(local.toS); }
+        local.done = false;
+        // What the hold set on the arms is kept and laid over the model's motion each frame; the joints go back to that motion for now.
+        const aimed = now.aim === "target" && !!goal, both = step.hands === "both";
+        for (let i = 0; i < nodes.length; i++) {
+            const slot = state.slots[i];
+            if (!slot.node) continue;
+            const set = i < 3 ? aimed : i < 6 ? both : aimed;
+            if (set && slot.delta) { slot.to.copy(slot.node.quaternion).multiply(S.q.copy(slot.base).invert()); slot.hasTo = Math.abs(slot.to.w) < .999999; }
+            else if (set) { slot.to.copy(slot.node.quaternion); slot.hasTo = true; }
+            else slot.hasTo = false;
+            slot.node.quaternion.copy(slot.base);
+            slot.out.copy(slot.base);
+        }
+        main.add(object);
+        object.position.copy(local.fromP); object.quaternion.copy(local.fromQ); object.scale.copy(local.fromS);
+        this.unpin(state);
+        for (const hand of both ? [main, off] : [main]) { const grip = hand ? R._handGrips.get(hand) : null; if (grip) { grip.pinned = true; state.pinned.push(grip); } }
+        state.solved = true; state.t = state.frames > 0 ? 0 : 1; state.solvedAt = this.frame;
+        state.aimed = step.aim === "target" && !!goal; state.aimStep = step;
+        if (goal) owner.object.worldToLocal(state.goalLocal.copy(goal));
+        if (scene && state.lit !== scene) this.light(state, scene);
+    },
+    /** A held model on a lit map takes the map's lights, as the character's own model does. */
+    light(state, scene) {
+        state.lit = scene;
+        state.record.object.traverse(child => {
+            const mats = child.material ? (Array.isArray(child.material) ? child.material : [child.material]) : [];
+            for (const mat of mats) {
+                mat.__reactorModel = true; mat.fog = false;
+                if (mat.color && !mat.userData.baseColor) mat.userData.baseColor = mat.color.clone();
+                if (Reactor3D.litMaterial) Reactor3D.litMaterial(mat);
+                if (scene._materials && scene._materials.indexOf(mat) < 0) scene._materials.push(mat);
+            }
+        });
+        scene._ambientLevel = undefined;
+    },
+    /** Lay the hold over this frame's motion: the arm joints it set, eased from the hold before, and the thing's place in the hand. */
+    replay(state) {
+        const S = this.scratch(), easing = state.t < 1;
+        if (easing) state.t = Math.min(1, state.t + 1 / Math.max(1, state.frames));
+        const k = state.easing === "linear" ? state.t : state.t * state.t * (3 - 2 * state.t);
+        let held = false;
+        for (const slot of state.slots) {
+            if (!slot.node || (!slot.hasFrom && !slot.hasTo)) continue;
+            const node = slot.node;
+            if (!node.quaternion.equals(slot.out)) slot.base.copy(node.quaternion);
+            const a = slot.hasFrom ? slot.from : slot.delta ? S.one : slot.base, b = slot.hasTo ? slot.to : slot.delta ? S.one : slot.base;
+            slot.cur.copy(a).slerp(b, k);
+            if (slot.delta) node.quaternion.copy(slot.cur).multiply(slot.base); else node.quaternion.copy(slot.cur);
+            slot.out.copy(node.quaternion);
+            if (state.t >= 1 && !slot.hasTo) slot.hasFrom = false; else held = true;
+        }
+        const local = state.local, object = state.record && state.record.object;
+        if (local && object && object.parent && !local.done) {
+            object.position.lerpVectors(local.fromP, local.toP, k); object.quaternion.slerpQuaternions(local.fromQ, local.toQ, k); object.scale.lerpVectors(local.fromS, local.toS, k);
+            local.done = state.t >= 1;
+        }
+        // Nothing shown and nothing left to ease: the unit is done with until it holds again.
+        if (!state.shown && !held && state.t >= 1) { if (state.carry) state.idle = true; else this.free(state); }
+        return easing || held;
+    }
+};
+
+/**
+ * A body pulling itself up a ledge keeps its hands on the edge
+ * (`ReactorPhysics.updateMantle` moves the body; this poses the arms). Each
+ * frame of a mantle, after the model's own motion, both arms reach for the lip
+ * of the ledge where the body meets the wall: up at it while the body hangs
+ * below, down on it as the body rises past, let go as it steps over. A climb
+ * down holds the edge it left while that is within reach. The arms ease back
+ * to the model's own motion when it is done. Models without hand joints keep
+ * their motion.
+ */
+Reactor3D.MantlePose = {
+    /** Frames the hands take onto the edge, and the arms back to the model's own motion afterwards. */
+    IN: 5,
+    OUT: 10,
+    /** How far onto the top the hands lie, and over it, in tiles. */
+    INSET: 0.08,
+    LIFT: 0.03,
+    /** The joints of both arms on a model, as slots that give the motion back what it did not rewrite; [] without hands. */
+    slots(record) {
+        const H = Reactor3D.Held, slots = [];
+        for (const side of ["right", "left"]) {
+            const hand = H.joint(record, side + "Hand"), fore = hand && hand.parent, upper = fore && fore.parent;
+            if (!upper || !upper.parent || upper === record.object) return [];
+            for (const node of [upper, fore]) slots.push({ node, side, base: node.quaternion.clone(), out: node.quaternion.clone(), set: false });
+        }
+        return slots;
+    },
+    /** Where the edge is, in the map's own space: on the wall's face between the two cells, at the height the hands take. */
+    lip(mantle, out) {
+        const step = Reactor3D.MantlePose.STEPS[mantle.d] || [0, 0];
+        // Up: the top is the cell it goes to. Down: the cell it left.
+        const onto = mantle.down ? -1 : 1;
+        const height = mantle.down ? mantle.from : (Number.isFinite(mantle.lip) ? mantle.lip : mantle.to);
+        return out.set(mantle.x + 0.5 - step[0] * 0.5 + step[0] * onto * this.INSET, height + this.LIFT, mantle.y + 0.5 - step[1] * 0.5 + step[1] * onto * this.INSET);
+    },
+    STEPS: { 2: [0, 1], 4: [-1, 0], 6: [1, 0], 8: [0, -1] },
+    /** How much of the pose shows this frame (0-1). */
+    weight(mantle, character, state) {
+        if (mantle.down) {
+            // While the edge it left is within the arms' reach.
+            const reach = state.reach || 1;
+            return Math.max(0, Math.min(1, (reach * 1.2 - state.far) / (reach * 0.3)));
+        }
+        if (!mantle.over) return Math.min(1, (mantle.t || 0) / this.IN);
+        // Over the edge: the hands push off and let go as the body comes onto the top.
+        const rx = Number.isFinite(character._realX) ? character._realX : character.x, ry = Number.isFinite(character._realY) ? character._realY : character.y;
+        const left = Math.abs(character._x - rx) + Math.abs(character._y - ry);
+        return Math.max(0, Math.min(1, (left - 0.3) / 0.4));
+    },
+    /** Once a frame for a character with a model, after its animation: true when the pose changed the picture. */
+    update(holder, character) {
+        const mantle = character._reactorMantle, object = holder.object;
+        let state = holder.mantlePose;
+        if (!mantle && !state) return false;
+        if (typeof THREE === "undefined" || !object || !object.parent || !Reactor3D.Held || !globalThis.ReactorBattleRoomView) { holder.mantlePose = null; return false; }
+        if (!state || state.object !== object) {
+            const record = { object, attachmentBones: new Map(), extent: object.userData.glbSize || { x: 1, y: 1, z: 1 }, scale: 1 };
+            state = holder.mantlePose = { object, record, slots: this.slots(record), w: 0, fade: 0, reach: 0, far: 0, half: 0,
+                lip: new THREE.Vector3(), right: new THREE.Vector3(), left: new THREE.Vector3(), a: new THREE.Vector3(), b: new THREE.Vector3(), q: new THREE.Quaternion() };
+        }
+        if (!state.slots.length) { if (!mantle) holder.mantlePose = null; return false; }
+        // What the motion did not rewrite goes back to what it last was, so the pose is laid over the motion, not over itself.
+        for (const slot of state.slots) {
+            if (slot.set && slot.node.quaternion.equals(slot.out)) slot.node.quaternion.copy(slot.base); else slot.base.copy(slot.node.quaternion);
+            slot.set = false;
+        }
+        object.updateMatrixWorld(true);
+        let weight;
+        if (mantle) {
+            const upperR = state.slots[0].node, upperL = state.slots[2].node;
+            upperR.getWorldPosition(state.a); upperL.getWorldPosition(state.b);
+            state.half = state.a.distanceTo(state.b) / 2;
+            if (!state.reach) {
+                const elbow = state.slots[1].node.getWorldPosition(new THREE.Vector3()), hand = Reactor3D.Held.joint(state.record, "rightHand").getWorldPosition(new THREE.Vector3());
+                state.reach = state.a.distanceTo(elbow) + elbow.distanceTo(hand);
+            }
+            object.parent.localToWorld(this.lip(mantle, state.lip));
+            // Each hand on the edge in front of its own shoulder.
+            const step = this.STEPS[mantle.d] || [0, 0];
+            state.right.copy(state.a).sub(state.b);
+            const along = state.right.x * -step[1] + state.right.z * step[0], sign = along >= 0 ? 1 : -1;
+            state.right.set(state.lip.x - step[1] * state.half * sign, state.lip.y, state.lip.z + step[0] * state.half * sign);
+            state.left.set(state.lip.x + step[1] * state.half * sign, state.lip.y, state.lip.z - step[0] * state.half * sign);
+            state.far = state.a.add(state.b).multiplyScalar(0.5).distanceTo(state.lip);
+            weight = this.weight(mantle, character, state);
+            state.w = weight; state.fade = this.OUT;
+        } else {
+            state.fade--;
+            weight = state.w * Math.max(0, state.fade) / this.OUT;
+            if (state.fade <= 0) { holder.mantlePose = null; return true; }
+        }
+        if (weight <= 0.001) return false;
+        Reactor3D.Held.reachArm(state.record, "right", state.right, 0.35);
+        Reactor3D.Held.reachArm(state.record, "left", state.left, 0.35);
+        for (const slot of state.slots) {
+            state.q.copy(slot.base).slerp(slot.node.quaternion, weight);
+            slot.node.quaternion.copy(state.q);
+            slot.out.copy(state.q); slot.set = true;
+        }
+        return true;
+    }
+};
+
+/** How far toward the wall a body pulling itself up a ledge is drawn: its front against the wall's face, by how far the physics says it leans. */
+Reactor3D.mantleHold = function(holder, character) {
+    const mantle = character._reactorMantle;
+    if (!mantle || !holder) return 0;
+    if (holder.mantleDepth === undefined) {
+        const extent = holder.object && holder.object.userData.glbSize;
+        holder.mantleDepth = extent ? Math.min(0.42, Math.max(0.12, extent.z * (holder.object.scale.z || 1) / 2)) : 0.3;
+    }
+    const full = (typeof ReactorPhysics !== "undefined" && ReactorPhysics.MANTLE_LEAN) || 0.32;
+    return Math.min(1, (mantle.lean || 0) / full) * Math.max(0, 0.5 - holder.mantleDepth - Reactor3D.MANTLE_WALL_GAP);
+};
+/** The gap left between a climber's front and the wall it climbs, in tiles. */
+Reactor3D.MANTLE_WALL_GAP = 0.03;
 
 /** A node that hinges like a bone: a THREE.Bone, or a file joint (often a plain Group) the rig names. */
 Reactor3D.isRigJoint = function(node) {
@@ -3841,6 +7093,17 @@ Reactor3D.applyModelRig = function(root, rig) {
     for (const bone of rootBones) root.add(bone);
     root.updateMatrixWorld(true);
     this.attachRigHands(root, rig, bones);
+    // The finger joints the hands gained follow the rig's own bones in the skeleton.
+    const fingerJoints = this.rigFingerJoints(root), fingerHands = new Map();
+    for (const joint of fingerJoints) {
+        const at = bones.indexOf(joint.hand), e = joint.entry;
+        if (at < 0) continue;
+        let hand = fingerHands.get(joint.hand);
+        if (!hand) fingerHands.set(joint.hand, hand = { index: at, node: joint.hand, fingers: [] });
+        hand.fingers.push({ base: e.base, tip: e.tip, length: e.length, radius: e.radius, thumb: e.thumb, one: bones.length, two: bones.length + 1 });
+        bones.push(joint.one, joint.two);
+    }
+    if (fingerHands.size) root.updateMatrixWorld(true);
     const skeleton = new THREE.Skeleton(bones);
     for (const key of Object.keys(rig.weights)) {
         const mesh = meshes[Number(key)];
@@ -3850,10 +7113,20 @@ Reactor3D.applyModelRig = function(root, rig) {
         const position = geometry.getAttribute("position");
         if (!position || position.count !== data.count) continue;
         const weightScale = 1 / 255;
-        const skinWeights = new Float32Array(data.count * 4);
+        let skinWeights = new Float32Array(data.count * 4);
         for (let i = 0; i < data.count * 4; i++) skinWeights[i] = data.weights[i] * weightScale;
+        let skinIndices = Uint16Array.from(data.indices);
+        if (fingerHands.size) {
+            // The hands' share of the skin goes on to their finger joints, in each hand's own frame at rest.
+            mesh.updateMatrixWorld(true);
+            const list = [...fingerHands.values()].map(hand => ({ index: hand.index, fingers: hand.fingers,
+                toHand: new THREE.Matrix4().copy(hand.node.matrixWorld).invert().multiply(mesh.matrixWorld).elements }));
+            const skin = this.fingerSkinWeights(data.count, position, (i, c) => skinIndices[i * 4 + c], (i, c) => skinWeights[i * 4 + c], list, geometry.index || null);
+            skinIndices = skin.index; skinWeights = skin.weight;
+            [...fingerHands.values()].forEach((hand, i) => { if (list[i].mitt) this._handGrips.get(hand.node).layout.mitt = true; });
+        }
         geometry.setAttribute("skinIndex",
-            new THREE.BufferAttribute(Uint16Array.from(data.indices), 4));
+            new THREE.BufferAttribute(skinIndices, 4));
         geometry.setAttribute("skinWeight", new THREE.BufferAttribute(skinWeights, 4));
         const skinned = new THREE.SkinnedMesh(geometry, mesh.material);
         skinned.name = mesh.name;
@@ -4137,6 +7410,7 @@ Reactor3D.startRagdoll = function(holder, character) {
     object.updateMatrixWorld(true);
     // The body leaves the model's standing bounds as it falls.
     object.traverse(node => { if (node.isMesh) node.frustumCulled = false; });
+    object.userData.rrNoCull = true;
     const nodes = {};
     for (const entry of holder.binding.meshes) for (const part of entry.parts) if (!nodes[part.name]) nodes[part.name] = entry.mesh;
     const bones = Reactor3D.RAGDOLL_BONES.filter(([name]) => nodes[name]);
@@ -4337,9 +7611,10 @@ Reactor3D.chestForward = function(holder) {
     return 0;
 };
 
-/** Whether a character is on a ladder by the physics. */
+/** Whether a character is climbing by the physics: on a ladder, or pulling itself up (or lowering itself down) beside a ledge. */
 Reactor3D.isClimbing = function(character) {
-    return !!(character && character._reactorOnLadder);
+    // (Over the edge of a ledge the body steps onto the top: a walk, not a climb.)
+    return !!(character && (character._reactorOnLadder || (character._reactorMantle && !character._reactorMantle.over)));
 };
 
 /** Whether a character is swimming by the physics. */
@@ -4358,15 +7633,21 @@ Reactor3D.isAirborne = function(character) {
  * travel without dashing, "dashing" is travel while dashing, "jumping" is
  * any time in the air (the rise and the fall), "swimming" moving through
  * deep water and "treading" floating still in it. "idle" is standing still
- * on the ground. Returns true/false for those triggers and null for every
- * other trigger.
+ * on the ground. "riding" is seated on a vehicle, and outranks every one of
+ * them. Returns true/false for those triggers and null for every other
+ * trigger.
  */
-/** Standing still on the ground: not moving, in the air, in deep water or on a ladder. */
+/** Standing still on the ground: not moving, in the air, in deep water, on a ladder or seated on a vehicle. */
 Reactor3D.isIdleState = function(state) {
-    return !state.moving && !state.airborne && !state.swimming && !state.climbing;
+    return !state.moving && !state.airborne && !state.swimming && !state.climbing && !state.riding;
 };
 
 Reactor3D.moveTriggerActive = function(trigger, state) {
+    // A seated rider (`state.riding`) plays its riding motion whatever the vehicle under it does: rolling,
+    // in the air or through a ford, none of the body's own states is in force. Rules that play always or
+    // on demand are not movement triggers and answer null as for anyone.
+    if (trigger === "riding") return !!state.riding;
+    if (state.riding) return trigger === "always" || trigger === "action" ? null : false;
     if (trigger === "jumping") return !!state.airborne;
     if (trigger === "swimming") return !!state.swimming && !!state.moving;
     if (trigger === "treading") return !!state.swimming && !state.moving;
@@ -4478,6 +7759,90 @@ Reactor3D.sampleModelKeys = function(rule, p) {
     return { rotate: curve("rotate"), move: curve("move"), resize: curve("resize") };
 };
 
+/*
+ * `sampleModelKeys` for the frame loop: the same timeline and the same
+ * arithmetic, in the same order, written into the caller's arrays. The
+ * public one built a stops array, six closures and a dozen small arrays per
+ * keyed rule per model per frame; this one reads the stops in place (the
+ * rest stop, the rule's own keys, the closing rest stop) and allocates
+ * nothing. The public one stays as it was for the editor's callers, and a
+ * test holds the two to the same numbers.
+ */
+const KEY_REST = [0, 0, 0], KEY_ONE = [1, 1, 1];
+const KEY_REST_STOP = { at: 0, rotate: KEY_REST, move: KEY_REST, resize: KEY_ONE };
+const KEY_END_STOP = { at: 1, rotate: KEY_REST, move: KEY_REST, resize: KEY_ONE };
+const keyTimeline = { keys: null, lead: 0, count: 0, n: 0, loops: false };
+function keyStop(line, j) {
+    if (line.lead && j === 0) return KEY_REST_STOP;
+    const index = j - line.lead;
+    return index < line.count ? line.keys[index] : KEY_END_STOP;
+}
+function keyField(stop, name, i) {
+    return (stop[name] || (name === "resize" ? KEY_ONE : KEY_REST))[i];
+}
+function keyMeets(line, name, i) {
+    const gap = keyField(keyStop(line, line.n - 1), name, i) - keyField(keyStop(line, 0), name, i);
+    return name === "rotate" ? Math.abs(gap - 360 * Math.round(gap / 360)) < 1e-6 : gap === 0;
+}
+function keySlope(line, name, i, j) {
+    const n = line.n;
+    if (j < 0 || j >= n - 1) {
+        if (!line.loops || n < 3 || !keyMeets(line, name, i)) return null;
+        j = j < 0 ? n - 2 : 0;
+    }
+    const h = keyStop(line, j + 1).at - keyStop(line, j).at;
+    return h > 0 ? (keyField(keyStop(line, j + 1), name, i) - keyField(keyStop(line, j), name, i)) / h : 0;
+}
+function keyWidth(line, j) {
+    const n = line.n;
+    if (j < 0) j = n - 2; else if (j >= n - 1) j = 0;
+    return keyStop(line, j + 1).at - keyStop(line, j).at;
+}
+function keyTangent(line, name, i, j) {
+    const d0 = keySlope(line, name, i, j - 1), d1 = keySlope(line, name, i, j);
+    if (d0 === null || d1 === null || d0 * d1 <= 0) return 0;
+    const h0 = keyWidth(line, j - 1), h1 = keyWidth(line, j);
+    return 3 * (h0 + h1) / ((2 * h1 + h0) / d0 + (h1 + 2 * h0) / d1);
+}
+Reactor3D._sampleModelKeysInto = function(rule, p, out) {
+    const line = keyTimeline;
+    const keys = rule.keys;
+    line.keys = keys;
+    line.count = keys.length;
+    // A key at 0 replaces the rest stop rather than sitting on top of it.
+    line.lead = keys.length > 0 && keys[0].at <= 0 ? 0 : 1;
+    const last = keyStop(line, line.lead + line.count - 1);
+    const n = line.lead + line.count + (last.at < 1 ? 1 : 0);
+    line.n = n;
+    let k = 0;
+    while (k + 2 < n && p > keyStop(line, k + 1).at) k++;
+    const a = keyStop(line, k), b = keyStop(line, Math.min(n - 1, k + 1));
+    const span = b.at - a.at;
+    if (!(span > 0)) {
+        const move = b.move || KEY_REST, resize = b.resize || KEY_ONE;
+        for (let i = 0; i < 3; i++) {
+            out.rotate[i] = b.rotate[i];
+            out.move[i] = move[i];
+            out.resize[i] = resize[i];
+        }
+        line.keys = null;
+        return;
+    }
+    const t = Math.min(1, Math.max(0, (p - a.at) / span));
+    line.loops = !!rule.trigger && rule.trigger !== "action";
+    const t2 = t * t, t3 = t2 * t;
+    const h00 = 2 * t3 - 3 * t2 + 1, h10 = t3 - 2 * t2 + t, h01 = -2 * t3 + 3 * t2, h11 = t3 - t2;
+    for (let c = 0; c < 3; c++) {
+        const name = c === 0 ? "rotate" : c === 1 ? "move" : "resize";
+        const target = out[name];
+        for (let i = 0; i < 3; i++) {
+            const v0 = keyField(a, name, i), v1 = keyField(b, name, i);
+            target[i] = h00 * v0 + h10 * span * keyTangent(line, name, i, k) + h01 * v1 + h11 * span * keyTangent(line, name, i, k + 1);
+        }
+    }
+    line.keys = null;
+};
+
 /** Drive one instance's rules for this frame. */
 /**
  * Logic frames a movement clip keeps playing after movement stops being
@@ -4487,6 +7852,155 @@ Reactor3D.sampleModelKeys = function(rule, p) {
  * stopping. Frames, not milliseconds, so it is the same on any display.
  */
 Reactor3D.MOVE_CLIP_GRACE = 8;
+
+/*
+ * The animation pool's hand-outs, as plain functions over counters kept on
+ * the pool itself. As closures they were made afresh on every call: seven
+ * allocations per animated model per frame, for the same four lines.
+ */
+function animNextVec(pool) {
+    const v = pool.vec[pool.vecAt] || (pool.vec[pool.vecAt] = new THREE.Vector3());
+    pool.vecAt++;
+    return v;
+}
+function animNextQuat(pool) {
+    const q = pool.quat[pool.quatAt] || (pool.quat[pool.quatAt] = new THREE.Quaternion());
+    pool.quatAt++;
+    return q;
+}
+function animNextMat(pool) {
+    const m = pool.mat[pool.matAt] || (pool.mat[pool.matAt] = new THREE.Matrix4());
+    pool.matAt++;
+    return m;
+}
+function animPivotTurn(pool, pivot, quat) {
+    const p = animNextVec(pool).fromArray(pivot);
+    const m = animNextMat(pool).makeRotationFromQuaternion(quat);
+    const turned = animNextVec(pool).copy(p).applyQuaternion(quat);
+    m.setPosition(p.sub(turned));
+    return m;
+}
+function animPivotGrow(pool, pivot, size) {
+    const p = animNextVec(pool).fromArray(pivot);
+    const m = animNextMat(pool).makeScale(size.x, size.y, size.z);
+    const grown = animNextVec(pool).copy(p).multiply(size);
+    m.setPosition(p.sub(grown));
+    return m;
+}
+
+/*
+ * A node's quaternion, written only when it changes. three re-derives a
+ * node's Euler angles from its quaternion on every write — a rotation
+ * matrix and three inverse trig calls — and the pass wrote every part of
+ * every animated model every frame, most of them the value already there.
+ * Skipped only when both the quaternion and the Euler angles are exactly
+ * what this pass left behind the last time it wrote: the angles are then
+ * already the ones the write would derive, so nothing observable differs.
+ * `Reactor3D.AnimationWrites.enabled = false` writes every time.
+ */
+Reactor3D.AnimationWrites = { enabled: true };
+function animSetQuaternion(entry, q) {
+    const node = entry.mesh.quaternion;
+    const memo = entry.quatMemo;
+    if (memo && Reactor3D.AnimationWrites.enabled
+        && q._x === node._x && q._y === node._y && q._z === node._z && q._w === node._w) {
+        const euler = entry.mesh.rotation;
+        if (memo[0] === node._x && memo[1] === node._y && memo[2] === node._z && memo[3] === node._w
+            && memo[4] === euler._x && memo[5] === euler._y && memo[6] === euler._z && memo[7] === euler._order) return;
+    }
+    node.copy(q);
+    const euler = entry.mesh.rotation;
+    const note = memo || (entry.quatMemo = [0, 0, 0, 0, 0, 0, 0, ""]);
+    note[0] = node._x; note[1] = node._y; note[2] = node._z; note[3] = node._w;
+    note[4] = euler._x; note[5] = euler._y; note[6] = euler._z; note[7] = euler._order;
+}
+
+/**
+ * Which rules reach which of a binding's meshes, worked out once instead of
+ * every frame. A rule names a part; a mesh answers to it through the first
+ * name in its ancestry chain that starts with it (the part's own name first,
+ * its parents after). That was asked afresh each frame for every mesh, every
+ * active rule and every name in the chain — on a rigged character or a
+ * vehicle cut into dozens of parts it was most of the animation pass — yet
+ * it only changes when a rule's part or a part's name does.
+ *
+ * Per mesh, the table lists the rules that reach it already in the order
+ * their contributions compose (deepest match first, then rule order), so a
+ * frame only has to skip the rules that are not playing. It is checked
+ * against everything it was built from on every use — the rules array and
+ * each rule in it, the part each names, the mesh list, each mesh's part
+ * chain and every name in it — so carving, rigging, a rename or a new rule
+ * list rebuilds it before it can answer. `enabled = false` matches every
+ * frame as before.
+ */
+Reactor3D.AnimationMatches = {
+    enabled: true,
+    table(binding, rules) {
+        const table = binding._matchTable;
+        if (table && this.current(table, binding, rules)) return table;
+        return (binding._matchTable = this.build(binding, rules));
+    },
+    current(table, binding, rules) {
+        const meshes = binding.meshes;
+        if (table.rules !== rules || table.ruleCount !== rules.length
+            || table.meshes !== meshes || table.meshCount !== meshes.length) return false;
+        for (let i = 0; i < rules.length; i++) {
+            if (table.ruleList[i] !== rules[i] || table.ruleParts[i] !== rules[i].part) return false;
+        }
+        let at = 0;
+        for (let e = 0; e < meshes.length; e++) {
+            const entry = meshes[e];
+            const parts = entry.parts;
+            if (table.entries[e] !== entry || table.chains[e] !== parts || table.chainCounts[e] !== parts.length) return false;
+            for (let d = 0; d < parts.length; d++, at++) {
+                if (table.parts[at] !== parts[d] || table.names[at] !== parts[d].name) return false;
+            }
+        }
+        return true;
+    },
+    build(binding, rules) {
+        const meshes = binding.meshes;
+        const table = {
+            rules, ruleCount: rules.length, ruleList: rules.slice(), ruleParts: rules.map(rule => rule.part),
+            meshes, meshCount: meshes.length, entries: meshes.slice(),
+            chains: [], chainCounts: [], parts: [], names: [], reach: []
+        };
+        for (const rule of rules) {
+            if (rule.part && rule._partLowerOf !== rule.part) {
+                rule._partLower = String(rule.part).toLowerCase();
+                rule._partLowerOf = rule.part;
+            }
+        }
+        for (const entry of meshes) {
+            table.chains.push(entry.parts);
+            table.chainCounts.push(entry.parts.length);
+            for (const part of entry.parts) {
+                table.parts.push(part);
+                table.names.push(part.name);
+            }
+            const reach = [];
+            for (let i = 0; i < rules.length; i++) {
+                const rule = rules[i];
+                if (!rule.part) continue;
+                for (let d = 0; d < entry.parts.length; d++) {
+                    const part = entry.parts[d];
+                    if (part.nameLower === undefined || part.nameLowerOf !== part.name) {
+                        part.nameLower = String(part.name).toLowerCase();
+                        part.nameLowerOf = part.name;
+                    }
+                    // (An `exact` rule answers to the whole name only: a wheel rule on Wheel1 leaves Wheel10 alone.)
+                    if (rule.exact ? part.nameLower === rule._partLower : part.nameLower.indexOf(rule._partLower) === 0) {
+                        reach.push({ rule: i, depth: d });
+                        break;
+                    }
+                }
+            }
+            reach.sort((a, b) => b.depth - a.depth || a.rule - b.rule);
+            table.reach.push(reach);
+        }
+        return table;
+    }
+};
 
 Reactor3D.applyModelAnimation = function(binding, rules, state) {
     if (typeof THREE === "undefined" || !binding || !rules || !rules.length) return;
@@ -4499,32 +8013,26 @@ Reactor3D.applyModelAnimation = function(binding, rules, state) {
     // walking character allocates nothing. Nothing handed out here outlives
     // the call: results are copied into the root and the per-entry matrix.
     const pool = this._animPool || (this._animPool = {
-        vec: [], quat: [], mat: [], match: [], action: [], actions: [],
+        vec: [], quat: [], mat: [], match: [], action: [], actions: [], byRule: [],
+        vecAt: 0, quatAt: 0, matAt: 0,
+        sampled: { rotate: [0, 0, 0], move: [0, 0, 0], resize: [1, 1, 1] },
         euler: new THREE.Euler(), scratch: new THREE.Matrix4(),
         outPos: new THREE.Vector3(), outQuat: new THREE.Quaternion(), outScale: new THREE.Vector3()
     });
-    let vecAt = 0, quatAt = 0, matAt = 0, matchAt = 0, actionAt = 0;
-    const takeVec = () => pool.vec[vecAt] || (pool.vec[vecAt] = new THREE.Vector3()), nextVec = () => { const v = takeVec(); vecAt++; return v; };
-    const nextQuat = () => { const q = pool.quat[quatAt] || (pool.quat[quatAt] = new THREE.Quaternion()); quatAt++; return q; };
-    const nextMat = () => { const m = pool.mat[matAt] || (pool.mat[matAt] = new THREE.Matrix4()); matAt++; return m; };
+    pool.vecAt = 0;
+    pool.quatAt = 0;
+    pool.matAt = 0;
+    let matchAt = 0, actionAt = 0;
     const euler = pool.euler;
-    const axisOf = rule => nextVec().fromArray(this.AXIS_VECTORS[rule.axis]);
-    const pivotTurn = (pivot, quat) => {
-        const p = nextVec().fromArray(pivot);
-        const m = nextMat().makeRotationFromQuaternion(quat);
-        const turned = nextVec().copy(p).applyQuaternion(quat);
-        m.setPosition(p.sub(turned));
-        return m;
-    };
-    const pivotGrow = (pivot, size) => {
-        const p = nextVec().fromArray(pivot);
-        const m = nextMat().makeScale(size.x, size.y, size.z);
-        const grown = nextVec().copy(p).multiply(size);
-        m.setPosition(p.sub(grown));
-        return m;
-    };
+    // Counted rather than truncated: setting an array's length every call
+    // was a measurable share of this pass.
     const partActions = pool.actions;
-    partActions.length = 0;
+    let actionCount = 0;
+    // The action each rule contributes this frame, by rule index, for the
+    // match table; filled in as the actions are made.
+    const matches = this.AnimationMatches.enabled ? this.AnimationMatches.table(binding, rules) : null;
+    const byRule = pool.byRule;
+    if (matches) for (let i = 0; i < rules.length; i++) byRule[i] = null;
     for (let i = 0; i < rules.length; i++) {
         const rule = rules[i];
         if (rule.type === "clip") continue;
@@ -4579,7 +8087,8 @@ Reactor3D.applyModelAnimation = function(binding, rules, state) {
                 }
             }
             if (progress === null) continue;
-            const sampled = this.sampleModelKeys(rule, progress);
+            const sampled = pool.sampled;
+            this._sampleModelKeysInto(rule, progress, sampled);
             if (weight < 1) {
                 for (let k = 0; k < 3; k++) {
                     sampled.rotate[k] *= weight;
@@ -4589,14 +8098,14 @@ Reactor3D.applyModelAnimation = function(binding, rules, state) {
             }
             if (rule.fromRest) restWeight = rule.instant ? 1 : Math.max(0, Math.min(1, progress));
             const toRad = Math.PI / 180;
-            quat = nextQuat().setFromEuler(euler.set(
+            quat = animNextQuat(pool).setFromEuler(euler.set(
                 sampled.rotate[0] * toRad, sampled.rotate[1] * toRad, sampled.rotate[2] * toRad, "XYZ"));
             if (sampled.move[0] || sampled.move[1] || sampled.move[2]) {
-                slide = nextVec().set(sampled.move[0], sampled.move[1], sampled.move[2])
+                slide = animNextVec(pool).set(sampled.move[0], sampled.move[1], sampled.move[2])
                     .multiplyScalar((state.moveScale || 1) / (state.scale || 1));
             }
             if (sampled.resize[0] !== 1 || sampled.resize[1] !== 1 || sampled.resize[2] !== 1) {
-                grow = nextVec().set(sampled.resize[0], sampled.resize[1], sampled.resize[2]);
+                grow = animNextVec(pool).set(sampled.resize[0], sampled.resize[1], sampled.resize[2]);
             }
         } else if (rule.type === "pose") {
             // The pose blend persists across frames (in binding.angles) so
@@ -4646,16 +8155,16 @@ Reactor3D.applyModelAnimation = function(binding, rules, state) {
             if (!blend) continue;
             const eased = this.poseEase(blend);
             const toRad = Math.PI / 180;
-            quat = nextQuat().setFromEuler(euler.set(
+            quat = animNextQuat(pool).setFromEuler(euler.set(
                 rule.rotate[0] * eased * toRad,
                 rule.rotate[1] * eased * toRad,
                 rule.rotate[2] * eased * toRad, "XYZ"));
             if (rule.move[0] || rule.move[1] || rule.move[2]) {
-                slide = nextVec().set(rule.move[0], rule.move[1], rule.move[2])
+                slide = animNextVec(pool).set(rule.move[0], rule.move[1], rule.move[2])
                     .multiplyScalar(eased * (state.moveScale || 1) / (state.scale || 1));
             }
             if (rule.resize[0] !== 1 || rule.resize[1] !== 1 || rule.resize[2] !== 1) {
-                grow = nextVec().set(
+                grow = animNextVec(pool).set(
                     1 + (rule.resize[0] - 1) * eased,
                     1 + (rule.resize[1] - 1) * eased,
                     1 + (rule.resize[2] - 1) * eased);
@@ -4673,17 +8182,42 @@ Reactor3D.applyModelAnimation = function(binding, rules, state) {
                 if (t >= this.modelRuleDuration(rule)) continue;
             }
             if (rule.type === "spin") {
-                const gain = rule.perTile
-                    ? state.distance * rule.perTile
-                    : (gate === false ? 0 : rule.speed / 60);
-                binding.angles[i] = (binding.angles[i] || 0) + gain;
-                quat = nextQuat().setFromAxisAngle(axisOf(rule), binding.angles[i] * Math.PI / 180);
+                // The road rolled under it in this call: a ridden vehicle's state says how far, signed along
+                // its heading (`travel`, so a wheel rolls back in reverse); anything else rolls by the
+                // distance it covered. A wheel that knows its radius (model units) turns exactly with the
+                // road at any bound size; one with `perTile` turns that many degrees a tile.
+                const travel = Number.isFinite(state.travel) ? state.travel : state.distance;
+                const gain = rule.radius
+                    ? travel / (rule.radius * (state.scale || 1)) * (180 / Math.PI)
+                    : rule.perTile
+                        ? travel * rule.perTile
+                        : (gate === false ? 0 : rule.speed / 60);
+                // The angle stays one a part can be drawn at. A gain that is no such number adds nothing:
+                // a caller that says neither how far it rolled nor how far it went (a preview posing the
+                // model at one frame), or a radius, a scale or a travel at the edge of what a number
+                // holds. The wheel keeps the angle it had and rolls on from it when the road is known again.
+                const had = binding.angles[i];
+                const kept = had > -1e300 && had < 1e300 ? had : 0;
+                const rolled = kept + gain;
+                binding.angles[i] = rolled > -1e300 && rolled < 1e300 ? rolled : kept;
+                quat = animNextQuat(pool).setFromAxisAngle(animNextVec(pool).fromArray(rule.axisVector || this.AXIS_VECTORS[rule.axis]), binding.angles[i] * Math.PI / 180);
+            } else if (rule.type === "drive") {
+                // A part that follows its driver (the bars by the steering): `degrees` at an input of 1,
+                // about the rule's own line. With no inputs on the state every input is 0 and the part
+                // rests. It joins the part actions below like any rule, so a wheel nested in it spins
+                // about the turned axle. Nothing is kept from frame to frame: the turn is the input's.
+                const inputs = state.inputs;
+                const input = inputs ? inputs[rule.input] : 0;
+                const angle = Number.isFinite(input) ? rule.degrees * input : 0;
+                // (No turn, or one past any a part can be drawn at: the part rests.)
+                if (!angle || !(angle > -1e300 && angle < 1e300)) continue;
+                quat = animNextQuat(pool).setFromAxisAngle(animNextVec(pool).fromArray(rule.axisVector || this.AXIS_VECTORS[rule.axis]), angle * Math.PI / 180);
             } else if (rule.type === "swing") {
                 const angle = rule.degrees * Math.sin(2 * Math.PI * (t / rule.period + rule.phase));
-                quat = nextQuat().setFromAxisAngle(axisOf(rule), angle * Math.PI / 180);
+                quat = animNextQuat(pool).setFromAxisAngle(animNextVec(pool).fromArray(this.AXIS_VECTORS[rule.axis]), angle * Math.PI / 180);
             } else {
                 const offset = rule.amount * (state.moveScale || 1) * Math.sin(2 * Math.PI * (t / rule.period + rule.phase)) / (state.scale || 1);
-                slide = axisOf(rule).multiplyScalar(offset);
+                slide = animNextVec(pool).fromArray(this.AXIS_VECTORS[rule.axis]).multiplyScalar(offset);
             }
         }
         if (!rule.part) {
@@ -4700,13 +8234,15 @@ Reactor3D.applyModelAnimation = function(binding, rules, state) {
             }
             const action = pool.action[actionAt] || (pool.action[actionAt] = {});
             actionAt++;
-            action.order = partActions.length;
+            action.order = actionCount;
             action.partLower = rule._partLower;
+            action.exact = rule.exact === true;
             action.quat = quat;
             action.slide = slide;
             action.grow = grow;
             action.rest = restWeight;
-            partActions.push(action);
+            partActions[actionCount++] = action;
+            if (matches) byRule[i] = action;
         }
     }
     // Per mesh, contributions compose by ANCESTRY, not authoring order: a
@@ -4714,9 +8250,30 @@ Reactor3D.applyModelAnimation = function(binding, rules, state) {
     // turret's turn applies before the cannon's recoil and the recoil
     // slides along the turned barrel — whichever rule was written or
     // edited first. Same-depth contributions keep their rule order.
-    for (const entry of binding.meshes) {
+    const meshes = binding.meshes;
+    for (let e = 0; e < meshes.length; e++) {
+        const entry = meshes[e];
         let matched = null;
-        for (const action of partActions) {
+        if (matches) {
+            // The table's order is already the composing order, and a rule
+            // makes at most one action, so the hits need no sort.
+            const reach = matches.reach[e];
+            let hits = 0;
+            for (let r = 0; r < reach.length; r++) {
+                const action = byRule[reach[r].rule];
+                if (!action) continue;
+                if (!matched) matched = entry.matched || (entry.matched = []);
+                const hit = pool.match[matchAt] || (pool.match[matchAt] = {});
+                matchAt++;
+                hit.action = action;
+                hit.depth = reach[r].depth;
+                hit.pivot = entry.parts[reach[r].depth].pivot;
+                matched[hits++] = hit;
+            }
+            if (matched && matched.length !== hits) matched.length = hits;
+        }
+        if (!matches) for (let a = 0; a < actionCount; a++) {
+            const action = partActions[a];
             let depth = -1;
             let pivot = null;
             for (let d = 0; d < entry.parts.length; d++) {
@@ -4725,7 +8282,7 @@ Reactor3D.applyModelAnimation = function(binding, rules, state) {
                     part.nameLower = String(part.name).toLowerCase();
                     part.nameLowerOf = part.name;
                 }
-                if (part.nameLower.indexOf(action.partLower) === 0) {
+                if (action.exact ? part.nameLower === action.partLower : part.nameLower.indexOf(action.partLower) === 0) {
                     depth = d;
                     pivot = entry.parts[d].pivot;
                     break;
@@ -4744,7 +8301,7 @@ Reactor3D.applyModelAnimation = function(binding, rules, state) {
             matched.push(hit);
         }
         if (!matched) continue;
-        matched.sort((a, b) => b.depth - a.depth || a.action.order - b.action.order);
+        if (!matches) matched.sort((a, b) => b.depth - a.depth || a.action.order - b.action.order);
         entry.acc = (entry.accMatrix || (entry.accMatrix = new THREE.Matrix4())).identity();
         for (let m = 0; m < matched.length; m++) {
             const action = matched[m].action;
@@ -4754,10 +8311,10 @@ Reactor3D.applyModelAnimation = function(binding, rules, state) {
             // The slide comes first: an offset is in the model's frame, not
             // in the frame the same pose's turn leaves behind.
             if (slide) {
-                entry.acc.multiply(nextMat().makeTranslation(slide.x, slide.y, slide.z));
+                entry.acc.multiply(animNextMat(pool).makeTranslation(slide.x, slide.y, slide.z));
             }
-            if (turn) entry.acc.multiply(pivotTurn(pivot, turn));
-            if (action.grow) entry.acc.multiply(pivotGrow(pivot, action.grow));
+            if (turn) entry.acc.multiply(animPivotTurn(pool, pivot, turn));
+            if (action.grow) entry.acc.multiply(animPivotGrow(pool, pivot, action.grow));
         }
     }
     if (binding.mixer) {
@@ -4766,7 +8323,7 @@ Reactor3D.applyModelAnimation = function(binding, rules, state) {
         for (const entry of binding.meshes) {
             if (!entry.clipBase) continue;
             entry.mesh.position.copy(entry.clipBase.position);
-            entry.mesh.quaternion.copy(entry.clipBase.quaternion);
+            animSetQuaternion(entry, entry.clipBase.quaternion);
             entry.mesh.scale.copy(entry.clipBase.scale);
         }
         // The same rules array asks every frame; filter it once per array.
@@ -4822,9 +8379,18 @@ Reactor3D.applyModelAnimation = function(binding, rules, state) {
             // prefers "dashing" over plain "moving"; two clips on the same
             // trigger never fight — the first in the list plays.
             const pick = trigger => clipRules.find(r => r.trigger === trigger);
+            // Seated on a vehicle the riding clip outranks everything, and loops: the body's own states
+            // (a gait, a jump, a swim) are the vehicle's doing and none of their clips plays on a rider.
+            const riding = !!state.riding;
+            const ride = riding ? pick("riding") : null;
+            if (ride) {
+                desired = ride.clip;
+                key = ride.clip;
+                rate = ride.rate || 1;
+            }
             // On a ladder the climb clip, and in the water the swim clip, outrank every gait, and loop.
             // Floating still takes a tread clip, or the swim clip when there is none.
-            const swim = (state.climbing ? pick("climbing") : null)
+            const swim = riding ? null : (state.climbing ? pick("climbing") : null)
                 || (state.swimming ? (moving ? pick("swimming") : pick("treading") || pick("swimming")) : null);
             if (swim) {
                 desired = swim.clip;
@@ -4834,7 +8400,7 @@ Reactor3D.applyModelAnimation = function(binding, rules, state) {
             // In the air the jump clip outranks every gait. It plays once and
             // holds its last frame through a long fall unless it repeats;
             // its own key restarts it on every new jump.
-            const jump = !swim && state.airborne ? pick("jumping") : null;
+            const jump = !riding && !swim && state.airborne ? pick("jumping") : null;
             if (jump) {
                 desired = jump.clip;
                 key = jump.clip + ":air";
@@ -4844,9 +8410,10 @@ Reactor3D.applyModelAnimation = function(binding, rules, state) {
             // A state with a motion of its own but no clip (a rig's default Jump, Swim or
             // Climb) plays it from the rest pose: a gait clip under it would fight it.
             const procedural = trigger => rules.some(r => r.trigger === trigger && r.type !== "clip");
-            const stateMotion = !jump && !swim && ((state.climbing && procedural("climbing"))
+            // (A rider with no riding clip plays its riding motion, the rig's own Ride, from the rest pose.)
+            const stateMotion = riding ? !ride && procedural("riding") : !jump && !swim && ((state.climbing && procedural("climbing"))
                 || (state.swimming && procedural(moving ? "swimming" : "treading")) || (state.airborne && procedural("jumping")));
-            const rule = jump || swim || stateMotion ? null : (moving
+            const rule = ride || jump || swim || stateMotion ? null : (riding ? null : moving
                 ? (dashing ? pick("dashing") : pick("walking")) || pick("moving")
                 : pick("idle")) || pick("always");
             if (rule) {
@@ -4932,7 +8499,7 @@ Reactor3D.applyModelAnimation = function(binding, rules, state) {
         }
         if (!entry.acc) {
             entry.mesh.position.copy(basePosition);
-            entry.mesh.quaternion.copy(baseQuaternion);
+            animSetQuaternion(entry, baseQuaternion);
             if (baseScale) entry.mesh.scale.copy(baseScale);
             continue;
         }
@@ -4959,7 +8526,7 @@ Reactor3D.applyModelAnimation = function(binding, rules, state) {
         scratch.multiply(entry.acc);
         scratch.decompose(outPos, outQuat, outScale);
         entry.mesh.position.copy(outPos);
-        entry.mesh.quaternion.copy(outQuat);
+        animSetQuaternion(entry, outQuat);
         entry.mesh.scale.copy(outScale);
     }
 };
@@ -5103,7 +8670,7 @@ Reactor3D.updateEnemyModelSprite = function(sprite) {
             if (sprite._reactorBattler !== state || !template) return;
             this.groundAnimatedTemplate(template, sidecar);
             const object = this.cloneModelTemplate(template);
-            this.applyModelTransform(object, this.readModelTransform(sidecar));
+            this.applyModelTransform(object, this.readModelTransform(sidecar, spec));
             const rig = this.readModelRig(sidecar);
             if (rig) {
                 this.applyModelRig(object, rig);
@@ -5130,6 +8697,7 @@ Reactor3D.updateEnemyModelSprite = function(sprite) {
             camera.position.set(0, height * 0.52, Math.max(distance, 0.8));
             camera.lookAt(0, height * 0.48, 0);
             state.object = object;
+            state.template = template;
             state.scene = scene;
             state.camera = camera;
             state.scale = scale;
@@ -5199,7 +8767,7 @@ Reactor3D.actorFaceState = function(actorId) {
         if (!template || !this.isLoaded()) return;
         this.groundAnimatedTemplate(template, sidecar);
         const object = this.cloneModelTemplate(template);
-        this.applyModelTransform(object, this.readModelTransform(sidecar));
+        this.applyModelTransform(object, this.readModelTransform(sidecar, spec));
         const rig = this.readModelRig(sidecar);
         if (rig) {
             this.applyModelRig(object, rig);
@@ -5296,7 +8864,7 @@ Reactor3D.updateActorModelSprite = function(sprite) {
             if (sprite._reactorBattler !== state || !template) return;
             this.groundAnimatedTemplate(template, sidecar);
             const object = this.cloneModelTemplate(template);
-            this.applyModelTransform(object, this.readModelTransform(sidecar));
+            this.applyModelTransform(object, this.readModelTransform(sidecar, spec));
             const rig = this.readModelRig(sidecar);
             if (rig) {
                 this.applyModelRig(object, rig);
@@ -5324,6 +8892,7 @@ Reactor3D.updateActorModelSprite = function(sprite) {
             camera.position.set(0, height * 0.52, Math.max(distance, 0.8));
             camera.lookAt(0, height * 0.48, 0);
             state.object = object;
+            state.template = template;
             state.scene = scene;
             state.camera = camera;
             state.scale = scale;
@@ -5479,7 +9048,7 @@ Reactor3D.expandModelSpriteFrame = function(state) {
     state.radius = radius;
     state.pixelsPerUnit = size / (radius * 2);
     if (size !== state.size) {
-        this.releaseBattlerState(state);
+        this.releaseBattlerState(state, true);
         const previous = state.bitmap;
         state.size = size; state.bitmap = new Bitmap(size, size);
         const sprite = state.sprite;
@@ -5513,6 +9082,36 @@ Reactor3D.releaseMapModelState = function(state) {
 };
 
 /**
+ * What a flat map's picture of a model is scaled by while a battle runs on
+ * this map, so a fighter one tile big stands no taller than a unit's picture
+ * (ReactorFightLook.modelFit): the map's units and the party, who are all
+ * the same size as each other with a battle or without. 1 with no battle
+ * here, for anyone who is no fighter, and for a body bigger than its tile
+ * (Reactor3D.eventBody), which is drawn as big as it is. Who is a fighter is
+ * read as a battle starts or ends and again on the look's beat; the size is
+ * eased, so nobody jumps.
+ */
+Reactor3D.flatUnitFit = function(sprite, character) {
+    const rule = root.ReactorFightLook, F = root.ReactorFight;
+    if (!rule || !F || !F.eventLook || !character) return 1;
+    const frame = typeof Graphics !== "undefined" && Graphics ? Graphics.frameCount : 0;
+    const fight = typeof $gameFight !== "undefined" ? $gameFight : null;
+    const battle = fight && fight._active ? fight._serial || 1 : 0;
+    const kept = sprite._reactorUnitFit || (sprite._reactorUnitFit = { at: -1, battle: 0, want: 1, now: 0 });
+    if (kept.at < 0 || kept.battle !== battle || !(frame > 0) || frame < kept.at || frame - kept.at >= (F.LOOK_BEAT || 12)) {
+        kept.at = frame; kept.battle = battle;
+        let fighter = false;
+        if (battle && fight.isHere && fight.isHere()) {
+            fighter = typeof character.event === "function" ? !!F.eventLook(character) : this.partyCharacter(character);
+        }
+        kept.want = fighter && this.eventBody(character).count === 1 ? rule.modelFit(this.characterHeightTiles(character)) : 1;
+    }
+    if (!kept.now) kept.now = kept.want;
+    else if (kept.now !== kept.want) kept.now = Math.abs(kept.want - kept.now) < 0.01 ? kept.want : kept.now + (kept.want - kept.now) * 0.2;
+    return kept.now;
+};
+
+/**
  * A model-bound character on a map that is not rendered in 3D is still a
  * sprite: an orthographic render of the model from the map's pitch, its
  * footprint one `size` tiles across, its ground origin on the tile centre,
@@ -5521,6 +9120,11 @@ Reactor3D.releaseMapModelState = function(state) {
  */
 Reactor3D.updateMapModelSprite = function(sprite) {
     const character = sprite && sprite._character;
+    // The size a unit was drawn at for a battle (below) is taken off again first, whatever the sprite shows now.
+    if (sprite && sprite._reactorFlatFit) {
+        sprite.scale.x /= sprite._reactorFlatFit; sprite.scale.y /= sprite._reactorFlatFit;
+        sprite._reactorFlatFit = 0;
+    }
     if (!character || typeof character.tileId === "function" && character.tileId() > 0) return;
     const spec = this.characterModelSpec(character);
     let state = sprite._reactorMapModel;
@@ -5532,9 +9136,18 @@ Reactor3D.updateMapModelSprite = function(sprite) {
         }
         return;
     }
+    // A unit of a Tactical battle on this flat map is drawn to fit the cells it stands on (a figure three tiles
+    // tall would hide whoever stands behind it): the battle says how (flatFit). In a battle of any mode here a
+    // fighter one tile big stands no taller than a unit's picture (flatUnitFit). Put on before anything below can
+    // leave: a sprite whose model is being changed for another (the party back in its order as a battle ends)
+    // shows the old picture at the size it had until the new one is drawn.
+    const fight = typeof ReactorFight !== "undefined" && ReactorFight && ReactorFight.flatFit ? ReactorFight : null;
+    const fit = Math.min(fight ? fight.flatFit(character) : 1, this.flatUnitFit(sprite, character));
+    if (fit !== 1 && fit > 0) { sprite.scale.x *= fit; sprite.scale.y *= fit; sprite._reactorFlatFit = fit; }
     this.ensureLoaded();
     if (!this.isLoaded()) return;
-    const key = this.modelCacheKey(spec.name, spec.ext, spec.file);
+    // Another variant of the same model is another picture: the sprite is drawn again.
+    const key = spec.variant ? this.modelCacheKey(spec.name, spec.ext, spec.file) + "|" + spec.variant : this.modelCacheKey(spec.name, spec.ext, spec.file);
     if (state && state.key !== key) {
         this.releaseMapModelState(state);
         sprite._reactorMapModel = state = null;
@@ -5551,7 +9164,7 @@ Reactor3D.updateMapModelSprite = function(sprite) {
             if (sprite._reactorMapModel !== state || !template) return;
             this.groundAnimatedTemplate(template, sidecar);
             const object = this.cloneModelTemplate(template);
-            this.applyModelTransform(object, this.readModelTransform(sidecar));
+            this.applyModelTransform(object, this.readModelTransform(sidecar, spec));
             const rig = this.readModelRig(sidecar);
             if (rig) {
                 this.applyModelRig(object, rig);
@@ -5571,12 +9184,13 @@ Reactor3D.updateMapModelSprite = function(sprite) {
             const camera = new THREE.OrthographicCamera(-0.5, 0.5, 0.5, -0.5, 0.01, 100);
             const framing = this.frameModelSprite(object, state.size, camera);
             state.object = object;
+            state.template = template;
             state.scene = scene;
             state.camera = camera;
             state.scale = 1 / span;
             state.binding = this.prepareModelInstance(object, object.__reactorClips);
             state.rules = sidecar ? this.readModelAnimationRules(sidecar) : [];
-            state.effects = sidecar ? this.readModelEffects(sidecar) : [];
+            state.effects = sidecar ? this.readModelEffects(sidecar, spec) : [];
             object.userData.glbSize = extent;
             this.bindModelLandmarks(object, this.readModelLandmarks(sidecar));
             state.unit = state.size;
@@ -5611,6 +9225,9 @@ Reactor3D.updateMapModelSprite = function(sprite) {
     const th = typeof $gameMap !== "undefined" && $gameMap.tileHeight ? $gameMap.tileHeight() : 48;
     sprite.anchor.x = state.anchorX;
     sprite.anchor.y = state.anchorY + (th / 2) / state.size;
+    // A unit of a Tactical battle on this flat map is lit to read on a dark floor: the battle says how (flatLight).
+    const lit = fight && fight.flatLight ? fight.flatLight(character) : 0;
+    if ((state.fightLit || 0) !== lit) { state.fightLit = lit; state.dirty = true; }
     // Same pose and turn as the 3D scene gives the model.
     this.applyEventModelPose(state.object, spec, this.characterModelDir8(character));
     const targetYaw = state.object.rotation.y;
@@ -5656,6 +9273,8 @@ Reactor3D.updateMapModelSprite = function(sprite) {
         });
         state.dirty = true;
     }
+    // A held thing is part of the picture: the same holder the 3D scene uses, on the sprite's own model.
+    if (this.MapHeld.count && this.MapHeld.update(state, character, null, !!sprite._rrCulled)) state.dirty = true;
     for (const name of this.takeModelEffects(character)) {
         const effect = this.modelEffectByName(state.effects, name);
         if (effect && effect.trigger === "action") this.fireNamedEffect(effect, character, state);
@@ -5670,6 +9289,14 @@ Reactor3D.updateMapModelSprite = function(sprite) {
         && !SceneManager.isFinalUpdateOfFrame()) return;
     this.expandModelSpriteFrame(state);
     state.dirty = false;
+    // A flat map has no lights of its own: its pictures are drawn evenly lit. The game's model shader reads the
+    // lights from shared uniforms, which still hold whatever the last 3D map left there (a night's ambient drew
+    // every model nearly black); the unit of a battle is drawn a little brighter (`fightLit`).
+    if (this.packLightUniforms) {
+        const ambient = this._flatAmbient || (this._flatAmbient = { intensity: 1, colour: 0xffffff });
+        ambient.intensity = 1 + (state.fightLit || 0);
+        this.packLightUniforms(this._flatLights || (this._flatLights = []), ambient);
+    }
     this.paintModelSpriteCanvas(state);
 };
 
@@ -5772,7 +9399,370 @@ Reactor3D.applyModelSurface = function(object, surface) {
     });
 };
 
-Reactor3D.readModelTransform = function(json) {
+//-----------------------------------------------------------------------------
+// Variants: one model worn several ways. `model.json › variants` is a list of
+// `{ name, color?, texture?, surface?, media? }`; a use of the model (an event
+// page, a placed prop, a Database binding) names one in its spec (`variant`).
+// What a variant does not say is the model's own. Geometry, skeleton, clips
+// and textures are shared; an instance's materials are its own already (a
+// flash tints one tank, not every tank), so a variant costs no extra copies.
+//
+//   color    an adjustment of the model's own picture, as an image editor's
+//            Hue/Saturation does it: { mode: "colorize", color, strength,
+//            lightness } gives every texel the color's hue and saturation and
+//            keeps its own light and dark; { mode: "adjust", hue, saturation,
+//            brightness } shifts the colors it has. Run in the material's
+//            shader on the texel (flat material colors are adjusted the same
+//            way), so it needs no second copy of the texture.
+//   texture  another picture from the model's textures folder in place of
+//            its own.
+//   surface  the Surface settings for this variant, or false for none.
+//   media    { "<video effect's name>": { file } | false }: another picture
+//            or movie on that media surface, or the surface left off.
+
+Reactor3D.readVariantColor = function(raw) {
+    if (!raw || typeof raw !== "object") return null;
+    const number = (value, fallback, low, high) => {
+        const n = Number(value);
+        return Number.isFinite(n) ? Math.max(low, Math.min(high, n)) : fallback;
+    };
+    if (raw.mode === "colorize") {
+        const strength = number(raw.strength, 1, 0, 1);
+        const color = typeof raw.color === "string" && /^#[0-9a-f]{6}$/i.test(raw.color) ? raw.color.toLowerCase() : "#ffffff";
+        const lightness = number(raw.lightness, 0, -1, 1);
+        return strength > 0 ? { mode: "colorize", color, strength, lightness } : null;
+    }
+    if (raw.mode === "adjust") {
+        const hue = number(raw.hue, 0, -180, 180), saturation = number(raw.saturation, 1, 0, 2), brightness = number(raw.brightness, 1, 0, 2);
+        return hue || saturation !== 1 || brightness !== 1 ? { mode: "adjust", hue, saturation, brightness } : null;
+    }
+    return null;
+};
+
+/** A model's variants, validated, in file order; a name appears once. */
+Reactor3D.readModelVariants = function(json) {
+    const list = json && Array.isArray(json.variants) ? json.variants : [];
+    const variants = [], seen = new Set();
+    for (const raw of list) {
+        if (!raw || typeof raw !== "object" || typeof raw.name !== "string" || !raw.name.trim()) continue;
+        const name = raw.name.trim();
+        if (seen.has(name)) continue;
+        seen.add(name);
+        const variant = { name };
+        const color = this.readVariantColor(raw.color);
+        if (color) variant.color = color;
+        if (typeof raw.texture === "string" && raw.texture && !/[\\/]|\.\./.test(raw.texture)) variant.texture = raw.texture;
+        if (raw.surface === false) variant.surface = false;
+        else if (raw.surface && typeof raw.surface === "object") variant.surface = this.readModelSurface({ surface: raw.surface });
+        if (raw.media && typeof raw.media === "object" && !Array.isArray(raw.media)) {
+            const media = {};
+            for (const key of Object.keys(raw.media)) {
+                const entry = raw.media[key];
+                if (entry === false) media[key] = false;
+                else if (entry && typeof entry === "object" && typeof entry.file === "string" && entry.file) media[key] = { file: entry.file };
+            }
+            if (Object.keys(media).length) variant.media = media;
+        }
+        variants.push(variant);
+    }
+    return variants;
+};
+
+/**
+ * The variant a use names, or null for the model's own look. A name the
+ * model no longer has is said once and falls back to the model's own.
+ */
+Reactor3D.modelVariant = function(json, name) {
+    if (!name || !json) return null;
+    const cache = this._variantCache || (this._variantCache = new WeakMap());
+    let variants = cache.get(json);
+    if (!variants || variants.from !== json.variants) {
+        variants = { from: json.variants, list: this.readModelVariants(json) };
+        cache.set(json, variants);
+    }
+    const found = variants.list.find(variant => variant.name === name);
+    if (found) return found;
+    const missed = this._variantMissed || (this._variantMissed = new Set());
+    if (!missed.has(name)) {
+        missed.add(name);
+        console.warn("Reactor3D: no variant named \"" + name + "\" on this model; it shows its own look.");
+    }
+    return null;
+};
+
+/** The look a spec's variant gives a model: its color adjustment, texture and which model's folder the texture is in. */
+Reactor3D.modelLook = function(json, spec) {
+    const variant = spec && spec.variant ? this.modelVariant(json, spec.variant) : null;
+    if (!variant || (!variant.color && !variant.texture)) return null;
+    return { color: variant.color || null, texture: variant.texture || "", model: spec.name || "" };
+};
+
+/** A color adjusted as the shader adjusts a texel (sRGB in and out, 0-1): for flat material colors and the editor's swatches. */
+Reactor3D.adjustLookRgb = function(rgb, color) {
+    if (!color) return rgb.slice();
+    const [r, g, b] = rgb;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b), l = (max + min) / 2, d = max - min;
+    let h = 0, s = 0;
+    if (d > 1e-6) {
+        s = d / (1 - Math.abs(2 * l - 1));
+        h = max === r ? ((g - b) / d + 6) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+        h /= 6;
+    }
+    const toRgb = (hue, sat, light) => {
+        const a = sat * Math.min(light, 1 - light);
+        return [0, 8, 4].map(n => {
+            const k = (n + hue * 12) % 12;
+            return light - a * Math.max(-1, Math.min(k - 3, 9 - k, 1));
+        });
+    };
+    if (color.mode === "colorize") {
+        const target = this.hexHueSaturation(color.color);
+        const light = Math.max(0, Math.min(1, l + color.lightness * (color.lightness > 0 ? 1 - l : l)));
+        const tinted = toRgb(target[0], target[1], light);
+        return [0, 1, 2].map(i => rgb[i] + (tinted[i] - rgb[i]) * color.strength);
+    }
+    return toRgb((h + color.hue / 360 + 1) % 1, Math.max(0, Math.min(1, s * color.saturation)), l)
+        .map(v => Math.max(0, Math.min(1, v * color.brightness)));
+};
+
+/** A "#rrggbb" as [hue 0-1, saturation 0-1] (HSL). */
+Reactor3D.hexHueSaturation = function(hex) {
+    const value = parseInt(String(hex || "#ffffff").slice(1), 16) || 0;
+    const r = (value >> 16 & 255) / 255, g = (value >> 8 & 255) / 255, b = (value & 255) / 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b), l = (max + min) / 2, d = max - min;
+    if (d < 1e-6) return [0, 0];
+    const s = d / (1 - Math.abs(2 * l - 1));
+    const h = max === r ? ((g - b) / d + 6) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    return [h / 6, Math.min(1, s)];
+};
+
+/** A material's color adjustment, or null: `userData.rrLook` holds the two uniform vectors. */
+Reactor3D.lookOf = function(material) {
+    const look = material && material.userData && material.userData.rrLook;
+    if (!look || !look.a || !(look.a.x > 0)) return null;
+    // A cloned material copies its userData through JSON: the vectors arrive as plain objects.
+    if (!look.a.isVector4 && typeof THREE !== "undefined") {
+        look.a = new THREE.Vector4(look.a.x, look.a.y, look.a.z, look.a.w);
+        look.b = new THREE.Vector4(look.b.x, look.b.y, look.b.z, look.b.w);
+    }
+    return look;
+};
+
+Reactor3D.LOOK_GLSL = [
+    "uniform vec4 rrLookA;",
+    "uniform vec4 rrLookB;",
+    "vec3 rrLookHsl(vec3 c) {",
+    "\tfloat hi = max(c.r, max(c.g, c.b)), lo = min(c.r, min(c.g, c.b)), l = (hi + lo) * 0.5, d = hi - lo;",
+    "\tif (d < 1e-5) return vec3(0.0, 0.0, l);",
+    "\tfloat s = d / (1.0 - abs(2.0 * l - 1.0));",
+    "\tfloat h = hi == c.r ? mod((c.g - c.b) / d + 6.0, 6.0) : hi == c.g ? (c.b - c.r) / d + 2.0 : (c.r - c.g) / d + 4.0;",
+    "\treturn vec3(h / 6.0, s, l);",
+    "}",
+    "vec3 rrLookRgb(vec3 hsl) {",
+    "\tvec3 k = mod(vec3(0.0, 8.0, 4.0) + hsl.x * 12.0, 12.0);",
+    "\tfloat a = hsl.y * min(hsl.z, 1.0 - hsl.z);",
+    "\treturn hsl.z - a * max(vec3(-1.0), min(min(k - 3.0, 9.0 - k), vec3(1.0)));",
+    "}",
+    // The texel in display values (as an image editor sees it), adjusted, and back to linear.
+    "vec3 rrLookAdjust(vec3 linear) {",
+    "\tvec3 c = pow(max(linear, vec3(0.0)), vec3(1.0 / 2.2));",
+    "\tvec3 hsl = rrLookHsl(c);",
+    "\tif (rrLookA.x < 1.5) {",
+    "\t\tfloat l = clamp(hsl.z + rrLookA.z * (rrLookA.z > 0.0 ? 1.0 - hsl.z : hsl.z), 0.0, 1.0);",
+    "\t\tc = mix(c, rrLookRgb(vec3(rrLookB.x, rrLookB.y, l)), rrLookA.y);",
+    "\t} else {",
+    "\t\tc = clamp(rrLookRgb(vec3(fract(hsl.x + rrLookB.x + 1.0), clamp(hsl.y * rrLookB.y, 0.0, 1.0), hsl.z)) * rrLookB.z, 0.0, 1.0);",
+    "\t}",
+    "\treturn pow(c, vec3(2.2));",
+    "}"
+].join("\n");
+
+/**
+ * The color adjustment in a material's program: the texel is adjusted before
+ * the material's own color multiplies it, so a flash or the ambient over the
+ * material is not recolored. Called last in a lit material's chain
+ * (`litMaterial`) and by `lookMaterial` for one that is not lit.
+ */
+Reactor3D.injectLook = function(material, shader) {
+    const look = this.lookOf(material);
+    if (!look || !shader) return;
+    shader.uniforms.rrLookA = { value: look.a };
+    shader.uniforms.rrLookB = { value: look.b };
+    if (shader.fragmentShader.indexOf("rrLookAdjust(") >= 0) return;
+    shader.fragmentShader = this.LOOK_GLSL + "\n" + shader.fragmentShader.replace(
+        "#include <map_fragment>",
+        [
+            "#ifdef USE_MAP",
+            "\tvec4 rrLookBase = diffuseColor;",
+            "\tdiffuseColor = vec4(1.0);",
+            "#endif",
+            "\t#include <map_fragment>",
+            "#ifdef USE_MAP",
+            "\tdiffuseColor.rgb = rrLookAdjust(diffuseColor.rgb);",
+            "\tdiffuseColor *= rrLookBase;",
+            "#endif"
+        ].join("\n")
+    );
+};
+
+/** A material that can carry a color adjustment whether or not it is lit: its own program key while it has one. */
+Reactor3D.lookMaterial = function(material) {
+    if (!material || material.__reactorLook) return material;
+    material.__reactorLook = true;
+    const earlier = material.onBeforeCompile;
+    material.onBeforeCompile = function(shader, renderer) {
+        if (typeof earlier === "function") earlier.call(this, shader, renderer);
+        // A lit material's own chain places the adjustment (last, so the texel is adjusted before anything mixed over it).
+        if (!this.__reactorLit) Reactor3D.injectLook(this, shader);
+    };
+    const earlierKey = material.customProgramCacheKey;
+    material.customProgramCacheKey = function() {
+        return (typeof earlierKey === "function" ? earlierKey.call(this) : "") + (!this.__reactorLit && Reactor3D.lookOf(this) ? "|look" : "");
+    };
+    return material;
+};
+
+/** A variant's replacement picture, loaded once per file and per way of reading it, shared by every instance. */
+Reactor3D.variantTexture = function(model, file, like) {
+    if (typeof THREE === "undefined" || !model || !file) return null;
+    const flip = like ? !!like.flipY : false;
+    const key = model + "/" + file + (flip ? "|flip" : "");
+    const cache = this._variantTextures || (this._variantTextures = new Map());
+    let texture = cache.get(key);
+    if (texture) return texture;
+    // The editor draws a project that is not its own page: it says where the file is.
+    const hook = typeof globalThis !== "undefined" && typeof globalThis.RRVariantTextureUrl === "function" ? globalThis.RRVariantTextureUrl : null;
+    const url = (hook ? hook(model, file) : null) || this.modelTextureDir(model) + file;
+    texture = new THREE.TextureLoader().load(url, () => { if (Reactor3D.onVariantTextureLoaded) Reactor3D.onVariantTextureLoaded(texture); },
+        undefined, () => {
+            console.warn("Reactor3D: variant texture " + url + " could not be loaded.");
+            // A missing file shows the model's own picture, not a black model.
+            if (like && like.image && !like.isCompressedTexture) { texture.image = like.image; texture.needsUpdate = true; }
+        });
+    // Read as the model's own picture is: a GLB's is not flipped, and repeats as the file says.
+    texture.flipY = flip;
+    if (like) { texture.wrapS = like.wrapS; texture.wrapT = like.wrapT; texture.colorSpace = like.colorSpace; texture.channel = like.channel || 0; }
+    else if (THREE.SRGBColorSpace) texture.colorSpace = THREE.SRGBColorSpace;
+    cache.set(key, texture);
+    return texture;
+};
+
+/**
+ * Put a look (a variant's color adjustment and texture, or null for the
+ * model's own) on an instance's materials. What each material had is kept,
+ * so a look can change or go while the instance lives.
+ */
+Reactor3D.applyModelLook = function(object, look) {
+    if (!object || typeof THREE === "undefined") return;
+    const own = this._lookOwn || (this._lookOwn = new WeakMap());
+    const color = look && look.color ? look.color : null;
+    let a = null, b = null;
+    if (color) {
+        if (color.mode === "colorize") {
+            const target = this.hexHueSaturation(color.color);
+            a = [1, color.strength, color.lightness, 0]; b = [target[0], target[1], 0, 0];
+        } else {
+            a = [2, 0, 0, 0]; b = [color.hue / 360, color.saturation, color.brightness, 0];
+        }
+    }
+    const scratch = this._lookScratch || (this._lookScratch = new THREE.Color());
+    object.traverse(node => {
+        if (!node.isMesh || !node.material || (node.userData && node.userData.__reactorOverlay)) return;
+        for (const material of Array.isArray(node.material) ? node.material : [node.material]) {
+            if (!material || !material.color || material.__reactorSelfLit) continue;
+            let mine = own.get(material);
+            if (!mine) {
+                if (!look) continue;
+                const base = material.userData.baseColor && material.userData.baseColor.isColor ? material.userData.baseColor : material.color;
+                mine = { color: base.clone(), map: material.map || null };
+                own.set(material, mine);
+            }
+            // The picture: the variant's own in place of the file's.
+            const map = look && look.texture ? (this.variantTexture(look.model, look.texture, mine.map) || mine.map) : mine.map;
+            if (material.map !== map) {
+                const had = !!material.map;
+                material.map = map;
+                if (had !== !!map) material.needsUpdate = true;
+            }
+            // The color adjustment: in the program for a textured material, on the color itself for a flat one.
+            const had = !!this.lookOf(material);
+            const adjusts = !!color && !!material.map;
+            if (adjusts) {
+                // A lit material's chain already places the adjustment; wrapping it too would change the
+                // program key three derives from the outermost onBeforeCompile, and with it the program.
+                if (!material.__reactorLit) this.lookMaterial(material);
+                let slot = material.userData.rrLook;
+                if (!slot || !slot.a || !slot.a.isVector4) slot = material.userData.rrLook = { a: new THREE.Vector4(), b: new THREE.Vector4() };
+                slot.a.fromArray(a); slot.b.fromArray(b);
+            } else if (material.userData.rrLook && material.userData.rrLook.a) {
+                material.userData.rrLook.a.x = 0;
+            }
+            // three keeps one uniform set per material, from its latest compile (see setMaterialShine).
+            if (had !== adjusts) { material.dispose(); material.needsUpdate = true; }
+            if (!material.userData.baseColor || !material.userData.baseColor.isColor) material.userData.baseColor = material.color.clone();
+            const base = material.userData.baseColor;
+            base.copy(mine.color);
+            if (color && !material.map) {
+                base.getRGB(scratch, THREE.SRGBColorSpace);
+                const out = this.adjustLookRgb([scratch.r, scratch.g, scratch.b], color);
+                base.setRGB(out[0], out[1], out[2], THREE.SRGBColorSpace);
+            }
+            material.color.copy(base);
+        }
+    });
+};
+
+/**
+ * Give a live character another of its model's variants ("" for the model's
+ * own look), from a script or a plugin. Kept on the character, so it is saved
+ * with it; the model takes it on its next sync.
+ */
+Reactor3D.setModelVariant = function(character, name) {
+    if (!character) return;
+    const next = typeof name === "string" ? name.trim() : "";
+    if ((character._reactorModelVariant || "") === next && character._reactorModelVariant !== undefined) return;
+    character._reactorModelVariant = next;
+};
+
+/**
+ * A live instance takes another variant of its model: its surface, color
+ * adjustment and texture change on the materials it has, and its media
+ * surfaces start again with the variant's pictures.
+ */
+Reactor3D.refreshModelVariant = function(holder, spec) {
+    if (!holder || !spec) return;
+    holder.variant = spec.variant || "";
+    const json = this._sidecarJson ? this._sidecarJson[spec.name] : null;
+    if (!holder.object) return;
+    this.applyModelSurface(holder.object, this.variantSurface(json, spec));
+    this.applyModelLook(holder.object, this.modelLook(json, spec));
+    if (!json || !this.readModelEffects) return;
+    if (holder.videos && holder.effects && this.stopVideoEffect) {
+        for (const effect of holder.effects) if (holder.videos[effect.name]) this.stopVideoEffect(effect, holder.character, holder);
+    }
+    holder.effects = this.readModelEffects(json, spec);
+    // What the new variant does not wear goes out: its lights, and its animations that play on their own.
+    const worn = new Set(holder.effects.map(effect => effect.name));
+    if (holder.lights) for (const name of Object.keys(holder.lights)) if (!worn.has(name)) delete holder.lights[name];
+    if (holder.anchored && this.stopAnchoredAnimation) {
+        for (const entry of holder.anchored) if (entry.triggered && !worn.has(entry.triggered)) this.stopAnchoredAnimation(entry);
+    }
+};
+
+/** A character's spec with the variant a script gave it, built once per change. */
+Reactor3D.variantSpecOf = function(character, spec) {
+    if (!spec || !character || character._reactorModelVariant === undefined) return spec;
+    const specs = this._variantSpecs || (this._variantSpecs = new WeakMap());
+    const held = specs.get(character);
+    if (held && held.from === spec && held.variant === character._reactorModelVariant) return held.spec;
+    const next = Object.assign({}, spec);
+    if (character._reactorModelVariant) next.variant = character._reactorModelVariant;
+    else delete next.variant;
+    specs.set(character, { from: spec, variant: character._reactorModelVariant, spec: next });
+    return next;
+};
+
+Reactor3D.readModelTransform = function(json, spec) {
     const raw = json && json.transform && typeof json.transform === "object" ? json.transform : {};
     const vec = value => [0, 1, 2].map(i => {
         const list = Array.isArray(value) ? value : [];
@@ -5783,8 +9773,18 @@ Reactor3D.readModelTransform = function(json) {
         offset: vec(raw.offset),
         rotate: vec(raw.rotate),
         scale: this.readScale(raw.scale, 1),
-        surface: this.readModelSurface(json)
+        surface: this.variantSurface(json, spec),
+        // The variant's color adjustment and texture; null is the model's own picture.
+        look: this.modelLook(json, spec)
     };
+};
+
+/** The surface a use shows: its variant's own (or none, when the variant says so), else the model's. */
+Reactor3D.variantSurface = function(json, spec) {
+    const variant = spec && spec.variant ? this.modelVariant(json, spec.variant) : null;
+    if (variant && variant.surface === false) return null;
+    if (variant && variant.surface) return variant.surface;
+    return this.readModelSurface(json);
 };
 
 Reactor3D.isIdentityTransform = function(transform) {
@@ -5801,6 +9801,7 @@ Reactor3D.applyModelTransform = function(object, transform) {
     if (!object || typeof THREE === "undefined") return null;
     // The surface goes with the transform, so every place a model is put down shines alike.
     if (transform && "surface" in transform) this.applyModelSurface(object, transform.surface);
+    if (transform && "look" in transform) this.applyModelLook(object, transform.look);
     let wrapper = object.children.find(child => child.userData && child.userData.__reactorTransform);
     if (!wrapper) {
         if (this.isIdentityTransform(transform)) return null;
@@ -5961,6 +9962,8 @@ Reactor3D.advanceModelAction = function(holder, character, frame) {
         const fxNow = frame - holder.action.frame;
         for (const rule of holder.rules) {
             if (rule.trigger !== "action" || rule.name !== holder.action.name) continue;
+            // Nothing timed on this rule: nothing to fire, so nothing to measure.
+            if (!rule.effects || !rule.effects.length) continue;
             const duration = Reactor3D.modelRuleDuration(rule, holder.binding.clips);
             for (const effect of Reactor3D.modelEffectsToFire(rule, duration, holder.fxT, fxNow)) {
                 Reactor3D.fireModelEffect(effect, character, holder);
@@ -6070,26 +10073,42 @@ Reactor3D.IDENTITY_TRANSFORM = function() {
 /** The transform a character shows this frame, eased between the one it had and the one it was given. */
 Reactor3D.liveTransformAt = function(state, frame) {
     if (!state) return null;
+    return this._liveTransformInto(state, frame, { offset: [0, 0, 0], rotate: [0, 0, 0], scale: [0, 0, 0], done: false });
+};
+
+/** `liveTransformAt` into the caller's record: the placement asks every frame. */
+Reactor3D._liveTransformInto = function(state, frame, out) {
     const to = state.to, from = state.from || this.IDENTITY_TRANSFORM();
     const duration = Math.max(0, state.duration || 0);
     let t = duration > 0 ? (frame - state.frame) / duration : 1;
     t = Math.max(0, Math.min(1, t));
     // Ease in and out, so a move settles rather than stops.
     const e = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
-    const mix = (a, b) => a + (b - a) * e;
-    return {
-        offset: [0, 1, 2].map(i => mix(from.offset[i], to.offset[i])),
-        rotate: [0, 1, 2].map(i => mix(from.rotate[i], to.rotate[i])),
-        scale: [0, 1, 2].map(i => mix(from.scale[i], to.scale[i])),
-        done: t >= 1
-    };
+    for (let i = 0; i < 3; i++) {
+        out.offset[i] = from.offset[i] + (to.offset[i] - from.offset[i]) * e;
+        out.rotate[i] = from.rotate[i] + (to.rotate[i] - from.rotate[i]) * e;
+        out.scale[i] = from.scale[i] + (to.scale[i] - from.scale[i]) * e;
+    }
+    out.done = t >= 1;
+    return out;
+};
+
+/**
+ * The level axis a character goes over about when it falls along `yaw` (the angle on the map of the way it is
+ * thrown, 0 down the map: `ReactorFight.fallYaw`), or null when it has none. One shared vector: read it at once.
+ */
+Reactor3D.fallAxis = function(yaw) {
+    if (typeof yaw !== "number" || !Number.isFinite(yaw)) return null;
+    const axis = Reactor3D._fallAxis || (Reactor3D._fallAxis = new THREE.Vector3());
+    return axis.set(Math.cos(yaw), 0, -Math.sin(yaw));
 };
 
 Reactor3D.applyLiveTransform = function(object, character) {
     const state = character && character._reactorTransform;
     if (!state || !object) return;
     const frame = typeof Graphics !== "undefined" ? Graphics.frameCount : 0;
-    const live = this.liveTransformAt(state, frame);
+    const live = this._liveTransformInto(state, frame, this._liveScratch
+        || (this._liveScratch = { offset: [0, 0, 0], rotate: [0, 0, 0], scale: [0, 0, 0], done: false }));
     if (!live) return;
     const r = Math.PI / 180;
     object.position.x += live.offset[0];
@@ -6130,8 +10149,63 @@ Reactor3D.MapScene.prototype.modelsGroup = function() {
         this._modelsGroup = new THREE.Group();
         this._modelsGroup.name = "character-models";
         this._scene.add(this._modelsGroup);
+        // Where `InstanceCull` finds the placed instances from the scene alone.
+        this._scene.userData.rrModelsGroup = this._modelsGroup;
     }
     return this._modelsGroup;
+};
+
+/**
+ * Culling a placed instance that has a skin, the correct way round (see
+ * `presetSkinnedBounds` for why three cannot): a sphere in WORLD space built
+ * from where the instance stands and how big it is, never from the skin's
+ * rest geometry. Its centre is half the instance's span above its feet and
+ * its radius one and a half spans and a tile, which holds a body whatever its
+ * bones do in place (a swing, a lunge, a jump). An instance outside a
+ * camera's frustum by that sphere is hidden for that one draw: a shadow face
+ * that looks away from it (four or five of a light's six, each of which
+ * skinned a whole character to draw nothing), or the view when it is behind
+ * the camera. A body in a ragdoll leaves its bounds and is never culled.
+ * Rigid meshes are left to three, which culls them itself.
+ */
+Reactor3D.InstanceCull = {
+    enabled: true,
+    SPAN_REACH: 1.5,
+    PAD: 1,
+    hide(scene, camera) {
+        const group = this.enabled && scene && camera && scene.userData && scene.userData.rrModelsGroup;
+        if (!group || !group.visible || !group.children.length || typeof THREE === "undefined") return null;
+        const frustum = this._frustum || (this._frustum = new THREE.Frustum());
+        const matrix = this._matrix || (this._matrix = new THREE.Matrix4());
+        const sphere = this._sphere || (this._sphere = new THREE.Sphere());
+        if (camera.parent === null && camera.matrixWorldAutoUpdate !== false) camera.updateMatrixWorld();
+        frustum.setFromProjectionMatrix(matrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
+        let hidden = null;
+        for (const object of group.children) {
+            if (!object.visible || object.userData.rrNoCull || !this.skinned(object)) continue;
+            const span = Reactor3D.instanceSpan(object);
+            sphere.center.setFromMatrixPosition(object.matrixWorld);
+            sphere.center.y += span * 0.5;
+            sphere.radius = span * this.SPAN_REACH + this.PAD;
+            if (frustum.intersectsSphere(sphere)) continue;
+            object.visible = false;
+            (hidden || (hidden = [])).push(object);
+        }
+        return hidden;
+    },
+    show(hidden) {
+        if (hidden) for (const object of hidden) object.visible = true;
+    },
+    /** Whether an instance draws a skinned mesh (asked once per instance). */
+    skinned(object) {
+        let known = object.userData.rrSkinned;
+        if (known === undefined) {
+            known = false;
+            object.traverse(node => { if (node.isSkinnedMesh) known = true; });
+            object.userData.rrSkinned = known;
+        }
+        return known;
+    }
 };
 
 /** Billboards for above-characters events, rendered with the above pass. */
@@ -6161,9 +10235,210 @@ Reactor3D.mapHasAboveEvents = function(mapData) {
     return false;
 };
 
+const STILL_UNIT_EXTENT = { x: 1, y: 1, z: 1 };
+const STILL_NO_STRETCH = [1, 1, 1];
+
+/**
+ * A model standing where it stood last frame is not placed again.
+ *
+ * Placing one — its size, its authored turn and front mark, the eased
+ * facing, the ladder hold, its lift, a Transform 3D Model, a Face Ceiling
+ * or a Rotate — is a dozen trigonometric calls and three rebuilt rotations,
+ * and every prop on a map paid it every frame to arrive where it already
+ * was. The placement is a function of its inputs, so when every one of them
+ * is what it was the last time the placement ran, and the model still
+ * stands exactly as that placement left it, what it would write is already
+ * written. Its inputs: the spec, the model's size, the ground under it
+ * (read fresh each frame, so a changed map is seen), its cell position,
+ * eight-way facing, lift, air, pose pitch and spin, and the Transform 3D
+ * Model it carries — only once that has finished easing, and only while
+ * its numbers are the ones it was placed with. The facing has to have
+ * finished its turn too. The player (the look lean writes its turn), a
+ * climber and a ragdoll are always placed.
+ *
+ * While settled the model's own matrix is composed once and frozen, as the
+ * static world's meshes are; its first change thaws it before placing it.
+ * Only the root: parts under it are animation's to move. `enabled = false`
+ * places every model every frame, as before.
+ */
+Reactor3D.StillModels = {
+    enabled: true,
+    settled(holder, character, object, spec, extent, ground, dir8) {
+        const placed = holder.placed;
+        if (!placed || placed.object !== object || !placed.yawSettled || !placed.eligible) return false;
+        if (!this.eligible(character)) return false;
+        if (placed.spec !== spec || placed.ground !== ground || placed.dir8 !== dir8
+            || placed.realX !== character._realX || placed.realY !== character._realY
+            || placed.lift !== (character._reactorLift || 0) || placed.air !== (character._reactorAir || 0)
+            || placed.pitch !== (character._reactorPosePitch || 0) || placed.spin !== (character._reactorSpin || 0)
+            || placed.fallYaw !== (character._reactorFallYaw ?? null)
+            || placed.ex !== extent.x || placed.ey !== extent.y || placed.ez !== extent.z
+            || placed.smoothYaw !== holder.smoothYaw) return false;
+        if (!this.sameTransform(placed, character._reactorTransform)) return false;
+        // Untouched since: anything that moved, turned or scaled it outside
+        // the placement is overwritten by a full placement, as it always was.
+        const p = object.position, q = object.quaternion, r = object.rotation, s = object.scale;
+        return p.x === placed.px && p.y === placed.py && p.z === placed.pz
+            && q.x === placed.qx && q.y === placed.qy && q.z === placed.qz && q.w === placed.qw
+            && r.x === placed.rx && r.y === placed.ry && r.z === placed.rz && r.order === placed.order
+            && s.x === placed.sx && s.y === placed.sy && s.z === placed.sz;
+    },
+    eligible(character) {
+        return !character._reactorRagdoll && !character._reactorOnLadder
+            && !(typeof $gamePlayer !== "undefined" && character === $gamePlayer);
+    },
+    note(holder, character, object, spec, extent, ground, dir8, lodSpan, targetYaw) {
+        const placed = holder.placed || (holder.placed = { numbers: [] });
+        placed.object = object;
+        // Placed while climbing or limp, or as the player, it is placed again.
+        placed.eligible = this.eligible(character);
+        placed.spec = spec;
+        placed.ground = ground;
+        placed.dir8 = dir8;
+        placed.realX = character._realX;
+        placed.realY = character._realY;
+        placed.lift = character._reactorLift || 0;
+        placed.air = character._reactorAir || 0;
+        placed.pitch = character._reactorPosePitch || 0;
+        placed.spin = character._reactorSpin || 0;
+        placed.fallYaw = character._reactorFallYaw ?? null;
+        placed.ex = extent.x;
+        placed.ey = extent.y;
+        placed.ez = extent.z;
+        placed.smoothYaw = holder.smoothYaw;
+        placed.yawSettled = holder.smoothYaw === targetYaw;
+        placed.lodSpan = lodSpan;
+        const state = character._reactorTransform || null;
+        placed.transform = state;
+        placed.transformDone = !!state && this.transformDone(state);
+        if (state) this.transformNumbers(state, placed.numbers);
+        const p = object.position, q = object.quaternion, r = object.rotation, s = object.scale;
+        placed.px = p.x; placed.py = p.y; placed.pz = p.z;
+        placed.qx = q.x; placed.qy = q.y; placed.qz = q.z; placed.qw = q.w;
+        placed.rx = r.x; placed.ry = r.y; placed.rz = r.z; placed.order = r.order;
+        placed.sx = s.x; placed.sy = s.y; placed.sz = s.z;
+    },
+    /** Whether a Transform 3D Model has eased all the way, by `liveTransformAt`'s own clock. */
+    transformDone(state) {
+        const frame = typeof Graphics !== "undefined" ? Graphics.frameCount : 0;
+        const duration = Math.max(0, state.duration || 0);
+        let t = duration > 0 ? (frame - state.frame) / duration : 1;
+        t = Math.max(0, Math.min(1, t));
+        return t >= 1;
+    },
+    /** Every number `liveTransformAt` reads, flat. */
+    transformNumbers(state, out) {
+        const from = state.from || Reactor3D.IDENTITY_TRANSFORM(), to = state.to;
+        out[0] = state.frame;
+        out[1] = state.duration;
+        for (let i = 0; i < 3; i++) {
+            out[2 + i] = from.offset[i];
+            out[5 + i] = from.rotate[i];
+            out[8 + i] = from.scale[i];
+            out[11 + i] = to.offset[i];
+            out[14 + i] = to.rotate[i];
+            out[17 + i] = to.scale[i];
+        }
+        return out;
+    },
+    sameTransform(placed, state) {
+        if (placed.transform !== (state || null)) return false;
+        if (!state) return true;
+        if (!placed.transformDone || !this.transformDone(state)) return false;
+        const numbers = this.transformNumbers(state, this._numbers || (this._numbers = []));
+        const was = placed.numbers;
+        for (let i = 0; i < numbers.length; i++) if (numbers[i] !== was[i]) return false;
+        return true;
+    },
+    freeze(holder, object) {
+        if (!object.matrixAutoUpdate) return;
+        object.updateMatrix();
+        object.matrixAutoUpdate = false;
+        holder.rootFrozen = true;
+    },
+    thaw(holder, object) {
+        if (!holder.rootFrozen) return;
+        object.matrixAutoUpdate = true;
+        holder.rootFrozen = false;
+    }
+};
+
+/**
+ * How often a character model's motion is sampled, by how much of the view it
+ * takes: every frame when it is plain to see, every other frame when it is
+ * small (under ANIMATION_SMALL of the view's height: smaller than a unit in the
+ * tactical view), every fourth when it is
+ * a speck or behind the eye. The clip follows the frame clock, so a model
+ * sampled less often is in the same pose at the same moment, only stepped;
+ * where it stands is still placed every frame. The same rule in every mode
+ * (exploration, Tactical, Action): a crowd's far side is what it saves on.
+ */
+Reactor3D.ANIMATION_SMALL = 0.05;
+Reactor3D.ANIMATION_SPECK = 0.02;
+Reactor3D.animationStride = function(x, y, z, span, camera) {
+    if (!camera || !camera.position || !(span > 0)) return 1;
+    const eye = camera.position, dx = x - eye.x, dy = y - eye.y, dz = z - eye.z;
+    const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    if (distance < span * 2) return 1;
+    // Behind the eye (with the body's own size to spare): nobody is looking.
+    const e = camera.matrixWorld && camera.matrixWorld.elements;
+    if (e && -(dx * e[8] + dy * e[9] + dz * e[10]) < -span) return 4;
+    const fov = camera.fov > 0 ? camera.fov : 50;
+    const share = span / (2 * distance * Math.tan(fov * Math.PI / 360));
+    return share < Reactor3D.ANIMATION_SPECK ? 4 : share < Reactor3D.ANIMATION_SMALL ? 2 : 1;
+};
+
+/**
+ * Whether a placed model's motion is sampled this frame: the player's own
+ * body and one playing an action asked of it always are; the rest by their
+ * stride, each on its own frame of it so a crowd's samples are spread.
+ */
+Reactor3D.animationDue = function(holder, character, object, camera) {
+    holder.sampled = true;
+    if (!camera || holder.action || (typeof $gamePlayer !== "undefined" && character === $gamePlayer)) return true;
+    const span = Reactor3D.instanceSpan(object);
+    const stride = Reactor3D.animationStride(object.position.x, object.position.y + span / 2, object.position.z, span, camera);
+    if (stride === 1) return true;
+    if (holder.strideAt === undefined) holder.strideAt = (Reactor3D._strideSeed = (Reactor3D._strideSeed || 0) + 1);
+    // Kept for what is laid over the motion each frame (the look's lean): a frame not sampled keeps last frame's pose whole.
+    return (holder.sampled = ((typeof Graphics !== "undefined" ? Graphics.frameCount : 0) + holder.strideAt) % stride === 0);
+};
+
+/**
+ * New models built a few a frame while a battle runs on the map: each is a clone, a rig, its fingers and materials
+ * (3 to 5 ms), and an army arriving together was one frame of 200 ms. The first of a frame is always built, more only
+ * inside BUDGET ms; outside a battle (a map loading under its fade) every model is built the moment its files are in.
+ */
+Reactor3D.ModelJoins = {
+    BUDGET: 4,
+    spent: 0,
+    queue: [],
+    limited() {
+        const fight = typeof $gameFight !== "undefined" ? $gameFight : null;
+        return !!(fight && typeof fight.isActive === "function" && fight.isActive());
+    },
+    now() { return typeof performance !== "undefined" ? performance.now() : Date.now(); },
+    /** A model whose files are in: built now, or after those already waiting. */
+    add(job) {
+        if (this.limited() && (this.queue.length || this.spent >= this.BUDGET)) { this.queue.push(job); return; }
+        const start = this.now();
+        try { job(); } finally { this.spent += this.now() - start; }
+    },
+    /** Once a frame, before the frame's own new models: those waiting, oldest first. */
+    drain() {
+        this.spent = 0;
+        while (this.queue.length && (this.spent < this.BUDGET || !this.limited())) {
+            const start = this.now();
+            try { this.queue.shift()(); } catch (error) { console.error("Reactor3D: a model could not join the map", error); }
+            this.spent += this.now() - start;
+        }
+    }
+};
+
 Reactor3D.MapScene.prototype.syncCharacterModels = function(characters) {
     if (typeof THREE === "undefined") return;
     const group = this.modelsGroup();
+    Reactor3D.ModelJoins.drain();
     if (!this._modelInstances) this._modelInstances = new Map();
     const live = new Set();
     // The camera is aimed for this frame before the models are synced;
@@ -6171,6 +10446,11 @@ Reactor3D.MapScene.prototype.syncCharacterModels = function(characters) {
     const lodViewport = Reactor3D.viewport();
     const lodCamera = lodViewport && lodViewport.camera ? lodViewport.camera() : null;
     const lodEye = lodCamera ? lodCamera.position : null;
+    // The screen the distance levels are budgeted against, read once a sync
+    // rather than once a model: it is the same camera and viewport for all.
+    let lodScreen = null;
+    let commandsAsked = false;
+    const still = Reactor3D.StillModels;
     for (const character of characters || []) {
         const spec = Reactor3D.characterModelSpec(character);
         if (!spec) continue;
@@ -6183,13 +10463,13 @@ Reactor3D.MapScene.prototype.syncCharacterModels = function(characters) {
             Promise.all([
                 Reactor3D.loadModel(spec.name, spec.ext, spec.file, spec.texture),
                 Reactor3D.loadModelSidecar(spec.name)
-            ]).then(([template, sidecar]) => {
+            ]).then(([template, sidecar]) => Reactor3D.ModelJoins.add(() => {
                 if (!template || !this._modelsGroup) return;
                 const current = this._modelInstances.get(key);
                 if (current !== holder || current.spec !== Reactor3D.modelCacheKey(spec.name, spec.ext, spec.file)) return;
                 Reactor3D.groundAnimatedTemplate(template, sidecar);
                 const object = Reactor3D.cloneModelTemplate(template);
-                Reactor3D.applyModelTransform(object, Reactor3D.readModelTransform(sidecar));
+                Reactor3D.applyModelTransform(object, Reactor3D.readModelTransform(sidecar, spec));
                 object.userData.glbSize = template.userData.glbSize;
                 // Carved parts (or the rig's bones) must exist before the
                 // binding is prepared, or the new pieces would be invisible
@@ -6206,7 +10486,8 @@ Reactor3D.MapScene.prototype.syncCharacterModels = function(characters) {
                 current.binding = Reactor3D.prepareModelInstance(object, object.__reactorClips);
                 Reactor3D.bindModelLandmarks(object, Reactor3D.readModelLandmarks(sidecar));
                 current.rules = sidecar ? Reactor3D.readModelAnimationRules(sidecar) : [];
-                current.effects = sidecar ? Reactor3D.readModelEffects(sidecar) : [];
+                current.effects = sidecar ? Reactor3D.readModelEffects(sidecar, spec) : [];
+                current.variant = spec.variant || "";
                 group.add(object);
                 // A prop never moves; its map is cached. An event walks.
                 Reactor3D.Shadows.markCaster(object, !(typeof character.eventId === "function"
@@ -6228,74 +10509,106 @@ Reactor3D.MapScene.prototype.syncCharacterModels = function(characters) {
                     }
                 });
                 this._ambientLevel = undefined;
-            });
+            }));
         }
         const object = holder.object;
         if (!object) continue;
+        // Another variant of the same model (a page change, or a script): the look changes on the instance it has.
+        if (holder.variant !== (spec.variant || "")) Reactor3D.refreshModelVariant(holder, spec);
         Reactor3D.resumeModelPlayback(holder, character, Reactor3D.currentFrame());
-        const extent = object.userData.glbSize || { x: 1, y: 1, z: 1 };
+        const extent = object.userData.glbSize || STILL_UNIT_EXTENT;
         // Largest dimension, matching the collision footprint's rule.
         const span = Math.max(extent.x, extent.y, extent.z, 0.0001);
         const fit = (spec.size > 0 ? spec.size : 2) / span;
         const scale = fit * (spec.scale > 0 ? spec.scale : 1);
-        const stretch = spec.stretch || [1, 1, 1];
         const ground = Reactor3D.characterGround(
             typeof $dataMap !== "undefined" ? $dataMap : null, character);
-        object.scale.set(scale * stretch[0], scale * stretch[1], scale * stretch[2]);
-        if (lodEye) Reactor3D.pickLod(object, Reactor3D.instanceSpan(object), lodEye, holder.spec);
-        Reactor3D.applyEventModelPose(object, spec, Reactor3D.characterModelDir8(character));
-        // Facing is discrete, so the pose above pivots a long model 90 degrees
-        // in one frame — the ends of a nine-tile vehicle teleport sideways.
-        // Ease the visible yaw toward the pose's target along the shortest
-        // arc; collision already accounts for both orientations of a turning
-        // step, so only the drawing needs the swing.
-        const targetYaw = object.rotation.y;
-        if (holder.smoothYaw === undefined) {
-            holder.smoothYaw = targetYaw;
-        } else {
-            const delta = Math.atan2(
-                Math.sin(targetYaw - holder.smoothYaw),
-                Math.cos(targetYaw - holder.smoothYaw));
-            const maxStep = Reactor3D.MODEL_TURN_SPEED;
-            holder.smoothYaw = Math.abs(delta) <= maxStep
-                ? targetYaw
-                : holder.smoothYaw + Math.sign(delta) * maxStep;
+        const dir8 = Reactor3D.characterModelDir8(character);
+        if (lodEye && !lodScreen) {
+            lodScreen = this._lodScreenScratch || (this._lodScreenScratch = { factor: 0, pixels: 0 });
+            lodScreen.factor = Reactor3D._lodScreenFactor();
+            lodScreen.pixels = Reactor3D._lodScreenPixels();
         }
-        object.rotation.y = holder.smoothYaw;
-        // Publish the heading the model is actually drawn at, so a light this
-        // character carries swings with the mesh instead of snapping between
-        // compass points. The spec's own yaw is an art correction for a model
-        // authored facing the wrong way, not part of where the character
-        // looks, so it comes back off.
-        Reactor3D.noteModelFacing(character, holder.smoothYaw - (spec.yaw || 0));
-        const offset = spec.offset || [0, 0, 0];
-        // A jump or a fall (reactor_physics) lifts the model by its air.
-        const air = character._reactorAir || 0;
-        // A climber hangs against its ladder, not in the middle of the cell.
-        if (character._reactorOnLadder && holder.chestForward === undefined) holder.chestForward = Reactor3D.chestForward(holder);
-        const hold = character._reactorOnLadder ? Reactor3D.LADDER_RUNGS - Reactor3D.LADDER_CHEST_GAP - (holder.chestForward || 0) : 0;
-        const holdX = hold * ((character.direction && character.direction() === 6) ? 1 : (character.direction && character.direction() === 4) ? -1 : 0);
-        const holdZ = hold * ((character.direction && character.direction() === 2) ? 1 : (character.direction && character.direction() === 8) ? -1 : 0);
-        object.position.set(character._realX + 0.5 + offset[0] + holdX, ground + (character._reactorLift || 0) + air + offset[2], character._realY + 0.5 + offset[1] + holdZ);
-        holder.cameraBaseX = character._realX;
-        holder.cameraBaseY = ground + (character._reactorLift || 0) + air;
-        holder.cameraBaseZ = character._realY;
-        Reactor3D.applyLiveTransform(object, character);
-        // Face Ceiling / Face Ground and Rotate route steps. Local axes,
-        // after the facing yaw: a model falls onto its own back or face
-        // whichever way it points, and rolls the way a sprite would turn.
-        const posePitch = character._reactorPosePitch || 0;
-        const poseSpin = character._reactorSpin || 0;
-        if (posePitch) object.rotateX(-posePitch * Math.PI / 2);
-        if (poseSpin) object.rotateZ(-poseSpin * Math.PI / 180);
+        if (still.enabled && still.settled(holder, character, object, spec, extent, ground, dir8)) {
+            // Placed last frame from these same inputs and untouched since:
+            // everything the placement below would write is already there.
+            if (lodEye) Reactor3D.pickLod(object, holder.placed.lodSpan, lodEye, holder.spec, lodScreen);
+            Reactor3D.noteModelFacing(character, holder.smoothYaw - (spec.yaw || 0));
+            still.freeze(holder, object);
+        } else {
+            still.thaw(holder, object);
+            const stretch = spec.stretch || STILL_NO_STRETCH;
+            object.scale.set(scale * stretch[0], scale * stretch[1], scale * stretch[2]);
+            const lodSpan = Reactor3D.instanceSpan(object);
+            if (lodEye) Reactor3D.pickLod(object, lodSpan, lodEye, holder.spec, lodScreen);
+            Reactor3D.applyEventModelPose(object, spec, dir8);
+            // Facing is discrete, so the pose above pivots a long model 90 degrees
+            // in one frame — the ends of a nine-tile vehicle teleport sideways.
+            // Ease the visible yaw toward the pose's target along the shortest
+            // arc; collision already accounts for both orientations of a turning
+            // step, so only the drawing needs the swing.
+            const targetYaw = object.rotation.y;
+            if (holder.smoothYaw === undefined) {
+                holder.smoothYaw = targetYaw;
+            } else {
+                const delta = Math.atan2(
+                    Math.sin(targetYaw - holder.smoothYaw),
+                    Math.cos(targetYaw - holder.smoothYaw));
+                const maxStep = Reactor3D.MODEL_TURN_SPEED;
+                holder.smoothYaw = Math.abs(delta) <= maxStep
+                    ? targetYaw
+                    : holder.smoothYaw + Math.sign(delta) * maxStep;
+            }
+            object.rotation.y = holder.smoothYaw;
+            // Publish the heading the model is actually drawn at, so a light this
+            // character carries swings with the mesh instead of snapping between
+            // compass points. The spec's own yaw is an art correction for a model
+            // authored facing the wrong way, not part of where the character
+            // looks, so it comes back off.
+            Reactor3D.noteModelFacing(character, holder.smoothYaw - (spec.yaw || 0));
+            const offset = spec.offset || [0, 0, 0];
+            // A jump or a fall (reactor_physics) lifts the model by its air.
+            const air = character._reactorAir || 0;
+            // A climber hangs against its ladder, not in the middle of the cell.
+            if (character._reactorOnLadder && holder.chestForward === undefined) holder.chestForward = Reactor3D.chestForward(holder);
+            // (A body pulling itself up a ledge leans to the wall it climbs: the physics says how far.)
+            const hold = character._reactorOnLadder ? Reactor3D.LADDER_RUNGS - Reactor3D.LADDER_CHEST_GAP - (holder.chestForward || 0)
+                : character._reactorMantle ? Reactor3D.mantleHold(holder, character) : 0;
+            const holdX = hold * ((character.direction && character.direction() === 6) ? 1 : (character.direction && character.direction() === 4) ? -1 : 0);
+            const holdZ = hold * ((character.direction && character.direction() === 2) ? 1 : (character.direction && character.direction() === 8) ? -1 : 0);
+            // A sized event's model stands at the middle of its footprint.
+            const middle = Reactor3D.eventGraphicOffset(character);
+            const middleX = middle ? middle[0] : 0, middleZ = middle ? middle[1] : 0;
+            object.position.set(character._realX + 0.5 + middleX + offset[0] + holdX, ground + (character._reactorLift || 0) + air + offset[2], character._realY + 0.5 + middleZ + offset[1] + holdZ);
+            holder.cameraBaseX = character._realX;
+            holder.cameraBaseY = ground + (character._reactorLift || 0) + air;
+            holder.cameraBaseZ = character._realY;
+            Reactor3D.applyLiveTransform(object, character);
+            // Face Ceiling / Face Ground and Rotate route steps. Local axes,
+            // after the facing yaw: a model falls onto its own back or face
+            // whichever way it points, and rolls the way a sprite would turn.
+            const posePitch = character._reactorPosePitch || 0;
+            const poseSpin = character._reactorSpin || 0;
+            // One felled by a blow goes over along the blow's line on the map (`_reactorFallYaw`), whichever way it faced.
+            const fallAxis = posePitch > 0 ? Reactor3D.fallAxis(character._reactorFallYaw) : null;
+            if (fallAxis) object.rotateOnWorldAxis(fallAxis, posePitch * Math.PI / 2);
+            else if (posePitch) object.rotateX(-posePitch * Math.PI / 2);
+            if (poseSpin) object.rotateZ(-poseSpin * Math.PI / 180);
+            if (still.enabled) still.note(holder, character, object, spec, extent, ground, dir8, lodSpan, targetYaw);
+        }
         object.visible = !(character.isTransparent && character.isTransparent())
             && !Reactor3D.cameraInsideModel(character, object)
             && !Reactor3D.characterHiddenByCamera(character, true);
-        Reactor3D.registerPluginCommands();
+        // Idempotent; asked once a sync, at the first placed model, which is
+        // when the first of the per-model calls it replaces used to run.
+        if (!commandsAsked) {
+            commandsAsked = true;
+            Reactor3D.registerPluginCommands();
+        }
         // A limp body (a fatal fall) is the ragdoll's, not the animation's.
         if (character._reactorRagdoll && holder.binding) {
             Reactor3D.stepRagdoll(holder, character);
-        } else if (holder.binding && holder.rules && holder.rules.length) {
+        } else if (holder.binding && holder.rules && holder.rules.length && Reactor3D.animationDue(holder, character, object, lodCamera)) {
             let frame = typeof Graphics !== "undefined" ? Graphics.frameCount : 0;
             const distance = holder.lastX === undefined
                 ? 0
@@ -6328,7 +10641,11 @@ Reactor3D.MapScene.prototype.syncCharacterModels = function(characters) {
         }
         // After the animation pass: a clip writes every bone each frame, so
         // the look's lean goes on top of whatever the head was doing.
-        if (!character._reactorRagdoll) Reactor3D.applyLookLean(object, character);
+        if (!character._reactorRagdoll && holder.sampled !== false) Reactor3D.applyLookLean(object, character);
+        // A body on a ledge keeps its hands on the edge: Reactor3D.MantlePose.
+        if (character._reactorMantle || holder.mantlePose) Reactor3D.MantlePose.update(holder, character);
+        // What the character holds (a tactical battle's weapons) is laid over the motion: Reactor3D.MapHeld.
+        if (Reactor3D.MapHeld.count) Reactor3D.MapHeld.update(holder, character, this, !object.visible);
         // Effects run for every placed model, rules or none: a reactor with
         // no animation of its own still plays its core glow. Asked for by
         // name (the Play 3D Effect command, a rule that names one), by
@@ -6362,8 +10679,16 @@ Reactor3D.MapScene.prototype.syncCharacterModels = function(characters) {
     for (const [key, holder] of this._modelInstances) {
         if (live.has(key)) continue;
         if (holder.object && holder.object.parent) holder.object.parent.remove(holder.object);
+        if (Reactor3D.MapHeld.count) Reactor3D.MapHeld.detach(holder);
+        Reactor3D.releaseModelHolder(holder);
         this._modelInstances.delete(key);
     }
+};
+
+/** A character model going for good: what its copy holds on the GPU goes with it (the renderer outlives map scenes). */
+Reactor3D.releaseModelHolder = function(holder) {
+    const entry = holder && holder.object && this._glbCache[holder.spec];
+    if (entry && entry.template) this.releaseModelInstance(holder.object, entry.template);
 };
 
 Reactor3D.MapScene.prototype.syncCharacterBillboards = function(sprites) {
@@ -6424,7 +10749,7 @@ Reactor3D.MapScene.prototype.syncCharacterBillboards = function(sprites) {
             // The quad leans towards the camera; seen from a light it is a
             // cut-out of the sprite, which is the shadow a sprite should cast.
             Reactor3D.Shadows.markCaster(object, true);
-            holder = { texture, geometry, object, stamp: "", view: null, above: false };
+            holder = { texture, geometry, object, stampFields: null, view: null, above: false };
             this._billboards.set(key, holder);
         }
         this._updateCharacterBillboard(holder, sprite, character);
@@ -6486,8 +10811,11 @@ Reactor3D.billboardView = function(holder, sheet) {
 };
 
 Reactor3D.MapScene.prototype._updateCharacterBillboard = function(holder, sprite, character) {
-    const bitmap = sprite.bitmap;
-    const frame = sprite._frame;
+    // A battle unit that stands as a battler picture or a plain figure (Sprite_Character.updateReactorLook) is
+    // drawn from the larger copy of that picture, whole, at the size in tiles the look rule gives it.
+    const look = sprite._rrLook && sprite._rrLook.full ? sprite._rrLook : null;
+    const bitmap = look ? look.full : sprite.bitmap;
+    const frame = look ? look.frame : sprite._frame;
     const ready = bitmap && (!bitmap.isReady || bitmap.isReady())
         && frame && frame.width > 0 && frame.height > 0;
     const hidden = (character.isTransparent && character.isTransparent())
@@ -6495,13 +10823,20 @@ Reactor3D.MapScene.prototype._updateCharacterBillboard = function(holder, sprite
     holder.object.visible = !!(ready && !hidden);
     if (!ready) return;
     const mirrored = !!(sprite.scale && sprite.scale.x < 0);
-    const stamp = [
-        bitmap.url || bitmap._url || "",
-        frame.x, frame.y, frame.width, frame.height,
-        mirrored ? 1 : 0
-    ].join(":");
-    if (holder.stamp !== stamp) {
-        holder.stamp = stamp;
+    // What the frame was cut from last time, field by field: joining them
+    // into a string made one per billboard per frame to find nothing new.
+    const url = bitmap.url || bitmap._url || "";
+    const stamp = holder.stampFields || (holder.stampFields = { url: null, bitmap: null, x: 0, y: 0, width: 0, height: 0, mirrored: false });
+    // (The bitmap itself as well as its file: two drawn pictures of one size have no file to tell them apart.)
+    if (stamp.url !== url || stamp.bitmap !== bitmap || stamp.x !== frame.x || stamp.y !== frame.y
+        || stamp.width !== frame.width || stamp.height !== frame.height || stamp.mirrored !== mirrored) {
+        stamp.url = url;
+        stamp.bitmap = bitmap;
+        stamp.x = frame.x;
+        stamp.y = frame.y;
+        stamp.width = frame.width;
+        stamp.height = frame.height;
+        stamp.mirrored = mirrored;
         const sheet = Reactor3D.sheetTextureFor(bitmap);
         if (sheet && sheet.image) {
             const view = Reactor3D.billboardView(holder, sheet);
@@ -6519,7 +10854,8 @@ Reactor3D.MapScene.prototype._updateCharacterBillboard = function(holder, sprite
     const map = typeof $gameMap !== "undefined" ? $gameMap : null;
     const tw = map && map.tileWidth ? map.tileWidth() : 48;
     const th = map && map.tileHeight ? map.tileHeight() : 48;
-    holder.object.scale.set(frame.width / tw, frame.height / th, 1);
+    if (look) holder.object.scale.set(look.wide, look.tall, 1);
+    else holder.object.scale.set(frame.width / tw, frame.height / th, 1);
     const ground = Reactor3D.characterGround(
         typeof $dataMap !== "undefined" ? $dataMap : null, character);
     const viewport = Reactor3D.viewport();
@@ -6541,9 +10877,11 @@ Reactor3D.MapScene.prototype._updateCharacterBillboard = function(holder, sprite
             footZ = (e[10] / reach) * 0.5;
         }
     }
-    let baseX = character._realX + 0.5 + footX;
+    // A sized event's picture stands at the middle of its footprint.
+    const middle = Reactor3D.eventGraphicOffset(character);
+    let baseX = character._realX + 0.5 + footX + (middle ? middle[0] : 0);
     let baseY = ground;
-    let baseZ = character._realY + 0.5 + footZ;
+    let baseZ = character._realY + 0.5 + footZ + (middle ? middle[1] : 0);
     // A decoration drawn over the scene follows the art it decorates. If its
     // cell was stood into a facade, the builder recorded where that wall's
     // plane is and how far up it the cell sits (`facadeAt`); anchoring there,
@@ -6657,6 +10995,7 @@ Reactor3D.MapScene.prototype.clear = function() {
         for (const holder of this._modelInstances.values()) {
             Reactor3D.pauseModelPlayback(holder);
             if (holder.object && holder.object.parent) holder.object.parent.remove(holder.object);
+            Reactor3D.releaseModelHolder(holder);
         }
         this._modelInstances.clear();
     }
@@ -6725,12 +11064,19 @@ Reactor3D.normalizeProp = function(raw, mapData) {
         direction: [2, 4, 6, 8].indexOf(direction) >= 0 ? direction : 2,
         size: size > 0 ? size : 2,
         scale: scale > 0 ? scale : 1,
+        // Per-axis stretch on top of size and scale, as the editor saves it.
+        stretch: [0, 1, 2].map(i => {
+            const v = Array.isArray(raw.stretch) ? Number(raw.stretch[i]) : 1;
+            return Number.isFinite(v) && v > 0 ? v : 1;
+        }),
         passable: raw.passable === true || raw.passable === "true",
         // An action rule and an effect the prop starts with, by name.
         animations, animation: animations[0] || "",
         animationSpeed: Math.max(1, Math.min(1000, number(raw.animationSpeed, 100))),
         repeat: raw.repeat === true || raw.repeat === "true",
-        effects, effect: effects[0] || ""
+        effects, effect: effects[0] || "",
+        // Which of the model's variants it wears: only on a prop that names one.
+        ...(typeof raw.variant === "string" && raw.variant.trim() ? { variant: raw.variant.trim() } : null)
     };
 };
 
@@ -6751,7 +11097,8 @@ Reactor3D.propModelSpec = function(prop) {
     return {
         name: prop.name, ext: prop.ext, file: prop.file, texture: prop.texture,
         size: prop.size, scale: prop.scale, stretch: prop.stretch,
-        yaw: prop.yaw, pitch: prop.pitch, roll: prop.roll
+        yaw: prop.yaw, pitch: prop.pitch, roll: prop.roll,
+        ...(prop.variant ? { variant: prop.variant } : null)
     };
 };
 
@@ -6856,10 +11203,18 @@ Reactor3D.setEventZ = function(mapData, eventId, z) {
 };
 
 /**
- * An event's footprint in tiles, `[w, h]` from its own tile rightward and
- * down (`reactor3d.eventSize[id]`; 1 by 1 when unset). One event can stand
- * over a whole ramp or doorway: touching or facing any tile of it counts, and
- * it blocks all of them as it would its own. 2D maps too.
+ * An event's footprint in tiles, `[w, h]` (`reactor3d.eventSize[id]`; 1 by 1
+ * when unset). One event can stand over a whole ramp or doorway: touching or
+ * facing any tile of it counts, and it blocks all of them as it would its
+ * own. 2D maps too.
+ *
+ * With `reactor3d.eventSizeAnchor: "center"` the footprint is centred on the
+ * event: tiles x - floor((w - 1) / 2) to x + floor(w / 2), the same for y,
+ * and an even size's middle is a tile's edge, so the event's graphic is drawn
+ * half a tile on (`eventGraphicOffset`). A map without the mark (saved by
+ * 0.98.8) counts the footprint from the event's tile rightward and down and
+ * draws the graphic on that tile, as it always did; the editor converts a
+ * map when it opens it.
  */
 Reactor3D.EVENT_SIZE_MAX = 64;
 Reactor3D.eventSizeAt = function(mapData, eventId) {
@@ -6868,6 +11223,39 @@ Reactor3D.eventSizeAt = function(mapData, eventId) {
     if (!Array.isArray(raw)) return [1, 1];
     const n = v => Math.max(1, Math.min(this.EVENT_SIZE_MAX, Math.floor(Number(v)) || 1));
     return [n(raw[0]), n(raw[1])];
+};
+
+/** Whether the map's footprints are centred on their events. */
+Reactor3D.eventSizeCentered = function(mapData) {
+    return !!(mapData && mapData.reactor3d && mapData.reactor3d.eventSizeAnchor === "center");
+};
+
+/** The footprint's first tile, in tiles from the event's own (zero or less). */
+Reactor3D.eventFootprintOrigin = function(mapData, eventId) {
+    if (!this.eventSizeCentered(mapData)) return [0, 0];
+    const [w, h] = this.eventSizeAt(mapData, eventId);
+    return [0 - Math.floor((w - 1) / 2), 0 - Math.floor((h - 1) / 2)];
+};
+
+/**
+ * How far from the middle of its tile a sized event's graphic stands, in
+ * tiles: half a tile along each axis its centred footprint is even on, else
+ * nothing. Returns a shared pair (read it before the next call); `null` for
+ * a character that is no sized event, which is nearly every one.
+ */
+Reactor3D._graphicOffset = [0, 0];
+Reactor3D.eventGraphicOffset = function(character) {
+    const map = typeof $dataMap !== "undefined" ? $dataMap : null;
+    const sidecar = map && map.reactor3d;
+    if (!sidecar || !sidecar.eventSize || sidecar.eventSizeAnchor !== "center" || !character || !(character._eventId > 0)) return null;
+    const raw = sidecar.eventSize[String(character._eventId)];
+    if (!Array.isArray(raw)) return null;
+    const w = Math.floor(Number(raw[0])) || 1, h = Math.floor(Number(raw[1])) || 1;
+    if (w % 2 !== 0 && h % 2 !== 0) return null;
+    const offset = this._graphicOffset;
+    offset[0] = w % 2 === 0 ? 0.5 : 0;
+    offset[1] = h % 2 === 0 ? 0.5 : 0;
+    return offset;
 };
 
 Reactor3D.setEventSize = function(mapData, eventId, size) {
@@ -6886,7 +11274,11 @@ Reactor3D.setEventSize = function(mapData, eventId, size) {
     mapData.reactor3d.eventSize[String(eventId)] = [w, h];
 };
 
-/** A sized event is at every tile of its footprint (triggers, the action button and collision all ask `pos`). */
+/**
+ * A sized event is at every tile of its footprint (triggers, the action
+ * button and collision all ask `pos`), and its sprite, with the balloon and
+ * animations that follow it, is drawn at the footprint's middle.
+ */
 Reactor3D.installEventFootprints = function() {
     if (typeof Game_Event === "undefined" || Game_Event.prototype.pos.__reactorFootprint) return;
     const basePos = Game_Event.prototype.pos;
@@ -6895,9 +11287,22 @@ Reactor3D.installEventFootprints = function() {
         if (!map || !map.reactor3d || !map.reactor3d.eventSize) return basePos.call(this, x, y);
         const [w, h] = Reactor3D.eventSizeAt(map, this._eventId);
         if (w === 1 && h === 1) return basePos.call(this, x, y);
-        return x >= this._x && x < this._x + w && y >= this._y && y < this._y + h;
+        const [ox, oy] = Reactor3D.eventFootprintOrigin(map, this._eventId);
+        const x0 = this._x + ox, y0 = this._y + oy;
+        return x >= x0 && x < x0 + w && y >= y0 && y < y0 + h;
     };
     Game_Event.prototype.pos.__reactorFootprint = true;
+    // The base methods are looked up as they are called, so a plugin's own screenX on the classes below still runs.
+    Game_Event.prototype.screenX = function() {
+        const x = Game_Character.prototype.screenX.call(this);
+        const offset = Reactor3D.eventGraphicOffset(this);
+        return offset && offset[0] ? x + Math.floor(offset[0] * $gameMap.tileWidth()) : x;
+    };
+    Game_Event.prototype.screenY = function() {
+        const y = Game_Character.prototype.screenY.call(this);
+        const offset = Reactor3D.eventGraphicOffset(this);
+        return offset && offset[1] ? y + Math.floor(offset[1] * $gameMap.tileHeight()) : y;
+    };
 };
 
 /** The height a character may rise to: the room's ceiling, else a tall default. */
@@ -6977,6 +11382,7 @@ Reactor3D.installVerticalMotion = function() {
     };
     /** Lie facing the ceiling (1) or the ground (-1), or stand back up (0) — a bed, a knockout. */
     proto.reactorFacePose = function(pose) {
+        this._reactorFallYaw = null;
         this._reactorPosePitch = pose > 0 ? 1 : pose < 0 ? -1 : 0;
     };
     /** Turn the drawn character to `degrees` on screen; a model rolls the same way. 0 stands it straight. */
@@ -6997,19 +11403,8 @@ Reactor3D.installVerticalMotion = function() {
         }
         baseUpdateMove.call(this);
     };
-    const baseCollided = proto.isCollidedWithEvents;
-    proto.isCollidedWithEvents = function(x, y) {
-        if (typeof $gameMap === "undefined" || !$gameMap || !$gameMap.eventsXyNt) return baseCollided.call(this, x, y);
-        const events = $gameMap.eventsXyNt(x, y);
-        return events.some(event => event.isNormalPriority() && Reactor3D.charactersOverlapVertically(this, event, { x, y }));
-    };
-    if (typeof Game_Event !== "undefined" && Game_Event.prototype.isCollidedWithPlayerCharacters) {
-        const basePlayer = Game_Event.prototype.isCollidedWithPlayerCharacters;
-        Game_Event.prototype.isCollidedWithPlayerCharacters = function(x, y) {
-            if (typeof $gamePlayer !== "undefined" && $gamePlayer && !Reactor3D.charactersOverlapVertically(this, $gamePlayer)) return false;
-            return basePlayer.call(this, x, y);
-        };
-    }
+    // Collision by height is part of the body rule: `isCollidedWithEvents` and
+    // `isCollidedWithPlayerCharacters` ask Reactor3D.bodyBlocksTile / bodyMeetsEvents / bodyMeetsParty.
 };
 
 /**

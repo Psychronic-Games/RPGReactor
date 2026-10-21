@@ -359,7 +359,7 @@ class ShowPictureEditor {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const asset = options.asset === undefined ? this.getPictureAsset() : options.asset;
         if (!asset && !options.allowEmpty) {
-            alert(tt(this.pictureName ? 'Image not found' : 'No image selected'));
+            RRDialog.alert(tt(this.pictureName ? 'Image not found' : 'No image selected'), { title: tt('Quick Setting') });
             return;
         }
 

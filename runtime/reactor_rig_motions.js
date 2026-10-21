@@ -13,7 +13,7 @@
  * torso and head lean forward on positive X and turn left on positive Y.
  *
  * The movement states (walking, dashing, idle, jumping, swimming,
- * treading, climbing) have a preset each, and a rigged model plays those on its own
+ * treading, climbing, riding) have a preset each, and a rigged model plays those on its own
  * for any state it has no motion of its own for (`DEFAULTS`,
  * `defaultRules`), so a character climbs, swims and jumps plausibly
  * before anyone animates it. The same file is the runtime's
@@ -185,6 +185,24 @@
             RightLowerLeg: [key(0, [0, 0, 0]), key(0.5, [90, 0, 0]), key(1, [0, 0, 0])],
             Head: hold([-12, 0, 0])
         }),
+        // Seated astride a vehicle, held still for as long as the ride lasts: thighs forward and a
+        // little apart, shins back, the back bent forward toward the bars, arms out ahead and drawn
+        // in 10° (most rigs hang their arms out, and a raised arm keeps that: the hands end a bar's
+        // width apart). Nothing in it moves, and it has no track for the hips, the chest, the neck or
+        // the head: where the body sits, how far it leans to reach and where it looks are laid over
+        // it by the vehicle's own rider points, which also take the hands and feet to their grips
+        // and rests.
+        motion('ride', 'Ride', 'humanoid', 'riding', 60, {
+            LeftUpperLeg: hold([-70, 0, 10]),
+            RightUpperLeg: hold([-70, 0, -10]),
+            LeftLowerLeg: hold([100, 0, 0]),
+            RightLowerLeg: hold([100, 0, 0]),
+            Spine: hold([30, 0, 0]),
+            LeftUpperArm: hold([-80, 0, -10]),
+            RightUpperArm: hold([-80, 0, 10]),
+            LeftLowerArm: hold([-20, 0, 0]),
+            RightLowerArm: hold([-20, 0, 0])
+        }),
         // ── Humanoid: gestures, on demand ────────────────────────────
         motion('wave', 'Wave', 'humanoid', 'action', 90, {
             // The arm raised up in front (a forward raise leaves shoulder armour
@@ -350,7 +368,7 @@
 
     /** The preset a rig plays on its own in each state it has no motion for. */
     const DEFAULTS = {
-        humanoid: { idle: 'breathe', walking: 'walk', dashing: 'run', jumping: 'jump', swimming: 'swim', treading: 'tread', climbing: 'climb' },
+        humanoid: { idle: 'breathe', walking: 'walk', dashing: 'run', jumping: 'jump', swimming: 'swim', treading: 'tread', climbing: 'climb', riding: 'ride' },
         quadruped: { idle: 'idle-sway', walking: 'quad-walk', dashing: 'quad-walk' }
     };
 
@@ -368,7 +386,8 @@
     /**
      * The default rules a rigged model plays: for each state of its
      * template the model has no motion of its own for, that state's preset.
-     * A preset laid on two states (a quadruped's walk) is taken once.
+     * A preset laid on two states (a quadruped's walk) is taken once, and
+     * when the model has a motion for one of them it plays in the other only.
      */
     function defaultRules(template, rules) {
         const table = DEFAULTS[template];
@@ -379,7 +398,11 @@
             const preset = PRESETS.find(entry => entry.id === id && entry.template === template);
             if (!preset) continue;
             taken.add(id);
-            for (const rule of preset.rules) out.push(Object.assign(JSON.parse(JSON.stringify(rule)), { defaultMotion: true }));
+            const states = Object.keys(table).filter(other => table[other] === id);
+            const open = states.filter(other => !covers(rules || [], other));
+            for (const trigger of open.length < states.length ? open : [null]) {
+                for (const rule of preset.rules) out.push(Object.assign(JSON.parse(JSON.stringify(rule)), { defaultMotion: true }, trigger ? { trigger } : {}));
+            }
         }
         return out;
     }

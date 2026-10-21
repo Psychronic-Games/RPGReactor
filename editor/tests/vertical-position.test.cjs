@@ -103,7 +103,9 @@ test('Face Ceiling, Face Ground and Rotate reach the drawn character', () => {
     assert.match(three, /if \(posePitch\) object\.rotateX\(-posePitch \* Math\.PI \/ 2\);/, 'a model falls about its own axes, after facing');
     assert.match(three, /if \(poseSpin\) object\.rotateZ\(-poseSpin \* Math\.PI \/ 180\);/, 'and rolls the way a sprite turns');
     const sprites = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_sprites.js'), 'utf8');
-    assert.match(sprites, /this\.rotation = \(\(posePitch \? posePitch \* 90 : 0\) \+ poseSpin\) \* Math\.PI \/ 180;/, 'sprites turn in 2D and stood-up 3D alike');
+    // (`side` is 1 for a route's pose: only one felled by a blow from its right goes over the other way.)
+    assert.match(sprites, /this\.rotation = \(\(posePitch \? side \* posePitch \* 90 : 0\) \+ poseSpin\) \* Math\.PI \/ 180;/, 'sprites turn in 2D and stood-up 3D alike');
+    assert.match(three, /proto\.reactorFacePose = function\(pose\) \{\s*\n\s*this\._reactorFallYaw = null;/, 'a route\'s pose is never turned by an old fall');
 });
 
 test('the event list names a route step; the dialog spreads them over its columns', () => {
@@ -148,12 +150,16 @@ test('a sized event is at every tile of its footprint, stored in the sidecar by 
     const E = require(path.join(editorRoot, 'src', 'utils', 'MapElevation.js'));
     E.setEventSize(map, 7, [2, 4]);
     assert.deepEqual(Reactor3D.eventSizeAt(map, 7), [2, 4], 'the editor writes what the runtime reads');
-    // pos: the footprint, right and down from the event's tile.
+    // pos: the footprint, centred on the event's tile (the editor marks the map so).
+    assert.equal(map.reactor3d.eventSizeAnchor, 'center');
     global.Game_Event = function() {}; Game_Event.prototype.pos = function(x, y) { return this._x === x && this._y === y; };
     global.$dataMap = map;
     try {
         Reactor3D.installEventFootprints();
         const event = Object.assign(Object.create(Game_Event.prototype), { _eventId: 7, _x: 5, _y: 5 });
-        assert.deepEqual([[5, 5], [6, 8], [7, 5], [4, 5], [5, 9]].map(([x, y]) => event.pos(x, y)), [true, true, false, false, false]);
+        assert.deepEqual([[5, 5], [6, 7], [5, 4], [7, 5], [4, 5], [5, 8], [5, 3]].map(([x, y]) => event.pos(x, y)), [true, true, true, false, false, false, false]);
+        // A map without the mark is counted right and down, as it was saved.
+        delete map.reactor3d.eventSizeAnchor;
+        assert.deepEqual([[5, 5], [6, 8], [7, 5], [4, 5], [5, 9], [5, 4]].map(([x, y]) => event.pos(x, y)), [true, true, false, false, false, false]);
     } finally { delete global.Game_Event; delete global.$dataMap; }
 });

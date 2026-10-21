@@ -8,10 +8,10 @@ class ChangeEquipmentEditor {
         this.modal = null;
         this.callback = null;
 
-        // Parameters: [actorId, equipSlot, equipId]
+        // Parameters: [actorId, equipment type id (System equipTypes, 1 = Weapon), item id (0 = none)]
         this.actorId = 1;
-        this.equipSlot = 0; // 0=Weapon, 1=Shield, 2=Head, 3=Body, 4=Accessory
-        this.equipId = 0; // 0=None
+        this.equipSlot = 1;
+        this.equipId = 0;
     }
 
     show(command, callback) {
@@ -20,11 +20,12 @@ class ChangeEquipmentEditor {
         if (command && command.code === 319) {
             const params = command.parameters;
             this.actorId = params[0] || 1;
-            this.equipSlot = params[1] || 0;
+            // Equipment type ids start at 1; a 0 (written by this dialog before it used the ids) meant Weapon.
+            this.equipSlot = params[1] || 1;
             this.equipId = params[2] || 0;
         } else {
             this.actorId = 1;
-            this.equipSlot = 0;
+            this.equipSlot = 1;
             this.equipId = 0;
         }
 
@@ -130,18 +131,10 @@ class ChangeEquipmentEditor {
         const slotSelect = document.createElement('select');
         slotSelect.style.cssText = 'padding:6px 10px; background-color:var(--color-bg-input); color:var(--color-text); border:1px solid var(--color-border-input); border-radius:3px; font-size:12px; flex:1;';
 
-        const slots = [
-            { value: 0, label: 'Weapon' },
-            { value: 1, label: 'Shield' },
-            { value: 2, label: 'Head' },
-            { value: 3, label: 'Body' },
-            { value: 4, label: 'Accessory' }
-        ];
-
-        slots.forEach(slot => {
+        ChangeEquipmentEditor.equipTypes(this.databaseManager, this.equipSlot).forEach(slot => {
             const option = document.createElement('option');
             option.value = slot.value;
-            option.textContent = window.I18n ? window.I18n.tText(slot.label) : slot.label;
+            option.textContent = slot.label;
             option.selected = (this.equipSlot === slot.value);
             slotSelect.appendChild(option);
         });
@@ -174,7 +167,7 @@ class ChangeEquipmentEditor {
         noneOption.selected = (this.equipId === 0);
         equipSelect.appendChild(noneOption);
 
-        if (this.equipSlot === 0) {
+        if (this.equipSlot === 1) {
             // Weapons
             const weapons = this.databaseManager.data.weapons || [];
             for (let i = 1; i < weapons.length; i++) {
@@ -186,10 +179,10 @@ class ChangeEquipmentEditor {
                 equipSelect.appendChild(option);
             }
         } else {
-            // Armors (for slots 1-4)
+            // Armors of the chosen equipment type
             const armors = this.databaseManager.data.armors || [];
             for (let i = 1; i < armors.length; i++) {
-                if (!armors[i]) continue;
+                if (!armors[i] || (armors[i].etypeId && armors[i].etypeId !== this.equipSlot)) continue;
                 const option = document.createElement('option');
                 option.value = i;
                 option.textContent = `${i.toString().padStart(4, '0')}: ${armors[i].name || tt('Unnamed')}`;
@@ -223,6 +216,24 @@ class ChangeEquipmentEditor {
         footer.appendChild(cancelBtn);
         footer.appendChild(okBtn);
         container.appendChild(footer);
+    }
+
+    /**
+     * The project's equipment types as { value: id, label }, ids from 1 (Weapon), with the
+     * stock five when System has none. A saved id the list lacks stays selectable.
+     */
+    static equipTypes(databaseManager, current) {
+        const tt = text => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
+        let names = null;
+        try {
+            const system = databaseManager && typeof databaseManager.getSystem === 'function' ? databaseManager.getSystem() : null;
+            names = system && Array.isArray(system.equipTypes) ? system.equipTypes : null;
+        } catch (error) { names = null; }
+        const types = names && names.length > 1
+            ? names.slice(1).map((name, index) => ({ value: index + 1, label: String(name || '') || `#${index + 1}` }))
+            : ['Weapon', 'Shield', 'Head', 'Body', 'Accessory'].map((name, index) => ({ value: index + 1, label: tt(name) }));
+        if (current > 0 && !types.some(type => type.value === current)) types.push({ value: current, label: `#${current}` });
+        return types;
     }
 
     buildCommand() {

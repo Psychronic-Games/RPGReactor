@@ -1,3 +1,11 @@
+/** Whether a Web build packs its files, remembered between deployments (and shared with the editor's own Web build). */
+const WebPackPreference = {
+    KEY: 'rr-web-pack-files',
+    load() { try { return localStorage.getItem(this.KEY) === '1'; } catch (error) { return false; } },
+    save(on) { try { localStorage.setItem(this.KEY, on ? '1' : '0'); } catch (error) { /* a preference only */ } },
+};
+if (typeof window !== 'undefined') window.WebPackPreference = WebPackPreference;
+
 class BuildManager {
     constructor() {
         this.isBuilding = false;
@@ -66,6 +74,13 @@ class BuildManager {
                                             <div style="color: var(--color-text); font-weight: 600; font-size: 13px;">${tt('Web (HTML5)')}</div>
                                             <div style="color: var(--color-text-muted); font-size: 11px;">${tt('Build for browser deployment')}</div>
                                         </div>
+                                    </label>
+                                    <label id="build-pack-option" style="display: none; align-items: flex-start; gap: 8px; margin-left: 28px; padding: 7px 9px; background: var(--color-bg-surface); border: 1px solid var(--color-border-subtle); border-left: 2px solid var(--color-accent-border); border-radius: 4px; cursor: pointer;">
+                                        <input id="build-pack-files" type="checkbox" class="system-checkbox" style="width: 16px; height: 16px; min-width: 16px; min-height: 16px; max-width: 16px; max-height: 16px; flex: 0 0 16px; margin: 1px 0 0;">
+                                        <span>
+                                            <span style="display: block; color: var(--color-text); font-weight: 600; font-size: 12px;">${tt('Pack files into archives')}</span>
+                                            <span style="display: block; color: var(--color-text-muted); font-size: 10px; line-height: 1.35; margin-top: 2px;">${tt('A few zip archives in place of many files, for web hosts with file limits.')}</span>
+                                        </span>
                                     </label>
                                 </div>
                             </div>
@@ -329,6 +344,8 @@ class BuildManager {
             document.getElementById(id).addEventListener('change', () => this.updateCodecAvailability());
         }
         document.getElementById('build-platform-linux').addEventListener('change', () => this.updateAppImageAvailability());
+        document.getElementById('build-platform-web').addEventListener('change', () => this.updatePackAvailability());
+        document.getElementById('build-pack-files').addEventListener('change', event => WebPackPreference.save(event.target.checked));
 
         // Close on background click
         this.modal.addEventListener('click', (e) => {
@@ -349,6 +366,13 @@ class BuildManager {
             });
         });
 
+    }
+
+    /** Packing is a choice of the Web build alone: shown with it, and remembered between deployments. */
+    updatePackAvailability() {
+        const web = document.getElementById('build-platform-web').checked;
+        document.getElementById('build-pack-option').style.display = web ? 'flex' : 'none';
+        document.getElementById('build-pack-files').checked = web && WebPackPreference.load();
     }
 
     updateAppImageAvailability() {
@@ -393,23 +417,30 @@ class BuildManager {
             this.setupModal();
         }
         this.modal.style.display = 'flex';
+        // Tab stays inside, Escape closes as the cross does, and the focus goes back to what opened the dialog.
+        window.RRKeyboardNavigation?.modal(this.modal, { onEscape: () => this.close() })?.enter();
         this.clearLog();
         this.resetProgress();
         this.updateCodecAvailability();
         this.updateAppImageAvailability();
+        this.updatePackAvailability();
         this.log(tt('Ready to build. Select platforms and click "Start Build".'), 'var(--color-text-muted)');
         this.versionPicker.load().catch(() => {});
     }
 
-    close() {
+    async close() {
         if (this.isBuilding) {
             const tt = text => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
-            const confirm = window.confirm(tt('A build is in progress. Are you sure you want to close?'));
-            if (!confirm) return;
-            this.cancelBuild();
+            const confirmed = await RRDialog.confirm(tt('A build is in progress. Are you sure you want to close?'), {
+                title: tt('Deploy Game'), ok: tt('Cancel Build'), cancel: tt('Keep Building'), danger: true
+            });
+            if (!confirmed) return;
+            // The build may have finished while the question was up.
+            if (this.isBuilding) this.cancelBuild();
         }
         this.versionPicker.close();
         this.modal.style.display = 'none';
+        this.modal._rrModalKeys?.leave();
     }
 
     selectOutputDirectory() {
@@ -536,18 +567,25 @@ class BuildManager {
     }
 
     async startBuild() {
+        // One build at a time: a second click while the project saves would start a second worker on the same folder.
+        if (this.isBuilding || this._starting) return;
+        this._starting = true;
+        try { await this._startBuild(); } finally { this._starting = false; }
+    }
+
+    async _startBuild() {
         const tt = text => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
         const platforms = this.getSelectedPlatforms();
 
         if (platforms.length === 0) {
-            alert(tt('Please select at least one platform to build.'));
+            await RRDialog.alert(tt('Please select at least one platform to build.'), { title: tt('Deploy Game') });
             return;
         }
 
         // Validate that a project is loaded
         const project = window.reactor.projectController.getCurrentProject();
         if (!project || !project.path) {
-            alert(tt('No project is currently loaded. Please open a project before building.'));
+            await RRDialog.alert(tt('No project is currently loaded. Please open a project before building.'), { title: tt('Deploy Game'), kind: 'warning' });
             return;
         }
 
@@ -556,7 +594,7 @@ class BuildManager {
         // stale build (playtest already saves for the same reason).
         const saved = await window.reactor.projectController.saveAll();
         if (!saved) {
-            alert(tt('Build cancelled: the project could not be saved.'));
+            await RRDialog.alert(tt('Build cancelled: the project could not be saved.'), { title: tt('Deploy Game'), kind: 'error' });
             return;
         }
 
@@ -580,7 +618,7 @@ class BuildManager {
 
         const editorNwVersion = process.versions.nw || process.versions['node-webkit'];
         if (!editorNwVersion) {
-            alert(tt('Could not determine the editor NW.js version.'));
+            await RRDialog.alert(tt('Could not determine the editor NW.js version.'), { title: tt('Deploy Game'), kind: 'error' });
             return;
         }
         const nwVersionPolicy = document.getElementById('build-nw-version-policy').value;
@@ -588,11 +626,11 @@ class BuildManager {
         if (nwVersionPolicy === 'exact') {
             try { await this.versionPicker.load(); }
             catch {
-                alert(tt('NW.js versions are unavailable. Connect to the internet or choose Same as editor.'));
+                await RRDialog.alert(tt('NW.js versions are unavailable. Connect to the internet or choose Same as editor.'), { title: tt('Deploy Game'), kind: 'warning' });
                 return;
             }
             if (!this.versionPicker.hasVersion(exactNwVersion)) {
-                alert(tt('Select an available NW.js version from the searchable list.'));
+                await RRDialog.alert(tt('Select an available NW.js version from the searchable list.'), { title: tt('Deploy Game') });
                 return;
             }
         }
@@ -602,6 +640,7 @@ class BuildManager {
         const runtimeLocales = this.selectedRuntimeLocales();
         const assetOptimization = this.assetOptimizationSettings();
         const createLinuxAppImage = document.getElementById('build-create-linux-appimage').checked;
+        const packWebFiles = platforms.includes('web') && document.getElementById('build-pack-files').checked;
 
         this.isBuilding = true;
         document.getElementById('build-start-btn').style.display = 'none';
@@ -618,7 +657,7 @@ class BuildManager {
             if (!fs.existsSync(workerPath)) {
                 throw new Error(`${tt('Build worker not found at:')} ${workerPath}`);
             }
-            this.worker = new Worker(workerPath, {
+            const worker = this.worker = new Worker(workerPath, {
                 workerData: {
                     projectPath: project.path,
                     projectName: project.name,
@@ -632,13 +671,17 @@ class BuildManager {
                     runtimeLocales,
                     assetOptimization,
                     createLinuxAppImage,
+                    packWebFiles,
                     appRoot: appRoot,
                     editorExecPath: process.execPath,
                 }
             });
 
+            // A cancelled build's worker still reports (its exit comes after the cancel): only this build's own count.
+            const current = () => this.worker === worker;
             // Log messages from worker
             this.worker.on('message', (msg) => {
+                if (!current()) return;
                 if (msg.type === 'log') {
                     this.log(msg.message, msg.color || 'var(--color-text)');
                 } else if (msg.type === 'progress') {
@@ -656,6 +699,7 @@ class BuildManager {
 
             // Worker threw an uncaught error
             this.worker.on('error', (err) => {
+                if (!current()) return;
                 this.log('', 'var(--color-text)');
                 this.log('========================================', 'var(--color-danger-bright)');
                 this.log(tt('Build worker error:'), 'var(--color-danger-bright)');
@@ -666,6 +710,7 @@ class BuildManager {
 
             // Worker exited
             this.worker.on('exit', (code) => {
+                if (!current()) return;
                 if (code !== 0 && this.isBuilding) {
                     this.log(`${tt('Build worker exited with code')} ${code}`, 'var(--color-danger-bright)');
                 }

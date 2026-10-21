@@ -1,0 +1,4 @@
+[null,
+  { "id": 1, "name": "Motorcycle", "kind": "motorcycle",
+    "model": { "name": "Vehicles/kawashaki_ninja_h2", "file": "kawashaki_ninja_h2" } }
+]

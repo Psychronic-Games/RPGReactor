@@ -145,7 +145,7 @@ class DatabaseTilesetEditor {
     saveTileset() {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
         if (!this.currentTileset) {
-            alert(tt('No tileset selected'));
+            RRDialog.alert(tt('No tileset selected'), { title: tt('Tilesets'), kind: 'warning' });
             return;
         }
 
@@ -318,7 +318,7 @@ class DatabaseTilesetEditor {
         const projectPath = this.getProjectPath();
         if (!projectPath) {
             console.error('Cannot save: projectPath is null');
-            alert(tt('Error: Project path not available. Cannot save tilesets.'));
+            RRDialog.alert(tt('Error: Project path not available. Cannot save tilesets.'), { title: tt('Tilesets'), kind: 'error' });
             return;
         }
 
@@ -348,7 +348,7 @@ class DatabaseTilesetEditor {
             console.debug('Tilesets.json saved successfully');
         } catch (error) {
             console.error('Error saving Tilesets.json:', error);
-            alert(`${tt('Error saving tilesets:')} ${error.message}`);
+            RRDialog.alert(`${tt('Error saving tilesets:')} ${error.message}`, { title: tt('Tilesets'), kind: 'error' });
         }
     }
 
@@ -392,13 +392,13 @@ class DatabaseTilesetEditor {
                 <!-- Main two-column layout -->
                 <div style="display: flex; flex: 1; overflow: hidden;">
                     <!-- Left sidebar: Layer list (top) and flag editor (bottom) -->
-                    <div style="width: 260px; border-right: 1px solid var(--color-border); display: flex; flex-direction: column; background-color: var(--color-bg-list-item);">
+                    <div class="rr-tileset-side" style="width: 260px; border-right: 1px solid var(--color-border); display: flex; flex-direction: column; background-color: var(--color-bg-list-item); min-height: 0; overflow-y: auto;">
                         <!-- Top: Layer list. Sized to its eleven rows rather
                              than sharing the column half-and-half with Flags:
                              an equal split left the list scrolling while the
                              panel below it had room to spare. -->
                         <div style="flex: 0 0 auto; display: flex; flex-direction: column; border-bottom: 1px solid var(--color-border); overflow: hidden;">
-                            <div style="padding: 8px; border-bottom: 1px solid var(--color-border); background-color: var(--color-bg-panel);">
+                            <div class="rr-db-fold-header" data-section-key="layers" style="padding: 8px; border-bottom: 1px solid var(--color-border); background-color: var(--color-bg-panel);">
                                 <h3 style="margin: 0; font-size: 11px; font-weight: 600; color: var(--color-text);">${tt('Tileset Layers')}</h3>
                             </div>
                             <div style="flex: 0 0 auto; padding: 6px 8px;">
@@ -422,9 +422,9 @@ class DatabaseTilesetEditor {
                             </div>
                         </div>
 
-                        <!-- Bottom: Flag editor -->
-                        <div style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
-                            <div style="padding: 8px; border-bottom: 1px solid var(--color-border); background-color: var(--color-bg-panel);">
+                        <!-- Bottom: Flag editor. Keeps its own height; on a short window the whole column scrolls. -->
+                        <div style="flex: 1 0 auto; display: flex; flex-direction: column;">
+                            <div class="rr-db-fold-header" data-section-key="flags" style="padding: 8px; border-bottom: 1px solid var(--color-border); background-color: var(--color-bg-panel);">
                                 <h4 style="margin: 0; font-size: 11px; font-weight: 600; color: var(--color-text);">${tt('Flags')}</h4>
                             </div>
                             <div style="flex: 1; overflow-y: auto; padding: 8px;">
@@ -761,7 +761,7 @@ class DatabaseTilesetEditor {
             document.removeEventListener('keydown', onKeyDown);
             if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
         };
-        const confirm = () => {
+        const accept = () => {
             if (chosen === null || !overlay.isConnected || !detailCurrent()) return;
             this.assignTilesetToLayer(layerIndex, chosen, layerName);
             close();
@@ -786,7 +786,7 @@ class DatabaseTilesetEditor {
             previewPane.appendChild(cleared);
         };
         noneRow.addEventListener('click', selectNone);
-        noneRow.addEventListener('dblclick', () => { selectNone(); confirm(); });
+        noneRow.addEventListener('dblclick', () => { selectNone(); accept(); });
         noneRow.addEventListener('keydown', event => {
             if (event.key !== 'Enter' && event.key !== ' ') return;
             event.preventDefault();
@@ -810,7 +810,7 @@ class DatabaseTilesetEditor {
                 const image = document.createElement('img');
                 image.src = this.assetUrl(absolutePath);
                 image.style.cssText = 'max-width: 100%; max-height: 100%; image-rendering: pixelated; display: block;';
-                image.addEventListener('dblclick', confirm);
+                image.addEventListener('dblclick', accept);
                 previewPane.appendChild(image);
             };
 
@@ -842,7 +842,7 @@ class DatabaseTilesetEditor {
                 const item = event.target.closest('.rr-picker-file-item');
                 if (item && item.dataset.fileName) {
                     chosen = item.dataset.fileName;
-                    confirm();
+                    accept();
                 }
             });
 
@@ -857,7 +857,7 @@ class DatabaseTilesetEditor {
 
         closeButton.addEventListener('click', close);
         cancelButton.addEventListener('click', close);
-        selectButton.addEventListener('click', confirm);
+        selectButton.addEventListener('click', accept);
         overlay.addEventListener('click', event => {
             // A click on the backdrop no longer closes the dialog: an accidental
             // click beside it must never cost in-progress work. Close deliberately.
@@ -2302,6 +2302,7 @@ class DatabaseTilesetEditor {
                 break;
         }
 
+        currentFlag = DatabaseTilesetEditor.keepEmptyTileStar(tileIndex, currentFlag);
         if (currentFlag !== oldFlag) {
             this.currentTileset.flags[tileIndex] = currentFlag;
             // Autotiles: mirror the flag to all 48 shape slots of the kind —
@@ -2613,6 +2614,15 @@ class DatabaseTilesetEditor {
         }
     }
 
+    /**
+     * Tile 0 is the empty tile of every unpainted upper layer: its passage stays a star,
+     * or checkPassage stops at it and every wall under it turns walkable (O) or every
+     * floor solid (X). Its other flags are free to edit.
+     */
+    static keepEmptyTileStar(tileIndex, flag) {
+        return tileIndex === 0 ? (flag & ~0x1F) | 0x10 : flag;
+    }
+
     /** The flag a passage brush writes, over whatever the tile had. */
     passageBrushFlag(oldFlag) {
         switch (this.passageBrush) {
@@ -2625,6 +2635,7 @@ class DatabaseTilesetEditor {
 
     /** Write one tile's flag with autotile mirroring, repaint, and announce. */
     writeTileFlag(canvas, imageIndex, isSplitSheet, tileIndex, newFlag) {
+        newFlag = DatabaseTilesetEditor.keepEmptyTileStar(tileIndex, newFlag);
         const oldFlag = this.currentTileset.flags[tileIndex] || 0;
         if (newFlag === oldFlag) return false;
         this.currentTileset.flags[tileIndex] = newFlag;

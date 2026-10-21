@@ -37,6 +37,40 @@ async function stageEditor(appRoot, outputDir) {
     return stageRoot;
 }
 
+// Scripts that only package the editor itself; they run from a source checkout.
+const PACKAGING_ONLY = new Set(['build-scripts/build.js', 'build-scripts/convert-icon.js']);
+
+function unresolvedPackages(stageRoot) {
+    const builtins = new Set(require('node:module').builtinModules);
+    const missing = [];
+    const walk = (dir) => {
+        for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+            const full = path.join(dir, entry.name);
+            if (entry.isDirectory()) {
+                walk(full);
+                continue;
+            }
+            const relative = path.relative(stageRoot, full).split(path.sep).join('/');
+            if (!/\.c?js$/.test(entry.name) || PACKAGING_ONLY.has(relative)) continue;
+            const source = fs.readFileSync(full, 'utf8');
+            for (const match of source.matchAll(/\brequire\(\s*['"]([^'"\s]+)['"]\s*\)/g)) {
+                const name = match[1].replace(/^node:/, '');
+                // nw.gui and electron come from the host, not from node_modules.
+                if (name.startsWith('.') || name.startsWith('/') || name.startsWith('nw.') || name === 'electron') continue;
+                const parts = name.split('/');
+                const packageName = name.startsWith('@') ? parts.slice(0, 2).join('/') : parts[0];
+                if (builtins.has(packageName)) continue;
+                if (!fs.existsSync(path.join(stageRoot, 'node_modules', packageName, 'package.json'))) {
+                    missing.push(`${relative} requires ${packageName}`);
+                }
+            }
+        }
+    };
+    walk(path.join(stageRoot, 'src'));
+    walk(path.join(stageRoot, 'build-scripts'));
+    return missing;
+}
+
 test('editor distribution staging includes runtime asset dependencies', async () => {
     const outputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rpg-reactor-dist-stage-output-'));
     let stageRoot = null;
@@ -54,6 +88,10 @@ test('editor distribution staging includes runtime asset dependencies', async ()
             'node_modules/@jsquash/oxipng/optimise.js',
             'node_modules/@jsquash/oxipng/codec/pkg/squoosh_oxipng_bg.wasm',
             'node_modules/wasm-feature-detect/dist/umd/index.js',
+            'node_modules/pngjs/lib/png.js',
+            'build-scripts/legacy-import-worker.js',
+            'src/legacy/skeleton/data/System.json',
+            'src/legacy/skeleton-shared.json',
             'build-scripts/appimage-utils.js',
             'build-scripts/appimage-runtime-LICENSE.txt',
             'build-scripts/native-download.js',
@@ -93,6 +131,20 @@ test('editor distribution staging includes runtime asset dependencies', async ()
         assert.equal(packageJson.dependencies['gif.js'], '^0.2.0');
         assert.equal(packageJson.dependencies['gifuct-js'], '^2.1.2');
         assert.equal(packageJson.dependencies['@jsquash/oxipng'], '2.3.0');
+
+        // The stage carries no full node_modules tree, so every package the
+        // shipped code requires must have been staged by name.
+        assert.deepEqual(unresolvedPackages(stageRoot), []);
+
+        // A packaged editor imports old projects from its own folder: its
+        // package.json, runtime and import skeleton are all inside the stage.
+        const stagedPaths = require(path.join(stageRoot, 'src', 'legacy', 'EditorPaths.js'));
+        assert.equal(stagedPaths.editorPackage().version, packageJson.version);
+        assert.equal(stagedPaths.runtime(), path.join(stageRoot, 'runtime'));
+        for (const [relativePath, file] of stagedPaths.skeletonFiles()) {
+            assert.equal(path.relative(stageRoot, file).startsWith('..'), false, `${relativePath} comes from inside the stage`);
+        }
+        require(path.join(stageRoot, 'src', 'legacy', 'LegacyImporter.js'));
 
         const starterRoot = path.join(stageRoot, 'template', 'Demo');
         const starterMetadata = JSON.parse(fs.readFileSync(path.join(starterRoot, 'project.rpgreactor'), 'utf8'));

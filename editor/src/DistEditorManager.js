@@ -56,6 +56,13 @@ class DistEditorManager {
                                             <div style="color: var(--color-text-muted); font-size: 11px;">${tt('Browser editor with bundled Reactor One project')}</div>
                                         </div>
                                     </label>
+                                    <label id="dist-pack-option" style="display: none; align-items: flex-start; gap: 8px; margin-left: 28px; padding: 7px 9px; background: var(--color-bg-surface); border: 1px solid var(--color-border-subtle); border-left: 2px solid var(--color-accent-border); border-radius: 4px; cursor: pointer;">
+                                        <input id="dist-pack-files" type="checkbox" class="system-checkbox" style="width: 16px; height: 16px; min-width: 16px; min-height: 16px; max-width: 16px; max-height: 16px; flex: 0 0 16px; margin: 1px 0 0;">
+                                        <span>
+                                            <span style="display: block; color: var(--color-text); font-weight: 600; font-size: 12px;">${tt('Pack files into archives')}</span>
+                                            <span style="display: block; color: var(--color-text-muted); font-size: 10px; line-height: 1.35; margin-top: 2px;">${tt('A few zip archives in place of many files, for web hosts with file limits.')}</span>
+                                        </span>
+                                    </label>
                                 </div>
                             </div>
 
@@ -235,6 +242,8 @@ class DistEditorManager {
         const web = type === 'web';
         section.style.display = type === 'platform' ? 'block' : 'none';
         document.getElementById('dist-nw-section').style.display = web ? 'none' : 'block';
+        document.getElementById('dist-pack-option').style.display = web ? 'flex' : 'none';
+        document.getElementById('dist-pack-files').checked = web && !!window.WebPackPreference?.load();
         const codec = document.getElementById('dist-include-proprietary-codecs');
         const codecOption = document.getElementById('dist-codec-option');
         const disabled = type === 'minimal' || web;
@@ -266,6 +275,8 @@ class DistEditorManager {
             this.setupModal();
         }
         this.modal.style.display = 'flex';
+        // Tab stays inside, Escape closes as the cross does, and the focus goes back to what opened the dialog.
+        window.RRKeyboardNavigation?.modal(this.modal, { onEscape: () => this.close() })?.enter();
         this.clearLog();
         this.resetProgress();
         this.updatePlatformVisibility();
@@ -273,14 +284,19 @@ class DistEditorManager {
         this.versionPicker.load().catch(() => {});
     }
 
-    close() {
+    async close() {
         if (this.isBuilding) {
             const tt = text => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
-            if (!window.confirm(tt('A build is in progress. Close anyway?'))) return;
-            this.cancelBuild();
+            const confirmed = await RRDialog.confirm(tt('A build is in progress. Close anyway?'), {
+                title: tt('Deploy Editor'), ok: tt('Cancel Build'), cancel: tt('Keep Building'), danger: true
+            });
+            if (!confirmed) return;
+            // The build may have finished while the question was up.
+            if (this.isBuilding) this.cancelBuild();
         }
         this.versionPicker.close();
         this.modal.style.display = 'none';
+        this.modal._rrModalKeys?.leave();
     }
 
     selectOutputDirectory() {
@@ -398,6 +414,8 @@ class DistEditorManager {
         const edition = this.modal.querySelector('input[name="dist-edition"]:checked').value;
         const includeProprietaryCodecs = document.getElementById('dist-include-proprietary-codecs').checked;
         const createLinuxAppImage = document.getElementById('dist-create-linux-appimage').checked;
+        const packWebFiles = packageType === 'web' && document.getElementById('dist-pack-files').checked;
+        if (packageType === 'web') window.WebPackPreference?.save(packWebFiles);
 
         // Determine platforms
         let platforms;
@@ -407,7 +425,7 @@ class DistEditorManager {
             if (document.getElementById('dist-platform-win').checked) platforms.push('win');
             if (document.getElementById('dist-platform-osx').checked) platforms.push('osx');
             if (platforms.length === 0) {
-                alert(tt('Please select at least one platform.'));
+                await RRDialog.alert(tt('Please select at least one platform.'), { title: tt('Deploy Editor') });
                 return;
             }
         } else {
@@ -434,7 +452,7 @@ class DistEditorManager {
 
         const editorNwVersion = process.versions.nw || process.versions['node-webkit'];
         if (packageType !== 'web' && !editorNwVersion) {
-            alert(tt('Could not determine the editor NW.js version.'));
+            await RRDialog.alert(tt('Could not determine the editor NW.js version.'), { title: tt('Deploy Editor'), kind: 'error' });
             return;
         }
         const nwVersionPolicy = document.getElementById('dist-nw-version-policy').value;
@@ -442,11 +460,11 @@ class DistEditorManager {
         if (packageType !== 'web' && nwVersionPolicy === 'exact') {
             try { await this.versionPicker.load(); }
             catch {
-                alert(tt('NW.js versions are unavailable. Connect to the internet or choose Same as editor.'));
+                await RRDialog.alert(tt('NW.js versions are unavailable. Connect to the internet or choose Same as editor.'), { title: tt('Deploy Editor'), kind: 'warning' });
                 return;
             }
             if (!this.versionPicker.hasVersion(exactNwVersion)) {
-                alert(tt('Select an available NW.js version from the searchable list.'));
+                await RRDialog.alert(tt('Select an available NW.js version from the searchable list.'), { title: tt('Deploy Editor') });
                 return;
             }
         }
@@ -478,6 +496,7 @@ class DistEditorManager {
                     editorExecPath: process.execPath,
                     includeProprietaryCodecs,
                     createLinuxAppImage,
+                    packWebFiles,
                     releaseBuild: false,
                     releaseHashManifestPath: process.env.RPG_REACTOR_RELEASE_HASH_MANIFEST ||
                         pathModule.join(appRoot, 'build-scripts', 'release-hashes.json'),

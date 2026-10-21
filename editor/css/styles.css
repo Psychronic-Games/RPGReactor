@@ -578,6 +578,8 @@
             font-size: 14px;
             border-radius: 3px;
             margin: 2px 0;
+            /* A double-click opens the row; it must not select its text as well. */
+            user-select: none;
         }
 
         .tree-item:hover {
@@ -610,8 +612,15 @@
         }
 
         /* Map Info Content (inside workspace-tabs) */
+        /* One row: the toggles keep their width and the map name gives way,
+           so the two halves never overlap on a narrow window (1024×600). */
         #map-info-content {
             display: none;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 0 16px;
+            box-sizing: border-box;
             font-size: 12px;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
             width: 100%;
@@ -621,27 +630,42 @@
         }
 
         #map-info-left {
-            position: absolute !important;
-            left: 16px !important;
-            top: 50% !important;
-            transform: translateY(-50%) !important;
-            max-width: calc(100% - 400px) !important;
-            overflow: hidden !important;
-            text-overflow: ellipsis !important;
-            white-space: nowrap !important;
-            display: flex !important;
-            gap: 12px !important;
-            align-items: center !important;
+            flex: 1 1 auto;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        #map-info-left .map-info-item {
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        #map-info-left .map-info-item + .map-info-item {
+            flex-shrink: 0;
         }
 
         #map-info-right {
-            position: absolute !important;
-            right: 16px !important;
-            top: 50% !important;
-            transform: translateY(-50%) !important;
-            display: flex !important;
-            gap: 16px !important;
-            align-items: center !important;
+            flex: 0 0 auto;
+            display: flex;
+            gap: 16px;
+            align-items: center;
+        }
+
+        @media (max-width: 1180px) {
+            #map-info-content {
+                gap: 10px;
+                padding: 0 10px;
+            }
+
+            #map-info-right {
+                gap: 10px;
+            }
         }
 
         .map-info-item {
@@ -656,7 +680,8 @@
         .map-grid,
         .map-passage,
         .map-3d-view,
-        .map-video-previews {
+        .map-video-previews,
+        .map-surround-view {
             display: inline-flex;
             align-items: center;
             gap: 4px;
@@ -669,7 +694,8 @@
         .map-grid input,
         .map-passage input,
         .map-3d-view input,
-        .map-video-previews input {
+        .map-video-previews input,
+        .map-surround-view input {
             margin: 0;
             accent-color: var(--color-accent-bright);
             cursor: pointer;
@@ -679,6 +705,17 @@
             color: var(--color-text);
             font-weight: 500;
         }
+
+        /* The readouts keep their width as their numbers change, so the ticks beside them do not slide
+           from under the pointer when it leaves the map. */
+        #map-coordinates,
+        #map-zoom {
+            display: inline-block;
+            font-variant-numeric: tabular-nums;
+            text-align: center;
+        }
+        #map-coordinates { min-width: 7ch; }
+        #map-zoom { min-width: 4ch; }
 
         .workspace-tab {
             padding: 8px 16px;
@@ -816,6 +853,9 @@
             border-top: 1px solid var(--color-border);
             border-left: 1px solid var(--color-border);
         }
+        /* The 3D view moves by its camera: the flat map's scrollbars would scroll nothing that is seen. */
+        #canvas-container:has(> #map-3d-input) > .custom-scrollbar,
+        #canvas-container:has(> #map-3d-input) > .custom-scrollbar-corner { display: none !important; }
 
         /* Disable context menu on canvas */
         canvas {
@@ -1484,27 +1524,19 @@
             flex-shrink: 0;
         }
 
+        /* A Terms panel is a Database section like any other: its look is .database-section's. */
         .rr-terms-panel {
             min-width: 0;
-            border: 1px solid var(--color-border);
-            border-radius: 4px;
             overflow: hidden;
-            background: var(--color-bg-panel);
         }
 
-        .rr-terms-panel > header {
-            padding: 6px 8px;
-            border-bottom: 1px solid var(--color-border);
-            color: var(--color-text-strong);
-            font-size: 12px;
-            font-weight: 700;
-            background: var(--color-bg-surface);
+        .rr-terms-panel.database-section {
+            margin-bottom: 0;
         }
 
         .rr-terms-fields {
             display: grid;
             gap: 6px 8px;
-            padding: 8px;
         }
 
         .rr-terms-fields-two {
@@ -1701,6 +1733,37 @@
             padding: 5px 10px;
         }
 
+        /* Dragging event commands to a new place (map events, common events, troop pages). */
+        .command-drop-line {
+            position: fixed;
+            height: 2px;
+            border-radius: 1px;
+            background-color: var(--color-accent-bright);
+            box-shadow: 0 0 0 1px var(--color-accent-tint-30);
+            pointer-events: none;
+            z-index: 10006;
+        }
+
+        .command-drop-line::before {
+            content: '';
+            position: absolute;
+            left: -3px;
+            top: -3px;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: var(--color-accent-bright);
+        }
+
+        .command-dragging {
+            opacity: 0.45;
+        }
+
+        body.rr-command-drag-active,
+        body.rr-command-drag-active * {
+            cursor: grabbing !important;
+        }
+
         /* Light themes: white-on-white blends in, so swap to brand accent. */
         :root[data-theme="light"] .database-section-header,
         :root[data-theme="bubblegum-light"] .database-section-header,
@@ -1881,6 +1944,40 @@
             gap: 10px 12px;
             align-items: center;
         }
+        .vehicle-detail .vehicle-hint,
+        .vehicle-inherited-skills {
+            margin: 6px 0 0;
+            font-size: 11px;
+            line-height: 1.4;
+            color: var(--color-text-muted);
+        }
+        .event-vehicle-problem:empty {
+            display: none;
+        }
+        .vehicle-equipment-row {
+            display: grid;
+            grid-template-columns: 90px minmax(0, 1fr);
+            align-items: center;
+            gap: 8px;
+            min-width: 0;
+        }
+        .vehicle-equipment-rows {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(225px, 1fr));
+            gap: 6px 12px;
+            margin-top: 8px;
+        }
+        .vehicle-equipment-row > span {
+            font-size: 12px;
+            color: var(--color-text-muted);
+        }
+        .vehicle-equipment-row select {
+            width: 100%;
+            max-width: none;
+        }
+        .vehicle-base-stats {
+            grid-column: 1 / -1;
+        }
         .db-form > label,
         .db-form .db-row-pair > label {
             color: var(--color-text-muted);
@@ -2006,6 +2103,8 @@
             gap: 4px;
             min-width: 0;
         }
+        /* A button in a column row keeps one line, so it stays the height of the buttons beside it. */
+        .db-row-cols > .db-col > button { white-space: nowrap; }
         .db-row-cols > .db-col > label {
             color: var(--color-text-muted);
             font-size: 12px;
@@ -2118,6 +2217,198 @@
 
         .database-section {
             min-width: 0; /* Allow grid items to shrink */
+        }
+
+        /* Folding sections (RRDatabaseSections). A header that folds its
+         * card carries aria-expanded; the card carries is-collapsed while
+         * folded and is then its header and nothing else. The chevron sits
+         * in the header's own padding at the start of the title (the right
+         * in a right-to-left language), out of the way of headers that lay
+         * their parts out as a row. */
+        .database-section-header[aria-expanded],
+        .rr-db-fold-header[aria-expanded] {
+            position: relative;
+            padding-inline-start: 24px;
+            cursor: pointer;
+            user-select: none;
+        }
+        /* A panel that opted in sets its own padding inline. */
+        .rr-db-fold-header[aria-expanded] {
+            padding-inline-start: 24px !important;
+        }
+        /* One chevron for every card: its color is the title's, whatever
+         * a card's own older marker rule says. */
+        .database-section-header[aria-expanded]::before,
+        .rr-db-fold-header[aria-expanded]::before {
+            content: '';
+            position: absolute;
+            inset-inline-start: 9px;
+            top: 50%;
+            width: 0;
+            height: 0;
+            margin-top: -4px;
+            border-style: solid;
+            border-width: 4px 0 4px 6px;
+            border-color: transparent transparent transparent currentColor;
+            color: inherit;
+            opacity: 0.6;
+            transform: rotate(90deg);
+            transition: transform 0.12s ease;
+        }
+        .database-section-header[aria-expanded="false"]::before,
+        .rr-db-fold-header[aria-expanded="false"]::before {
+            transform: none;
+        }
+        /* Folded, the chevron points the way the title reads, and the
+         * card's accent line stands where the title starts. */
+        [dir="rtl"] .database-section-header[aria-expanded="false"]::before,
+        [dir="rtl"] .rr-db-fold-header[aria-expanded="false"]::before {
+            transform: scaleX(-1);
+        }
+        [dir="rtl"] .database-section-header[aria-expanded] {
+            border-left: 0;
+            border-right: 3px solid var(--color-accent);
+        }
+        /* A chip in the Tactics title line does not make its bar taller
+         * than the other cards'. */
+        .rr-tactics-header > .rr-btn-chip {
+            margin-block: -3px;
+        }
+        .database-section-header[aria-expanded]:hover::before,
+        .rr-db-fold-header[aria-expanded]:hover::before {
+            opacity: 1;
+        }
+        .database-section-header[aria-expanded]:focus-visible,
+        .rr-db-fold-header[aria-expanded]:focus-visible {
+            outline: 2px solid var(--color-accent-bright);
+            outline-offset: -2px;
+        }
+        summary.database-section-header[aria-expanded] { list-style: none; }
+        summary.database-section-header[aria-expanded]::-webkit-details-marker { display: none; }
+
+        .database-section.is-collapsed > :not(.database-section-header),
+        .rr-db-fold.is-collapsed > :not(.rr-db-fold-header):not(:has(.rr-db-fold-header)),
+        .rr-db-fold.is-collapsed > :has(.rr-db-fold-header) > :not(.rr-db-fold-header) {
+            display: none !important;
+        }
+        .database-section.is-collapsed > .database-section-header {
+            margin-bottom: 0;
+        }
+        /* Its own height, whatever its place: never grown to fill a row or
+         * a column, never squeezed by a column that is full. */
+        .database-section.is-collapsed,
+        .rr-db-fold.is-collapsed {
+            flex: 0 0 auto !important;
+            height: auto !important;
+            min-height: 0 !important;
+        }
+        .rr-db-fold.is-collapsed .rr-db-fold-header {
+            border-bottom-color: transparent;
+        }
+
+        /* A folded card is a bar across its row: in a grid that stretches
+         * its cards the shell gives the whole row to each card of a row
+         * that holds a folded one (rr-section-solo); in a row of cards the
+         * folded one takes a line of its own and the others share theirs. */
+        .database-sections-grid > .rr-section-solo,
+        .database-actor-pair > .rr-section-solo {
+            grid-column: 1 / -1;
+        }
+        .database-enemy-top-row:has(> .database-section.is-collapsed),
+        .database-enemy-bottom-row:has(> .database-section.is-collapsed) {
+            flex-wrap: wrap;
+        }
+        .database-enemy-top-row > .database-section.is-collapsed,
+        .database-enemy-bottom-row > .database-section.is-collapsed,
+        .state-duration-notes > .database-section.is-collapsed {
+            flex: 0 0 100% !important;
+            max-width: none;
+        }
+        .database-enemy-top-row:has(> .database-section.is-collapsed) > .database-section:not(.is-collapsed),
+        .database-enemy-bottom-row:has(> .database-section.is-collapsed) > .database-section:not(.is-collapsed) {
+            flex-grow: 1 !important;
+        }
+        /* Cards of a grid that does not stretch them stay in their cell. */
+        .rr-controls > .database-section.is-collapsed {
+            align-self: start;
+        }
+
+        /* Troops. With the preview folded, the cards beside it stand in a
+         * row under its bar and the event pages take the height; with the
+         * event pages folded, an open preview takes it; with both folded,
+         * nothing is stretched. The cards under a folded preview never
+         * take more of the page than the open preview did: in a short
+         * window they scroll, and the event pages keep their share. */
+        .rr-troop-upper-workspace:has(> .rr-troop-preview-section.is-collapsed) {
+            grid-template-columns: minmax(0, 1fr);
+            flex: 0 1 auto;
+            max-height: 52%;
+            overflow-y: auto;
+        }
+        .rr-troop-editor:has(> .rr-troop-events-section.is-collapsed) > .rr-troop-upper-workspace:has(> .rr-troop-preview-section.is-collapsed) {
+            max-height: none;
+        }
+        .rr-troop-upper-workspace > .rr-troop-preview-section.is-collapsed {
+            align-self: start;
+        }
+        .rr-troop-upper-workspace:has(> .rr-troop-preview-section.is-collapsed) > .rr-troop-sidebar {
+            flex-direction: row !important;
+            flex-wrap: wrap;
+            align-items: flex-start;
+            overflow: visible;
+        }
+        .rr-troop-upper-workspace:has(> .rr-troop-preview-section.is-collapsed) > .rr-troop-sidebar > * {
+            flex: 1 1 240px;
+            width: auto !important;
+        }
+        .rr-troop-editor:has(> .rr-troop-events-section.is-collapsed) > .rr-troop-upper-workspace:not(:has(> .rr-troop-preview-section.is-collapsed)) {
+            flex: 1 1 auto;
+            max-height: none;
+        }
+
+        /* Animations. A folded pane beside the preview is its title line;
+         * the preview takes the room. */
+        .anim-editor-main-row > .rr-db-fold.is-collapsed,
+        .anim-editor-workspace > .rr-db-fold.is-collapsed {
+            width: auto !important;
+            min-width: 0 !important;
+            align-self: flex-start;
+        }
+        .anim-editor-root .rr-db-fold.is-collapsed > .rr-db-fold-header {
+            margin-bottom: 0 !important;
+            gap: 8px;
+        }
+
+        /* Types. A folded list is its title line; the open lists share the
+         * row. */
+        html:not(.rr-web) .rr-types-grid:has(> .rr-types-panel.is-collapsed) {
+            display: flex;
+        }
+        html:not(.rr-web) .rr-types-grid:has(> .rr-types-panel.is-collapsed) > .rr-types-panel {
+            flex: 1 1 185px;
+            min-width: 185px;
+        }
+        html:not(.rr-web) .rr-types-grid > .rr-types-panel.is-collapsed {
+            flex: 0 0 185px !important;
+        }
+        .rr-types-grid > .rr-types-panel.is-collapsed {
+            align-self: start;
+        }
+        .rr-types-panel.is-collapsed .rr-types-panel-body {
+            height: auto;
+        }
+
+        /* Terms. Beside a folded panel the other takes the row; with the
+         * messages folded, the panels on the left take the page. */
+        .rr-terms-top-grid:has(> .rr-terms-panel.is-collapsed) {
+            grid-template-columns: minmax(0, 1fr);
+        }
+        .rr-terms-workspace:has(> .rr-terms-messages-panel.is-collapsed) {
+            display: flex;
+            flex-direction: column;
+        }
+        .rr-terms-workspace:has(> .rr-terms-messages-panel.is-collapsed) > .rr-terms-left {
+            flex: 0 1 auto;
         }
 
         .database-preview {
@@ -3265,12 +3556,7 @@
             flex: 0 1 clamp(260px, 30vw, 380px);
         }
 
-        html.rr-web #map-info-left {
-            max-width: calc(100% - 230px) !important;
-        }
-
         html.rr-web #map-info-right {
-            right: 8px !important;
             gap: 8px !important;
         }
 
@@ -3375,8 +3661,6 @@
             }
 
             html.rr-web #map-info-left {
-                left: 8px !important;
-                max-width: calc(100% - 150px) !important;
                 gap: 6px !important;
             }
 
@@ -3501,10 +3785,6 @@
                 flex-wrap: wrap;
                 gap: 10px !important;
                 margin-bottom: 24px !important;
-            }
-
-            html.rr-web #map-info-left {
-                max-width: calc(100% - 16px) !important;
             }
 
             html.rr-web #map-info-right {
@@ -3677,15 +3957,14 @@
         /* Build mode: the bar over the 3D view. */
         .rr-build-hotbar {
             position: absolute;
-            left: 50%;
+            left: 12px;
+            right: 12px;
             bottom: 12px;
-            transform: translateX(-50%);
             z-index: 7;
             display: flex;
             flex-direction: column;
             align-items: center;
             gap: 6px;
-            max-width: calc(100% - 24px);
             pointer-events: none;
         }
         .rr-build-row {
@@ -3694,12 +3973,27 @@
             gap: 4px;
             padding: 6px 8px;
             border-radius: 12px;
-            background-color: rgba(10, 12, 16, 0.78);
+            background-color: color-mix(in srgb, var(--color-bg-deep) 82%, transparent);
             border: 1px solid var(--color-border);
             pointer-events: auto;
             max-width: 100%;
+            box-sizing: border-box;
             overflow-x: auto;
         }
+        /* A view too narrow for one row: smaller slots that wrap onto a second row, the groups as a square of icons. */
+        .rr-build-hotbar.is-compact .rr-build-row { flex-wrap: wrap; justify-content: center; overflow-x: visible; row-gap: 2px; padding: 5px 6px; }
+        .rr-build-hotbar.is-compact .rr-build-slot { width: 46px; height: 46px; gap: 1px; font-size: 9px; }
+        .rr-build-hotbar.is-compact .rr-build-slot svg { width: 20px; height: 20px; }
+        .rr-build-hotbar.is-compact .rr-build-slot-label { max-width: 44px; }
+        .rr-build-hotbar.is-compact .rr-build-groups { display: grid; grid-template-columns: repeat(2, 30px); gap: 3px; margin-right: 4px; padding-right: 6px; }
+        .rr-build-hotbar.is-compact .rr-build-group { justify-content: center; padding: 3px 0; }
+        .rr-build-hotbar.is-compact .rr-build-group span { display: none; }
+        .rr-build-hotbar.is-compact .rr-build-keys { display: none; }
+        /* A short view: icons only (each slot keeps its name as a tooltip), so the panel above keeps its room. */
+        .rr-build-hotbar.is-short .rr-build-slot { width: 38px; height: 36px; }
+        .rr-build-hotbar.is-short .rr-build-slot-label { display: none; }
+        .rr-build-hotbar.is-short .rr-build-groups { grid-template-columns: repeat(4, 28px); }
+        .rr-build-hotbar.is-short .rr-build-hint { display: none; }
         .rr-build-context:empty { display: none; }
         /* Database › Controls: keys, buttons, and jumping and gravity. */
         .rr-controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; padding: 16px; align-items: start; }
@@ -3730,13 +4024,15 @@
         .rr-controls-unit { color: var(--color-text-muted); font-size: 11px; }
         /* Database › Structures: floors and tools, the floor plan, the building in 3D. */
         .rr-structures-body { display: flex; flex: 1; min-height: 0; }
-        .rr-structures-side { flex: 0 0 150px; display: flex; flex-direction: column; gap: 6px; padding: 8px; border-right: 1px solid var(--color-border); overflow-y: auto; background: var(--color-bg-surface); }
+        .rr-structures-side { flex: 0 0 184px; display: flex; flex-direction: column; gap: 6px; padding: 8px; border-right: 1px solid var(--color-border); overflow-y: auto; background: var(--color-bg-surface); }
         .rr-structures-side-title { font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-text-muted); margin-top: 4px; }
         .rr-structures-floorlist { display: flex; flex-direction: column; gap: 2px; max-height: 220px; overflow-y: auto; }
         .rr-structures-floor, .rr-structures-tool { display: flex; align-items: center; gap: 6px; width: 100%; padding: 5px 8px; border: 1px solid transparent; border-radius: 4px; background: var(--color-bg-button); color: var(--color-text); font-size: 12px; text-align: left; cursor: pointer; }
         .rr-structures-floor:hover, .rr-structures-tool:hover { border-color: var(--color-border); }
         .rr-structures-floor.active, .rr-structures-tool.active { background: var(--color-accent-tint-15); border-color: var(--color-accent-border-strong, var(--color-accent)); }
+        :root[data-theme$="light"] .rr-structures-floor.active, :root[data-theme$="light"] .rr-structures-tool.active { background: var(--color-accent); border-color: var(--color-accent); color: var(--color-accent-on); }
         .rr-structures-toolgrid { display: grid; grid-template-columns: 1fr; gap: 2px; }
+        .rr-structures-above { margin-bottom: 4px; }
         .r3d-preview-states { position: absolute; right: 10px; bottom: 10px; display: none; gap: 2px; padding: 3px; background: color-mix(in srgb, var(--color-bg-panel) 88%, transparent); border: 1px solid var(--color-border); border-radius: 6px; box-shadow: 0 4px 14px rgba(0,0,0,0.3); z-index: 2; }
         .r3d-preview-state { border: none; background: none; color: var(--color-text-muted); font-size: 12px; padding: 4px 10px; border-radius: 4px; cursor: pointer; }
         .r3d-preview-state:hover { color: var(--color-text); background: var(--color-bg-hover); }
@@ -3748,15 +4044,15 @@
         .rr-structures-side-field[hidden] { display: none; }
         .rr-structures-side-field select { width: 100%; }
         .rr-structures-planpane { flex: 1.25; min-width: 0; position: relative; background: var(--color-bg-deep); border-right: 1px solid var(--color-border); }
-        .rr-structures-paint { position: absolute; inset: 0; width: 100%; height: calc(100% - 26px); cursor: crosshair; outline: none; }
-        .rr-structures-paint-hint { position: absolute; left: 0; right: 0; bottom: 0; height: 26px; line-height: 26px; padding: 0 8px; font-size: 11px; color: var(--color-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .rr-structures-paint { position: absolute; inset: 0; width: 100%; height: calc(100% - 36px); cursor: crosshair; outline: none; }
+        .rr-structures-paint-hint { position: absolute; left: 0; right: 0; bottom: 0; height: 36px; box-sizing: border-box; line-height: 15px; padding: 3px 8px; font-size: 11px; color: var(--color-text-muted); overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
         .rr-structures-3dpane { flex: 1; min-width: 0; position: relative; background: var(--color-bg-deep); }
         /* The Structure workshop: what is being built, and the way to save it, over the 3D view. */
         .rr-workshop-banner {
             position: absolute;
             top: 12px;
             left: 12px;
-            right: 256px;
+            right: 324px;
             z-index: 8;
             display: none;
             align-items: center;
@@ -3790,8 +4086,9 @@
             position: absolute;
             top: 12px;
             right: 12px;
-            bottom: 96px;
+            max-height: calc(100% - 132px);
             width: 300px;
+            min-height: 0;
             z-index: 7;
             display: flex;
             flex-direction: column;
@@ -3804,24 +4101,97 @@
             color: var(--color-text);
         }
         .rr-build-panel-head { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; padding: 8px 10px; background-color: var(--color-bg-deep); border-bottom: 1px solid var(--color-border); font-size: 13px; font-weight: 600; color: var(--color-text-strong); }
+        .rr-build-panel-title { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .rr-build-collapse { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 0; border: 1px solid transparent; border-radius: 4px; background: transparent; color: var(--color-text-muted); cursor: pointer; }
+        .rr-build-collapse:hover { color: var(--color-text-strong); border-color: var(--color-border); }
+        /* Collapsed: the head alone, the view free beneath it. */
+        .rr-build-panel.is-collapsed { max-height: none !important; }
+        .rr-build-panel.is-collapsed .rr-build-panel-head { border-bottom: 0; }
+        .rr-build-panel.is-collapsed > .rr-build-panel-body, .rr-build-panel.is-collapsed > .rr-build-panel-foot { display: none; }
+        /* What a click does, first on every panel. */
+        .rr-build-note.rr-build-lead { padding: 2px 2px 0; color: var(--color-text-muted); }
+        .rr-build-more > summary { cursor: pointer; list-style: none; user-select: none; }
+        .rr-build-more > summary::-webkit-details-marker { display: none; }
+        .rr-build-more > summary::before { content: '▸'; margin-right: 4px; color: var(--color-text-muted); }
+        .rr-build-more[open] > summary::before { content: '▾'; }
+        .rr-build-panel.is-compact .rr-build-panel-body { gap: 6px; padding: 8px; }
+        .rr-build-panel.is-compact .lit-section-header { padding-top: 3px; padding-bottom: 3px; }
+        .rr-build-panel.is-compact .rr-build-panel-head { padding: 6px 8px; }
+        .rr-build-actions { display: flex; gap: 6px; }
+        .rr-build-actions > button { flex: 1; }
+        .rr-build-finishes.rr-build-pair { grid-template-columns: repeat(2, 1fr); }
+        /* Every shape as an icon, its name on hover and in the card's corner. */
+        .rr-build-shape-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(30px, 1fr)); gap: 2px; }
+        .rr-build-shape-grid .rr-build-chip { justify-content: center; padding: 5px 0; }
+        /* Rock sizes: icon and name on one line, three to a row. */
+        .rr-build-shapes .rr-build-chip.rr-build-rockpreset { flex-direction: row; gap: 4px; padding: 4px 4px; font-size: 11px; }
+        .rr-build-shapes .rr-build-chip.rr-build-rockpreset svg { width: 16px; height: 16px; flex: 0 0 auto; }
+        /* A narrow panel has no room for both: the six carry the same icon, so the name stays. */
+        .rr-build-panel.is-narrow .rr-build-shapes .rr-build-chip.rr-build-rockpreset svg { display: none; }
         .rr-build-panel-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column; gap: 8px; padding: 10px; }
         .rr-build-panel-foot { flex: 0 0 auto; }
         .rr-build-panel-foot > button { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 4px; }
         .rr-build-section { flex: 0 0 auto; }
+        .rr-build-tabs { display: flex; gap: 4px; padding: 3px; margin: 6px 6px 0; border: 1px solid var(--color-border); border-radius: 5px; background: var(--color-bg-deep); }
+        .rr-build-pane[hidden] { display: none; }
+        .rr-build-tabs .map-props-btn { flex: 1; min-width: 0; min-height: 24px; padding: 3px 7px; font-size: 11px; border-color: transparent; background: transparent; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .rr-build-tabs .map-props-btn.primary { background: var(--color-accent-tint-15); border-color: var(--color-accent-border-strong); color: var(--color-accent-bright); }
+        .rr-build-wide-button { width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+        .rr-save-structure { width: min(440px, 94vw); }
+        .rr-save-structure .rr-modal-body { display: flex; flex-direction: column; gap: 12px; max-height: 76vh; overflow: auto; }
+        .rr-save-structure-top { display: flex; gap: 12px; align-items: center; }
+        .rr-save-structure-thumb { max-width: 160px; max-height: 120px; border: 1px solid var(--color-border); border-radius: 4px; background: var(--color-bg-deep); flex: 0 0 auto; image-rendering: auto; }
+        .rr-save-structure-what { font-size: 13px; color: var(--color-text); min-width: 0; overflow-wrap: anywhere; }
+        .rr-save-structure-form { grid-template-columns: 80px minmax(0, 1fr); }
+        .rr-save-structure-form .rr-build-check { font-size: 13px; color: var(--color-text); display: flex; gap: 6px; align-items: flex-start; }
+        .rr-save-structure-error { min-height: 1em; font-size: 12px; color: var(--color-danger-bright); }
+        @media (max-width: 520px) { .rr-save-structure-top { flex-direction: column; align-items: flex-start; } }
+        .rr-build-subhead { font-size: 11px; color: var(--color-text-muted); padding: 6px 6px 2px; }
         .rr-build-field { display: grid; grid-template-columns: 1fr 74px; align-items: center; gap: 6px; color: var(--color-text-muted); }
         .rr-build-field input { width: 100%; box-sizing: border-box; }
-        .rr-build-swatches { display: flex; flex-wrap: wrap; gap: 4px; }
+        /* A door's and a window frame's rows: a wider field for a choice or a name, on the same label|field grid. */
+        .rr-build-field.rr-build-wide { grid-template-columns: 1fr 128px; }
+        .rr-build-field select, .rr-build-field input[type="text"] { width: 100%; min-width: 0; box-sizing: border-box; }
+        .rr-build-field.rr-build-sound { grid-template-columns: 56px 1fr; }
+        .rr-build-sound-row { display: flex; gap: 4px; min-width: 0; }
+        .rr-build-sound-row .rr-build-door-sound { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; padding: 3px 6px; font-size: 11px; }
+        .rr-build-sound-row .rr-build-door-play, .rr-build-sound-row .rr-build-door-reset { flex: 0 0 26px; padding: 3px 0; font-size: 11px; }
+        /* Materials: a compact grid that scrolls inside itself past two rows, the chosen one named in the card's corner. */
+        /* A material in use, large (the Build panel, Database > Structures): its picture, its name, a mark that it swaps. */
+        .rr-material-tile { display: flex; align-items: center; gap: 10px; width: 100%; min-width: 0; padding: 4px 8px 4px 4px; border: 1px solid var(--color-border-input); border-radius: 6px; background: var(--color-bg-input); color: var(--color-text); font-size: 12px; text-align: left; cursor: pointer; }
+        .rr-material-tile:hover, .rr-material-tile[aria-expanded="true"] { border-color: var(--color-accent); }
+        .rr-material-tile-face, .rr-material-option-face { display: block; flex: 0 0 auto; border-radius: 4px; background-color: var(--color-bg-deep); background-size: cover; background-position: center; box-sizing: border-box; }
+        .rr-material-tile-face { width: 48px; height: 48px; }
+        .rr-material-tile-face.is-plain, .rr-material-option-face.is-plain { border: 1px dashed var(--color-border-input); }
+        .rr-material-tile-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+        .rr-material-tile-swap { flex: 0 0 auto; display: inline-flex; color: var(--color-text-muted); }
+        .rr-material-tile:hover .rr-material-tile-swap { color: var(--color-accent); }
+        /* The project's materials to choose from, opened from a tile. */
+        .rr-material-popup { position: fixed; z-index: 10020; max-width: calc(100vw - 16px); padding: 8px; border: 1px solid var(--color-border); border-radius: 6px; background: var(--color-bg-panel); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4); color: var(--color-text); }
+        .rr-material-options { display: grid; grid-template-columns: repeat(5, 68px); gap: 6px; max-height: min(78vh, 640px); overflow-y: auto; }
+        .rr-material-option { display: flex; flex-direction: column; align-items: center; gap: 3px; width: 68px; padding: 3px; border: 2px solid transparent; border-radius: 6px; background: transparent; color: var(--color-text); font-size: 10px; cursor: pointer; }
+        .rr-material-option:hover, .rr-material-option:focus-visible { border-color: var(--color-border-input); background: var(--color-bg-hover); outline: none; }
+        .rr-material-option[aria-selected="true"] { border-color: var(--color-accent); }
+        .rr-material-option-face { width: 58px; height: 58px; }
+        .rr-material-option-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .rr-material-popup-note { max-width: 364px; padding-top: 6px; font-size: 11px; color: var(--color-text-muted); }
         .rr-build-facing { display: flex; align-items: center; gap: 4px; }
         .rr-build-facing .rr-build-chip { width: 34px; justify-content: center; font-size: 14px; }
         .rr-build-modes { display: flex; gap: 4px; margin-bottom: 4px; }
         /* Word chips (a water look, a finish) read as buttons on the card: their own fill and edge. */
-        .rr-build-chip:is(.rr-build-look, .rr-build-finish) { flex: 1 1 auto; justify-content: center; background: var(--color-bg-input); border-color: var(--color-border-input); border-radius: 5px; }
-        .rr-build-chip:is(.rr-build-look, .rr-build-finish):hover { border-color: var(--color-accent-border-strong, var(--color-accent)); }
-        .rr-build-chip:is(.rr-build-look, .rr-build-finish)[aria-pressed="true"] { border-color: var(--color-accent); background: color-mix(in srgb, var(--color-accent) 22%, var(--color-bg-input)); color: var(--color-text-strong); }
-        .rr-build-finishes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+        .rr-build-chip:is(.rr-build-look, .rr-build-finish, .rr-build-finish-custom) { flex: 1 1 auto; justify-content: center; background: var(--color-bg-input); border-color: var(--color-border-input); border-radius: 5px; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+        .rr-build-chip:is(.rr-build-look, .rr-build-finish, .rr-build-finish-custom):hover { border-color: var(--color-accent-border-strong, var(--color-accent)); }
+        .rr-build-chip:is(.rr-build-look, .rr-build-finish, .rr-build-finish-custom)[aria-pressed="true"] { border-color: var(--color-accent); background: color-mix(in srgb, var(--color-accent) 22%, var(--color-bg-input)); color: var(--color-text-strong); }
+        .rr-build-finishes { display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 4px; }
+        .rr-build-surface-rows[hidden] { display: none; }
         /* Gloss, metal, texture and tint show only through a reflection: dimmed (still editable) while it is 0. */
         .rr-surface-row.is-dimmed { opacity: 0.45; }
         .rr-build-shapes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+        .rr-build-rockcaps { display: flex; gap: 4px; margin-bottom: 4px; }
+        .rr-build-rockcaps .rr-build-chip { flex: 1; justify-content: center; }
+        .rr-build-rocktint-row { display: flex; gap: 6px; align-items: center; }
+        .rr-build-rocktint-row input[type="color"] { width: 44px; height: 26px; padding: 0; border: 1px solid var(--color-border); background: none; }
+        .rr-build-check { display: flex; gap: 6px; align-items: center; font-size: 12px; margin: 6px 0 2px; }
         .rr-build-shapes .rr-build-chip { flex-direction: column; justify-content: center; gap: 2px; padding: 5px 2px; font-size: 10px; min-width: 0; }
         .rr-build-shapes .rr-build-chip span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .rr-build-wrap { white-space: normal; line-height: 1.4; padding: 0; }
@@ -3881,7 +4251,7 @@
             border-radius: 6px;
             border: 2px solid transparent;
             background-size: cover;
-            background-color: #333;
+            background-color: var(--color-bg-input);
             cursor: pointer;
             flex: 0 0 auto;
         }
@@ -3890,7 +4260,7 @@
         .rr-build-note { font-size: 11px; color: var(--color-text-muted); padding: 0 6px; white-space: nowrap; }
         /* A note meant to wrap does, whatever order the two rules come in. */
         .rr-build-note.rr-build-wrap { white-space: normal; overflow-wrap: anywhere; padding: 0; }
-        .rr-build-hint { font-size: 11px; color: var(--color-text-muted); white-space: nowrap; pointer-events: none; text-shadow: 0 1px 2px rgba(0,0,0,.8); }
+        .rr-build-hint { font-size: 11px; color: var(--color-text-muted); white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; pointer-events: none; text-shadow: 0 1px 2px rgba(0,0,0,.8); }
         .rr-build-hint b { color: var(--color-text-strong); font-weight: 600; }
         .rr-build-flash {
             font-size: 12px;
@@ -4240,6 +4610,22 @@
         .rr-ui-capture-row button,
         .rr-ui-capture-head button,
         .rr-ui-capture-row-item button { min-height: 28px; }
+        .rr-ui-fit-notice {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 10px;
+            padding: 6px 12px;
+            font-size: 12px;
+            color: var(--color-text-muted);
+            border-bottom: 1px solid var(--color-border);
+        }
+        .rr-ui-fit-notice[hidden] { display: none; }
+        .rr-ui-fit-notice button { min-height: 26px; }
+        .rr-ui-size-warn { color: var(--color-warning-text, var(--color-warning, var(--color-text))); }
+        .rr-ui-canvas-preview { cursor: default; }
+        .rr-ui-design { display: flex; align-items: center; gap: 6px; }
+        .rr-ui-design input { flex: 1 1 0; min-width: 0; }
         .rr-ui-canvas-host {
             align-items: safe center;
             justify-content: safe center;
@@ -4592,6 +4978,14 @@
             font-size: 12px;
             color: var(--color-text);
         }
+        .rr-ui-check-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 4px 8px;
+        }
+        .rr-ui-check-grid .rr-ui-check {
+            min-width: 0;
+        }
         .rr-ui-condition,
         .rr-ui-action {
             display: flex;
@@ -4830,6 +5224,7 @@
         .lighting-panel input[type="range"]:focus-visible::-webkit-slider-thumb {
             background: var(--color-accent-hover);
         }
+        .lit-note { font-size: 11px; color: var(--color-text-muted); padding: 0 2px 4px; line-height: 1.35; }
         .lit-flags {
             display: flex;
             flex-wrap: wrap;
@@ -5193,6 +5588,9 @@
 .r3d-face-interior-color { width:40px; height:26px; padding:2px; border:1px solid var(--color-border-input); background:var(--color-bg-surface); }
 .r3d-face-field select { flex:1; min-width:0; padding:3px 6px; background:var(--color-bg-surface); color:var(--color-text); border:1px solid var(--color-border-input); border-radius:3px; }
 .r3d-face-position-title { border-top:1px solid var(--color-border); margin-top:10px; padding-top:8px; color:var(--color-text-muted); font-size:11px; }
+.r3d-face-advanced { margin:8px 0 2px; border-top:1px solid var(--color-border); padding-top:6px; }
+.r3d-face-advanced > summary { cursor:pointer; font-size:11px; color:var(--color-text-muted); }
+.r3d-face-advanced .r3d-face-position-title { border-top:0; margin-top:4px; padding-top:0; }
 .r3d-face-number { padding:3px 4px; background:var(--color-bg-surface); color:var(--color-text); border:1px solid var(--color-border-input); font-size:11px; }
 .r3d-face-save { width:100%; margin-top:8px; padding:5px 8px; }
 .r3d-face-help { margin-top:8px; font-size:11px; line-height:1.45; color:var(--color-text-muted); }
@@ -5295,11 +5693,15 @@ details.mp-section:not([open]) > .mp-section-body { display:none; }
 .rr-pieces-material[aria-checked="true"] { border-color: var(--color-accent) !important; box-shadow: 0 0 0 1px var(--color-accent); }
 .rr-sequence-header > .rr-sequence-id { color:var(--color-text-muted);font-size:12px;font-variant-numeric:tabular-nums;white-space:nowrap;padding:0 2px; }
 .rr-sequence-header > input { flex:1;min-width:100px;width:140px; }
-.rr-sequence-editor .rr-battle-workspace { flex:1;min-height:260px;grid-template-columns:clamp(180px,20%,260px) minmax(0,1fr) 250px;grid-template-rows:minmax(0,1fr); }
+.rr-sequence-editor .rr-battle-workspace { flex:1;min-height:260px;grid-template-columns:clamp(180px,20%,290px) minmax(0,1fr) 250px;grid-template-rows:minmax(0,1fr); }
 /* On a short screen the centre column scrolls inside its track instead of spilling over the footer. */
 .rr-sequence-center { display:flex;flex-direction:column;gap:8px;min-height:0;overflow-y:auto;overflow-x:hidden; }
 .rr-sequence-center > * { flex-shrink:0; }
 .rr-sequence-cast { align-items:flex-end; }
+.rr-sequence-cast-fold { flex:0 0 auto; }
+.rr-sequence-cast-fold > .rr-sequence-cast { padding:8px; }
+.rr-sequence-cast-summary { font-weight:600; }
+.rr-sequence-cast-names { font-weight:400;color:var(--color-text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0; }
 .rr-sequence-backdrop { display:flex;gap:8px;flex-wrap:wrap;flex-basis:100%; }
 .rr-sequence-backdrop > .rr-battle-field { flex:1;min-width:120px; }
 /* Preview cast and stand-ins: two aligned rows of four (User, Target, Skill / Item, Weapon in Hand; Targets, Swap Sides, Scene, Projection). */
@@ -5341,8 +5743,10 @@ details.mp-section:not([open]) > .mp-section-body { display:none; }
 .rr-transform-card .rr-battle-field { margin:0; }
 .rr-sequence-cast-help { margin:0;font-size:11px; }
 .rr-pose-parts { display:flex;flex-direction:column;gap:6px;min-width:0; }
-.rr-pose-part-picker { display:flex;gap:6px;min-width:0; }
+.rr-pose-part-picker { display:flex;flex-wrap:wrap;gap:6px;min-width:0; }
 .rr-pose-part-picker select { flex:1;min-width:0; }
+/* In a narrow inspector the chooser keeps a readable width and Add Part drops under it. */
+.rr-pose-part-picker > .rr-shim-wrapper { flex:1 1 120px !important; }
 .rr-pose-part-list { display:flex;flex-direction:column;gap:4px; }
 .rr-pose-part-row { display:flex;gap:4px;min-width:0; }
 .rr-pose-part-row .rr-pose-part-name { flex:1;min-width:0;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
@@ -5370,7 +5774,8 @@ details.mp-section:not([open]) > .mp-section-body { display:none; }
 .rr-sequence-timeline-card .rr-sequence-steps { flex:1;min-height:0;max-height:none; }
 .rr-sequence-timeline-card .rr-sequence-steps button { padding:8px;flex-shrink:0;white-space:normal;overflow-wrap:anywhere; }
 @container database-detail (max-width:1100px) {
- .rr-sequence-editor .rr-battle-workspace { grid-template-columns:180px minmax(0,1fr) 220px; }
+ .rr-sequence-editor .rr-battle-workspace { grid-template-columns:204px minmax(0,1fr) 220px; }
+ .rr-sequence-header > .rr-battle-field .rr-shim-wrapper { max-width:230px; }
  .rr-sequence-editor { gap:8px;padding:8px; }
  .rr-sequence-tools select { max-width:135px;font-size:11px; }
 }
@@ -5398,16 +5803,135 @@ details.mp-section:not([open]) > .mp-section-body { display:none; }
     .r3d-browser-column { width: 170px !important; flex-basis: 170px !important; }
     .r3d-record-column { width: 280px !important; flex-basis: 280px !important; }
 }
-.r3d-record-column .r3d-sec-header { flex-wrap: wrap; }
-.r3d-record-column .r3d-sec-header > span:nth-child(2) {
-    min-width: 80px;
-    overflow-wrap: anywhere;
-}
-.r3d-record-column .r3d-sec-header > button {
-    padding: 4px 8px;
-    margin-left: 0 !important;
-    font-size: 11px;
-}
+/* Database > 3D Models: the record column. Every section is one dock card
+   (title, count, one Add), its rows one height, and the column scrolls as one. */
+.r3d-record-column { gap: 6px; padding: 6px; overflow-y: auto; box-sizing: border-box; background: var(--color-bg-panel); }
+.r3d-sec .lit-section-header { cursor: pointer; min-height: 30px; box-sizing: border-box; padding: 3px 4px 3px 7px; }
+.r3d-sec .lit-section-header:focus-visible { outline: 2px solid var(--color-accent-bright); outline-offset: -2px; }
+.r3d-sec .r3d-sec-toggle { flex: 0 0 10px; font-size: 10px; color: var(--color-text-muted); }
+.r3d-sec-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.r3d-sec-count { flex: 0 0 auto; min-width: 16px; padding: 0 5px; border-radius: 8px; background: color-mix(in srgb, var(--color-text) 12%, transparent);
+    color: var(--color-text-muted); font-size: 10px; line-height: 16px; font-weight: 600; letter-spacing: 0; text-align: center; font-variant-numeric: tabular-nums; }
+.r3d-sec-count:empty { display: none; }
+.r3d-sec-add { flex: 0 0 22px; width: 22px; height: 22px; margin-left: auto; padding: 0; display: grid; place-items: center; box-sizing: border-box;
+    border: 1px solid var(--color-border-input); border-radius: 4px; background: var(--color-bg-surface); color: var(--color-text); cursor: pointer; }
+.r3d-sec-add:hover, .r3d-sec-add:focus-visible { border-color: var(--color-accent); color: var(--color-accent-bright); outline: none; }
+.r3d-sec.is-collapsed .lit-section-header { border-bottom-color: transparent; }
+.r3d-sec.is-collapsed .r3d-sec-body { display: none; }
+.r3d-sec-body { display: flex; flex-direction: column; min-width: 0; }
+.r3d-rows { display: flex; flex-direction: column; outline: none; }
+.r3d-rows:focus-visible { box-shadow: inset 0 0 0 1px var(--color-accent-border-strong, var(--color-accent)); }
+.r3d-row { display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; align-items: center; column-gap: 7px; height: 28px; box-sizing: border-box;
+    padding: 0 4px 0 6px; border-left: 2px solid transparent; font-size: 12px; color: var(--color-text); cursor: pointer; }
+.r3d-row:hover { background: var(--color-accent-tint-10); }
+.r3d-row.is-selected { background: var(--color-accent-tint-25); border-left-color: var(--color-accent); }
+.r3d-row-icon { display: grid; place-items: center; width: 16px; height: 16px; color: var(--color-text-muted); }
+.r3d-row.is-selected .r3d-row-icon { color: var(--color-accent-bright); }
+.r3d-row-text { display: flex; align-items: baseline; gap: 7px; min-width: 0; white-space: nowrap; overflow: hidden; }
+.r3d-row-name { flex: 0 1 auto; min-width: 24px; overflow: hidden; text-overflow: ellipsis; }
+.r3d-row-note { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 11px; color: var(--color-text-muted); }
+.r3d-row-rename { flex: 1 1 auto; min-width: 0; height: 22px; box-sizing: border-box; padding: 0 5px; font: inherit; font-size: 12px;
+    background: var(--color-bg-input); color: var(--color-text); border: 1px solid var(--color-accent); border-radius: 3px; }
+.r3d-row-actions { display: flex; gap: 1px; opacity: 0; }
+.r3d-row:hover .r3d-row-actions, .r3d-row.is-selected .r3d-row-actions, .r3d-row:focus-within .r3d-row-actions { opacity: 1; }
+.r3d-row-action { width: 22px; height: 22px; padding: 0; display: grid; place-items: center; border: 0; border-radius: 4px; background: none;
+    color: var(--color-text-muted); cursor: pointer; }
+.r3d-row-action:hover, .r3d-row-action:focus-visible { background: color-mix(in srgb, var(--color-text) 14%, transparent); color: var(--color-text); outline: none; }
+.r3d-row-action.is-danger:hover, .r3d-row-action.is-danger:focus-visible { color: var(--color-danger-bright, #ff6b6b); }
+.r3d-row-action:disabled { opacity: 0.4; cursor: default; }
+.r3d-sec-note { padding: 7px 10px; font-size: 11px; line-height: 1.4; color: var(--color-text-muted); }
+.r3d-sec-sub { display: flex; align-items: center; gap: 6px; padding: 5px 8px 3px; border-top: 1px solid var(--color-border);
+    font-size: 10px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--color-text-muted); }
+.r3d-sec-foot { display: flex; align-items: center; gap: 6px; padding: 5px 8px; border-top: 1px solid var(--color-border); font-size: 11px; color: var(--color-text-muted); }
+.r3d-sec-foot > button { flex: 1; height: 24px; padding: 0 8px; font-size: 11px; }
+.r3d-sec-foot > label { display: flex; align-items: flex-start; gap: 6px; cursor: pointer; }
+.r3d-row.is-plain { cursor: default; }
+.r3d-row.is-plain:hover { background: none; }
+.r3d-row.is-plain .r3d-row-actions { opacity: 1; }
+/* The page's one status line stays in sight at the foot of the column. */
+.r3d-status { flex: 0 0 auto; position: sticky; bottom: -6px; z-index: 1; margin: auto -6px -6px; min-height: 16px; padding: 5px 10px; border-top: 1px solid var(--color-border);
+    background: var(--color-bg-panel); font-size: 11px; line-height: 1.35; color: var(--color-text-muted); overflow-wrap: anywhere; }
+.r3d-status:empty { visibility: hidden; }
+.r3d-toolbar { align-items: flex-start; }
+/* A model with states to play has their bar along the bottom: the cost card sits above it, not under it. */
+.r3d-canvas-wrap:has(> .r3d-preview-states[style*="flex"]) .r3d-stats-card { bottom: 48px !important; }
+.r3d-status.is-unsaved { color: var(--color-accent-bright); }
+.r3d-status.is-unsaved::before { content: '●'; margin-right: 5px; font-size: 9px; }
+
+/* The floating card of an effect or a look: a title that renames, tabs,
+   one tab's rows on a label | control grid, and one primary action. */
+.r3d-fcard { display: flex; flex-direction: column; font-size: 12px; color: var(--color-text); }
+.r3d-fcard-head.lit-section-header { gap: 4px; padding: 4px 5px 4px 7px; border-radius: 5px 5px 0 0; text-transform: none; letter-spacing: 0; }
+.r3d-fcard-head .r3d-row-icon { flex: 0 0 16px; color: inherit; }
+.r3d-fcard-title { flex: 1 1 auto; min-width: 0; height: 24px; box-sizing: border-box; padding: 0 6px; font: inherit; font-size: 12px; font-weight: 600;
+    background: transparent; color: var(--color-text); border: 1px solid transparent; border-radius: 3px; text-overflow: ellipsis; }
+.r3d-fcard-title:hover:not(:disabled) { border-color: var(--color-border-input); }
+.r3d-fcard-title:focus { border-color: var(--color-accent); background: var(--color-bg-input); outline: none; }
+.r3d-fcard-title:disabled { opacity: 1; -webkit-text-fill-color: var(--color-text); }
+.r3d-fcard-head > button { flex: 0 0 22px; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 4px; background: none;
+    color: var(--color-text-muted); cursor: pointer; font-size: 15px; line-height: 1; }
+.r3d-fcard-head > button:hover:not(:disabled), .r3d-fcard-head > button:focus-visible { background: color-mix(in srgb, var(--color-text) 14%, transparent); color: var(--color-text); outline: none; }
+.r3d-fcard-head > button:disabled { opacity: 0.35; cursor: default; }
+.r3d-fcard-tabs { display: flex; gap: 0; padding: 0 8px; border-bottom: 1px solid var(--color-border); }
+.r3d-fcard-tab { flex: 1 1 0; min-width: 0; height: 28px; padding: 0 4px; border: 0; border-bottom: 2px solid transparent; background: none;
+    color: var(--color-text-muted); font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.r3d-fcard-tab:hover, .r3d-fcard-tab:focus-visible { color: var(--color-text); outline: none; }
+.r3d-fcard-tab.is-on { color: var(--color-accent-bright); border-bottom-color: var(--color-accent); }
+.r3d-fcard-hint { padding: 7px 12px 0; font-size: 11px; line-height: 1.35; color: var(--color-text-muted); }
+.r3d-fgrid { display: grid; grid-template-columns: 82px minmax(0, 1fr); column-gap: 8px; row-gap: 6px; align-items: center; padding: 9px 12px 11px; }
+.r3d-flabel { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: var(--color-text-muted); }
+.r3d-flabel.is-axis { font-size: 12px; font-weight: 700; }
+.r3d-ffield { display: flex; align-items: center; gap: 6px; min-width: 0; min-height: 26px; }
+.r3d-ffield.is-dimmed, .r3d-flabel.is-dimmed { opacity: 0.45; }
+.r3d-ffield > .rr-shim-wrapper { flex: 1 1 0; min-width: 0; height: 26px; }
+.r3d-ffield select, .r3d-ffield input[type="text"], .r3d-ffield input[type="number"], .r3d-fbtn {
+    flex: 1 1 0; min-width: 0; width: 100%; height: 26px; box-sizing: border-box; margin: 0; padding: 0 7px; font: inherit; font-size: 12px;
+    background: var(--color-bg-input); color: var(--color-text); border: 1px solid var(--color-border-input); border-radius: 3px; }
+.r3d-ffield input[type="number"] { flex: 0 0 60px; width: 60px; padding: 0 5px; }
+.r3d-fbtn { cursor: pointer; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.r3d-fbtn:hover, .r3d-fbtn:focus-visible { border-color: var(--color-accent); outline: none; }
+.r3d-fbtn.is-square { flex: 0 0 26px; width: 26px; padding: 0; text-align: center; }
+.r3d-fbtn.is-on { border-color: var(--color-accent); background: var(--color-accent); color: var(--color-accent-on); }
+.r3d-ffield input[type="range"] { flex: 1 1 0; min-width: 0; margin: 0; accent-color: var(--color-accent); }
+.r3d-fvalue { flex: 0 0 42px; text-align: right; font-size: 11px; font-variant-numeric: tabular-nums; color: var(--color-text); }
+.r3d-fcheck { display: inline-flex; align-items: center; gap: 5px; min-width: 0; font-size: 11px; color: var(--color-text); cursor: pointer; white-space: nowrap; }
+.r3d-fcheck > input { margin: 0; }
+.r3d-fseg { display: flex; flex: 1 1 0; min-width: 0; height: 26px; border: 1px solid var(--color-border-input); border-radius: 3px; overflow: hidden; }
+.r3d-fseg > button { flex: 1 1 0; min-width: 0; padding: 0 4px; border: 0; border-left: 1px solid var(--color-border-input); background: var(--color-bg-input);
+    color: var(--color-text); font: inherit; font-size: 11px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.r3d-fseg > button:first-child { border-left: 0; }
+.r3d-fseg > button[aria-pressed="true"] { background: var(--color-accent); color: var(--color-accent-on); font-weight: 600; }
+.r3d-flabel.is-top { align-self: start; line-height: 24px; }
+.r3d-fchips { flex-wrap: wrap; gap: 4px; }
+.r3d-fchip { flex: 0 1 auto; min-width: 0; max-width: 100%; height: 24px; box-sizing: border-box; padding: 0 9px; border: 1px solid var(--color-border-input); border-radius: 12px;
+    background: var(--color-bg-input); color: var(--color-text); font: inherit; font-size: 11px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.r3d-fchip:hover, .r3d-fchip:focus-visible { border-color: var(--color-accent); outline: none; }
+.r3d-fchip[aria-pressed="true"] { border-color: var(--color-accent); background: var(--color-accent); color: var(--color-accent-on); font-weight: 600; }
+.r3d-fhead { grid-column: 1 / -1; display: flex; align-items: center; gap: 6px; min-height: 24px; font-size: 11px; font-weight: 600; color: var(--color-text); }
+.r3d-fhead > span { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.r3d-fwhat { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: var(--color-text-muted); }
+.r3d-ffield > input[type="checkbox"] { flex: 0 0 auto; margin: 0; }
+.r3d-fbtn.is-muted { color: var(--color-text-muted); }
+.r3d-fbtn:disabled { opacity: 0.45; cursor: default; }
+.r3d-fgrid.is-list { max-height: 330px; overflow-y: auto; }
+.r3d-fnote { grid-column: 1 / -1; font-size: 11px; line-height: 1.35; color: var(--color-text-muted); }
+.r3d-fcard-foot { display: flex; align-items: center; gap: 8px; padding: 8px 12px 10px; border-top: 1px solid var(--color-border); }
+.r3d-fcard-foot > button { flex: 1 1 0; height: 28px; padding: 0 10px; }
+.r3d-fcard-foot > span { flex: 1 1 0; min-width: 0; font-size: 11px; color: var(--color-text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.r3d-save.is-unsaved::before { content: '●'; margin-right: 6px; font-size: 9px; vertical-align: 1px; }
+.r3d-fcard .rr-material-tile { flex: 1 1 0; min-width: 0; }
+
+/* The tools down the preview's left edge: the one in use names itself. */
+.r3d-toolbar .r3d-tool { display: flex; align-items: center; gap: 6px; height: 28px; min-width: 28px; box-sizing: border-box; padding: 0 5px;
+    border: 1px solid var(--color-border); border-radius: 4px; background: var(--color-bg-panel); color: var(--color-text); cursor: pointer; font: inherit; font-size: 12px; white-space: nowrap; }
+.r3d-toolbar .r3d-tool > span { display: none; padding-right: 3px; font-weight: 600; }
+.r3d-toolbar .r3d-tool:hover > span, .r3d-toolbar .r3d-tool:focus-visible > span, .r3d-toolbar .r3d-tool.is-on > span { display: inline; }
+.r3d-toolbar .r3d-tool:hover, .r3d-toolbar .r3d-tool:focus-visible { border-color: var(--color-accent); outline: none; }
+.r3d-toolbar .r3d-tool.is-on { border-color: var(--color-accent); background: var(--color-accent); color: var(--color-accent-on); }
+/* Which variant the preview is wearing: always named, and a click takes it off. */
+.r3d-toolbar .r3d-tool.r3d-variant-chip { margin-top: 6px; border-color: var(--color-accent); max-width: 190px; }
+.r3d-toolbar .r3d-tool.r3d-variant-chip > span { display: inline; overflow: hidden; text-overflow: ellipsis; }
+.r3d-toolbar .r3d-tool.r3d-variant-chip > b { font-weight: 400; color: var(--color-text-muted); padding-right: 2px; }
 
 /* Class spans the row; the two related level values share the next row. */
 .database-actor-columns .db-form > .db-row-cols:has([data-field="classId"]) {
@@ -5595,10 +6119,13 @@ details.mp-section:not([open]) > .mp-section-body { display:none; }
 [data-sequence-assignment] { margin-top:16px; grid-column:1 / -1; }
 .rr-battle-phase-list { display:grid; gap:8px; }
 .rr-battle-phase-row { display:grid; grid-template-columns:minmax(140px,1fr) minmax(180px,1.4fr); align-items:center; gap:8px 12px; padding:8px 0; border-bottom:1px solid var(--color-border); }
-.rr-battle-phase-caption { display:flex;flex-direction:column;gap:4px; }
+.rr-battle-phase-caption { display:flex;flex-direction:column;gap:4px;font-size:13px; }
 .rr-battle-phase-caption .rr-battle-help { margin:0; }
 .rr-battle-motion-details { margin-top:12px; }
-.rr-battle-motion-details > summary { padding:8px; background:var(--color-bg-panel); border-left:3px solid var(--color-accent); cursor:pointer; font-weight:600; }
+.rr-battle-motion-details > summary { padding:8px; background:var(--color-bg-panel); border-left:3px solid var(--color-accent); cursor:pointer; font-size:13px; font-weight:600; }
+.rr-state-motion-fields { display:flex;flex-direction:column;gap:8px; }
+.rr-state-motion-fields > .rr-battle-help { margin:0; }
+.rr-state-motion-fields > .rr-battle-motion-details { margin-top:4px; }
 @container database-detail (max-width:560px) { .rr-battle-phase-row { grid-template-columns:minmax(0,1fr); } }
 
 .rr-battler-graphic-card { width:100%;margin-top:10px;box-sizing:border-box; }
@@ -5643,15 +6170,16 @@ details.mp-section:not([open]) > .mp-section-body { display:none; }
 .rr-sequence-disclosure-body { display:flex;flex-direction:column;gap:8px;padding:8px; }
 .rr-sequence-disclosure-body .rr-battle-field { margin:0; }
 /* Phase sections in the step list: where Prepare, Movement, Execute, Effect, Return and Finish begin. */
-.rr-sequence-phase-head { display:flex;align-items:center;gap:6px;margin-top:6px;padding:4px 6px 4px 8px;border-inline-start:3px solid var(--color-accent);border-radius:4px;background:var(--color-bg-panel);font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--color-text);cursor:default; }
+.rr-sequence-phase-head { display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:6px;padding:4px 6px 4px 8px;border-inline-start:3px solid var(--color-accent);border-radius:4px;background:var(--color-bg-panel);font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--color-text);cursor:default; }
 .rr-sequence-phase-continued { opacity:.8; }
 .rr-sequence-phase-continued .rr-sequence-phase-number { opacity:.55; }
 .rr-sequence-phase-head:first-child { margin-top:0; }
 .rr-sequence-phase-number { display:inline-flex;flex:0 0 16px;align-items:center;justify-content:center;width:16px;height:16px;box-sizing:border-box;border-radius:50%;background:var(--color-accent-tint-25);color:var(--color-accent-bright);font-size:10px;font-weight:700; }
 .rr-sequence-phase-label { font-weight:700;flex:0 0 auto; }
-.rr-sequence-phase-count { flex:1;min-width:0;color:var(--color-text-muted);text-transform:none;letter-spacing:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+.rr-sequence-phase-count { flex:1 1 auto;min-width:0;color:var(--color-text-muted);text-transform:none;letter-spacing:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
 .rr-sequence-phase-head .rr-btn-secondary { flex:0 0 auto;min-height:20px;padding:0 6px !important;font-size:11px;text-transform:none;letter-spacing:0;white-space:nowrap; }
-.rr-sequence-phase-add { display:inline-flex;align-items:center;justify-content:center;width:22px;padding:0 !important;font-weight:700;text-align:center !important;margin-inline-start:auto; }
+.rr-sequence-phase-add { display:inline-flex;align-items:center;justify-content:center;width:22px;padding:0 !important;font-weight:700;text-align:center !important; }
+.rr-sequence-phase-actions { display:flex;gap:6px;margin-inline-start:auto; }
 .rr-sequence-phase-head.drop-into { outline:2px solid var(--color-accent);outline-offset:-2px; }
 .rr-sequence-footer { align-items:center;flex-wrap:wrap;gap:8px 14px; }
 .rr-sequence-footer > .rr-battle-field { flex:0 0 auto;flex-direction:row;align-items:center;gap:6px; }
@@ -5668,6 +6196,7 @@ details.mp-section:not([open]) > .mp-section-body { display:none; }
 
 .rr-sequence-step-modes { display:flex;flex-wrap:nowrap;gap:4px; }
 .rr-sequence-step-modes button { flex:1;min-width:0;padding:5px 3px; }
+.rr-sequence-editor .rr-sequence-step-modes button { white-space:nowrap; }
 
 /* Action Sequences: the step picker dialog. Each group is a section in the
    editor's family: a dark header bar with the accent strip (Map Properties,
@@ -5825,3 +6354,702 @@ details.mp-section:not([open]) > .mp-section-body { display:none; }
 .rr-context-menu-item[aria-disabled="true"]:hover { background: transparent; }
 .rr-context-menu-key { color: var(--color-text-muted); font-size: 11px; }
 .rr-context-menu-separator { height: 1px; margin: 4px 0; background: var(--color-border); }
+
+/* Battles on the map: the event commands' dialogs share one label | field grid. */
+.fc-body { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 8px 10px; align-items: center; font-size: 12px; color: var(--color-text); overflow-y: auto; }
+.fc-body [hidden] { display: none !important; }
+.fc-row { display: contents; }
+.fc-label { color: var(--color-text); white-space: nowrap; }
+.fc-field { display: flex; align-items: center; gap: 6px; min-width: 0; min-height: 28px; }
+.fc-field > select, .fc-field > .rr-shim-wrapper, .fc-field > input[type="text"] { flex: 1 1 0; min-width: 0; box-sizing: border-box; }
+.fc-body .fc-number { flex: 0 0 76px; width: 76px; box-sizing: border-box; }
+.fc-words { color: var(--color-text-muted); white-space: nowrap; }
+.fc-wide { grid-column: 1 / -1; }
+.fc-check { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.fc-hint { grid-column: 1 / -1; color: var(--color-text-muted); font-size: 11px; line-height: 1.35; }
+.fc-hint.fc-when-wait { margin-top: -4px; padding-left: 22px; }
+.fc-enemies { color: var(--color-text-muted); line-height: 1.35; }
+.fc-enemies.fc-warn, .fc-problem { color: var(--color-warning-text); }
+.fc-starts { display: flex; align-items: center; gap: 8px; color: var(--color-text-muted); line-height: 1.35; }
+.fc-starts-text { flex: 1; min-width: 0; }
+.fc-more-toggle { display: flex; align-items: center; gap: 6px; padding: 2px 0; background: none; border: none; color: var(--color-text); font: inherit; font-weight: 600; text-align: left; cursor: pointer; }
+.fc-more-toggle:hover { color: var(--color-accent-bright); }
+.fc-more-mark { width: 10px; color: var(--color-text-muted); }
+.fc-pick { display: inline-flex; align-items: center; gap: 4px; min-width: 0; }
+.fc-pick-open { max-width: 230px; overflow: hidden; text-overflow: ellipsis; text-align: left; font-weight: 400; }
+.fc-field > input[type="text"] { font-size: 12px; }
+.fc-stack { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+/* A label beside several lines sits level with the first. */
+.fc-row:has(.fc-stack) > .fc-label { align-self: start; line-height: 28px; }
+.fc-where { display: flex; align-items: center; gap: 8px; min-width: 0; min-height: 28px; }
+.fc-where > .fc-check { flex: 0 0 auto; }
+.fc-where > select, .fc-where > .rr-shim-wrapper { flex: 1 1 0; min-width: 0; }
+.fc-where:not(.is-on) > :not(.fc-check) { opacity: 0.45; }
+.fc-tile { font-variant-numeric: tabular-nums; }
+.fc-seg { display: inline-flex; }
+.fc-seg > button { margin-left: -1px; padding: 5px 12px; background: var(--color-bg-deep); border: 1px solid var(--color-border-input); color: var(--color-text); font-size: 12px; cursor: pointer; }
+.fc-seg > button:first-child { margin-left: 0; border-radius: 3px 0 0 3px; }
+.fc-seg > button:last-child { border-radius: 0 3px 3px 0; }
+.fc-seg > button.is-on { position: relative; z-index: 1; background: var(--color-accent-tint-30); border-color: var(--color-accent-bright); color: var(--color-text-strong); }
+/* The event editor's top: a band of fields (a small label over each, every control one height), then the page strip. */
+.event-editor-top { flex-shrink: 0; }
+.event-editor-header { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px 12px; padding: 8px 12px 10px; background-color: var(--color-bg-list-item-alt); border-bottom: 1px solid var(--color-border); }
+.event-header-text { flex: 1000 1 340px; min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr); gap: 12px; }
+.event-header-set { flex: 0 1 auto; min-width: 0; display: flex; align-items: flex-end; gap: 12px; }
+.event-header-field { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.event-header-label { font-size: 10px; font-weight: 700; line-height: 12px; letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap; color: var(--color-text-muted); }
+.event-header-controls { display: flex; align-items: center; gap: 6px; height: 28px; min-width: 0; white-space: nowrap; }
+.event-header-controls > span:not(.event-unit-more):not(.event-vehicle-more), .event-unit-more > label, .event-vehicle-more > label { font-size: 11px; color: var(--color-text-muted); }
+.event-vehicle-more { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.event-vehicle-more[hidden] { display: none; }
+.event-header-controls .rr-shim-wrapper:has(.event-vehicle-type) { max-width: 200px; }
+.event-editor-header input, .event-editor-header select, .event-editor-header textarea { box-sizing: border-box; height: 28px; margin: 0; padding: 0 8px; font-size: 12px; line-height: 16px; font-weight: 400; color: var(--color-text); background-color: var(--color-bg-panel); border: 1px solid var(--color-border-input); border-radius: 3px; }
+.event-editor-header input:focus, .event-editor-header select:focus, .event-editor-header textarea:focus { border-color: var(--color-accent); outline: none; }
+.event-header-name input { width: 100%; }
+.event-header-controls input[type="number"] { width: 50px; }
+.event-size-auto { display: inline-flex; align-items: center; gap: 5px; height: 28px; font-size: 11px; color: var(--color-text-muted); cursor: pointer; }
+.event-size-auto[hidden] { display: none; }
+.event-editor-header .event-size-auto input { width: 14px; height: 14px; padding: 0; }
+.event-editor-header input.is-auto { color: var(--color-text-muted); border-style: dashed; }
+.event-note-box { position: relative; height: 28px; }
+.event-editor-header .event-note-box textarea.event-note-input { position: absolute; top: 0; left: 0; width: 100%; min-height: 0; padding: 0 8px; font-size: 12px; line-height: 26px; font-weight: 400; color: var(--color-text); background-color: var(--color-bg-panel); border-color: var(--color-border-input); white-space: pre; overflow: hidden; resize: none; }
+.event-editor-header .event-note-box textarea.event-note-input:focus { z-index: 30; height: 100px; padding: 5px 8px; line-height: 16px; overflow: auto; border-color: var(--color-accent); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35); }
+.event-note-box[data-more]::after { content: attr(data-more); position: absolute; top: 6px; right: 6px; padding: 0 5px; font-size: 10px; line-height: 16px; border-radius: 8px; color: var(--color-text-muted); background: var(--color-bg-deep); pointer-events: none; }
+.event-note-box:focus-within::after { display: none; }
+.event-unit-more { display: contents; }
+.event-unit-more[hidden] { display: none; }
+/* The In battle row: side, "as", record, Move, Comes back; a unit made by a tag is words and one button. */
+.event-unit-more > .event-unit-as { font-size: 11px; color: var(--color-text-muted); }
+.event-unit-returns { display: inline-flex; align-items: center; gap: 5px; height: 28px; cursor: pointer; }
+.event-unit-returns[hidden] { display: none; }
+.event-editor-header .event-unit-returns input { width: 14px; height: 14px; padding: 0; }
+.event-unit-look { flex-shrink: 0; font-size: 10px; line-height: 14px; color: var(--color-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* The editor's own dropdown (a trigger drawn over the select) at the band's control height. */
+.event-header-controls .rr-shim-wrapper { flex: 0 1 auto; min-width: 60px; height: 28px; }
+.event-header-controls .rr-shim-wrapper:has(.event-unit-id) { max-width: 220px; }
+.event-header-controls .rr-shim-wrapper:has(.event-unit-team) { flex: 1 0 auto; }
+.event-header-controls .rr-shim-trigger { height: 28px !important; min-height: 0 !important; padding-top: 0 !important; padding-bottom: 0 !important; font-size: 12px !important; line-height: 26px; }
+.event-editor-header .event-unit-move { width: 50px; }
+.event-page-strip { display: flex; align-items: flex-start; gap: 12px; margin: 10px 12px 0; padding: 4px; border-radius: 4px; background-color: var(--color-bg-input); }
+.event-page-tabs { flex: 1 1 0; min-width: 150px; max-height: 52px; overflow-y: auto; display: flex; flex-wrap: wrap; gap: 4px; }
+.event-page-tab, .event-page-button { box-sizing: border-box; height: 24px; padding: 0 10px; font-size: 11px; line-height: 22px; white-space: nowrap; border-radius: 3px; cursor: pointer; border: 1px solid var(--color-border-input); transition: color 0.15s, border-color 0.15s, background-color 0.15s; }
+.event-page-tab { font-weight: 600; color: var(--color-text-muted); background-color: var(--color-bg-deep); }
+.event-page-tab:hover { color: var(--color-text); }
+.event-page-tab.active { color: var(--color-text-strong); background-color: var(--color-accent-tint-30); border-color: var(--color-accent-bright); }
+.event-page-buttons { flex: 0 1 auto; min-width: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
+.event-page-button { min-width: 0; padding: 0 8px; overflow: hidden; text-overflow: ellipsis; text-align: center; color: var(--color-text); background-color: var(--color-bg-panel); }
+.event-page-button:hover, .event-page-button:active { background-color: var(--color-bg-deep); border-color: var(--color-accent-border-strong, var(--color-accent)); }
+.event-fight-hook { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 2px; padding-top: 4px; border-top: 1px solid var(--color-border); font-size: 12px; }
+.event-fight-hook-label { flex-shrink: 0; }
+.event-fight-hook-note { flex-basis: 100%; font-size: 11px; line-height: 1.35; color: var(--color-text-muted); }
+.event-fight-hook-note[hidden] { display: none; }
+.event-fight-hook select, .event-fight-hook input { padding: 3px; font-size: 11px; min-width: 0; }
+.event-fight-hook-on, .event-fight-hook > .rr-shim-wrapper { flex: 1 1 0; min-width: 120px; }
+.event-fight-hook-more { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+/* What a moment needs (its turn, its region, its side) sits on a line of its own under the choice. */
+.event-fight-hook-more:not(:empty) { flex-basis: 100%; }
+.event-fight-hook-turn, .event-fight-hook-region { width: 52px; }
+.event-fight-hook-words { font-size: 11px; color: var(--color-text-muted); white-space: nowrap; }
+.system-battle-mode-grid { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 10px; align-items: center; color: var(--color-text); font-size: 12px; }
+/* The field selects set their own display, so a hidden row says it with weight. */
+.system-battle-mode-grid [hidden] { display: none !important; }
+.system-battle-mode-grid .rr-shim-wrapper:has(> select[hidden]) { display: none !important; }
+.system-battle-check { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.system-battle-mode-hint { color: var(--color-text-muted); font-size: 11px; line-height: 1.4; }
+/* A line of words and a group's heading take the whole width of the label | field grid. */
+.system-battle-mode-grid > .system-battle-mode-hint, .system-battle-mode-grid > .system-battle-group { grid-column: 1 / -1; }
+.system-battle-group { margin-top: 6px; padding-top: 8px; border-top: 1px solid var(--color-border); color: var(--color-text-strong); font-size: 11px; font-weight: 700; letter-spacing: 0.4px; text-transform: uppercase; }
+.system-battle-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--color-border); }
+.system-battle-setup-why { color: var(--color-text-muted); font-size: 11px; line-height: 1.4; }
+
+/* The battle cards of a Database record page (Tactical Battles; Action and First Person Battles): the title line
+   with what the record does, the fields, and the picture beside them or, in a narrow card, under them. */
+.rr-tactics-section > .rr-tactics-header { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; container-type: inline-size; }
+/* The title keeps its words; the summary takes the room that is left and is cut short before the title is. */
+.rr-tactics-title { flex: 0 1 auto; min-width: 0; }
+.rr-tactics-summary { flex: 1 1 0; min-width: 0; font-weight: 400; font-size: 12px; color: var(--color-text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rr-tactics-reset { flex: 0 0 auto; font-weight: 400; }
+/* Nothing to say (equipment that changes nothing): no line is kept for it. */
+.rr-tactics-summary:empty { display: none; }
+/* A card too narrow for the title and the summary side by side: the summary takes a line of its own under the
+   title, the chip stays at the end of the title's line and the fold arrow beside the title. */
+@container (max-width: 480px) {
+    .rr-tactics-summary { order: 1; flex: 0 0 100%; }
+    .rr-tactics-reset { margin-inline-start: auto; }
+    .rr-tactics-section > .rr-tactics-header[aria-expanded]::before { top: 12.5px; }
+}
+.database-section.rr-tactics-section > .database-section-content.rr-tactics-body { display: flex; flex-direction: row; flex-wrap: wrap; align-items: flex-start; align-content: flex-start; gap: 14px; }
+.rr-tactics-scope { flex: 0 0 100%; min-width: 0; color: var(--color-text-muted); font-size: 12px; line-height: 1.5; }
+.rr-tactics-form > [hidden] { display: none; }
+/* The picture stands beside the fields while they keep 280px, what their rows take with every unit on one line;
+   with less it goes under them. In a wide card the fields keep to a form's width, so the picture is not at the far edge. */
+.rr-tactics-form { flex: 1 1 280px; min-width: 0; max-width: 460px; }
+.rr-tactics-inline { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.rr-tactics-range { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.rr-tactics-range > [hidden] { display: none; }
+/* A number field is as wide as four digits take, the same in every row. A row holds its words in any language: a
+   long unit breaks onto a second line, and only a row whose words cannot break makes its fields give way, so nothing
+   runs under the picture. */
+.rr-tactics-inline > input[type="number"] { width: 52px; flex: 0 1 52px; min-width: 40px; padding-inline: 6px; text-align: center; }
+/* Hidden numeric or source controls take no room. */
+.rr-tactics-inline > [hidden] { display: none; }
+.rr-tactics-inline > select { flex: 1 1 auto; min-width: 0; }
+.rr-tactics-word { flex: 0 1000 auto; color: var(--color-text-muted); font-size: 12px; }
+.db-form > label.rr-tactics-check { grid-column: 2; display: flex; align-items: center; gap: 8px; text-align: start; font-weight: 400; color: var(--color-text); cursor: pointer; }
+.rr-tactics-picture { flex: 0 0 auto; display: flex; flex-direction: column; gap: 6px; }
+.rr-tactics-picture > canvas { width: 198px; height: 198px; border: 1px solid var(--color-border); border-radius: 3px; display: block; }
+/* The reach picture follows the pointer: it aims the area. */
+.rr-tactics-picture > canvas.is-aimed { cursor: crosshair; }
+.rr-tactics-legend { display: flex; gap: 12px; font-size: 11px; color: var(--color-text-muted); }
+.rr-tactics-preview-title, .rr-tactics-preview-hint { max-width: 198px; font-size: 11px; line-height: 1.4; color: var(--color-text-muted); }
+.rr-tactics-legend { flex-wrap: wrap; }
+.rr-tactics-legend > span { display: inline-flex; align-items: center; gap: 5px; }
+.rr-tactics-key { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+.rr-tactics-key.is-reach { background: var(--color-text-strong); opacity: .28; }
+.rr-tactics-key.is-area { background: var(--color-accent); }
+
+/* Battle Setup (map view): the card docked beside the map. Everything but the tiles keeps its height; the tiles take the rest and scroll. */
+.rr-battle-setup { width: 320px; display: flex; flex-direction: column; gap: 10px; padding: 10px 12px 12px; box-sizing: border-box; background: var(--color-bg-panel); font-size: 12px; color: var(--color-text); outline: none; }
+#map-side-dock > .rr-battle-setup { flex: 1; width: auto; min-height: 0; }
+.rr-battle-setup-head { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; user-select: none; }
+.rr-battle-setup-title { flex: 1; font-weight: 700; font-size: 13px; color: var(--color-text-strong); }
+.rr-battle-setup-close { width: 24px; height: 24px; padding: 0; line-height: 1; flex: 0 0 auto; }
+.rr-battle-setup-body { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; gap: 8px; overflow-x: hidden; overflow-y: auto; }
+.rr-battle-setup-part { flex: 0 0 auto; display: flex; flex-direction: column; gap: 4px; min-height: 0; }
+.rr-battle-setup-part.is-tiles { flex: 0 1 auto; min-height: 96px; margin-top: 4px; padding-top: 10px; border-top: 1px solid var(--color-border); gap: 6px; }
+.rr-battle-setup-grid { display: grid; grid-template-columns: 78px minmax(0, 1fr); gap: 6px 8px; align-items: center; }
+.rr-battle-setup-grid > label { color: var(--color-text-muted); font-weight: 600; overflow-wrap: anywhere; }
+.rr-battle-setup-grid > select { min-width: 0; width: 100%; font-weight: 400; }
+.rr-battle-setup-tiles-head { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; min-height: 24px; }
+.rr-battle-setup-side { flex: 0 0 116px; min-width: 0; height: 24px; font-weight: 600; }
+.rr-battle-setup-search { flex: 1 1 0; min-width: 0; height: 24px; }
+.rr-battle-setup-tiles { flex: 0 1 auto; min-height: 0; overflow-y: auto; border: 1px solid var(--color-border); border-radius: 4px; background: var(--color-bg-surface); padding: 4px; }
+.rr-battle-setup-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
+.rr-battle-setup-group { padding: 4px 2px 2px; color: var(--color-text-muted); font-size: 11px; font-weight: 600; }
+.rr-battle-setup-tile { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0; padding: 2px 0 3px; border: 1px solid transparent; border-radius: 4px; background: transparent; color: var(--color-text); font-size: 11px; cursor: pointer; }
+.rr-battle-setup-tile > canvas { width: 68px; height: 68px; max-width: 100%; border-radius: 3px; background: var(--color-bg-deep); }
+.rr-battle-setup-tile:hover { background: var(--color-bg-selected); }
+.rr-battle-setup-tile:focus-visible { outline: 2px solid var(--color-accent-bright); outline-offset: -2px; }
+.rr-battle-setup-tile.is-on { border-color: var(--color-accent-bright); background: var(--color-bg-selected); color: var(--color-text-strong); font-weight: 600; }
+/* Two lines: names that differ only at the end ("Raider Cutter", "Raider Captain") stay apart. */
+.rr-battle-setup-name { max-width: 100%; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-height: 1.2; text-align: center; overflow-wrap: anywhere; }
+.rr-battle-setup-row { align-items: start; }
+.rr-battle-setup-empty { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 10px; color: var(--color-text-muted); }
+.rr-battle-setup-hint { flex: 0 0 auto; color: var(--color-text-muted); font-size: 11px; line-height: 1.35; min-height: 30px; }
+.rr-battle-setup-hint.is-armed { color: var(--color-accent-bright); }
+.rr-battle-setup-hint.is-refused { color: var(--color-warning-text, var(--color-text)); font-weight: 600; }
+.rr-battle-setup-unit { flex: 0 0 auto; display: flex; flex-direction: column; gap: 6px; padding-top: 10px; border-top: 1px solid var(--color-border); }
+.rr-battle-setup-unit-head { display: flex; align-items: center; gap: 8px; min-height: 24px; }
+.rr-battle-setup-facing { display: flex; gap: 4px; }
+.rr-battle-setup-unit[hidden] { display: none; }
+/* The selected unit: its name gives way, its number never does. */
+.rr-battle-setup-unit-name { flex: 1 1 auto; min-width: 0; display: flex; align-items: baseline; gap: 4px; color: var(--color-text-strong); font-weight: 600; }
+.rr-battle-setup-unit-text { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rr-battle-setup-unit-id { flex: 0 0 auto; white-space: nowrap; }
+.rr-battle-setup-unit-label { color: var(--color-text-muted); font-weight: 600; }
+.rr-battle-setup-unit .map-props-btn { width: 24px; min-width: 24px; min-height: 24px; padding: 0; font-size: 11px; }
+.rr-battle-setup-unit .map-props-btn.active { background: var(--color-accent); color: var(--color-accent-on); }
+.rr-battle-setup-remove { flex: 0 0 auto; min-height: 24px; padding: 2px 10px; font-size: 11px; }
+.rr-battle-setup-distance { display: flex; align-items: center; gap: 6px; color: var(--color-text-muted); }
+.rr-battle-setup-distance > input { width: 56px; text-align: center; }
+.rr-battle-setup-foot { flex: 0 0 auto; display: flex; flex-direction: column; gap: 8px; padding-top: 10px; border-top: 1px solid var(--color-border); }
+.rr-battle-setup-sentence { line-height: 1.4; color: var(--color-text); }
+.rr-battle-setup-sentence.is-warn { color: var(--color-warning-text, var(--color-text)); }
+.rr-battle-setup-count { padding: 0; border: 0; background: none; color: inherit; font: inherit; font-weight: 700; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.rr-battle-setup-count:focus-visible { outline: 2px solid var(--color-accent-bright); outline-offset: 2px; }
+.rr-battle-setup-lines { display: flex; flex-direction: column; gap: 4px; max-height: 84px; overflow-y: auto; font-size: 11px; line-height: 1.35; }
+.rr-battle-setup-line { display: flex; align-items: flex-start; gap: 6px; }
+.rr-battle-setup-line > span { flex: 1; min-width: 0; color: var(--color-warning-text, var(--color-text)); }
+.rr-battle-setup-line.is-note > span { color: var(--color-text-muted); }
+.rr-battle-setup-fix { flex: 0 0 auto; min-height: 20px; padding: 0 8px; font-size: 11px; }
+.rr-battle-setup-play { min-height: 32px; font-size: 13px; font-weight: 600; }
+.rr-battle-setup-play:disabled { opacity: 0.5; cursor: not-allowed; }
+.rr-battle-setup-pick { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); z-index: 20; max-width: min(520px, 90%); padding: 6px 12px; border: 1px solid var(--color-accent-bright); border-radius: 4px; background: var(--color-bg-panel); color: var(--color-text-strong); font-size: 12px; pointer-events: none; box-shadow: var(--shadow-popup); }
+.rr-battle-setup-pick.is-refused { border-color: var(--color-warning-text, var(--color-border)); color: var(--color-warning-text, var(--color-text)); }
+/* The Event Model panel stands beside the docked card, never over it. */
+#workspace:has(#map-side-dock > .rr-battle-setup) > .event-model-panel { right: 328px !important; }
+/* A short window: smaller pictures and tighter rows, so two rows of tiles still show. */
+@media (max-height: 640px) {
+    .rr-battle-setup, .rr-battle-setup-body { gap: 4px; }
+    .rr-battle-setup-tile > canvas { width: 48px; height: 48px; }
+}
+
+/* Build bar, Terrain: the ground types (a dot of each type's tint on its chip), the petal palette. */
+.rr-build-gdot { display: inline-block; width: 12px; height: 12px; flex: 0 0 12px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, 0.35); }
+.rr-build-chip.rr-build-gtype, .rr-build-chip.rr-build-gpreset, .rr-build-chip.rr-build-fpalette { flex-direction: row; align-items: center; gap: 6px; }
+.rr-build-gadd { margin-top: 6px; }
+.rr-build-gadd > summary { display: inline-block; cursor: pointer; list-style: none; padding: 4px 10px; margin-bottom: 6px; }
+.rr-build-gadd > summary::-webkit-details-marker { display: none; }
+.rr-build-fpetal-list { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; justify-content: flex-end; }
+
+/* Map Properties: a card's named groups, and a line saying what a group does */
+.map-props-subhead { margin: 12px 0 8px; padding-top: 10px; border-top: 1px solid var(--color-border); font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-text); }
+.map-props-subhead.is-first { margin-top: 0; padding-top: 0; border-top: 0; }
+.map-props-hint { font-size: 11px; color: var(--color-text-muted); line-height: 1.4; margin: 0 0 6px; }
+
+/* Build bar, Terrain: Beyond the Border (BuildHotbar.surroundBody) and the Ground panel's Steep Ground. */
+.rr-build-shapes .rr-build-chip.rr-build-sstyle { justify-content: flex-start; padding: 6px 2px 5px; gap: 3px; border-color: var(--color-border-input); background: var(--color-bg-input); border-radius: 6px; }
+.rr-build-shapes .rr-build-chip.rr-build-sstyle svg { flex: 0 0 auto; width: 30px; height: 24px; }
+/* A style's name in full, on two lines where one is too narrow. */
+.rr-build-shapes .rr-build-chip.rr-build-sstyle span { white-space: normal; text-align: center; line-height: 1.15; overflow-wrap: anywhere; }
+.rr-build-shapes .rr-build-chip.rr-build-sstyle:hover { border-color: var(--color-accent-border-strong, var(--color-accent)); }
+.rr-build-shapes .rr-build-chip.rr-build-sstyle[aria-pressed="true"] { border-color: var(--color-accent); background: color-mix(in srgb, var(--color-accent) 22%, var(--color-bg-input)); color: var(--color-text-strong); }
+/* A map that is not 3D: the pictures are off with the rest. */
+.rr-build-shapes .rr-build-chip.rr-build-sstyle:disabled { opacity: 0.45; cursor: default; }
+.rr-build-shapes .rr-build-chip.rr-build-sstyle:disabled:not([aria-pressed="true"]):hover { border-color: var(--color-border-input); }
+/* A slider under its name, the value at the name's right: room for a long name or value in any language. */
+.rr-build-stack { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 3px 6px; color: var(--color-text-muted); }
+.rr-build-stack > input[type="range"] { grid-column: 1 / -1; width: 100%; min-width: 0; }
+.rr-build-stack-value { display: inline-flex; align-items: center; gap: 6px; min-height: 22px; }
+.rr-build-stack-value > b { font-weight: 500; color: var(--color-text); }
+.rr-build-stack-value > .rr-build-chip { padding: 2px 8px; border-color: var(--color-border-input); background: var(--color-bg-input); }
+.rr-build-stack-value > .rr-build-chip[aria-pressed="true"] { border-color: var(--color-accent); background: color-mix(in srgb, var(--color-accent) 22%, var(--color-bg-input)); color: var(--color-text-strong); }
+.rr-build-stack.is-off, .rr-build-field.is-off, .rr-build-range.is-off { opacity: 0.45; }
+.rr-build-range.is-off .rr-color-swatch-btn { cursor: default; }
+/* The line under Distance saying how far this computer shows. */
+.rr-build-stack > .rr-build-sreach { grid-column: 1 / -1; }
+/* Advanced: every row on one label | field grid, the field wide enough for a side's style; the names' column is as wide as the longest word in it, in any language. */
+.rr-build-sgrid { display: grid; grid-template-columns: minmax(min-content, 1fr) minmax(0, 150px); gap: 6px; align-items: center; }
+.rr-build-sgrid > .rr-build-field.rr-build-sfield { grid-column: 1 / -1; grid-template-columns: subgrid; }
+/* A trait's or an effect's row that is not the selected one: its dropdown and number wait, greyed. */
+.rr-trait-row.is-off > :not(input[type="radio"]):not(.rr-trait-label), .rr-trait-subrow.is-off { opacity: 0.38; }
+.rr-trait-row .rr-trait-label { cursor: pointer; }
+.rr-slot-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+.rr-slot-row { display: grid; grid-template-columns: 18px 18px minmax(0, 1fr) auto; align-items: center; gap: 6px; border-block: 2px solid transparent; }
+.rr-slot-grip { padding: 0; border: 0; background: transparent; color: var(--color-text-muted); font-size: 14px; line-height: 1; cursor: grab; touch-action: none; }
+.rr-slot-grip:hover, .rr-slot-grip:focus-visible { color: var(--color-accent-bright); outline: none; }
+.rr-slot-row.is-dragging { opacity: 0.45; }
+.rr-slot-row.is-dragging .rr-slot-grip { cursor: grabbing; }
+.rr-slot-row.is-drop-before { border-top-color: var(--color-accent-bright); }
+.rr-slot-row.is-drop-after { border-bottom-color: var(--color-accent-bright); }
+.rr-slot-number { color: var(--color-text-muted); font-size: 12px; text-align: end; }
+.rr-slot-row .rr-shim-wrapper, .rr-slot-row select { width: 100%; }
+.rr-slot-remove { min-width: 28px; padding-inline: 0; font-size: 15px; line-height: 1; }
+.rr-build-field.rr-build-sfield .rr-number-stepper { width: 100% !important; }
+/* A narrow view: the name over its field, as the sliders are. */
+.rr-build-panel.is-narrow .rr-build-sgrid { grid-template-columns: minmax(0, 1fr); }
+.rr-build-panel.is-narrow .rr-build-sgrid > .rr-build-field.rr-build-sfield { row-gap: 2px; }
+/* The one slot named in three words: on two lines, its icon and first line level with its neighbors'; the second line has 4px of the row's own padding under the slot. */
+.rr-build-slot[data-slot="surround"] { width: auto; min-width: 62px; height: 62px; margin-bottom: -4px; justify-content: flex-start; padding-top: 9.5px; padding-bottom: 0; }
+.rr-build-slot[data-slot="surround"] svg { flex: 0 0 auto; }
+.rr-build-slot[data-slot="surround"] .rr-build-slot-label { flex: 0 0 auto; white-space: normal; text-align: center; line-height: 1; max-width: 64px; text-wrap: balance; overflow: visible; }
+.rr-build-hotbar.is-compact .rr-build-slot[data-slot="surround"] { width: auto; min-width: 46px; height: 50px; padding-top: 7.5px; }
+.rr-build-hotbar.is-compact .rr-build-slot[data-slot="surround"] .rr-build-slot-label { max-width: 58px; line-height: 1; }
+.rr-build-hotbar.is-short .rr-build-slot[data-slot="surround"] { width: 38px; min-width: 0; height: 36px; margin-bottom: 0; justify-content: center; padding: 4px 2px 3px; }
+
+/* ==========================================================================
+   Small screens (1024x600 to 1366x768). Layout only: nothing here changes a
+   surface at 1440 wide and up, or on a window 700 tall and up.
+   ========================================================================== */
+/* The map view's header: with eight ticks the map's name had no room left at 1024 wide and only "(200 x" showed.
+   The ticks take a second row instead. */
+@media (max-width: 1180px) {
+    #workspace-tabs { height: auto; }
+    #map-info-content { flex-wrap: wrap; height: auto; min-height: 35px; row-gap: 2px; padding-top: 3px; padding-bottom: 3px; }
+    #map-info-left { flex: 1 1 260px; }
+    #map-info-right { flex: 0 1 auto; flex-wrap: wrap; justify-content: flex-end; row-gap: 2px; }
+}
+/* Database > User Interfaces: the Layers panel never cuts its buttons off; it scrolls. */
+.rr-ui-workspace > .database-section.rr-ui-tree-panel > .database-section-content { overflow-y: auto; }
+/* Stacked (a narrow window): the canvas and the layers each keep a workable height and the page scrolls,
+   instead of halving whatever height is left. */
+@container database-detail (max-width: 620px) {
+    .rr-ui-editor { overflow-y: auto; }
+    .rr-ui-editor > .rr-ui-workspace { flex: 0 0 auto; grid-template-rows: minmax(280px, 46vh) minmax(320px, auto); overflow: visible; }
+}
+/* Database > Action Sequences on a narrow window: the steps keep the left column and the inspector goes under
+   the preview, so the preview is not squeezed to a sliver between two fixed columns. */
+@container database-detail (max-width: 760px) {
+    .rr-sequence-editor { overflow-y: auto; }
+    .rr-sequence-editor .rr-battle-workspace { flex: 0 0 auto; height: 780px; min-height: 0; grid-template-columns: clamp(150px, 30%, 200px) minmax(0, 1fr); grid-template-rows: minmax(0, 2fr) minmax(0, 1fr); }
+    .rr-sequence-editor .rr-battle-workspace > :not(.rr-sequence-center):not(.rr-sequence-inspector-card) { grid-column: 1; grid-row: 1 / span 2; }
+    .rr-sequence-editor .rr-battle-workspace > .rr-sequence-center { grid-column: 2; grid-row: 1; }
+    .rr-sequence-editor .rr-battle-workspace > .rr-sequence-inspector-card { grid-column: 2; grid-row: 2; }
+    .rr-sequence-header > .rr-battle-field .rr-shim-wrapper { max-width: none; }
+}
+/* On a short window the sequence page scrolls and its workspace keeps a workable height. */
+@media (max-height: 700px) {
+    .rr-sequence-editor { overflow-y: auto; }
+    @container database-detail (min-width: 761px) {
+        .rr-sequence-editor .rr-battle-workspace { flex: 0 0 auto; height: 440px; min-height: 0; }
+    }
+}
+
+/* Map history: what an undo or a redo took back, shown over the map for a moment (main.js announceHistoryStep). */
+.rr-history-note { position: absolute; left: 50%; top: 56px; transform: translateX(-50%); z-index: 9; padding: 5px 10px; border-radius: 8px; background-color: rgba(10, 12, 16, 0.82); border: 1px solid var(--color-accent-border, var(--color-border)); color: #f2f2f2; font-size: 12px; pointer-events: none; opacity: 0; transition: opacity 160ms ease; }
+.rr-history-note.is-shown { opacity: 1; }
+
+/* Controls page: the battle cards' Keyboard / Gamepad sub-headings, and a key that does something else outside the battle. */
+.rr-controls-subhead th { padding: 8px 0 3px; text-align: left; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--color-text-muted); }
+.rr-controls-subhead:first-child th { padding-top: 0; }
+.rr-controls-chip.rr-controls-shared { border-style: dashed; }
+.rr-controls-moved { grid-column: 1 / -1; padding: 6px 10px; border: 1px solid var(--color-accent); border-radius: 4px; font-size: 12px; color: var(--color-text); }
+/* The battle cards' long action names wrap, so the keys keep a row of their own width. */
+.rr-controls-tactical .rr-controls-table td:first-child { white-space: normal; }
+
+/* ==========================================================================
+   Character sheet picker (event/CharacterGraphicPicker.js): a file list beside the sheet, which is drawn in its own
+   arrangement with every frame a click target. Every rule here starts with .rr-char-picker.
+   ========================================================================== */
+/* Over the event editor, the Database and the command dialogs that open it. */
+.rr-char-picker-overlay { z-index: 20000; }
+/* The dialog grows with the window: 135vh keeps the sheet's box near the 3:2 of a stock sheet. */
+.rr-char-picker.rr-modal { width: min(92vw, clamp(1040px, 135vh, 1350px)); height: min(900px, 90vh); max-height: 90vh; overflow: hidden; }
+.rr-char-picker.rr-modal:focus { outline: none; }
+.rr-char-picker > .rr-modal-header, .rr-char-picker > .rr-modal-footer { flex: 0 0 auto; }
+.rr-char-picker-body { flex: 1 1 auto; min-height: 0; display: flex; overflow: hidden; }
+.rr-char-picker-files { flex: 0 0 250px; width: 250px; min-height: 0; overflow: hidden; border-inline-end: 1px solid var(--color-border); background: var(--color-bg-list-item); }
+/* Nothing here scrolls but the sheet's own box: the name, the zoom and the line under the sheet stay in view. */
+.rr-char-picker-preview { flex: 1 1 0; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 8px; padding: 12px 16px; overflow: hidden; }
+.rr-char-picker-bar { flex: 0 0 auto; display: flex; align-items: center; gap: 10px; min-height: 28px; }
+/* The name and the kind share the bar: each grows to its own text and no further. The kind takes the larger share,
+   so a long file name is cut before the kind is. */
+.rr-char-picker-name, .rr-char-picker-kind { flex: 1 1 0; min-width: 0; max-width: max-content; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rr-char-picker-name { font-size: 14px; font-weight: 600; color: var(--color-text-strong); }
+.rr-char-picker-kind { flex-grow: 2; font-size: 12px; color: var(--color-text-muted); }
+.rr-char-picker-zoom { flex: 0 0 auto; margin-inline-start: auto; display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--color-text-muted); }
+.rr-char-picker-zoom[hidden] { display: none; }
+/* The sheet sits in the middle of its box; a zoom larger than the box scrolls here, both ways. */
+.rr-char-picker-sheet-box { flex: 1 1 0; min-width: 0; min-height: 0; display: flex; overflow: auto; padding: 8px; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-bg-surface); }
+/* The grid follows the picture, whatever way the language reads. */
+.rr-char-picker-sheet { flex: 0 0 auto; margin: auto; display: grid; direction: ltr; }
+/* A character is one block; the hairlines between its frames are the block showing through. */
+.rr-char-picker-character { display: grid; border: 0 solid var(--color-border); background: color-mix(in srgb, var(--color-border) 45%, var(--color-asset-preview-bg)); }
+.rr-char-picker-frame { position: relative; line-height: 0; cursor: pointer; background: var(--color-asset-preview-bg); }
+.rr-char-picker-frame canvas { display: block; image-rendering: pixelated; }
+.rr-char-picker-sheet.is-smooth canvas { image-rendering: auto; }
+/* One accent: the picked frame wears it, the frame under the pointer a fainter state of the same color. The rings
+   are the bright accent, which stands out from the frames in every palette. */
+.rr-char-picker-frame::after { content: ''; position: absolute; inset: 0; border: 0 solid transparent; pointer-events: none; }
+.rr-char-picker-frame:hover canvas { background: color-mix(in srgb, var(--color-accent) 10%, transparent); }
+.rr-char-picker-frame:hover::after { border-width: 1px; border-color: color-mix(in srgb, var(--color-accent-bright) 70%, transparent); }
+.rr-char-picker-frame.selected canvas { background: color-mix(in srgb, var(--color-accent) 24%, transparent); }
+.rr-char-picker-frame.selected::after { border-width: 2px; border-color: var(--color-accent-bright); }
+.rr-char-picker-frame:focus { outline: none; }
+.rr-char-picker-frame:focus-visible { z-index: 1; outline: 2px solid var(--color-accent-bright); outline-offset: 1px; }
+.rr-char-picker-status { flex: 0 0 auto; height: 20px; line-height: 20px; font-size: 13px; color: var(--color-text); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rr-char-picker-status.is-hint, .rr-char-picker-status.is-hover { color: var(--color-text-muted); }
+.rr-char-picker-message { margin: auto; padding: 20px 12px; font-size: 13px; color: var(--color-text-muted); text-align: center; }
+.rr-char-picker-message.is-error { color: var(--color-danger-bright); }
+.rr-char-picker-message-detail { margin-top: 8px; font-size: 12px; color: var(--color-text-muted); }
+/* Clear takes the picture away: it stands apart from OK and Cancel. */
+.rr-char-picker .rr-modal-footer .rr-char-picker-clear { margin-inline-end: auto; }
+.rr-char-picker .rr-button-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+/* End of the character sheet picker. */
+
+/* ---------------------------------------------------------------------------
+   RRDialog: the editor's alert, confirm and prompt (utils/Dialog.js).
+   Above every modal, picker, dropdown popup and hover help (100001 is the
+   highest of those), so a question is never asked from under what opened it.
+   --------------------------------------------------------------------------- */
+.rr-dialog-overlay { z-index: 100100; }
+.rr-dialog { width: min(460px, calc(100vw - 32px)); }
+.rr-dialog .rr-modal-body { flex-direction: row; align-items: flex-start; gap: var(--space-3); padding: var(--space-5); }
+.rr-dialog-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: var(--space-2); }
+.rr-dialog-message { margin: 0; color: var(--color-text); font-size: 13px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
+.rr-dialog-icon { flex: 0 0 auto; display: flex; align-items: center; justify-content: center; width: 26px; height: 26px; margin-top: -3px; border-radius: 50%; border: 1px solid var(--color-warning-border); background: color-mix(in srgb, var(--color-warning) 30%, transparent); color: var(--color-warning-text); font-size: 15px; font-weight: 700; line-height: 1; user-select: none; }
+.rr-dialog-error .rr-dialog-icon, .rr-dialog-danger .rr-dialog-icon { border-color: var(--color-danger-border); background: var(--color-danger-bg-deep); color: var(--color-danger-light); }
+.rr-dialog-input { margin-top: var(--space-1); font-size: 13px; }
+.rr-dialog-input[aria-invalid="true"] { border-color: var(--color-danger-bright); }
+.rr-dialog-problem { min-height: 1.4em; color: var(--color-danger-bright); font-size: var(--font-size-base); line-height: 1.4; }
+/* Two labels too long for one row take a row each; one longer than the dialog wraps inside its button. */
+.rr-dialog .rr-modal-footer { flex-wrap: wrap; }
+.rr-dialog .rr-modal-footer button { min-width: 84px; max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+/* The focused button is the one Enter presses: it shows however the dialog was opened. */
+.rr-dialog .rr-modal-footer button:focus, .rr-dialog .rr-modal-close:focus-visible { outline: 2px solid var(--color-accent-bright); outline-offset: 2px; }
+.rr-dialog .rr-modal-footer .rr-button-danger:focus { outline-color: var(--color-danger-bright); }
+/* End of RRDialog. */
+
+/* ---------------------------------------------------------------------------
+   Image Layers tool (MapImageLayersManager.js). The panel wears the Lighting
+   panel's cards, rows and fields (.lighting-panel, .lit-*); these are its own
+   parts: the list, the picture tile, conditions, the Add menu, and the layers
+   laid over the 3D view.
+   --------------------------------------------------------------------------- */
+.rr-image-layers-panel.is-floating { position: fixed; right: 14px; top: 120px; width: 300px; max-height: calc(100vh - 150px); z-index: 9000; }
+.rr-image-layers-panel > * { flex: 0 0 auto; }
+.rr-image-layers-head { display: flex; align-items: center; gap: 8px; }
+.rr-image-layers-title { flex: 1; font-size: 13px; font-weight: 700; }
+.rr-image-layers-close { width: 24px; height: 24px; padding: 0; line-height: 1; }
+.rr-image-layers-about { padding: 0; }
+.rr-image-layer-add { align-self: flex-start; padding: 5px 12px; font-size: 12px; }
+.rr-image-layer-add:focus-visible, .rr-image-layers-close:focus-visible { outline: 2px solid var(--color-accent-bright); outline-offset: 2px; }
+
+/* The list: eye, picture, name and what it is, up, down, remove. */
+.rr-image-layer-list { display: flex; flex-direction: column; gap: 2px; }
+.rr-image-layer-item { display: grid; grid-template-columns: 22px minmax(0, 1fr) 20px 20px 20px; align-items: center; gap: 2px; padding: 2px 3px; border: 1px solid var(--color-border); border-radius: 3px; background-color: var(--color-bg-input); }
+/* The row under the pointer is a quiet tone, well apart from the selected row's in a light theme as in a dark one. */
+.rr-image-layer-item:hover { background-color: color-mix(in srgb, var(--color-bg-hover) 45%, var(--color-bg-input)); }
+.rr-image-layer-item.is-selected { border-color: var(--color-accent); background-color: var(--color-bg-selected); }
+.rr-image-layer-item.is-hidden .rr-image-layer-pick { opacity: 0.5; }
+.rr-image-layer-pick { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 2px; border: 0; border-radius: 2px; background: transparent; color: var(--color-text); font: inherit; font-size: 11px; text-align: start; cursor: pointer; }
+.rr-image-layer-thumb { flex: 0 0 auto; width: 34px; height: 26px; border: 1px solid var(--color-border); border-radius: 2px; }
+/* A picture over a checker of two mid tones (dark in every theme: .rr-dark-surface), so a pale fog and a dark vignette both read. */
+.rr-image-layer-thumb, .rr-image-layer-face.rr-material-tile-face { background-color: var(--color-bg-input-alt); background-image: var(--rr-image-layer-picture, none), conic-gradient(var(--color-bg-button-active) 25%, var(--color-bg-input-alt) 0 50%, var(--color-bg-button-active) 0 75%, var(--color-bg-input-alt) 0); background-position: center, 0 0; background-repeat: no-repeat, repeat; background-size: cover, 12px 12px; }
+.rr-image-layer-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.3; }
+.rr-image-layer-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.rr-image-layer-line { font-size: 10px; color: var(--color-text-muted); overflow-wrap: anywhere; }
+.rr-image-layer-icon { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; padding: 0; border: 1px solid transparent; border-radius: 3px; background: transparent; color: var(--color-text-muted); cursor: pointer; }
+.rr-image-layer-icon:hover:not(:disabled) { color: var(--color-accent-bright); border-color: var(--color-border-input); background-color: var(--color-bg-deep); }
+.rr-image-layer-icon:disabled { opacity: 0.3; cursor: default; }
+.rr-image-layer-eye { width: 22px; color: var(--color-text); }
+.rr-image-layer-pick:focus-visible, .rr-image-layer-icon:focus-visible { outline: 2px solid var(--color-accent-bright); outline-offset: -1px; }
+.rr-image-layer-warning, .rr-image-layer-line.rr-image-layer-warning, .rr-image-layer-hint.rr-image-layer-warning { color: var(--color-warning-text); }
+/* A picture's name is a file name: its characters keep their order in a right-to-left language, and it stands at the
+   side its row starts on. A switch's or variable's name reads in its own direction. Inside a sentence a picture's name
+   is one piece: it goes to the next line whole, and breaks only when it is longer than a line. */
+.rr-image-layer-file { direction: ltr; unicode-bidi: isolate; }
+.rr-image-layer-own { unicode-bidi: plaintext; }
+.rr-image-layer-file:is([dir="rtl"] *), .rr-image-layer-own:is([dir="rtl"] *) { text-align: right; }
+/* The name in a card's head stands at the far end of the head in either direction. */
+.rr-image-layers-panel .lit-section-meta { margin-left: 0; margin-inline-start: auto; }
+.rr-image-layer-word.is-file { display: inline-block; max-width: 100%; overflow-wrap: anywhere; }
+
+/* The selected layer: one label | field grid, every control the same height. The label column holds the longest
+   label of the 17 languages on one line; a longer word still breaks before it reaches the field. */
+.rr-image-layers-panel .lit-row { grid-template-columns: 108px minmax(0, 1fr); }
+.rr-image-layers-panel .lit-row > span:first-child { white-space: normal; overflow: visible; overflow-wrap: anywhere; hyphens: auto; line-height: 1.25; }
+.rr-image-layer-field { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.rr-image-layer-scroll .rr-image-layer-field { gap: 3px; }
+.rr-image-layer-field > .lit-select, .rr-image-layer-field > .lit-ambient-slider, .rr-image-layer-field > .rr-image-layer-picture { flex: 1 1 auto; min-width: 0; }
+/* A row with one list (Depth, Placement, Repeats, Blend Mode): the list stands beside its label while the entry it
+   shows fits there, and goes under the label at the card's width when the entry is longer, as some languages'
+   words are. The entry is read whole either way. */
+.rr-image-layers-panel .rr-image-layer-row.is-list { display: flex; flex-wrap: wrap; align-items: center; gap: 3px 6px; }
+.rr-image-layer-row.is-list > .rr-image-layer-label { flex: 0 0 108px; min-width: 0; }
+.rr-image-layer-row.is-list > .rr-image-layer-field { flex: 1 1 auto; min-width: 0; }
+/* 26px is the height the editor's themed dropdown gives every list; the number fields and the pickers stand beside them at the same height. */
+.rr-image-layers-panel .lit-input, .rr-image-layers-panel .rr-number-stepper { height: 26px; box-sizing: border-box; font-size: 11px; }
+.rr-image-layers-panel .rr-number-stepper { flex: 0 0 auto; border-radius: 3px; background: var(--color-bg-input); }
+.rr-image-layers-panel .rr-number-stepper-input { height: 100%; padding: 0 5px; font-size: 11px; }
+.rr-image-layers-panel .rr-number-stepper-buttons { width: 18px; }
+/* The field of a chosen switch or variable wears the look of the panel's lists (the themed dropdown): same height,
+   border, radius, ground and caret; a light theme gives both the input tones. */
+.rr-image-layer-reference { flex: 1 1 auto; display: flex; align-items: center; gap: 6px; min-width: 0; height: 26px; box-sizing: border-box; padding: 0 8px 0 10px; border: 1px solid var(--color-accent-border); border-radius: var(--radius-md); background: var(--color-bg-panel); color: var(--color-text-strong); font: inherit; font-size: var(--font-size-base); font-weight: 600; text-align: start; cursor: pointer; transition: border-color var(--ease-base); }
+.rr-image-layer-reference:hover { border-color: var(--color-accent-border-strong); }
+.rr-image-layer-reference:is(:root[data-theme="light"] *) { background: var(--color-bg-input); border-color: var(--color-border-input); }
+.rr-image-layer-reference:is(:root[data-theme$="-light"] *) { background: var(--color-bg-input); border-color: var(--color-border-input); }
+.rr-image-layer-reference-label { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rr-image-layer-reference.is-empty .rr-image-layer-reference-label { color: var(--color-text-muted); font-weight: 400; }
+.rr-image-layer-reference-caret { flex: 0 0 auto; font-size: 9px; color: var(--color-accent-bright); }
+.rr-image-layer-reference:focus-visible, .rr-image-layers-panel .rr-material-tile:focus-visible, .rr-image-layer-toggle input:focus-visible { outline: 2px solid var(--color-accent-bright); outline-offset: 1px; }
+.rr-image-layer-unit { flex: 0 0 auto; font-size: 11px; color: var(--color-text-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.rr-image-layer-hint { font-size: 10.5px; line-height: 1.35; color: var(--color-text-muted); margin-top: -3px; }
+/* The picture tile: the picture across the tile, and under it the picture's name, whole, on as many lines as it needs. */
+.rr-image-layer-tile { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px 8px; padding: 4px 8px 5px 4px; }
+.rr-image-layer-face.rr-material-tile-face { grid-area: 1 / 1; width: 100%; height: 56px; background-size: contain, 12px 12px; }
+.rr-image-layer-tile .rr-material-tile-swap { grid-area: 1 / 2; }
+.rr-image-layer-tile .rr-material-tile-name { grid-area: 2 / 1 / 3 / 3; padding-inline-start: 2px; white-space: normal; overflow-wrap: anywhere; font-size: 11px; line-height: 1.3; }
+.rr-image-layer-notice { padding: 6px 8px; border: 1px solid var(--color-warning-border); border-radius: 4px; background: color-mix(in srgb, var(--color-warning) 22%, transparent); color: var(--color-text); font-size: 11px; line-height: 1.4; }
+
+/* Shown, and Change the picture with a variable: two cards, so a condition is never mistaken for a picture swap. */
+.rr-image-layers-panel .rr-shim-trigger { height: 26px !important; min-height: 26px !important; line-height: 16px; }
+.rr-image-layer-group .lit-group-title { justify-content: flex-start; flex-wrap: wrap; row-gap: 2px; }
+/* A long title wraps beside its state; a one-word state keeps its own width up to half the header. */
+.rr-image-layer-group .lit-group-title > span:first-child { flex: 1 1 0; min-width: 0; line-height: 1.3; }
+.rr-image-layer-group .lit-group-title::after { margin-inline-start: 4px; }
+.rr-image-layer-group-meta { flex: 0 0 auto; max-width: 50%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--color-text-muted); }
+/* A state that is a sentence (the conditions, a variable's name) has the line under the title, and is read whole. */
+.rr-image-layer-group-meta.is-sentence { order: 1; flex: 1 1 100%; max-width: none; overflow: visible; white-space: normal; overflow-wrap: anywhere; line-height: 1.35; }
+.rr-image-layer-toggle { display: flex; align-items: center; gap: 5px; color: var(--color-text); cursor: pointer; }
+.rr-image-layer-toggle input { margin: 0; flex: 0 0 auto; }
+/* A condition: its tick box with its words, then its fields on lines of their own, set in under the words, so a
+   switch's or variable's name has the width of the card. */
+.rr-image-layer-condition > .rr-image-layer-label { display: none; }
+.rr-image-layer-condition.lit-row { grid-template-columns: minmax(0, 1fr); }
+.rr-image-layer-condition .rr-image-layer-toggle { flex: 0 1 auto; min-width: 0; font-size: 11px; line-height: 1.25; }
+.rr-image-layer-condition.is-under .rr-image-layer-field { padding-inline-start: 18px; }
+.rr-image-layer-versions { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; padding: 6px 8px; border-radius: 4px; background: var(--color-bg-deep); color: var(--color-text); font-size: 11px; line-height: 1.4; overflow-wrap: anywhere; }
+/* The pictures a variable chooses. A row is a small card: "When it is [number] show" with its remove button at the
+   end of that line, and under them the picture it shows, across the card (the same inset at both ends), with the
+   look of the panel's lists. */
+.rr-image-layer-version-list { display: flex; flex-direction: column; gap: 4px; }
+.rr-image-layer-version { display: grid; grid-template-columns: minmax(0, 1fr) 20px; align-items: start; gap: 4px; padding-block: 4px 5px; padding-inline: 6px 3px; border: 1px solid var(--color-border); border-radius: 3px; background-color: var(--color-bg-input); }
+.rr-image-layer-version-words { grid-area: 1 / 1; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 5px; min-width: 0; font-size: 11px; color: var(--color-text); }
+.rr-image-layer-version-word { white-space: nowrap; }
+/* A comma or a colon after the number field stands against the field, not a gap away from it. */
+.rr-image-layer-version-word.is-mark { margin-inline-start: -4px; }
+.rr-image-layer-version-remove { grid-area: 1 / 2; margin-top: 3px; }
+.rr-image-layer-version-picture { grid-area: 2 / 1 / 3 / -1; margin-inline-end: 3px; display: flex; align-items: center; gap: 6px; min-width: 0; height: 32px; box-sizing: border-box; padding: 2px 8px 2px 3px; border: 1px solid var(--color-accent-border); border-radius: var(--radius-md); background: var(--color-bg-panel); color: var(--color-text-strong); font: inherit; font-size: 11px; font-weight: 600; text-align: start; cursor: pointer; transition: border-color var(--ease-base); }
+.rr-image-layer-version-picture:hover { border-color: var(--color-accent-border-strong); }
+.rr-image-layer-version-picture:is(:root[data-theme="light"] *) { background: var(--color-bg-input); border-color: var(--color-border-input); }
+.rr-image-layer-version-picture:is(:root[data-theme$="-light"] *) { background: var(--color-bg-input); border-color: var(--color-border-input); }
+.rr-image-layer-version-picture:focus-visible { outline: 2px solid var(--color-accent-bright); outline-offset: 1px; }
+.rr-image-layer-version-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rr-image-layer-version-problem { grid-column: 1 / -1; font-size: 10.5px; line-height: 1.35; }
+.rr-image-layer-version-add, .rr-image-layer-version-listall { align-self: flex-start; padding: 4px 10px; font-size: 11px; }
+.rr-image-layer-version-listall { margin-top: 3px; }
+.rr-image-layer-version-add:focus-visible, .rr-image-layer-version-listall:focus-visible { outline: 2px solid var(--color-accent-bright); outline-offset: 2px; }
+.rr-image-layer-version-rest.lit-note, .rr-image-layer-look-note.lit-note { padding: 0 2px; }
+/* The list of pictures to look at names them whole: its label stands over it and it has the card's width. */
+.rr-image-layers-panel .rr-image-layer-look.lit-row { grid-template-columns: minmax(0, 1fr); row-gap: 3px; }
+
+/* The Add menu: what each choice makes, in a few words. */
+.rr-image-layer-menu { position: fixed; z-index: 10020; width: 292px; max-width: calc(100vw - 16px); padding: 4px; border: 1px solid var(--color-border); border-radius: 6px; background: var(--color-bg-panel); box-shadow: var(--shadow-popup); color: var(--color-text); }
+.rr-image-layer-menu-row { display: flex; flex-direction: column; gap: 1px; width: 100%; padding: 6px 8px; border: 0; border-radius: 4px; background: transparent; color: var(--color-text); font: inherit; text-align: start; cursor: pointer; }
+.rr-image-layer-menu-row:hover, .rr-image-layer-menu-row:focus-visible, .rr-image-layer-menu-row.rr-menu-key-active { background: var(--color-bg-hover); outline: none; }
+.rr-image-layer-menu-label { font-size: 12px; font-weight: 600; }
+.rr-image-layer-menu-hint { font-size: 11px; line-height: 1.35; color: var(--color-text-muted); }
+.rr-image-layer-menu-note { margin-top: 4px; padding: 6px 8px 4px; border-top: 1px solid var(--color-border); font-size: 11px; line-height: 1.35; color: var(--color-text-muted); }
+/* The picture grid opened from this tool: wider tiles for pictures that are mostly wider than tall, and a name on up
+   to three lines, so "Town_ground-1" and "Town_ground-2" can be told apart. */
+.rr-image-layer-grid .rr-material-options { grid-template-columns: repeat(4, 88px); }
+.rr-image-layer-grid .rr-material-option { width: 88px; }
+.rr-image-layer-grid .rr-material-option-face { width: 78px; height: 54px; }
+.rr-image-layer-grid .rr-material-option-name { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; direction: ltr; unicode-bidi: isolate; white-space: normal; overflow-wrap: anywhere; line-height: 1.2; text-align: center; }
+.rr-image-layer-grid .rr-material-option:focus-visible { border-color: var(--color-accent-bright); }
+
+/* A layer the game draws on the screen, over the 3D view: above the canvas, under the view's input surface. */
+.rr-image-layer-screen { position: absolute; inset: 0; z-index: 5; pointer-events: none; background-repeat: no-repeat; background-size: 100% 100%; }
+.rr-image-layer-screen.is-repeating { background-repeat: repeat; background-size: auto; }
+.rr-image-layer-screen.is-across { background-repeat: repeat-x; }
+.rr-image-layer-screen.is-down { background-repeat: repeat-y; }
+/* End of the Image Layers tool. */
+
+/* Database battle cards: Tactical Battles with Action and First Person Battles under it, the two in the place of one
+   card (weapons, skills, items). An open card takes the height its row has to spare; the cards keep the gap the
+   page's own cards have. */
+.rr-battle-cards { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+/* In the right column with a card open, the two stand beside both the card of their row and the open card after
+   them (Weapons: Traits and Note; Skills: Effects and Note), which share that height: the list card does not grow
+   as tall as the two cards together. With the card after them folded there is nothing to share with, and the list
+   card keeps its own height at the top of the row, as wide as its column. */
+.database-sections-grid > .rr-battle-cards:nth-child(even):not(.rr-section-solo):has(+ .database-section:not(.is-collapsed)) { grid-row: span 2; }
+.database-sections-grid > .database-section:has(+ .rr-battle-cards:nth-child(even):not(.rr-section-solo) + .database-section.is-collapsed) { place-self: start stretch; }
+.rr-battle-cards > .database-section { flex: 1 1 auto; display: flex; flex-direction: column; }
+.rr-battle-cards > .database-section > .database-section-content { flex: 1 1 auto; }
+.database-item-column > .rr-battle-cards > .database-section { margin-bottom: 0; }
+/* End of the Database battle cards. */
+/* Database > Terms: the words of battles on the map. */
+.rr-terms-battle-panel { flex-shrink: 0; }
+.rr-terms-battle-hint { padding: 5px 8px; border-bottom: 1px solid var(--color-border); color: var(--color-text-muted); background: var(--color-bg-surface); font-size: 10px; line-height: 1.4; }
+/* The list has no scrollbar of its own (the column scrolls), so its columns line up without a gutter. */
+.rr-terms-battle-panel > .rr-terms-message-columns { padding-right: 0; }
+/* A stock word can be a whole sentence: its column is wider than the Messages panel's. */
+.rr-terms-battle-panel > .rr-terms-message-columns, .rr-terms-battle-list .rr-terms-message-row { grid-template-columns: minmax(125px, 42%) minmax(0, 1fr); }
+.rr-terms-battle-list { background: var(--color-bg-list-item); }
+.rr-terms-battle-list .rr-terms-message-group { position: static; }
+/* The stock word in an empty field is fainter than a typed one in every theme. */
+.rr-terms-battle-list .rr-terms-message-row input::placeholder { color: var(--color-text); opacity: 0.42; }
+/* End of the battle words. */
+
+/* Passage in the 3D map view (MapEdgeLabels.js): the legend in the view's corner and the words under the pointer.
+   The six mark colors are the ones the marks on the map are drawn in: the view reads them from this layer. */
+.rr-passage-layer { position: absolute; inset: 0; overflow: hidden; pointer-events: none;
+    --rr-passage-walk: #7bd88f; --rr-passage-hop: #ffd84a; --rr-passage-mantle: #ff9a3c; --rr-passage-ladder: #58b4ff; --rr-passage-drop: #c79bff; --rr-passage-blocked: #ff5a4f;
+    --rr-passage-rim: color-mix(in srgb, var(--color-bg-deep) 72%, transparent); }
+.rr-passage-legend { position: absolute; inset-block-start: 10px; inset-inline-start: 10px; box-sizing: border-box; min-width: 136px; max-width: 232px; padding: 6px 8px 7px; border: 1px solid var(--color-border); border-radius: 6px; background: color-mix(in srgb, var(--color-bg-panel) 88%, transparent); color: var(--color-text); font-size: 11px; line-height: 1.3; pointer-events: auto; user-select: none; z-index: 1; }
+/* Where the line starts at the right, the legend's corner is the one the view's scroll bar stands in. */
+.rr-passage-rtl .rr-passage-legend { inset-inline-start: 24px; }
+.rr-passage-legend-head { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+.rr-passage-legend-title { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; color: var(--color-text-strong); }
+.rr-passage-legend-close { flex: 0 0 auto; width: 18px; height: 18px; padding: 0; border: 0; border-radius: 4px; background: transparent; color: var(--color-text-muted); font: inherit; font-size: 14px; line-height: 1; cursor: pointer; }
+.rr-passage-legend-close:hover { background: var(--color-bg-hover); color: var(--color-text-strong); }
+.rr-passage-legend-close:focus-visible { outline: 2px solid var(--color-accent-bright); outline-offset: 1px; }
+.rr-passage-legend-row { display: flex; align-items: center; gap: 8px; padding: 1.5px 0; }
+.rr-passage-legend-row > span { min-width: 0; overflow-wrap: anywhere; }
+.rr-passage-swatch { flex: 0 0 36px; width: 36px; height: 14px; overflow: visible; }
+.rr-passage-legend-progress { height: 2px; margin-top: 6px; border-radius: 1px; background: linear-gradient(to right, var(--color-accent-bright) var(--rr-passage-done, 0%), var(--color-border) var(--rr-passage-done, 0%)); }
+.rr-passage-legend-progress[hidden] { display: none; }
+.rr-passage-label { position: absolute; left: 0; top: 0; padding: 2px 7px 2px 6px; border-inline-start: 3px solid var(--rr-passage-blocked); border-radius: 3px; background: color-mix(in srgb, var(--color-bg-deep) 80%, transparent); color: var(--color-text-strong); font-size: 11.5px; font-weight: 600; line-height: 1.35; white-space: nowrap; will-change: transform; z-index: 2; }
+.rr-passage-label[hidden] { display: none; }
+/* The four sides in one label, where the place is too small on the screen for a label at each: a row a side, led by an arrow pointing its way. */
+.rr-passage-list { padding: 0; border-inline-start: 0; background: color-mix(in srgb, var(--color-bg-deep) 88%, transparent); overflow: hidden; }
+.rr-passage-list-row { display: flex; align-items: center; gap: 5px; padding: 1px 7px 1px 5px; border-inline-start: 3px solid var(--rr-passage-blocked); }
+.rr-passage-list-way { flex: 0 0 1.2em; text-align: center; color: var(--color-text-muted); font-weight: 400; }
+.rr-passage-list-row.is-walk { border-inline-start-color: var(--rr-passage-walk); }
+.rr-passage-list-row.is-hop { border-inline-start-color: var(--rr-passage-hop); }
+.rr-passage-list-row.is-mantle { border-inline-start-color: var(--rr-passage-mantle); }
+.rr-passage-list-row.is-ladder { border-inline-start-color: var(--rr-passage-ladder); }
+.rr-passage-list-row.is-drop { border-inline-start-color: var(--rr-passage-drop); }
+.rr-passage-outline { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.rr-passage-outline polygon { fill: none; stroke: var(--color-text-strong); stroke-width: 1.25; stroke-dasharray: 4 3; stroke-linejoin: round; opacity: 0.85; }
+.rr-passage-label.is-walk { border-inline-start-color: var(--rr-passage-walk); }
+.rr-passage-label.is-hop { border-inline-start-color: var(--rr-passage-hop); }
+.rr-passage-label.is-mantle { border-inline-start-color: var(--rr-passage-mantle); }
+.rr-passage-label.is-ladder { border-inline-start-color: var(--rr-passage-ladder); }
+.rr-passage-label.is-drop { border-inline-start-color: var(--rr-passage-drop); }
+/* End of Passage in the 3D map view. */
+
+/* The Events list: a battle unit's row carries a dot in its side's color (EventManager.updateEventsList gives the color). */
+#events-list .event-list-item[data-side]::before { content: ''; display: inline-block; width: 8px; height: 8px; margin-inline-end: 7px; border-radius: 50%; vertical-align: 1px; background: var(--rr-unit-side, var(--color-text-muted)); box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-text-strong) 45%, transparent); }
+/* End of the Events list's side dot. */
+
+/* Database battle cards: an enemy's picture on the map (the row "On the map" of its card). The picture in a box, the
+   sheet's name, the button that opens the sheet picker and the way back to Automatic; under them, in the fields'
+   column, a line for what the enemy stands as. */
+.rr-tactics-look { gap: 8px; }
+.rr-tactics-sprite { flex: 0 0 48px; width: 48px; height: 48px; border: 1px solid var(--color-border); border-radius: 3px; background: var(--color-bg-deep); image-rendering: pixelated; }
+.rr-tactics-look-name { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-text); font-size: 13px; }
+.rr-tactics-look-name.is-automatic { color: var(--color-text-muted); }
+.rr-tactics-look > .rr-btn-chip { flex: 0 0 auto; }
+.db-form > .rr-tactics-hint { grid-column: -2 / -1; margin-top: -4px; font-size: 11px; line-height: 1.35; color: var(--color-text-muted); }
+@container database-detail (max-width: 760px) {
+    .rr-tactics-form > .rr-tactics-hint,
+    .rr-tactics-form > label.rr-tactics-check { grid-column: 1 / -1; }
+}
+/* End of an enemy's picture on the map. */
+
+/* Vehicles share the Actors' two-column hierarchy without the image-card whitespace. */
+.vehicle-detail { padding:12px; }
+.vehicle-detail .vehicle-columns { gap:12px; grid-template-columns:repeat(2,minmax(0,1fr)); }
+.vehicle-detail .database-item-column { gap:10px; }
+.vehicle-detail .database-section { margin:0; padding:0; min-width:0; }
+.vehicle-detail .database-section-content { padding:10px; }
+.vehicle-detail .database-section-header { padding:8px 10px; }
+.vehicle-detail .vehicle-fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+.vehicle-detail .vehicle-field { display:flex; flex-direction:column; gap:4px; min-width:0; margin:0; }
+.vehicle-detail .vehicle-field > span { font-size:11px; color:var(--color-text-muted); }
+.vehicle-detail input:not([type=checkbox]), .vehicle-detail select, .vehicle-detail textarea { width:100%; min-width:0; box-sizing:border-box; }
+.vehicle-detail .vehicle-check { display:flex; align-items:center; gap:5px; margin-top:8px; font-size:12px; }
+.vehicle-detail .vehicle-sprite-preview { flex:none; width:64px; height:64px; image-rendering:pixelated; border:1px solid var(--color-border); border-radius:4px; }
+.vehicle-detail .vehicle-equipment-rows { grid-template-columns:minmax(0,1fr); margin:0; gap:7px; }
+.vehicle-detail .vehicle-equipment-row { grid-template-columns:80px minmax(0,1fr); }
+.vehicle-detail .vehicle-base-stats { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px 14px; }
+.vehicle-detail .vehicle-base-stats > div { display:flex; justify-content:space-between; font-size:12px; }
+.vehicle-detail .vehicle-base-stats span { color:var(--color-text-muted); }
+.vehicle-detail .vehicle-handling-details { margin-top:10px; font-size:12px; }
+.vehicle-detail .vehicle-handling-details summary { cursor:pointer; color:var(--color-text-muted); }
+.vehicle-detail .vehicle-handling { margin-top:8px; }
+.vehicle-detail .vehicle-medium-settings { margin-top:8px; }
+.vehicle-detail .vehicle-stock-bgm { margin-top:8px; width:100%; }
+.vehicle-detail .vehicle-location-row { display:flex; gap:6px; margin-bottom:8px; }
+.vehicle-detail .vehicle-location-row { align-items:center; }
+.vehicle-detail .vehicle-location-row .vehicle-location-browse { flex:1; min-width:0; }
+.vehicle-detail .vehicle-location-row .vehicle-start-direction { width:auto; flex:none; }
+/* The map picker's 3D view (MapPicker3D): a viewport, dark in every theme as the map preview beside it is. */
+.map-picker-view { margin-left:auto; gap:4px; align-items:center; }
+.map-picker-view button { padding:4px 12px; font-size:12px; }
+.map-picker-view button.is-on { border-color:var(--color-accent); background:var(--color-accent); color:var(--color-accent-on); }
+.map-picker-3d { flex:1; min-height:0; min-width:0; position:relative; overflow:hidden; background-color:#0a0a0a; border:1px solid var(--color-border); border-radius:3px; }
+.map-picker-3d-canvas, .map-picker-3d-overlay { position:absolute; inset:0; width:100%; height:100%; display:block; }
+.map-picker-3d-overlay { cursor:crosshair; outline:none; }
+.map-picker-3d-coords { position:absolute; top:8px; right:8px; box-sizing:border-box; min-width:132px; padding:6px 8px; background-color:rgba(0,0,0,.8); color:#fff; font:12px/16px monospace; text-align:center; border-radius:3px; pointer-events:none; }
+.map-picker-3d-hint { position:absolute; left:8px; bottom:8px; max-width:calc(100% - 16px); padding:4px 8px; background-color:rgba(0,0,0,.7); color:#ddd; font-size:11px; border-radius:3px; pointer-events:none; }
+.map-picker-3d-note { padding:16px; color:#ddd; font-size:13px; }
+.vehicle-detail .vehicle-start-number { flex:none; min-width:1.2em; text-align:right; color:var(--color-text-muted); }
+.vehicle-detail .vehicle-location-browse { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.vehicle-detail .traits-table { table-layout:auto; width:100%; }
+.vehicle-detail .traits-table td { overflow-wrap:anywhere; }
+.vehicle-detail .trait-action-buttons, .vehicle-detail .learning-action-buttons { flex-wrap:wrap; gap:4px; }
+@container database-detail (max-width:480px) {
+  .vehicle-detail .vehicle-columns { grid-template-columns:minmax(0,1fr); }
+}
+.vehicle-detail .vehicle-graphic-slot { display:flex; flex-direction:column; align-items:center; gap:6px; padding:0; background:none; border:0; }
+.vehicle-detail .vehicle-graphic-slot .graphic-canvas-container { height:128px; width:100%; display:flex; align-items:center; justify-content:center; }
+.vehicle-detail .vehicle-graphic-slot .vehicle-sprite-preview { border:0; }
+.vehicle-detail .vehicle-graphic-slot .graphic-preview-name { max-width:100%; min-height:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:11px; }
+.vehicle-detail .vehicle-model-settings { margin-top:8px; }
+.vehicle-detail .vehicle-model-settings[hidden] { display:none; }
+
+.vehicle-detail .vehicle-graphic-slot .graphic-3d-pane { height:128px !important; }
+.vehicle-detail .vehicle-graphic-slot img { width:104px !important; height:104px !important; }
+
+.vehicle-detail .database-section-header[aria-expanded] { padding-inline-start:26px; }
+.vehicle-detail .vehicle-sound-row { display:grid; grid-template-columns:82px minmax(0,1fr); align-items:center; gap:8px; margin-bottom:6px; font-size:11px; }
+.vehicle-detail .vehicle-sound-row:last-child { margin-bottom:0; }
+.vehicle-detail .vehicle-sound-row > span { color:var(--color-text-muted); overflow-wrap:anywhere; }
+.vehicle-detail .vehicle-sound-browse { width:100%; min-width:0; text-align:start; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; padding:4px 7px; }
+.vehicle-detail .vehicle-effects-details { font-size:11px; margin-top:9px; }
+.vehicle-detail .vehicle-effects-details summary { cursor:pointer; color:var(--color-text-muted); }
+.vehicle-detail .vehicle-effect-rows { margin-top:8px; }

@@ -14,6 +14,8 @@ function loadClass(relativePath, className, globals = {}) {
         console: { log() {}, debug() {}, warn() {}, error() {} },
         process,
         require,
+        // The editor's themed dialog, answered by the test's own `alert` and `confirm` stand-ins.
+        RRDialog: require('./helpers/dialog-stub.cjs').themedDialogFrom(globals),
         ...globals
     });
 }

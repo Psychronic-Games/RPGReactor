@@ -45,7 +45,7 @@ class DatabaseEnemyEditor {
         generalSection.style.flex = '0.9 1 0';
         generalSection.style.minWidth = '0';
         generalSection.innerHTML = `
-            <div class="database-section-header">${tt('General')}</div>
+            <div class="database-section-header" data-section-key="general">${tt('General')}</div>
             <div class="database-section-content">
                 <div class="db-form" style="margin-bottom: 8px;">
                     <div class="db-row-cols">
@@ -115,7 +115,7 @@ class DatabaseEnemyEditor {
         paramsSection.style.flex = '1.6 1 0';
         paramsSection.style.minWidth = '0';
         paramsSection.innerHTML = `
-            <div class="database-section-header">${tt('Parameters')}</div>
+            <div class="database-section-header" data-section-key="parameters">${tt('Parameters')}</div>
             <div class="database-section-content">
                 <!-- The Parameter column is pinned to its own longest label:
                      a 1px width with the labels held on one line collapses it
@@ -162,7 +162,7 @@ class DatabaseEnemyEditor {
         dropItemsSection.style.flex = '0.9 1 0';
         dropItemsSection.style.minWidth = '0';
         dropItemsSection.innerHTML = `
-            <div class="database-section-header">${tt('Drop Items')}</div>
+            <div class="database-section-header" data-section-key="drop-items">${tt('Drop Items')}</div>
             <div class="database-section-content">
                 ${this.buildDropItemsHTML(enemy)}
             </div>
@@ -221,7 +221,7 @@ class DatabaseEnemyEditor {
         actionsSection.setAttribute('tabindex', '0');
         actionsSection.style.outline = 'none';
         actionsSection.innerHTML = `
-            <div class="database-section-header">${tt('Action Patterns')}</div>
+            <div class="database-section-header" data-section-key="action-patterns">${tt('Action Patterns')}</div>
             <div class="database-section-content">
                 <table class="traits-table" id="enemy-actions-table-${enemy.id}">
                     <thead>
@@ -270,6 +270,13 @@ class DatabaseEnemyEditor {
             wrapper.appendChild(passiveSection);
         }
 
+        // Combat settings grouped by shared rules, Tactical movement and Action attacks.
+        const tacticsSection = window.RRTactics?.createSection({ kind: 'enemy', record: enemy, databaseManager: this.databaseManager });
+        if (tacticsSection) {
+            tacticsSection.style.marginBottom = '16px';
+            wrapper.appendChild(tacticsSection);
+        }
+
         // Traits + Note row (side by side)
         const traitsNoteRow = document.createElement('div');
         traitsNoteRow.className = 'database-enemy-bottom-row';
@@ -283,7 +290,7 @@ class DatabaseEnemyEditor {
         traitsSection.setAttribute('tabindex', '0');
         traitsSection.style.outline = 'none';
         traitsSection.innerHTML = `
-            <div class="database-section-header">${tt('Traits')}</div>
+            <div class="database-section-header" data-section-key="traits">${tt('Traits')}</div>
             <div class="database-section-content">
                 <table class="traits-table" id="enemy-traits-table-${enemy.id}">
                     <thead>
@@ -323,7 +330,7 @@ class DatabaseEnemyEditor {
         noteSection.style.display = 'flex';
         noteSection.style.flexDirection = 'column';
         noteSection.innerHTML = `
-            <div class="database-section-header">${tt('Note')}</div>
+            <div class="database-section-header" data-section-key="note">${tt('Note')}</div>
             <div class="database-section-content" style="flex: 1; display: flex; flex-direction: column;">
                 <textarea class="database-field-value" style="width: 100%; flex: 1 1 auto; min-height: 60px; resize: vertical;" data-field="note" data-enemy-id="${enemy.id}">${this.escapeHTML(enemy.note || '')}</textarea>
             </div>
@@ -862,7 +869,7 @@ class DatabaseEnemyEditor {
         return `
             <details class="enemy-forecast" id="enemy-forecast-${enemy.id}"${state.open ? ' open' : ''}>
                 <summary class="enemy-forecast-summary">
-                    <span>${tt('Behaviour forecast')}</span>
+                    <span>${tt('Behavior forecast')}</span>
                     ${badge}
                 </summary>
                 <div class="enemy-forecast-body">
@@ -1893,7 +1900,7 @@ class DatabaseEnemyEditor {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const project = this.projectManager.getCurrentProject();
         if (!project) {
-            alert(tt('No project loaded'));
+            RRDialog.alert(tt('No project loaded'), { title: tt('Enemies'), kind: 'warning' });
             return;
         }
 

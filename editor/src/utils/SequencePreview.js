@@ -4,7 +4,8 @@
  * A second player written for the editor would drift from the game the first
  * time either changed, so there is none. The preview runs the runtime's own
  * WebAudio and AudioManager sections -- sliced whole from the project's
- * js/reactor_core.js and js/reactor_managers.js, which is the copy the game
+ * js/reactor_core_io.js (js/reactor_core.js in a copy from before the core was
+ * split) and js/reactor_managers.js, which is the copy the game
  * plays, or from the editor's runtime/ when the project's copy predates the
  * music library -- in a scope of their own. Only the surroundings are supplied
  * here: the few Utils calls those sections make, answered for files on this
@@ -17,7 +18,7 @@
 class RRSequencePreview {
     /** The runtime sections the preview runs: all of WebAudio, and all of AudioManager. */
     static SECTIONS = {
-        webAudio: { file: 'reactor_core.js', start: 'function WebAudio() {', end: 'function Video() {' },
+        webAudio: { file: 'reactor_core_io.js', start: 'function WebAudio() {', end: 'function Video() {' },
         audioManager: { file: 'reactor_managers.js', start: 'function AudioManager() {', end: 'function SoundManager() {' }
     };
 
@@ -56,7 +57,8 @@ class RRSequencePreview {
             let core;
             let managers;
             try {
-                core = fs.readFileSync(path.join(dir, 'reactor_core.js'), 'utf8');
+                const split = path.join(dir, this.SECTIONS.webAudio.file);
+                core = fs.readFileSync(fs.existsSync(split) ? split : path.join(dir, 'reactor_core.js'), 'utf8');
                 managers = fs.readFileSync(path.join(dir, 'reactor_managers.js'), 'utf8');
             } catch (error) {
                 continue;

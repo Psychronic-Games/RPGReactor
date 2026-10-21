@@ -93,7 +93,9 @@
 
     const _setupChoices = Game_Interpreter.prototype.setupChoices;
     Game_Interpreter.prototype.setupChoices = function(params) {
-        if (LARGE) params = this.rrCombineChoices(params);
+        // Only a Show Choices command has following ones to join; a script's own list (setup_choices) stands alone.
+        const command = this._list && this._list[this._index];
+        if (LARGE && command && command.code === 102) params = this.rrCombineChoices(params);
         _setupChoices.call(this, params);
         if (OPTIONS) this.rrApplyChoiceOptions();
     };

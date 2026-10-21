@@ -282,6 +282,15 @@ class BattleProcessingEditor {
         separator.appendChild(loseRow);
 
         content.appendChild(separator);
+
+        const fought = this.foughtOnMapLine();
+        if (fought) {
+            const line = document.createElement('div');
+            line.className = 'battle-processing-on-map';
+            line.style.cssText = 'color: var(--color-text-muted); font-size: 12px; line-height: 1.4;';
+            line.textContent = fought;
+            content.appendChild(line);
+        }
         container.appendChild(content);
 
         // Footer
@@ -301,6 +310,25 @@ class BattleProcessingEditor {
         footer.appendChild(cancelBtn);
         footer.appendChild(okBtn);
         container.appendChild(footer);
+    }
+
+    /**
+     * Where the battle is fought, in words, when this command sits in a map
+     * event on a map whose mode in force is on the map; '' for a Classic map
+     * and outside the map's event editor.
+     */
+    foughtOnMapLine() {
+        if (typeof FightCommandEditor === 'undefined' || typeof document === 'undefined') return '';
+        const editor = document.getElementById('event-editor-modal');
+        if (!editor || editor.style.display === 'none') return '';
+        return BattleProcessingEditor.foughtOnMap(FightCommandEditor.context({ databaseManager: this.databaseManager }));
+    }
+
+    static foughtOnMap(context) {
+        const mode = FightCommandEditor.modeInForce(context);
+        if (!FightCommandEditor.ON_MAP.includes(mode)) return '';
+        const name = FightCommandEditor._t((FightCommandEditor.MODES.find(([value]) => value === mode) || ['', mode])[1]);
+        return FightCommandEditor._t("Fought on this map as {mode} (this map's mode): the troop appears round the party and the enemy units near it join.", { mode: name });
     }
 
     /**

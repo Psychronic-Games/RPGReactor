@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Image Layers">
+  <defs>
+    <linearGradient id="il-back" x1="22" y1="4" x2="60" y2="34" gradientUnits="userSpaceOnUse"><stop stop-color="#9fe2ff"/><stop offset=".5" stop-color="#24bdf3"/><stop offset="1" stop-color="#0b4a8f"/></linearGradient>
+    <linearGradient id="il-mid" x1="13" y1="13" x2="52" y2="44" gradientUnits="userSpaceOnUse"><stop stop-color="#ff9db9"/><stop offset=".5" stop-color="#ff5b8d"/><stop offset="1" stop-color="#8f1c4e"/></linearGradient>
+    <linearGradient id="il-sky" x1="6" y1="24" x2="44" y2="58" gradientUnits="userSpaceOnUse"><stop stop-color="#1a5a94"/><stop offset="1" stop-color="#06111f"/></linearGradient>
+    <linearGradient id="il-sun" x1="10" y1="28" x2="20" y2="40" gradientUnits="userSpaceOnUse"><stop stop-color="#fff6a5"/><stop offset="1" stop-color="#ffbf19"/></linearGradient>
+  </defs>
+  <!-- Three sheets stacked toward the viewer; the front one is a picture: a sun over a hill. -->
+  <rect x="19" y="1" width="44" height="34" rx="5" fill="#01030a"/>
+  <rect x="22" y="4" width="38" height="28" rx="2.5" fill="url(#il-back)"/>
+  <rect x="10" y="10" width="46" height="36" rx="5" fill="#01030a"/>
+  <rect x="13" y="13" width="40" height="30" rx="2.5" fill="url(#il-mid)"/>
+  <rect x="1" y="20" width="48" height="43" rx="5" fill="#01030a"/>
+  <rect x="5" y="24" width="40" height="35" rx="2" fill="url(#il-sky)" stroke="#effaff" stroke-width="2"/>
+  <circle cx="16" cy="35" r="5.5" fill="url(#il-sun)"/>
+  <path d="M6 58 L20 43 L27 50 L34 40 L44 55 L44 58 Z" fill="#effaff"/>
+</svg>

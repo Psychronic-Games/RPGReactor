@@ -613,7 +613,7 @@
 
     window.RPGReactorWebHost = {
         mode: 'web',
-        version: '0.98.8',
+        version: '0.99.0',
         projectRoot: PROJECT_ROOT,
         fs: null,
         path: createPathApi(),
@@ -644,7 +644,8 @@
             let previousStamp = null;
             try { previousStamp = localStorage.getItem('rrWebBundleStamp'); } catch (error) { /* private mode */ }
             if (storedRecords.length && previousStamp && previousStamp !== bundleStamp
-                && confirm(tt('This update ships a newer Reactor One than your browser-saved copy. Load the new version and discard your browser edits?'))) {
+                && await RRDialog.confirm(tt('This update ships a newer Reactor One than your browser-saved copy. Load the new version and discard your browser edits?'),
+                    { title: 'Reactor One', ok: tt('Load New Version'), cancel: tt('Keep My Edits'), danger: true })) {
                 try { localStorage.setItem('rrWebBundleStamp', bundleStamp); } catch (error) { /* best effort */ }
                 await this.resetProject();
                 return;
@@ -684,6 +685,10 @@
                 } catch (error) {
                     console.warn(`Edited playtest overlay is unavailable: ${error.name || 'Error'}: ${error.message || error}`);
                 }
+            }
+            // A packed project is read through the service worker alone: without it there is nothing to open.
+            if (this.manifest.packed && !navigator.serviceWorker?.controller) {
+                throw new Error(tt('this window blocks service workers, which read the project. Open a normal (not private) window with site data allowed.'));
             }
         },
         assetUrl(filePath) {
@@ -752,7 +757,8 @@
                 if (existingPaths.length) {
                     const allowed = confirmOverwrite
                         ? await confirmOverwrite(existingPaths)
-                        : window.confirm(tt('{count} destination file(s) already exist. Replace them?', { count: existingPaths.length }));
+                        : await RRDialog.confirm(tt('{count} destination file(s) already exist. Replace them?', { count: existingPaths.length }),
+                            { title: tt('Replace exported files?'), ok: tt('Replace'), danger: true });
                     if (!allowed) return null;
                 }
                 await beforeWrite?.();
@@ -850,7 +856,8 @@
             if (existing.length) {
                 const allowed = confirmOverwrite
                     ? await confirmOverwrite(existing.map(item => item.path))
-                    : window.confirm(tt('{count} destination file(s) already exist. Replace them?', { count: existing.length }));
+                    : await RRDialog.confirm(tt('{count} destination file(s) already exist. Replace them?', { count: existing.length }),
+                        { title: tt('Replace exported files?'), ok: tt('Replace'), danger: true });
                 if (!allowed) return null;
             }
             for (const item of existing) {
@@ -965,9 +972,9 @@
             location.reload();
         },
         unsupported(feature) {
-            alert(tt('{feature} is available in the desktop edition of RPG Reactor. Browser edits are saved in this browser.', {
+            return RRDialog.alert(tt('{feature} is available in the desktop edition of RPG Reactor. Browser edits are saved in this browser.', {
                 feature: tt(feature),
-            }));
+            }), { title: tt(feature) });
         },
         applyBrowserUi() {
             for (const action of ['build-deployment', 'dist-editor', 'exit', 'new-project', 'open-project', 'close-project']) {
@@ -986,8 +993,9 @@
             reset.className = 'graphic-selector-button';
             reset.textContent = tt('Reset');
             reset.style.cssText = 'padding:2px 6px;font-size:10px;';
-            reset.onclick = () => {
-                if (confirm(tt('Reset Reactor One and discard all browser-saved edits?'))) this.resetProject();
+            reset.onclick = async () => {
+                if (await RRDialog.confirm(tt('Reset Reactor One and discard all browser-saved edits?'),
+                    { title: 'Reactor One', ok: tt('Reset'), danger: true })) this.resetProject();
             };
             banner.append(message, reset);
             document.body.appendChild(banner);

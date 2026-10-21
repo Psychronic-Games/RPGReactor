@@ -14,7 +14,7 @@ const editorRoot = path.resolve(__dirname, '..');
 const deep8 = path.resolve(editorRoot, '..', 'template', 'DEEP 8');
 
 test('the module exposes report, printReport and importProject, and the CLI and worker use it', () => {
-    assert.deepEqual(Object.keys(I).sort(), ['findRtp', 'importProject', 'languages', 'open', 'printReport', 'probe', 'report']);
+    assert.deepEqual(Object.keys(I).sort(), ['findLegacyFont', 'findRtp', 'importProject', 'languages', 'open', 'printReport', 'probe', 'report', 'rtpCandidates', 'runtimeEngine']);
     const cli = fs.readFileSync(path.join(editorRoot, 'build-scripts', 'import-legacy-project.cjs'), 'utf8');
     assert.match(cli, /LegacyImporter\.js/);
     assert.match(cli, /I\.importProject\(/);
@@ -125,4 +125,65 @@ test('probe names the engine of a folder without reading its maps', () => {
         const found = I.probe(deep8);
         assert.deepEqual([found.kind, found.engine, found.title, found.maps, found.languages], ['2003', 'RPG Maker 2003', 'Deep 8', 266, ['english']]);
     }
+});
+
+test('an import never writes into the game: its own folder, a folder inside it or one holding it is refused', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rr-legacy-self-'));
+    try {
+        const game = path.join(root, 'Game');
+        fs.mkdirSync(game);
+        fs.writeFileSync(path.join(game, 'RPG_RT.ldb'), '');
+        for (const dest of [game, path.join(game, 'Game (Reactor)'), root]) {
+            await assert.rejects(async () => I.importProject(game, dest, { force: true, skipAssets: true }), /game's own folder/, dest);
+        }
+        assert.deepEqual(fs.readdirSync(game), ['RPG_RT.ldb'], 'the game folder is untouched');
+    } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('a 2000/2003 title is read in the game\'s code page, not Latin-1', () => {
+    // GameTitle=ゆめソード in Shift_JIS (ソ's second byte is a backslash).
+    const sjis = Buffer.concat([Buffer.from('[RPG_RT]\r\nGameTitle='), Buffer.from([0x82, 0xe4, 0x82, 0xdf, 0x83, 0x5c, 0x81, 0x5b, 0x83, 0x68]), Buffer.from('\r\nEncoding=932\r\n')]);
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rr-legacy-title-'));
+    try {
+        fs.writeFileSync(path.join(root, 'RPG_RT.ldb'), '');
+        fs.writeFileSync(path.join(root, 'RPG_RT.ini'), sjis);
+        assert.equal(I.probe(root).title, 'ゆめソード', 'the dialog shows and names the project by the real title');
+    } finally { fs.rmSync(root, { recursive: true, force: true }); }
+    if (!fs.existsSync(path.join(deep8, 'RPG_RT.ldb'))) return;
+    const L = require('../src/legacy/LcfReader.js');
+    const ldb = fs.readFileSync(path.join(deep8, 'RPG_RT.ldb'));
+    const project = L.readProject({ read: (name) => (name === 'RPG_RT.ini' ? sjis : name === 'RPG_RT.ldb' ? ldb : null), list: () => [] });
+    assert.equal(project.ini.RPG_RT.GameTitle, 'ゆめソード', 'the imported System.json and project take the same title');
+});
+
+test('the dialog imports again into a folder already there only when asked, and never waits on a worker that is gone', () => {
+    const dialog = fs.readFileSync(path.join(editorRoot, 'src', 'LegacyImportDialog.js'), 'utf8');
+    assert.match(dialog, /force && !\(await RRDialog\.confirm\(/);
+    assert.match(dialog, /options: \{ force, /);
+    assert.match(dialog, /\.on\('exit', [^\n]*failed\(/);
+});
+
+test('a map numbered 1000 or more is its own file when a re-import clears maps it did not write', { skip: !fs.existsSync(path.join(deep8, 'RPG_RT.ldb')) }, async () => {
+    const dest = fs.mkdtempSync(path.join(os.tmpdir(), 'rr-legacy-bigmap-'));
+    try {
+        fs.mkdirSync(path.join(dest, 'data'));
+        fs.writeFileSync(path.join(dest, 'data', 'Map1000.json'), '{}');   // an earlier import's map 1000, not map 100
+        await I.importProject(deep8, dest, { maps: [100], skipAssets: true, force: true, log: () => {} });
+        assert.ok(fs.existsSync(path.join(dest, 'data', 'Map100.json')));
+        assert.ok(!fs.existsSync(path.join(dest, 'data', 'Map1000.json')), 'Map1000.json is map 1000, which this import did not write');
+    } finally { fs.rmSync(dest, { recursive: true, force: true }); }
+});
+
+test('an XP, VX or VX Ace Game.ini is read in the code page its editor wrote it in', () => {
+    const R = require('../src/legacy/RgssImporter.js');
+    const title = (bytes) => /Title=(.*)/.exec(R.iniText(Buffer.from(bytes)))[1];
+    assert.equal(title(Buffer.concat([Buffer.from('[Game]\r\nLibrary=RGSS104J.dll\r\nTitle='), Buffer.from([0x82, 0xe4, 0x82, 0xdf, 0x83, 0x5c, 0x81, 0x5b, 0x83, 0x68]), Buffer.from('\r\n')])), 'ゆめソード');
+    for (const western of ['Höhle', 'Mädchen', 'Café Noir', 'Hero’s Quest']) assert.equal(title(Buffer.from(`Title=${western}\r\n`.replace('’', '\x92'), 'latin1')), western);
+    assert.equal(title(Buffer.from('Title=日本語\n', 'utf8')), '日本語');
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rr-legacy-gameini-'));
+    try {
+        fs.writeFileSync(path.join(root, 'Game.rgssad'), '');
+        fs.writeFileSync(path.join(root, 'Game.ini'), Buffer.concat([Buffer.from('[Game]\r\nLibrary=RGSS104J.dll\r\nTitle='), Buffer.from([0x82, 0xe4, 0x82, 0xdf, 0x83, 0x5c, 0x81, 0x5b, 0x83, 0x68]), Buffer.from('\r\n')]));
+        assert.equal(I.probe(root).title, 'ゆめソード');
+    } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });

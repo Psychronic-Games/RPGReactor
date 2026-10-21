@@ -179,7 +179,7 @@ function loadIconPicker({ sheetHeight = 640, fail = false, iconSize = 32 } = {})
             }
         },
         Image,
-        alert: message => alerts.push(message),
+        RRDialog: { alert: async message => { alerts.push(message); } },
         window: null,
         reactor: { databaseManager: { getSystem: () => ({ iconSize }) } }
     };

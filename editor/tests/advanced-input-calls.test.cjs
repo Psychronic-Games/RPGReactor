@@ -1,4 +1,5 @@
 const assert = require('node:assert/strict');
+const { runtimeSource } = require('./helpers/runtime-source.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
@@ -185,7 +186,7 @@ test('malformed or invalid input tags remain ordinary Script conditions', () => 
 });
 
 function loadInputRuntime() {
-    const source = fs.readFileSync(path.join(workspaceRoot, 'runtime', 'reactor_core.js'), 'utf8');
+    const source = runtimeSource('reactor_core.js');
     const start = source.indexOf('function Input()');
     const end = source.indexOf('//-----------------------------------------------------------------------------\n/**\n * The static class that handles JSON', start);
     assert.ok(start >= 0 && end > start);

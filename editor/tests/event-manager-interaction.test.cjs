@@ -367,4 +367,10 @@ test('entering Event mode closes map media editing before installing event point
     assert.deepEqual(calls,['close media','sync true','event handlers']);
     calls.length=0;manager.setEventMode(false);
     assert.deepEqual(calls,['sync false','remove handlers']);
+    // An event left selected kept its model card and arrows over the map in the next tool.
+    manager.setEventMode(true);
+    manager.selectEvent=event=>{calls.push('select '+event);manager.selectedEvent=event;};
+    manager.selectedEvent={id:2};calls.length=0;manager.setEventMode(false);
+    assert.deepEqual(calls,['sync false','remove handlers','select null']);
+    assert.equal(manager.selectedEvent,null);
 });

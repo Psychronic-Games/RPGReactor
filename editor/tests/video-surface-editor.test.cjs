@@ -1,4 +1,5 @@
 const { source3D } = require('./helpers/runtime-3d-source.cjs');
+const { runtimeSource } = require('./helpers/runtime-source.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -615,11 +616,12 @@ test('Preview Event animates stepping pages and previews 3D-model pages in both 
     assert.match(events, /RREventPreviewModels\.thumbnail\(project, spec, this\.projectController\.mapEditor3D, pixels, direction\)/);
     assert.match(map3d, /static previewPageIndex\(mapData, event\)/);
     assert.match(map3d, /this\.eventSprite\(event, sheets, page\?\.image, previewIndex !== null && page\?\.stepAnime \? page : null\)/, '3D draws the previewed page');
-    assert.match(map3d, /RREventPreviewModels\.instance\(template, spec, page\?\.image\?\.direction \|\| 2\)/);
+    assert.match(map3d, /RREventPreviewModels\.instance\(template, spec, direction\)/);
     assert.match(map3d, /this\.animateEventPreviews\(now\);/);
     assert.match(html, /src="src\/utils\/EventPreviewModels\.js"/);
     const models = require(path.join(editorRoot, 'src', 'utils', 'EventPreviewModels.js'));
-    assert.deepEqual(Object.keys(models).sort(), ['animate', 'clear', 'instance', 'revision', 'templateFor', 'texturesDecoded', 'thumbnail']);
+    assert.deepEqual(Object.keys(models).sort(), ['THUMBNAILS_KEPT', 'animate', 'clear', 'disposeInstance', 'instance', 'nextMap', 'releaseGpu', 'revision',
+        'sharedGeometry', 'stats', 'sweep', 'templateFor', 'texturesDecoded', 'thumbnail']);
 });
 
 test('model-bound characters on flat maps render as sprites, the view the editor previews', () => {
@@ -638,7 +640,8 @@ test('model-bound characters on flat maps render as sprites, the view the editor
     assert.match(sprites, /if \(Reactor3D\.updateMapModelSprite\) Reactor3D\.updateMapModelSprite\(this\);/);
     const editorModels = read('src/utils/EventPreviewModels.js');
     assert.match(editorModels, /Reactor3D\.frameModelSprite\(object, Math\.round\(pixels\), thumbCamera\)/, 'the editor thumbnail uses the same framing');
-    assert.match(read('src/EventManager.js'), /sprite\.anchor\.set\(texture\.anchorX, texture\.anchorY\);\n\s+sprite\.x = \(event\.x \+ 0\.5\) \* tw;\n\s+sprite\.y = \(event\.y \+ 0\.5\) \* th;/, 'and places the origin on the tile centre');
+    assert.match(read('src/EventManager.js'), /sprite\.anchor\.set\(texture\.anchorX, texture\.anchorY\);\n\s+sprite\.x = \(x \+ 0\.5\) \* tw;\n\s+sprite\.y = \(y \+ 0\.5\) \* th;/, 'and places the origin on the tile centre');
+    assert.match(read('src/EventManager.js'), /return this\.modelSpriteAt\(this\.previewModelRaw\(event, pageIndex\), page\?\.image\?\.direction \|\| 2, event\.x, event\.y\);/, 'an event\'s preview: its own tile');
     assert.match(read('src/EventManager.js'), /map3d\.ensureLibraries\(\)\.then\(ready => \{/, '2D previews load three.js on demand');
     assert.match(read('css/styles.css'), /\.sidebar-header \{\n\s+background-color: var\(--color-bg-panel\);\n(?:.*\n){2}\s+border-left: 3px solid var\(--color-accent\);/);
 });
@@ -711,15 +714,15 @@ test('culled character sprites keep updating, three gets a clean unpack state, a
 });
 
 test('priority 3 draws above the tile layers yet y-sorts against characters in front of it', () => {
-    const objects = fs.readFileSync(path.join(editorRoot, '..', 'runtime', 'reactor_objects.js'), 'utf8');
+    const objects = runtimeSource('reactor_objects.js');
     const sprites = fs.readFileSync(path.join(editorRoot, '..', 'runtime', 'reactor_sprites.js'), 'utf8');
     assert.match(objects, /if \(this\._priorityType === 3\) return 5;\n\s+return this\._priorityType \* 2 \+ 1;/, 'the above layer, not MZ\'s z 7');
     assert.match(objects, /Game_CharacterBase\.prototype\.isSortedAbovePriority = function\(\) \{\n\s+return this\._priorityType === 3;/);
     assert.match(sprites, /this\.z = this\.reactorSortedZ\(\);/);
     assert.match(sprites, /if \(cy <= oy\) continue;\s+\/\/ behind it/, 'behind: own layer, so the event covers the character');
     assert.match(sprites, /if \(top >= bottom\) continue;\s+\/\/ clear below it\n\s+return 5;/, 'in front and overlapping: lifted to the event\'s layer');
-    assert.match(sprites, /const drawnWidth = sprite => \(\(sprite\._frame && sprite\._frame\.width\) \|\| sprite\.width \|\| 48\)/, 'measured from the frame, which is stable mid-update');
-    assert.match(sprites, /this\._reactorSortedAbove = sorted;/, 'the spriteset lists them once per frame');
+    assert.match(sprites, /function reactorDrawnWidth\(sprite\) \{\n\s+return \(\(sprite\._frame && sprite\._frame\.width\) \|\| sprite\.width \|\| 48\)/, 'measured from the frame, which is stable mid-update');
+    assert.match(sprites, /const sorted = this\._reactorSortedAbove \|\| \(this\._reactorSortedAbove = \[\]\);\n\s+sorted\.length = 0;/, 'the spriteset lists them once per frame');
     const page = read('src/event/EventPageEditor.js');
     assert.match(page, /<option value="3" \$\{page\.priorityType === 3 \? 'selected' : ''\}>\$\{this\._t\('event\.aboveCharactersSorted'\)\}<\/option>/);
     const i18n = read('src/I18nManager.js');

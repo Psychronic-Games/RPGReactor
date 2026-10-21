@@ -7,8 +7,8 @@
  * than to a product. Those are the things an author actually has to know, and
  * until now the only place they were written down was the engine source.
  *
- * Every sentence here describes what `runtime/reactor_objects.js` really does,
- * checked against it rather than against RPG Maker's documentation - the two
+ * Every sentence here describes what `runtime/reactor_objects*.js` really do,
+ * checked against them rather than against RPG Maker's documentation - the two
  * disagree in a few places, and the runtime wins.
  *
  * Rows carry their sentence as hover help (see utils/HoverHelp.js). Dropdown
@@ -25,6 +25,7 @@ class TraitHelp {
             12: 'Multiplies the chance a debuff on this parameter lands. Traits multiply together, so 0% makes the battler immune to it.',
             13: 'Multiplies the chance this state lands on the battler. Certain Hit actions ignore it.',
             14: 'Makes the battler immune to this state, and erases it if it is already there.',
+            15: 'The chance a buff on this parameter is accepted, a refresh included. It never changes how strong the buff is. Traits multiply together; 0% blocks new buffs while existing ones run out, and blocking all eight parameters takes eight traits.',
             21: 'Multiplies one of the eight main parameters. Separate traits multiply together, and buffs apply on top of the result.',
             22: 'Adds to one of the ten extra parameters. Every matching trait is summed, so these stack additively.',
             23: 'Multiplies one of the ten special parameters. Separate traits multiply together.',
@@ -43,7 +44,7 @@ class TraitHelp {
             54: 'Empties the slot and stops anything being equipped in it.',
             55: 'Changes what the equipment slots of this battler are.',
             61: 'A chance of one extra action this turn. Each trait is rolled on its own, so several can stack.',
-            62: 'Switches on one fixed battler behaviour.',
+            62: 'Switches on one fixed battler behavior.',
             63: 'Changes the animation played on defeat. Enemies only - actors ignore it.',
             64: 'A party-wide effect, active while this battler is in the party.'
         };
@@ -104,7 +105,7 @@ class TraitHelp {
         return flagHelp;
     }
 
-    /** The four Collapse Effects, in stored dataId order. */
+    /** The Collapse Effects, in stored dataId order. */
     static collapseEffects() {
         const tt = text => (window.I18n ? window.I18n.tText(text) : text);
         const collapseHelp = [
@@ -115,7 +116,8 @@ class TraitHelp {
             'The sprite breaks into drifting motes and blows away.',
             'The sprite burns away into rising embers and sparks.',
             'The sprite unravels into slow green motes that drift upward and glow.',
-            'The sprite breaks like glass: shards burst outward from the middle and fall.'
+            'The sprite breaks like glass: shards burst outward from the middle and fall.',
+            'The battler falls and stays on the ground. It can be revived.'
         ].map(tt);
         return collapseHelp;
     }
@@ -154,6 +156,7 @@ class TraitHelp {
         const methods = {
             11: ['elementRate', 'calcElementRate', 'elementsMaxRate'],
             12: ['debuffRate'],
+            15: ['buffRate', 'isBuffAccepted'],
             13: ['stateRate'],
             14: ['stateResistSet', 'isStateResist'],
             21: ['paramRate', 'param'],

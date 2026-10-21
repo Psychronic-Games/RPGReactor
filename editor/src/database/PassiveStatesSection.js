@@ -779,7 +779,7 @@
         section.setAttribute('tabindex', '0');
         section.style.outline = 'none';
         section.innerHTML = `
-            <div class="database-section-header">${tt('Passive States')}</div>
+            <div class="database-section-header" data-section-key="passive-states">${tt('Passive States')}</div>
             <div class="database-section-content">
                 <table class="traits-table passive-states-table">
                     <thead>
@@ -981,7 +981,7 @@
         let chosen = null;
 
         const close = () => overlay.remove();
-        const confirm = () => {
+        const accept = () => {
             if (!chosen) return;
             const kindId = kindSelect ? kindSelect.value : kinds[0];
             close();
@@ -1005,7 +1005,7 @@
                 });
                 row.addEventListener('dblclick', () => {
                     chosen = Number(row.dataset.stateId);
-                    confirm();
+                    accept();
                 });
             });
         };
@@ -1015,13 +1015,13 @@
             if (event.key === 'Enter') {
                 const first = list.querySelector('.passive-dialog-row');
                 if (first && !chosen) chosen = Number(first.dataset.stateId);
-                confirm();
+                accept();
             }
             if (event.key === 'Escape') close();
         });
         modal.querySelector('.passive-dialog-close').addEventListener('click', close);
         modal.querySelector('.passive-dialog-cancel').addEventListener('click', close);
-        okButton.addEventListener('click', confirm);
+        okButton.addEventListener('click', accept);
         // A click on the backdrop does not close the dialog: close deliberately.
         paint();
         setTimeout(() => filter.focus(), 0);

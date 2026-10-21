@@ -1247,6 +1247,71 @@
         Window_Base.prototype.fittingHeight = function(numLines) {
             return numLines * this.lineHeight() + this.standardPadding() * 2;
         };
+
+        // MV pads windows by 18; MZ's 12 comes from System 2, which MV data
+        // has no value for unless the editor has saved one.
+        Window_Base.prototype.standardPadding = function() {
+            const advanced = global.$dataSystem && $dataSystem.advanced;
+            return advanced && typeof advanced.windowPadding === "number" ? advanced.windowPadding : 18;
+        };
+
+        // MV lists command text from the left; only horizontal commands center.
+        if (global.Window_Command) {
+            Window_Command.prototype.itemTextAlign = function() { return "left"; };
+        }
+        if (global.Window_HorzCommand) {
+            Window_HorzCommand.prototype.itemTextAlign = function() { return "center"; };
+        }
+
+        // MV paints a window's back once: the stretched back and the tiled
+        // pattern drawn into one bitmap, faded by backOpacity as a whole. MZ
+        // fades the two layers separately, so a skin with an opaque pattern
+        // comes out almost solid (the 0.75 back reads as 0.94).
+        if (global.Window && Window.prototype._refreshBack) {
+            Window.prototype._refreshBack = function() {
+                const sprite = this._backSprite;
+                if (!sprite) return;
+                const m = this._margin;
+                const w = Math.max(0, Math.floor(this._width - m * 2));
+                const h = Math.max(0, Math.floor(this._height - m * 2));
+                const skin = this._windowskin;
+                const tiling = sprite.children && sprite.children[0];
+                if (tiling) tiling.visible = false;
+                sprite.scale.x = 1;
+                sprite.scale.y = 1;
+                sprite.move(m, m);
+                if (w <= 0 || h <= 0 || !skin || !skin.isReady()) {
+                    sprite.visible = false;
+                    return;
+                }
+                sprite.visible = true;
+                let bitmap = this._mvBackBitmap;
+                if (!bitmap || bitmap.width !== w || bitmap.height !== h) {
+                    if (bitmap) bitmap.destroy();
+                    bitmap = this._mvBackBitmap = new Bitmap(w, h);
+                } else {
+                    bitmap.clear();
+                }
+                bitmap.blt(skin, 0, 0, 96, 96, 0, 0, w, h);
+                for (let y = 0; y < h; y += 96) {
+                    for (let x = 0; x < w; x += 96) {
+                        bitmap.blt(skin, 0, 96, 96, 96, x, y, 96, 96);
+                    }
+                }
+                sprite.bitmap = bitmap;
+                sprite.setFrame(0, 0, w, h);
+                if (sprite.setColorTone) sprite.setColorTone(this._colorTone);
+            };
+            // The back picture belongs to the window; every scene change destroys its windows.
+            const _destroy = Window.prototype.destroy;
+            Window.prototype.destroy = function() {
+                if (this._mvBackBitmap) {
+                    this._mvBackBitmap.destroy();
+                    this._mvBackBitmap = null;
+                }
+                return _destroy.apply(this, arguments);
+            };
+        }
         if (global.Window_Selectable) {
             Window_Selectable.prototype.itemHeight = function() {
                 return this.lineHeight();
@@ -1471,6 +1536,26 @@
     // normal-priority ones. MV-authored games routed NPCs around
     // below-priority events (floor markers), so keep MV's stricter rule
     // for them — MZ games get the MZ rule from the corescript.
+    // MV's message commands (Show Text, Choices, Number, Item, Scrolling
+    // Text) step past what they consumed themselves and return false; MZ's
+    // return true and let executeCommand step. MV plugins wrap them without
+    // passing the result on (GALV_MessageStyles' command101), which under
+    // MZ's rule leaves the interpreter on the Show Choices it already ran:
+    // the choices open a second time, without their text, after the first
+    // answer. MV's own convention does not depend on the return value.
+    function installMessageCommandStepCompatibility() {
+        if (!global.Game_Interpreter) return;
+        for (const name of ["command101", "command102", "command103", "command104", "command105"]) {
+            const original = Game_Interpreter.prototype[name];
+            if (typeof original !== "function" || original.__mvStepsItself) continue;
+            Game_Interpreter.prototype[name] = function(params) {
+                if (original.call(this, params || this._params || [])) this._index++;
+                return false;
+            };
+            Game_Interpreter.prototype[name].__mvStepsItself = true;
+        }
+    }
+
     function installEventCollisionCompatibility() {
         if (!global.Game_Event || !Game_Event.prototype) return;
         Game_Event.prototype.isCollidedWithEvents = function(x, y) {
@@ -1711,6 +1796,57 @@
             }
             return origResize.apply(this, arguments);
         };
+    }
+
+    /**
+     * MV's System.json lacks the fields MZ added, and the MZ boot, title and
+     * menus read them: an MV project nobody had opened System 2 for stopped at
+     * boot ("Cannot read properties of undefined (reading
+     * 'mainFontFilename')"), then at the title (`titleCommandWindow`). Data
+     * without one of them gets MV's own behaviour: the 816x624 screen with the
+     * UI the same size, font size 28, window opacity 192, the 48/144/32 tile,
+     * face and icon sizes, the turn-based battle, all four item categories,
+     * key items counted, no autosave, splash screen or message skip, and the
+     * title's command window as MV placed it.
+     * The font names are MZ's defaults, which the font loader below swaps for
+     * the font gamefont.css declares; a plugin-set screen size still wins at
+     * boot (resizeScreen above). Only absent fields are filled.
+     */
+    function systemDefaults() {
+        return {
+            advanced: {
+                gameId: 0,
+                screenWidth: 816, screenHeight: 624,
+                uiAreaWidth: 816, uiAreaHeight: 624,
+                numberFontFilename: "mplus-2p-bold-sub.woff",
+                fallbackFonts: "Verdana, sans-serif",
+                fontSize: mvGameSemantics ? 28 : 26,
+                mainFontFilename: "mplus-1m-regular.woff",
+                windowOpacity: 192,
+                screenScale: 1
+            },
+            battleSystem: 0,
+            tileSize: 48, faceSize: 144, iconSize: 32,
+            itemCategories: [true, true, true, true],
+            optAutosave: false,
+            optKeyItemsNumber: true,
+            optMessageSkip: false,
+            optSplashScreen: false,
+            titleCommandWindow: { background: 0, offsetX: 0, offsetY: 0 }
+        };
+    }
+
+    function installSystemDefaults() {
+        if (!global.DataManager || DataManager.onLoad.__mvSystemDefaults) return;
+        var origOnLoad = DataManager.onLoad;
+        DataManager.onLoad = function(object) {
+            if (object && object === global.$dataSystem) {
+                var defaults = systemDefaults();
+                for (var key in defaults) if (object[key] === undefined) object[key] = defaults[key];
+            }
+            return origOnLoad.apply(this, arguments);
+        };
+        DataManager.onLoad.__mvSystemDefaults = true;
     }
 
     function installSceneLayoutCompatibility() {
@@ -2189,6 +2325,21 @@
                 obj[name] = fn;
             }
         };
+
+        // MV keeps icon and face sizes as statics; MZ moved them to
+        // ImageManager. Plugins that build an icon bitmap from them
+        // (GALV_ActionIndicators) otherwise make it 0x0 and draw nothing.
+        if (global.ImageManager) {
+            var sizeStatic = function(owner, name, value) {
+                if (owner && owner[name] === undefined && value !== undefined) owner[name] = value;
+            };
+            sizeStatic(global.Window_Base, "_iconWidth", ImageManager.iconWidth);
+            sizeStatic(global.Window_Base, "_iconHeight", ImageManager.iconHeight);
+            sizeStatic(global.Window_Base, "_faceWidth", ImageManager.faceWidth);
+            sizeStatic(global.Window_Base, "_faceHeight", ImageManager.faceHeight);
+            sizeStatic(global.Sprite_StateIcon, "_iconWidth", ImageManager.iconWidth);
+            sizeStatic(global.Sprite_StateIcon, "_iconHeight", ImageManager.iconHeight);
+        }
 
         // ---- Game_Map.tileEvents (MV name) <-> _tileEvents (MZ rename).
         // MV saves serialize the field as `tileEvents`; Reactor reads
@@ -5475,6 +5626,7 @@
     installBackgroundSnapCompatibility();
     installTraitObjectsCopyCompatibility();
     installBoxSizeCompatibility();
+    installSystemDefaults();
     installStaleEventGuard();
     installSpriteBaseCompatibility();
     installButtonCompatibility();
@@ -5586,11 +5738,30 @@
         }
 
         // An event whose data is gone, or whose pages all fail their
-        // conditions, reads as an empty page rather than throwing.
+        // conditions, reads as an empty page rather than throwing: a whole
+        // one, since MV plugins guard with `if (page)` and then walk its
+        // list (GALV_CFStepSE read `page.list.length` of a bare {} and
+        // stopped SideMV on its first map).
+        var emptyPage = {
+            conditions: { actorId: 1, actorValid: false, itemId: 1, itemValid: false, selfSwitchCh: "A", selfSwitchValid: false,
+                switch1Id: 1, switch1Valid: false, switch2Id: 1, switch2Valid: false, variableId: 1, variableValid: false, variableValue: 0 },
+            directionFix: false,
+            image: { characterIndex: 0, characterName: "", direction: 2, pattern: 0, tileId: 0 },
+            list: [],
+            moveFrequency: 3,
+            moveRoute: { list: [{ code: 0, parameters: [] }], repeat: true, skippable: false, wait: false },
+            moveSpeed: 3, moveType: 0, priorityType: 0,
+            stepAnime: false, through: false, trigger: 0, walkAnime: true
+        };
         if (global.Game_Event && !marked(Game_Event.prototype, "page")) {
             Game_Event.prototype.page = mark(function() {
                 var event = this.event();
-                return (event && event.pages[this._pageIndex]) || {};
+                var page = event && event.pages[this._pageIndex];
+                if (page) return page;
+                // Kept whole: a plugin that writes to the page it read writes here.
+                if (!Array.isArray(emptyPage.list)) emptyPage.list = [];
+                emptyPage.list.length = 0;
+                return emptyPage;
             });
             Game_Event.prototype.list = mark(function() {
                 return this.page().list || [];
@@ -5644,6 +5815,7 @@
         installSceneLayoutCompatibility();
         installMapDataReloadCompatibility();
         installEventCollisionCompatibility();
+        installMessageCommandStepCompatibility();
         installDamagePopupCompatibility();
         installBattleTurnFlowCompatibility();
         installBattleFieldOffsetCompatibility();

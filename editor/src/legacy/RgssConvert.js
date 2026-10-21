@@ -94,9 +94,41 @@
      * evaluate where the call runs. An empty string is true, as the scripts read it. Throws when the
      * condition cannot be translated, so the call is kept as a comment rather than guessed.
      */
+    const SPRINTF = '((f, ...v) => { let i = 0; return String(f).replace(/%[sd]/g, (m) => (m === \'%d\' ? Math.trunc(Number(v[i++])) : String(v[i++]))); })(';
+    /** Top-level comma-separated parts of generated JS (an argument list). */
+    function splitArgs(text) {
+        const out = [];
+        let depth = 0, quote = null, start = 0;
+        for (let i = 0; i < text.length; i++) {
+            const c = text[i];
+            if (quote) { if (c === '\\') i++; else if (c === quote) quote = null; continue; }
+            if (c === '"' || c === "'" || c === '`') quote = c;
+            else if ('([{'.includes(c)) depth++;
+            else if (')]}'.includes(c)) depth--;
+            else if (c === ',' && !depth) { out.push(text.slice(start, i).trim()); start = i + 1; }
+        }
+        out.push(text.slice(start).trim());
+        return out;
+    }
     function rubyCondition(literalJs, options) {
         let text;
         const fail = (why) => { throw (T && T.Fail ? new T.Fail(why) : new SyntaxError(why)); };
+        // A condition put together with sprintf("…%d…", i), directly or through a local: the format is translated
+        // with each mark a local, and the values go in when the call runs.
+        if (/^[a-z_]\w*$/.test(literalJs) && options.localCode && options.localCode.has(literalJs)) literalJs = options.localCode.get(literalJs);
+        if (String(literalJs).startsWith(SPRINTF) && literalJs.endsWith(')')) {
+            const [format, ...values] = splitArgs(literalJs.slice(SPRINTF.length, -1));
+            let f;
+            try { f = JSON.parse(format); } catch (_) { fail('condition format is not a string'); }
+            let k = 0;
+            const names = [];
+            const ruby = f.replace(/%[sd]/g, () => { const n = 'rrfmt' + k++; names.push(n); return n; });
+            if (names.length !== values.length) fail('condition format and values differ');
+            const locals = Object.assign({}, options.locals, ...names.map(n => ({ [n]: 'number' })));
+            const js = T ? T.transpileExpression(ruby, Object.assign({}, options, { locals })) : null;
+            if (js === null || js === undefined) fail('condition ' + f);
+            return `((${names.join(', ')}) => (${String(js).replace(/;\s*$/, '')}))(${values.join(', ')})`;
+        }
         try { text = JSON.parse(literalJs); } catch (_) { fail('condition is not a string'); }
         if (!String(text).trim()) return 'true';
         const js = T ? T.transpileExpression(String(text), options) : null;
@@ -411,7 +443,7 @@
     function ruby(source, kind, context = {}) {
         if (!T) return null;
         const { calls, ivars, extra } = familyTables(context);
-        const options = Object.assign({ self: context.self === 'character' ? 'character' : 'interpreter', constants: context.constants || {}, calls, ivars }, extra);
+        const options = Object.assign({ self: context.self === 'character' ? 'character' : 'interpreter', constants: context.constants || {}, calls, ivars, locals: context.locals, declared: context.declared }, extra);
         if (kind === 'formula') return T.transpileFormula(source, options);
         return kind === 'expression' ? T.transpileExpression(source, options) : T.transpile(source, options);
     }
@@ -423,6 +455,26 @@
      * comments in place. `partial` says whether any line was left behind.
      */
     function rubyProgram(lines, context) {
+        // Fiber.yield ending the script hands the frame back: after SceneManager.call (the new scene starts), or
+        // repeated while a message, choice or transfer runs (the interpreter's own wait for it).
+        const YIELD_WAITS = [[/^\$game_message\.(choice\?|busy\?|visible)$/, 'message'], [/^\$game_player\.transfer\?$/, 'transfer']];
+        const trailingWait = (line) => {
+            const t = line.replace(/#.*$/, '').trim();
+            if (!t) return '';
+            if (t === 'Fiber.yield') return 'this.wait(1);';
+            const m = /^Fiber\.yield\s+while\s+(.+)$/.exec(t);
+            const known = m && YIELD_WAITS.find(([re]) => re.test(m[1].trim()));
+            return known ? `this.setWaitMode("${known[1]}");` : null;
+        };
+        if (context.self !== 'character') {
+            const waits = [];
+            let end = lines.length;
+            for (let w; end > 0 && (w = trailingWait(lines[end - 1])) !== null; end--) if (w) waits.unshift(w);
+            if (waits.length) {
+                const r = rubyProgram(lines.slice(0, end), context);
+                return r && { code: [...r.code.filter(l => l !== ''), waits[waits.length - 1]], partial: r.partial };
+            }
+        }
         const whole = ruby(lines.join('\n'), 'statement', context);
         if (whole !== null) return { code: whole.split('\n'), partial: false };
         if (!T) return null;
@@ -430,8 +482,12 @@
         if (!standalone) return null;
         const out = [];
         let translated = 0;
+        // Each line knows the locals the lines before it declared (goods = […] then scene.prepare(goods)).
+        const locals = {};
         for (const line of lines) {
-            const js = ruby(line, 'statement', context);
+            const declared = {};
+            const js = ruby(line, 'statement', Object.assign({}, context, { locals: Object.assign({}, locals), declared }));
+            if (js !== null) Object.assign(locals, declared);
             if (js !== null) { out.push(...js.split('\n').filter(l => l !== '')); if (js) translated++; }
             else out.push('// Ruby (did not carry over): ' + line);
         }
@@ -462,6 +518,14 @@
         }
         if (typeof out.name === 'string') out.name = [out.name];
         return out;
+    }
+
+    /**
+     * The window scale an RGSS import opens at: a whole number, so every game pixel covers the same screen
+     * pixels, 2 when twice the screen fits a 1080p desktop, else 1. Any other factor smears text and edges.
+     */
+    function windowScale(width, height) {
+        return width * 2 <= 1800 && height * 2 <= 1000 ? 2 : 1;
     }
 
     /**
@@ -566,7 +630,15 @@
         const out = {};
         for (const source of sources) {
             const stack = [];
-            for (const line of String(source || '').split(/\r?\n/)) {
+            const lines = String(source || '').split(/\r?\n/);
+            for (let li = 0; li < lines.length; li++) {
+                let line = lines[li];
+                // An array of strings written over several lines is read as one line.
+                if (/^\s*[A-Z][A-Za-z0-9_]*\s*=\s*\[/.test(line) && !/\]\s*(#.*)?$/.test(line)) {
+                    let joined = line.replace(/#.*$/, ''), k = li;
+                    while (k + 1 < lines.length && !/\]\s*(#.*)?$/.test(lines[k]) && k - li < 400) joined += ' ' + lines[++k].replace(/#.*$/, '').trim();
+                    if (/\]\s*$/.test(joined)) { line = joined; li = k; }
+                }
                 const mod = /^\s*(module|class)\s+([A-Z][A-Za-z0-9_:]*)/.exec(line);
                 if (mod) { stack.push(mod[2]); continue; }
                 if (/^\s*end\b/.test(line) && stack.length && /^\s{0,2}end\b/.test(line)) stack.pop();
@@ -606,6 +678,8 @@
                 return `\\I[${r.icon}]${r.name}`;
             });
         }
+        // VX's \G opens the gold window (MZ's \$); in VX Ace it is the currency name, so only VX games say so.
+        if (codes.vxGold) out = out.replace(/\\G(?![A-Za-z])/g, '\\$');
         if (codes.messageFace) out = out.replace(/\\MF\[\s*([^,\]]*?)\s*,\s*(\d+)\s*\]/gi, (m, face, index) => { tag(notes, 'textCodeConverted'); return `\\RRFACE[${face},${index}]`; });
         return out;
     }
@@ -698,12 +772,12 @@
     const byId = (records, convert) => { const out = [null]; for (const r of list(records)) if (r && r.id) out[r.id] = convert(r); for (let i = 1; i < out.length; i++) if (out[i] === undefined) out[i] = null; return out; };
 
     function database(ace, notes) {
-        // A damage formula is Ruby. Plain arithmetic reads the same in JavaScript and stays as written; anything else
-        // (division, method calls, statements) is translated. One that cannot be read stays: MZ gives it 0, as Ace
+        // A damage formula is Ruby. Plain arithmetic on MZ's names reads the same in JavaScript and stays as written;
+        // anything else (division, method calls, a Ruby name like b.actor_id, statements) is translated. One that cannot be read stays: MZ gives it 0, as Ace
         // gave 0 for a formula that raised.
         const formulaOf = (d) => {
             const out = damage(d);
-            if (!out.type || /^[\w\s.+\-*()]*$/.test(out.formula) && !/\b(rand|p)\b/.test(out.formula)) return out;
+            if (!out.type || /^[\w\s.+\-*()]*$/.test(out.formula) && !/\b(rand|p)\b|\.\w*_/.test(out.formula)) return out;
             const js = ruby(out.formula, 'formula', activeContext);
             if (js === null) { tag(notes, 'rubyFormula'); return out; }
             tag(notes, 'formulaTranslated');
@@ -915,10 +989,11 @@
         blit(out, scaleNearest(region(0, 64, 64, 64), 1.5), 0, 0, 96, 96, 0, 96);
         clear(96, 0, 96, 96);
         const F = (x, y, w, h) => region(64 + x, y, w, h);
-        blit(out, F(0, 0, 16, 16), 0, 0, 16, 16, 96, 0); blit(out, F(48, 0, 16, 16), 0, 0, 16, 16, 176, 0);
-        blit(out, F(0, 48, 16, 16), 0, 0, 16, 16, 96, 80); blit(out, F(48, 48, 16, 16), 0, 0, 16, 16, 176, 80);
         blit(out, stretch(F(16, 0, 32, 16), 80, 16), 0, 0, 80, 16, 104, 0); blit(out, stretch(F(16, 48, 32, 16), 80, 16), 0, 0, 80, 16, 104, 80);
         blit(out, stretch(F(0, 16, 16, 32), 16, 80), 0, 0, 16, 80, 96, 8); blit(out, stretch(F(48, 16, 16, 32), 16, 80), 0, 0, 16, 80, 176, 8);
+        // The corners go on last: the edges reach into the corner cells, and a frame's corner ornaments must stay whole.
+        blit(out, F(0, 0, 16, 16), 0, 0, 16, 16, 96, 0); blit(out, F(48, 0, 16, 16), 0, 0, 16, 16, 176, 0);
+        blit(out, F(0, 48, 16, 16), 0, 0, 16, 16, 96, 80); blit(out, F(48, 48, 16, 16), 0, 0, 16, 16, 176, 80);
         // The scroll arrows sit in the frame cell's middle in both engines: Ace's 16×8, centred in MZ's 24×12 slots.
         blit(out, F(24, 16, 16, 8), 0, 0, 16, 8, 136, 26); blit(out, F(24, 40, 16, 8), 0, 0, 16, 8, 136, 62);
         clear(96, 96, 96, 48);
@@ -929,6 +1004,18 @@
             const dx = 96 + (i % 8) * 12, dy = 144 + Math.floor(i / 8) * 12;
             for (let y = 0; y < 12; y++) for (let x = 0; x < 12; x++) { const di = ((dy + y) * out.width + dx + x) * 4; for (let k = 0; k < 4; k++) out.data[di + k] = skin.data[si + k]; }
         }
+        return out;
+    }
+
+    /**
+     * An RGSS skin's frame cell (64 × 64 at (x, 0): 64 in VX and VX Ace, 128 in XP), kept beside the converted skin
+     * as <name>_frame.png: RGSS draws a frame's 16 px corners as they are and repeats its edges, where MZ's frame
+     * stretches them, so the runtime draws it from this (System.json rrRgssFrames lists the skins that have one).
+     */
+    function frameCell(skin, x = 64) {
+        const K = root.RRLegacyConvert || (typeof require === 'function' ? require('./LegacyConvert.js') : null);
+        const out = K.blank(64, 64);
+        if (skin && skin.width >= x + 64 && skin.height >= 64) K.blit(out, skin, x, 0, 64, 64, 0, 0);
         return out;
     }
 
@@ -1012,7 +1099,7 @@
     /** Script constants (from scriptConstants) that Ruby translation resolves while converting. */
     const setContext = (context) => { activeContext = context || {}; };
 
-    const api = { skipsTitle, audioAliases, applyAudioAliases, plain, audio, ruby, rubyProgram, parseCall, scriptFamilies, FAMILIES, scriptConstants, fontDefaults, chooseFont, SYSTEM_FONTS, screenSize, gdsParallaxLayers, rgssFontScale, setContext, windowSkin, commands, database, system, vocabMessages, mapInfos, map, BUTTONS };
+    const api = { skipsTitle, audioAliases, applyAudioAliases, plain, audio, ruby, rubyProgram, parseCall, scriptFamilies, FAMILIES, scriptConstants, fontDefaults, chooseFont, SYSTEM_FONTS, screenSize, windowScale, frameCell, gdsParallaxLayers, rgssFontScale, setContext, windowSkin, commands, database, system, vocabMessages, mapInfos, map, BUTTONS };
     root.RRRgssConvert = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

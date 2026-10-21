@@ -956,7 +956,7 @@ class PluginCommandEditor {
         }
 
         if (!this.fs.existsSync(browseDir)) {
-            alert(tt('Directory not found:') + ' ' + (arg.dir || browseDir));
+            RRDialog.alert(tt('Directory not found:') + ' ' + (arg.dir || browseDir), { title: tt('Select File'), kind: 'warning' });
             return;
         }
 
@@ -967,7 +967,7 @@ class PluginCommandEditor {
             { recursive: Boolean(arg.dir) });
 
         if (files.length === 0) {
-            alert(tt('No files found in:') + ' ' + (arg.dir || browseDir));
+            RRDialog.alert(tt('No files found in:') + ' ' + (arg.dir || browseDir), { title: tt('Select File') });
             return;
         }
 

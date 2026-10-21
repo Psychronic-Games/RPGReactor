@@ -1,4 +1,5 @@
 const assert = require('node:assert/strict');
+const { runtimeSource } = require('./helpers/runtime-source.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
@@ -271,7 +272,7 @@ test('the error sweep sees sequence tracks, and a missing file is reported', () 
 test('the runtime hooks are in place: the scene tick, map autoplay and the vehicle path', () => {
     const scenes = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_scenes.js'), 'utf8');
     assert.match(scenes, /AudioManager\.checkErrors\(\);\n\s*AudioManager\.updateBgmSequence\(\);/);
-    const objects = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_objects.js'), 'utf8');
+    const objects = runtimeSource('reactor_objects.js');
     assert.match(objects, /AudioManager\.playBgm\(AudioManager\.mapBgmObject\(\$dataMap, this\.mapId\(\)\)\)/);
     assert.match(objects, /this\._walkingBgm = AudioManager\.mapBgmObject\(\$dataMap, \$gameMap\.mapId\(\)\)/);
 });
@@ -834,7 +835,7 @@ test('battle music: a troop or a map names a track or a library entry, each in f
 });
 
 test('Game_System.battleBgm asks the troop, then Change Battle BGM, then the map, then System', () => {
-    const objects = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_objects.js'), 'utf8');
+    const objects = runtimeSource('reactor_objects.js');
     const source = /Game_System\.prototype\.battleBgm = function\(\) \{[\s\S]*?\n\};/.exec(objects)[0];
     const answers = { troop: null, map: null };
     const context = {

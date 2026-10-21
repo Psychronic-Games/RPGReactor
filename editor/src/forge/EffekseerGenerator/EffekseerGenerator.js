@@ -1646,9 +1646,12 @@ class EffekseerGenerator {
                 // Hash-stamp the copied filename: the runtime caches
                 // textures by PATH, so re-using a name would show the old
                 // pixels until restart.
+                // Every byte and the length: a sample of every 997th byte gave
+                // every PNG under 1 KB the same name, so a second small texture
+                // of the same name was never written and the first one showed.
                 const raw = fs.readFileSync(file.path);
-                let h = 5381;
-                for (let i = 0; i < raw.length; i += 997) h = ((h << 5) + h + raw[i]) >>> 0;
+                let h = 5381 ^ raw.length;
+                for (let i = 0; i < raw.length; i++) h = ((h << 5) + h + raw[i]) >>> 0;
                 const ext = path.extname(file.path);
                 const stem = path.basename(file.path, ext).replace(/[^A-Za-z0-9_-]/g, '');
                 const baseName = `${stem}_${h.toString(36)}${ext}`;
@@ -2178,11 +2181,13 @@ class EffekseerGenerator {
         this._scheduleRebuild();
     }
 
-    _savePreset() {
+    async _savePreset() {
         const recipe = this._recipe();
         if (!recipe) return;
-        const name = (prompt(this._t('efk.presetName'), '') || '').trim();
-        if (!name) return;
+        const typed = await RRDialog.prompt(this._t('efk.presetName'), { title: this._tx('Save Preset'), value: '', ok: this._tx('Save') });
+        const name = (typed || '').trim();
+        // The preset is for the recipe that was in the panel when the name was asked.
+        if (!name || this._recipe() !== recipe) return;
         const all = this._loadPresets();
         if (!all[recipe.id]) all[recipe.id] = {};
         all[recipe.id][name] = { ...this._params() };
@@ -2294,7 +2299,7 @@ class EffekseerGenerator {
         try {
             const gl = canvas.getContext('webgl', { premultipliedAlpha: false, alpha: false }) ||
                        canvas.getContext('experimental-webgl', { premultipliedAlpha: false, alpha: false });
-            if (!gl) { this._overlay('WebGL unavailable', true); return; }
+            if (!gl) { this._overlay(this._tx('WebGL unavailable'), true); return; }
             this._gl = gl;
             this._efkContext = effekseer.createContext();
             this._efkContext.init(gl);
@@ -2302,7 +2307,7 @@ class EffekseerGenerator {
             else this._efkContext.setRestorationOfStatesFlag(true);
         } catch (e) {
             console.error('EffekseerGenerator: context init failed:', e);
-            this._overlay('Effekseer init failed', true);
+            this._overlay(this._tx('Effekseer init failed'), true);
             return;
         }
         this._startLoop(canvas);
@@ -2713,7 +2718,10 @@ class EffekseerGenerator {
             const effectsDir = path.join(project.path, 'effects');
             const mainPath = path.join(effectsDir, `${name}.efkefc`);
             if (fs.existsSync(mainPath) &&
-                !confirm(`effects/${name}.efkefc ${this._tx('already exists in this project. Overwrite it?')}`)) {
+                !(await RRDialog.confirm(this._tx('{file} already exists in this project. Overwrite it?').replace('{file}', () => `effects/${name}.efkefc`),
+                    { title: this._tx('Overwrite File'), ok: this._tx('Overwrite'), danger: true }))) {
+                // The line may still say "Exported" from an earlier export of this file.
+                this._status(this._tx('Export canceled'));
                 return;
             }
             for (const file of files.values()) {

@@ -13,7 +13,7 @@
  *     reason unlisted.
  *
  * Command parameter layouts are taken from the Reactor runtime's own
- * Game_Interpreter (runtime/reactor_objects.js), not from memory of MZ.
+ * Game_Interpreter (runtime/reactor_objects_interpreter.js), not from memory of MZ.
  */
 class DatabaseReferenceFinder {
 

@@ -13,6 +13,9 @@
 
 const RR_EfkTextures = (() => {
     const CACHE = new Map();
+    // Parametric names put their numbers in the key, so a dragged slider makes a new canvas at every stop:
+    // the least recently asked for go once there are more than this many.
+    const CACHE_LIMIT = 96;
 
     const make = (size, draw) => {
         const c = document.createElement('canvas');
@@ -844,6 +847,12 @@ const RR_EfkTextures = (() => {
             const gen = GENERATORS[base];
             if (!gen) throw new Error(`RR_EfkTextures: unknown texture "${name}"`);
             CACHE.set(key, gen(size, opts));
+            if (CACHE.size > CACHE_LIMIT) CACHE.delete(CACHE.keys().next().value);
+        } else {
+            // Asked for again: it becomes the last to go.
+            const canvas = CACHE.get(key);
+            CACHE.delete(key);
+            CACHE.set(key, canvas);
         }
         return CACHE.get(key);
     }
@@ -960,6 +969,6 @@ const RR_EfkTextures = (() => {
         return out;
     }
 
-    return { NAMES: Object.keys(GENERATORS), SIZES, get, dataUrl, pngBytes,
+    return { NAMES: Object.keys(GENERATORS), SIZES, CACHE_LIMIT, cached: () => CACHE.size, get, dataUrl, pngBytes,
              userTextDataUrl, userParaDataUrl, userParaInfo, userTextPngBytes };
 })();

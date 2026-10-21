@@ -84,7 +84,12 @@ class MessageCommandEditor {
                 configurable: true,
                 enumerable: true,
                 get: () => this._activeHeader()[key],
-                set: value => { this._activeHeader()[key] = value; }
+                set: value => {
+                    const header = this._activeHeader();
+                    header[key] = value;
+                    // A picture is the whole choice: the message's own Automatic or None goes with it.
+                    if (flat === 'faceImage' && value) delete header.faceMode;
+                }
             });
         }
     }
@@ -157,6 +162,10 @@ class MessageCommandEditor {
         } else {
             this.resetToDefaults();
         }
+
+        // What each box's face was when it was read: a choice put back to that is written back as it was.
+        for (const box of this.boxes) box.faceRead = { name: box.header.faceName || '', mode: box.header.faceMode };
+        this._autoMemo = null;
 
         if (!this.modal) {
             this.createModal();
@@ -524,7 +533,12 @@ class MessageCommandEditor {
     }
 
     /**
-     * Create face selector column
+     * The face column: what the message shows beside its text. Automatic is
+     * the speaker's face (found by the game from the speaker name: an actor,
+     * an event of that name, or the event that runs the message), None is no
+     * face, Picture is a face from img/faces as RPG Maker has it. The box
+     * above the three shows what the choice will be, and the line under it
+     * says who Automatic found, or why nobody.
      */
     createFaceSelector() {
         const column = document.createElement('div');
@@ -533,6 +547,7 @@ class MessageCommandEditor {
             flex-direction: column;
             gap: 8px;
             width: 150px;
+            flex-shrink: 0;
         `;
 
         const label = document.createElement('div');
@@ -547,55 +562,406 @@ class MessageCommandEditor {
         canvas.style.cssText = `
             border: 1px solid var(--color-border-input);
             background-color: var(--color-bg-input);
-            image-rendering: pixelated;
-            image-rendering: -moz-crisp-edges;
-            image-rendering: crisp-edges;
             cursor: pointer;
         `;
 
         // Double-click to open face picker
         canvas.addEventListener('dblclick', () => this.browseFaces());
 
-        // Browse button
-        const browseBtn = document.createElement('button');
-        browseBtn.textContent = this._t('Browse...');
-        browseBtn.style.cssText = `
-            padding: 6px 16px;
-            background-color: var(--color-bg-panel);
-            color: var(--color-text);
-            border: 1px solid var(--color-border-input);
-            border-radius: 3px;
-            cursor: pointer;
-            font-size: 12px;
+        const hint = document.createElement('div');
+        hint.className = 'face-choice-hint';
+        hint.setAttribute('aria-live', 'polite');
+        hint.style.cssText = `
+            min-height: 30px; font-size: 11px; line-height: 1.35;
+            color: var(--color-text-muted); overflow-wrap: anywhere;
         `;
-        browseBtn.addEventListener('click', () => this.browseFaces());
 
-        // Clear button
-        const clearBtn = document.createElement('button');
-        clearBtn.textContent = this._t('Clear');
-        clearBtn.style.cssText = `
-            padding: 6px 16px;
-            background-color: var(--color-bg-panel);
-            color: var(--color-text);
-            border: 1px solid var(--color-border-input);
-            border-radius: 3px;
-            cursor: pointer;
-            font-size: 12px;
-        `;
-        clearBtn.addEventListener('click', () => {
-            this.faceImage = '';
-            this.faceIndex = 0;
-            this.updateFacePreview();
-        });
+        const choices = document.createElement('div');
+        choices.className = 'face-choice-buttons';
+        choices.setAttribute('role', 'group');
+        choices.setAttribute('aria-label', this._t('Face:'));
+        choices.style.cssText = 'display: flex; flex-direction: column; gap: 4px;';
+        const choice = (mode, text, title, onClick) => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.dataset.faceMode = mode;
+            button.textContent = text;
+            if (title) button.title = title;
+            button.style.cssText = `
+                padding: 6px 10px;
+                background-color: var(--color-bg-panel);
+                color: var(--color-text);
+                border: 1px solid var(--color-border-input);
+                border-radius: 3px;
+                cursor: pointer;
+                font-size: 12px;
+                text-align: left;
+            `;
+            button.addEventListener('click', onClick);
+            choices.appendChild(button);
+        };
+        choice('auto', this._t('Automatic'), this._t("The speaker's face"), () => this._setFaceMode('auto'));
+        choice('none', this._t('None'), '', () => this._setFaceMode('none'));
+        choice('picture', this._t('Picture...'), '', () => this.browseFaces());
 
         column.appendChild(label);
         column.appendChild(canvas);
-        column.appendChild(browseBtn);
-        column.appendChild(clearBtn);
+        column.appendChild(hint);
+        column.appendChild(choices);
 
         // Face preview will be updated after renderContent completes
 
         return column;
+    }
+
+    //-------------------------------------------------------------------------
+    // The speaker's face (Automatic). The rules are the game's own
+    // (runtime/reactor_speaker_face.js, loaded from the runtime folder), read
+    // against what the editor knows: the database, and for a map's event the
+    // event being edited and the others on its map.
+
+    /** The project's switch: what a Show Text with no face picture does when it does not say. */
+    _projectFaceOn() {
+        const system = this.databaseManager && this.databaseManager.getSystem ? this.databaseManager.getSystem() : null;
+        return !!system && system.reactorSpeakerFace === true;
+    }
+
+    /** What a box's face is: 'picture', 'auto' or 'none'. */
+    _faceMode(header) {
+        const own = header || this._activeHeader();
+        if (own.faceName) return 'picture';
+        if (own.faceMode === 'auto' || own.faceMode === 'none') return own.faceMode;
+        return this._projectFaceOn() ? 'auto' : 'none';
+    }
+
+    /**
+     * Automatic or None for the active box. The choice is written on the
+     * command only when it differs from what the project's switch does, so a
+     * message that follows the project stays RPG Maker's five parameters; a
+     * choice the command was read with comes back exactly as it was written.
+     */
+    _setFaceMode(mode) {
+        const header = this._activeHeader();
+        const box = this.boxes[this.activeIndex];
+        const read = (box && box.faceRead) || { name: '', mode: undefined };
+        const projectMode = this._projectFaceOn() ? 'auto' : 'none';
+        const readMode = read.name ? 'picture' : (read.mode === 'auto' || read.mode === 'none') ? read.mode : projectMode;
+        header.faceName = '';
+        header.faceIndex = 0;
+        if (mode === readMode && typeof read.mode === 'string') header.faceMode = read.mode;
+        else if (mode === projectMode) delete header.faceMode;
+        else header.faceMode = mode;
+        this.updateFacePreview();
+        this.updateGuide();
+    }
+
+    /** The game's rules for who speaks, or null while they load. */
+    _speakerRules() {
+        if (window.ReactorSpeakerFace) return window.ReactorSpeakerFace;
+        if (!this._rulesLoading) {
+            this._rulesLoading = this._loadSpeakerRules().then(ready => {
+                if (!ready) return;
+                this._autoMemo = null;
+                if (this.modal && this.modal.style.display !== 'none') {
+                    this.updateFacePreview();
+                    this.updateGuide();
+                }
+            });
+        }
+        return null;
+    }
+
+    async _loadSpeakerRules() {
+        const file = 'reactor_speaker_face.js';
+        const script = (url, label) => new Promise((resolve, reject) => {
+            const element = document.createElement('script');
+            element.src = url;
+            element.dataset.rrSource = label;
+            element.onload = resolve;
+            element.onerror = () => { element.remove(); reject(new Error(`Could not load ${label}`)); };
+            document.head.appendChild(element);
+        });
+        try {
+            const host = window.RPGReactorWebHost;
+            if (host && host.mode === 'web' && host.projectRoot && typeof host.assetUrl === 'function') {
+                const url = `${String(host.projectRoot).replace(/\/+$/, '')}/js/${file}`;
+                await script(host.assetUrl(url), url);
+            } else {
+                const manager = this.projectController && this.projectController.projectManager;
+                const runtimePath = manager && manager.getRuntimePath ? manager.getRuntimePath() : null;
+                if (!runtimePath || typeof require !== 'function') return false;
+                const fs = require('fs'), full = require('path').join(runtimePath, file);
+                if (!fs.existsSync(full)) return false;
+                const url = URL.createObjectURL(new Blob([fs.readFileSync(full, 'utf8') + '\n//# sourceURL=' + full], { type: 'text/javascript' }));
+                try { await script(url, full); } finally { URL.revokeObjectURL(url); }
+            }
+        } catch (error) {
+            console.warn('Show Text:', error);
+        }
+        return !!window.ReactorSpeakerFace;
+    }
+
+    /** The event this dialog edits a message of, when it was opened from a map's event; nothing otherwise (a common event, a battle event). */
+    _speakerHost() {
+        const manager = this.projectController && this.projectController.eventManager;
+        const editor = manager && manager.eventEditor;
+        if (editor && editor.currentEvent && editor.commandList && editor.commandList.messageEditor === this) {
+            const pageIndex = Number.isInteger(editor.commandList.currentPageIndex)
+                ? editor.commandList.currentPageIndex : (editor.currentPageIndex || 0);
+            return { editor, event: editor.currentEvent, pageIndex, map: typeof editor._currentMap === 'function' ? editor._currentMap() : null };
+        }
+        return { editor: null, event: null, pageIndex: 0, map: null };
+    }
+
+    /** The actors, the starting party and the map's events, as the rules read them. No variables: their values live in a running game. */
+    _speakerWorld(host) {
+        const data = (this.databaseManager && this.databaseManager.data) || {};
+        const system = data.system || {};
+        const list = Array.isArray(data.actors) ? data.actors : [];
+        const nameOf = id => (list[id] && list[id].name) || '';
+        const party = Array.isArray(system.partyMembers) ? system.partyMembers : [];
+        const events = [];
+        if (host.event) {
+            for (const event of (host.map && host.map.events) || []) {
+                if (event && event.id !== host.event.id) events.push({ id: event.id, name: event.name || '' });
+            }
+            events.push({ id: host.event.id, name: host.event.name || '' });
+        }
+        return {
+            actors: list.filter(Boolean).map(actor => ({ id: actor.id, name: actor.name || '' })),
+            party, events, runningEventId: host.event ? host.event.id : 0,
+            lookup: { actorName: nameOf, partyMemberName: n => nameOf(party[n - 1]), partyMemberId: n => party[n - 1] || 0, currency: system.currencyUnit || '' }
+        };
+    }
+
+    /**
+     * What Automatic will show for a box: { state, hint } with state 'face'
+     * (name, index: a file in img/faces), 'model' (spec: a portrait of that
+     * model), 'none', or 'unknown' when only the running game can tell.
+     */
+    _automatic(header) {
+        const raw = String((header && header.speakerName) || '');
+        const memo = this._autoMemo || (this._autoMemo = new Map());
+        if (memo.has(raw)) return memo.get(raw);
+        const rules = this._speakerRules();
+        if (!rules) return { state: 'unknown', hint: '' };
+        const found = this._findAutomatic(rules, raw);
+        memo.set(raw, found);
+        return found;
+    }
+
+    _findAutomatic(rules, raw) {
+        const host = this._speakerHost();
+        const world = this._speakerWorld(host);
+        const who = rules.whoSpeaks(raw, world);
+        const said = rules.plainName(raw, world.lookup).text || raw;
+        if (who.kind === 'none') {
+            if (who.why === 'unknown') return { state: 'unknown', hint: this._t('The name comes from a variable: the game finds the speaker when the message shows.') };
+            // Outside a map's event the editor knows neither who runs the message nor who stands on the map.
+            if (!host.event) return { state: 'unknown', hint: this._t('The game finds the speaker when the message shows.') };
+            return { state: 'none', hint: this._t('No face: nobody here is named %1.').replace('%1', said) };
+        }
+        if (who.kind === 'actor') return this._actorFace(who.id);
+        if (who.kind === 'event') return this._eventFace(who.id, host);
+        // Several events of one name: those that have a look must all look alike.
+        let first = null;
+        for (const id of who.ids) {
+            const one = this._eventFace(id, host);
+            const key = one.state === 'face' ? `face|${one.name}|${one.index}` : one.state === 'model' ? `model|${JSON.stringify(one.spec)}` : '';
+            if (!key) continue;
+            if (!first) first = { one, key };
+            else if (key !== first.key) return { state: 'none', hint: this._t('No face: several events are named %1 and do not look alike.').replace('%1', said) };
+        }
+        return first ? first.one : { state: 'none', hint: this._t('No face: %1 has no model and no face picture.').replace('%1', said) };
+    }
+
+    /** A model spec as the game reads it, from an entry of a sidecar. */
+    _modelSpec(raw) {
+        if (!raw || !raw.name) return null;
+        return window.Reactor3D && window.Reactor3D.normalizeModelSpec ? window.Reactor3D.normalizeModelSpec(raw) : raw;
+    }
+
+    _actorFace(id) {
+        const data = (this.databaseManager && this.databaseManager.data) || {};
+        const actor = (data.actors || [])[id];
+        const name = (actor && actor.name) || `#${id}`;
+        if (actor && actor.faceName) {
+            return { state: 'face', name: actor.faceName, index: actor.faceIndex || 0, hint: this._t('The face of %1.').replace('%1', name) };
+        }
+        const entry = actor && data.modelBindings && data.modelBindings.actors ? data.modelBindings.actors[String(id)] : null;
+        const spec = this._modelSpec(entry && (entry.name ? entry : (entry.face || entry.character)));
+        if (spec) return { state: 'model', spec, hint: this._t('A portrait made from the model of %1.').replace('%1', name) };
+        return { state: 'none', hint: this._t('No face: %1 has no model and no face picture.').replace('%1', name) };
+    }
+
+    /** An event's face: the page being edited for the event this dialog belongs to, the first page of any other. */
+    _eventFace(id, host) {
+        const edited = !!host.event && host.event.id === id;
+        const event = edited ? host.event : ((host.map && host.map.events) || []).find(entry => entry && entry.id === id);
+        const name = (event && event.name) || `#${id}`;
+        const none = { state: 'none', hint: this._t('No face: %1 has no model and no face picture.').replace('%1', name) };
+        if (!event) return none;
+        const pageIndex = edited ? host.pageIndex : 0;
+        const page = (event.pages || [])[pageIndex] || (event.pages || [])[0] || {};
+        const portrait = spec => ({ state: 'model', spec, hint: this._t('A portrait made from the model of %1.').replace('%1', name) });
+        let spec = null;
+        if (edited && host.editor && Array.isArray(host.editor.pendingModels)) spec = this._modelSpec(host.editor.pendingModels[pageIndex]);
+        else {
+            const stored = host.map && host.map.reactor3d && host.map.reactor3d.events ? host.map.reactor3d.events[String(id)] : null;
+            spec = this._modelSpec(stored && stored[String(pageIndex)]);
+        }
+        if (spec) return portrait(spec);
+        const image = page.image || {};
+        const sheet = image.tileId > 0 ? '' : String(image.characterName || '');
+        if (sheet) {
+            const sign = (/^[!$]+/.exec(sheet.split('/').pop()) || [''])[0];
+            if (sign.includes('!') || !this._hasFaceFile(sheet)) return none;
+            return { state: 'face', name: sheet, index: sign.includes('$') ? 0 : (image.characterIndex || 0), hint: this._t('The face of %1.').replace('%1', name) };
+        }
+        // A battle unit with no picture of its own wears the model the Database binds to its record.
+        const unit = /<unit\s*:\s*([^>]+)>/i.exec(String(event.note || ''));
+        const recordId = unit ? Number((/(\d+)/.exec(unit[1]) || [])[1]) || 0 : 0;
+        if (recordId) {
+            const bindings = (this.databaseManager && this.databaseManager.data && this.databaseManager.data.modelBindings) || {};
+            const entry = /\benemy\b/i.test(unit[1])
+                ? (bindings.enemies || {})[String(recordId)]
+                : (bindings.actors || {})[String(recordId)];
+            spec = this._modelSpec(entry && (entry.name ? entry : entry.character));
+            if (spec) return portrait(spec);
+        }
+        return none;
+    }
+
+    /** Whether img/faces holds a face file of this name. */
+    _hasFaceFile(name) {
+        const projectPath = this._projectPath();
+        if (!projectPath || typeof require !== 'function') return false;
+        const path = require('path'), fs = require('fs');
+        const folder = path.join(projectPath, 'img', 'faces');
+        if (window.RRAssetFiles && window.RRAssetFiles.urlFor) return !!window.RRAssetFiles.urlFor(folder, name, ['.png']);
+        return fs.existsSync(path.join(folder, name + '.png'));
+    }
+
+    /** The portrait of a model, as the game frames it: a canvas, or null while it is being made (the box is drawn again when it is). */
+    _portraitFor(spec) {
+        const projectPath = this._projectPath();
+        if (!projectPath || !spec) return null;
+        const key = [projectPath, spec.name, spec.file || '', spec.ext || '', spec.variant || '', spec.texture || ''].join('|');
+        const kept = this._portraits || (this._portraits = new Map());
+        if (kept.has(key)) {
+            const held = kept.get(key);
+            return held && held.getContext ? held : null;
+        }
+        kept.set(key, 'making');
+        this._renderPortrait(spec).then(canvas => {
+            kept.set(key, canvas || 'failed');
+            // A few portraits are kept between opens; the oldest goes.
+            while (kept.size > 12) kept.delete(kept.keys().next().value);
+            if (this.modal && this.modal.style.display !== 'none') {
+                this.updateFacePreview();
+                this.renderMiniPreview();
+            }
+        });
+        return null;
+    }
+
+    async _renderPortrait(spec) {
+        try {
+            const models = window.RREventPreviewModels, rules = this._speakerRules();
+            const project = this.projectController.getCurrentProject
+                ? this.projectController.getCurrentProject() : this.projectController.currentProject;
+            if (!models || !rules || !project) return null;
+            const template = await models.templateFor(project, spec, window.reactor && window.reactor.mapEditor3D, true);
+            if (!template || !window.THREE || !window.Reactor3D) return null;
+            const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
+            // A model's pictures decode after it parses: drawn before that it is a black shape.
+            for (let i = 0; i < 60 && !models.texturesDecoded(template); i++) await pause(100);
+            const built = rules.buildScene(window.Reactor3D, window.THREE, template, template.userData.reactorSidecar || null, spec);
+            for (let i = 0; spec.variant && i < 60 && !models.texturesDecoded(built.object); i++) await pause(100);
+            // The portrait is lit by its own scene, never by the open map's lights.
+            const preview = typeof ModelPreview3D !== 'undefined' ? ModelPreview3D : null;
+            if (preview && preview.isolateLighting) preview.isolateLighting(built.object);
+            const size = 144, drawn = size * 2;
+            const out = document.createElement('canvas');
+            out.width = out.height = size;
+            // Drawn outright (shaders made on the spot), and once more a moment later for a picture that was still uploading.
+            for (let pass = 0; pass < 2; pass++) {
+                if (pass) await pause(120);
+                this._portraitStage().use(stage => {
+                    stage.renderer.setSize(drawn, drawn, false);
+                    stage.renderer.render(built.scene, built.camera);
+                    const context = out.getContext('2d');
+                    context.clearRect(0, 0, size, size);
+                    context.drawImage(stage.renderer.domElement, 0, 0, size, size);
+                });
+            }
+            if (models.disposeInstance) models.disposeInstance(built.object);
+            return out;
+        } catch (error) {
+            console.warn('Show Text: no portrait of the speaker\'s model.', error);
+            return null;
+        }
+    }
+
+    /** The small renderer portraits are drawn with; it is dropped, with its context, a few seconds after its last use. */
+    _portraitStage() {
+        if (this._stage) return this._stage;
+        const stage = {
+            state: null,
+            timer: null,
+            use(fn) {
+                if (!stage.state) {
+                    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+                    renderer.setClearColor(0x000000, 0);
+                    stage.state = { renderer };
+                }
+                clearTimeout(stage.timer);
+                stage.timer = setTimeout(() => {
+                    const state = stage.state;
+                    stage.state = null;
+                    if (!state) return;
+                    const release = window.RRModelRelease;
+                    if (release && release.dropRenderer) release.dropRenderer(state.renderer);
+                    else {
+                        state.renderer.dispose();
+                        if (state.renderer.forceContextLoss) state.renderer.forceContextLoss();
+                    }
+                }, 4000);
+                return fn(stage.state);
+            }
+        };
+        this._stage = stage;
+        return stage;
+    }
+
+    /**
+     * The face a box shows in the previews: null for none, else what to draw
+     * in the face's room: `picture` (a face file's name and index), `canvas`
+     * (a portrait), or neither while a portrait is being made or only the
+     * game can tell. The room is kept in every one of those, so the text is
+     * measured at the width it will have.
+     */
+    _previewFace(header) {
+        if (header.faceName) return { picture: header };
+        if (this._faceMode(header) !== 'auto') return null;
+        const found = this._automatic(header);
+        if (found.state === 'face') return { picture: { faceName: found.name, faceIndex: found.index } };
+        if (found.state === 'model') return { canvas: this._portraitFor(found.spec) };
+        return found.state === 'unknown' ? {} : null;
+    }
+
+    /** A plain head and shoulders: a face that is on its way, or that only the game can tell. */
+    _drawFacePlaceholder(context, x, y, size) {
+        context.save();
+        context.globalAlpha = 0.3;
+        context.fillStyle = window.ThemeColors ? ThemeColors.resolve('--color-text-muted', '#888888') : '#888888';
+        context.beginPath();
+        context.arc(x + size / 2, y + size * 0.38, size * 0.17, 0, Math.PI * 2);
+        context.fill();
+        context.beginPath();
+        context.ellipse(x + size / 2, y + size, size * 0.33, size * 0.36, 0, Math.PI, 0);
+        context.fill();
+        context.restore();
     }
 
     /**
@@ -795,7 +1161,7 @@ class MessageCommandEditor {
         if (window.RRTextCodes.hasWordWrap(this.textLines.join('\n'))) return;
 
         const available = window.RRTextCodes.messageTextWidth(
-            this._pluginList(), Boolean(this.faceImage));
+            this._pluginList(), Boolean(this._previewFace(this._activeHeader())));
         const context = this._measureContext();
         const system = window.reactor?.databaseManager?.data?.system;
         const projectSize = Number(system?.advanced?.fontSize);
@@ -891,6 +1257,9 @@ class MessageCommandEditor {
             // and the miniature's name box and headroom follow too.
             this.renderBoxList();
             this.renderMiniPreview();
+            // The name decides the automatic face, and a face narrows the text.
+            this.updateFacePreview();
+            this.updateGuide();
         });
 
         // The name box takes control characters too - an actor's real name via
@@ -1003,7 +1372,7 @@ class MessageCommandEditor {
             this.projectController.currentProject;
 
         if (!currentProject || !currentProject.path) {
-            alert(this._t('No project loaded'));
+            RRDialog.alert(this._t('No project loaded'), { title: this._t('Select Face'), kind: 'warning' });
             return;
         }
 
@@ -1012,14 +1381,14 @@ class MessageCommandEditor {
         const facesFolder = path.join(currentProject.path, 'img', 'faces');
 
         if (!fs.existsSync(facesFolder)) {
-            alert(this._t('Faces folder not found:') + ' ' + facesFolder);
+            RRDialog.alert(this._t('Faces folder not found:') + ' ' + facesFolder, { title: this._t('Select Face'), kind: 'warning' });
             return;
         }
 
         const files = RRAssetFiles.listImageReferences(facesFolder);
 
         if (files.length === 0) {
-            alert(this._t('No face images found'));
+            RRDialog.alert(this._t('No face images found'), { title: this._t('Select Face') });
             return;
         }
 
@@ -1393,7 +1762,8 @@ class MessageCommandEditor {
     }
 
     /**
-     * Update face preview canvas
+     * Update the face box: the picture the active box's choice will show, the
+     * choice itself on the three buttons, and the line that says who it is.
      */
     updateFacePreview() {
         const canvas = this.modal ? this.modal.querySelector('.face-preview-canvas') : null;
@@ -1401,8 +1771,50 @@ class MessageCommandEditor {
 
         const ctx = canvas.getContext('2d');
         ctx.clearRect(0, 0, canvas.width, canvas.height);
+        // A picture still loading for an earlier choice must not land on this one.
+        const ticket = this._faceTicket = (this._faceTicket || 0) + 1;
 
-        if (!this.faceImage) return;
+        const header = this._activeHeader();
+        const mode = this._faceMode(header);
+        for (const button of this.modal.querySelectorAll('.face-choice-buttons button')) {
+            const chosen = button.dataset.faceMode === mode;
+            button.setAttribute('aria-pressed', chosen ? 'true' : 'false');
+            button.style.backgroundColor = chosen ? 'var(--color-bg-selected)' : 'var(--color-bg-panel)';
+            button.style.borderColor = chosen ? 'var(--color-accent)' : 'var(--color-border-input)';
+            button.style.fontWeight = chosen ? 'bold' : 'normal';
+            // A bar in the accent color marks the choice in every theme, light ones too.
+            button.style.boxShadow = chosen ? 'inset 4px 0 0 var(--color-accent)' : 'none';
+        }
+        const hint = this.modal.querySelector('.face-choice-hint');
+        const say = text => { if (hint) hint.textContent = text || ''; };
+        // A face sheet is pixel art; a portrait is not.
+        canvas.style.imageRendering = 'pixelated';
+
+        let faceName = '', faceIndex = 0;
+        if (mode === 'picture') {
+            faceName = this.faceImage;
+            faceIndex = this.faceIndex;
+            say(`${faceName} [${faceIndex}]`);
+        } else if (mode === 'auto') {
+            const found = this._automatic(header);
+            say(found.hint);
+            if (found.state === 'face') {
+                faceName = found.name;
+                faceIndex = found.index;
+            } else if (found.state === 'model') {
+                const portrait = this._portraitFor(found.spec);
+                canvas.style.imageRendering = 'auto';
+                if (portrait) ctx.drawImage(portrait, 0, 0, canvas.width, canvas.height);
+                else this._drawFacePlaceholder(ctx, 0, 0, canvas.width);
+            } else if (found.state === 'unknown') {
+                this._drawFacePlaceholder(ctx, 0, 0, canvas.width);
+            }
+        } else {
+            say('');
+        }
+        // The miniature and the guide follow the face: it narrows the text.
+        this.updateGuide();
+        if (!faceName) return;
 
         const currentProject = this.projectController.getCurrentProject ?
             this.projectController.getCurrentProject() :
@@ -1412,12 +1824,13 @@ class MessageCommandEditor {
 
         const path = require('path');
         const facesFolder = path.join(currentProject.path, 'img', 'faces');
-        const imagePath = RRAssetFiles.imageUrlFor(facesFolder, this.faceImage);
+        const imagePath = RRAssetFiles.imageUrlFor(facesFolder, faceName);
 
         const faceSheet = new Image();
 
         faceSheet.onload = () => {
-            const source = RRFaceSheet.sourceRect(this.faceIndex, faceSheet);
+            if (ticket !== this._faceTicket) return;
+            const source = RRFaceSheet.sourceRect(faceIndex, faceSheet);
             if (!source) return;
 
             ctx.imageSmoothingEnabled = false;
@@ -1725,11 +2138,13 @@ class MessageCommandEditor {
 
         // A caret move inside the same box changes nothing on screen; leave
         // the running playback alone rather than restarting it. The skin and
-        // fonts arrive async, so they are part of "the same".
+        // fonts and the speaker's picture arrive async, so they are part of "the same".
         this._loadPreviewFaces(page.lines);
+        const face = this._previewFace(header);
         const key = JSON.stringify([page.lines, header.faceName, header.faceIndex,
             header.speakerName, header.background, width, height + headroom,
-            Boolean(this._skin), this._previewFontFamily || '', this._previewFaceVersion || 0]);
+            Boolean(this._skin), this._previewFontFamily || '', this._previewFaceVersion || 0,
+            face ? [face.picture ? face.picture.faceName : '', face.picture ? face.picture.faceIndex : 0, Boolean(face.canvas)] : null]);
         if (this._miniAnim && this._miniAnim.key === key) return;
         this._stopMiniAnimation();
 
@@ -1971,8 +2386,11 @@ class MessageCommandEditor {
         }
 
         let textLeft = x + metrics.PADDING + metrics.ITEM_PADDING;
-        if (page.header.faceName) {
-            this.drawPreviewFace(context, page.header, x + metrics.PADDING, y + metrics.PADDING);
+        const face = this._previewFace(page.header);
+        if (face) {
+            if (face.picture) this.drawPreviewFace(context, face.picture, x + metrics.PADDING, y + metrics.PADDING);
+            else if (face.canvas) context.drawImage(face.canvas, x + metrics.PADDING, y + metrics.PADDING, metrics.FACE_SIZE, metrics.FACE_SIZE);
+            else this._drawFacePlaceholder(context, x + metrics.PADDING, y + metrics.PADDING, metrics.FACE_SIZE);
             textLeft += metrics.FACE_SIZE + metrics.ITEM_PADDING;
         }
 

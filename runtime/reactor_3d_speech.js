@@ -51,13 +51,16 @@
 
     // Split the authored lip line once. Both copies coincide at rest; the GPU
     // morph separates them during speech, instead of stretching bridging faces.
-    function splitLipSeam(original, modelPoints, center, up, influence, vertexMatrix) {
+    // `signedAt(point)` is a model-space point's height above the lip line (a
+    // plane for three points, a curve for an outline); `influence(point)` is
+    // above zero where the mouth moves.
+    function splitLipSeam(original, modelPoints, signedAt, influence, vertexMatrix) {
         const position = original.getAttribute("position"), count = position.count;
         const index = original.getIndex(), total = index ? index.count : count;
         if (original.drawRange.start !== 0 || original.drawRange.count < total) return null;
         const extra = [], triangles = [], seams = [], groups = [];
         const point = i => new THREE.Vector3().fromArray(modelPoints, i * 3);
-        const signed = i => point(i).sub(center).dot(up);
+        const signed = i => signedAt(point(i));
         const epsilon = 1e-8;
         for (let at = 0; at + 2 < total; at += 3) {
             const ids = [0, 1, 2].map(j => index ? index.getX(at + j) : at + j);
@@ -133,7 +136,7 @@
         return { geometry, seams, extra, originalCount: count };
     }
 
-    function makeMouthInterior(mesh, geometry, morphIndex, seams, vertexMatrix, forward, depth, influence, color) {
+    function makeMouthInterior(mesh, geometry, morphIndex, seams, vertexMatrix, forward, insetAt, color) {
         const vertices = [], targets = [], indices = [], boneIndices = [], boneWeights = [];
         const position = geometry.attributes.position, target = geometry.morphAttributes.position[morphIndex];
         const si = geometry.attributes.skinIndex, sw = geometry.attributes.skinWeight;
@@ -150,7 +153,7 @@
                     if (relative) lower.add(new THREE.Vector3().fromBufferAttribute(position, seam[j - 2]));
                     open.lerp(lower, 0.5);
                     const matrix = vertexMatrix(geometry, i), model = rest.clone().applyMatrix4(matrix);
-                    const inset = forward.clone().multiplyScalar(-depth * influence(model))
+                    const inset = forward.clone().multiplyScalar(-insetAt(model))
                         .applyMatrix3(new THREE.Matrix3().setFromMatrix4(matrix.invert()));
                     rest.add(inset); open.add(inset);
                 }
@@ -178,6 +181,181 @@
         return cavity;
     }
 
+    /**
+     * The mouth three points give (Mouth, Upper lip, Lower lip): an ellipsoid of
+     * influence round the mouth point sized from the lip-to-lip distance, cut by
+     * the plane through it. Kept exactly as it was, for models saved without an
+     * outline.
+     */
+    function pointsShape(points, height) {
+        const center = points.mouth;
+        const lipSpan = points.upperLip && points.lowerLip ? points.upperLip.distanceTo(points.lowerLip) : 0;
+        const up = lipSpan > 0 ? points.upperLip.clone().sub(points.lowerLip).normalize() : new THREE.Vector3(0, 1, 0);
+        const forward = new THREE.Vector3(0, 0, 1).addScaledVector(up, -up.z).normalize();
+        if (!forward.lengthSq()) forward.set(1, 0, 0);
+        const right = new THREE.Vector3().crossVectors(up, forward).normalize();
+        const radiusX = lipSpan ? Math.max(height * 0.025, Math.min(height * 0.065, lipSpan * 2.4)) : height * 0.06;
+        const radiusY = lipSpan ? Math.max(height * 0.012, lipSpan * 1.25) : height * 0.045;
+        const radiusZ = lipSpan ? Math.max(height * 0.015, lipSpan * 1.4) : height * 0.065;
+        const opening = lipSpan ? Math.min(height * 0.035, lipSpan * 0.9) : height * 0.035;
+        const scratch = new THREE.Vector3();
+        const influence = point => {
+            scratch.copy(point).sub(center);
+            const distance = Math.pow(scratch.dot(right) / radiusX, 2)
+                + Math.pow(scratch.dot(up) / radiusY, 2) + Math.pow(scratch.dot(forward) / radiusZ, 2);
+            return Math.pow(Math.max(0, 1 - distance), 2);
+        };
+        const signed = new THREE.Vector3();
+        return {
+            kind: "points", up, forward, right, radiusX, radiusY, radiusZ, opening,
+            split: lipSpan > height * 0.001,
+            weight: influence,
+            signedAt: point => signed.copy(point).sub(center).dot(up),
+            // The lower side opens down by the opening; the upper lifts a quarter of it.
+            displace: (point, side, weight) => opening * (side >= 0 ? 0.25 : -1) * weight,
+            insetAt: point => opening * 0.6 * influence(point)
+        };
+    }
+
+    /** A polyline of [u, v] points as a height over u: straight between points, held flat past its ends. */
+    function heightOver(points) {
+        const sorted = points.slice().sort((a, b) => a[0] - b[0]);
+        return u => {
+            if (u <= sorted[0][0]) return sorted[0][1];
+            for (let i = 1; i < sorted.length; i++) {
+                const a = sorted[i - 1], b = sorted[i];
+                if (u <= b[0]) return b[0] - a[0] > 1e-12 ? a[1] + (b[1] - a[1]) * (u - a[0]) / (b[0] - a[0]) : Math.max(a[1], b[1]);
+            }
+            return sorted[sorted.length - 1][1];
+        };
+    }
+
+    /** How much of a lip a mouth takes up as it opens (at `open` 1), and the most it may (at `open` 2). */
+    const OPEN_SHARE = 0.45, OPEN_SHARE_MAX = 0.9;
+
+    /**
+     * The mouth a ring of eight points draws (`ring` in MOUTH_OUTLINE_KEYS order,
+     * rest space): its own frame (forward out of the face along
+     * `options.outward`, across from the right corner to the left as seen from
+     * there, up square to both), the
+     * lip line from corner to corner through the middle of each upper and lower
+     * pair, and inside the ring a movement that is whole at the lip line and
+     * nothing at the ring. Nothing outside the ring as seen from the front
+     * moves, nor anything far in front of or behind the surface the ring lies
+     * on. `options.open` scales the opening (1 unless said, 0 to 2).
+     */
+    function outlineShape(ring, options = {}) {
+        if (!Array.isArray(ring) || ring.length !== 8 || ring.some(p => !p)) return null;
+        let [cornerL, upperL, upperM, upperR, cornerR, lowerR, lowerM, lowerL] = ring;
+        const origin = new THREE.Vector3();
+        for (const point of ring) origin.addScaledVector(point, 1 / 8);
+        const out = options.outward && options.outward.lengthSq() > 0 ? options.outward.clone().normalize() : null;
+        let across = cornerL.clone().sub(cornerR);
+        // The mouth as it looks from the model's front: a corner or a lip set
+        // deeper than its twin neither turns nor leans it.
+        const flat = out ? across.clone().addScaledVector(out, -across.dot(out)) : null;
+        const facing = !!flat && flat.lengthSq() > 1e-18;
+        if (facing) across = flat;
+        const width = across.length();
+        if (!(width > 1e-9)) return null;
+        across.multiplyScalar(1 / width);
+        const span = upperM.clone().sub(lowerM);
+        const forward = new THREE.Vector3(), up = new THREE.Vector3();
+        if (facing) {
+            forward.copy(out);
+            up.crossVectors(forward, across).normalize();
+            // A ring drawn with its corners the other way round still has its upper lip on top.
+            if (up.dot(span) < 0) {
+                across.negate(); up.negate();
+                [cornerL, upperL, upperR, cornerR, lowerR, lowerL] = [cornerR, upperR, upperL, cornerL, lowerL, lowerR];
+            }
+        } else {
+            up.copy(span).addScaledVector(across, -span.dot(across));
+            if (!(up.lengthSq() > 1e-18)) up.set(0, 1, 0).addScaledVector(across, -across.y);
+            up.normalize();
+            forward.crossVectors(across, up).normalize();
+        }
+        const scratch = new THREE.Vector3();
+        const uv = point => { scratch.copy(point).sub(origin); return [scratch.dot(across), scratch.dot(up)]; };
+        const top = [cornerR, upperR, upperM, upperL, cornerL].map(uv), bottom = [cornerR, lowerR, lowerM, lowerL, cornerL].map(uv);
+        const lipLine = top.map((p, i) => (i === 0 || i === 4 ? p : [(p[0] + bottom[i][0]) / 2, (p[1] + bottom[i][1]) / 2]));
+        const topAt = heightOver(top), bottomAt = heightOver(bottom), seamAt = heightOver(lipLine);
+        // How far forward the face lies under the ring: across it from the upper edge to the lower.
+        const uw = point => { scratch.copy(point).sub(origin); return [scratch.dot(across), scratch.dot(forward)]; };
+        const topDepth = heightOver([cornerR, upperR, upperM, upperL, cornerL].map(uw));
+        const bottomDepth = heightOver([cornerR, lowerR, lowerM, lowerL, cornerL].map(uw));
+        const depthAt = (u, v) => {
+            const high = topAt(u), low = bottomAt(u);
+            const t = high - low > 1e-12 ? Math.max(0, Math.min(1, (v - low) / (high - low))) : 0.5;
+            return bottomDepth(u) + (topDepth(u) - bottomDepth(u)) * t;
+        };
+        const uMin = Math.min(top[0][0], top[4][0]), uMax = Math.max(top[0][0], top[4][0]);
+        let tall = 0;
+        for (let i = 0; i <= 32; i++) { const u = uMin + (uMax - uMin) * i / 32; tall = Math.max(tall, topAt(u) - bottomAt(u)); }
+        if (!(tall > 1e-9)) return null;
+        const share = Math.min(OPEN_SHARE_MAX, OPEN_SHARE * (Number.isFinite(options.open) ? Math.max(0, options.open) : 1));
+        // Within a third of the mouth's width of the face under the ring the movement is whole; past six tenths it is none.
+        const near = width * 0.35, far = width * 0.6;
+        const smooth = t => t * t * (3 - 2 * t);
+        // From the lip line to the ring the movement falls away smoothly. A wide
+        // opening straightens the fall just enough that the lip squashes and never folds over itself.
+        const straight = share > 0 ? Math.max(0, Math.min(1, (1.5 - 0.95 / share) / 0.5)) : 0;
+        const fall = t => straight * t + (1 - straight) * smooth(t);
+        const local = point => { scratch.copy(point).sub(origin); return [scratch.dot(across), scratch.dot(up), scratch.dot(forward)]; };
+        const upperRoom = u => Math.max(0, topAt(u) - seamAt(u)), lowerRoom = u => Math.max(0, seamAt(u) - bottomAt(u));
+        const drop = u => share * lowerRoom(u), rise = u => Math.min(0.25 * drop(u), share * upperRoom(u));
+        const clampU = u => Math.max(uMin, Math.min(uMax, u));
+        const weight = point => {
+            const [u, v, w] = local(point);
+            if (u <= uMin || u >= uMax) return 0;
+            const depth = Math.abs(w - depthAt(u, v));
+            if (depth >= far) return 0;
+            const s = v - seamAt(u), room = s >= 0 ? upperRoom(u) : lowerRoom(u);
+            if (!(room > 1e-12)) return 0;
+            const t = Math.abs(s) / room;
+            if (t >= 1) return 0;
+            return (1 - fall(t)) * (depth <= near ? 1 : 1 - smooth((depth - near) / (far - near)));
+        };
+        return {
+            kind: "outline", origin, across, up, forward, width, tall, share, near, far, uMin, uMax,
+            split: true, local, topAt, bottomAt, seamAt, depthAt, drop, rise,
+            weight,
+            signedAt: point => { const [u, v] = local(point); return v - seamAt(clampU(u)); },
+            displace: (point, side, w) => { const u = local(point)[0]; return (side >= 0 ? rise(u) : -drop(u)) * w; },
+            // The lining sits as far back as the mouth opens there.
+            insetAt: point => { const [u, v, w] = local(point); const depth = Math.abs(w - depthAt(u, v)); return depth >= far || u <= uMin || u >= uMax ? 0 : 0.8 * (drop(u) + rise(u)); }
+        };
+    }
+
+    /**
+     * The ring three points imply, for a model saved before outlines: upright
+     * and even about the mouth point (the old points were often set a little
+     * askew), so the lip line stays at the mouth point: corners where the old
+     * rule's movement had all but faded, the upper and lower middles on the
+     * lips' outer edges (as far from the mouth as the two lip points are
+     * apart, which sat on the lips), and the four between. In ring order.
+     */
+    function outlineFromPoints(points, height) {
+        if (!points || !points.mouth) return null;
+        height = Math.max(0.0001, height || 1);
+        const center = points.mouth, half = pointsShape(points, height).radiusX * 0.8;
+        // Up the face without the lean to one side; across is the model's own left.
+        const lean = points.upperLip && points.lowerLip ? points.upperLip.clone().sub(points.lowerLip) : new THREE.Vector3(0, 1, 0);
+        lean.x = 0;
+        const up = lean.lengthSq() > 1e-18 ? lean.normalize() : new THREE.Vector3(0, 1, 0);
+        const across = new THREE.Vector3(1, 0, 0);
+        const reach = (point, least) => Math.max(least, point ? 2 * Math.abs(point.clone().sub(center).dot(up)) : 0);
+        const lift = (reach(points.upperLip, height * 0.012) + reach(points.lowerLip, height * 0.012)) / 2, sink = lift;
+        const at = (side, rise) => center.clone().addScaledVector(across, side * half).addScaledVector(up, rise);
+        return [at(1, 0), at(0.5, lift * 0.85), at(0, lift), at(-0.5, lift * 0.85), at(-1, 0), at(-0.5, -sink * 0.85), at(0, -sink), at(0.5, -sink * 0.85)];
+    }
+
+    /** What the three old points are once there is a ring: the lip line's middle, and the upper and lower middles. */
+    function outlineMiddles(ring) {
+        if (!Array.isArray(ring) || ring.length !== 8) return null;
+        return { mouth: ring[2].clone().add(ring[6]).multiplyScalar(0.5), upperLip: ring[2].clone(), lowerLip: ring[6].clone() };
+    }
+
     function prepare(object) {
         if (!object || typeof THREE === "undefined") return null;
         if (drivers.has(object)) return drivers.get(object);
@@ -193,26 +371,12 @@
         // A rig's authored jaw/open-mouth shape wins. Otherwise use a small,
         // smooth lip morph around the designated mouth and lip points.
         const rest = object.__reactorLandmarkRest;
-        if (!morphs.length && !jaw && rest && rest.points.mouth) {
-            const center = rest.points.mouth;
-            const height = Math.max(0.0001, object.userData.glbSize?.y || 1);
-            const lipSpan = rest.points.upperLip && rest.points.lowerLip
-                ? rest.points.upperLip.distanceTo(rest.points.lowerLip) : 0;
-            const up = lipSpan > 0 ? rest.points.upperLip.clone().sub(rest.points.lowerLip).normalize() : new THREE.Vector3(0, 1, 0);
-            const forward = new THREE.Vector3(0, 0, 1).addScaledVector(up, -up.z).normalize();
-            if (!forward.lengthSq()) forward.set(1, 0, 0);
-            const right = new THREE.Vector3().crossVectors(up, forward).normalize();
-            const radiusX = lipSpan ? Math.max(height * 0.025, Math.min(height * 0.065, lipSpan * 2.4)) : height * 0.06;
-            const radiusY = lipSpan ? Math.max(height * 0.012, lipSpan * 1.25) : height * 0.045;
-            const radiusZ = lipSpan ? Math.max(height * 0.015, lipSpan * 1.4) : height * 0.065;
-            const opening = lipSpan ? Math.min(height * 0.035, lipSpan * 0.9) : height * 0.035;
-            const scratch = new THREE.Vector3();
-            const influence = point => {
-                scratch.copy(point).sub(center);
-                const distance = Math.pow(scratch.dot(right) / radiusX, 2)
-                    + Math.pow(scratch.dot(up) / radiusY, 2) + Math.pow(scratch.dot(forward) / radiusZ, 2);
-                return Math.pow(Math.max(0, 1 - distance), 2);
-            };
+        const height = Math.max(0.0001, object.userData.glbSize?.y || 1);
+        // The ring when the model has one, else the three points as before.
+        const shape = !morphs.length && !jaw && rest && rest.points.mouth
+            ? (rest.outline && outlineShape(rest.outline, { open: rest.open, outward: new THREE.Vector3(0, 0, 1) })) || pointsShape(rest.points, height) : null;
+        if (shape) {
+            const up = shape.up, forward = shape.forward;
             for (const entry of rest.meshes) {
                 const mesh = entry.mesh, original = mesh.geometry;
                 if (!original.getAttribute("position")) continue;
@@ -233,7 +397,7 @@
                 for (let i = 0; i < originalPosition.count; i++) {
                     model.fromBufferAttribute(originalPosition, i).applyMatrix4(vertexMatrix(original, i)).toArray(modelPoints, i * 3);
                 }
-                const split = lipSpan > height * 0.001 ? splitLipSeam(original, modelPoints, center, up, influence, vertexMatrix) : null;
+                const split = shape.split ? splitLipSeam(original, modelPoints, shape.signedAt, shape.weight, vertexMatrix) : null;
                 const geometry = split ? split.geometry : original.clone(), position = geometry.getAttribute("position");
                 const values = new Float32Array(position.count * 3), directionInverse = new THREE.Matrix3();
                 let affected = 0;
@@ -241,10 +405,10 @@
                     local.fromBufferAttribute(position, i);
                     const matrix = vertexMatrix(geometry, i);
                     model.copy(local).applyMatrix4(matrix);
-                    const weight = influence(model);
+                    const weight = shape.weight(model);
                     const forcedSide = split && i >= split.originalCount ? split.extra[i - split.originalCount].side : 0;
-                    const side = (forcedSide || Math.sign(model.clone().sub(center).dot(up))) >= 0 ? 0.25 : -1;
-                    delta.copy(up).multiplyScalar(opening * side * weight)
+                    const side = forcedSide || Math.sign(shape.signedAt(model));
+                    delta.copy(up).multiplyScalar(shape.displace(model, side, weight))
                         .applyMatrix3(directionInverse.setFromMatrix4(matrix.invert()));
                     if (weight > 0.001) affected++;
                     if (!geometry.morphTargetsRelative) delta.add(local);
@@ -264,7 +428,7 @@
                 mesh.geometry = geometry; mesh.updateMorphTargets();
                 if (oldWeights) oldWeights.forEach((value, i) => { mesh.morphTargetInfluences[i] = value; });
                 const cavity = split && rest.interior !== "none" ? makeMouthInterior(mesh, geometry, index,
-                    split.seams, vertexMatrix, forward, opening * 0.6, influence, rest.interiorColor || "#080808") : null;
+                    split.seams, vertexMatrix, forward, shape.insetAt, rest.interiorColor || "#080808") : null;
                 owned.push({ mesh, original, geometry, oldWeights, oldNames, cavity });
                 morphs.push({ mesh, index, base: 0 });
                 if (cavity) morphs.push({ mesh: cavity, index: 0, base: 0 });
@@ -274,6 +438,8 @@
         let applied = false;
         const driver = {
             kind: morphs.length ? (owned.length ? "lipMorph" : "morph") : jaw ? "jaw" : "none",
+            // Which mouth the fallback was built from: "outline" or "points".
+            shape: owned.length && shape ? shape.kind : null,
             restore() {
                 if (!applied) return;
                 if (morphs.length) for (const entry of morphs) entry.mesh.morphTargetInfluences[entry.index] = entry.base;
@@ -432,7 +598,8 @@
         for (const holder of this._modelInstances?.values() || []) drivers.get(holder.object)?.dispose();
         return clear.apply(this, arguments);
     };
-    R.Speech = { RATE, envelope, levelAt, prepare, attach, play, stop, tick, active, install };
+    R.Speech = { RATE, envelope, levelAt, prepare, attach, play, stop, tick, active, install,
+        pointsShape, outlineShape, outlineFromPoints, outlineMiddles, heightOver, OPEN_SHARE, OPEN_SHARE_MAX };
     install();
     if (typeof module !== "undefined" && module.exports) module.exports = R;
 })(typeof globalThis !== "undefined" ? globalThis : this);

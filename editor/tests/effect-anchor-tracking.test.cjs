@@ -120,8 +120,9 @@ test('effect anchors see fresh ancestor transforms with one update per node', ()
 test('the parts list opens with the whole model as its first entry', () => {
     const editor = fs.readFileSync(path.join(repoRoot, 'editor', 'src', 'database', 'Database3DEditor.js'), 'utf8');
     const at = editor.indexOf('renderPartList() {');
-    const body = editor.slice(at, editor.indexOf('renderPartForm() {', at));
-    assert.match(body, /whole\.textContent = this\._t\('Whole model'\);/, 'the row is there before any carving');
+    const body = editor.slice(at, editor.indexOf('    _row({ icon, name', at));
+    assert.match(body, /const whole = this\._row\(\{ icon: 'model', name: this\._t\('Whole model'\)/, 'the row is there before any carving');
+    assert.ok(body.indexOf('list.appendChild(whole);') < body.indexOf('if (!this.customParts.length) {'), 'ahead of the hint and of every carved part');
     assert.match(body, /this\.selectPartByName\(''\);/, 'and it selects the whole-model target');
 });
 
@@ -184,22 +185,21 @@ test('a turning body blocks only the arc it sweeps through, height respected', (
     // In the footprint's frame (localZ = dx·sin t + dy·cos t against the
     // thin half), the quarter turn sweeps the (+x,−y) and (−x,+y)
     // quadrants and never touches the other two.
-    assert.equal(R.eventModelSweepHits(character, spec, 0, 0, 5, -5, fromYaw, toYaw), true,
-        'one end sweeps its quadrant');
-    assert.equal(R.eventModelSweepHits(character, spec, 0, 0, -5, 5, fromYaw, toYaw), true,
-        'the other end sweeps the opposite one');
-    assert.equal(R.eventModelSweepHits(character, spec, 0, 0, 5, 5, fromYaw, toYaw), false,
-        'an unswept quadrant stays free');
-    assert.equal(R.eventModelSweepHits(character, spec, 0, 0, -5, -5, fromYaw, toYaw), false,
-        'both of them');
-    assert.equal(R.eventModelSweepHits(character, spec, 0, 0, 5, 5), true,
-        'with no arc given the old whole-disc caution stands');
+    const swept = R._sweepBody(character, spec, R.collisionKeysFor(spec).pose, 'b', fromYaw, toYaw, false);
+    assert.equal(R.bodyHas(swept, 5, -5), true, 'one end sweeps its quadrant');
+    assert.equal(R.bodyHas(swept, -5, 5), true, 'the other end sweeps the opposite one');
+    assert.equal(R.bodyHas(swept, 5, 5), false, 'an unswept quadrant stays free');
+    assert.equal(R.bodyHas(swept, -5, -5), false, 'both of them');
+    assert.equal(R.bodyHas(swept, 8, 0), true, 'where it lay');
+    assert.equal(R.bodyHas(swept, 0, 8), true, 'and where it lies after');
     delete R._glbCache[key];
 
     const source = source3D();
-    assert.match(source, /if \(!this\.charactersOverlapVertically\(character, other\)\) continue;[\s\S]{0,120}blockedBy\(other\._x, other\._y\)/,
-        'canFace skips what is vertically clear');
-    assert.match(source, /if \(!this\.charactersOverlapVertically\(character, other\)\) continue;[\s\S]{0,120}eventModelWouldOverlap/,
+    const canFace = source.slice(source.indexOf('Reactor3D.eventModelCanFace = function'));
+    assert.match(canFace.slice(0, canFace.indexOf('\n};')), /_bodyOverlap\(swept, x, y, other, now\)[\s\S]{0,400}if \(!this\._bodyHeights\(character, other\)/,
+        'canFace asks what the turn sweeps, and skips what is vertically clear');
+    const meets = source.slice(source.indexOf('Reactor3D._bodyMeetsEvents = function'));
+    assert.match(meets.slice(0, meets.indexOf('\n};')), /if \(!this\._bodyHeights\(mover, other\)/,
         'and so does the step overlap loop');
 });
 

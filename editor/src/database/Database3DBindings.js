@@ -8,6 +8,11 @@
  *     "enemies": { "<enemyId>": spec } }
  * with spec exactly what the map sidecar stores per event (name, file,
  * ext, size, scale, yaw/pitch/roll in degrees, faces).
+ *
+ * While a project's database is loaded, its bindings are part of the
+ * Database's edits: the DatabaseManager registers its in-memory copy
+ * (useStore), reads and writes go there, and the file is written with the
+ * rest of the database on OK/Apply, so Cancel and list Undo take them back.
  */
 (function(root) {
     'use strict';
@@ -25,7 +30,21 @@
         else fs.writeFileSync(destination, data, 'utf8');
     }
 
+    // (projectPath) => the live bindings object for that project, or null.
+    let storeProvider = null;
+
+    function useStore(provider) {
+        storeProvider = typeof provider === 'function' ? provider : null;
+    }
+
+    function liveStore(projectPath) {
+        const store = storeProvider && projectPath ? storeProvider(projectPath) : null;
+        return store && typeof store === 'object' && !Array.isArray(store) ? store : null;
+    }
+
     function read(projectPath) {
+        const live = liveStore(projectPath);
+        if (live) return JSON.parse(JSON.stringify(live));
         const fs = require('fs');
         const destination = filePath(projectPath);
         try {
@@ -62,9 +81,8 @@
         return entry && entry.name ? entry : null;
     }
 
-    function set(projectPath, section, id, spec, slot) {
-        const fs = require('fs');
-        const data = read(projectPath);
+    /** Put one binding into a bindings object (a slot of an actor, or a whole entry); a nameless spec removes it. */
+    function apply(data, section, id, spec, slot) {
         if (slot) {
             const existing = slotsOf(data[section] && data[section][String(id)]);
             const entry = {};
@@ -87,21 +105,47 @@
             delete data[section][String(id)];
             if (!Object.keys(data[section]).length) delete data[section];
         }
-        const sections = Object.keys(data).filter(key => key !== 'version');
+        return data;
+    }
+
+    /** Drop every binding of a section past `maxId` (the section's maximum shrank). */
+    function prune(data, section, maxId) {
+        const entries = data && data[section];
+        if (!entries || typeof entries !== 'object') return false;
+        let changed = false;
+        for (const key of Object.keys(entries)) {
+            if (Number(key) > maxId) { delete entries[key]; changed = true; }
+        }
+        if (!Object.keys(entries).length) delete data[section];
+        return changed;
+    }
+
+    /** Write a bindings object as the file; with nothing bound the absent file is the clean state. */
+    function writeStore(projectPath, data, fs = require('fs')) {
+        const sections = Object.keys(data || {}).filter(key => key !== 'version');
         if (!sections.length) {
-            // Nothing bound: the absent file is the clean state.
             fs.rmSync(filePath(projectPath), { force: true });
             return;
         }
-        data.version = 1;
-        writeFile(fs, filePath(projectPath), (typeof RRJson !== 'undefined' && RRJson.stringify ? RRJson.stringify(data) : JSON.stringify(data, null, 2)) + '\n');
+        const out = Object.assign({}, data, { version: 1 });
+        writeFile(fs, filePath(projectPath), (typeof RRJson !== 'undefined' && RRJson.stringify ? RRJson.stringify(out) : JSON.stringify(out, null, 2)) + '\n');
+    }
+
+    function set(projectPath, section, id, spec, slot) {
+        const live = liveStore(projectPath);
+        if (live) {
+            apply(live, section, id, spec && spec.name ? JSON.parse(JSON.stringify(spec)) : spec, slot);
+            return;
+        }
+        writeStore(projectPath, apply(read(projectPath), section, id, spec, slot));
     }
 
     function trySet(projectPath, section, id, spec, slot) {
         try { set(projectPath, section, id, spec, slot); return true; }
         catch (error) {
             console.error('Could not save 3D model binding:', error);
-            alert(root.I18n ? root.I18n.tText('Could not save the 3D model binding.') : 'Could not save the 3D model binding.');
+            RRDialog.alert(root.I18n ? root.I18n.tText('Could not save the 3D model binding.') : 'Could not save the 3D model binding.',
+                { title: root.I18n ? root.I18n.t('menu.models3d') : '3D Models', kind: 'error' });
             return false;
         }
     }
@@ -187,7 +231,7 @@
             name.style.color = '';
             if (options.onSync) options.onSync(spec);
             check.checked = !!spec;
-            name.textContent = spec ? spec.name : tt('(None)');
+            name.textContent = spec ? spec.name + (spec.variant ? ' · ' + spec.variant : '') : tt('(None)');
             name.style.display = spec ? '' : 'none';
             change.style.display = spec ? '' : 'none';
             if (row._rr3d && row._rr3d.afterSync) row._rr3d.afterSync(spec);
@@ -381,6 +425,7 @@
         bottomRow.appendChild(corner);
 
         const pane = document.createElement('div');
+        pane.className = 'graphic-3d-pane';
         pane.style.cssText = 'display:none;flex-direction:column;align-items:center;justify-content:center;'
             + 'gap:6px;height:176px;box-sizing:border-box;';
         const thumb = document.createElement('img');
@@ -394,7 +439,8 @@
         pane.appendChild(nameTag);
         canvasBox.parentNode.insertBefore(pane, canvasBox.nextSibling);
 
-        const bound = () => get(project.path, 'actors', id, slot);
+        const bound = () => options.getBound ? options.getBound() : get(project.path, 'actors', id, slot);
+        const write = spec => options.setBound ? options.setBound(spec) !== false : trySet(project.path, 'actors', id, spec, slot);
         const api = { afterSync: null };
         box._rr3dSlot = api;
         const sync = () => {
@@ -426,9 +472,10 @@
             button.setAttribute('data-i18n-text-source', spec ? 'Change Model' : button2d);
             button.textContent = spec ? tt('Change Model') : tt(button2d);
             if (spec) {
-                nameTag.textContent = spec.name;
+                const shown = spec.name + (spec.variant ? ' · ' + spec.variant : '');
+                nameTag.textContent = shown;
                 nameTag.style.display = nameTag2d ? 'none' : '';
-                if (nameTag2d) { nameTag2d.style.display = ''; nameTag2d.textContent = spec.name; nameTag2d.title = spec.name; }
+                if (nameTag2d) { nameTag2d.style.display = ''; nameTag2d.textContent = shown; nameTag2d.title = shown; }
                 thumb.style.opacity = '0.35';
                 if (options.thumbnail) {
                     const render = () => Promise.resolve().then(() => options.thumbnail(spec)).then(url => {
@@ -455,19 +502,20 @@
 
         const openPicker = () => {
             const picker = new ModelGraphicPicker(pickerController(projectManager, project));
-            picker.show(bound(), result => {
+            picker.show(options.pickerValue ? options.pickerValue() : bound(), result => {
                 // The modal-close observer restores the persisted selection on
                 // failure too, without starting a second thumbnail render.
-                if (trySet(project.path, 'actors', id, result, slot)
+                if (write(result)
                     && result && result.name && options.onBound) options.onBound(result);
             }, options.framing ? { framing: true } : undefined);
+            if (picker._modal) options.registerModal?.(picker._modal, () => picker._close?.());
             resyncWhenClosed();
         };
 
         check.addEventListener('change', () => {
             if (check.checked) openPicker();
             else {
-                if (!trySet(project.path, 'actors', id, null, slot)) { sync(); return; }
+                if (!write(null)) { sync(); return; }
                 sync();
             }
         });
@@ -484,7 +532,7 @@
             sync,
             openPicker,
             clear: () => {
-                if (!trySet(project.path, 'actors', id, null, slot)) { sync(); return false; }
+                if (!write(null)) { sync(); return false; }
                 sync();
                 return true;
             },
@@ -502,7 +550,7 @@
         return api;
     }
 
-    const api = { filePath, read, get, set, attachRow, decorateSlot, modelThumbnail };
+    const api = { filePath, read, get, set, apply, prune, writeStore, useStore, attachRow, decorateSlot, modelThumbnail };
     root.RRDatabase3DBindings = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof globalThis !== 'undefined' ? globalThis : window);

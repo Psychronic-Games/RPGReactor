@@ -183,3 +183,28 @@ test('every sound, track and jingle the Demo names exists on disk with that exac
     for (const ref of refs) if (!onDisk[ref.kind].has(ref.name)) missing.set(`${ref.kind}/${ref.name}`, (missing.get(`${ref.kind}/${ref.name}`) || []).concat(ref.where));
     assert.deepEqual([...missing].map(([name, where]) => `${name} (${[...new Set(where)].slice(0, 3).join('; ')})`), [], 'audio the Demo names but does not ship');
 });
+
+test('every sound a Demo vehicle type names exists on disk: its own, and its kind\'s where it names none', () => {
+    const VehicleCheck = require('../src/utils/VehicleCheck.js');
+    // The kinds' stock sounds are the runtime's; without its file a type's own names are all there is to read.
+    let Vehicles = null;
+    const runtimeFile = path.join(repoRoot, 'runtime', 'reactor_3d_vehicles.js');
+    if (fs.existsSync(runtimeFile)) {
+        const sandbox = { console, Math, JSON, Reactor3D: {} };
+        require('node:vm').runInNewContext(fs.readFileSync(runtimeFile, 'utf8'), sandbox, { filename: runtimeFile });
+        Vehicles = sandbox.Reactor3D.Vehicles && sandbox.Reactor3D.Vehicles.KINDS ? sandbox.Reactor3D.Vehicles : null;
+    }
+    const namesOf = types => (Array.isArray(types) ? types : []).filter(Boolean).flatMap(type => VehicleCheck.soundsOf(type, { Vehicles }).map(sound => `${sound.kind}/${sound.name}`));
+    // The reader: a type's own sounds, its music, and no name for a slot written as silence.
+    const own = namesOf([null, { id: 1, kind: 'motorcycle', sounds: { engine: { name: 'my-engine' }, start: 'my-start', stop: null, bump: null, land: null }, bgm: { name: 'My Ride' } }]);
+    assert.deepEqual(own, ['se/my-engine', 'se/my-start', 'bgm/My Ride']);
+    if (Vehicles) assert.ok(namesOf([null, { id: 1, kind: 'motorcycle' }]).length >= 3, 'a type that names no sound takes its kind\'s engine, start and stop');
+    const file = path.join(demoRoot, 'data', 'ReactorVehicles.json');
+    const names = fs.existsSync(file) ? namesOf(JSON.parse(fs.readFileSync(file, 'utf8'))) : [];
+    const missing = names.filter(name => {
+        const [kind, sound] = [name.slice(0, name.indexOf('/')), name.slice(name.indexOf('/') + 1)];
+        const folder = path.join(demoRoot, 'audio', kind);
+        return !(fs.existsSync(folder) && fs.readdirSync(folder).some(entry => entry.replace(/\.[^.]+$/, '') === sound));
+    });
+    assert.deepEqual(missing, [], 'sounds the Demo\'s vehicle types name but the Demo does not ship');
+});

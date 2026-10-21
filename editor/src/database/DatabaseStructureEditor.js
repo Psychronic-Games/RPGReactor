@@ -26,11 +26,11 @@ class DatabaseStructureEditor {
     /** What an effect can be, the way the 3D Models page attaches them: a screen, a light, an animation. */
     static EFFECT_KINDS = ['screen', 'light', 'animation'];
     static EFFECT_DEFAULTS = { screen: { width: 4, height: 2.25, z: 1, media: '' }, light: { color: '#9fd8ff', radius: 6, intensity: 1.2, z: 4 }, animation: { animation: 0, z: 0 } };
-    static SHAPE_KINDS = ['box', 'wedge', 'pyramid', 'prism', 'hull', 'spike', 'cylinder', 'capsule', 'tube', 'cone', 'dome', 'sphere', 'dish', 'fin', 'arch', 'tunnel', 'ring'];
+    static SHAPE_KINDS = ['box', 'wedge', 'pyramid', 'prism', 'hull', 'spike', 'cylinder', 'capsule', 'tube', 'cone', 'dome', 'sphere', 'dish', 'fin', 'arch', 'tunnel', 'ring', 'rock'];
     /** The settings a kind carries beyond its size, with what it wears until told otherwise. */
-    static SHAPE_PARAMS = { hull: { sides: 8, taper: 0.8 }, spike: { sides: 6, taper: 0 }, capsule: { sides: 24 }, dish: { sides: 32 }, fin: { taper: 0.4 }, cylinder: { sweep: 360 }, tube: { sweep: 360, thick: 0.3 }, ring: { sweep: 360, thick: 0.2 } };
+    static SHAPE_PARAMS = { hull: { sides: 8, taper: 0.8 }, spike: { sides: 6, taper: 0 }, capsule: { sides: 24 }, dish: { sides: 32 }, fin: { taper: 0.4 }, cylinder: { sweep: 360 }, tube: { sweep: 360, thick: 0.3 }, ring: { sweep: 360, thick: 0.2 }, rock: { rough: 0.5 } };
     /** What a shape is first placed at, in tiles: wide enough to see, tall enough to matter. */
-    static SHAPE_DEFAULTS = { box: [4, 3, 4], wedge: [4, 2, 4], pyramid: [4, 4, 4], prism: [4, 3, 6], cylinder: [4, 6, 4], tube: [6, 5, 6], cone: [4, 4, 4], dome: [4, 2, 4], sphere: [4, 4, 4], arch: [3, 4, 1], tunnel: [4, 4, 8], ring: [6, 1, 6], hull: [4, 6, 4], spike: [1, 4, 1], capsule: [2, 6, 2], dish: [4, 1, 4], fin: [3, 3, 0.25], tower: [4, 6, 4] };
+    static SHAPE_DEFAULTS = { box: [4, 3, 4], wedge: [4, 2, 4], pyramid: [4, 4, 4], prism: [4, 3, 6], cylinder: [4, 6, 4], tube: [6, 5, 6], cone: [4, 4, 4], dome: [4, 2, 4], sphere: [4, 4, 4], arch: [3, 4, 1], tunnel: [4, 4, 8], ring: [6, 1, 6], hull: [4, 6, 4], spike: [1, 4, 1], capsule: [2, 6, 2], dish: [4, 1, 4], fin: [3, 3, 0.25], rock: [4, 4, 4], tower: [4, 6, 4] };
     /** The three things the 3D handles do to a selected shape. */
     static GIZMO_MODES = ['move', 'turn', 'size'];
     /** How close a dragged face comes to another shape's face before it clicks onto it, in tiles. */
@@ -115,6 +115,7 @@ class DatabaseStructureEditor {
             capsule: `<path d="M5 5.5a3 3 0 0 1 6 0v5a3 3 0 0 1-6 0z M5 6.5h6 M5 9.5h6" ${stroke}/>`,
             dish: `<path d="M2.5 5a5.5 5.5 0 0 0 11 0 M2.5 5h11 M8 9v4 M6 13h4" ${stroke}/>`,
             fin: `<path d="M3 13h10V7L9 2H3z M3 7h6" ${stroke}/>`,
+            rock: `<path d="M2 13l1.7-4 2.7-2.7 2.3 1.3 2-2.6 3.3 4.3V13z M6.3 6l.7 3.3 2-2" ${stroke}/>`,
             move: `<path d="M8 2v12M2 8h12M8 2l-2 2M8 2l2 2M8 14l-2-2M8 14l2-2M2 8l2-2M2 8l2 2M14 8l-2-2M14 8l-2 2" ${stroke}/>`,
             turn: `<path d="M13 8a5 5 0 1 1-1.5-3.5M11.5 2v2.5H14" ${stroke}/>`,
             size: `<path d="M3 13V8M3 13h5M3 13l4-4M13 3v5M13 3H8M13 3L9 7" ${stroke}/>`,
@@ -170,7 +171,7 @@ class DatabaseStructureEditor {
         if (palette?.materials) return palette.materials().map(entry => entry.name);
         const node = this._node(), root = this.projectPath();
         if (!node || !root || typeof RRAssetFiles === 'undefined') return [];
-        try { return RRAssetFiles.listImages(node.path.join(root, 'img', 'materials')).map(record => record.imageReference || record.name); } catch (error) { return []; }
+        try { return RRAssetFiles.listMaterials(node.path.join(root, 'img', 'materials')).map(record => record.imageReference || record.name); } catch (error) { return []; }
     }
 
     materialUrl(name) {
@@ -206,6 +207,9 @@ class DatabaseStructureEditor {
                 if (anchored) out.push(int(door[3], 0, 0, this.SIZE_MAX));
                 // A front door may say which side of the room it is on.
                 if (anchored && ['north', 'south', 'east', 'west'].includes(door[4])) out.push(door[4]);
+                // The door that hangs there: its own settings (an object), or false for an open doorway.
+                const own = door[door.length - 1];
+                if (door.length > 3 && (own === false || (own && typeof own === 'object' && !Array.isArray(own)))) out.push(own === false ? false : JSON.parse(JSON.stringify(own)));
                 return out;
             }),
             windows: (floor?.windows || []).filter(Array.isArray).map(cell => [int(cell[0], 0, 0, this.SIZE_MAX), int(cell[1], 0, 0, this.SIZE_MAX)]),
@@ -219,8 +223,18 @@ class DatabaseStructureEditor {
         }));
         // A roof of so many rows, or none at all (`pitch: null`): a bridge, a hangar, a flat-topped tower.
         plan.roof = Object.assign({ pitch: plan.roof && plan.roof.pitch === null ? null : int(plan.roof?.pitch, 2, 0, 20) },
-            plan.roof && (plan.roof.style === 'flat' || plan.roof.style === 'gable') ? { style: plan.roof.style } : {});
-        plan.windows = { every: int(plan.windows?.every, 6, 0, 60), width: int(plan.windows?.width, 2, 1, 8) };
+            plan.roof && this.ROOF_STYLES.includes(plan.roof.style) ? { style: plan.roof.style } : {},
+            plan.roof && plan.roof.style === 'shed' && this.DIRECTIONS.includes(plan.roof.high) ? { high: plan.roof.high } : {},
+            plan.roof && Number.isFinite(Number(plan.roof.overhang)) ? { overhang: Math.max(0, Math.min(1, Number(plan.roof.overhang))) } : {});
+        // The window rhythm, and how the windows look: their frame, shutters and flower boxes (StructurePlan reads them).
+        const look = plan.windows && typeof plan.windows === 'object' ? plan.windows : {};
+        plan.windows = Object.assign({ every: int(look.every, 6, 0, 60), width: int(look.width, 2, 1, 8) },
+            look.frame === false || typeof look.frame === 'string' || (look.frame && typeof look.frame === 'object') ? { frame: JSON.parse(JSON.stringify(look.frame)) } : {},
+            look.shutters === true || /^#[0-9a-f]{6}$/i.test(String(look.shutters)) ? { shutters: look.shutters } : {},
+            look.closed === true ? { closed: true } : {},
+            look.flowerBox === true || look.flowerBox === 'all' ? { flowerBox: look.flowerBox } : {});
+        // Every door's settings (`door`), or none hung at all (`doors: false`).
+        if (plan.door !== undefined && !(plan.door && typeof plan.door === 'object' && !Array.isArray(plan.door))) delete plan.door;
         plan.spots = Object.fromEntries(Object.entries(plan.spots || {}).map(([name, cell]) => [name, [int(cell?.[0], 0, 0, this.SIZE_MAX), int(cell?.[1], 0, 0, this.SIZE_MAX)]]));
         plan.effects = (Array.isArray(plan.effects) ? plan.effects : []).filter(fx => fx && this.EFFECT_KINDS.includes(fx.type)).map(fx => {
             const own = this.EFFECT_DEFAULTS[fx.type];
@@ -266,10 +280,15 @@ class DatabaseStructureEditor {
         }).filter(Boolean);
         plan.lights = (Array.isArray(plan.lights) ? plan.lights : []).filter(row => row && typeof row === 'object').map(row => Object.assign({}, row));
         plan.surfaces = (Array.isArray(plan.surfaces) ? plan.surfaces : []).filter(row => row && typeof row === 'object').map(row => Object.assign({}, row));
+        // A saved selection's placed models (plot cells) and the water standing in it (its level above the pad).
+        plan.props = (Array.isArray(plan.props) ? plan.props : []).filter(row => row && typeof row === 'object' && row.name).map(row => { const out = Object.assign({}, row); delete out.id; delete out.structure; return out; });
+        plan.water = (Array.isArray(plan.water) ? plan.water : []).filter(row => row && typeof row === 'object').map(row => { const out = JSON.parse(JSON.stringify(row)); delete out.structure; return out; });
+        plan.description = typeof plan.description === 'string' ? plan.description : '';
+        plan.category = typeof plan.category === 'string' ? plan.category : '';
         // A described building is as tall as its floors; a built one as its highest storey with walls,
         // doors, windows or stairs (what stands above that, a roof, sits on top).
-        if (plan.floors.length && !plan.pieces.length) plan.height = Math.min(24, plan.floors.length);
-        else if (plan.pieces.length && typeof RRStructureFloors !== 'undefined') plan.height = RRStructureFloors.occupiedFloors(plan) || plan.height;
+        const builtFloors = plan.pieces.length && typeof RRStructureFloors !== 'undefined' ? RRStructureFloors.occupiedFloors(plan) : 0;
+        if (plan.floors.length || builtFloors) plan.height = Math.min(24, Math.max(plan.floors.length, builtFloors));
         plan.paths = (Array.isArray(plan.paths) ? plan.paths : []).filter(Array.isArray).map(strip => {
             const out = [0, 1, 2, 3].map(i => int(strip[i], 0, 0, this.SIZE_MAX));
             if (strip[4]) out.push(String(strip[4]));
@@ -295,8 +314,10 @@ class DatabaseStructureEditor {
             return f;
         });
         if (plan.stairs.length || had.has('stairs')) fields.stairs = plan.stairs.map(stair => ({ floor: stair.floor, from: stair.from.slice(), dir: stair.dir, width: stair.width }));
-        if (plan.floors.length || had.has('roof')) fields.roof = Object.assign({ pitch: plan.roof.pitch }, plan.roof.style ? { style: plan.roof.style } : {});
-        if (plan.floors.length || had.has('windows')) fields.windows = { every: plan.windows.every, width: plan.windows.width };
+        if (plan.floors.length || had.has('roof')) fields.roof = Object.assign({ pitch: plan.roof.pitch }, plan.roof.style ? { style: plan.roof.style } : {}, plan.roof.high ? { high: plan.roof.high } : {}, Number.isFinite(plan.roof.overhang) ? { overhang: plan.roof.overhang } : {});
+        if (plan.floors.length || had.has('windows')) fields.windows = Object.assign({}, plan.windows);
+        if (plan.door) fields.door = JSON.parse(JSON.stringify(plan.door));
+        if (plan.doors === false) fields.doors = false;
         if (Object.keys(plan.spots).length || had.has('spots')) fields.spots = Object.fromEntries(Object.entries(plan.spots).map(([name, cell]) => [name, cell.slice()]));
         if (plan.events.length || had.has('events')) fields.events = plan.events.map(event => ({ ...event }));
         if (plan.effects.length || had.has('effects')) fields.effects = plan.effects.map(fx => {
@@ -335,11 +356,35 @@ class DatabaseStructureEditor {
         if (plan.pieces.length || had.has('pieces')) { fields.height = plan.height; fields.pieces = plan.pieces.map(piece => { const out = Object.assign({}, piece); if (!out.material) delete out.material; if (!out.rot) delete out.rot; if (!out.z) delete out.z; return out; }); }
         if (plan.lights.length || had.has('lights')) fields.lights = plan.lights.map(row => Object.assign({}, row));
         if (plan.surfaces.length || had.has('surfaces')) fields.surfaces = plan.surfaces.map(row => Object.assign({}, row));
+        if ((plan.props || []).length || had.has('props')) fields.props = (plan.props || []).map(row => Object.assign({}, row));
+        if ((plan.water || []).length || had.has('water')) fields.water = (plan.water || []).map(row => JSON.parse(JSON.stringify(row)));
+        if (plan.description) fields.description = plan.description;
+        if (plan.category) fields.category = plan.category;
         // The file's own order first, then anything new at the end.
         const out = {};
         for (const key of plan._had || []) if (key in fields) out[key] = fields[key];
         for (const key of Object.keys(fields)) if (!(key in out)) out[key] = fields[key];
         return out;
+    }
+
+    /** The plot a built structure needs: every piece, light, screen, shape, effect and spot inside it. */
+    static builtExtent(plan) {
+        let w = 0, d = 0;
+        const cover = (x, y) => {
+            if (Number.isFinite(Number(x))) w = Math.max(w, Math.floor(Number(x)) + 1);
+            if (Number.isFinite(Number(y))) d = Math.max(d, Math.floor(Number(y)) + 1);
+        };
+        for (const row of [].concat(plan.pieces || [], plan.lights || [], plan.surfaces || [], plan.props || [])) if (row) cover(row.x, row.y);
+        for (const sheet of plan.water || []) if (sheet) cover(sheet.x1, sheet.y1);
+        for (const row of [].concat(plan.shapes || [], plan.effects || [])) if (row && Array.isArray(row.at)) cover(row.at[0], row.at[1]);
+        for (const cell of Object.values(plan.spots || {})) if (Array.isArray(cell)) cover(cell[0], cell[1]);
+        // A described building: its rooms (corner to corner), windows and stairs.
+        for (const floor of plan.floors || []) {
+            for (const rect of Object.values(floor.rooms || {})) if (Array.isArray(rect)) cover(rect[2], rect[3]);
+            for (const cell of floor.windows || []) if (Array.isArray(cell)) cover(cell[0], cell[1]);
+        }
+        for (const stair of plan.stairs || []) if (stair && Array.isArray(stair.from)) cover(stair.from[0], stair.from[1]);
+        return [w, d];
     }
 
     /** A cottage to start from: two rooms, a front door, a door between, a window every six cells. */
@@ -447,7 +492,9 @@ class DatabaseStructureEditor {
         // happens in the world (the Build toggle over the 3D map), not in a form here.
         // The structure one floor at a time (paint walls, floors, doors, windows and stairs) beside it whole in 3D.
         // Both edit the same pieces as the 3D Build bar, so the plan, the preview and Build never disagree.
-        this._paint = Object.assign({ floor: 0, tool: 'room', dir: 'north', wallMaterial: null, floorMaterial: null }, this._paint || {}, { floor: 0 });
+        this._paint = Object.assign({ floor: 0, tool: 'room', dir: 'north' }, this._paint || {}, { floor: 0, above: false, roofPitch: null });
+        this._paintVersion = (this._paintVersion || 0) + 1;
+        this._dressing = null;
         detailEl.innerHTML = `
             <div class="rr-structures" style="display:flex;flex-direction:column;height:100%;min-height:0;font-size:12px;">
                 <div class="rr-structures-bar" style="display:flex;align-items:center;gap:14px;padding:6px 10px;border-bottom:1px solid var(--color-border);flex-wrap:wrap;"></div>
@@ -489,20 +536,33 @@ class DatabaseStructureEditor {
     // ---- The floor plan: one floor of pieces, painted ------------------------
 
     static PAINT_TOOLS = ['select', 'room', 'floor', 'wall', 'door', 'window', 'stairs', 'erase'];
+    static ROOF_STYLES = ['gable', 'flat', 'shed'];
+    /** Shapes drawn round on the plan; the rest are drawn as their box. */
+    static ROUND_SHAPES = ['cylinder', 'capsule', 'tube', 'cone', 'dome', 'sphere', 'dish', 'ring'];
 
     floorsApi() { return typeof RRStructureFloors !== 'undefined' ? RRStructureFloors : null; }
 
     /** Floors: more copies the top floor up, fewer takes floors off the top (asking first when they hold something). */
-    setFloorCount(value) {
+    async setFloorCount(value) {
         const F = this.floorsApi(), plan = this.current?.plan;
         if (!F || !plan) return;
         const target = Math.max(1, Math.min(24, Math.floor(Number(value)) || 1));
-        const now = F.isDescribed(plan) ? plan.floors.length : F.floorsOf(plan);
+        const now = this._floorCount(plan);
         if (target === now) return;
         if (target < now && !F.isDescribed(plan)) {
             let lost = false;
             for (let f = target; f < now; f++) if (F.hasPieces(plan, f)) lost = true;
-            if (lost && !window.confirm(this._t('Take away floors {from} to {to} and everything on them?', { from: target + 1, to: now }))) { this.renderBar(); return; }
+            if (lost) {
+                const one = now - target === 1;
+                const action = one ? this._t('Remove Floor') : this._t('Remove Floors');
+                const remove = await RRDialog.confirm(one
+                    ? this._t('Take away floor {floor} and everything on it?', { floor: now })
+                    : this._t('Take away floors {from} to {to} and everything on them?', { from: target + 1, to: now }),
+                    { title: action, ok: action, danger: true });
+                // The answer is for the plan and the floors that were there when it was asked.
+                if (this.current?.plan !== plan) return;
+                if (!remove || this._floorCount(plan) !== now) { this.renderBar(); return; }
+            }
         }
         this.pushHistory();
         F.setFloors(plan, target);
@@ -518,53 +578,70 @@ class DatabaseStructureEditor {
         const F = this.floorsApi(), plan = this.current?.plan;
         if (!side || !F || !plan) return;
         const tt = text => this._t(text);
-        const count = F.isDescribed(plan) ? plan.floors.length : F.floorsOf(plan);
+        const count = this._floorCount(plan);
         this._paint.floor = Math.max(0, Math.min(count - 1, this._paint.floor));
-        const names = this.materials();
-        const pick = (role, fallback) => {
-            const chosen = this._paint[role];
-            if (chosen !== null && chosen !== undefined) return chosen;
-            const own = plan.materials?.[role === 'wallMaterial' ? 'wall' : 'floor'];
-            return own || (names.includes(fallback) ? fallback : (names[0] || ''));
-        };
-        this._paint.wallMaterial = pick('wallMaterial', 'Stone');
-        this._paint.floorMaterial = pick('floorMaterial', 'Wood');
+        const roofStyle = (plan.roof && plan.roof.style) || 'gable';
+        const roofPitch = this._roofPitch(plan);
         const floors = [];
         for (let f = count - 1; f >= 0; f--) {
             const label = f === 0 ? tt('Ground floor') : this._t('Floor {n}', { n: f + 1 });
-            floors.push(`<button type="button" class="rr-structures-floor${f === this._paint.floor ? ' active' : ''}" data-floor="${f}" aria-pressed="${f === this._paint.floor}">${rrEscapeHtml(label)}</button>`);
+            const active = !this._paint.above && f === this._paint.floor;
+            floors.push(`<button type="button" class="rr-structures-floor${active ? ' active' : ''}" data-floor="${f}" aria-pressed="${active}">${rrEscapeHtml(label)}</button>`);
         }
+        // Over the floors: the whole building from above, roof, tower and all (to look at, not to paint on).
+        floors.unshift(`<button type="button" class="rr-structures-floor rr-structures-above${this._paint.above ? ' active' : ''}" data-above="1" aria-pressed="${!!this._paint.above}">${rrEscapeHtml(tt('Seen from above'))}</button>`);
         const toolNames = { select: 'Select', room: 'Room', floor: 'Floor', wall: 'Wall', door: 'Door', window: 'Window', stairs: 'Stairs', erase: 'Eraser' };
         const toolIcons = { select: 'select', room: 'room', floor: 'room', wall: 'remove', door: 'door', window: 'window', stairs: 'stairs', erase: 'remove' };
         const tools = DatabaseStructureEditor.PAINT_TOOLS.map(tool => `<button type="button" class="rr-structures-tool${tool === this._paint.tool ? ' active' : ''}" data-tool="${tool}" aria-pressed="${tool === this._paint.tool}" title="${rrEscapeHtml(tt(toolNames[tool]))}">${DatabaseStructureEditor.icon(toolIcons[tool])}<span>${rrEscapeHtml(tt(toolNames[tool]))}</span></button>`).join('');
-        const option = (value, current) => `<option value="${rrEscapeHtml(value)}"${value === current ? ' selected' : ''}>${rrEscapeHtml(value || tt('(none)'))}</option>`;
         const dirNames = { north: 'North', east: 'East', south: 'South', west: 'West' };
         side.innerHTML = `
             <div class="rr-structures-side-title">${rrEscapeHtml(tt('Floors'))}</div>
             <div class="rr-structures-floorlist">${floors.join('')}</div>
             <button type="button" class="rr-btn-secondary rr-structures-addfloor">${rrEscapeHtml(tt('+ Add floor'))}</button>
-            <label class="rr-structures-side-field"><span>${rrEscapeHtml(tt('Roof'))}</span><select class="database-field-value rr-structures-roof-style">${[['gable', 'Gable'], ['flat', 'Flat']].map(([v, l]) => `<option value="${v}"${v === ((this.current?.plan?.roof && this.current.plan.roof.style) || 'gable') ? ' selected' : ''}>${rrEscapeHtml(tt(l))}</option>`).join('')}</select></label>
+            <label class="rr-structures-side-field"><span>${rrEscapeHtml(tt('Roof'))}</span><select class="database-field-value rr-structures-roof-style">${[['gable', 'Gable'], ['flat', 'Flat'], ['shed', 'Slanted']].map(([v, l]) => `<option value="${v}"${v === roofStyle ? ' selected' : ''}>${rrEscapeHtml(tt(l))}</option>`).join('')}</select></label>
+            <label class="rr-structures-side-field"${roofStyle === 'shed' ? '' : ' hidden'}><span>${rrEscapeHtml(tt('Rises'))}</span><select class="database-field-value rr-structures-roof-high">${Object.keys(dirNames).map(d => `<option value="${d}"${d === ((plan.roof && plan.roof.high) || 'north') ? ' selected' : ''}>${rrEscapeHtml(tt(dirNames[d]))}</option>`).join('')}</select></label>
+            <label class="rr-structures-side-field"${roofStyle === 'flat' ? ' hidden' : ''}><span>${rrEscapeHtml(tt('Roof pitch (rows)'))}</span><input type="number" class="database-field-value rr-structures-roof-pitch" min="${roofStyle === 'shed' ? 1 : 0}" max="20" step="1" value="${roofPitch}"></label>
+            ${this._materialTile('roof', tt('Roof'))}
             <button type="button" class="rr-btn-secondary rr-structures-roof" title="${rrEscapeHtml(tt('Lay the roof again over the top floor.'))}">${rrEscapeHtml(tt('Rebuild roof'))}</button>
             <div class="rr-structures-side-title">${rrEscapeHtml(tt('Tools'))}</div>
             <div class="rr-structures-toolgrid">${tools}</div>
             ${this._sel?.length ? `<div class="rr-structures-selbar"><span>${rrEscapeHtml(this._selLabel())}</span>${this._sel.some(p => p.kind === 'stair') ? `<button type="button" class="rr-btn-secondary rr-structures-selturn">${rrEscapeHtml(tt('Turn'))}</button>` : ''}<button type="button" class="rr-btn-secondary rr-structures-seldelete">${rrEscapeHtml(tt('Delete'))}</button></div>` : ''}
-            <label class="rr-structures-side-field"><span>${rrEscapeHtml(tt('Walls'))}</span><select class="database-field-value rr-structures-wallmat">${[''].concat(names).map(n => option(n, this._paint.wallMaterial)).join('')}</select></label>
-            <label class="rr-structures-side-field"><span>${rrEscapeHtml(tt('Floors'))}</span><select class="database-field-value rr-structures-floormat">${[''].concat(names).map(n => option(n, this._paint.floorMaterial)).join('')}</select></label>
+            <div class="rr-structures-side-field"><span>${rrEscapeHtml(tt('Walls'))}</span>${this._materialTile('wall', tt('Walls'))}</div>
+            <div class="rr-structures-side-field"><span>${rrEscapeHtml(tt('Floors'))}</span>${this._materialTile('floor', tt('Floors'))}</div>
             <label class="rr-structures-side-field"${this._paint.tool === 'stairs' ? '' : ' hidden'}><span>${rrEscapeHtml(tt('Stairs climb'))}</span><select class="database-field-value rr-structures-dir">${Object.keys(dirNames).map(d => `<option value="${d}"${d === this._paint.dir ? ' selected' : ''}>${rrEscapeHtml(tt(dirNames[d]))}</option>`).join('')}</select></label>`;
         side.querySelector('.rr-structures-selturn')?.addEventListener('click', () => this.turnSelection());
         side.querySelector('.rr-structures-seldelete')?.addEventListener('click', () => this.deleteSelection());
-        side.querySelectorAll('.rr-structures-floor').forEach(button => button.addEventListener('click', () => { this._paint.floor = Number(button.dataset.floor); this._sel = []; this.renderSide(); this.drawPaint(); if (this._peek === true) this.draw3D(this._report); }));
+        side.querySelectorAll('.rr-structures-floor').forEach(button => button.addEventListener('click', () => {
+            this._paint.above = button.dataset.above === '1';
+            if (!this._paint.above) this._paint.floor = Number(button.dataset.floor);
+            this._sel = []; this.renderSide(); this.drawPaint();
+            if (this._peek === true) this.draw3D(this._report);
+        }));
         side.querySelector('.rr-structures-roof').addEventListener('click', () => this.rebuildRoof());
-        side.querySelector('.rr-structures-addfloor').addEventListener('click', () => { this.setFloorCount(count + 1); this._paint.floor = count; this.renderSide(); this.drawPaint(); });
-        side.querySelectorAll('.rr-structures-tool').forEach(button => button.addEventListener('click', () => { this._paint.tool = button.dataset.tool; if (this._paint.tool !== 'select') this._sel = []; this.renderSide(); this.drawPaint(); }));
-        side.querySelector('.rr-structures-wallmat').addEventListener('change', event => { this._paint.wallMaterial = event.target.value; });
-        side.querySelector('.rr-structures-floormat').addEventListener('change', event => { this._paint.floorMaterial = event.target.value; });
+        side.querySelector('.rr-structures-addfloor').addEventListener('click', async () => { await this.setFloorCount(count + 1); this._paint.floor = count; this._paint.above = false; this.renderSide(); this.drawPaint(); });
+        // A tool is for a floor: picking one from the view from above goes back to the floor last looked at.
+        side.querySelectorAll('.rr-structures-tool').forEach(button => button.addEventListener('click', () => { this._paint.tool = button.dataset.tool; this._paint.above = false; if (this._paint.tool !== 'select') this._sel = []; this.renderSide(); this.drawPaint(); }));
+        // A material is chosen from its pictures; the building wears it as the pointer passes over, and keeps it on a click.
+        for (const button of side.querySelectorAll('.rr-structures-mat')) button.addEventListener('click', () => {
+            const role = button.dataset.role;
+            this.openMaterialPicker(button, name => this.dressRole(role, name), name => this.previewRole(role, name));
+        });
+        side.querySelector('.rr-structures-roof-style').addEventListener('change', event => this.setRoof({ style: event.target.value }));
+        side.querySelector('.rr-structures-roof-high').addEventListener('change', event => this.setRoof({ high: event.target.value }));
+        side.querySelector('.rr-structures-roof-pitch').addEventListener('change', event => this.setRoof({ pitch: event.target.value }));
         side.querySelector('.rr-structures-dir')?.addEventListener('change', event => { this._paint.dir = event.target.value; this.drawPaint(); });
         const hint = this._detail?.querySelector('.rr-structures-paint-hint');
         if (hint) {
             const tips = { select: 'Click a piece to pick it up, or drag a box. Drag to move; arrows nudge, R turns stairs, Delete removes.', room: 'Drag a rectangle: walls around it, floor inside.', floor: 'Drag a rectangle of floor.', wall: 'Drag a straight line of wall.', door: 'Drag along a wall to open a doorway in it.', window: 'Drag along a wall to put windows in it.', stairs: 'Click where the stairs start; they climb to the next floor. R turns them.', erase: 'Drag over anything on this floor to take it away.' };
-            hint.textContent = (F.isDescribed(plan) ? tt('Painting turns this described building into pieces.') + ' ' : '') + tt(tips[this._paint.tool]) + ' ' + tt('Right-drag erases. Ctrl+Z undoes.');
+            hint.textContent = this._paint.above ? tt('Seen from above') : (F.isDescribed(plan) ? tt('Painting turns this described building into pieces.') + ' ' : '') + tt(tips[this._paint.tool]) + ' ' + tt('Right-drag erases. Ctrl+Z undoes.');
+            hint.title = hint.textContent;
         }
+    }
+
+    /** A role's material as a large tile; a click swaps it for another. */
+    _materialTile(role, title) {
+        const value = this._roleMaterial(role);
+        return RRMaterialPopup.tile({ cls: 'rr-structures-mat', value, url: value ? this.materialUrl(value) || '' : '', blank: this._t('Plain'), attrs: `data-role="${role}" title="${rrEscapeHtml(title)}"` });
     }
 
     /** A material's picture, loaded once, for painting cells in it. */
@@ -607,15 +684,237 @@ class DatabaseStructureEditor {
         return F.rectCells(a.x, a.y, b.x, b.y);
     }
 
+    /** How far up a shape reaches from where it stands, in levels (a tilted slab by its lean). */
+    static shapeRise(shape) {
+        const size = Array.isArray(shape.size) ? shape.size : [1, 1, 1];
+        const h = Number(size[1]) || 1, d = Number(size[2]) || Number(size[0]) || 1;
+        const tilt = (Number(shape.tilt) || 0) * Math.PI / 180;
+        return Math.abs(h * Math.cos(tilt)) + Math.abs(d * Math.sin(tilt));
+    }
+
+    /** A piece's own surface (a finish, or its sliders), or null. */
+    static surfaceOf(piece) {
+        const presets = (typeof Reactor3D !== 'undefined' && Reactor3D.PIECE_FINISHES) || {};
+        return (piece && (piece.surface || (piece.finish && presets[piece.finish]))) || null;
+    }
+
+    /**
+     * A surface as a flat colour for a view with no reflections: its tint (silver for an untinted
+     * mirror or chrome), and whether the material's picture still shows through it.
+     */
+    static surfaceLook(surface) {
+        if (!surface || !(Number(surface.reflect) > 0)) return null;
+        const tint = /^#[0-9a-f]{6}$/i.test(String(surface.tint || '')) ? String(surface.tint).toLowerCase() : '#ffffff';
+        const pictured = (Number(surface.texture) || 0) >= 0.5;
+        return { color: tint === '#ffffff' && !pictured ? '#d5dde6' : tint, pictured };
+    }
+
+    /**
+     * One shape on the plan: its footprint where it stands, turned as it is, in its material (or its
+     * finish's colour), darker the taller it is, with the lines that tell a pyramid from a dome from a
+     * tube. Overhead ones are an outline in dashes.
+     */
+    _drawShape(ctx, g, shape, options = {}) {
+        const { cell, ox, oy } = g;
+        const E = DatabaseStructureEditor;
+        const offset = Array.isArray(shape.offset) ? shape.offset : [0, 0];
+        const tilt = (Number(shape.tilt) || 0) * Math.PI / 180;
+        const w = Math.max(0.1, Number(shape.size[0]) || 1) * cell;
+        // A tilted slab covers less ground than its length.
+        const d = Math.max(0.1, Math.abs((Number(shape.size[2]) || Number(shape.size[0]) || 1) * Math.cos(tilt)) + Math.abs((Number(shape.size[1]) || 0) * Math.sin(tilt))) * cell;
+        const round = E.ROUND_SHAPES.includes(shape.kind), hollow = shape.kind === 'tube' || shape.kind === 'ring';
+        const thick = Math.max(0.05, Math.min(0.95, (Number.isFinite(Number(shape.thick)) ? Number(shape.thick) : 0.3) * 2));
+        ctx.save();
+        ctx.translate(ox + (shape.x + 0.5 + (Number(offset[0]) || 0)) * cell, oy + (shape.y + 0.5 + (Number(offset[1]) || 0)) * cell);
+        ctx.rotate((Number(shape.angle) || 0) * Math.PI / 180);
+        const outline = () => {
+            ctx.beginPath();
+            if (round) ctx.ellipse(0, 0, w / 2, d / 2, 0, 0, Math.PI * 2); else ctx.rect(-w / 2, -d / 2, w, d);
+            // A tube or a ring is its wall: the middle is open.
+            if (hollow) ctx.ellipse(0, 0, w / 2 * (1 - thick), d / 2 * (1 - thick), 0, 0, Math.PI * 2);
+        };
+        outline();
+        if (options.overhead) {
+            ctx.setLineDash([4, 3]);
+            ctx.strokeStyle = 'rgba(225,230,240,0.55)';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+            ctx.restore();
+            return;
+        }
+        const look = E.surfaceLook(E.surfaceOf(shape));
+        const entry = look && !look.pictured ? null : this._materialImage(shape.material);
+        if (entry && entry.image) {
+            const pattern = ctx.createPattern(entry.image, 'repeat');
+            if (pattern && pattern.setTransform && typeof DOMMatrix === 'function') pattern.setTransform(new DOMMatrix().scale(cell / entry.image.width, cell / entry.image.height));
+            ctx.fillStyle = pattern || '#6b6f76';
+        } else ctx.fillStyle = look ? look.color : '#6b6f76';
+        ctx.fill('evenodd');
+        if (look && entry && entry.image) { ctx.globalAlpha = 0.45; ctx.fillStyle = look.color; ctx.fill('evenodd'); ctx.globalAlpha = 1; }
+        // A solid as tall as a wall reads as one; low things (a bench, a crate) stay light.
+        const rise = E.shapeRise(shape);
+        if (!options.above && rise >= 2.5) { ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fill('evenodd'); }
+        ctx.strokeStyle = 'rgba(15,17,20,0.85)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        // What kind it is: a peak's diagonals, a ridge, a slope's high edge, a dome's ring.
+        ctx.strokeStyle = 'rgba(255,255,255,0.45)';
+        ctx.beginPath();
+        if (shape.kind === 'pyramid' || shape.kind === 'spike') { ctx.moveTo(-w / 2, -d / 2); ctx.lineTo(w / 2, d / 2); ctx.moveTo(w / 2, -d / 2); ctx.lineTo(-w / 2, d / 2); }
+        else if (shape.kind === 'prism') { ctx.moveTo(-w / 2, 0); ctx.lineTo(w / 2, 0); }
+        else if (shape.kind === 'wedge') { ctx.moveTo(-w / 2, d / 2 - 2); ctx.lineTo(w / 2, d / 2 - 2); }
+        else if (shape.kind === 'cone') { ctx.moveTo(1.5, 0); ctx.arc(0, 0, 1.5, 0, Math.PI * 2); }
+        else if (shape.kind === 'dome' || shape.kind === 'sphere' || shape.kind === 'dish' || shape.kind === 'capsule') { ctx.moveTo(w / 4, 0); ctx.ellipse(0, 0, w / 4, d / 4, 0, 0, Math.PI * 2); }
+        else if (shape.kind === 'arch' || shape.kind === 'tunnel') { ctx.setLineDash([3, 3]); ctx.moveTo(-w * 0.3, -d / 2); ctx.lineTo(-w * 0.3, d / 2); ctx.moveTo(w * 0.3, -d / 2); ctx.lineTo(w * 0.3, d / 2); }
+        ctx.stroke();
+        ctx.restore();
+    }
+
+    /**
+     * The whole building from above: every cell's highest piece and every shape, the lower drawn
+     * first, so the roof lies over the rooms and a tower's cap over its tower.
+     */
+    _drawAbove(ctx, g, S) {
+        const { cell, ox, oy, W, D } = g;
+        const index = this._paintIndex;
+        if (!index.above) {
+            const tops = new Map();
+            for (const [, cells] of index.floors) for (const [key, list] of cells) for (const piece of list) {
+                if (piece.kind === 'glass' || piece.kind === 'door') continue;
+                const z = Number(piece.z) || 0;
+                const top = z + (['wall', 'doorway', 'window', 'pillar', 'ladder'].includes(piece.kind) ? S : piece.kind === 'floor' || piece.kind === 'roof' ? 0.1 : 1);
+                const best = tops.get(key);
+                if (!best || top > best.top) tops.set(key, { top, piece });
+            }
+            const items = [];
+            let low = Infinity, high = -Infinity;
+            for (const [key, { top, piece }] of tops) { const [x, y] = key.split(',').map(Number); items.push({ top, piece, x, y }); low = Math.min(low, top); high = Math.max(high, top); }
+            for (const shape of index.shapeList) { const top = (Number(shape.z) || 0) + DatabaseStructureEditor.shapeRise(shape); items.push({ top, shape }); low = Math.min(low, top); high = Math.max(high, top); }
+            items.sort((a, b) => a.top - b.top);
+            index.above = { items, low, high };
+        }
+        const { items, low, high } = index.above;
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(ox, oy, W * cell, D * cell);
+        ctx.clip();
+        for (const item of items) {
+            // Higher is lighter, so a slope and a tower read as height.
+            const lift = high > low ? (item.top - low) / (high - low) : 0;
+            if (item.shape) { this._drawShape(ctx, g, item.shape, { above: true }); continue; }
+            const entry = this._materialImage(item.piece.material);
+            if (entry && entry.image) ctx.drawImage(entry.image, ox + item.x * cell, oy + item.y * cell, cell, cell);
+            else { ctx.fillStyle = '#6b6f76'; ctx.fillRect(ox + item.x * cell, oy + item.y * cell, cell, cell); }
+            ctx.fillStyle = lift >= 0.5 ? `rgba(255,255,255,${((lift - 0.5) * 0.36).toFixed(3)})` : `rgba(0,0,0,${((0.5 - lift) * 0.7).toFixed(3)})`;
+            ctx.fillRect(ox + item.x * cell, oy + item.y * cell, cell, cell);
+        }
+        ctx.restore();
+        const accent = (typeof ThemeColors !== 'undefined' && ThemeColors.resolve ? ThemeColors.resolve('--color-accent') : null) || '#e0b020';
+        ctx.strokeStyle = accent;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(ox - 1, oy - 1, W * cell + 2, D * cell + 2);
+    }
+
+    /** Everything the plan builds, as the 3D view shows it: built once per change. */
+    _builtPieces(plan) {
+        const version = this._paintVersion || 0, cache = this._built;
+        if (cache && cache.plan === plan && cache.version === version) return cache.pieces;
+        const SP = typeof RRStructurePlan !== 'undefined' ? RRStructurePlan : null;
+        let pieces = plan.pieces || [];
+        if (SP) { try { pieces = SP.build(plan, 0, 0, 1, 0, name => this.resolve(name)); } catch (error) { pieces = plan.pieces || []; } }
+        this._built = { plan, version, pieces };
+        return pieces;
+    }
+
+    /** How many floors the plan shows: its described floors, its built ones, or those of the plans it is made of. */
+    _floorCount(plan) {
+        const F = this.floorsApi();
+        const own = F.isDescribed(plan) ? Math.max(plan.floors.length, F.occupiedFloors(plan)) : F.floorsOf(plan);
+        if (!(plan.parts || []).length) return Math.max(1, Math.min(24, own));
+        const whole = F.occupiedFloors({ storey: plan.storey, pieces: this._builtPieces(plan) });
+        return Math.max(1, Math.min(24, F.isDescribed(plan) || (plan.pieces || []).length ? Math.max(own, whole) : whole));
+    }
+
+    /** The material a role wears: the plan's own, what most of its pieces wear, or a stock one. */
+    _roleMaterial(role) {
+        const F = this.floorsApi(), plan = this.current?.plan;
+        if (!F || !plan) return '';
+        if (F.isDescribed(plan) && plan.materials?.[role]) return plan.materials[role];
+        const worn = F.roleMaterial(plan, role, this._builtPieces(plan));
+        if (worn !== null) return worn;
+        if (plan.materials?.[role]) return plan.materials[role];
+        const names = this.materials(), stock = { wall: 'Stone', floor: 'Wood', roof: 'RoofTile' }[role];
+        return names.includes(stock) ? stock : (role === 'roof' ? '' : names[0] || '');
+    }
+
+    /** The roof's height in rows: the plan's own, or the one set here for a building already in pieces. */
+    _roofPitch(plan) {
+        if (plan.roof && plan.roof.pitch !== null && Number.isFinite(Number(plan.roof.pitch))) return Number(plan.roof.pitch);
+        if (Number.isFinite(this._paint.roofPitch)) return this._paint.roofPitch;
+        return plan.roof && plan.roof.style === 'shed' ? 3 : 6;
+    }
+
+    /**
+     * The roof's style, high side or pitch changed: a described building takes the setting and builds
+     * with it; one already in pieces has its roof laid again. One undo step either way.
+     */
+    setRoof(change) {
+        const F = this.floorsApi(), plan = this.current?.plan;
+        if (!F || !plan) return;
+        const next = Object.assign({}, plan.roof || {});
+        if (DatabaseStructureEditor.ROOF_STYLES.includes(change.style)) next.style = change.style;
+        if (DatabaseStructureEditor.DIRECTIONS.includes(change.high)) next.high = change.high;
+        if (next.style !== 'shed') delete next.high;
+        const pitch = change.pitch === undefined ? null : Math.max(next.style === 'shed' ? 1 : 0, Math.min(20, Math.floor(Number(change.pitch)) || 0));
+        if (pitch !== null) this._paint.roofPitch = pitch;
+        const described = F.isDescribed(plan);
+        if (described && pitch !== null) next.pitch = pitch;
+        this.pushHistory();
+        plan.roof = next;
+        if (!described) F.rebuildRoof(plan, Object.assign({ style: next.style || 'gable', pitch: this._roofPitch(plan) }, this._roleMaterial('roof') ? { roof: this._roleMaterial('roof') } : {}));
+        this._sel = [];
+        this.markDirty();
+        this.renderSide();
+    }
+
+    /** A material over a role as the pointer passes it in the picker: shown, not kept. `null` takes it back. */
+    previewRole(role, name) {
+        const F = this.floorsApi(), plan = this.current?.plan;
+        if (!F || !plan) return;
+        if (this._dressing) { F.undress(this._dressing.changes); this._dressing = null; }
+        this._paintVersion = (this._paintVersion || 0) + 1;
+        if (name !== null && name !== undefined) {
+            const only = role !== 'roof' && this._paint.tool === 'select' && this._sel?.length ? this._sel : null;
+            this._dressing = { changes: F.dress(plan, role, this._roleMaterial(role), name, only) };
+        }
+        this._paintVersion = (this._paintVersion || 0) + 1;
+        this.drawPaint();
+        this.schedulePreview();
+    }
+
+    /** A material chosen for a role: the selection wears it, or with nothing selected the whole building; new painting uses it. */
+    dressRole(role, name) {
+        const F = this.floorsApi(), plan = this.current?.plan;
+        if (!F || !plan) return;
+        if (this._dressing) { F.undress(this._dressing.changes); this._dressing = null; }
+        this._paintVersion = (this._paintVersion || 0) + 1;
+        const only = role !== 'roof' && this._paint.tool === 'select' && this._sel?.length ? this._sel : null;
+        this.pushHistory();
+        const changes = F.dress(plan, role, this._roleMaterial(role), name, only);
+        if (!changes.length) this._history.pop();
+        this.markDirty();
+        this.renderSide();
+    }
+
     /** The roof laid again over the top floor (a squashed one, or after the floors changed), undoably. */
     rebuildRoof() {
         const F = this.floorsApi(), plan = this.current?.plan;
         if (!F || !plan) return;
         this.pushHistory();
+        const pitch = this._roofPitch(plan), roof = this._roleMaterial('roof');
         if (F.isDescribed(plan)) F.buildOut(plan, typeof RRStructurePlan !== 'undefined' ? RRStructurePlan : null, name => this.resolve(name));
-        const style = (typeof document !== 'undefined' && document.querySelector('.rr-structures-roof-style')?.value) || (plan.roof && plan.roof.style) || 'gable';
-        plan.roof = Object.assign({}, plan.roof || {}, { style });
-        F.rebuildRoof(plan, { style });
+        const style = (plan.roof && plan.roof.style) || 'gable';
+        F.rebuildRoof(plan, Object.assign({ style, pitch }, roof ? { roof } : {}));
         this._sel = [];
         this.markDirty();
         this.renderBar();
@@ -690,8 +989,9 @@ class DatabaseStructureEditor {
         if (!F || !plan) return;
         const SP = typeof RRStructurePlan !== 'undefined' ? RRStructurePlan : null;
         this.pushHistory();
+        const wall = this._roleMaterial('wall'), slab = this._roleMaterial('floor');
         if (F.isDescribed(plan)) F.buildOut(plan, SP, name => this.resolve(name));
-        const floor = this._paint.floor, wall = this._paint.wallMaterial, slab = this._paint.floorMaterial;
+        const floor = this._paint.floor;
         if (tool === 'room') {
             F.paintFloor(plan, floor, F.rectCells(a.x, a.y, b.x, b.y), slab);
             F.paintWall(plan, floor, F.outlineCells(a.x, a.y, b.x, b.y), wall, slab);
@@ -714,6 +1014,7 @@ class DatabaseStructureEditor {
         canvas.addEventListener('contextmenu', event => event.preventDefault());
         canvas.addEventListener('pointerdown', event => {
             if (event.button !== 0 && event.button !== 2) return;
+            if (this._paint.above) return;
             const cell = this._paintCellAt(canvas, event.clientX, event.clientY);
             if (!cell || !cell.inside) return;
             canvas.setPointerCapture?.(event.pointerId);
@@ -804,35 +1105,44 @@ class DatabaseStructureEditor {
         ctx.fillStyle = '#262b31';
         ctx.fillRect(ox, oy, W * cell, D * cell);
         const S = F.storeyOf(plan);
-        let source = plan;
-        // A described building is drawn from what it builds, without changing it until painted.
-        if (F.isDescribed(plan)) {
-            const SP = typeof RRStructurePlan !== 'undefined' ? RRStructurePlan : null;
-            const key = JSON.stringify(plan.floors) + plan.size.join('x');
-            if (this._describedKey !== key) { this._describedKey = key; this._describedPieces = SP ? SP.build(plan, 0, 0, 1, 0, name => this.resolve(name)) : []; }
-            source = { size: plan.size, storey: S, pieces: this._describedPieces };
-        }
+        // The plan is drawn from what it builds (its rooms, its own pieces, its shapes, its parts and paths),
+        // the same pieces the 3D view shows, without changing a described building until it is painted.
+        const source = { size: plan.size, storey: S, pieces: this._builtPieces(plan) };
         const floor = this._paint.floor;
         // Pieces by floor and cell, built once per change: a 24-floor manor is tens of thousands of
         // pieces, and searching them all for every cell of the plan took seconds per draw.
         const cacheKey = [this._paintVersion || 0, source.pieces, source.pieces.length].join('|');
         if (!this._paintIndex || this._paintIndex.key !== cacheKey || this._paintIndex.pieces !== source.pieces) {
-            const floors = new Map();
+            const floors = new Map(), shapes = new Map();
+            // A shape belongs on the plan of every floor it stands through (a tower from the ground up),
+            // lowest first so what stands on something is drawn over it. What only hangs in the top of
+            // a storey (eaves, a roof's slab) is overhead and left to the view from above.
+            const shapeList = (source.pieces || []).filter(piece => Array.isArray(piece.size)).sort((a, b) => (Number(a.z) || 0) - (Number(b.z) || 0));
+            for (const piece of shapeList) {
+                const z0 = Number(piece.z) || 0, z1 = z0 + DatabaseStructureEditor.shapeRise(piece);
+                for (let f = Math.floor(z0 / S); f * S < z1 - 0.05; f++) {
+                    if (f === Math.floor(z0 / S) && z0 - f * S > S - 1.5) continue;
+                    if (!shapes.has(f)) shapes.set(f, []);
+                    shapes.get(f).push(piece);
+                }
+            }
             for (const piece of source.pieces || []) {
                 const f = Math.floor((Number(piece.z) || 0) / S);
+                if (Array.isArray(piece.size)) continue;
                 let cells = floors.get(f);
                 if (!cells) floors.set(f, cells = new Map());
                 const key = piece.x + ',' + piece.y;
                 const list = cells.get(key);
                 if (list) list.push(piece); else cells.set(key, [piece]);
             }
-            this._paintIndex = { key: cacheKey, pieces: source.pieces, floors };
+            this._paintIndex = { key: cacheKey, pieces: source.pieces, floors, shapes, shapeList };
         }
         const byCell = floorIndex => this._paintIndex.floors.get(floorIndex) || new Map();
         const shownOf = list => {
             for (const kind of ['doorway', 'window', 'wall', 'stair', 'pillar', 'block', 'fence', 'ramp', 'roof']) { const piece = list.find(p => p.kind === kind); if (piece) return piece; }
             return list.find(p => p.kind === 'floor') || list[0] || null;
         };
+        if (this._paint.above) { this._drawAbove(ctx, g, S); return; }
         if (floor > 0) {
             ctx.fillStyle = 'rgba(255,255,255,0.10)';
             for (const [key, list] of byCell(floor - 1)) if (list.some(p => F.WALLISH.includes(p.kind))) { const [x, y] = key.split(',').map(Number); ctx.fillRect(ox + x * cell, oy + y * cell, cell, cell); }
@@ -866,6 +1176,14 @@ class DatabaseStructureEditor {
             else { ctx.fillStyle = 'rgba(150,160,175,0.85)'; ctx.fillRect(px + 1, py + 1, cell - 2, cell - 2); }
             if (shown.kind === 'wall' || shown.kind === 'window') { ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth = 1; ctx.strokeRect(px + 0.5, py + 0.5, cell - 1, cell - 1); }
         }
+        // Shapes: each one's own footprint, turned as it stands, kept inside the plot. What starts above
+        // head height (a canopy, a hanging sign) is overhead: an outline in dashes.
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(ox, oy, W * cell, D * cell);
+        ctx.clip();
+        for (const shape of this._paintIndex.shapes.get(floor) || []) this._drawShape(ctx, g, shape, { overhead: (Number(shape.z) || 0) - floor * S >= 2.5 });
+        ctx.restore();
         // The grid, then the plot's edge.
         if (cell >= 8) {
             ctx.strokeStyle = 'rgba(255,255,255,0.07)';
@@ -951,6 +1269,7 @@ class DatabaseStructureEditor {
     /** The plan object stays the record's own; only its contents change. */
     restore(json) {
         this._paintVersion = (this._paintVersion || 0) + 1;
+        this._dressing = null;
         const plan = this.current.plan;
         const next = DatabaseStructureEditor.normalizePlan(JSON.parse(json));
         for (const key of Object.keys(plan)) delete plan[key];
@@ -1017,31 +1336,17 @@ class DatabaseStructureEditor {
     }
 
     /** The grid under a swatch button; a click chooses, Escape or a click elsewhere closes. */
-    openMaterialPicker(button, onPick) {
+    openMaterialPicker(button, onPick, onHover = null) {
         this.closeMaterialPicker();
-        const blank = button.dataset.blank || '';
-        const current = button.dataset.value || '';
-        const names = this.materials();
-        const swatch = (name, inner, title) => `<button type="button" class="rr-structures-swatch" data-name="${rrEscapeHtml(name)}" title="${rrEscapeHtml(title)}" aria-checked="${name === current}" style="width:44px;height:44px;padding:0;border-radius:4px;border:2px solid ${name === current ? 'var(--color-accent)' : 'var(--color-border-input)'};background:var(--color-bg-deep);overflow:hidden;cursor:pointer;">${inner}</button>`;
-        const grid = document.createElement('div');
-        grid.className = 'rr-structures-picker';
-        grid.setAttribute('role', 'listbox');
-        grid.style.cssText = 'position:fixed;z-index:10020;display:grid;grid-template-columns:repeat(6, 44px);gap:4px;padding:8px;background:var(--color-bg-panel);border:1px solid var(--color-border);border-radius:4px;box-shadow:0 6px 18px rgba(0,0,0,.35);';
-        grid.innerHTML = swatch('', `<span style="display:block;width:100%;height:100%;border:1px dashed var(--color-border-input);box-sizing:border-box;"></span>`, blank)
-            + names.map(name => swatch(name, `<img src="${rrEscapeHtml(this.materialUrl(name) || '')}" alt="" draggable="false" style="width:100%;height:100%;object-fit:cover;display:block;pointer-events:none;">`, name)).join('')
-            + `<div style="grid-column:1 / -1;font-size:11px;color:var(--color-text-muted);padding-top:2px;">${rrEscapeHtml(this._t('Any tileable image under img/materials is a material.'))}</div>`;
-        const rect = button.getBoundingClientRect();
-        grid.style.left = Math.max(8, Math.min(window.innerWidth - 300, rect.left)) + 'px';
-        grid.style.top = (rect.bottom + 4 + 260 > window.innerHeight ? rect.top - 4 - 260 : rect.bottom + 4) + 'px';
-        document.body.appendChild(grid);
-        for (const el of grid.querySelectorAll('.rr-structures-swatch')) el.addEventListener('click', () => { onPick(el.dataset.name); this.closeMaterialPicker(); });
-        const away = event => { if (!grid.contains(event.target) && event.target !== button) this.closeMaterialPicker(); };
-        const key = event => { if (event.key === 'Escape') this.closeMaterialPicker(); };
-        setTimeout(() => { document.addEventListener('pointerdown', away, true); document.addEventListener('keydown', key, true); }, 0);
-        this._picker = { grid, away, key };
+        RRMaterialPopup.open(button, {
+            materials: this.materials().map(name => ({ name, url: this.materialUrl(name) || '' })),
+            current: button.dataset.value || '', blank: button.dataset.blank || '',
+            note: this._t('Any tileable image under img/materials is a material.'), onPick, onHover
+        });
     }
 
     closeMaterialPicker() {
+        if (typeof RRMaterialPopup !== 'undefined') RRMaterialPopup.close();
         const picker = this._picker;
         if (!picker) return;
         document.removeEventListener('pointerdown', picker.away, true);
@@ -1084,9 +1389,16 @@ class DatabaseStructureEditor {
             this.renderMore();
         });
         for (const input of bar.querySelectorAll('.rr-structures-size')) {
+            // The plot never shrinks past what is built on it: those pieces could not be reached again.
+            const least = () => Math.max(DatabaseStructureEditor.SIZE_MIN, DatabaseStructureEditor.builtExtent(plan)[Number(input.dataset.i)]);
+            input.min = String(least());
             input.addEventListener('change', () => {
+                const i = Number(input.dataset.i);
+                const size = Math.max(least(), Math.min(DatabaseStructureEditor.SIZE_MAX, Math.floor(Number(input.value)) || DatabaseStructureEditor.SIZE_MIN));
+                input.value = String(size);
+                if (size === plan.size[i]) return;
                 this.pushHistory();
-                plan.size[Number(input.dataset.i)] = Math.max(DatabaseStructureEditor.SIZE_MIN, Math.min(DatabaseStructureEditor.SIZE_MAX, Math.floor(Number(input.value)) || DatabaseStructureEditor.SIZE_MIN));
+                plan.size[i] = size;
                 this.markDirty();
             });
         }
@@ -2139,10 +2451,16 @@ class DatabaseStructureEditor {
         const byMaterial = new Map();
         const peekButton = this._detail?.querySelector('.rr-structures-peek');
         if (peekButton) { peekButton.setAttribute('aria-pressed', String(peek)); peekButton.style.borderColor = peek ? 'var(--color-accent)' : ''; }
-        for (const piece of shown) { const key = piece.material || ''; if (!byMaterial.has(key)) byMaterial.set(key, []); byMaterial.get(key).push(piece); }
-        for (const [name, pieces] of byMaterial) {
+        // One mesh per material and surface: a gold bell is gold here too.
+        for (const piece of shown) {
+            const surface = DatabaseStructureEditor.surfaceOf(piece);
+            const key = (piece.material || '') + '\u0001' + (surface && Reactor3D.surfaceKey ? Reactor3D.surfaceKey(surface) : '');
+            if (!byMaterial.has(key)) byMaterial.set(key, { name: piece.material || '', surface, pieces: [] });
+            byMaterial.get(key).pieces.push(piece);
+        }
+        for (const [key, { name, surface, pieces }] of byMaterial) {
             const geometry = Reactor3D.pieceGeometry(pieces, mapData);
-            const mesh = new THREE.Mesh(geometry, this._material3D(name));
+            const mesh = new THREE.Mesh(geometry, this._material3D(name, surface, key));
             preview.scene.add(mesh);
             preview.meshes.push(mesh);
         }
@@ -2160,6 +2478,11 @@ class DatabaseStructureEditor {
         this._layoutEffects(preview, plan);
         this._setGhost(preview, null);
         this._syncGizmo(preview);
+        // Until the wheel says otherwise the whole building is in view, however narrow the pane: its
+        // half-diagonal, top included, is what the frame loop fits.
+        let top = plan.storey;
+        for (const piece of shown) top = Math.max(top, (Number(piece.z) || 0) + (Array.isArray(piece.size) ? Number(piece.size[1]) || 1 : 1));
+        preview.fit = Math.sqrt(W * W + H * H + top * top) / 2;
         if (!preview.distance || preview.autoDistance) { preview.distance = Math.max(W, H) * 1.3 + 6; preview.autoDistance = true; }
         preview.dirty = true;
     }
@@ -2183,7 +2506,7 @@ class DatabaseStructureEditor {
         }
         const [W, H] = plan.size, floors = Math.max(1, plan.floors.length), S = plan.storey;
         const roofZ = floors * S;
-        const pitch = Math.max(0, Math.min(Math.floor((H - 1) / 2), plan.roof.pitch || 0));
+        const pitch = plan.roof.style === 'shed' ? Math.max(1, plan.roof.pitch || 1) : Math.max(0, Math.min(Math.floor((H - 1) / 2), plan.roof.pitch || 0));
         const radius = Math.max(0.35, Math.min(1.2, Math.max(W, H) * 0.03));
         const show = plan.floors.length > 0;
         preview.handles.pitch.visible = show && plan.roof.pitch !== null;
@@ -2219,18 +2542,20 @@ class DatabaseStructureEditor {
         label.style.top = (y - 28) + 'px';
     }
 
-    _material3D(name) {
+    _material3D(name, surface = null, key = name) {
         const preview = this._preview;
-        if (preview.materials.has(name)) return preview.materials.get(name);
-        const material = new THREE.MeshBasicMaterial({ color: name ? 0xffffff : 0x9a9a9a, vertexColors: true, side: THREE.FrontSide });
-        const url = this.materialUrl(name);
+        if (preview.materials.has(key)) return preview.materials.get(key);
+        // No reflections in this view: a finish shows as its colour, over the picture when the finish keeps it.
+        const look = DatabaseStructureEditor.surfaceLook(surface);
+        const material = new THREE.MeshBasicMaterial({ color: look ? look.color : name ? 0xffffff : 0x9a9a9a, vertexColors: true, side: THREE.FrontSide });
+        const url = look && !look.pictured ? null : this.materialUrl(name);
         if (url) {
             const texture = new THREE.TextureLoader().load(url, () => { preview.dirty = true; });
             texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
             if (THREE.SRGBColorSpace) texture.colorSpace = THREE.SRGBColorSpace;
             material.map = texture;
         }
-        preview.materials.set(name, material);
+        preview.materials.set(key, material);
         return material;
     }
 
@@ -2241,6 +2566,7 @@ class DatabaseStructureEditor {
         if (typeof ModelPreview3D !== 'undefined' && ModelPreview3D.updateBackground) ModelPreview3D.updateBackground(scene); else scene.background = new THREE.Color(0x202830);
         const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 2000);
         const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+        if (typeof RRModelRelease !== 'undefined') RRModelRelease.track(renderer, 'structure-preview');
         renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
         if (THREE.SRGBColorSpace) renderer.outputColorSpace = THREE.SRGBColorSpace;
         const preview = this._preview = { canvas, scene, camera, renderer, meshes: [], materials: new Map(), yaw: 0.7, pitch: 0.55, distance: 0, autoDistance: true, centre: { x: 0, y: 0, z: 0 }, dirty: true, raf: 0 };
@@ -2256,6 +2582,7 @@ class DatabaseStructureEditor {
                 preview.dirty = true;
             }
             if (preview.dirty || preview.live) {
+                if (preview.autoDistance && preview.fit) preview.distance = preview.fit / Math.tan(camera.fov * Math.PI / 360) / Math.min(1, camera.aspect) * 1.05;
                 const c = preview.centre, d = preview.distance || 20;
                 camera.position.set(c.x + Math.cos(preview.yaw) * Math.cos(preview.pitch) * d, c.y + Math.sin(preview.pitch) * d, c.z + Math.sin(preview.yaw) * Math.cos(preview.pitch) * d);
                 camera.lookAt(c.x, c.y, c.z);
@@ -2393,7 +2720,9 @@ class DatabaseStructureEditor {
         this._clearEffects(preview);
         preview.ground?.geometry.dispose();
         this._showHandleLabel(null);
-        preview.renderer.dispose();
+        // The page's own context goes back to the browser with it.
+        if (typeof RRModelRelease !== 'undefined') RRModelRelease.dropRenderer(preview.renderer);
+        else preview.renderer.dispose();
         this._preview = null;
     }
 

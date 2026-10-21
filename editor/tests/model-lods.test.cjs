@@ -7,6 +7,7 @@
  * placed instance swaps its meshes' geometry by distance.
  */
 const { source3D } = require('./helpers/runtime-3d-source.cjs');
+const { runtimeSource } = require('./helpers/runtime-source.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -203,7 +204,9 @@ test('the runtime and the editor load the listed levels and pick per frame', () 
     assert.match(three, /Reactor3D\.loadLodLevels = function\(template, key, name, baseUrl\) \{/);
     assert.match(three, /const files = sidecar && Array\.isArray\(sidecar\.lods\) \? sidecar\.lods : null;/, 'only listed files are fetched');
     assert.match(three, /if \(entry\.template && !entry\.template\.userData\.animated\) \{\n\s*this\.loadLodLevels\(entry\.template, key, name, baseUrl\);/);
-    assert.match(three, /if \(lodEye\) Reactor3D\.pickLod\(object, Reactor3D\.instanceSpan\(object\), lodEye, holder\.spec\);/);
+    // Picked every frame, a still model included: its span is the one the placement measured.
+    assert.match(three, /const lodSpan = Reactor3D\.instanceSpan\(object\);\n\s*if \(lodEye\) Reactor3D\.pickLod\(object, lodSpan, lodEye, holder\.spec, lodScreen\);/);
+    assert.match(three, /if \(lodEye\) Reactor3D\.pickLod\(object, holder\.placed\.lodSpan, lodEye, holder\.spec, lodScreen\);/);
     assert.match(three, /if \(meshes\.length !== base\.length\) \{/, 'a level with a different mesh count is refused');
     const preview = read('editor/src/utils/EventPreviewModels.js');
     assert.match(preview, /if \(Array\.isArray\(sidecar\.lods\) && Reactor3D\.attachLodLevels && !loaded\.userData\.animated\) \{/);
@@ -214,7 +217,7 @@ test('the runtime and the editor load the listed levels and pick per frame', () 
 });
 
 test('a weak GPU is read once at boot, keeps the 3D passes sharp under a capped ratio and gives up multisampling', () => {
-    const core = read('runtime/reactor_core.js');
+    const core = runtimeSource('reactor_core.js');
     assert.match(core, /this\._sampleGpuTier\(app\.renderer\);/);
     const start = core.indexOf('Graphics._sampleGpuTier = function(renderer) {');
     const end = core.indexOf('\n};', start) + 3;
@@ -239,6 +242,8 @@ test('a weak GPU is read once at boot, keeps the 3D passes sharp under a capped 
 
     context.Graphics.maxCanvasPixelRatio = 4; context.Reactor3D.renderTargetSamples = 4;
     assert.equal(context.Graphics._sampleGpuTier({ gl: fakeGl('Mali-G52') }), 'weak');
+    assert.equal(context.Graphics._sampleGpuTier({ gl: fakeGl('ANGLE (AMD, AMD Ryzen 9 9950X3D 16-Core Processor (radeonsi raphael_mendocino ACO), OpenGL 4.6)') }), 'weak', 'Mesa names an APU for its processor');
+    assert.equal(context.Graphics._sampleGpuTier({ gl: fakeGl('ANGLE (AMD, AMD Radeon RX 7800 XT (radeonsi navi32 ACO), OpenGL 4.6)') }), 'full', 'a discrete card on the same driver');
     assert.equal(context.Graphics._sampleGpuTier({ gl: fakeGl('Apple M2') }), 'full');
     assert.equal(context.Graphics._sampleGpuTier({}), 'unknown', 'no context, no guess');
     context.Graphics.gpuTierOverride = 'full';
@@ -248,7 +253,7 @@ test('a weak GPU is read once at boot, keeps the 3D passes sharp under a capped 
 });
 
 test('a window larger than the backing store is enlarged pixel for pixel on a weak GPU, and smoothly elsewhere', () => {
-    const core = read('runtime/reactor_core.js');
+    const core = runtimeSource('reactor_core.js');
     const slice = name => { const at = core.indexOf(`Graphics.${name} = function`); return core.slice(at, core.indexOf('\n};', at) + 3); };
     const context = { Graphics: { _realScale: 1, maxCanvasPixelRatio: 4, gpuTier: 'full', upscaleFilter: 'auto' }, window: { devicePixelRatio: 1 } };
     vm.createContext(context);
@@ -312,7 +317,10 @@ test('the 3D passes draw at game size on every screen and are enlarged into the 
     // Nearest from birth, not decided from the canvas ratio of the moment:
     // a target made in a window and kept through an enlargement must not
     // go on sampling linear.
-    assert.match(three, /this\.createTarget\(size\.width, size\.height, this\._scale\);/);
+    assert.match(three, /const target = this\.createTarget\(size\.width, size\.height, full \? 1 : this\._scale, full \? \{ samples: 0 \} : undefined\);/);
+    // Only the smaller target a sharpening upscale reads from is filtered.
+    assert.match(three, /const target = this\.createTarget\(size\.width, size\.height, this\._scale, \{ linear: true \}\);/);
+    assert.equal((three.match(/linear: true/g) || []).length, 1);
     assert.match(three, /const filter = THREE\.NearestFilter;\n[\s\S]{0,400}?minFilter: filter,\n\s*magFilter: filter,/);
     assert.doesNotMatch(three, /options && options\.nearest/);
     const proto = Reactor3D.Viewport.prototype;

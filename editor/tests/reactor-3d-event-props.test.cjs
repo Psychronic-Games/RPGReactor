@@ -9,6 +9,7 @@
  * becomes the same geometry a painted one would.
  */
 const { source3D } = require('./helpers/runtime-3d-source.cjs');
+const { runtimeSource } = require('./helpers/runtime-source.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -193,8 +194,7 @@ test('a character stands on the ground, not on what was built there', () => {
     // them off the cell they were standing on.
     const sprites = fs.readFileSync(
         path.join(repoRoot, 'runtime', 'reactor_sprites.js'), 'utf8');
-    const objects = fs.readFileSync(
-        path.join(repoRoot, 'runtime', 'reactor_objects.js'), 'utf8');
+    const objects = runtimeSource('reactor_objects.js');
     assert.doesNotMatch(sprites, /const ground = Reactor3D\.surfaceHeightAt/);
     assert.doesNotMatch(sprites, /const focusHeight = Reactor3D\.surfaceHeightAt/);
     assert.doesNotMatch(objects, /Reactor3D\.surfaceHeightAt/);
@@ -222,7 +222,7 @@ test('the above pass says where it sorts to', () => {
         path.join(repoRoot, 'runtime', 'reactor_sprites.js'), 'utf8');
     assert.match(sprites, /this\._reactor3dAbove\.sprite\.z = 4;/);
 
-    const core = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_core.js'), 'utf8');
+    const core = runtimeSource('reactor_core.js');
     assert.match(core, /Tilemap\.prototype\._compareChildOrder = function\(a, b\) \{/,
         'the sort this has to survive');
     assert.match(core, /const az = a\.z \|\| 0;/, 'and an absent z really does read as 0');

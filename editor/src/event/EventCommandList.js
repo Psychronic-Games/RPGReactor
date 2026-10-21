@@ -103,6 +103,9 @@ const SIMPLE_COMMAND_EDITORS = {
     342: ['changeEnemyTPEditor']
 };
 
+// Undo and redo states per command array; see EventCommandList.trackHistory.
+const COMMAND_LIST_HISTORY = new WeakMap();
+
 /**
  * EventCommandList - Manages the interactive command list
  */
@@ -112,8 +115,15 @@ class EventCommandList {
         this.commandPicker = new EventCommandPicker();
         this.playModelAnimationEditor = new PlayModelAnimationEditor();
         this.callUserInterfaceEditor = new CallUserInterfaceEditor();
+        this.vehicleCommandEditor = typeof VehicleCommandEditor !== 'undefined' ? new VehicleCommandEditor(eventEditor.databaseManager,
+            () => ({ event: eventEditor.currentEvent || null, map: eventEditor.currentMap || (typeof window !== 'undefined' ? window.reactor?.eventManager?.currentMap : null) || null })) : null;
         this.questCommandEditor = typeof QuestCommandEditor !== 'undefined'
             ? new QuestCommandEditor(eventEditor.databaseManager) : null;
+        this.fightCommandEditor = typeof FightCommandEditor !== 'undefined'
+            ? new FightCommandEditor(eventEditor.databaseManager) : null;
+        // Party Followers: Change Follower Formation, Follower Orders.
+        this.followerCommandEditor = typeof FollowerCommandEditor !== 'undefined'
+            ? new FollowerCommandEditor(eventEditor.databaseManager, eventEditor.projectController) : null;
         this.camera3DEditor = typeof Camera3DEditor !== 'undefined' ? new Camera3DEditor() : null;
         this.transformModel3DEditor = typeof TransformModel3DEditor !== 'undefined' ? new TransformModel3DEditor() : null;
         this.lightCommandEditor = typeof LightCommandEditor !== 'undefined' ? new LightCommandEditor() : null;
@@ -474,6 +484,7 @@ class EventCommandList {
 
     /** The dialog for a Reactor plugin command, by its command name. */
     _reactorCommandEditor(name) {
+        if (typeof VehicleCommandEditor !== 'undefined' && VehicleCommandEditor.supports(name)) return this.vehicleCommandEditor;
         if (typeof MediaSurfaceEditor !== 'undefined'
             && typeof MediaSurfaceEditor.supports === 'function'
             && MediaSurfaceEditor.supports(name)) {
@@ -488,6 +499,8 @@ class EventCommandList {
         if (name === 'SpeakModel3D') return this.speakModel3DEditor;
         if (name === 'CallUserInterface') return this.callUserInterfaceEditor;
         if (typeof QuestCommandEditor !== 'undefined' && QuestCommandEditor.supports(name)) return this.questCommandEditor;
+        if (typeof FightCommandEditor !== 'undefined' && FightCommandEditor.supports(name)) return this.fightCommandEditor;
+        if (typeof FollowerCommandEditor !== 'undefined' && FollowerCommandEditor.supports(name)) return this.followerCommandEditor;
         return null;
     }
 
@@ -526,6 +539,8 @@ class EventCommandList {
 
             const commandListRoot = this._commandListRoot;
             if (!commandListRoot?.isConnected || !commandListRoot.contains(e.target)) return;
+            // A dialog over the editor (a command's own, the picker) has the keys, even with the focus left on the list.
+            if (EventCommandList.coveredByDialog(eventEditorModal)) return;
 
             // Don't intercept when user is typing in an input, textarea, or contenteditable
             const tag = e.target.tagName;
@@ -534,7 +549,14 @@ class EventCommandList {
             // Check for Ctrl/Cmd key
             const isCtrl = e.ctrlKey || e.metaKey;
 
-            if (isCtrl && e.key.toLowerCase() === 'a') {
+            const stepped = EventCommandList.historyKey(e, this.currentPage.list);
+            if (stepped !== null) {
+                e.preventDefault();
+                if (stepped) {
+                    this.selectedIndices = [];
+                    this.refreshCommandList(this.currentPage, this.currentPageIndex);
+                }
+            } else if (isCtrl && e.key.toLowerCase() === 'a') {
                 e.preventDefault();
                 this.selectedIndices = this.currentPage.list
                     .map((command, index) => command?.code !== 0 ? index : -1)
@@ -556,8 +578,21 @@ class EventCommandList {
                 // Delete key (no confirmation)
                 e.preventDefault();
                 this.deleteCommands(this.currentPage, this.currentPageIndex);
+            } else if (e.key === 'Enter' && !isCtrl && !e.shiftKey && !e.altKey && this.selectedIndices.length === 1) {
+                // Enter edits the selected command; on an empty row it adds one there.
+                e.preventDefault();
+                const selected = this.selectedIndices[0];
+                if (this.currentPage.list[selected]?.code === 0) this.newCommand(this.currentPage, this.currentPageIndex);
+                else this.editCommand(selected, this.currentPage, this.currentPageIndex);
             }
         });
+    }
+
+    /** Whether something lies over the Event Editor: what is under the middle of the window is not part of it. */
+    static coveredByDialog(editorModal) {
+        if (!editorModal || typeof document.elementFromPoint !== 'function' || !(window.innerWidth > 0)) return false;
+        const top = document.elementFromPoint(window.innerWidth / 2, window.innerHeight / 2);
+        return !!top && !editorModal.contains(top);
     }
 
     /**
@@ -734,11 +769,10 @@ class EventCommandList {
 
         container.innerHTML = '';
 
-        if (!page.list || page.list.length === 0) {
-            container.innerHTML = `<div style="color: var(--color-text-muted); padding: 8px;">${this._t('event.noCommands')}</div>`;
-            this.attachEmptyContextMenu(container, page, pageIndex);
-            return;
-        }
+        // A list that arrives without its End gets one.
+        if (!Array.isArray(page.list)) page.list = [];
+        EventCommandList.ensureTerminator(page.list);
+        EventCommandList.trackHistory(page.list);
 
         // Create command list container
         const listContainer = document.createElement('div');
@@ -766,6 +800,28 @@ class EventCommandList {
         });
 
         container.appendChild(listContainer);
+
+        EventCommandList.enableDragReorder(container, {
+            rowSelector: '.command-item',
+            indexKey: 'index',
+            indentBase: 91,
+            indentStep: 24,
+            list: () => page.list,
+            scroller: () => container.closest('.event-contents-area'),
+            dragIndices: pressed => {
+                // A drag from an unselected row moves that row; from a
+                // selected one, the whole selection.
+                if (!this._isIndexSelected(page, pressed)) {
+                    this.selectSingle(EventCommandList.ownerIndex(page.list, pressed));
+                    this.updateSelectionStyles(page);
+                }
+                return this.expandSelection(page);
+            },
+            commit: moved => {
+                this.selectedIndices = Array.from({ length: moved.count }, (_value, i) => moved.start + i);
+                this.refreshCommandList(page, pageIndex);
+            }
+        });
     }
 
     /**
@@ -797,10 +853,9 @@ class EventCommandList {
         // Check if this command or its parent is selected
         let isSelected = this.selectedIndices.includes(index);
 
-        // If this is a continuation line (401, 408), also check if parent is selected
-        if (!isSelected && (command.code === 401 || command.code === 408)) {
-            const parentIndex = this.findParentCommandIndex(index, page);
-            isSelected = this.selectedIndices.includes(parentIndex);
+        // A row that belongs to a command is selected with it.
+        if (!isSelected) {
+            isSelected = this.selectedIndices.includes(EventCommandList.ownerIndex(page.list, index));
         }
 
         div.style.cssText = `
@@ -859,7 +914,9 @@ class EventCommandList {
         if (isPluginCommand) {
             const params = command.parameters || [];
             const args = params[3] || {};
-            const hasArgs = pluginArgRows > 0 || Object.keys(args).length > 0;
+            // A Reactor command with a dialog of its own says what it does in its line; its raw arguments are not listed.
+            const ownDialog = command.code === 357 && params[0] === 'RPGReactor' && !!this._reactorCommandEditor(params[1]);
+            const hasArgs = !ownDialog && (pluginArgRows > 0 || Object.keys(args).length > 0);
 
             if (hasArgs) {
                 const isExpanded = this.expandedPluginCommands.has(index);
@@ -1018,10 +1075,7 @@ class EventCommandList {
         // Click to select
         div.addEventListener('click', (e) => {
             // Continuation rows select their authored parent.
-            let targetIndex = index;
-            if (command.code === 401 || command.code === 408 || command.code === 657) {
-                targetIndex = this.findParentCommandIndex(index, page);
-            }
+            const targetIndex = EventCommandList.ownerIndex(page.list, index);
 
             if (e.ctrlKey || e.metaKey) {
                 // Multi-select
@@ -1041,9 +1095,13 @@ class EventCommandList {
         // Double-click to edit
         div.addEventListener('dblclick', () => {
             // Continuation rows edit their authored parent.
-            let targetIndex = index;
-            if (command.code === 401 || command.code === 408 || command.code === 657) {
-                targetIndex = this.findParentCommandIndex(index, page);
+            const targetIndex = EventCommandList.ownerIndex(page.list, index);
+            // An empty row (the End of the list or of a branch) takes a new command there.
+            if (page.list[targetIndex]?.code === 0) {
+                this.selectSingle(targetIndex);
+                this.updateSelectionStyles(page);
+                this.newCommand(page, pageIndex);
+                return;
             }
             this.editCommand(targetIndex, page, pageIndex);
         });
@@ -1071,11 +1129,7 @@ class EventCommandList {
                 // a left click does. Selecting the raw 401/408/657 here sent
                 // the menu's Edit to a code no editor owns - the placeholder
                 // alert - while left-click-then-right-click worked.
-                let targetIndex = index;
-                if (command.code === 401 || command.code === 408 || command.code === 657) {
-                    targetIndex = this.findParentCommandIndex(index, page);
-                }
-                this.selectSingle(targetIndex);
+                this.selectSingle(EventCommandList.ownerIndex(page.list, index));
                 this.updateSelectionStyles(page);
             }
             this.showContextMenu(e.clientX, e.clientY, page, pageIndex);
@@ -1088,10 +1142,7 @@ class EventCommandList {
         const command = page.list[index];
         if (!command) return false;
         if (this.selectedIndices.includes(index)) return true;
-        if (command.code === 401 || command.code === 408 || command.code === 657) {
-            return this.selectedIndices.includes(this.findParentCommandIndex(index, page));
-        }
-        return false;
+        return this.selectedIndices.includes(EventCommandList.ownerIndex(page.list, index));
     }
 
     /**
@@ -1470,6 +1521,8 @@ class EventCommandList {
                 const faceName = params[0] || '';
                 const faceIndex = params[1] || 0;
                 const speakerName = params[4] || '';
+                // A message's own face choice (reactorFace beside the parameters): said only when the command carries one.
+                const faceChoice = command.reactorFace === 'auto' ? tt('Automatic') : command.reactorFace === 'none' ? tt('None') : '';
 
                 if (faceName) {
                     description = `${tt('Face:')} ${faceName} [${faceIndex}]`;
@@ -1478,6 +1531,8 @@ class EventCommandList {
                     }
                     // Create face icon data for rendering
                     faceIcon = { faceName, faceIndex };
+                } else if (faceChoice) {
+                    description = `${tt('Face:')} ${faceChoice}` + (speakerName ? ` - ${speakerName}` : '');
                 } else if (speakerName) {
                     description = speakerName;
                 } else {
@@ -1906,6 +1961,10 @@ class EventCommandList {
                 let charName = tt('Player');
                 if (charId === 0) charName = tt('This Event');
                 else if (charId > 0) charName = this._fmtEvent(charId);
+                // A follower of the party, by its place in the line.
+                if (typeof FollowerCommandEditor !== 'undefined' && FollowerCommandEditor.placeOfCharacterId(charId) > 0) {
+                    charName = FollowerCommandEditor.routeTargetName(charId, FollowerCommandEditor.context().count);
+                }
                 const cmdCount = route && route.list ? route.list.filter(c => c.code !== 0).length : 0;
                 description = `${charName} (${cmdCount} ${tt(cmdCount !== 1 ? 'commands' : 'command')})`;
                 break;
@@ -2014,6 +2073,8 @@ class EventCommandList {
                                 else if (step.op === 'faceground') description = tt('Face Ground');
                                 else if (step.op === 'standup') description = tt('Stand Up');
                                 else if (step.op === 'rotate') description = `${tt('Rotate')}: ${step.n}°`;
+                                // Move to Tile: "Move to (14, 9)".
+                                else if (step.op === 'moveto') description = SetMovementRouteEditor.moveToText(step, tt);
                                 else description = `${tt('Set Height')}: ${step.n}`;
                             } else {
                                 description += `: ${String(mp[0] || '').substring(0, 30)}`;
@@ -2118,6 +2179,23 @@ class EventCommandList {
                         description = LightCommandEditor.summary(params[1], params[3]);
                         break;
                     }
+                    // So do the on-map battle commands ("Enemy 0002: Bat at (12, 8)").
+                    if (typeof FightCommandEditor !== 'undefined' && FightCommandEditor.supports(params[1])) {
+                        info.name = this._commandName(FightCommandEditor.LABELS[params[1]]);
+                        description = FightCommandEditor.summary(params[1], params[3]);
+                        break;
+                    }
+                    if (typeof VehicleCommandEditor !== 'undefined' && VehicleCommandEditor.supports(params[1])) {
+                        info.name = window.I18n ? window.I18n.t(params[1] === 'GetOnVehicle' ? 'vehicle.getOn' : 'vehicle.getOff') : VehicleCommandEditor.LABELS[params[1]];
+                        description = VehicleCommandEditor.summary(params[1], params[3]);
+                        break;
+                    }
+                    // And the Party Followers commands ("Followers walk in a wedge, 2 tiles apart").
+                    if (typeof FollowerCommandEditor !== 'undefined' && FollowerCommandEditor.supports(params[1])) {
+                        info.name = this._commandName(FollowerCommandEditor.LABELS[params[1]]);
+                        description = FollowerCommandEditor.summary(params[1], params[3]);
+                        break;
+                    }
                 } else if (pluginName && commandName) {
                     description = `${pluginName}: ${commandName}`;
                 } else if (pluginName) {
@@ -2220,8 +2298,9 @@ class EventCommandList {
                 break;
             }
             case 202: {
-                const vehicles = ['Boat', 'Ship', 'Airship'];
-                description = `${tt(vehicles[params[0]] || 'Unknown')} → (${params[2]}, ${params[3]}, ${params[4]})`;
+                const vehicle = typeof SetVehicleLocationEditor !== 'undefined'
+                    ? SetVehicleLocationEditor.vehicleName(params[0], this.eventEditor?.databaseManager, tt) : tt(['Boat', 'Ship', 'Airship'][params[0]] || 'Unknown');
+                description = `${vehicle} → (${params[2]}, ${params[3]}, ${params[4]})`;
                 break;
             }
             case 216: description = params[0] === 0 ? tt('Show') : tt('Hide'); break;
@@ -2375,8 +2454,13 @@ class EventCommandList {
                 break;
             }
             case 319: {
-                const slots = ['Weapon', 'Shield', 'Head', 'Body', 'Accessory'];
-                description = `${tt(slots[params[1]] || 'Unknown')} = #${params[2] || 0}`;
+                // [actor, equipment type id (1 = Weapon), item id]: weapons for type 1, armors otherwise.
+                const databaseManager = this.eventEditor?.databaseManager;
+                const editorClass = typeof ChangeEquipmentEditor !== 'undefined' ? ChangeEquipmentEditor : null;
+                const type = editorClass ? editorClass.equipTypes(databaseManager, params[1]).find(entry => entry.value === params[1]) : null;
+                const items = params[1] === 1 ? databaseManager?.data?.weapons : databaseManager?.data?.armors;
+                const item = params[2] ? items?.[params[2]] : null;
+                description = `${type ? type.label : `#${params[1] || 0}`} = ${params[2] ? (item?.name || `#${params[2]}`) : tt('None')}`;
                 break;
             }
             case 320: case 324:
@@ -2405,15 +2489,15 @@ class EventCommandList {
             case 331: case 332: case 342: {
                 const idx = params[0] || 0;
                 const op = params[1] === 0 ? '+' : '-';
-                const val = params[3] || 0;
-                description = `#${idx + 1} ${op}${val}`;
+                const val = params[2] === 1 ? this._fmtVarBracket(params[3] || 0) : (params[3] || 0);
+                description = `${idx === -1 ? tt('Entire Troop') : `#${idx + 1}`} ${op}${val}`;
                 break;
             }
             case 333: {
                 const idx = params[0] || 0;
                 const op = params[1] === 0 ? tt('Add') : tt('Remove');
                 const stId = params[2] || 1;
-                description = `#${idx + 1} ${op} ${tt('State')} ${stId}`;
+                description = `${idx === -1 ? tt('Entire Troop') : `#${idx + 1}`} ${op} ${tt('State')} ${stId}`;
                 break;
             }
             case 334: case 335: {
@@ -2737,10 +2821,7 @@ class EventCommandList {
             { label: 'Select All', action: () => { this.selectAll(page); this.refreshCommandList(page, pageIndex); } },
             { label: '—', divider: true },
             { label: 'Copy As Text', action: () => this.copyAsText(page) },
-            { label: 'Copy As HTML', action: () => this.copyAsHTML(page) },
-            { label: '—', divider: true },
-            { label: 'Toggle Skip', action: () => this.toggleSkip(page, pageIndex) },
-            { label: 'Test', action: () => this.testEvent(page, pageIndex) }
+            { label: 'Copy As HTML', action: () => this.copyAsHTML(page) }
         ];
 
         menuItems.forEach(item => {
@@ -2789,17 +2870,6 @@ class EventCommandList {
             }
         };
         setTimeout(() => document.addEventListener('click', closeMenu), 100);
-    }
-
-    /**
-     * Attach context menu to empty area
-     */
-    attachEmptyContextMenu(container, page, pageIndex) {
-        container.addEventListener('contextmenu', (e) => {
-            e.preventDefault();
-            this.selectedIndices = [];
-            this.showContextMenu(e.clientX, e.clientY, page, pageIndex);
-        });
     }
 
     /**
@@ -2870,7 +2940,16 @@ class EventCommandList {
     }
 
     static safeInsertionIndex(list, insertIndex) {
-        for (const [parentCode, continuationCode] of [[355, 655], [357, 657]]) {
+        // The list's End stays last, and a body's own terminator stays the
+        // last row of its body.
+        if (list?.length && list[list.length - 1]?.code === 0) {
+            insertIndex = Math.min(insertIndex, list.length - 1);
+        }
+        insertIndex = Math.max(0, insertIndex);
+        if (insertIndex > 0 && list?.[insertIndex - 1]?.code === 0) insertIndex--;
+        // Not between a command and the rows that belong to it.
+        for (const [parent, continuationCode] of Object.entries(EventCommandList.ROW_OWNERS)) {
+            const parentCode = Number(parent);
             if (list?.[insertIndex]?.code !== continuationCode) continue;
             const range = this.contiguousBlockRange(list, insertIndex, parentCode, continuationCode);
             if (range) insertIndex = range.end + 1;
@@ -2878,8 +2957,565 @@ class EventCommandList {
         const next = list?.[insertIndex];
         const previous = list?.[insertIndex - 1];
         const branchMarkers = [402, 403, 601, 602, 603];
-        if ([102, 301].includes(previous?.code) && branchMarkers.includes(next?.code)) return insertIndex + 1;
+        const battleStart = EventCommandList.isMapBattleStart(previous?.code === 657
+            ? list[EventCommandList.pluginArgsOwnerIndex(list, insertIndex - 1)] : previous);
+        if (([102, 301].includes(previous?.code) || battleStart) && branchMarkers.includes(next?.code)) return insertIndex + 1;
         return insertIndex;
+    }
+
+    /**
+     * A list ends with one code-0 command at indent 0. Adds it when it is
+     * missing; returns whether the list changed.
+     */
+    static ensureTerminator(list) {
+        if (!Array.isArray(list)) return false;
+        const last = list[list.length - 1];
+        if (last && last.code === 0) {
+            if (!last.indent) return false;
+            last.indent = 0;
+            return true;
+        }
+        list.push({ code: 0, indent: 0, parameters: [] });
+        return true;
+    }
+
+    /**
+     * Drop code-0 rows that terminate nothing. A body's terminator sits one
+     * level under the marker that follows it; the list's End is the last row.
+     */
+    static removeStrayTerminators(list) {
+        if (!Array.isArray(list)) return false;
+        const closers = [402, 403, 404, 411, 412, 413, 601, 602, 603, 604];
+        let removed = false;
+        for (let i = list.length - 2; i >= 0; i--) {
+            const command = list[i];
+            if (!command || command.code !== 0) continue;
+            const indent = command.indent || 0;
+            const next = list[i + 1];
+            if (indent > 0 && next && closers.includes(next.code) && (next.indent || 0) === indent - 1) continue;
+            list.splice(i, 1);
+            removed = true;
+        }
+        return removed;
+    }
+
+    /**
+     * Remove the commands at `indices`. The one door for Delete and Cut in
+     * every command list: the End is never removed, and the list is left
+     * terminated with no orphaned body terminators.
+     */
+    static removeCommands(list, indices) {
+        if (!Array.isArray(list)) return list;
+        const last = list.length - 1;
+        Array.from(new Set(indices)).sort((a, b) => b - a).forEach(index => {
+            if (index < 0 || index >= list.length) return;
+            if (index === last && list[index]?.code === 0) return;
+            list.splice(index, 1);
+        });
+        EventCommandList.removeStrayTerminators(list);
+        EventCommandList.ensureTerminator(list);
+        return list;
+    }
+
+    /**
+     * Copies of clipboard commands fit to insert: an End copied along with
+     * its neighbours is left out, body terminators inside a copied block stay.
+     */
+    static pasteableCommands(commands) {
+        const copies = (commands || []).map(command => JSON.parse(JSON.stringify(command)));
+        const depths = copies.filter(command => command.code !== 0).map(command => command.indent || 0);
+        if (depths.length === 0) return [];
+        const top = Math.min(...depths);
+        const kept = copies.filter(command => command.code !== 0 || (command.indent || 0) > top);
+        // Commands copied from different depths each start at the first
+        // one's depth: a command may sit deeper than the one before it only
+        // inside the body that one opens.
+        const opens = [102, 111, 112, 301, 402, 403, 411, 601, 602, 603];
+        const base = kept[0].indent || 0;
+        let delta = 0;
+        let previous = null;
+        for (const command of kept) {
+            let indent = (command.indent || 0) + delta;
+            const limit = previous ? previous.indent + (opens.includes(previous.code) ? 1 : 0) : base;
+            if (indent < base || indent > limit) {
+                delta = base - (command.indent || 0);
+                indent = base;
+            }
+            command.indent = indent;
+            previous = command;
+        }
+        return kept;
+    }
+
+    /** Headers that own a body, with their branch markers and end marker. */
+    static get BRANCH_STRUCTURES() {
+        return {
+            102: { markers: [402, 403], end: 404, headerOwnsBody: false },
+            111: { markers: [411], end: 412, headerOwnsBody: true },
+            112: { markers: [], end: 413, headerOwnsBody: true },
+            301: { markers: [601, 602, 603], end: 604, headerOwnsBody: false }
+        };
+    }
+
+    /** Whether `command` is Start Battle on Map, the Reactor command that carries Battle Processing's branch rows. */
+    static isMapBattleStart(command) {
+        return !!command && command.code === 357 && Array.isArray(command.parameters)
+            && command.parameters[0] === 'RPGReactor' && command.parameters[1] === 'StartMapBattle';
+    }
+
+    /** The branch shape a header command owns: the table's entry for its code; Start Battle on Map has Battle Processing's. */
+    static branchShape(command) {
+        if (!command) return null;
+        if (EventCommandList.isMapBattleStart(command)) return EventCommandList.BRANCH_STRUCTURES[301];
+        return EventCommandList.BRANCH_STRUCTURES[command.code] || null;
+    }
+
+    /** The last row of the header at `headerIndex` itself: a plugin command's argument rows come before its branch rows. */
+    static headerEnd(list, headerIndex) {
+        if (list?.[headerIndex]?.code !== 357) return headerIndex;
+        const rows = EventCommandList.contiguousBlockRange(list, headerIndex, 357, 657);
+        return rows ? rows.end : headerIndex;
+    }
+
+    /**
+     * { start, end } of everything the header at `headerIndex` owns. A
+     * structure that lost its end marker stops at its last own row, so
+     * nothing after it is taken along.
+     */
+    static structureRange(list, headerIndex) {
+        const shape = EventCommandList.branchShape(list?.[headerIndex]);
+        if (!shape) return null;
+        const { endIndex } = EventCommandList.collectBranchStructure(
+            list, EventCommandList.headerEnd(list, headerIndex), shape.markers, shape.end, shape.headerOwnsBody);
+        return { start: headerIndex, end: endIndex };
+    }
+
+    /**
+     * The branch rows under the Start Battle on Map at `index`, by their code:
+     * `Map(code -> { marker, body })`, each body ending in its terminator.
+     * Two rows of one code (a hand-made list) are read as one branch.
+     */
+    static battleBranches(list, index) {
+        const shape = EventCommandList.BRANCH_STRUCTURES[301];
+        const indent = list[index].indent || 0;
+        const { branches, endIndex } = EventCommandList.collectBranchStructure(
+            list, EventCommandList.headerEnd(list, index), shape.markers, shape.end, shape.headerOwnsBody);
+        const isTerminator = command => !!command && command.code === 0 && (command.indent || 0) === indent + 1;
+        const byCode = new Map();
+        for (const branch of branches) {
+            const body = branch.body.filter(command => !isTerminator(command));
+            const known = byCode.get(branch.marker.code);
+            if (known) known.body.push(...body);
+            else byCode.set(branch.marker.code, { marker: branch.marker, body });
+        }
+        for (const branch of byCode.values()) branch.body.push({ code: 0, indent: indent + 1, parameters: [] });
+        return { byCode, endIndex, indent };
+    }
+
+    /**
+     * The branches an edit of the Start Battle on Map at `index` would take
+     * with their commands: those `block` no longer has that hold any.
+     * `[{ code, count }]` in the order If Win (601), If Escape (602), If Lose
+     * (603); `count` is the commands under the row, nested ones included.
+     */
+    static lostBattleBranches(list, index, block) {
+        if (!EventCommandList.isMapBattleStart(list?.[index])) return [];
+        const shape = EventCommandList.BRANCH_STRUCTURES[301];
+        const commands = EventCommandList.commandBlock(block);
+        const base = commands.length ? (commands[0].indent || 0) : 0;
+        const stays = new Set(commands.filter(command => shape.markers.includes(command.code) && (command.indent || 0) === base).map(command => command.code));
+        const { byCode } = EventCommandList.battleBranches(list, index);
+        const lost = [];
+        for (const code of shape.markers) {
+            const branch = byCode.get(code);
+            const count = branch ? branch.body.filter(command => command.code !== 0).length : 0;
+            if (count > 0 && !stays.has(code)) lost.push({ code, count });
+        }
+        return lost;
+    }
+
+    /** The question asked before branches go with their commands. `name(code)` names a branch row, `t(text, params)` translates. */
+    static lostBranchWords(lost, name, t) {
+        return t('The commands under {branches} will be deleted.', { branches: lost.map(branch => name(branch.code)).join(', ') });
+    }
+
+    /**
+     * Asked before an edit of the Start Battle on Map at `index` is stored:
+     * when `block` takes a branch that holds commands, the author says
+     * whether they go. Resolves true when the edit may be stored.
+     */
+    confirmLostBranches(list, index, block) {
+        const lost = EventCommandList.lostBattleBranches(list, index, block);
+        if (lost.length === 0) return Promise.resolve(true);
+        if (typeof RRDialog === 'undefined') return Promise.resolve(false);
+        const i18n = typeof window !== 'undefined' ? window.I18n : null;
+        const t = (text, params) => (i18n ? (params ? i18n.formatText(text, params) : i18n.tText(text))
+            : String(text).replace(/\{(\w+)\}/g, (token, key) => (params && key in params ? String(params[key]) : token)));
+        const rows = { 601: 'If Win', 602: 'If Escape', 603: 'If Lose' };
+        return RRDialog.confirm(EventCommandList.lostBranchWords(lost, code => this._commandName(rows[code]), t),
+            { title: this._commandName('Start Battle on Map'), ok: t('Delete'), danger: true });
+    }
+
+    /**
+     * Replace the Start Battle on Map at `index`, with its argument rows and
+     * its branch rows, by `block`: the command, then the branch rows it has
+     * now. A branch that stays keeps its body. A branch `block` no longer has
+     * goes when it is empty; one that holds commands stays where it is, with
+     * them, unless `options.drop` says they go with it. Nothing that ran only
+     * after one result is ever left to run after every result.
+     * Returns `{ start, commands, kept }`, `kept` the codes of the branches that stayed for their commands.
+     */
+    static replaceBattleStart(list, index, block, options = {}) {
+        const commands = EventCommandList.commandBlock(block).slice();
+        if (commands.length === 0 || !EventCommandList.isMapBattleStart(list?.[index])) return null;
+        const shape = EventCommandList.BRANCH_STRUCTURES[301];
+        const { byCode, endIndex, indent } = EventCommandList.battleBranches(list, index);
+        EventCommandList.rebaseInsertIndent(commands, indent);
+        const atDepth = command => (command.indent || 0) === indent;
+        // The block as the command (with any rows of its own), its branch rows with the bodies it brings, and its end row.
+        const header = [], brought = new Map();
+        let endRow = null, open = null;
+        for (const command of commands) {
+            if (atDepth(command) && shape.markers.includes(command.code)) { open = { marker: command, body: [] }; brought.set(command.code, open); }
+            else if (atDepth(command) && command.code === shape.end) { endRow = command; open = null; }
+            else if (open) open.body.push(command);
+            else if (!endRow) header.push(command);
+        }
+        const holds = branch => !!branch && branch.body.some(command => command.code !== 0);
+        const next = header.slice(), kept = [];
+        let rows = 0;
+        for (const code of shape.markers) {
+            const now = brought.get(code), before = byCode.get(code);
+            if (!now && !(holds(before) && !options.drop)) continue;
+            if (!now) kept.push(code);
+            next.push(now ? now.marker : before.marker);
+            // What was under the row stays under it; a row that had nothing takes what the block brings.
+            const body = holds(before) ? before.body : (now ? now.body.slice() : []);
+            const last = body[body.length - 1];
+            if (!(last && last.code === 0 && (last.indent || 0) === indent + 1)) body.push({ code: 0, indent: indent + 1, parameters: [] });
+            next.push(...body);
+            rows++;
+        }
+        if (rows > 0) next.push(endRow || { code: shape.end, indent, parameters: [] });
+        list.splice(index, endIndex - index + 1, ...next);
+        return { start: index, commands: next, kept };
+    }
+
+    /** Commands whose following rows belong to them: parent code -> row code. */
+    static get ROW_OWNERS() {
+        return { 101: 401, 105: 405, 108: 408, 205: 505, 302: 605, 355: 655, 357: 657 };
+    }
+
+    /**
+     * The command a row belongs to: a Show Text line's 101, a Move Route
+     * step's 205. Any other index is its own owner.
+     */
+    static ownerIndex(list, index) {
+        const family = EventCommandList.rowFamily(list?.[index]?.code);
+        if (!family || list[index].code !== family[1]) return index;
+        return EventCommandList.contiguousBlockRange(list, index, family[0], family[1])?.start ?? index;
+    }
+
+    /** [parentCode, rowCode] of the family `code` belongs to, as parent or row. */
+    static rowFamily(code) {
+        const owners = EventCommandList.ROW_OWNERS;
+        if (owners[code]) return [code, owners[code]];
+        const parent = Object.keys(owners).find(key => owners[key] === code);
+        return parent ? [Number(parent), code] : null;
+    }
+
+    /**
+     * The legal insertion index nearest to `gap`: not after the End, not
+     * between a command and its own rows, not after a body's terminator.
+     */
+    static dropIndex(list, gap) {
+        gap = Math.max(0, Math.min(gap, list.length));
+        const family = EventCommandList.rowFamily(list[gap]?.code);
+        if (family && list[gap].code === family[1]) {
+            const range = EventCommandList.contiguousBlockRange(list, gap, family[0], family[1]);
+            if (range) {
+                gap = gap - range.start <= range.end + 1 - gap ? range.start : range.end + 1;
+            } else {
+                while (list[gap]?.code === family[1]) gap++;
+            }
+        }
+        return EventCommandList.safeInsertionIndex(list, gap);
+    }
+
+    /**
+     * Where the commands at `indices` (whole blocks, as expandSelection gives
+     * them) land when dropped on the gap before row `gap`. Returns null when
+     * the drop is inside the dragged commands or leaves the order as it is;
+     * otherwise { runs, rest, insertAt, indent, before }: `before` is the row
+     * of the list as it stands that the commands land in front of.
+     */
+    static planMove(list, indices, gap) {
+        if (!Array.isArray(list) || !indices) return null;
+        const last = list.length - 1;
+        const moved = Array.from(new Set(indices))
+            .filter(index => index >= 0 && index <= last && !(index === last && list[index]?.code === 0))
+            .sort((a, b) => a - b);
+        if (moved.length === 0) return null;
+        const runs = [];
+        for (const index of moved) {
+            const run = runs[runs.length - 1];
+            if (run && run.end === index - 1) run.end = index;
+            else runs.push({ start: index, end: index });
+        }
+        if (runs.some(run => gap > run.start && gap <= run.end)) return null;
+
+        const taken = new Set(moved);
+        const rest = [];
+        const restIndex = [];
+        list.forEach((command, index) => {
+            if (taken.has(index)) return;
+            rest.push(command);
+            restIndex.push(index);
+        });
+        const insertAt = EventCommandList.dropIndex(rest, gap - moved.filter(index => index < gap).length);
+        const before = insertAt < restIndex.length ? restIndex[insertAt] : list.length;
+        if (runs.length === 1 && before === runs[0].end + 1) return null;
+        return { runs, rest, insertAt, indent: EventCommandList.insertionIndent(rest, insertAt), before };
+    }
+
+    /**
+     * Move the commands at `indices` to the gap before row `gap`, in place.
+     * Each run of neighbours takes the indent of where it lands and keeps its
+     * inner structure. Returns { start, count } of the moved commands, or null.
+     */
+    static moveCommands(list, indices, gap) {
+        const plan = EventCommandList.planMove(list, indices, gap);
+        if (!plan) return null;
+        const commands = [];
+        for (const run of plan.runs) {
+            const block = list.slice(run.start, run.end + 1);
+            EventCommandList.rebaseInsertIndent(block, plan.indent);
+            commands.push(...block);
+        }
+        list.splice(0, list.length, ...plan.rest);
+        list.splice(plan.insertAt, 0, ...commands);
+        EventCommandList.ensureTerminator(list);
+        return { start: plan.insertAt, count: commands.length };
+    }
+
+    // ---- History ---------------------------------------------------------
+
+    static _historyOf(list) {
+        let history = COMMAND_LIST_HISTORY.get(list);
+        if (!history) {
+            history = { current: null, undo: [], redo: [] };
+            COMMAND_LIST_HISTORY.set(list, history);
+        }
+        return history;
+    }
+
+    /**
+     * Note the state a list is shown in. A state that differs from the last
+     * one noted becomes an undo step, whichever command changed it.
+     */
+    static trackHistory(list) {
+        if (!Array.isArray(list)) return;
+        const history = EventCommandList._historyOf(list);
+        const json = JSON.stringify(list);
+        if (history.current && history.current.json === json) return;
+        if (history.current) {
+            history.undo.push(history.current);
+            if (history.undo.length > 50) history.undo.shift();
+            history.redo.length = 0;
+        }
+        history.current = { json, commands: list.slice() };
+    }
+
+    // Restored in place, into the same command objects: folds and anything
+    // else keyed on a command keep pointing at it.
+    static _applyHistory(list, state) {
+        const data = JSON.parse(state.json);
+        list.length = 0;
+        data.forEach((values, index) => {
+            const command = state.commands[index];
+            for (const key of Object.keys(command)) delete command[key];
+            list.push(Object.assign(command, values));
+        });
+    }
+
+    static _stepHistory(list, from, to) {
+        if (!Array.isArray(list)) return false;
+        EventCommandList.trackHistory(list);
+        const history = EventCommandList._historyOf(list);
+        if (history[from].length === 0) return false;
+        history[to].push(history.current);
+        history.current = history[from].pop();
+        EventCommandList._applyHistory(list, history.current);
+        return true;
+    }
+
+    /** Take the list back one change. Returns whether anything changed. */
+    static undoList(list) {
+        return EventCommandList._stepHistory(list, 'undo', 'redo');
+    }
+
+    static redoList(list) {
+        return EventCommandList._stepHistory(list, 'redo', 'undo');
+    }
+
+    /** Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y on a command list. Returns whether the key was one of them and changed the list. */
+    static historyKey(event, list) {
+        if (!(event.ctrlKey || event.metaKey) || event.altKey) return null;
+        const key = String(event.key).toLowerCase();
+        if (key === 'z' && !event.shiftKey) return EventCommandList.undoList(list);
+        if (key === 'y' || (key === 'z' && event.shiftKey)) return EventCommandList.redoList(list);
+        return null;
+    }
+
+    // ---- Drag to reorder -------------------------------------------------
+
+    /**
+     * Let the rows of `container` be dragged to a new place. Shared by the
+     * map event, common event and troop page lists. options:
+     *   rowSelector, indexKey   the row elements and their dataset index key
+     *   indentBase, indentStep  where a command name starts, in px per indent
+     *   list()                  the command array
+     *   scroller()              the element that scrolls the rows (optional)
+     *   dragIndices(index)      the commands a drag from that row moves
+     *                           (the host selects the row first if needed)
+     *   commit(moved)           show the moved list; moved is { start, count }
+     */
+    static enableDragReorder(container, options) {
+        if (!container || typeof container.addEventListener !== 'function') return;
+        // Rows are rebuilt on every render; the latest closures win.
+        container._rrDragReorder = options;
+        if (container._rrDragReorderBound) return;
+        container._rrDragReorderBound = true;
+        container.addEventListener('mousedown', event => EventCommandList._dragPress(container, event));
+        // The click that ends a drag belongs to the drag, not to the row under it.
+        container.addEventListener('click', event => {
+            if (!container._rrDragJustEnded) return;
+            event.stopPropagation();
+            event.preventDefault();
+        }, true);
+    }
+
+    static _dragPress(container, event) {
+        const options = container._rrDragReorder;
+        // Shift and Ctrl presses are selection gestures.
+        if (!options || event.button !== 0 || event.shiftKey || event.ctrlKey || event.metaKey) return;
+        const row = event.target.closest?.(options.rowSelector);
+        if (!row || !container.contains(row)) return;
+        if (event.target.closest('input, textarea, select, button, [contenteditable], .command-collapse-toggle, .plugin-args-toggle')) return;
+        const pressed = Number(row.dataset[options.indexKey]);
+        const pressedCommand = options.list()?.[pressed];
+        if (!pressedCommand || pressedCommand.code === 0) return;
+
+        const doc = container.ownerDocument;
+        const view = doc.defaultView;
+        const state = { x: event.clientX, y: event.clientY, dragging: false, indices: null, plan: null, gap: -1, line: null, frame: 0 };
+        const startX = event.clientX, startY = event.clientY;
+        const rows = () => Array.from(container.querySelectorAll(options.rowSelector))
+            .filter(element => element.dataset[options.indexKey] !== undefined && element.offsetParent !== null);
+        const scroller = () => options.scroller?.() || container;
+
+        const update = () => {
+            const list = options.list();
+            const elements = rows();
+            let gap = list.length;
+            for (const element of elements) {
+                const rect = element.getBoundingClientRect();
+                if (state.y < rect.top + rect.height / 2) {
+                    gap = Number(element.dataset[options.indexKey]);
+                    break;
+                }
+            }
+            state.gap = gap;
+            state.plan = EventCommandList.planMove(list, state.indices, gap);
+            const target = state.plan && elements.find(element => Number(element.dataset[options.indexKey]) >= state.plan.before);
+            if (!target) {
+                state.plan = null;
+                state.line.style.display = 'none';
+                return;
+            }
+            const bounds = container.getBoundingClientRect();
+            const clip = scroller().getBoundingClientRect();
+            const top = target.getBoundingClientRect().top - 2;
+            const left = bounds.left + options.indentBase + state.plan.indent * options.indentStep;
+            const visible = top >= clip.top - 2 && top <= clip.bottom;
+            state.line.style.display = visible ? 'block' : 'none';
+            state.line.style.top = `${Math.round(top)}px`;
+            state.line.style.left = `${Math.round(left)}px`;
+            state.line.style.width = `${Math.max(24, Math.round(bounds.right - left - 6))}px`;
+        };
+
+        // Near the top or bottom edge the list scrolls under the pointer.
+        const autoScroll = () => {
+            state.frame = view.requestAnimationFrame(autoScroll);
+            const element = scroller();
+            const clip = element.getBoundingClientRect();
+            const edge = 36;
+            let step = 0;
+            if (state.y < clip.top + edge) step = -Math.ceil((clip.top + edge - state.y) / 3);
+            else if (state.y > clip.bottom - edge) step = Math.ceil((state.y - (clip.bottom - edge)) / 3);
+            if (!step) return;
+            const before = element.scrollTop;
+            element.scrollTop = before + Math.max(-24, Math.min(24, step));
+            if (element.scrollTop !== before) update();
+        };
+
+        const begin = () => {
+            state.indices = options.dragIndices(pressed) || [];
+            if (state.indices.length === 0) return false;
+            state.dragging = true;
+            view.getSelection?.()?.removeAllRanges();
+            const dragged = new Set(state.indices);
+            for (const element of rows()) {
+                if (dragged.has(Number(element.dataset[options.indexKey]))) element.classList.add('command-dragging');
+            }
+            doc.body.classList.add('rr-command-drag-active');
+            state.line = doc.createElement('div');
+            state.line.className = 'command-drop-line';
+            doc.body.appendChild(state.line);
+            state.frame = view.requestAnimationFrame(autoScroll);
+            return true;
+        };
+
+        const finish = commit => {
+            doc.removeEventListener('mousemove', onMove, true);
+            doc.removeEventListener('mouseup', onUp, true);
+            doc.removeEventListener('keydown', onKey, true);
+            view.removeEventListener('blur', onBlur);
+            if (!state.dragging) return;
+            view.cancelAnimationFrame(state.frame);
+            state.line.remove();
+            doc.body.classList.remove('rr-command-drag-active');
+            container.querySelectorAll('.command-dragging').forEach(element => element.classList.remove('command-dragging'));
+            container._rrDragJustEnded = true;
+            view.setTimeout(() => { container._rrDragJustEnded = false; }, 0);
+            const moved = commit && state.plan
+                ? EventCommandList.moveCommands(options.list(), state.indices, state.gap)
+                : null;
+            if (moved) options.commit(moved);
+        };
+        const onMove = moveEvent => {
+            state.x = moveEvent.clientX;
+            state.y = moveEvent.clientY;
+            if (!state.dragging) {
+                if (Math.hypot(state.x - startX, state.y - startY) < 5) return;
+                if (!begin()) { finish(false); return; }
+            }
+            moveEvent.preventDefault();
+            update();
+        };
+        const onUp = () => finish(true);
+        const onBlur = () => finish(false);
+        const onKey = keyEvent => {
+            if (!state.dragging) return;
+            // Every key belongs to the drag while it lasts; Escape ends it.
+            keyEvent.preventDefault();
+            keyEvent.stopPropagation();
+            if (keyEvent.key === 'Escape') finish(false);
+        };
+        doc.addEventListener('mousemove', onMove, true);
+        doc.addEventListener('mouseup', onUp, true);
+        doc.addEventListener('keydown', onKey, true);
+        view.addEventListener('blur', onBlur);
     }
 
     static generatedCommand(command, expectedKind) {
@@ -3277,8 +3913,11 @@ class EventCommandList {
             const reactorEditor = this._reactorCommandEditor(command.reactor);
             if (reactorEditor) {
                 reactorEditor.show(null, (built) => {
-                    if (built) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([built], baseIndent)[0]);
+                    // One command, or a command with the rows that belong to it.
+                    const commands = EventCommandList.commandBlock(built);
+                    if (commands.length > 0) {
+                        this._rebaseInsertIndent(commands, baseIndent);
+                        page.list.splice(insertIndex, 0, ...commands);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -3747,14 +4386,23 @@ class EventCommandList {
         const reactorEditor = code === 357 && command.parameters && command.parameters[0] === 'RPGReactor'
             ? this._reactorCommandEditor(command.parameters[1]) : null;
         if (reactorEditor) {
+            const battleStart = EventCommandList.isMapBattleStart(command);
+            // Branch rows go with their commands only once the author has said so.
+            let drop = false;
+            const context = battleStart
+                ? { beforeStore: async block => (drop = await this.confirmLostBranches(page.list, index, block)) }
+                : (reactorEditor === this.videoSurfaceEditor ? this._videoSurfaceContext(page, pageIndex, index, true) : undefined);
             reactorEditor.show(command, (editedCommand) => {
-                if (editedCommand) {
-                    EventCommandList.replaceContiguousBlock(
-                        page.list, index, editedCommand, 357, 657);
+                if (EventCommandList.commandBlock(editedCommand).length > 0) {
+                    if (battleStart) {
+                        EventCommandList.replaceBattleStart(page.list, index, editedCommand, { drop });
+                    } else {
+                        EventCommandList.replaceContiguousBlock(
+                            page.list, index, editedCommand, 357, 657);
+                    }
                     this.refreshCommandList(page, pageIndex);
                 }
-            }, undefined, reactorEditor === this.videoSurfaceEditor
-                ? this._videoSurfaceContext(page, pageIndex, index, true) : undefined);
+            }, undefined, context);
             return;
         }
         if (code === 356 || code === 357) {
@@ -3936,7 +4584,8 @@ class EventCommandList {
 
         // For other commands, show placeholder
         const tt = (text) => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
-        alert(`${tt('Edit command dialog for')} "${this.getCommandInfo(command).name}" ${tt('will be implemented for each command type.')}`);
+        const commandName = this.getCommandInfo(command).name;
+        RRDialog.alert(`${tt('Edit command dialog for')} "${commandName}" ${tt('will be implemented for each command type.')}`, { title: commandName });
     }
 
     /**
@@ -3947,7 +4596,23 @@ class EventCommandList {
     expandSelection(page) {
         const expanded = new Set();
 
+        const addStructure = headerIndex => {
+            const range = EventCommandList.structureRange(page.list, headerIndex);
+            if (!range) return;
+            for (let i = range.start; i <= range.end; i++) expanded.add(i);
+        };
+        // A marker selects the structure it belongs to; one whose header is
+        // gone, or closed before it, goes on its own.
+        const addOwner = (headerIndex, markerIndex) => {
+            const range = headerIndex >= 0 ? EventCommandList.structureRange(page.list, headerIndex) : null;
+            if (range && markerIndex <= range.end) addStructure(headerIndex);
+            else expanded.add(markerIndex);
+        };
+
         this.selectedIndices.forEach(index => {
+            // The End and a body's terminator are not commands: selected on
+            // their own they copy, cut and delete nothing.
+            if (page.list[index]?.code === 0) return;
             const generatedLoop = EventCommandList.generatedLoopRangeContaining(page.list, index);
             if (generatedLoop) {
                 for (let i = generatedLoop.start; i <= generatedLoop.end; i++) expanded.add(i);
@@ -3990,20 +4655,14 @@ class EventCommandList {
                 } else {
                     expanded.add(index);
                 }
+                // A Start Battle on Map goes with its branch rows.
+                if (EventCommandList.isMapBattleStart(page.list[range ? range.start : index])) addStructure(range ? range.start : index);
             }
             // For Show Choices (102), include entire branch structure. The
             // End marker must sit at the header's indent — a nested choice
             // structure inside a branch body ends with its own deeper 404.
             else if (code === 102) {
-                const headerIndent = command.indent || 0;
-                expanded.add(index);
-                for (let i = index + 1; i < page.list.length; i++) {
-                    expanded.add(i);
-                    if (page.list[i].code === 404 &&
-                        (page.list[i].indent || 0) === headerIndent) {
-                        break;
-                    }
-                }
+                addStructure(index);
             }
             // For continuation lines, include parent AND all siblings
             else if (code === 401) {
@@ -4074,56 +4733,30 @@ class EventCommandList {
             // indent. An orphaned 413 ("Repeat Above") jumps execution
             // backwards unconditionally; an orphaned 411 swallows its body.
             else if ([111, 112].includes(code)) {
-                const endCode = code === 111 ? 412 : 413;
-                const headerIndent = command.indent || 0;
-                expanded.add(index);
-                for (let i = index + 1; i < page.list.length; i++) {
-                    expanded.add(i);
-                    if (page.list[i].code === endCode &&
-                        (page.list[i].indent || 0) === headerIndent) {
-                        break;
-                    }
-                }
+                addStructure(index);
             }
             else if ([411, 412, 413].includes(code)) {
                 const headerCode = code === 413 ? 112 : 111;
-                const endCode = code === 413 ? 413 : 412;
                 const markerIndent = command.indent || 0;
-                for (let i = index - 1; i >= 0; i--) {
-                    if (page.list[i].code !== headerCode || (page.list[i].indent || 0) !== markerIndent) continue;
-                    for (let j = i; j < page.list.length; j++) {
-                        expanded.add(j);
-                        if (page.list[j].code === endCode && (page.list[j].indent || 0) === markerIndent) break;
-                    }
-                    break;
+                let header = -1;
+                for (let i = index - 1; i >= 0 && header < 0; i--) {
+                    if (page.list[i].code === headerCode && (page.list[i].indent || 0) === markerIndent) header = i;
                 }
+                addOwner(header, index);
             }
             else if (code === 301) {
-                expanded.add(index);
                 // Only a "branch results" battle carries 601-604 markers;
                 // a standalone 301 is a regular command.
-                const next = page.list[index + 1];
-                if (next && [601, 602, 603].includes(next.code)) {
-                    const headerIndent = command.indent || 0;
-                    for (let i = index + 1; i < page.list.length; i++) {
-                        expanded.add(i);
-                        if (page.list[i].code === 604 &&
-                            (page.list[i].indent || 0) === headerIndent) {
-                            break;
-                        }
-                    }
-                }
+                addStructure(index);
             }
             else if ([601, 602, 603, 604].includes(code)) {
                 const markerIndent = command.indent || 0;
-                for (let i = index - 1; i >= 0; i--) {
-                    if (page.list[i].code !== 301 || (page.list[i].indent || 0) !== markerIndent) continue;
-                    for (let j = i; j < page.list.length; j++) {
-                        expanded.add(j);
-                        if (page.list[j].code === 604 && (page.list[j].indent || 0) === markerIndent) break;
-                    }
-                    break;
+                let header = -1;
+                for (let i = index - 1; i >= 0 && header < 0; i--) {
+                    const owns = page.list[i].code === 301 || EventCommandList.isMapBattleStart(page.list[i]);
+                    if (owns && (page.list[i].indent || 0) === markerIndent) header = i;
                 }
+                addOwner(header, index);
             }
             // For branch markers inside choices, don't copy individually
             else if ([402, 403, 404].includes(code)) {
@@ -4133,29 +4766,31 @@ class EventCommandList {
                 // means the structure is malformed, so leave the row alone
                 // rather than grab an unrelated earlier choice block.
                 const markerIndent = command.indent || 0;
+                let header = -1;
                 for (let i = index - 1; i >= 0; i--) {
                     const prev = page.list[i];
                     const prevIndent = prev.indent || 0;
                     if (prevIndent > markerIndent) continue;
                     if (prevIndent < markerIndent) break;
                     if (prev.code === 102) {
-                        // Add entire choice structure
-                        expanded.add(i);
-                        for (let j = i + 1; j < page.list.length; j++) {
-                            expanded.add(j);
-                            if (page.list[j].code === 404 &&
-                                (page.list[j].indent || 0) === markerIndent) {
-                                break;
-                            }
-                        }
+                        header = i;
                         break;
                     }
                     if (prev.code !== 402 && prev.code !== 403) break;
                 }
+                addOwner(header, index);
             }
             else {
-                // Regular command
-                expanded.add(index);
+                // A regular command, with the rows that belong to it (a
+                // Move Route's steps, a shop's goods).
+                const family = EventCommandList.rowFamily(code);
+                const range = family
+                    ? EventCommandList.contiguousBlockRange(page.list, index, family[0], family[1]) : null;
+                if (range) {
+                    for (let i = range.start; i <= range.end; i++) expanded.add(i);
+                } else {
+                    expanded.add(index);
+                }
             }
         });
 
@@ -4168,7 +4803,10 @@ class EventCommandList {
         const listSnapshot = JSON.stringify(page.list);
         const wrote = await this.copyCommands(page, pageIndex);
         if (!wrote) {
-            alert(window.I18n?.t('db.clipboardWriteFailed') || 'Could not write data to the clipboard.');
+            await RRDialog.alert(window.I18n?.t('db.clipboardWriteFailed') || 'Could not write data to the clipboard.', {
+                title: window.I18n ? window.I18n.tText('Cut') : 'Cut',
+                kind: 'error'
+            });
             return;
         }
         if (this.currentPage !== targetPage || targetPage !== page
@@ -4181,6 +4819,8 @@ class EventCommandList {
     copyCommands(page, pageIndex) {
         // Expand selection to include related commands
         const expandedIndices = this.expandSelection(page);
+        // Nothing but the End selected: leave the clipboard as it is.
+        if (expandedIndices.length === 0) return Promise.resolve(true);
         this.clipboard = expandedIndices.map(i => JSON.parse(JSON.stringify(page.list[i])));
         if (typeof ReactorClipboard !== 'undefined') {
             return ReactorClipboard.write('eventCommands', { commands: this.clipboard });
@@ -4205,11 +4845,15 @@ class EventCommandList {
             || selected.length !== this.selectedIndices.length
             || selected.some((index, i) => index !== this.selectedIndices[i])) return;
 
-        if (!commands || commands.length === 0) {
-            alert(window.I18n ? window.I18n.tText('No event commands in clipboard to paste.') : 'No event commands in clipboard to paste.');
+        const pasted = EventCommandList.pasteableCommands(commands);
+        if (pasted.length === 0) {
+            await RRDialog.alert(window.I18n ? window.I18n.tText('No event commands in clipboard to paste.') : 'No event commands in clipboard to paste.', {
+                title: window.I18n ? window.I18n.tText('Paste') : 'Paste'
+            });
             return;
         }
 
+        EventCommandList.ensureTerminator(page.list);
         let insertIndex;
         if (selected.length > 0) {
             // Insert BEFORE the selected command (RPG Maker behavior)
@@ -4232,14 +4876,13 @@ class EventCommandList {
         }
 
         insertIndex = EventCommandList.safeInsertionIndex(page.list, insertIndex);
-        const pasted = commands.map(cmd => JSON.parse(JSON.stringify(cmd)));
         this._rebaseInsertIndent(pasted, EventCommandList.insertionIndent(page.list, insertIndex));
         pasted.forEach((cmd, i) => {
             page.list.splice(insertIndex + i, 0, cmd);
         });
 
         this.selectedIndices = [];
-        for (let i = 0; i < commands.length; i++) {
+        for (let i = 0; i < pasted.length; i++) {
             this.selectedIndices.push(insertIndex + i);
         }
 
@@ -4247,18 +4890,9 @@ class EventCommandList {
     }
 
     deleteCommands(page, pageIndex) {
-        // Expand selection to include related commands
-        const expandedIndices = this.expandSelection(page);
-
-        // Sort in reverse to delete from end to start
-        const sortedIndices = [...expandedIndices].sort((a, b) => b - a);
-
-        sortedIndices.forEach(index => {
-            // Don't delete the End command (code 0), but allow deleting anything else
-            if (page.list[index] && page.list[index].code !== 0) {
-                page.list.splice(index, 1);
-            }
-        });
+        // Expand selection to include related commands. A deleted block
+        // takes its bodies' terminators with it; the list keeps its End.
+        EventCommandList.removeCommands(page.list, this.expandSelection(page));
 
         this.selectedIndices = [];
         this.refreshCommandList(page, pageIndex);
@@ -4285,16 +4919,6 @@ class EventCommandList {
 
         navigator.clipboard.writeText(html);
         console.debug('Copied as HTML');
-    }
-
-    toggleSkip(page, pageIndex) {
-        // TODO: Implement skip flag
-        console.debug('Toggle skip for selected commands');
-    }
-
-    testEvent(page, pageIndex) {
-        // TODO: Implement event testing
-        console.debug('Test event from this point');
     }
 
     /**
@@ -4399,7 +5023,10 @@ class EventCommandList {
 
         const container = document.querySelector('.event-contents-area');
         if (container) {
+            // The rows are rebuilt; the list stays where it was scrolled to.
+            const scrollTop = container.scrollTop;
             this.eventEditor.updateContentsColumn();
+            container.scrollTop = scrollTop;
             if (restoreFocus) this._commandListRoot?.focus({ preventScroll: true });
         }
     }

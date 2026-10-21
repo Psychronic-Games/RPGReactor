@@ -35,6 +35,7 @@ function makeHarness() {
 
     const previousWindow = global.window;
     const previousAlert = global.alert;
+    const previousDialog = global.RRDialog;
     global.window = {
         confirm: () => state.confirmAnswer,
         alert: () => {},
@@ -44,6 +45,8 @@ function makeHarness() {
         RRWriteFileAtomicSync: require('../src/utils/FsAtomic.js')
     };
     global.alert = () => {};
+    // The tool asks through the themed dialog; a test answers it by replacing window.confirm.
+    global.RRDialog = { confirm: async (message, options) => global.window.confirm(message, options), alert: async () => {} };
     if (typeof globalThis.rrEscapeHtml !== 'function') {
         globalThis.rrEscapeHtml = require(path.join(editorRoot, 'src', 'utils', 'HtmlEscape.js'));
     }
@@ -78,6 +81,7 @@ function makeHarness() {
         cleanup() {
             global.window = previousWindow;
             global.alert = previousAlert;
+            if (previousDialog === undefined) delete global.RRDialog; else global.RRDialog = previousDialog;
             fs.rmSync(root, { recursive: true, force: true });
         }
     };

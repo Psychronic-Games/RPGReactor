@@ -94,6 +94,18 @@ test('web distribution uses the bundled Demo, staged runtime, and current artifa
             'faces for defined actors survive the trim');
         assert.ok(!entries.some(line => line === 'project/img/battlehud/Face_286.png'),
             'faces for undefined actors are trimmed');
+        // Tileset pictures no tileset names, and plugin files the plugin list does not name, stay out too.
+        const demoRoot = path.resolve(editorRoot, '..', 'template', 'Demo');
+        const tilesetNames = new Set(JSON.parse(fs.readFileSync(path.join(demoRoot, 'data', 'Tilesets.json'), 'utf8'))
+            .flatMap(tileset => (tileset && tileset.tilesetNames) || []).filter(Boolean));
+        const shippedTilesets = entries.filter(line => line.startsWith('project/img/tilesets/')).map(line => path.parse(line).name);
+        assert.ok(shippedTilesets.length > 0 && shippedTilesets.every(name => tilesetNames.has(name)), 'only tileset pictures a tileset names ship');
+        for (const name of tilesetNames) {
+            if (fs.existsSync(path.join(demoRoot, 'img', 'tilesets', name + '.png'))) assert.ok(shippedTilesets.includes(name), name + ' is named by a tileset and ships');
+        }
+        const pluginList = fs.readFileSync(path.join(demoRoot, 'js', 'reactor_plugins.js'), 'utf8');
+        const shippedPlugins = entries.filter(line => /^project\/js\/plugins\/[^/]+\.js$/.test(line)).map(line => path.parse(line).name);
+        assert.ok(shippedPlugins.length > 0 && shippedPlugins.every(name => pluginList.includes('"' + name + '"')), 'only plugins the plugin list names ship, switched on or off');
         assert.ok(entries.some(line => line.startsWith('project/3d/Vehicles/kawashaki_ninja_h2/')),
             'models the maps place survive the trim, inside their folders');
         assert.ok(!entries.some(line => line.startsWith('project/3d/sas blue/')),

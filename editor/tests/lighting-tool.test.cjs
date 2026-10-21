@@ -365,3 +365,28 @@ test('the 2D aim handle and cone lines point where the glow, the flat game sprit
     assert.match(source, /yaw: Math\.round\(-Math\.atan2\(dx, dy\) \* 180 \/ Math\.PI\)/, 'the aim drag is the inverse of the handle');
     assert.match(source, /const yaw = -\(light\.yaw \* Math\.PI\) \/ 180;\s*\n\s*const dir = side =>/, 'the cone lines turn with the handle');
 });
+
+test('an undo puts the lights back as they were written and where they stood in the file', () => {
+    // A light written by hand keeps only the fields it was given; one undo must not rewrite every light on the map.
+    const map = { width: 10, height: 10, reactor3d: { version: 1, lights: [
+        { id: 'tube', type: 'point', x: 2.5, y: 4.5, height: 2.5, radius: 5.5, color: '#cfe8ff', intensity: 1.6, flicker: 0.75, tag: 'flicker' },
+        { id: 'lamp', type: 'point', x: 6, y: 6, body: false, radius: 3 }
+    ], lighting: { ambient: 0.4 }, props: [], pieces: [] } };
+    const written = JSON.stringify(map.reactor3d);
+    const saved = MapLights.snapshot(map);
+    MapLights.add(map, { x: 1, y: 1 });
+    MapLights.restore(map, saved);
+    assert.equal(JSON.stringify(map.reactor3d), written, 'the first undo leaves the sidecar as it was, field for field');
+    // The last light taken and brought back: the list returns to its place, not the end of the file.
+    const sidecar = map.reactor3d;
+    for (const light of MapLights.list(map).slice()) MapLights.remove(map, light.id);
+    MapLights.setAmbient(map, { ambient: 0.9 });
+    assert.equal('lights' in map.reactor3d, false);
+    MapLights.restore(map, saved);
+    assert.equal(map.reactor3d, sidecar, 'the same sidecar object');
+    assert.equal(JSON.stringify(map.reactor3d), written);
+    // A key the map gained since stays, after the ones it had.
+    map.reactor3d.water = [];
+    MapLights.restore(map, saved);
+    assert.deepEqual(Object.keys(map.reactor3d), ['version', 'lights', 'lighting', 'props', 'pieces', 'water']);
+});

@@ -18,6 +18,7 @@ class DatabaseManager {
             commonEvents: 9999,
             userInterfaces: 9999,
             quests: 9999,
+            vehicles: 9999,
             structures: 9999,
             musicSequences: 9999,
             actionSequences: 9999,
@@ -75,6 +76,7 @@ class DatabaseManager {
             // project that never authored one.
             ['actionSequences', 'ActionSequences.json'],
             ['quests', 'ReactorQuests.json'],
+            ['vehicles', 'ReactorVehicles.json'],
             ['system', 'System.json']
         ];
 
@@ -96,6 +98,7 @@ class DatabaseManager {
             // absent in projects that never authored an interface.
             userInterfaces: [],
             quests: [],
+            vehicles: [null],
             // Reactor's building plans: one record per file under 3d/Structures,
             // read on load and written back on save, so the list, search,
             // clipboard and undo are the database's own.
@@ -107,6 +110,9 @@ class DatabaseManager {
             // Per-tile 3D classification. Not one of the dataFiles: those are
             // the MZ database format, and this is ours, stored beside them.
             tileset3d: null,
+            // 3D model bindings of actors, enemies, weapons, armors and items
+            // (Database.r3d.json), edited and saved with the rest.
+            modelBindings: null,
             // Editor-only labels for player-facing database entries.
             editorNames: null
         };
@@ -155,9 +161,12 @@ class DatabaseManager {
             for (const [key, filename] of this.dataFiles) {
                 loaded[key] = await this.loadJSON(dataPath, filename);
             }
+            if (!Array.isArray(loaded.vehicles)) throw new Error('ReactorVehicles.json must be an array');
+            if (!loaded.vehicles.length) loaded.vehicles = [null];
             loaded.battlePresentation = await this.loadJSON(dataPath, 'BattlePresentation.json');
             loaded.structures = await this.loadStructures(projectPath);
             loaded.tileset3d = await this.loadTileset3D(projectPath);
+            loaded.modelBindings = this.loadModelBindings(projectPath);
             loaded.editorNames = await this.loadEditorNames(projectPath);
             // An absent file reads as []; records start at id 1 behind the
             // null slot every other database file keeps. A project that has
@@ -179,7 +188,9 @@ class DatabaseManager {
             if (Array.isArray(loaded.battlePresentation) && !loaded.battlePresentation.length) loaded.battlePresentation = battle.empty();
             battle.validateStore(loaded.actionSequences, loaded.battlePresentation);
             Object.assign(this.data, loaded);
+            this.equipTypeBaseline = this.equipSlots()?.named(this.data.system) || null;
             this.projectPath = projectPath;
+            this.registerModelBindingStore();
             this.dataGeneration++;
             this.mutationGeneration++;
             this.captureSavedState();
@@ -361,10 +372,11 @@ class DatabaseManager {
         try {
             this.fs.mkdirSync(directory, { recursive: true });
             for (const entry of records) {
-                if (!entry || !entry.name || !entry.plan) continue;
+                // A deleted record has no name and no file. One with a file keeps it while its name is retyped.
+                if (!entry || !entry.plan || (!entry.name && !entry.file)) continue;
                 if (!entry.file || taken.has(entry.file)) entry.file = DatabaseManager.structureFileName(entry.name, taken);
                 taken.add(entry.file);
-                entry.plan.name = entry.name;
+                entry.plan.name = entry.name || entry.file.replace(/\.json$/i, '');
                 const plan = normalize(entry.plan);
                 this._writeFileAtomic(this.fs, this.path.join(directory, entry.file), (typeof RRMapElevation !== 'undefined' && RRMapElevation.stringifySidecar ? RRMapElevation.stringifySidecar(trim(plan)) : JSON.stringify(trim(plan), null, 2)) + '\n');
                 keep.add(entry.file);
@@ -379,6 +391,67 @@ class DatabaseManager {
             return true;
         } catch (error) {
             console.error('The structure plans could not be saved:', error);
+            return false;
+        }
+    }
+
+    bindingsModule() {
+        return (typeof globalThis !== 'undefined' && globalThis.RRDatabase3DBindings) || null;
+    }
+
+    /** Database.r3d.json as an object; {} when absent; null (and the error kept) when unreadable. */
+    loadModelBindings(projectPath) {
+        const bindings = this.bindingsModule();
+        this.modelBindingsLoadError = null;
+        if (!bindings) return null;
+        try {
+            const filePath = bindings.filePath(projectPath);
+            if (!this.fs.existsSync(filePath)) return {};
+            const parsed = RRJson.read(this.fs, filePath);
+            if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+                throw new Error('Database.r3d.json must contain a JSON object');
+            }
+            return parsed;
+        } catch (error) {
+            // Readers then go to the file and show its error; it is never overwritten.
+            console.error('Error loading Database.r3d.json:', error);
+            this.modelBindingsLoadError = error;
+            return null;
+        }
+    }
+
+    /**
+     * Bindings read and written while this project is loaded go to data.modelBindings,
+     * so they are saved on OK/Apply, dropped by Cancel and restored by list Undo.
+     */
+    registerModelBindingStore() {
+        const bindings = this.bindingsModule();
+        if (!bindings || !bindings.useStore) return;
+        const same = (a, b) => {
+            if (!a || !b) return false;
+            if (!this.path) return a === b;
+            return this.path.resolve(a) === this.path.resolve(b);
+        };
+        bindings.useStore(projectPath => {
+            if (!same(projectPath, this.projectPath) || this.modelBindingsLoadError) return null;
+            if (!this.data.modelBindings || typeof this.data.modelBindings !== 'object') this.data.modelBindings = {};
+            return this.data.modelBindings;
+        });
+    }
+
+    saveModelBindings(projectPath) {
+        const bindings = this.bindingsModule();
+        if (!bindings || this.data.modelBindings === null || this.data.modelBindings === undefined) return true;
+        if (this.modelBindingsLoadError && this.fs.existsSync(bindings.filePath(projectPath))) {
+            console.error('Refusing to overwrite unreadable Database.r3d.json:', this.modelBindingsLoadError);
+            return false;
+        }
+        try {
+            bindings.writeStore(projectPath, this.data.modelBindings, this.fs);
+            this.captureSavedState('modelBindings');
+            return true;
+        } catch (error) {
+            console.error('Error saving Database.r3d.json:', error);
             return false;
         }
     }
@@ -487,6 +560,9 @@ class DatabaseManager {
         if (!dataKey || dataKey === 'tileset3d') {
             this.savedState.tileset3d = this.serialize(this.data.tileset3d || null);
         }
+        if (!dataKey || dataKey === 'modelBindings') {
+            this.savedState.modelBindings = this.serialize(this.data.modelBindings || null);
+        }
         if (!dataKey || dataKey === 'structures') {
             this.savedState.structures = this.serialize(this.data.structures || null);
         }
@@ -509,12 +585,38 @@ class DatabaseManager {
             && this.serialize(this.data.editorNames || null) !== this.savedState.editorNames) {
             dirty.push('editorNames');
         }
+        if (this.savedState.modelBindings !== undefined
+            && this.serialize(this.data.modelBindings || null) !== this.savedState.modelBindings) {
+            dirty.push('modelBindings');
+        }
         if (this.savedState.structures !== undefined
             && this.serialize(this.data.structures || null) !== this.savedState.structures) {
             dirty.push('structures');
         }
         if (this.savedState.battlePresentation !== undefined && this.serialize(this.data.battlePresentation || null) !== this.savedState.battlePresentation) dirty.push('battlePresentation');
         return dirty;
+    }
+
+    /** The equipment-type rules (utils/EquipSlots.js), where the editor has loaded them. */
+    equipSlots() {
+        return typeof RREquipSlots !== 'undefined' ? RREquipSlots : null;
+    }
+
+    /** The equipment types that were named when the project was last saved or loaded. */
+    equipTypesKnown() {
+        return this.equipTypeBaseline || (this.equipTypeBaseline = this.equipSlots()?.named(this.data.system) || []);
+    }
+
+    /**
+     * The equipment types a class does not show a slot for yet: for a class with no list of its own, a
+     * type named since the last save (the save gives the class its own list without it). Empty otherwise.
+     */
+    unsettledEquipTypes(classId) {
+        const slots = this.equipSlots(), classEntry = this.getClass(classId), out = new Set();
+        if (!slots || (classEntry && slots.classSlots(classEntry))) return out;
+        const known = new Set(this.equipTypesKnown());
+        for (const id of slots.named(this.data.system)) if (!known.has(id)) out.add(id);
+        return out;
     }
 
     isDirty() {
@@ -650,6 +752,18 @@ class DatabaseManager {
 
     getTileset(id) {
         return this.data.tilesets[id] || null;
+    }
+
+    getVehicles() {
+        return (this.data.vehicles || []).filter(Boolean);
+    }
+
+    getVehicle(id) {
+        return (this.data.vehicles || [])[id] || null;
+    }
+
+    hasVehicles() {
+        return (this.data.vehicles || []).some(Boolean);
     }
 
     getQuests() {
@@ -885,6 +999,9 @@ class DatabaseManager {
             this.data[dataKey].length = newMax + 1;
             const names = this.editorNamesModule();
             if (names) this.data.editorNames = names.prune(this.data.editorNames, dataKey, newMax);
+            // A record grown back later must not inherit the removed one's model.
+            const bindings = this.bindingsModule();
+            if (bindings && this.data.modelBindings) bindings.prune(this.data.modelBindings, dataKey, newMax);
         }
 
         if (newMax !== currentMax) this.mutationGeneration++;
@@ -938,6 +1055,7 @@ class DatabaseManager {
         // not persist editor names until every normal database write succeeds.
         if (!this.canSaveEditorNames(projectPath)) return false;
         if (!this.saveBattlePresentation(projectPath)) return false;
+        if (this.equipSlots()) this.equipTypeBaseline = this.equipSlots().settle(this.data, this.equipTypesKnown());
         // Only what changed since the last save (or load) is written. Every
         // write is an fsync'd temp file renamed into place, and a sync client
         // or scanner holding the file can stall each rename, so rewriting the
@@ -966,6 +1084,9 @@ class DatabaseManager {
                 && !this.fs.existsSync(this.path.join(projectPath, 'data', filename))) {
                 continue;
             }
+            // Optional Reactor data leaves imported RPG Maker projects unchanged.
+            if (key === 'vehicles' && !this.hasVehicles()
+                && !this.fs.existsSync(this.path.join(projectPath, 'data', filename))) continue;
             // System.json is part of dataFiles and gets its own fresh
             // versionId when its turn comes — skip the companion rewrite
             // that would otherwise re-save it after every other file.
@@ -978,6 +1099,7 @@ class DatabaseManager {
             failed.push(this.tileset3DClasses()?.FILENAME || 'Tilesets.r3d.json');
         }
         if (!unchanged('structures') && !await this.saveStructures(projectPath)) failed.push('3d/Structures');
+        if (!unchanged('modelBindings') && !this.saveModelBindings(projectPath)) failed.push('Database.r3d.json');
         if (failed.length === 0 && !unchanged('editorNames') && !await this.saveEditorNames(projectPath)) {
             failed.push(this.editorNamesModule()?.FILENAME || 'Database.names.json');
         }

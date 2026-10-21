@@ -48,7 +48,7 @@ class DatabaseMusicSequenceEditor {
         wrapper.className = 'database-detail-wrapper db-page';
         wrapper.innerHTML = `
             <div class="database-section">
-                <div class="database-section-header">${rrEscapeHtml(tt('General'))}</div>
+                <div class="database-section-header" data-section-key="general">${rrEscapeHtml(tt('General'))}</div>
                 <div class="database-section-content"><div class="db-form">
                     <div class="db-row-cols">
                         <span class="db-col"><label>${rrEscapeHtml(tt('Name'))}</label><input type="text" class="database-field-value music-sequence-name" data-field="name" value="${rrEscapeHtml(live.name)}"></span>
@@ -56,7 +56,7 @@ class DatabaseMusicSequenceEditor {
                 </div></div>
             </div>
             <div class="database-section">
-                <div class="database-section-header">${rrEscapeHtml(tt('Sequence'))}</div>
+                <div class="database-section-header" data-section-key="sequence">${rrEscapeHtml(tt('Sequence'))}</div>
                 <div class="database-section-content">
                     <div style="font-size: 11px; color: var(--color-text-muted); line-height: 1.5; margin-bottom: 6px;">${rrEscapeHtml(tt('A sequence here can play as a map’s music, or as battle music for a troop, a map or Change Battle BGM.'))}</div>
                     <div class="music-sequence-rows"></div>

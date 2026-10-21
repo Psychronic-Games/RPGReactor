@@ -57,9 +57,7 @@
 
     function reportMissing() {
         const message = tt('IconSet.png was not found in img/system.');
-        const ui = root.reactor && root.reactor.uiManager;
-        if (ui && typeof ui.showAlert === 'function') ui.showAlert(tt('Select Icon'), message);
-        else if (typeof alert === 'function') alert(message);
+        root.RRDialog.alert(message, { title: tt('Select Icon'), kind: 'warning' });
     }
 
     function iconCount(img) {

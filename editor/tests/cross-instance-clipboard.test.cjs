@@ -12,6 +12,8 @@ function loadBrowserClass(relativePath, className, globals = {}) {
     return vm.runInNewContext(`${source}\n${className};`, {
         console: { log() {}, debug() {}, warn() {}, error() {} },
         alert() {},
+        // The editor's themed dialog, answered by the test's own `alert` stand-in.
+        RRDialog: require('./helpers/dialog-stub.cjs').themedDialogFrom(globals),
         ...globals
     });
 }
@@ -398,7 +400,8 @@ test('event commands, pages, and movement routes prefer the shared clipboard', a
     eventManager.notifyEventSelected = () => {};
     eventManager.updateEventListSelection = () => {};
     await eventManager.pasteEvent(12, 9);
-    assert.equal(eventManager.currentMap.events[8].name, 'EV008');
+    // The shared clipboard's event, not the stale local one; a named event keeps its name when pasted.
+    assert.equal(eventManager.currentMap.events[8].name, 'Source Event');
     assert.equal(eventManager.currentMap.events[8].x, 12);
     assert.equal(eventManager.currentMap.events[8].pages.length, 0);
 });

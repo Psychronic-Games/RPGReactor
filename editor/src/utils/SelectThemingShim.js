@@ -236,7 +236,8 @@
 
         // Type-to-filter search for long lists.
         const optionCount = selectEl.querySelectorAll('option').length;
-        if (optionCount > 15) {
+        // (A list that asks for it has the search box whatever its length: data-rr-search="always".)
+        if (optionCount > 15 || selectEl.dataset.rrSearch === 'always') {
             const search = document.createElement('input');
             search.type = 'text';
             search.placeholder = (window.I18n ? window.I18n.tText('Search...') : 'Search...');

@@ -11,10 +11,20 @@
  * the actor (no icon, no turns, never removed). One passive per note line;
  * several lines give several, and two skills naming the same state give its
  * traits twice. Skills that only a passive state adds give no passives of
- * their own. Enemies have none. No script calls.
+ * their own. Enemies have passives only where the game gave them a skill
+ * list (Victor Engine's Basic Module: the skills of their actions); without
+ * one they have none. No script calls.
  *
  * Installed by File › Import Project… when the imported game carried the
  * original script.
+ *
+ * @param enemySkills
+ * @text Enemy skills
+ * @type select
+ * @option none
+ * @option actions
+ * @desc "actions": an enemy knows the skills of its action patterns.
+ * @default none
  */
 (() => {
     'use strict';
@@ -34,22 +44,33 @@
         return ids;
     };
 
-    // Actors whose skills are being listed: their passives are left out of the traits the list reads.
+    const params = typeof PluginManager !== 'undefined' ? PluginManager.parameters('RR_CpPassiveSkills') : {};
+    const ENEMY_ACTIONS = String(params.enemySkills || '') === 'actions';
+
+    // Battlers whose skills are being listed: their passives are left out of the traits the list reads.
     const listing = new Set();
     let anyPassives = null;
-    Game_BattlerBase.prototype.rrPassives = function() { return []; };
-    Game_Actor.prototype.rrPassives = function() {
+    const passivesOf = (battler, skills) => {
         if (anyPassives === null && typeof $dataSkills !== 'undefined' && $dataSkills) anyPassives = $dataSkills.some(s => passiveIds(s).length);
         if (!anyPassives) return [];
         const out = [];
-        listing.add(this);
+        listing.add(battler);
         try {
-            for (const skill of this.skills()) for (const id of passiveIds(skill)) out.push($dataStates[id]);
+            for (const skill of skills()) for (const id of passiveIds(skill)) out.push($dataStates[id]);
         } finally {
-            listing.delete(this);
+            listing.delete(battler);
         }
         return out.filter(Boolean);
     };
+    Game_BattlerBase.prototype.rrPassives = function() { return []; };
+    Game_Actor.prototype.rrPassives = function() { return passivesOf(this, () => this.skills()); };
+    // An enemy's skills: another port's list when there is one, else the skills of its actions.
+    if (ENEMY_ACTIONS && typeof Game_Enemy !== 'undefined') {
+        Game_Enemy.prototype.rrPassives = function() {
+            return passivesOf(this, () => (typeof this.skills === 'function' ? this.skills()
+                : this.enemy().actions.map(action => $dataSkills[action.skillId])));
+        };
+    }
 
     const _traitObjects = Game_BattlerBase.prototype.traitObjects;
     Game_BattlerBase.prototype.traitObjects = function() {

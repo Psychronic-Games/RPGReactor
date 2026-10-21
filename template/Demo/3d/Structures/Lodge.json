@@ -1,0 +1,13 @@
+{
+  "name": "Lodge",
+  "size": [13,13],
+  "storey": 5,
+  "materials": {"wall":"Wood","inner":"Plaster","floor":"Wood","wet":"Stone","roof":"RoofTile","stair":"Wood"},
+  "floors": [
+    {"rooms":{"living":[1,5,11,11],"bed":[1,1,5,3],"kitchen":[7,1,11,3]},"doors":[["living","outside",3,6,"south"],["living","bed",2],["living","kitchen",2]],"wet":["kitchen"]}
+  ],
+  "stairs": [],
+  "roof": {"pitch":6},
+  "windows": {"every":5,"width":2,"shutters":"#2f4f6f"},
+  "spots": {"table":[6,8],"hearth":[9,2]}
+}

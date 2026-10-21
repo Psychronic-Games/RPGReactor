@@ -2,11 +2,12 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
+const { runtimeSource: joinedRuntime } = require('./helpers/runtime-source.cjs');
 
 const repoRoot = path.resolve(__dirname, '..', '..');
 const editorRoot = path.resolve(__dirname, '..');
 const commandsDir = path.join(editorRoot, 'src', 'event', 'commands');
-const runtimeSource = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_objects.js'), 'utf8');
+const runtimeSource = joinedRuntime('reactor_objects.js');
 
 /**
  * Highest `params[n]` index each interpreter command reads, plus one — i.e. the

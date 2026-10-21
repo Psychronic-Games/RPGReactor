@@ -1,4 +1,5 @@
 const assert = require('node:assert/strict');
+const { runtimeSource } = require('./helpers/runtime-source.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
@@ -6,7 +7,7 @@ const vm = require('node:vm');
 const { paramNamesSource } = require('./helpers/param-names.cjs');
 
 const repoRoot = path.resolve(__dirname, '..', '..');
-const objects = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_objects.js'), 'utf8');
+const objects = runtimeSource('reactor_objects.js');
 const editorSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'database', 'DatabaseEffectEditor.js'), 'utf8');
 
 function slice(startMarker, endAfter) {

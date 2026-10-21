@@ -325,6 +325,8 @@ Scene_Boot.prototype.start = function() {
     // Every plugin has loaded by now; an element plugin's list reader can
     // be taught about multi-element skills and items.
     Game_Action.installMultiElementShim();
+    // ...and the Buff Rate trait can wrap every plugin's buff methods.
+    Game_Battler.installBuffRateGate();
     SoundManager.preloadImportantSounds();
     if (DataManager.isBattleTest()) {
         DataManager.setupBattleTest();
@@ -438,7 +440,7 @@ Scene_Title.prototype.create = function() {
 Scene_Title.prototype.resumePlaytestCheckpoint = function() {
     if (!DataManager.hasPlaytestCheckpoint() || this._resumingPlaytestCheckpoint) return;
     this._resumingPlaytestCheckpoint = true;
-    DataManager.loadGame(DataManager.PLAYTEST_CHECKPOINT_ID)
+    DataManager.loadGame(DataManager.playtestCheckpointId())
         .then(() => {
             SoundManager.playLoad();
             this.fadeOutAll();
@@ -608,7 +610,7 @@ Scene_Message.prototype.createMessageWindow = function() {
 Scene_Message.prototype.messageWindowRect = function() {
     const ww = Graphics.boxWidth;
     // room for the frame margin (none in a 2003 import); an XP, VX or VX Ace window is its lines and padding
-    const wh = this.calcWindowHeight(4, false) + ($dataSystem && $dataSystem.rrRgssWindows ? 0 : Window.defaultMargin() * 2);
+    const wh = this.calcWindowHeight(4, false) + ($dataSystem && ($dataSystem.rrRgssWindows || $dataSystem.rrLegacyWindows) ? 0 : Window.defaultMargin() * 2);
     const wx = (Graphics.boxWidth - ww) / 2;
     const wy = 0;
     return new Rectangle(wx, wy, ww, wh);
@@ -754,14 +756,27 @@ Scene_Map.prototype.onMapLoaded = function() {
 };
 
 Scene_Map.prototype.onTransfer = function() {
+    // Over a border into the map shown past it: its pictures are the ones in use.
+    if (this.isBorderCrossing()) return;
     ImageManager.clear();
     EffectManager.clear();
+};
+
+// Whether this map was entered over a border without a break (Reactor3D.Neighbors).
+Scene_Map.prototype.isBorderCrossing = function() {
+    return typeof Reactor3D !== "undefined" && !!(Reactor3D.Neighbors && Reactor3D.Neighbors.crossing);
 };
 
 Scene_Map.prototype.start = function() {
     Scene_Message.prototype.start.call(this);
     SceneManager.clearStack();
-    if (this._transfer) {
+    if (this._transfer && this.isBorderCrossing()) {
+        // One world: no fade, no save in the middle of a walk, and the first picture is of the map entered.
+        this._mapNameWindow.open();
+        $gameMap.autoplay();
+        this._spriteset.update();
+        Reactor3D.Neighbors.end();
+    } else if (this._transfer) {
         this.fadeInForTransfer();
         this.onTransferEnd();
     } else if (this.needsFadeIn()) {
@@ -852,10 +867,12 @@ Scene_Map.prototype.isBusy = function() {
 Scene_Map.prototype.terminate = function() {
     Scene_Message.prototype.terminate.call(this);
     if (!SceneManager.isNextScene(Scene_Battle)) {
-        this._spriteset.update();
+        // Over a border the map entered draws its own first picture: this one is neither drawn again nor kept as a still.
+        const crossing = SceneManager.isNextScene(Scene_Map) && this.isBorderCrossing();
+        if (!crossing) this._spriteset.update();
         this._mapNameWindow.hide();
         this.hideMenuButton();
-        SceneManager.snapForBackground();
+        if (!crossing) SceneManager.snapForBackground();
     }
     $gameScreen.clearZoom();
 };
@@ -2218,7 +2235,8 @@ Scene_Options.prototype.optionsWindowRect = function() {
 
 Scene_Options.prototype.maxCommands = function() {
     // Increase this value when adding option items.
-    return 7;
+    // The Graphics row is there once this machine has drawn a 3D map (Window_Options.addGraphicsOption).
+    return 7 + (typeof Reactor3D !== "undefined" && Reactor3D.Quality && ConfigManager.reactor3dSeen ? 1 : 0);
 };
 
 Scene_Options.prototype.maxVisibleCommands = function() {
@@ -2878,6 +2896,23 @@ Scene_Name.prototype.create = function() {
     this._actor = $gameActors.actor(this._actorId);
     this.createEditWindow();
     this.createInputWindow();
+    this.fitNameWindows();
+};
+
+/** On a screen too small for the two windows they are shown smaller, whole and in the middle. */
+Scene_Name.prototype.fitNameWindows = function() {
+    const edit = this._editWindow, input = this._inputWindow;
+    if (!edit || !input || !edit.scale || !input.scale) return;
+    const gap = 8, width = Math.max(edit.width, input.width), height = edit.height + gap + input.height;
+    const scale = Math.min(1, Graphics.boxWidth / width, Graphics.boxHeight / height);
+    if (!(scale < 1)) return;
+    const x = Math.round((Graphics.boxWidth - width * scale) / 2), y = Math.round((Graphics.boxHeight - height * scale) / 2);
+    edit.scale.set(scale, scale);
+    input.scale.set(scale, scale);
+    edit.x = x;
+    edit.y = y;
+    input.x = x;
+    input.y = y + Math.round((edit.height + gap) * scale);
 };
 
 Scene_Name.prototype.start = function() {
@@ -3703,12 +3738,26 @@ Scene_Gameover.prototype.gotoTitle = function() {
 // can slow a map down, never hold it hostage.
 const _reactorSceneMapOnMapLoaded = Scene_Map.prototype.onMapLoaded;
 Scene_Map.prototype.onMapLoaded = function() {
+    // Another map than the one played: what it does not claim, from here on, is let go when it starts.
+    if (typeof Reactor3D !== "undefined" && Reactor3D.ModelUse && typeof $gameMap !== "undefined" && $gameMap) {
+        const transfer = this._transfer && typeof $gamePlayer !== "undefined" && $gamePlayer && $gamePlayer.isTransferring();
+        if (Reactor3D.ModelUse.begin(transfer ? $gamePlayer.newMapId() : $gameMap.mapId())) {
+            // The map left behind is not drawn again: its world and the models this map does not
+            // name go before this map's come in, so the two are not in memory together.
+            try {
+                const before = SceneManager._previousScene, spriteset = before && before !== this && before._spriteset;
+                if (spriteset && typeof spriteset.releaseReactor3D === "function" && !Reactor3D.ModelUse.busy()) spriteset.releaseReactor3D();
+                if (typeof $dataMap !== "undefined" && $dataMap) Reactor3D.ModelUse.sweep($dataMap, true);
+            } catch (error) { console.warn("Reactor3D: the map before could not be released early.", error); }
+        }
+    }
     _reactorSceneMapOnMapLoaded.call(this);
     this._reactorPreloadDone = true;
     if (typeof Reactor3D !== "undefined" && Reactor3D.preloadMapModels
         && typeof $dataMap !== "undefined" && $dataMap) {
         const specs = Reactor3D.collectMapModelSpecs($dataMap);
-        if (specs.length) {
+        // Over a border the models stood in view already; any that did not arrive as they load.
+        if (specs.length && !this.isBorderCrossing()) {
             this._reactorPreloadDone = false;
             const done = () => { this._reactorPreloadDone = true; };
             Reactor3D.preloadMapModels($dataMap).then(done, done);
@@ -3726,6 +3775,8 @@ const _reactorSceneMapStart = Scene_Map.prototype.start;
 Scene_Map.prototype.start = function() {
     _reactorSceneMapStart.call(this);
     if (typeof Reactor3D !== "undefined" && Reactor3D.warmLoadedTemplates) {
+        // The scene before this one is gone and this map's models are claimed.
+        if (Reactor3D.ModelUse && typeof $dataMap !== "undefined") Reactor3D.ModelUse.sweep($dataMap);
         Reactor3D.warmLoadedTemplates();
     }
 };
@@ -3844,7 +3895,8 @@ Scene_Boot.prototype.isReady = function() {
     const _adjustBoxSize = Scene_Boot.prototype.adjustBoxSize;
     Scene_Boot.prototype.adjustBoxSize = function() {
         _adjustBoxSize.call(this);
-        if (!rgss()) return;
+        // RPG Maker 2000/2003 (rrLegacyWindows) lay windows out on the whole screen too.
+        if (!rgss() && !($dataSystem && $dataSystem.rrLegacyWindows)) return;
         Graphics.boxWidth = $dataSystem.advanced.uiAreaWidth;
         Graphics.boxHeight = $dataSystem.advanced.uiAreaHeight;
     };

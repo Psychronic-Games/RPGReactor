@@ -1,4 +1,5 @@
 const assert = require('node:assert/strict');
+const { runtimeSource } = require('./helpers/runtime-source.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
@@ -6,7 +7,7 @@ const vm = require('node:vm');
 const PIXI = require('pixi.js');
 
 const repoRoot = path.resolve(__dirname, '..', '..');
-const core = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_core.js'), 'utf8');
+const core = runtimeSource('reactor_core.js');
 const sprites = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_sprites.js'), 'utf8');
 
 function loadTileLayers() {
@@ -221,12 +222,84 @@ test('forced sprite selection bypasses atlas setup and mesh failure falls back',
     assert.equal(layer._v8Backend, 'sprites');
     assert.equal(atlasCalls, 0, 'forced fallback never allocates the atlas');
 
+    // The atlas is made when the first tile is drawn: a layer that draws none never makes one.
     context.$reactorTilemapBackend = 'mesh';
     layer._setupV8Backend([]);
-    assert.equal(layer._v8Backend, 'sprites');
-    assert.equal(atlasCalls, 1);
+    assert.equal(layer._v8Backend, 'mesh');
+    assert.equal(atlasCalls, 0, 'setting the tilesets allocates nothing');
+    layer._v8MeshDirty = true;
+    layer._syncV8Backend();
+    assert.equal(atlasCalls, 0, 'nor does a frame with no tiles');
+    assert.equal(layer._v8MeshDirty, false);
+    layer._images = [];
+    layer.addRect(0, 0, 0, 0, 0, 48, 48);
+    layer._syncV8Backend();
+    assert.equal(atlasCalls, 1, 'the first tile asks for it');
+    assert.equal(layer._v8Backend, 'sprites', 'and a failure there falls back to sprites');
     assert.equal(context.$reactorTilemapStats.fallbacks, 1);
     assert.equal(context.$reactorTilemapStats.fallbackReason, 'atlas unavailable');
+});
+
+test('the tile atlas is made once, by the first tile drawn', () => {
+    const context = loadTileLayers();
+    const { Tilemap } = context;
+    const layer = new PIXI.Container();
+    Object.setPrototypeOf(layer, Tilemap.Layer.prototype);
+    layer._elements = []; layer._images = [];
+    layer._v8TileRoot = new PIXI.Container();
+    layer.addChild(layer._v8TileRoot);
+    let atlasCalls = 0; const bitmaps = [];
+    Tilemap.Layer._acquireV8Atlas = given => { atlasCalls++; assert.equal(given, bitmaps, 'from the tilesets the layer was given');
+        return { bitmaps: given, texture: PIXI.Texture.EMPTY, width: 4096, height: 3072, shadowX: 3072, shadowY: 2048, refs: 1 }; };
+    context.$reactorTilemapBackend = 'mesh';
+    layer._setupV8Backend(bitmaps);
+    assert.equal(atlasCalls, 0);
+    layer.addRect(-1, 0, 0, 22, 32, 24, 24);
+    layer._syncV8Backend();
+    assert.equal(atlasCalls, 1);
+    assert.equal(layer._v8Backend, 'mesh');
+    assert.equal(layer._v8Mesh.visible, true);
+    layer.clear(); layer.addRect(-1, 0, 0, 2, 2, 24, 24);
+    layer._syncV8Backend();
+    assert.equal(atlasCalls, 1, 'later frames reuse it');
+});
+
+test('a tile layer that is not shown (a 3D map draws the tiles itself) makes no atlas until it is', () => {
+    const context = loadTileLayers();
+    const { Tilemap } = context;
+    const layer = new PIXI.Container(), combined = new PIXI.Container();
+    Object.setPrototypeOf(layer, Tilemap.Layer.prototype);
+    layer._elements = []; layer._images = [];
+    layer._v8TileRoot = new PIXI.Container();
+    layer.addChild(layer._v8TileRoot);
+    combined.addChild(layer);
+    let atlasCalls = 0;
+    Tilemap.Layer._acquireV8Atlas = given => { atlasCalls++; return { bitmaps: given, texture: PIXI.Texture.EMPTY, width: 4096, height: 3072, shadowX: 3072, shadowY: 2048, refs: 1 }; };
+    context.$reactorTilemapBackend = 'mesh';
+    layer._setupV8Backend([]);
+    layer.addRect(-1, 0, 0, 22, 32, 24, 24);
+    combined.visible = false;
+    layer._syncV8Backend();
+    assert.equal(atlasCalls, 0, 'hidden with its parent');
+    combined.visible = true; layer.visible = false;
+    layer._syncV8Backend();
+    assert.equal(atlasCalls, 0, 'hidden itself');
+    layer.visible = true;
+    layer._syncV8Backend();
+    assert.equal(atlasCalls, 1, 'shown: the tiles it was given are drawn');
+    assert.equal(layer._v8Mesh.visible, true);
+    // Hidden after it drew (the 3D view came up a frame later): the atlas is given back, and made again on show.
+    let released = 0;
+    Tilemap.Layer._releaseV8Atlas = () => { released++; };
+    combined.visible = false;
+    layer._syncV8Backend(); layer._syncV8Backend();
+    assert.equal(released, 1, 'once');
+    assert.equal(layer._v8Atlas, null);
+    assert.equal(layer._v8Mesh.visible, false);
+    combined.visible = true;
+    layer._syncV8Backend();
+    assert.equal(atlasCalls, 2);
+    assert.equal(layer._v8Mesh.visible, true);
 });
 
 test('the shared runtime atlas is destroyed only after its last layer releases it', () => {

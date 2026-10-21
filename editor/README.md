@@ -1,8 +1,8 @@
 # RPG Reactor
 
-For the consolidated update, read the [0.98.7 release notes](../docs/posts/release-notes-0.98.7.md). Battle Rooms and visual Action Sequences are opt-in systems; see the [battle guide](../docs/BATTLE-PRESENTATION.md) and the [rigging guide](../docs/RIGGING-MODELS.md) for setup and current limits.
+For the consolidated update, read the [0.99.0 release notes](../docs/posts/release-notes-0.99.0.md). Battle Rooms and visual Action Sequences are opt-in systems; see the [battle guide](../docs/BATTLE-PRESENTATION.md) and the [rigging guide](../docs/RIGGING-MODELS.md) for setup and current limits.
 
-RPG Reactor 0.98.8 (in development) is an open-source, cross-platform RPG game editor and runtime for RPG Maker MV/MZ-compatible projects, built on NW.js, PixiJS v8 and Three.js. RPG Reactor provides its own modern runtime, PixiJS 8 for 2D and Three.js for HD-2D/3D maps, while preserving compatibility with RPG Maker project data and targeting backwards compatibility with both RPG Maker MZ and MV plugins. Create 2D and HD-2D RPG games with a complete development environment featuring map editing, event scripting, database management, and game testing capabilities.
+RPG Reactor 0.99.0 is an open-source, cross-platform RPG game editor and runtime for RPG Maker MV/MZ-compatible projects, built on NW.js, PixiJS v8 and Three.js. RPG Reactor provides its own modern runtime, PixiJS 8 for 2D and Three.js for HD-2D/3D maps, while preserving compatibility with RPG Maker project data and targeting backwards compatibility with both RPG Maker MZ and MV plugins. Create 2D and HD-2D RPG games with a complete development environment featuring map editing, event scripting, database management, and game testing capabilities.
 
 ## Features
 
@@ -20,7 +20,7 @@ RPG Reactor 0.98.8 (in development) is an open-source, cross-platform RPG game e
 - **Map audio**: Autoplay BGM/BGS in Map Properties are chosen in the audio picker, which plays the track and sets its volume, pitch, and pan
 - **Non-destructive resizing**: Changing a map's size reports the tiles and names the events that fall outside the new bounds, and makes no change until confirmed. A nine-cell anchor picker chooses which corner or edge content keeps, so a map can grow from the top or left; tiles and events move together, Set Event Location and `System.json` starts follow, and Transfer Player / Set Vehicle Location commands elsewhere that target the map are offered for adjustment. Top-left is the default and byte-identical to the previous behavior
 - **Performance optimized**: Maps from 1×1 through 512×512 are validated before allocation. Large maps retain a buffered 32-tile-chunk viewport and merge ordinary tiles, autotile quadrants, shadows, and animated A1 water into GPU meshes, preserving full-map zoom without map-sized framebuffer caches
-- **HD-2D map authoring**: Opt-in 3D maps preserve RPG Maker's grid and data while standing authored walls, roofs, panels, foliage, events, plugin lights, and parallax-backed ground. An event page can carry a mesh from `3d/<name>/source` (pose and facing marks in `Map###.r3d.json`) instead of a walking sheet. The 3D editor supports object/footing authoring, camera flight, hover targeting, event creation and dragging, and the same lower/character/starred composition order as runtime. Map Properties holds the 3D switch, the room a 3D map is built in (a parallax floor, walls, and ceiling at an authored height, `room` in `Map###.r3d.json`, walls and ceiling facing inward so the camera looks past them), and the map's Default Camera. Models carry their own effects (a database animation placed on a part or bone by clicking the model, previewed in the viewport) that animation timelines and the Play 3D Effect command fire. The palette's 3D-M tab places 3D model props on the map (size, per-axis stretch, facing, lift, passable, with a transform card of offset/rotate/scale sliders, a placement ghost under the cursor and Undo), moved by tile in 2D and freely with pose rings in 3D; the Transform 3D Model event command eases a placed model's offset, turn and scale in play; in play each prop is a model-bound event with footprint collision. Five camera modes are available: Fixed Angle (HD-2D), Top-Down, Isometric, Third Person, and First Person, each with optional pitch/yaw/distance/FOV overrides; the Change 3D Camera event command moves between them in play, eased over frames, focused on the display, player, or an event, and optionally kept across maps. Runtime PIXI 8 tile meshes repaint atomically and plugin row layers are prepared once before rendering, so lower, upper, and plugin-added layers remain complete and joined while the camera moves. Effects can also be video surfaces (an animated screen on a console) and play on demand, always, or by movement state; an effect's scale is relative to its model (100% = a model-sized frame). Effekseer effects are drawn inside the scene from the view's own camera, at full resolution, on a plane stood at the anchor, so a strut, a wall or a character in front hides them (the game does the same, drawing only the box the effect fills); a map with models is drawn under one depth buffer rather than the 2D upper-layer sandwich, so a screen or star tile behind a tower stays behind it as the view turns. Model collision follows the mesh (`collision: "box"` opts out): a tile is blocked when the mesh covers its middle or half of it, and the selected prop's blocked tiles are drawn in red in the editor; the map header's Passage toggle marks every cell the game will not walk, as RPG Maker's passage view does, including model footprints. Third and first person play with mouse look (the mouse turns the view as soon as it moves; a click takes it, Escape releases it and opens the menu), camera-relative WASD/arrows, looking up over the shoulder with the character's head following. The map's right-click menu sets the Player Facing at the start position, shown by an arrow on the marker; the 3D view draws the player and vehicle starts as labelled boxes. Number fields throughout the editor use themed ▲▼ steppers
+- **HD-2D map authoring**: Opt-in 3D maps preserve RPG Maker's grid and data while standing authored walls, roofs, panels, foliage, events, plugin lights, and parallax-backed ground. An event page can carry a mesh from `3d/<name>/source` (pose and facing marks in `Map###.r3d.json`) instead of a walking sheet. The 3D editor supports object/footing authoring, camera flight, hover targeting, event creation and dragging, and the same lower/character/starred composition order as runtime. Map Properties holds the 3D switch, the room a 3D map is built in (a parallax floor, walls, and ceiling at an authored height, `room` in `Map###.r3d.json`, walls and ceiling facing inward so the camera looks past them), and the map's Default Camera. Models carry their own effects (a database animation placed on a part or bone by clicking the model, previewed in the viewport) that animation timelines and the Play 3D Effect command fire. The Build bar's Models group places 3D model props on the map (size, per-axis stretch, facing, lift, passable, with a transform card of offset/rotate/scale sliders, a placement ghost under the cursor and Undo), moved by tile in 2D and freely with pose rings in 3D; the Transform 3D Model event command eases a placed model's offset, turn and scale in play; in play each prop is a model-bound event with footprint collision. Five camera modes are available: Fixed Angle (HD-2D), Top-Down, Isometric, Third Person, and First Person, each with optional pitch/yaw/distance/FOV overrides; the Change 3D Camera event command moves between them in play, eased over frames, focused on the display, player, or an event, and optionally kept across maps. Runtime PIXI 8 tile meshes repaint atomically and plugin row layers are prepared once before rendering, so lower, upper, and plugin-added layers remain complete and joined while the camera moves. Effects can also be video surfaces (an animated screen on a console) and play on demand, always, or by movement state; an effect's scale is relative to its model (100% = a model-sized frame). Effekseer effects are drawn inside the scene from the view's own camera, at full resolution, on a plane stood at the anchor, so a strut, a wall or a character in front hides them (the game does the same, drawing only the box the effect fills); a map with models is drawn under one depth buffer rather than the 2D upper-layer sandwich, so a screen or star tile behind a tower stays behind it as the view turns. Model collision follows the mesh (`collision: "box"` opts out): a tile is blocked when the mesh covers its middle or half of it, and the selected prop's blocked tiles are drawn in red in the editor; the map header's Passage toggle marks every cell the game will not walk, as RPG Maker's passage view does, including model footprints. Third and first person play with mouse look (the mouse turns the view as soon as it moves; a click takes it, Escape releases it and opens the menu), camera-relative WASD/arrows, looking up over the shoulder with the character's head following. The map's right-click menu sets the Player Facing at the start position, shown by an arrow on the marker; the 3D view draws the player and vehicle starts as labelled boxes. Number fields throughout the editor use themed ▲▼ steppers
 
 ### Event System
 - **Visual event editor**: Create interactive objects, NPCs, and triggers
@@ -46,7 +46,7 @@ RPG Reactor 0.98.8 (in development) is an open-source, cross-platform RPG game e
    - Dynamic Picture IDs and duration, one/range/all erasure, angle, custom anchor, sine-wave, Overlay blend, and negative-scale Quick Setting preview
    - Nested-structure-safe If/Else and Show Choices editing, optional Else creation, loops, labels, and common events
    - Custom script and plugin command execution
-- **Native Video Surfaces**: Reactor's Show/Transform/Stop Video Surface commands place WebM or MP4 against the screen, map, player, or an event. Layer, opacity, audio/playback rate, loop/wait, scanlines, culling, position, size, rotation, scale, depth, Z, and four local-pixel corners are authorable. Runtime PIXI handles 2D/all screen targets, projectively warps corners, leaves Z to the 3D view (the dragged position is the whole 2D placement), and measures culling in screen pixels. Runtime Three.js handles 3D map/event/player targets as rectangular planes with Z/world-camera culling and ignores corners. In the 3D view, pose rings around the surface rotate it by dragging. Saved commands preview through PIXI, Three.js, or a 3D-screen DOM bounding-box/clip approximation. All drag to move; PIXI projectively warps, DOM corner handles reshape its clip without perspective-correct pixels, and Three.js remains rectangular. Editor previews omit scanlines; only Three.js previews apply culling. Visible anchors, synchronized fields, and right-click exact source navigation remain available. The preview independently reduces every page without evaluating page conditions/runtime flow and forces media muted/looping; playtest honors authored playback. Preview state/resources are discarded without touching map or sidecar data
+- **Native Media Surfaces**: Reactor's Show/Transform/Stop Media Surface commands place a WebM/MP4 video or a PNG/JPG/WebP image against the screen, map, player, or an event. Layer, opacity, audio/playback rate, loop/wait, scanlines, culling, position, size, rotation, scale, depth, Z, and four corners are authorable. Runtime PIXI handles 2D/all screen targets and projectively warps corners; runtime Three.js handles 3D targets, where an edited corner quad is kept for map rendering and Battle Rooms. Move arrows and pose rings edit the live pose in 3D; Shift-dragging a corner keeps proportions. Saved commands keep their `ShowVideoSurface`/`TransformVideoSurface`/`StopVideoSurface` IDs; see the [media surface guide](../docs/MEDIA-SURFACES.md). Visible anchors, synchronized fields, and right-click exact source navigation remain available. The preview independently reduces every page without evaluating page conditions/runtime flow and forces media muted/looping; playtest honors authored playback. Preview state/resources are discarded without touching map or sidecar data
 - **Portable advanced commands**: Stock-compatible forms stay ordinary stock command arrays. Reactor-only structured forms use syntax-checked, strictly versioned Script metadata and stock MV/MZ fallback bodies; modified or unknown tags remain normal Script commands rather than being reinterpreted
 - **RPG Maker-style Game Data**: Control Variables opens a nested selector with database names, actor/enemy/character properties, party data, Other data, and every Last Action Data operand while preserving stock command parameters
 - **Collapsible block structures**: Conditional Branch, Show Choices, and Loop fold from the arrow beside them, badged with the hidden line count. Nested blocks keep their own state, folds track the command rather than its position so edits above a block don't strand them, and fold state persists per project/map/event/page across restarts
@@ -74,20 +74,26 @@ Comprehensive editors for all game data in a near-full-viewport workspace with f
 | **System 2** | Menu commands, item categories, attack motions, editor settings, asset sizes, advanced options, and an ordered fillable Magic Skills list of Skill Type IDs controlling side-view casting motion |
 | **Types** | Five simultaneous ID-preserving lists for Elements, Skill Types, Weapon Types, Armor Types, and Equipment Types, with multiselect, keyboard and context-menu Cut/Copy/Paste, bulk clear, Add, and confirmed Change Maximum |
 | **Terms** | One compact workspace for Basic Statuses, Parameters, Commands, and the complete grouped Messages schema with text clipboard context menus |
-| **3D** | Browse the project's `3d/` model library in folders, carve any mesh region into a named part, rig static models with Humanoid/Quadruped/Plant/Vehicle skeletons, apply preset motions, and author every pose, swing, spin, bob, clip, keyframe timeline, and timed effect on one slider card with live preview. Bindings live in `data/Database.r3d.json` and per-model `model.json` / `model.rig.bin` sidecars; an Effects section names animations, video/image surfaces, and lights anchored on the model (placed by clicking it or dragging the marker, offset/rotate/scale on the card with a live preview) for the Play 3D Effect command and animation timelines |
+| **3D Models** | Browse the project's `3d/` model library in folders, carve any mesh region into a named part, rig static models with Humanoid/Quadruped/Plant/Vehicle skeletons, apply preset motions, and author every pose, swing, spin, bob, clip, keyframe timeline, and timed effect on one slider card with live preview. Bindings live in `data/Database.r3d.json` and per-model `model.json` / `model.rig.bin` sidecars; an Effects section names animations, video/image surfaces, and lights anchored on the model (placed by clicking it or dragging the marker, offset/rotate/scale on the card with a live preview) for the Play 3D Effect command and animation timelines |
+| **Vehicles** | Boat, Ship and Airship lead the list; add optional vehicle types with a 2D sprite or shared 3D model picker, movement/handling, class, starting equipment, traits and skills. Classes can define vehicle equipment slots. Assign a type in an event’s Reactor Vehicle settings; ridden vehicles travel between maps and stay where parked. Sound groups independent idle/acceleration/slowdown BGS loops, optional BGM and folded SE effects. [Authoring guide](../docs/AUTHORING.md#authoring-vehicles). Mounted combat and an in-game equipment menu remain open. |
 | **Quests** | Author quest categories, descriptions, objectives, visibility rules, and rewards that can give gold, items, EXP or a common event; import VisuStella, Yanfly, or GS definitions. Reactor stores definitions in `data/ReactorQuests.json`, separately from plugin quest files; progress saves with the game. The tracked quest shows on the map in a tracker window set up under Tracker and Labels |
 | **User Interfaces** | Author Box, Image, Text, Button, Gauge, Text Input, and typed List nodes as interactive scenes or display-only map HUDs. Generated baselines and opt-in, role-safe replacements cover Title, Main Menu, Game End, Status, Options, Save, Load, Items, Skills, Equipment, Shop, and Name Input, and a Battle HUD dresses battles; stock fallback remains automatic. Named List contexts, actor bindings, functional Options and Save/Load rows, detailed typography/state/focus styling, transitions, live visual capture, and runtime preview are built. Records live in `data/UserInterfaces.json`, invisible to stock RPG Maker |
 
 ### Rendering and model optimization
 
-The shared Three.js/PIXI WebGL path renders the 3D world at game resolution by
-default (`Reactor3D.maxPassPixelRatio = 1`), enlarges it with nearest sampling,
-and uses no MSAA. A project may opt into native-resolution passes or MSAA;
-adaptive resolution is off by default. Main-canvas/UI resolution also depends
-on GPU tier. See [current rendering status](../docs/STATUS.md).
+The shared Three.js/PIXI WebGL path renders the 3D world at game resolution
+(`Reactor3D.maxPassPixelRatio = 1`), drawn at `Reactor3D.renderScale` 0.75 of it
+and enlarged by a sharpening filter (`Reactor3D.SharpUpscale`), with no MSAA.
+Lighting and light haze are worked out at a quarter size and filtered up by
+surface. A project may change any of these; adaptive resolution is off by
+default. Main-canvas/UI resolution also depends on GPU tier. See
+[current rendering status](../docs/STATUS.md) and the quality settings in
+[performance checks](../docs/PERFORMANCE.md).
 
-Volume lights use distance and point/spot/beam shape; surface normals and normal
-maps do not contribute to this lighting model. Shadow atlases budget 8 static /
+Volume lights use distance and point/spot/beam/sun shape; surface normals and normal
+maps do not contribute to this lighting model. Still, flickering and pulsing
+lights are baked into a light volume and moving lights are gathered once a
+frame. Shadow atlases budget 8 static /
 3 dynamic light rows on full quality and 4 / 2 on weak quality. Rows are cached
 and prioritize light incident on the player, so a light's casting flag does not
 guarantee a shadow row when the budget is full. Model lights exclude their own
@@ -97,7 +103,9 @@ GLB import and the 3D database's Optimize action offer texture capping, skin
 weight packing, geometry reduction, and GPU cache ordering. Both presets can
 reduce geometry; inspect the result on an animated model where applicable.
 Separate LOD-file generation is off in both presets. Existing authored levels
-still load; automatic in-memory levels remain planned.
+still load. Dense models also get automatic in-memory distance levels
+(`Reactor3D.GeometryDetail`): shadow faces draw simplified casters on every
+GPU, and on weak GPUs the view does too.
 
 ### Custom User Interfaces
 
@@ -127,7 +135,7 @@ imports only through explicit Starting Layout / Add to Front actions.
 - **Formats**: OGG, MP3, WAV, FLAC, and M4A, with per-format loop tags (`LOOPSTART`/`LOOPLENGTH` comments, ID3 `TXXX`, WAV `smpl`) and embedded album art shown beside each track; the same interface and one shared extraction cache back every audio picker, System music/sound picker, event command, and plugin audio field in the editor
 - **Playback controls**: Volume, pitch, pan, and seek
 - **Loop configuration**: Set custom loop points
-- **BGM sequences**: Map Properties sequences repeat ordered tracks, silence, and layered palettes with random pools, timing, and fades. Native track loop points are ignored inside a sequence
+- **BGM sequences**: Sequences in Database › Music Sequences or a map's Map Properties repeat ordered tracks, silence, and layered palettes with random pools, timing, and fades; a map, a troop, or Change Battle BGM can name a library sequence. Native track loop points are ignored inside a sequence
 - **Real-time preview**: Play BGM/BGS/ME/SE in map, Common, and Troop events uses the same current art-backed browser, native loop points, seek/transport controls, and volume/pitch/pan preview as system audio and map autoplay settings
 - **Unicode filename index**: The left rail uses normalized Unicode initials and locale-aware ordering; numbers and punctuation remain under `#`
 - **Recursive folders**: BGM, BGS, ME, and SE browsers discover nested files and preserve extensionless relative names such as `Boss/Phase 2`
@@ -205,7 +213,7 @@ imports only through explicit Starting Layout / Add to Front actions.
 - **Persistent choices**: Game output directory, runtime locales, PNG optimization, and audio quality are restored independently on the next editor session. Lossy audio compression starts unchecked for every deployment
 - **Optional Linux AppImage**: On Linux x86_64 build hosts, Linux game deployment can also emit one portable `.AppImage` file beside the normal Linux folder. The existing folder remains unchanged, and the AppImage option is off by default
 - **Web export**: HTML5 builds for browser deployment
-- Access from **Build → Create Deployment Package...**
+- Access from **Build → Deploy Game...**
 
 ### Editor Distribution Builder
 Package the RPG Reactor editor itself for desktop or web distribution.
@@ -228,7 +236,7 @@ Package the RPG Reactor editor itself for desktop or web distribution.
 - **SHA256 checksums**: Automatically generated for all output archives
 - **Playtest-safe runtime layout**: Windows/Linux platform packages append the editor payload to the branded executable while leaving `nw.exe`/`nw` clean for playtest; macOS packages as a self-contained `.app` with an internal clean playtest runtime that symlinks to the bundled NW.js framework
 - **Windows compatibility mode**: Windows editor packages use frameless RPG Reactor title controls, centered startup, and manual maximize/restore behavior so running the Windows build under Proton/Wine on Linux avoids native-frame white bars and click offsets
-- Access from **Build → Package Editor for Distribution...**
+- Access from **Build → Deploy Editor...**
 
 Maintainers can produce the same release worker configuration non-interactively
 with `node build-scripts/release-editor.cjs --target <linux|windows|macos|web>
@@ -247,10 +255,11 @@ Procedural sprite-sheet generator for visual effects and projectile animations.
 
 - **Layered composition**: Stack multiple animations as layers; per-layer visibility, opacity, and blend mode (`source-over`, `add`, `multiply`, `screen`, etc.)
 - **Keyframe timeline per layer**: Drop keyframes at any frame; sliders and colors interpolate linearly between them and textures cross-fade smoothly so a single layer can morph through several looks in one loop
-- **Animation library**: 76 recipes across four categories, including these examples:
-  - **Geometric**: Cube, Pyramid, Cylinder, Cone, Sphere, Torus, Möbius Strip, Double Helix, Dodecahedron, Hypercube, Pentachoron (4D), Circular Saw Blade
-  - **Energy**: Fire, Energy Field, Energy Wisps, Teleport Column, Portal
-  - **Object**: Sword, Knife, Hammer, Arrow, Bullet, Rock, Egg, Coin, Crown, Scythe
+- **Animation library**: 76 recipes across eight categories, including these examples:
+  - **Geometric**: Cube, Pyramid, Cylinder, Cone, Sphere, Torus, Möbius Strip, Double Helix, Dodecahedron, Hypercube, Pentachoron (4D)
+  - **Elements**: Fire, Water, Wind, Electric, Frost Crystal
+  - **Energy**: Energy Field, Energy Wisps, Teleport Column, Portal
+  - **Object**: Sword, Knife, Hammer, Arrow, Bullet, Rock, Egg, Coin, Crown, Scythe, Circular Saw Blade
   - **Effect**: Hypnotize (seamless Archimedean spiral), Acid Trip (kaleidoscopic mandala)
 - **3D pipeline**: Every shape supports static tilts + per-axis rotation cycles, glow halo, textured faces with backface culling, and depth-sorted edges
 - **Texture sources**:
@@ -295,7 +304,7 @@ Procedural sfxr-style SFX and instrument generator built on Web Audio. Bakes str
 - **27 parameters** in six groups — Source, Envelope, Pitch, Modulation, Filter, Texture — each with an inline description
 - **Randomize**: each archetype declares `lockedParams`, so the values defining its identity (a Laser's waveform, an Explosion's highpass) hold steady and a roll stays recognizably that sound
 - **Live visualizers**: waveform, envelope, and pitch canvases redraw as sliders move, before playback
-- **Export**: 16-bit PCM mono WAV, defaulting to `audio/se/<name>.wav`. Presets and pattern state persist per project under `forge/sound_effect_generator/`
+- **Export**: WAV (16-bit PCM), OGG (Opus), or MP3 to `audio/se/`, with a ten-step Quality setting for the lossy formats. Presets and pattern state persist per project under `forge/sound_effect_generator/`
 
 ### Theming
 
@@ -385,9 +394,12 @@ RPG Reactor/
 ├── RPGReactor.command           # macOS source-checkout launcher
 ├── runtime/                     # Player-facing corescript copied into projects
 │   ├── reactor_core.js
+│   ├── reactor_core_display.js
+│   ├── reactor_core_io.js
 │   ├── reactor_main.js
 │   ├── reactor_managers.js
 │   ├── reactor_objects.js
+│   ├── reactor_objects_*.js     # actions, battlers, map, interpreter, legacy
 │   ├── reactor_scenes.js
 │   ├── reactor_sprites.js
 │   ├── reactor_windows.js
@@ -423,8 +435,10 @@ MyGame/
 ├── js/
 │   ├── reactor_main.js     # Runtime entry point and ordered loader
 │   ├── reactor_core.js     # Core engine
+│   ├── reactor_core_display.js / reactor_core_io.js # Core, continued
 │   ├── reactor_managers.js # Game managers
 │   ├── reactor_objects.js  # Game objects
+│   ├── reactor_objects_*.js # Game objects, continued
 │   ├── reactor_picture_extensions.js # Optional Reactor picture state/effects
 │   ├── reactor_scenes.js   # Scene system
 │   ├── reactor_sprites.js  # Sprite rendering
@@ -493,7 +507,9 @@ Both are CI gates. `npm run smoke:nw-interactions` also runs in CI: it checks ra
 record changes, retired dialogs, keyboard ownership, delayed map loads and seeded
 navigation sequences in a disposable project. Set `RR_INTERACTION_SEED` to replay
 another sequence; failures retain the seed and action trace in the uploaded JSON.
+`smoke:nw-keyboard`, `smoke:nw-menus` and `smoke:nw-event-double-click` are CI gates too.
 All NW.js smokes accept `--nw-root=/path/to/matching/sdk`.
+`npm run smoke:nw-choices` is a local check that needs a display: in the real editor it tries each trait row (Actors, Classes, Vehicles; a sample on Weapons, Armors, Enemies, States) and each effect row (Skills, Items) while greyed, then selects it, sets it, presses OK and compares the stored record and the list's wording with what was picked.
 `npm run smoke:nw-ui` checks the responsive interface editor
 from 1280x720 through 2560x1440 as a local release gate. Prior GUI passes do not
 replace a fresh check of the candidate, and Node tests do not establish visual
@@ -504,7 +520,7 @@ cd editor
 npm test
 ```
 
-Use **Build → Create Deployment Package...** for game packages and **Build → Package Editor for Distribution...** for editor archives. The direct npm game-build scripts require an explicit project path and acknowledgment that their developer download is not release-authenticated, for example `npm run build:linux -- --project="/path/to/game" --developer-unverified-downloads`.
+Use **Build → Deploy Game...** for game packages and **Build → Deploy Editor...** for editor archives. The direct npm game-build scripts require an explicit project path and acknowledgment that their developer download is not release-authenticated, for example `npm run build:linux -- --project="/path/to/game" --developer-unverified-downloads`.
 
 ### Startup splash artwork
 

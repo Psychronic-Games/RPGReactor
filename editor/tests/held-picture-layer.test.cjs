@@ -30,8 +30,8 @@ test('a held picture can be drawn behind its holder everywhere it is drawn', () 
     assert.match(room, /owner\?standing\(owner\)-1:1e6\+/);
     const editor = read('editor/src/database/DatabaseActionSequenceEditor.js');
     assert.match(editor, /view\.sequenceBillboard\(id,img\.source,img\.frame,this\.liftPose\(view\)\(p\),\{\.\.\.step,ownerKey:key\}\)/);
-    // The choice sits with the other Show options, and is hidden for Move and Hide.
-    assert.match(editor, /\.\.\.\(step\.type==='weapon'\?\['layer'\]:\[\]\)\]\.includes\(field\.key\)/);
+    // The choice sits with the other Show options (under Advanced, with what the weapon is drawn as and attached to), and is hidden for Move and Hide.
+    assert.match(editor, /\(step\.type==='weapon'\|\|!\['weaponGraphic','attachment','iconSource','destination','arc','flight'\]\.includes\(field\.key\)\)/);
     assert.match(editor, /'weaponGraphic','attachment','bone','gripX','gripY','equipIndex','layer'\]\.includes\(field\.key\)\)continue;/);
     const manager = read('editor/src/I18nManager.js');
     assert.equal((manager.match(/\{"In front of the battler": /g) || []).length, 17);

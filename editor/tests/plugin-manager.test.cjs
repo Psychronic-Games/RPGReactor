@@ -13,7 +13,7 @@ function loadBrowserClass(filePath, className) {
         console,
         require,
         nw: {},
-        alert: () => {},
+        RRDialog: { alert: async () => {}, confirm: async () => true },
         RRPluginAnnotations: require(path.join(repoRoot, 'src', 'utils', 'PluginAnnotations.js')),
         RRPluginParamCodec: require(path.join(repoRoot, 'src', 'utils', 'PluginParamCodec.js'))
     });

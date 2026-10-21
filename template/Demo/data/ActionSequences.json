@@ -1985,8 +1985,8 @@
         "duration": 0,
         "role": "user",
         "anchor": "home",
-        "x": 0,
-        "y": 0,
+        "x": 0.06,
+        "y": -0.01,
         "z": 0,
         "easing": "smooth",
         "mode": "show",
@@ -2001,7 +2001,7 @@
         "hands": "one",
         "aim": "none",
         "iconSource": "weapon",
-        "rotation": 0,
+        "rotation": 110.1,
         "phase": "execute"
       },
       {
@@ -5942,20 +5942,6 @@
             ]
           }
         ],
-        "phase": "execute"
-      },
-      {
-        "id": "step-003wwu1n7",
-        "type": "animation",
-        "duration": 0,
-        "role": "allTargets",
-        "anchor": "home",
-        "x": 0,
-        "y": 0,
-        "z": 0,
-        "easing": "smooth",
-        "animationSource": "id",
-        "animationId": 129,
         "phase": "execute"
       },
       {
@@ -10776,6 +10762,2551 @@
       },
       {
         "id": "step-ggk3jt3yb",
+        "type": "move",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "moveMode": "anchor",
+        "speed": 0,
+        "arc": 0,
+        "face": "home",
+        "phase": "finish"
+      }
+    ],
+    "phases": [
+      "prepare",
+      "movement",
+      "execute",
+      "return",
+      "finish"
+    ],
+    "purpose": "action"
+  },
+  {
+    "id": 35,
+    "version": 1,
+    "name": "Sniper Shot",
+    "note": "",
+    "steps": [
+      {
+        "id": "step-tc-sniper-01",
+        "type": "weapon",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "mode": "show",
+        "weaponGraphic": "icon",
+        "weaponImageId": 1,
+        "weaponFrame": 1,
+        "layer": "front",
+        "attachment": "rightHand",
+        "bone": "",
+        "gripX": 0.5,
+        "gripY": 0,
+        "equipIndex": 1,
+        "hands": "both",
+        "aim": "target",
+        "hold": "fist",
+        "iconSource": "weapon",
+        "rotation": 0,
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-sniper-02",
+        "type": "motion",
+        "duration": 10,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "__pose",
+        "parts": [
+          {
+            "part": "Chest",
+            "rotate": [
+              -4,
+              0,
+              10
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "Head",
+            "rotate": [
+              6,
+              0,
+              -8
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          }
+        ],
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-sniper-03",
+        "type": "sound",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "audio": {
+          "name": "gun-reload-02",
+          "volume": 70,
+          "pitch": 90,
+          "pan": 0
+        },
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-sniper-04",
+        "type": "wait",
+        "duration": 26,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-sniper-05",
+        "type": "sound",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "audio": {
+          "name": "Railgun-01",
+          "volume": 95,
+          "pitch": 110,
+          "pan": 0
+        },
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-sniper-06",
+        "type": "flash",
+        "duration": 4,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "red": 255,
+        "green": 240,
+        "blue": 200,
+        "alpha": 90,
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-sniper-07",
+        "type": "projectile",
+        "duration": 5,
+        "role": "user",
+        "anchor": "home",
+        "x": 0.05,
+        "y": 0,
+        "z": 0,
+        "easing": "linear",
+        "iconSource": "color",
+        "iconIndex": 0,
+        "name": "",
+        "destination": "target",
+        "sourceRole": "battler",
+        "attachment": "rightHand",
+        "bone": "",
+        "gripX": 0.5,
+        "gripY": 0.5,
+        "equipIndex": 1,
+        "startHeight": 1,
+        "endHeight": 1,
+        "arc": 0,
+        "spin": 0,
+        "rotation": 0,
+        "scale": 1,
+        "flight": "oneWay",
+        "color": "#fff2c0",
+        "size": 6,
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-sniper-08",
+        "type": "motion",
+        "duration": 3,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "__pose",
+        "parts": [
+          {
+            "part": "Chest",
+            "rotate": [
+              -16,
+              0,
+              10
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "Head",
+            "rotate": [
+              6,
+              0,
+              -8
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          }
+        ],
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-sniper-09",
+        "type": "animation",
+        "duration": 0,
+        "role": "allTargets",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "animationSource": "action",
+        "animationId": 0,
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-sniper-10",
+        "type": "impact",
+        "duration": 0,
+        "role": "allTargets",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-sniper-11",
+        "type": "shake",
+        "duration": 10,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "power": 6,
+        "speed": 9,
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-sniper-12",
+        "type": "wait",
+        "duration": 14,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-sniper-13",
+        "type": "motion",
+        "duration": 10,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "__pose",
+        "parts": [
+          {
+            "part": "Chest",
+            "rotate": [
+              0,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "Head",
+            "rotate": [
+              0,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          }
+        ],
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-sniper-14",
+        "type": "wait",
+        "duration": 2,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-sniper-15",
+        "type": "weapon",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "mode": "show",
+        "weaponGraphic": "icon",
+        "weaponImageId": 1,
+        "weaponFrame": 1,
+        "layer": "front",
+        "attachment": "offset",
+        "bone": "",
+        "gripX": 0.5,
+        "gripY": 0.5,
+        "equipIndex": 1,
+        "hands": "one",
+        "aim": "none",
+        "hold": "hand",
+        "visible": false,
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-sniper-16",
+        "type": "motion",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "idle",
+        "phase": "finish"
+      },
+      {
+        "id": "step-tc-sniper-17",
+        "type": "move",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "moveMode": "anchor",
+        "speed": 0,
+        "arc": 0,
+        "face": "home",
+        "phase": "finish"
+      }
+    ],
+    "phases": [
+      "prepare",
+      "movement",
+      "execute",
+      "return",
+      "finish"
+    ],
+    "purpose": "action"
+  },
+  {
+    "id": 36,
+    "version": 1,
+    "name": "Burst Fire",
+    "note": "",
+    "steps": [
+      {
+        "id": "step-tc-burst-01",
+        "type": "weapon",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "mode": "show",
+        "weaponGraphic": "icon",
+        "weaponImageId": 1,
+        "weaponFrame": 1,
+        "layer": "front",
+        "attachment": "rightHand",
+        "bone": "",
+        "gripX": 0.5,
+        "gripY": 0,
+        "equipIndex": 1,
+        "hands": "both",
+        "aim": "target",
+        "hold": "fist",
+        "iconSource": "weapon",
+        "rotation": 0,
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-burst-02",
+        "type": "motion",
+        "duration": 6,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "__pose",
+        "parts": [
+          {
+            "part": "Chest",
+            "rotate": [
+              -4,
+              0,
+              10
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "Head",
+            "rotate": [
+              6,
+              0,
+              -8
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          }
+        ],
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-burst-03",
+        "type": "sound",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "audio": {
+          "name": "gun-shot-01",
+          "volume": 85,
+          "pitch": 105,
+          "pan": 0
+        },
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-burst-04",
+        "type": "projectile",
+        "duration": 6,
+        "role": "user",
+        "anchor": "home",
+        "x": 0.05,
+        "y": 0,
+        "z": 0,
+        "easing": "linear",
+        "iconSource": "color",
+        "iconIndex": 0,
+        "name": "",
+        "destination": "target",
+        "sourceRole": "battler",
+        "attachment": "rightHand",
+        "bone": "",
+        "gripX": 0.5,
+        "gripY": 0.5,
+        "equipIndex": 1,
+        "startHeight": 1,
+        "endHeight": 1,
+        "arc": 0,
+        "spin": 0,
+        "rotation": 0,
+        "scale": 1,
+        "flight": "oneWay",
+        "color": "#ffd27a",
+        "size": 7,
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-burst-05",
+        "type": "shake",
+        "duration": 4,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "power": 2,
+        "speed": 10,
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-burst-06",
+        "type": "sound",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "audio": {
+          "name": "gun-shot-01",
+          "volume": 85,
+          "pitch": 109,
+          "pan": 0
+        },
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-burst-07",
+        "type": "projectile",
+        "duration": 6,
+        "role": "user",
+        "anchor": "home",
+        "x": 0.05,
+        "y": 0,
+        "z": 0,
+        "easing": "linear",
+        "iconSource": "color",
+        "iconIndex": 0,
+        "name": "",
+        "destination": "target",
+        "sourceRole": "battler",
+        "attachment": "rightHand",
+        "bone": "",
+        "gripX": 0.5,
+        "gripY": 0.5,
+        "equipIndex": 1,
+        "startHeight": 1,
+        "endHeight": 1,
+        "arc": 0,
+        "spin": 0,
+        "rotation": 0,
+        "scale": 1,
+        "flight": "oneWay",
+        "color": "#ffd27a",
+        "size": 7,
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-burst-08",
+        "type": "shake",
+        "duration": 4,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "power": 2,
+        "speed": 10,
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-burst-09",
+        "type": "sound",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "audio": {
+          "name": "gun-shot-01",
+          "volume": 85,
+          "pitch": 113,
+          "pan": 0
+        },
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-burst-10",
+        "type": "projectile",
+        "duration": 6,
+        "role": "user",
+        "anchor": "home",
+        "x": 0.05,
+        "y": 0,
+        "z": 0,
+        "easing": "linear",
+        "iconSource": "color",
+        "iconIndex": 0,
+        "name": "",
+        "destination": "target",
+        "sourceRole": "battler",
+        "attachment": "rightHand",
+        "bone": "",
+        "gripX": 0.5,
+        "gripY": 0.5,
+        "equipIndex": 1,
+        "startHeight": 1,
+        "endHeight": 1,
+        "arc": 0,
+        "spin": 0,
+        "rotation": 0,
+        "scale": 1,
+        "flight": "oneWay",
+        "color": "#ffd27a",
+        "size": 7,
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-burst-11",
+        "type": "shake",
+        "duration": 4,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "power": 2,
+        "speed": 10,
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-burst-12",
+        "type": "animation",
+        "duration": 0,
+        "role": "allTargets",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "animationSource": "action",
+        "animationId": 0,
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-burst-13",
+        "type": "impact",
+        "duration": 0,
+        "role": "allTargets",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-burst-14",
+        "type": "wait",
+        "duration": 12,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-burst-15",
+        "type": "motion",
+        "duration": 8,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "__pose",
+        "parts": [
+          {
+            "part": "Chest",
+            "rotate": [
+              0,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "Head",
+            "rotate": [
+              0,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          }
+        ],
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-burst-16",
+        "type": "wait",
+        "duration": 2,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-burst-17",
+        "type": "weapon",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "mode": "show",
+        "weaponGraphic": "icon",
+        "weaponImageId": 1,
+        "weaponFrame": 1,
+        "layer": "front",
+        "attachment": "offset",
+        "bone": "",
+        "gripX": 0.5,
+        "gripY": 0.5,
+        "equipIndex": 1,
+        "hands": "one",
+        "aim": "none",
+        "hold": "hand",
+        "visible": false,
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-burst-18",
+        "type": "motion",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "idle",
+        "phase": "finish"
+      },
+      {
+        "id": "step-tc-burst-19",
+        "type": "move",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "moveMode": "anchor",
+        "speed": 0,
+        "arc": 0,
+        "face": "home",
+        "phase": "finish"
+      }
+    ],
+    "phases": [
+      "prepare",
+      "movement",
+      "execute",
+      "return",
+      "finish"
+    ],
+    "purpose": "action"
+  },
+  {
+    "id": 37,
+    "version": 1,
+    "name": "Shotgun Blast",
+    "note": "",
+    "steps": [
+      {
+        "id": "step-tc-shotgun-01",
+        "type": "weapon",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "mode": "show",
+        "weaponGraphic": "icon",
+        "weaponImageId": 1,
+        "weaponFrame": 1,
+        "layer": "front",
+        "attachment": "rightHand",
+        "bone": "",
+        "gripX": 0.5,
+        "gripY": 0,
+        "equipIndex": 1,
+        "hands": "both",
+        "aim": "target",
+        "hold": "fist",
+        "iconSource": "weapon",
+        "rotation": 0,
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-shotgun-02",
+        "type": "motion",
+        "duration": 6,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "__pose",
+        "parts": [
+          {
+            "part": "Chest",
+            "rotate": [
+              2,
+              0,
+              12
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "Head",
+            "rotate": [
+              4,
+              0,
+              -10
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          }
+        ],
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-shotgun-03",
+        "type": "sound",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "audio": {
+          "name": "gun-reload-04",
+          "volume": 80,
+          "pitch": 100,
+          "pan": 0
+        },
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-shotgun-04",
+        "type": "wait",
+        "duration": 8,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-shotgun-05",
+        "type": "sound",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "audio": {
+          "name": "gun-shot-01",
+          "volume": 100,
+          "pitch": 70,
+          "pan": 0
+        },
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-shotgun-06",
+        "type": "flash",
+        "duration": 5,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "red": 255,
+        "green": 210,
+        "blue": 150,
+        "alpha": 110,
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-shotgun-07",
+        "type": "projectile",
+        "duration": 5,
+        "role": "user",
+        "anchor": "home",
+        "x": 0.05,
+        "y": 0,
+        "z": 0,
+        "easing": "linear",
+        "iconSource": "color",
+        "iconIndex": 0,
+        "name": "",
+        "destination": "allTargets",
+        "sourceRole": "battler",
+        "attachment": "rightHand",
+        "bone": "",
+        "gripX": 0.5,
+        "gripY": 0.5,
+        "equipIndex": 1,
+        "startHeight": 1,
+        "endHeight": 1,
+        "arc": 0,
+        "spin": 0,
+        "rotation": 0,
+        "scale": 1,
+        "flight": "oneWay",
+        "color": "#ffb060",
+        "size": 14,
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-shotgun-08",
+        "type": "motion",
+        "duration": 3,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "__pose",
+        "parts": [
+          {
+            "part": "Chest",
+            "rotate": [
+              -20,
+              0,
+              12
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "Head",
+            "rotate": [
+              4,
+              0,
+              -10
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          }
+        ],
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-shotgun-09",
+        "type": "animation",
+        "duration": 0,
+        "role": "allTargets",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "animationSource": "action",
+        "animationId": 0,
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-shotgun-10",
+        "type": "impact",
+        "duration": 0,
+        "role": "allTargets",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-shotgun-11",
+        "type": "shake",
+        "duration": 12,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "power": 7,
+        "speed": 10,
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-shotgun-12",
+        "type": "wait",
+        "duration": 12,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-shotgun-13",
+        "type": "motion",
+        "duration": 10,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "__pose",
+        "parts": [
+          {
+            "part": "Chest",
+            "rotate": [
+              0,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "Head",
+            "rotate": [
+              0,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          }
+        ],
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-shotgun-14",
+        "type": "wait",
+        "duration": 2,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-shotgun-15",
+        "type": "weapon",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "mode": "show",
+        "weaponGraphic": "icon",
+        "weaponImageId": 1,
+        "weaponFrame": 1,
+        "layer": "front",
+        "attachment": "offset",
+        "bone": "",
+        "gripX": 0.5,
+        "gripY": 0.5,
+        "equipIndex": 1,
+        "hands": "one",
+        "aim": "none",
+        "hold": "hand",
+        "visible": false,
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-shotgun-16",
+        "type": "motion",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "idle",
+        "phase": "finish"
+      },
+      {
+        "id": "step-tc-shotgun-17",
+        "type": "move",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "moveMode": "anchor",
+        "speed": 0,
+        "arc": 0,
+        "face": "home",
+        "phase": "finish"
+      }
+    ],
+    "phases": [
+      "prepare",
+      "movement",
+      "execute",
+      "return",
+      "finish"
+    ],
+    "purpose": "action"
+  },
+  {
+    "id": 38,
+    "version": 1,
+    "name": "Support Cast",
+    "note": "",
+    "steps": [
+      {
+        "id": "step-tc-support-01",
+        "type": "motion",
+        "duration": 8,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "__pose",
+        "parts": [
+          {
+            "part": "RightUpperArm",
+            "rotate": [
+              -80,
+              0,
+              -10
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "RightLowerArm",
+            "rotate": [
+              -20,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "Chest",
+            "rotate": [
+              -4,
+              0,
+              6
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          }
+        ],
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-support-02",
+        "type": "sound",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "audio": {
+          "name": "select-03",
+          "volume": 70,
+          "pitch": 120,
+          "pan": 0
+        },
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-support-03",
+        "type": "wait",
+        "duration": 8,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-support-04",
+        "type": "sound",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "audio": {
+          "name": "powerup-01",
+          "volume": 80,
+          "pitch": 120,
+          "pan": 0
+        },
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-support-05",
+        "type": "animation",
+        "duration": 0,
+        "role": "allTargets",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "animationSource": "action",
+        "animationId": 0,
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-support-06",
+        "type": "impact",
+        "duration": 0,
+        "role": "allTargets",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-support-07",
+        "type": "wait",
+        "duration": 18,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-support-08",
+        "type": "motion",
+        "duration": 8,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "__pose",
+        "parts": [
+          {
+            "part": "RightUpperArm",
+            "rotate": [
+              0,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "RightLowerArm",
+            "rotate": [
+              0,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "Chest",
+            "rotate": [
+              0,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          }
+        ],
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-support-09",
+        "type": "motion",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "idle",
+        "phase": "finish"
+      },
+      {
+        "id": "step-tc-support-10",
+        "type": "move",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "moveMode": "anchor",
+        "speed": 0,
+        "arc": 0,
+        "face": "home",
+        "phase": "finish"
+      }
+    ],
+    "phases": [
+      "prepare",
+      "movement",
+      "execute",
+      "return",
+      "finish"
+    ],
+    "purpose": "action"
+  },
+  {
+    "id": 39,
+    "version": 1,
+    "name": "Area Cast",
+    "note": "",
+    "steps": [
+      {
+        "id": "step-tc-area-01",
+        "type": "motion",
+        "duration": 10,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "__pose",
+        "parts": [
+          {
+            "part": "RightUpperArm",
+            "rotate": [
+              -150,
+              0,
+              -15
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "LeftUpperArm",
+            "rotate": [
+              -150,
+              0,
+              15
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "Chest",
+            "rotate": [
+              -8,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          }
+        ],
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-area-02",
+        "type": "sound",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "audio": {
+          "name": "powerup-02",
+          "volume": 80,
+          "pitch": 100,
+          "pan": 0
+        },
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-area-03",
+        "type": "flash",
+        "duration": 10,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "red": 180,
+        "green": 220,
+        "blue": 255,
+        "alpha": 70,
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-area-04",
+        "type": "wait",
+        "duration": 14,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-area-05",
+        "type": "motion",
+        "duration": 5,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "__pose",
+        "parts": [
+          {
+            "part": "RightUpperArm",
+            "rotate": [
+              -60,
+              0,
+              -10
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "LeftUpperArm",
+            "rotate": [
+              -60,
+              0,
+              10
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "Chest",
+            "rotate": [
+              10,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          }
+        ],
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-area-06",
+        "type": "sound",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "audio": {
+          "name": "whoosh-03",
+          "volume": 80,
+          "pitch": 90,
+          "pan": 0
+        },
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-area-07",
+        "type": "animation",
+        "duration": 0,
+        "role": "allTargets",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "animationSource": "action",
+        "animationId": 0,
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-area-08",
+        "type": "impact",
+        "duration": 0,
+        "role": "allTargets",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-area-09",
+        "type": "shake",
+        "duration": 14,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "power": 5,
+        "speed": 9,
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-area-10",
+        "type": "wait",
+        "duration": 16,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-area-11",
+        "type": "motion",
+        "duration": 10,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "__pose",
+        "parts": [
+          {
+            "part": "RightUpperArm",
+            "rotate": [
+              0,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "LeftUpperArm",
+            "rotate": [
+              0,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "Chest",
+            "rotate": [
+              0,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          }
+        ],
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-area-12",
+        "type": "motion",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "idle",
+        "phase": "finish"
+      },
+      {
+        "id": "step-tc-area-13",
+        "type": "move",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "moveMode": "anchor",
+        "speed": 0,
+        "arc": 0,
+        "face": "home",
+        "phase": "finish"
+      }
+    ],
+    "phases": [
+      "prepare",
+      "movement",
+      "execute",
+      "return",
+      "finish"
+    ],
+    "purpose": "action"
+  },
+  {
+    "id": 40,
+    "version": 1,
+    "name": "Grenade Toss",
+    "note": "",
+    "steps": [
+      {
+        "id": "step-tc-grenade-01",
+        "type": "weapon",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "mode": "show",
+        "weaponGraphic": "icon",
+        "weaponImageId": 1,
+        "weaponFrame": 1,
+        "layer": "front",
+        "attachment": "rightHand",
+        "bone": "",
+        "gripX": 0.5,
+        "gripY": 0.5,
+        "equipIndex": 1,
+        "hands": "one",
+        "aim": "none",
+        "hold": "fist",
+        "iconSource": "action",
+        "rotation": 0,
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-grenade-02",
+        "type": "motion",
+        "duration": 6,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "__pose",
+        "parts": [
+          {
+            "part": "RightUpperArm",
+            "rotate": [
+              -60,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "RightLowerArm",
+            "rotate": [
+              -110,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "LeftUpperArm",
+            "rotate": [
+              -50,
+              0,
+              -25
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "LeftLowerArm",
+            "rotate": [
+              -100,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          }
+        ],
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-grenade-03",
+        "type": "sound",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "audio": {
+          "name": "select-03",
+          "volume": 70,
+          "pitch": 80,
+          "pan": 0
+        },
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-grenade-04",
+        "type": "wait",
+        "duration": 8,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-grenade-05",
+        "type": "motion",
+        "duration": 6,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "__pose",
+        "parts": [
+          {
+            "part": "RightUpperArm",
+            "rotate": [
+              -160,
+              0,
+              -20
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "RightLowerArm",
+            "rotate": [
+              -40,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "LeftUpperArm",
+            "rotate": [
+              0,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "LeftLowerArm",
+            "rotate": [
+              0,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "Chest",
+            "rotate": [
+              -10,
+              0,
+              10
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          }
+        ],
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-grenade-06",
+        "type": "sound",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "audio": {
+          "name": "whoosh-01",
+          "volume": 80,
+          "pitch": 100,
+          "pan": 0
+        },
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-grenade-07",
+        "type": "weapon",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "mode": "show",
+        "weaponGraphic": "icon",
+        "weaponImageId": 1,
+        "weaponFrame": 1,
+        "layer": "front",
+        "attachment": "offset",
+        "bone": "",
+        "gripX": 0.5,
+        "gripY": 0.5,
+        "equipIndex": 1,
+        "hands": "one",
+        "aim": "none",
+        "hold": "hand",
+        "visible": false,
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-grenade-08",
+        "type": "projectile",
+        "duration": 34,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "linear",
+        "iconSource": "action",
+        "iconIndex": 0,
+        "name": "",
+        "destination": "allTargets",
+        "sourceRole": "battler",
+        "attachment": "rightHand",
+        "bone": "",
+        "gripX": 0.5,
+        "gripY": 0.5,
+        "equipIndex": 1,
+        "startHeight": 1.6,
+        "endHeight": 0.4,
+        "arc": 2.4,
+        "spin": 14,
+        "rotation": 0,
+        "scale": 1,
+        "flight": "oneWay",
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-grenade-09",
+        "type": "animation",
+        "duration": 0,
+        "role": "allTargets",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "animationSource": "action",
+        "animationId": 0,
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-grenade-10",
+        "type": "impact",
+        "duration": 0,
+        "role": "allTargets",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-grenade-11",
+        "type": "shake",
+        "duration": 18,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "power": 7,
+        "speed": 10,
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-grenade-12",
+        "type": "motion",
+        "duration": 6,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "__pose",
+        "parts": [
+          {
+            "part": "RightUpperArm",
+            "rotate": [
+              -40,
+              0,
+              20
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "RightLowerArm",
+            "rotate": [
+              -10,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "Chest",
+            "rotate": [
+              12,
+              0,
+              -8
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          }
+        ],
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-grenade-13",
+        "type": "wait",
+        "duration": 14,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-grenade-14",
+        "type": "motion",
+        "duration": 10,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "__pose",
+        "parts": [
+          {
+            "part": "RightUpperArm",
+            "rotate": [
+              0,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "RightLowerArm",
+            "rotate": [
+              0,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "part": "Chest",
+            "rotate": [
+              0,
+              0,
+              0
+            ],
+            "move": [
+              0,
+              0,
+              0
+            ],
+            "resize": [
+              1,
+              1,
+              1
+            ]
+          }
+        ],
+        "phase": "execute"
+      },
+      {
+        "id": "step-tc-grenade-15",
+        "type": "motion",
+        "duration": 0,
+        "role": "user",
+        "anchor": "home",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "easing": "smooth",
+        "motionIndex": 0,
+        "motionFrames": 0,
+        "motionSpeed": 0,
+        "motionLoop": "default",
+        "motion": "idle",
+        "phase": "finish"
+      },
+      {
+        "id": "step-tc-grenade-16",
         "type": "move",
         "duration": 0,
         "role": "user",

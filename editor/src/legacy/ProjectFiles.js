@@ -206,4 +206,18 @@ function raisePictureLimit(dest) {
     return highest;
 }
 
-module.exports = { raisePictureLimit, forEachReference, fileIndex, matchFileCase, clearMissingSystemFiles, missingList, missingReferences, copyAcrossAudio, FOLDERS };
+/**
+ * package.json's name for an imported game, which also names its storage folder: its title in ASCII
+ * letters and digits, with a hash of the whole title when that leaves no letter (a title in Japanese
+ * or another script), so two such games never share one.
+ */
+function packageName(title) {
+    const text = String(title || '');
+    const slug = text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    if (/[a-z]/.test(slug)) return 'rr-' + slug;
+    let hash = 0x811c9dc5;
+    for (const ch of text) { hash ^= ch.codePointAt(0); hash = Math.imul(hash, 0x01000193) >>> 0; }
+    return 'rr-' + (slug ? slug + '-' : '') + 'game-' + hash.toString(16).padStart(8, '0');
+}
+
+module.exports = { packageName, raisePictureLimit, forEachReference, fileIndex, matchFileCase, clearMissingSystemFiles, missingList, missingReferences, copyAcrossAudio, FOLDERS };

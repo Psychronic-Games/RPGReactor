@@ -5,8 +5,13 @@
  *   node editor/build-scripts/import-legacy-project.cjs <source> --report [--json <file>] [--encoding <codepage>]
  *   node editor/build-scripts/import-legacy-project.cjs <source> <destination> [--maps 1,2,3] [--skip-assets] [--force] [--encoding <codepage>] [--language <name>]
  *
- * `--rtp <folder>` names RPG Maker 2000/2003's RTP when a game takes files from it and it is not
- * where the installer puts it (RPG2K_RTP_PATH / RPG2K3_RTP_PATH work too).
+ * `--rtp <folder or file>` names RPG Maker 2000/2003's RTP when a game takes files from it and it is not
+ * where the installer puts it: a folder, a folder holding one or its installer, or an installer or archive
+ * (.exe, .zip, .rar), which is unpacked into the user's RTP folder (RPG2K_RTP_PATH / RPG2K3_RTP_PATH work too).
+ * `--download-rtp` fetches RPG Maker's official RTP (unpacked into the user's RTP folder, not
+ * installed) when a 2000/2003 game needs one and none is found.
+ * `--font <file or folder>` names RM2000.fon / RMG2000.fon when neither the game, the RTP
+ * nor the system fonts hold it.
  * `--report` says what the project holds and what an import will do with
  * it, and writes nothing unless `--json` names a file. With a destination
  * a new Reactor project is written there (the editor's File › Import
@@ -18,11 +23,11 @@ const I = require(path.join(__dirname, '..', 'src', 'legacy', 'LegacyImporter.js
 
 const argv = process.argv.slice(2);
 const flag = (name) => { const i = argv.indexOf(name); return i >= 0 ? (argv[i + 1] || true) : null; };
-const flagValues = new Set(['--json', '--encoding', '--maps', '--language', '--rtp'].map(flag).filter(v => v && v !== true));
+const flagValues = new Set(['--json', '--encoding', '--maps', '--language', '--rtp', '--font'].map(flag).filter(v => v && v !== true));
 const positional = argv.filter(a => !a.startsWith('--') && !flagValues.has(a));
 const [source, destination] = positional;
 if (!source || (!flag('--report') && !destination)) {
-    console.error('usage: import-legacy-project.cjs <source> --report [--json <file>] [--encoding <codepage>]\n       import-legacy-project.cjs <source> <destination> [--maps 1,2,3] [--skip-assets] [--force] [--encoding <codepage>] [--language <name>] [--rtp <folder>]');
+    console.error('usage: import-legacy-project.cjs <source> --report [--json <file>] [--encoding <codepage>]\n       import-legacy-project.cjs <source> <destination> [--maps 1,2,3] [--skip-assets] [--force] [--encoding <codepage>] [--language <name>] [--rtp <folder> | --download-rtp] [--font <RM2000.fon or folder>]');
     process.exit(2);
 }
 const encoding = flag('--encoding') && flag('--encoding') !== true ? flag('--encoding') : undefined;
@@ -36,8 +41,26 @@ const encoding = flag('--encoding') && flag('--encoding') !== true ? flag('--enc
     }
     const maps = flag('--maps') && flag('--maps') !== true ? String(flag('--maps')).split(',').map(Number) : null;
     const language = flag('--language') && flag('--language') !== true ? flag('--language') : undefined;
-    const rtpPath = flag('--rtp') && flag('--rtp') !== true ? flag('--rtp') : undefined;
-    const summary = await I.importProject(source, destination, { maps, skipAssets: !!flag('--skip-assets'), force: !!flag('--force'), encoding, language, rtpPath, log: (line) => console.log(line) });
+    let rtpPath = flag('--rtp') && flag('--rtp') !== true ? flag('--rtp') : undefined;
+    // --rtp takes an RTP folder, a folder holding one or its installer, or an installer or archive (.exe, .zip, .rar).
+    if (rtpPath) {
+        const RM = require('../src/legacy/RtpManager.js');
+        if (!fs.statSync(rtpPath).isDirectory() || !RM.findRtpFolder(rtpPath, 0)) {
+            rtpPath = await RM.rtpFrom(rtpPath);
+            console.log(`RTP: ${rtpPath}`);
+        }
+    }
+    // --download-rtp: a 2000/2003 game that needs the RTP and finds none gets RPG Maker's official one, unpacked, not installed.
+    if (flag('--download-rtp') && !rtpPath) {
+        const probed = I.probe(source);
+        if ((probed.kind === '2000' || probed.kind === '2003') && probed.needsRtp && !I.findRtp(probed.engine, { source })) {
+            console.log(`Downloading the official ${probed.kind} RTP…`);
+            rtpPath = await require('../src/legacy/RtpManager.js').fetchOfficial(probed.engine);
+            console.log(`  unpacked into ${rtpPath}`);
+        }
+    }
+    const fontPath = flag('--font') && flag('--font') !== true ? flag('--font') : undefined;
+    const summary = await I.importProject(source, destination, { maps, skipAssets: !!flag('--skip-assets'), force: !!flag('--force'), encoding, language, rtpPath, fontPath, log: (line) => console.log(line) });
     // Movies Chromium cannot play become WebM and MIDI becomes Ogg once the project is written.
     const media = require('../src/legacy/LegacyMedia.js');
     if (summary && summary.destination && media.pendingMedia(summary.destination)) {

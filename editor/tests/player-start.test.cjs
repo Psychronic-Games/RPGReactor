@@ -1,4 +1,5 @@
 const assert = require('node:assert/strict');
+const { runtimeSource } = require('./helpers/runtime-source.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
@@ -8,7 +9,7 @@ const repoRoot = path.resolve(editorRoot, '..');
 const read = file => fs.readFileSync(path.join(repoRoot, file), 'utf8');
 
 test('the player start has a facing: System.json startDirection, honoured by the runtime and drawn by the editor', () => {
-    const objects = read('runtime/reactor_objects.js');
+    const objects = runtimeSource('reactor_objects.js');
     assert.match(objects, /startDirection/, 'the runtime reads the start facing');
     assert.match(objects, /this\.reserveTransfer\(mapId, x, y, direction, 0\)/, 'and transfers with it');
 

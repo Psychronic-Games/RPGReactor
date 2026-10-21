@@ -8,6 +8,8 @@ function load(name, globals = {}) {
     return vm.runInNewContext(`${fs.readFileSync(path.join(root, 'src', `${name}.js`), 'utf8')};${name};`, {
         console: { log() {}, debug() {}, warn() {}, error() {} }, require, process, nw: {},
         RRJson: require('../src/utils/JsonFiles.js'), alert() {}, confirm: () => true,
+        // The editor's themed dialog: a notice goes to the test's `alert`, a question is answered by its `confirm` (yes unless a test says otherwise).
+        RRDialog: require('./helpers/dialog-stub.cjs').themedDialogFrom({ confirm: () => true, ...globals }),
         localStorage: { getItem: () => null, setItem() {} }, ...globals
     });
 }
@@ -124,6 +126,8 @@ test('map ID allocation protects orphaned map and sidecar files from overwrite',
 test('a delete confirmation completing after a project switch cannot delete the next project map', async t => {
     const h=mapHarness(t);let resolve;h.pc.tilemapManager.currentMap.id=1;h.pc.confirmUnsavedChanges=()=>new Promise(r=>resolve=r);
     const next={...h.pc.currentProject,maps:plain(h.pc.currentProject.maps)},action=h.pc.deleteMap(1);
+    // The delete question is answered first; the project changes while the unsaved-changes question is up.
+    await new Promise(turn=>setImmediate(turn));
     h.pc.currentProject=next;resolve(true);await action;
     assert.ok(next.maps[1]);assert.equal(fs.existsSync(path.join(h.dir,'data/Map001.json')),true);
 });
@@ -155,6 +159,8 @@ test('project switching while deleted-map System repair is pending cannot delete
     const h=mapHarness(t);h.pc.databaseManager.data.system={startMapId:1,startX:4,startY:5};
     let resolve;h.pc.databaseManager.saveJSON=()=>new Promise(r=>resolve=r);
     const old=h.pc.currentProject,next={...old,maps:plain(old.maps)};const action=h.pc.deleteMap(1);
+    // The delete question is answered first; the project changes while the System repair is being saved.
+    await new Promise(turn=>setImmediate(turn));
     h.pc.currentProject=next;h.pc.databaseManager.data={mapInfos:next.maps,system:{startMapId:1}};resolve(true);await action;
     assert.ok(next.maps[1]);assert.ok(old.maps[1]);assert.equal(fs.existsSync(path.join(h.dir,'data/Map001.json')),true);
 });

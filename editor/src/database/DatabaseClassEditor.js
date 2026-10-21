@@ -33,12 +33,16 @@ class DatabaseClassEditor {
         // SECOND COLUMN
         const rightColumn = document.createElement('div');
         rightColumn.style.cssText = 'display: flex; flex-direction: column; gap: 16px; min-width: 0;';
+        rightColumn.appendChild(this.createEquipSlotsSection(classEntry));
         rightColumn.appendChild(this.createTraitsSection(classEntry));
         const passiveSection = window.RRPassiveStates?.createSection({
             objectType: 'class', record: classEntry,
             databaseManager: this.databaseManager, projectManager: this.projectManager
         });
         if (passiveSection) rightColumn.appendChild(passiveSection);
+        // Combat settings grouped by shared rules, Tactical movement and Action attacks.
+        const tacticsSection = window.RRTactics?.createSection({ kind: 'class', record: classEntry, databaseManager: this.databaseManager });
+        if (tacticsSection) rightColumn.appendChild(tacticsSection);
         rightColumn.appendChild(this.createNoteSection(classEntry));
 
         columnsWrapper.appendChild(leftColumn);
@@ -54,7 +58,7 @@ class DatabaseClassEditor {
         const section = document.createElement('div');
         section.className = 'database-section';
         section.innerHTML = `
-            <div class="database-section-header">${tt('General Settings')}</div>
+            <div class="database-section-header" data-section-key="general-settings">${tt('General Settings')}</div>
             <div class="database-section-content">
                 <div class="db-form" style="margin-bottom: 10px;">
                     <div class="db-row-cols">
@@ -68,7 +72,7 @@ class DatabaseClassEditor {
                     <label class="database-field-label">${tt('EXP Curve:')}</label>
                 </div>
                 <div class="form-row exp-curve-trigger database-class-exp-grid" data-class-id="${classEntry.id}"
-                     style="display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 8px; cursor: pointer; padding: 8px; border: 1px solid transparent; border-radius: 4px;"
+                     style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; cursor: pointer; padding: 8px; border: 1px solid transparent; border-radius: 4px;"
                      onmouseover="this.style.borderColor='var(--color-accent-bright)'; this.style.background='var(--color-bg-base)';"
                      onmouseout="this.style.borderColor='transparent'; this.style.background='transparent';"
                      title="${tt('Click to edit EXP curve')}">
@@ -98,12 +102,110 @@ class DatabaseClassEditor {
         return section;
     }
 
+    /**
+     * The class's equipment slots: a row each, its equipment type picked from
+     * a dropdown, and a button that adds one. A type may be picked for as many
+     * slots as the class has of it. Kept on the class as `rrEquipSlots`; the
+     * starting equipment of its actors and vehicles moves with each slot's type.
+     */
+    createEquipSlotsSection(classEntry) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        const section = document.createElement('div');
+        section.className = 'database-section';
+        const system = this.databaseManager.getSystem() || {}, types = system.equipTypes || [], slots = RREquipSlots;
+        const project = this.projectManager?.getCurrentProject?.() || null;
+        const plain = name => String(name || '').replace(/\\[iI]\[\d+\]\s*/g, '').trim();
+        const names = slots.named(system).map(id => ({ id, name: plain(types[id]) })).sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }) || a.id - b.id);
+        // The class's slots as they are now: its own list, else what it has without one (less a type named since the last save).
+        const unsettled = this.databaseManager.unsettledEquipTypes?.(classEntry.id) || new Set();
+        // (A copy: the class's own list changes only in setClassSlots, after everyone's slots as they were are noted.)
+        const current = () => slots.classSlots(classEntry)?.slice() || slots.resolve(this.databaseManager, project, { classId: classEntry.id }, slots.isDualWield(null, classEntry)).filter(id => String(types[id] || '').trim() && !unsettled.has(id));
+        const options = chosen => (names.some(type => type.id === chosen) ? '' : `<option value="${chosen}" selected>${rrEscapeHtml(plain(types[chosen]) || '#' + chosen)}</option>`)
+            + names.map(type => `<option value="${type.id}"${type.id === chosen ? ' selected' : ''}>${rrEscapeHtml(type.name)}</option>`).join('');
+        const list = current();
+        section.innerHTML = `
+            <div class="database-section-header" data-section-key="equipment-slots">${tt('Equipment Slots')}</div>
+            <div class="database-section-content">
+                <div class="rr-slot-list" data-rr-i18n-skip>${list.map((id, index) => `
+                    <div class="rr-slot-row" data-index="${index}">
+                        <button type="button" class="rr-slot-grip" data-index="${index}" title="${rrEscapeHtml(tt('Drag to reorder'))}" aria-label="${rrEscapeHtml(tt('Drag to reorder'))}"><span aria-hidden="true">⠿</span></button>
+                        <span class="rr-slot-number">${index + 1}</span>
+                        <select class="database-field-value rr-slot-type" data-index="${index}" data-rr-search="always">${options(id)}</select>
+                        <button type="button" class="rr-btn-chip rr-slot-remove" data-index="${index}" title="${rrEscapeHtml(tt('Delete'))}" aria-label="${rrEscapeHtml(tt('Delete'))}">&times;</button>
+                    </div>`).join('')}</div>
+                <div class="trait-action-buttons"><button type="button" class="rr-btn-chip rr-slot-add">${tt('Add')}</button></div>
+            </div>
+        `;
+        const write = next => {
+            const slotsOf = record => slots.resolve(this.databaseManager, project, record, slots.isDualWield(record, classEntry));
+            slots.setClassSlots(this.databaseManager.data, classEntry, next, slotsOf);
+            this.databaseManager.updateClass(classEntry.id, classEntry);
+            this.refreshClassDetail(classEntry);
+        };
+        section.querySelectorAll('.rr-slot-type').forEach(select => select.addEventListener('change', () => {
+            const next = current();
+            next[Number(select.dataset.index)] = Number(select.value);
+            write(next);
+        }));
+        section.querySelectorAll('.rr-slot-remove').forEach(button => button.addEventListener('click', () => {
+            const next = current();
+            next.splice(Number(button.dataset.index), 1);
+            write(next);
+        }));
+        // Order: a slot is dragged by its grip to another place in the list (or moved with the arrow keys
+        // while the grip has the focus). The row under the pointer shows where it will stand.
+        const rowsOf = () => Array.from(section.querySelectorAll('.rr-slot-row'));
+        const move = (from, to, focus) => {
+            const before = current(), next = slots.moveSlot(before, from, to);
+            if (next === before) return;
+            write(next);
+            if (focus) setTimeout(() => document.querySelectorAll('.rr-slot-grip')[Math.max(0, Math.min(next.length - 1, to))]?.focus({ preventScroll: true }), 0);
+        };
+        section.querySelectorAll('.rr-slot-grip').forEach(grip => {
+            const from = Number(grip.dataset.index);
+            grip.addEventListener('keydown', event => {
+                if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+                event.preventDefault();
+                move(from, from + (event.key === 'ArrowUp' ? -1 : 1), true);
+            });
+            grip.addEventListener('pointerdown', event => {
+                if (event.button !== 0) return;
+                event.preventDefault();
+                const rows = rowsOf(), row = rows[from];
+                let to = from;
+                // The place the pointer is over: before the first row whose middle is below it.
+                const placeAt = y => { let at = rows.length - 1; for (let i = 0; i < rows.length; i++) { const box = rows[i].getBoundingClientRect(); if (y < box.top + box.height / 2) { at = i; break; } } return at; };
+                const show = () => rows.forEach((other, i) => { other.classList.toggle('is-dragging', other === row); other.classList.toggle('is-drop-before', i === to && to < from); other.classList.toggle('is-drop-after', i === to && to > from); });
+                const onMove = moved => { to = placeAt(moved.clientY); show(); };
+                const end = done => {
+                    document.removeEventListener('pointermove', onMove, true);
+                    document.removeEventListener('pointerup', onUp, true);
+                    document.removeEventListener('pointercancel', onCancel, true);
+                    rows.forEach(other => other.classList.remove('is-dragging', 'is-drop-before', 'is-drop-after'));
+                    if (done) move(from, to, false);
+                };
+                const onUp = () => end(true), onCancel = () => end(false);
+                document.addEventListener('pointermove', onMove, true);
+                document.addEventListener('pointerup', onUp, true);
+                document.addEventListener('pointercancel', onCancel, true);
+                show();
+            });
+        });
+        // A new slot is of the type of the last one: a second Head under the first, ready to be changed.
+        section.querySelector('.rr-slot-add').addEventListener('click', () => {
+            const next = current();
+            next.push(next.length ? next[next.length - 1] : (slots.standard(system)[0] || (names[0] && names[0].id) || 1));
+            write(next);
+        });
+        return section;
+    }
+
     createNoteSection(classEntry) {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const section = document.createElement('div');
         section.className = 'database-section';
         section.innerHTML = `
-            <div class="database-section-header">${tt('Note')}</div>
+            <div class="database-section-header" data-section-key="note">${tt('Note')}</div>
             <div class="database-section-content">
                 <textarea class="database-field-value" rows="4" style="width: 100%; box-sizing: border-box;" data-field="note" data-class-id="${classEntry.id}">${rrEscapeHtml(classEntry.note)}</textarea>
             </div>
@@ -208,7 +310,7 @@ class DatabaseClassEditor {
             ? `<span class="rr-class-target-note" style="font-size: 11px; font-weight: normal; color: var(--color-text-muted); white-space: nowrap; margin-right: 8px;">${rrEscapeHtml(tt('Actors of this class stop at Lv{level}').replace('{level}', String(actorsCap)))}</span>`
             : '';
         section.innerHTML = `
-            <div class="database-section-header" style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+            <div class="database-section-header" data-section-key="parameter-curves" style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                 <span style="flex: 1 1 auto;">${tt('Parameter Curves')}</span>
                 ${capNote}
                 <label class="database-field-label" style="margin: 0; font-weight: normal; white-space: nowrap;">${tt('Target level')}</label>
@@ -882,7 +984,7 @@ class DatabaseClassEditor {
             `<tr><td colspan="4" style="text-align: center; color: var(--color-text-muted);">${tt('No skills learned')}</td></tr>`;
 
         section.innerHTML = `
-            <div class="database-section-header">${tt('Learnable Skills')}</div>
+            <div class="database-section-header" data-section-key="learnable-skills">${tt('Learnable Skills')}</div>
             <div class="database-section-content">
                 <table class="traits-table learnings-table">
                     <thead>
@@ -981,12 +1083,13 @@ class DatabaseClassEditor {
     deleteLearning(classEntry, learningIndex) {
         if (!classEntry.learnings?.[learningIndex]) return;
         classEntry.learnings.splice(learningIndex, 1);
-        this.databaseManager.updateClass(classEntry.id, classEntry);
-        this.refreshClassDetail(classEntry);
+        this.saveLearningRecord(classEntry);
+        this.refreshLearningRecord(classEntry);
     }
 
     showLearningEditorModal(classEntry, learningIndex) {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        const isCurrent = this.commonUI?.databaseEditor?.captureDetailContext?.() || (() => true);
         const existing = learningIndex >= 0 ? classEntry.learnings?.[learningIndex] : null;
         const firstSkill = (this.databaseManager.getSkills() || []).find(skill => skill && skill.id > 0);
         const draft = existing
@@ -1031,6 +1134,7 @@ class DatabaseClassEditor {
         modal.querySelector('.learning-edit-cancel').addEventListener('click', close);
         // A click on the backdrop no longer closes the dialog: close deliberately.
         modal.querySelector('.learning-edit-ok').addEventListener('click', () => {
+            if (!isCurrent() || !overlay.isConnected) return;
             const maxLevel = globalThis.RR_LIMITS?.ACTOR_LEVEL || 999;
             draft.level = Math.max(1, Math.min(maxLevel, parseInt(modal.querySelector('.learning-edit-level').value) || 1));
             draft.skillId = parseInt(modal.querySelector('.learning-edit-skill').value) || draft.skillId;
@@ -1038,10 +1142,20 @@ class DatabaseClassEditor {
             if (!classEntry.learnings) classEntry.learnings = [];
             if (learningIndex >= 0) classEntry.learnings[learningIndex] = draft;
             else classEntry.learnings.push(draft);
-            this.databaseManager.updateClass(classEntry.id, classEntry);
+            this.saveLearningRecord(classEntry);
             close();
-            this.refreshClassDetail(classEntry);
+            this.refreshLearningRecord(classEntry);
         });
+    }
+
+    saveLearningRecord(record) {
+        if (this.recordOwner?.save) return this.recordOwner.save(record);
+        return this.databaseManager.updateClass(record.id, record);
+    }
+
+    refreshLearningRecord(record) {
+        if (this.recordOwner?.refresh) return this.recordOwner.refresh(record);
+        return this.refreshClassDetail(record);
     }
 
     createTraitsSection(classEntry) {
@@ -1064,7 +1178,7 @@ class DatabaseClassEditor {
             `<tr><td colspan="3" style="text-align: center; color: var(--color-text-muted);">${tt('No traits')}</td></tr>`;
 
         section.innerHTML = `
-            <div class="database-section-header">${tt('Traits')}</div>
+            <div class="database-section-header" data-section-key="traits">${tt('Traits')}</div>
             <div class="database-section-content">
                 <table class="traits-table" id="traits-table-${classEntry.id}">
                     <thead>

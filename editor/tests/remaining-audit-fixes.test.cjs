@@ -1,4 +1,5 @@
 const assert = require('node:assert/strict');
+const { runtimeSource } = require('./helpers/runtime-source.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
@@ -16,7 +17,7 @@ test('Set Event Location exchange writes the character the engine reads', () => 
     assert.match(source, /this\.exchangeCharacterId = params\[2\] \?\? 0;/);
     assert.match(source, /params\.push\(this\.exchangeCharacterId, 0, this\.direction\)/);
 
-    const objects = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_objects.js'), 'utf8');
+    const objects = runtimeSource('reactor_objects.js');
     assert.match(objects, /const character2 = this\.character\(params\[2\]\);/);
     assert.match(objects, /if \(params\[4\] > 0\) \{\s*\n\s*character\.setDirection\(params\[4\]\);/);
 });
@@ -46,7 +47,7 @@ test('every odd A1 kind uses the waterfall table, as the engine does', () => {
     assert.doesNotMatch(tilemap, /Only E-type waterfalls \(tx=4-7\) use waterfall table/);
     assert.doesNotMatch(tilemap, /if \(Math\.floor\(tx \/ 4\) === 1\) \{\s*\n\s*autotileTable = this\.WATERFALL_AUTOTILE_TABLE;/);
 
-    const core = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_core.js'), 'utf8');
+    const core = runtimeSource('reactor_core.js');
     assert.match(core, /bx \+= 6;\s*\n\s*autotileTable = Tilemap\.WATERFALL_AUTOTILE_TABLE;/,
         'the engine picks it unconditionally');
 

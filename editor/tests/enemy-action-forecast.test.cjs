@@ -1,4 +1,5 @@
 const assert = require('node:assert/strict');
+const { runtimeSource } = require('./helpers/runtime-source.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
@@ -211,7 +212,7 @@ test('an unauthored Max TP falls back to the runtime default', () => {
 test('the modelled rule still matches the runtime it mirrors', () => {
     // The whole panel is wrong if selectAllActions changes shape, so pin the
     // two things the model depends on: the window width and the comparison.
-    const source = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_objects.js'), 'utf8');
+    const source = runtimeSource('reactor_objects.js');
     const body = source.slice(source.indexOf('Game_Enemy.prototype.selectAllActions'));
     assert.match(body, /const ratingZero = ratingMax - 3;/);
     assert.match(body, /actionList\.filter\(a => a\.rating > ratingZero\)/);
