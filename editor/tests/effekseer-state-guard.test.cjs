@@ -109,6 +109,20 @@ test('the game overlay context follows the same policy through Graphics', () => 
     assert.match(read('runtime/reactor_main.js'), /runtime revision: \d{8}\.\d+/);
 });
 
+test('the scene copy under game effects sets every GL state it depends on', () => {
+    // Restoration is off after the first draw, so the copy inherits the last effect draw's state. A subtractive
+    // layer (FUNC_REVERSE_SUBTRACT) and a model drawn with Culling Front (CULL_FACE) each blacked out the screen.
+    const core = read('runtime/reactor_core.js');
+    const start = core.indexOf('Graphics.blitSceneBehindEffects = function() {');
+    const body = core.slice(start, core.indexOf('gl.drawArrays(gl.TRIANGLES, 0, 3);', start));
+    assert.ok(start >= 0 && body.length > 0);
+    for (const call of ['gl.disable(gl.DEPTH_TEST);', 'gl.disable(gl.CULL_FACE);', 'gl.disable(gl.SCISSOR_TEST);',
+        'gl.disable(gl.STENCIL_TEST);', 'gl.colorMask(true, true, true, true);', 'gl.enable(gl.BLEND);',
+        'gl.blendEquation(gl.FUNC_ADD);', 'gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);']) {
+        assert.ok(body.includes(call), `the copy sets ${call}`);
+    }
+});
+
 test('the editor lights pass draws nothing but the light group', () => {
     const source = read('editor/src/MapEditor3D.js');
     const start = source.indexOf('renderLightsPass(scene) {');

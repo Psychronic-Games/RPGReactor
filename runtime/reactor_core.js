@@ -2285,8 +2285,17 @@ Graphics.blitSceneBehindEffects = function() {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     gl.uniform1i(blit.uTex, 0);
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+    // Effekseer's state restoration is off after the first draw (settleEffekseerState), so this context still
+    // holds whatever the last effect draw left. Set everything the copy depends on: a subtractive layer left
+    // FUNC_REVERSE_SUBTRACT (the copy subtracted itself to black) and a culled model left CULL_FACE on (the
+    // full-screen triangle was culled away) — both blacked out the whole battle screen.
     gl.disable(gl.DEPTH_TEST);
+    gl.disable(gl.CULL_FACE);
+    gl.disable(gl.SCISSOR_TEST);
+    gl.disable(gl.STENCIL_TEST);
+    gl.colorMask(true, true, true, true);
     gl.enable(gl.BLEND);
+    gl.blendEquation(gl.FUNC_ADD);
     // Both source canvases hold premultiplied alpha.
     gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
     let drew = false;
