@@ -421,10 +421,15 @@ test('installing twice wraps once', () => {
 test('every boot path installs the gate once the plugins have loaded', () => {
     assert.match(read('runtime/reactor_scenes.js'),
         /Scene_Boot\.prototype\.start = function\(\) \{\n    Scene_Base\.prototype\.start\.call\(this\);\n[\s\S]{0,300}?Game_Battler\.installBuffRateGate\(\);/);
-    // A playtest started at a map position replaces Scene_Boot.start rather
-    // than calling it, and goes on to real play.
-    assert.match(read('runtime/reactor_fight_flow.js'),
-        /Scene_Base\.prototype\.start\.call\(this\);\n(?:\s*\/\/.*\n)*\s*if \(typeof Game_Battler === "function"\) Game_Battler\.installBuffRateGate\(\);/);
+    // The boots that replace Scene_Boot.start rather than calling it: the
+    // start-at-position playtest, the interface preview (which can use an
+    // item on the party) and UI capture (which can open Scene_Battle).
+    const guarded = /Scene_Base\.prototype\.start\.call\(this\);\n(?:\s*\/\/.*\n)*\s*if \(typeof Game_Battler === "function"\) Game_Battler\.installBuffRateGate\(\);/g;
+    for (const [file, paths] of [['runtime/reactor_fight_flow.js', 1], ['runtime/reactor_ui.js', 2]]) {
+        const source = read(file);
+        assert.equal((source.match(/Scene_Base\.prototype\.start\.call\(this\);/g) || []).length, paths, `${file}: its bypassing boots`);
+        assert.equal((source.match(guarded) || []).length, paths, `${file}: every bypassing boot installs the gate`);
+    }
 });
 
 // ---------------------------------------------------------------- editor

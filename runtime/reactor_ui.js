@@ -7584,6 +7584,8 @@
         const request = ReactorUI.captureRequest();
         if (request && !DataManager.isBattleTest() && !DataManager.isEventTest()) {
             Scene_Base.prototype.start.call(this);
+            // A capture can open Scene_Battle; the stock start that installs the gate is skipped.
+            if (typeof Game_Battler === "function") Game_Battler.installBuffRateGate();
             SoundManager.preloadImportantSounds();
             if (ReactorUI.beginCapture(request)) {
                 this.resizeScreen();
@@ -7596,6 +7598,8 @@
             return _Scene_Boot_start.apply(this, arguments);
         }
         Scene_Base.prototype.start.call(this);
+        // The preview can use an Add Buff item on the party.
+        if (typeof Game_Battler === "function") Game_Battler.installBuffRateGate();
         SoundManager.preloadImportantSounds();
         DataManager.setupNewGame();
         ReactorUI._preview = true;
