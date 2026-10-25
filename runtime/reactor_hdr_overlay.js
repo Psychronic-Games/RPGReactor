@@ -100,7 +100,7 @@
         for (const p of H.programs.values()) gl.deleteProgram(p.p);
         for (const p of [H.down, H.setup, H.blur]) if (p) gl.deleteProgram(p.p);
         if (H.buf) gl.deleteBuffer(H.buf);
-        H.resources = []; H.programs.clear(); H.probe = null; H.ok = null;
+        H.resources = []; H.programs.clear(); H.probe = null; H.pre = null; H.ok = null;
     }
     api.contextLost = function() {
         // Old WASM handles cannot be resumed in the replacement Effekseer context.
@@ -110,7 +110,7 @@
             sprite._hdrActive = false; sprite._playing = false; sprite._started = false;
         }
         active.clear();
-        H.probe = null; H.resources = []; H.programs.clear();
+        H.probe = null; H.pre = null; H.resources = []; H.programs.clear();
         H.down = H.setup = H.blur = H.buf = null; H.ok = false;
     };
     api.contextRestored = function() { H.ok = null; };
@@ -280,22 +280,39 @@
         // mip chain (skip all 19 bloom passes when intensity is zero)
         const weights = [];
         if (s.bloom > 0) {
+            // The threshold acts at the game's bloom setup resolution, half its screen. An effect drawn radiusScale
+            // times larger than in the game covers that pixel with radiusScale of ours: level log2(radiusScale).
+            // Every Gaussian reads that level or a coarser one, so all of the bloom is thresholded.
+            const setupLevel = Number.isFinite(s.threshold) ?
+                Math.min(H.levels.length - 1, Math.max(0, Math.round(Math.log2(s.bloomScale)))) : -1;
+            let base = H.main;
+            if (setupLevel === 0) {
+                if (!H.pre) H.pre = target(gl, H.w, H.h, H.type, false);
+                if (!H.pre) throw Error("bloom setup target incomplete");
+                gl.useProgram(H.setup.p);
+                bind(gl, 0, H.main.t, H.setup.u.uTex);
+                gl.uniform2f(H.setup.u.uTexel, 0, 0);
+                gl.uniform1f(H.setup.u.uThreshold, s.threshold);
+                quad(gl, H.setup, H.pre);
+                base = H.pre;
+            }
+            const level = l => l === 0 ? base : H.levels[l];
             for (let l = 1; l < H.levels.length; l++) {
-                const src = H.levels[l - 1];
-                const prog = l === 1 && Number.isFinite(s.threshold) ? H.setup : H.down;
+                const src = level(l - 1);
+                const prog = l === setupLevel ? H.setup : H.down;
                 gl.useProgram(prog.p);
                 bind(gl, 0, src.t, prog.u.uTex);
                 gl.uniform2f(prog.u.uTexel, 1 / src.w, 1 / src.h);
                 if (prog === H.setup) gl.uniform1f(prog.u.uThreshold, s.threshold);
                 quad(gl, prog, H.levels[l]);
             }
-            // six Gaussians, each blurred at the level where its sigma is 2-4 texels
+            // six Gaussians, each blurred at the level where its sigma is 2-4 texels (never finer than the setup)
             for (let i = 0; i < SIZES.length; i++) {
                 const sigma = H.w * SIZES[i] * 0.04 * 0.5 / Math.sqrt(33.4) * s.bloomScale;
-                let l = 0;
+                let l = Math.max(0, setupLevel);
                 while (l < H.levels.length - 1 && sigma / Math.pow(2, l) > 4) l++;
                 const st = sigma / Math.pow(2, l);
-                const L = H.levels[l], T = H.tmp[l];
+                const L = level(l), T = H.tmp[l];
                 if (!H.g[i] || H.g[i].w !== L.w || H.g[i].h !== L.h) {
                     if (H.g[i]) { const old = H.g[i]; gl.deleteTexture(old.t); gl.deleteFramebuffer(old.f);
                         H.resources.splice(H.resources.indexOf(old), 1); }

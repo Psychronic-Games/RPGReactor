@@ -82,9 +82,13 @@ The six sizes follow UE 4.27's width-relative bloom radii; Gaussian sigma is
 `viewWidth * size * 0.04 * 0.5 / sqrt(33.4) * radiusScale`.
 
 `bloom.threshold` (optional, runtime 20261025.2) is UE 4's bloom setup threshold.
-When it is a number, the first half-resolution downsample multiplies the light by
+When it is a number, the light is multiplied by
 `clamp((dot(rgb, (0.3, 0.59, 0.11)) - threshold) * 0.5, 0, 1)` before any blur, as
-`PostProcessBloomSetup` does: light whose exposed luminance is at or below the
+`PostProcessBloomSetup` does. UE runs that setup at half its screen resolution; an
+effect drawn `radiusScale` times larger than in the source game covers that pixel
+with `radiusScale` overlay pixels, so the setup runs at pyramid level
+`round(log2(radiusScale))` (level 0 is an extra full-resolution pass), and every
+Gaussian reads that level or a coarser one: light whose exposed luminance is at or below the
 threshold does not bloom, and bloom reaches full strength 2 units above it. A
 negative threshold blooms dark light partly (-0.8 passes 40 % at zero). Without it
 every pixel blooms, as before. Like the other bloom settings, it is taken from the

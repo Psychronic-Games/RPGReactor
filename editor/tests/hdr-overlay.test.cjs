@@ -80,11 +80,17 @@ test('zero intensity skips all nineteen bloom passes',async()=>{
     e.api.configure({bloomIntensity:0});e.api.canStart(s);e.api.render({},[s]);
     assert.equal(e.calls.filter(c=>c[0]==='drawArrays').length,1,'only the final grade/composite draws');
 });
-test('a bloom threshold runs the setup pass on the first downsample only',async()=>{
+test('a bloom threshold runs the setup pass once, at level log2(radiusScale) (2.4 -> the first downsample)',async()=>{
     const e=environment({...side,bloom:{...side.bloom,threshold:0.15}}),s=e.sprite();await e.ready(s);
     e.api.canStart(s);e.api.render({},[s]);
     assert.deepEqual(e.calls.filter(c=>c[0]==='uniform1f'&&c[2]===0.15).length,1);
     assert.equal(e.calls.filter(c=>c[0]==='drawArrays').length,20,'7 downsamples (1 setup), 12 blurs, 1 grade');
+});
+test('an effect drawn at the game size thresholds at full resolution before the first downsample',async()=>{
+    const e=environment({...side,bloom:{...side.bloom,radiusScale:1,threshold:0.15}}),s=e.sprite();await e.ready(s);
+    e.api.canStart(s);e.api.render({},[s]);
+    assert.equal(e.calls.filter(c=>c[0]==='uniform1f'&&c[2]===0.15).length,1);
+    assert.equal(e.calls.filter(c=>c[0]==='drawArrays').length,21,'1 full-resolution setup, 7 downsamples, 12 blurs, 1 grade');
 });
 test('without a threshold every downsample is a plain average',async()=>{
     const e=environment(),s=e.sprite();await e.ready(s);e.api.canStart(s);e.api.render({},[s]);
