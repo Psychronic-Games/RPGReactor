@@ -14,7 +14,8 @@
         overrides: Object.create(null) };
     function settings(sidecar) {
         return Object.assign({ bloom: Number(params.bloomIntensity ?? sidecar.bloom.intensity),
-            bloomScale: Number(params.bloomRadiusScale ?? sidecar.bloom.radiusScale), debug: (params.debug === true || params.debug === "true") },
+            bloomScale: Number(params.bloomRadiusScale ?? sidecar.bloom.radiusScale), threshold: sidecar.bloom.threshold,
+            debug: (params.debug === true || params.debug === "true") },
             window.REACTOR_HDR || {});
     }
     function valid(s) {
@@ -25,7 +26,8 @@
             !s.bloom.sizes.every(x => Number.isFinite(x) && x > 0) ||
             !s.bloom.tints.every(x => Number.isFinite(x) && x >= 0) ||
             !Number.isFinite(s.bloom.intensity) || s.bloom.intensity < 0 ||
-            !Number.isFinite(s.bloom.radiusScale) || s.bloom.radiusScale <= 0) throw Error("invalid HDR sidecar");
+            !Number.isFinite(s.bloom.radiusScale) || s.bloom.radiusScale <= 0 ||
+            (s.bloom.threshold !== undefined && !Number.isFinite(s.bloom.threshold))) throw Error("invalid HDR sidecar");
         return s;
     }
     function request(name) {
@@ -96,7 +98,7 @@
             if (r.rb) gl.deleteRenderbuffer(r.rb);
         }
         for (const p of H.programs.values()) gl.deleteProgram(p.p);
-        for (const p of [H.down, H.blur]) if (p) gl.deleteProgram(p.p);
+        for (const p of [H.down, H.setup, H.blur]) if (p) gl.deleteProgram(p.p);
         if (H.buf) gl.deleteBuffer(H.buf);
         H.resources = []; H.programs.clear(); H.probe = null; H.ok = null;
     }
@@ -109,7 +111,7 @@
         }
         active.clear();
         H.probe = null; H.resources = []; H.programs.clear();
-        H.down = H.blur = H.buf = null; H.ok = false;
+        H.down = H.setup = H.blur = H.buf = null; H.ok = false;
     };
     api.contextRestored = function() { H.ok = null; };
     api.release = function(sprite) { active.delete(sprite); };
@@ -142,6 +144,13 @@
     const FS_DOWN = "precision highp float; varying vec2 vUv; uniform sampler2D uTex; uniform vec2 uTexel;" +
         "void main(){ gl_FragColor = 0.25 * (texture2D(uTex, vUv + uTexel * vec2(-0.5,-0.5)) + texture2D(uTex, vUv + uTexel * vec2(0.5,-0.5))" +
         " + texture2D(uTex, vUv + uTexel * vec2(-0.5,0.5)) + texture2D(uTex, vUv + uTexel * vec2(0.5,0.5))); }";
+    // the first downsample with UE 4's bloom setup threshold (PostProcessBloomSetup): light below the threshold in
+    // luminance does not bloom, ramping to full over 2 units above it
+    const FS_SETUP = "precision highp float; varying vec2 vUv; uniform sampler2D uTex; uniform vec2 uTexel; uniform float uThreshold;" +
+        "void main(){ vec4 c = 0.25 * (texture2D(uTex, vUv + uTexel * vec2(-0.5,-0.5)) + texture2D(uTex, vUv + uTexel * vec2(0.5,-0.5))" +
+        " + texture2D(uTex, vUv + uTexel * vec2(-0.5,0.5)) + texture2D(uTex, vUv + uTexel * vec2(0.5,0.5)));" +
+        " float lum = dot(c.rgb, vec3(0.3, 0.59, 0.11)); c.rgb *= clamp((lum - uThreshold) * 0.5, 0.0, 1.0);" +
+        " gl_FragColor = c; }";
     // separable Gaussian, sigma in texels (<= ~5), +-3 sigma
     const FS_BLUR = "precision highp float; varying vec2 vUv; uniform sampler2D uTex; uniform vec2 uStep; uniform float uSigma;" +
         "void main(){ vec4 s = vec4(0.0); float w = 0.0; for (int i = -16; i <= 16; i++) { float x = float(i);" +
@@ -226,6 +235,7 @@
             if (H.levels.some(x => !x) || H.tmp.some(x => !x)) throw Error("bloom pyramid incomplete");
             H.g = Array.from({length: 6}, () => null);
             H.down = compile(gl, VS, FS_DOWN);
+            H.setup = compile(gl, VS, FS_SETUP);
             H.blur = compile(gl, VS, FS_BLUR);
 
             H.buf = gl.createBuffer();
@@ -272,10 +282,12 @@
         if (s.bloom > 0) {
             for (let l = 1; l < H.levels.length; l++) {
                 const src = H.levels[l - 1];
-                gl.useProgram(H.down.p);
-                bind(gl, 0, src.t, H.down.u.uTex);
-                gl.uniform2f(H.down.u.uTexel, 1 / src.w, 1 / src.h);
-                quad(gl, H.down, H.levels[l]);
+                const prog = l === 1 && Number.isFinite(s.threshold) ? H.setup : H.down;
+                gl.useProgram(prog.p);
+                bind(gl, 0, src.t, prog.u.uTex);
+                gl.uniform2f(prog.u.uTexel, 1 / src.w, 1 / src.h);
+                if (prog === H.setup) gl.uniform1f(prog.u.uThreshold, s.threshold);
+                quad(gl, prog, H.levels[l]);
             }
             // six Gaussians, each blurred at the level where its sigma is 2-4 texels
             for (let i = 0; i < SIZES.length; i++) {
